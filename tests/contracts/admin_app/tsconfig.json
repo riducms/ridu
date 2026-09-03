@@ -1,0 +1,18 @@
+{
+	// This standalone contract fixture is outside admin/, so it needs its own
+	// editor project to resolve Svelte files and workspace package source exports.
+	"extends": "../../../tsconfig.svelte.json",
+	"compilerOptions": {
+		"allowArbitraryExtensions": true,
+		"allowJs": true,
+		"checkJs": true,
+		"types": ["svelte", "vite/client"],
+		"paths": {
+			"@admin/*": ["../../../admin/src/*"],
+			"@ui/*": ["../../../packages/ui/src/*"],
+			"@plugin-richtext/*": ["../../../packages/plugin-richtext/src/*"],
+			"@plugin-seo/*": ["../../../packages/plugin-seo/src/*"]
+		}
+	},
+	"include": ["*.ts", "*.svelte", "../../../admin/src/vite-env.d.ts"]
+}

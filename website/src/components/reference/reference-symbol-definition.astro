@@ -1,0 +1,137 @@
+---
+import CodeBlock from '@/components/code/code-block.astro';
+import { resolvedReferenceTypeLinks, type ReferenceSymbol } from '@/reference';
+import { splitReferenceType } from '@/reference/signature';
+import ReferenceSignature from './reference-signature.astro';
+
+interface Props {
+	symbol: ReferenceSymbol;
+	href: string;
+	embedded?: boolean;
+}
+
+const { symbol, href, embedded = false } = Astro.props;
+const typeLinks = resolvedReferenceTypeLinks(symbol);
+const callableType =
+	symbol.kind === 'type' &&
+	(/\bfunc\s*\(/.test(symbol.signature) || /=\s*\(/.test(symbol.signature));
+const callableSymbol =
+	symbol.kind === 'function' ||
+	symbol.kind === 'method' ||
+	symbol.kind === 'command' ||
+	callableType;
+const exampleLanguage =
+	symbol.language === 'ts' ? 'ts' : symbol.language === 'shell' ? 'bash' : 'go';
+const bodyStart = symbol.signature.indexOf('{');
+const displaySignature =
+	embedded && symbol.parameters.length > 0 && bodyStart >= 0
+		? symbol.signature.slice(0, bodyStart).trim()
+		: symbol.signature;
+---
+
+<div class:list={['reference-definition', { 'reference-definition--embedded': embedded }]}>
+	<ReferenceSignature
+		signature={displaySignature}
+		name={symbol.name}
+		parameters={symbol.parameters}
+		{typeLinks}
+		symbolHref={href}
+	/>
+	<p class="reference-lede">{symbol.summary}</p>
+	{
+		!embedded && symbol.source && (
+			<p class="reference-source">
+				<a href={symbol.source.url}>
+					Source{' '}
+					<code>
+						{symbol.source.path}:{symbol.source.line}
+					</code>
+				</a>
+			</p>
+		)
+	}
+
+	{
+		callableSymbol && (symbol.parameters.length > 0 || symbol.returns) && (
+			<dl class="reference-api-tags">
+				{symbol.parameters.map((parameter) => (
+					<div>
+						<dt>
+							<span>@param</span> <code>{parameter.name}</code>
+						</dt>
+						<dd>{parameter.description}</dd>
+					</div>
+				))}
+				{symbol.returns && (
+					<div>
+						<dt>@returns</dt>
+						<dd>{symbol.returns.description}</dd>
+					</div>
+				)}
+			</dl>
+		)
+	}
+
+	{
+		!callableSymbol && symbol.parameters.length > 0 && (
+			<>
+				{symbol.parametersLabel && <p class="reference-member-label">{symbol.parametersLabel}</p>}
+				<dl class="reference-member-list">
+					{symbol.parameters.map((parameter) => (
+						<div class="reference-member">
+							<dt>
+								{parameter.href ? (
+									<a class="reference-member-link" href={parameter.href}>
+										<code class="reference-member-name">{parameter.name}</code>
+									</a>
+								) : (
+									<code class="reference-member-name">{parameter.name}</code>
+								)}
+								<span aria-hidden="true">:</span>
+								<span class="reference-member-type">
+									{splitReferenceType(parameter.type).map((part) =>
+										Object.hasOwn(typeLinks, part) ? <a href={typeLinks[part]}>{part}</a> : part
+									)}
+								</span>
+							</dt>
+							<dd>{parameter.description}</dd>
+						</div>
+					))}
+				</dl>
+			</>
+		)
+	}
+
+	{
+		!callableSymbol && symbol.returns && (
+			<p class="reference-return">
+				<span class="reference-return-label">Returns</span>{' '}
+				<code class="reference-return-type">
+					{splitReferenceType(symbol.returns.type).map((part) =>
+						Object.hasOwn(typeLinks, part) ? <a href={typeLinks[part]}>{part}</a> : part
+					)}
+				</code>{' '}
+				<span>{symbol.returns.description}</span>
+			</p>
+		)
+	}
+
+	{
+		symbol.details.length > 0 && (
+			<div class="reference-detail">
+				{symbol.details.map((paragraph) => (
+					<p>{paragraph}</p>
+				))}
+			</div>
+		)
+	}
+
+	{
+		!embedded && symbol.example && (
+			<div class="reference-example">
+				<p>Example</p>
+				<CodeBlock code={symbol.example} lang={exampleLanguage} label={symbol.language} />
+			</div>
+		)
+	}
+</div>

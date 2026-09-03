@@ -1,0 +1,5 @@
+.next/
+media/
+node_modules/
+payload-parity.db*
+tsconfig.tsbuildinfo

@@ -1,0 +1,83 @@
+.ridu-richtext-tags span + span::before {
+	margin-inline-end: 0.5rem;
+	color: var(--ink-faint);
+	content: "·";
+}
+
+.ridu-richtext-content ::selection {
+	background: color-mix(in srgb, var(--primary) 28%, transparent);
+	color: var(--foreground);
+}
+
+.ridu-richtext-content > .ridu-richtext-heading:first-child {
+	margin-top: 0;
+}
+
+.ridu-richtext-list-item::marker {
+	color: var(--brand-primary-soft);
+}
+
+.ridu-richtext-checklist .ridu-richtext-list-item {
+	position: relative;
+	padding-inline-start: 1.75rem;
+}
+
+.ridu-richtext-checklist .ridu-richtext-list-item::before {
+	position: absolute;
+	top: 0.42rem;
+	inset-inline-start: 0;
+	width: 0.9rem;
+	height: 0.9rem;
+	border: 1px solid var(--border);
+	border-radius: 0.25rem;
+	content: "";
+}
+
+.ridu-richtext-checklist .ridu-richtext-list-item-checked::before {
+	border-color: var(--primary);
+	background: var(--primary);
+	box-shadow: inset 0 0 0 2px var(--background);
+}
+
+.ridu-richtext-rule.is-selected {
+	border-top-color: color-mix(in srgb, var(--primary) 60%, transparent);
+}
+
+/* Lexical toggles this inline; keep the toolbar measurable while preventing interaction. */
+.ridu-richtext-block-toolbar[style*="display: none"] {
+	opacity: 0 !important;
+	pointer-events: none;
+}
+
+/* Lexical positions the menu 4px into the canvas; cancel that offset and center the grip on its rule. */
+.ridu-richtext-block-toolbar {
+	margin-inline-start: calc(-4px - 0.4rem);
+}
+
+.ridu-richtext-block-grip span {
+	width: 2px;
+	height: 2px;
+	border-radius: 50%;
+	background: currentColor;
+}
+
+.ridu-richtext-upload-preview.is-loading::after {
+	position: absolute;
+	inset: 0;
+	background: color-mix(in srgb, var(--foreground) 3%, transparent);
+	content: "";
+}
+
+@keyframes ridu-richtext-menu-in {
+	from {
+		opacity: 0;
+		transform: translateY(0.25rem) scale(0.985);
+	}
+}
+
+@keyframes ridu-richtext-toolbar-in {
+	from {
+		opacity: 0;
+		transform: translateY(0.2rem) scale(0.985);
+	}
+}

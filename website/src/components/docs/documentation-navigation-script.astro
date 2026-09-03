@@ -1,0 +1,59 @@
+<script>
+	let navigationScrollTop: number | undefined;
+
+	function updateDocumentationNavigation(panel: HTMLDetailsElement) {
+		const currentPath = window.location.pathname;
+		for (const link of panel.querySelectorAll<HTMLAnchorElement>('a[href]')) {
+			const active = new URL(link.href).pathname === currentPath;
+			if (active) link.setAttribute('aria-current', 'page');
+			else link.removeAttribute('aria-current');
+		}
+
+		for (const item of panel.querySelectorAll<HTMLLIElement>('li[data-depth]')) {
+			const active = item.querySelector('[aria-current="page"]') !== null;
+			item.toggleAttribute('data-active-branch', active);
+			if (active)
+				item.querySelector<HTMLDetailsElement>(':scope > details')?.setAttribute('open', '');
+		}
+	}
+
+	function initializeDocumentationNavigation() {
+		const desktop = window.matchMedia('(min-width: 768px)');
+		for (const panel of document.querySelectorAll<HTMLDetailsElement>(
+			'[data-documentation-navigation]'
+		)) {
+			updateDocumentationNavigation(panel);
+			if (navigationScrollTop !== undefined) {
+				panel.querySelector<HTMLElement>('nav')?.scrollTo({ top: navigationScrollTop });
+			}
+			if (panel.dataset.documentationNavigationReady !== undefined) continue;
+			panel.dataset.documentationNavigationReady = '';
+
+			const sync = () => {
+				panel.open = desktop.matches || panel.dataset.mobileOpen === 'true';
+			};
+			panel.addEventListener('toggle', () => {
+				if (!desktop.matches) panel.dataset.mobileOpen = String(panel.open);
+			});
+			panel.addEventListener('click', (event) => {
+				if (
+					desktop.matches ||
+					!(event.target instanceof Element) ||
+					event.target.closest('a[href]') === null
+				)
+					return;
+				panel.dataset.mobileOpen = 'false';
+				panel.open = false;
+			});
+			desktop.addEventListener('change', sync);
+			sync();
+		}
+	}
+
+	initializeDocumentationNavigation();
+	document.addEventListener('astro:before-preparation', () => {
+		const navigation = document.querySelector<HTMLElement>('[data-documentation-navigation] > nav');
+		if (navigation) navigationScrollTop = navigation.scrollTop;
+	});
+	document.addEventListener('astro:page-load', initializeDocumentationNavigation);
+</script>

@@ -1,0 +1,5 @@
+{
+	// Give editor language servers a test project where bun:test globals are valid
+	// without exposing Bun types to the browser application under ../src.
+	"extends": "../tsconfig.test.json"
+}

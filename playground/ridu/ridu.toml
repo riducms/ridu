@@ -1,0 +1,12 @@
+version = 1
+database = "postgres"
+entry = "./cmd/server"
+admin = "./admin"
+schema = "./generated/ridu.schema.json"
+client = "./generated/ridu.generated.ts"
+migrations = "./migrations"
+openapi = "./generated/ridu.openapi.json"
+generated.graphql.schema = "./generated/ridu.graphql"
+assets = "./internal/adminassets/dist"
+plugins = "./ridu.plugins.json"
+plugin_go = "./content/ridu_plugins.generated.go"

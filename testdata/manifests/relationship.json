@@ -1,0 +1,86 @@
+{
+  "version": 1,
+  "application": {
+    "name": "Relationships"
+  },
+  "collections": [
+    {
+      "id": "authors",
+      "slug": "authors",
+      "labels": {
+        "singular": "Author",
+        "plural": "Authors"
+      },
+      "admin": {},
+      "capabilities": {
+        "auth": false,
+        "upload": false,
+        "versions": false,
+        "trash": false
+      },
+      "fields": [
+        {
+          "id": "authors-name",
+          "name": "name",
+          "path": "name",
+          "type": "text",
+          "category": "scalar",
+          "required": true,
+          "unique": false,
+          "admin": {
+            "label": "Name"
+          },
+          "text": {}
+        }
+      ]
+    },
+    {
+      "id": "posts",
+      "slug": "posts",
+      "labels": {
+        "singular": "Post",
+        "plural": "Posts"
+      },
+      "admin": {},
+      "capabilities": {
+        "auth": false,
+        "upload": false,
+        "versions": false,
+        "trash": false
+      },
+      "fields": [
+        {
+          "id": "posts-title",
+          "name": "title",
+          "path": "title",
+          "type": "text",
+          "category": "scalar",
+          "required": true,
+          "unique": false,
+          "admin": {
+            "label": "Title"
+          },
+          "text": {}
+        },
+        {
+          "id": "posts-author",
+          "name": "author",
+          "path": "author",
+          "type": "relationship",
+          "category": "relationship",
+          "required": true,
+          "unique": false,
+          "admin": {
+            "label": "Author"
+          },
+          "relationship": {
+            "collectionId": "authors",
+            "collectionSlug": "authors",
+            "onDelete": "restrict"
+          }
+        }
+      ]
+    }
+  ],
+  "plugins": []
+}

@@ -1,0 +1,208 @@
+{
+  "version": 1,
+  "application": {
+    "name": "Ridu",
+    "admin": {
+      "userCollectionId": "users",
+      "userCollectionSlug": "users"
+    }
+  },
+  "collections": [
+    {
+      "id": "users",
+      "slug": "users",
+      "labels": {
+        "singular": "User",
+        "plural": "Users"
+      },
+      "admin": {},
+      "capabilities": {
+        "auth": true,
+        "upload": false,
+        "versions": false,
+        "trash": false
+      },
+      "authSettings": {
+        "identityField": "email",
+        "sessionDurationSeconds": 86400,
+        "passwordMinLength": 8,
+        "passwordMaxBytes": 72,
+        "passwordBcryptCost": 10,
+        "maxLoginAttempts": 5,
+        "lockDurationSeconds": 600,
+        "passwordReset": false,
+        "passwordResetTokenDurationSeconds": 3600,
+        "verifyEmail": false,
+        "verificationTokenDurationSeconds": 86400,
+        "apiKeys": false
+      },
+      "fields": [
+        {
+          "id": "users-email",
+          "name": "email",
+          "path": "email",
+          "type": "text",
+          "category": "scalar",
+          "required": true,
+          "unique": true,
+          "admin": {
+            "label": "Email"
+          },
+          "text": {}
+        }
+      ]
+    },
+    {
+      "id": "posts",
+      "slug": "posts",
+      "labels": {
+        "singular": "Post",
+        "plural": "Posts"
+      },
+      "admin": {},
+      "capabilities": {
+        "auth": false,
+        "upload": false,
+        "versions": false,
+        "trash": false
+      },
+      "fields": [
+        {
+          "id": "posts-title",
+          "name": "title",
+          "path": "title",
+          "type": "text",
+          "category": "scalar",
+          "required": true,
+          "unique": false,
+          "admin": {
+            "label": "let's win today interesting"
+          },
+          "text": {}
+        },
+        {
+          "id": "posts-status",
+          "name": "status",
+          "path": "status",
+          "type": "select",
+          "category": "scalar",
+          "required": false,
+          "unique": false,
+          "default": "draft",
+          "admin": {
+            "label": "Status"
+          },
+          "select": {
+            "choices": [
+              {
+                "value": "draft",
+                "label": "Draft"
+              },
+              {
+                "value": "published",
+                "label": "Published"
+              }
+            ]
+          }
+        },
+        {
+          "id": "posts-author",
+          "name": "author",
+          "path": "author",
+          "type": "relationship",
+          "category": "relationship",
+          "required": false,
+          "unique": false,
+          "admin": {
+            "label": "Author"
+          },
+          "relationship": {
+            "collectionId": "users",
+            "collectionSlug": "users",
+            "onDelete": "nullify"
+          }
+        },
+        {
+          "id": "posts-content",
+          "name": "content",
+          "path": "content",
+          "type": "plugin",
+          "category": "plugin",
+          "required": false,
+          "unique": false,
+          "admin": {
+            "label": "Content"
+          },
+          "plugin": {
+            "key": "richtext",
+            "config": {
+              "features": [
+                "code",
+                "horizontal-rule",
+                "links",
+                "lists",
+                "relationships",
+                "uploads"
+              ]
+            },
+            "referenceKeys": [
+              "relationTo"
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "plugins": [
+    {
+      "key": "richtext",
+      "version": "0.1.0",
+      "goPackage": "github.com/riducms/ridu/plugins/richtext",
+      "apiVersion": 1,
+      "ridu": {
+        "minimum": "0.1.0"
+      },
+      "admin": {
+        "package": "@riducms/plugin-richtext",
+        "export": "richTextAdminPlugin",
+        "apiVersion": 1,
+        "pairingVersion": 1
+      },
+      "fieldTypes": [
+        {
+          "key": "richtext",
+          "typescriptPackage": "@riducms/plugin-richtext",
+          "typescriptOutput": "RichTextDocument",
+          "typescriptInput": "RichTextDocument",
+          "goPackage": "github.com/riducms/ridu/plugins/richtext",
+          "goType": "Document",
+          "jsonSchema": {
+            "type": "object",
+            "required": [
+              "version",
+              "root"
+            ],
+            "properties": {
+              "version": {
+                "const": 1
+              },
+              "root": {
+                "type": "object"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      ]
+    },
+    {
+      "key": "graphql",
+      "version": "0.1.0",
+      "goPackage": "github.com/riducms/ridu/plugins/graphql",
+      "apiVersion": 1,
+      "ridu": {
+        "minimum": "0.1.0"
+      }
+    }
+  ]
+}

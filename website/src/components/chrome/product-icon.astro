@@ -1,0 +1,83 @@
+---
+interface Props {
+	name:
+		| 'core'
+		| 'data'
+		| 'admin'
+		| 'sdk'
+		| 'adapters'
+		| 'plugins'
+		| 'cli'
+		| 'guides'
+		| 'reference'
+		| 'github';
+}
+
+const { name } = Astro.props;
+---
+
+<svg
+	class:list={[
+		'size-3.5',
+		name === 'github'
+			? 'fill-current stroke-none'
+			: 'fill-none stroke-current stroke-width-[1.55] [stroke-linecap:square] [stroke-linejoin:miter]'
+	]}
+	viewBox="0 0 24 24"
+	aria-hidden="true"
+	data-product-icon={name}
+>
+	{
+		name === 'core' && (
+			<>
+				<circle cx="12" cy="12" r="3" />
+				<path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1" />
+			</>
+		)
+	}
+	{
+		name === 'data' && (
+			<>
+				<ellipse cx="12" cy="6" rx="7" ry="3" />
+				<path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6" />
+			</>
+		)
+	}
+	{
+		name === 'admin' && (
+			<>
+				<rect x="4" y="5" width="16" height="14" rx="1" />
+				<path d="M4 9h16M9 9v10" />
+			</>
+		)
+	}
+	{name === 'sdk' && <path d="M8 4 3 12l5 8M16 4l5 8-5 8M14 3l-4 18" />}
+	{name === 'adapters' && <path d="M8 3v6M16 3v6M6 9h12v3a6 6 0 0 1-12 0ZM12 18v3" />}
+	{
+		name === 'plugins' && (
+			<>
+				<path d="M9 4v5H4v6h5v5h6v-5h5V9h-5V4Z" />
+				<path d="M9 9h6v6H9z" />
+			</>
+		)
+	}
+	{
+		name === 'cli' && (
+			<>
+				<rect x="3" y="5" width="18" height="14" rx="1" />
+				<path d="m7 10 3 2-3 2M12 15h5" />
+			</>
+		)
+	}
+	{
+		name === 'guides' && (
+			<path d="M4 5.5A3.5 3.5 0 0 1 7.5 2H11v18H7.5A3.5 3.5 0 0 0 4 23ZM20 5.5A3.5 3.5 0 0 0 16.5 2H13v18h3.5A3.5 3.5 0 0 1 20 23Z" />
+		)
+	}
+	{name === 'reference' && <path d="M6 4h12v16H6zM9 8h6M9 12h6M9 16h4" />}
+	{
+		name === 'github' && (
+			<path d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.86c-2.78.6-3.37-1.18-3.37-1.18-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.61.07-.61 1 .07 1.53 1.03 1.53 1.03.9 1.53 2.35 1.09 2.92.83.09-.65.35-1.09.64-1.34-2.22-.25-4.56-1.11-4.56-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.64 0 0 .84-.27 2.75 1.02A9.6 9.6 0 0 1 12 6.84c.85 0 1.71.12 2.51.34 1.91-1.29 2.75-1.02 2.75-1.02.55 1.37.2 2.39.1 2.64.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.85v2.75c0 .27.18.58.69.48A10 10 0 0 0 12 2Z" />
+		)
+	}
+</svg>

@@ -1,0 +1,410 @@
+{
+	"schemaVersion": 1,
+	"records": [
+		{
+			"module": "cli",
+			"id": "cli:ridu#ridu new",
+			"name": "ridu new",
+			"kind": "command",
+			"signature": "ridu new [--template starter|blank] [--database postgres|sqlite|mongodb] [--package-manager npm|bun|pnpm|yarn] [--agent codex|claude|cursor|all|none] [--no-agent] [--module <go-module>] [--scope <npm-scope>] [directory]",
+			"members": [],
+			"parameters": [
+				{
+					"name": "--template",
+					"type": "starter | blank",
+					"description": "Embedded application template; defaults to starter."
+				},
+				{
+					"name": "--database",
+					"type": "postgres | sqlite | mongodb",
+					"description": "Official database adapter; defaults to postgres."
+				},
+				{
+					"name": "--package-manager",
+					"type": "npm | bun | pnpm | yarn",
+					"description": "Frontend package manager; defaults to npm outside the interactive wizard."
+				},
+				{
+					"name": "--agent",
+					"type": "codex | claude | cursor | all | none",
+					"description": "Release-matched local coding-agent layout; defaults to codex outside a terminal."
+				},
+				{
+					"name": "--no-agent",
+					"type": "boolean",
+					"description": "Do not install coding-agent entrypoints, skills, or ownership manifest."
+				},
+				{
+					"name": "--module",
+					"type": "string",
+					"description": "Go module path; defaults to example.com/<project>."
+				},
+				{
+					"name": "--scope",
+					"type": "string",
+					"description": "npm scope for the generated admin workspace; defaults to @<project>."
+				},
+				{
+					"name": "directory",
+					"type": "string",
+					"description": "New project directory, which must not already exist."
+				}
+			],
+			"aliases": ["ridu new"],
+			"overloads": []
+		},
+		{
+			"module": "cli",
+			"id": "cli:ridu#ridu agent install",
+			"name": "ridu agent install",
+			"kind": "command",
+			"signature": "ridu agent install [--agent codex|claude|cursor|all]",
+			"members": [],
+			"parameters": [],
+			"aliases": ["ridu agent install"],
+			"overloads": []
+		},
+		{
+			"module": "cli",
+			"id": "cli:ridu#ridu agent sync",
+			"name": "ridu agent sync",
+			"kind": "command",
+			"signature": "ridu agent sync",
+			"members": [],
+			"parameters": [],
+			"aliases": ["ridu agent sync"],
+			"overloads": []
+		},
+		{
+			"module": "cli",
+			"id": "cli:ridu#ridu doctor",
+			"name": "ridu doctor",
+			"kind": "command",
+			"signature": "ridu doctor",
+			"members": [],
+			"parameters": [],
+			"aliases": ["ridu doctor"],
+			"overloads": []
+		},
+		{
+			"module": "cli",
+			"id": "cli:ridu#ridu dev",
+			"name": "ridu dev",
+			"kind": "command",
+			"signature": "ridu dev [--database-url <url> | --database-path <path>] [--address <host:port>] [--admin-port <port>] [--no-docker] [--no-install] [--no-sync]",
+			"members": [],
+			"parameters": [
+				{
+					"name": "--database-url",
+					"type": "string",
+					"description": "PostgreSQL or MongoDB development URL; defaults to DATABASE_URL, then the selected scaffold Compose service."
+				},
+				{
+					"name": "--database-path",
+					"type": "string",
+					"description": "SQLite-only development path; defaults to RIDU_SQLITE_PATH, then .ridu/development.sqlite."
+				},
+				{
+					"name": "--address",
+					"type": "string",
+					"description": "Go API listen address; defaults to 127.0.0.1:8080."
+				},
+				{
+					"name": "--admin-port",
+					"type": "number",
+					"description": "Vite admin port; defaults to 5173."
+				},
+				{
+					"name": "--no-docker",
+					"type": "boolean",
+					"description": "Do not start the scaffolded PostgreSQL or MongoDB Compose service."
+				},
+				{
+					"name": "--no-install",
+					"type": "boolean",
+					"description": "Do not install missing frontend dependencies with the configured package manager."
+				},
+				{
+					"name": "--no-sync",
+					"type": "boolean",
+					"description": "Do not apply a safe non-destructive development schema plan."
+				}
+			],
+			"aliases": ["ridu dev"],
+			"overloads": []
+		},
+		{
+			"module": "cli",
+			"id": "cli:ridu#ridu generate",
+			"name": "ridu generate",
+			"kind": "command",
+			"signature": "ridu generate [--check]",
+			"members": [],
+			"parameters": [
+				{
+					"name": "--check",
+					"type": "boolean",
+					"description": "Compare expected bytes without writing; exit unsuccessfully on missing or stale output."
+				}
+			],
+			"aliases": ["ridu generate"],
+			"overloads": []
+		},
+		{
+			"module": "cli",
+			"id": "cli:ridu#ridu check",
+			"name": "ridu check",
+			"kind": "command",
+			"signature": "ridu check",
+			"members": [],
+			"parameters": [],
+			"aliases": ["ridu check"],
+			"overloads": []
+		},
+		{
+			"module": "cli",
+			"id": "cli:ridu#ridu build",
+			"name": "ridu build",
+			"kind": "command",
+			"signature": "ridu build [--output <path>]",
+			"members": [],
+			"parameters": [
+				{
+					"name": "--output",
+					"type": "string",
+					"description": "Binary path; defaults to dist/<project> (with .exe on Windows)."
+				}
+			],
+			"aliases": ["ridu build"],
+			"overloads": []
+		},
+		{
+			"module": "cli",
+			"id": "cli:ridu#ridu migrate create",
+			"name": "ridu migrate create",
+			"kind": "command",
+			"signature": "ridu migrate create --name <kebab-name> [--accept-renames | --transform <name>] [--allow-destructive]",
+			"members": [],
+			"parameters": [
+				{
+					"name": "--name",
+					"type": "string",
+					"description": "Required lowercase kebab-case migration name."
+				},
+				{
+					"name": "--accept-renames",
+					"type": "boolean",
+					"description": "PostgreSQL or MongoDB: accept every unambiguous detected rename without an interactive prompt."
+				},
+				{
+					"name": "--transform",
+					"type": "string",
+					"description": "SQLite or MongoDB: bind a named compiled data transform to the immutable artifact."
+				},
+				{
+					"name": "--allow-destructive",
+					"type": "boolean",
+					"description": "Record destructive changes confirmed by the selected adapter planner after explicit review."
+				}
+			],
+			"aliases": ["ridu migrate create"],
+			"overloads": []
+		},
+		{
+			"module": "cli",
+			"id": "cli:ridu#ridu migrate plan",
+			"name": "ridu migrate plan",
+			"kind": "command",
+			"signature": "ridu migrate plan [--database-url <url> | --database-path <path>] [--allow-insecure-database (PostgreSQL or MongoDB)] [--json]",
+			"members": [],
+			"parameters": [],
+			"aliases": ["ridu migrate plan"],
+			"overloads": []
+		},
+		{
+			"module": "cli",
+			"id": "cli:ridu#ridu migrate status",
+			"name": "ridu migrate status",
+			"kind": "command",
+			"signature": "ridu migrate status [--database-url <url> | --database-path <path>] [--allow-insecure-database (PostgreSQL or MongoDB)] [--json]",
+			"members": [],
+			"parameters": [],
+			"aliases": ["ridu migrate status"],
+			"overloads": []
+		},
+		{
+			"module": "cli",
+			"id": "cli:ridu#ridu migrate verify",
+			"name": "ridu migrate verify",
+			"kind": "command",
+			"signature": "ridu migrate verify [--database-url <url>] [adapter runner options]",
+			"members": [],
+			"parameters": [],
+			"aliases": ["ridu migrate verify"],
+			"overloads": []
+		},
+		{
+			"module": "cli",
+			"id": "cli:ridu#ridu migrate up",
+			"name": "ridu migrate up",
+			"kind": "command",
+			"signature": "ridu migrate up [--database-url <url> | --database-path <path>] [adapter runner options]",
+			"members": [],
+			"parameters": [],
+			"aliases": ["ridu migrate up"],
+			"overloads": []
+		},
+		{
+			"module": "cli",
+			"id": "cli:ridu#ridu migrate down",
+			"name": "ridu migrate down",
+			"kind": "command",
+			"signature": "ridu migrate down [--database-path <path>] --allow-destructive",
+			"members": [],
+			"parameters": [],
+			"aliases": ["ridu migrate down"],
+			"overloads": []
+		},
+		{
+			"module": "cli",
+			"id": "cli:ridu#ridu migrate reset",
+			"name": "ridu migrate reset",
+			"kind": "command",
+			"signature": "ridu migrate reset [--database-path <path>] --allow-destructive",
+			"members": [],
+			"parameters": [],
+			"aliases": ["ridu migrate reset"],
+			"overloads": []
+		},
+		{
+			"module": "cli",
+			"id": "cli:ridu#ridu migrate refresh",
+			"name": "ridu migrate refresh",
+			"kind": "command",
+			"signature": "ridu migrate refresh [--database-path <path>] --allow-destructive",
+			"members": [],
+			"parameters": [],
+			"aliases": ["ridu migrate refresh"],
+			"overloads": []
+		},
+		{
+			"module": "cli",
+			"id": "cli:ridu#ridu migrate fresh",
+			"name": "ridu migrate fresh",
+			"kind": "command",
+			"signature": "ridu migrate fresh [--database-path <path>] --allow-destructive",
+			"members": [],
+			"parameters": [],
+			"aliases": ["ridu migrate fresh"],
+			"overloads": []
+		},
+		{
+			"module": "cli",
+			"id": "cli:ridu#PostgreSQL migration runner options",
+			"name": "PostgreSQL migration runner options",
+			"kind": "command",
+			"signature": "--database-url <url> --allow-insecure-database --allow-maintenance --allow-unbounded --advisory-lock-wait <duration> --lock-timeout <duration> --statement-timeout <duration> --batch-timeout <duration> --concurrent-index-timeout <duration> --idle-in-transaction-timeout <duration> --stop-after-phase <id> --stop-after-step <id>",
+			"members": [],
+			"parameters": [],
+			"aliases": ["PostgreSQL migration runner options"],
+			"overloads": []
+		},
+		{
+			"module": "cli",
+			"id": "cli:ridu#MongoDB migration runner options",
+			"name": "MongoDB migration runner options",
+			"kind": "command",
+			"signature": "--database-url <url> --allow-insecure-database --allow-maintenance --allow-unbounded --advisory-lock-wait <duration> --concurrent-index-timeout <duration>",
+			"members": [],
+			"parameters": [],
+			"aliases": ["MongoDB migration runner options"],
+			"overloads": []
+		},
+		{
+			"module": "cli",
+			"id": "cli:ridu#ridu plugin new",
+			"name": "ridu plugin new",
+			"kind": "command",
+			"signature": "ridu plugin new <directory> --key <key> --module <go-module> --admin-package <npm-package>",
+			"members": [],
+			"parameters": [],
+			"aliases": ["ridu plugin new"],
+			"overloads": []
+		},
+		{
+			"module": "cli",
+			"id": "cli:ridu#ridu plugin add",
+			"name": "ridu plugin add",
+			"kind": "command",
+			"signature": "ridu plugin add <key> --go-package <package> [--go-version <version>] [--constructor <name>] [--admin-package <package>] [--admin-version <version>] [--no-install]",
+			"members": [],
+			"parameters": [
+				{
+					"name": "--go-package",
+					"type": "string",
+					"description": "Required compiled Go plugin package."
+				},
+				{
+					"name": "--go-version",
+					"type": "string",
+					"description": "Go module requirement; defaults to latest."
+				},
+				{
+					"name": "--constructor",
+					"type": "string",
+					"description": "Exported zero-argument constructor; defaults to New."
+				},
+				{
+					"name": "--admin-package",
+					"type": "string",
+					"description": "Optional paired static admin package."
+				},
+				{
+					"name": "--admin-version",
+					"type": "string",
+					"description": "Admin package requirement; defaults to latest."
+				},
+				{
+					"name": "--no-install",
+					"type": "boolean",
+					"description": "Update registration without invoking Go or the configured frontend package manager."
+				}
+			],
+			"aliases": ["ridu plugin add"],
+			"overloads": []
+		},
+		{
+			"module": "cli",
+			"id": "cli:ridu#ridu plugin remove",
+			"name": "ridu plugin remove",
+			"kind": "command",
+			"signature": "ridu plugin remove <key> [--no-install]",
+			"members": [],
+			"parameters": [],
+			"aliases": ["ridu plugin remove"],
+			"overloads": []
+		},
+		{
+			"module": "cli",
+			"id": "cli:ridu#ridu version",
+			"name": "ridu version",
+			"kind": "command",
+			"signature": "ridu version | ridu --version | ridu -v",
+			"members": [],
+			"parameters": [],
+			"aliases": ["ridu version"],
+			"overloads": []
+		},
+		{
+			"module": "cli",
+			"id": "cli:ridu#ridu help",
+			"name": "ridu help",
+			"kind": "command",
+			"signature": "ridu help | ridu --help | ridu -h",
+			"members": [],
+			"parameters": [],
+			"aliases": ["ridu help"],
+			"overloads": []
+		}
+	]
+}

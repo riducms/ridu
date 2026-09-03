@@ -1,0 +1,62 @@
+{
+	"name": "{{.ProjectName}}",
+	"private": true,
+	"workspaces": ["admin", ".ridu/packages/*"],
+	"dependencies": {
+		"@riducms/plugin-richtext": "{{.NPMVersion}}",
+		"@riducms/plugin-seo": "{{.NPMVersion}}",
+		"@riducms/plugin-form-builder": "{{.NPMVersion}}",
+		"@riducms/sdk": "{{.NPMVersion}}"
+	},
+	"devDependencies": {
+		"@riducms/cli": "{{.NPMVersion}}",
+		"tsx": "4.23.13"
+	},
+	"overrides": {
+		"nanoid": "3.3.18",
+		"lexical": "0.49.0",
+		"@lexical/devtools-core": "0.49.0",
+		"@lexical/dragon": "0.49.0",
+		"@lexical/hashtag": "0.49.0",
+		"@lexical/history": "0.49.0",
+		"@lexical/html": "0.49.0",
+		"@lexical/link": "0.49.0",
+		"@lexical/list": "0.49.0",
+		"@lexical/mark": "0.49.0",
+		"@lexical/markdown": "0.49.0",
+		"@lexical/overflow": "0.49.0",
+		"@lexical/plain-text": "0.49.0",
+		"@lexical/rich-text": "0.49.0",
+		"@lexical/table": "0.49.0",
+		"@lexical/text": "0.49.0",
+		"@lexical/utils": "0.49.0",
+		"@lexical/yjs": "0.49.0"
+	},
+	"resolutions": {
+		"nanoid": "3.3.18",
+		"lexical": "0.49.0",
+		"@lexical/devtools-core": "0.49.0",
+		"@lexical/dragon": "0.49.0",
+		"@lexical/hashtag": "0.49.0",
+		"@lexical/history": "0.49.0",
+		"@lexical/html": "0.49.0",
+		"@lexical/link": "0.49.0",
+		"@lexical/list": "0.49.0",
+		"@lexical/mark": "0.49.0",
+		"@lexical/markdown": "0.49.0",
+		"@lexical/overflow": "0.49.0",
+		"@lexical/plain-text": "0.49.0",
+		"@lexical/rich-text": "0.49.0",
+		"@lexical/table": "0.49.0",
+		"@lexical/text": "0.49.0",
+		"@lexical/utils": "0.49.0",
+		"@lexical/yjs": "0.49.0"
+	},
+	"scripts": {
+		"dev": "ridu dev",
+		"dev:admin": "{{.AdminDevCommand}}",
+		"ridu": "ridu",
+		"check": "ridu check",
+		"build": "ridu build"
+	}
+}

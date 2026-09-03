@@ -1,0 +1,36 @@
+{
+	"name": "@riducms/ui",
+	"description": "Framework-owned Svelte UI primitives shared by Ridu admin surfaces.",
+	"version": "0.1.0",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/riducms/ridu.git",
+		"directory": "packages/ui"
+	},
+	"homepage": "https://riducms.com",
+	"bugs": {
+		"url": "https://github.com/riducms/ridu/issues"
+	},
+	"publishConfig": {
+		"access": "public",
+		"provenance": true
+	},
+	"type": "module",
+	"exports": {
+		".": "./src/index.ts"
+	},
+	"files": [
+		"src"
+	],
+	"scripts": {
+		"check": "svelte-check --tsconfig ./tsconfig.json"
+	},
+	"dependencies": {
+		"bits-ui": "^2.18.1",
+		"tailwind-variants": "^3.3.1"
+	},
+	"peerDependencies": {
+		"svelte": "^5.56.8"
+	}
+}

@@ -1,0 +1,38 @@
+{
+	"name": "@riducms/cli",
+	"description": "Cross-platform npm launcher for Ridu's native Go CLI.",
+	"version": "0.1.0",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/riducms/ridu.git",
+		"directory": "packages/cli"
+	},
+	"homepage": "https://riducms.com",
+	"bugs": {
+		"url": "https://github.com/riducms/ridu/issues"
+	},
+	"publishConfig": {
+		"access": "public",
+		"provenance": true
+	},
+	"type": "module",
+	"exports": {
+		"./run": "./src/run.js"
+	},
+	"bin": {
+		"ridu": "./src/cli.js"
+	},
+	"files": [
+		"src/cli.js",
+		"src/launcher.js",
+		"src/run.js"
+	],
+	"scripts": {
+		"check": "bun test",
+		"test": "bun test"
+	},
+	"engines": {
+		"node": ">=20"
+	}
+}

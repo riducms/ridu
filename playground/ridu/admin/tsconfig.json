@@ -1,0 +1,23 @@
+{
+	"extends": "@tsconfig/svelte/tsconfig.json",
+	"compilerOptions": {
+		"allowJs": true,
+		"allowArbitraryExtensions": true,
+		"allowImportingTsExtensions": true,
+		"checkJs": false,
+		"lib": ["ES2023", "DOM", "DOM.Iterable"],
+		"moduleResolution": "Bundler",
+		"noEmit": true,
+		"strict": true,
+		"target": "ES2023",
+		"types": ["svelte", "vite/client", "node"],
+		"paths": {
+			"@": ["./src"],
+			"@/*": ["./src/*"],
+			"@admin/*": ["./node_modules/@riducms/admin/src/*"],
+			"@ui/*": ["./node_modules/@riducms/ui/src/*"],
+			"@plugin-richtext/*": ["./node_modules/@riducms/plugin-richtext/src/*"]
+		}
+	},
+	"include": ["src/**/*.ts", "src/**/*.svelte", "../generated/**/*.ts", "vite.config.ts"]
+}

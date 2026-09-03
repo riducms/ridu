@@ -1,0 +1,30 @@
+services:
+  mongodb:
+    image: mongo:8.2.9-noble@sha256:007773db61cb1aa44e526fb7175fc582902e67d4e6cc5f13106445767d46c818
+    command: ["mongod", "--replSet", "ridu-rs0", "--bind_ip_all"]
+    ports:
+      - "127.0.0.1::27017"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          mongosh --quiet --eval 'try { const h=db.hello(); if (h.setName === "ridu-rs0" && h.isWritablePrimary) { quit(0) }; if (!h.setName) { try { rs.initiate({_id:"ridu-rs0",members:[{_id:0,host:"mongodb:27017"}]}) } catch (_) {} } } catch (_) {}; quit(1)'
+      interval: 2s
+      timeout: 5s
+      retries: 30
+      start_period: 5s
+
+  mongodb-standalone:
+    image: mongo:8.2.9-noble@sha256:007773db61cb1aa44e526fb7175fc582902e67d4e6cc5f13106445767d46c818
+    command: ["mongod", "--bind_ip_all"]
+    ports:
+      - "127.0.0.1::27017"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          mongosh --quiet --eval 'quit(db.adminCommand({ping:1}).ok ? 0 : 1)'
+      interval: 2s
+      timeout: 5s
+      retries: 30
+      start_period: 5s

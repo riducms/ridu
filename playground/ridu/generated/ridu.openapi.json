@@ -1,0 +1,851 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Ridu API",
+    "version": "schema-1"
+  },
+  "paths": {
+    "/api/access/collections/posts/selection": {
+      "post": {
+        "operationId": "resolveSelectionposts",
+        "parameters": null,
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionSelectionInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionSelectionEnvelope"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "description": "Ridu error envelope"
+          }
+        },
+        "summary": "Resolve filtered Posts selection"
+      }
+    },
+    "/api/access/collections/users/selection": {
+      "post": {
+        "operationId": "resolveSelectionusers",
+        "parameters": null,
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionSelectionInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionSelectionEnvelope"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "description": "Ridu error envelope"
+          }
+        },
+        "summary": "Resolve filtered Users selection"
+      }
+    },
+    "/api/auth/change-password": {
+      "post": {
+        "operationId": "changePassword",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "description": "Ridu error envelope"
+          }
+        },
+        "summary": "Change the current password"
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "operationId": "logout",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "description": "Ridu error envelope"
+          }
+        },
+        "summary": "Logout"
+      }
+    },
+    "/api/auth/logout-all": {
+      "post": {
+        "operationId": "logoutAll",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "description": "Ridu error envelope"
+          }
+        },
+        "summary": "Logout all sessions"
+      }
+    },
+    "/api/auth/me": {
+      "get": {
+        "operationId": "currentSession",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "description": "Ridu error envelope"
+          }
+        },
+        "summary": "Current session"
+      }
+    },
+    "/api/auth/refresh": {
+      "post": {
+        "operationId": "refreshSession",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "description": "Ridu error envelope"
+          }
+        },
+        "summary": "Rotate current session"
+      }
+    },
+    "/api/auth/sessions": {
+      "get": {
+        "operationId": "listAuthSessions",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "description": "Ridu error envelope"
+          }
+        },
+        "summary": "List active sessions"
+      }
+    },
+    "/api/auth/sessions/{id}": {
+      "delete": {
+        "operationId": "revokeAuthSession",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "description": "Ridu error envelope"
+          }
+        },
+        "summary": "Revoke an active session"
+      },
+      "parameters": [
+        {
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    "/api/auth/users/bootstrap": {
+      "get": {
+        "operationId": "authBootstrapusers",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthBootstrapEnvelope"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "description": "Ridu error envelope"
+          }
+        },
+        "summary": "Check first-user setup availability for Users"
+      }
+    },
+    "/api/auth/users/create-user": {
+      "post": {
+        "operationId": "createAuthusers",
+        "parameters": null,
+        "responses": {
+          "201": {
+            "description": "Successful response"
+          },
+          "default": {
+            "description": "Ridu error envelope"
+          }
+        },
+        "summary": "Create User with credentials"
+      }
+    },
+    "/api/auth/users/login": {
+      "post": {
+        "operationId": "loginusers",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "description": "Ridu error envelope"
+          }
+        },
+        "summary": "Login to Users"
+      }
+    },
+    "/api/auth/users/{id}/unlock": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "forceUnlockusers",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "description": "Ridu error envelope"
+          }
+        },
+        "summary": "Force unlock User"
+      }
+    },
+    "/api/collections/posts": {
+      "get": {
+        "operationId": "listposts",
+        "parameters": [
+          {
+            "description": "Expand readable relationships recursively.",
+            "in": "query",
+            "name": "depth",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "maximum": 5,
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "description": "Ridu error envelope"
+          }
+        },
+        "summary": "List Posts"
+      },
+      "post": {
+        "operationId": "createposts",
+        "parameters": null,
+        "responses": {
+          "201": {
+            "description": "Successful response"
+          },
+          "default": {
+            "description": "Ridu error envelope"
+          }
+        },
+        "summary": "Create Post"
+      }
+    },
+    "/api/collections/posts/bulk": {
+      "post": {
+        "operationId": "bulkposts",
+        "parameters": null,
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "description": "Ridu error envelope"
+          }
+        },
+        "summary": "Bulk mutate Posts"
+      }
+    },
+    "/api/collections/posts/{id}": {
+      "delete": {
+        "operationId": "deleteposts",
+        "parameters": null,
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "description": "Ridu error envelope"
+          }
+        },
+        "summary": "Delete Post"
+      },
+      "get": {
+        "operationId": "findposts",
+        "parameters": [
+          {
+            "description": "Expand readable relationships recursively.",
+            "in": "query",
+            "name": "depth",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "maximum": 5,
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "description": "Ridu error envelope"
+          }
+        },
+        "summary": "Find Post"
+      },
+      "parameters": [
+        {
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "patch": {
+        "operationId": "updateposts",
+        "parameters": null,
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "description": "Ridu error envelope"
+          }
+        },
+        "summary": "Update Post"
+      }
+    },
+    "/api/collections/posts/{id}/copy-locale": {
+      "post": {
+        "operationId": "copyLocaleposts",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "description": "Ridu error envelope"
+          }
+        },
+        "summary": "Copy localized values between locales"
+      }
+    },
+    "/api/collections/posts/{id}/duplicate": {
+      "post": {
+        "operationId": "duplicateposts",
+        "parameters": null,
+        "responses": {
+          "201": {
+            "description": "Successful response"
+          },
+          "default": {
+            "description": "Ridu error envelope"
+          }
+        },
+        "summary": "Duplicate Post"
+      }
+    },
+    "/api/collections/users": {
+      "get": {
+        "operationId": "listusers",
+        "parameters": [
+          {
+            "description": "Expand readable relationships recursively.",
+            "in": "query",
+            "name": "depth",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "maximum": 5,
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "description": "Ridu error envelope"
+          }
+        },
+        "summary": "List Users"
+      },
+      "post": {
+        "operationId": "createusers",
+        "parameters": null,
+        "responses": {
+          "201": {
+            "description": "Successful response"
+          },
+          "default": {
+            "description": "Ridu error envelope"
+          }
+        },
+        "summary": "Create User"
+      }
+    },
+    "/api/collections/users/bulk": {
+      "post": {
+        "operationId": "bulkusers",
+        "parameters": null,
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "description": "Ridu error envelope"
+          }
+        },
+        "summary": "Bulk mutate Users"
+      }
+    },
+    "/api/collections/users/{id}": {
+      "delete": {
+        "operationId": "deleteusers",
+        "parameters": null,
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "description": "Ridu error envelope"
+          }
+        },
+        "summary": "Delete User"
+      },
+      "get": {
+        "operationId": "findusers",
+        "parameters": [
+          {
+            "description": "Expand readable relationships recursively.",
+            "in": "query",
+            "name": "depth",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "maximum": 5,
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "description": "Ridu error envelope"
+          }
+        },
+        "summary": "Find User"
+      },
+      "parameters": [
+        {
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "patch": {
+        "operationId": "updateusers",
+        "parameters": null,
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "description": "Ridu error envelope"
+          }
+        },
+        "summary": "Update User"
+      }
+    },
+    "/api/collections/users/{id}/copy-locale": {
+      "post": {
+        "operationId": "copyLocaleusers",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "description": "Ridu error envelope"
+          }
+        },
+        "summary": "Copy localized values between locales"
+      }
+    },
+    "/api/collections/users/{id}/duplicate": {
+      "post": {
+        "operationId": "duplicateusers",
+        "parameters": null,
+        "responses": {
+          "201": {
+            "description": "Successful response"
+          },
+          "default": {
+            "description": "Ridu error envelope"
+          }
+        },
+        "summary": "Duplicate User"
+      }
+    },
+    "/api/preferences": {
+      "delete": {
+        "operationId": "resetPreferences",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "description": "Ridu error envelope"
+          }
+        },
+        "summary": "Reset current user preferences"
+      }
+    },
+    "/api/preferences/{key}": {
+      "delete": {
+        "operationId": "deletePreference",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "description": "Ridu error envelope"
+          }
+        },
+        "summary": "Delete a current user preference"
+      },
+      "get": {
+        "operationId": "getPreference",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "description": "Ridu error envelope"
+          }
+        },
+        "summary": "Read a current user preference"
+      },
+      "parameters": [
+        {
+          "in": "path",
+          "name": "key",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "put": {
+        "operationId": "setPreference",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "description": "Ridu error envelope"
+          }
+        },
+        "summary": "Set a current user preference"
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AccessCapabilities": {
+        "type": "object",
+        "properties": {
+          "fields": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/FieldCapabilities"
+            },
+            "type": "object"
+          },
+          "operations": {
+            "$ref": "#/components/schemas/OperationCapabilities"
+          }
+        },
+        "required": [
+          "operations",
+          "fields"
+        ]
+      },
+      "AuthBootstrapEnvelope": {
+        "type": "object",
+        "properties": {
+          "available": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "available"
+        ]
+      },
+      "CollectionSelectionEnvelope": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CollectionSelectionItem"
+            },
+            "type": "array"
+          },
+          "totalDocs": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "totalDocs"
+        ]
+      },
+      "CollectionSelectionInput": {
+        "type": "object",
+        "properties": {
+          "trash": {
+            "type": "boolean"
+          },
+          "where": {
+            "type": "object"
+          }
+        }
+      },
+      "CollectionSelectionItem": {
+        "type": "object",
+        "properties": {
+          "access": {
+            "$ref": "#/components/schemas/AccessCapabilities"
+          },
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "access"
+        ]
+      },
+      "FieldCapabilities": {
+        "type": "object",
+        "properties": {
+          "create": {
+            "type": "boolean"
+          },
+          "read": {
+            "type": "boolean"
+          },
+          "update": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "read",
+          "create",
+          "update"
+        ]
+      },
+      "OperationCapabilities": {
+        "type": "object",
+        "properties": {
+          "admin": {
+            "type": "boolean"
+          },
+          "create": {
+            "type": "boolean"
+          },
+          "delete": {
+            "type": "boolean"
+          },
+          "deletePermanent": {
+            "type": "boolean"
+          },
+          "duplicate": {
+            "type": "boolean"
+          },
+          "publish": {
+            "type": "boolean"
+          },
+          "read": {
+            "type": "boolean"
+          },
+          "readVersions": {
+            "type": "boolean"
+          },
+          "restoreDeleted": {
+            "type": "boolean"
+          },
+          "selectAll": {
+            "type": "boolean"
+          },
+          "unpublish": {
+            "type": "boolean"
+          },
+          "update": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "admin",
+          "create",
+          "read",
+          "readVersions",
+          "update",
+          "delete",
+          "duplicate",
+          "publish",
+          "unpublish",
+          "restoreDeleted",
+          "deletePermanent",
+          "selectAll"
+        ]
+      },
+      "posts": {
+        "type": "object",
+        "properties": {
+          "author": {
+            "type": "string",
+            "nullable": true
+          },
+          "content": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "root": {
+                    "type": "object"
+                  },
+                  "version": {
+                    "const": 1
+                  }
+                },
+                "required": [
+                  "version",
+                  "root"
+                ],
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "draft",
+              "published"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "createdAt",
+          "updatedAt",
+          "title"
+        ]
+      },
+      "users": {
+        "type": "object",
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "email": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "createdAt",
+          "updatedAt",
+          "email"
+        ]
+      }
+    }
+  }
+}

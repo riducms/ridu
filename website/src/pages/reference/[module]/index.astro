@@ -1,0 +1,82 @@
+---
+import riduArchLogo from '@/assets/ridu-logo-arch.svg';
+import ReferenceShell from '@/components/reference/reference-shell.astro';
+import {
+	groupReferenceSymbols,
+	referenceGroupID,
+	referenceSymbolDisplayName,
+	referenceModules,
+	type ReferenceModule
+} from '@/reference';
+
+export function getStaticPaths() {
+	return referenceModules.map((module) => ({ params: { module: module.slug }, props: { module } }));
+}
+
+interface Props {
+	module: ReferenceModule;
+}
+
+const { module } = Astro.props;
+const symbolGroups = groupReferenceSymbols(module);
+---
+
+<ReferenceShell title={`${module.name} reference`} description={module.summary} {module}>
+	<article class="reference-page">
+		<header class="reference-header">
+			<p class="reference-kind">Module</p>
+			<h1 class="reference-title reference-title-row">
+				<img class="reference-mark" src={riduArchLogo.src} alt="" />
+				<a href={`/reference/${module.slug}/`}>{module.name}</a>
+			</h1>
+		</header>
+		<p class="reference-module-description">
+			<code>{module.packageName}</code> — {module.summary}
+		</p>
+
+		<nav class="reference-group-nav" aria-label="Symbol groups">
+			{
+				[...symbolGroups].map(([group, symbols]) => (
+					<a href={`#${referenceGroupID(group)}`}>
+						{group} <span class="ml-0.75">{symbols.length}</span>
+					</a>
+				))
+			}
+		</nav>
+
+		{
+			[...symbolGroups].map(([group, symbols]) => (
+				<section class="reference-symbol-group" id={referenceGroupID(group)}>
+					<h2 class="reference-group-title">
+						{group} <small class="reference-group-count">{symbols.length}</small>
+					</h2>
+					<ul class="reference-symbol-list">
+						{symbols.map((symbol) => {
+							const callable = symbol.kind === 'function' || symbol.kind === 'method';
+							const keyword = callable ? '' : `${symbol.kind}\u00a0`;
+							const displayName = referenceSymbolDisplayName(module, symbol);
+							return (
+								<li class="reference-symbol-row" data-reference-kind={symbol.kind}>
+									<a
+										class="reference-symbol-name"
+										href={`/reference/${module.slug}/${symbol.slug}/`}
+									>
+										<code>
+											{keyword && <span class="reference-symbol-keyword">{keyword}</span>}
+											<span class="reference-symbol-prefix">{displayName.qualifier}</span>
+											<strong class="reference-symbol-label">{displayName.label}</strong>
+											{callable && <span class="reference-symbol-call">()</span>}
+										</code>
+									</a>
+									{symbol.kind !== 'method' && !(symbols.length > 30) ? (
+										<p class="reference-symbol-summary">{symbol.summary}</p>
+									) : null}
+								</li>
+							);
+						})}
+					</ul>
+				</section>
+			))
+		}
+	</article>
+</ReferenceShell>

@@ -1,0 +1,137 @@
+---
+import DocsShell from '@/components/docs/docs-shell.astro';
+import DocumentPagination from '@/components/docs/document-pagination.astro';
+import {
+	getAdjacentDocumentationLocation,
+	getAuthoredDocumentationPage
+} from '@/config/documentation';
+import BaseLayout from '@/layouts/base-layout.astro';
+
+const page = getAuthoredDocumentationPage('docs', '');
+if (!page) throw new Error('Documentation landing metadata is missing');
+const { previous, next } = await getAdjacentDocumentationLocation({ area: 'docs', slug: '' });
+const toc = [
+	{ label: 'Start building', href: '#start-building' },
+	{ label: 'Choose a topic', href: '#choose-a-topic' }
+];
+
+const paths = [
+	{
+		title: 'Model content',
+		description: 'Define collections, globals, fields, relationships, and localized values in Go.',
+		href: '/docs/collections/',
+		links: [
+			{ label: 'Fields', href: '/docs/fields/' },
+			{ label: 'Relationships', href: '/docs/relationships/' }
+		]
+	},
+	{
+		title: 'Work with data',
+		description:
+			'Use the local Go API, REST, or generated TypeScript SDK through one operation model.',
+		href: '/docs/data-access/',
+		links: [
+			{ label: 'TypeScript SDK', href: '/docs/typescript-sdk/' },
+			{ label: 'Querying', href: '/docs/querying/' }
+		]
+	},
+	{
+		title: 'Admin & workflows',
+		description: 'Learn the embedded authoring UI, drafts, versions, uploads, and live preview.',
+		href: '/docs/admin/',
+		links: [
+			{ label: 'Editorial workflows', href: '/docs/editorial-workflows/' },
+			{ label: 'Live preview', href: '/guides/live-preview/' }
+		]
+	},
+	{
+		title: 'Adapters',
+		description:
+			'Choose SQLite, PostgreSQL, or the supported MongoDB profile and connect existing services.',
+		href: '/docs/adapters/',
+		links: [
+			{ label: 'PostgreSQL', href: '/docs/postgres/' },
+			{ label: 'MongoDB', href: '/docs/mongodb/' }
+		]
+	},
+	{
+		title: 'Extend Ridu',
+		description: 'Register trusted Go plugins and pair their statically imported admin extensions.',
+		href: '/docs/plugins/',
+		links: [
+			{ label: 'Rich text', href: '/docs/rich-text/' },
+			{ label: 'Custom fields', href: '/guides/custom-fields/' }
+		]
+	},
+	{
+		title: 'Develop & operate',
+		description:
+			'Generate contracts, run migrations, build, deploy, and troubleshoot an application.',
+		href: '/docs/production/',
+		links: [
+			{ label: 'Prevent abuse', href: '/docs/preventing-abuse/' },
+			{ label: 'CLI', href: '/docs/cli/' }
+		]
+	}
+];
+---
+
+<BaseLayout title={page.title} description={page.description} active="docs" wide footer={false}>
+	<DocsShell {page} {toc} prose={false}>
+		<section class="border-b border-line py-10" id="start-building">
+			<h2 class="m-b max-w-170 text-[clamp(1.8rem,4vw,2.65rem)] leading-[1.05]">
+				Build a working project before learning the whole framework.
+			</h2>
+			<p class="max-w-170 text-16px leading-[1.65] text-ink-soft">
+				Choose SQLite or PostgreSQL, open the admin, create a document, and read it through the
+				generated SDK. Both routes converge on the same application.
+			</p>
+			<div class="mt-5.6 flex flex-wrap items-center gap-x-4.4 gap-y-2.8">
+				<a
+					class="border border-accent rd-3px bg-accent-soft px-3.6 py-2.8 text-ink no-underline hover:text-accent"
+					href="/docs/quickstart/">Start the Quickstart <span>→</span></a
+				>
+				<a class="text-ink no-underline hover:text-accent" href="/docs/installation/"
+					>Installation and recovery</a
+				>
+				<a class="text-ink no-underline hover:text-accent" href="/guides/project-structure/"
+					>Understand the scaffold</a
+				>
+			</div>
+		</section>
+
+		<section class="border-b border-line py-10" id="choose-a-topic">
+			<header>
+				<h2 class="m-0 max-w-170 text-[clamp(1.8rem,4vw,2.65rem)] leading-[1.05]">
+					Choose the outcome you need.
+				</h2>
+			</header>
+			<div class="mt-6 grid grid-cols-[repeat(auto-fit,minmax(min(100%,250px),1fr))] gap-2.8">
+				{
+					paths.map((path) => (
+						<article class="flex min-w-0 flex-col border border-line rd-4px bg-surface p-4">
+							<h3 class="mt-0 mb-2.2 text-16px">
+								<a class="text-ink no-underline hover:text-accent" href={path.href}>
+									{path.title}
+								</a>
+							</h3>
+							<p class="mt-0 text-[0.82rem] leading-[1.55] text-ink-soft">{path.description}</p>
+							<nav
+								class="mt-auto flex flex-wrap gap-x-3.2 gap-y-1.8 pt-2.4"
+								aria-label={`${path.title} links`}
+							>
+								{path.links.map((link) => (
+									<a class="text-12px text-accent no-underline" href={link.href}>
+										{link.label}
+									</a>
+								))}
+							</nav>
+						</article>
+					))
+				}
+			</div>
+		</section>
+
+		<DocumentPagination {previous} {next} />
+	</DocsShell>
+</BaseLayout>

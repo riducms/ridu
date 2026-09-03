@@ -1,0 +1,76 @@
+---
+import { capabilities, type CapabilityStatus } from '@/capabilities/registry';
+
+const statusLabels: Record<CapabilityStatus, string> = {
+	available: 'Available',
+	limited: 'Limited',
+	experimental: 'Experimental',
+	planned: 'Planned'
+};
+const statusClasses: Record<CapabilityStatus, string> = {
+	available: 'text-green',
+	limited: 'text-accent',
+	experimental: 'text-violet',
+	planned: 'text-blue'
+};
+
+const categories = new Map<string, typeof capabilities>();
+for (const capability of capabilities) {
+	categories.set(capability.category, [...(categories.get(capability.category) ?? []), capability]);
+}
+---
+
+<section class="mt-10 mb-14" aria-labelledby="capability-matrix-title">
+	<header class="max-w-180">
+		<h2 class="mt-0" id="capability-matrix-title">Capability matrix</h2>
+		<p class="mt-0">Check the limits for a capability, then follow its setup guide.</p>
+	</header>
+	{
+		[...categories].map(([category, entries]) => (
+			<section
+				class="mt-8"
+				aria-labelledby={`capability-${category.toLowerCase().replaceAll(/[^a-z0-9]+/g, '-')}`}
+			>
+				<h3 class="mt-0" id={`capability-${category.toLowerCase().replaceAll(/[^a-z0-9]+/g, '-')}`}>
+					{category}
+				</h3>
+				<div class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,290px),1fr))] gap-3.4">
+					{entries.map((capability) => (
+						<article
+							class="flex min-w-0 flex-col gap-3 border border-line rd-6px bg-surface-raised/56 p-4"
+							data-capability-status={capability.status}
+							id={`capability-${capability.id}`}
+						>
+							<div class="flex-s-between-start gap-3.2">
+								<h4 class="mt-0 text-16px">{capability.name}</h4>
+								<span
+									class:list={[
+										'flex-none border border-current rd-full px-1.8 py-[0.16rem] font-mono text-[0.6rem] tracking-[0.05em] uppercase',
+										statusClasses[capability.status]
+									]}
+								>
+									{statusLabels[capability.status]}
+								</span>
+							</div>
+							<p class="mt-0 text-[0.82rem] leading-[1.55] text-ink-soft">{capability.summary}</p>
+							{capability.qualificationLimits.length > 0 && (
+								<ul class="m-0 pl-4.4">
+									{capability.qualificationLimits.map((limit) => (
+										<li class="text-[0.82rem] leading-[1.55] text-ink-soft">{limit}</li>
+									))}
+								</ul>
+							)}
+							<footer class="mt-auto flex flex-wrap gap-3 pt-0.8">
+								{capability.guides.map((guide, index) => (
+									<a class="text-12px text-accent" href={guide}>
+										{index === 0 ? 'Setup guide' : `Related guide ${index + 1}`}
+									</a>
+								))}
+							</footer>
+						</article>
+					))}
+				</div>
+			</section>
+		))
+	}
+</section>

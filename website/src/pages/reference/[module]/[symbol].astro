@@ -1,0 +1,146 @@
+---
+import riduArchLogo from '@/assets/ridu-logo-arch.svg';
+import ReferenceShell from '@/components/reference/reference-shell.astro';
+import ReferenceSymbolDefinition from '@/components/reference/reference-symbol-definition.astro';
+import { getDocumentationPages } from '@/config/documentation';
+import {
+	inlineReferencedTypeEntries,
+	receiverMethodEntries,
+	referenceModules,
+	type ReferenceModule,
+	type ReferenceSymbol
+} from '@/reference';
+
+interface RelatedDocumentation {
+	title: string;
+	href: string;
+}
+
+export async function getStaticPaths() {
+	const documentationPages = await getDocumentationPages();
+	const documentationByHref = new Map(
+		documentationPages.map((page) => [page.href, { title: page.title, href: page.href }])
+	);
+	const documentationBySymbol = new Map<string, RelatedDocumentation[]>();
+	for (const page of documentationPages) {
+		for (const symbolID of page.relatedSymbolIds) {
+			const related = documentationBySymbol.get(symbolID) ?? [];
+			related.push({ title: page.title, href: page.href });
+			documentationBySymbol.set(symbolID, related);
+		}
+	}
+
+	return referenceModules.flatMap((module) =>
+		module.symbols.map((symbol) => {
+			const relatedDocumentation = [
+				...symbol.relatedDocs.map(
+					(href): RelatedDocumentation => documentationByHref.get(href) ?? { title: href, href }
+				),
+				...(documentationBySymbol.get(symbol.id) ?? [])
+			].filter(
+				(candidate, index, candidates) =>
+					candidates.findIndex((other) => other.href === candidate.href) === index
+			);
+			return {
+				params: { module: module.slug, symbol: symbol.slug },
+				props: { module, symbol, relatedDocumentation }
+			};
+		})
+	);
+}
+
+interface Props {
+	module: ReferenceModule;
+	symbol: ReferenceSymbol;
+	relatedDocumentation: RelatedDocumentation[];
+}
+
+const { module, symbol, relatedDocumentation } = Astro.props;
+const titlePrefix = symbol.kind === 'command' || symbol.name.includes('.') ? '' : `${module.name}.`;
+const fullSymbolName = `${titlePrefix}${symbol.name}`;
+const symbolHref = `/reference/${module.slug}/${symbol.slug}/`;
+const referencedTypes = inlineReferencedTypeEntries(symbol);
+const receiverMethods = receiverMethodEntries(module, symbol);
+---
+
+<ReferenceShell
+	title={fullSymbolName}
+	description={symbol.summary}
+	{module}
+	activeSymbol={symbol.slug}
+>
+	<article class="reference-page">
+		<header class="reference-header">
+			<p class="reference-kind" data-reference-kind={symbol.kind}>{symbol.kind}</p>
+			<h1 class="reference-title reference-title-row">
+				<img class="reference-mark" src={riduArchLogo.src} alt="" />
+				<a href={symbolHref}>{symbol.name}</a>
+			</h1>
+		</header>
+
+		<ReferenceSymbolDefinition {symbol} href={symbolHref} />
+
+		{
+			receiverMethods.length > 0 && (
+				<section class="reference-section">
+					<h2 class="reference-section-title">Methods</h2>
+					<ul class="reference-symbol-list">
+						{receiverMethods.map((entry) => (
+							<li class="reference-symbol-row" data-reference-kind="method">
+								<a
+									class="reference-symbol-name"
+									href={`/reference/${entry.module.slug}/${entry.symbol.slug}/`}
+								>
+									<code>
+										<span class="reference-symbol-prefix">{symbol.name}.</span>
+										<strong class="reference-symbol-label">
+											{entry.symbol.name.slice(symbol.name.length + 1)}
+										</strong>
+										<span class="reference-symbol-call">()</span>
+									</code>
+								</a>
+								<p class="reference-symbol-summary">{entry.symbol.summary}</p>
+							</li>
+						))}
+					</ul>
+				</section>
+			)
+		}
+
+		{
+			referencedTypes.length > 0 && (
+				<section class="reference-section">
+					<h2 class="reference-section-title">Related types</h2>
+					<ul class="reference-symbol-list">
+						{referencedTypes.map((entry) => (
+							<li class="reference-symbol-row" data-reference-kind={entry.symbol.kind}>
+								<a
+									class="reference-symbol-name"
+									href={`/reference/${entry.module.slug}/${entry.symbol.slug}/`}
+								>
+									<code>{entry.symbol.name}</code>
+								</a>
+								<p class="reference-symbol-summary">{entry.symbol.summary}</p>
+							</li>
+						))}
+					</ul>
+				</section>
+			)
+		}
+
+		{
+			relatedDocumentation.length > 0 && (
+				<section class="reference-section">
+					<h2 class="reference-section-title">Related guides</h2>
+					<ul class="reference-related-guides">
+						{relatedDocumentation.map((document) => (
+							<li>
+								<a href={document.href}>{document.title}</a>
+							</li>
+						))}
+					</ul>
+				</section>
+			)
+		}
+	</article>
+</ReferenceShell>

@@ -1,0 +1,198 @@
+---
+import DocToc from '@/components/docs/doc-toc.astro';
+import DocumentPageActions from '@/components/docs/document-page-actions.astro';
+import DocumentationNavigation from '@/components/docs/documentation-navigation.astro';
+import DocumentationNavigationScript from '@/components/docs/documentation-navigation-script.astro';
+import {
+	getDocumentationNavigation,
+	type DocumentationArea,
+	type DocumentationAvailability,
+	type DocumentationLayout,
+	type DocumentationNavigationItem,
+	type DocumentationSection
+} from '@/config/documentation';
+
+interface TocItem {
+	label: string;
+	href: string;
+	depth?: 2 | 3;
+}
+
+interface ShellPage {
+	area: DocumentationArea;
+	href: string;
+	section: DocumentationSection;
+	parent?: string;
+	eyebrow: string;
+	title: string;
+	description: string;
+	availability?: DocumentationAvailability;
+	capabilityIds?: string[];
+	layout?: DocumentationLayout;
+}
+
+interface Props {
+	page: ShellPage;
+	toc: TocItem[];
+	prose?: boolean;
+	pageActions?: boolean;
+}
+
+const { page, toc, prose = true, pageActions = false } = Astro.props;
+const navigation = await getDocumentationNavigation();
+const path = Astro.url.pathname;
+const currentSection = navigation.find((section) => section.label === page.section);
+
+const findItem = (
+	items: DocumentationNavigationItem[],
+	predicate: (item: DocumentationNavigationItem) => boolean
+): DocumentationNavigationItem | undefined => {
+	for (const item of items) {
+		if (predicate(item)) return item;
+		const nested = findItem(item.children, predicate);
+		if (nested) return nested;
+	}
+	return undefined;
+};
+
+const parentItem = page.parent
+	? findItem(currentSection?.items ?? [], (item) =>
+			[item.id, item.id.split('/').at(-1)].includes(page.parent)
+		)
+	: undefined;
+
+const statusLabels = {
+	available: 'Available',
+	limited: 'Limited',
+	experimental: 'Experimental',
+	planned: 'Planned'
+} as const;
+const availability = page.availability?.status === 'available' ? undefined : page.availability;
+const availabilityHref = availability?.anchor
+	? `#${availability.anchor}`
+	: availability
+		? `/docs/status/#${availability.status}`
+		: undefined;
+const availabilityClass =
+	availability?.status === 'experimental'
+		? 'border-violet/40 bg-violet/8 text-violet'
+		: availability?.status === 'planned'
+			? 'border-blue/40 bg-blue/8 text-blue'
+			: 'border-accent/40 bg-accent/8 text-accent';
+const wide = page.layout === 'wide';
+---
+
+<div
+	class:list={[
+		'mx-auto block min-h-page w-full md:(grid w-docs grid-cols-[240px_minmax(0,1fr)])',
+		wide
+			? 'xl:(w-docs-wide grid-cols-[260px_minmax(0,1fr)_220px])'
+			: 'xl:grid-cols-[288px_minmax(0,880px)_240px]'
+	]}
+>
+	<details
+		class="docs-navigation-panel mx-5 mt-4.5 border border-line bg-surface md:(sticky top-$page-header-height m-0 bg-transparent b-0 h-page self-start overflow-hidden border-r)"
+		open
+		transition:persist="documentation-navigation"
+		data-documentation-navigation
+		data-mobile-open="false"
+	>
+		<summary
+			class="cursor-pointer list-inside px-3.25 py-2.75 font-mono text-11px text-ink-soft md:hidden"
+		>
+			Browse all documentation
+		</summary>
+		<nav
+			class="site-scrollbar overflow-y-auto px-3.5 pt-3 pb-4.5 max-h-[68vh] border-t border-line md:(max-h-page b-t-0 px-5 py-7 pr-7 pb-15)"
+			aria-label="Documentation navigation"
+		>
+			<DocumentationNavigation sections={navigation} {path} />
+		</nav>
+	</details>
+
+	<article
+		class:list={[
+			'docs-document min-w-0 px-5 pt-8.5 pb-33 md:(px-9 pt-10) xl:pb-22.5',
+			wide ? 'xl:px-10' : 'xl:px-14'
+		]}
+	>
+		<header class="border-b border-line pb-8">
+			<div class="flex-s-between flex-wrap gap-3">
+				<nav class="flex flex-wrap items-center gap-2 text-12.5px" aria-label="Breadcrumb">
+					<a class="text-ink-soft no-underline hover:text-accent" href="/docs/">Docs</a>
+					<span class="font-mono text-ink-faint" aria-hidden="true">›</span>
+					<a
+						class="text-ink-soft no-underline hover:text-accent"
+						href={currentSection?.items.find((item) => item.href)?.href ?? '/docs/'}
+					>
+						{page.section}
+					</a>
+					{
+						parentItem?.href && parentItem.href !== page.href && (
+							<>
+								<span class="font-mono text-ink-faint" aria-hidden="true">
+									›
+								</span>
+								<a class="text-ink-soft no-underline hover:text-accent" href={parentItem.href}>
+									{parentItem.label}
+								</a>
+							</>
+						)
+					}
+					<span class="font-mono text-ink-faint" aria-hidden="true">›</span>
+					<span class="text-accent">{page.eyebrow}</span>
+				</nav>
+				{pageActions && <DocumentPageActions title={page.title} href={page.href} />}
+			</div>
+			<div class="mt-2.25 mb-2 flex flex-wrap items-center gap-3">
+				<h1 class="m-0 text-38px leading-[1.05] md:text-42px">
+					{page.title}
+				</h1>
+				{
+					availability && availabilityHref && (
+						<a
+							class:list={[
+								'inline-flex items-center border px-2 py-1 font-mono text-9.5px tracking-[0.08em] no-underline uppercase',
+								availabilityClass
+							]}
+							href={availabilityHref}
+							aria-label={`${statusLabels[availability.status]}: ${availability.description}`}
+							title={availability.description}
+						>
+							{statusLabels[availability.status]}
+						</a>
+					)
+				}
+			</div>
+			<p class="m-0 max-w-760px text-17px leading-[1.6] text-ink-soft">{page.description}</p>
+		</header>
+		<div class:list={{ 'docs-prose': prose }}>
+			<slot name="before-content" />
+			<slot />
+		</div>
+	</article>
+
+	<DocToc items={toc} />
+</div>
+
+<DocumentationNavigationScript />
+
+<style>
+	.docs-document :global(h2),
+	.docs-document :global(h3),
+	.docs-document :global(h4) {
+		font-family: var(--font-body);
+	}
+
+	.docs-document :global(h2) {
+		font-weight: 500;
+	}
+
+	.docs-document :global(h3) {
+		font-weight: 500;
+	}
+
+	.docs-document :global(h4) {
+		font-weight: 500;
+	}
+</style>

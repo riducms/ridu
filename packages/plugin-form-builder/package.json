@@ -1,0 +1,43 @@
+{
+	"name": "@riducms/plugin-form-builder",
+	"description": "Dynamic form contracts and admin pairing for Ridu's official Form Builder plugin.",
+	"version": "0.1.0",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/riducms/ridu.git",
+		"directory": "packages/plugin-form-builder"
+	},
+	"homepage": "https://riducms.com",
+	"bugs": {
+		"url": "https://github.com/riducms/ridu/issues"
+	},
+	"publishConfig": {
+		"access": "public",
+		"provenance": true
+	},
+	"type": "module",
+	"exports": {
+		".": "./src/index.ts",
+		"./admin": "./src/admin.ts"
+	},
+	"files": [
+		"src"
+	],
+	"scripts": {
+		"check": "tsc --noEmit",
+		"test": "bun test"
+	},
+	"peerDependencies": {
+		"@riducms/plugin": "workspace:*"
+	},
+	"peerDependenciesMeta": {
+		"@riducms/plugin": {
+			"optional": true
+		}
+	},
+	"devDependencies": {
+		"@riducms/plugin": "workspace:*",
+		"typescript": "~6.0.2"
+	}
+}

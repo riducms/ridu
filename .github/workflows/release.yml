@@ -1,0 +1,165 @@
+name: Publish a tested Ridu release
+run-name: Publish Ridu v${{ inputs.version }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Exact coordinated version to publish, without the v prefix
+        required: true
+        type: string
+      commit_sha:
+        description: Exact reviewed public main commit to release
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-ridu-release
+  cancel-in-progress: false
+
+env:
+  GOTOOLCHAIN: local
+
+jobs:
+  publish:
+    name: Test v${{ inputs.version }}, publish npm packages, and create the GitHub release
+    if: github.repository == 'riducms/ridu'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    permissions:
+      artifact-metadata: write
+      attestations: write
+      contents: write
+      id-token: write
+    services:
+      postgres:
+        image: postgres:17-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73
+        env:
+          POSTGRES_DB: ridu
+          POSTGRES_PASSWORD: ridu
+          POSTGRES_USER: ridu
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ridu -d ridu"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      RIDU_POSTGRES_CLIENT_IMAGE: postgres:17-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73
+      RIDU_POSTGRES_RECOVERY_DRILL: "1"
+      RIDU_POSTGRES_URL: postgres://ridu:ridu@localhost:5432/ridu?sslmode=disable
+    steps:
+      - name: Check out the public source revision
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Require public main on the release-qualified runner
+        env:
+          EXPECTED_COMMIT_SHA: ${{ inputs.commit_sha }}
+        run: |
+          test "${GITHUB_REPOSITORY}" = "riducms/ridu"
+          test "${GITHUB_REF}" = "refs/heads/main"
+          test "${GITHUB_SHA}" = "${EXPECTED_COMMIT_SHA}"
+          test "$(git rev-parse HEAD)" = "${EXPECTED_COMMIT_SHA}"
+          test "${RUNNER_OS}" = "Linux"
+          test "${RUNNER_ARCH}" = "X64"
+          test "$(uname -m)" = "x86_64"
+
+      - name: Install Go 1.25.13
+        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version: "1.25.13"
+          cache: false
+
+      - name: Install Bun 1.4.0
+        uses: oven-sh/setup-bun@3d267786b128fe76c2f16a390aa2448b815359f3 # v2.1.2
+        with:
+          bun-version: "1.4.0"
+
+      - name: Install Node.js 24 and npm
+        uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
+        with:
+          node-version: "24"
+          package-manager-cache: false
+
+      - name: Install GoReleaser 2.18.0
+        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7
+        with:
+          distribution: goreleaser
+          version: v2.18.0
+          install-only: true
+
+      - name: Verify the requested coordinated version is unpublished
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED_VERSION: ${{ inputs.version }}
+        run: |
+          bun ./scripts/check-release-version.ts "v${REQUESTED_VERSION}"
+          release_tag="v${REQUESTED_VERSION}"
+          if git show-ref --verify --quiet "refs/tags/${release_tag}"
+          then
+            echo "tag ${release_tag} already exists; refusing to replace a release" >&2
+            exit 1
+          fi
+          if gh release view "${release_tag}" >/dev/null 2>&1
+          then
+            echo "GitHub release ${release_tag} already exists; refusing to replace it" >&2
+            exit 1
+          fi
+          echo "tag=${release_tag}" >> "${GITHUB_OUTPUT}"
+
+      - name: Verify private vulnerability reporting is enabled
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api "repos/${GITHUB_REPOSITORY}/private-vulnerability-reporting" | jq -e '.enabled == true' >/dev/null
+
+      - name: Install locked JavaScript dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install the release-qualified Chromium browser
+        run: bunx playwright install --with-deps chromium
+
+      - name: Run the complete Ridu release qualification
+        run: make release-check
+
+      - name: Pack the exact npm release artifacts
+        run: bash ./scripts/prepare-release-packages.sh "${GITHUB_WORKSPACE}/.ridu/release-npm"
+
+      - name: Publish npm packages through trusted publishing
+        run: bash ./scripts/publish-release-packages.sh .ridu/release-npm
+
+      - name: Create the local release tag after npm succeeds
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: git tag "${RELEASE_TAG}" "${GITHUB_SHA}"
+
+      - name: Build and draft the GitHub release with GoReleaser
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: goreleaser release --clean
+
+      - name: Attest release provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        with:
+          subject-checksums: dist/SHA256SUMS
+
+      - name: Attest the release SBOM
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        with:
+          subject-path: |
+            dist/*.tar.gz
+            dist/*.zip
+          sbom-path: .ridu/release-metadata/ridu.spdx.json
+
+      - name: Publish the verified GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: gh release edit "${RELEASE_TAG}" --draft=false

@@ -1,0 +1,26 @@
+---
+import BaseLayout from '@/layouts/base-layout.astro';
+import type { ReferenceModule } from '@/reference';
+import ReferenceMobileNav from './reference-mobile-nav.astro';
+import ReferenceSidebar from './reference-sidebar.astro';
+import './reference.css';
+
+interface Props {
+	title: string;
+	description: string;
+	module?: ReferenceModule;
+	activeSymbol?: string;
+}
+
+const { title, description, module, activeSymbol } = Astro.props;
+---
+
+<BaseLayout {title} {description} active="reference" wide footer={false}>
+	<div class="reference-shell mx-auto min-h-page w-reference">
+		<ReferenceSidebar {module} active={activeSymbol} />
+		<div class="reference-content">
+			<ReferenceMobileNav {module} {activeSymbol} />
+			<slot />
+		</div>
+	</div>
+</BaseLayout>

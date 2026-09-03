@@ -1,0 +1,40 @@
+{
+	"name": "@riducms/plugin-seo",
+	"description": "Search metadata authoring for Ridu's official SEO plugin.",
+	"version": "0.1.0",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/riducms/ridu.git",
+		"directory": "packages/plugin-seo"
+	},
+	"homepage": "https://riducms.com",
+	"bugs": {
+		"url": "https://github.com/riducms/ridu/issues"
+	},
+	"publishConfig": {
+		"access": "public",
+		"provenance": true
+	},
+	"type": "module",
+	"exports": {
+		".": "./src/index.ts"
+	},
+	"files": [
+		"src"
+	],
+	"scripts": {
+		"check": "svelte-check --tsconfig ./tsconfig.json",
+		"test": "bun test",
+		"build": "vite build"
+	},
+	"dependencies": {
+		"@riducms/plugin": "workspace:*",
+		"@riducms/ui": "workspace:*",
+		"@riducms/protocol": "workspace:*",
+		"svelte": "^5.56.8"
+	},
+	"devDependencies": {
+		"@riducms/build": "workspace:*"
+	}
+}

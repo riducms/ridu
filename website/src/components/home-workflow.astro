@@ -1,0 +1,194 @@
+---
+import CodeBlock from '@/components/code/code-block.astro';
+
+const model = `package content
+
+import (
+	"github.com/riducms/ridu"
+	"github.com/riducms/ridu/field"
+)
+
+var Posts = ridu.Collection{
+	Slug: "posts",
+	Fields: []field.Definition{
+		field.Text("title", field.Required()),
+		field.Select("status",
+			field.OneOf("draft", "published"),
+		),
+	},
+}`;
+
+const development = `$ npm run dev
+
+INFO  Ridu is ready
+  Admin  http://127.0.0.1:5173/admin/
+  API    http://127.0.0.1:8080
+INFO  Watching Go configuration; press Ctrl+C to stop`;
+
+const client = `import { createClient } from '../generated/ridu.generated';
+
+const ridu = createClient({ baseURL: 'http://localhost:8080' });
+
+const page = await ridu.list('posts', {
+	where: { status: { equals: 'published' } }
+});
+
+console.log(page.docs);`;
+
+const production = `$ npm run build
+
+INFO  Verified migration artifact history
+Built dist/content`;
+
+const steps = [
+	{
+		id: 'model',
+		title: 'Define the model',
+		code: 'content/posts.go',
+		description: 'Define fields, access rules, hooks, tasks, and backend plugins in Go.'
+	},
+	{
+		id: 'develop',
+		title: 'Work locally',
+		code: 'npm run dev',
+		description:
+			'One command refreshes contracts, prepares the development database, and runs the API and admin.'
+	},
+	{
+		id: 'consume',
+		title: 'Read content',
+		code: 'scripts/read-posts.ts',
+		description: 'Query published posts through the generated Fetch client.'
+	},
+	{
+		id: 'ship',
+		title: 'Build the application',
+		code: 'npm run build',
+		description: 'Ridu builds the admin and server, then emits one application binary.'
+	}
+] as const;
+---
+
+<section class="py-14 sm:py-18" aria-labelledby="workflow-title" data-home-workflow>
+	<div class="max-w-700px">
+		<h2 id="workflow-title" class="m-0 text-38px leading-[1.05] sm:text-48px">
+			From content model to running application.
+		</h2>
+		<p class="mt-4 mb-0 text-16px leading-[1.65] text-ink-soft sm:text-18px">
+			Define the model, work with it in the admin, use it from application code, and build the
+			production binary.
+		</p>
+	</div>
+
+	<div
+		class="mt-10 grid items-start gap-6 lg:(grid-cols-[minmax(280px,0.72fr)_minmax(0,1.28fr)] gap-10)"
+	>
+		<div
+			class="grid gap-2"
+			role="tablist"
+			aria-label="Ridu application workflow"
+			aria-orientation="vertical"
+		>
+			{
+				steps.map((step, index) => (
+					<button
+						id={`workflow-tab-${step.id}`}
+						class="grid w-full grid-cols-[34px_minmax(0,1fr)] gap-x-3 rounded-4px border border-transparent px-3.5 py-3.5 text-left text-ink-soft hover:(border-line bg-surface) aria-[selected=true]:(border-line-strong bg-surface-raised text-ink)"
+						type="button"
+						role="tab"
+						aria-selected={index === 0 ? 'true' : 'false'}
+						aria-controls={`workflow-panel-${step.id}`}
+						tabindex={index === 0 ? 0 : -1}
+						data-home-workflow-tab={step.id}
+					>
+						<span class="mt-0.5 grid size-7 place-items-center rounded-full bg-surface text-12px text-ink-faint">
+							{index + 1}
+						</span>
+						<span class="min-w-0">
+							<strong class="block font-heading text-18px font-400 text-ink">{step.title}</strong>
+							<code class="mt-0.5 block overflow-hidden text-ellipsis whitespace-nowrap font-mono text-10.5px text-accent">
+								{step.code}
+							</code>
+							<span class="mt-2 block text-14px leading-[1.55]">{step.description}</span>
+						</span>
+					</button>
+				))
+			}
+		</div>
+
+		<div class="min-w-0">
+			<div
+				id="workflow-panel-model"
+				role="tabpanel"
+				aria-labelledby="workflow-tab-model"
+				data-home-workflow-panel="model"
+			>
+				<CodeBlock code={model} lang="go" label="content/posts.go" />
+			</div>
+			<div
+				id="workflow-panel-develop"
+				role="tabpanel"
+				aria-labelledby="workflow-tab-develop"
+				data-home-workflow-panel="develop"
+				hidden
+			>
+				<CodeBlock code={development} lang="text" label="terminal" />
+			</div>
+			<div
+				id="workflow-panel-consume"
+				role="tabpanel"
+				aria-labelledby="workflow-tab-consume"
+				data-home-workflow-panel="consume"
+				hidden
+			>
+				<CodeBlock code={client} lang="ts" label="scripts/read-posts.ts" />
+			</div>
+			<div
+				id="workflow-panel-ship"
+				role="tabpanel"
+				aria-labelledby="workflow-tab-ship"
+				data-home-workflow-panel="ship"
+				hidden
+			>
+				<CodeBlock code={production} lang="text" label="terminal" />
+			</div>
+		</div>
+	</div>
+</section>
+
+<script>
+	function initializeHomeWorkflow() {
+		for (const workflow of document.querySelectorAll<HTMLElement>('[data-home-workflow]')) {
+			if (workflow.dataset.homeWorkflowReady !== undefined) continue;
+			workflow.dataset.homeWorkflowReady = '';
+			const tabs = [...workflow.querySelectorAll<HTMLButtonElement>('[data-home-workflow-tab]')];
+			const panels = [...workflow.querySelectorAll<HTMLElement>('[data-home-workflow-panel]')];
+
+			const select = (tab: HTMLButtonElement) => {
+				for (const candidate of tabs) {
+					const selected = candidate === tab;
+					candidate.setAttribute('aria-selected', String(selected));
+					candidate.tabIndex = selected ? 0 : -1;
+				}
+				for (const panel of panels) {
+					panel.hidden = panel.dataset.homeWorkflowPanel !== tab.dataset.homeWorkflowTab;
+				}
+			};
+
+			for (const tab of tabs) {
+				tab.addEventListener('click', () => select(tab));
+				tab.addEventListener('keydown', (event) => {
+					if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+					event.preventDefault();
+					const direction = event.key === 'ArrowUp' || event.key === 'ArrowLeft' ? -1 : 1;
+					const next = tabs[(tabs.indexOf(tab) + direction + tabs.length) % tabs.length];
+					next.focus();
+					select(next);
+				});
+			}
+		}
+	}
+
+	initializeHomeWorkflow();
+	document.addEventListener('astro:page-load', initializeHomeWorkflow);
+</script>

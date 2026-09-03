@@ -1,0 +1,40 @@
+---
+import type { ComponentProps } from 'astro/types';
+import { Code } from 'astro:components';
+import CodeLanguageIcon from '@/components/code/code-language-icon.astro';
+import { normalizeSource } from '@/components/code/normalize-source';
+import { riduCodeTheme } from '@/config/code-theme';
+
+interface Props {
+	code: string;
+	lang?: ComponentProps<typeof Code>['lang'];
+	label?: string;
+	compact?: boolean;
+	bare?: boolean;
+}
+
+const { code, lang = 'go', label, compact = false, bare = false } = Astro.props;
+
+const source = normalizeSource(code);
+---
+
+<figure class:list={['code-block', { compact, bare }]} data-code-block>
+	{
+		!bare && (
+			<header>
+				<span class="code-label">
+					<CodeLanguageIcon lang={String(lang)} />
+					{label ?? lang}
+				</span>
+				<button type="button" data-copy-code data-code={source} aria-label="Copy code">
+					<svg viewBox="0 0 24 24" aria-hidden="true">
+						<rect x="8" y="8" width="11" height="11" rx="1" />
+						<path d="M16 8V5H5v11h3" />
+					</svg>
+					<span>Copy</span>
+				</button>
+			</header>
+		)
+	}
+	<div class="code-source"><Code code={source} {lang} theme={riduCodeTheme} /></div>
+</figure>

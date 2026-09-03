@@ -1,0 +1,37 @@
+{
+	"name": "create-ridu",
+	"description": "Create a Ridu project with the matching native Ridu CLI.",
+	"version": "0.1.0",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/riducms/ridu.git",
+		"directory": "packages/create-ridu"
+	},
+	"homepage": "https://riducms.com",
+	"bugs": {
+		"url": "https://github.com/riducms/ridu/issues"
+	},
+	"publishConfig": {
+		"access": "public",
+		"provenance": true
+	},
+	"type": "module",
+	"bin": {
+		"create-ridu": "./src/cli.js"
+	},
+	"files": [
+		"src/arguments.js",
+		"src/cli.js"
+	],
+	"scripts": {
+		"check": "bun test",
+		"test": "bun test"
+	},
+	"dependencies": {
+		"@riducms/cli": "workspace:*"
+	},
+	"engines": {
+		"node": ">=20"
+	}
+}

@@ -1,0 +1,123 @@
+{
+  "version": 1,
+  "name": "add-summary",
+  "planner": {
+    "name": "ridu-sqlite",
+    "version": "1.0.0"
+  },
+  "minimumRunnerContract": 1,
+  "previousArtifactDigest": "260e00424b87e71ce2a2018f51472c7532ce7bf530e1b69a3f435dba7ddc32af",
+  "fromDigest": "5f594052bd8c91c06ab9137df347eb95556f74b663ed2ed05c9a2e8a8fd3613f",
+  "toDigest": "508f083bed28cff5928050a740870f3bcd794c3fe0005cdbddd3e81ee9ec80b6",
+  "before": {
+    "version": 1,
+    "application": {
+      "name": "SQLite migrations"
+    },
+    "collections": [
+      {
+        "id": "posts",
+        "slug": "posts",
+        "labels": {
+          "singular": "Post",
+          "plural": "Posts"
+        },
+        "admin": {},
+        "capabilities": {
+          "auth": false,
+          "upload": false,
+          "versions": false,
+          "trash": false
+        },
+        "fields": [
+          {
+            "id": "posts-title",
+            "name": "title",
+            "path": "title",
+            "type": "text",
+            "category": "scalar",
+            "required": false,
+            "unique": false,
+            "admin": {
+              "label": "Title"
+            },
+            "text": {}
+          }
+        ]
+      }
+    ],
+    "plugins": []
+  },
+  "after": {
+    "version": 1,
+    "application": {
+      "name": "SQLite migrations"
+    },
+    "collections": [
+      {
+        "id": "posts",
+        "slug": "posts",
+        "labels": {
+          "singular": "Post",
+          "plural": "Posts"
+        },
+        "admin": {},
+        "capabilities": {
+          "auth": false,
+          "upload": false,
+          "versions": false,
+          "trash": false
+        },
+        "fields": [
+          {
+            "id": "posts-title",
+            "name": "title",
+            "path": "title",
+            "type": "text",
+            "category": "scalar",
+            "required": false,
+            "unique": false,
+            "admin": {
+              "label": "Title"
+            },
+            "text": {}
+          },
+          {
+            "id": "posts-summary",
+            "name": "summary",
+            "path": "summary",
+            "type": "text",
+            "category": "scalar",
+            "required": false,
+            "unique": true,
+            "index": true,
+            "admin": {
+              "label": "Summary"
+            },
+            "text": {}
+          }
+        ]
+      }
+    ],
+    "plugins": []
+  },
+  "phases": [
+    {
+      "id": "phase-001",
+      "mode": "transaction",
+      "physicalContractVersion": 1,
+      "beforePhysicalDigest": "65610f4437225d2c22a64cfc3f7328321a765429c3c584aa9438df2ccfec1c36",
+      "afterPhysicalDigest": "59c1b7dbb58572957e2f151453fa74b75d8da5855475bd43d082f373df6d5208",
+      "steps": [
+        {
+          "id": "step-0001",
+          "kind": "assert_schema",
+          "executorVersion": 1,
+          "name": "verify resulting SQLite schema",
+          "payload": {}
+        }
+      ]
+    }
+  ],
+  "risks": []
+}

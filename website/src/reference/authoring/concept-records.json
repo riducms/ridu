@@ -1,0 +1,87 @@
+{
+	"schemaVersion": 1,
+	"records": [
+		{
+			"module": "store",
+			"id": "go:github.com/riducms/ridu/store#Store errors",
+			"name": "Store errors",
+			"kind": "type",
+			"signature": "var ErrNotFound, ErrConflict, ErrAuthInitialized, ErrDeleteRestricted, ErrPopulationLimit, ErrTaskLeaseLost error",
+			"members": [],
+			"parameters": [],
+			"aliases": ["store.Store errors", "Store errors"],
+			"overloads": []
+		},
+		{
+			"module": "migration",
+			"id": "go:github.com/riducms/ridu/migration#Runner contracts",
+			"name": "Runner contracts",
+			"kind": "type",
+			"signature": "const RunnerContractVersion = 1; const PhysicalContractVersion = 1",
+			"members": [],
+			"parameters": [],
+			"aliases": ["migration.Runner contracts", "Runner contracts"],
+			"overloads": []
+		},
+		{
+			"module": "postgres",
+			"id": "go:github.com/riducms/ridu/adapters/postgres#Migration boundary codes",
+			"name": "Migration boundary codes",
+			"kind": "type",
+			"signature": "const CodeMigrationPlanMismatch = \"RIDU_MIGRATION_PLAN_MISMATCH\"; var ErrMaintenanceRequired error",
+			"members": [],
+			"parameters": [],
+			"aliases": ["postgres.Migration boundary codes", "Migration boundary codes"],
+			"overloads": []
+		},
+		{
+			"module": "richtext",
+			"id": "go:github.com/riducms/ridu/plugins/richtext#Feature constants",
+			"name": "Feature constants",
+			"kind": "type",
+			"signature": "const ( FeatureLinks Feature = \"links\"; FeatureLists Feature = \"lists\"; FeatureCode Feature = \"code\"; FeatureHorizontalRule Feature = \"horizontal-rule\"; FeatureUploads Feature = \"uploads\"; FeatureRelationships Feature = \"relationships\"; FeatureBlocks Feature = \"blocks\" )",
+			"members": [],
+			"parameters": [],
+			"aliases": ["richtext.Feature constants", "Feature constants"],
+			"overloads": []
+		},
+		{
+			"module": "formbuilder",
+			"id": "go:github.com/riducms/ridu/plugins/formbuilder#Field type constants",
+			"name": "Field type constants",
+			"kind": "type",
+			"signature": "const ( FieldCheckbox FieldType = \"checkbox\"; FieldCountry FieldType = \"country\"; FieldDate FieldType = \"date\"; FieldEmail FieldType = \"email\"; FieldMessage FieldType = \"message\"; FieldNumber FieldType = \"number\"; FieldPayment FieldType = \"payment\"; FieldRadio FieldType = \"radio\"; FieldSelect FieldType = \"select\"; FieldState FieldType = \"state\"; FieldText FieldType = \"text\"; FieldTextarea FieldType = \"textarea\"; FieldUpload FieldType = \"upload\" )",
+			"members": [],
+			"parameters": [],
+			"aliases": ["formbuilder.Field type constants", "Field type constants"],
+			"overloads": []
+		},
+		{
+			"module": "sdk",
+			"id": "ts:@riducms/sdk#Live preview constants",
+			"name": "Live preview constants",
+			"kind": "type",
+			"signature": "const RIDU_LIVE_PREVIEW_MESSAGE = \"ridu-live-preview\"; const RIDU_LIVE_PREVIEW_CHANNEL_PARAM = \"__ridu_preview\"; const RIDU_PREVIEW_TOKEN_PARAM = \"__ridu_preview_token\"",
+			"members": [
+				{
+					"name": "RIDU_LIVE_PREVIEW_MESSAGE",
+					"type": "\"ridu-live-preview\"",
+					"description": "The stable postMessage protocol discriminator."
+				},
+				{
+					"name": "RIDU_LIVE_PREVIEW_CHANNEL_PARAM",
+					"type": "\"__ridu_preview\"",
+					"description": "The preview channel query parameter."
+				},
+				{
+					"name": "RIDU_PREVIEW_TOKEN_PARAM",
+					"type": "\"__ridu_preview_token\"",
+					"description": "The short-lived preview token query parameter."
+				}
+			],
+			"parameters": [],
+			"aliases": ["@riducms/sdk.Live preview constants", "Live preview constants"],
+			"overloads": []
+		}
+	]
+}

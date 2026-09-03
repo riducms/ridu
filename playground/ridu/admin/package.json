@@ -1,0 +1,28 @@
+{
+	"name": "@ridu-playground/admin",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "vite",
+		"check": "svelte-check --tsconfig ./tsconfig.json",
+		"build": "vite build"
+	},
+	"dependencies": {
+		"@riducms/admin": "0.0.0-dogfood.1787424314091508000",
+		"@riducms/plugin": "0.0.0-dogfood.1787424314091508000",
+		"@riducms/ui": "0.0.0-dogfood.1787424314091508000",
+		"@riducms/plugin-richtext": "0.0.0-dogfood.1787424314091508000",
+		"svelte": "^5.56.8"
+	},
+	"devDependencies": {
+		"@hvniel/lexical-svelte": "^0.1.1",
+		"@iconify/json": "^2.2.509",
+		"@sveltejs/vite-plugin-svelte": "^7.2.0",
+		"@tsconfig/svelte": "^5.0.8",
+		"@types/node": "^24.13.3",
+		"@riducms/build": "0.0.0-dogfood.1787424314091508000",
+		"svelte-check": "^4.7.3",
+		"typescript": "~6.0.2",
+		"vite": "^8.2.0"
+	}
+}

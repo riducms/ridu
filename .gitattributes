@@ -1,0 +1,6 @@
+internal/adminassets/dist/assets/*.js -whitespace
+internal/adminassets/dist/** linguist-generated=true
+testdata/generated/** linguist-generated=true
+playground/ridu/generated/** linguist-generated=true
+playground/payload/src/payload-types.ts linguist-generated=true
+playground/shadcn-rhea/** linguist-vendored=true

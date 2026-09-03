@@ -1,0 +1,31 @@
+{
+	"name": "@riducms/translations",
+	"description": "Typed admin translations, language negotiation, plurals, and Intl formatting for Ridu.",
+	"version": "0.1.0",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/riducms/ridu.git",
+		"directory": "packages/translations"
+	},
+	"homepage": "https://riducms.com",
+	"bugs": {
+		"url": "https://github.com/riducms/ridu/issues"
+	},
+	"publishConfig": {
+		"access": "public",
+		"provenance": true
+	},
+	"type": "module",
+	"exports": {
+		".": "./src/index.ts",
+		"./languages/en": "./src/languages/en.ts"
+	},
+	"files": [
+		"src"
+	],
+	"scripts": {
+		"check": "tsc -p tsconfig.json",
+		"test": "bun test"
+	}
+}

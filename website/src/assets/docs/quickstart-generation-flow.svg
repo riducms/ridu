@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 420" role="img" aria-labelledby="title description">
+  <title id="title">Ridu quickstart generation flow</title>
+  <desc id="description">Executable Go configuration resolves into one manifest, which drives database migrations, generated Go and TypeScript contracts, OpenAPI, the SDK, and the embedded admin.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#6f7d8d" />
+    </marker>
+    <style>
+      .background { fill: #0c0e10; }
+      .panel { fill: #15191d; stroke: #3d4650; stroke-width: 2; }
+      .accent { fill: #18251f; stroke: #5b8f73; stroke-width: 2; }
+      .label { fill: #f3f5f7; font: 600 22px ui-sans-serif, system-ui, sans-serif; }
+      .detail { fill: #aeb7c1; font: 16px ui-sans-serif, system-ui, sans-serif; }
+      .code { fill: #9fc8ae; font: 17px ui-monospace, SFMono-Regular, Menlo, monospace; }
+      .arrow { fill: none; stroke: #6f7d8d; stroke-width: 3; marker-end: url(#arrow); }
+    </style>
+  </defs>
+
+  <rect class="background" width="1200" height="420" rx="20" />
+
+  <rect class="accent" x="40" y="140" width="235" height="140" rx="12" />
+  <text class="label" x="70" y="185">Executable Go config</text>
+  <text class="code" x="70" y="224">content/*.go</text>
+  <text class="detail" x="70" y="254">Fields, access, hooks, plugins</text>
+
+  <path class="arrow" d="M 275 210 L 385 210" />
+
+  <rect class="accent" x="390" y="140" width="230" height="140" rx="12" />
+  <text class="label" x="422" y="185">Resolved manifest</text>
+  <text class="code" x="422" y="224">schema.json</text>
+  <text class="detail" x="422" y="254">Stable and deterministic</text>
+
+  <path class="arrow" d="M 620 210 C 685 210, 680 86, 745 86" />
+  <path class="arrow" d="M 620 210 L 745 210" />
+  <path class="arrow" d="M 620 210 C 685 210, 680 334, 745 334" />
+
+  <rect class="panel" x="750" y="28" width="405" height="116" rx="12" />
+  <text class="label" x="780" y="72">Reviewed persistence</text>
+  <text class="code" x="780" y="105">migrations/</text>
+  <text class="detail" x="925" y="105">PostgreSQL · SQLite · MongoDB</text>
+
+  <rect class="panel" x="750" y="152" width="405" height="116" rx="12" />
+  <text class="label" x="780" y="196">Generated contracts</text>
+  <text class="code" x="780" y="229">Go · TypeScript · OpenAPI</text>
+  <text class="detail" x="780" y="254">Committed and checked for drift</text>
+
+  <rect class="panel" x="750" y="276" width="405" height="116" rx="12" />
+  <text class="label" x="780" y="320">One application runtime</text>
+  <text class="code" x="780" y="353">Local API · REST · SDK · admin</text>
+  <text class="detail" x="780" y="378">One operation engine, one Go binary</text>
+</svg>

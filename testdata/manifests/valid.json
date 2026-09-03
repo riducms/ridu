@@ -1,0 +1,64 @@
+{
+  "version": 1,
+  "application": {
+    "name": "Editorial"
+  },
+  "collections": [
+    {
+      "id": "posts",
+      "slug": "posts",
+      "labels": {
+        "singular": "Post",
+        "plural": "Posts"
+      },
+      "admin": {},
+      "capabilities": {
+        "auth": false,
+        "upload": false,
+        "versions": false,
+        "trash": false
+      },
+      "fields": [
+        {
+          "id": "posts-title",
+          "name": "title",
+          "path": "title",
+          "type": "text",
+          "category": "scalar",
+          "required": true,
+          "unique": true,
+          "admin": {
+            "label": "Title"
+          },
+          "text": {}
+        },
+        {
+          "id": "posts-status",
+          "name": "status",
+          "path": "status",
+          "type": "select",
+          "category": "scalar",
+          "required": false,
+          "unique": false,
+          "default": "draft",
+          "admin": {
+            "label": "Status"
+          },
+          "select": {
+            "choices": [
+              {
+                "value": "draft",
+                "label": "Draft"
+              },
+              {
+                "value": "published",
+                "label": "Published"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "plugins": []
+}

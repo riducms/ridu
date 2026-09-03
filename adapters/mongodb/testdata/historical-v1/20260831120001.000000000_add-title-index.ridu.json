@@ -1,0 +1,135 @@
+{
+  "version": 1,
+  "name": "add-title-index",
+  "planner": {
+    "name": "mongodb",
+    "version": "1.0.0"
+  },
+  "minimumRunnerContract": 1,
+  "previousArtifactDigest": "67ef7ec7d91e9378389abb4299275ed33466931fabe79d16fa2a9f185d512eb4",
+  "fromDigest": "28d6e699dfcfa6c826c3529c4eaf54b33086cbe613717b0aea634652869cfd46",
+  "toDigest": "86148257cf84d095a3a0284424cced8bd6991854bf22c44cdbe461f9733edac0",
+  "before": {
+    "version": 1,
+    "application": {
+      "name": "MongoDB migrations"
+    },
+    "collections": [
+      {
+        "id": "posts",
+        "slug": "posts",
+        "labels": {
+          "singular": "Post",
+          "plural": "Posts"
+        },
+        "admin": {},
+        "capabilities": {
+          "auth": false,
+          "upload": false,
+          "versions": false,
+          "trash": false
+        },
+        "fields": [
+          {
+            "id": "posts-title",
+            "name": "title",
+            "path": "title",
+            "type": "text",
+            "category": "scalar",
+            "required": false,
+            "unique": false,
+            "admin": {
+              "label": ""
+            },
+            "text": {}
+          }
+        ]
+      }
+    ],
+    "plugins": []
+  },
+  "after": {
+    "version": 1,
+    "application": {
+      "name": "MongoDB migrations"
+    },
+    "collections": [
+      {
+        "id": "posts",
+        "slug": "posts",
+        "labels": {
+          "singular": "Post",
+          "plural": "Posts"
+        },
+        "admin": {},
+        "capabilities": {
+          "auth": false,
+          "upload": false,
+          "versions": false,
+          "trash": false
+        },
+        "fields": [
+          {
+            "id": "posts-title",
+            "name": "title",
+            "path": "title",
+            "type": "text",
+            "category": "scalar",
+            "required": false,
+            "unique": false,
+            "index": true,
+            "admin": {
+              "label": ""
+            },
+            "text": {}
+          }
+        ]
+      }
+    ],
+    "plugins": []
+  },
+  "phases": [
+    {
+      "id": "phase-001",
+      "mode": "no_transaction",
+      "physicalContractVersion": 1,
+      "beforePhysicalDigest": "0a6fbe447901464ac2211361a7de3bad6c1dad1c72ee0aaa956d45cce38320fd",
+      "afterPhysicalDigest": "9ee431aa00d506ec3fe8dcdc8d6d2761b9dbd9df09ae9b6bcfdff1497360ec1d",
+      "steps": [
+        {
+          "id": "step-0001",
+          "kind": "mongodb_create_index",
+          "executorVersion": 1,
+          "name": "create MongoDB index z_i_d96543b87c70b105 for content resource \"posts\"",
+          "payload": {
+            "collection": "z_c_a44f1b9751711635",
+            "index": "z_i_d96543b87c70b105"
+          }
+        }
+      ]
+    },
+    {
+      "id": "phase-002",
+      "mode": "no_transaction",
+      "physicalContractVersion": 1,
+      "beforePhysicalDigest": "9ee431aa00d506ec3fe8dcdc8d6d2761b9dbd9df09ae9b6bcfdff1497360ec1d",
+      "afterPhysicalDigest": "4322cfd4197cdef97994f3118efe9508dc2c5555f3aeb97b39956a89e737c414",
+      "steps": [
+        {
+          "id": "step-0002",
+          "kind": "mongodb_assert_schema",
+          "executorVersion": 1,
+          "name": "verify resulting MongoDB schema",
+          "payload": {}
+        }
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "code": "RIDU_MONGODB_INDEX_BUILD_NON_TRANSACTIONAL",
+      "level": "warning",
+      "message": "MongoDB index builds run as resumable no-transaction phases; an interrupted artifact may leave reviewed indexes in place before the artifact completes"
+    }
+  ]
+}

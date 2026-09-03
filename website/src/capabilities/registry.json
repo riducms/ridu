@@ -1,0 +1,388 @@
+[
+	{
+		"id": "model.fields",
+		"name": "Built-in fields",
+		"category": "Content model",
+		"status": "available",
+		"summary": "Executable Go field definitions cover scalar, choice, structured, relationship, media, layout, computed, and plugin-owned values.",
+		"qualificationLimits": [],
+		"owners": ["field", "schema", "core", "admin"],
+		"evidence": [
+			"field/field_test.go",
+			"core/config_test.go",
+			"admin/tests/field-registry.test.ts"
+		],
+		"adapters": ["postgres", "sqlite", "mongodb"],
+		"guides": ["/docs/fields/"],
+		"symbols": [
+			"go:github.com/riducms/ridu/field#Definition",
+			"go:github.com/riducms/ridu/field#Select"
+		]
+	},
+	{
+		"id": "model.relationships",
+		"name": "Relationships and joins",
+		"category": "Content model",
+		"status": "available",
+		"summary": "Forward relationships, upload references, population, reference policies, and read-only inverse joins share the operation engine.",
+		"qualificationLimits": [],
+		"owners": ["field", "core", "store"],
+		"evidence": [
+			"core/computed_test.go",
+			"core/upload_reference_test.go",
+			"adapters/postgres/reference_filter_integration_test.go"
+		],
+		"adapters": ["postgres", "sqlite", "mongodb"],
+		"guides": ["/docs/relationships/", "/docs/fields/relationship/", "/docs/fields/join/"],
+		"symbols": [
+			"go:github.com/riducms/ridu/field#Relationship",
+			"go:github.com/riducms/ridu/field#Join"
+		]
+	},
+	{
+		"id": "content.localization",
+		"name": "Content and admin localization",
+		"category": "Admin & workflows",
+		"status": "available",
+		"summary": "Localized storage, fallbacks, all-locale reads, copy-locale authoring, RTL presentation, and translated admin chrome are implemented.",
+		"qualificationLimits": [
+			"Application content translations and admin interface translations are configured independently."
+		],
+		"owners": ["core", "admin", "@riducms/translations"],
+		"evidence": [
+			"core/localization_test.go",
+			"admin/tests/localized-field-presentation.test.ts",
+			"packages/translations/src/runtime.test.ts"
+		],
+		"adapters": ["postgres", "sqlite", "mongodb"],
+		"guides": ["/docs/localization/"],
+		"symbols": [
+			"go:github.com/riducms/ridu/core#LocalizationConfig",
+			"ts:@riducms/translations#CoreTranslationCatalog"
+		]
+	},
+	{
+		"id": "data.local-api",
+		"name": "Local Go API",
+		"category": "Work with data",
+		"status": "available",
+		"summary": "Typed local operations enter the same access, validation, hook, transaction, and redaction engine as remote transports.",
+		"qualificationLimits": [],
+		"owners": ["core"],
+		"evidence": ["core/app_test.go", "core/http_test.go"],
+		"adapters": ["postgres", "sqlite", "mongodb"],
+		"guides": ["/docs/local-api/", "/docs/data-access/"],
+		"symbols": [
+			"go:github.com/riducms/ridu/core#LocalAPI",
+			"go:github.com/riducms/ridu/core#LocalAPI.Find"
+		]
+	},
+	{
+		"id": "data.rest-sdk",
+		"name": "REST API and generated SDK",
+		"category": "Work with data",
+		"status": "available",
+		"summary": "Generated TypeScript contracts and the Fetch-based SDK cover collection and global operations exposed by REST.",
+		"qualificationLimits": [
+			"Select and populate inputs are typed, while response projections retain the full generated output type."
+		],
+		"owners": ["internal/httpapi", "@riducms/protocol", "@riducms/sdk"],
+		"evidence": [
+			"internal/httpapi/http_test.go",
+			"packages/protocol/tests/conformance.test.ts",
+			"packages/sdk/tests/client.test.ts"
+		],
+		"adapters": ["postgres", "sqlite", "mongodb"],
+		"guides": ["/docs/rest-api/", "/docs/typescript-sdk/", "/docs/generated-contracts/"],
+		"symbols": ["ts:@riducms/sdk#RiduClient", "ts:@riducms/sdk#RiduClient.list"]
+	},
+	{
+		"id": "admin.authoring",
+		"name": "Embedded admin authoring",
+		"category": "Admin & workflows",
+		"status": "available",
+		"summary": "The embedded Svelte admin provides collection and global routes, schema-driven forms, lists, saved views, drawers, bulk actions, and static extension points.",
+		"qualificationLimits": [],
+		"owners": ["admin", "@riducms/admin", "@riducms/ui"],
+		"evidence": [
+			"admin/tests/admin-runtime.test.ts",
+			"admin/tests/form-controller.test.ts",
+			"admin/tests/list-workspace.test.ts"
+		],
+		"adapters": ["postgres", "sqlite", "mongodb"],
+		"guides": ["/docs/admin/"],
+		"symbols": ["ts:@riducms/admin#mountAdmin"]
+	},
+	{
+		"id": "workflow.editorial",
+		"name": "Editorial workflows",
+		"category": "Admin & workflows",
+		"status": "available",
+		"summary": "Drafts, versions, publishing, scheduling, locks, trash, duplication, and atomic bulk actions are available through shared operation contracts.",
+		"qualificationLimits": [],
+		"owners": ["core", "admin", "store"],
+		"evidence": [
+			"core/versions_test.go",
+			"admin/tests/version-diff.test.ts",
+			"admin/tests/document-route-dirty.test.ts"
+		],
+		"adapters": ["postgres", "sqlite", "mongodb"],
+		"guides": ["/docs/editorial-workflows/", "/docs/drafts-and-versions/"],
+		"symbols": ["go:github.com/riducms/ridu/core#VersionConfig"]
+	},
+	{
+		"id": "workflow.live-preview",
+		"name": "Live preview",
+		"category": "Admin & workflows",
+		"status": "limited",
+		"summary": "Saved draft preview and optional unsaved postMessage updates work with short-lived, access-checked preview capabilities.",
+		"qualificationLimits": [
+			"Preview grants are process-local; multi-replica deployments need session affinity for preview reads."
+		],
+		"owners": ["core", "admin", "@riducms/sdk"],
+		"evidence": [
+			"core/preview_internal_test.go",
+			"admin/tests/live-preview.test.ts",
+			"packages/sdk/tests/live-preview.test.ts"
+		],
+		"adapters": ["postgres", "sqlite", "mongodb"],
+		"guides": ["/guides/live-preview/"],
+		"symbols": [
+			"go:github.com/riducms/ridu/core#LivePreviewConfig",
+			"ts:@riducms/sdk#RiduClient.createPreviewToken"
+		]
+	},
+	{
+		"id": "media.uploads",
+		"name": "Uploads and object storage",
+		"category": "Admin & workflows",
+		"status": "limited",
+		"summary": "Multipart and guarded remote ingestion, image sizes, focal regeneration, private delivery, local storage, and S3-compatible storage are implemented.",
+		"qualificationLimits": [
+			"Resumable and direct-to-storage upload, quarantine, and malware scanning are not included."
+		],
+		"owners": ["core", "storage", "adapters/storage"],
+		"evidence": [
+			"core/uploads_test.go",
+			"internal/uploads/uploads_test.go",
+			"adapters/storage/s3/s3_test.go"
+		],
+		"adapters": ["postgres", "sqlite", "mongodb"],
+		"guides": ["/docs/uploads/", "/docs/storage/"],
+		"symbols": [
+			"go:github.com/riducms/ridu/core#UploadConfig",
+			"go:github.com/riducms/ridu/storage#Backend"
+		]
+	},
+	{
+		"id": "adapter.postgres",
+		"name": "PostgreSQL adapter",
+		"category": "Database adapters",
+		"status": "available",
+		"summary": "Use PostgreSQL when the database is a separate service or the application runs on multiple hosts.",
+		"qualificationLimits": [
+			"When a release adds migrations, follow the documented drain, verify, snapshot, migrate, status, and start sequence."
+		],
+		"owners": ["adapters/postgres"],
+		"evidence": [
+			"adapters/postgres/conformance_integration_test.go",
+			"adapters/postgres/postgres_recovery_integration_test.go"
+		],
+		"adapters": ["postgres"],
+		"guides": ["/docs/postgres/"],
+		"symbols": [
+			"go:github.com/riducms/ridu/adapters/postgres#Open",
+			"go:github.com/riducms/ridu/adapters/postgres#ProjectMigrations"
+		],
+		"setupCoverage": {
+			"newProject": "/docs/postgres/#new-project",
+			"existingProject": "/docs/postgres/#existing-project"
+		}
+	},
+	{
+		"id": "adapter.sqlite",
+		"name": "SQLite adapter",
+		"category": "Database adapters",
+		"status": "limited",
+		"summary": "Pure-Go SQLite supports local-file applications and small or local workloads on one host.",
+		"qualificationLimits": [
+			"Shared network filesystems and horizontally replicated deployments are not supported; backups must be SQLite-aware or taken after quiescing WAL writers."
+		],
+		"owners": ["adapters/sqlite"],
+		"evidence": ["adapters/sqlite/conformance_test.go", "adapters/sqlite/recovery_test.go"],
+		"adapters": ["sqlite"],
+		"guides": ["/docs/sqlite/"],
+		"symbols": [
+			"go:github.com/riducms/ridu/adapters/sqlite#Open",
+			"go:github.com/riducms/ridu/adapters/sqlite#ProjectMigrations"
+		],
+		"setupCoverage": {
+			"newProject": "/docs/sqlite/#new-project",
+			"existingProject": "/docs/sqlite/#existing-project"
+		}
+	},
+	{
+		"id": "adapter.mongodb",
+		"name": "MongoDB adapter",
+		"category": "Database adapters",
+		"status": "limited",
+		"summary": "Use MongoDB only with Ridu’s supported version, security, topology, and platform configuration.",
+		"qualificationLimits": [
+			"Support covers generated starter and blank projects on Linux x86-64, MongoDB Community 8.2.9, SCRAM-SHA-256, verified TLS, and a writable three-member replica set.",
+			"Atlas, DocumentDB, Cosmos DB, standalone servers, other versions or topologies, and generic live cross-adapter data migration are not supported."
+		],
+		"owners": ["adapters/mongodb"],
+		"evidence": [
+			"adapters/mongodb/production_deployment_integration_test.go",
+			"adapters/mongodb/production_replica_set_integration_test.go",
+			"adapters/mongodb/migration_verify_test.go"
+		],
+		"adapters": ["mongodb"],
+		"guides": ["/docs/mongodb/"],
+		"symbols": [
+			"go:github.com/riducms/ridu/adapters/mongodb#Open",
+			"go:github.com/riducms/ridu/adapters/mongodb#ProjectMigrations"
+		],
+		"setupCoverage": {
+			"newProject": "/docs/mongodb/#new-project",
+			"existingProject": "/docs/mongodb/#existing-project"
+		}
+	},
+	{
+		"id": "plugin.rich-text",
+		"name": "Rich text plugin",
+		"category": "Official plugins",
+		"status": "limited",
+		"summary": "The paired Go and Svelte Lexical integration provides schema-owned rich-text documents, validation, uploads, and admin authoring.",
+		"qualificationLimits": [],
+		"owners": ["plugins/richtext", "@riducms/plugin-richtext"],
+		"evidence": [
+			"plugins/richtext/richtext_test.go",
+			"packages/plugin-richtext/tests/rich-text-document.test.ts"
+		],
+		"adapters": ["postgres", "sqlite", "mongodb"],
+		"guides": ["/docs/rich-text/"],
+		"symbols": ["go:github.com/riducms/ridu/plugins/richtext#New"],
+		"setupCoverage": {
+			"newProject": "/docs/rich-text/#new-project",
+			"existingProject": "/docs/rich-text/#existing-project"
+		}
+	},
+	{
+		"id": "plugin.seo",
+		"name": "SEO plugin",
+		"category": "Official plugins",
+		"status": "available",
+		"summary": "The paired SEO plugin adds typed metadata fields and static admin authoring without bypassing normal field contracts.",
+		"qualificationLimits": [],
+		"owners": ["plugins/seo", "@riducms/plugin-seo"],
+		"evidence": ["plugins/seo/seo_test.go", "packages/plugin-seo/tests/seo.test.ts"],
+		"adapters": ["postgres", "sqlite", "mongodb"],
+		"guides": ["/docs/seo/"],
+		"symbols": ["go:github.com/riducms/ridu/plugins/seo#Plugin"],
+		"setupCoverage": {
+			"newProject": "/docs/seo/#new-project",
+			"existingProject": "/docs/seo/#existing-project"
+		}
+	},
+	{
+		"id": "plugin.form-builder",
+		"name": "Form Builder plugin",
+		"category": "Official plugins",
+		"status": "available",
+		"summary": "Form Builder provides compiled form definitions, validation, submissions, email and payment extension points, and a paired admin experience.",
+		"qualificationLimits": [],
+		"owners": ["plugins/formbuilder", "@riducms/plugin-form-builder"],
+		"evidence": [
+			"plugins/formbuilder/formbuilder_test.go",
+			"packages/plugin-form-builder/tests/form-builder.test.ts"
+		],
+		"adapters": ["postgres", "sqlite", "mongodb"],
+		"guides": ["/docs/form-builder/"],
+		"symbols": ["go:github.com/riducms/ridu/plugins/formbuilder#Plugin"],
+		"setupCoverage": {
+			"newProject": "/docs/form-builder/#new-project",
+			"existingProject": "/docs/form-builder/#existing-project"
+		}
+	},
+	{
+		"id": "plugin.graphql",
+		"name": "GraphQL plugin",
+		"category": "Official plugins",
+		"status": "experimental",
+		"summary": "The opt-in GraphQL plugin adds generated queries and mutations for supported Ridu resources.",
+		"qualificationLimits": [
+			"The API may change before the plugin is marked available; applications that do not import it do not include GraphQL."
+		],
+		"owners": ["plugins/graphql"],
+		"evidence": ["plugins/graphql/graphql_test.go", "plugins/graphql/server_test.go"],
+		"adapters": ["postgres"],
+		"guides": ["/docs/graphql/"],
+		"symbols": ["go:github.com/riducms/ridu/plugins/graphql#New"],
+		"setupCoverage": {
+			"newProject": "/docs/graphql/#new-project",
+			"existingProject": "/docs/graphql/#existing-project"
+		}
+	},
+	{
+		"id": "plugin.mcp",
+		"name": "MCP plugin",
+		"category": "Official plugins",
+		"status": "limited",
+		"summary": "The opt-in MCP transport exposes explicitly selected, access-checked collection and global reads to authenticated clients.",
+		"qualificationLimits": [
+			"Write tools, prompts, custom resources, and source-code mutation are not supported."
+		],
+		"owners": ["plugins/mcp"],
+		"evidence": ["plugins/mcp/mcp_test.go"],
+		"adapters": ["postgres", "sqlite", "mongodb"],
+		"guides": ["/docs/mcp/"],
+		"symbols": ["go:github.com/riducms/ridu/plugins/mcp#Plugin"],
+		"setupCoverage": {
+			"newProject": "/docs/mcp/#new-project",
+			"existingProject": "/docs/mcp/#existing-project"
+		}
+	},
+	{
+		"id": "extensions.custom-fields",
+		"name": "Custom fields",
+		"category": "Extend Ridu",
+		"status": "available",
+		"summary": "Compiled Go field semantics can be paired with statically registered Svelte components through public plugin contracts.",
+		"qualificationLimits": [],
+		"owners": ["core", "field", "@riducms/plugin"],
+		"evidence": [
+			"core/plugin_runtime_test.go",
+			"admin/tests/field-registry.test.ts",
+			"packages/plugin/tests/plugin.test.ts"
+		],
+		"adapters": ["postgres", "sqlite", "mongodb"],
+		"guides": ["/guides/custom-fields/"],
+		"symbols": [
+			"go:github.com/riducms/ridu/field#Plugin",
+			"go:github.com/riducms/ridu/core#PluginFieldType"
+		]
+	},
+	{
+		"id": "operations.tasks",
+		"name": "Durable tasks",
+		"category": "Develop & operate",
+		"status": "limited",
+		"summary": "Typed handlers, retries, leases, heartbeats, cancellation, concurrency keys, and retention run through official stores.",
+		"qualificationLimits": [
+			"Workflow checkpoints, declarative cron, email/import/export adapters, and an access-controlled task admin are not included."
+		],
+		"owners": ["core", "store"],
+		"evidence": [
+			"core/task_test.go",
+			"adapters/sqlite/tasks_test.go",
+			"adapters/mongodb/tasks_test.go"
+		],
+		"adapters": ["postgres", "sqlite", "mongodb"],
+		"guides": ["/docs/tasks/"],
+		"symbols": [
+			"go:github.com/riducms/ridu/core#TaskDefinition",
+			"go:github.com/riducms/ridu/core#TaskHandler"
+		]
+	}
+]

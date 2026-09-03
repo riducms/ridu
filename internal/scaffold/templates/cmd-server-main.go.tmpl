@@ -1,0 +1,165 @@
+package main
+
+import (
+	"context"
+{{if .MongoDB}}	"fmt"
+{{end}}	"log"
+{{if .SQLite}}	"net/url"
+{{end}}	"os"
+{{if .SQLite}}	"path/filepath"
+{{end}}	"strconv"
+	"strings"
+	"time"
+
+	"{{.ModulePath}}/content"
+	"{{.ModulePath}}/internal/adminassets"
+	"github.com/riducms/ridu"
+{{if .Postgres}}	"github.com/riducms/ridu/adapters/postgres"
+{{else if .MongoDB}}	"github.com/riducms/ridu/adapters/mongodb"
+{{else if .SQLite}}	"github.com/riducms/ridu/adapters/sqlite"
+{{end}}	"github.com/riducms/ridu/store"
+)
+
+{{if .MongoDB}}const internalDevelopmentServerArgument = "--ridu-internal-development-server"
+
+{{end}}func main() {
+	applicationConfig := content.Config()
+{{if .MongoDB}}	internalDevelopmentServer := len(os.Args) == 2 && os.Args[1] == internalDevelopmentServerArgument
+	if internalDevelopmentServer {
+		os.Args = os.Args[:1]
+	}
+{{end}}	var options []ridu.ExecuteOption
+	if len(os.Args) == 1 {
+		options = runtimeOptions(applicationConfig{{if .MongoDB}}, internalDevelopmentServer{{end}})
+	}
+	if err := ridu.Execute(applicationConfig, options...); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func runtimeOptions(applicationConfig ridu.Config{{if .MongoDB}}, internalDevelopmentServer bool{{end}}) []ridu.ExecuteOption {
+	return []ridu.ExecuteOption{
+		ridu.WithStore(func(ctx context.Context) (store.Store, error) {
+{{if .Postgres}}			return postgres.OpenWithConfig(ctx, postgres.PoolConfig{
+				DatabaseURL:              os.Getenv("DATABASE_URL"),
+				AllowInsecureTransport:   envBool("RIDU_ALLOW_INSECURE_DATABASE"),
+				MaxUploadLockConnections: envInt32("RIDU_POSTGRES_UPLOAD_LOCK_CONNECTIONS"),
+			})
+{{else if .MongoDB}}			backend, err := mongodb.OpenWithConfig(ctx, mongodb.Config{
+				DatabaseURL:            os.Getenv("DATABASE_URL"),
+				AllowInsecureTransport: envBool("RIDU_ALLOW_INSECURE_DATABASE"),
+				ApplicationName:        "ridu-server",
+			})
+			if err != nil {
+				return nil, err
+			}
+			if internalDevelopmentServer {
+				manifest, err := ridu.Resolve(applicationConfig)
+				if err != nil {
+					_ = backend.Close()
+					return nil, fmt.Errorf("resolve MongoDB development manifest: %w", err)
+				}
+				if err := backend.VerifyIndexes(ctx, manifest); err != nil {
+					_ = backend.Close()
+					return nil, fmt.Errorf("verify MongoDB development indexes: %w", err)
+				}
+			}
+			return backend, nil
+{{else if .SQLite}}			return sqlite.Open(ctx, sqliteDatabasePath())
+{{end}}		}),
+		ridu.WithAddress(env("RIDU_ADDRESS", ":8080")),
+		ridu.WithHandlerOptions(ridu.HandlerOptions{
+			AdminAssets:             adminassets.FS(),
+			AllowedOrigins:          envList("RIDU_ALLOWED_ORIGINS"),
+			AllowedHosts:            envList("RIDU_ALLOWED_HOSTS"),
+			TrustedProxyCIDRs:       envList("RIDU_TRUSTED_PROXY_CIDRS"),
+			ReadinessTimeout:        envDuration("RIDU_READINESS_TIMEOUT"),
+			StrictTransportSecurity: os.Getenv("RIDU_STRICT_TRANSPORT_SECURITY"),
+		}),
+		ridu.WithServerOptions(ridu.ServerOptions{
+			ShutdownTimeout:            envDuration("RIDU_SHUTDOWN_TIMEOUT"),
+			WorkerDrainTimeout:         envDuration("RIDU_WORKER_DRAIN_TIMEOUT"),
+			ReadinessDrainDelay:        envDuration("RIDU_READINESS_DRAIN_DELAY"),
+			AllowUnverifiableReadiness: {{if .MongoDB}}internalDevelopmentServer{{else}}envBool("RIDU_ALLOW_UNVERIFIABLE_READINESS"){{end}},
+			SkipReadinessPreflight:     {{if .MongoDB}}internalDevelopmentServer{{else}}envBool("RIDU_SKIP_READINESS_PREFLIGHT"){{end}},
+		}),
+	}
+}
+
+{{if .SQLite}}func sqliteDatabasePath() string {
+	path := strings.TrimSpace(os.Getenv("RIDU_SQLITE_PATH"))
+	switch {
+	case path == "":
+		log.Fatal("RIDU_SQLITE_PATH is required")
+	case path == ":memory:":
+		log.Fatal("RIDU_SQLITE_PATH must be a file because migrations and the server run in separate processes")
+	case strings.HasPrefix(path, "file:"):
+		parsed, err := url.Parse(path)
+		if err != nil {
+			log.Fatalf("RIDU_SQLITE_PATH must be a valid SQLite file URI: %v", err)
+		}
+		target := parsed.Path
+		if target == "" {
+			target, err = url.PathUnescape(parsed.Opaque)
+		}
+		if err != nil || !filepath.IsAbs(target) {
+			log.Fatal("RIDU_SQLITE_PATH file URI must contain an absolute path")
+		}
+	case !filepath.IsAbs(path):
+		log.Fatal("RIDU_SQLITE_PATH must be an absolute file path")
+	}
+	return path
+}
+
+{{end}}func envBool(name string) bool {
+	raw := strings.TrimSpace(os.Getenv(name))
+	if raw == "" {
+		return false
+	}
+	value, err := strconv.ParseBool(raw)
+	if err != nil {
+		log.Fatalf("%s must be a boolean: %v", name, err)
+	}
+	return value
+}
+
+func envDuration(name string) time.Duration {
+	raw := strings.TrimSpace(os.Getenv(name))
+	if raw == "" {
+		return 0
+	}
+	value, err := time.ParseDuration(raw)
+	if err != nil {
+		log.Fatalf("%s must be a Go duration: %v", name, err)
+	}
+	return value
+}
+
+func envInt32(name string) int32 {
+	raw := strings.TrimSpace(os.Getenv(name))
+	if raw == "" {
+		return 0
+	}
+	value, err := strconv.ParseInt(raw, 10, 32)
+	if err != nil || value < 0 {
+		log.Fatalf("%s must be a non-negative 32-bit integer", name)
+	}
+	return int32(value)
+}
+
+func envList(name string) []string {
+	var values []string
+	for _, value := range strings.Split(os.Getenv(name), ",") {
+		if value = strings.TrimSpace(value); value != "" {
+			values = append(values, value)
+		}
+	}
+	return values
+}
+
+func env(name, fallback string) string {
+	if value := os.Getenv(name); value != "" {
+		return value
+	}
+	return fallback
+}

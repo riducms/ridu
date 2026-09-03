@@ -1,0 +1,2 @@
+# Deterministic generator output; formatting is owned by stableJSON().
+src/reference/generated/catalog.json

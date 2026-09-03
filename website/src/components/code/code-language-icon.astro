@@ -1,0 +1,41 @@
+---
+/// <reference types="unplugin-icons/types/astro" />
+
+import BashIcon from '~icons/simple-icons/gnubash';
+import GoIcon from '~icons/simple-icons/go';
+import GraphqlIcon from '~icons/simple-icons/graphql';
+import HtmlIcon from '~icons/simple-icons/html5';
+import JavascriptIcon from '~icons/simple-icons/javascript';
+import JsonIcon from '~icons/simple-icons/json';
+import MarkdownIcon from '~icons/simple-icons/markdown';
+import SvelteIcon from '~icons/simple-icons/svelte';
+import TomlIcon from '~icons/simple-icons/toml';
+import TypescriptIcon from '~icons/simple-icons/typescript';
+import CssIcon from '~icons/simple-icons/css';
+import TextIcon from '~icons/mdi/text-box-outline';
+import { resolveCodeLanguage, type CodeLanguage } from './code-language';
+
+interface Props {
+	lang?: string;
+}
+
+const icons: Record<CodeLanguage, typeof TextIcon> = {
+	bash: BashIcon,
+	css: CssIcon,
+	go: GoIcon,
+	graphql: GraphqlIcon,
+	html: HtmlIcon,
+	js: JavascriptIcon,
+	json: JsonIcon,
+	markdown: MarkdownIcon,
+	md: MarkdownIcon,
+	svelte: SvelteIcon,
+	text: TextIcon,
+	toml: TomlIcon,
+	ts: TypescriptIcon
+} as const;
+
+const Icon = icons[resolveCodeLanguage(Astro.props.lang)];
+---
+
+<span class="code-language-icon" aria-hidden="true"><Icon /></span>
