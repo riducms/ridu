@@ -1,0 +1,5 @@
+{
+	// Keep the root editor project Node-only for vite.config.ts. Browser source and
+	// Bun tests use the nearer configs in src/ and tests/ so their globals do not mix.
+	"extends": "./tsconfig.node.json"
+}

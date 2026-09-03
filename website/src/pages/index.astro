@@ -1,0 +1,81 @@
+---
+import { Image } from 'astro:assets';
+import adminPostEditor from '../../../docs/assets/ridu-admin-post-editor.png';
+import CodeBlock from '@/components/code/code-block.astro';
+import HomeWorkflow from '@/components/home-workflow.astro';
+import BaseLayout from '@/layouts/base-layout.astro';
+
+const createCommand = `npm create ridu@latest my-app`;
+---
+
+<BaseLayout>
+	<section
+		class="grid items-center gap-12 pt-14 pb-10 sm:(pt-20 pb-12) lg:(grid-cols-[minmax(0,0.82fr)_minmax(520px,1.18fr)] gap-[clamp(50px,7vw,96px)] pt-24)"
+	>
+		<div class="min-w-0">
+			<h1 class="m-0 max-w-620px text-52px leading-[0.98] sm:text-[clamp(58px,6.3vw,78px)]">
+				A CMS that ships like Go software.
+			</h1>
+			<p class="mt-6 mb-0 max-w-590px text-16px leading-[1.65] text-ink-soft sm:text-18px">
+				Define collections, access rules, hooks, and plugins in Go. Ridu turns that configuration
+				into database migrations, a REST API, a generated TypeScript client, and an embedded Svelte
+				admin. The application ships as one Go binary.
+			</p>
+			<div class="mt-7 flex flex-wrap items-center gap-5">
+				<a
+					class="inline-flex-s-center h-10.5 rounded-2px border border-ink bg-ink px-4.25 text-14px font-700 text-canvas no-underline hover:bg-white"
+					href="/docs/quickstart/">Start with Ridu</a
+				>
+				<a class="muted-link text-14px" href="/docs/"
+					>Read the docs <span aria-hidden="true">→</span></a
+				>
+			</div>
+
+			<div class="mt-9 max-w-460px">
+				<CodeBlock code={createCommand} lang="bash" label="Create a project" compact />
+				<p class="mt-2.5 mb-0 text-12.5px leading-[1.55] text-ink-faint">
+					Interactive setup asks for the template and database. Bun, pnpm, Yarn, and a direct Go
+					install are available too.
+				</p>
+			</div>
+		</div>
+
+		<figure class="m-0 min-w-0">
+			<div
+				class="overflow-hidden rounded-5px border border-line-strong bg-surface shadow-[0_24px_80px_rgba(0,0,0,0.28)]"
+			>
+				<Image
+					class="block aspect-[1.57] h-auto w-full object-cover object-top"
+					src={adminPostEditor}
+					alt="A published post open in the embedded Ridu admin, with title, status, author, rich-text content, and document actions."
+					loading="eager"
+				/>
+			</div>
+			<figcaption class="mt-3 text-12.5px leading-[1.5] text-ink-faint">
+				Edit content, relationships, status, and rich text in one form.
+			</figcaption>
+		</figure>
+	</section>
+
+	<HomeWorkflow />
+
+	<section
+		class="mb-20 grid items-center gap-7 rounded-6px bg-surface px-6 py-8 sm:(px-9 py-10) lg:(grid-cols-[1fr_auto] gap-14)"
+	>
+		<div class="max-w-700px">
+			<h2 class="m-0 text-32px leading-[1.08] sm:text-40px">See the whole path in one project.</h2>
+			<p class="mt-3 mb-0 text-15px leading-[1.65] text-ink-soft sm:text-16px">
+				Choose Starter and SQLite—no database service or Docker required. Create a post in the
+				admin, then read it through the generated SDK.
+			</p>
+		</div>
+		<div class="flex flex-wrap items-center gap-4 lg:justify-end">
+			<a
+				class="inline-flex-s-center h-10.5 rounded-2px border border-ink bg-ink px-4.25 text-14px font-700 text-canvas no-underline hover:bg-white"
+				href="/docs/quickstart/">Follow the quickstart</a
+			>
+			<a class="muted-link text-14px" href="/docs/status/">Check what’s ready →</a>
+			<p class="basis-full m-0 text-11.5px text-ink-faint lg:text-right">Pre-1.0 · MIT licensed</p>
+		</div>
+	</section>
+</BaseLayout>

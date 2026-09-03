@@ -1,0 +1,49 @@
+---
+import CapabilityMatrix from '@/components/docs/capability-matrix.astro';
+import DocsShell from '@/components/docs/docs-shell.astro';
+import DocumentChoiceScript from '@/components/docs/document-choice-script.astro';
+import DocumentPagination from '@/components/docs/document-pagination.astro';
+import PackageManagerTabsScript from '@/components/code/package-manager-tabs-script.astro';
+import { getAdjacentDocumentationPage, type DocumentationPage } from '@/config/documentation';
+import BaseLayout from '@/layouts/base-layout.astro';
+
+interface Heading {
+	depth: number;
+	slug: string;
+	text: string;
+}
+
+interface Props {
+	page: DocumentationPage;
+	headings: Heading[];
+}
+
+const { page, headings } = Astro.props;
+const { previous, next } = await getAdjacentDocumentationPage(page);
+const toc = headings
+	.filter((heading) => heading.depth === 2 || heading.depth === 3)
+	.map((heading) => ({
+		label: heading.text,
+		href: `#${heading.slug}`,
+		depth: heading.depth as 2 | 3
+	}));
+---
+
+<BaseLayout
+	title={page.title}
+	description={page.description}
+	active={page.area}
+	wide
+	footer={false}
+>
+	<DocsShell {page} {toc} pageActions>
+		<Fragment slot="before-content">
+			{page.slug === 'status' && <CapabilityMatrix />}
+			<slot name="before-content" />
+		</Fragment>
+		<slot />
+		<DocumentPagination {previous} {next} />
+	</DocsShell>
+	<DocumentChoiceScript />
+	<PackageManagerTabsScript />
+</BaseLayout>

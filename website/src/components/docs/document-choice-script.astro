@@ -1,0 +1,170 @@
+<script>
+	const choiceStoragePrefix = 'ridu:docs:choice:';
+
+	function readChoice(key: string): string | undefined {
+		try {
+			return window.localStorage.getItem(`${choiceStoragePrefix}${key}`) ?? undefined;
+		} catch {
+			return;
+		}
+	}
+
+	function writeChoice(key: string, value: string) {
+		try {
+			window.localStorage.setItem(`${choiceStoragePrefix}${key}`, value);
+		} catch {
+			// Storage can be unavailable in privacy-restricted browsing contexts.
+		}
+	}
+
+	function selectChoice(group: HTMLElement, value: string, persist = true): boolean {
+		const key = group.dataset.docChoice;
+		const controls = [...group.querySelectorAll<HTMLButtonElement>('[data-doc-choice-value]')];
+		const selected = controls.find((control) => control.dataset.docChoiceValue === value);
+		if (!key || !selected) return false;
+
+		for (const control of controls) {
+			const active = control === selected;
+			control.setAttribute('aria-selected', String(active));
+			control.tabIndex = active ? 0 : -1;
+		}
+		for (const panel of group.querySelectorAll<HTMLElement>('[data-doc-choice-panel]')) {
+			panel.hidden = panel.dataset.docChoicePanel !== value;
+		}
+		if (persist) writeChoice(key, value);
+		return true;
+	}
+
+	function selectMatchingChoices(source: HTMLElement, value: string, persist = true): boolean {
+		const key = source.dataset.docChoice;
+		if (!key) return false;
+		let selected = false;
+		for (const group of document.querySelectorAll<HTMLElement>('[data-doc-choice]')) {
+			if (group.dataset.docChoice !== key) continue;
+			selected = selectChoice(group, value, false) || selected;
+		}
+		if (selected && persist) writeChoice(key, value);
+		return selected;
+	}
+
+	function initializeDocumentChoices() {
+		const groups = [...document.querySelectorAll<HTMLElement>('[data-doc-choice]')];
+		for (const [groupIndex, group] of groups.entries()) {
+			if (group.dataset.docChoiceReady !== undefined) continue;
+			group.dataset.docChoiceReady = '';
+			const controls = [...group.querySelectorAll<HTMLButtonElement>('[data-doc-choice-value]')];
+			const key = group.dataset.docChoice;
+			const safeKey = (key ?? 'choice').replaceAll(/[^a-z0-9_-]+/gi, '-');
+			for (const [index, control] of controls.entries()) {
+				const value = control.dataset.docChoiceValue;
+				if (!value) continue;
+				const panel = group.querySelector<HTMLElement>(`[data-doc-choice-panel="${value}"]`);
+				if (!panel) continue;
+				control.id ||= `doc-choice-${safeKey}-${groupIndex}-${index}-tab`;
+				panel.id ||= `doc-choice-${safeKey}-${groupIndex}-${index}-panel`;
+				control.setAttribute('role', 'tab');
+				control.setAttribute('aria-controls', panel.id);
+				panel.setAttribute('role', 'tabpanel');
+				panel.setAttribute('aria-labelledby', control.id);
+			}
+			for (const control of controls) {
+				control.addEventListener('click', () => {
+					const value = control.dataset.docChoiceValue;
+					if (value) selectMatchingChoices(group, value);
+				});
+				control.addEventListener('keydown', (event) => {
+					let index: number | undefined;
+					if (event.key === 'Home') index = 0;
+					if (event.key === 'End') index = controls.length - 1;
+					if (event.key === 'ArrowLeft') {
+						index = (controls.indexOf(control) - 1 + controls.length) % controls.length;
+					}
+					if (event.key === 'ArrowRight') index = (controls.indexOf(control) + 1) % controls.length;
+					if (index === undefined) return;
+					event.preventDefault();
+					const next = controls[index];
+					const value = next?.dataset.docChoiceValue;
+					if (!next || !value) return;
+					next.focus();
+					selectMatchingChoices(group, value);
+				});
+			}
+
+			const hashTarget = location.hash
+				? document.getElementById(decodeURIComponent(location.hash.slice(1)))
+				: undefined;
+			const hashPanel =
+				hashTarget?.matches('[data-doc-choice-panel]') && group.contains(hashTarget)
+					? hashTarget
+					: undefined;
+			const hashChoice = hashPanel?.dataset.docChoicePanel;
+			if (hashChoice && selectMatchingChoices(group, hashChoice, false)) continue;
+			const preferred = key ? readChoice(key) : undefined;
+			const fallback = controls[0]?.dataset.docChoiceValue;
+			if (preferred && selectMatchingChoices(group, preferred, false)) continue;
+			if (fallback) selectMatchingChoices(group, fallback, false);
+		}
+	}
+
+	initializeDocumentChoices();
+	document.addEventListener('astro:page-load', initializeDocumentChoices);
+</script>
+
+<style is:global>
+	[data-doc-choice] {
+		margin-block: 1.5rem;
+	}
+
+	[data-doc-choice] [role='tablist'] {
+		display: flex;
+		gap: 20px;
+		overflow-x: auto;
+		border-bottom: 1px solid var(--colors-line-strong);
+		scrollbar-width: none;
+	}
+
+	[data-doc-choice] [role='tablist']::-webkit-scrollbar {
+		display: none;
+	}
+
+	[data-doc-choice-value] {
+		position: relative;
+		min-height: 40px;
+		flex: 0 0 auto;
+		padding: 4px 0 10px;
+		border: 0;
+		background: transparent;
+		color: var(--colors-ink-faint);
+		font: inherit;
+		font-size: 14px;
+		cursor: pointer;
+	}
+
+	[data-doc-choice-value][aria-selected='true'] {
+		color: var(--colors-ink);
+	}
+
+	[data-doc-choice-value][aria-selected='true']::after {
+		position: absolute;
+		right: 0;
+		bottom: -1px;
+		left: 0;
+		height: 2px;
+		background: var(--colors-accent);
+		content: '';
+	}
+
+	[data-doc-choice-panel] {
+		padding-top: 1rem;
+	}
+
+	[data-doc-choice-panel] > :first-child {
+		margin-top: 0;
+	}
+
+	@media (width < 48rem) {
+		[data-doc-choice] [role='tablist'] {
+			gap: 18px;
+		}
+	}
+</style>

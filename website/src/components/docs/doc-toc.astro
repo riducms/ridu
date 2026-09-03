@@ -1,0 +1,483 @@
+---
+interface TocItem {
+	label: string;
+	href: string;
+	depth?: 2 | 3;
+}
+
+interface Props {
+	items: TocItem[];
+	floatOnly?: boolean;
+}
+
+const { items, floatOnly = false } = Astro.props;
+const firstItem = items[0];
+---
+
+{
+	items.length > 0 && (
+		<>
+			<aside class:list={['toc-rail', { 'float-only': floatOnly }]} aria-label="On this page">
+				<div class="toc-rail-inner">
+					<p class="toc-title">On this page</p>
+					<nav class="toc-list site-scrollbar" aria-label="On this page" data-toc-scroll>
+						{items.map((item) => (
+							<a
+								href={item.href}
+								data-depth={item.depth ?? 2}
+								data-toc-link={item.href.slice(1)}
+								data-toc-label={item.label}
+							>
+								{item.label}
+							</a>
+						))}
+					</nav>
+				</div>
+			</aside>
+
+			<div class="toc-float" data-toc-float>
+				<div class="toc-float-panel" id="doc-toc-panel" data-toc-panel hidden>
+					<div class="toc-float-panel-header">
+						<p>On this page</p>
+						<span>{items.length} sections</span>
+					</div>
+					<nav class="site-scrollbar" aria-label="On this page" data-toc-scroll>
+						{items.map((item) => (
+							<a
+								href={item.href}
+								data-depth={item.depth ?? 2}
+								data-toc-link={item.href.slice(1)}
+								data-toc-label={item.label}
+							>
+								{item.label}
+							</a>
+						))}
+					</nav>
+				</div>
+
+				<button
+					class="toc-float-trigger"
+					type="button"
+					aria-controls="doc-toc-panel"
+					aria-expanded="false"
+					aria-label={`Open on this page navigation. Current section: ${firstItem?.label ?? ''}`}
+					data-toc-trigger
+				>
+					<span class="toc-float-mark" aria-hidden="true">
+						<i />
+						<i />
+						<i />
+					</span>
+					<span class="toc-float-copy">
+						<small>On this page</small>
+						<strong data-toc-current>{firstItem?.label}</strong>
+					</span>
+					<span class="toc-float-chevron" aria-hidden="true" />
+				</button>
+			</div>
+		</>
+	)
+}
+
+<style>
+	.toc-rail {
+		min-width: 0;
+	}
+
+	.toc-rail.float-only {
+		display: none;
+	}
+
+	.toc-rail-inner {
+		position: sticky;
+		top: var(--page-header-height);
+		display: flex;
+		max-height: calc(100vh - var(--page-header-height));
+		flex-direction: column;
+		padding: 40px 10px 40px 30px;
+	}
+
+	.toc-title,
+	.toc-float-panel-header p {
+		margin: 0;
+		color: var(--colors-ink-faint);
+		font-family: var(--font-mono);
+		font-size: 11px;
+		font-weight: 500;
+		letter-spacing: 0.14em;
+		text-transform: uppercase;
+	}
+
+	.toc-list,
+	.toc-float-panel nav {
+		min-height: 0;
+		margin-top: 14px;
+		padding-left: 0;
+		overflow-y: auto;
+	}
+
+	.toc-list {
+		border-left: 1px solid var(--colors-line);
+	}
+
+	.toc-list a,
+	.toc-float-panel nav a {
+		display: block;
+		margin-left: -1px;
+		padding: 4px 4px 4px 16px;
+		border-left: 1px solid transparent;
+		color: var(--colors-ink-faint);
+		font-size: 13px;
+		font-weight: 400;
+		line-height: 1.375;
+		text-decoration: none;
+		overflow-wrap: anywhere;
+		transition:
+			border-color 120ms ease,
+			color 120ms ease;
+	}
+
+	.toc-list a[data-depth='3'],
+	.toc-float-panel nav a[data-depth='3'] {
+		padding-left: 28px;
+	}
+
+	.toc-list a:hover,
+	.toc-float-panel nav a:hover {
+		border-left-color: var(--colors-line-strong);
+		color: var(--colors-ink-soft);
+	}
+
+	.toc-list a[data-active],
+	.toc-float-panel nav a[data-active] {
+		border-left-color: var(--colors-accent);
+		color: var(--colors-ink);
+		font-weight: 400;
+	}
+
+	.toc-float {
+		display: none;
+	}
+
+	@media (width < 80rem) {
+		.toc-rail {
+			display: none;
+		}
+
+		.toc-float {
+			position: fixed;
+			right: calc(16px + env(safe-area-inset-right));
+			bottom: calc(16px + env(safe-area-inset-bottom));
+			z-index: 80;
+			display: grid;
+			justify-items: end;
+			width: min(320px, calc(100vw - 32px));
+		}
+
+		.toc-float-trigger {
+			display: grid;
+			grid-template-columns: 22px minmax(0, 1fr) 10px;
+			align-items: center;
+			gap: 10px;
+			width: min(286px, calc(100vw - 32px));
+			min-height: 52px;
+			padding: 8px 13px 8px 12px;
+			border: 1px solid var(--colors-line-strong);
+			border-radius: 7px;
+			background: rgba(24, 20, 23, 0.96);
+			box-shadow:
+				0 16px 48px rgba(0, 0, 0, 0.34),
+				inset 0 1px rgba(255, 255, 255, 0.035);
+			color: var(--colors-ink);
+			backdrop-filter: blur(18px);
+			cursor: pointer;
+			text-align: left;
+		}
+
+		.toc-float-trigger:hover {
+			border-color: color-mix(in srgb, var(--colors-accent) 45%, var(--colors-line-strong));
+		}
+
+		.toc-float-trigger[aria-expanded='true'] {
+			border-color: color-mix(in srgb, var(--colors-accent) 58%, var(--colors-line-strong));
+		}
+
+		.toc-float-mark {
+			display: grid;
+			gap: 3px;
+			width: 18px;
+		}
+
+		.toc-float-mark i {
+			display: block;
+			height: 1px;
+			border-radius: 999px;
+			background: var(--colors-ink-faint);
+		}
+
+		.toc-float-mark i:nth-child(2) {
+			width: 12px;
+			background: var(--colors-accent);
+		}
+
+		.toc-float-mark i:nth-child(3) {
+			width: 15px;
+		}
+
+		.toc-float-copy {
+			display: grid;
+			min-width: 0;
+			gap: 1px;
+		}
+
+		.toc-float-copy small {
+			color: var(--colors-ink-faint);
+			font-family: var(--font-mono);
+			font-size: 8.5px;
+			font-weight: 520;
+			letter-spacing: 0.1em;
+			line-height: 1.2;
+			text-transform: uppercase;
+		}
+
+		.toc-float-copy strong {
+			display: block;
+			overflow: hidden;
+			font-size: 12.5px;
+			font-weight: 580;
+			line-height: 1.35;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+		}
+
+		.toc-float-chevron {
+			width: 7px;
+			height: 7px;
+			border-right: 1px solid currentColor;
+			border-bottom: 1px solid currentColor;
+			color: var(--colors-ink-faint);
+			transform: rotate(225deg) translate(-1px, -1px);
+			transition: transform 140ms ease;
+		}
+
+		.toc-float-trigger[aria-expanded='true'] .toc-float-chevron {
+			transform: rotate(45deg) translate(-1px, -1px);
+		}
+
+		.toc-float-panel {
+			width: 100%;
+			max-height: min(58vh, calc(100dvh - var(--page-header-height) - 96px), 440px);
+			margin-bottom: 8px;
+			padding: 14px 14px 13px;
+			border: 1px solid var(--colors-line-strong);
+			border-radius: 7px;
+			background: rgba(24, 20, 23, 0.98);
+			box-shadow:
+				0 24px 70px rgba(0, 0, 0, 0.42),
+				inset 0 1px rgba(255, 255, 255, 0.035);
+			backdrop-filter: blur(18px);
+		}
+
+		.toc-float-panel[hidden] {
+			display: none;
+		}
+
+		.toc-float-panel-header {
+			display: flex;
+			align-items: baseline;
+			justify-content: space-between;
+			gap: 12px;
+			padding: 0 2px 10px;
+			border-bottom: 1px solid var(--colors-line);
+		}
+
+		.toc-float-panel-header span {
+			color: var(--colors-ink-faint);
+			font-size: 10.5px;
+		}
+
+		.toc-float-panel nav {
+			max-height: min(46vh, 340px);
+			margin-top: 10px;
+		}
+
+		.toc-float-panel nav a {
+			padding-block: 6px;
+			padding-right: 8px;
+			border-radius: 3px;
+		}
+
+		.toc-float-panel nav a:hover {
+			background: var(--colors-surface-hover);
+		}
+
+		.toc-float-panel nav a[data-active] {
+			background: var(--colors-accent-soft);
+		}
+	}
+
+	@media (width < 48rem) {
+		.toc-float {
+			right: calc(12px + env(safe-area-inset-right));
+			bottom: calc(12px + env(safe-area-inset-bottom));
+			width: min(310px, calc(100vw - 24px));
+		}
+
+		.toc-float-trigger {
+			width: min(260px, calc(100vw - 24px));
+		}
+
+		.toc-float-panel {
+			max-height: min(52vh, calc(100dvh - var(--page-header-height) - 84px), 400px);
+		}
+	}
+</style>
+
+<script>
+	let disposeDocToc = () => {};
+
+	function initializeDocToc() {
+		disposeDocToc();
+		const links = Array.from(document.querySelectorAll<HTMLAnchorElement>('a[data-toc-link]'));
+		if (links.length === 0) return;
+		const controller = new AbortController();
+		const slugs = [...new Set(links.map((link) => link.dataset.tocLink ?? ''))].filter(Boolean);
+		const targets = slugs
+			.map((slug) => ({ slug, element: document.getElementById(slug) }))
+			.filter((entry): entry is { slug: string; element: HTMLElement } => entry.element !== null);
+		const floating = document.querySelector<HTMLElement>('[data-toc-float]');
+		const panel = floating?.querySelector<HTMLElement>('[data-toc-panel]');
+		const trigger = floating?.querySelector<HTMLButtonElement>('[data-toc-trigger]');
+		const currentLabel = floating?.querySelector<HTMLElement>('[data-toc-current]');
+
+		const keepVisible = (link: HTMLElement) => {
+			const scroller = link.closest<HTMLElement>('[data-toc-scroll]');
+			if (
+				!scroller ||
+				scroller.clientHeight === 0 ||
+				scroller.scrollHeight <= scroller.clientHeight
+			) {
+				return;
+			}
+
+			const row = link.getBoundingClientRect();
+			const frame = scroller.getBoundingClientRect();
+			if (row.top < frame.top) scroller.scrollTop += row.top - frame.top - 8;
+			else if (row.bottom > frame.bottom) scroller.scrollTop += row.bottom - frame.bottom + 8;
+		};
+
+		let activeSlug = '';
+		let activeLabel = '';
+
+		const setActive = (slug: string) => {
+			if (!slug) return;
+			const matching = links.find((link) => link.dataset.tocLink === slug);
+			const label = matching?.dataset.tocLabel ?? matching?.textContent?.trim() ?? '';
+
+			activeSlug = slug;
+			activeLabel = label;
+			for (const link of links) {
+				const isActive = link.dataset.tocLink === activeSlug;
+				link.toggleAttribute('data-active', isActive);
+				if (isActive) {
+					link.setAttribute('aria-current', 'location');
+					keepVisible(link);
+				} else {
+					link.removeAttribute('aria-current');
+				}
+			}
+
+			if (currentLabel) currentLabel.textContent = activeLabel;
+			if (trigger) {
+				trigger.setAttribute(
+					'aria-label',
+					`Open on this page navigation. Current section: ${activeLabel}`
+				);
+			}
+		};
+
+		let pendingFrame = 0;
+		const update = () => {
+			pendingFrame = 0;
+			if (targets.length === 0) return;
+
+			const threshold = Math.min(180, Math.max(96, window.innerHeight * 0.28));
+			let current = targets[0];
+			for (const target of targets) {
+				if (target.element.getBoundingClientRect().top <= threshold) current = target;
+			}
+
+			const atPageEnd =
+				window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 2;
+			if (atPageEnd) current = targets.at(-1) ?? current;
+			if (current.slug !== activeSlug) setActive(current.slug);
+		};
+
+		const schedule = () => {
+			if (pendingFrame === 0) pendingFrame = window.requestAnimationFrame(update);
+		};
+
+		const setPanelOpen = (open: boolean, restoreFocus = false) => {
+			if (!panel || !trigger) return;
+			panel.hidden = !open;
+			trigger.setAttribute('aria-expanded', String(open));
+			trigger.setAttribute(
+				'aria-label',
+				`${open ? 'Close' : 'Open'} on this page navigation. Current section: ${activeLabel}`
+			);
+			if (open) {
+				const activePanelLink = panel.querySelector<HTMLElement>('a[data-active]');
+				if (activePanelLink) window.requestAnimationFrame(() => keepVisible(activePanelLink));
+			} else if (restoreFocus) {
+				trigger.focus();
+			}
+		};
+
+		trigger?.addEventListener('click', () => setPanelOpen(Boolean(panel?.hidden ?? true)), {
+			signal: controller.signal
+		});
+		panel?.addEventListener(
+			'click',
+			(event) => {
+				const link = (event.target as Element).closest<HTMLAnchorElement>('a[data-toc-link]');
+				if (!link) return;
+				setActive(link.dataset.tocLink ?? '');
+				setPanelOpen(false);
+			},
+			{ signal: controller.signal }
+		);
+
+		document.addEventListener(
+			'pointerdown',
+			(event) => {
+				if (!floating || panel?.hidden || floating.contains(event.target as Node)) return;
+				setPanelOpen(false);
+			},
+			{ signal: controller.signal }
+		);
+
+		document.addEventListener(
+			'keydown',
+			(event) => {
+				if (event.key !== 'Escape' || panel?.hidden) return;
+				event.preventDefault();
+				setPanelOpen(false, true);
+			},
+			{ signal: controller.signal }
+		);
+
+		setActive(targets[0]?.slug ?? slugs[0]);
+		update();
+		window.addEventListener('scroll', schedule, { passive: true, signal: controller.signal });
+		window.addEventListener('resize', schedule, { signal: controller.signal });
+		window.addEventListener('hashchange', schedule, { signal: controller.signal });
+		disposeDocToc = () => {
+			controller.abort();
+			if (pendingFrame !== 0) window.cancelAnimationFrame(pendingFrame);
+		};
+	}
+
+	initializeDocToc();
+	document.addEventListener('astro:page-load', initializeDocToc);
+	document.addEventListener('astro:before-swap', () => disposeDocToc());
+</script>

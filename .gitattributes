@@ -1,0 +1,26 @@
+internal/adminassets/dist/assets/*.js -whitespace
+internal/adminassets/dist/** linguist-generated=true
+testdata/generated/** linguist-generated=true
+playground/ridu/generated/** linguist-generated=true
+playground/payload/src/payload-types.ts linguist-generated=true
+playground/shadcn-rhea/** linguist-vendored=true
+
+# ridu-dev is the private source repository. These tracked files provide local
+# maintainer and agent context but must never enter the public ridu projection.
+AGENTS.md export-ignore
+**/AGENTS.md export-ignore
+CLAUDE.md export-ignore
+**/CLAUDE.md export-ignore
+SKILL.md export-ignore
+**/SKILL.md export-ignore
+# Release-owned end-user skills are public product artifacts. Maintainer skills
+# remain excluded by the rules above and the dedicated .agents exclusion.
+internal/agentdocs/skills/** -export-ignore
+.agents export-ignore
+.agents/** export-ignore
+docs/*.md export-ignore
+docs/**/*.md export-ignore
+docs/assets/README.md -export-ignore
+admin/docs export-ignore
+admin/docs/** export-ignore
+scripts/export-public.sh export-ignore

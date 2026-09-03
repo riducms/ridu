@@ -1,0 +1,58 @@
+---
+import type { DocumentationNavigationItem } from '@/config/documentation';
+
+interface Props {
+	item: DocumentationNavigationItem;
+	path: string;
+	depth?: number;
+}
+
+const { item, path, depth = 0 } = Astro.props;
+const containsPath = (candidate: DocumentationNavigationItem): boolean =>
+	candidate.href === path || candidate.children.some(containsPath);
+const active = item.href === path;
+const branchActive = containsPath(item);
+const linkClasses = [
+	'block border-l py-1.15 leading-[1.4] no-underline transition-colors',
+	depth === 0
+		? 'border-line pl-3.5 text-14px text-ink-faint'
+		: 'border-transparent pl-3 text-14px text-ink-faint',
+	'hover:(border-accent text-ink) aria-[current=page]:(border-accent text-ink)'
+];
+---
+
+<li data-depth={depth} data-active-branch={branchActive || undefined}>
+	{
+		item.children.length > 0 ? (
+			<details open={branchActive}>
+				<summary class="cursor-pointer py-1.2 text-14px text-ink-faint hover:text-ink marker:text-ink-faint">
+					{item.label}
+				</summary>
+				<ul class="m-0 ml-1.5 list-none border-l border-line/70 py-0.75 pl-1.5">
+					{item.href && (
+						<li>
+							<a
+								class:list={linkClasses}
+								href={item.href}
+								aria-current={active ? 'page' : undefined}
+							>
+								Overview
+							</a>
+						</li>
+					)}
+					{item.children.map((child) => (
+						<Astro.self item={child} {path} depth={depth + 1} />
+					))}
+				</ul>
+			</details>
+		) : item.href ? (
+			<a class:list={linkClasses} href={item.href} aria-current={active ? 'page' : undefined}>
+				{item.label}
+			</a>
+		) : (
+			<p class="m-0 border-l border-transparent py-1.25 pl-3 font-mono text-9.5px font-600 tracking-[0.08em] text-ink-soft uppercase">
+				{item.label}
+			</p>
+		)
+	}
+</li>

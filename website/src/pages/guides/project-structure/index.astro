@@ -1,0 +1,362 @@
+---
+import CodeBlock from '@/components/code/code-block.astro';
+import DocsShell from '@/components/docs/docs-shell.astro';
+import DocumentPagination from '@/components/docs/document-pagination.astro';
+import {
+	getAdjacentDocumentationLocation,
+	getAuthoredDocumentationPage
+} from '@/config/documentation';
+import BaseLayout from '@/layouts/base-layout.astro';
+
+const projectAreas = [
+	{
+		path: 'content/',
+		title: 'Your content model',
+		description: 'Collections, fields, access rules, hooks, and application plugin registration.',
+		primary: true
+	},
+	{
+		path: 'cmd/server/main.go',
+		title: 'Runtime wiring',
+		description: 'The database adapter, embedded admin, server address, and production options.',
+		primary: false
+	},
+	{
+		path: 'admin/',
+		title: 'Admin entry',
+		description: 'Mounts the admin and registers your static UI extensions.',
+		primary: false
+	},
+	{
+		path: 'generated/',
+		title: 'Generated contracts',
+		description:
+			'The schema manifest, OpenAPI document, Go contracts, and typed TypeScript client.',
+		primary: false
+	},
+	{
+		path: 'ridu.toml',
+		title: 'Project settings',
+		description:
+			'Paths and adapter choices used by the CLI. Secrets and schema do not belong here.',
+		primary: false
+	},
+	{
+		path: 'migrations/',
+		title: 'Production changes',
+		description:
+			'Reviewed, immutable database changes. This directory appears with your first migration.',
+		primary: false
+	}
+] as const;
+
+const fullScaffold = `my-ridu-app/
+├── admin/
+│   ├── src/
+│   │   ├── main.ts
+│   │   ├── plugins.ts
+│   │   └── ridu.plugins.generated.ts
+│   ├── index.html
+│   ├── package.json
+│   ├── tsconfig.json
+│   └── vite.config.ts
+├── cmd/
+│   └── server/
+│       └── main.go
+├── content/
+│   ├── config.go
+│   ├── users.go
+│   └── ridu_plugins.generated.go
+├── generated/
+│   ├── ridu.generated.go
+│   ├── ridu.generated.ts
+│   ├── ridu.openapi.json
+│   └── ridu.schema.json
+├── internal/
+│   └── adminassets/
+│       ├── dist/
+│       │   └── placeholder.txt
+│       └── assets.go
+├── .gitignore
+├── PROJECT.md
+├── README.md
+├── go.mod
+├── go.sum
+├── package.json
+├── ridu.plugins.json
+└── ridu.toml`;
+
+const postsExample = `package content
+
+import (
+	"github.com/riducms/ridu"
+	"github.com/riducms/ridu/field"
+)
+
+var Posts = ridu.Collection{
+	Slug: "posts",
+	Access: ridu.CollectionAccess{
+		Create: authenticatedOnly,
+		Read:   authenticatedOnly,
+		Update: authenticatedOnly,
+		Delete: authenticatedOnly,
+	},
+	Fields: []field.Definition{
+		field.Text("title", field.Required()),
+	},
+}`;
+
+const configExample = `package content
+
+import "github.com/riducms/ridu"
+
+func Config() ridu.Config {
+	return ridu.Config{
+		Name:    "Content",
+		Admin:   ridu.AdminConfig{User: "users"},
+		Plugins: installedPlugins(),
+		Collections: []ridu.Collection{
+			Users,
+			Posts,
+		},
+	}
+}`;
+
+const editingRules = [
+	{
+		title: 'Edit application code',
+		paths: 'content/, admin/src/plugins.ts',
+		description: 'Define content behaviour and register admin extensions here.'
+	},
+	{
+		title: 'Change project wiring',
+		paths: 'cmd/server/main.go, ridu.toml, package files',
+		description: 'Change these when runtime composition, project paths, or dependencies change.'
+	},
+	{
+		title: 'Regenerate, review, commit',
+		paths: 'generated/, plugin registries, migrations, lockfiles',
+		description:
+			'Regenerate these with the relevant command and review the diff. Do not edit derived files by hand.'
+	},
+	{
+		title: 'Recreate freely',
+		paths: '.ridu/, node_modules/, dist/',
+		description: 'These are local caches, installed dependencies, or build output—not source.'
+	}
+] as const;
+
+const guideToc = [
+	{ label: 'Project map', href: '#project-map' },
+	{ label: 'Add a collection', href: '#first-edit' },
+	{ label: 'Generated output', href: '#generation-flow' },
+	{ label: 'Editing rules', href: '#ownership' }
+];
+const { previous, next } = await getAdjacentDocumentationLocation({
+	area: 'guides',
+	slug: 'project-structure'
+});
+const page = getAuthoredDocumentationPage('guides', 'project-structure');
+if (!page) throw new Error('Project structure documentation metadata is missing');
+---
+
+<BaseLayout title={page.title} description={page.description} active="guides" wide footer={false}>
+	<DocsShell {page} toc={guideToc} prose={false}>
+		<div class="max-w-[1080px] pb-12 text-16px leading-[1.7] text-ink-soft">
+			<div class="mt-8 max-w-760px rounded-4px border border-accent/35 bg-accent/5 px-5 py-4.5">
+				<h2 class="m-0 text-20px font-600 text-ink">
+					Most work starts in <code class="font-mono text-[0.9em] text-accent">content/</code>.
+				</h2>
+				<p class="mt-1.5 mb-0">
+					Keep the development command running, edit a collection, and let Ridu refresh the
+					contracts and admin. The rest of the project can stay out of your way until you need it.
+				</p>
+			</div>
+
+			<section class="mt-16 scroll-mt-24" id="project-map">
+				<h2 class="m-0 text-30px leading-tight text-ink">The project at a glance</h2>
+				<p class="mt-3 mb-0 max-w-760px">
+					This uses the smallest interactive scaffold: choose <strong class="text-ink">Blank</strong
+					>{', '}
+					<strong class="text-ink">SQLite</strong>, and no coding-agent guidance. You only need six
+					places to understand the shape of the application.
+				</p>
+
+				<div class="mt-7 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+					{
+						projectAreas.map((area) => (
+							<article
+								class:list={[
+									'min-w-0 rounded-4px border p-4.5',
+									area.primary ? 'border-accent/45 bg-accent/5' : 'border-line bg-surface/65'
+								]}
+							>
+								<code
+									class:list={[
+										'block overflow-hidden text-ellipsis whitespace-nowrap font-mono text-12px',
+										area.primary ? 'text-accent' : 'text-ink-soft'
+									]}
+								>
+									{area.path}
+								</code>
+								<h3 class="mt-2 mb-0 text-17px font-600 text-ink">{area.title}</h3>
+								<p class="mt-1.5 mb-0 text-13.5px leading-[1.55]">{area.description}</p>
+							</article>
+						))
+					}
+				</div>
+
+				<details class="group mt-5 rounded-4px border border-line bg-surface/45">
+					<summary
+						class="flex-s-between min-h-13 cursor-pointer list-none gap-4 px-4.5 py-3 text-14px font-550 text-ink hover:bg-surface-hover [&::-webkit-details-marker]:hidden"
+					>
+						<span>Show the complete Blank + SQLite scaffold</span>
+						<span
+							class="text-20px font-300 text-ink-faint transition-transform group-open:rotate-45"
+							aria-hidden="true">+</span
+						>
+					</summary>
+					<div class="border-t border-line px-4.5 pb-5">
+						<CodeBlock
+							code={fullScaffold}
+							lang="text"
+							label="After a successful ridu new"
+							compact
+						/>
+						<div class="grid gap-5 text-13.5px leading-[1.6] md:grid-cols-2">
+							<div>
+								<h3 class="m-0 text-14px font-600 text-ink">Different scaffold choices</h3>
+								<ul class="mt-2 mb-0 pl-5">
+									<li>
+										<strong class="text-ink">Starter</strong> also adds
+										<code class="font-mono text-[0.88em]">content/posts.go</code>.
+									</li>
+									<li>
+										PostgreSQL and MongoDB add an adapter-specific
+										<code class="font-mono text-[0.88em]">compose.yaml</code>.
+									</li>
+									<li>
+										pnpm, Yarn, and agent choices add only their own workspace or guidance files.
+									</li>
+								</ul>
+							</div>
+							<div>
+								<h3 class="m-0 text-14px font-600 text-ink">Files created later</h3>
+								<ul class="mt-2 mb-0 pl-5">
+									<li>Your package manager creates its lockfile during installation.</li>
+									<li>
+										<code class="font-mono text-[0.88em]">ridu dev</code> uses disposable
+										<code class="font-mono text-[0.88em]">.ridu/</code> state.
+									</li>
+									<li>
+										Migrations and <code class="font-mono text-[0.88em]">dist/</code> appear only when
+										you create or build them.
+									</li>
+								</ul>
+							</div>
+						</div>
+					</div>
+				</details>
+			</section>
+
+			<section class="mt-20 scroll-mt-24" id="first-edit">
+				<h2 class="m-0 text-30px leading-tight text-ink">Add a collection</h2>
+				<p class="mt-3 mb-0 max-w-760px">
+					A blank project starts with the authenticated <code class="font-mono text-[0.9em]"
+						>users</code
+					>
+					collection. Create <code class="font-mono text-[0.9em]">content/posts.go</code>, then
+					register it beside <code class="font-mono text-[0.9em]">Users</code> in the complete config.
+				</p>
+
+				<div class="mt-6 grid items-start gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+					<CodeBlock code={postsExample} lang="go" label="content/posts.go" />
+					<CodeBlock code={configExample} lang="go" label="content/config.go" />
+				</div>
+
+				<p class="mt-4 mb-0 max-w-760px">
+					Save both files while your package manager's <code class="font-mono text-[0.9em]"
+						>dev</code
+					>
+					command is running. The admin reloads with a Posts collection, and the generated Go, OpenAPI,
+					and TypeScript contracts all gain the same document shape.
+				</p>
+			</section>
+
+			<section class="mt-20 scroll-mt-24" id="generation-flow">
+				<h2 class="m-0 text-30px leading-tight text-ink">What happens when you save</h2>
+				<p class="mt-3 mb-0 max-w-760px">
+					Change the Go configuration once, then development updates every surface that needs the
+					new model.
+				</p>
+
+				<div class="mt-7 grid items-stretch gap-3 md:grid-cols-[1fr_auto_1fr_auto_1fr]">
+					<article class="rounded-4px border border-line bg-surface/65 p-4.5">
+						<h3 class="m-0 text-16px font-600 text-ink">You edit the model</h3>
+						<code class="mt-2 block font-mono text-12px text-accent">content/*.go</code>
+						<p class="mt-2 mb-0 text-14px leading-[1.55]">
+							Fields, access rules, hooks, and plugins live here.
+						</p>
+					</article>
+					<span class="hidden self-center text-ink-faint md:block" aria-hidden="true">→</span>
+					<article class="rounded-4px border border-line bg-surface/65 p-4.5">
+						<h3 class="m-0 text-16px font-600 text-ink">Ridu resolves it</h3>
+						<code class="mt-2 block font-mono text-12px text-accent">ridu dev</code>
+						<p class="mt-2 mb-0 text-14px leading-[1.55]">
+							The executable config becomes one deterministic manifest.
+						</p>
+					</article>
+					<span class="hidden self-center text-ink-faint md:block" aria-hidden="true">→</span>
+					<article class="rounded-4px border border-line bg-surface/65 p-4.5">
+						<h3 class="m-0 text-16px font-600 text-ink">Every surface updates</h3>
+						<code class="mt-2 block font-mono text-12px text-accent">generated/ + admin</code>
+						<p class="mt-2 mb-0 text-14px leading-[1.55]">
+							Contracts, safe development storage, the API, and admin stay aligned.
+						</p>
+					</article>
+				</div>
+
+				<p class="mt-4 mb-0 max-w-760px text-13.5px">
+					Development synchronization is not a deployment plan. Create and review an immutable
+					<a
+						class="text-accent underline decoration-accent/35 underline-offset-3 hover:text-ink"
+						href="/docs/migrations/">migration</a
+					>
+					before shipping a production schema change.
+				</p>
+			</section>
+
+			<section class="mt-20 scroll-mt-24" id="ownership">
+				<h2 class="m-0 text-30px leading-tight text-ink">Editing rules</h2>
+				<p class="mt-3 mb-0 max-w-760px">
+					Use these rules to decide what to edit, regenerate, or recreate.
+				</p>
+
+				<div class="mt-7 grid gap-x-8 gap-y-5 md:grid-cols-2">
+					{
+						editingRules.map((rule) => (
+							<article class="min-w-0 rounded-4px bg-surface/50 p-4.5">
+								<h3 class="m-0 text-16px font-600 text-ink">{rule.title}</h3>
+								<code class="mt-1.5 block overflow-hidden text-ellipsis font-mono text-11px leading-[1.5] text-accent">
+									{rule.paths}
+								</code>
+								<p class="mt-2 mb-0 text-14px leading-[1.55]">{rule.description}</p>
+							</article>
+						))
+					}
+				</div>
+
+				<div class="mt-6 max-w-760px border-l-2 border-accent pl-4">
+					<h3 class="m-0 text-16px font-600 text-ink">If generated output looks wrong</h3>
+					<p class="mt-1.5 mb-0 text-13.5px leading-[1.6]">
+						Change the Go source and regenerate. Patching generated JSON or TypeScript only hides
+						the mismatch until the next <code class="font-mono text-[0.88em]">ridu dev</code> or
+						<code class="font-mono text-[0.88em]">ridu generate</code> run.
+					</p>
+				</div>
+			</section>
+
+			<DocumentPagination {previous} {next} />
+		</div>
+	</DocsShell>
+</BaseLayout>

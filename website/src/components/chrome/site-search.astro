@@ -1,0 +1,149 @@
+<button
+	class="search-trigger"
+	type="button"
+	data-search-open
+	aria-expanded="false"
+	aria-haspopup="dialog"
+	aria-label="Search Ridu docs"
+	aria-keyshortcuts="Meta+K Control+K /"
+>
+	<svg class="search-trigger-icon" viewBox="0 0 24 24" aria-hidden="true">
+		<circle cx="11" cy="11" r="7"></circle><path d="m16 16 4 4"></path>
+	</svg>
+	<span class="search-trigger-label">Search docs, APIs, guides…</span><kbd
+		class="search-trigger-shortcut search-keycap"
+		data-search-shortcut>/</kbd
+	>
+</button>
+
+<dialog
+	id="site-search-dialog"
+	class="search-dialog"
+	data-search-dialog
+	aria-labelledby="site-search-title"
+>
+	<form class="search-shell" role="search" data-search-form>
+		<h2 class="sr-only" id="site-search-title">Search Ridu documentation</h2>
+		<div class="search-input-row">
+			<svg class="search-input-icon" viewBox="0 0 24 24" aria-hidden="true">
+				<circle cx="11" cy="11" r="7"></circle><path d="m16 16 4 4"></path>
+			</svg>
+			<input
+				class="search-input"
+				type="search"
+				placeholder="Search APIs, docs, and guides…"
+				aria-label="Search"
+				role="combobox"
+				aria-controls="search-results"
+				aria-autocomplete="list"
+				aria-expanded="false"
+				autocomplete="off"
+				spellcheck="false"
+				data-search-input
+			/>
+			<button class="search-close" type="button" data-search-close aria-label="Close search">
+				<kbd class="search-keycap search-close-keycap">esc</kbd>
+			</button>
+		</div>
+
+		<div class="search-filter-row">
+			<div class="search-filters" role="group" aria-label="Filter search results">
+				<button class="search-filter" type="button" data-search-filter="all" aria-pressed="true">
+					<span>All</span><span class="search-filter-count" data-search-filter-count hidden></span>
+				</button>
+				<button class="search-filter" type="button" data-search-filter="docs" aria-pressed="false">
+					<span>Docs</span><span class="search-filter-count" data-search-filter-count hidden></span>
+				</button>
+				<button
+					class="search-filter"
+					type="button"
+					data-search-filter="guides"
+					aria-pressed="false"
+				>
+					<span>Guides</span><span class="search-filter-count" data-search-filter-count hidden
+					></span>
+				</button>
+				<button
+					class="search-filter"
+					type="button"
+					data-search-filter="reference"
+					aria-pressed="false"
+				>
+					<span>Reference</span><span class="search-filter-count" data-search-filter-count hidden
+					></span>
+				</button>
+			</div>
+			<span class="search-filter-hint" aria-hidden="true"
+				><kbd class="search-keycap search-control-keycap">tab</kbd> controls</span
+			>
+		</div>
+
+		<div class="search-results-viewport site-scrollbar" data-search-list aria-busy="true">
+			<div class="search-state" data-search-status>
+				<svg class="search-state-icon" viewBox="0 0 24 24" aria-hidden="true">
+					<circle cx="11" cy="11" r="7"></circle><path d="m16 16 4 4"></path>
+				</svg>
+				<p class="search-state-title" data-search-status-title>Loading search…</p>
+				<small class="search-state-detail" data-search-status-detail
+					>Search will be ready in a moment.</small
+				>
+			</div>
+			<div
+				class="search-results"
+				id="search-results"
+				role="listbox"
+				aria-label="Search results"
+				data-search-results
+			>
+			</div>
+			<div class="search-state" data-search-empty hidden>
+				<svg class="search-state-icon" viewBox="0 0 24 24" aria-hidden="true">
+					<circle cx="11" cy="11" r="7"></circle><path d="m16 16 4 4"></path>
+				</svg>
+				<p class="search-state-title">No matching results</p>
+				<small class="search-state-detail" data-search-empty-detail
+					>Try a different term or search every section.</small
+				>
+			</div>
+			<p class="sr-only" role="status" aria-live="polite" aria-atomic="true" data-search-announcer>
+				Loading search.
+			</p>
+		</div>
+
+		<footer class="search-footer">
+			<span class="search-summary" data-search-summary>Preparing index…</span>
+			<a class="search-all" href="/search/" data-search-all>View all results →</a>
+			<span class="search-keyboard" aria-hidden="true">
+				<span class="search-keyboard-hint search-keyboard-primary"
+					><kbd class="search-keycap search-control-keycap">↑</kbd><kbd
+						class="search-keycap search-control-keycap">↓</kbd
+					> move</span
+				>
+				<span class="search-keyboard-hint"
+					><kbd class="search-keycap search-control-keycap">↵</kbd> open</span
+				>
+				<span class="search-keyboard-hint"
+					><kbd class="search-keycap search-control-keycap">esc</kbd> close</span
+				>
+			</span>
+		</footer>
+	</form>
+</dialog>
+
+<script>
+	import { initializeSiteSearch } from '@/search/site-search.client';
+
+	function initializeSearch() {
+		document
+			.querySelectorAll<HTMLDialogElement>('[data-search-dialog]')
+			.forEach(initializeSiteSearch);
+	}
+
+	initializeSearch();
+	document.addEventListener('astro:page-load', initializeSearch);
+	document.addEventListener('astro:before-preparation', () => {
+		document
+			.querySelectorAll<HTMLDialogElement>('[data-search-dialog][open]')
+			.forEach((dialog) => dialog.close());
+	});
+</script>

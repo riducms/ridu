@@ -1,0 +1,135 @@
+---
+import AnthropicIcon from '~icons/simple-icons/anthropic';
+import ChatGPTIcon from '~icons/simple-icons/openai';
+import MarkdownIcon from '~icons/simple-icons/markdown';
+import ChevronDownIcon from '~icons/mdi/chevron-down';
+import CopyIcon from '~icons/mdi/content-copy';
+
+interface Props {
+	title: string;
+	href: string;
+}
+
+const { title, href } = Astro.props;
+const markdownPath = `${href.replace(/\/$/, '')}.md`;
+const markdownURL = new URL(markdownPath, Astro.site ?? Astro.url.origin).href;
+const prompt = `Read ${markdownURL} (the Ridu documentation page "${title}") so I can ask questions about it.`;
+const menuItems = [
+	{
+		label: 'View as Markdown',
+		description: 'This page as plain text',
+		href: markdownPath,
+		icon: MarkdownIcon,
+		external: false
+	},
+	{
+		label: 'Open in ChatGPT',
+		description: 'Ask ChatGPT about this page',
+		href: `https://chatgpt.com/?q=${encodeURIComponent(prompt)}`,
+		icon: ChatGPTIcon,
+		external: true
+	},
+	{
+		label: 'Open in Claude',
+		description: 'Ask Claude about this page',
+		href: `https://claude.ai/new?q=${encodeURIComponent(prompt)}`,
+		icon: AnthropicIcon,
+		external: true
+	}
+] as const;
+---
+
+<div
+	class="relative flex h-8 flex-none items-stretch border border-line rounded-2px bg-surface font-body text-12.5px text-ink-soft"
+	data-page-actions
+	data-markdown-url={markdownPath}
+>
+	<button
+		class="flex-s-center cursor-pointer gap-2 border-0 bg-transparent px-3 text-inherit hover:bg-surface-hover hover:text-ink"
+		type="button"
+		data-copy-page
+	>
+		<CopyIcon class="s-3.5" aria-hidden="true" />
+		<span class="hidden sm:inline" data-copy-page-label>Copy page</span>
+	</button>
+	<details class="group">
+		<summary
+			class="flex-s-center h-full w-8 cursor-pointer list-none border-l border-line bg-transparent text-inherit hover:bg-surface-hover hover:text-ink [&::-webkit-details-marker]:hidden"
+			aria-label="More page actions"
+		>
+			<ChevronDownIcon class="s-3.5 group-open:rotate-180" aria-hidden="true" />
+		</summary>
+		<div
+			class="absolute top-[calc(100%+0.45rem)] right-0 z-40 grid w-[min(20.25rem,calc(100vw-2.5rem))] border border-line bg-surface-raised p-3 shadow-[0_14px_38px_rgb(0_0_0_/0.28)]"
+			role="menu"
+		>
+			{
+				menuItems.map(({ label, description, href, icon: Icon, external }) => (
+					<a
+						class="grid grid-cols-[2rem_minmax(0,1fr)] items-center gap-3.5 bg-transparent px-1.5 py-2 text-ink no-underline hover:bg-surface-hover"
+						{href}
+						target={external ? '_blank' : undefined}
+						rel={external ? 'noreferrer' : undefined}
+						role="menuitem"
+					>
+						<span class="grid s-8 place-items-center border border-line text-ink-faint">
+							<Icon class="s-3.5" aria-hidden="true" />
+						</span>
+						<span class="grid gap-0.5">
+							<strong class="text-13.5px font-500 tracking-[0.005em]">
+								{label}
+								{external && (
+									<span class="text-[0.75em] text-ink-faint" aria-hidden="true">
+										{' '}
+										↗
+									</span>
+								)}
+							</strong>
+							<small class="text-12px leading-[1.35] text-ink-faint">{description}</small>
+						</span>
+					</a>
+				))
+			}
+		</div>
+	</details>
+	<p class="sr-only" aria-live="polite" data-page-actions-status></p>
+</div>
+
+<script>
+	function initializePageActions() {
+		for (const actions of document.querySelectorAll<HTMLElement>('[data-page-actions]')) {
+			if (actions.dataset.pageActionsReady !== undefined) continue;
+			actions.dataset.pageActionsReady = '';
+			const details = actions.querySelector('details');
+			const status = actions.querySelector<HTMLElement>('[data-page-actions-status]');
+			const copyButton = actions.querySelector<HTMLButtonElement>('[data-copy-page]');
+			const copyLabel = actions.querySelector<HTMLElement>('[data-copy-page-label]');
+
+			copyButton?.addEventListener('click', async () => {
+				try {
+					const response = await fetch(actions.dataset.markdownUrl ?? '');
+					if (!response.ok) throw new Error(`Markdown request failed with ${response.status}`);
+					await navigator.clipboard.writeText(await response.text());
+					if (copyLabel) copyLabel.textContent = 'Copied';
+					if (status) status.textContent = 'Page copied as Markdown.';
+					window.setTimeout(() => {
+						if (copyLabel) copyLabel.textContent = 'Copy page';
+					}, 1400);
+				} catch {
+					if (status) status.textContent = 'Could not copy this page.';
+				}
+				details?.removeAttribute('open');
+			});
+		}
+	}
+
+	document.addEventListener('click', (event) => {
+		if (!(event.target instanceof Node)) return;
+		for (const actions of document.querySelectorAll<HTMLElement>('[data-page-actions]')) {
+			if (!actions.contains(event.target))
+				actions.querySelector('details')?.removeAttribute('open');
+		}
+	});
+	initializePageActions();
+	document.addEventListener('astro:page-load', initializePageActions);
+</script>

@@ -1,0 +1,23 @@
+<script>
+	function initializeCodeCopyButtons() {
+		for (const button of document.querySelectorAll<HTMLButtonElement>('[data-copy-code]')) {
+			if (button.dataset.copyCodeReady !== undefined) continue;
+			button.dataset.copyCodeReady = '';
+			button.addEventListener('click', async () => {
+				await navigator.clipboard.writeText(button.dataset.code ?? '');
+				const label = button.querySelector('span');
+				if (!label) return;
+				const accessibleLabel = button.getAttribute('aria-label') ?? 'Copy code';
+				label.textContent = 'Copied';
+				button.setAttribute('aria-label', 'Copied');
+				window.setTimeout(() => {
+					label.textContent = 'Copy';
+					button.setAttribute('aria-label', accessibleLabel);
+				}, 1200);
+			});
+		}
+	}
+
+	initializeCodeCopyButtons();
+	document.addEventListener('astro:page-load', initializeCodeCopyButtons);
+</script>

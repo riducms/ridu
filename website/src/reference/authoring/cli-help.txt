@@ -1,0 +1,22 @@
+Ridu content-management framework
+
+Usage:
+  ridu <command>
+
+Commands:
+  new       Create a generated Ridu application
+  agent     Install or synchronize release-matched coding-agent guidance
+  dev       Run the selected database, generation, API, and admin together
+  generate  Resolve executable config and write generated contracts
+  migrate   Create artifacts and run the selected adapter's qualified lifecycle
+  check     Verify generated drift, Go, TypeScript, and Svelte
+  build     Generate the admin and build one application binary
+  doctor    Diagnose local project prerequisites
+  plugin    Add or remove compiled backend/admin plugins
+  add       Install a plugin (alias for plugin add)
+  version   Print the Ridu CLI version
+  help      Show this help
+
+Contract versions:
+  project protocol 1
+  schema manifest  1

@@ -1,0 +1,37 @@
+{
+	"name": "@riducms/protocol",
+	"description": "Versioned wire contracts shared by Ridu's generated clients and admin.",
+	"version": "0.1.0",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/riducms/ridu.git",
+		"directory": "packages/protocol"
+	},
+	"homepage": "https://riducms.com",
+	"bugs": {
+		"url": "https://github.com/riducms/ridu/issues"
+	},
+	"publishConfig": {
+		"access": "public",
+		"provenance": true
+	},
+	"type": "module",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js",
+			"default": "./dist/index.js"
+		}
+	},
+	"files": [
+		"dist"
+	],
+	"scripts": {
+		"build": "tsc -p tsconfig.build.json",
+		"check": "tsc -p tsconfig.json",
+		"test": "bun test"
+	}
+}

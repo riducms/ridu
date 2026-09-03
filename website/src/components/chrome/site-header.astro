@@ -1,0 +1,101 @@
+---
+import riduArchLogo from '@/assets/ridu-logo-arch.svg';
+import RiduWordLogo from '@/assets/ridu-word-logo.svg';
+import SiteSearch from '@/components/chrome/site-search.astro';
+import { primaryNavigation, site } from '@/config/site';
+
+interface Props {
+	active?: 'docs' | 'guides' | 'reference';
+	wide?: boolean;
+}
+
+const { active, wide = false } = Astro.props;
+const activePrimary = active === 'guides' ? 'docs' : active;
+---
+
+<header
+	class="site-header sticky top-0 z-100 h-header border-b border-line bg-[rgba(13,10,12,0.96)] backdrop-blur-14px"
+>
+	<div
+		class:list={['mx-auto flex h-header items-center', wide ? 'w-docs-gutter md:w-docs' : 'w-site']}
+	>
+		<a class="inline-flex shrink-0 items-center no-underline" href="/" aria-label="Ridu home">
+			<RiduWordLogo class="hidden md:block" width={100} />
+			<img
+				class="block h-auto w-36px md:hidden"
+				src={riduArchLogo.src}
+				width="41"
+				height="35"
+				alt=""
+			/>
+		</a>
+		<nav class="ml-8.8 hidden items-center gap-0.6 md:flex" aria-label="Primary navigation">
+			{
+				primaryNavigation.map((item) => (
+					<a
+						class="rd-full px-2.9 py-1.9 text-14px text-ink-soft no-underline hover:text-ink aria-[current=page]:(bg-surface-raised text-ink)"
+						href={item.href}
+						aria-current={activePrimary === item.key ? 'page' : undefined}
+					>
+						{item.label}
+					</a>
+				))
+			}
+		</nav>
+
+		<details class="group relative ml-auto block md:hidden">
+			<summary
+				class="grid size-10 cursor-pointer list-none place-items-center text-19px text-ink-soft group-open:(bg-surface-raised text-ink) [&::-webkit-details-marker]:hidden"
+				aria-label="Open navigation"
+			>
+				<svg
+					class="size-1em fill-none stroke-current stroke-width-[1.7] [stroke-linecap:round] [stroke-linejoin:round]"
+					viewBox="0 0 24 24"
+					aria-hidden="true"
+				>
+					<path d="M5 7h14M5 12h14M5 17h14"></path>
+				</svg>
+			</summary>
+			<nav
+				class="absolute right-0 top-[calc(100%+10px)] grid w-180px border border-line-strong bg-surface p-1.5 shadow-[0_18px_50px_rgba(0,0,0,0.55)]"
+				aria-label="Mobile navigation"
+			>
+				{
+					primaryNavigation.map((item) => (
+						<a
+							class="px-2.5 py-2.75 text-14px text-ink-soft no-underline hover:(bg-surface-hover text-ink) aria-[current=page]:(bg-surface-hover text-ink)"
+							href={item.href}
+							aria-current={activePrimary === item.key ? 'page' : undefined}
+						>
+							{item.label}
+						</a>
+					))
+				}
+				<a
+					class="px-2.5 py-2.75 text-14px text-ink-soft no-underline hover:(bg-surface-hover text-ink)"
+					href={site.github}>GitHub</a
+				>
+			</nav>
+		</details>
+
+		<SiteSearch transition:persist="site-search" />
+
+		<div class="ml-2.8 flex items-center gap-3 xl:ml-auto">
+			<a
+				class="hidden size-8.5 place-items-center text-18px text-ink-soft md:grid"
+				href={site.github}
+				aria-label="Ridu on GitHub"
+			>
+				<svg class="size-1em fill-current stroke-none" viewBox="0 0 24 24" aria-hidden="true">
+					<path
+						d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.86c-2.78.6-3.37-1.18-3.37-1.18-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.61.07-.61 1 .07 1.53 1.03 1.53 1.03.9 1.53 2.35 1.09 2.92.83.09-.65.35-1.09.64-1.34-2.22-.25-4.56-1.11-4.56-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.64 0 0 .84-.27 2.75 1.02A9.6 9.6 0 0 1 12 6.84c.85 0 1.71.12 2.51.34 1.91-1.29 2.75-1.02 2.75-1.02.55 1.37.2 2.39.1 2.64.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.85v2.75c0 .27.18.58.69.48A10 10 0 0 0 12 2Z"
+					></path>
+				</svg>
+			</a>
+			<a
+				class="inline-flex-s-center h-10 rd-2px border border-ink bg-ink px-2.8 text-12px font-700 text-canvas no-underline hover:bg-white md:(h-9.5 px-3.6 text-14px)"
+				href="/docs/quickstart/">Get started</a
+			>
+		</div>
+	</div>
+</header>

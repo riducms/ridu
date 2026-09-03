@@ -1,0 +1,437 @@
+{
+	"schemaVersion": 2,
+	"benchmark": "ridu-vs-payload-production-stress",
+	"date": "2026-08-29",
+	"outcome": {
+		"backend": "The historical backend run used Ridu's former ordinary PostgreSQL pool default of 20 and Payload's default of 10. Ridu completed the selected-field API workloads with materially higher throughput, lower tail latency, and lower application RSS, but the 4.765x multiplier is not a current equal-pool result.",
+		"relationships": "A final same-concurrency strict slice validated exact populated author/category IDs and required the expected collaborator/related-post targets on 5,000 responses per framework; Ridu led throughput 3.706x with 75.01% lower p95.",
+		"releaseReadiness": "The original Ridu admin failure was an invalid benchmark setup that served the generic fallback bundle. A corrected application-specific production admin passed login, dashboard, 10,002-row list, full editor, French, and Arabic RTL checks with no browser warnings or errors.",
+		"currentPoolStatus": "Ridu's ordinary PostgreSQL pool now defaults to 10 to match Payload; the separate four-connection upload-lock pool is unchanged. The full backend stress suite has not yet been rerun at 10 versus 10.",
+		"payloadWriteBoundary": "A same-harness, same-standalone A/B at concurrency 16 produced 32/32 timeouts with Payload's default pool of 10 and 2,317/2,317 successes when the only recorded benchmark tuning change was PAYLOAD_POOL_MAX=20. The default server did not recover within the configured ten-second window."
+	},
+	"evidenceClasses": {
+		"primaryLongRuns": "Hashed raw results with complete per-request/resource data, but the then-untracked generating harness was not self-hashed and was subsequently hardened.",
+		"finalStrictRuns": "Hashed raw results that include the exact historical backend harness SHA-256, effective configuration, allowlisted inherited benchmark tuning variables, strict field/relationship validation, and a clean immutable Payload tree hash.",
+		"correctedAdminRun": "Hashed setup raw recording the current harness, new 10-connection-default Ridu binary, application-specific admin tree, fresh 10,000-post dataset, and successful health/count reconciliation. Browser observations remain operator-recorded without a retained trace.",
+		"operatorObservations": "Browser and hey timings recorded in the report without retained trace or console-output artifacts; qualitative corroboration only."
+	},
+	"postBenchmarkCorrections": {
+		"riduOrdinaryPoolDefault": {
+			"previous": 20,
+			"current": 10,
+			"separateUploadLockPool": 4,
+			"code": "adapters/postgres/postgres.go",
+			"focusedVerification": "go test ./adapters/postgres",
+			"fullBackendRerunCompleted": false,
+			"interpretation": "All published backend tables remain measurements of the former 20-versus-10 configuration."
+		},
+		"adminLaunch": {
+			"previousSetup": "Go fixture served the generic embedded fallback because RIDU_BROWSER_ADMIN_DIR was absent.",
+			"currentSetup": "Stress runner requires, serves, and hashes .ridu/admin-fixture-build through RIDU_BROWSER_ADMIN_DIR.",
+			"result": "passed"
+		}
+	},
+	"environment": {
+		"hardware": "Apple M2 Max",
+		"logicalCPUs": 12,
+		"memoryBytes": 34359738368,
+		"operatingSystem": "macOS 26.2",
+		"kernel": "Darwin 25.2.0 arm64",
+		"postgres": "16.12 (Postgres.app)",
+		"go": "1.25.13",
+		"bun": "1.4.0",
+		"node": "24.13.0"
+	},
+	"subjects": {
+		"ridu": {
+			"revision": "8813b3c9433d6643d4ec6950b5234623582eb3d0",
+			"historicalBackendBinary": {
+				"bytes": 22441842,
+				"sha256": "c9bc06ac7f4fa2227554731ba2889ff80a4434f4b38a1cbe6bc6f08e43b0d0c6",
+				"postgresPool": "former ordinary max 20 plus separate upload-lock max 4; 22-23 sessions observed"
+			},
+			"correctedAdminBinary": {
+				"bytes": 22441842,
+				"sha256": "9dd853057b5be5065d60d42702ab1f9dc9762bf25c42ab8b5a44620c2c7bd626",
+				"postgresPool": "current ordinary max 10 plus separate upload-lock max 4"
+			},
+			"correctedAdminTree": {
+				"files": 39,
+				"bytes": 2145043,
+				"sha256": "a9079010eddb3c567636a0e6f0e56276a7ff093f089b6d1f82a31cf2fc344326"
+			}
+		},
+		"payload": {
+			"payload": "3.87.0",
+			"payloadTagCommit": "8d65662d419cc9894ddded952507eafe5cd67ddf",
+			"next": "16.2.6",
+			"dbPostgres": "3.87.0",
+			"bunLockSHA256": "962bb1f5922931026f5a3e9bd2371f40fcdd829337e6e1a0985636afb0e949e3",
+			"serverJSSHA256": "2ab6b35928ffc74aff751df0b2250dc43f36f8105b8f355c04de94a2ed8afe47",
+			"cleanStandalone": {
+				"files": 2002,
+				"bytes": 75445693,
+				"sha256": "5efe7dd9f8cba9e00a71b294c217d1f80c002f127ed2ab7290c7f2f36f7e15ae"
+			},
+			"postgresPool": "adapter default max 10; explicit max 20 only in labelled diagnostics"
+		}
+	},
+	"historicalBackendHarness": {
+		"path": "tests/performance/stress.ts",
+		"bytes": 74098,
+		"sha256": "f8cff9fc7e8d4565c4d9cdd595ad3dbc18f21134e34930d7079e3a65a232c2d5",
+		"provenInRawArtifacts": [
+			".ridu/performance/stress-2026-08-28T23-52-05.015Z.json",
+			".ridu/performance/stress-2026-08-28T23-54-42.053Z.json",
+			".ridu/performance/stress-2026-08-28T23-56-21.311Z.json"
+		]
+	},
+	"currentHarness": {
+		"path": "tests/performance/stress.ts",
+		"bytes": 74561,
+		"sha256": "0f752504147c349b6f0643490a50f98795ff42578ed82a28ea3b309fa75f030a",
+		"adminLaunchInvariant": "requires, serves, and hashes .ridu/admin-fixture-build",
+		"provenInRawArtifact": ".ridu/performance/stress-2026-08-29T07-56-17.409Z.json"
+	},
+	"primaryProfile": {
+		"datasetDocuments": 10000,
+		"datasetRelationships": ["author", "category", "collaborators", "relatedPosts"],
+		"relationshipTargetDiversity": "all generated rows reference the same discovered fixture author, category, collaborator, and related post",
+		"readDurationSecondsPerLevel": 30,
+		"readConcurrencies": [1, 8, 32, 128],
+		"riduMatchedConcurrency": 16,
+		"payloadMatchedConcurrency": 8,
+		"matchedReadRequestsPerOperation": 2000,
+		"matchedMutationRequestsPerOperation": 500,
+		"versionedUpdateDurationSecondsPerLevel": 30,
+		"riduWriteConcurrencies": [1, 4, 8, 16, 32],
+		"payloadHealthyWriteConcurrencies": [1, 4, 8],
+		"soakSeconds": 300,
+		"soakConcurrency": 8,
+		"soakMix": ["selected point read", "selected list", "versioned draft summary update"],
+		"requestModel": "closed loop",
+		"validationScope": "expected HTTP status, parseable JSON, response ID or list total, visibility counts, cleanup, and health; not field checksums, relationship IDs, version counts, or delayed-commit detection"
+	},
+	"readSaturation": [
+		{
+			"concurrency": 1,
+			"ridu": { "requestsPerSecond": 523.12, "p95Ms": 4.49 },
+			"payload": { "requestsPerSecond": 326.68, "p95Ms": 7.7 },
+			"throughputRatio": 1.601
+		},
+		{
+			"concurrency": 8,
+			"ridu": { "requestsPerSecond": 5294.82, "p95Ms": 2.93 },
+			"payload": { "requestsPerSecond": 1867.32, "p95Ms": 6.87 },
+			"throughputRatio": 2.836
+		},
+		{
+			"concurrency": 32,
+			"ridu": { "requestsPerSecond": 7309.82, "p95Ms": 7.7 },
+			"payload": { "requestsPerSecond": 1929.95, "p95Ms": 23.25 },
+			"throughputRatio": 3.788
+		},
+		{
+			"concurrency": 128,
+			"ridu": { "requestsPerSecond": 7481.12, "p95Ms": 21.89 },
+			"payload": { "requestsPerSecond": 1791.73, "p95Ms": 102.97 },
+			"throughputRatio": 4.175
+		}
+	],
+	"fiveMinuteSelectedFieldSoak": {
+		"ridu": {
+			"requests": 763466,
+			"successes": 763466,
+			"failures": 0,
+			"requestsPerSecond": 2544.85,
+			"latencyMs": { "p50": 2.72, "p95": 6.71, "p99": 7.41, "p99.9": 8.86, "max": 31.45 },
+			"applicationRSSMiB": { "median": 74.84, "p95": 75.03, "max": 75.05 },
+			"applicationCPUPercent": { "median": 427.1, "p95": 433.2, "max": 437.7 },
+			"healthFailures": 0,
+			"finalVisibilityCountReconciliation": true
+		},
+		"payload": {
+			"requests": 160214,
+			"successes": 160214,
+			"failures": 0,
+			"requestsPerSecond": 534.02,
+			"latencyMs": { "p50": 7.43, "p95": 35.82, "p99": 39.63, "p99.9": 50.21, "max": 464.04 },
+			"applicationRSSMiB": { "median": 620.98, "p95": 630.38, "max": 630.77 },
+			"applicationCPUPercent": { "median": 103.7, "p95": 126.9, "max": 171.4 },
+			"healthFailures": 0,
+			"finalVisibilityCountReconciliation": true
+		},
+		"comparison": {
+			"throughputRatio": 4.765,
+			"riduP95ReductionPercent": 81.27,
+			"riduMedianRSSReductionPercent": 87.95,
+			"riduMaximumRSSReductionPercent": 88.1,
+			"roughMedianCPUTimeMsPerRequest": { "ridu": 1.678, "payload": 1.942 }
+		}
+	},
+	"strictRelationshipSlice": {
+		"datasetDocuments": 10000,
+		"requestsPerOperationPerFramework": 5000,
+		"concurrency": 8,
+		"harnessSHA256": "f8cff9fc7e8d4565c4d9cdd595ad3dbc18f21134e34930d7079e3a65a232c2d5",
+		"validators": [
+			"seed response exact title, summary, status, readingMinutes, featured, author ID, and category ID, with expected collaborator and related-post IDs present",
+			"every document returned by selected responses contains every selected field; list total is exact, but page cardinality is not separately asserted",
+			"populated responses contain exact expected author and category documents, with expected collaborator and related-post documents present",
+			"updates echo the submitted summary",
+			"final admin/public/contributor visibility counts match"
+		],
+		"operations": [
+			{
+				"operation": "selected list",
+				"ridu": { "requestsPerSecond": 3183.47, "p95Ms": 3.23, "invalidShapes": 0 },
+				"payload": { "requestsPerSecond": 1441.02, "p95Ms": 7.53, "invalidShapes": 0 },
+				"throughputRatio": 2.209
+			},
+			{
+				"operation": "selected point read",
+				"ridu": { "requestsPerSecond": 13146.39, "p95Ms": 0.99, "invalidShapes": 0 },
+				"payload": { "requestsPerSecond": 2504.28, "p95Ms": 5.07, "invalidShapes": 0 },
+				"throughputRatio": 5.25
+			},
+			{
+				"operation": "populated relationship read",
+				"ridu": {
+					"requestsPerSecond": 1507.44,
+					"p95Ms": 6.28,
+					"invalidShapes": 0,
+					"averageBytes": 3582.29
+				},
+				"payload": {
+					"requestsPerSecond": 406.74,
+					"p95Ms": 25.13,
+					"invalidShapes": 0,
+					"averageBytes": 3662.3
+				},
+				"throughputRatio": 3.706,
+				"riduP95ReductionPercent": 75.01
+			},
+			{
+				"operation": "contributor access-filtered list",
+				"ridu": { "requestsPerSecond": 2948.83, "p95Ms": 3.33, "invalidShapes": 0 },
+				"payload": { "requestsPerSecond": 934.52, "p95Ms": 11.31, "invalidShapes": 0 },
+				"throughputRatio": 3.155
+			}
+		],
+		"allReadResponses": {
+			"requests": 40000,
+			"successes": 40000,
+			"invalidJSON": 0,
+			"invalidShapes": 0
+		},
+		"finalVisibilityCountReconciliation": { "ridu": true, "payload": true }
+	},
+	"versionedUpdateSaturationProductDefaults": [
+		{
+			"concurrency": 1,
+			"ridu": { "requestsPerSecond": 370.76, "p95Ms": 3.83, "failures": 0 },
+			"payload": { "requestsPerSecond": 56.89, "p95Ms": 21.7, "failures": 0 },
+			"throughputRatio": 6.517
+		},
+		{
+			"concurrency": 4,
+			"ridu": { "requestsPerSecond": 835.1, "p95Ms": 8.58, "failures": 0 },
+			"payload": { "requestsPerSecond": 214.97, "p95Ms": 21.56, "failures": 0 },
+			"throughputRatio": 3.885
+		},
+		{
+			"concurrency": 8,
+			"ridu": { "requestsPerSecond": 1347.67, "p95Ms": 6.97, "failures": 0 },
+			"payload": { "requestsPerSecond": 222.65, "p95Ms": 44.53, "failures": 0 },
+			"throughputRatio": 6.053
+		}
+	],
+	"payloadPoolSameArtifactAB": {
+		"datasetDocuments": 100,
+		"concurrency": 16,
+		"durationSeconds": 10,
+		"requestTimeoutMs": 5000,
+		"harnessSHA256": "f8cff9fc7e8d4565c4d9cdd595ad3dbc18f21134e34930d7079e3a65a232c2d5",
+		"payloadStandaloneSHA256": "5efe7dd9f8cba9e00a71b294c217d1f80c002f127ed2ab7290c7f2f36f7e15ae",
+		"defaultPool": {
+			"inheritedServerTuning": {},
+			"requests": 32,
+			"successes": 0,
+			"timeouts": 32,
+			"p95Ms": 5001.58,
+			"idleInTransactionMedian": 9,
+			"healthRecovered": false,
+			"finalVisibilityCountReconciliation": false
+		},
+		"pool20": {
+			"inheritedServerTuning": { "PAYLOAD_POOL_MAX": "20" },
+			"requests": 2317,
+			"successes": 2317,
+			"timeouts": 0,
+			"requestsPerSecond": 230.96,
+			"p95Ms": 80.45,
+			"idleInTransactionMedian": 11,
+			"healthRecovered": true,
+			"finalVisibilityCountReconciliation": true
+		},
+		"interpretation": "Changing the only recorded benchmark tuning variable, the pool maximum, moved the fixture from total timeout and no recovery within the configured ten-second window to complete success at concurrency 16. This strongly implicates pool capacity, but other inherited process environment was not serialized and the pre-launch source migration/config files were not hashed in these raws, so this is not a completely sealed causal experiment. It does not explain the internal reason so many transactions are held."
+	},
+	"threeTrialControlMedians": [
+		{
+			"operation": "selected list",
+			"concurrency": 16,
+			"ridu": { "requestsPerSecond": 5538.64, "p95Ms": 4.14 },
+			"payload": { "requestsPerSecond": 1241.96, "p95Ms": 16.8 },
+			"throughputRatio": 4.46
+		},
+		{
+			"operation": "selected find",
+			"concurrency": 16,
+			"ridu": { "requestsPerSecond": 17237.24, "p95Ms": 1.48 },
+			"payload": { "requestsPerSecond": 2210.03, "p95Ms": 10.46 },
+			"throughputRatio": 7.8
+		},
+		{
+			"operation": "create versioned draft",
+			"concurrency": 8,
+			"ridu": { "requestsPerSecond": 2427.29, "p95Ms": 4.18 },
+			"payload": { "requestsPerSecond": 363.09, "p95Ms": 28.91 },
+			"throughputRatio": 6.685
+		},
+		{
+			"operation": "update versioned draft",
+			"concurrency": 8,
+			"ridu": { "requestsPerSecond": 2401.15, "p95Ms": 4.06 },
+			"payload": { "requestsPerSecond": 272.5, "p95Ms": 35.86 },
+			"throughputRatio": 8.812
+		},
+		{
+			"operation": "delete versioned draft",
+			"concurrency": 8,
+			"ridu": { "requestsPerSecond": 3508.33, "p95Ms": 2.88 },
+			"payload": { "requestsPerSecond": 308.19, "p95Ms": 31.93 },
+			"throughputRatio": 11.384
+		}
+	],
+	"startupComparison": {
+		"included": false,
+		"reason": "Payload migrations ran before its startup clock while Ridu migrations ran inside its clock, and readiness probes differed."
+	},
+	"operatorObservations": {
+		"hey": {
+			"operation": "selected list",
+			"concurrency": 128,
+			"durationSeconds": 10,
+			"ridu": { "requestsPerSecond": 2256.8906, "p95Ms": 314.7, "statuses200": 22638 },
+			"payload": { "requestsPerSecond": 1375.8723, "p95Ms": 107.8, "statuses200": 13827 },
+			"retainedOutputArtifact": false
+		},
+		"browser": {
+			"invalidOriginalRiduSetup": {
+				"usable": false,
+				"cause": "The multilingual/plugin-bearing fixture was paired with the generic embedded fallback because RIDU_BROWSER_ADMIN_DIR was absent.",
+				"excludedFromProductConclusion": true
+			},
+			"payload": {
+				"context": "during five-minute Payload soak",
+				"initialLoginNavigationMs": 583,
+				"loginToDashboardMs": 2283,
+				"postsListWith10010RowsMs": 2292,
+				"relationshipAndRichTextEditorMs": 2814,
+				"postSoakEditorReloadMs": 2143,
+				"usable": true,
+				"consoleErrorsObserved": 0
+			},
+			"correctedRidu": {
+				"context": "focused production-admin rerun on a fresh 10,000-generated-post fixture; not concurrent with a five-minute soak",
+				"totalPosts": 10002,
+				"ordinaryPostgresPoolDefault": 10,
+				"loginReloadMs": 99,
+				"dashboardReloadMs": 106,
+				"postsListReloadMs": 183,
+				"fullEditorNavigationMs": 3068,
+				"frenchInterface": true,
+				"arabicInterface": true,
+				"arabicDocumentDirection": "rtl",
+				"usable": true,
+				"consoleWarningsObserved": 0,
+				"consoleErrorsObserved": 0
+			},
+			"retainedTraceArtifact": false
+		}
+	},
+	"rawArtifacts": [
+		{
+			"role": "three-trial control",
+			"path": ".ridu/performance/results-2026-08-28T22-02-10.283Z.json",
+			"sha256": "29117b24beafa60f17f2eb22c6afd243776d4c6e4c4a37ca4ff66026527d4fbb"
+		},
+		{
+			"role": "primary Ridu long stress",
+			"path": ".ridu/performance/stress-2026-08-28T22-30-44.244Z.json",
+			"sha256": "35099ddc8d2068ea76301fea7e5b17f2652c8ad3b6e1456a0a8c7fde0c6e2ede",
+			"provenanceCaveat": "Outer status is running because the later Payload sibling was stopped; results[0] is completed. The then-untracked harness was not self-hashed and predates the failure-budget field."
+		},
+		{
+			"role": "primary healthy Payload long stress",
+			"path": ".ridu/performance/stress-2026-08-28T22-50-22.316Z.json",
+			"sha256": "27197cbc4596105ab57e2fc566840e8676f4e2455917b6df8468def3e4c9f794",
+			"provenanceCaveat": "The then-untracked harness was not self-hashed."
+		},
+		{
+			"role": "final strict relationship slice",
+			"path": ".ridu/performance/stress-2026-08-28T23-52-05.015Z.json",
+			"sha256": "8c0ad5c2c9e805f6e2c504d01f33852766fb2d9bd220ed6f7a15473295f37a8b",
+			"harnessSHA256": "f8cff9fc7e8d4565c4d9cdd595ad3dbc18f21134e34930d7079e3a65a232c2d5"
+		},
+		{
+			"role": "final Payload default-pool A/B half",
+			"path": ".ridu/performance/stress-2026-08-28T23-54-42.053Z.json",
+			"sha256": "ba888b87f6f58b2a1dd5ad8b3a8813bb74a8363f4a3f548bde99134b09fe1ba3",
+			"harnessSHA256": "f8cff9fc7e8d4565c4d9cdd595ad3dbc18f21134e34930d7079e3a65a232c2d5",
+			"payloadStandaloneSHA256": "5efe7dd9f8cba9e00a71b294c217d1f80c002f127ed2ab7290c7f2f36f7e15ae"
+		},
+		{
+			"role": "corrected Ridu production-admin setup",
+			"path": ".ridu/performance/stress-2026-08-29T07-56-17.409Z.json",
+			"sha256": "4e8f8a789bbd0602a1abc2b7ceee88bb343be2d43b8d6caae615f1f1f1e76785",
+			"harnessSHA256": "0f752504147c349b6f0643490a50f98795ff42578ed82a28ea3b309fa75f030a",
+			"riduBinarySHA256": "9dd853057b5be5065d60d42702ab1f9dc9762bf25c42ab8b5a44620c2c7bd626",
+			"riduAdminTreeSHA256": "a9079010eddb3c567636a0e6f0e56276a7ff093f089b6d1f82a31cf2fc344326",
+			"provenanceCaveat": "The raw is marked interrupted because the operator stopped the configured ten-minute hold after browser verification finished. Dataset creation and health/count reconciliation had completed successfully; browser actions and timings are not embedded in the raw."
+		},
+		{
+			"role": "final Payload pool-20 A/B half",
+			"path": ".ridu/performance/stress-2026-08-28T23-56-21.311Z.json",
+			"sha256": "447740cb5587dc76bee2b04e0eeb58a7875fa1daa6c7b02f5b5cb5dc4985e56b",
+			"harnessSHA256": "f8cff9fc7e8d4565c4d9cdd595ad3dbc18f21134e34930d7079e3a65a232c2d5",
+			"payloadStandaloneSHA256": "5efe7dd9f8cba9e00a71b294c217d1f80c002f127ed2ab7290c7f2f36f7e15ae"
+		},
+		{
+			"role": "exploratory Payload default-pool concurrency-32 failure",
+			"path": ".ridu/performance/stress-2026-08-28T23-06-15.077Z.json",
+			"sha256": "bd5fdacfe96c37a8cf22823af323cc251f9b6b8e191529b80cd7d774acf9a0f9",
+			"provenanceCaveat": "Inherited tuning was not explicitly recorded in this older raw."
+		},
+		{
+			"role": "exploratory Payload observed-20-session concurrency-32 success",
+			"path": ".ridu/performance/stress-2026-08-28T23-20-49.658Z.json",
+			"sha256": "185ec8f62c39457f24d1d6dc1f1ec0f30838589fe0fd29a3216588abd1a6b3b0",
+			"provenanceCaveat": "Inherited tuning was not explicitly recorded in this older raw."
+		}
+	],
+	"caveats": [
+		"One local machine, one primary long run per framework, and one three-trial short control do not establish universal performance or confidence intervals.",
+		"The fixtures are behaviorally comparable but not identical. Payload initializes an additional localized global and capability collection; Ridu runs a lightweight preview listener.",
+		"Selected fields and observable operations match, but response envelopes differ. Ridu's primary selected list and point responses were larger than Payload's.",
+		"The primary soak does not populate relationships; the final strict slice covers population but all generated rows share the same relationship targets.",
+		"Published backend tables used Ridu 20 versus Payload 10. Ridu now defaults to 10, but a full 10-versus-10 backend rerun has not been performed.",
+		"Application RSS is summed process-tree RSS; the shared PostgreSQL server is excluded.",
+		"The PostgreSQL waiting counter means any non-null wait_event, including idle ClientRead, and must not be read as lock waiting.",
+		"CPU comes from macOS ps samples; derived CPU time per request is approximate.",
+		"Ridu dataset seeding performs create and publish as two requests, while Payload creates each published document in one request.",
+		"The benchmark repaired stale Payload fixture migration files in the worktree; the task did not commit them.",
+		"Browser and hey timings have no retained trace/output artifact and are not inputs to the hashed backend tables. Corrected Ridu admin timings were not measured during a five-minute soak and are not directly comparable with Payload's during-soak timings.",
+		"Aborted pilot runs, including a quadratic result-aggregation implementation, are excluded."
+	]
+}

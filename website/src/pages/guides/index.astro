@@ -1,0 +1,64 @@
+---
+import DocsShell from '@/components/docs/docs-shell.astro';
+import { getAuthoredDocumentationPage } from '@/config/documentation';
+import BaseLayout from '@/layouts/base-layout.astro';
+
+const page = getAuthoredDocumentationPage('guides', '');
+if (!page) throw new Error('Guides landing metadata is missing');
+const toc = [{ label: 'All guides', href: '#all-guides' }];
+const guides = [
+	{
+		title: 'Project structure',
+		description: 'Find the files you edit, the files Ridu generates, and local development output.',
+		href: '/guides/project-structure/',
+		section: 'Get started'
+	},
+	{
+		title: 'Migrate from Payload',
+		description: 'Translate familiar TypeScript concepts into Ridu’s Go-first application model.',
+		href: '/guides/from-payload/',
+		section: 'Get started'
+	},
+	{
+		title: 'Migrate from PocketBase',
+		description: 'Move from a database-shaped admin to executable schema and generated contracts.',
+		href: '/guides/from-pocketbase/',
+		section: 'Get started'
+	},
+	{
+		title: 'Build a custom field',
+		description: 'Pair a Go field contract with a statically registered Svelte admin component.',
+		href: '/guides/custom-fields/',
+		section: 'Extend Ridu'
+	},
+	{
+		title: 'Add live preview',
+		description: 'Connect draft-aware previews and optional unsaved postMessage updates.',
+		href: '/guides/live-preview/',
+		section: 'Admin & workflows'
+	}
+];
+---
+
+<BaseLayout title={page.title} description={page.description} active="guides" wide footer={false}>
+	<DocsShell {page} {toc} prose={false}>
+		<section class="py-10" id="all-guides">
+			<div class="mt-6 grid grid-cols-[repeat(auto-fit,minmax(min(100%,280px),1fr))] gap-2.8">
+				{
+					guides.map((guide) => (
+						<a
+							class="grid gap-2 border border-line rd-4px bg-surface p-4 text-ink no-underline hover:border-accent"
+							href={guide.href}
+						>
+							<small class="font-mono text-[0.58rem] tracking-[0.08em] text-accent uppercase">
+								{guide.section}
+							</small>
+							<strong class="text-16px">{guide.title}</strong>
+							<span class="text-[0.82rem] leading-[1.55] text-ink-soft">{guide.description}</span>
+						</a>
+					))
+				}
+			</div>
+		</section>
+	</DocsShell>
+</BaseLayout>

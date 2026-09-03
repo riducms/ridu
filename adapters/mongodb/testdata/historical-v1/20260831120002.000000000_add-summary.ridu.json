@@ -1,0 +1,124 @@
+{
+  "version": 1,
+  "name": "add-summary",
+  "planner": {
+    "name": "mongodb",
+    "version": "1.0.0"
+  },
+  "minimumRunnerContract": 1,
+  "previousArtifactDigest": "54f86c6d0db5f34410e08c9f02def5b4e128f1ee13f5750bc8c3e76572183c09",
+  "fromDigest": "86148257cf84d095a3a0284424cced8bd6991854bf22c44cdbe461f9733edac0",
+  "toDigest": "49680ac367618d6f9c60cf779a178ad03ba08e30d4a2b200a1425cd251387a9e",
+  "before": {
+    "version": 1,
+    "application": {
+      "name": "MongoDB migrations"
+    },
+    "collections": [
+      {
+        "id": "posts",
+        "slug": "posts",
+        "labels": {
+          "singular": "Post",
+          "plural": "Posts"
+        },
+        "admin": {},
+        "capabilities": {
+          "auth": false,
+          "upload": false,
+          "versions": false,
+          "trash": false
+        },
+        "fields": [
+          {
+            "id": "posts-title",
+            "name": "title",
+            "path": "title",
+            "type": "text",
+            "category": "scalar",
+            "required": false,
+            "unique": false,
+            "index": true,
+            "admin": {
+              "label": ""
+            },
+            "text": {}
+          }
+        ]
+      }
+    ],
+    "plugins": []
+  },
+  "after": {
+    "version": 1,
+    "application": {
+      "name": "MongoDB migrations"
+    },
+    "collections": [
+      {
+        "id": "posts",
+        "slug": "posts",
+        "labels": {
+          "singular": "Post",
+          "plural": "Posts"
+        },
+        "admin": {},
+        "capabilities": {
+          "auth": false,
+          "upload": false,
+          "versions": false,
+          "trash": false
+        },
+        "fields": [
+          {
+            "id": "posts-title",
+            "name": "title",
+            "path": "title",
+            "type": "text",
+            "category": "scalar",
+            "required": false,
+            "unique": false,
+            "index": true,
+            "admin": {
+              "label": ""
+            },
+            "text": {}
+          },
+          {
+            "id": "posts-summary",
+            "name": "summary",
+            "path": "summary",
+            "type": "text",
+            "category": "scalar",
+            "required": false,
+            "unique": false,
+            "admin": {
+              "label": ""
+            },
+            "text": {}
+          }
+        ]
+      }
+    ],
+    "plugins": []
+  },
+  "phases": [
+    {
+      "id": "phase-001",
+      "mode": "no_transaction",
+      "physicalContractVersion": 1,
+      "beforePhysicalDigest": "0d6a6f83f32c66470da7ce28b7aefbec672628c2ed1bd822e2b398dfeb56c940",
+      "afterPhysicalDigest": "f67edda755010935d6e196ae45aad636ae10b5168f064b095fa61a3acce871bd",
+      "steps": [
+        {
+          "id": "step-0001",
+          "kind": "mongodb_assert_schema",
+          "executorVersion": 1,
+          "name": "verify resulting MongoDB schema",
+          "payload": {}
+        }
+      ]
+    }
+  ],
+  "risks": []
+}

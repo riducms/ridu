@@ -1,0 +1,66 @@
+x-mongodb-member: &mongodb-member
+  image: mongo:8.2.9-noble@sha256:007773db61cb1aa44e526fb7175fc582902e67d4e6cc5f13106445767d46c818
+  network_mode: host
+  entrypoint: ["/bin/bash", "/ridu-fixture/start-member.sh"]
+  restart: "no"
+  stop_grace_period: 15s
+  volumes:
+    - type: bind
+      source: ${RIDU_MONGODB_PRODUCTION_FIXTURE_ROOT:?fixture root is required}
+      target: /ridu-fixture/secrets
+      read_only: true
+    - type: bind
+      source: ${RIDU_MONGODB_PRODUCTION_FIXTURE_START:?member startup script is required}
+      target: /ridu-fixture/start-member.sh
+      read_only: true
+
+services:
+  mongodb-1:
+    <<: *mongodb-member
+    environment:
+      RIDU_MONGODB_MEMBER_PORT: ${RIDU_MONGODB_MEMBER_1_PORT:?member 1 port is required}
+    volumes:
+      - mongodb-1-data:/data/db
+      - type: bind
+        source: ${RIDU_MONGODB_PRODUCTION_FIXTURE_ROOT:?fixture root is required}
+        target: /ridu-fixture/secrets
+        read_only: true
+      - type: bind
+        source: ${RIDU_MONGODB_PRODUCTION_FIXTURE_START:?member startup script is required}
+        target: /ridu-fixture/start-member.sh
+        read_only: true
+
+  mongodb-2:
+    <<: *mongodb-member
+    environment:
+      RIDU_MONGODB_MEMBER_PORT: ${RIDU_MONGODB_MEMBER_2_PORT:?member 2 port is required}
+    volumes:
+      - mongodb-2-data:/data/db
+      - type: bind
+        source: ${RIDU_MONGODB_PRODUCTION_FIXTURE_ROOT:?fixture root is required}
+        target: /ridu-fixture/secrets
+        read_only: true
+      - type: bind
+        source: ${RIDU_MONGODB_PRODUCTION_FIXTURE_START:?member startup script is required}
+        target: /ridu-fixture/start-member.sh
+        read_only: true
+
+  mongodb-3:
+    <<: *mongodb-member
+    environment:
+      RIDU_MONGODB_MEMBER_PORT: ${RIDU_MONGODB_MEMBER_3_PORT:?member 3 port is required}
+    volumes:
+      - mongodb-3-data:/data/db
+      - type: bind
+        source: ${RIDU_MONGODB_PRODUCTION_FIXTURE_ROOT:?fixture root is required}
+        target: /ridu-fixture/secrets
+        read_only: true
+      - type: bind
+        source: ${RIDU_MONGODB_PRODUCTION_FIXTURE_START:?member startup script is required}
+        target: /ridu-fixture/start-member.sh
+        read_only: true
+
+volumes:
+  mongodb-1-data:
+  mongodb-2-data:
+  mongodb-3-data:

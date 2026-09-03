@@ -1,0 +1,68 @@
+{
+  "version": 1,
+  "application": {
+    "name": "Nested"
+  },
+  "collections": [
+    {
+      "id": "pages",
+      "slug": "pages",
+      "labels": {
+        "singular": "Page",
+        "plural": "Pages"
+      },
+      "admin": {},
+      "capabilities": {
+        "auth": false,
+        "upload": false,
+        "versions": false,
+        "trash": false
+      },
+      "fields": [
+        {
+          "id": "pages-seo",
+          "name": "seo",
+          "path": "seo",
+          "type": "group",
+          "category": "nested",
+          "required": false,
+          "unique": false,
+          "admin": {
+            "label": "Search metadata"
+          },
+          "nested": {
+            "fields": [
+              {
+                "id": "pages-seo-meta-title",
+                "name": "metaTitle",
+                "path": "seo.metaTitle",
+                "type": "text",
+                "category": "scalar",
+                "required": true,
+                "unique": false,
+                "admin": {
+                  "label": "Meta Title"
+                },
+                "text": {}
+              },
+              {
+                "id": "pages-seo-description",
+                "name": "description",
+                "path": "seo.description",
+                "type": "text",
+                "category": "scalar",
+                "required": false,
+                "unique": false,
+                "admin": {
+                  "label": "Description"
+                },
+                "text": {}
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "plugins": []
+}

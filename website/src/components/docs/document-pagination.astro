@@ -1,0 +1,44 @@
+---
+import type { DocumentationPaginationPage } from '@/config/documentation';
+
+interface Props {
+	previous?: DocumentationPaginationPage;
+	next?: DocumentationPaginationPage;
+}
+
+const { previous, next } = Astro.props;
+---
+
+<nav
+	class="mt-16 grid max-w-740px grid-cols-1 gap-3 border-t border-line pt-6 sm:grid-cols-2"
+	aria-label="Documentation pagination"
+>
+	{
+		previous ? (
+			<a
+				class="grid min-h-18.5 gap-0.75 rd-3px border border-line px-4 py-3.5 no-underline hover:(border-line-strong bg-surface)"
+				href={previous.href}
+				rel="prev"
+			>
+				<small class="font-mono text-10px tracking-[0.08em] text-ink-faint uppercase">
+					Previous
+				</small>
+				<span class="text-14px text-ink">← {previous.title}</span>
+			</a>
+		) : (
+			<span class="hidden sm:block" />
+		)
+	}
+	{
+		next && (
+			<a
+				class="grid min-h-18.5 gap-0.75 rd-3px border border-line px-4 py-3.5 text-left no-underline hover:(border-line-strong bg-surface) sm:text-right"
+				href={next.href}
+				rel="next"
+			>
+				<small class="font-mono text-10px tracking-[0.08em] text-ink-faint uppercase">Next</small>
+				<span class="text-14px text-ink">{next.title} →</span>
+			</a>
+		)
+	}
+</nav>

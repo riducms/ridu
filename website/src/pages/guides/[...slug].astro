@@ -1,0 +1,22 @@
+---
+import { render } from 'astro:content';
+import { getDocumentationPages, type DocumentationPage } from '@/config/documentation';
+import DocsLayout from '@/layouts/docs-layout.astro';
+
+export async function getStaticPaths() {
+	return (await getDocumentationPages())
+		.filter((page) => page.area === 'guides')
+		.map((page) => ({ params: { slug: page.slug }, props: { page } }));
+}
+
+interface Props {
+	page: DocumentationPage;
+}
+
+const { page } = Astro.props;
+const { Content, headings } = await render(page.entry);
+---
+
+<DocsLayout {page} {headings}>
+	<Content />
+</DocsLayout>

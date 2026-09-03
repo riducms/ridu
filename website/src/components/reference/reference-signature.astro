@@ -1,0 +1,54 @@
+---
+import {
+	formatReferenceSignature,
+	tokenizeReferenceSignature,
+	type SignatureTokenKind
+} from '@/reference/signature';
+import type { ReferenceParameter } from '@/reference';
+
+interface Props {
+	signature: string;
+	name: string;
+	parameters?: Pick<ReferenceParameter, 'name'>[];
+	typeLinks?: Record<string, string>;
+	symbolHref?: string;
+}
+
+const { signature, name, parameters = [], typeLinks = {}, symbolHref } = Astro.props;
+const formattedSignature = formatReferenceSignature(signature);
+const tokens = tokenizeReferenceSignature(formattedSignature, {
+	name,
+	parameters,
+	typeLinks
+});
+const tokenClasses: Partial<Record<SignatureTokenKind, string>> = {
+	keyword: 'text-[#ff7eb6]',
+	symbol: 'text-blue font-600',
+	reference: 'text-blue font-600',
+	parameter: 'text-[#ffb977] italic',
+	type: 'text-cyan',
+	string: 'text-green',
+	number: 'text-[#d6ad74]',
+	punctuation: 'text-ink-faint'
+};
+---
+
+<div class="reference-signature" role="group" aria-label={`Signature: ${formattedSignature}`}>
+	<code>
+		{
+			tokens.map((token) => {
+				const href = token.href ?? (token.kind === 'symbol' ? symbolHref : undefined);
+				return href ? (
+					<a
+						href={href}
+						class:list={[`token-${token.kind}`, tokenClasses[token.kind], 'underline decoration-1']}
+					>
+						{token.text}
+					</a>
+				) : (
+					<span class:list={[`token-${token.kind}`, tokenClasses[token.kind]]}>{token.text}</span>
+				);
+			})
+		}
+	</code>
+</div>

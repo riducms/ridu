@@ -1,0 +1,51 @@
+{
+	"name": "@riducms/plugin-richtext",
+	"description": "Svelte and Lexical admin integration for Ridu's official rich-text plugin.",
+	"version": "0.1.0",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/riducms/ridu.git",
+		"directory": "packages/plugin-richtext"
+	},
+	"homepage": "https://riducms.com",
+	"bugs": {
+		"url": "https://github.com/riducms/ridu/issues"
+	},
+	"publishConfig": {
+		"access": "public",
+		"provenance": true
+	},
+	"type": "module",
+	"exports": {
+		".": "./src/index.ts"
+	},
+	"files": [
+		"src"
+	],
+	"scripts": {
+		"check": "svelte-check --tsconfig ./tsconfig.json",
+		"test": "bun test",
+		"build": "vite build"
+	},
+	"dependencies": {
+		"@hvniel/lexical-svelte": "^0.1.1",
+		"@lexical/code": "0.49.0",
+		"@lexical/history": "0.49.0",
+		"@lexical/link": "0.49.0",
+		"@lexical/list": "0.49.0",
+		"@lexical/rich-text": "0.49.0",
+		"@lexical/selection": "0.49.0",
+		"@lexical/utils": "0.49.0",
+		"@riducms/plugin": "workspace:*",
+		"@riducms/ui": "workspace:*",
+		"@riducms/protocol": "workspace:*",
+		"@types/prismjs": "^1.26.5",
+		"lexical": "0.49.0",
+		"prismjs": "^1.30.0",
+		"svelte": "^5.56.8"
+	},
+	"devDependencies": {
+		"@riducms/build": "workspace:*"
+	}
+}

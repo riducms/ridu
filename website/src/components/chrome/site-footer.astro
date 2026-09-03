@@ -1,0 +1,19 @@
+---
+import riduWordLogo from '@/assets/ridu-word-logo.svg';
+import { site } from '@/config/site';
+---
+
+<footer class="border-t border-line bg-canvas">
+	<div
+		class="mx-auto flex min-h-110px w-site flex-col gap-4.8 py-7 items-start md:(flex-row items-center py-0)"
+	>
+		<a href="/" aria-label="Ridu home">
+			<img class="block h-auto w-82px" src={riduWordLogo.src} width="94" height="28" alt="Ridu" />
+		</a>
+		<nav class="flex gap-5 md:ml-auto" aria-label="Footer navigation">
+			<a class="muted-link text-14px" href="/docs/">Docs</a>
+			<a class="muted-link text-14px" href="/reference/">Reference</a>
+			<a class="muted-link text-14px" href={site.github}>GitHub</a>
+		</nav>
+	</div>
+</footer>

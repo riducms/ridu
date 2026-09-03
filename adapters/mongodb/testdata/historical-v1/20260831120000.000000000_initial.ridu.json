@@ -1,0 +1,515 @@
+{
+  "version": 1,
+  "name": "initial",
+  "planner": {
+    "name": "mongodb",
+    "version": "1.0.0"
+  },
+  "minimumRunnerContract": 1,
+  "previousArtifactDigest": "",
+  "fromDigest": "",
+  "toDigest": "28d6e699dfcfa6c826c3529c4eaf54b33086cbe613717b0aea634652869cfd46",
+  "after": {
+    "version": 1,
+    "application": {
+      "name": "MongoDB migrations"
+    },
+    "collections": [
+      {
+        "id": "posts",
+        "slug": "posts",
+        "labels": {
+          "singular": "Post",
+          "plural": "Posts"
+        },
+        "admin": {},
+        "capabilities": {
+          "auth": false,
+          "upload": false,
+          "versions": false,
+          "trash": false
+        },
+        "fields": [
+          {
+            "id": "posts-title",
+            "name": "title",
+            "path": "title",
+            "type": "text",
+            "category": "scalar",
+            "required": false,
+            "unique": false,
+            "admin": {
+              "label": ""
+            },
+            "text": {}
+          }
+        ]
+      }
+    ],
+    "plugins": []
+  },
+  "phases": [
+    {
+      "id": "phase-001",
+      "mode": "no_transaction",
+      "physicalContractVersion": 1,
+      "beforePhysicalDigest": "0d3e20adcc90bbe3a25ae6e61f9418a57edd47b63dafc8744c71b3b34c19a4af",
+      "afterPhysicalDigest": "08f2495d99db4cc619bc6bf0bf77638f323f6fe791b91f6e21164600eecd40a0",
+      "steps": [
+        {
+          "id": "step-0001",
+          "kind": "mongodb_create_index",
+          "executorVersion": 1,
+          "name": "create MongoDB index z_auth_api_key_expiry for authentication API-key state",
+          "payload": {
+            "collection": "z_ridu_auth_api_keys",
+            "index": "z_auth_api_key_expiry"
+          }
+        }
+      ]
+    },
+    {
+      "id": "phase-002",
+      "mode": "no_transaction",
+      "physicalContractVersion": 1,
+      "beforePhysicalDigest": "08f2495d99db4cc619bc6bf0bf77638f323f6fe791b91f6e21164600eecd40a0",
+      "afterPhysicalDigest": "cca9bbb7c4862960a80b16f1c5ba0d21c41edf829a43e454aa921eab392430e4",
+      "steps": [
+        {
+          "id": "step-0002",
+          "kind": "mongodb_create_index",
+          "executorVersion": 1,
+          "name": "create MongoDB index z_auth_api_key_owner for authentication API-key state",
+          "payload": {
+            "collection": "z_ridu_auth_api_keys",
+            "index": "z_auth_api_key_owner"
+          }
+        }
+      ]
+    },
+    {
+      "id": "phase-003",
+      "mode": "no_transaction",
+      "physicalContractVersion": 1,
+      "beforePhysicalDigest": "cca9bbb7c4862960a80b16f1c5ba0d21c41edf829a43e454aa921eab392430e4",
+      "afterPhysicalDigest": "6ce50dc4ed8d47201ddb1301ee171a29743118b9190132c4ca5c54fd76c563b1",
+      "steps": [
+        {
+          "id": "step-0003",
+          "kind": "mongodb_create_index",
+          "executorVersion": 1,
+          "name": "create MongoDB index z_auth_api_key_token for authentication API-key state",
+          "payload": {
+            "collection": "z_ridu_auth_api_keys",
+            "index": "z_auth_api_key_token"
+          }
+        }
+      ]
+    },
+    {
+      "id": "phase-004",
+      "mode": "no_transaction",
+      "physicalContractVersion": 1,
+      "beforePhysicalDigest": "6ce50dc4ed8d47201ddb1301ee171a29743118b9190132c4ca5c54fd76c563b1",
+      "afterPhysicalDigest": "a7fac1493f3aeb51edaeea0d124b75a7c92daca3bd079de90bfd5fc7d6f05d02",
+      "steps": [
+        {
+          "id": "step-0004",
+          "kind": "mongodb_create_index",
+          "executorVersion": 1,
+          "name": "create MongoDB index z_auth_credential_owner for authentication credential state",
+          "payload": {
+            "collection": "z_ridu_auth_credentials",
+            "index": "z_auth_credential_owner"
+          }
+        }
+      ]
+    },
+    {
+      "id": "phase-005",
+      "mode": "no_transaction",
+      "physicalContractVersion": 1,
+      "beforePhysicalDigest": "a7fac1493f3aeb51edaeea0d124b75a7c92daca3bd079de90bfd5fc7d6f05d02",
+      "afterPhysicalDigest": "49dea6648505af7968043d0893bf419797e5b220d5a490d44ddcd283a98dc513",
+      "steps": [
+        {
+          "id": "step-0005",
+          "kind": "mongodb_create_index",
+          "executorVersion": 1,
+          "name": "create MongoDB index z_auth_rate_limit_expiry for authentication rate-limit state",
+          "payload": {
+            "collection": "z_ridu_auth_rate_limits",
+            "index": "z_auth_rate_limit_expiry"
+          }
+        }
+      ]
+    },
+    {
+      "id": "phase-006",
+      "mode": "no_transaction",
+      "physicalContractVersion": 1,
+      "beforePhysicalDigest": "49dea6648505af7968043d0893bf419797e5b220d5a490d44ddcd283a98dc513",
+      "afterPhysicalDigest": "4546ddce5f5be65a13a59254f40efecbf4c27a81864d91241bdd355bcf9cf9d8",
+      "steps": [
+        {
+          "id": "step-0006",
+          "kind": "mongodb_create_index",
+          "executorVersion": 1,
+          "name": "create MongoDB index z_auth_session_expiry for authentication session state",
+          "payload": {
+            "collection": "z_ridu_auth_sessions",
+            "index": "z_auth_session_expiry"
+          }
+        }
+      ]
+    },
+    {
+      "id": "phase-007",
+      "mode": "no_transaction",
+      "physicalContractVersion": 1,
+      "beforePhysicalDigest": "4546ddce5f5be65a13a59254f40efecbf4c27a81864d91241bdd355bcf9cf9d8",
+      "afterPhysicalDigest": "9bcd696d94d4feb66c5253b90e961660352a703ab08a636699546e3e279147e6",
+      "steps": [
+        {
+          "id": "step-0007",
+          "kind": "mongodb_create_index",
+          "executorVersion": 1,
+          "name": "create MongoDB index z_auth_session_owner for authentication session state",
+          "payload": {
+            "collection": "z_ridu_auth_sessions",
+            "index": "z_auth_session_owner"
+          }
+        }
+      ]
+    },
+    {
+      "id": "phase-008",
+      "mode": "no_transaction",
+      "physicalContractVersion": 1,
+      "beforePhysicalDigest": "9bcd696d94d4feb66c5253b90e961660352a703ab08a636699546e3e279147e6",
+      "afterPhysicalDigest": "9d087f170a627b8ac62fec59d904696e2a18f73b74dfdcf3c1ea9bbd46b33285",
+      "steps": [
+        {
+          "id": "step-0008",
+          "kind": "mongodb_create_index",
+          "executorVersion": 1,
+          "name": "create MongoDB index z_auth_session_public_id for authentication session state",
+          "payload": {
+            "collection": "z_ridu_auth_sessions",
+            "index": "z_auth_session_public_id"
+          }
+        }
+      ]
+    },
+    {
+      "id": "phase-009",
+      "mode": "no_transaction",
+      "physicalContractVersion": 1,
+      "beforePhysicalDigest": "9d087f170a627b8ac62fec59d904696e2a18f73b74dfdcf3c1ea9bbd46b33285",
+      "afterPhysicalDigest": "147896e53b6ce855631bea421375cf33c6b8179b82c68cbcfe8d9d2b9e8293b5",
+      "steps": [
+        {
+          "id": "step-0009",
+          "kind": "mongodb_create_index",
+          "executorVersion": 1,
+          "name": "create MongoDB index z_auth_token_hash for authentication recovery-token state",
+          "payload": {
+            "collection": "z_ridu_auth_tokens",
+            "index": "z_auth_token_hash"
+          }
+        }
+      ]
+    },
+    {
+      "id": "phase-010",
+      "mode": "no_transaction",
+      "physicalContractVersion": 1,
+      "beforePhysicalDigest": "147896e53b6ce855631bea421375cf33c6b8179b82c68cbcfe8d9d2b9e8293b5",
+      "afterPhysicalDigest": "c2d8141a3c61d7937fac88175ac4ea73b5480c2f09ba1f0a61e37b8025bfdc31",
+      "steps": [
+        {
+          "id": "step-0010",
+          "kind": "mongodb_create_index",
+          "executorVersion": 1,
+          "name": "create MongoDB index z_auth_token_owner_purpose for authentication recovery-token state",
+          "payload": {
+            "collection": "z_ridu_auth_tokens",
+            "index": "z_auth_token_owner_purpose"
+          }
+        }
+      ]
+    },
+    {
+      "id": "phase-011",
+      "mode": "no_transaction",
+      "physicalContractVersion": 1,
+      "beforePhysicalDigest": "c2d8141a3c61d7937fac88175ac4ea73b5480c2f09ba1f0a61e37b8025bfdc31",
+      "afterPhysicalDigest": "69902c37770df41eb7896c5e8165c91ddeab72074eda9efd26333030ddea4956",
+      "steps": [
+        {
+          "id": "step-0011",
+          "kind": "mongodb_create_index",
+          "executorVersion": 1,
+          "name": "create MongoDB index z_document_lock_owner for document-lock state",
+          "payload": {
+            "collection": "z_ridu_document_locks",
+            "index": "z_document_lock_owner"
+          }
+        }
+      ]
+    },
+    {
+      "id": "phase-012",
+      "mode": "no_transaction",
+      "physicalContractVersion": 1,
+      "beforePhysicalDigest": "69902c37770df41eb7896c5e8165c91ddeab72074eda9efd26333030ddea4956",
+      "afterPhysicalDigest": "971532fd43db48a8c1be2c6e9006f826eb7b19f185d4e718568bc334ecb17c04",
+      "steps": [
+        {
+          "id": "step-0012",
+          "kind": "mongodb_create_index",
+          "executorVersion": 1,
+          "name": "create MongoDB index z_document_lock_target for document-lock state",
+          "payload": {
+            "collection": "z_ridu_document_locks",
+            "index": "z_document_lock_target"
+          }
+        }
+      ]
+    },
+    {
+      "id": "phase-013",
+      "mode": "no_transaction",
+      "physicalContractVersion": 1,
+      "beforePhysicalDigest": "971532fd43db48a8c1be2c6e9006f826eb7b19f185d4e718568bc334ecb17c04",
+      "afterPhysicalDigest": "1853b3040282f23aa483bc97fdaad3da6e7434374521f0cb9c2f12fdd22e4690",
+      "steps": [
+        {
+          "id": "step-0013",
+          "kind": "mongodb_create_index",
+          "executorVersion": 1,
+          "name": "create MongoDB index z_preference_owner_key for preference state",
+          "payload": {
+            "collection": "z_ridu_preferences",
+            "index": "z_preference_owner_key"
+          }
+        }
+      ]
+    },
+    {
+      "id": "phase-014",
+      "mode": "no_transaction",
+      "physicalContractVersion": 1,
+      "beforePhysicalDigest": "1853b3040282f23aa483bc97fdaad3da6e7434374521f0cb9c2f12fdd22e4690",
+      "afterPhysicalDigest": "bdf7d26ca6bb5e19617a5ab58fcf6038b0f45aa3ffacaa95576ca07b41b74964",
+      "steps": [
+        {
+          "id": "step-0014",
+          "kind": "mongodb_create_index",
+          "executorVersion": 1,
+          "name": "create MongoDB index z_task_concurrency_identity for task concurrency state",
+          "payload": {
+            "collection": "z_ridu_task_concurrency",
+            "index": "z_task_concurrency_identity"
+          }
+        }
+      ]
+    },
+    {
+      "id": "phase-015",
+      "mode": "no_transaction",
+      "physicalContractVersion": 1,
+      "beforePhysicalDigest": "bdf7d26ca6bb5e19617a5ab58fcf6038b0f45aa3ffacaa95576ca07b41b74964",
+      "afterPhysicalDigest": "9c9dd09fe2b06ececd779d3aa0b66535bec62701613fd5f69760959dbce6c7e4",
+      "steps": [
+        {
+          "id": "step-0015",
+          "kind": "mongodb_create_index",
+          "executorVersion": 1,
+          "name": "create MongoDB index z_task_concurrency_requester for task concurrency state",
+          "payload": {
+            "collection": "z_ridu_task_concurrency",
+            "index": "z_task_concurrency_requester"
+          }
+        }
+      ]
+    },
+    {
+      "id": "phase-016",
+      "mode": "no_transaction",
+      "physicalContractVersion": 1,
+      "beforePhysicalDigest": "9c9dd09fe2b06ececd779d3aa0b66535bec62701613fd5f69760959dbce6c7e4",
+      "afterPhysicalDigest": "96276be0b92ba1b00f043556972c8525770caef39358560ec0e8cd4c755c29bd",
+      "steps": [
+        {
+          "id": "step-0016",
+          "kind": "mongodb_create_index",
+          "executorVersion": 1,
+          "name": "create MongoDB index z_task_concurrency_target for task concurrency state",
+          "payload": {
+            "collection": "z_ridu_task_concurrency",
+            "index": "z_task_concurrency_target"
+          }
+        }
+      ]
+    },
+    {
+      "id": "phase-017",
+      "mode": "no_transaction",
+      "physicalContractVersion": 1,
+      "beforePhysicalDigest": "96276be0b92ba1b00f043556972c8525770caef39358560ec0e8cd4c755c29bd",
+      "afterPhysicalDigest": "38e5c0b9eada7d62bed92fc8caab91e29037007b186ab3f780bd7e6ca1b736db",
+      "steps": [
+        {
+          "id": "step-0017",
+          "kind": "mongodb_create_index",
+          "executorVersion": 1,
+          "name": "create MongoDB index z_task_due for task state",
+          "payload": {
+            "collection": "z_ridu_tasks",
+            "index": "z_task_due"
+          }
+        }
+      ]
+    },
+    {
+      "id": "phase-018",
+      "mode": "no_transaction",
+      "physicalContractVersion": 1,
+      "beforePhysicalDigest": "38e5c0b9eada7d62bed92fc8caab91e29037007b186ab3f780bd7e6ca1b736db",
+      "afterPhysicalDigest": "a7ba217491832ed3d8faa0646ba8f2d0a2813ddd250650ecacca394422eaeae2",
+      "steps": [
+        {
+          "id": "step-0018",
+          "kind": "mongodb_create_index",
+          "executorVersion": 1,
+          "name": "create MongoDB index z_task_lease for task state",
+          "payload": {
+            "collection": "z_ridu_tasks",
+            "index": "z_task_lease"
+          }
+        }
+      ]
+    },
+    {
+      "id": "phase-019",
+      "mode": "no_transaction",
+      "physicalContractVersion": 1,
+      "beforePhysicalDigest": "a7ba217491832ed3d8faa0646ba8f2d0a2813ddd250650ecacca394422eaeae2",
+      "afterPhysicalDigest": "073154527f0a4a301c976d21c7a758496036c3e0e59c2cf3ddcea329ce4109da",
+      "steps": [
+        {
+          "id": "step-0019",
+          "kind": "mongodb_create_index",
+          "executorVersion": 1,
+          "name": "create MongoDB index z_task_requester for task state",
+          "payload": {
+            "collection": "z_ridu_tasks",
+            "index": "z_task_requester"
+          }
+        }
+      ]
+    },
+    {
+      "id": "phase-020",
+      "mode": "no_transaction",
+      "physicalContractVersion": 1,
+      "beforePhysicalDigest": "073154527f0a4a301c976d21c7a758496036c3e0e59c2cf3ddcea329ce4109da",
+      "afterPhysicalDigest": "0e0b3a09f7998e6a3d987e0602479f6e85edb4e62132cdd7280d30932d55ef33",
+      "steps": [
+        {
+          "id": "step-0020",
+          "kind": "mongodb_create_index",
+          "executorVersion": 1,
+          "name": "create MongoDB index z_task_retention for task state",
+          "payload": {
+            "collection": "z_ridu_tasks",
+            "index": "z_task_retention"
+          }
+        }
+      ]
+    },
+    {
+      "id": "phase-021",
+      "mode": "no_transaction",
+      "physicalContractVersion": 1,
+      "beforePhysicalDigest": "0e0b3a09f7998e6a3d987e0602479f6e85edb4e62132cdd7280d30932d55ef33",
+      "afterPhysicalDigest": "f0661c0e0fdffca50de7d980eabb13b7cf0bb3944da00ee16e93f26d0867b3be",
+      "steps": [
+        {
+          "id": "step-0021",
+          "kind": "mongodb_create_index",
+          "executorVersion": 1,
+          "name": "create MongoDB index z_task_target for task state",
+          "payload": {
+            "collection": "z_ridu_tasks",
+            "index": "z_task_target"
+          }
+        }
+      ]
+    },
+    {
+      "id": "phase-022",
+      "mode": "no_transaction",
+      "physicalContractVersion": 1,
+      "beforePhysicalDigest": "f0661c0e0fdffca50de7d980eabb13b7cf0bb3944da00ee16e93f26d0867b3be",
+      "afterPhysicalDigest": "77bb7d1a1ad105d6a874e9d9b1e093d3c4905d61f5b0b3b688bdef64986192b8",
+      "steps": [
+        {
+          "id": "step-0022",
+          "kind": "mongodb_assert_schema",
+          "executorVersion": 1,
+          "name": "verify resulting MongoDB schema",
+          "payload": {}
+        }
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "code": "RIDU_MONGODB_INDEX_BUILD_NON_TRANSACTIONAL",
+      "level": "warning",
+      "message": "MongoDB index builds run as resumable no-transaction phases; an interrupted artifact may leave reviewed indexes in place before the artifact completes"
+    },
+    {
+      "code": "RIDU_BUILD_UNIQUE_INDEX",
+      "level": "warning",
+      "message": "build unique MongoDB index z_auth_api_key_token for authentication API-key state; the migration fails if existing indexed values conflict"
+    },
+    {
+      "code": "RIDU_BUILD_UNIQUE_INDEX",
+      "level": "warning",
+      "message": "build unique MongoDB index z_auth_credential_owner for authentication credential state; the migration fails if existing indexed values conflict"
+    },
+    {
+      "code": "RIDU_BUILD_UNIQUE_INDEX",
+      "level": "warning",
+      "message": "build unique MongoDB index z_auth_session_public_id for authentication session state; the migration fails if existing indexed values conflict"
+    },
+    {
+      "code": "RIDU_BUILD_UNIQUE_INDEX",
+      "level": "warning",
+      "message": "build unique MongoDB index z_auth_token_hash for authentication recovery-token state; the migration fails if existing indexed values conflict"
+    },
+    {
+      "code": "RIDU_BUILD_UNIQUE_INDEX",
+      "level": "warning",
+      "message": "build unique MongoDB index z_auth_token_owner_purpose for authentication recovery-token state; the migration fails if existing indexed values conflict"
+    },
+    {
+      "code": "RIDU_BUILD_UNIQUE_INDEX",
+      "level": "warning",
+      "message": "build unique MongoDB index z_document_lock_target for document-lock state; the migration fails if existing indexed values conflict"
+    },
+    {
+      "code": "RIDU_BUILD_UNIQUE_INDEX",
+      "level": "warning",
+      "message": "build unique MongoDB index z_preference_owner_key for preference state; the migration fails if existing indexed values conflict"
+    },
+    {
+      "code": "RIDU_BUILD_UNIQUE_INDEX",
+      "level": "warning",
+      "message": "build unique MongoDB index z_task_concurrency_identity for task concurrency state; the migration fails if existing indexed values conflict"
+    }
+  ]
+}

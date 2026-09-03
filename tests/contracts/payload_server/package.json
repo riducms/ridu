@@ -1,0 +1,41 @@
+{
+	"name": "@riducms/payload-parity-fixture",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"packageManager": "bun@1.4.0",
+	"scripts": {
+		"build": "next build",
+		"check": "tsc --noEmit",
+		"check:sqlite-side-by-side:payload": "bun src/sqlite-baseline/check.ts",
+		"dev": "next dev",
+		"format:generated": "prettier --write 'src/app/(payload)/admin/importMap.js' src/payload-types.ts",
+		"generate": "bun run generate:importmap && bun run generate:types && bun run format:generated",
+		"generate:importmap": "payload generate:importmap",
+		"generate:sqlite-baseline-migration": "PAYLOAD_CONFIG_PATH=src/sqlite-baseline/payload.config.ts PAYLOAD_SQLITE_BASELINE_URL=file:./sqlite-baseline-generation.db payload migrate:create sqlite_baseline --force-accept-warning",
+		"generate:types": "payload generate:types",
+		"start": "next start"
+	},
+	"dependencies": {
+		"@payloadcms/db-postgres": "3.87.0",
+		"@payloadcms/db-sqlite": "3.87.0",
+		"@payloadcms/next": "3.87.0",
+		"@payloadcms/plugin-form-builder": "3.87.0",
+		"@payloadcms/plugin-seo": "3.87.0",
+		"@payloadcms/richtext-lexical": "3.87.0",
+		"@payloadcms/ui": "3.87.0",
+		"graphql": "16.11.0",
+		"next": "16.2.6",
+		"payload": "3.87.0",
+		"react": "19.2.6",
+		"react-dom": "19.2.6",
+		"sharp": "0.34.2"
+	},
+	"devDependencies": {
+		"@types/node": "22.19.9",
+		"@types/react": "19.2.14",
+		"@types/react-dom": "19.2.3",
+		"prettier": "3.9.6",
+		"typescript": "5.7.3"
+	}
+}

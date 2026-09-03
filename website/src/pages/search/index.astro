@@ -1,0 +1,165 @@
+---
+import BaseLayout from '@/layouts/base-layout.astro';
+---
+
+<BaseLayout
+	title="Search"
+	description="Search every Ridu documentation page, section, example, command, and public API symbol."
+	active="docs"
+>
+	<section class="mx-auto max-w-230 py-[clamp(3rem,8vw,6rem)]" data-full-search-root>
+		<header class="max-w-180">
+			<p class="mt-0 mb-2.6 font-mono text-[0.68rem] tracking-[0.1em] text-accent uppercase">
+				Documentation search
+			</p>
+			<h1 class="m-0 text-[clamp(2.5rem,7vw,4.5rem)] leading-[0.98]">
+				Search all Ridu documentation
+			</h1>
+			<p class="max-w-170 text-[1.05rem] leading-[1.6] text-ink-soft">
+				Search prose, tables, examples, commands, environment variables, and exact symbols such as
+				<code class="font-mono text-[0.86em] text-accent">field.Select</code> or
+				<code class="font-mono text-[0.86em] text-accent">RiduClient.list</code>.
+			</p>
+		</header>
+
+		<form
+			class="mt-9 border border-line-strong rd-5px bg-surface p-4"
+			role="search"
+			data-full-search-form
+		>
+			<label
+				class="font-mono text-[0.65rem] tracking-[0.07em] text-ink-faint uppercase"
+				for="full-search-input"
+			>
+				Search query
+			</label>
+			<div class="mt-1.8 grid grid-cols-[minmax(0,1fr)_auto] lt-sm:grid-cols-1">
+				<input
+					class="min-h-12.6 min-w-0 border border-r-0 border-line-strong bg-canvas px-3.6 text-ink font-inherit lt-sm:(border-r border-b-0)"
+					id="full-search-input"
+					name="q"
+					type="search"
+					placeholder="Try field.Select, DATABASE_URL, or add MongoDB…"
+					autocomplete="off"
+					spellcheck="false"
+					data-full-search-input
+				/>
+				<button
+					class="min-h-12.6 cursor-pointer border border-line-strong bg-ink px-5 font-inherit font-700 text-canvas"
+					type="submit">Search</button
+				>
+			</div>
+			<fieldset class="m-0 mt-4 flex flex-wrap gap-1.6 border-0 p-0">
+				<legend
+					class="mb-1.4 w-full font-mono text-[0.65rem] tracking-[0.07em] text-ink-faint uppercase"
+				>
+					Filter results
+				</legend>
+				<button
+					class="cursor-pointer border border-line rd-full bg-transparent px-3 py-[0.38rem] text-ink-soft aria-[pressed=true]:(border-accent bg-accent-soft text-accent)"
+					type="button"
+					data-full-search-filter="all"
+					aria-pressed="true">All</button
+				>
+				<button
+					class="cursor-pointer border border-line rd-full bg-transparent px-3 py-[0.38rem] text-ink-soft aria-[pressed=true]:(border-accent bg-accent-soft text-accent)"
+					type="button"
+					data-full-search-filter="docs"
+					aria-pressed="false">Docs</button
+				>
+				<button
+					class="cursor-pointer border border-line rd-full bg-transparent px-3 py-[0.38rem] text-ink-soft aria-[pressed=true]:(border-accent bg-accent-soft text-accent)"
+					type="button"
+					data-full-search-filter="guides"
+					aria-pressed="false">Guides</button
+				>
+				<button
+					class="cursor-pointer border border-line rd-full bg-transparent px-3 py-[0.38rem] text-ink-soft aria-[pressed=true]:(border-accent bg-accent-soft text-accent)"
+					type="button"
+					data-full-search-filter="reference"
+					aria-pressed="false">Reference</button
+				>
+			</fieldset>
+		</form>
+
+		<p
+			class="mt-5.6 mb-3 font-mono text-[0.72rem] text-ink-faint"
+			role="status"
+			aria-live="polite"
+			data-full-search-status
+		>
+			Preparing search…
+		</p>
+		<div class="grid gap-2.6" data-full-search-results></div>
+	</section>
+</BaseLayout>
+
+<script>
+	import { initializeSearchPage } from '@/search/search-page.client';
+
+	function initializeFullSearch() {
+		const root = document.querySelector<HTMLElement>('[data-full-search-root]');
+		if (root) initializeSearchPage(root);
+	}
+
+	initializeFullSearch();
+	document.addEventListener('astro:page-load', initializeFullSearch);
+</script>
+
+<style is:global>
+	.full-search-result {
+		display: grid;
+		gap: 0.3rem;
+		padding: 0.95rem 1rem;
+		border: 1px solid var(--colors-line);
+		border-radius: 4px;
+		background: color-mix(in srgb, var(--colors-surface) 70%, transparent);
+		text-decoration: none;
+	}
+
+	.full-search-result:hover {
+		border-color: var(--colors-line-strong);
+		background: var(--colors-surface);
+	}
+
+	.full-search-result-heading {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 1rem;
+	}
+
+	.full-search-result-heading strong {
+		color: var(--colors-ink);
+	}
+
+	.full-search-result-heading small,
+	.full-search-result-breadcrumb,
+	.full-search-result-route {
+		font-family: var(--font-mono);
+		font-size: 0.66rem;
+		color: var(--colors-ink-faint);
+	}
+
+	.full-search-result-heading small {
+		text-transform: uppercase;
+	}
+
+	.full-search-result-snippet {
+		font-size: 0.84rem;
+		line-height: 1.5;
+		color: var(--colors-ink-soft);
+	}
+
+	.full-search-result-route {
+		color: var(--colors-accent);
+	}
+
+	@media (width < 40rem) {
+		.full-search-result-heading {
+			align-items: flex-start;
+			flex-direction: column;
+			gap: 0.2rem;
+		}
+	}
+</style>

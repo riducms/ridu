@@ -1,0 +1,94 @@
+version: 2
+
+project_name: ridu
+
+before:
+  hooks:
+    - bash ./scripts/prepare-release-metadata.sh
+
+builds:
+  - id: ridu
+    main: ./cmd/ridu
+    binary: ridu
+    flags:
+      - -trimpath
+      - -buildvcs=false
+    ldflags:
+      - -buildid=
+      - -X main.version={{ .Tag }}
+    env:
+      - CGO_ENABLED=0
+      - GOFLAGS=-mod=readonly
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    hooks:
+      post:
+        - bash ./scripts/prepare-release-binary-metadata.sh "{{ .Target }}" "{{ .Path }}"
+
+archives:
+  - id: ridu
+    ids:
+      - ridu
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    name_template: "ridu_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    builds_info:
+      mtime: "{{ .CommitDate }}"
+    files:
+      - src: LICENSE
+        strip_parent: true
+        info:
+          mtime: "{{ .CommitDate }}"
+          mode: 0644
+      - src: admin/THIRD_PARTY_NOTICES.md
+        strip_parent: true
+        info:
+          mtime: "{{ .CommitDate }}"
+          mode: 0644
+      - src: .ridu/release-metadata/{{ .Os }}_{{ .Arch }}*/THIRD_PARTY_GO_LICENSES.txt
+        strip_parent: true
+        info:
+          mtime: "{{ .CommitDate }}"
+          mode: 0644
+      - src: .ridu/release-metadata/THIRD_PARTY_JS_LICENSES.txt
+        strip_parent: true
+        info:
+          mtime: "{{ .CommitDate }}"
+          mode: 0644
+
+checksum:
+  name_template: SHA256SUMS
+  algorithm: sha256
+  extra_files:
+    - glob: .ridu/release-metadata/ridu.spdx.json
+    - glob: .ridu/release-npm/*.tgz
+
+changelog:
+  use: github-native
+
+release:
+  github:
+    owner: riducms
+    name: ridu
+  draft: true
+  target_commitish: "{{ .Commit }}"
+  name_template: "Ridu {{ .Tag }}"
+  replace_existing_draft: false
+  replace_existing_artifacts: false
+  mode: keep-existing
+  include_meta: false
+  preflight:
+    fail_on_error: true
+  extra_files:
+    - glob: .ridu/release-metadata/ridu.spdx.json
+    - glob: .ridu/release-npm/*.tgz

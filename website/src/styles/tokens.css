@@ -1,0 +1,17 @@
+:root {
+	color-scheme: dark;
+	--header-height: 65px;
+	--docs-nav-height: 44px;
+	--page-header-height: var(--header-height);
+}
+
+body.has-doc-nav {
+	--page-header-height: calc(var(--header-height) + var(--docs-nav-height));
+}
+
+@media (width < 48rem) {
+	:root {
+		--header-height: 59px;
+		--docs-nav-height: 41px;
+	}
+}

@@ -1,0 +1,40 @@
+# Operating systems and editors
+.DS_Store
+.idea/
+.vscode/
+
+# Environment and local configuration
+.env
+.env.*
+!.env.example
+*.local
+*.log
+
+# JavaScript and Svelte
+node_modules/
+dist/
+!/internal/adminassets/dist/
+!/internal/adminassets/dist/**
+.svelte-kit/
+.vite/
+coverage/
+playwright-report/
+test-results/
+.playwright-mcp/
+
+# Go workspace files are developer-owned until the repository needs one.
+go.work
+go.work.sum
+!playground/go.work
+!playground/go.work.sum
+
+# Go build and test output
+*.exe
+*.out
+*.test
+
+# Ridu-generated disposable state
+.ridu/
+
+# Legacy pre-rename disposable state. Keep local Zeno caches out of the worktree.
+.zeno/

@@ -1,0 +1,109 @@
+<script>
+	import {
+		isPackageManager,
+		packageManagers,
+		type PackageManager
+	} from '@/components/code/package-manager';
+
+	const preferenceKey = 'ridu:docs:package-manager';
+	const orderedManagers = packageManagers.map((manager) => manager.id);
+
+	function readPreference(): PackageManager | undefined {
+		try {
+			const value = window.localStorage.getItem(preferenceKey);
+			return isPackageManager(value) ? value : undefined;
+		} catch {
+			return;
+		}
+	}
+
+	function writePreference(manager: PackageManager) {
+		try {
+			window.localStorage.setItem(preferenceKey, manager);
+		} catch {
+			// Storage can be unavailable in privacy-restricted browsing contexts.
+		}
+	}
+
+	function selectInGroup(group: HTMLElement, manager: PackageManager): boolean {
+		const tabs = [...group.querySelectorAll<HTMLButtonElement>('[data-package-manager-tab]')];
+		const selectedTab = tabs.find((tab) => tab.dataset.packageManagerTab === manager);
+		if (!selectedTab) return false;
+
+		for (const tab of tabs) {
+			const selected = tab === selectedTab;
+			tab.setAttribute('aria-selected', String(selected));
+			tab.tabIndex = selected ? 0 : -1;
+		}
+
+		const panels = [...group.querySelectorAll<HTMLElement>('[data-package-manager-panel]')];
+		for (const panel of panels) {
+			panel.hidden = panel.dataset.packageManagerPanel !== manager;
+		}
+
+		return true;
+	}
+
+	function selectEverywhere(manager: PackageManager, persist = true) {
+		document
+			.querySelectorAll<HTMLElement>('[data-package-manager-tabs]')
+			.forEach((group) => selectInGroup(group, manager));
+		if (persist) writePreference(manager);
+	}
+
+	function initializePackageManagerTabs() {
+		const groups = [...document.querySelectorAll<HTMLElement>('[data-package-manager-tabs]')];
+
+		for (const group of groups) {
+			if (group.dataset.packageManagerReady !== undefined) continue;
+			group.dataset.packageManagerReady = '';
+
+			const tabs = [...group.querySelectorAll<HTMLButtonElement>('[data-package-manager-tab]')];
+			for (const tab of tabs) {
+				tab.addEventListener('click', () => {
+					const manager = tab.dataset.packageManagerTab;
+					if (isPackageManager(manager)) selectEverywhere(manager);
+				});
+
+				tab.addEventListener('keydown', (event) => {
+					let index: number | undefined;
+					if (event.key === 'Home') index = 0;
+					if (event.key === 'End') index = tabs.length - 1;
+					if (event.key === 'ArrowLeft')
+						index = (tabs.indexOf(tab) - 1 + tabs.length) % tabs.length;
+					if (event.key === 'ArrowRight') index = (tabs.indexOf(tab) + 1) % tabs.length;
+					if (index === undefined) return;
+
+					event.preventDefault();
+					const next = tabs[index];
+					const manager = next?.dataset.packageManagerTab;
+					if (!next || !isPackageManager(manager)) return;
+					next.focus();
+					selectEverywhere(manager);
+				});
+			}
+		}
+
+		const preference = readPreference();
+		if (preference) {
+			selectEverywhere(preference, false);
+			return;
+		}
+
+		for (const group of groups) {
+			const selected = group.querySelector<HTMLButtonElement>(
+				'[data-package-manager-tab][aria-selected="true"]'
+			)?.dataset.packageManagerTab;
+			const fallback = isPackageManager(selected) ? selected : orderedManagers[0];
+			if (fallback) selectInGroup(group, fallback);
+		}
+	}
+
+	initializePackageManagerTabs();
+	document.addEventListener('astro:page-load', initializePackageManagerTabs);
+	window.addEventListener('storage', (event) => {
+		if (event.key === preferenceKey && isPackageManager(event.newValue)) {
+			selectEverywhere(event.newValue, false);
+		}
+	});
+</script>

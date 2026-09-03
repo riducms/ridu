@@ -1,0 +1,61 @@
+---
+import { groupReferenceSymbols, referenceModules, type ReferenceModule } from '@/reference';
+
+interface Props {
+	module?: ReferenceModule;
+	activeSymbol?: string;
+}
+
+const { module, activeSymbol } = Astro.props;
+const moduleSymbols = module ? [...groupReferenceSymbols(module).values()].flat() : [];
+const activeIndex = activeSymbol
+	? moduleSymbols.findIndex((symbol) => symbol.slug === activeSymbol)
+	: -1;
+const visibleSymbols =
+	activeIndex >= 0 ? moduleSymbols.slice(Math.max(0, activeIndex - 3), activeIndex + 4) : [];
+const visibleModules = module
+	? [module, ...referenceModules.filter((item) => item.slug !== module.slug)]
+	: referenceModules;
+const activeEntry = activeIndex >= 0 ? module?.symbols[activeIndex] : undefined;
+const orderedSymbols = activeEntry
+	? [activeEntry, ...visibleSymbols.filter((symbol) => symbol.slug !== activeEntry.slug)]
+	: visibleSymbols;
+---
+
+<div class="reference-mobile-nav">
+	<nav class="reference-mobile-row" aria-label="Reference modules">
+		<a class="reference-mobile-link" href="/reference/" aria-current={!module ? 'page' : undefined}
+			>All</a
+		>
+		{
+			visibleModules.map((item) => (
+				<a
+					class="reference-mobile-link"
+					href={`/reference/${item.slug}/`}
+					aria-current={module?.slug === item.slug ? 'page' : undefined}
+				>
+					{item.name}
+				</a>
+			))
+		}
+	</nav>
+	{
+		module && activeSymbol && (
+			<nav class="reference-mobile-row" aria-label={`${module.name} symbols`}>
+				<a class="reference-mobile-link" href={`/reference/${module.slug}/`}>
+					All {moduleSymbols.length}
+				</a>
+				{orderedSymbols.map((symbol) => (
+					<a
+						class="reference-mobile-link"
+						data-reference-kind={symbol.kind}
+						href={`/reference/${module.slug}/${symbol.slug}/`}
+						aria-current={activeSymbol === symbol.slug ? 'page' : undefined}
+					>
+						{symbol.name}
+					</a>
+				))}
+			</nav>
+		)
+	}
+</div>

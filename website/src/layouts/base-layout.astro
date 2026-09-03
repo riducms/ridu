@@ -1,0 +1,54 @@
+---
+import '@fontsource/questrial/400.css';
+import '@fontsource-variable/geist';
+import '@fontsource-variable/martian-mono';
+import '@/styles/global.css';
+import { ClientRouter } from 'astro:transitions';
+import riduArchLogo from '@/assets/ridu-logo-arch.svg';
+import CodeCopyScript from '@/components/code/code-copy-script.astro';
+import SiteFooter from '@/components/chrome/site-footer.astro';
+import SiteHeader from '@/components/chrome/site-header.astro';
+import { site, type ProductKey } from '@/config/site';
+
+interface Props {
+	title?: string;
+	description?: string;
+	active?: 'docs' | 'guides' | 'reference';
+	product?: ProductKey;
+	wide?: boolean;
+	footer?: boolean;
+}
+
+const { title, description = site.description, active, wide = false, footer = true } = Astro.props;
+const fullTitle = title ? `${title} · ${site.name}` : site.title;
+const canonical = new URL(Astro.url.pathname, Astro.site ?? site.url);
+---
+
+<!doctype html>
+<html lang="en-GB">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="generator" content={Astro.generator} />
+		<title>{fullTitle}</title>
+		<meta name="description" content={description} />
+		<link rel="canonical" href={canonical} />
+		<link rel="icon" type="image/svg+xml" href={riduArchLogo.src} />
+		<meta name="theme-color" content="#0d0a0c" />
+		<meta property="og:type" content="website" />
+		<meta property="og:title" content={fullTitle} />
+		<meta property="og:description" content={description} />
+		<meta property="og:url" content={canonical} />
+		<meta name="twitter:card" content="summary_large_image" />
+		<ClientRouter />
+	</head>
+	<body>
+		<a class="skip-link" href="#main">Skip to content</a>
+		<SiteHeader active={active} {wide} />
+		<main id="main" class:list={{ 'mx-auto w-site': !wide }}>
+			<slot />
+		</main>
+		{footer && <SiteFooter />}
+		<CodeCopyScript />
+	</body>
+</html>

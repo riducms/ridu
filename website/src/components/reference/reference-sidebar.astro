@@ -1,0 +1,81 @@
+---
+import {
+	groupReferenceModules,
+	groupReferenceSymbols,
+	referenceModules,
+	type ReferenceModule
+} from '@/reference';
+
+interface Props {
+	module?: ReferenceModule;
+	active?: string;
+}
+
+const { module, active } = Astro.props;
+const moduleGroups = groupReferenceModules(referenceModules);
+const orderedSymbols = module ? [...groupReferenceSymbols(module).values()].flat() : [];
+const activeSymbol = active ? orderedSymbols.find((symbol) => symbol.slug === active) : undefined;
+const visibleSymbols = activeSymbol ? [activeSymbol] : orderedSymbols;
+
+const badgeLabel: Record<string, string> = {
+	function: 'F',
+	method: 'M',
+	type: 'T',
+	interface: 'I',
+	class: 'C',
+	command: '›'
+};
+---
+
+<aside
+	class="reference-sidebar sticky top-$page-header-height hidden h-page self-start overflow-y-auto border-r border-line px-5 pt-7.5 pb-15 lg:block"
+>
+	{
+		module && (
+			<>
+				<nav class="reference-sidebar-breadcrumb" aria-label="Breadcrumb">
+					<a href="/reference/">Modules</a>
+					<span>/</span>
+					<a href={`/reference/${module.slug}/`}>{module.name}</a>
+				</nav>
+				<nav class="reference-sidebar-symbols" aria-label={`${module.name} symbols`}>
+					{visibleSymbols.map((symbol) => (
+						<a
+							class="reference-sidebar-symbol"
+							data-reference-kind={symbol.kind}
+							href={`/reference/${module.slug}/${symbol.slug}/`}
+							aria-current={active === symbol.slug ? 'page' : undefined}
+						>
+							<span class="reference-kind-badge" data-reference-kind={symbol.kind}>
+								{badgeLabel[symbol.kind] ?? symbol.kind[0]}
+							</span>
+							{symbol.name}
+						</a>
+					))}
+				</nav>
+			</>
+		)
+	}
+
+	<nav
+		class:list={['reference-sidebar-modules', { 'has-symbols': Boolean(module) }]}
+		aria-label="Reference modules"
+	>
+		{
+			[...moduleGroups].map(([group, modules]) => (
+				<section class="reference-sidebar-group">
+					<p class="reference-sidebar-label">{group}</p>
+					{modules.map((item) => (
+						<a
+							class="reference-sidebar-module"
+							href={`/reference/${item.slug}/`}
+							aria-current={module?.slug === item.slug ? 'page' : undefined}
+						>
+							{item.name}
+						</a>
+					))}
+				</section>
+			))
+		}
+	</nav>
+</aside>

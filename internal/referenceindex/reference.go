@@ -1,0 +1,758 @@
+// Package referenceindex derives and reconciles current relationship and
+// upload references from canonical store values. It is shared by official
+// stores so the strict test adapter and PostgreSQL cannot silently diverge.
+package referenceindex
+
+import (
+	"sort"
+
+	"github.com/riducms/ridu/schema"
+	"github.com/riducms/ridu/store"
+)
+
+// Entry is one current reference occurrence owned by a document. Occurrence
+// is deterministic within the owner/field/target/locale tuple and permits
+// duplicate list members without collapsing the derived index.
+type Entry struct {
+	Owner      store.DocumentReference
+	FieldID    schema.StableID
+	Target     store.DocumentReference
+	Locale     schema.LocaleCode
+	Occurrence int
+}
+
+// Collect derives every relationship and upload reference in one canonical
+// current document, including nested containers and localized values.
+func Collect(collection schema.Collection, document store.Document) []Entry {
+	owner := store.DocumentReference{CollectionID: collection.ID, DocumentID: document.ID}
+	var entries []Entry
+	for _, field := range collection.Fields {
+		value, exists := document.Values[field.Name]
+		if !exists {
+			continue
+		}
+		entries = append(entries, CollectField(owner, field, value, "")...)
+	}
+	assignOccurrences(entries)
+	return entries
+}
+
+// CollectField derives references beneath one stored root field. For a
+// localized physical column, locale identifies the column and value is the
+// unwrapped locale value. An empty locale means value has canonical storage
+// shape and may itself contain locale maps.
+func CollectField(owner store.DocumentReference, field schema.Field, value store.Value, locale schema.LocaleCode) []Entry {
+	var entries []Entry
+	if locale != "" && field.Localized {
+		field.Localized = false
+		collectFieldValue(owner, field, value, locale, &entries)
+	} else {
+		collectField(owner, field, value, locale, &entries)
+	}
+	assignOccurrences(entries)
+	return entries
+}
+
+func collectFields(owner store.DocumentReference, fields []schema.Field, values store.Values, locale schema.LocaleCode, entries *[]Entry) {
+	for _, field := range fields {
+		value, exists := values[field.Name]
+		if !exists {
+			continue
+		}
+		collectField(owner, field, value, locale, entries)
+	}
+}
+
+func collectField(owner store.DocumentReference, field schema.Field, value store.Value, inheritedLocale schema.LocaleCode, entries *[]Entry) {
+	if value.Kind() == store.ValueNull {
+		return
+	}
+	if field.Localized {
+		localized, valid := value.ObjectValue()
+		if !valid {
+			return
+		}
+		locales := make([]string, 0, len(localized))
+		for locale := range localized {
+			locales = append(locales, locale)
+		}
+		sort.Strings(locales)
+		field.Localized = false
+		for _, locale := range locales {
+			collectFieldValue(owner, field, localized[locale], schema.LocaleCode(locale), entries)
+		}
+		return
+	}
+	collectFieldValue(owner, field, value, inheritedLocale, entries)
+}
+
+func collectFieldValue(owner store.DocumentReference, field schema.Field, value store.Value, locale schema.LocaleCode, entries *[]Entry) {
+	if value.Kind() == store.ValueNull {
+		return
+	}
+	switch field.Type {
+	case schema.FieldTypeRelationship:
+		collectRelationship(owner, field, value, locale, entries)
+	case schema.FieldTypeUpload:
+		collectUpload(owner, field, value, locale, entries)
+	case schema.FieldTypeGroup:
+		if object, valid := value.ObjectValue(); valid && field.Nested != nil {
+			collectFields(owner, field.Nested.Fields, object, locale, entries)
+		}
+	case schema.FieldTypeArray:
+		items, valid := value.Values()
+		if !valid || field.Nested == nil {
+			return
+		}
+		for _, item := range items {
+			if object, valid := item.ObjectValue(); valid {
+				collectFields(owner, field.Nested.Fields, object, locale, entries)
+			}
+		}
+	case schema.FieldTypeBlocks:
+		items, valid := value.Values()
+		if !valid || field.Blocks == nil {
+			return
+		}
+		for _, item := range items {
+			object, valid := item.ObjectValue()
+			if !valid {
+				continue
+			}
+			blockType, _ := object["blockType"].StringValue()
+			for _, block := range field.Blocks.Types {
+				if block.Key == blockType {
+					collectFields(owner, block.Fields, object, locale, entries)
+					break
+				}
+			}
+		}
+	}
+}
+
+func collectRelationship(owner store.DocumentReference, field schema.Field, value store.Value, locale schema.LocaleCode, entries *[]Entry) {
+	relationship := field.Relationship
+	if relationship == nil {
+		return
+	}
+	values := []store.Value{value}
+	if relationship.HasMany {
+		values, _ = value.Values()
+	}
+	for _, item := range values {
+		if !relationship.Polymorphic {
+			id, valid := item.StringValue()
+			if valid && id != "" {
+				*entries = append(*entries, Entry{
+					Owner: owner, FieldID: field.ID, Locale: locale,
+					Target: store.DocumentReference{CollectionID: relationship.CollectionID, DocumentID: id},
+				})
+			}
+			continue
+		}
+		object, valid := item.ObjectValue()
+		if !valid {
+			continue
+		}
+		slug, slugValid := object["relationTo"].StringValue()
+		id, idValid := object["id"].StringValue()
+		if !slugValid || !idValid || id == "" {
+			continue
+		}
+		for _, target := range relationship.Targets {
+			if string(target.CollectionSlug) == slug {
+				*entries = append(*entries, Entry{
+					Owner: owner, FieldID: field.ID, Locale: locale,
+					Target: store.DocumentReference{CollectionID: target.CollectionID, DocumentID: id},
+				})
+				break
+			}
+		}
+	}
+}
+
+func collectUpload(owner store.DocumentReference, field schema.Field, value store.Value, locale schema.LocaleCode, entries *[]Entry) {
+	upload := field.Upload
+	if upload == nil {
+		return
+	}
+	values := []store.Value{value}
+	if upload.HasMany {
+		values, _ = value.Values()
+	}
+	for _, item := range values {
+		id, valid := item.StringValue()
+		if valid && id != "" {
+			*entries = append(*entries, Entry{
+				Owner: owner, FieldID: field.ID, Locale: locale,
+				Target: store.DocumentReference{CollectionID: upload.CollectionID, DocumentID: id},
+			})
+		}
+	}
+}
+
+func assignOccurrences(entries []Entry) {
+	counts := make(map[string]int, len(entries))
+	for index := range entries {
+		entry := &entries[index]
+		key := string(entry.Owner.CollectionID) + "\x00" + entry.Owner.DocumentID + "\x00" + string(entry.FieldID) + "\x00" +
+			string(entry.Target.CollectionID) + "\x00" + entry.Target.DocumentID + "\x00" + string(entry.Locale)
+		entry.Occurrence = counts[key]
+		counts[key]++
+	}
+}
+
+// FindReferenceField locates a relationship/upload field and its stored root
+// field by stable ID.
+func FindReferenceField(collection schema.Collection, fieldID schema.StableID) (reference schema.Field, root schema.Field, found bool) {
+	for _, candidate := range collection.Fields {
+		if reference, found = findReferenceField(candidate, fieldID); found {
+			return reference, candidate, true
+		}
+	}
+	return schema.Field{}, schema.Field{}, false
+}
+
+func findReferenceField(field schema.Field, fieldID schema.StableID) (schema.Field, bool) {
+	if field.ID == fieldID && (field.Relationship != nil || field.Upload != nil) {
+		return field, true
+	}
+	if field.Nested != nil {
+		for _, child := range field.Nested.Fields {
+			if found, ok := findReferenceField(child, fieldID); ok {
+				return found, true
+			}
+		}
+	}
+	if field.Blocks != nil {
+		for _, block := range field.Blocks.Types {
+			for _, child := range block.Fields {
+				if found, ok := findReferenceField(child, fieldID); ok {
+					return found, true
+				}
+			}
+		}
+	}
+	return schema.Field{}, false
+}
+
+// ReferenceFieldIDs returns every relationship/upload field ID beneath one
+// stored root field.
+func ReferenceFieldIDs(root schema.Field) []schema.StableID {
+	var ids []schema.StableID
+	collectReferenceFieldIDs(root, &ids)
+	return ids
+}
+
+func collectReferenceFieldIDs(field schema.Field, ids *[]schema.StableID) {
+	if field.Relationship != nil || field.Upload != nil {
+		*ids = append(*ids, field.ID)
+	}
+	if field.Nested != nil {
+		for _, child := range field.Nested.Fields {
+			collectReferenceFieldIDs(child, ids)
+		}
+	}
+	if field.Blocks != nil {
+		for _, block := range field.Blocks.Types {
+			for _, child := range block.Fields {
+				collectReferenceFieldIDs(child, ids)
+			}
+		}
+	}
+}
+
+// TargetsAnyResource reports whether the collection's current reference or
+// upload topology can address one of the supplied resource IDs. Migration
+// rollback uses this to purge version snapshots that could otherwise restore
+// an identity after its resource is reintroduced.
+func TargetsAnyResource(collection schema.Collection, resourceIDs []schema.StableID) bool {
+	targets := stableIDSet(resourceIDs)
+	for _, field := range collection.Fields {
+		if fieldTargetsAnyResource(field, targets) {
+			return true
+		}
+	}
+	return false
+}
+
+func fieldTargetsAnyResource(field schema.Field, targets map[schema.StableID]struct{}) bool {
+	if relationship := field.Relationship; relationship != nil {
+		if !relationship.Polymorphic {
+			if _, found := targets[relationship.CollectionID]; found {
+				return true
+			}
+		} else {
+			for _, target := range relationship.Targets {
+				if _, found := targets[target.CollectionID]; found {
+					return true
+				}
+			}
+		}
+	}
+	if upload := field.Upload; upload != nil {
+		if _, found := targets[upload.CollectionID]; found {
+			return true
+		}
+	}
+	if field.Nested != nil {
+		for _, child := range field.Nested.Fields {
+			if fieldTargetsAnyResource(child, targets) {
+				return true
+			}
+		}
+	}
+	if field.Blocks != nil {
+		for _, block := range field.Blocks.Types {
+			for _, child := range block.Fields {
+				if fieldTargetsAnyResource(child, targets) {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// RemoveResourceTargets removes every current relationship or upload value
+// that addresses a retired resource, regardless of the field's ordinary
+// document-delete policy. A schema rollback removes the target type itself,
+// so retaining restrict-policy values would only leave dormant identities that
+// could reappear on a later up migration.
+func RemoveResourceTargets(collection schema.Collection, values store.Values, resourceIDs []schema.StableID) (store.Values, bool) {
+	targets := stableIDSet(resourceIDs)
+	result := store.CloneValues(values)
+	changed := false
+	for _, field := range collection.Fields {
+		value, exists := result[field.Name]
+		if !exists {
+			continue
+		}
+		updated, fieldChanged := removeResourceField(field, value, targets)
+		if fieldChanged {
+			result[field.Name] = updated
+			changed = true
+		}
+	}
+	return result, changed
+}
+
+func stableIDSet(values []schema.StableID) map[schema.StableID]struct{} {
+	result := make(map[schema.StableID]struct{}, len(values))
+	for _, value := range values {
+		result[value] = struct{}{}
+	}
+	return result
+}
+
+func removeResourceFields(fields []schema.Field, values store.Values, targets map[schema.StableID]struct{}) (store.Values, bool) {
+	result := store.CloneValues(values)
+	changed := false
+	for _, field := range fields {
+		value, exists := result[field.Name]
+		if !exists {
+			continue
+		}
+		updated, fieldChanged := removeResourceField(field, value, targets)
+		if fieldChanged {
+			result[field.Name] = updated
+			changed = true
+		}
+	}
+	return result, changed
+}
+
+func removeResourceField(field schema.Field, value store.Value, targets map[schema.StableID]struct{}) (store.Value, bool) {
+	if field.Localized {
+		localized, valid := value.ObjectValue()
+		if !valid {
+			return value, false
+		}
+		result := store.CloneValues(localized)
+		field.Localized = false
+		changed := false
+		for locale, localizedValue := range localized {
+			updated, localeChanged := removeResourceFieldValue(field, localizedValue, targets)
+			if localeChanged {
+				result[locale] = updated
+				changed = true
+			}
+		}
+		if changed {
+			return store.Object(result), true
+		}
+		return value, false
+	}
+	return removeResourceFieldValue(field, value, targets)
+}
+
+func removeResourceFieldValue(field schema.Field, value store.Value, targets map[schema.StableID]struct{}) (store.Value, bool) {
+	switch field.Type {
+	case schema.FieldTypeRelationship:
+		return removeResourceRelationship(field, value, targets)
+	case schema.FieldTypeUpload:
+		return removeResourceUpload(field, value, targets)
+	case schema.FieldTypeGroup:
+		object, valid := value.ObjectValue()
+		if !valid || field.Nested == nil {
+			return value, false
+		}
+		updated, changed := removeResourceFields(field.Nested.Fields, object, targets)
+		if changed {
+			return store.Object(updated), true
+		}
+	case schema.FieldTypeArray:
+		items, valid := value.Values()
+		if !valid || field.Nested == nil {
+			return value, false
+		}
+		updated := append([]store.Value(nil), items...)
+		changed := false
+		for index, item := range items {
+			object, valid := item.ObjectValue()
+			if !valid {
+				continue
+			}
+			itemValues, itemChanged := removeResourceFields(field.Nested.Fields, object, targets)
+			if itemChanged {
+				updated[index] = store.Object(itemValues)
+				changed = true
+			}
+		}
+		if changed {
+			return store.List(updated...), true
+		}
+	case schema.FieldTypeBlocks:
+		items, valid := value.Values()
+		if !valid || field.Blocks == nil {
+			return value, false
+		}
+		updated := append([]store.Value(nil), items...)
+		changed := false
+		for index, item := range items {
+			object, valid := item.ObjectValue()
+			if !valid {
+				continue
+			}
+			blockType, _ := object["blockType"].StringValue()
+			for _, block := range field.Blocks.Types {
+				if block.Key != blockType {
+					continue
+				}
+				itemValues, itemChanged := removeResourceFields(block.Fields, object, targets)
+				if itemChanged {
+					updated[index] = store.Object(itemValues)
+					changed = true
+				}
+				break
+			}
+		}
+		if changed {
+			return store.List(updated...), true
+		}
+	}
+	return value, false
+}
+
+func removeResourceRelationship(field schema.Field, value store.Value, targets map[schema.StableID]struct{}) (store.Value, bool) {
+	relationship := field.Relationship
+	if relationship == nil {
+		return value, false
+	}
+	if !relationship.Polymorphic {
+		if _, retired := targets[relationship.CollectionID]; !retired {
+			return value, false
+		}
+		if relationship.HasMany {
+			items, valid := value.Values()
+			if !valid || len(items) == 0 {
+				return value, false
+			}
+			return store.List(), true
+		}
+		if value.Kind() != store.ValueNull {
+			return store.Null(), true
+		}
+		return value, false
+	}
+	if relationship.HasMany {
+		items, valid := value.Values()
+		if !valid {
+			return value, false
+		}
+		filtered := make([]store.Value, 0, len(items))
+		for _, item := range items {
+			if polymorphicValueTargetsResource(*relationship, item, targets) {
+				continue
+			}
+			filtered = append(filtered, item)
+		}
+		if len(filtered) != len(items) {
+			return store.List(filtered...), true
+		}
+		return value, false
+	}
+	if polymorphicValueTargetsResource(*relationship, value, targets) {
+		return store.Null(), true
+	}
+	return value, false
+}
+
+func polymorphicValueTargetsResource(relationship schema.RelationshipField, value store.Value, targets map[schema.StableID]struct{}) bool {
+	object, valid := value.ObjectValue()
+	if !valid {
+		return false
+	}
+	slug, valid := object["relationTo"].StringValue()
+	if !valid {
+		return false
+	}
+	for _, target := range relationship.Targets {
+		if string(target.CollectionSlug) != slug {
+			continue
+		}
+		_, retired := targets[target.CollectionID]
+		return retired
+	}
+	return false
+}
+
+func removeResourceUpload(field schema.Field, value store.Value, targets map[schema.StableID]struct{}) (store.Value, bool) {
+	upload := field.Upload
+	if upload == nil {
+		return value, false
+	}
+	if _, retired := targets[upload.CollectionID]; !retired {
+		return value, false
+	}
+	if upload.HasMany {
+		items, valid := value.Values()
+		if !valid || len(items) == 0 {
+			return value, false
+		}
+		return store.List(), true
+	}
+	if value.Kind() != store.ValueNull {
+		return store.Null(), true
+	}
+	return value, false
+}
+
+// NullifyTarget reconciles every nullify-policy reference in a current
+// document. Callers must plan restrict matches across the whole transaction
+// before invoking it.
+func NullifyTarget(collection schema.Collection, values store.Values, target store.DocumentReference) (store.Values, bool) {
+	result := store.CloneValues(values)
+	changed := false
+	for _, field := range collection.Fields {
+		value, exists := result[field.Name]
+		if !exists {
+			continue
+		}
+		updated, fieldChanged := nullifyField(field, value, target)
+		if fieldChanged {
+			result[field.Name] = updated
+			changed = true
+		}
+	}
+	return result, changed
+}
+
+// NullifyField reconciles a target beneath one stored root field. locale is
+// non-empty only when value came from one localized physical column.
+func NullifyField(field schema.Field, value store.Value, target store.DocumentReference, locale schema.LocaleCode) (store.Value, bool) {
+	if locale != "" && field.Localized {
+		field.Localized = false
+		return nullifyFieldValue(field, value, target)
+	}
+	return nullifyField(field, value, target)
+}
+
+func nullifyFields(fields []schema.Field, values store.Values, target store.DocumentReference) (store.Values, bool) {
+	result := store.CloneValues(values)
+	changed := false
+	for _, field := range fields {
+		value, exists := result[field.Name]
+		if !exists {
+			continue
+		}
+		updated, fieldChanged := nullifyField(field, value, target)
+		if fieldChanged {
+			result[field.Name] = updated
+			changed = true
+		}
+	}
+	return result, changed
+}
+
+func nullifyField(field schema.Field, value store.Value, target store.DocumentReference) (store.Value, bool) {
+	if field.Localized {
+		localized, valid := value.ObjectValue()
+		if !valid {
+			return value, false
+		}
+		result := store.CloneValues(localized)
+		field.Localized = false
+		changed := false
+		for locale, localizedValue := range localized {
+			updated, localeChanged := nullifyFieldValue(field, localizedValue, target)
+			if localeChanged {
+				result[locale] = updated
+				changed = true
+			}
+		}
+		if changed {
+			return store.Object(result), true
+		}
+		return value, false
+	}
+	return nullifyFieldValue(field, value, target)
+}
+
+func nullifyFieldValue(field schema.Field, value store.Value, target store.DocumentReference) (store.Value, bool) {
+	switch field.Type {
+	case schema.FieldTypeRelationship:
+		return nullifyRelationship(field, value, target)
+	case schema.FieldTypeUpload:
+		return nullifyUpload(field, value, target)
+	case schema.FieldTypeGroup:
+		object, valid := value.ObjectValue()
+		if !valid || field.Nested == nil {
+			return value, false
+		}
+		updated, changed := nullifyFields(field.Nested.Fields, object, target)
+		if changed {
+			return store.Object(updated), true
+		}
+	case schema.FieldTypeArray:
+		items, valid := value.Values()
+		if !valid || field.Nested == nil {
+			return value, false
+		}
+		updated := append([]store.Value(nil), items...)
+		changed := false
+		for index, item := range items {
+			object, valid := item.ObjectValue()
+			if !valid {
+				continue
+			}
+			itemValues, itemChanged := nullifyFields(field.Nested.Fields, object, target)
+			if itemChanged {
+				updated[index] = store.Object(itemValues)
+				changed = true
+			}
+		}
+		if changed {
+			return store.List(updated...), true
+		}
+	case schema.FieldTypeBlocks:
+		items, valid := value.Values()
+		if !valid || field.Blocks == nil {
+			return value, false
+		}
+		updated := append([]store.Value(nil), items...)
+		changed := false
+		for index, item := range items {
+			object, valid := item.ObjectValue()
+			if !valid {
+				continue
+			}
+			blockType, _ := object["blockType"].StringValue()
+			for _, block := range field.Blocks.Types {
+				if block.Key != blockType {
+					continue
+				}
+				itemValues, itemChanged := nullifyFields(block.Fields, object, target)
+				if itemChanged {
+					updated[index] = store.Object(itemValues)
+					changed = true
+				}
+				break
+			}
+		}
+		if changed {
+			return store.List(updated...), true
+		}
+	}
+	return value, false
+}
+
+func nullifyRelationship(field schema.Field, value store.Value, target store.DocumentReference) (store.Value, bool) {
+	relationship := field.Relationship
+	if relationship == nil || relationship.OnDelete != schema.ReferenceDeleteNullify {
+		return value, false
+	}
+	if relationship.HasMany {
+		items, valid := value.Values()
+		if !valid {
+			return value, false
+		}
+		filtered := make([]store.Value, 0, len(items))
+		for _, item := range items {
+			if relationshipValueMatches(*relationship, item, target) {
+				continue
+			}
+			filtered = append(filtered, item)
+		}
+		if len(filtered) != len(items) {
+			return store.List(filtered...), true
+		}
+		return value, false
+	}
+	if relationshipValueMatches(*relationship, value, target) {
+		return store.Null(), true
+	}
+	return value, false
+}
+
+func relationshipValueMatches(relationship schema.RelationshipField, value store.Value, target store.DocumentReference) bool {
+	if !relationship.Polymorphic {
+		id, valid := value.StringValue()
+		return valid && relationship.CollectionID == target.CollectionID && id == target.DocumentID
+	}
+	object, valid := value.ObjectValue()
+	if !valid {
+		return false
+	}
+	slug, slugValid := object["relationTo"].StringValue()
+	id, idValid := object["id"].StringValue()
+	if !slugValid || !idValid || id != target.DocumentID {
+		return false
+	}
+	for _, candidate := range relationship.Targets {
+		if candidate.CollectionID == target.CollectionID && string(candidate.CollectionSlug) == slug {
+			return true
+		}
+	}
+	return false
+}
+
+func nullifyUpload(field schema.Field, value store.Value, target store.DocumentReference) (store.Value, bool) {
+	upload := field.Upload
+	if upload == nil || upload.OnDelete != schema.ReferenceDeleteNullify || upload.CollectionID != target.CollectionID {
+		return value, false
+	}
+	if upload.HasMany {
+		items, valid := value.Values()
+		if !valid {
+			return value, false
+		}
+		filtered := make([]store.Value, 0, len(items))
+		for _, item := range items {
+			id, valid := item.StringValue()
+			if valid && id == target.DocumentID {
+				continue
+			}
+			filtered = append(filtered, item)
+		}
+		if len(filtered) != len(items) {
+			return store.List(filtered...), true
+		}
+		return value, false
+	}
+	id, valid := value.StringValue()
+	if valid && id == target.DocumentID {
+		return store.Null(), true
+	}
+	return value, false
+}

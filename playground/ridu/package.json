@@ -1,0 +1,35 @@
+{
+	"name": "ridu",
+	"private": true,
+	"packageManager": "bun@1.4.0",
+	"workspaces": ["admin", ".ridu/packages/*"],
+	"dependencies": {
+		"@riducms/plugin-richtext": "0.0.0-dogfood.1787424314091508000",
+		"@riducms/sdk": "0.0.0-dogfood.1787424314091508000"
+	},
+	"overrides": {
+		"nanoid": "3.3.18",
+		"lexical": "0.49.0",
+		"@lexical/devtools-core": "0.49.0",
+		"@lexical/dragon": "0.49.0",
+		"@lexical/hashtag": "0.49.0",
+		"@lexical/history": "0.49.0",
+		"@lexical/html": "0.49.0",
+		"@lexical/link": "0.49.0",
+		"@lexical/list": "0.49.0",
+		"@lexical/mark": "0.49.0",
+		"@lexical/markdown": "0.49.0",
+		"@lexical/overflow": "0.49.0",
+		"@lexical/plain-text": "0.49.0",
+		"@lexical/rich-text": "0.49.0",
+		"@lexical/table": "0.49.0",
+		"@lexical/text": "0.49.0",
+		"@lexical/utils": "0.49.0",
+		"@lexical/yjs": "0.49.0"
+	},
+	"scripts": {
+		"dev": "bun run --cwd admin dev",
+		"check": "bun run --cwd admin check",
+		"build": "bun run --cwd admin build"
+	}
+}

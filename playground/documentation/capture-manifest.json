@@ -1,0 +1,245 @@
+{
+	"version": 1,
+	"fields": [
+		{
+			"slug": "text",
+			"collection": "field-guide",
+			"documentId": "docs-field-guide",
+			"route": "/admin/collections/field-guide/docs-field-guide?locale=en",
+			"selector": "[data-field-path=\"title\"]",
+			"state": "filled",
+			"output": "docs/assets/fields/text.png",
+			"documentationOwner": "website/src/content/docs/fields/text.md"
+		},
+		{
+			"slug": "textarea",
+			"collection": "field-guide",
+			"documentId": "docs-field-guide",
+			"route": "/admin/collections/field-guide/docs-field-guide?locale=en",
+			"selector": "[data-field-path=\"summary\"]",
+			"state": "filled",
+			"output": "docs/assets/fields/textarea.png",
+			"documentationOwner": "website/src/content/docs/fields/textarea.md"
+		},
+		{
+			"slug": "email",
+			"collection": "field-guide",
+			"documentId": "docs-field-guide",
+			"route": "/admin/collections/field-guide/docs-field-guide?locale=en",
+			"selector": "[data-field-path=\"contactEmail\"]",
+			"state": "filled",
+			"output": "docs/assets/fields/email.png",
+			"documentationOwner": "website/src/content/docs/fields/email.md"
+		},
+		{
+			"slug": "number",
+			"collection": "field-guide",
+			"documentId": "docs-field-guide",
+			"route": "/admin/collections/field-guide/docs-field-guide?locale=en",
+			"selector": "[data-field-path=\"priority\"]",
+			"state": "filled",
+			"output": "docs/assets/fields/number.png",
+			"documentationOwner": "website/src/content/docs/fields/number.md"
+		},
+		{
+			"slug": "date",
+			"collection": "field-guide",
+			"documentId": "docs-field-guide",
+			"route": "/admin/collections/field-guide/docs-field-guide?locale=en",
+			"selector": "[data-field-path=\"publishedAt\"]",
+			"state": "picker-open",
+			"output": "docs/assets/fields/date.png",
+			"documentationOwner": "website/src/content/docs/fields/date.md"
+		},
+		{
+			"slug": "checkbox",
+			"collection": "field-guide",
+			"documentId": "docs-field-guide",
+			"route": "/admin/collections/field-guide/docs-field-guide?locale=en",
+			"selector": "[data-field-path=\"featured\"]",
+			"state": "checked",
+			"output": "docs/assets/fields/checkbox.png",
+			"documentationOwner": "website/src/content/docs/fields/checkbox.md"
+		},
+		{
+			"slug": "select",
+			"collection": "field-guide",
+			"documentId": "docs-field-guide",
+			"route": "/admin/collections/field-guide/docs-field-guide?locale=en",
+			"selector": "[data-field-path=\"status\"]",
+			"state": "opened-multiple-selected",
+			"output": "docs/assets/fields/select.png",
+			"documentationOwner": "website/src/content/docs/fields/select.md"
+		},
+		{
+			"slug": "radio",
+			"collection": "field-guide",
+			"documentId": "docs-field-guide",
+			"route": "/admin/collections/field-guide/docs-field-guide?locale=en",
+			"selector": "[data-field-path=\"tone\"]",
+			"state": "selected",
+			"output": "docs/assets/fields/radio.png",
+			"documentationOwner": "website/src/content/docs/fields/radio.md"
+		},
+		{
+			"slug": "point",
+			"collection": "field-guide",
+			"documentId": "docs-field-guide",
+			"route": "/admin/collections/field-guide/docs-field-guide?locale=en",
+			"selector": "[data-field-path=\"location\"]",
+			"state": "filled",
+			"output": "docs/assets/fields/point.png",
+			"documentationOwner": "website/src/content/docs/fields/point.md"
+		},
+		{
+			"slug": "json",
+			"collection": "field-guide",
+			"documentId": "docs-field-guide",
+			"route": "/admin/collections/field-guide/docs-field-guide?locale=en",
+			"selector": "[data-field-path=\"metadata\"]",
+			"state": "filled",
+			"output": "docs/assets/fields/json.png",
+			"documentationOwner": "website/src/content/docs/fields/json.md"
+		},
+		{
+			"slug": "code",
+			"collection": "field-guide",
+			"documentId": "docs-field-guide",
+			"route": "/admin/collections/field-guide/docs-field-guide?locale=en",
+			"selector": "[data-field-path=\"source\"]",
+			"state": "filled",
+			"output": "docs/assets/fields/code.png",
+			"documentationOwner": "website/src/content/docs/fields/code.md"
+		},
+		{
+			"slug": "slug",
+			"collection": "field-guide",
+			"documentId": "docs-field-guide",
+			"route": "/admin/collections/field-guide/docs-field-guide?locale=en",
+			"selector": "[data-field-path=\"slug\"]",
+			"state": "generated",
+			"output": "docs/assets/fields/slug.png",
+			"documentationOwner": "website/src/content/docs/fields/slug.md"
+		},
+		{
+			"slug": "group",
+			"collection": "field-guide",
+			"documentId": "docs-field-guide",
+			"route": "/admin/collections/field-guide/docs-field-guide?locale=en",
+			"selector": "[data-field-path=\"seo\"]",
+			"state": "filled",
+			"output": "docs/assets/fields/group.png",
+			"documentationOwner": "website/src/content/docs/fields/group.md"
+		},
+		{
+			"slug": "array",
+			"collection": "field-guide",
+			"documentId": "docs-field-guide",
+			"route": "/admin/collections/field-guide/docs-field-guide?locale=en",
+			"selector": "[data-field-path=\"links\"]",
+			"state": "expanded",
+			"output": "docs/assets/fields/array.png",
+			"documentationOwner": "website/src/content/docs/fields/array.md"
+		},
+		{
+			"slug": "blocks",
+			"collection": "field-guide",
+			"documentId": "docs-field-guide",
+			"route": "/admin/collections/field-guide/docs-field-guide?locale=en",
+			"selector": "[data-field-path=\"layout\"]",
+			"state": "expanded",
+			"output": "docs/assets/fields/blocks.png",
+			"documentationOwner": "website/src/content/docs/fields/blocks.md"
+		},
+		{
+			"slug": "relationship",
+			"collection": "field-guide",
+			"documentId": "docs-field-guide",
+			"route": "/admin/collections/field-guide/docs-field-guide?locale=en",
+			"selector": "[data-field-path=\"author\"]",
+			"state": "populated",
+			"output": "docs/assets/fields/relationship.png",
+			"documentationOwner": "website/src/content/docs/fields/relationship.md"
+		},
+		{
+			"slug": "upload",
+			"collection": "field-guide",
+			"documentId": "docs-field-guide",
+			"route": "/admin/collections/field-guide/docs-field-guide?locale=en",
+			"selector": "[data-field-path=\"cover\"]",
+			"state": "populated",
+			"output": "docs/assets/fields/upload.png",
+			"documentationOwner": "website/src/content/docs/fields/upload.md"
+		},
+		{
+			"slug": "row",
+			"collection": "field-guide",
+			"documentId": "docs-field-guide",
+			"route": "/admin/collections/field-guide/docs-field-guide?locale=en",
+			"selector": "[data-field-row]",
+			"state": "filled",
+			"output": "docs/assets/fields/row.png",
+			"documentationOwner": "website/src/content/docs/fields/row.md"
+		},
+		{
+			"slug": "collapsible",
+			"collection": "field-guide",
+			"documentId": "docs-field-guide",
+			"route": "/admin/collections/field-guide/docs-field-guide?locale=en",
+			"selector": "[data-field-collapsible]",
+			"state": "expanded",
+			"output": "docs/assets/fields/collapsible.png",
+			"documentationOwner": "website/src/content/docs/fields/collapsible.md"
+		},
+		{
+			"slug": "tabs",
+			"collection": "field-guide",
+			"documentId": "docs-field-guide",
+			"route": "/admin/collections/field-guide/docs-field-guide?locale=en",
+			"selector": "[data-field-tab-group]",
+			"state": "active",
+			"output": "docs/assets/fields/tabs.png",
+			"documentationOwner": "website/src/content/docs/fields/tabs.md"
+		},
+		{
+			"slug": "ui",
+			"collection": "field-guide",
+			"documentId": "docs-field-guide",
+			"route": "/admin/collections/field-guide/docs-field-guide?locale=en",
+			"selector": "[data-ui-field=\"guidance\"]",
+			"state": "visible",
+			"output": "docs/assets/fields/ui.png",
+			"documentationOwner": "website/src/content/docs/fields/ui.md"
+		},
+		{
+			"slug": "virtual",
+			"collection": "field-guide",
+			"documentId": "docs-field-guide",
+			"route": "/admin/collections/field-guide/docs-field-guide?locale=en",
+			"selector": "[data-field-path=\"displayLabel\"]",
+			"state": "computed",
+			"output": "docs/assets/fields/virtual.png",
+			"documentationOwner": "website/src/content/docs/fields/virtual.md"
+		},
+		{
+			"slug": "plugin",
+			"collection": "field-guide",
+			"documentId": "docs-field-guide",
+			"route": "/admin/collections/field-guide/docs-field-guide?locale=en",
+			"selector": "[data-field-path=\"content\"]",
+			"state": "filled",
+			"output": "docs/assets/fields/plugin.png",
+			"documentationOwner": "website/src/content/docs/fields/plugin.md"
+		},
+		{
+			"slug": "join",
+			"collection": "categories",
+			"documentId": "docs-category",
+			"route": "/admin/collections/categories/docs-category?locale=en",
+			"selector": "[data-field-path=\"articles\"]",
+			"state": "populated",
+			"output": "docs/assets/fields/join.png",
+			"documentationOwner": "website/src/content/docs/fields/join.md"
+		}
+	]
+}

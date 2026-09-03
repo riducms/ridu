@@ -1,0 +1,5 @@
+{
+	// Give editor language servers a browser-only project for admin source files.
+	// This prevents Bun and Node globals from changing browser API types.
+	"extends": "../tsconfig.app.json"
+}

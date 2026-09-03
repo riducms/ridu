@@ -1,0 +1,18 @@
+{
+  "error": {
+    "code": "validation",
+    "status": 422,
+    "message": "document validation failed",
+    "requestId": "req_fixture",
+    "issues": [
+      {
+        "code": "required",
+        "path": "title",
+        "message": "Title is required"
+      }
+    ],
+    "details": {
+      "operation": "create"
+    }
+  }
+}

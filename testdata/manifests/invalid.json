@@ -1,0 +1,54 @@
+{
+  "issues": [
+    {
+      "code": "missing_application_name",
+      "path": "name",
+      "message": "application name must not be empty"
+    },
+    {
+      "code": "duplicate_collection_slug",
+      "path": "collections[1].slug",
+      "message": "collection slug \"posts\" is already used at collections[0].slug"
+    },
+    {
+      "code": "duplicate_plugin_key",
+      "path": "plugins[1].key",
+      "message": "plugin key \"duplicate\" is already used at plugins[0].key"
+    },
+    {
+      "code": "invalid_field_name",
+      "path": "collections[0].fields[0].name",
+      "message": "field name must start with a lowercase letter and contain only letters, numbers, or underscores"
+    },
+    {
+      "code": "invalid_field_name",
+      "path": "collections[0].fields[1].name",
+      "message": "field name must start with a lowercase letter and contain only letters, numbers, or underscores"
+    },
+    {
+      "code": "duplicate_field_path",
+      "path": "collections[0].fields[1].name",
+      "message": "field path \"Title\" is already used at collections[0].fields[0].name"
+    },
+    {
+      "code": "missing_nested_fields",
+      "path": "collections[0].fields[2].options.fields",
+      "message": "group field requires at least one child field"
+    },
+    {
+      "code": "duplicate_select_value",
+      "path": "collections[0].fields[3].options.choices[1].value",
+      "message": "select value \"draft\" is already used at collections[0].fields[3].options.choices[0].value"
+    },
+    {
+      "code": "invalid_select_default",
+      "path": "collections[0].fields[3].options.default",
+      "message": "default value \"published\" is not one of the configured select choices"
+    },
+    {
+      "code": "missing_relationship",
+      "path": "collections[0].fields[4].options.to[0]",
+      "message": "relationship target collection \"missing\" does not exist"
+    }
+  ]
+}
