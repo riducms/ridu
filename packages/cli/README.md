@@ -36,7 +36,7 @@ still using the ordinary npm registry.
 Go users can install the same command directly:
 
 ```sh
-go install github.com/riducms/ridu/cmd/ridu@v0.1.0
+go install github.com/riducms/ridu/cmd/ridu@v0.1.1
 ```
 
 Set `RIDU_BINARY` to an already-installed binary path when downloads are managed centrally.

@@ -1,7 +1,7 @@
 {
 	"name": "@riducms/build",
 	"description": "Build-time Vite and UnoCSS integration for a generated Ridu admin.",
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"license": "MIT",
 	"repository": {
 		"type": "git",

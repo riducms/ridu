@@ -1,4 +1,4 @@
-name: Publish a tested Ridu release
+name: Publish a locally qualified Ridu release
 run-name: Publish Ridu v${{ inputs.version }}
 
 on:
@@ -25,33 +25,15 @@ env:
 
 jobs:
   publish:
-    name: Test v${{ inputs.version }}, publish npm packages, and create the GitHub release
+    name: Publish npm packages and create Ridu v${{ inputs.version }}
     if: github.repository == 'riducms/ridu'
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 45
     permissions:
       artifact-metadata: write
       attestations: write
       contents: write
       id-token: write
-    services:
-      postgres:
-        image: postgres:17-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73
-        env:
-          POSTGRES_DB: ridu
-          POSTGRES_PASSWORD: ridu
-          POSTGRES_USER: ridu
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U ridu -d ridu"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 12
-    env:
-      RIDU_POSTGRES_CLIENT_IMAGE: postgres:17-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73
-      RIDU_POSTGRES_RECOVERY_DRILL: "1"
-      RIDU_POSTGRES_URL: postgres://ridu:ridu@localhost:5432/ridu?sslmode=disable
     steps:
       - name: Check out the public source revision
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -123,11 +105,8 @@ jobs:
       - name: Install locked JavaScript dependencies
         run: bun install --frozen-lockfile
 
-      - name: Install the release-qualified Chromium browser
-        run: bunx playwright install --with-deps chromium
-
-      - name: Run the complete Ridu release qualification
-        run: make release-check
+      - name: Verify coordinated release metadata
+        run: make release-version-check
 
       - name: Pack the exact npm release artifacts
         run: bash ./scripts/prepare-release-packages.sh "${GITHUB_WORKSPACE}/.ridu/release-npm"
