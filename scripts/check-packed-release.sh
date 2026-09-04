@@ -81,12 +81,21 @@ for package_directory in "$package_root"/*; do
 		echo "$package_target includes unrelated third-party notices" >&2
 		exit 1
 	fi
-	if [[ "$package_target" == "ridu-framework-protocol" || "$package_target" == "ridu-framework-sdk" ]]; then
+	if [[ "$package_target" == "ridu-framework-protocol" || "$package_target" == "ridu-framework-sdk" || "$package_target" == "ridu-framework-build" ]]; then
 		if grep -Fq '"./src/' <<<"$packed_manifest"; then
 			echo "$package_target manifest exports raw TypeScript runtime sources" >&2
 			exit 1
 		fi
-		for compiled_file in package/dist/index.js package/dist/index.d.ts; do
+		compiled_files=(package/dist/index.js package/dist/index.d.ts)
+		if [[ "$package_target" == "ridu-framework-build" ]]; then
+			compiled_files+=(
+				package/dist/uno/index.js
+				package/dist/uno/index.d.ts
+				package/dist/vite/index.js
+				package/dist/vite/index.d.ts
+			)
+		fi
+		for compiled_file in "${compiled_files[@]}"; do
 			if ! grep -Fxq -- "$compiled_file" "$packed_members"; then
 				echo "$package_target omits $compiled_file" >&2
 				exit 1

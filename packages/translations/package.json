@@ -1,7 +1,7 @@
 {
 	"name": "@riducms/translations",
 	"description": "Typed admin translations, language negotiation, plurals, and Intl formatting for Ridu.",
-	"version": "0.1.3",
+	"version": "0.1.4",
 	"license": "MIT",
 	"repository": {
 		"type": "git",
