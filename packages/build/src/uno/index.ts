@@ -10,10 +10,10 @@ import {
 } from "unocss";
 import presetAnimations from "unocss-preset-animations";
 
-import ariaPreset from "./presets/aria-preset.ts";
-import riduUtilitiesPreset from "./presets/custom-preset.ts";
-import dashPreset from "./presets/dash-preset.ts";
-import shadcnPreset from "./presets/shadcn-preset.ts";
+import ariaPreset from "./presets/aria-preset.js";
+import riduUtilitiesPreset from "./presets/custom-preset.js";
+import dashPreset from "./presets/dash-preset.js";
+import shadcnPreset from "./presets/shadcn-preset.js";
 
 export interface AdminUnoConfigOptions {
 	filesystem?: readonly string[];
@@ -25,10 +25,10 @@ export function presetRiduUtilities() {
 }
 
 const presetDependencies = [
-	"./presets/custom-preset.ts",
-	"./presets/shadcn-preset.ts",
-	"./presets/dash-preset.ts",
-	"./presets/aria-preset.ts",
+	"./presets/custom-preset.js",
+	"./presets/shadcn-preset.js",
+	"./presets/dash-preset.js",
+	"./presets/aria-preset.js",
 ].map((path) => fileURLToPath(new URL(path, import.meta.url)));
 
 export function createAdminUnoConfig(options: AdminUnoConfigOptions = {}) {

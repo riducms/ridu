@@ -50,7 +50,7 @@
 		"build:admin-fixture": "RIDU_FRAMEWORK_ADMIN_FIXTURE=true bun run --cwd admin build -- --outDir ../../../.ridu/admin-fixture-build",
 		"generate:admin-assets": "bun run --cwd admin build",
 		"build:admin-assets-check": "RIDU_ADMIN_ASSET_CHECK=true bun run --cwd admin build -- --manifest",
-		"build:runtime-packages": "bun run --cwd packages/protocol build && bun run --cwd packages/sdk build",
+		"build:runtime-packages": "bun run --cwd packages/protocol build && bun run --cwd packages/sdk build && bun run --cwd packages/build build",
 		"check:admin-assets": "bun run build:admin-assets-check && bun scripts/check-admin-assets.ts && bun scripts/check-core-admin-bundle-budget.ts",
 		"check:admin-fixture-budget": "bun scripts/check-admin-fixture-bundle-budget.ts",
 		"build": "bun run build:runtime-packages && bun run generate:admin-assets && bun run --cwd packages/plugin-richtext build && bun run --cwd packages/plugin-seo build && bun run build:admin-fixture",
