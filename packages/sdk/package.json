@@ -1,7 +1,7 @@
 {
 	"name": "@riducms/sdk",
 	"description": "Fetch-based TypeScript client runtime for generated Ridu application contracts.",
-	"version": "0.1.4",
+	"version": "0.1.5",
 	"license": "MIT",
 	"repository": {
 		"type": "git",
