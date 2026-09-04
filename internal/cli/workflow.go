@@ -26,6 +26,7 @@ import (
 	"github.com/riducms/ridu/adapters/postgres"
 	"github.com/riducms/ridu/adapters/sqlite"
 	"github.com/riducms/ridu/internal/generate"
+	"github.com/riducms/ridu/internal/goworkspace"
 	"github.com/riducms/ridu/internal/migrationartifact"
 	"github.com/riducms/ridu/internal/projectfile"
 	"github.com/riducms/ridu/migration"
@@ -1517,6 +1518,9 @@ func runForeground(ctx context.Context, directory string, environment []string, 
 	command := exec.CommandContext(ctx, name, arguments...)
 	command.Dir = directory
 	command.Env = append(os.Environ(), environment...)
+	if name == "go" {
+		command.Env = goworkspace.IsolateUnlistedModule(directory, command.Env)
+	}
 	command.Stdout = unwrapCLIWriter(stdout)
 	command.Stderr = unwrapCLIWriter(stderr)
 	return command.Run()
@@ -1537,6 +1541,9 @@ func commandOutput(ctx context.Context, directory string, environment []string, 
 	command := exec.CommandContext(ctx, name, arguments...)
 	command.Dir = directory
 	command.Env = append(os.Environ(), environment...)
+	if name == "go" {
+		command.Env = goworkspace.IsolateUnlistedModule(directory, command.Env)
+	}
 	encoded, err := command.CombinedOutput()
 	return string(encoded), err
 }

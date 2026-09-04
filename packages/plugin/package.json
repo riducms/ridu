@@ -1,7 +1,7 @@
 {
 	"name": "@riducms/plugin",
 	"description": "Public TypeScript contracts for statically registered Ridu admin plugins.",
-	"version": "0.1.1",
+	"version": "0.1.2",
 	"license": "MIT",
 	"repository": {
 		"type": "git",

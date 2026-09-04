@@ -1,7 +1,7 @@
 {
 	"name": "@riducms/ui",
 	"description": "Framework-owned Svelte UI primitives shared by Ridu admin surfaces.",
-	"version": "0.1.1",
+	"version": "0.1.2",
 	"license": "MIT",
 	"repository": {
 		"type": "git",

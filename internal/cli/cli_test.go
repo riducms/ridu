@@ -341,6 +341,47 @@ func (plugin) Descriptor() ridu.PluginDescriptor {
 	}
 }
 
+func TestGeneratedProjectIgnoresAnUnlistedEnclosingGoWorkspace(t *testing.T) {
+	frameworkRoot := moduleRoot(t)
+	setFrameworkProxy(t, frameworkRoot, testReleaseVersion)
+	workspaceRoot := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workspaceRoot, "go.mod"), []byte("module example.com/outer-workspace\n\ngo 1.25.13\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	workFile := filepath.Join(workspaceRoot, "go.work")
+	if err := os.WriteFile(workFile, []byte("go 1.25.13\n\nuse .\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GOWORK", workFile)
+	target := filepath.Join(workspaceRoot, "nested-content")
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	exitCode := cli.Run(context.Background(), []string{
+		"new",
+		"--module", "example.com/fixture/nested-content",
+		"--scope", "@fixture",
+		target,
+	}, &stdout, &stderr, cli.Options{WorkingDirectory: frameworkRoot, Version: testReleaseVersion, FrameworkVersion: ridu.FrameworkVersion})
+	if exitCode != 0 {
+		t.Fatalf("nested ridu new exit = %d; stdout: %s; stderr: %s", exitCode, stdout.String(), stderr.String())
+	}
+	if _, err := os.Stat(filepath.Join(target, "generated", "ridu.schema.json")); err != nil {
+		t.Fatalf("nested project did not generate initial contracts: %v", err)
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	exitCode = cli.Run(context.Background(), []string{"generate", "--check"}, &stdout, &stderr, cli.Options{
+		WorkingDirectory: target,
+		Version:          testReleaseVersion,
+		FrameworkVersion: ridu.FrameworkVersion,
+	})
+	if exitCode != 0 {
+		t.Fatalf("nested ridu generate --check exit = %d; stdout: %s; stderr: %s", exitCode, stdout.String(), stderr.String())
+	}
+}
+
 func TestNewKeepsProjectWhenDependencySetupFails(t *testing.T) {
 	target := newProjectTarget(t, "incomplete-content")
 	emptyProxy := t.TempDir()
