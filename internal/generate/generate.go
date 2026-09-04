@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/riducms/ridu/internal/goworkspace"
 	"github.com/riducms/ridu/internal/project"
 	"github.com/riducms/ridu/internal/projectfile"
 	"github.com/riducms/ridu/internal/schemadiff"
@@ -645,6 +646,9 @@ func runCommandWithEnvironment(ctx context.Context, directory string, environmen
 	command := exec.CommandContext(ctx, name, arguments...)
 	command.Dir = directory
 	command.Env = environment
+	if name == "go" {
+		command.Env = goworkspace.IsolateUnlistedModule(directory, command.Env)
+	}
 	stdout := limitedBuffer{limit: project.MaxResponseBytes}
 	stderr := limitedBuffer{limit: 1 << 20}
 	command.Stdout = &stdout
