@@ -96,6 +96,19 @@ func TestPublishVendorsUnpublishedPackagesAsOneLocalWorkspaceGraph(t *testing.T)
 			t.Errorf("published package %s does not expose compiled output:\n%s", target, manifest)
 		}
 	}
+	buildPackageRoot := filepath.Join(projectRoot, ".ridu", "packages", "ridu-framework-build")
+	for _, compiledFile := range []string{
+		"dist/index.js",
+		"dist/index.d.ts",
+		"dist/uno/index.js",
+		"dist/uno/index.d.ts",
+		"dist/vite/index.js",
+		"dist/vite/index.d.ts",
+	} {
+		if _, err := os.Stat(filepath.Join(buildPackageRoot, filepath.FromSlash(compiledFile))); err != nil {
+			t.Errorf("published build package omits %s: %v", compiledFile, err)
+		}
+	}
 }
 
 func TestPublishPreservesAUserOwnedPackagesDirectory(t *testing.T) {

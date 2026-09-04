@@ -28,7 +28,7 @@ var packages = []packageDefinition{
 	{name: "@riducms/protocol", source: "packages/protocol", target: "ridu-framework-protocol", build: true},
 	{name: "@riducms/translations", source: "packages/translations", target: "ridu-framework-translations"},
 	{name: "@riducms/sdk", source: "packages/sdk", target: "ridu-framework-sdk", build: true},
-	{name: "@riducms/build", source: "packages/build", target: "ridu-framework-build"},
+	{name: "@riducms/build", source: "packages/build", target: "ridu-framework-build", build: true},
 	{name: "@riducms/plugin", source: "packages/plugin", target: "ridu-framework-plugin"},
 	{name: "@riducms/ui", source: "packages/ui", target: "ridu-framework-ui"},
 	{name: "@riducms/admin", source: "admin", target: "ridu-framework-admin", notices: "admin/THIRD_PARTY_NOTICES.md", omitSourceTSConfig: true},

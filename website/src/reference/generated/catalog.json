@@ -9558,7 +9558,7 @@
 					"kind": "constant",
 					"group": "Runtime",
 					"summary": "The semantic Ridu framework version used by the CLI and project-command compatibility handshake.",
-					"signature": "const FrameworkVersion = \"0.1.3\"",
+					"signature": "const FrameworkVersion = \"0.1.4\"",
 					"parameters": [],
 					"parametersLabel": "",
 					"details": [

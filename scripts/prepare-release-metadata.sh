@@ -14,6 +14,7 @@ fi
 mkdir -p "$metadata_root"
 (
 	cd "$repository_root"
+	bun run --cwd packages/build build >/dev/null
 	RIDU_ADMIN_ASSET_CHECK=true \
 		RIDU_ADMIN_DEPENDENCY_INVENTORY="$dependency_inventory" \
 		bun run --cwd admin build >/dev/null
