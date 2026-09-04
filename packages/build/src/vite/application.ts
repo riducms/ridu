@@ -66,9 +66,24 @@ export function createAdminApplicationConfig(options: AdminApplicationConfigOpti
 		resolve: {
 			dedupe: unique(["bits-ui", "svelte", ...(options.dedupe ?? [])]),
 		},
-		...(options.optimizeDepsExclude === undefined
-			? {}
-			: { optimizeDeps: { exclude: [...options.optimizeDepsExclude] } }),
+		optimizeDeps: {
+			// Preserve package-relative aliases and Svelte preprocessing in framework source.
+			exclude: unique([
+				"@riducms/admin",
+				"@riducms/ui",
+				"@riducms/plugin-richtext",
+				"@riducms/plugin-seo",
+				...(options.optimizeDepsExclude ?? []),
+			]),
+			// Lexical loads its React devtools dynamically, beyond the initial dependency scan.
+			include: [
+				"react",
+				"react-dom",
+				"react/jsx-runtime",
+				"react/jsx-dev-runtime",
+				"react-dom/client",
+			],
+		},
 		build: {
 			outDir: options.outDir,
 			emptyOutDir: true,
