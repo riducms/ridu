@@ -1,4 +1,4 @@
-export { createAdminApplicationConfig, type AdminApplicationConfigOptions } from "./application.ts";
-export { createAdminLibraryConfig, type AdminLibraryConfigOptions } from "./library.ts";
-export { riduSchemaReloadPlugin } from "./schema-reload.ts";
-export { packageSourceAliasPlugin } from "./source-alias.ts";
+export { createAdminApplicationConfig, type AdminApplicationConfigOptions } from "./application.js";
+export { createAdminLibraryConfig, type AdminLibraryConfigOptions } from "./library.js";
+export { riduSchemaReloadPlugin } from "./schema-reload.js";
+export { packageSourceAliasPlugin } from "./source-alias.js";

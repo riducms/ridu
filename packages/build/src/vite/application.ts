@@ -7,10 +7,10 @@ import UnoCSS from "unocss/vite";
 import Icons from "unplugin-icons/vite";
 import { defineConfig, type Plugin, type PluginOption } from "vite";
 
-import { createAdminUnoConfig } from "../uno/index.ts";
-import { contentCSSHash } from "./compiler-options.ts";
-import { riduSchemaReloadPlugin } from "./schema-reload.ts";
-import { packageSourceAliasPlugin } from "./source-alias.ts";
+import { createAdminUnoConfig } from "../uno/index.js";
+import { contentCSSHash } from "./compiler-options.js";
+import { riduSchemaReloadPlugin } from "./schema-reload.js";
+import { packageSourceAliasPlugin } from "./source-alias.js";
 
 type SvelteOptions = NonNullable<Parameters<typeof svelte>[0]>;
 

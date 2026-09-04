@@ -1,7 +1,7 @@
 {
 	"name": "@riducms/plugin-form-builder",
 	"description": "Dynamic form contracts and admin pairing for Ridu's official Form Builder plugin.",
-	"version": "0.1.2",
+	"version": "0.1.3",
 	"license": "MIT",
 	"repository": {
 		"type": "git",
