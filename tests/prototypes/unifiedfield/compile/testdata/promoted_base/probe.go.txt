@@ -1,0 +1,11 @@
+package promotedbase
+
+type base[T any] struct{}
+
+func (b base[T]) Label(string) base[T] { return b }
+
+type text struct{ base[string] }
+
+func (t text) MaxLength(int) text { return t }
+
+var _ = text{}.Label("Title").MaxLength(120)

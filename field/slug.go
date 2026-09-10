@@ -8,32 +8,11 @@ import "strings"
 //
 // Slugs intentionally use ordinary text storage and generated string contracts.
 // Localization and defaults are not supported by this first-class helper.
-func Slug(name, sourcePath string, options ...StringOption) Definition {
-	definition := build(KindText, name, options)
-	definition.slugSource = strings.TrimSpace(sourcePath)
-	definition.slugConfigured = true
-	definition.required = true
-	definition.unique = true
-	definition.index = true
-	if definition.slugSource == "" {
-		definition.issues = append(definition.issues, Issue{
-			Code: "missing_slug_source", Path: "sourcePath",
-			Message: "slug source path must not be empty",
-		})
-	}
-	if definition.localized {
-		definition.issues = append(definition.issues, Issue{
-			Code: "unsupported_slug_localization", Path: "options.localized",
-			Message: "slug fields cannot be localized; use separate explicit slug fields when locale-specific URLs are required",
-		})
-	}
-	if definition.defaultValue != nil {
-		definition.issues = append(definition.issues, Issue{
-			Code: "unsupported_slug_default", Path: "options.default",
-			Message: "slug fields derive their initial value from the configured source and cannot declare a default",
-		})
-	}
-	return cloneDefinitions([]Definition{definition})[0]
+func Slug(name, sourcePath string) TextField {
+	f := Text(name).Required().Unique().Index()
+	f.definition.slugConfigured = true
+	f.definition.slugSource = strings.TrimSpace(sourcePath)
+	return f
 }
 
 // NormalizeSlug converts a source or manual value into Ridu's deterministic

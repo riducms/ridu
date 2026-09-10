@@ -5,7 +5,14 @@ product: core
 eyebrow: 'Start here'
 order: 10
 aliases:
-  ['overview', 'what is ridu', 'why ridu', 'cms', 'Payload alternative', 'PocketBase alternative']
+  [
+    'overview',
+    'what is ridu',
+    'why ridu',
+    'cms',
+    'Payload alternative',
+    'PocketBase alternative'
+  ]
 navigation:
   section: 'Get started'
   order: 20
@@ -15,13 +22,12 @@ navigation:
 ## What is Ridu? {#what-is-ridu}
 
 Ridu is a Go content-management framework with a built-in Svelte 5 admin. You define
-collections, fields, access rules, hooks, and plugins in executable Go. Ridu resolves that config
-into a schema manifest and derives the database plan, REST contract, TypeScript
-types, Fetch client, and authoring interface from it.
+collections, fields, permissions, hooks, and plugins in Go. Ridu uses that configuration to build
+the database structure, API, TypeScript client, and admin forms.
 
-Local Go calls, REST, the SDK, admin, tasks, and plugin transports use the same authorization,
-validation, hooks, transactions, population, and redaction. The built admin is embedded in the Go
-server, so Node.js and package managers are build-time tools.
+The same permissions and validation apply whether a change comes from Go code, the API, or the
+admin. The admin is included in the Go server binary. You use JavaScript tools to build it;
+you do not need a JavaScript server in production.
 
 Choose PostgreSQL for networked, multi-host deployments or SQLite for a local file on one host.
 MongoDB requires a transaction-capable replica set and has a narrower
@@ -30,25 +36,30 @@ object storage.
 
 Check [Capability status](/docs/status/) for complete, limited, experimental, and planned behavior.
 
-## The authoring model {#authoring-model}
+| You want to                        | Start with                                    | Main API                                                                 |
+| ---------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------ |
+| Define content and server behavior | [Configuration](/docs/configuration/)         | `ridu.Config`, `ridu.Collection`, and `field.*` constructors             |
+| Read or change content from Go     | [Local API](/docs/local-api/)                 | `app.Local()` or generated typed handles                                 |
+| Build a TypeScript frontend        | [TypeScript SDK](/docs/typescript-sdk/)       | Generated `createClient`, `list`, `find`, `create`, and `update` methods |
+| Change the authoring interface     | [Custom components](/docs/custom-components/) | `defineAdmin`, `defineFieldEditor`, and focused extension registrations  |
+| Prepare a deployment               | [Production](/docs/production/)               | `ridu build`, migrations, readiness, and graceful shutdown settings      |
 
-A collection is a typed Go config value:
+## Define your content in Go {#authoring-model}
+
+A collection describes documents of one kind, such as posts:
 
 ```go title="content/posts.go"
 var Posts = ridu.Collection{
 	Slug: "posts",
-	Fields: []field.Definition{
-		field.Text("title", field.Required()),
-		field.Select("status",
-			field.OneOf("draft", "published"),
-			field.Default("draft"),
-		),
+	Fields: field.Fields{
+		field.Text("title").Required(),
+		field.Select("status", "draft", "published").Default("draft"),
 	},
 }
 ```
 
-Go checks names and option types at compile time; Ridu then validates cross-field and
-cross-collection rules while resolving the manifest. [Ridu for TypeScript developers](/docs/go-for-typescript/)
+Go checks that you use the right field methods and callback types. Ridu checks the full
+configuration for problems such as a relationship pointing to a collection that does not exist. [Ridu for TypeScript developers](/docs/go-for-typescript/)
 explains packages, struct literals, slices, functions, `nil`, errors, and contexts through familiar
 TypeScript ideas.
 
@@ -61,7 +72,7 @@ const client = createClient({ baseURL: 'https://cms.example.com' });
 
 const page = await client.list('posts', {
 	where: { status: { equals: 'published' } },
-	sort: ['-publishedAt'],
+	sort: ['-createdAt'],
 	limit: 12
 });
 
@@ -78,21 +89,22 @@ The generated module provides collection and field types through the Fetch SDK. 
 ### I build TypeScript frontends {#typescript-path}
 
 Read [TypeScript SDK](/docs/typescript-sdk/) and [Querying data](/docs/querying/) first. You need Go
-only when you author the server schema or a compiled backend extension; a frontend consuming an
+only when you change the content model or server behavior; a frontend consuming an
 existing Ridu application stays in TypeScript.
 
-### I model content and backend behavior {#builder-path}
+### I build the CMS {#builder-path}
 
 Follow the [installation guide](/docs/installation/), then read [Core concepts](/docs/core-concepts/),
 [Configuration](/docs/configuration/), [Fields](/docs/fields/), [Access control](/docs/access-control/),
 and [Hooks](/docs/hooks/). The [Project structure](/guides/project-structure/) guide separates files
-you own from committed generated contracts and disposable build state.
+you edit from files Ridu generates for you.
 
 ### I am evaluating another CMS {#evaluator-path}
 
-Use [Move from Payload](/guides/from-payload/) for a concept and migration-contract map, or
+Use [Move from Payload](/guides/from-payload/) to compare the two frameworks and plan a migration, or
 [Ridu for PocketBase users](/guides/from-pocketbase/) for the code-defined and embedded-store trade-offs.
-Read [Performance and footprint](/docs/performance/) for benchmark results and test conditions.
+Read [Performance](/docs/performance/) for optimization guidance and
+[Measure performance](/docs/performance/measurement/) for benchmark results and test conditions.
 
 ## Current limits {#not-a-compatibility-layer}
 

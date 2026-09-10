@@ -75,7 +75,7 @@
 	function addFilter() {
 		if (field === undefined) return;
 		const filterValue = operator === "exists" ? value || "true" : value;
-		if (operator !== "exists" && filterValue === "") return;
+		if (operator !== "exists" && filterValue === "" && field?.type !== "text-list") return;
 		onFiltersChange([...filters, { field: field.path, operator, value: filterValue }]);
 		value = "";
 	}
@@ -163,21 +163,21 @@
 								aria-label={i18n.t("collections:filterValue")}
 							>
 								<span class={value === "" ? "text-foreground-placeholder" : undefined}>
-									{field.select?.choices.find((choice) => choice.value === value)?.label ??
+									{field.select?.options.find((option) => option.value === value)?.label ??
 										i18n.t("collections:chooseValue")}
 								</span>
 							</SelectTrigger>
 							<SelectContent>
 								<SelectItem value="" label={i18n.t("collections:chooseValue")} />
-								{#each field.select?.choices ?? [] as choice}
-									<SelectItem value={choice.value} label={choice.label} />
+								{#each field.select?.options ?? [] as option}
+									<SelectItem value={option.value} label={option.label} />
 								{/each}
 							</SelectContent>
 						</Select>
 					{:else if field.type === "date"}
 						<DateValueControl
 							id={`collection-filter-${field.id}`}
-							appearance={field.date?.pickerAppearance}
+							appearance={field.date?.format}
 							{value}
 							label={i18n.t("collections:filterValue")}
 							size="toolbar"
@@ -186,7 +186,7 @@
 					{:else}
 						<Input
 							aria-label={i18n.t("collections:filterValue")}
-							type={field.type === "number" ? "number" : "text"}
+							type={field.type === "number" || field.type === "number-list" ? "number" : "text"}
 							class="h-8"
 							bind:value
 						/>

@@ -15,7 +15,7 @@ func TestMapAtPathTraversesLocalizedGroupsArraysAndBlocks(t *testing.T) {
 	fields := []schema.Field{{
 		Name: "sections", Type: schema.FieldTypeArray, Nested: &schema.NestedField{Fields: []schema.Field{{
 			Name: "content", Type: schema.FieldTypeBlocks, Blocks: &schema.BlocksField{Types: []schema.BlockType{{
-				Key: "quote", Fields: []schema.Field{{
+				Slug: "quote", Fields: []schema.Field{{
 					Name: "credit", Path: mustPath(t, "sections", "content", "quote", "credit"), Type: schema.FieldTypeGroup,
 					Nested: &schema.NestedField{Fields: []schema.Field{{
 						Name: "author", Path: mustPath(t, "sections", "content", "quote", "credit", "author"), Type: schema.FieldTypeRelationship,
@@ -43,12 +43,12 @@ func TestMapAtPathTraversesLocalizedGroupsArraysAndBlocks(t *testing.T) {
 	if !matched || !reflect.DeepEqual(visited, []string{"person-fr"}) {
 		t.Fatalf("matched=%v visited=%v", matched, visited)
 	}
-	sections, _ := mapped["sections"].Values()
-	section, _ := sections[0].ObjectValue()
-	blocks, _ := section["content"].Values()
-	quote, _ := blocks[0].ObjectValue()
-	credit, _ := quote["credit"].ObjectValue()
-	localized, _ := credit["author"].ObjectValue()
+	sections, _ := mapped["sections"].CopyList()
+	section, _ := sections[0].CopyObject()
+	blocks, _ := section["content"].CopyList()
+	quote, _ := blocks[0].CopyObject()
+	credit, _ := quote["credit"].CopyObject()
+	localized, _ := credit["author"].CopyObject()
 	if got, _ := localized["fr"].StringValue(); got != "populated:person-fr" {
 		t.Fatalf("French mapped value = %q", got)
 	}
@@ -79,7 +79,7 @@ func TestReferenceFieldsAndFieldAtPathIncludeBlockDiscriminator(t *testing.T) {
 		Name: "asset", Path: mustPath(t, "layout", "hero", "asset"), Type: schema.FieldTypeUpload,
 		Upload: &schema.UploadField{CollectionID: "media", CollectionSlug: "media"},
 	}
-	fields := []schema.Field{{Name: "layout", Type: schema.FieldTypeBlocks, Blocks: &schema.BlocksField{Types: []schema.BlockType{{Key: "hero", Fields: []schema.Field{reference}}}}}}
+	fields := []schema.Field{{Name: "layout", Type: schema.FieldTypeBlocks, Blocks: &schema.BlocksField{Types: []schema.BlockType{{Slug: "hero", Fields: []schema.Field{reference}}}}}}
 	found, ok := population.FieldAtPath(fields, reference.Path)
 	if !ok || found.ID != reference.ID || found.Path.String() != "layout.hero.asset" {
 		t.Fatalf("field = %#v, found=%v", found, ok)
@@ -108,10 +108,10 @@ func TestMapPopulatedDocumentsTraversesNestedLocalizedResponseShape(t *testing.T
 		delete(document.Values, "secret")
 		return document
 	})
-	meta, _ := mapped["meta"].ObjectValue()
-	localized, _ := meta["reviewer"].ObjectValue()
+	meta, _ := mapped["meta"].CopyObject()
+	localized, _ := meta["reviewer"].CopyObject()
 	for _, locale := range []string{"en", "fr"} {
-		document, populated := localized[locale].DocumentValue()
+		document, populated := localized[locale].CopyDocument()
 		if !populated {
 			t.Fatalf("%s reviewer was not populated", locale)
 		}
@@ -145,12 +145,12 @@ func TestMapPopulatedDocumentsTraversesInverseJoinTargets(t *testing.T) {
 		delete(document.Values, "secret")
 		return document
 	})
-	joined, valid := mapped["posts"].Values()
+	joined, valid := mapped["posts"].CopyList()
 	if !valid || !reflect.DeepEqual(visited, []string{"one", "two"}) {
 		t.Fatalf("visited=%v joined=%#v", visited, mapped["posts"])
 	}
 	for _, value := range joined {
-		document, populated := value.DocumentValue()
+		document, populated := value.CopyDocument()
 		if !populated {
 			t.Fatalf("join target = %#v", value)
 		}

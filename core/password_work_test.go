@@ -19,7 +19,7 @@ func TestLoginRejectsBeforeBcryptWhenPasswordWorkIsSaturated(t *testing.T) {
 		Collections: []Collection{{
 			Slug: "users", Auth: true,
 			AuthConfig: AuthConfig{Password: PasswordPolicy{BcryptCost: bcrypt.MinCost}},
-			Fields:     []field.Definition{field.Email("email", field.Required(), field.Unique())},
+			Fields:     field.Fields{field.Email("email").Required().Unique()},
 		}},
 	}, teststore.New())
 	if err != nil {
@@ -41,7 +41,7 @@ func TestInitializedAnonymousAuthCreationRejectsBeforePasswordWork(t *testing.T)
 		Collections: []Collection{{
 			Slug: "users", Auth: true,
 			AuthConfig: AuthConfig{Password: PasswordPolicy{BcryptCost: bcrypt.MinCost}},
-			Fields:     []field.Definition{field.Email("email", field.Required(), field.Unique())},
+			Fields:     field.Fields{field.Email("email").Required().Unique()},
 		}},
 	}, teststore.New())
 	if err != nil {

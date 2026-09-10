@@ -12,6 +12,7 @@ import (
 	"github.com/riducms/ridu"
 	"github.com/riducms/ridu/field"
 	"github.com/riducms/ridu/internal/teststore"
+	"github.com/riducms/ridu/operation"
 	mcpplugin "github.com/riducms/ridu/plugins/mcp"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/store"
@@ -52,18 +53,25 @@ func TestMCPListsExplicitToolsAndReadsThroughActorAccessAndRedaction(t *testing.
 			{
 				Slug: "users", Auth: true,
 				AuthConfig: ridu.AuthConfig{Password: ridu.PasswordPolicy{BcryptCost: bcrypt.MinCost}, APIKeys: true},
-				Fields:     []field.Definition{field.Text("email", field.Required(), field.Unique())},
+				Fields: field.Fields{
+					field.Text("email").Required().Unique(),
+				},
 			},
 			{
 				Slug: "posts", Access: ridu.CollectionAccess{Read: authenticatedPublished},
-				Fields:      []field.Definition{field.Text("title"), field.Checkbox("published"), field.Text("secret")},
-				FieldAccess: map[string]ridu.FieldAccess{"secret": {Read: func(ridu.FieldAccessContext) (bool, error) { return false, nil }}},
+				Fields: field.Fields{
+					field.Text("title"),
+					field.Checkbox("published"),
+					field.Text("secret").Access(field.Access{Read: func(operation.AccessContext) (bool, error) { return false, nil }}),
+				},
 			},
 		},
 		Globals: []ridu.Global{{
 			Slug: "settings", Access: ridu.GlobalAccess{Read: authenticatedGlobal},
-			Fields:      []field.Definition{field.Text("siteName"), field.Text("privateNote")},
-			FieldAccess: map[string]ridu.FieldAccess{"privateNote": {Read: func(ridu.FieldAccessContext) (bool, error) { return false, nil }}},
+			Fields: field.Fields{
+				field.Text("siteName"),
+				field.Text("privateNote").Access(field.Access{Read: func(operation.AccessContext) (bool, error) { return false, nil }}),
+			},
 		}},
 	}, teststore.New())
 	if err != nil {
@@ -253,7 +261,9 @@ func TestMCPRejectsUnknownConfiguredResourcesAtStartup(t *testing.T) {
 		Name: "Invalid MCP", Plugins: []ridu.Plugin{mcpplugin.New(mcpplugin.Config{
 			Collections: []mcpplugin.Resource{{Slug: "missing"}},
 		})},
-		Collections: []ridu.Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title")}}},
+		Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{
+			field.Text("title"),
+		}}},
 	}, teststore.New())
 	if err == nil || !strings.Contains(err.Error(), `unknown collection "missing"`) {
 		t.Fatalf("New error = %v", err)

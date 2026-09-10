@@ -18,11 +18,7 @@ func TestPostgresCompoundIndexesUseExactLocaleNullAndTrashSemantics(t *testing.T
 		}},
 		Collections: []ridu.Collection{{
 			Slug: "posts", Trash: true,
-			Fields: []field.Definition{
-				field.Text("tenant", field.Index()),
-				field.Group("seo", field.Fields(field.Text("slug", field.Index()))),
-				field.Text("localizedCode", field.Localized(), field.Index()),
-			},
+			Fields: field.Fields{field.Text("tenant").Index(), field.Group("seo", field.Fields{field.Text("slug").Index()}), field.Text("localizedCode").Localized().Index()},
 			Indexes: []ridu.CollectionIndex{
 				{Fields: []string{"tenant", "seo.slug"}, Unique: true},
 				{Fields: []string{"tenant", "localizedCode"}, Unique: true},

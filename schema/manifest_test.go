@@ -45,7 +45,7 @@ func TestManifestOwnsAnImmutableSnapshot(t *testing.T) {
 				Type:     schema.FieldTypeSelect,
 				Category: schema.FieldCategoryScalar,
 				Admin:    schema.FieldAdmin{Row: &schema.FieldRow{ID: "post-status"}},
-				Select: &schema.SelectField{Choices: []schema.SelectChoice{{
+				Select: &schema.SelectField{Options: []schema.SelectOption{{
 					Value: "draft",
 					Label: "Draft",
 				}}},
@@ -67,7 +67,7 @@ func TestManifestOwnsAnImmutableSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	input.Collections[0].Fields[0].Select.Choices[0].Value = "input-mutated"
+	input.Collections[0].Fields[0].Select.Options[0].Value = "input-mutated"
 	*input.Collections[0].Fields[1].Text.MinLength = 99
 	input.Collections[0].Indexes[0].Fields[0] = query.Path{}
 	input.Collections[0].Fields[0].Admin.Row.ID = "input-mutated"
@@ -80,7 +80,7 @@ func TestManifestOwnsAnImmutableSnapshot(t *testing.T) {
 	input.Globals[0].Endpoints[0].Path = "/input-mutated"
 	input.Plugins[0].Admin.Package = "input-mutated"
 	returned := manifest.Snapshot()
-	returned.Collections[0].Fields[0].Select.Choices[0].Value = "snapshot-mutated"
+	returned.Collections[0].Fields[0].Select.Options[0].Value = "snapshot-mutated"
 	*returned.Collections[0].Fields[1].Text.MinLength = 100
 	returned.Collections[0].Indexes[0].Fields[0] = query.Path{}
 	returned.Collections[0].Fields[0].Admin.Row.ID = "snapshot-mutated"
@@ -100,8 +100,8 @@ func TestManifestOwnsAnImmutableSnapshot(t *testing.T) {
 	if !bytes.Equal(before, after) {
 		t.Fatalf("manifest changed after external mutation:\nbefore:\n%s\nafter:\n%s", before, after)
 	}
-	if got := manifest.Snapshot().Collections[0].Fields[0].Select.Choices[0].Value; got != "draft" {
-		t.Fatalf("manifest choice = %q, want draft", got)
+	if got := manifest.Snapshot().Collections[0].Fields[0].Select.Options[0].Value; got != "draft" {
+		t.Fatalf("manifest option = %q, want draft", got)
 	}
 	if got := *manifest.Snapshot().Collections[0].Fields[1].Text.MinLength; got != 2 {
 		t.Fatalf("manifest minimum length = %d, want 2", got)
@@ -155,7 +155,7 @@ func TestManifestParseValidatesSelectMetadata(t *testing.T) {
 				ID: "posts", Slug: "posts", Labels: schema.CollectionLabels{Singular: "Post", Plural: "Posts"},
 				Fields: []schema.Field{{
 					ID: "post-status", Name: "status", Path: path, Type: schema.FieldTypeSelect, Category: schema.FieldCategoryScalar,
-					Admin: schema.FieldAdmin{Label: "Status"}, Select: &schema.SelectField{Choices: []schema.SelectChoice{
+					Admin: schema.FieldAdmin{Label: "Status"}, Select: &schema.SelectField{Options: []schema.SelectOption{
 						{Value: "draft", Label: "Draft"}, {Value: "published", Label: "Published"},
 					}},
 				}},
@@ -170,10 +170,10 @@ func TestManifestParseValidatesSelectMetadata(t *testing.T) {
 	}{
 		{name: "missing details", mutate: func(candidate *schema.Field) { candidate.Select = nil }, want: "require scalar select details"},
 		{name: "details on non-select", mutate: func(candidate *schema.Field) { candidate.Type = schema.FieldTypeText }, want: "cannot declare select details"},
-		{name: "missing choices", mutate: func(candidate *schema.Field) { candidate.Select.Choices = nil }, want: "missing select choices"},
-		{name: "missing choice value", mutate: func(candidate *schema.Field) { candidate.Select.Choices[0].Value = "" }, want: "missing select choice value"},
-		{name: "duplicate choice", mutate: func(candidate *schema.Field) { candidate.Select.Choices[1].Value = "draft" }, want: "duplicate select choice value"},
-		{name: "non-canonical label", mutate: func(candidate *schema.Field) { candidate.Select.Choices[0].Label = " Draft " }, want: "invalid canonical select choice label"},
+		{name: "missing options", mutate: func(candidate *schema.Field) { candidate.Select.Options = nil }, want: "missing select options"},
+		{name: "missing option value", mutate: func(candidate *schema.Field) { candidate.Select.Options[0].Value = "" }, want: "missing select option value"},
+		{name: "duplicate option", mutate: func(candidate *schema.Field) { candidate.Select.Options[1].Value = "draft" }, want: "duplicate select option value"},
+		{name: "non-canonical label", mutate: func(candidate *schema.Field) { candidate.Select.Options[0].Label = " Draft " }, want: "invalid canonical select option label"},
 		{name: "radio has many", mutate: func(candidate *schema.Field) { candidate.Type, candidate.Select.HasMany = schema.FieldTypeRadio, true }, want: "invalid radio cardinality"},
 		{name: "multi scalar default", mutate: func(candidate *schema.Field) {
 			candidate.Select.HasMany, candidate.Default = true, stringPointer("draft")

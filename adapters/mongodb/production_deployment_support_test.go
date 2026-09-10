@@ -452,7 +452,7 @@ var Media = ridu.Collection{
 		Update: authenticatedOnly,
 		Delete: authenticatedOnly,
 	},
-	Fields: []field.Definition{field.Text("alt", field.Required())},
+	Fields: field.Fields{field.Text("alt").Required()},
 }
 `
 	if err := os.WriteFile(filepath.Join(project.root, "content", "media.go"), []byte(media), 0o644); err != nil {
@@ -1279,7 +1279,7 @@ func mongoDBProductionDeploymentAddIndexedFields(t *testing.T, project mongoDBPr
 	t.Helper()
 	var fields strings.Builder
 	for index := 1; index <= count; index++ {
-		fmt.Fprintf(&fields, "\t\tfield.Text(\"deploymentIndex%02d\", field.Index()),\n", index)
+		fmt.Fprintf(&fields, "\t\tfield.Text(\"deploymentIndex%02d\").Index(),\n", index)
 	}
 	fields.WriteString("\t\tfield.Text(\"summary\"),\n")
 	path := filepath.Join(project.root, "content", "posts.go")

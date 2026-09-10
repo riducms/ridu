@@ -115,7 +115,7 @@ func TestMongoDBOperationEngineCRUDUsesMutationFences(t *testing.T) {
 		Name: "MongoDB operation engine",
 		Collections: []ridu.Collection{{
 			Slug: "posts", Trash: true,
-			Fields: []field.Definition{field.Text("title", field.Required()), field.Number("rank")},
+			Fields: field.Fields{field.Text("title").Required(), field.Number("rank")},
 		}},
 	}, backend)
 	if err != nil {
@@ -179,15 +179,8 @@ func TestMongoDBOperationEngineNestedGroupsRejectArrayAncestorMatches(t *testing
 	application, err := ridu.New(ridu.Config{
 		Name: "MongoDB nested groups",
 		Collections: []ridu.Collection{{
-			Slug: "posts",
-			Fields: []field.Definition{
-				field.Text("title"),
-				field.Group("seo", field.Required(), field.Fields(
-					field.Text("headline", field.Required()),
-					field.Number("rank"),
-					field.Group("details", field.Fields(field.Text("summary", field.Required()))),
-				)),
-			},
+			Slug:   "posts",
+			Fields: field.Fields{field.Text("title"), field.Group("seo", field.Fields{field.Text("headline").Required(), field.Number("rank"), field.Group("details", field.Fields{field.Text("summary").Required()})}).Required()},
 		}},
 	}, backend)
 	if err != nil {
@@ -218,7 +211,7 @@ func TestMongoDBOperationEngineNestedGroupsRejectArrayAncestorMatches(t *testing
 	if err != nil {
 		t.Fatalf("operation-engine nested update: %v", err)
 	}
-	seo, ok := updated.Values["seo"].ObjectValue()
+	seo, ok := updated.Values["seo"].CopyObject()
 	if !ok {
 		t.Fatalf("updated group = %#v, want object", updated.Values["seo"])
 	}
@@ -228,7 +221,7 @@ func TestMongoDBOperationEngineNestedGroupsRejectArrayAncestorMatches(t *testing
 	if rank, _ := seo["rank"].NumberValue(); rank != 2 {
 		t.Fatalf("nested update rank = %#v, want 2", seo)
 	}
-	details, ok := seo["details"].ObjectValue()
+	details, ok := seo["details"].CopyObject()
 	if !ok {
 		t.Fatalf("nested update lost nested group: %#v", seo)
 	}
@@ -305,7 +298,7 @@ func TestMongoDBRepeatedRootsWriteProjectAndFailClosedOnCorruptBSON(t *testing.T
 		mongoRollback(t, write)
 		t.Fatal(err)
 	}
-	rows, _ := updated.Values["rows"].Values()
+	rows, _ := updated.Values["rows"].CopyList()
 	if len(rows) != 1 {
 		mongoRollback(t, write)
 		t.Fatalf("whole-root update retained old rows: %#v", updated.Values["rows"])
@@ -724,7 +717,7 @@ func TestMongoDBRESTScalarCRUD(t *testing.T) {
 		Name: "MongoDB REST",
 		Collections: []ridu.Collection{{
 			Slug: "posts", Trash: true,
-			Fields: []field.Definition{field.Text("title", field.Required()), field.Number("rank")},
+			Fields: field.Fields{field.Text("title").Required(), field.Number("rank")},
 		}},
 	}, backend)
 	if err != nil {
@@ -774,7 +767,7 @@ func TestMongoDBCanonicalImportIDsRoundTripThroughTheEngine(t *testing.T) {
 	application, err := ridu.New(ridu.Config{
 		Name: "MongoDB import IDs",
 		Collections: []ridu.Collection{{
-			Slug: "posts", Fields: []field.Definition{field.Text("title", field.Required())},
+			Slug: "posts", Fields: field.Fields{field.Text("title").Required()},
 		}},
 	}, backend)
 	if err != nil {

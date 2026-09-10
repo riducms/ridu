@@ -2,18 +2,17 @@
 
 # Collections and globals
 
-Collections hold many documents—posts, products, people, media. Globals hold exactly one logical
-document—site settings, navigation, or a home-page composition. Both use the same fields, access,
-validation, hooks, localization, and field redaction.
+Collections hold many documents, such as posts, products, people, or media. Globals hold one
+document, such as site settings or the main navigation. Both support fields, permissions,
+validation, hooks, and translations.
 
-`ridu.Collection` and `ridu.Global` are typed Go config values. Their serializable shape becomes
-generated Go and TypeScript contracts, OpenAPI, and the admin model.
+Define them with `ridu.Collection` and `ridu.Global`. Ridu generates the matching API, Go and
+TypeScript types, and admin screens.
 
 ## Define a collection {#define-a-collection}
 
-A collection slug is its durable public address in REST, generated clients, relationships, and the
-admin. Presentation belongs in `Labels` and `Admin`; runtime behaviour belongs in fields, access,
-hooks, and explicit capabilities.
+A collection slug, such as `articles`, identifies it in the API, relationships, and admin URLs.
+Use `Fields` to list the fields each article should have.
 
 ```go title="content/articles.go"
 package content
@@ -35,13 +34,13 @@ var Articles = ridu.Collection{
 		Group:          "Editorial",
 		Description:    "Long-form stories published on the site.",
 	},
-	Fields: []field.Definition{
-		field.Text("title", field.Required()),
+	Fields: field.Fields{
+		field.Text("title").Required(),
 		field.Textarea("summary"),
-		field.Relationship("category", field.To("categories")),
-		field.Group("seo", field.Fields(
-			field.Text("slug", field.Required()),
-		)),
+		field.Relationship("category", "categories"),
+		field.Group("seo", field.Fields{
+			field.Text("slug").Required(),
+		}),
 	},
 	Indexes: []ridu.CollectionIndex{
 		{Fields: []string{"category", "seo.slug"}, Unique: true},
@@ -52,7 +51,7 @@ var Articles = ridu.Collection{
 Register the value in `ridu.Config.Collections`. Config resolution rejects unknown
 relationship targets, invalid admin fields, duplicate slugs, and unsupported index paths.
 
-## Collection configuration map {#collection-config}
+## Collection settings {#collection-config}
 
 | Property                              | Purpose                                                                                          |
 | ------------------------------------- | ------------------------------------------------------------------------------------------------ |
@@ -66,14 +65,13 @@ relationship targets, invalid admin fields, duplicate slugs, and unsupported ind
 | `Versions`, `VersionConfig`           | Record snapshots and optionally enable draft authoring.                                          |
 | `Trash`                               | Replace ordinary delete with recoverable trash, restore, and permanent-delete operations.        |
 | `LockDocuments`, `DocumentLockConfig` | Persist editor locks and controlled takeover for coordinated authoring.                          |
-| `Access`, `FieldAccess`               | Authorize resource operations and redact or reject individual field paths.                       |
-| `Hooks`, `FieldHooks`                 | Run deterministic lifecycle callbacks, including transaction-reusing nested local calls.         |
-| `Computed`                            | Resolve virtual response fields after storage without persisting them.                           |
+| `Access`                              | Authorize resource operations.                                                                   |
+| `Hooks`                               | Run deterministic lifecycle callbacks, including transaction-reusing nested local calls.         |
 
-See [Fields](./fields.md) for every builder and option. A field's name is part of stored and
-generated contracts; its label and description affect presentation only.
+See [Fields](./fields.md) for examples. A field name becomes a stored property and appears in
+generated types; its label and description only change what authors see.
 
-## Admin metadata is presentation {#admin-metadata}
+## Customize the collection in the admin {#admin-metadata}
 
 `CollectionAdmin` configures browsing and editing without changing API authorization:
 
@@ -97,9 +95,10 @@ itself. Live-preview URL templates accept `{id}`, `{collection}`, and
 > Admin visibility and capability responses are interface hints, never authorization. Every API
 > request independently evaluates collection and field access inside its store transaction.
 
-## Compound indexes {#indexes}
+## Index several fields together {#indexes}
 
-Use `CollectionIndex` when the tuple, rather than one field, is indexed or unique:
+Use `CollectionIndex` to index a combination of fields. For example, an external ID can be
+unique within each tenant while still being reused by a different tenant:
 
 ```go
 Indexes: []ridu.CollectionIndex{
@@ -117,43 +116,43 @@ than once when any component is null or absent. Localized values are unique per 
 across a fallback result. Trashed documents leave the active unique set; restoring one can fail
 with `conflict` if another active document has claimed its tuple.
 
-## Opt-in capabilities {#capabilities}
+## Add accounts, uploads, drafts, or trash {#capabilities}
 
 A collection supports create, duplicate, find, list, update, delete, filtering, pagination,
 selection, population, access evaluation, hooks, and generated contracts. Flags add features:
 
-| Configuration         | Adds                                                                                                                 | Required runtime contract                                                                         |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `Auth: true`          | Password credentials, sessions, account lockout, recovery/verification, optional API keys, custom request strategies | Store implements `store.AuthStore`; the production server also expects auth maintenance support   |
-| `Upload: true`        | Server-owned file metadata, validation, image variants, delivery, regeneration, and cleanup                          | `Config.Storage`, `StorageNamespace`, and upload-aware store capabilities                         |
-| `Versions: true`      | `_revision`, `_status`, retained snapshots, restore, and scheduled collection publishing                             | Store implements `store.VersionTransaction`; scheduling needs durable task or publish-job support |
-| `Trash: true`         | Soft delete, trash-only reads, restore, permanent delete, empty trash, and cleanup of owned state                    | Store implements the trash and reference-cleanup contracts                                        |
-| `LockDocuments: true` | Inspect/acquire/release locks and authorized takeover                                                                | Store implements `store.DocumentLockStore`                                                        |
+| Configuration         | What it adds                                                                                             |
+| --------------------- | -------------------------------------------------------------------------------------------------------- |
+| `Auth: true`          | User accounts, passwords, sessions, account recovery, and optional API keys                              |
+| `Upload: true`        | File records, image processing, and file delivery; configure `Config.Storage` and `StorageNamespace` too |
+| `Versions: true`      | Saved history, restore, optional drafts, and scheduled publishing                                        |
+| `Trash: true`         | Recoverable deletion, restore, and permanent deletion                                                    |
+| `LockDocuments: true` | Editing locks and authorized takeover                                                                    |
 
-All three official database adapters supply these store capabilities; MongoDB does so inside its
-[bounded production profile](./mongodb.md). Application construction fails if an adapter cannot
-support an enabled feature.
+The official database adapters support these features; MongoDB requires its
+[documented production setup](./mongodb.md). If you write your own adapter, it must implement
+support for each feature you enable. Ridu checks that when the application starts.
 Continue with [Authentication](https://riducms.com/docs/authentication/),
 [Uploads](./uploads.md), [Drafts and versions](./drafts-and-versions.md), and
 [Editorial workflows](https://riducms.com/docs/editorial-workflows/) for each feature.
 
-## Access, hooks, and computed output {#runtime-behaviour}
+## Set permissions and run hooks {#runtime-behaviour}
 
 `CollectionAccess` has independent `Admin`, `Create`, `Read`, `ReadVersions`, `Update`, `Publish`,
 `Unpublish`, `Delete`, and `Unlock` rules. A nil `ReadVersions` rule falls back to `Read`; nil
 `Publish`, `Unpublish`, and `Unlock` rules fall back to `Update`. Read and mutation rules can return
 `ridu.Where(...)`, which the store must combine atomically with the caller's filter.
 
-`FieldAccess` and `FieldHooks` maps use authored paths such as `seo.slug`. Repeated field
-occurrences also receive a concrete runtime path. `Computed` values are response-only and can be
-limited with local API output selection. Learn the order and transaction boundaries in
+Attach field access and hooks directly with `.Access(field.Access{...})` and
+`.Hooks(field.Hooks[T]{...})`. Reusing the field also reuses its rules and hooks.
+Root `field.Virtual` values own their resolver and can be limited with output selection. Learn the order and transaction boundaries in
 [Access control](./access-control.md) and [Hooks](./hooks.md).
 
 ## Globals {#globals}
 
-Globals use singleton routes and generated singleton handles. Reading a global before its first
-write returns a schema-shaped value with defaults; the first update persists the row under the
-global slug.
+Use a global for content that has one instance, such as your site settings. Before it is first
+saved, reading it returns its fields with their defaults. Its first update saves the document
+using the global slug as its ID.
 
 ```go title="content/globals.go"
 package content
@@ -170,8 +169,8 @@ var SiteSettings = ridu.Global{
 		Group:       "Settings",
 		Description: "Site-wide identity and support details.",
 	},
-	Fields: []field.Definition{
-		field.Text("siteName", field.Required()),
+	Fields: field.Fields{
+		field.Text("siteName").Required(),
 		field.Email("supportEmail"),
 	},
 	Access: ridu.GlobalAccess{
@@ -209,10 +208,10 @@ force a rename.
 This changes the public field from `title` to `headline`; the migration must preserve the stored
 value:
 
-```go title="content/articles.go" remove={2} add={3}
-Fields: []field.Definition{
-	field.Text("title", field.Required()),
-	field.Text("headline", field.Required()),
+```go title="content/articles.go"
+Fields: field.Fields{
+	field.Text("title").Required(),
+	field.Text("headline").Required(),
 },
 ```
 

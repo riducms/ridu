@@ -1,0 +1,14 @@
+package wrongreadhook
+
+import (
+	"example.com/ridu-gate1/field"
+	"example.com/ridu-gate1/operation"
+)
+
+var _ = field.Relationship("owner", "users").ReadHooks(field.ReadHooks[operation.ReferenceOutput]{
+	AfterRead: []field.OutputTransform[operation.ReferenceOutput]{
+		func(operation.ReadContext, operation.Value[operation.ID]) (operation.Change[operation.ID], error) {
+			return operation.Change[operation.ID]{}, nil
+		},
+	},
+})

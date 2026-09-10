@@ -95,6 +95,7 @@ export function resolvedReferenceTypeLinks(symbol: ReferenceSymbol): Record<stri
 	const declarations = [
 		symbol.signature,
 		...symbol.parameters.map((parameter) => parameter.type),
+		...(symbol.options ?? []).map((option) => option.type),
 		...(symbol.returns ? [symbol.returns.type] : [])
 	];
 	for (const declaration of declarations) {
@@ -146,6 +147,7 @@ export function referencedTypeEntries(symbol: ReferenceSymbol): ReferenceSymbolE
 	const declarations = [
 		symbol.signature,
 		...symbol.parameters.map((parameter) => parameter.type),
+		...(symbol.options ?? []).map((option) => option.type),
 		...(symbol.returns ? [symbol.returns.type] : [])
 	];
 

@@ -13,8 +13,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/riducms/ridu/internal/embedded"
 	"github.com/riducms/ridu/internal/localization"
 	populationwalk "github.com/riducms/ridu/internal/population"
+	"github.com/riducms/ridu/internal/primitivefield"
 	"github.com/riducms/ridu/internal/referenceindex"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
@@ -1202,11 +1204,16 @@ func (transaction *transaction) Create(ctx context.Context, request store.Create
 		return store.Document{}, store.ErrConflict
 	}
 	collection[id] = document
-	transaction.replaceReferenceEntries(request.Collection, document)
+	if err := transaction.replaceReferenceEntries(request.Collection, document); err != nil {
+		return store.Document{}, err
+	}
 	return store.CloneDocument(document), nil
 }
 
 func (transaction *transaction) Find(ctx context.Context, request store.Request) (store.Document, error) {
+	if err := primitivefield.ValidateRequest(request); err != nil {
+		return store.Document{}, err
+	}
 	if err := transaction.ready(ctx); err != nil {
 		return store.Document{}, err
 	}
@@ -1222,6 +1229,9 @@ func (transaction *transaction) Find(ctx context.Context, request store.Request)
 }
 
 func (transaction *transaction) List(ctx context.Context, request store.Request) (store.Page, error) {
+	if err := primitivefield.ValidateRequest(request); err != nil {
+		return store.Page{}, err
+	}
 	if err := transaction.ready(ctx); err != nil {
 		return store.Page{}, err
 	}
@@ -1256,6 +1266,9 @@ func (transaction *transaction) List(ctx context.Context, request store.Request)
 }
 
 func (transaction *transaction) Distinct(ctx context.Context, request store.DistinctRequest) (store.DistinctPage, error) {
+	if err := primitivefield.ValidateRequest(store.Request{Collection: request.Collection, Filter: request.Filter, Access: request.Access}); err != nil {
+		return store.DistinctPage{}, err
+	}
 	if err := transaction.ready(ctx); err != nil {
 		return store.DistinctPage{}, err
 	}
@@ -1353,6 +1366,9 @@ func compareDistinctValues(left, right store.Value) int {
 }
 
 func (transaction *transaction) ListWindow(ctx context.Context, request store.Request) (store.Window, error) {
+	if err := primitivefield.ValidateRequest(request); err != nil {
+		return store.Window{}, err
+	}
 	if err := transaction.ready(ctx); err != nil {
 		return store.Window{}, err
 	}
@@ -1458,16 +1474,8 @@ func collectUploadObjectReferences(values store.Values, candidates, referenced m
 			referenced[key] = struct{}{}
 		}
 	}
-	sizes, valid := values["sizes"].ObjectValue()
-	if !valid {
-		return
-	}
-	for _, encoded := range sizes {
-		metadata, valid := encoded.ObjectValue()
-		if !valid {
-			continue
-		}
-		key, valid := metadata["objectKey"].StringValue()
+	for _, encoded := range values["sizes"].Entries() {
+		key, valid := encoded.Get("objectKey").StringValue()
 		if !valid {
 			continue
 		}
@@ -1635,13 +1643,12 @@ func (transaction *transaction) prepare(document store.Document, request store.R
 
 func populateValue(value store.Value, relationship *schema.RelationshipField, lookup func(schema.StableID, string) (store.Document, bool)) store.Value {
 	if relationship.HasMany {
-		items, valid := value.Values()
-		if !valid {
+		if value.Kind() != store.ValueList {
 			return value
 		}
-		populated := make([]store.Value, len(items))
-		for index, item := range items {
-			populated[index] = populateReference(item, relationship, lookup)
+		populated := make([]store.Value, 0, value.Len())
+		for item := range value.Elements() {
+			populated = append(populated, populateReference(item, relationship, lookup))
 		}
 		return store.List(populated...)
 	}
@@ -1659,7 +1666,7 @@ func populateReference(value store.Value, relationship *schema.RelationshipField
 		}
 		return value
 	}
-	object, valid := value.ObjectValue()
+	object, valid := value.CopyObject()
 	if !valid {
 		return value
 	}
@@ -1694,6 +1701,9 @@ func project(document store.Document, selection []query.Path) store.Document {
 }
 
 func (transaction *transaction) Update(ctx context.Context, request store.UpdateRequest) (store.Document, error) {
+	if err := primitivefield.ValidateRequest(request.Request); err != nil {
+		return store.Document{}, err
+	}
 	if err := transaction.writable(ctx); err != nil {
 		return store.Document{}, err
 	}
@@ -1723,7 +1733,9 @@ func (transaction *transaction) Update(ctx context.Context, request store.Update
 		return store.Document{}, store.ErrConflict
 	}
 	collection[document.ID] = document
-	transaction.replaceReferenceEntries(request.Collection, document)
+	if err := transaction.replaceReferenceEntries(request.Collection, document); err != nil {
+		return store.Document{}, err
+	}
 	return store.CloneDocument(document), nil
 }
 
@@ -1759,6 +1771,9 @@ func (transaction *transaction) SaveVersion(ctx context.Context, collection sche
 }
 
 func (transaction *transaction) ListVersions(ctx context.Context, request store.VersionRequest) ([]store.Version, error) {
+	if err := primitivefield.ValidateNode(request.Collection.Fields, request.Access); err != nil {
+		return nil, err
+	}
 	if err := transaction.ready(ctx); err != nil {
 		return nil, err
 	}
@@ -1789,6 +1804,9 @@ func (transaction *transaction) FindVersion(ctx context.Context, collection sche
 }
 
 func (transaction *transaction) Delete(ctx context.Context, request store.Request) (store.Document, error) {
+	if err := primitivefield.ValidateRequest(request); err != nil {
+		return store.Document{}, err
+	}
 	if err := transaction.writable(ctx); err != nil {
 		return store.Document{}, err
 	}
@@ -1896,24 +1914,34 @@ func (transaction *transaction) ApplyReferenceDelete(ctx context.Context, reques
 			transaction.deleteReferenceEntries(owner)
 			continue
 		}
-		values, changed := referenceindex.NullifyTarget(collection, document.Values, request.Target)
+		values, changed, referenceErr := referenceindex.NullifyTarget(collection, document.Values, request.Target)
+		if referenceErr != nil {
+			return referenceErr
+		}
 		if !changed {
 			return fmt.Errorf("reference index for owner collection %q is inconsistent with current values", owner.CollectionID)
 		}
 		document.Values = values
 		transaction.collection(string(owner.CollectionID))[owner.DocumentID] = document
-		transaction.replaceReferenceEntries(collection, document)
+		if err := transaction.replaceReferenceEntries(collection, document); err != nil {
+			return err
+		}
 	}
 	transaction.event("apply-reference-delete")
 	return nil
 }
 
-func (transaction *transaction) replaceReferenceEntries(collection schema.Collection, document store.Document) {
+func (transaction *transaction) replaceReferenceEntries(collection schema.Collection, document store.Document) error {
 	owner := store.DocumentReference{CollectionID: collection.ID, DocumentID: document.ID}
 	transaction.deleteReferenceEntries(owner)
-	for _, entry := range referenceindex.Collect(collection, document) {
+	entries, referenceErr := referenceindex.Collect(collection, document)
+	if referenceErr != nil {
+		return referenceErr
+	}
+	for _, entry := range entries {
 		transaction.references[referenceEntryKey(entry)] = entry
 	}
+	return nil
 }
 
 func (transaction *transaction) deleteReferenceEntries(owner store.DocumentReference) {
@@ -1959,6 +1987,9 @@ func (transaction *transaction) DeleteDocumentState(ctx context.Context, referen
 }
 
 func (transaction *transaction) Trash(ctx context.Context, request store.Request) (store.Document, error) {
+	if err := primitivefield.ValidateRequest(request); err != nil {
+		return store.Document{}, err
+	}
 	if err := transaction.writable(ctx); err != nil {
 		return store.Document{}, err
 	}
@@ -1976,6 +2007,9 @@ func (transaction *transaction) Trash(ctx context.Context, request store.Request
 }
 
 func (transaction *transaction) Restore(ctx context.Context, request store.Request) (store.Document, error) {
+	if err := primitivefield.ValidateRequest(request); err != nil {
+		return store.Document{}, err
+	}
 	if err := transaction.writable(ctx); err != nil {
 		return store.Document{}, err
 	}
@@ -2277,7 +2311,7 @@ func indexedFieldChain(fields []schema.Field, segments []string) []schema.Field 
 		if candidate.Nested == nil {
 			return nil
 		}
-		return append(chain, indexedFieldChain(candidate.Nested.Fields, segments[1:])...)
+		return append(chain, indexedFieldChain(candidate.Nested.ResolvedFields(), segments[1:])...)
 	}
 	return nil
 }
@@ -2295,31 +2329,24 @@ func collectIndexedLocales(values store.Values, chain []schema.Field, position i
 	if position >= len(chain) {
 		return
 	}
-	value, exists := values[chain[position].Name]
-	if !exists || value.Kind() == store.ValueNull {
+	collectIndexedLocaleValue(values[chain[position].Name], chain, position, locales)
+}
+
+func collectIndexedLocaleValue(value store.Value, chain []schema.Field, position int, locales map[string]struct{}) {
+	if value.Kind() == store.ValueNull {
 		return
 	}
 	if chain[position].Localized {
-		localized, valid := value.ObjectValue()
-		if !valid {
-			return
-		}
-		for locale, localizedValue := range localized {
+		for locale, localizedValue := range value.Entries() {
 			locales[locale] = struct{}{}
 			if position+1 < len(chain) {
-				object, valid := localizedValue.ObjectValue()
-				if valid {
-					collectIndexedLocales(object, chain, position+1, locales)
-				}
+				collectIndexedLocaleValue(localizedValue.Get(chain[position+1].Name), chain, position+1, locales)
 			}
 		}
 		return
 	}
 	if position+1 < len(chain) {
-		object, valid := value.ObjectValue()
-		if valid {
-			collectIndexedLocales(object, chain, position+1, locales)
-		}
+		collectIndexedLocaleValue(value.Get(chain[position+1].Name), chain, position+1, locales)
 	}
 }
 
@@ -2336,44 +2363,36 @@ func indexedTuple(document store.Document, chains [][]schema.Field, locale strin
 }
 
 func indexedValue(values store.Values, chain []schema.Field, locale string) (store.Value, bool) {
+	if len(chain) == 0 {
+		return store.Value{}, false
+	}
+	value, exists := values[chain[0].Name]
 	for position, candidate := range chain {
-		value, exists := values[candidate.Name]
+		if position != 0 {
+			value, exists = value.Lookup(candidate.Name)
+		}
 		if !exists {
 			return store.Value{}, false
 		}
 		if candidate.Localized {
-			localized, valid := value.ObjectValue()
-			if !valid {
-				return store.Value{}, false
-			}
-			value, exists = localized[locale]
+			value, exists = value.Lookup(locale)
 			if !exists {
 				return store.Value{}, false
 			}
 		}
-		if position == len(chain)-1 {
-			return value, true
-		}
-		object, valid := value.ObjectValue()
-		if !valid {
-			return store.Value{}, false
-		}
-		values = object
 	}
-	return store.Value{}, false
+	return value, true
 }
 
 func localizedValuesConflict(left, right store.Value) bool {
-	leftValues, leftOK := left.ObjectValue()
-	rightValues, rightOK := right.ObjectValue()
-	if !leftOK || !rightOK {
+	if left.Kind() != store.ValueObject || right.Kind() != store.ValueObject {
 		return equalValue(left, right)
 	}
-	for locale, rightValue := range rightValues {
+	for locale, rightValue := range right.Entries() {
 		if rightValue.Kind() == store.ValueNull {
 			continue
 		}
-		if leftValue, exists := leftValues[locale]; exists && leftValue.Kind() != store.ValueNull && equalValue(leftValue, rightValue) {
+		if leftValue, exists := left.Lookup(locale); exists && leftValue.Kind() != store.ValueNull && equalValue(leftValue, rightValue) {
 			return true
 		}
 	}
@@ -2406,36 +2425,97 @@ func matchesDeletion(document store.Document, mode store.DeletionMode) bool {
 func matchesRequest(document store.Document, request store.Request) bool {
 	filterRequest := request
 	filterRequest.AllLocales = false
-	if !matchesAll(localizedForRequest(document, filterRequest), request.Filter) {
+	if !matchesAll(document, filterRequest, request.Filter) {
 		return false
 	}
 	if request.Access == nil {
 		return true
 	}
 	if !request.AllLocales || len(request.Locales) == 0 {
-		return matchesAll(localizedForRequest(document, request), request.Access)
+		return matchesAll(document, request, request.Access)
 	}
 	for _, locale := range request.Locales {
 		localeRequest := request
 		localeRequest.AllLocales = false
 		localeRequest.LocaleChain = []schema.LocaleCode{locale}
-		if !matchesAll(localizedForRequest(document, localeRequest), request.Access) {
+		if !matchesAll(document, localeRequest, request.Access) {
 			return false
 		}
 	}
 	return true
 }
 
-func matchesAll(document store.Document, nodes ...*query.Node) bool {
+func matchesAll(document store.Document, request store.Request, nodes ...*query.Node) bool {
+	cache := make(map[string][]store.Value)
+	values := func(path query.Path) []store.Value {
+		if values, found := cache[path.String()]; found {
+			return values
+		}
+		values := queryDocumentValues(document, request, path)
+		cache[path.String()] = values
+		return values
+	}
 	for _, node := range nodes {
-		if node != nil && !matches(document, *node) {
+		if node != nil && !matchesPrimitiveQuery(document, request.Collection.Fields, *node, values) {
 			return false
 		}
 	}
 	return true
+}
+
+// queryDocumentValues resolves schema paths against canonical stored values.
+// Runtime objects must not reinterpret a block discriminator as an ordinary
+// child name: a public variant path could otherwise reach a private variant.
+func queryDocumentValues(document store.Document, request store.Request, path query.Path) []store.Value {
+	segments := path.Segments()
+	if len(segments) == 1 && (segments[0] == "id" || segments[0] == "_status" || segments[0] == "_revision") {
+		return documentValues(document, segments)
+	}
+	if len(segments) == 0 {
+		return nil
+	}
+	root, present := document.Values[segments[0]]
+	if !present {
+		return nil
+	}
+	var values []store.Value
+	locales := populationwalk.LocaleSelection{All: request.AllLocales, Chain: request.LocaleChain}
+	visit := func(prefix query.Path, remainder []string) {
+		populationwalk.VisitAtPath(request.Collection.Fields, store.Values{segments[0]: root}, prefix, locales, func(_ schema.Field, value store.Value) {
+			if len(remainder) == 0 {
+				values = append(values, value)
+			} else {
+				values = append(values, valuesBelow(value, remainder)...)
+			}
+		})
+	}
+	if _, found := populationwalk.FieldAtPath(request.Collection.Fields, path); found {
+		visit(path, nil)
+		return values
+	}
+	// Opaque JSON/plugins support data keys without authored child
+	// fields. Structured fields and embedded plugin trees require canonical
+	// schema paths instead of accepting their serialized wire shape.
+	for length := len(segments) - 1; length > 0; length-- {
+		prefix, err := query.NewPath(segments[:length]...)
+		if err != nil {
+			continue
+		}
+		if field, found := populationwalk.FieldAtPath(request.Collection.Fields, prefix); found && (field.Type == schema.FieldTypeJSON || field.Type == schema.FieldTypePlugin && !embedded.HasFields(field)) {
+			visit(prefix, segments[length:])
+			return values
+		}
+	}
+	return nil
 }
 
 func matches(document store.Document, node query.Node) bool {
+	return matchesWithValues(document, node, func(path query.Path) []store.Value {
+		return documentValues(document, path.Segments())
+	})
+}
+
+func matchesWithValues(document store.Document, node query.Node, atPath func(query.Path) []store.Value) bool {
 	switch node.Kind {
 	case query.ExpressionComparison:
 		if node.Comparison == nil {
@@ -2444,7 +2524,7 @@ func matches(document store.Document, node query.Node) bool {
 		if timestamp, system := documentTimestamp(document, node.Comparison.Path); system {
 			return matchesTimestamp(timestamp, node.Comparison.Operator, node.Comparison.Value)
 		}
-		values := documentValues(document, node.Comparison.Path.Segments())
+		values := atPath(node.Comparison.Path)
 		if node.Comparison.Operator == query.OperatorExists {
 			want, _ := node.Comparison.Value.BooleanValue()
 			present := false
@@ -2472,20 +2552,20 @@ func matches(document store.Document, node query.Node) bool {
 		return false
 	case query.ExpressionAnd:
 		for _, child := range node.Children {
-			if !matches(document, child) {
+			if !matchesWithValues(document, child, atPath) {
 				return false
 			}
 		}
 		return true
 	case query.ExpressionOr:
 		for _, child := range node.Children {
-			if matches(document, child) {
+			if matchesWithValues(document, child, atPath) {
 				return true
 			}
 		}
 		return false
 	case query.ExpressionNot:
-		return len(node.Children) == 1 && !matches(document, node.Children[0])
+		return len(node.Children) == 1 && !matchesWithValues(document, node.Children[0], atPath)
 	default:
 		return false
 	}
@@ -2580,18 +2660,28 @@ func valuesAtSegments(values store.Values, segments []string) []store.Value {
 }
 
 func valuesBelow(value store.Value, segments []string) []store.Value {
-	if object, ok := value.ObjectValue(); ok {
-		if blockType, exists := object["blockType"]; exists {
+	if value.Kind() == store.ValueObject {
+		if blockType, exists := value.Lookup("blockType"); exists {
 			kind, _ := blockType.StringValue()
 			if kind == segments[0] {
-				return valuesAtSegments(object, segments[1:])
+				segments = segments[1:]
 			}
 		}
-		return valuesAtSegments(object, segments)
+		if len(segments) == 0 {
+			return nil
+		}
+		child, exists := value.Lookup(segments[0])
+		if !exists {
+			return nil
+		}
+		if len(segments) == 1 {
+			return []store.Value{child}
+		}
+		return valuesBelow(child, segments[1:])
 	}
-	if list, ok := value.Values(); ok {
+	if value.Kind() == store.ValueList {
 		var result []store.Value
-		for _, item := range list {
+		for item := range value.Elements() {
 			result = append(result, valuesBelow(item, segments)...)
 		}
 		return result
@@ -2600,27 +2690,23 @@ func valuesBelow(value store.Value, segments []string) []store.Value {
 }
 
 func documentValue(document store.Document, segments []string) (store.Value, bool) {
+	if len(segments) == 0 {
+		return store.Value{}, false
+	}
 	if len(segments) == 1 && segments[0] == "id" {
 		return store.String(document.ID), true
 	}
 	if len(segments) == 1 && segments[0] == "_status" && document.Status != "" {
 		return store.String(string(document.Status)), true
 	}
-	values := document.Values
-	for index, segment := range segments {
-		value, exists := values[segment]
+	value, exists := document.Values[segments[0]]
+	for _, segment := range segments[1:] {
 		if !exists {
 			return store.Value{}, false
 		}
-		if index == len(segments)-1 {
-			return value, true
-		}
-		values, exists = value.ObjectValue()
-		if !exists {
-			return store.Value{}, false
-		}
+		value, exists = value.Lookup(segment)
 	}
-	return store.Value{}, false
+	return value, exists
 }
 
 func compare(actual store.Value, exists bool, operator query.Operator, expected query.Value) bool {
@@ -2642,11 +2728,11 @@ func compare(actual store.Value, exists bool, operator query.Operator, expected 
 		if !exists || !expectedOK {
 			return false
 		}
-		if values, list := actual.Values(); list {
+		if actual.Kind() == store.ValueList {
 			if operator == query.OperatorLike {
 				return false
 			}
-			for _, value := range values {
+			for value := range actual.Elements() {
 				text, valid := value.StringValue()
 				if valid && text == expectedText {
 					return true
@@ -2763,3 +2849,36 @@ var _ store.AuthStore = (*Store)(nil)
 var _ store.AuthTransaction = (*transaction)(nil)
 var _ store.AuthUnlockTransaction = (*transaction)(nil)
 var _ store.DistinctTransaction = (*transaction)(nil)
+
+func matchesPrimitiveQuery(document store.Document, fields []schema.Field, node query.Node, values func(query.Path) []store.Value) bool {
+	if node.Kind == query.ExpressionComparison && node.Comparison != nil && node.Comparison.Operator == query.OperatorIn {
+		if field, ok := populationwalk.FieldAtPath(fields, node.Comparison.Path); ok && primitivefield.IsList(field) {
+			for _, value := range values(node.Comparison.Path) {
+				if primitivefield.Membership(value, node.Comparison.Value) {
+					return true
+				}
+			}
+			return false
+		}
+	}
+	switch node.Kind {
+	case query.ExpressionAnd:
+		for _, child := range node.Children {
+			if !matchesPrimitiveQuery(document, fields, child, values) {
+				return false
+			}
+		}
+		return true
+	case query.ExpressionOr:
+		for _, child := range node.Children {
+			if matchesPrimitiveQuery(document, fields, child, values) {
+				return true
+			}
+		}
+		return false
+	case query.ExpressionNot:
+		return len(node.Children) == 1 && !matchesPrimitiveQuery(document, fields, node.Children[0], values)
+	default:
+		return matchesWithValues(document, node, values)
+	}
+}

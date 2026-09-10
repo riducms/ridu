@@ -174,16 +174,15 @@ func mongoUploadValuesReference(values store.Values, key string) bool {
 	if objectKey, valid := values["objectKey"].StringValue(); valid && objectKey == key {
 		return true
 	}
-	sizes, valid := values["sizes"].ObjectValue()
-	if !valid {
+	sizes := values["sizes"]
+	if sizes.Kind() != store.ValueObject {
 		return false
 	}
-	for _, size := range sizes {
-		metadata, valid := size.ObjectValue()
-		if !valid {
+	for _, size := range sizes.Entries() {
+		if size.Kind() != store.ValueObject {
 			continue
 		}
-		if objectKey, valid := metadata["objectKey"].StringValue(); valid && objectKey == key {
+		if objectKey, valid := size.Get("objectKey").StringValue(); valid && objectKey == key {
 			return true
 		}
 	}

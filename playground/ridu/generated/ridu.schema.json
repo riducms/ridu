@@ -76,7 +76,10 @@
           "required": true,
           "unique": false,
           "admin": {
-            "label": "let's win today interesting"
+            "editor": {
+              "reference": "app:text"
+            },
+            "label": "Title"
           },
           "text": {}
         },
@@ -93,7 +96,7 @@
             "label": "Status"
           },
           "select": {
-            "choices": [
+            "options": [
               {
                 "value": "draft",
                 "label": "Draft"
@@ -134,9 +137,244 @@
             "label": "Content"
           },
           "plugin": {
+            "embeddedTrees": [
+              {
+                "version": 1,
+                "key": "blocks",
+                "root": [
+                  "root"
+                ],
+                "children": "children",
+                "tag": "type",
+                "cases": [
+                  {
+                    "tagValue": "block",
+                    "payload": "fields",
+                    "discriminator": "blockType",
+                    "identity": "_key"
+                  }
+                ]
+              }
+            ],
             "key": "richtext",
             "config": {
               "features": [
+                "code",
+                "horizontal-rule",
+                "links",
+                "lists",
+                "relationships",
+                "uploads"
+              ]
+            },
+            "referenceKeys": [
+              "relationTo"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "workshops",
+      "slug": "workshops",
+      "labels": {
+        "singular": "Workshop",
+        "plural": "Workshops"
+      },
+      "admin": {
+        "useAsTitle": "title"
+      },
+      "capabilities": {
+        "auth": false,
+        "upload": false,
+        "versions": false,
+        "trash": false
+      },
+      "fields": [
+        {
+          "id": "workshops-city",
+          "name": "city",
+          "path": "city",
+          "type": "select",
+          "category": "scalar",
+          "required": true,
+          "unique": false,
+          "admin": {
+            "label": "City",
+            "description": "After editing the title, change this city to refresh its feedback."
+          },
+          "select": {
+            "options": [
+              {
+                "value": "London",
+                "label": "London"
+              },
+              {
+                "value": "Bristol",
+                "label": "Bristol"
+              }
+            ]
+          }
+        },
+        {
+          "id": "workshops-title",
+          "name": "title",
+          "path": "title",
+          "type": "text",
+          "category": "scalar",
+          "required": true,
+          "unique": false,
+          "liveValidation": true,
+          "admin": {
+            "label": "Workshop title",
+            "description": "Include the selected city, for example: London pottery evening. Try removing London, then wait a moment without saving."
+          },
+          "text": {}
+        },
+        {
+          "id": "workshops-sessions",
+          "name": "sessions",
+          "path": "sessions",
+          "type": "array",
+          "category": "nested",
+          "required": false,
+          "unique": false,
+          "admin": {
+            "label": "Extra sessions",
+            "description": "The same rule works inside each row. Try editing a title and moving that row."
+          },
+          "nested": {
+            "fields": [
+              {
+                "id": "workshops-sessions-city",
+                "name": "city",
+                "path": "sessions.city",
+                "type": "select",
+                "category": "scalar",
+                "required": true,
+                "unique": false,
+                "admin": {
+                  "label": "City",
+                  "description": "After editing the title, change this city to refresh its feedback."
+                },
+                "select": {
+                  "options": [
+                    {
+                      "value": "London",
+                      "label": "London"
+                    },
+                    {
+                      "value": "Bristol",
+                      "label": "Bristol"
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "workshops-sessions-title",
+                "name": "title",
+                "path": "sessions.title",
+                "type": "text",
+                "category": "scalar",
+                "required": true,
+                "unique": false,
+                "liveValidation": true,
+                "admin": {
+                  "label": "Workshop title",
+                  "description": "Include the selected city, for example: London pottery evening. Try removing London, then wait a moment without saving."
+                },
+                "text": {}
+              }
+            ]
+          }
+        },
+        {
+          "id": "workshops-description",
+          "name": "description",
+          "path": "description",
+          "type": "plugin",
+          "category": "plugin",
+          "required": false,
+          "unique": false,
+          "admin": {
+            "label": "Description and embedded workshop card",
+            "description": "Choose Edit on the seeded Workshop card. Its title is checked before you choose Apply."
+          },
+          "plugin": {
+            "embeddedTrees": [
+              {
+                "version": 1,
+                "key": "blocks",
+                "root": [
+                  "root"
+                ],
+                "children": "children",
+                "tag": "type",
+                "cases": [
+                  {
+                    "tagValue": "block",
+                    "payload": "fields",
+                    "discriminator": "blockType",
+                    "identity": "_key",
+                    "types": [
+                      {
+                        "slug": "workshop",
+                        "labels": {
+                          "singular": "Workshop card",
+                          "plural": "Workshop cards"
+                        },
+                        "fields": [
+                          {
+                            "id": "workshops-description-blocks-block-workshop-city",
+                            "name": "city",
+                            "path": "description.blocks.block.workshop.city",
+                            "type": "select",
+                            "category": "scalar",
+                            "required": true,
+                            "unique": false,
+                            "admin": {
+                              "label": "City",
+                              "description": "After editing the title, change this city to refresh its feedback."
+                            },
+                            "select": {
+                              "options": [
+                                {
+                                  "value": "London",
+                                  "label": "London"
+                                },
+                                {
+                                  "value": "Bristol",
+                                  "label": "Bristol"
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "id": "workshops-description-blocks-block-workshop-title",
+                            "name": "title",
+                            "path": "description.blocks.block.workshop.title",
+                            "type": "text",
+                            "category": "scalar",
+                            "required": true,
+                            "unique": false,
+                            "liveValidation": true,
+                            "admin": {
+                              "label": "Workshop title",
+                              "description": "Include the selected city, for example: London pottery evening. Try removing London, then wait a moment without saving."
+                            },
+                            "text": {}
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "key": "richtext",
+            "config": {
+              "features": [
+                "blocks",
                 "code",
                 "horizontal-rule",
                 "links",
@@ -156,11 +394,11 @@
   "plugins": [
     {
       "key": "richtext",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "goPackage": "github.com/riducms/ridu/plugins/richtext",
       "apiVersion": 1,
       "ridu": {
-        "minimum": "0.1.0"
+        "minimum": "0.2.0"
       },
       "admin": {
         "package": "@riducms/plugin-richtext",
@@ -170,13 +408,17 @@
       },
       "fieldTypes": [
         {
+          "embeddedTypes": [
+            "blocks.block"
+          ],
           "key": "richtext",
-          "typescriptPackage": "@riducms/plugin-richtext",
+          "typescriptPackage": "@riducms/plugin-richtext/document",
           "typescriptOutput": "RichTextDocument",
-          "typescriptInput": "RichTextDocument",
+          "typescriptInput": "RichTextDocumentInput",
           "goPackage": "github.com/riducms/ridu/plugins/richtext",
           "goType": "Document",
           "jsonSchema": {
+            "$id": "https://riducms.com/schemas/richtext/document/1",
             "type": "object",
             "required": [
               "version",
@@ -187,22 +429,608 @@
                 "const": 1
               },
               "root": {
-                "type": "object"
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/node"
+                  },
+                  {
+                    "properties": {
+                      "type": {
+                        "const": "root"
+                      }
+                    }
+                  }
+                ]
               }
             },
-            "additionalProperties": false
+            "additionalProperties": false,
+            "$defs": {
+              "node": {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "enum": [
+                      "root",
+                      "paragraph",
+                      "heading",
+                      "quote",
+                      "text",
+                      "linebreak",
+                      "link",
+                      "list",
+                      "listitem",
+                      "code",
+                      "horizontalrule",
+                      "upload",
+                      "relationship",
+                      "block"
+                    ]
+                  },
+                  "version": {
+                    "const": 1
+                  },
+                  "children": {
+                    "type": "array",
+                    "items": {
+                      "allOf": [
+                        {
+                          "$ref": "#/$defs/node"
+                        },
+                        {
+                          "properties": {
+                            "type": {
+                              "not": {
+                                "const": "root"
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "fields": {
+                    "type": "object"
+                  },
+                  "text": {
+                    "type": "string"
+                  },
+                  "format": {
+                    "type": [
+                      "integer",
+                      "string"
+                    ]
+                  },
+                  "detail": {
+                    "type": "integer"
+                  },
+                  "mode": {
+                    "enum": [
+                      "normal",
+                      "token",
+                      "segmented"
+                    ]
+                  },
+                  "style": {
+                    "type": "string"
+                  },
+                  "textFormat": {
+                    "type": "integer"
+                  },
+                  "textStyle": {
+                    "type": "string"
+                  },
+                  "direction": {
+                    "enum": [
+                      "ltr",
+                      "rtl",
+                      null
+                    ]
+                  },
+                  "indent": {
+                    "type": "integer"
+                  },
+                  "tag": {
+                    "type": "string"
+                  },
+                  "url": {
+                    "type": "string"
+                  },
+                  "target": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "rel": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "title": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "listType": {
+                    "type": "string"
+                  },
+                  "start": {
+                    "type": "integer"
+                  },
+                  "value": {
+                    "type": "integer"
+                  },
+                  "checked": {
+                    "type": "boolean"
+                  },
+                  "language": {
+                    "type": "string"
+                  },
+                  "theme": {
+                    "type": "string"
+                  },
+                  "relationTo": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "caption": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false,
+                "allOf": [
+                  {
+                    "if": {
+                      "properties": {
+                        "type": {
+                          "const": "block"
+                        }
+                      }
+                    },
+                    "then": {
+                      "required": [
+                        "type",
+                        "version",
+                        "fields"
+                      ],
+                      "properties": {
+                        "type": {
+                          "const": "block"
+                        },
+                        "version": {
+                          "const": 1
+                        },
+                        "fields": {
+                          "type": "object"
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    "else": {
+                      "not": {
+                        "required": [
+                          "fields"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "type": {
+                          "enum": [
+                            "root",
+                            "paragraph",
+                            "heading",
+                            "quote",
+                            "link",
+                            "list",
+                            "listitem",
+                            "code"
+                          ]
+                        }
+                      }
+                    },
+                    "then": {
+                      "required": [
+                        "children"
+                      ]
+                    },
+                    "else": {
+                      "not": {
+                        "required": [
+                          "children"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "type": {
+                          "const": "text"
+                        }
+                      }
+                    },
+                    "then": {
+                      "required": [
+                        "text"
+                      ],
+                      "properties": {
+                        "format": {
+                          "type": "integer"
+                        }
+                      }
+                    },
+                    "else": {
+                      "properties": {
+                        "format": {
+                          "enum": [
+                            "",
+                            "left",
+                            "center",
+                            "right",
+                            "justify",
+                            "start",
+                            "end"
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "type": {
+                          "const": "root"
+                        }
+                      }
+                    },
+                    "then": {
+                      "propertyNames": {
+                        "enum": [
+                          "type",
+                          "version",
+                          "children",
+                          "direction",
+                          "format",
+                          "indent"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "type": {
+                          "const": "paragraph"
+                        }
+                      }
+                    },
+                    "then": {
+                      "propertyNames": {
+                        "enum": [
+                          "type",
+                          "version",
+                          "children",
+                          "direction",
+                          "format",
+                          "indent",
+                          "textFormat",
+                          "textStyle"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "type": {
+                          "const": "quote"
+                        }
+                      }
+                    },
+                    "then": {
+                      "propertyNames": {
+                        "enum": [
+                          "type",
+                          "version",
+                          "children",
+                          "direction",
+                          "format",
+                          "indent",
+                          "textFormat",
+                          "textStyle"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "type": {
+                          "const": "heading"
+                        }
+                      }
+                    },
+                    "then": {
+                      "propertyNames": {
+                        "enum": [
+                          "type",
+                          "version",
+                          "children",
+                          "direction",
+                          "format",
+                          "indent",
+                          "textFormat",
+                          "textStyle",
+                          "tag"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "type": {
+                          "const": "link"
+                        }
+                      }
+                    },
+                    "then": {
+                      "propertyNames": {
+                        "enum": [
+                          "type",
+                          "version",
+                          "children",
+                          "direction",
+                          "format",
+                          "indent",
+                          "textFormat",
+                          "textStyle",
+                          "url",
+                          "target",
+                          "rel",
+                          "title"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "type": {
+                          "const": "list"
+                        }
+                      }
+                    },
+                    "then": {
+                      "propertyNames": {
+                        "enum": [
+                          "type",
+                          "version",
+                          "children",
+                          "direction",
+                          "format",
+                          "indent",
+                          "textFormat",
+                          "textStyle",
+                          "listType",
+                          "start",
+                          "tag"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "type": {
+                          "const": "listitem"
+                        }
+                      }
+                    },
+                    "then": {
+                      "propertyNames": {
+                        "enum": [
+                          "type",
+                          "version",
+                          "children",
+                          "direction",
+                          "format",
+                          "indent",
+                          "textFormat",
+                          "textStyle",
+                          "value",
+                          "checked"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "type": {
+                          "const": "code"
+                        }
+                      }
+                    },
+                    "then": {
+                      "propertyNames": {
+                        "enum": [
+                          "type",
+                          "version",
+                          "children",
+                          "direction",
+                          "format",
+                          "indent",
+                          "textFormat",
+                          "textStyle",
+                          "language",
+                          "theme"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "type": {
+                          "const": "text"
+                        }
+                      }
+                    },
+                    "then": {
+                      "propertyNames": {
+                        "enum": [
+                          "type",
+                          "version",
+                          "text",
+                          "detail",
+                          "format",
+                          "mode",
+                          "style"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "type": {
+                          "const": "linebreak"
+                        }
+                      }
+                    },
+                    "then": {
+                      "propertyNames": {
+                        "enum": [
+                          "type",
+                          "version"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "type": {
+                          "const": "horizontalrule"
+                        }
+                      }
+                    },
+                    "then": {
+                      "propertyNames": {
+                        "enum": [
+                          "type",
+                          "version"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "type": {
+                          "const": "upload"
+                        }
+                      }
+                    },
+                    "then": {
+                      "propertyNames": {
+                        "enum": [
+                          "type",
+                          "version",
+                          "relationTo",
+                          "id",
+                          "format",
+                          "caption"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "type": {
+                          "const": "relationship"
+                        }
+                      }
+                    },
+                    "then": {
+                      "propertyNames": {
+                        "enum": [
+                          "type",
+                          "version",
+                          "relationTo",
+                          "id",
+                          "format"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "type": {
+                          "const": "heading"
+                        }
+                      }
+                    },
+                    "then": {
+                      "required": [
+                        "tag"
+                      ],
+                      "properties": {
+                        "tag": {
+                          "enum": [
+                            "h1",
+                            "h2",
+                            "h3",
+                            "h4",
+                            "h5",
+                            "h6"
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "type": {
+                          "const": "list"
+                        }
+                      }
+                    },
+                    "then": {
+                      "required": [
+                        "listType"
+                      ],
+                      "properties": {
+                        "listType": {
+                          "enum": [
+                            "bullet",
+                            "number",
+                            "check"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
           }
         }
       ]
-    },
-    {
-      "key": "graphql",
-      "version": "0.1.0",
-      "goPackage": "github.com/riducms/ridu/plugins/graphql",
-      "apiVersion": 1,
-      "ridu": {
-        "minimum": "0.1.0"
-      }
     }
   ]
 }

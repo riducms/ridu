@@ -3,8 +3,27 @@ import type { SchemaField } from "@riducms/protocol";
 import { createAdminI18n, en, fr } from "@riducms/translations";
 
 import { invalidFieldLabels, validateFormValues } from "../src/core/forms/form-validation";
+import { initialFormValues } from "../src/core/forms/form-schema";
 
 describe("manifest-derived form validation", () => {
+	it("leaves dynamic defaults omitted for the server while validating explicit empty input", () => {
+		const title = { ...field("title", "text", true), dynamicDefault: true };
+		const rows = field("rows", "array", false);
+		rows.nested = { fields: [title] };
+		expect(initialFormValues([title, rows])).toEqual({});
+		expect(validateFormValues([title], {}, { requireMissing: true })).toEqual([]);
+		expect(validateFormValues([rows], { rows: [{ _key: "A" }] }, { requireMissing: true })).toEqual(
+			[]
+		);
+		for (const value of [null, ""]) {
+			expect(validateFormValues([title], { title: value }, { requireMissing: true })).toEqual([
+				{ code: "required", path: "title", message: "title is required" },
+			]);
+		}
+		expect(
+			validateFormValues([{ ...title, dynamicDefault: false }], {}, { requireMissing: true })
+		).toEqual([{ code: "required", path: "title", message: "title is required" }]);
+	});
 	it("rejects empty required fields and accepts empty optional controls", () => {
 		const fields = [
 			field("title", "text", true),
@@ -60,8 +79,8 @@ describe("manifest-derived form validation", () => {
 		content.blocks = {
 			types: [
 				{
-					key: "heading",
-					label: "Heading",
+					slug: "heading",
+					labels: { singular: "Heading", plural: "Headings" },
 					fields: [field("text", "text", true, "content.heading.text")],
 				},
 			],
@@ -89,7 +108,7 @@ describe("manifest-derived form validation", () => {
 		).toEqual([]);
 	});
 
-	it("validates bounded arrays, radio choices, and geographic points", () => {
+	it("validates bounded arrays, radio options, and geographic points", () => {
 		const team = field("team", "array", false);
 		team.nested = { fields: [field("name", "text", true, "team.name")], minRows: 1, maxRows: 2 };
 		const priority = { ...selectField("priority", true), type: "radio" as const };
@@ -103,7 +122,7 @@ describe("manifest-derived form validation", () => {
 			).map(({ code, path }) => ({ code, path }))
 		).toEqual([
 			{ code: "min_rows", path: "team" },
-			{ code: "invalid_choice", path: "priority" },
+			{ code: "invalid_option", path: "priority" },
 			{ code: "invalid_point", path: "location" },
 		]);
 	});
@@ -112,7 +131,7 @@ describe("manifest-derived form validation", () => {
 		const roles = selectField("roles", true);
 		roles.select = {
 			hasMany: true,
-			choices: [
+			options: [
 				{ value: "admin", label: "Admin" },
 				{ value: "editor", label: "Editor" },
 			],
@@ -136,8 +155,8 @@ describe("manifest-derived form validation", () => {
 				{ requireMissing: true }
 			).map(({ code, path }) => ({ code, path }))
 		).toEqual([
-			{ code: "invalid_choice", path: "roles.1" },
-			{ code: "duplicate_choice", path: "roles.2" },
+			{ code: "invalid_option", path: "roles.1" },
+			{ code: "duplicate_option", path: "roles.2" },
 			{ code: "invalid_type", path: "roles.3" },
 		]);
 		expect(
@@ -261,7 +280,7 @@ type SelectFieldFixture = SchemaField & { select: NonNullable<SchemaField["selec
 function selectField(name: string, required: boolean): SelectFieldFixture {
 	return {
 		...field(name, "select", required),
-		select: { choices: [{ value: "draft", label: "Draft" }] },
+		select: { options: [{ value: "draft", label: "Draft" }] },
 	};
 }
 
@@ -272,3 +291,33 @@ function relationshipField(name: string, required: boolean): SchemaField {
 		relationship: { collectionId: "users", collectionSlug: "users", onDelete: "nullify" },
 	};
 }
+
+describe("ordinary blocks bounds", () => {
+	it("bounds only present lists and preserves required semantics", () => {
+		const layout = field("layout", "blocks", false);
+		layout.blocks = {
+			minRows: 2,
+			maxRows: 3,
+			types: [{ slug: "hero", labels: { singular: "Hero", plural: "Heroes" }, fields: [] }],
+		};
+		const check = (values: Record<string, unknown>, required = false) =>
+			validateFormValues([{ ...layout, required }], values, { requireMissing: true }).map(
+				({ code, path }) => ({ code, path })
+			);
+		expect(check({})).toEqual([]);
+		expect(check({ layout: null })).toEqual([]);
+		expect(check({ layout: [] })).toEqual([{ code: "min_rows", path: "layout" }]);
+		for (const count of [1, 2, 3, 4]) {
+			const rows = Array.from({ length: count }, () => ({ blockType: "hero" }));
+			expect(check({ layout: rows })).toEqual(
+				count < 2
+					? [{ code: "min_rows", path: "layout" }]
+					: count > 3
+						? [{ code: "max_rows", path: "layout" }]
+						: []
+			);
+		}
+		for (const values of [{}, { layout: null }, { layout: [] }])
+			expect(check(values, true)).toEqual([{ code: "required", path: "layout" }]);
+	});
+});

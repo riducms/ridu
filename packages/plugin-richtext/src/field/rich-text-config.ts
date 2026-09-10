@@ -17,20 +17,23 @@ const features = new Set<RichTextFeature>([
 	"blocks",
 ]);
 
-export function parseRichTextConfig(value: unknown): RichTextConfig {
-	if (!isRecord(value)) return { features: [], uploadCollections: [], relationshipCollections: [] };
+export function decodeRichTextConfig(value: unknown): RichTextConfig {
+	if (!isRecord(value)) throw new Error("Rich-text config must be an object.");
+	for (const key of Object.keys(value))
+		if (!["features", "uploadCollections", "relationshipCollections"].includes(key))
+			throw new Error(`Unsupported rich-text config key ${key}.`);
+	const strings = (key: string): string[] => {
+		const items = value[key] ?? [];
+		if (!Array.isArray(items) || items.some((item) => typeof item !== "string" || !item))
+			throw new Error(`${key} must be an array of nonempty strings.`);
+		return [...items];
+	};
+	const selected = strings("features");
+	if (!selected.every(isRichTextFeature)) throw new Error("Unsupported rich-text feature.");
 	return {
-		features: Array.isArray(value.features) ? value.features.filter(isRichTextFeature) : [],
-		uploadCollections: Array.isArray(value.uploadCollections)
-			? value.uploadCollections.filter(
-					(collection): collection is string => typeof collection === "string"
-				)
-			: [],
-		relationshipCollections: Array.isArray(value.relationshipCollections)
-			? value.relationshipCollections.filter(
-					(collection): collection is string => typeof collection === "string"
-				)
-			: [],
+		features: selected,
+		uploadCollections: strings("uploadCollections"),
+		relationshipCollections: strings("relationshipCollections"),
 	};
 }
 

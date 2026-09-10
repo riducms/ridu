@@ -6,6 +6,7 @@ import {
 } from "@lexical/list";
 import { $createHeadingNode, $createQuoteNode } from "@lexical/rich-text";
 import { $setBlocksType } from "@lexical/selection";
+import type { SchemaBlockType } from "@riducms/protocol";
 import type { AdminI18n, FieldAuthoringHost } from "@riducms/plugin";
 import { INSERT_HORIZONTAL_RULE_COMMAND, MenuOption } from "@hvniel/lexical-svelte";
 import {
@@ -18,6 +19,7 @@ import {
 
 import {
 	OPEN_RELATIONSHIP_BROWSER_COMMAND,
+	OPEN_BLOCK_EDITOR_COMMAND,
 	OPEN_UPLOAD_BROWSER_COMMAND,
 } from "@plugin-richtext/menu/rich-text-commands";
 import { hasRichTextFeature, type RichTextConfig } from "@plugin-richtext/field/rich-text-config";
@@ -31,6 +33,7 @@ export class RichTextMenuOption extends MenuOption {
 	readonly keyHint: string;
 	readonly preservePlaceholder: boolean;
 	readonly restoreEditorFocus: boolean;
+	readonly blockType: string | undefined;
 
 	constructor(
 		key: string,
@@ -43,6 +46,7 @@ export class RichTextMenuOption extends MenuOption {
 			keyHint?: string;
 			preservePlaceholder?: boolean;
 			restoreEditorFocus?: boolean;
+			blockType?: string;
 		} = {}
 	) {
 		super(key);
@@ -54,6 +58,7 @@ export class RichTextMenuOption extends MenuOption {
 		this.keyHint = options.keyHint ?? "↵";
 		this.preservePlaceholder = options.preservePlaceholder ?? true;
 		this.restoreEditorFocus = options.restoreEditorFocus ?? true;
+		this.blockType = options.blockType;
 	}
 }
 
@@ -61,7 +66,8 @@ export function buildRichTextOptions(
 	editor: LexicalEditor,
 	config: RichTextConfig,
 	i18n: AdminI18n,
-	authoring?: FieldAuthoringHost
+	authoring?: FieldAuthoringHost,
+	blockTypes: readonly SchemaBlockType[] = []
 ): RichTextMenuOption[] {
 	const options = [
 		new RichTextMenuOption(
@@ -215,6 +221,27 @@ export function buildRichTextOptions(
 		options.push(...relationshipOptions);
 	}
 
+	if (hasRichTextFeature(config, "blocks") && authoring?.beginSchemaDraft !== undefined) {
+		options.splice(
+			4,
+			0,
+			...blockTypes.map(
+				(type) =>
+					new RichTextMenuOption(
+						`block-${type.slug}`,
+						type.labels.singular,
+						i18n.t("plugin.richtext:block.description", { key: type.slug }),
+						"▣",
+						["block", type.slug, type.labels.singular],
+						() =>
+							queueMicrotask(() =>
+								editor.dispatchCommand(OPEN_BLOCK_EDITOR_COMMAND, { blockType: type.slug })
+							),
+						{ restoreEditorFocus: false, blockType: type.slug }
+					)
+			)
+		);
+	}
 	return options;
 }
 

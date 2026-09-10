@@ -12,6 +12,7 @@ import {
 	normalizeWorkspacePreference,
 	parseListFilters,
 	parseListPageSize,
+	sortableField,
 } from "@admin/features/collections/list-workspace";
 
 const fields = [
@@ -81,8 +82,8 @@ describe("collection list workspace", () => {
 				blocks: {
 					types: [
 						{
-							key: "hero",
-							label: "Hero",
+							slug: "hero",
+							labels: { singular: "Hero", plural: "Heroes" },
 							fields: [
 								{
 									name: "heading",
@@ -317,4 +318,22 @@ describe("collection list workspace", () => {
 		expect(await second).toEqual({ dispatched: true, value: "second" });
 		expect(calls).toEqual(["session-a", "session-b"]);
 	});
+});
+
+test("attached read protection excludes queries while retaining readable list columns", () => {
+	const protectedTitle = { ...fields[0]!, queryRestricted: true };
+	const group = {
+		...fields[0]!,
+		name: "meta",
+		path: "meta",
+		type: "group",
+		queryRestricted: true,
+		nested: { fields: [{ ...fields[0]!, path: "meta.title" }] },
+	} as SchemaField;
+	expect(filterableFields([protectedTitle, group, fields[1]!]).map((field) => field.path)).toEqual([
+		"capacity",
+	]);
+	const columns = listColumnFields({ fields: [protectedTitle, group] } as SchemaCollection);
+	expect(columns.map((field) => field.path)).toEqual(["title", "meta.title"]);
+	expect(columns.every((field) => !sortableField(field))).toBe(true);
 });

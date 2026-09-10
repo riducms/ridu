@@ -5,8 +5,10 @@ package localization
 
 import (
 	"fmt"
+	"math"
 	"strings"
 
+	"github.com/riducms/ridu/internal/embedded"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
 )
@@ -17,6 +19,9 @@ type Selection struct {
 	Chain      []schema.LocaleCode
 	All        bool
 	Configured []schema.LocaleCode
+	// PreserveNull is used only while completing write patches. Read projections
+	// normally skip null locale values so fallback can select another locale.
+	PreserveNull bool
 }
 
 // Resolve validates request locale input. ExplicitFallback replaces configured
@@ -91,7 +96,7 @@ func StoragePatch(fields []schema.Field, values store.Values, selection Selectio
 		if !exists {
 			continue
 		}
-		localized, err := storageValue(field, value, selection)
+		localized, _, err := storageValue(field, value, selection)
 		if err != nil {
 			return nil, err
 		}
@@ -113,7 +118,7 @@ func ProjectDocument(document store.Document, fields []schema.Field, selection S
 		if !exists {
 			continue
 		}
-		value, visible := projectValueAt(field, canonical, selection, field.Name, projected.LocalizationSources)
+		value, visible, _ := projectValueAt(field, canonical, selection, field.Name, projected.LocalizationSources)
 		if !visible {
 			delete(projected.Values, field.Name)
 			continue
@@ -135,7 +140,7 @@ func MergeStoragePatch(fields []schema.Field, current, patch store.Values) store
 			continue
 		}
 		previous := result[field.Name]
-		result[field.Name] = mergeValue(field, previous, next)
+		result[field.Name], _ = mergeValue(field, previous, next)
 	}
 	return result
 }
@@ -153,8 +158,8 @@ func MergeStorageUpdate(fields []schema.Field, current, patch store.Values) stor
 		if !exists {
 			continue
 		}
-		if field.Localized || field.Type == schema.FieldTypeGroup || field.Type == schema.FieldTypeArray || field.Type == schema.FieldTypeBlocks {
-			result[field.Name] = mergeValue(field, current[field.Name], next)
+		if field.Localized || field.Type == schema.FieldTypeGroup || field.Type == schema.FieldTypeArray || field.Type == schema.FieldTypeBlocks || embedded.HasFields(field) {
+			result[field.Name], _ = mergeValue(field, current[field.Name], next)
 		}
 	}
 	return result
@@ -165,9 +170,16 @@ func MergeStorageUpdate(fields []schema.Field, current, patch store.Values) stor
 // copy-to-locale update can merge nested values without replacing shared
 // structure or non-localized siblings.
 func LocalizedValues(fields []schema.Field, values store.Values) store.Values {
+	return localizedValues(fields, func(name string) (store.Value, bool) {
+		value, exists := values[name]
+		return value, exists
+	})
+}
+
+func localizedValues(fields []schema.Field, lookup func(string) (store.Value, bool)) store.Values {
 	result := store.Values{}
 	for _, field := range fields {
-		value, exists := values[field.Name]
+		value, exists := lookup(field.Name)
 		if !exists {
 			continue
 		}
@@ -185,16 +197,19 @@ func LocalizedValues(fields []schema.Field, values store.Values) store.Values {
 // safety requirement for non-localized arrays and blocks with localized
 // descendants.
 func CopyLocaleIssues(fields []schema.Field, values store.Values) []schema.Issue {
-	return copyLocaleIssues(fields, values, "")
+	return copyLocaleIssues(fields, func(name string) (store.Value, bool) {
+		value, exists := values[name]
+		return value, exists
+	}, "")
 }
 
-func copyLocaleIssues(fields []schema.Field, values store.Values, prefix string) []schema.Issue {
+func copyLocaleIssues(fields []schema.Field, lookup func(string) (store.Value, bool), prefix string) []schema.Issue {
 	var issues []schema.Issue
 	for _, field := range fields {
 		if field.Localized {
 			continue
 		}
-		value, exists := values[field.Name]
+		value, exists := lookup(field.Name)
 		if !exists {
 			continue
 		}
@@ -202,46 +217,58 @@ func copyLocaleIssues(fields []schema.Field, values store.Values, prefix string)
 		if prefix != "" {
 			path = prefix + "." + field.Name
 		}
+		if embedded.HasFields(field) {
+			err := embedded.Visit(field, value, path, embedded.NewBudget(), func(o embedded.ReadOccurrence) error {
+				if fieldsHaveLocalization(o.Fields) && o.Key == "" {
+					issues = append(issues, schema.Issue{Code: "missing_row_key", Path: o.RuntimePath + "." + o.Case.Identity, Message: "localized copy requires a non-empty stable occurrence identity"})
+				}
+				issues = append(issues, copyLocaleIssues(o.Fields, o.Payload.Lookup, o.RuntimePath)...)
+				return nil
+			})
+			if problem, ok := err.(*embedded.Error); ok {
+				issues = append(issues, problem.Issue)
+			}
+			continue
+		}
 		switch field.Type {
 		case schema.FieldTypeGroup:
-			object, valid := value.ObjectValue()
-			if valid && field.Nested != nil {
-				issues = append(issues, copyLocaleIssues(field.Nested.Fields, object, path)...)
+			if value.Kind() == store.ValueObject && field.Nested != nil {
+				issues = append(issues, copyLocaleIssues(field.Nested.ResolvedFields(), value.Lookup, path)...)
 			}
 		case schema.FieldTypeArray:
-			rows, valid := value.Values()
-			if !valid || field.Nested == nil || !fieldsHaveLocalization(field.Nested.Fields) {
+			if value.Kind() != store.ValueList || field.Nested == nil || !fieldsHaveLocalization(field.Nested.ResolvedFields()) {
 				continue
 			}
-			issues = append(issues, copyLocaleRowIssues(rows, path)...)
-			for index, row := range rows {
-				object, valid := row.ObjectValue()
-				if valid {
-					issues = append(issues, copyLocaleIssues(field.Nested.Fields, object, fmt.Sprintf("%s.%d", path, index))...)
+			issues = append(issues, copyLocaleRowIssues(value, path)...)
+			index := -1
+			for row := range value.Elements() {
+				index++
+				if row.Kind() == store.ValueObject {
+					issues = append(issues, copyLocaleIssues(field.Nested.ResolvedFields(), row.Lookup, fmt.Sprintf("%s.%d", path, index))...)
 				}
 			}
 		case schema.FieldTypeBlocks:
-			rows, valid := value.Values()
-			if !valid || field.Blocks == nil {
+			if value.Kind() != store.ValueList || field.Blocks == nil {
 				continue
 			}
 			hasLocalization := false
-			for _, block := range field.Blocks.Types {
-				hasLocalization = hasLocalization || fieldsHaveLocalization(block.Fields)
+			for _, block := range field.Blocks.ResolvedTypes() {
+				hasLocalization = hasLocalization || fieldsHaveLocalization(block.ResolvedFields())
 			}
 			if !hasLocalization {
 				continue
 			}
-			issues = append(issues, copyLocaleRowIssues(rows, path)...)
-			for index, row := range rows {
-				object, valid := row.ObjectValue()
-				if !valid {
+			issues = append(issues, copyLocaleRowIssues(value, path)...)
+			index := -1
+			for row := range value.Elements() {
+				index++
+				if row.Kind() != store.ValueObject {
 					continue
 				}
-				blockType, _ := object["blockType"].StringValue()
-				for _, block := range field.Blocks.Types {
-					if block.Key == blockType {
-						issues = append(issues, copyLocaleIssues(block.Fields, object, fmt.Sprintf("%s.%d", path, index))...)
+				blockType, _ := row.Get("blockType").StringValue()
+				for _, block := range field.Blocks.ResolvedTypes() {
+					if block.Slug == blockType {
+						issues = append(issues, copyLocaleIssues(block.ResolvedFields(), row.Lookup, fmt.Sprintf("%s.%d", path, index))...)
 						break
 					}
 				}
@@ -251,18 +278,18 @@ func copyLocaleIssues(fields []schema.Field, values store.Values, prefix string)
 	return issues
 }
 
-func copyLocaleRowIssues(rows []store.Value, path string) []schema.Issue {
-	seen := make(map[string]int, len(rows))
+func copyLocaleRowIssues(rows store.Value, path string) []schema.Issue {
+	seen := make(map[string]int, rows.Len())
 	var issues []schema.Issue
-	for index, row := range rows {
-		object, valid := row.ObjectValue()
-		if !valid {
+	index := -1
+	for row := range rows.Elements() {
+		index++
+		if row.Kind() != store.ValueObject {
 			continue
 		}
-		key, valid := object["_key"].StringValue()
-		key = strings.TrimSpace(key)
+		key, valid := row.Get("_key").StringValue()
 		keyPath := fmt.Sprintf("%s.%d._key", path, index)
-		if !valid || key == "" {
+		if !valid || strings.TrimSpace(key) == "" {
 			issues = append(issues, schema.Issue{Code: "missing_row_key", Path: keyPath, Message: "localized copy requires a non-empty stable row key"})
 			continue
 		}
@@ -279,58 +306,65 @@ func localizedValue(field schema.Field, value store.Value) (store.Value, bool) {
 	if field.Localized {
 		return value, true
 	}
+	if embedded.HasFields(field) {
+		if !hasLocalizedDescendant(field) {
+			return store.Value{}, false
+		}
+		transformed, err := embedded.TransformValue(field, value, field.Name, embedded.NewBudget(), func(o embedded.ReadOccurrence) (store.Value, bool, error) {
+			children := localizedValues(o.Fields, o.Payload.Lookup)
+			copyReserved(o.Payload, children, o.Case.Identity)
+			copyReserved(o.Payload, children, o.Case.Discriminator)
+			return store.Object(children), true, nil
+		})
+		return transformed, err == nil
+	}
 	switch field.Type {
 	case schema.FieldTypeGroup:
-		object, ok := value.ObjectValue()
-		if !ok || field.Nested == nil {
+		if value.Kind() != store.ValueObject || field.Nested == nil {
 			return store.Value{}, false
 		}
-		children := LocalizedValues(field.Nested.Fields, object)
+		children := localizedValues(field.Nested.ResolvedFields(), value.Lookup)
 		return store.Object(children), len(children) > 0
 	case schema.FieldTypeArray:
-		items, ok := value.Values()
-		if !ok || field.Nested == nil || !fieldsHaveLocalization(field.Nested.Fields) {
+		if value.Kind() != store.ValueList || field.Nested == nil || !fieldsHaveLocalization(field.Nested.ResolvedFields()) {
 			return store.Value{}, false
 		}
-		result := make([]store.Value, 0, len(items))
-		for _, item := range items {
-			object, valid := item.ObjectValue()
-			if !valid {
+		result := make([]store.Value, 0, value.Len())
+		for item := range value.Elements() {
+			if item.Kind() != store.ValueObject {
 				continue
 			}
-			row := LocalizedValues(field.Nested.Fields, object)
-			copyReserved(object, row, "_key")
+			row := localizedValues(field.Nested.ResolvedFields(), item.Lookup)
+			copyReserved(item, row, "_key")
 			result = append(result, store.Object(row))
 		}
 		return store.List(result...), true
 	case schema.FieldTypeBlocks:
-		items, ok := value.Values()
-		if !ok || field.Blocks == nil {
+		if value.Kind() != store.ValueList || field.Blocks == nil {
 			return store.Value{}, false
 		}
 		hasLocalizedBlock := false
-		for _, block := range field.Blocks.Types {
-			hasLocalizedBlock = hasLocalizedBlock || fieldsHaveLocalization(block.Fields)
+		for _, block := range field.Blocks.ResolvedTypes() {
+			hasLocalizedBlock = hasLocalizedBlock || fieldsHaveLocalization(block.ResolvedFields())
 		}
 		if !hasLocalizedBlock {
 			return store.Value{}, false
 		}
-		result := make([]store.Value, 0, len(items))
-		for _, item := range items {
-			object, valid := item.ObjectValue()
-			if !valid {
+		result := make([]store.Value, 0, value.Len())
+		for item := range value.Elements() {
+			if item.Kind() != store.ValueObject {
 				continue
 			}
-			blockType, _ := object["blockType"].StringValue()
+			blockType, _ := item.Get("blockType").StringValue()
 			row := store.Values{}
-			for _, block := range field.Blocks.Types {
-				if block.Key == blockType {
-					row = LocalizedValues(block.Fields, object)
+			for _, block := range field.Blocks.ResolvedTypes() {
+				if block.Slug == blockType {
+					row = localizedValues(block.ResolvedFields(), item.Lookup)
 					break
 				}
 			}
-			copyReserved(object, row, "_key")
-			copyReserved(object, row, "blockType")
+			copyReserved(item, row, "_key")
+			copyReserved(item, row, "blockType")
 			result = append(result, store.Object(row))
 		}
 		return store.List(result...), true
@@ -348,25 +382,46 @@ func fieldsHaveLocalization(fields []schema.Field) bool {
 	return false
 }
 
-func copyReserved(source, target store.Values, name string) {
-	if value, exists := source[name]; exists {
+func copyReserved(source store.Value, target store.Values, name string) {
+	if value, exists := source.Lookup(name); exists {
 		target[name] = value
 	}
 }
 
+// Schema-only checks avoid inspecting wide ordinary values when no descendant
+// needs localization. Embedded descriptors still require traversal for their
+// envelope validation and budgets, even when their payloads are not localized.
 func hasLocalizedDescendant(field schema.Field) bool {
-	if field.Nested != nil {
-		for _, child := range field.Nested.Fields {
-			if child.Localized || hasLocalizedDescendant(child) {
+	return childFieldsMatch(field, fieldsHaveLocalization)
+}
+
+func fieldsNeedTraversal(fields []schema.Field) bool {
+	for _, field := range fields {
+		if field.Localized || embedded.HasFields(field) || childFieldsMatch(field, fieldsNeedTraversal) {
+			return true
+		}
+	}
+	return false
+}
+
+func childFieldsMatch(field schema.Field, matches func([]schema.Field) bool) bool {
+	if field.Nested != nil && matches(field.Nested.ResolvedFields()) {
+		return true
+	}
+	if field.Blocks != nil {
+		for _, block := range field.Blocks.ResolvedTypes() {
+			if matches(block.ResolvedFields()) {
 				return true
 			}
 		}
 	}
-	if field.Blocks != nil {
-		for _, block := range field.Blocks.Types {
-			for _, child := range block.Fields {
-				if child.Localized || hasLocalizedDescendant(child) {
-					return true
+	if field.Plugin != nil {
+		for _, tree := range field.Plugin.EmbeddedTrees {
+			for _, c := range tree.Cases {
+				for _, block := range c.ResolvedTypes() {
+					if matches(block.ResolvedFields()) {
+						return true
+					}
 				}
 			}
 		}
@@ -374,277 +429,437 @@ func hasLocalizedDescendant(field schema.Field) bool {
 	return false
 }
 
-func storageValue(field schema.Field, value store.Value, selection Selection) (store.Value, error) {
+func storageValue(field schema.Field, value store.Value, selection Selection) (store.Value, bool, error) {
 	if field.Localized {
 		if selection.All {
-			object, ok := value.ObjectValue()
-			if !ok {
-				return store.Value{}, fmt.Errorf("localized field %q must be a locale-keyed object for an all-locales write", field.Path.String())
+			if value.Kind() != store.ValueObject {
+				return store.Value{}, false, fmt.Errorf("localized field %q must be a locale-keyed object for an all-locales write", field.Path.String())
 			}
-			for code := range object {
+			for code := range value.Entries() {
 				if !contains(selection.Configured, schema.LocaleCode(code)) {
-					return store.Value{}, fmt.Errorf("localized field %q contains unknown locale %q", field.Path.String(), code)
+					return store.Value{}, false, fmt.Errorf("localized field %q contains unknown locale %q", field.Path.String(), code)
 				}
 			}
-			return store.Object(object), nil
+			return value, false, nil
 		}
-		return store.Object(store.Values{string(selection.Locale): value}), nil
+		return store.Object(store.Values{string(selection.Locale): value}), true, nil
 	}
-	return transformChildren(field, value, func(child schema.Field, childValue store.Value) (store.Value, error) {
-		return storageValue(child, childValue, selection)
+	return mapChildObjects(field, value, "", func(fields []schema.Field, object store.Value, _ string) (store.Value, bool, error) {
+		return transformObject(fields, object, func(child schema.Field, childValue store.Value) (store.Value, bool, error) {
+			return storageValue(child, childValue, selection)
+		})
 	})
 }
 
-func projectValueAt(field schema.Field, value store.Value, selection Selection, path string, sources map[string]schema.LocaleCode) (store.Value, bool) {
+func projectValueAt(field schema.Field, value store.Value, selection Selection, path string, sources map[string]schema.LocaleCode) (store.Value, bool, bool) {
 	if field.Localized {
 		if selection.All {
-			return value, true
+			return value, true, false
 		}
-		localized, ok := value.ObjectValue()
-		if !ok {
-			return store.Value{}, false
+		if value.Kind() != store.ValueObject {
+			return store.Value{}, false, true
 		}
 		for index, locale := range selection.Chain {
-			candidate, exists := localized[string(locale)]
-			if exists && candidate.Kind() != store.ValueNull {
+			candidate, exists := value.Lookup(string(locale))
+			if exists && (candidate.Kind() != store.ValueNull || selection.PreserveNull) {
 				if text, stringValue := candidate.StringValue(); stringValue && text == "" && index < len(selection.Chain)-1 {
 					continue
 				}
 				sources[path] = locale
-				return candidate, true
+				return candidate, true, true
 			}
 		}
-		return store.Value{}, false
+		return store.Value{}, false, true
 	}
-	switch field.Type {
-	case schema.FieldTypeGroup:
-		object, ok := value.ObjectValue()
-		if !ok || field.Nested == nil {
-			return value, true
-		}
-		return store.Object(projectObject(field.Nested.Fields, object, selection, path, sources)), true
-	case schema.FieldTypeArray:
-		items, ok := value.Values()
-		if !ok || field.Nested == nil {
-			return value, true
-		}
-		for index, item := range items {
-			object, valid := item.ObjectValue()
-			if valid {
-				items[index] = store.Object(projectObject(field.Nested.Fields, object, selection, fmt.Sprintf("%s.%d", path, index), sources))
-			}
-		}
-		return store.List(items...), true
-	case schema.FieldTypeBlocks:
-		items, ok := value.Values()
-		if !ok || field.Blocks == nil {
-			return value, true
-		}
-		for index, item := range items {
-			object, valid := item.ObjectValue()
-			if !valid {
-				continue
-			}
-			blockType, _ := object["blockType"].StringValue()
-			for _, block := range field.Blocks.Types {
-				if block.Key == blockType {
-					items[index] = store.Object(projectObject(block.Fields, object, selection, fmt.Sprintf("%s.%d", path, index), sources))
-					break
-				}
-			}
-		}
-		return store.List(items...), true
-	default:
-		return value, true
-	}
+	transformed, changed, err := mapChildObjects(field, value, path, func(fields []schema.Field, object store.Value, objectPath string) (store.Value, bool, error) {
+		projected, changed := projectObject(fields, object, selection, objectPath, sources)
+		return projected, changed, nil
+	})
+	return transformed, err == nil, changed
 }
 
-func projectObject(fields []schema.Field, object store.Values, selection Selection, parentPath string, sources map[string]schema.LocaleCode) store.Values {
-	result := store.CloneValues(object)
+func projectObject(fields []schema.Field, object store.Value, selection Selection, parentPath string, sources map[string]schema.LocaleCode) (store.Value, bool) {
+	var result store.Values
 	for _, field := range fields {
-		value, exists := object[field.Name]
+		if !field.Localized && !embedded.HasFields(field) && !childFieldsMatch(field, fieldsNeedTraversal) {
+			continue
+		}
+		value, exists := object.Lookup(field.Name)
 		if !exists {
 			continue
 		}
-		path := parentPath + "." + field.Name
-		projected, visible := projectValueAt(field, value, selection, path, sources)
+		projected, visible, changed := projectValueAt(field, value, selection, parentPath+"."+field.Name, sources)
+		if visible && !changed {
+			continue
+		}
+		if result == nil {
+			result, _ = object.CopyObject()
+		}
 		if visible {
 			result[field.Name] = projected
 		} else {
 			delete(result, field.Name)
 		}
 	}
-	return result
+	if result == nil {
+		return object, false
+	}
+	return store.Object(result), true
 }
 
-type valueTransform func(schema.Field, store.Value) (store.Value, error)
+type objectTransform func([]schema.Field, store.Value, string) (store.Value, bool, error)
 
-func transformChildren(field schema.Field, value store.Value, transform valueTransform) (store.Value, error) {
-	switch field.Type {
-	case schema.FieldTypeGroup:
-		object, ok := value.ObjectValue()
-		if !ok || field.Nested == nil {
-			return value, nil
+// mapChildObjects retains untouched containers. A changed list is materialized
+// once, rather than path-copying it once per changed row.
+func mapChildObjects(field schema.Field, value store.Value, path string, transform objectTransform) (store.Value, bool, error) {
+	if embedded.HasFields(field) {
+		changed := false
+		prefix := path
+		if prefix == "" {
+			prefix = field.Name
 		}
-		transformed, err := transformObject(field.Nested.Fields, object, transform)
-		return store.Object(transformed), err
-	case schema.FieldTypeArray:
-		items, ok := value.Values()
-		if !ok || field.Nested == nil {
-			return value, nil
+		transformed, err := embedded.TransformValue(field, value, prefix, embedded.NewBudget(), func(o embedded.ReadOccurrence) (store.Value, bool, error) {
+			next, updated, err := transform(o.Fields, o.Payload, o.RuntimePath)
+			changed = changed || updated
+			return next, updated, err
+		})
+		return transformed, changed, err
+	}
+	if !childFieldsMatch(field, fieldsNeedTraversal) {
+		return value, false, nil
+	}
+	if field.Type == schema.FieldTypeGroup {
+		if value.Kind() != store.ValueObject || field.Nested == nil {
+			return value, false, nil
 		}
-		for index, item := range items {
-			object, valid := item.ObjectValue()
-			if valid {
-				transformed, err := transformObject(field.Nested.Fields, object, transform)
-				if err != nil {
-					return store.Value{}, err
-				}
-				items[index] = store.Object(transformed)
-			}
+		return transform(field.Nested.ResolvedFields(), value, path)
+	}
+	if value.Kind() != store.ValueList || (field.Type != schema.FieldTypeArray && field.Type != schema.FieldTypeBlocks) {
+		return value, false, nil
+	}
+	var items []store.Value
+	index := -1
+	for item := range value.Elements() {
+		index++
+		if item.Kind() != store.ValueObject {
+			continue
 		}
-		return store.List(items...), nil
-	case schema.FieldTypeBlocks:
-		items, ok := value.Values()
-		if !ok || field.Blocks == nil {
-			return value, nil
-		}
-		for index, item := range items {
-			object, valid := item.ObjectValue()
-			if !valid {
-				continue
-			}
-			blockType, _ := object["blockType"].StringValue()
-			for _, block := range field.Blocks.Types {
-				if block.Key == blockType {
-					transformed, err := transformObject(block.Fields, object, transform)
-					if err != nil {
-						return store.Value{}, err
-					}
-					items[index] = store.Object(transformed)
+		var fields []schema.Field
+		if field.Type == schema.FieldTypeArray && field.Nested != nil {
+			fields = field.Nested.ResolvedFields()
+		} else if field.Type == schema.FieldTypeBlocks && field.Blocks != nil {
+			blockType, _ := item.Get("blockType").StringValue()
+			for _, block := range field.Blocks.ResolvedTypes() {
+				if block.Slug == blockType {
+					fields = block.ResolvedFields()
 					break
 				}
 			}
 		}
-		return store.List(items...), nil
-	default:
-		return value, nil
+		if !fieldsNeedTraversal(fields) {
+			continue
+		}
+		itemPath := ""
+		if path != "" {
+			itemPath = fmt.Sprintf("%s.%d", path, index)
+		}
+		transformed, changed, err := transform(fields, item, itemPath)
+		if err != nil {
+			return store.Value{}, false, err
+		}
+		if changed {
+			if items == nil {
+				items, _ = value.CopyList()
+			}
+			items[index] = transformed
+		}
 	}
+	if items == nil {
+		return value, false, nil
+	}
+	return store.List(items...), true, nil
 }
 
-func transformObject(fields []schema.Field, object store.Values, transform valueTransform) (store.Values, error) {
-	result := store.CloneValues(object)
+func transformObject(fields []schema.Field, object store.Value, transform func(schema.Field, store.Value) (store.Value, bool, error)) (store.Value, bool, error) {
+	var result store.Values
 	for _, child := range fields {
-		value, exists := object[child.Name]
+		value, exists := object.Lookup(child.Name)
 		if !exists {
 			continue
 		}
-		transformed, err := transform(child, value)
+		transformed, changed, err := transform(child, value)
 		if err != nil {
-			return nil, err
+			return store.Value{}, false, err
 		}
-		result[child.Name] = transformed
+		if changed {
+			if result == nil {
+				result, _ = object.CopyObject()
+			}
+			result[child.Name] = transformed
+		}
 	}
-	return result, nil
+	if result == nil {
+		return object, false, nil
+	}
+	return store.Object(result), true, nil
 }
 
-func mergeValue(field schema.Field, current, patch store.Value) store.Value {
+// Merge change flags are relative to the patch: complete submitted objects can
+// be retained even when their scalar values differ from current storage. Only
+// omitted members or recursively completed children require a new container.
+func mergeValue(field schema.Field, current, patch store.Value) (store.Value, bool) {
 	if field.Localized {
-		previous, previousOK := current.ObjectValue()
-		next, nextOK := patch.ObjectValue()
-		if !nextOK {
-			return patch
+		if patch.Kind() != store.ValueObject {
+			return patch, false
 		}
-		if !previousOK {
-			previous = store.Values{}
+		if unchanged, complete := unchangedValuePatch(field, current, patch); unchanged {
+			if complete {
+				return patch, false
+			}
+			return current, true
 		}
+		merged := omittedMembers(current, patch)
 		unlocalized := field
 		unlocalized.Localized = false
-		for locale, value := range next {
-			previous[locale] = mergeValue(unlocalized, previous[locale], value)
+		for locale, value := range patch.Entries() {
+			previous, _ := current.Lookup(locale)
+			next, changed := mergeValue(unlocalized, previous, value)
+			if changed {
+				if merged == nil {
+					merged, _ = patch.CopyObject()
+				}
+				merged[locale] = next
+			}
 		}
-		return store.Object(previous)
+		if merged == nil {
+			return patch, false
+		}
+		return store.Object(merged), true
 	}
+	if embedded.HasFields(field) {
+		previous := map[string]store.Value{}
+		err := embedded.Visit(field, current, field.Name, embedded.NewBudget(), func(o embedded.ReadOccurrence) error {
+			if o.Key != "" {
+				previous[o.Identity] = o.Payload
+			}
+			return nil
+		})
+		if err != nil {
+			return patch, false
+		}
+		changed := false
+		transformed, err := embedded.TransformValue(field, patch, field.Name, embedded.NewBudget(), func(o embedded.ReadOccurrence) (store.Value, bool, error) {
+			old, exists := previous[o.Identity]
+			if !exists {
+				return o.Payload, false, nil
+			}
+			merged, updated := mergeObjectValue(o.Fields, old, o.Payload)
+			changed = changed || updated
+			return merged, updated, nil
+		})
+		if err != nil {
+			return patch, false
+		}
+		return transformed, changed
+	}
+
 	switch field.Type {
 	case schema.FieldTypeGroup:
-		return mergeObjectValue(field.Nested, current, patch)
+		if field.Nested != nil {
+			return mergeObjectValue(field.Nested.ResolvedFields(), current, patch)
+		}
 	case schema.FieldTypeArray:
 		return mergeRows(field.Nested, nil, current, patch)
 	case schema.FieldTypeBlocks:
 		return mergeRows(nil, field.Blocks, current, patch)
-	default:
-		return patch
 	}
+	return patch, false
 }
 
-func mergeObjectValue(nested *schema.NestedField, current, patch store.Value) store.Value {
-	previous, previousOK := current.ObjectValue()
-	next, nextOK := patch.ObjectValue()
-	if !previousOK || !nextOK || nested == nil {
-		return patch
-	}
-	merged := store.CloneValues(previous)
-	for name, value := range next {
-		merged[name] = value
-	}
-	for _, field := range nested.Fields {
-		value, exists := next[field.Name]
-		if exists {
-			merged[field.Name] = mergeValue(field, previous[field.Name], value)
-		}
-	}
-	return store.Object(merged)
-}
-
-func mergeRows(nested *schema.NestedField, blocks *schema.BlocksField, current, patch store.Value) store.Value {
-	previousRows, previousOK := current.Values()
-	nextRows, nextOK := patch.Values()
-	if !previousOK || !nextOK {
-		return patch
-	}
-	byKey := make(map[string]store.Values, len(previousRows))
-	for _, row := range previousRows {
-		object, ok := row.ObjectValue()
-		if !ok {
-			continue
-		}
-		key, _ := object["_key"].StringValue()
-		if key != "" {
-			byKey[key] = object
-		}
-	}
-	for index, row := range nextRows {
-		object, ok := row.ObjectValue()
-		if !ok {
-			continue
-		}
-		key, _ := object["_key"].StringValue()
-		previous := byKey[key]
-		merged := store.CloneValues(previous)
-		for name, value := range object {
+func omittedMembers(current, patch store.Value) store.Values {
+	var merged store.Values
+	for name, value := range current.Entries() {
+		if _, exists := patch.Lookup(name); !exists {
+			if merged == nil {
+				merged, _ = patch.CopyObject()
+			}
 			merged[name] = value
 		}
-		fields := []schema.Field(nil)
+	}
+	return merged
+}
+
+func mergeObjectValue(fields []schema.Field, current, patch store.Value) (store.Value, bool) {
+	if current.Kind() != store.ValueObject || patch.Kind() != store.ValueObject {
+		return patch, false
+	}
+	if unchanged, complete := unchangedObjectPatch(fields, current, patch); unchanged {
+		if complete {
+			return patch, false
+		}
+		return current, true
+	}
+	merged := omittedMembers(current, patch)
+	for _, field := range fields {
+		if value, exists := patch.Lookup(field.Name); exists {
+			next, changed := mergeValue(field, current.Get(field.Name), value)
+			if changed {
+				if merged == nil {
+					merged, _ = patch.CopyObject()
+				}
+				merged[field.Name] = next
+			}
+		}
+	}
+	if merged == nil {
+		return patch, false
+	}
+	return store.Object(merged), true
+}
+
+// unchangedObjectPatch recognizes sparse no-op updates by inspecting only
+// submitted members. This lets identity-only rows and empty group patches reuse
+// current storage without first copying all their omitted members. Complete
+// patches can still be retained directly by the caller.
+func unchangedObjectPatch(fields []schema.Field, current, patch store.Value) (unchanged, complete bool) {
+	if current.Kind() != store.ValueObject || patch.Kind() != store.ValueObject {
+		return false, false
+	}
+	complete = current.Len() == patch.Len()
+	pendingObjects := 0
+	for name, value := range patch.Entries() {
+		previous, exists := current.Lookup(name)
+		if !exists {
+			return false, false
+		}
+		if value.Kind() == store.ValueObject {
+			if previous.Kind() != store.ValueObject {
+				return false, false
+			}
+			pendingObjects++
+			continue
+		}
+		if same, _ := unchangedValuePatch(schema.Field{}, previous, value); !same {
+			return false, false
+		}
+	}
+	if pendingObjects == 0 {
+		return true, complete
+	}
+	// Scalar comparisons need no schema search. Resolve compound members in a
+	// single schema pass, keeping wide objects linear without a per-row index.
+	for _, field := range fields {
+		value, exists := patch.Lookup(field.Name)
+		if !exists || value.Kind() != store.ValueObject {
+			continue
+		}
+		previous, _ := current.Lookup(field.Name)
+		same, childComplete := unchangedValuePatch(field, previous, value)
+		if !same {
+			return false, false
+		}
+		complete = complete && childComplete
+		pendingObjects--
+		if pendingObjects == 0 {
+			return true, complete
+		}
+	}
+	// An unresolved object is opaque or unknown, so it cannot use this shortcut.
+	return false, false
+}
+
+func unchangedValuePatch(field schema.Field, current, patch store.Value) (bool, bool) {
+	if current.Kind() != patch.Kind() {
+		return false, false
+	}
+	// Scalars compare without visiting child containers. Float bits retain signed zero;
+	// Lookup in the caller distinguishes explicit null from an absent member.
+	switch patch.Kind() {
+	case store.ValueNull:
+		return true, true
+	case store.ValueString:
+		previous, _ := current.StringValue()
+		next, _ := patch.StringValue()
+		return previous == next, true
+	case store.ValueNumber:
+		previous, _ := current.NumberValue()
+		next, _ := patch.NumberValue()
+		return math.Float64bits(previous) == math.Float64bits(next), true
+	case store.ValueBoolean:
+		previous, _ := current.BooleanValue()
+		next, _ := patch.BooleanValue()
+		return previous == next, true
+	}
+	if field.Localized && patch.Kind() == store.ValueObject {
+		unlocalized := field
+		unlocalized.Localized = false
+		complete := current.Len() == patch.Len()
+		for locale, value := range patch.Entries() {
+			previous, exists := current.Lookup(locale)
+			if !exists {
+				return false, false
+			}
+			same, childComplete := unchangedValuePatch(unlocalized, previous, value)
+			if !same {
+				return false, false
+			}
+			complete = complete && childComplete
+		}
+		return true, complete
+	}
+	if field.Type == schema.FieldTypeGroup && field.Nested != nil && !embedded.HasFields(field) {
+		return unchangedObjectPatch(field.Nested.ResolvedFields(), current, patch)
+	}
+	// Lists, populated documents, opaque objects and embedded envelopes retain
+	// their normal merge/replacement and admission paths. Do not deep-compare them.
+	return false, false
+}
+
+func mergeRows(nested *schema.NestedField, blocks *schema.BlocksField, current, patch store.Value) (store.Value, bool) {
+	if current.Kind() != store.ValueList || patch.Kind() != store.ValueList {
+		return patch, false
+	}
+	byKey := make(map[string]store.Value, current.Len())
+	for row := range current.Elements() {
+		key, _ := row.Get("_key").StringValue()
+		if key != "" {
+			byKey[key] = row
+		}
+	}
+
+	var nextRows []store.Value
+	index := -1
+	for row := range patch.Elements() {
+		index++
+		if row.Kind() != store.ValueObject {
+			continue
+		}
+		key, _ := row.Get("_key").StringValue()
+		previous := byKey[key]
+		var fields []schema.Field
 		if nested != nil {
-			fields = nested.Fields
+			fields = nested.ResolvedFields()
 		} else if blocks != nil {
-			blockType, _ := object["blockType"].StringValue()
-			for _, block := range blocks.Types {
-				if block.Key == blockType {
-					fields = block.Fields
+			blockType, _ := row.Get("blockType").StringValue()
+			for _, block := range blocks.ResolvedTypes() {
+				if block.Slug == blockType {
+					fields = block.ResolvedFields()
 					break
 				}
 			}
 		}
-		for _, field := range fields {
-			value, exists := object[field.Name]
-			if exists {
-				merged[field.Name] = mergeValue(field, previous[field.Name], value)
+		merged, changed := mergeObjectValue(fields, previous, row)
+		if changed {
+			if nextRows == nil {
+				nextRows, _ = patch.CopyList()
 			}
+			nextRows[index] = merged
 		}
-		nextRows[index] = store.Object(merged)
 	}
-	return store.List(nextRows...)
+	if nextRows == nil {
+		return patch, false
+	}
+	return store.List(nextRows...), true
 }
 
 func contains(values []schema.LocaleCode, value schema.LocaleCode) bool {

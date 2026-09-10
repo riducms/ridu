@@ -2,179 +2,63 @@
 
 # Hooks
 
-## The lifecycle {#lifecycle}
+Hooks are Go functions that run when Ridu creates, reads, updates, or deletes content.
+Use them to clean up a field value, record who edited a document, save an audit entry,
+or send a notification after a successful save.
 
-Hooks run as part of the same operation engine used by REST, the local API, the SDK, and the admin. Within a phase, each `[]ridu.Hook` runs in slice order. Choose the narrowest phase that owns the work: normalize before validation, derive before persistence, and leave external effects until after commit.
+They run on the server for requests from the admin, REST, the SDK, and the local Go API.
 
-| Phase                         | When it runs                              | Good for                                          |
-| ----------------------------- | ----------------------------------------- | ------------------------------------------------- |
-| `BeforeDuplicate`             | After the source is copied                | Resetting slugs and copy-only fields              |
-| `BeforeValidate`              | Before field validators                   | Trimming and normalizing input                    |
-| `BeforeChange`                | After validation, before persistence      | Derived values and audit fields                   |
-| `BeforeOperation`             | Immediately before storage                | Last transactional preparation                    |
-| `BeforeRead`                  | Before documents are read                 | Request-scoped read setup                         |
-| `BeforeDelete`                | After the original is loaded              | Dependent transactional cleanup                   |
-| `AfterChange` / `AfterDelete` | After persistence, inside the transaction | Writes that must commit or roll back together     |
-| `AfterRead`                   | Before field-level redaction              | Decorating the returned document                  |
-| `AfterOperation`              | After the operation, before commit        | General transactional follow-up                   |
-| `AfterError`                  | When the resource operation fails         | Metrics and contextual logging                    |
-| `AfterCommit`                 | Only after commit succeeds                | Email, webhooks, indexing, and cache invalidation |
+## Choose where your hook belongs {#choose-a-hook}
 
-<aside class="callout" data-variant="note">
-<strong>Collection and field hooks</strong>
-<p>Collection hooks receive the whole operation. Field hooks receive the same context with <code>FieldPath</code> set and support duplicate, validate, change, operation, delete, after-read, and after-commit phases. Field paths are map keys, so rely on slice order within one path—not map order across paths. <code>BeforeRead</code> and <code>AfterError</code> are resource-level phases.</p>
-</aside>
+| What you want to do                                                       | Start here                                                      |
+| ------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| Change one field, such as trimming a title or formatting a returned value | [Field hooks](./hooks/fields.md)                              |
+| Work with a whole document, such as recording its last editor             | [Collection hooks](./hooks/collections.md)                    |
+| Run code when a singleton such as site settings changes                   | [Global hooks](./hooks/globals.md)                            |
+| Read the user, previous values, or current locale                         | [Hook context](./hooks/context.md)                            |
+| Save related documents, send notifications, or handle failures            | [Transactions and errors](./hooks/transactions-and-errors.md) |
 
-## Read HookContext {#hook-context}
+A field hook follows the field wherever you reuse it, including inside groups, arrays, and blocks.
+A collection or global hook is a better fit when several fields need to change together.
 
-Application code should use [`ridu.HookContext`](https://riducms.com/reference/ridu/hook-context/). It is the ergonomic alias of [`core.HookContext`](https://riducms.com/reference/core/hook-context/), so both names describe the same value.
+## Before or after saving? {#lifecycle}
 
-| Value                   | What it contains                                                                            |
-| ----------------------- | ------------------------------------------------------------------------------------------- |
-| `Operation`             | The create, duplicate, read, update, delete, publish, or unpublish operation                |
-| `Actor`                 | The authenticated document, or `nil` for an anonymous operation                             |
-| `Data`                  | Mutable incoming values during write phases                                                 |
-| `Document`              | The current result once the phase has one                                                   |
-| `Original`              | The persisted value before update or delete                                                 |
-| `Context`               | Cancellation, deadline, and the active transaction boundary                                 |
-| `Local`                 | Nested operations through the normal engine; pre-commit phases reuse the active transaction |
-| `Error`                 | The original failure while `AfterError` runs                                                |
-| `Locale` / `AllLocales` | The locale view selected for this operation                                                 |
+- **Before saving:** clean up or calculate values with `BeforeValidate` or `BeforeChange`.
+- **After storage, before commit:** use `AfterChange` for related database writes that must
+  succeed or roll back together.
+- **After commit:** use `AfterCommit` to notify another service once the document has been saved.
+- **When preparing a response:** use `AfterRead` to change what the caller receives without
+  changing the stored value.
 
-Fields are [`store.Value`](https://riducms.com/reference/store/value/) values rather than `any`. Read strings with [`StringValue()`](https://riducms.com/reference/store/value-string-value/) and write them with [`store.String(...)`](https://riducms.com/reference/store/string/).
+<span id="save-order"></span>
 
-## Normalize before validation {#normalize-input}
+See the [collection hook sequence](./hooks/collections.md#save-order) for the exact order,
+including validation, permissions, and field hooks. Some stages also run for reads and deletes;
+check `ctx.Operation` when your code should run only on saves.
 
-`BeforeValidate` is the right place to make user input canonical. The validator sees the value written back to `ctx.Data`.
+Ridu waits for each hook to finish. Use [tasks](https://riducms.com/docs/tasks/) for work that needs background
+processing or retries, and read [after-commit behavior](./hooks/transactions-and-errors.md#after-commit)
+before sending email or calling a webhook.
 
-```go title="content/posts.go" add={18-22}
-func trimString(name string) ridu.Hook {
-	return func(ctx ridu.HookContext) error {
-		value, exists := ctx.Data[name]
-		if !exists {
-			return nil
-		}
+## Find an example {#examples}
 
-		text, valid := value.StringValue()
-		if valid {
-			ctx.Data[name] = store.String(strings.TrimSpace(text))
-		}
-		return nil
-	}
-}
+- <span id="normalize-input"></span>[Trim a field before validation](./hooks/fields.md#normalize-input).
+- <span id="typed-field-hooks"></span>[Change a typed field before saving](./hooks/fields.md#typed-field-hooks).
+- <span id="read-hooks"></span>[Format a returned value](./hooks/fields.md#read-hooks).
+- <span id="derive-values"></span>[Record who edited a document](./hooks/collections.md#derive-values).
+- <span id="global-hooks"></span>[Add a hook to site settings](./hooks/globals.md#global-hooks).
+- <span id="hook-context"></span><span id="stored-and-returned-values"></span>[Read and change hook values](./hooks/context.md).
+- <span id="nested-operations"></span>[Save an audit entry in the same transaction](./hooks/transactions-and-errors.md#nested-operations).
+- <span id="recursion"></span>[Avoid triggering the same hook again](./hooks/context.md#recursion).
+- <span id="after-commit"></span><span id="after-commit-errors"></span>[Send a notification after a save](./hooks/transactions-and-errors.md#after-commit).
+- <span id="handle-errors"></span><span id="hook-errors"></span>[Log and handle failures](./hooks/transactions-and-errors.md#handle-errors).
+- <span id="performance"></span>[Keep frequently run hooks fast](./hooks/transactions-and-errors.md#performance).
 
-var Posts = ridu.Collection{
-	Slug: "posts",
-	FieldHooks: map[string]ridu.CollectionHooks{
-		"title": {
-			BeforeValidate: []ridu.Hook{trimString("title")},
-		},
-	},
-}
-```
+## Handle errors across the application {#application-hooks}
 
-## Derive values before persistence {#derive-values}
+`Config.Hooks.AfterError` runs for failures across the application, including failures that happen
+before Ridu knows which collection or global is involved. Use it for a central logger or error
+reporting service. Collection and global error hooks run before the application error hooks.
 
-Use `BeforeChange` when a value should be derived from already-valid input and written in the same transaction. Inspect `Operation` when behaviour differs between create and update.
-
-```go title="content/posts.go"
-func recordLastEditor(ctx ridu.HookContext) error {
-	if ctx.Actor == nil {
-		return nil
-	}
-	if ctx.Operation != ridu.OperationCreate &&
-		ctx.Operation != ridu.OperationUpdate {
-		return nil
-	}
-
-	ctx.Data["lastEditedBy"] = store.String(ctx.Actor.ID)
-	return nil
-}
-
-var Posts = ridu.Collection{
-	Hooks: ridu.CollectionHooks{
-		BeforeChange: []ridu.Hook{recordLastEditor},
-	},
-}
-```
-
-## Keep related writes atomic {#nested-operations}
-
-During a transactional phase such as `AfterChange`, `ctx.Local` runs nested work through normal access rules, validation, and hooks while reusing the outer transaction. If the nested call fails, return its error and the outer operation rolls back too.
-
-```go title="content/posts.go"
-func writeAuditEntry(ctx ridu.HookContext) error {
-	if ctx.Document == nil {
-		return nil
-	}
-
-	_, err := ctx.Local.Create(
-		ctx.Context,
-		"audit-log",
-		store.Values{
-			"document":  store.String(ctx.Document.ID),
-			"operation": store.String(string(ctx.Operation)),
-		},
-		ctx.Actor,
-	)
-	return err
-}
-
-var Posts = ridu.Collection{
-	Hooks: ridu.CollectionHooks{
-		AfterChange: []ridu.Hook{writeAuditEntry},
-	},
-}
-```
-
-<aside class="callout" data-variant="warning">
-<strong>Avoid accidental recursion</strong>
-<p>A hook can trigger another hooked collection. Keep the dependency direction clear, and guard on <code>Operation</code> or use a dedicated destination collection when a nested write could re-enter the same hook.</p>
-</aside>
-
-## Cross the transaction boundary {#after-commit}
-
-Use `AfterCommit` for work that must not happen when the database rolls back. The write is already durable: a returned error is reported as a committed-hook failure and cannot roll the document back. Configure `Config.AfterCommit` with a dispatcher when effects need retries or a durable worker boundary.
-
-```go title="content/posts.go"
-func reindexPost(ctx ridu.HookContext) error {
-	if ctx.Document == nil {
-		return nil
-	}
-	return search.Enqueue(ctx.Context, ctx.Document.ID)
-}
-
-var Posts = ridu.Collection{
-	Hooks: ridu.CollectionHooks{
-		AfterCommit: []ridu.Hook{reindexPost},
-	},
-}
-```
-
-<aside class="callout" data-variant="important">
-<strong>Transaction boundary</strong>
-<p><code>AfterChange</code> and <code>AfterOperation</code> run inside the transaction. <code>AfterCommit</code> runs after it and <code>ctx.Local</code> starts a new transaction there. Do not blindly retry the original write when only an after-commit effect failed.</p>
-</aside>
-
-## Observe failures without hiding them {#handle-errors}
-
-`AfterError` runs outside the failed transaction and receives the original failure on `ctx.Error`. Use it for context-rich logging and metrics; returning `nil` does not turn the failed operation into a success.
-
-```go title="content/posts.go"
-func countFailure(ctx ridu.HookContext) error {
-	metrics.OperationFailure(
-		string(ctx.Operation),
-		string(ctx.CollectionID),
-	)
-	log.Printf("ridu operation failed: %v", ctx.Error)
-	return nil
-}
-
-var Posts = ridu.Collection{
-	Hooks: ridu.CollectionHooks{
-		AfterError: []ridu.Hook{countFailure},
-	},
-}
-```
-
-See [`ridu.CollectionHooks`](https://riducms.com/reference/ridu/collection-hooks/) for every phase and [`ridu.Hook`](https://riducms.com/reference/ridu/hook/) for the callback contract.
+Follow [Log a failed operation](./hooks/transactions-and-errors.md#handle-errors) for a complete
+example and the difference between a rolled-back write and a failure after commit.

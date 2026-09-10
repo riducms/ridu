@@ -20,15 +20,12 @@ func TestSQLiteOnlineBackupRestoreDrillIncludesWALState(t *testing.T) {
 		Collections: []ridu.Collection{
 			{
 				Slug: "users", Auth: true,
-				Fields: []field.Definition{field.Email("email", field.Required(), field.Unique())},
+				Fields: field.Fields{field.Email("email").Required().Unique()},
 			},
 			{
 				Slug: "posts", Versions: true,
 				VersionConfig: ridu.VersionConfig{Drafts: true},
-				Fields: []field.Definition{
-					field.Text("title", field.Required()),
-					field.Relationship("author", field.To("users"), field.Required()),
-				},
+				Fields:        field.Fields{field.Text("title").Required(), field.Relationship("author", "users").Required()},
 			},
 		},
 	}

@@ -1,3 +1,4 @@
+import { mapBlockTypes } from "@riducms/protocol";
 import type { SchemaField } from "@riducms/protocol";
 
 const canonicalAccessPath = Symbol.for("@riducms/admin/canonicalAccessPath");
@@ -49,15 +50,12 @@ function scopeField(
 		...(field.blocks === undefined
 			? {}
 			: {
-					blocks: {
-						...field.blocks,
-						types: field.blocks.types.map((block) => ({
-							...block,
-							fields: block.fields.map((child) =>
-								scopeField(child, `${path}.${child.name}`, instance, readOnly)
-							),
-						})),
-					},
+					blocks: mapBlockTypes(field.blocks, (block) => ({
+						...block,
+						fields: block.fields.map((child) =>
+							scopeField(child, `${path}.${child.name}`, instance, readOnly)
+						),
+					})),
 				}),
 	};
 	return scoped;

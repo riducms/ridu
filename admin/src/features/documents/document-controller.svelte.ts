@@ -1,3 +1,4 @@
+import { connectDocumentLiveValidation } from "@admin/core/forms/live-validation.svelte";
 import type { DocumentLockEnvelope, SchemaCollection } from "@riducms/protocol";
 import { RiduError } from "@riducms/sdk";
 import { tick, untrack } from "svelte";
@@ -85,6 +86,7 @@ export class DocumentController {
 
 	constructor(readonly options: DocumentControllerOptions) {
 		this.form = new FormController({}, options.runtime.i18n);
+		connectDocumentLiveValidation(this.form, options.runtime.client);
 		$effect(() => {
 			const slug = this.options.slug;
 			const documentID = this.options.global ? slug : this.options.documentID;
@@ -146,6 +148,7 @@ export class DocumentController {
 		});
 
 		$effect(() => () => {
+			this.form.disposeBindings();
 			this.#saveRequest?.abort();
 			this.#imageRequest?.abort();
 			if (this.#copyResetTimer !== undefined) window.clearTimeout(this.#copyResetTimer);
@@ -929,7 +932,7 @@ export class DocumentController {
 		this.imageOutcomeUncertain = false;
 		this.form.setAccess(undefined, documentID === undefined ? "create" : "update");
 		if (documentID === undefined) {
-			this.form.reset(initialFormValues(collection.fields));
+			this.form.reset(initialFormValues(collection.fields), collection.fields);
 			this.form.setLocalization(locale);
 			this.versions = [];
 			this.currentDocument = undefined;
@@ -1179,7 +1182,10 @@ export class DocumentController {
 
 	#applyDocument(document: AdminDocument, recoverDraft = false) {
 		this.currentDocument = document;
-		this.form.reset(documentFormValues(this.collection?.fields ?? [], document));
+		this.form.reset(
+			documentFormValues(this.collection?.fields ?? [], document),
+			this.collection?.fields ?? []
+		);
 		this.form.setLocalization(this.contentLocale, document._localization?.sources);
 		this.currentRevision = typeof document._revision === "number" ? document._revision : 0;
 		this.currentStatus = document._status === "draft" ? "draft" : "published";

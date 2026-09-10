@@ -52,7 +52,7 @@ func TestMongoDocumentCodecPreservesCanonicalValuesAndNanoseconds(t *testing.T) 
 		t.Fatalf("decoded document = %#v, want %#v", decoded, document)
 	}
 	decoded.Values["title"] = store.String("mutated")
-	opaque, _ := decoded.Values["opaque"].ObjectValue()
+	opaque, _ := decoded.Values["opaque"].CopyObject()
 	opaque["a.b"] = store.Number(99)
 	decodedAgain, err := decodeDocument(bson.Raw(rawBytes))
 	if err != nil {
@@ -112,7 +112,7 @@ func TestMongoNumericCodecCanonicalizesSignedZeroAtStorageBoundaries(t *testing.
 		t.Fatal(err)
 	}
 	assertStorePositiveZero(t, decoded["single"])
-	decodedLocalized, ok := decoded["localized"].ObjectValue()
+	decodedLocalized, ok := decoded["localized"].CopyObject()
 	if !ok {
 		t.Fatalf("decoded localized value = %#v, want object", decoded["localized"])
 	}
@@ -414,18 +414,18 @@ func TestMongoCollectionCodecPreservesAndStrictlyValidatesRepeatedRoots(t *testi
 		{name: "array missing required child", field: "rows", value: store.List(store.Object(store.Values{
 			"kind": store.String("primary"),
 		})), want: "missing required field"},
-		{name: "array invalid select choice", field: "rows", value: store.List(store.Object(store.Values{
+		{name: "array invalid select option", field: "rows", value: store.List(store.Object(store.Values{
 			"kind": store.String("primary"), "label": store.String("visible"), "state": store.String("unknown"),
-		})), want: "unknown select choice"},
-		{name: "array invalid radio choice", field: "rows", value: store.List(store.Object(store.Values{
+		})), want: "unknown select option"},
+		{name: "array invalid radio option", field: "rows", value: store.List(store.Object(store.Values{
 			"kind": store.String("primary"), "label": store.String("visible"), "tone": store.String("unknown"),
-		})), want: "unknown select choice"},
+		})), want: "unknown select option"},
 		{name: "block missing discriminator", field: "layout", value: store.List(store.Object(store.Values{
 			"heading": store.String("Welcome"),
-		})), want: "blockType"},
+		})), want: "requires schema recovery"},
 		{name: "block unknown discriminator", field: "layout", value: store.List(store.Object(store.Values{
 			"blockType": store.String("unknown"), "heading": store.String("Welcome"),
-		})), want: "invalid blockType"},
+		})), want: "requires schema recovery"},
 		{name: "block field from another type", field: "layout", value: store.List(store.Object(store.Values{
 			"blockType": store.String("quote"), "heading": store.String("Quote"), "tone": store.String("bright"),
 		})), want: "not a stored field"},

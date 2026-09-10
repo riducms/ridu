@@ -4,7 +4,13 @@ description: 'Let editors assemble reusable forms, validate and persist submissi
 product: plugins
 eyebrow: 'Plugins'
 order: 196
-aliases: ['forms', 'dynamic forms', 'Form Builder plugin', 'Payload Form Builder']
+aliases:
+  [
+    'forms',
+    'dynamic forms',
+    'Form Builder plugin',
+    'Payload Form Builder'
+  ]
 capabilities: ['plugin.form-builder']
 availability:
   status: available
@@ -92,7 +98,10 @@ func Config() ridu.Config {
 				UploadCollections:     []schema.CollectionSlug{"media"},
 				RedirectRelationships: []schema.CollectionSlug{"pages"},
 				DefaultToEmail:        "forms@example.com",
-				SendEmail: func(ctx context.Context, email formbuilder.Email) error {
+				SendEmail: func(
+					ctx context.Context,
+					email formbuilder.Email,
+				) error {
 					return mailer.Send(ctx, email)
 				},
 			}),
@@ -175,11 +184,17 @@ import {
 } from '@riducms/plugin-form-builder';
 import { client } from './ridu';
 
-export async function submitForm(form: FormDefinition, values: FormValues) {
+export async function submitForm(
+	form: FormDefinition,
+	values: FormValues
+) {
 	const issues = validateFormValues(form, values);
 	if (issues.length) return { issues };
 
-	const submission = await client.create('form-submissions', buildSubmissionInput(form, values));
+	const submission = await client.create(
+		'form-submissions',
+		buildSubmissionInput(form, values)
+	);
 	return { submission, confirmation: confirmationFor(form) };
 }
 ```
@@ -232,13 +247,17 @@ access must admit the public actor or authenticated user who is completing the f
 For payment, configure display choices and one trusted callback:
 
 ```go title="content/config.go"
-PaymentProcessors: []field.Choice{{Value: "stripe", Label: "Card"}},
-HandlePayment: func(ctx formbuilder.PaymentContext) (store.Value, error) {
+PaymentProcessors: []field.Option{{Value: "stripe", Label: "Card"}},
+HandlePayment: func(
+	ctx formbuilder.PaymentContext,
+) (store.Value, error) {
 	charge, err := payments.Charge(ctx.Context.Context, ctx.Total)
 	if err != nil {
 		return store.Value{}, err
 	}
-	return store.Object(store.Values{"chargeID": store.String(charge.ID)}), nil
+	return store.Object(
+		store.Values{"chargeID": store.String(charge.ID)},
+	), nil
 },
 ```
 

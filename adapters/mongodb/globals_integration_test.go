@@ -24,14 +24,11 @@ func TestMongoDBGlobalUsesResourceStorePathAndSnapshotPredicates(t *testing.T) {
 	config := ridu.Config{
 		Name: "MongoDB global resource path",
 		Collections: []ridu.Collection{{
-			Slug: "posts", Fields: []field.Definition{field.Text("title")},
+			Slug: "posts", Fields: field.Fields{field.Text("title")},
 		}},
 		Globals: []ridu.Global{{
 			Slug: "site-settings", Versions: true,
-			Fields: []field.Definition{
-				field.Text("siteName", field.Required(), field.Index()),
-				field.Text("announcement", field.Default("Welcome")),
-			},
+			Fields: field.Fields{field.Text("siteName").Required().Index(), field.Text("announcement").Default("Welcome")},
 			Access: ridu.GlobalAccess{
 				Read: func(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
 					if allowMissingRead {

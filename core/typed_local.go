@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
 )
@@ -45,32 +44,12 @@ type TypedPage[Document any] struct {
 	Total     int
 }
 
-// TypedListOptions is the subset of ListOptions whose response shape can be
-// represented by a generated Go document model. Population and all-locale
-// reads intentionally remain on LocalAPI: both change field value shapes at
-// runtime and therefore cannot be decoded into one static Document type.
-type TypedListOptions struct {
-	Where           query.Expression
-	Page            int
-	Limit           int
-	Sort            []query.Sort
-	Select          []query.Path
-	OutputFields    []query.Path
-	Draft           *bool
-	Actor           *store.Document
-	ActorCollection schema.CollectionSlug
-	TrashOnly       bool
-	Locale          schema.LocaleCode
-	FallbackLocales []schema.LocaleCode
-	DisableFallback bool
-}
-
-func (collection BoundTypedCollection[Document, Create, Update]) Create(ctx context.Context, input Create, actor *store.Document) (Document, error) {
+func (collection BoundTypedCollection[Document, Create, Update]) Create(ctx context.Context, input Create, actor *store.Document, localeOptions ...TypedLocaleOptions) (Document, error) {
 	values, err := typedInputValues(input)
 	if err != nil {
 		return *new(Document), err
 	}
-	document, err := collection.local.Create(ctx, collection.definition.slug, values, actor)
+	document, err := collection.local.Create(ctx, collection.definition.slug, values, actor, typedWriteLocales(localeOptions)...)
 	return decodeTypedDocument[Document](document, err)
 }
 
@@ -83,46 +62,33 @@ func (collection BoundTypedCollection[Document, Create, Update]) Import(ctx cont
 	return decodeTypedDocument[Document](document, err)
 }
 
-func (collection BoundTypedCollection[Document, Create, Update]) Find(ctx context.Context, id string, actor *store.Document) (Document, error) {
-	document, err := collection.local.Find(ctx, collection.definition.slug, id, actor)
+// Find reads one locale with optional population and projection.
+func (collection BoundTypedCollection[Document, Create, Update]) Find(ctx context.Context, id string, options TypedReadOptions) (Document, error) {
+	document, err := collection.local.FindWithOptions(ctx, collection.definition.slug, id, options.findOptions(false))
 	return decodeTypedDocument[Document](document, err)
 }
 
+// List filters, paginates and populates one locale through the operation engine.
+// A failed decode returns an error and no partial page.
 func (collection BoundTypedCollection[Document, Create, Update]) List(ctx context.Context, options TypedListOptions) (TypedPage[Document], error) {
-	page, err := collection.local.List(ctx, collection.definition.slug, ListOptions{
-		Where: options.Where, Page: options.Page, Limit: options.Limit, Sort: options.Sort,
-		Select: options.Select, OutputFields: options.OutputFields, Draft: options.Draft,
-		Actor: options.Actor, ActorCollection: options.ActorCollection, TrashOnly: options.TrashOnly,
-		Locale: options.Locale, FallbackLocales: options.FallbackLocales, DisableFallback: options.DisableFallback,
-	})
-	if err != nil {
-		return TypedPage[Document]{}, err
-	}
-	documents := make([]Document, len(page.Documents))
-	for index, stored := range page.Documents {
-		documents[index], err = decodeStoredDocument[Document](stored)
-		if err != nil {
-			return TypedPage[Document]{}, err
-		}
-	}
-	return TypedPage[Document]{Documents: documents, Page: page.Page, Limit: page.Limit, Total: page.Total}, nil
+	return listTypedDocuments[Document](ctx, collection.local, collection.definition.slug, options, false)
 }
 
-func (collection BoundTypedCollection[Document, Create, Update]) Update(ctx context.Context, id string, input Update, actor *store.Document) (Document, error) {
+func (collection BoundTypedCollection[Document, Create, Update]) Update(ctx context.Context, id string, input Update, actor *store.Document, localeOptions ...TypedLocaleOptions) (Document, error) {
 	values, err := typedInputValues(input)
 	if err != nil {
 		return *new(Document), err
 	}
-	document, err := collection.local.Update(ctx, collection.definition.slug, id, values, actor)
+	document, err := collection.local.Update(ctx, collection.definition.slug, id, values, actor, typedWriteLocales(localeOptions)...)
 	return decodeTypedDocument[Document](document, err)
 }
 
-func (collection BoundTypedCollection[Document, Create, Update]) UpdateRevision(ctx context.Context, id string, input Update, expectedRevision int, actor *store.Document) (Document, error) {
+func (collection BoundTypedCollection[Document, Create, Update]) UpdateRevision(ctx context.Context, id string, input Update, expectedRevision int, actor *store.Document, localeOptions ...TypedLocaleOptions) (Document, error) {
 	values, err := typedInputValues(input)
 	if err != nil {
 		return *new(Document), err
 	}
-	document, err := collection.local.UpdateRevision(ctx, collection.definition.slug, id, values, expectedRevision, actor)
+	document, err := collection.local.UpdateRevision(ctx, collection.definition.slug, id, values, expectedRevision, actor, typedWriteLocales(localeOptions)...)
 	return decodeTypedDocument[Document](document, err)
 }
 
@@ -175,4 +141,20 @@ func decodeStoredDocument[Document any](stored store.Document) (Document, error)
 		return *new(Document), fmt.Errorf("decode typed document: %w", err)
 	}
 	return document, nil
+}
+
+// TypedLocaleOptions selects one authoring locale without changing the generated
+// write response into an all-locales document.
+type TypedLocaleOptions struct {
+	Locale          schema.LocaleCode
+	FallbackLocales []schema.LocaleCode
+	DisableFallback bool
+}
+
+func typedWriteLocales(options []TypedLocaleOptions) []LocaleOptions {
+	result := make([]LocaleOptions, len(options))
+	for i, option := range options {
+		result[i] = LocaleOptions{Locale: option.Locale, FallbackLocales: option.FallbackLocales, DisableFallback: option.DisableFallback}
+	}
+	return result
 }

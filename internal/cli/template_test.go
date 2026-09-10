@@ -5,6 +5,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -107,10 +108,7 @@ func TestAgentCommandAddsClaudeAndSynchronizesInstalledDocs(t *testing.T) {
 	if exitCode := runAgent([]string{"sync"}, &stdout, &stderr, options); exitCode != 0 {
 		t.Fatalf("agent sync exit = %d; stdout=%s stderr=%s", exitCode, stdout.String(), stderr.String())
 	}
-	if !strings.Contains(stdout.String(), "matches v1.2.4") {
-		t.Fatalf("agent sync output = %q", stdout.String())
-	}
-	if !strings.Contains(stdout.String(), "Synchronized 90 managed agent-documentation files") || strings.Contains(stdout.String(), ".agents/skills/") {
+	if !regexp.MustCompile(`^Synchronized [1-9][0-9]* managed agent-documentation files\.\nRidu agent documentation matches v1\.2\.4\.\n$`).MatchString(stdout.String()) {
 		t.Fatalf("agent sync should be concise: %q", stdout.String())
 	}
 }

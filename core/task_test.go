@@ -9,6 +9,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/riducms/ridu/field"
@@ -118,42 +119,44 @@ func TestTaskAdmissionReconcilerFailureIsSurfacedWithoutStarvingQueuedTasks(t *t
 }
 
 func TestTaskRetryClassificationAndTerminalFailureAreDurable(t *testing.T) {
-	var retryCalls atomic.Int32
-	retrying := NewTask("retrying-task", func(_ TaskContext, _ struct{}) (string, error) {
-		if retryCalls.Add(1) == 1 {
-			return "", RetryTaskAfter("provider_busy", errors.New("provider busy"), time.Millisecond)
+	synctest.Test(t, func(t *testing.T) {
+		var retryCalls atomic.Int32
+		retrying := NewTask("retrying-task", func(_ TaskContext, _ struct{}) (string, error) {
+			if retryCalls.Add(1) == 1 {
+				return "", RetryTaskAfter("provider_busy", errors.New("provider busy"), time.Millisecond)
+			}
+			return "done", nil
+		}, TaskRetries(3, time.Millisecond, time.Second, TaskBackoffFixed))
+		terminal := NewTask("terminal-task", func(_ TaskContext, _ struct{}) (struct{}, error) {
+			return struct{}{}, AbortTask("invalid_destination", errors.New("destination is invalid"))
+		})
+		application, _ := newTaskTestApp(t, retrying, terminal)
+		retryReceipt, err := retrying.Enqueue(context.Background(), application, struct{}{}, TaskEnqueueOptions{})
+		if err != nil {
+			t.Fatal(err)
 		}
-		return "done", nil
-	}, TaskRetries(3, time.Millisecond, time.Second, TaskBackoffFixed))
-	terminal := NewTask("terminal-task", func(_ TaskContext, _ struct{}) (struct{}, error) {
-		return struct{}{}, AbortTask("invalid_destination", errors.New("destination is invalid"))
+		terminalReceipt, err := terminal.Enqueue(context.Background(), application, struct{}{}, TaskEnqueueOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		summary, err := application.RunTasks(context.Background(), 10)
+		if err != nil || summary.Retried != 1 || summary.Failed != 1 {
+			t.Fatalf("first run = %#v, %v", summary, err)
+		}
+		failed, err := terminal.Result(context.Background(), application, terminalReceipt.ID)
+		if err != nil || failed.State != store.TaskStateFailed || failed.LastErrorCode != "invalid_destination" || failed.LastError != "destination is invalid" {
+			t.Fatalf("terminal result = %#v, %v", failed, err)
+		}
+		time.Sleep(3 * time.Millisecond)
+		summary, err = application.RunTasks(context.Background(), 10)
+		if err != nil || summary.Succeeded != 1 {
+			t.Fatalf("retry run = %#v, %v", summary, err)
+		}
+		succeeded, err := retrying.Result(context.Background(), application, retryReceipt.ID)
+		if err != nil || !succeeded.HasOutput || succeeded.Output != "done" || succeeded.Attempts != 2 {
+			t.Fatalf("retry result = %#v, %v", succeeded, err)
+		}
 	})
-	application, _ := newTaskTestApp(t, retrying, terminal)
-	retryReceipt, err := retrying.Enqueue(context.Background(), application, struct{}{}, TaskEnqueueOptions{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	terminalReceipt, err := terminal.Enqueue(context.Background(), application, struct{}{}, TaskEnqueueOptions{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	summary, err := application.RunTasks(context.Background(), 10)
-	if err != nil || summary.Retried != 1 || summary.Failed != 1 {
-		t.Fatalf("first run = %#v, %v", summary, err)
-	}
-	failed, err := terminal.Result(context.Background(), application, terminalReceipt.ID)
-	if err != nil || failed.State != store.TaskStateFailed || failed.LastErrorCode != "invalid_destination" || failed.LastError != "destination is invalid" {
-		t.Fatalf("terminal result = %#v, %v", failed, err)
-	}
-	time.Sleep(3 * time.Millisecond)
-	summary, err = application.RunTasks(context.Background(), 10)
-	if err != nil || summary.Succeeded != 1 {
-		t.Fatalf("retry run = %#v, %v", summary, err)
-	}
-	succeeded, err := retrying.Result(context.Background(), application, retryReceipt.ID)
-	if err != nil || !succeeded.HasOutput || succeeded.Output != "done" || succeeded.Attempts != 2 {
-		t.Fatalf("retry result = %#v, %v", succeeded, err)
-	}
 }
 
 func TestTaskHandlerPanicIsRecoveredWithoutPersistingOrReturningItsValue(t *testing.T) {
@@ -451,143 +454,149 @@ func TestRunningHandlerCannotCompleteAfterCancellationBeforeHeartbeat(t *testing
 }
 
 func TestTaskHeartbeatPreventsConcurrentCrashRecovery(t *testing.T) {
-	started := make(chan struct{})
-	release := make(chan struct{})
-	var calls atomic.Int32
-	task := NewTask("heartbeat-task", func(ctx TaskContext, _ struct{}) (struct{}, error) {
-		calls.Add(1)
-		close(started)
+	synctest.Test(t, func(t *testing.T) {
+		started := make(chan struct{})
+		release := make(chan struct{})
+		var calls atomic.Int32
+		task := NewTask("heartbeat-task", func(ctx TaskContext, _ struct{}) (struct{}, error) {
+			calls.Add(1)
+			close(started)
+			select {
+			case <-release:
+				return struct{}{}, nil
+			case <-ctx.Context.Done():
+				return struct{}{}, ctx.Context.Err()
+			}
+		})
+		application, backend := newTaskTestApp(t, task)
+		if _, err := task.Enqueue(context.Background(), application, struct{}{}, TaskEnqueueOptions{}); err != nil {
+			t.Fatal(err)
+		}
+		type runResult struct {
+			summary TaskRunSummary
+			err     error
+		}
+		run := make(chan runResult, 1)
+		go func() {
+			summary, err := application.runTasks(context.Background(), taskRunOptions{
+				limit: 1, leaseDuration: 500 * time.Millisecond, heartbeatInterval: 25 * time.Millisecond,
+			})
+			run <- runResult{summary: summary, err: err}
+		}()
 		select {
-		case <-release:
-			return struct{}{}, nil
-		case <-ctx.Context.Done():
-			return struct{}{}, ctx.Context.Err()
+		case <-started:
+		case <-time.After(time.Second):
+			t.Fatal("task did not start")
+		}
+		time.Sleep(1100 * time.Millisecond)
+		claimed, err := backend.ClaimTasks(context.Background(), store.TaskClaim{Limit: 1, LeaseDuration: time.Minute})
+		if err != nil || len(claimed) != 0 {
+			t.Fatalf("concurrent recovery claim = %#v, %v", claimed, err)
+		}
+		close(release)
+		result := <-run
+		if result.err != nil || result.summary.Succeeded != 1 || calls.Load() != 1 {
+			t.Fatalf("run = %#v, %v, calls %d", result.summary, result.err, calls.Load())
 		}
 	})
-	application, backend := newTaskTestApp(t, task)
-	if _, err := task.Enqueue(context.Background(), application, struct{}{}, TaskEnqueueOptions{}); err != nil {
-		t.Fatal(err)
-	}
-	type runResult struct {
-		summary TaskRunSummary
-		err     error
-	}
-	run := make(chan runResult, 1)
-	go func() {
-		summary, err := application.runTasks(context.Background(), taskRunOptions{
-			limit: 1, leaseDuration: 500 * time.Millisecond, heartbeatInterval: 25 * time.Millisecond,
-		})
-		run <- runResult{summary: summary, err: err}
-	}()
-	select {
-	case <-started:
-	case <-time.After(time.Second):
-		t.Fatal("task did not start")
-	}
-	time.Sleep(1100 * time.Millisecond)
-	claimed, err := backend.ClaimTasks(context.Background(), store.TaskClaim{Limit: 1, LeaseDuration: time.Minute})
-	if err != nil || len(claimed) != 0 {
-		t.Fatalf("concurrent recovery claim = %#v, %v", claimed, err)
-	}
-	close(release)
-	result := <-run
-	if result.err != nil || result.summary.Succeeded != 1 || calls.Load() != 1 {
-		t.Fatalf("run = %#v, %v, calls %d", result.summary, result.err, calls.Load())
-	}
 }
 
 func TestEveryTaskInAClaimedBatchStartsAndHeartbeatsImmediately(t *testing.T) {
-	started := make(chan int, 2)
-	release := make(chan struct{})
-	task := NewTask("batch-heartbeat-task", func(ctx TaskContext, input postgresStyleTaskInput) (struct{}, error) {
-		started <- input.ID
-		select {
-		case <-release:
-			return struct{}{}, nil
-		case <-ctx.Context.Done():
-			return struct{}{}, ctx.Context.Err()
+	synctest.Test(t, func(t *testing.T) {
+		started := make(chan int, 2)
+		release := make(chan struct{})
+		task := NewTask("batch-heartbeat-task", func(ctx TaskContext, input postgresStyleTaskInput) (struct{}, error) {
+			started <- input.ID
+			select {
+			case <-release:
+				return struct{}{}, nil
+			case <-ctx.Context.Done():
+				return struct{}{}, ctx.Context.Err()
+			}
+		})
+		application, backend := newTaskTestApp(t, task)
+		for id := 1; id <= 2; id++ {
+			if _, err := task.Enqueue(context.Background(), application, postgresStyleTaskInput{ID: id}, TaskEnqueueOptions{}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		type runResult struct {
+			summary TaskRunSummary
+			err     error
+		}
+		run := make(chan runResult, 1)
+		go func() {
+			summary, err := application.runTasks(context.Background(), taskRunOptions{
+				limit: 2, leaseDuration: 500 * time.Millisecond, heartbeatInterval: 25 * time.Millisecond,
+			})
+			run <- runResult{summary: summary, err: err}
+		}()
+		seen := make(map[int]bool)
+		for len(seen) != 2 {
+			select {
+			case id := <-started:
+				seen[id] = true
+			case <-time.After(time.Second):
+				t.Fatalf("only started %#v", seen)
+			}
+		}
+		time.Sleep(1100 * time.Millisecond)
+		claimed, err := backend.ClaimTasks(context.Background(), store.TaskClaim{Limit: 2, LeaseDuration: time.Minute})
+		if err != nil || len(claimed) != 0 {
+			t.Fatalf("claimed live batch member = %#v, %v", claimed, err)
+		}
+		close(release)
+		result := <-run
+		if result.err != nil || result.summary.Succeeded != 2 {
+			t.Fatalf("batch result = %#v, %v", result.summary, result.err)
 		}
 	})
-	application, backend := newTaskTestApp(t, task)
-	for id := 1; id <= 2; id++ {
-		if _, err := task.Enqueue(context.Background(), application, postgresStyleTaskInput{ID: id}, TaskEnqueueOptions{}); err != nil {
-			t.Fatal(err)
-		}
-	}
-	type runResult struct {
-		summary TaskRunSummary
-		err     error
-	}
-	run := make(chan runResult, 1)
-	go func() {
-		summary, err := application.runTasks(context.Background(), taskRunOptions{
-			limit: 2, leaseDuration: 500 * time.Millisecond, heartbeatInterval: 25 * time.Millisecond,
-		})
-		run <- runResult{summary: summary, err: err}
-	}()
-	seen := make(map[int]bool)
-	for len(seen) != 2 {
-		select {
-		case id := <-started:
-			seen[id] = true
-		case <-time.After(time.Second):
-			t.Fatalf("only started %#v", seen)
-		}
-	}
-	time.Sleep(1100 * time.Millisecond)
-	claimed, err := backend.ClaimTasks(context.Background(), store.TaskClaim{Limit: 2, LeaseDuration: time.Minute})
-	if err != nil || len(claimed) != 0 {
-		t.Fatalf("claimed live batch member = %#v, %v", claimed, err)
-	}
-	close(release)
-	result := <-run
-	if result.err != nil || result.summary.Succeeded != 2 {
-		t.Fatalf("batch result = %#v, %v", result.summary, result.err)
-	}
 }
 
 func TestTaskHeartbeatsWhileRegisteredInputValidationRuns(t *testing.T) {
-	task := NewTask("validation-heartbeat-task", func(_ TaskContext, _ struct{}) (struct{}, error) {
-		return struct{}{}, nil
-	})
-	application, backend := newTaskTestApp(t, task)
-	if _, err := task.Enqueue(context.Background(), application, struct{}{}, TaskEnqueueOptions{}); err != nil {
-		t.Fatal(err)
-	}
-	runtime := application.taskRegistry[task.TaskSlug()]
-	validate := runtime.validate
-	started := make(chan struct{})
-	runtime.validate = func(input json.RawMessage) (json.RawMessage, error) {
-		close(started)
-		time.Sleep(1100 * time.Millisecond)
-		return validate(input)
-	}
-	application.taskRegistry[task.TaskSlug()] = runtime
-	type runResult struct {
-		summary TaskRunSummary
-		err     error
-	}
-	run := make(chan runResult, 1)
-	go func() {
-		summary, err := application.runTasks(context.Background(), taskRunOptions{
-			limit: 1, leaseDuration: 500 * time.Millisecond, heartbeatInterval: 25 * time.Millisecond,
+	synctest.Test(t, func(t *testing.T) {
+		task := NewTask("validation-heartbeat-task", func(_ TaskContext, _ struct{}) (struct{}, error) {
+			return struct{}{}, nil
 		})
-		run <- runResult{summary: summary, err: err}
-	}()
-	select {
-	case <-started:
-	case <-time.After(time.Second):
-		t.Fatal("task validation did not start")
-	}
-	time.Sleep(800 * time.Millisecond)
-	claimed, err := backend.ClaimTasks(context.Background(), store.TaskClaim{Limit: 1, LeaseDuration: time.Minute})
-	if err != nil || len(claimed) != 0 {
-		t.Fatalf("reclaimed task during registered validation = %#v, %v", claimed, err)
-	}
-	result := <-run
-	if result.err != nil || result.summary.Succeeded != 1 {
-		t.Fatalf("run = %#v, %v", result.summary, result.err)
-	}
+		application, backend := newTaskTestApp(t, task)
+		if _, err := task.Enqueue(context.Background(), application, struct{}{}, TaskEnqueueOptions{}); err != nil {
+			t.Fatal(err)
+		}
+		runtime := application.taskRegistry[task.TaskSlug()]
+		validate := runtime.validate
+		started := make(chan struct{})
+		runtime.validate = func(input json.RawMessage) (json.RawMessage, error) {
+			close(started)
+			time.Sleep(1100 * time.Millisecond)
+			return validate(input)
+		}
+		application.taskRegistry[task.TaskSlug()] = runtime
+		type runResult struct {
+			summary TaskRunSummary
+			err     error
+		}
+		run := make(chan runResult, 1)
+		go func() {
+			summary, err := application.runTasks(context.Background(), taskRunOptions{
+				limit: 1, leaseDuration: 500 * time.Millisecond, heartbeatInterval: 25 * time.Millisecond,
+			})
+			run <- runResult{summary: summary, err: err}
+		}()
+		select {
+		case <-started:
+		case <-time.After(time.Second):
+			t.Fatal("task validation did not start")
+		}
+		time.Sleep(800 * time.Millisecond)
+		claimed, err := backend.ClaimTasks(context.Background(), store.TaskClaim{Limit: 1, LeaseDuration: time.Minute})
+		if err != nil || len(claimed) != 0 {
+			t.Fatalf("reclaimed task during registered validation = %#v, %v", claimed, err)
+		}
+		result := <-run
+		if result.err != nil || result.summary.Succeeded != 1 {
+			t.Fatalf("run = %#v, %v", result.summary, result.err)
+		}
+	})
 }
 
 func TestTaskWorkerCancellationReturnsTheLeaseForImmediateRecovery(t *testing.T) {
@@ -777,7 +786,7 @@ func newTaskTestApp(t *testing.T, definitions ...TaskDefinition) (*App, *teststo
 func taskTestConfig(definitions ...TaskDefinition) Config {
 	return Config{
 		Name: "durable task test", Tasks: definitions,
-		Collections: []Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title")}}},
+		Collections: []Collection{{Slug: "posts", Fields: field.Fields{field.Text("title")}}},
 	}
 }
 

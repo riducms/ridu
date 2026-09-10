@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 
 import {
 	removeSelectValue,
-	selectChoiceLabel,
+	selectOptionLabel,
 	selectManyValues,
 } from "../src/fields/select/select-value";
 
@@ -20,12 +20,12 @@ describe("multi-select values", () => {
 		]);
 	});
 
-	it("uses the authored choice label with an exact-value fallback", () => {
-		const choices = [
+	it("uses the authored option label with an exact-value fallback", () => {
+		const options = [
 			{ value: "admin", label: "Administrator" },
 			{ value: "editor", label: "Editor" },
 		];
-		expect(selectChoiceLabel(choices, "admin")).toBe("Administrator");
-		expect(selectChoiceLabel(choices, "unknown")).toBe("unknown");
+		expect(selectOptionLabel(options, "admin")).toBe("Administrator");
+		expect(selectOptionLabel(options, "unknown")).toBe("unknown");
 	});
 });

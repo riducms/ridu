@@ -26,14 +26,12 @@ func TestVersionLocaleAndJoinHelpersPreserveExactActorCollection(t *testing.T) {
 		Collections: []ridu.Collection{
 			{
 				Slug: "categories", Access: ridu.CollectionAccess{Read: staffOnly},
-				Fields: []field.Definition{field.Text("name"), field.Join("posts", "posts", "category")},
+				Fields: field.Fields{field.Text("name"), field.Join("posts", "posts", "category")},
 			},
 			{
 				Slug: "posts", Versions: true,
 				Access: ridu.CollectionAccess{Read: staffOnly, ReadVersions: staffOnly, Update: staffOnly},
-				Fields: []field.Definition{
-					field.Text("title", field.Localized()), field.Relationship("category", field.To("categories")),
-				},
+				Fields: field.Fields{field.Text("title").Localized(), field.Relationship("category", "categories")},
 			},
 		},
 	}, teststore.New())

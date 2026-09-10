@@ -12,6 +12,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/riducms/ridu/internal/primitivefield"
 	"github.com/riducms/ridu/internal/referenceindex"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
@@ -171,6 +172,9 @@ type sqliteIndexPath struct {
 }
 
 func sqliteDocumentIndexes(manifest schema.Manifest) (map[string]string, error) {
+	if err := primitivefield.ValidateManifestIndexes(manifest); err != nil {
+		return nil, err
+	}
 	snapshot := manifest.Snapshot()
 	desired := make(map[string]string)
 	resources := append(append([]schema.Collection(nil), snapshot.Collections...), snapshot.Globals...)
@@ -239,7 +243,7 @@ func sqliteDeclaredIndexPaths(fields []schema.Field) []sqliteIndexPath {
 				}
 			}
 			if candidate.Type == schema.FieldTypeGroup && candidate.Nested != nil {
-				visit(candidate.Nested.Fields, segments)
+				visit(candidate.Nested.ResolvedFields(), segments)
 			}
 		}
 	}
@@ -343,7 +347,7 @@ func sqliteQueryableFieldChain(fields []schema.Field, segments []string) ([]sche
 		if current.Type != schema.FieldTypeGroup || current.Nested == nil {
 			return nil, false
 		}
-		candidates = current.Nested.Fields
+		candidates = current.Nested.ResolvedFields()
 	}
 	return nil, false
 }
@@ -841,7 +845,11 @@ func rebuildDocumentReferences(ctx context.Context, runner sqlRunner, manifest s
 		}
 		rows.Close()
 		for _, document := range documents {
-			for _, entry := range referenceindex.Collect(collection, document) {
+			entries, referenceErr := referenceindex.Collect(collection, document)
+			if referenceErr != nil {
+				return referenceErr
+			}
+			for _, entry := range entries {
 				_, err := runner.ExecContext(ctx, `INSERT INTO ridu_document_references (
   owner_collection_id, owner_document_id, field_id,
   target_collection_id, target_document_id, locale, occurrence
@@ -983,7 +991,7 @@ func sqliteIndexedFieldChain(fields []schema.Field, segments []string) []schema.
 		if candidate.Nested == nil {
 			return nil
 		}
-		return append(chain, sqliteIndexedFieldChain(candidate.Nested.Fields, segments[1:])...)
+		return append(chain, sqliteIndexedFieldChain(candidate.Nested.ResolvedFields(), segments[1:])...)
 	}
 	return nil
 }
@@ -1006,14 +1014,14 @@ func sqliteCollectIndexedLocales(values store.Values, chain []schema.Field, posi
 		return
 	}
 	if chain[position].Localized {
-		localized, valid := value.ObjectValue()
+		localized, valid := value.CopyObject()
 		if !valid {
 			return
 		}
 		for locale, localizedValue := range localized {
 			locales[locale] = struct{}{}
 			if position+1 < len(chain) {
-				object, valid := localizedValue.ObjectValue()
+				object, valid := localizedValue.CopyObject()
 				if valid {
 					sqliteCollectIndexedLocales(object, chain, position+1, locales)
 				}
@@ -1022,7 +1030,7 @@ func sqliteCollectIndexedLocales(values store.Values, chain []schema.Field, posi
 		return
 	}
 	if position+1 < len(chain) {
-		object, valid := value.ObjectValue()
+		object, valid := value.CopyObject()
 		if valid {
 			sqliteCollectIndexedLocales(object, chain, position+1, locales)
 		}
@@ -1048,7 +1056,7 @@ func sqliteIndexedValue(values store.Values, chain []schema.Field, locale string
 			return store.Value{}, false
 		}
 		if candidate.Localized {
-			localized, valid := value.ObjectValue()
+			localized, valid := value.CopyObject()
 			if !valid {
 				return store.Value{}, false
 			}
@@ -1060,7 +1068,7 @@ func sqliteIndexedValue(values store.Values, chain []schema.Field, locale string
 		if position == len(chain)-1 {
 			return value, true
 		}
-		object, valid := value.ObjectValue()
+		object, valid := value.CopyObject()
 		if !valid {
 			return store.Value{}, false
 		}

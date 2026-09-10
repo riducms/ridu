@@ -18,8 +18,6 @@ import (
 	"syscall"
 	"testing"
 	"time"
-
-	"github.com/riducms/ridu/internal/frameworkpackages"
 )
 
 const generatedMongoDBProjectTestEnvironment = "RIDU_MONGODB_GENERATED_PROJECT_TEST"
@@ -99,7 +97,7 @@ func TestGeneratedMongoDBDevelopmentProject(t *testing.T) {
 	}
 
 	frameworkRoot := moduleRoot(t)
-	setFrameworkProxy(t, frameworkRoot, testReleaseVersion)
+	setFrameworkProxy(t, frameworkRoot)
 	cliBinary := filepath.Join(t.TempDir(), "ridu")
 	buildGeneratedProjectCLI(t, frameworkRoot, cliBinary)
 
@@ -116,9 +114,7 @@ func TestGeneratedMongoDBDevelopmentProject(t *testing.T) {
 	assertGeneratedMongoDBScaffold(t, blankRoot, false)
 
 	for _, root := range []string{starterRoot, blankRoot} {
-		if err := frameworkpackages.Publish(frameworkRoot, root, testReleaseVersion); err != nil {
-			t.Fatalf("publish release-shaped frontend packages into %s: %v", root, err)
-		}
+		publishFrontendPackages(t, root)
 		output, err := runGeneratedCommand(90*time.Second, root, map[string]string{"DATABASE_URL": poisonURL}, cliBinary, "generate", "--check")
 		if err != nil {
 			t.Fatalf("offline generation check for %s: %v\n%s", root, err, output)

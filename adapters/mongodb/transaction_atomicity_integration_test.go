@@ -19,14 +19,10 @@ func TestMongoDBCrossCapabilityTransactionAtomicity(t *testing.T) {
 		Name:  "MongoDB cross-capability transaction",
 		Admin: ridu.AdminConfig{User: "atomic-users"},
 		Collections: []ridu.Collection{
-			{Slug: "atomic-targets", Fields: []field.Definition{field.Text("name", field.Required())}},
+			{Slug: "atomic-targets", Fields: field.Fields{field.Text("name").Required()}},
 			{
 				Slug: "atomic-users", Auth: true, Versions: true,
-				Fields: []field.Definition{
-					field.Email("email", field.Required(), field.Unique()),
-					field.Relationship("favorite", field.To("atomic-targets")),
-					field.Text("note"),
-				},
+				Fields: field.Fields{field.Email("email").Required().Unique(), field.Relationship("favorite", "atomic-targets"), field.Text("note")},
 			},
 		},
 	})

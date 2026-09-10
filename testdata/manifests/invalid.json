@@ -32,22 +32,22 @@
     },
     {
       "code": "missing_nested_fields",
-      "path": "collections[0].fields[2].options.fields",
+      "path": "collections[0].fields[2].fields",
       "message": "group field requires at least one child field"
     },
     {
       "code": "duplicate_select_value",
-      "path": "collections[0].fields[3].options.choices[1].value",
-      "message": "select value \"draft\" is already used at collections[0].fields[3].options.choices[0].value"
+      "path": "collections[0].fields[3].options[1].value",
+      "message": "select value \"draft\" is already used at collections[0].fields[3].options[0].value"
     },
     {
       "code": "invalid_select_default",
-      "path": "collections[0].fields[3].options.default",
-      "message": "default value \"published\" is not one of the configured select choices"
+      "path": "collections[0].fields[3].default",
+      "message": "default value \"published\" is not one of the configured select options"
     },
     {
       "code": "missing_relationship",
-      "path": "collections[0].fields[4].options.to[0]",
+      "path": "collections[0].fields[4].target",
       "message": "relationship target collection \"missing\" does not exist"
     }
   ]

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	operationengine "github.com/riducms/ridu/internal/operation"
+	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
 )
@@ -187,7 +188,7 @@ func TestSQLiteOperationReadsOverlapWhileWriterGateIsHeld(t *testing.T) {
 		Collections: []operationengine.Collection{{
 			Schema: collection,
 			Hooks: operationengine.Hooks{BeforeOperation: []operationengine.Hook{func(hookContext operationengine.Context) error {
-				if hookContext.Operation == operationengine.Read {
+				if hookContext.Operation == operation.Read {
 					entered <- struct{}{}
 					<-release
 				}
@@ -215,7 +216,7 @@ func TestSQLiteOperationReadsOverlapWhileWriterGateIsHeld(t *testing.T) {
 			readContext, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
 			result, readError := engine.Execute(readContext, operationengine.Request{
-				Operation: operationengine.Read, Collection: "posts", Page: 1, Limit: 10,
+				Operation: operation.Read, Collection: "posts", Page: 1, Limit: 10,
 			})
 			results <- readResult{result: result, err: readError}
 		}()

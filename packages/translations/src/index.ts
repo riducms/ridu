@@ -18,6 +18,8 @@ export type {
 	CoreTranslationKey,
 	PluginMessageCatalog,
 	PluginTranslationKey,
+	ApplicationTranslationKey,
+	ExtensionTranslationKey,
 	PluralCategory,
 	PluralMessage,
 	TranslationLanguage,

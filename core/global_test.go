@@ -11,24 +11,22 @@ import (
 	"github.com/riducms/ridu"
 	"github.com/riducms/ridu/field"
 	"github.com/riducms/ridu/internal/teststore"
+	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/store"
 )
 
 func TestGlobalSingletonAccessHooksDraftsAndVersions(t *testing.T) {
-	var operations []ridu.Operation
+	var operations []operation.Kind
 	application, err := ridu.New(ridu.Config{
 		Name: "Globals",
 		Collections: []ridu.Collection{{
-			Slug: "posts", Fields: []field.Definition{field.Text("title")},
+			Slug: "posts", Fields: field.Fields{field.Text("title")},
 		}},
 		Globals: []ridu.Global{{
 			Slug: "site-settings", Label: "Site settings",
-			Admin: ridu.GlobalAdmin{Group: " Settings ", Description: " Site-wide presentation. "},
-			Fields: []field.Definition{
-				field.Text("siteName", field.Required()),
-				field.Text("announcement", field.Default("Welcome")),
-			},
+			Admin:    ridu.GlobalAdmin{Group: " Settings ", Description: " Site-wide presentation. "},
+			Fields:   field.Fields{field.Text("siteName").Required(), field.Text("announcement").Default("Welcome")},
 			Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true},
 			Access: ridu.GlobalAccess{
 				Read: func(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
@@ -122,7 +120,7 @@ func TestGlobalSingletonAccessHooksDraftsAndVersions(t *testing.T) {
 	if restoredDraft.Status != store.StatusDraft || restoredDraft.Revision != 5 || stringValue(restoredDraft.Values["announcement"]) != "Hello" {
 		t.Fatalf("restored global as draft = %#v", restoredDraft)
 	}
-	if want := []ridu.Operation{ridu.OperationRead, ridu.OperationUpdate, ridu.OperationUpdate, ridu.OperationPublish, ridu.OperationReadVersions, ridu.OperationUnpublish, ridu.OperationUnpublish}; !reflect.DeepEqual(operations, want) {
+	if want := []operation.Kind{operation.Read, operation.Update, operation.Update, operation.Publish, operation.ReadVersions, operation.Unpublish, operation.Unpublish}; !reflect.DeepEqual(operations, want) {
 		t.Fatalf("hook operations = %#v, want %#v", operations, want)
 	}
 }
@@ -130,9 +128,9 @@ func TestGlobalSingletonAccessHooksDraftsAndVersions(t *testing.T) {
 func TestGlobalRESTUsesSingletonRoutes(t *testing.T) {
 	application, err := ridu.New(ridu.Config{
 		Name:        "Global REST",
-		Collections: []ridu.Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title")}}},
+		Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{field.Text("title")}}},
 		Globals: []ridu.Global{{
-			Slug: "site-settings", Fields: []field.Definition{field.Text("siteName", field.Required())},
+			Slug: "site-settings", Fields: field.Fields{field.Text("siteName").Required()},
 			Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true},
 		}},
 	}, teststore.New())
@@ -180,7 +178,7 @@ func TestGlobalVersionHistoryAppliesFilteredAccessToSnapshots(t *testing.T) {
 		t.Fatal(err)
 	}
 	filtered := func(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
-		if ctx.Operation != ridu.OperationReadVersions {
+		if ctx.Operation != operation.ReadVersions {
 			t.Fatalf("version access operation = %q", ctx.Operation)
 		}
 		return ridu.Where(query.Equal(siteName, query.String("Ridu"))), nil
@@ -197,9 +195,9 @@ func TestGlobalVersionHistoryAppliesFilteredAccessToSnapshots(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			application, err := ridu.New(ridu.Config{
 				Name:        "Global version access",
-				Collections: []ridu.Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title")}}},
+				Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{field.Text("title")}}},
 				Globals: []ridu.Global{{
-					Slug: "site-settings", Fields: []field.Definition{field.Text("siteName", field.Required())},
+					Slug: "site-settings", Fields: field.Fields{field.Text("siteName").Required()},
 					Versions: true, Access: test.access,
 				}},
 			}, teststore.New())
@@ -264,9 +262,9 @@ func TestGlobalFilteredAccessUsesPersistedSingletonAndCannotCreateIt(t *testing.
 	afterChange, afterCommit := 0, 0
 	application, err := ridu.New(ridu.Config{
 		Name:        "Filtered global access",
-		Collections: []ridu.Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title")}}},
+		Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{field.Text("title")}}},
 		Globals: []ridu.Global{{
-			Slug: "site-settings", Fields: []field.Definition{field.Text("siteName", field.Required())},
+			Slug: "site-settings", Fields: field.Fields{field.Text("siteName").Required()},
 			Access: ridu.GlobalAccess{
 				Read: filtered,
 				Update: func(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
@@ -327,10 +325,10 @@ func TestGlobalCapabilitiesMatchFilteredSingletonAndVersionState(t *testing.T) {
 	}
 	application, err := ridu.New(ridu.Config{
 		Name:        "Filtered global capabilities",
-		Collections: []ridu.Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title")}}},
+		Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{field.Text("title")}}},
 		Globals: []ridu.Global{{
 			Slug: "site-settings", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true},
-			Fields: []field.Definition{field.Text("siteName", field.Required())},
+			Fields: field.Fields{field.Text("siteName").Required()},
 			Access: ridu.GlobalAccess{
 				Read:         filtered,
 				ReadVersions: filtered,
@@ -395,17 +393,17 @@ func TestMissingGlobalReadCapabilitiesMatchSyntheticReadPolicy(t *testing.T) {
 	}
 	application, err := ridu.New(ridu.Config{
 		Name:        "Missing global capabilities",
-		Collections: []ridu.Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title")}}},
+		Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{field.Text("title")}}},
 		Globals: []ridu.Global{
-			{Slug: "allowed", Fields: []field.Definition{field.Text("title", field.Default("Default"))}},
+			{Slug: "allowed", Fields: field.Fields{field.Text("title").Default("Default")}},
 			{
-				Slug: "filtered", Fields: []field.Definition{field.Text("title", field.Default("Default"))},
+				Slug: "filtered", Fields: field.Fields{field.Text("title").Default("Default")},
 				Access: ridu.GlobalAccess{Read: func(ridu.AccessContext) (ridu.AccessDecision, error) {
 					return ridu.Where(query.Equal(titlePath, query.String("Default"))), nil
 				}},
 			},
 			{
-				Slug: "denied", Fields: []field.Definition{field.Text("title", field.Default("Default"))},
+				Slug: "denied", Fields: field.Fields{field.Text("title").Default("Default")},
 				Access: ridu.GlobalAccess{Read: func(ridu.AccessContext) (ridu.AccessDecision, error) { return ridu.Deny(), nil }},
 			},
 		},
@@ -446,10 +444,10 @@ func TestGlobalStatusCapabilitiesDoNotDependOnReadAccess(t *testing.T) {
 	allowUpdate := func(ridu.AccessContext) (ridu.AccessDecision, error) { return ridu.Allow(), nil }
 	application, err := ridu.New(ridu.Config{
 		Name:        "Unreadable global mutation capabilities",
-		Collections: []ridu.Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title")}}},
+		Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{field.Text("title")}}},
 		Globals: []ridu.Global{
-			{Slug: "persisted", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true}, Fields: []field.Definition{field.Text("title")}, Access: ridu.GlobalAccess{Read: denyRead, Update: allowUpdate}},
-			{Slug: "missing", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true}, Fields: []field.Definition{field.Text("title")}, Access: ridu.GlobalAccess{Read: denyRead, Update: allowUpdate}},
+			{Slug: "persisted", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true}, Fields: field.Fields{field.Text("title")}, Access: ridu.GlobalAccess{Read: denyRead, Update: allowUpdate}},
+			{Slug: "missing", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true}, Fields: field.Fields{field.Text("title")}, Access: ridu.GlobalAccess{Read: denyRead, Update: allowUpdate}},
 		},
 	}, teststore.New())
 	if err != nil {
@@ -495,10 +493,10 @@ func TestGlobalAllLocalesFilteredAccessRequiresEveryLocale(t *testing.T) {
 		Localization: ridu.LocalizationConfig{DefaultLocale: "en", Locales: []ridu.Locale{
 			{Code: "en", Label: "English"}, {Code: "fr", Label: "French"},
 		}},
-		Collections: []ridu.Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title")}}},
+		Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{field.Text("title")}}},
 		Globals: []ridu.Global{{
 			Slug: "site-settings", Versions: true,
-			Fields: []field.Definition{field.Text("title", field.Required(), field.Localized())},
+			Fields: field.Fields{field.Text("title").Required().Localized()},
 			Access: ridu.GlobalAccess{Read: filtered, ReadVersions: filtered},
 		}},
 	}, teststore.New())
@@ -547,8 +545,8 @@ func TestGlobalAllLocalesFilteredAccessRequiresEveryLocale(t *testing.T) {
 func TestGlobalSlugsHaveAnIndependentNamespace(t *testing.T) {
 	application, err := ridu.New(ridu.Config{
 		Name:        "Independent global slugs",
-		Collections: []ridu.Collection{{Slug: "settings", Fields: []field.Definition{field.Text("title")}}},
-		Globals:     []ridu.Global{{Slug: "settings", Fields: []field.Definition{field.Text("name", field.Required())}}},
+		Collections: []ridu.Collection{{Slug: "settings", Fields: field.Fields{field.Text("title")}}},
+		Globals:     []ridu.Global{{Slug: "settings", Fields: field.Fields{field.Text("name").Required()}}},
 	}, teststore.New())
 	if err != nil {
 		t.Fatal(err)

@@ -1,0 +1,17 @@
+{
+	"extends": "../../tsconfig.svelte.json",
+	"compilerOptions": {
+		"lib": ["ES2023", "DOM", "DOM.Iterable"],
+		"strict": true,
+		"exactOptionalPropertyTypes": true,
+		"allowArbitraryExtensions": true,
+		"types": ["svelte", "bun", "vite/client"],
+		"paths": {
+			"@plugin-richtext/*": ["../../packages/plugin-richtext/src/*"],
+			"@ui/*": ["../../packages/ui/src/*"],
+			"@riducms/sdk": ["../../packages/sdk/src/index.ts"],
+			"@riducms/protocol": ["../../packages/protocol/src/index.ts"]
+		}
+	},
+	"include": ["render/**/*.svelte", "scripts/**/*.ts", "generated/**/*.ts", "*.ts", "*.svelte"]
+}

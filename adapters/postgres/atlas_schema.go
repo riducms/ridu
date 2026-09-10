@@ -300,7 +300,7 @@ func collectionAtlasIndexes(collection schema.Collection) []atlasIndexSpecificat
 				specifications = append(specifications, atlasIndexSpecification{fields: [][]schema.Field{chain}, localized: atlasIndexChainLocalized(chain)})
 			}
 			if candidate.Type == schema.FieldTypeGroup && candidate.Nested != nil {
-				inspect(candidate.Nested.Fields, chain)
+				inspect(candidate.Nested.ResolvedFields(), chain)
 			}
 		}
 	}
@@ -332,7 +332,7 @@ func atlasIndexFieldChain(fields []schema.Field, segments []string) []schema.Fie
 		if candidate.Nested == nil {
 			return nil
 		}
-		return append(chain, atlasIndexFieldChain(candidate.Nested.Fields, segments[1:])...)
+		return append(chain, atlasIndexFieldChain(candidate.Nested.ResolvedFields(), segments[1:])...)
 	}
 	return nil
 }

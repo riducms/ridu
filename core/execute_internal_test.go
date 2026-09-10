@@ -82,7 +82,7 @@ func TestProductionReadinessUsesTheExecutableMigrationHistory(t *testing.T) {
 		legacyError: errors.New("legacy readiness must not admit a production binary with exact history"),
 	}
 	application, err := New(
-		Config{Name: "exact migration readiness", Collections: []Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title")}}}},
+		Config{Name: "exact migration readiness", Collections: []Collection{{Slug: "posts", Fields: field.Fields{field.Text("title")}}}},
 		backend,
 	)
 	if err != nil {
@@ -105,7 +105,7 @@ func TestExplicitUnverifiableReadinessEscapeUsesTheLegacyContract(t *testing.T) 
 	var exactCalls atomic.Int32
 	var digest atomic.Pointer[string]
 	application, err := New(
-		Config{Name: "explicit readiness escape", Collections: []Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title")}}}},
+		Config{Name: "explicit readiness escape", Collections: []Collection{{Slug: "posts", Fields: field.Fields{field.Text("title")}}}},
 		migrationReadinessStore{
 			Store: teststore.New(), legacyCalls: &legacyCalls, exactCalls: &exactCalls, digest: &digest,
 		},
@@ -130,7 +130,7 @@ func TestApplicationOwnedReadinessRequiresTheBuildBoundMigrationHistory(t *testi
 	var exactCalls atomic.Int32
 	var digest atomic.Pointer[string]
 	application, err := New(
-		Config{Name: "missing application-owned history", Collections: []Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title")}}}},
+		Config{Name: "missing application-owned history", Collections: []Collection{{Slug: "posts", Fields: field.Fields{field.Text("title")}}}},
 		migrationReadinessStore{
 			Store: teststore.New(), legacyCalls: &legacyCalls, exactCalls: &exactCalls, digest: &digest,
 		},
@@ -151,7 +151,7 @@ func TestDevelopmentReadinessChecksConnectivityWithoutRequiringTheMigrationLedge
 	var pingCalls atomic.Int32
 	backend := developmentReadinessStore{Store: teststore.New(), readyCalls: &readyCalls, pingCalls: &pingCalls}
 	application, err := New(
-		Config{Name: "development readiness", Collections: []Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title")}}}},
+		Config{Name: "development readiness", Collections: []Collection{{Slug: "posts", Fields: field.Fields{field.Text("title")}}}},
 		backend,
 	)
 	if err != nil {
@@ -165,7 +165,7 @@ func TestDevelopmentReadinessChecksConnectivityWithoutRequiringTheMigrationLedge
 	}
 
 	unknown, err := New(
-		Config{Name: "unknown development readiness", Collections: []Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title")}}}},
+		Config{Name: "unknown development readiness", Collections: []Collection{{Slug: "posts", Fields: field.Fields{field.Text("title")}}}},
 		struct{ store.Store }{Store: teststore.New()},
 	)
 	if err != nil {
@@ -276,7 +276,7 @@ func TestExecuteBindsListenerBeforeStartingDurableWorkers(t *testing.T) {
 		calls.Add(1)
 		return struct{}{}, nil
 	})
-	config := Config{Name: "bind order", Tasks: []TaskDefinition{task}, Collections: []Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title")}}}}
+	config := Config{Name: "bind order", Tasks: []TaskDefinition{task}, Collections: []Collection{{Slug: "posts", Fields: field.Fields{field.Text("title")}}}}
 	backend := teststore.New()
 	application, err := New(config, backend)
 	if err != nil {
@@ -309,7 +309,7 @@ func TestExecuteRejectsAStoreThatCannotProveReadiness(t *testing.T) {
 	defer func() { os.Args = arguments }()
 	backend := struct{ store.Store }{Store: teststore.New()}
 	err := Execute(
-		Config{Name: "strict readiness", Collections: []Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title")}}}},
+		Config{Name: "strict readiness", Collections: []Collection{{Slug: "posts", Fields: field.Fields{field.Text("title")}}}},
 		WithStore(func(context.Context) (store.Store, error) { return backend, nil }),
 		WithAddress("127.0.0.1:0"),
 	)
@@ -333,7 +333,7 @@ func TestExecuteRejectsAnOfficialStoreWithoutEmbeddedMigrationHistory(t *testing
 		Store: teststore.New(), legacyCalls: &legacyCalls, exactCalls: &exactCalls, digest: &digest,
 	}
 	err := Execute(
-		Config{Name: "missing executable migration history", Collections: []Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title")}}}},
+		Config{Name: "missing executable migration history", Collections: []Collection{{Slug: "posts", Fields: field.Fields{field.Text("title")}}}},
 		WithStore(func(context.Context) (store.Store, error) { return backend, nil }),
 		WithAddress("127.0.0.1:0"),
 	)
@@ -359,7 +359,7 @@ func TestExecuteSkipsReadinessPreflightOnlyWhenExplicitlyRequested(t *testing.T)
 	var readinessCalls atomic.Int32
 	backend := failingReadinessStore{Store: teststore.New(), calls: &readinessCalls}
 	err = Execute(
-		Config{Name: "development readiness escape", Collections: []Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title")}}}},
+		Config{Name: "development readiness escape", Collections: []Collection{{Slug: "posts", Fields: field.Fields{field.Text("title")}}}},
 		WithStore(func(context.Context) (store.Store, error) { return backend, nil }),
 		WithAddress(listener.Addr().String()),
 		WithServerOptions(ServerOptions{SkipReadinessPreflight: true}),
@@ -384,7 +384,7 @@ func TestExecuteRequiresExpiredAuthMaintenanceOrExplicitExternalEscape(t *testin
 		Collections: []Collection{{
 			Slug: "users", Auth: true,
 			AuthConfig: AuthConfig{Password: PasswordPolicy{BcryptCost: bcrypt.MinCost}},
-			Fields:     []field.Definition{field.Email("email", field.Required(), field.Unique())},
+			Fields:     field.Fields{field.Email("email").Required().Unique()},
 		}},
 	}
 	if _, err := New(config, backend); err != nil {

@@ -1,6 +1,6 @@
 ---
 title: 'Virtual field'
-description: 'Return a typed value computed by trusted Go code without accepting or storing it.'
+description: 'Calculate a read-only value in Go, such as a display name from first and last names.'
 product: core
 eyebrow: 'Computed and plugin fields'
 order: 83
@@ -8,93 +8,110 @@ aliases:
   [
     'field.Virtual',
     'computed field',
-    'ComputedContext',
+    'operation.ReadContext',
     'ValueString',
-    'ctx.Document.Values',
+    'ctx.Root',
     'sibling values'
   ]
 relatedSymbolIds:
-  ['go:github.com/riducms/ridu/field#Virtual', 'go:github.com/riducms/ridu/core#Computed']
+  [
+    'go:github.com/riducms/ridu/field#Virtual',
+    'go:github.com/riducms/ridu/field#Resolver'
+  ]
 navigation:
   section: 'Model content'
   parent: fields
-  group: 'Computed & plugin'
   order: 230
   title: 'Virtual'
 ---
 
-Use `field.Virtual` when trusted Go code derives a response value from a document or another
-access-controlled read. Virtual values appear in generated output contracts but are never accepted
-as create/update data and are not stored.
+Use `field.Virtual` to calculate a value when a document is read. For example, combine first and
+last names into a display name. The value appears in API responses and generated output types,
+but is not stored and cannot be submitted when creating or updating a document.
 
 ## In the admin {#admin-behavior}
 
 ![A read-only Computed label virtual field in the Ridu admin showing a value resolved by Go code.](../../../../../docs/assets/fields/virtual.png)
 
-_The admin renders resolver output as read-only; create and update inputs never accept or persist it._
+_The admin displays the calculated value as read-only._
 
-## Define the field and resolver {#example}
+## Calculate a display name {#example}
 
-```go title="content/people.go" focus={18-20}
+```go title="content/people.go"
 package content
 
 import (
 	"github.com/riducms/ridu"
 	"github.com/riducms/ridu/field"
+	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/store"
 )
 
 var People = ridu.Collection{
 	Slug: "people",
-	Fields: []field.Definition{
-		field.Text("firstName", field.Required()),
-		field.Text("lastName", field.Required()),
-		field.Virtual("displayName", field.ValueString),
-	},
-	Computed: map[string]ridu.Computed{
-		"displayName": func(ctx ridu.ComputedContext) (store.Value, error) {
-			first, _ := ctx.Document.Values["firstName"].StringValue()
-			last, _ := ctx.Document.Values["lastName"].StringValue()
-			return store.String(first + " " + last), nil
-		},
+	Fields: field.Fields{
+		field.Text("firstName").Required(),
+		field.Text("lastName").Required(),
+		field.Virtual("displayName", field.ValueString,
+			func(
+				ctx operation.ReadContext,
+			) (operation.Value[store.Value], error) {
+				first, _ := ctx.Root.String("firstName")
+				last, _ := ctx.Root.String("lastName")
+				return operation.Present(store.String(first + " " + last)), nil
+			}),
 	},
 }
 ```
 
 ### Read sibling values {#sibling-data}
 
-Virtual fields are root fields, so their sibling values live in `ctx.Document.Values`. In the
-example, `displayName` reads the stored `firstName` and `lastName` siblings with `StringValue()`.
+Virtual fields are root fields, so their sibling values live in `ctx.Root`. In the
+example, `displayName` reads the stored `firstName` and `lastName` siblings with `ctx.Root.String(...)`.
 The second return value reports whether the value is actually a string; the example can ignore it
 because both source fields are required Text fields.
 
-Use `BooleanValue()` or `NumberValue()` for other scalar siblings, `ObjectValue()` for a Group or
-named Tabs value, and `Values()` for an Array or Blocks value. A Relationship or Upload sibling
-contains its stored reference shape—an ID, ID list, or polymorphic object—not an automatically
-populated document. Use `ctx.Local` when the resolver also needs to read that related document
-through its normal access rules.
+Read other fields with `ctx.Root.Get("name")`. On the returned value, call `BooleanValue()` for
+a checkbox or `NumberValue()` for a number. Read a Group or named tab's children with `Get`,
+and iterate an Array or Blocks list with `Elements()`. These reads share immutable values
+without copying the containers. A Relationship or Upload contains its saved ID or reference. Use
+`ctx.Local` to read the related document with the current user’s access rules.
 
 Choose `ValueString`, `ValueNumber`, `ValueBoolean`, or `ValueJSON`. The resolver must return the
-matching `store.Value`. Missing resolvers fail startup; a mismatched runtime value fails the
+matching `operation.Value[store.Value]`. Missing resolvers fail startup; a mismatched runtime value fails the
 operation.
 
 Virtual fields must live at a collection or global root. Resolvers receive the operation, actor and
 auth collection, current document, locale selection, context, and access-controlled Local API. Use
 that Local API for additional reads.
 
-## Cost, access, and selection {#behavior}
+## Configuration {#configuration}
 
-Unselected virtual fields do not run. Consumers should select only expensive computed output they
-need. A resolver is trusted application code, so bound its work and avoid network calls on every
-list row unless caching and failure behavior are defined. The output remains subject to field
-read visibility.
+| Constructor or method                                                     | What it controls                                                                          |
+| ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `field.Virtual(name, valueType, resolver)`                                | Declares the response key, finite output type, and Go callback that calculates it.        |
+| `field.ValueString`, `ValueNumber`, `ValueBoolean`, and other value types | Tell generation and runtime validation which `store.Value` kind the resolver must return. |
+| `.Access(...)` / `.RestrictAccess(...)`                                   | Controls whether the computed output is visible to the caller.                            |
+| `.ReadHooks(...)`                                                         | Transforms the resolved response value before final redaction.                            |
+| `.Admin(...)`                                                             | Sets label, description, position, width, and read-only presentation.                     |
+
+Virtual has no default, requiredness, write validator, write hook, localization setting, or stored
+column. Its resolver returns `operation.Empty[store.Value]()` for no output or
+`operation.Present(...)` with a value of the declared type.
+
+## Avoid unnecessary work when reading lists {#behavior}
+
+Ridu skips a virtual field when it is not selected in the read. If a calculation is expensive,
+request it only on the screens that need it. Be especially careful with list reads: a network
+request for every row can make the whole list slow. Cache repeated work where appropriate and
+handle failures. Field read access rules still apply to the calculated value.
 
 ## Common mistakes {#troubleshooting}
 
-- Do not try to filter or sort by a value that is never stored. Materialize/index a real field when
-  the database must query it.
+- Do not try to filter or sort by a value that is never stored. Save the calculated value in a stored field when
+  the database needs to filter or sort it.
 - Avoid nondeterministic or secret-bearing output unless an access rule permits it.
 - A Virtual is not an admin-only UI element; use [UI](/docs/fields/ui/) for presentation with no
   response value.
 
-See [`field.Virtual`](/reference/field/virtual/) and [`ridu.Computed`](/reference/core/computed/).
+See [`field.Virtual`](/reference/field/virtual/) and [`field.Resolver`](/reference/field/resolver/).

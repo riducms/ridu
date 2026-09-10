@@ -1,213 +1,249 @@
 ---
-title: 'Generated contracts'
-description: 'Generate and use Ridu’s manifest, OpenAPI schema, Go models, TypeScript client, and admin registry.'
+title: 'Generated types and files'
+description: 'Generate Go models, a typed TypeScript client, and API schemas from your content config, and keep them up to date.'
 product: sdk
 eyebrow: 'Tooling'
 order: 135
 aliases:
-  ['generate', 'codegen', 'manifest', 'OpenAPI', 'generated types', 'schema drift', 'ridu generate']
+  [
+    'generate',
+    'codegen',
+    'manifest',
+    'OpenAPI',
+    'generated types',
+    'schema drift',
+    'ridu generate'
+  ]
 navigation:
   section: 'Work with data'
   parent: 'data-access'
   order: 70
-  title: 'Generated contracts'
+  title: 'Generated types and files'
 ---
 
-`ridu generate` resolves the application config into a manifest and generated contracts. It does
-not touch the database, and it installs the output set atomically.
+Ridu generates Go models, a typed TypeScript client, and API schemas from your Go content config.
+When you add a field or change a collection, regenerate these files so your application code and
+admin know about the change.
 
-Commit generated contracts. They are reviewable application interfaces, not disposable caches.
+During development, `ridu dev` updates them on startup and whenever your Go config changes. Run
+`ridu generate` for a one-time update without starting the development server. Generation does
+not change your database.
 
-## Why Ridu executes config {#execute-config}
+Commit the generated files with the config change. Edit your Go config to change them; edits made
+directly to a generated file will be replaced the next time generation runs.
 
-A Go configuration can call functions, compose packages, and register compiled plugins. Parsing Go
-source would see syntax, not the values the program actually produces, so the CLI runs the
-project's configured command to resolve it.
+## How Ridu reads your config {#execute-config}
 
-The project command resolves `ridu.Config`, applies plugin transforms, validates the graph, and
-returns a deterministic snapshot. Generation does not connect to the database, initialize runtime
-storage, start the HTTP server, or make application network requests.
+Your config is Go code: it can call functions, reuse field definitions, and register plugins.
+Ridu runs your project's configured command to load that config and check it for errors.
 
-Protocol or framework version mismatches fail with an upgrade diagnostic instead of guessing at a
-schema. Executable access callbacks, hooks, task handlers, storage credentials, and secrets remain
-runtime-only; they are never serialized into the manifest.
+The result is a JSON description of your collections, globals, fields, and plugins, called the
+**schema manifest**. Access rules, hooks, task handlers, and secrets stay in your Go application;
+they are not included in the generated JSON.
 
-## Files in one generation {#outputs}
+[Schema and identifiers](/docs/go-packages/schema/) explains how this manifest differs from
+your Go config and saved documents, and how to inspect its field definitions in Go.
 
-The default generated project writes:
+If the CLI and application use incompatible versions, generation stops with an upgrade message.
+Use the CLI version pinned to your project.
 
-| Path                                  | What it contains                                                                                             | Commit it? |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ---------- |
-| `generated/ridu.schema.json`          | Canonical, versioned manifest with stable IDs, resources, fields, capabilities, plugin metadata, and digests | Yes        |
-| `generated/ridu.openapi.json`         | REST paths, request/response schemas, auth, locale parameters, and stable error envelopes                    | Yes        |
-| `generated/ridu.generated.go`         | Output/create/update structs and typed local collection/global handles                                       | Yes        |
-| `generated/ridu.generated.ts`         | Exact document/input/query/select/populate types and the generated client factory                            | Yes        |
-| `admin/src/ridu.plugins.generated.ts` | Validated static imports for official or packaged admin plugins                                              | Yes        |
-| `.ridu/…`                             | Project-command builds, staging files, caches, and intermediate admin output                                 | No         |
+## Which files Ridu generates {#outputs}
 
-`ridu.toml` can change the structural paths, but it cannot contain database credentials, access
-rules, or schema definitions. See [Project structure](/guides/project-structure/) for the directory
-map.
+A new Ridu project uses these paths:
+
+| Path                                  | What it contains                                                       | Commit it? |
+| ------------------------------------- | ---------------------------------------------------------------------- | ---------- |
+| `generated/ridu.schema.json`          | A JSON description of your content model and admin settings            | Yes        |
+| `generated/ridu.openapi.json`         | Your REST endpoints, request and response formats, and errors          | Yes        |
+| `generated/ridu.generated.go`         | Go document types and methods for working with collections and globals | Yes        |
+| `generated/ridu.generated.ts`         | TypeScript document types and a client for your application            | Yes        |
+| `admin/src/ridu.plugins.generated.ts` | Imports for the admin plugins enabled in your config                   | Yes        |
+| `.ridu/…`                             | Temporary builds, caches, and intermediate files                       | No         |
+
+`ridu.toml` lets you change these paths. Keep your content definitions, access rules, and
+database connection in your Go config. See [Project structure](/guides/project-structure/) for
+the directory layout.
 
 Keep `@riducms/sdk` and packages referenced by generated TypeScript field types in the root
-`package.json`. Keep an admin plugin in `admin/package.json` as well when the generated admin
-registry imports its runtime module.
+`package.json`. Install admin plugin packages in `admin/package.json` too, so the generated
+plugin imports can find them.
 
-## Canonical manifest {#manifest}
+## What the schema file contains {#manifest}
 
-The manifest is the contract shared by migrations, runtime plugins, generators, the admin, and
-tooling. Its serialization is deterministic: equivalent resolved configuration produces identical
-bytes and digests regardless of map iteration order.
+`generated/ridu.schema.json` describes your content model for the admin, generators, migrations,
+and plugins. The same config produces the same file, making changes easy to review in Git.
 
-Stable resource and field identities let a migration distinguish a rename from an unrelated drop
-and create. Human-facing slugs and labels can change while committed identity records continuity.
-Plugin contributions are namespaced and versioned.
+Ridu records stable IDs for collections, globals, and fields. These IDs let migrations recognize
+a renamed field instead of treating it as a deletion followed by a new field.
 
-A built-in field may carry `admin.component` with a paired plugin key, exact component key, and
-deterministic object configuration. This is public presentation metadata, not a new value type:
-storage, validation, migrations, OpenAPI, and generated Go/TypeScript values continue to follow the
-built-in field kind. Executable callbacks and credentials remain outside the manifest.
+The file also includes admin settings, such as which custom component edits a field. Replacing a
+text input with a custom component still generates a text value in Go and TypeScript. To change
+how a value is stored, change the field type.
 
-The manifest describes that an access rule exists and which operation it protects, but never its
-function body or decision. The admin can use this metadata to hide an unavailable action only as a
-presentation; every operation re-evaluates authorization on the server.
+Fields protected by read access rules are marked `queryRestricted`, so the generated client and
+admin can avoid offering filters and sorting for them. The server still checks access on every
+request; the access rule itself stays in Go.
 
-## Generated Go API {#go}
+## Use the generated Go types {#go}
 
-The Go file contains distinct types for stored output, create input, and partial update input. A
-generated collection handle binds those types to the same dynamic local operation engine:
+The Go file gives you separate types for documents, create input, and update input. Bind a
+collection to your application's local API, then call its methods with those types:
 
 ```go
 posts := generated.PostsCollection.With(app.Local())
 
 created, err := posts.Create(ctx, generated.PostCreate{
-	Title:  "Hello, Ridu",
-	Status: "draft",
+	Title: core.Set("Hello, Ridu"),
 }, actor)
 if err != nil {
 	return err
 }
 
-page, err := posts.List(ctx, core.TypedListOptions{Page: 1, Limit: 20, Actor: actor})
+page, err := posts.List(
+	ctx,
+	core.TypedListOptions{Page: 1, Limit: 20, Actor: actor},
+)
 ```
 
-Generated handles do not bypass access, hooks, validation, transactions, localization, or
-redaction. Dynamic filters keep using the shared [`query` package](/reference/query/); generated
-document and mutation shapes remove field-name maps from ordinary application code.
+This example uses an optional `title` field. For a required text field, pass a plain string
+instead of `core.Set(...)`. Generated methods run the same access checks, validation, and hooks
+as the rest of the local API.
 
-Nullable create/update fields use `*core.Input[T]`: leave the pointer nil to omit the field, call
-`core.Set(value)` to send a concrete value (including `false`, `0`, or an empty slice), and call
-`core.Null[T]()` to send explicit JSON `null`. A non-null slice, map, or fallback
-`json.RawMessage` cannot safely use its raw Go type because a nil value would encode as null. The
-same conservative rule applies to plugin-owned named Go types, whose underlying type and custom
-marshaling cannot be proven from the manifest. Required fields of those shapes therefore use
-`core.NonNullInput[T]` and `core.NonNull(value)`; their omittable default/update forms use
-`*core.NonNullInput[T]` and `core.SetNonNull(value)`. JSON encoding rejects a nil or otherwise
-null-encoding wrapped value. Other non-null fields that are omittable in an update or because they
-have a server default use `*T`.
+### Set, clear, or leave a field unchanged {#go-input-values}
 
-Both wrappers are write-only typed local-API arguments: `core.Input` and `core.NonNullInput` are not
-general-purpose JSON-unmarshal contracts. The non-null
-wrapper prevents JSON null; ordinary required/minimum-length validation still decides whether an
-empty concrete collection is valid. Typed list handles accept `core.TypedListOptions`; population
-and all-locale reads remain on the dynamic local API because they change field value shapes at
-runtime.
+On an update, leaving a field out means "keep the saved value." Sending `null` means "clear this
+value," which works only for nullable fields. The generated types distinguish these choices:
 
-## Generated TypeScript API {#typescript}
+| Generated field type    | Leave it out | Set a value              | Clear it         |
+| ----------------------- | ------------ | ------------------------ | ---------------- |
+| `*core.Input[T]`        | `nil`        | `core.Set(value)`        | `core.Null[T]()` |
+| `*core.NonNullInput[T]` | `nil`        | `core.SetNonNull(value)` | Not allowed      |
+| `core.NonNullInput[T]`  | Not allowed  | `core.NonNull(value)`    | Not allowed      |
+| `*T`                    | `nil`        | A pointer to the value   | Not allowed      |
+| `T`                     | Not allowed  | The value itself         | Not allowed      |
 
-The generated module extends the neutral `@riducms/sdk` runtime with application-specific types:
+Use the type generated for your field. `Input` lets you send explicit `null`. `NonNullInput`
+rejects values that would encode as JSON `null`, such as a nil slice. Ridu uses it for non-null
+lists, maps, JSON, and plugin-defined Go types. Both wrappers have `Get()` to read their value.
 
-- output, create, and update shapes for every collection and global;
-- collection/global/auth/upload/version-capability slug unions;
-- field-aware `where`, `select`, and `populate` inputs;
-- one `RiduConfig` map connecting slugs to all those types;
-- a `createClient` wrapper that supplies the exact config without repeated generics;
-- type-only module augmentation for raw SDK inference in programs with one generated config.
+Zero values still count as values: `core.Set(false)` sends `false`, and `core.Set(0)` sends `0`.
+An empty list is different from a nil list; required and minimum-row validation decide whether
+an empty list is accepted.
 
-Conditional admin presentation does not narrow generated TypeScript inputs. Create and update
-types remain ordinary flat field contracts, including each field's required, default, and null
-behavior. Hidden fields can still be submitted, and conditions do not perform runtime validation or
-authorization; enforce active-shape rules in application validation when needed.
+### Read related documents and translations {#go-read-options}
+
+`Find` takes `core.TypedReadOptions`, and `List` takes `core.TypedListOptions`. Use these options
+to choose fields and populate related documents. A generated relationship uses `Reference[T]`,
+which contains an `ID` and, when populated, a `Document`.
+
+Localized projects also generate an `AllLocales` reader and document types with language maps.
+Use the ordinary collection reader for a single language. Go field names use familiar
+initialisms such as `URL` and `UserID`; the JSON keys keep your configured names, such as `url`
+and `userID`.
+
+## Use the generated TypeScript client {#typescript}
+
+Import `createClient` from your generated file. It already knows your collection names, document
+fields, and which values are required when creating or updating content:
 
 ```ts
 import { createClient } from '~/generated/ridu.generated';
 
 const client = createClient({ baseURL: 'https://cms.example.com' });
 const post = await client.create('posts', {
-	title: 'Generated contracts',
+	title: 'Hello, Ridu',
 	status: 'draft'
 });
 ```
 
-A TypeScript program that contains zero generated configs—or more than one—does not select an
-automatic default. Import the intended generated wrapper, or pass its `RiduConfig` explicitly to
-the raw SDK. This avoids whichever package happened to load first silently choosing your API.
+The generated client also types filters, selected fields, and populated relationships. For
+example, a literal `select` option narrows the result to the fields you requested, and `populate`
+adds the related document's type. This works inside groups, arrays, and blocks, including reads
+of every translation. Options held in broadly typed variables may produce broader result types.
+Sort terms are strings; see [Querying data](/docs/querying/) for examples.
 
-Selection and population inputs are typed, but they do not yet transform the method's output type.
-Sort terms also remain strings. Treat the runtime projection as authoritative and see
-[Querying data](/docs/querying/) for that current boundary.
+Fields can be omitted from a response when access rules deny them, so check optional output
+values before using them. Hiding a field with an admin condition does not make it optional in a
+create request. Use [validation](/docs/fields/validation/) when allowed values depend on another
+field, and [access rules](/docs/access-control/) to protect them.
 
-## OpenAPI and other consumers {#openapi}
+The generated file exports `RiduConfig` for integrations that need your application's types.
+For a TypeScript project containing one generated config, the raw `@riducms/sdk` client can infer
+it too. With no config or multiple configs, import the intended generated `createClient` wrapper
+or pass that application's `RiduConfig` explicitly.
 
-The OpenAPI document is generated from the same snapshot as the TypeScript module. Use it for API
-inspection, non-TypeScript client generation, request fixtures, or gateway tooling. Do not
-hand-edit it: the next generation replaces it. When `generated.graphql.schema` is
-configured, the compiled GraphQL plugin also emits its exact runtime SDL for GraphQL clients,
-editor tooling, and API review.
+## Use OpenAPI and GraphQL schemas {#openapi}
 
-The admin loads the runtime schema and generated SDK contract, while its plugin registry imports
-static code selected at build time. GraphQL derives its SDL from the same manifest and executable
-plugin options.
+Use `generated/ridu.openapi.json` to inspect your API, generate a client in another language, or
+configure API tooling. It comes from the same content config as your Go and TypeScript types.
 
-## Atomic writes and drift checks {#atomic}
+If you use the GraphQL plugin, configure `generated.graphql.schema` to write the GraphQL schema
+for your client and editor tools. Like the other generated files, it is replaced when you run
+generation.
 
-`ridu generate` writes the outputs as one set. If generation or installation fails, the previous
-contract set remains intact. Byte-identical output keeps its timestamp.
+## Keep generated files up to date {#atomic}
 
-Use the non-writing mode in CI:
+`ridu generate` updates all generated files together. If it fails, your previous generated files
+remain in place.
+
+Use `--check` in CI to check for missing or outdated files without changing them:
 
 ```bash
 npm run ridu -- generate --check
 ```
 
-It fails when an expected file is missing or byte-different. During ordinary local development,
-keep the complete loop running:
+During development, keep the development server running to regenerate files when your config
+changes:
 
 ```bash
 npm run dev
 ```
 
-It regenerates contracts on config changes and synchronizes safe additive development schema
-changes. After the behavior works, review the generated files:
+This also applies supported, non-destructive schema changes to your development database. Review
+the generated file changes alongside your config:
 
 ```bash
 git diff -- generated admin/src/ridu.plugins.generated.ts
 ```
 
-If the change affects stored schema, create the immutable artifact and run the project checks before
-deployment:
+If the change affects stored data, create a migration and run the project checks before deployment:
 
 ```bash
 npm run ridu -- migrate create --name describe-the-change
 npm run ridu -- check
 ```
 
-Generation describes the target API; migration creation records the reviewed, immutable database
-transition from the previous manifest. A migration is not required for ordinary local development.
-Read [Migrations](/docs/migrations/) before
-changing an existing schema.
+Generation updates your application types and API description. A migration records how to change
+the database from the previous schema to the new one. Read [Migrations](/docs/migrations/) before
+deploying a schema change; you do not need to create a migration for every local edit.
 
-## Common failures {#failures}
+## Fix generation problems {#failures}
 
 | Symptom                             | Likely cause                                                                                                         | Next step                                                       |
 | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
 | Project command cannot compile      | Invalid Go config or incompatible package versions                                                                   | Run `go test ./...`; fix the first compiler error               |
-| Handshake version mismatch          | CLI and application framework do not share the project-command contract                                              | Use the CLI release pinned to the project                       |
-| Manifest validation fails           | Duplicate slug/name, invalid option combination, unknown relationship target, localization cycle, or plugin conflict | Follow the structured path in the error                         |
-| `--check` reports drift             | Config or generator version changed without committed outputs                                                        | Run generation locally and review all artifacts together        |
+| Handshake version mismatch          | The CLI and application use incompatible versions                                                                    | Use the CLI release pinned to the project                       |
+| Manifest validation fails           | Duplicate slug/name, invalid option combination, unknown relationship target, localization cycle, or plugin conflict | Fix the field or setting named in the error                     |
+| `--check` reports drift             | The generated files no longer match your config or framework version                                                 | Run generation locally and review the changed files             |
 | Raw SDK types fall back to defaults | No generated config, or multiple generated configs, are in the TypeScript program                                    | Import/use the generated wrapper explicitly                     |
-| Generated plugin import fails       | Registry metadata and installed Go/admin packages disagree                                                           | Use `ridu plugin` commands; do not patch the generated registry |
+| Generated plugin import fails       | A generated import does not match your installed plugin packages                                                     | Use `ridu plugin` commands; do not patch the generated registry |
 
-The [Troubleshooting](/docs/troubleshooting/) guide covers recovery in more detail. Exact generator,
-manifest, and project-handshake types are in the [Go API reference](/reference/schema/) and
-[CLI reference](/reference/cli/).
+See [Troubleshooting](/docs/troubleshooting/) for more help, the
+[schema reference](/reference/schema/) for schema types, and the [CLI reference](/reference/cli/)
+for generation commands.
+
+## Primitive list contracts {#primitive-lists}
+
+[TextList and NumberList](/docs/fields/lists/) generate Go slices and TypeScript `string[]` or
+`number[]`, with non-null elements. Create inputs require a list when `Required` or positive
+`MinRows` requires it, unless a default supplies it. Updates may omit the field; a supplied
+list replaces all items. Read fields remain optional because access can hide them.
+
+Go nullable inputs use `core.Set([]string{})` for an explicit empty list and
+`core.Null[[]string]()` for null. Required list inputs use `core.NonNull(...)` or
+`core.SetNonNull(...)` as the generated declaration indicates. Generated Go decoders reject
+null primitive items instead of converting them to zero values. Read slices use nil for absent
+or null values, following the existing read model. A nonnil empty slice retains `[]` when
+re-encoded; its `omitzero` tag omits nil slices without dropping empty lists. OpenAPI separates item
+constraints from list counts and describes write constraints without imposing them on
+read-hook results. The optional GraphQL plugin uses `[String!]` and `[Float!]`.

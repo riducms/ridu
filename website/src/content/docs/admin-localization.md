@@ -5,7 +5,13 @@ product: admin
 eyebrow: 'Admin tasks'
 order: 126
 aliases:
-  ['admin translation', 'interface language', 'admin timezone', 'RTL admin', 'localized labels']
+  [
+    'admin translation',
+    'interface language',
+    'admin timezone',
+    'RTL admin',
+    'localized labels'
+  ]
 capabilities: ['content.localization']
 navigation:
   section: 'Admin & workflows'
@@ -19,6 +25,17 @@ Ridu separates two choices: the **content locale** selects stored/fallback value
 **interface language** translates admin controls and application labels. An editor can author
 Arabic content with the French interface and a Europe/Paris display timezone.
 
+## Configuration {#configuration}
+
+| Go option                            | TypeScript counterpart             | What it controls                                                                   |
+| ------------------------------------ | ---------------------------------- | ---------------------------------------------------------------------------------- |
+| `Admin.Localization.Languages`       | `languages` passed to `mountAdmin` | Declares each available interface language and requires a matching static catalog. |
+| `DefaultLanguage`                    | First active/default catalog       | Chooses the initial interface language.                                            |
+| `AdminLanguage.Code`, `Label`, `RTL` | Catalog language metadata          | Keeps the Go declaration and bundled catalog identity/direction consistent.        |
+| `Admin.Localization.TimeZones`       | Browser `Intl` formatting          | Declares allowed IANA timezone IDs or fixed offsets and their labels.              |
+| `DefaultTimeZone`                    | Initial formatting timezone        | Chooses how stored instants appear before an author changes preference.            |
+| `LabelTranslations` maps             | `messages` / plugin catalogs       | Translates application-owned labels without changing stable slugs or keys.         |
+
 ## Configure interface choices {#configure}
 
 Declare languages/timezones in `Admin.Localization` and pass matching static catalogs to
@@ -30,7 +47,8 @@ import { ar, en, fr } from '@riducms/translations';
 
 mountAdmin<RiduConfig>({
 	target,
-	clientFactory: () => createClient({ baseURL: window.location.origin }),
+	clientFactory: () =>
+		createClient({ baseURL: window.location.origin }),
 	plugins: adminPlugins,
 	languages: [en, fr, ar]
 });

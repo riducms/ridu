@@ -42,10 +42,10 @@
 	);
 
 	function selectedLabel(field: SchemaField, value: string) {
-		const choice = field.select?.choices.find((candidate) => candidate.value === value);
-		return choice === undefined
+		const option = field.select?.options.find((candidate) => candidate.value === value);
+		return option === undefined
 			? i18n.t("uploads:chooseValue")
-			: i18n.text(choice.label, choice.labelTranslations);
+			: i18n.text(option.label, option.labelTranslations);
 	}
 
 	function controlLabel(field: SchemaField) {
@@ -83,10 +83,10 @@
 					</SelectTrigger>
 					<SelectContent>
 						<SelectItem value="" label={i18n.t("uploads:chooseValue")} />
-						{#each entry.field.select?.choices ?? [] as choice (choice.value)}
+						{#each entry.field.select?.options ?? [] as option (option.value)}
 							<SelectItem
-								value={choice.value}
-								label={i18n.text(choice.label, choice.labelTranslations)}
+								value={option.value}
+								label={i18n.text(option.label, option.labelTranslations)}
 							/>
 						{/each}
 					</SelectContent>

@@ -4,7 +4,8 @@ description: 'Choose between the local Go API, REST, TypeScript SDK, GraphQL, an
 product: data
 eyebrow: 'Data and APIs'
 order: 85
-aliases: ['crud', 'read data', 'write data', 'API overview', 'operations']
+aliases:
+  ['crud', 'read data', 'write data', 'API overview', 'operations']
 navigation:
   section: 'Work with data'
   order: 10

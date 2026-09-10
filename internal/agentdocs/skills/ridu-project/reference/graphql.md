@@ -205,11 +205,17 @@ graphqlplugin.New(graphqlplugin.Options{
 			Name: "postTotal",
 			Type: graphql.NewNonNull(graphql.Int),
 			Cost: 5,
-			Resolve: func(input graphqlplugin.ExtensionContext) (any, error) {
-				page, err := input.Local.List(input.Context, "posts", ridu.ListOptions{
-					Page: 1, Limit: 1,
-					Actor: input.Actor, ActorCollection: input.ActorCollection,
-				})
+			Resolve: func(
+				input graphqlplugin.ExtensionContext,
+			) (any, error) {
+				page, err := input.Local.List(
+					input.Context,
+					"posts",
+					ridu.ListOptions{
+						Page: 1, Limit: 1,
+						Actor: input.Actor, ActorCollection: input.ActorCollection,
+					},
+				)
 				return page.Total, err
 			},
 		},

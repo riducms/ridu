@@ -1,0 +1,29 @@
+{
+	"name": "ridu-payload-live-validation-investigation",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "next dev --hostname 127.0.0.1 --port 3417",
+		"check": "tsc --noEmit",
+		"generate": "payload generate:importmap"
+	},
+	"dependencies": {
+		"@payloadcms/db-sqlite": "3.88.0",
+		"@payloadcms/next": "3.88.0",
+		"@payloadcms/richtext-lexical": "3.88.0",
+		"@payloadcms/ui": "3.88.0",
+		"payload": "3.88.0",
+		"next": "16.2.6",
+		"graphql": "16.11.0",
+		"react": "19.2.6",
+		"react-dom": "19.2.6",
+		"sharp": "0.34.2"
+	},
+	"devDependencies": {
+		"@types/node": "22.19.9",
+		"@types/react": "19.2.14",
+		"@types/react-dom": "19.2.3",
+		"typescript": "5.7.3",
+		"@playwright/test": "1.58.2"
+	}
+}

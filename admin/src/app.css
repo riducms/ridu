@@ -232,12 +232,20 @@ a {
 	outline-offset: 2px;
 }
 
-[data-slot="input"]:focus-visible,
-[data-slot="textarea"]:focus-visible,
-[data-slot="command-input"]:focus-visible,
-select:focus-visible {
+[data-slot="input"]:not([aria-invalid="true"]):focus-visible,
+[data-slot="textarea"]:not([aria-invalid="true"]):focus-visible,
+[data-slot="command-input"]:not([aria-invalid="true"]):focus-visible,
+select:not([aria-invalid="true"]):focus-visible {
 	border-color: color-mix(in oklab, var(--ring) 78%, transparent);
 	box-shadow: none;
+	outline: none;
+}
+
+[data-slot="input"][aria-invalid="true"]:focus-visible,
+[data-slot="textarea"][aria-invalid="true"]:focus-visible,
+[data-slot="command-input"][aria-invalid="true"]:focus-visible,
+select[aria-invalid="true"]:focus-visible {
+	box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--destructive) 65%, transparent);
 	outline: none;
 }
 
@@ -306,6 +314,57 @@ select:focus-visible {
 	color: var(--destructive);
 	font-size: 0.8125rem;
 	line-height: 1.5;
+}
+
+/*
+ * Validation feedback is a status surface, not an interactive tooltip. Keep it
+ * anchored to the control without covering its hit target or replacing help copy.
+ */
+.ridu-field-error-tooltip {
+	position: absolute;
+	z-index: 20;
+	inset-inline-end: 0;
+	inset-block-end: calc(100% + 0.4rem);
+	max-inline-size: min(80%, 42rem);
+	margin: 0;
+	border-radius: calc(var(--radius) - 0.0625rem);
+	padding: 0.32rem 0.55rem;
+	background: var(--destructive);
+	box-shadow: 0 0.3rem 1rem oklch(0 0 0 / 18%);
+	color: var(--destructive-foreground);
+	font-size: 0.8125rem;
+	font-weight: 500;
+	line-height: 1.35;
+	list-style: none;
+	overflow-wrap: anywhere;
+	pointer-events: none;
+}
+
+.ridu-field-error-tooltip::after {
+	position: absolute;
+	inset-block-start: 100%;
+	inset-inline-end: 0.7rem;
+	inline-size: 0;
+	block-size: 0;
+	border: 0.32rem solid transparent;
+	border-block-start-color: var(--destructive);
+	content: "";
+}
+
+.ridu-field-error-tooltip > :where(ul, ol) {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.ridu-field-error-tooltip li + li {
+	margin-block-start: 0.2rem;
+}
+
+@media (max-width: 34rem) {
+	.ridu-field-error-tooltip {
+		max-inline-size: calc(100% - 0.5rem);
+	}
 }
 
 /*

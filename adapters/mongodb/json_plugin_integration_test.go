@@ -180,16 +180,14 @@ func mongoJSONPluginConfig() ridu.Config {
 			{
 				Slug: "pages", Versions: true,
 				VersionConfig: ridu.VersionConfig{Drafts: true, MaxPerDocument: 5},
-				Fields: []field.Definition{
-					field.JSON("metadata", field.Required()),
-					richtext.FieldWithConfig("content", richtext.Config{
-						Features:                []richtext.Feature{richtext.FeatureRelationships, richtext.FeatureUploads},
-						RelationshipCollections: []string{"posts"},
-						UploadCollections:       []string{"media"},
-					}, field.Required()),
+				Fields: field.Fields{field.JSON("metadata").Required(), richtext.Field("content", richtext.Config{
+					Features:                []richtext.Feature{richtext.FeatureRelationships, richtext.FeatureUploads},
+					RelationshipCollections: []string{"posts"},
+					UploadCollections:       []string{"media"},
+				}).Required(),
 				},
 			},
-			{Slug: "posts", Fields: []field.Definition{field.Text("title", field.Required())}},
+			{Slug: "posts", Fields: field.Fields{field.Text("title").Required()}},
 			{Slug: "media", Upload: true},
 		},
 	}

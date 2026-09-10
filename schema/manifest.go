@@ -38,6 +38,8 @@ type FieldType string
 
 const (
 	FieldTypeText         FieldType = "text"
+	FieldTypeTextList     FieldType = "text-list"
+	FieldTypeNumberList   FieldType = "number-list"
 	FieldTypeCode         FieldType = "code"
 	FieldTypeSelect       FieldType = "select"
 	FieldTypeRadio        FieldType = "radio"
@@ -76,6 +78,7 @@ const (
 type Snapshot struct {
 	Version     Version      `json:"version"`
 	Application Application  `json:"application"`
+	Blocks      []BlockType  `json:"blocks,omitempty"`
 	Collections []Collection `json:"collections"`
 	Globals     []Global     `json:"globals,omitempty"`
 	Plugins     []Plugin     `json:"plugins"`
@@ -233,6 +236,8 @@ type PluginAdmin struct {
 
 // PluginFieldType describes generated language types for one plugin field key.
 type PluginFieldType struct {
+	// EmbeddedTypes lists tree.case selectors supplying ordered generic payload type arguments.
+	EmbeddedTypes     []string        `json:"embeddedTypes,omitempty"`
 	Key               string          `json:"key"`
 	TypeScriptPackage string          `json:"typescriptPackage"`
 	TypeScriptOutput  string          `json:"typescriptOutput"`
@@ -377,82 +382,105 @@ type Capabilities struct {
 
 // Field is one resolved field with exactly one matching typed detail contract.
 type Field struct {
-	ID           StableID           `json:"id"`
-	Name         string             `json:"name"`
-	Path         query.Path         `json:"path"`
-	Type         FieldType          `json:"type"`
-	Category     FieldCategory      `json:"category"`
-	Required     bool               `json:"required"`
-	Unique       bool               `json:"unique"`
-	Index        bool               `json:"index,omitempty"`
-	Localized    bool               `json:"localized,omitempty"`
-	Default      *string            `json:"default,omitempty"`
-	Admin        FieldAdmin         `json:"admin"`
-	Text         *TextField         `json:"text,omitempty"`
-	Textarea     *TextField         `json:"textarea,omitempty"`
-	Code         *CodeField         `json:"code,omitempty"`
-	Number       *NumberField       `json:"number,omitempty"`
-	Date         *DateField         `json:"date,omitempty"`
-	Select       *SelectField       `json:"select,omitempty"`
-	Point        *PointField        `json:"point,omitempty"`
-	UI           *UIField           `json:"ui,omitempty"`
-	Join         *JoinField         `json:"join,omitempty"`
-	Virtual      *VirtualField      `json:"virtual,omitempty"`
-	Relationship *RelationshipField `json:"relationship,omitempty"`
-	Upload       *UploadField       `json:"upload,omitempty"`
-	Nested       *NestedField       `json:"nested,omitempty"`
-	Blocks       *BlocksField       `json:"blocks,omitempty"`
-	Plugin       *PluginField       `json:"plugin,omitempty"`
+	ID        StableID      `json:"id"`
+	Name      string        `json:"name"`
+	Path      query.Path    `json:"path"`
+	Type      FieldType     `json:"type"`
+	Category  FieldCategory `json:"category"`
+	Required  bool          `json:"required"`
+	Unique    bool          `json:"unique"`
+	Index     bool          `json:"index,omitempty"`
+	Localized bool          `json:"localized,omitempty"`
+	// QueryRestricted records an attached read policy's static prohibition on
+	// caller filtering, sorting and distinct queries. It is not an access verdict.
+	QueryRestricted bool    `json:"queryRestricted,omitempty"`
+	Default         *string `json:"default,omitempty"`
+	// DynamicDefault permits omitted input to reach server initialization. It does
+	// not contain executable code or promise that the callback supplies a value.
+	DynamicDefault bool `json:"dynamicDefault,omitempty"`
+	// LiveValidation enables explicit advisory server feedback without serializing callbacks.
+	LiveValidation bool                `json:"liveValidation,omitempty"`
+	Admin          FieldAdmin          `json:"admin"`
+	Text           *TextField          `json:"text,omitempty"`
+	Textarea       *TextField          `json:"textarea,omitempty"`
+	Code           *CodeField          `json:"code,omitempty"`
+	Number         *NumberField        `json:"number,omitempty"`
+	Date           *DateField          `json:"date,omitempty"`
+	Select         *SelectField        `json:"select,omitempty"`
+	Point          *PointField         `json:"point,omitempty"`
+	UI             *UIField            `json:"ui,omitempty"`
+	Join           *JoinField          `json:"join,omitempty"`
+	Virtual        *VirtualField       `json:"virtual,omitempty"`
+	Relationship   *RelationshipField  `json:"relationship,omitempty"`
+	List           *PrimitiveListField `json:"list,omitempty"`
+	Upload         *UploadField        `json:"upload,omitempty"`
+	Nested         *NestedField        `json:"nested,omitempty"`
+	Blocks         *BlocksField        `json:"blocks,omitempty"`
+	Plugin         *PluginField        `json:"plugin,omitempty"`
 }
 
 // FieldAdmin contains serializable presentation metadata, never authorization.
 type FieldAdmin struct {
-	Label                   string               `json:"label"`
-	LabelTranslations       map[string]string    `json:"labelTranslations,omitempty"`
-	Description             string               `json:"description,omitempty"`
-	DescriptionTranslations map[string]string    `json:"descriptionTranslations,omitempty"`
-	Placeholder             string               `json:"placeholder,omitempty"`
-	PlaceholderTranslations map[string]string    `json:"placeholderTranslations,omitempty"`
-	ReadOnly                bool                 `json:"readOnly,omitempty"`
-	Hidden                  bool                 `json:"hidden,omitempty"`
-	Sidebar                 bool                 `json:"sidebar,omitempty"`
-	Columns                 int                  `json:"columns,omitempty"`
-	Row                     *FieldRow            `json:"row,omitempty"`
-	Collapsible             *FieldCollapsible    `json:"collapsible,omitempty"`
-	Tab                     string               `json:"tab,omitempty"`
-	TabTranslations         map[string]string    `json:"tabTranslations,omitempty"`
-	TabGroup                *FieldTabGroup       `json:"tabGroup,omitempty"`
-	NamedTab                bool                 `json:"namedTab,omitempty"`
-	Condition               *FieldCondition      `json:"condition,omitempty"`
-	Component               *FieldAdminComponent `json:"component,omitempty"`
+	// Extensions are public finite JSON attachments owned by this field.
+	Extensions              map[string]json.RawMessage `json:"extensions,omitempty"`
+	Editor                  *FieldEditor               `json:"editor,omitempty"`
+	Label                   string                     `json:"label"`
+	LabelTranslations       map[string]string          `json:"labelTranslations,omitempty"`
+	Description             string                     `json:"description,omitempty"`
+	DescriptionTranslations map[string]string          `json:"descriptionTranslations,omitempty"`
+	Placeholder             string                     `json:"placeholder,omitempty"`
+	PlaceholderTranslations map[string]string          `json:"placeholderTranslations,omitempty"`
+	ReadOnly                bool                       `json:"readOnly,omitempty"`
+	Hidden                  bool                       `json:"hidden,omitempty"`
+	Sidebar                 bool                       `json:"sidebar,omitempty"`
+	Columns                 int                        `json:"columns,omitempty"`
+	Row                     *FieldRow                  `json:"row,omitempty"`
+	Collapsible             *FieldCollapsible          `json:"collapsible,omitempty"`
+	Tab                     string                     `json:"tab,omitempty"`
+	TabTranslations         map[string]string          `json:"tabTranslations,omitempty"`
+	TabGroup                *FieldTabGroup             `json:"tabGroup,omitempty"`
+	NamedTab                bool                       `json:"namedTab,omitempty"`
+	Condition               *FieldCondition            `json:"condition,omitempty"`
+	Component               *FieldAdminComponent       `json:"component,omitempty"`
+}
+
+// FieldEditor selects an application-local value editor. Config is public JSON.
+type FieldEditor struct {
+	Reference string          `json:"reference"`
+	Config    json.RawMessage `json:"config,omitempty"`
 }
 
 // FieldAdminComponent selects one statically registered plugin renderer for a
 // field without changing its storage, validation, access, or generated type.
 type FieldAdminComponent struct {
-	Plugin    string          `json:"plugin"`
-	Component string          `json:"component"`
+	// Reference selects an application-local row label; it is not valid for field renderers.
+	Reference string          `json:"reference,omitempty"`
+	Plugin    string          `json:"plugin,omitempty"`
+	Component string          `json:"component,omitempty"`
 	Config    json.RawMessage `json:"config,omitempty"`
 }
 
 // FieldRow identifies fields authored as one presentation-only layout row.
 // It never contributes a document path or stored value.
 type FieldRow struct {
-	ID StableID `json:"id"`
+	ID         StableID                   `json:"id"`
+	Extensions map[string]json.RawMessage `json:"extensions,omitempty"`
 }
 
 // FieldCollapsible identifies flattened fields presented inside one disclosure.
 type FieldCollapsible struct {
-	ID                 StableID          `json:"id"`
-	Label              string            `json:"label"`
-	LabelTranslations  map[string]string `json:"labelTranslations,omitempty"`
-	InitiallyCollapsed bool              `json:"initiallyCollapsed,omitempty"`
+	ID                 StableID                   `json:"id"`
+	Label              string                     `json:"label"`
+	LabelTranslations  map[string]string          `json:"labelTranslations,omitempty"`
+	InitiallyCollapsed bool                       `json:"initiallyCollapsed,omitempty"`
+	Extensions         map[string]json.RawMessage `json:"extensions,omitempty"`
 }
 
 // FieldTabGroup identifies fields authored by one presentation tabs definition.
 // It preserves local tab-group boundaries without contributing a document path.
 type FieldTabGroup struct {
-	ID StableID `json:"id"`
+	ID         StableID                   `json:"id"`
+	Extensions map[string]json.RawMessage `json:"extensions,omitempty"`
 }
 
 // FieldConditionKind identifies one node in a deterministic presentation expression.
@@ -532,18 +560,18 @@ type NumberField struct {
 	Step *float64 `json:"step,omitempty"`
 }
 
-// DatePickerAppearance is the finite date-control vocabulary understood by the admin.
-type DatePickerAppearance string
+// DateFormat identifies the accepted date string contract across APIs and admin.
+type DateFormat string
 
 const (
-	DatePickerDayOnly    DatePickerAppearance = "dayOnly"
-	DatePickerDayAndTime DatePickerAppearance = "dayAndTime"
-	DatePickerTimeOnly   DatePickerAppearance = "timeOnly"
+	DateOnly DateFormat = "date"
+	DateTime DateFormat = "date-time"
+	TimeOnly DateFormat = "time"
 )
 
 // DateField describes how a stored date string is authored and presented.
 type DateField struct {
-	PickerAppearance DatePickerAppearance `json:"pickerAppearance"`
+	Format DateFormat `json:"format"`
 }
 
 // PointField marks a [longitude, latitude] value.
@@ -578,15 +606,15 @@ type VirtualField struct {
 	ValueType ValueType `json:"valueType"`
 }
 
-// SelectField contains the finite choices for a select field.
+// SelectField contains the finite options for a select field.
 type SelectField struct {
-	Choices       []SelectChoice `json:"choices"`
+	Options       []SelectOption `json:"options"`
 	HasMany       bool           `json:"hasMany,omitempty"`
 	DefaultValues []string       `json:"defaultValues,omitempty"`
 }
 
-// SelectChoice is one normalized select value and label.
-type SelectChoice struct {
+// SelectOption is one normalized select value and label.
+type SelectOption struct {
 	Value             string            `json:"value"`
 	Label             string            `json:"label"`
 	LabelTranslations map[string]string `json:"labelTranslations,omitempty"`
@@ -643,6 +671,7 @@ const (
 
 // NestedField contains recursively resolved child fields.
 type NestedField struct {
+	bound             *boundFields
 	Fields            []Field              `json:"fields"`
 	MinRows           int                  `json:"minRows,omitempty"`
 	MaxRows           int                  `json:"maxRows,omitempty"`
@@ -660,17 +689,37 @@ type ArrayRowLabels struct {
 }
 
 type BlocksField struct {
-	Types []BlockType `json:"types"`
+	BlockReferences []string `json:"blockReferences,omitempty"`
+	bound           *boundBlocks
+	MinRows         int         `json:"minRows,omitempty"`
+	MaxRows         int         `json:"maxRows,omitempty"`
+	Types           []BlockType `json:"types,omitempty"`
+}
+
+// BlockAdmin contains the narrow content-derived block heading contract.
+type BlockAdmin struct {
+	RowLabel string `json:"rowLabel,omitempty"`
+}
+
+// BlockLabels contains resolved author-facing names and admin language overrides.
+type BlockLabels struct {
+	Singular             string            `json:"singular"`
+	Plural               string            `json:"plural"`
+	SingularTranslations map[string]string `json:"singularTranslations,omitempty"`
+	PluralTranslations   map[string]string `json:"pluralTranslations,omitempty"`
 }
 
 type BlockType struct {
-	Key               string            `json:"key"`
-	Label             string            `json:"label"`
-	LabelTranslations map[string]string `json:"labelTranslations,omitempty"`
-	Fields            []Field           `json:"fields"`
+	bound    *boundFields
+	TypeName string      `json:"typeName,omitempty"`
+	Admin    *BlockAdmin `json:"admin,omitempty"`
+	Slug     string      `json:"slug"`
+	Labels   BlockLabels `json:"labels"`
+	Fields   []Field     `json:"fields"`
 }
 
 type PluginField struct {
+	EmbeddedTrees []EmbeddedTree  `json:"embeddedTrees,omitempty"`
 	Key           string          `json:"key"`
 	Config        json.RawMessage `json:"config"`
 	ReferenceKeys []string        `json:"referenceKeys,omitempty"`
@@ -703,10 +752,19 @@ func Parse(encoded []byte) (Manifest, error) {
 	if snapshot.Version != CurrentVersion {
 		return Manifest{}, fmt.Errorf("unsupported schema manifest version %d; this Ridu build supports version %d", snapshot.Version, CurrentVersion)
 	}
+	if err := BindBlockReferences(&snapshot); err != nil {
+		return Manifest{}, err
+	}
+	if err := ValidateEmbeddedMetadata(snapshot); err != nil {
+		return Manifest{}, err
+	}
 	if err := validatePluginBuildMetadata(snapshot.Plugins); err != nil {
 		return Manifest{}, err
 	}
 	if err := validateAdminFieldComponents(snapshot); err != nil {
+		return Manifest{}, err
+	}
+	if err := validatePrimitiveListMetadata(snapshot); err != nil {
 		return Manifest{}, err
 	}
 	if err := validateSelectMetadata(snapshot); err != nil {
@@ -766,21 +824,21 @@ func validateSelectMetadata(snapshot Snapshot) error {
 				}
 				if candidate.Select != nil {
 					metadata := candidate.Select
-					if len(metadata.Choices) == 0 {
-						return fmt.Errorf("missing select choices at %s.select.choices", fieldPath)
+					if len(metadata.Options) == 0 {
+						return fmt.Errorf("missing select options at %s.select.options", fieldPath)
 					}
-					seenChoices := make(map[string]struct{}, len(metadata.Choices))
-					for choiceIndex, choice := range metadata.Choices {
-						choicePath := fmt.Sprintf("%s.select.choices[%d]", fieldPath, choiceIndex)
-						if choice.Value == "" {
-							return fmt.Errorf("missing select choice value at %s.value", choicePath)
+					seenOptions := make(map[string]struct{}, len(metadata.Options))
+					for optionIndex, option := range metadata.Options {
+						optionPath := fmt.Sprintf("%s.select.options[%d]", fieldPath, optionIndex)
+						if option.Value == "" {
+							return fmt.Errorf("missing select option value at %s.value", optionPath)
 						}
-						if _, duplicate := seenChoices[choice.Value]; duplicate {
-							return fmt.Errorf("duplicate select choice value %q at %s.value", choice.Value, choicePath)
+						if _, duplicate := seenOptions[option.Value]; duplicate {
+							return fmt.Errorf("duplicate select option value %q at %s.value", option.Value, optionPath)
 						}
-						seenChoices[choice.Value] = struct{}{}
-						if choice.Label == "" || choice.Label != strings.TrimSpace(choice.Label) {
-							return fmt.Errorf("invalid canonical select choice label at %s.label", choicePath)
+						seenOptions[option.Value] = struct{}{}
+						if option.Label == "" || option.Label != strings.TrimSpace(option.Label) {
+							return fmt.Errorf("invalid canonical select option label at %s.label", optionPath)
 						}
 					}
 					if candidate.Type == FieldTypeRadio && metadata.HasMany {
@@ -793,7 +851,7 @@ func validateSelectMetadata(snapshot Snapshot) error {
 						seenDefaults := make(map[string]struct{}, len(metadata.DefaultValues))
 						for defaultIndex, value := range metadata.DefaultValues {
 							defaultPath := fmt.Sprintf("%s.select.defaultValues[%d]", fieldPath, defaultIndex)
-							if _, valid := seenChoices[value]; !valid {
+							if _, valid := seenOptions[value]; !valid {
 								return fmt.Errorf("invalid multi-select default %q at %s", value, defaultPath)
 							}
 							if _, duplicate := seenDefaults[value]; duplicate {
@@ -806,20 +864,27 @@ func validateSelectMetadata(snapshot Snapshot) error {
 							return fmt.Errorf("invalid scalar select defaults at %s.select.defaultValues", fieldPath)
 						}
 						if candidate.Default != nil {
-							if _, valid := seenChoices[*candidate.Default]; !valid {
+							if _, valid := seenOptions[*candidate.Default]; !valid {
 								return fmt.Errorf("invalid select default %q at %s.default", *candidate.Default, fieldPath)
 							}
 						}
 					}
 				}
+				if err := inspect(EmbeddedBlocks(candidate), fieldPath+".plugin.embeddedTrees"); err != nil {
+					return err
+				}
 				if candidate.Nested != nil {
-					if err := inspect(candidate.Nested.Fields, fieldPath+".nested.fields"); err != nil {
+					if err := inspect(candidate.Nested.ResolvedFields(), fieldPath+".nested.fields"); err != nil {
 						return err
 					}
 				}
 				if candidate.Blocks != nil {
-					for blockIndex, block := range candidate.Blocks.Types {
-						if err := inspect(block.Fields, fmt.Sprintf("%s.blocks.types[%d].fields", fieldPath, blockIndex)); err != nil {
+					for blockIndex, block := range candidate.Blocks.ResolvedTypes() {
+						if block.TypeName != "" && !IsValidBlockTypeName(block.TypeName) {
+							return fmt.Errorf("invalid block type name at %s.blocks.types[%d].typeName", fieldPath, blockIndex)
+						}
+
+						if err := inspect(block.ResolvedFields(), fmt.Sprintf("%s.blocks.types[%d].fields", fieldPath, blockIndex)); err != nil {
 							return err
 						}
 					}
@@ -856,19 +921,22 @@ func validateAdminFieldMetadata(snapshot Snapshot) error {
 			}
 			if placeholder != "" {
 				switch candidate.Type {
-				case FieldTypeText, FieldTypeTextarea, FieldTypeEmail, FieldTypeNumber, FieldTypeSelect, FieldTypeRelationship, FieldTypeUpload:
+				case FieldTypeText, FieldTypeTextList, FieldTypeNumberList, FieldTypeTextarea, FieldTypeEmail, FieldTypeNumber, FieldTypeSelect, FieldTypeRelationship, FieldTypeUpload:
 				default:
 					return fmt.Errorf("unsupported placeholder at %s.admin.placeholder for field type %q", fieldPath, candidate.Type)
 				}
 			}
+			if err := validateFields(EmbeddedBlocks(candidate), fieldPath+".plugin.embeddedTrees", true); err != nil {
+				return err
+			}
 			if candidate.Nested != nil {
-				if err := validateFields(candidate.Nested.Fields, fieldPath+".nested.fields", true); err != nil {
+				if err := validateFields(candidate.Nested.ResolvedFields(), fieldPath+".nested.fields", true); err != nil {
 					return err
 				}
 			}
 			if candidate.Blocks != nil {
-				for blockIndex, block := range candidate.Blocks.Types {
-					if err := validateFields(block.Fields, fmt.Sprintf("%s.blocks.types[%d].fields", fieldPath, blockIndex), true); err != nil {
+				for blockIndex, block := range candidate.Blocks.ResolvedTypes() {
+					if err := validateFields(block.ResolvedFields(), fmt.Sprintf("%s.blocks.types[%d].fields", fieldPath, blockIndex), true); err != nil {
 						return err
 					}
 				}
@@ -941,9 +1009,22 @@ func validateConstraintAndIndexMetadata(snapshot Snapshot) error {
 				if candidate.Index && (repeated || !manifestSupportsIndexField(candidate)) {
 					return fmt.Errorf("unsupported index field at %s.index", fieldPath)
 				}
+				if candidate.DynamicDefault {
+					if candidate.Default != nil || candidate.Select != nil && len(candidate.Select.DefaultValues) != 0 {
+						return fmt.Errorf("conflicting defaults at %s.dynamicDefault: choose a literal or dynamic default", fieldPath)
+					}
+					switch candidate.Type {
+					case FieldTypeText, FieldTypeTextList, FieldTypeNumberList, FieldTypeCode, FieldTypeTextarea, FieldTypeEmail, FieldTypeDate, FieldTypeNumber, FieldTypeCheckbox, FieldTypeSelect, FieldTypeRadio:
+					default:
+						return fmt.Errorf("unsupported dynamic default at %s.dynamicDefault: field type %q does not support value defaults", fieldPath, candidate.Type)
+					}
+				}
+				if candidate.LiveValidation && (candidate.Category == FieldCategoryPresentation || candidate.Type == FieldTypeUI || candidate.Type == FieldTypeJoin || candidate.Type == FieldTypeVirtual) {
+					return fmt.Errorf("unsupported live validation at %s.liveValidation: field type %q has no writable value", fieldPath, candidate.Type)
+				}
 				var minLength, maxLength *int
 				switch candidate.Type {
-				case FieldTypeText:
+				case FieldTypeText, FieldTypeTextList:
 					if candidate.Text != nil {
 						minLength, maxLength = candidate.Text.MinLength, candidate.Text.MaxLength
 					}
@@ -963,31 +1044,51 @@ func validateConstraintAndIndexMetadata(snapshot Snapshot) error {
 				if minLength != nil && *minLength < 0 || maxLength != nil && *maxLength < 0 || minLength != nil && maxLength != nil && *minLength > *maxLength {
 					return fmt.Errorf("invalid length constraints at %s", fieldPath)
 				}
-				if candidate.Default != nil && (minLength != nil || maxLength != nil) {
+				if candidate.Type != FieldTypeTextList && candidate.Default != nil && (minLength != nil || maxLength != nil) {
 					length := utf8.RuneCountInString(*candidate.Default)
 					if minLength != nil && length < *minLength || maxLength != nil && length > *maxLength {
 						return fmt.Errorf("default violates length constraints at %s.default", fieldPath)
 					}
 				}
 				if candidate.Number != nil {
-					if candidate.Type != FieldTypeNumber || candidate.Number.Min != nil && (math.IsNaN(*candidate.Number.Min) || math.IsInf(*candidate.Number.Min, 0)) || candidate.Number.Max != nil && (math.IsNaN(*candidate.Number.Max) || math.IsInf(*candidate.Number.Max, 0)) || candidate.Number.Step != nil && (math.IsNaN(*candidate.Number.Step) || math.IsInf(*candidate.Number.Step, 0) || *candidate.Number.Step <= 0) || candidate.Number.Min != nil && candidate.Number.Max != nil && *candidate.Number.Min > *candidate.Number.Max {
+					if (candidate.Type != FieldTypeNumber && candidate.Type != FieldTypeNumberList) || candidate.Number.Min != nil && (math.IsNaN(*candidate.Number.Min) || math.IsInf(*candidate.Number.Min, 0)) || candidate.Number.Max != nil && (math.IsNaN(*candidate.Number.Max) || math.IsInf(*candidate.Number.Max, 0)) || candidate.Number.Step != nil && (math.IsNaN(*candidate.Number.Step) || math.IsInf(*candidate.Number.Step, 0) || *candidate.Number.Step <= 0) || candidate.Number.Min != nil && candidate.Number.Max != nil && *candidate.Number.Min > *candidate.Number.Max {
 						return fmt.Errorf("invalid number constraints at %s.number", fieldPath)
 					}
-					if candidate.Default != nil {
+					if candidate.Type != FieldTypeNumberList && candidate.Default != nil {
 						value, err := strconv.ParseFloat(*candidate.Default, 64)
 						if err != nil || candidate.Number.Min != nil && value < *candidate.Number.Min || candidate.Number.Max != nil && value > *candidate.Number.Max {
 							return fmt.Errorf("default violates number constraints at %s.default", fieldPath)
 						}
 					}
 				}
+				if err := inspect(EmbeddedBlocks(candidate), fieldPath+".plugin.embeddedTrees", true); err != nil {
+					return err
+				}
 				if candidate.Nested != nil {
-					if err := inspect(candidate.Nested.Fields, fieldPath+".nested.fields", repeated || candidate.Type == FieldTypeArray); err != nil {
+					if err := inspect(candidate.Nested.ResolvedFields(), fieldPath+".nested.fields", repeated || candidate.Type == FieldTypeArray); err != nil {
 						return err
 					}
 				}
 				if candidate.Blocks != nil {
-					for blockIndex, block := range candidate.Blocks.Types {
-						if err := inspect(block.Fields, fmt.Sprintf("%s.blocks.types[%d].fields", fieldPath, blockIndex), true); err != nil {
+					if candidate.Type != FieldTypeBlocks || candidate.Blocks.MinRows < 0 || candidate.Blocks.MaxRows < 0 || candidate.Blocks.MaxRows > 0 && candidate.Blocks.MinRows > candidate.Blocks.MaxRows {
+						return fmt.Errorf("invalid block row bounds at %s.blocks", fieldPath)
+					}
+
+					for blockIndex, block := range candidate.Blocks.ResolvedTypes() {
+						if block.Admin != nil && block.Admin.RowLabel != "" {
+							found := false
+							for _, child := range block.ResolvedFields() {
+								if child.Name == block.Admin.RowLabel && child.Category == FieldCategoryScalar && child.Type != FieldTypeJSON && child.Type != FieldTypePoint && child.Type != FieldTypeTextList && child.Type != FieldTypeNumberList && (child.Select == nil || !child.Select.HasMany) {
+									found = true
+									break
+								}
+							}
+							if !found {
+								return fmt.Errorf("invalid block row label at %s.blocks.types[%d].admin.rowLabel", fieldPath, blockIndex)
+							}
+						}
+
+						if err := inspect(block.ResolvedFields(), fmt.Sprintf("%s.blocks.types[%d].fields", fieldPath, blockIndex), true); err != nil {
 							return err
 						}
 					}
@@ -1063,6 +1164,8 @@ func validateSlugMetadata(snapshot Snapshot) error {
 						return fmt.Errorf("invalid localized slug at %s.localized", fieldPath)
 					case candidate.Default != nil:
 						return fmt.Errorf("invalid slug default at %s.default", fieldPath)
+					case candidate.DynamicDefault:
+						return fmt.Errorf("invalid slug default at %s.dynamicDefault: slug initialization owns its default", fieldPath)
 					case sourcePath == "" || sourcePath == candidate.Path.String():
 						return fmt.Errorf("invalid slug source at %s.text.slug.sourcePath", fieldPath)
 					}
@@ -1080,14 +1183,17 @@ func validateSlugMetadata(snapshot Snapshot) error {
 						return fmt.Errorf("invalid slug source %q at %s.text.slug.sourcePath: slug fields cannot derive from other slug fields", sourcePath, fieldPath)
 					}
 				}
+				if err := inspect(EmbeddedBlocks(candidate), fieldPath+".plugin.embeddedTrees", true); err != nil {
+					return err
+				}
 				if candidate.Nested != nil {
-					if err := inspect(candidate.Nested.Fields, fieldPath+".nested.fields", true); err != nil {
+					if err := inspect(candidate.Nested.ResolvedFields(), fieldPath+".nested.fields", true); err != nil {
 						return err
 					}
 				}
 				if candidate.Blocks != nil {
-					for blockIndex, block := range candidate.Blocks.Types {
-						if err := inspect(block.Fields, fmt.Sprintf("%s.blocks.types[%d].fields", fieldPath, blockIndex), true); err != nil {
+					for blockIndex, block := range candidate.Blocks.ResolvedTypes() {
+						if err := inspect(block.ResolvedFields(), fmt.Sprintf("%s.blocks.types[%d].fields", fieldPath, blockIndex), true); err != nil {
 							return err
 						}
 					}
@@ -1125,7 +1231,7 @@ func manifestSlugSourceChain(fields []Field, segments []string) []Field {
 		if candidate.Type != FieldTypeGroup || candidate.Nested == nil {
 			return nil
 		}
-		childChain := manifestSlugSourceChain(candidate.Nested.Fields, segments[1:])
+		childChain := manifestSlugSourceChain(candidate.Nested.ResolvedFields(), segments[1:])
 		if len(childChain) == 0 {
 			return nil
 		}
@@ -1180,14 +1286,17 @@ func validateReferenceDeleteMetadata(snapshot Snapshot) error {
 						return fmt.Errorf("invalid reference delete action at %s.onDelete: required references cannot be nullified", fieldPath)
 					}
 				}
+				if err := inspect(EmbeddedBlocks(candidate), fieldPath+".plugin.embeddedTrees"); err != nil {
+					return err
+				}
 				if candidate.Nested != nil {
-					if err := inspect(candidate.Nested.Fields, fieldPath+".nested.fields"); err != nil {
+					if err := inspect(candidate.Nested.ResolvedFields(), fieldPath+".nested.fields"); err != nil {
 						return err
 					}
 				}
 				if candidate.Blocks != nil {
-					for blockIndex, block := range candidate.Blocks.Types {
-						if err := inspect(block.Fields, fmt.Sprintf("%s.blocks.types[%d].fields", fieldPath, blockIndex)); err != nil {
+					for blockIndex, block := range candidate.Blocks.ResolvedTypes() {
+						if err := inspect(block.ResolvedFields(), fmt.Sprintf("%s.blocks.types[%d].fields", fieldPath, blockIndex)); err != nil {
 							return err
 						}
 					}
@@ -1293,14 +1402,17 @@ func validateReferenceFilterMetadata(snapshot Snapshot) error {
 						return err
 					}
 				}
+				if err := inspect(EmbeddedBlocks(candidate), fieldPath+".plugin.embeddedTrees"); err != nil {
+					return err
+				}
 				if candidate.Nested != nil {
-					if err := inspect(candidate.Nested.Fields, fieldPath+".nested.fields"); err != nil {
+					if err := inspect(candidate.Nested.ResolvedFields(), fieldPath+".nested.fields"); err != nil {
 						return err
 					}
 				}
 				if candidate.Blocks != nil {
-					for blockIndex, block := range candidate.Blocks.Types {
-						if err := inspect(block.Fields, fmt.Sprintf("%s.blocks.types[%d].fields", fieldPath, blockIndex)); err != nil {
+					for blockIndex, block := range candidate.Blocks.ResolvedTypes() {
+						if err := inspect(block.ResolvedFields(), fmt.Sprintf("%s.blocks.types[%d].fields", fieldPath, blockIndex)); err != nil {
 							return err
 						}
 					}
@@ -1349,7 +1461,7 @@ func manifestFilterFieldByPath(fields []Field, segments []string) *Field {
 			return candidate
 		}
 		if candidate.Type == FieldTypeGroup && candidate.Nested != nil {
-			return manifestFilterFieldByPath(candidate.Nested.Fields, segments[1:])
+			return manifestFilterFieldByPath(candidate.Nested.ResolvedFields(), segments[1:])
 		}
 	}
 	return nil
@@ -1449,14 +1561,17 @@ func validateUniqueMetadata(snapshot Snapshot) error {
 						return fmt.Errorf("unsupported unique field at %s.unique: list-valued references are not enforced by Ridu stores", fieldPath)
 					}
 				}
+				if err := inspect(EmbeddedBlocks(candidate), fieldPath+".plugin.embeddedTrees", true); err != nil {
+					return err
+				}
 				if candidate.Nested != nil {
-					if err := inspect(candidate.Nested.Fields, fieldPath+".nested.fields", true); err != nil {
+					if err := inspect(candidate.Nested.ResolvedFields(), fieldPath+".nested.fields", true); err != nil {
 						return err
 					}
 				}
 				if candidate.Blocks != nil {
-					for blockIndex, block := range candidate.Blocks.Types {
-						if err := inspect(block.Fields, fmt.Sprintf("%s.blocks.types[%d].fields", fieldPath, blockIndex), true); err != nil {
+					for blockIndex, block := range candidate.Blocks.ResolvedTypes() {
+						if err := inspect(block.ResolvedFields(), fmt.Sprintf("%s.blocks.types[%d].fields", fieldPath, blockIndex), true); err != nil {
 							return err
 						}
 					}
@@ -1656,11 +1771,14 @@ func validateAdminDisplayTranslations(snapshot Snapshot) error {
 				}
 			}
 			if candidate.Select != nil {
-				for choiceIndex, choice := range candidate.Select.Choices {
-					if err := validate(choice.LabelTranslations, fmt.Sprintf("%s.select.choices[%d].labelTranslations", fieldPath, choiceIndex)); err != nil {
+				for optionIndex, option := range candidate.Select.Options {
+					if err := validate(option.LabelTranslations, fmt.Sprintf("%s.select.options[%d].labelTranslations", fieldPath, optionIndex)); err != nil {
 						return err
 					}
 				}
+			}
+			if err := validateFields(EmbeddedBlocks(candidate), fieldPath+".plugin.embeddedTrees"); err != nil {
+				return err
 			}
 			if candidate.Nested != nil {
 				if candidate.Nested.RowLabels != nil {
@@ -1671,23 +1789,38 @@ func validateAdminDisplayTranslations(snapshot Snapshot) error {
 						return err
 					}
 				}
-				if err := validateFields(candidate.Nested.Fields, fieldPath+".nested.fields"); err != nil {
+				if err := validateFields(candidate.Nested.ResolvedFields(), fieldPath+".nested.fields"); err != nil {
 					return err
 				}
 			}
 			if candidate.Blocks != nil {
-				for blockIndex, block := range candidate.Blocks.Types {
+				for blockIndex, block := range candidate.Blocks.ResolvedTypes() {
 					blockPath := fmt.Sprintf("%s.blocks.types[%d]", fieldPath, blockIndex)
-					if err := validate(block.LabelTranslations, blockPath+".labelTranslations"); err != nil {
+					if err := validate(block.Labels.SingularTranslations, blockPath+".labels.singularTranslations"); err != nil {
 						return err
 					}
-					if err := validateFields(block.Fields, blockPath+".fields"); err != nil {
+					if err := validate(block.Labels.PluralTranslations, blockPath+".labels.pluralTranslations"); err != nil {
+						return err
+					}
+					if err := validateFields(block.ResolvedFields(), blockPath+".fields"); err != nil {
 						return err
 					}
 				}
 			}
 		}
 		return nil
+	}
+	for index, block := range snapshot.Blocks {
+		path := fmt.Sprintf("blocks[%d]", index)
+		if err := validate(block.Labels.SingularTranslations, path+".labels.singularTranslations"); err != nil {
+			return err
+		}
+		if err := validate(block.Labels.PluralTranslations, path+".labels.pluralTranslations"); err != nil {
+			return err
+		}
+		if err := validateFields(block.ResolvedFields(), path+".fields"); err != nil {
+			return err
+		}
 	}
 	resources := append(append([]Collection(nil), snapshot.Collections...), snapshot.Globals...)
 	for resourceIndex, resource := range resources {
@@ -1816,14 +1949,17 @@ func localizedFieldPath(fields []Field, prefix string) (string, bool) {
 		if field.Localized {
 			return path, true
 		}
+		if nested, found := localizedFieldPath(EmbeddedBlocks(field), path); found {
+			return nested, true
+		}
 		if field.Nested != nil {
-			if nested, found := localizedFieldPath(field.Nested.Fields, path); found {
+			if nested, found := localizedFieldPath(field.Nested.ResolvedFields(), path); found {
 				return nested, true
 			}
 		}
 		if field.Blocks != nil {
-			for _, block := range field.Blocks.Types {
-				if nested, found := localizedFieldPath(block.Fields, path+"."+block.Key); found {
+			for _, block := range field.Blocks.ResolvedTypes() {
+				if nested, found := localizedFieldPath(block.ResolvedFields(), path+"."+block.Slug); found {
 					return nested, true
 				}
 			}
@@ -1851,6 +1987,7 @@ func validateDocumentLockMetadata(collections []Collection) error {
 }
 
 func validatePluginBuildMetadata(plugins []Plugin) error {
+	fieldOwners := make(map[string]string)
 	keys := make(map[string]struct{}, len(plugins))
 	targets := make(map[string]struct{}, len(plugins))
 	adminRoutes := make(map[string]struct{})
@@ -1863,19 +2000,29 @@ func validatePluginBuildMetadata(plugins []Plugin) error {
 		}
 		keys[plugin.Key] = struct{}{}
 		hasDescriptor := plugin.Version != "" || plugin.GoPackage != "" || plugin.APIVersion != 0 || plugin.Ridu != nil || len(plugin.FieldTypes) != 0 || len(plugin.DatabaseContributions) != 0 || plugin.Admin != nil || len(plugin.Endpoints) != 0
+		if !hasDescriptor {
+			if owner, exists := fieldOwners[plugin.Key]; exists {
+				return fmt.Errorf("plugin field type %q is already owned by %s", plugin.Key, owner)
+			}
+			fieldOwners[plugin.Key] = plugin.Key
+		}
 		if hasDescriptor {
 			if !IsValidSemanticVersion(plugin.Version) || !IsValidGoPackage(plugin.GoPackage) || plugin.APIVersion != CurrentPluginAPIVersion || plugin.Ridu == nil || !IsValidSemanticVersionRange(plugin.Ridu.Minimum, plugin.Ridu.MaximumExclusive) {
 				return fmt.Errorf("invalid versioned plugin descriptor at plugins[%d]", index)
 			}
 			fieldKeys := make(map[string]struct{}, len(plugin.FieldTypes))
 			for fieldIndex, fieldType := range plugin.FieldTypes {
-				if !IsValidPluginKey(fieldType.Key) || fieldType.Key != plugin.Key || !IsValidAdminPluginPackage(fieldType.TypeScriptPackage) || !IsValidAdminPluginExport(fieldType.TypeScriptOutput) || !IsValidAdminPluginExport(fieldType.TypeScriptInput) || fieldType.TypeScriptWhere != "" && !IsValidAdminPluginExport(fieldType.TypeScriptWhere) || (fieldType.GoPackage == "") != (fieldType.GoType == "") || fieldType.GoPackage != "" && (!IsValidGoPackage(fieldType.GoPackage) || !IsValidAdminPluginExport(fieldType.GoType)) || len(fieldType.JSONSchema) != 0 && !json.Valid(fieldType.JSONSchema) {
+				if !IsValidPluginKey(fieldType.Key) || !IsValidAdminPluginPackage(fieldType.TypeScriptPackage) || !IsValidAdminPluginExport(fieldType.TypeScriptOutput) || !IsValidAdminPluginExport(fieldType.TypeScriptInput) || fieldType.TypeScriptWhere != "" && !IsValidAdminPluginExport(fieldType.TypeScriptWhere) || (fieldType.GoPackage == "") != (fieldType.GoType == "") || fieldType.GoPackage != "" && (!IsValidGoPackage(fieldType.GoPackage) || !IsValidAdminPluginExport(fieldType.GoType)) || len(fieldType.JSONSchema) != 0 && !json.Valid(fieldType.JSONSchema) {
 					return fmt.Errorf("invalid plugin field type at plugins[%d].fieldTypes[%d]", index, fieldIndex)
 				}
 				if _, exists := fieldKeys[fieldType.Key]; exists {
 					return fmt.Errorf("duplicate plugin field type %q", fieldType.Key)
 				}
 				fieldKeys[fieldType.Key] = struct{}{}
+				if owner, exists := fieldOwners[fieldType.Key]; exists {
+					return fmt.Errorf("plugin field type %q is already owned by %s", fieldType.Key, owner)
+				}
+				fieldOwners[fieldType.Key] = plugin.Key
 			}
 			prefix := "ridu_plugin_" + strings.ReplaceAll(plugin.Key, "-", "_") + "_"
 			adapters := make(map[PluginDatabaseAdapter]struct{}, len(plugin.DatabaseContributions))
@@ -1985,6 +2132,9 @@ func validPluginEndpointMetadata(endpoint PluginEndpoint) bool {
 }
 
 func validateAdminFieldComponents(snapshot Snapshot) error {
+	if err := ValidateFieldEditors(snapshot); err != nil {
+		return err
+	}
 	plugins := make(map[string]bool, len(snapshot.Plugins))
 	for _, plugin := range snapshot.Plugins {
 		plugins[plugin.Key] = plugin.Admin != nil
@@ -1998,22 +2148,25 @@ func validateAdminFieldComponents(snapshot Snapshot) error {
 					return err
 				}
 			}
+			if err := inspect(EmbeddedBlocks(field), fieldPath+".plugin.embeddedTrees"); err != nil {
+				return err
+			}
 			if field.Nested != nil {
 				if component := field.Nested.RowLabelComponent; component != nil {
 					if field.Type != FieldTypeArray && field.Type != FieldTypeBlocks {
 						return fmt.Errorf("row label component at %s.nested.rowLabelComponent requires an array or blocks field", fieldPath)
 					}
-					if err := validatePairedAdminComponent(component, fieldPath+".nested.rowLabelComponent", plugins, "admin row label component"); err != nil {
+					if err := validateRowLabelComponent(component, fieldPath+".nested.rowLabelComponent", plugins); err != nil {
 						return err
 					}
 				}
-				if err := inspect(field.Nested.Fields, fieldPath+".nested.fields"); err != nil {
+				if err := inspect(field.Nested.ResolvedFields(), fieldPath+".nested.fields"); err != nil {
 					return err
 				}
 			}
 			if field.Blocks != nil {
-				for blockIndex, block := range field.Blocks.Types {
-					if err := inspect(block.Fields, fmt.Sprintf("%s.blocks.types[%d].fields", fieldPath, blockIndex)); err != nil {
+				for blockIndex, block := range field.Blocks.ResolvedTypes() {
+					if err := inspect(block.ResolvedFields(), fmt.Sprintf("%s.blocks.types[%d].fields", fieldPath, blockIndex)); err != nil {
 						return err
 					}
 				}
@@ -2034,8 +2187,18 @@ func validateAdminFieldComponents(snapshot Snapshot) error {
 	return nil
 }
 
+func validateRowLabelComponent(component *FieldAdminComponent, path string, plugins map[string]bool) error {
+	if component.Reference == "" {
+		return validatePairedAdminComponent(component, path, plugins, "admin row label component")
+	}
+	if !localEditorReference.MatchString(component.Reference) || component.Plugin != "" || component.Component != "" || len(component.Config) != 0 && !isJSONObject(component.Config) {
+		return fmt.Errorf("invalid local row label at %s", path)
+	}
+	return nil
+}
+
 func validatePairedAdminComponent(component *FieldAdminComponent, path string, plugins map[string]bool, label string) error {
-	if !IsValidPluginKey(component.Plugin) || !IsValidAdminPluginExport(component.Component) || len(component.Config) != 0 && !isJSONObject(component.Config) {
+	if component.Reference != "" || !IsValidPluginKey(component.Plugin) || !IsValidAdminPluginExport(component.Component) || len(component.Config) != 0 && !isJSONObject(component.Config) {
 		return fmt.Errorf("invalid %s at %s", label, path)
 	}
 	if !plugins[component.Plugin] {
@@ -2059,14 +2222,17 @@ func validateFieldConditionMetadata(snapshot Snapshot) error {
 						return err
 					}
 				}
+				if err := inspect(EmbeddedBlocks(candidate), fieldPath+".plugin.embeddedTrees"); err != nil {
+					return err
+				}
 				if candidate.Nested != nil {
-					if err := inspect(candidate.Nested.Fields, fieldPath+".nested.fields"); err != nil {
+					if err := inspect(candidate.Nested.ResolvedFields(), fieldPath+".nested.fields"); err != nil {
 						return err
 					}
 				}
 				if candidate.Blocks != nil {
-					for blockIndex, block := range candidate.Blocks.Types {
-						if err := inspect(block.Fields, fmt.Sprintf("%s.blocks.types[%d].fields", fieldPath, blockIndex)); err != nil {
+					for blockIndex, block := range candidate.Blocks.ResolvedTypes() {
+						if err := inspect(block.ResolvedFields(), fmt.Sprintf("%s.blocks.types[%d].fields", fieldPath, blockIndex)); err != nil {
 							return err
 						}
 					}
@@ -2272,6 +2438,7 @@ func (manifest Manifest) Equal(other Manifest) bool {
 
 func cloneSnapshot(snapshot Snapshot) Snapshot {
 	cloned := snapshot
+	cloned.Blocks = cloneBlockTypes(snapshot.Blocks)
 	cloned.Application.NameTranslations = cloneStringMap(snapshot.Application.NameTranslations)
 	cloned.Application.Endpoints = append([]Endpoint(nil), snapshot.Application.Endpoints...)
 	if snapshot.Application.Admin != nil {
@@ -2362,6 +2529,7 @@ func cloneSnapshot(snapshot Snapshot) Snapshot {
 		cloned.Plugins[index].FieldTypes = make([]PluginFieldType, len(plugin.FieldTypes))
 		for fieldIndex, fieldType := range plugin.FieldTypes {
 			cloned.Plugins[index].FieldTypes[fieldIndex] = fieldType
+			cloned.Plugins[index].FieldTypes[fieldIndex].EmbeddedTypes = append([]string(nil), fieldType.EmbeddedTypes...)
 			cloned.Plugins[index].FieldTypes[fieldIndex].JSONSchema = append(json.RawMessage(nil), fieldType.JSONSchema...)
 		}
 		cloned.Plugins[index].DatabaseContributions = make([]PluginDatabaseContribution, len(plugin.DatabaseContributions))
@@ -2377,6 +2545,7 @@ func cloneSnapshot(snapshot Snapshot) Snapshot {
 		}
 		cloned.Plugins[index].Endpoints = append([]PluginEndpoint(nil), plugin.Endpoints...)
 	}
+	_ = BindBlockReferences(&cloned)
 	return cloned
 }
 
@@ -2406,18 +2575,31 @@ func cloneFields(fields []Field) []Field {
 	cloned := make([]Field, len(fields))
 	for index, field := range fields {
 		cloned[index] = field
+		cloned[index].Admin.Extensions = cloneAdminExtensions(field.Admin.Extensions)
+		if field.Admin.Editor != nil {
+			editor := *field.Admin.Editor
+			editor.Config = append(json.RawMessage(nil), editor.Config...)
+			cloned[index].Admin.Editor = &editor
+		}
 		cloned[index].Admin.LabelTranslations = cloneStringMap(field.Admin.LabelTranslations)
 		cloned[index].Admin.DescriptionTranslations = cloneStringMap(field.Admin.DescriptionTranslations)
 		cloned[index].Admin.PlaceholderTranslations = cloneStringMap(field.Admin.PlaceholderTranslations)
 		cloned[index].Admin.TabTranslations = cloneStringMap(field.Admin.TabTranslations)
 		if field.Admin.Row != nil {
 			row := *field.Admin.Row
+			row.Extensions = cloneAdminExtensions(field.Admin.Row.Extensions)
 			cloned[index].Admin.Row = &row
 		}
 		if field.Admin.Collapsible != nil {
 			collapsible := *field.Admin.Collapsible
 			collapsible.LabelTranslations = cloneStringMap(field.Admin.Collapsible.LabelTranslations)
+			collapsible.Extensions = cloneAdminExtensions(field.Admin.Collapsible.Extensions)
 			cloned[index].Admin.Collapsible = &collapsible
+		}
+		if field.Admin.TabGroup != nil {
+			group := *field.Admin.TabGroup
+			group.Extensions = cloneAdminExtensions(field.Admin.TabGroup.Extensions)
+			cloned[index].Admin.TabGroup = &group
 		}
 		if field.Admin.Condition != nil {
 			cloned[index].Admin.Condition = cloneFieldCondition(field.Admin.Condition)
@@ -2430,6 +2612,10 @@ func cloneFields(fields []Field) []Field {
 		if field.Default != nil {
 			value := *field.Default
 			cloned[index].Default = &value
+		}
+		if field.List != nil {
+			list := *field.List
+			cloned[index].List = &list
 		}
 		if field.Text != nil {
 			text := *field.Text
@@ -2489,10 +2675,10 @@ func cloneFields(fields []Field) []Field {
 		if field.Select != nil {
 			selectField := *field.Select
 			selectField.DefaultValues = append([]string(nil), field.Select.DefaultValues...)
-			selectField.Choices = make([]SelectChoice, len(field.Select.Choices))
-			for choiceIndex, choice := range field.Select.Choices {
-				selectField.Choices[choiceIndex] = choice
-				selectField.Choices[choiceIndex].LabelTranslations = cloneStringMap(choice.LabelTranslations)
+			selectField.Options = make([]SelectOption, len(field.Select.Options))
+			for optionIndex, option := range field.Select.Options {
+				selectField.Options[optionIndex] = option
+				selectField.Options[optionIndex].LabelTranslations = cloneStringMap(option.LabelTranslations)
 			}
 			cloned[index].Select = &selectField
 		}
@@ -2509,6 +2695,7 @@ func cloneFields(fields []Field) []Field {
 		}
 		if field.Nested != nil {
 			nested := *field.Nested
+			nested.bound = nil
 			nested.Fields = cloneFields(field.Nested.Fields)
 			if field.Nested.RowLabelComponent != nil {
 				component := *field.Nested.RowLabelComponent
@@ -2525,11 +2712,22 @@ func cloneFields(fields []Field) []Field {
 		}
 		if field.Blocks != nil {
 			blocks := *field.Blocks
-			blocks.Types = make([]BlockType, len(field.Blocks.Types))
+			blocks.bound = nil
+			blocks.BlockReferences = append([]string(nil), field.Blocks.BlockReferences...)
+			blocks.Types = nil
+			if field.Blocks.Types != nil {
+				blocks.Types = make([]BlockType, len(field.Blocks.Types))
+			}
 			for blockIndex, block := range field.Blocks.Types {
 				blocks.Types[blockIndex] = block
-				blocks.Types[blockIndex].LabelTranslations = cloneStringMap(block.LabelTranslations)
+				blocks.Types[blockIndex].bound = nil
+				blocks.Types[blockIndex].Labels.SingularTranslations = cloneStringMap(block.Labels.SingularTranslations)
+				blocks.Types[blockIndex].Labels.PluralTranslations = cloneStringMap(block.Labels.PluralTranslations)
 				blocks.Types[blockIndex].Fields = cloneFields(block.Fields)
+				if block.Admin != nil {
+					admin := *block.Admin
+					blocks.Types[blockIndex].Admin = &admin
+				}
 			}
 			cloned[index].Blocks = &blocks
 		}
@@ -2537,6 +2735,7 @@ func cloneFields(fields []Field) []Field {
 			plugin := *field.Plugin
 			plugin.Config = append(json.RawMessage(nil), field.Plugin.Config...)
 			plugin.ReferenceKeys = append([]string(nil), field.Plugin.ReferenceKeys...)
+			plugin.EmbeddedTrees = cloneEmbeddedTrees(field.Plugin.EmbeddedTrees)
 			cloned[index].Plugin = &plugin
 		}
 	}

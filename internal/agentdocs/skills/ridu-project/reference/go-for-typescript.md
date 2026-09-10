@@ -3,14 +3,17 @@
 # Go for TypeScript developers
 
 Use Go for Ridu configuration and trusted server behaviour such as access rules and hooks.
-Application frontends and admin plugins remain TypeScript, and Ridu generates TypeScript contracts
+Application frontends and admin components remain TypeScript, and Ridu generates TypeScript types
 for your content model.
 
-## The mental model {#mental-model}
+Once the syntax is familiar, [Go packages](./go-packages.md) explains the Ridu-specific types:
+`operation.Value[T]`, `store.Values`, `query.Path`, callback contexts, and schema identifiers.
 
-A Ridu project starts with a Go function that returns `ridu.Config`. Ridu validates the result and
-resolves it into a schema manifest. That manifest drives migrations, OpenAPI, generated Go models,
-the TypeScript client, and the admin.
+## Read a Ridu configuration {#mental-model}
+
+A Ridu project starts with a Go function that returns `ridu.Config`. You describe the collections,
+fields, and server behavior there. Ridu checks that configuration and uses it to build the
+database changes, API, Go and TypeScript types, and admin forms.
 
 Map common TypeScript constructs to their Go equivalents:
 
@@ -18,8 +21,8 @@ Map common TypeScript constructs to their Go equivalents:
 | -------------------------------------- | ---------------------------------------------------- |
 | `export const posts: Collection`       | `var Posts = ridu.Collection{...}`                   |
 | `{ slug: 'posts', fields: [...] }`     | `ridu.Collection{Slug: "posts", Fields: ...}`        |
-| `Field[]`                              | `[]field.Definition`                                 |
-| `required: true`                       | `field.Required()`                                   |
+| `Field[]`                              | `field.Fields`                                       |
+| `required: true`                       | `.Required()`                                        |
 | `async (args) => result`               | `func(ctx context.Context, args T) (Result, error)`  |
 | `undefined` or `null`                  | a type's zero value or, where absence matters, `nil` |
 | `throw new Error(...)`                 | return an `error`                                    |
@@ -37,22 +40,18 @@ import (
 
 var Posts = ridu.Collection{
 	Slug: "posts",
-	Fields: []field.Definition{
-		field.Text("title", field.Required()),
-		field.Text("slug", field.Required(), field.Unique()),
-		field.Select(
-			"status",
-			field.OneOf("draft", "published"),
-			field.Default("draft"),
-		),
+	Fields: field.Fields{
+		field.Text("title").Required(),
+		field.Text("slug").Required().Unique(),
+		field.Select("status", "draft", "published").Default("draft"),
 	},
 }
 ```
 
 The punctuation differs, but the shape is still a typed configuration object. `field.Text` and
-`field.Select` are constructors; calls such as `field.Required()` are typed options. Incompatible
-options are rejected by Go's type checker where possible, while rules that depend on the whole
-schema are reported when Ridu resolves the config.
+`field.Select` create fields. Methods such as `.Required()` return an updated copy of the field.
+Go catches invalid combinations, such as a number option on a text field. Ridu checks relationships
+between fields and collections when it loads the configuration.
 
 ## Enough Go to be productive {#enough-go}
 
@@ -79,8 +78,7 @@ ridu.Config{
 
 `[]ridu.Collection` is a slice, Go's growable-list type. Go gives every field a zero value:
 empty strings, `false`, `0`, and `nil` for pointers and slices. Ridu's public structs document when a
-zero value means “use the default.” Prefer named fields as above; they remain readable as contracts
-grow.
+zero value means “use the default.” Name the fields as above so the configuration is easy to read.
 
 ### Functions and errors {#functions-and-errors}
 
@@ -108,25 +106,25 @@ administrator.
 
 ### Formatting and tests {#formatting-and-tests}
 
-Go has one canonical formatter. Generated projects include formatting, vet, tests, generated-drift,
+Use `gofmt` to format Go code. Generated projects include formatting, vet, tests, generated-drift,
 and frontend checks behind `ridu check`. Go test files end in `_test.go`, and table-driven tests are
 the common equivalent of a parameterized test suite.
 
 ## What stays TypeScript {#what-stays-typescript}
 
 Ridu generates a TypeScript module containing document, create, update, select, query, and
-population types. It binds those contracts to the Fetch-based `@riducms/sdk`; SDK methods return
+population types. Its client uses the Fetch-based `@riducms/sdk`; SDK methods return
 `Promise<T>` values and reject structured `RiduError` failures.
 
-The Svelte 5 admin also consumes generated contracts. Custom admin fields and views are static
-TypeScript/Svelte modules, while their trusted server counterpart is a compiled Go plugin. Bun
-builds these assets, but production serves them from the Go binary and does not need a Node or Bun
-server.
+Write custom admin inputs, pages, and dashboard panels as Svelte components and import them in
+`admin.config.ts`. Hooks and access rules are ordinary Go application code. Build a Go plugin
+when adding a new field type or packaging a reusable server extension. Bun builds the admin,
+and the Go binary serves it in production.
 
 Read [TypeScript SDK](./typescript-sdk.md) for frontend calls, [Admin](./admin.md) for the admin,
-and [Custom fields](https://riducms.com/guides/custom-fields/) for a paired extension.
+and [Custom components](./custom-components.md) to customize its UI.
 
-## Where to put behaviour {#where-behaviour-lives}
+## Choose where your code belongs {#where-behaviour-lives}
 
 - Put collection and field definitions in small Go factory functions.
 - Put authorization in [access rules](./access-control.md), not in admin visibility settings.
@@ -148,6 +146,6 @@ You can learn the Go syntax as the product concepts appear:
 5. Keep [Troubleshooting](./troubleshooting.md) nearby for compiler, generation, and runtime
    symptoms.
 
-The compiler reports incompatible field options, callback signatures, and returned types before the
-application starts. Config resolution reports schema-wide errors such as duplicate slugs or a
-relationship to a missing collection.
+Go reports incorrect field methods, callback arguments, and return types before the application
+starts. Ridu reports configuration errors such as duplicate slugs or a relationship to a missing
+collection.

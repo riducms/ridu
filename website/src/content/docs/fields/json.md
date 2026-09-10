@@ -1,6 +1,6 @@
 ---
 title: 'JSON field'
-description: 'Store JSON-compatible data when the application cannot model a stable nested shape.'
+description: 'Store JSON whose properties are not known in advance, such as metadata from another service.'
 product: core
 eyebrow: 'Structured fields'
 order: 71
@@ -9,12 +9,11 @@ relatedSymbolIds: ['go:github.com/riducms/ridu/field#JSON']
 navigation:
   section: 'Model content'
   parent: fields
-  group: 'Structured'
   order: 110
   title: 'JSON'
 ---
 
-Use `field.JSON` for JSON-compatible data whose shape is genuinely open or controlled by another
+Use `field.JSON` for JSON-compatible data whose properties are not known in advance or are controlled by another
 system. It accepts null, booleans, finite numbers, strings, arrays, and objects and generates
 `unknown` in TypeScript so consumers must narrow the value before use.
 
@@ -24,27 +23,41 @@ system. It accepts null, booleans, finite numbers, strings, arrays, and objects 
 
 _Authors edit open JSON; generated TypeScript exposes `unknown`, requiring consumers to narrow it._
 
-## Smallest working example {#example}
+## Add a JSON editor {#example}
 
 ```go title="content/integrations.go"
-field.JSON(
-	"providerMetadata",
-	field.Description("Opaque metadata returned by the connected provider."),
-)
+field.JSON("providerMetadata").
+	Admin(field.Admin{
+		Description: "Opaque metadata returned by the connected provider.",
+	})
 ```
 
-The admin provides a JSON authoring control and the operation engine rejects malformed/non-JSON
-values from every transport.
+The admin shows a JSON editor. The server rejects invalid JSON whether it comes from the admin,
+REST, the SDK, or the Local API.
 
-## When to model the shape instead {#model-the-shape}
+## Configuration {#configuration}
+
+| Constructor or method                             | What it controls                                                        |
+| ------------------------------------------------- | ----------------------------------------------------------------------- |
+| `field.JSON(name)`                                | Creates a stored JSON-compatible value with an open shape.              |
+| `.Required()`                                     | Requires a non-null value.                                              |
+| `.Localized()`                                    | Stores separate JSON for each configured content locale.                |
+| `.Validate(callback)` / `.LiveValidate(callback)` | Adds application shape or business rules at save time or while editing. |
+| `.Admin(...)`                                     | Sets label, description, width, visibility, and editor metadata.        |
+| `.Access(...)` / `.RestrictAccess(...)`           | Replaces or narrows field create/read/update access.                    |
+| `.Hooks(...)` / `.ReadHooks(...)`                 | Transforms the opaque stored value or response.                         |
+
+## Choose JSON or structured fields {#model-the-shape}
 
 Prefer [Group](/docs/fields/group/) when the object has known properties, [Array](/docs/fields/array/)
-for repeated known rows, or [Blocks](/docs/fields/blocks/) for an authored union. Explicit fields
-produce better validation, migrations, generated types, filters, access paths, and admin controls.
+for a list of similar objects, or [Blocks](/docs/fields/blocks/) for a list of different content
+types. Defining the fields lets Ridu validate each property, generate useful types, and provide
+individual admin controls.
 
 JSON supports `Required`, `Localized`, conditions, and common presentation options. It
-does not accept scalar `Default`, length, numeric, choice, or relationship options. Define a plugin
-field when an open-looking value still needs a reusable validator and generated type.
+does not accept `Default`, length limits, number limits, choices, or relationship options. Use
+`.Validate(...)` for a custom validation rule, or build a plugin field when the value needs a
+reusable field type and editor.
 
 ## Querying and localization {#querying}
 
@@ -56,8 +69,8 @@ to the field value, not recursively to individual object keys.
 
 ## Common mistakes {#troubleshooting}
 
-- Do not use JSON to avoid modelling a stable business object; consumers then lose generated
-  contracts and path-aware validation.
+- Do not use JSON to avoid modelling a stable business object; you lose generated
+  types and validation for individual properties.
 - JSON does not accept functions, `undefined`, `Date`, `Map`, circular values, `NaN`, or infinity.
 - Treat provider metadata as untrusted input even after JSON decoding.
 

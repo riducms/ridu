@@ -12,7 +12,7 @@
 		"build": "astro build",
 		"check": "astro check",
 		"check:build": "bun scripts/check-build.ts",
-		"check:examples": "bun x tsc -p ../examples/documentation/tsconfig.json",
+		"check:examples": "bun x tsc -p ../examples/documentation/tsconfig.json && bun x svelte-check --workspace ../examples/documentation/custom-components --tsconfig ./tsconfig.json",
 		"lint": "prettier --check .",
 		"format": "prettier --write .",
 		"preview": "astro preview",
@@ -26,7 +26,7 @@
 		"@fontsource-variable/geist": "^5.3.0",
 		"@fontsource-variable/martian-mono": "^5.2.8",
 		"@fontsource/questrial": "^5.2.8",
-		"astro": "^7.0.6"
+		"astro": "^7.2.8"
 	},
 	"devDependencies": {
 		"@riducms/build": "file:../packages/build",
@@ -36,14 +36,15 @@
 		"@iconify/utils": "^3.1.4",
 		"@types/bun": "^1.4.0",
 		"@types/mdast": "^4.0.4",
-		"@unocss/astro": "^66.7.5",
+		"@unocss/astro": "66.7.5",
 		"github-slugger": "^2.0.0",
 		"mdast-util-from-markdown": "^2.0.3",
 		"prettier": "^3.8.3",
 		"prettier-plugin-astro": "^0.14.1",
+		"prettier-plugin-svelte": "^4.1.1",
 		"svelte2tsx": "^0.7.47",
 		"typescript": "6.0.3",
-		"unocss": "^66.7.5",
+		"unocss": "66.7.5",
 		"unplugin-icons": "^23.0.1"
 	}
 }

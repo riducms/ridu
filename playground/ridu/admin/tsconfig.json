@@ -14,9 +14,10 @@
 		"paths": {
 			"@": ["./src"],
 			"@/*": ["./src/*"],
-			"@admin/*": ["./node_modules/@riducms/admin/src/*"],
-			"@ui/*": ["./node_modules/@riducms/ui/src/*"],
-			"@plugin-richtext/*": ["./node_modules/@riducms/plugin-richtext/src/*"]
+			"@admin/*": ["./node_modules/@riducms/admin/src/*", "../node_modules/@riducms/admin/src/*"],
+			"@ui/*": ["./node_modules/@riducms/ui/src/*", "../node_modules/@riducms/ui/src/*"],
+			"@plugin-richtext/*": ["./node_modules/@riducms/plugin-richtext/src/*", "../node_modules/@riducms/plugin-richtext/src/*"],
+			"@plugin-seo/*": ["./node_modules/@riducms/plugin-seo/src/*", "../node_modules/@riducms/plugin-seo/src/*"]
 		}
 	},
 	"include": ["src/**/*.ts", "src/**/*.svelte", "../generated/**/*.ts", "vite.config.ts"]

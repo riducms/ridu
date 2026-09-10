@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/riducms/ridu/internal/commandrun"
 	"github.com/riducms/ridu/internal/goworkspace"
 	"github.com/riducms/ridu/internal/project"
 	"github.com/riducms/ridu/internal/projectfile"
@@ -272,13 +273,26 @@ func adminPluginRegistry(manifest schema.Manifest) []byte {
 		return []byte(output.String())
 	}
 
-	output.WriteString("import { resolveAdminPluginPairs } from \"@riducms/plugin\";\n")
+	output.WriteString("import { resolveAdminPluginPairs, type PluginFieldRegistration } from \"@riducms/plugin\";\n")
+	output.WriteString("type RiduNamedFieldComponent = import(\"@riducms/plugin\").RegisteredPluginField & { readonly type: Exclude<import(\"@riducms/plugin\").RegisteredPluginField[\"type\"], \"plugin\"> }")
+	for _, plugin := range plugins {
+		for _, fieldType := range plugin.FieldTypes {
+			valueType, inputType := adminFieldValueTypes(fieldType)
+			fmt.Fprintf(&output, "\n | (PluginFieldRegistration<%s, %s, \"plugin\"> & { readonly fieldType: %s })", valueType, inputType, strconv.Quote(fieldType.Key))
+		}
+	}
+	output.WriteString(";\n")
 	adminIndex := 0
 	for _, plugin := range plugins {
 		if plugin.Admin == nil {
 			continue
 		}
 		fmt.Fprintf(&output, "import { %s as riduAdminPlugin%d } from %s;\n", plugin.Admin.Export, adminIndex, strconv.Quote(plugin.Admin.Package))
+		for _, fieldType := range plugin.FieldTypes {
+			valueType, inputType := adminFieldValueTypes(fieldType)
+			fmt.Fprintf(&output, "riduAdminPlugin%d.fields[%s] satisfies PluginFieldRegistration<%s, %s>;\n", adminIndex, strconv.Quote(fieldType.Key), valueType, inputType)
+		}
+		fmt.Fprintf(&output, "riduAdminPlugin%d satisfies { readonly key: string; readonly components?: Readonly<Record<string, RiduNamedFieldComponent>> };\n", adminIndex)
 		adminIndex++
 	}
 	for _, plugin := range plugins {
@@ -295,12 +309,31 @@ func adminPluginRegistry(manifest schema.Manifest) []byte {
 		if plugin.Admin == nil {
 			continue
 		}
-		fmt.Fprintf(&output, "\t{\n\t\tbackend: { key: %s, package: %s, export: %s, apiVersion: %d, pairingVersion: %d, routes: %s, assets: %s },\n\t\tadmin: riduAdminPlugin%d,\n\t},\n",
-			strconv.Quote(plugin.Key), strconv.Quote(plugin.Admin.Package), strconv.Quote(plugin.Admin.Export), plugin.Admin.APIVersion, plugin.Admin.PairingVersion, typescriptStringArray(plugin.Admin.Routes), typescriptStringArray(plugin.Admin.Assets), adminIndex)
+		fmt.Fprintf(&output, "\t{\n\t\tbackend: { key: %s, package: %s, export: %s, apiVersion: %d, pairingVersion: %d, routes: %s, assets: %s, fieldTypes: %s },\n\t\tadmin: riduAdminPlugin%d,\n\t},\n",
+			strconv.Quote(plugin.Key), strconv.Quote(plugin.Admin.Package), strconv.Quote(plugin.Admin.Export), plugin.Admin.APIVersion, plugin.Admin.PairingVersion, typescriptStringArray(plugin.Admin.Routes), typescriptStringArray(plugin.Admin.Assets), typescriptStringArray(pluginFieldTypeKeys(plugin.FieldTypes)), adminIndex)
 		adminIndex++
 	}
 	output.WriteString("]);\n\nexport const generatedAdminPlugins = resolvedAdminPluginPairs.plugins;\n")
 	return []byte(output.String())
+}
+
+func adminFieldValueTypes(fieldType schema.PluginFieldType) (string, string) {
+	valueType := fmt.Sprintf("import(%s).%s", strconv.Quote(fieldType.TypeScriptPackage), fieldType.TypeScriptOutput)
+	inputType := fmt.Sprintf("import(%s).%s", strconv.Quote(fieldType.TypeScriptPackage), fieldType.TypeScriptInput)
+	if len(fieldType.EmbeddedTypes) != 0 {
+		arguments := "<" + strings.TrimSuffix(strings.Repeat("unknown, ", len(fieldType.EmbeddedTypes)), ", ") + ">"
+		valueType += arguments
+		inputType += arguments
+	}
+	return valueType, inputType
+}
+
+func pluginFieldTypeKeys(fields []schema.PluginFieldType) []string {
+	keys := make([]string, len(fields))
+	for index, fieldType := range fields {
+		keys[index] = fieldType.Key
+	}
+	return keys
 }
 
 // AdminPluginRegistry returns the generated static admin-plugin pairing module.
@@ -429,11 +462,9 @@ func discoverProjectOperation(ctx context.Context, definition projectfile.File, 
 	if err != nil {
 		diagnostic := strings.TrimSpace(string(stderr))
 		if diagnostic != "" {
-			diagnostic += ": " + err.Error()
-		} else {
-			diagnostic = err.Error()
+			diagnostic += ": "
 		}
-		return ResolvedProject{}, fmt.Errorf("project %s command failed: %s", operation, diagnostic)
+		return ResolvedProject{}, fmt.Errorf("project %s command failed: %s%w", operation, diagnostic, err)
 	}
 	response, err := project.DecodeResponse(stdout)
 	if err != nil {
@@ -653,7 +684,7 @@ func runCommandWithEnvironment(ctx context.Context, directory string, environmen
 	stderr := limitedBuffer{limit: 1 << 20}
 	command.Stdout = &stdout
 	command.Stderr = &stderr
-	err := command.Run()
+	err := commandrun.Run(ctx, command)
 	if stdout.exceeded {
 		err = errors.Join(err, fmt.Errorf("project stdout exceeds the %d-byte protocol limit", project.MaxResponseBytes))
 	}

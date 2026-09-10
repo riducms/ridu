@@ -2,14 +2,16 @@
 import riduArchLogo from '@/assets/ridu-logo-arch.svg';
 import RiduWordLogo from '@/assets/ridu-word-logo.svg';
 import SiteSearch from '@/components/chrome/site-search.astro';
+import type { DocumentationLayout } from '@/config/documentation';
 import { primaryNavigation, site } from '@/config/site';
 
 interface Props {
 	active?: 'docs' | 'guides' | 'reference';
 	wide?: boolean;
+	docsLayout?: DocumentationLayout;
 }
 
-const { active, wide = false } = Astro.props;
+const { active, wide = false, docsLayout } = Astro.props;
 const activePrimary = active === 'guides' ? 'docs' : active;
 ---
 
@@ -17,7 +19,15 @@ const activePrimary = active === 'guides' ? 'docs' : active;
 	class="site-header sticky top-0 z-100 h-header border-b border-line bg-[rgba(13,10,12,0.96)] backdrop-blur-14px"
 >
 	<div
-		class:list={['mx-auto flex h-header items-center', wide ? 'w-docs-gutter md:w-docs' : 'w-site']}
+		class:list={[
+			'mx-auto flex h-header items-center',
+			!wide
+				? 'w-site'
+				: active === 'reference'
+					? 'w-docs-gutter md:(w-reference px-4)'
+					: 'w-docs-gutter md:w-docs',
+			wide && docsLayout === 'wide' && 'xl:w-docs-wide'
+		]}
 	>
 		<a class="inline-flex shrink-0 items-center no-underline" href="/" aria-label="Ridu home">
 			<RiduWordLogo class="hidden md:block" width={100} />

@@ -271,7 +271,7 @@ func TestMongoDBOperationEngineVersionsRestoreAccessAndSameIDRecreation(t *testi
 	}
 	application, err := ridu.New(ridu.Config{Name: "MongoDB versions", Collections: []ridu.Collection{{
 		Slug: "posts", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true, MaxPerDocument: 3},
-		Fields: []field.Definition{field.Text("title", field.Required()), field.Text("owner", field.Required())},
+		Fields: field.Fields{field.Text("title").Required(), field.Text("owner").Required()},
 		Access: ridu.CollectionAccess{ReadVersions: owned},
 	}}}, backend)
 	if err != nil {

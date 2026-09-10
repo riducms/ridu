@@ -1,0 +1,127 @@
+{
+  "version": 1,
+  "name": "reviewed-label",
+  "planner": {
+    "name": "ridu-sqlite",
+    "version": "1.1.0"
+  },
+  "minimumRunnerContract": 1,
+  "previousArtifactDigest": "b9e26f0890b78d33f48ee0708616e2dbb5105341fa101d596e233364eb0185ea",
+  "fromDigest": "e51a698d027703dc6324540c4072e99796d1ad2917acd41a99944b390b0ec381",
+  "toDigest": "3e50d38d972e088239de27a36eb8c34bebed359430376a9e89e07fe1e2357759",
+  "before": {
+    "version": 1,
+    "application": {
+      "name": "Legacy labels"
+    },
+    "collections": [
+      {
+        "id": "notes",
+        "slug": "notes",
+        "labels": {
+          "singular": "Note",
+          "plural": "Notes"
+        },
+        "admin": {},
+        "capabilities": {
+          "auth": false,
+          "upload": false,
+          "versions": false,
+          "trash": false
+        },
+        "fields": [
+          {
+            "id": "notes-body",
+            "name": "body",
+            "path": "body",
+            "type": "text",
+            "category": "scalar",
+            "required": false,
+            "unique": false,
+            "admin": {
+              "label": "Body"
+            },
+            "text": {}
+          }
+        ]
+      }
+    ],
+    "plugins": []
+  },
+  "after": {
+    "version": 1,
+    "application": {
+      "name": "Legacy labels"
+    },
+    "collections": [
+      {
+        "id": "notes",
+        "slug": "notes",
+        "labels": {
+          "singular": "Note",
+          "plural": "Notes"
+        },
+        "admin": {},
+        "capabilities": {
+          "auth": false,
+          "upload": false,
+          "versions": false,
+          "trash": false
+        },
+        "fields": [
+          {
+            "id": "notes-body",
+            "name": "body",
+            "path": "body",
+            "type": "text",
+            "category": "scalar",
+            "required": false,
+            "unique": false,
+            "admin": {
+              "label": "Contents"
+            },
+            "text": {}
+          }
+        ]
+      }
+    ],
+    "plugins": []
+  },
+  "phases": [
+    {
+      "id": "phase-001",
+      "mode": "transaction",
+      "physicalContractVersion": 1,
+      "beforePhysicalDigest": "33af6425d02369a2957a495958f169ff88af0d6d2097e0174751fb4c28878939",
+      "afterPhysicalDigest": "36b33c501b2e0eca49168a1d77510ff96bb22a31b600bb18580ff669c9568dd9",
+      "steps": [
+        {
+          "id": "step-0001",
+          "kind": "data_transform",
+          "executorVersion": 1,
+          "name": "run data transform reviewed-label-change",
+          "payload": {
+            "transform": {
+              "name": "reviewed-label-change",
+              "checksum": "f8d508160fea0d8a1206aa7bf2802d351a28fd95993f02d0b830b2d510b497b5"
+            }
+          }
+        },
+        {
+          "id": "step-0002",
+          "kind": "assert_schema",
+          "executorVersion": 1,
+          "name": "verify resulting SQLite schema",
+          "payload": {}
+        }
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "code": "RIDU_SQLITE_TRANSFORMED_SCHEMA_CHANGE",
+      "level": "destructive",
+      "message": "the compiled data transform is responsible for preserving or deliberately rewriting content across this otherwise unsupported SQLite schema change"
+    }
+  ]
+}

@@ -58,10 +58,19 @@ func TestGraphQLPostgresCRUDLocalizationAndPopulation(t *testing.T) {
 		Name: "GraphQL PostgreSQL", Plugins: []ridu.Plugin{graphqlplugin.New()},
 		Localization: ridu.LocalizationConfig{DefaultLocale: "en", Locales: []ridu.Locale{{Code: "en", Label: "English"}, {Code: "fr", Label: "French", FallbackLocales: []schema.LocaleCode{"en"}}}},
 		Collections: []ridu.Collection{
-			{Slug: "categories", Fields: []field.Definition{field.Text("name", field.Required(), field.Localized()), field.Join("posts", "posts", "category")}},
-			{Slug: "posts", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true, MaxPerDocument: 5}, Fields: []field.Definition{
-				field.Text("title", field.Required(), field.Localized()), field.Relationship("category", field.To("categories")),
-				field.Group("seo", field.Fields(field.Text("description"))), field.Array("links", field.Fields(field.Text("label"))),
+			{Slug: "categories", Fields: field.Fields{
+				field.Text("name").Required().Localized(),
+				field.Join("posts", "posts", "category"),
+			}},
+			{Slug: "posts", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true, MaxPerDocument: 5}, Fields: field.Fields{
+				field.Text("title").Required().Localized(),
+				field.Relationship("category", "categories"),
+				field.Group("seo", field.Fields{
+					field.Text("description"),
+				}),
+				field.Array("links", field.Fields{
+					field.Text("label"),
+				}),
 			}},
 		},
 	}

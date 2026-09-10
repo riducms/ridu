@@ -5,26 +5,20 @@ import "@admin/app.css";
 
 import { mount } from "svelte";
 
-import type { AdminPlugin, FieldPlugin } from "@riducms/plugin";
 import type { RiduClient, RiduConfigShape } from "@riducms/sdk";
-import type { TranslationLanguage } from "@riducms/translations";
 
 import App from "@admin/app.svelte";
 import type { AdminClient } from "@admin/core/api/admin-client";
 
-export interface MountAdminOptions<Config extends RiduConfigShape> {
+import type { AdminConfig } from "@riducms/plugin/admin";
+
+export interface MountAdminOptions<Config extends RiduConfigShape> extends AdminConfig {
 	/** Existing DOM element that receives the Ridu admin application. */
 	target: Element;
 	/** Creates the generated, application-specific Fetch client. */
 	clientFactory: () => RiduClient<Config>;
 	/** Route prefix used when the admin is not mounted at /admin. */
 	adminBasePath?: string;
-	/** Statically paired packaged plugins, including fields and routes. */
-	plugins?: readonly AdminPlugin[];
-	/** Application-local field renderers that have no packaged backend pair. */
-	fieldPlugins?: readonly FieldPlugin[];
-	/** Statically imported catalogs available to the Go-configured admin languages. */
-	languages?: readonly TranslationLanguage[];
 }
 
 export function mountAdmin<Config extends RiduConfigShape>(
@@ -38,10 +32,8 @@ export function mountAdmin<Config extends RiduConfigShape>(
 		target: options.target,
 		props: {
 			clientFactory,
+			adminConfig: options,
 			...(options.adminBasePath === undefined ? {} : { adminBasePath: options.adminBasePath }),
-			...(options.plugins === undefined ? {} : { plugins: options.plugins }),
-			...(options.fieldPlugins === undefined ? {} : { fieldPlugins: options.fieldPlugins }),
-			...(options.languages === undefined ? {} : { languages: options.languages }),
 		},
 	});
 }

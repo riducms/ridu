@@ -1,6 +1,27 @@
 <script>
 	let navigationScrollTop: number | undefined;
 
+	function setBranchExpanded(toggle: HTMLButtonElement, children: HTMLElement, expanded: boolean) {
+		toggle.setAttribute('aria-expanded', String(expanded));
+		children.hidden = !expanded;
+	}
+
+	function revealCurrentPage(panel: HTMLDetailsElement) {
+		const navigation = panel.querySelector<HTMLElement>('nav');
+		const current = panel.querySelector<HTMLElement>('[aria-current="page"]');
+		if (!navigation || !current) return;
+		requestAnimationFrame(() => {
+			const navigationBounds = navigation.getBoundingClientRect();
+			const currentBounds = current.getBoundingClientRect();
+			const margin = 24;
+			if (currentBounds.top < navigationBounds.top + margin) {
+				navigation.scrollTop += currentBounds.top - navigationBounds.top - margin;
+			} else if (currentBounds.bottom > navigationBounds.bottom - margin) {
+				navigation.scrollTop += currentBounds.bottom - navigationBounds.bottom + margin;
+			}
+		});
+	}
+
 	function updateDocumentationNavigation(panel: HTMLDetailsElement) {
 		const currentPath = window.location.pathname;
 		for (const link of panel.querySelectorAll<HTMLAnchorElement>('a[href]')) {
@@ -9,11 +30,15 @@
 			else link.removeAttribute('aria-current');
 		}
 
-		for (const item of panel.querySelectorAll<HTMLLIElement>('li[data-depth]')) {
+		for (const item of panel.querySelectorAll<HTMLLIElement>('[data-navigation-item]')) {
 			const active = item.querySelector('[aria-current="page"]') !== null;
 			item.toggleAttribute('data-active-branch', active);
-			if (active)
-				item.querySelector<HTMLDetailsElement>(':scope > details')?.setAttribute('open', '');
+			if (!active) continue;
+			const toggle = item.querySelector<HTMLButtonElement>(
+				':scope > .docs-navigation-row > [data-navigation-toggle]'
+			);
+			const children = item.querySelector<HTMLElement>(':scope > [data-navigation-children]');
+			if (toggle && children) setBranchExpanded(toggle, children, true);
 		}
 	}
 
@@ -26,14 +51,27 @@
 			if (navigationScrollTop !== undefined) {
 				panel.querySelector<HTMLElement>('nav')?.scrollTo({ top: navigationScrollTop });
 			}
-			if (panel.dataset.documentationNavigationReady !== undefined) continue;
+			if (panel.dataset.documentationNavigationReady !== undefined) {
+				revealCurrentPage(panel);
+				continue;
+			}
 			panel.dataset.documentationNavigationReady = '';
+
+			for (const toggle of panel.querySelectorAll<HTMLButtonElement>('[data-navigation-toggle]')) {
+				toggle.addEventListener('click', () => {
+					const childrenID = toggle.getAttribute('aria-controls');
+					const children = childrenID ? document.getElementById(childrenID) : null;
+					if (!children) return;
+					setBranchExpanded(toggle, children, toggle.getAttribute('aria-expanded') !== 'true');
+				});
+			}
 
 			const sync = () => {
 				panel.open = desktop.matches || panel.dataset.mobileOpen === 'true';
 			};
 			panel.addEventListener('toggle', () => {
 				if (!desktop.matches) panel.dataset.mobileOpen = String(panel.open);
+				if (panel.open) revealCurrentPage(panel);
 			});
 			panel.addEventListener('click', (event) => {
 				if (
@@ -47,6 +85,7 @@
 			});
 			desktop.addEventListener('change', sync);
 			sync();
+			revealCurrentPage(panel);
 		}
 	}
 

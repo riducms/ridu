@@ -62,8 +62,8 @@ Plugin authors can exercise the shared backend contract with `plugintest.Run`:
 func TestConformance(t *testing.T) {
 	plugintest.Run(t, plugintest.Fixture{
 		Plugin: plugin.New(),
-		Fields: []field.Definition{
-			plugin.Field("value", field.Required()),
+		Fields: field.Fields{
+			plugin.Field("value").Required(),
 		},
 		ValidData:   store.Values{"value": store.String("valid")},
 		InvalidData: store.Values{"value": store.String("")},
@@ -76,7 +76,7 @@ func TestConformance(t *testing.T) {
 
 This covers config resolution, manifest encoding, compatibility, validation, Local API, and REST
 behavior. A field with an admin component also needs frontend type checks and a browser test. See
-[Build a custom field](https://riducms.com/guides/custom-fields/).
+[Build a custom field](./custom-fields.md).
 
 ## Check generated output {#generated-drift}
 

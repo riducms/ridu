@@ -27,23 +27,11 @@ func TestSQLiteStoreRunsThePayloadDocumentAndAuthVertical(t *testing.T) {
 		Collections: []ridu.Collection{
 			{
 				Slug: "users", Auth: true,
-				Fields: []field.Definition{
-					field.Email("email", field.Required(), field.Unique()),
-					field.Text("name"),
-				},
+				Fields: field.Fields{field.Email("email").Required().Unique(), field.Text("name")},
 			},
 			{
-				Slug: "posts",
-				Fields: []field.Definition{
-					field.Text("title", field.Required(), field.Unique()),
-					field.Select("status", field.Required(), field.Choices(
-						field.Choice{Value: "draft", Label: "Draft"},
-						field.Choice{Value: "published", Label: "Published"},
-					)),
-					field.Relationship("author", field.To("users"), field.Required()),
-					field.Relationship("watchers", field.ToMany("users")),
-					field.Group("metadata", field.Fields(field.Text("source"))),
-				},
+				Slug:   "posts",
+				Fields: field.Fields{field.Text("title").Required().Unique(), field.Select("status", "draft", "published").Required(), field.Relationship("author", "users").Required(), field.Relationships("watchers", "users"), field.Group("metadata", field.Fields{field.Text("source")})},
 				Access: ridu.CollectionAccess{
 					Read: func(ridu.AccessContext) (ridu.AccessDecision, error) {
 						return ridu.Where(query.Equal(statusPath, query.String("published"))), nil
@@ -128,7 +116,7 @@ func TestSQLiteStoreRunsThePayloadDocumentAndAuthVertical(t *testing.T) {
 	if err != nil || page.Total != 1 || len(page.Documents) != 1 || page.Documents[0].ID != public.ID {
 		t.Fatalf("access-filtered page = %#v, %v", page, err)
 	}
-	if populated, ok := page.Documents[0].Values["author"].DocumentValue(); !ok || populated.ID != user.ID {
+	if populated, ok := page.Documents[0].Values["author"].CopyDocument(); !ok || populated.ID != user.ID {
 		t.Fatalf("populated author = %#v", page.Documents[0].Values["author"])
 	}
 	if _, err := application.Local().Find(ctx, "posts", private.ID, nil); !sqliteOperationCode(err, "not_found") {
@@ -178,7 +166,7 @@ func TestSQLiteVersionAndTrashLifecycle(t *testing.T) {
 	config := ridu.Config{Name: "SQLite versions", Collections: []ridu.Collection{{
 		Slug: "posts", Versions: true, Trash: true,
 		VersionConfig: ridu.VersionConfig{Drafts: true},
-		Fields:        []field.Definition{field.Text("title", field.Required())},
+		Fields:        field.Fields{field.Text("title").Required()},
 	}}}
 	manifest, err := ridu.Resolve(config)
 	if err != nil {
@@ -244,22 +232,16 @@ func TestSQLiteNestedJoinAndRestoreShareTheOuterHookTransaction(t *testing.T) {
 	var postRevision, restoreRevision int
 	config := ridu.Config{Name: "SQLite nested mutation transactions", Collections: []ridu.Collection{
 		{
-			Slug: "categories",
-			Fields: []field.Definition{
-				field.Text("name", field.Required()),
-				field.Join("posts", "posts", "category"),
-			},
+			Slug:   "categories",
+			Fields: field.Fields{field.Text("name").Required(), field.Join("posts", "posts", "category")},
 		},
 		{
 			Slug: "posts", Versions: true,
-			Fields: []field.Definition{
-				field.Text("title", field.Required()),
-				field.Relationship("category", field.To("categories")),
-			},
+			Fields: field.Fields{field.Text("title").Required(), field.Relationship("category", "categories")},
 		},
 		{
 			Slug:   "triggers",
-			Fields: []field.Definition{field.Text("action", field.Required())},
+			Fields: field.Fields{field.Text("action").Required()},
 			Hooks: ridu.CollectionHooks{BeforeOperation: []ridu.Hook{func(hook ridu.HookContext) error {
 				action, _ := hook.Data["action"].StringValue()
 				switch action {

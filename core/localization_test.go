@@ -14,6 +14,7 @@ import (
 	ridu "github.com/riducms/ridu/core"
 	"github.com/riducms/ridu/field"
 	"github.com/riducms/ridu/internal/teststore"
+	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
@@ -32,7 +33,7 @@ func TestLocalizedUploadMetadataUsesTheRequestedLocale(t *testing.T) {
 		Collections: []ridu.Collection{{
 			Slug: "media", Upload: true,
 			UploadConfig: ridu.UploadConfig{MaxFileSize: 1024, MimeTypes: []string{"text/plain"}},
-			Fields:       []field.Definition{field.Text("alt", field.Required(), field.Localized())},
+			Fields:       field.Fields{field.Text("alt").Required().Localized()},
 		}},
 	}, teststore.New())
 	if err != nil {
@@ -49,7 +50,7 @@ func TestLocalizedUploadMetadataUsesTheRequestedLocale(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	localized, ok := all.Values["alt"].ObjectValue()
+	localized, ok := all.Values["alt"].CopyObject()
 	if !ok || stringValue(localized["fr"]) != "Bonjour" {
 		t.Fatalf("localized upload metadata = %#v", all.Values["alt"])
 	}
@@ -72,12 +73,7 @@ func TestLocalizedScalarCRUDQueryFallbackAndAccessContext(t *testing.T) {
 		},
 		Collections: []ridu.Collection{{
 			Slug: "posts", Versions: true,
-			Fields: []field.Definition{
-				field.Text("title", field.Required(), field.Localized()),
-				field.Text("tagline", field.Localized()),
-				field.Text("code", field.Unique(), field.Localized()),
-				field.Text("slug", field.Required()),
-			},
+			Fields: field.Fields{field.Text("title").Required().Localized(), field.Text("tagline").Localized(), field.Text("code").Unique().Localized(), field.Text("slug").Required()},
 			Access: ridu.CollectionAccess{Read: func(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
 				accessLocales = append(accessLocales, ctx.Locale)
 				return ridu.Allow(), nil
@@ -87,10 +83,8 @@ func TestLocalizedScalarCRUDQueryFallbackAndAccessContext(t *testing.T) {
 			}},
 		}},
 		Globals: []ridu.Global{{
-			Slug: "settings",
-			Fields: []field.Definition{
-				field.Text("announcement", field.Required(), field.Localized()),
-			},
+			Slug:   "settings",
+			Fields: field.Fields{field.Text("announcement").Required().Localized()},
 		}},
 	}, teststore.New())
 	if err != nil {
@@ -162,7 +156,7 @@ func TestLocalizedScalarCRUDQueryFallbackAndAccessContext(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	localized, ok := all.Values["title"].ObjectValue()
+	localized, ok := all.Values["title"].CopyObject()
 	if !ok || stringValue(localized["en"]) != "Hello" || stringValue(localized["fr"]) != "Bonjour" {
 		t.Fatalf("all-locales title = %#v", all.Values["title"])
 	}
@@ -177,7 +171,7 @@ func TestLocalizedScalarCRUDQueryFallbackAndAccessContext(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	duplicateTitles, ok := duplicateAll.Values["title"].ObjectValue()
+	duplicateTitles, ok := duplicateAll.Values["title"].CopyObject()
 	if !ok || stringValue(duplicateTitles["en"]) != "Hello" || stringValue(duplicateTitles["fr"]) != "Copie" {
 		t.Fatalf("duplicate did not retain and override locales independently: %#v", duplicateAll.Values["title"])
 	}
@@ -201,7 +195,7 @@ func TestLocalizedScalarCRUDQueryFallbackAndAccessContext(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	announcements, ok := global.Values["announcement"].ObjectValue()
+	announcements, ok := global.Values["announcement"].CopyObject()
 	if !ok || stringValue(announcements["en"]) != "Welcome" || stringValue(announcements["fr"]) != "Bienvenue" {
 		t.Fatalf("localized global = %#v", global.Values["announcement"])
 	}
@@ -223,7 +217,7 @@ func TestLocalizedScalarCRUDQueryFallbackAndAccessContext(t *testing.T) {
 	if err != nil || len(versions) < 2 {
 		t.Fatalf("localized versions = %#v, %v", versions, err)
 	}
-	latest, ok := versions[0].Snapshot.Values["title"].ObjectValue()
+	latest, ok := versions[0].Snapshot.Values["title"].CopyObject()
 	if !ok || stringValue(latest["en"]) != "Hello" || stringValue(latest["fr"]) != "Bonjour" {
 		t.Fatalf("version did not preserve every locale: %#v", versions[0].Snapshot.Values["title"])
 	}
@@ -237,7 +231,7 @@ func TestLocalizedScalarCRUDQueryFallbackAndAccessContext(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	restoredTitles, _ := restoredAll.Values["title"].ObjectValue()
+	restoredTitles, _ := restoredAll.Values["title"].CopyObject()
 	if stringValue(restoredTitles["en"]) != "Hello" || stringValue(restoredTitles["fr"]) != "Bonjour" {
 		t.Fatalf("restore did not restore one canonical all-locale snapshot: %#v", restoredAll.Values["title"])
 	}
@@ -249,7 +243,7 @@ func TestAllLocalesSortUsesTheDefaultLocaleValue(t *testing.T) {
 		Localization: ridu.LocalizationConfig{DefaultLocale: "en", Locales: []ridu.Locale{
 			{Code: "en", Label: "English"}, {Code: "fr", Label: "French"},
 		}},
-		Collections: []ridu.Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title", field.Localized())}}},
+		Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{field.Text("title").Localized()}}},
 	}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -282,7 +276,7 @@ func TestDuplicateAuthorizesEveryRetainedLocale(t *testing.T) {
 		application, err := ridu.New(ridu.Config{
 			Name: "Duplicate localized collection access", Localization: localization,
 			Collections: []ridu.Collection{{
-				Slug: "posts", Fields: []field.Definition{field.Text("owner", field.Required()), field.Text("title", field.Localized())},
+				Slug: "posts", Fields: field.Fields{field.Text("owner").Required(), field.Text("title").Localized()},
 				Access: ridu.CollectionAccess{Read: func(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
 					if ctx.Locale == "fr" {
 						if ctx.Actor == nil {
@@ -317,10 +311,11 @@ func TestDuplicateAuthorizesEveryRetainedLocale(t *testing.T) {
 		application, err := ridu.New(ridu.Config{
 			Name: "Duplicate localized field access", Localization: localization,
 			Collections: []ridu.Collection{{
-				Slug: "posts", Fields: []field.Definition{field.Text("secret", field.Localized())},
-				FieldAccess: map[string]ridu.FieldAccess{"secret": {Create: func(ctx ridu.FieldAccessContext) (bool, error) {
+				Slug: "posts", Fields: field.Fields{field.Text("secret").Localized().Access(field.Access{Create: func(ctx operation.AccessContext,
+
+				) (bool, error) {
 					return ctx.Locale != "fr", nil
-				}}},
+				}})},
 			}},
 		}, teststore.New())
 		if err != nil {
@@ -344,7 +339,7 @@ func TestDuplicateAuthorizesEveryRetainedLocale(t *testing.T) {
 			Name: "Duplicate localized relationship validation", Localization: localization,
 			Collections: []ridu.Collection{
 				{
-					Slug: "people", Fields: []field.Definition{field.Text("name")},
+					Slug: "people", Fields: field.Fields{field.Text("name")},
 					Access: ridu.CollectionAccess{Read: func(ridu.AccessContext) (ridu.AccessDecision, error) {
 						if !personReadable {
 							return ridu.Deny(), nil
@@ -352,7 +347,7 @@ func TestDuplicateAuthorizesEveryRetainedLocale(t *testing.T) {
 						return ridu.Allow(), nil
 					}},
 				},
-				{Slug: "posts", Fields: []field.Definition{field.Text("title"), field.Relationship("editor", field.To("people"), field.Localized())}},
+				{Slug: "posts", Fields: field.Fields{field.Text("title"), field.Relationship("editor", "people").Localized()}},
 			},
 		}, teststore.New())
 		if err != nil {
@@ -385,14 +380,8 @@ func TestLocalizedInverseJoinUsesTheRequestedLocale(t *testing.T) {
 			{Code: "fr", Label: "French", FallbackLocales: []schema.LocaleCode{"en"}},
 		}},
 		Collections: []ridu.Collection{
-			{Slug: "categories", Fields: []field.Definition{
-				field.Text("name", field.Required()),
-				field.Join("posts", "posts", "category", field.JoinDefaultSort("title")),
-			}},
-			{Slug: "posts", Fields: []field.Definition{
-				field.Text("title", field.Required(), field.Localized()),
-				field.Relationship("category", field.To("categories")),
-			}, Access: ridu.CollectionAccess{Update: func(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
+			{Slug: "categories", Fields: field.Fields{field.Text("name").Required(), field.Join("posts", "posts", "category").DefaultSort("title")}},
+			{Slug: "posts", Fields: field.Fields{field.Text("title").Required().Localized(), field.Relationship("category", "categories")}, Access: ridu.CollectionAccess{Update: func(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
 				updateLocale = ctx.Locale
 				return ridu.Allow(), nil
 			}}},
@@ -419,11 +408,11 @@ func TestLocalizedInverseJoinUsesTheRequestedLocale(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	joined, ok := found.Values["posts"].Values()
+	joined, ok := found.Values["posts"].CopyList()
 	if !ok || len(joined) != 1 {
 		t.Fatalf("joined posts = %#v", joined)
 	}
-	joinedPost, ok := joined[0].DocumentValue()
+	joinedPost, ok := joined[0].CopyDocument()
 	if !ok {
 		t.Fatalf("joined post = %#v", joined[0])
 	}
@@ -445,12 +434,12 @@ func TestLocalizedInverseJoinUsesTheRequestedLocale(t *testing.T) {
 	if updateLocale != "fr" {
 		t.Fatalf("join update locale = %q", updateLocale)
 	}
-	mutatedPosts, ok := mutated.Document.Values["posts"].Values()
+	mutatedPosts, ok := mutated.Document.Values["posts"].CopyList()
 	if !ok || len(mutatedPosts) != 2 {
 		t.Fatalf("localized mutated join = %#v", mutated.Document.Values["posts"])
 	}
 	for _, item := range mutatedPosts {
-		document, populated := item.DocumentValue()
+		document, populated := item.CopyDocument()
 		if !populated {
 			t.Fatalf("localized mutated join item = %#v", item)
 		}
@@ -472,8 +461,8 @@ func TestRESTLocalizationParametersMatchLocalAPI(t *testing.T) {
 			}
 			return []schema.LocaleCode{"en", "fr"}, nil
 		}},
-		Collections: []ridu.Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title", field.Required(), field.Localized())}}},
-		Globals:     []ridu.Global{{Slug: "settings", Fields: []field.Definition{field.Text("announcement", field.Required(), field.Localized())}}},
+		Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{field.Text("title").Required().Localized()}}},
+		Globals:     []ridu.Global{{Slug: "settings", Fields: field.Fields{field.Text("announcement").Required().Localized()}}},
 	}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -590,11 +579,7 @@ func TestLocalizedDescendantsPreserveSharedNestedStructure(t *testing.T) {
 		Localization: ridu.LocalizationConfig{DefaultLocale: "en", Locales: []ridu.Locale{
 			{Code: "en", Label: "English"}, {Code: "fr", Label: "French", FallbackLocales: []schema.LocaleCode{"en"}},
 		}},
-		Collections: []ridu.Collection{{Slug: "pages", Fields: []field.Definition{
-			field.Group("seo", field.Fields(field.Text("title", field.Required(), field.Localized()), field.Text("slug", field.Required()))),
-			field.Array("links", field.Fields(field.Text("label", field.Required(), field.Localized()), field.Text("href", field.Required()))),
-			field.Blocks("layout", field.BlockTypes(field.BlockType("hero", "Hero", field.Text("heading", field.Required(), field.Localized()), field.Text("theme", field.Required())))),
-		}}},
+		Collections: []ridu.Collection{{Slug: "pages", Fields: field.Fields{field.Group("seo", field.Fields{field.Text("title").Required().Localized(), field.Text("slug").Required()}), field.Array("links", field.Fields{field.Text("label").Required().Localized(), field.Text("href").Required()}), field.Blocks("layout", field.Block{Slug: "hero", Fields: field.Fields{field.Text("heading").Required().Localized(), field.Text("theme").Required()}})}}},
 	}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -640,8 +625,8 @@ func TestLocalizedDescendantsPreserveSharedNestedStructure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	seo, _ := all.Values["seo"].ObjectValue()
-	titles, ok := seo["title"].ObjectValue()
+	seo, _ := all.Values["seo"].CopyObject()
+	titles, ok := seo["title"].CopyObject()
 	if !ok || stringValue(titles["en"]) != "Home" || stringValue(titles["fr"]) != "Accueil" {
 		t.Fatalf("all-locales nested title = %#v", seo["title"])
 	}
@@ -652,16 +637,13 @@ func TestLocalizedDescendantsPreserveSharedNestedStructure(t *testing.T) {
 	}
 }
 
-func TestCopyLocaleRejectsKeylessStructuredLocalizedRows(t *testing.T) {
+func TestCopyLocalePreservesGeneratedStructuredRowKeys(t *testing.T) {
 	application, err := ridu.New(ridu.Config{
 		Name: "Keyed localized copy",
 		Localization: ridu.LocalizationConfig{DefaultLocale: "en", Locales: []ridu.Locale{
 			{Code: "en", Label: "English"}, {Code: "fr", Label: "French"},
 		}},
-		Collections: []ridu.Collection{{Slug: "pages", Fields: []field.Definition{
-			field.Array("links", field.Fields(field.Text("label", field.Localized()), field.Text("href"))),
-			field.Blocks("layout", field.BlockTypes(field.BlockType("hero", "Hero", field.Text("heading", field.Localized()), field.Text("theme")))),
-		}}},
+		Collections: []ridu.Collection{{Slug: "pages", Fields: field.Fields{field.Array("links", field.Fields{field.Text("label").Localized(), field.Text("href")}), field.Blocks("layout", field.Block{Slug: "hero", Fields: field.Fields{field.Text("heading").Localized(), field.Text("theme")}})}}},
 	}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -678,25 +660,24 @@ func TestCopyLocaleRejectsKeylessStructuredLocalizedRows(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err = application.Local().CopyLocale(context.Background(), "pages", created.ID, "en", "fr", created.Revision, nil)
-	var operationError *ridu.OperationError
-	if !errors.As(err, &operationError) || operationError.Code != "validation" {
-		t.Fatalf("keyless copy error = %v", err)
-	}
-	want := map[string]string{"links.0._key": "missing_row_key", "layout.0._key": "missing_row_key"}
-	for _, issue := range operationError.Issues {
-		if want[issue.Path] == issue.Code {
-			delete(want, issue.Path)
-		}
-	}
-	if len(want) != 0 {
-		t.Fatalf("keyless copy issues = %#v, missing %#v", operationError.Issues, want)
-	}
-	current, err := application.Local().Find(context.Background(), "pages", created.ID, nil, ridu.LocaleOptions{AllLocales: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if current.Revision != created.Revision {
-		t.Fatalf("failed copy changed revision from %d to %d", created.Revision, current.Revision)
+	current, err := application.Local().Find(context.Background(), "pages", created.ID, nil, ridu.LocaleOptions{Locale: "fr", DisableFallback: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"links", "layout"} {
+		key := nestedRowString(created.Values[name], 0, "_key")
+		if key == "" || nestedRowString(current.Values[name], 0, "_key") != key {
+			t.Fatalf("locale copy lost generated identity for %s", name)
+		}
+	}
+	if nestedRowString(current.Values["links"], 0, "label") != "About" || nestedRowString(current.Values["layout"], 0, "heading") != "Welcome" {
+		t.Fatalf("copied values = %#v", current.Values)
+	}
+	if current.LocalizationSources["links.0.label"] != "fr" || current.LocalizationSources["layout.0.heading"] != "fr" {
+		t.Fatalf("copied locale sources = %#v", current.LocalizationSources)
 	}
 }
 
@@ -706,8 +687,10 @@ func TestAllLocalesFieldAccessTraversesLocalizedContainers(t *testing.T) {
 		path   string
 	}
 	var observations []observation
-	readSecret := func(ctx ridu.FieldAccessContext) (bool, error) {
-		observations = append(observations, observation{locale: ctx.Locale, path: ctx.RuntimePath})
+	readSecret := func(ctx operation.AccessContext,
+
+	) (bool, error) {
+		observations = append(observations, observation{locale: ctx.Locale, path: string(ctx.OccurrenceID)})
 		return ctx.Locale == "en", nil
 	}
 	application, err := ridu.New(ridu.Config{
@@ -716,19 +699,8 @@ func TestAllLocalesFieldAccessTraversesLocalizedContainers(t *testing.T) {
 			{Code: "en", Label: "English"}, {Code: "fr", Label: "French"},
 		}},
 		Collections: []ridu.Collection{{
-			Slug: "pages",
-			Fields: []field.Definition{
-				field.Text("summary", field.Localized()),
-				field.Group("details", field.Localized(), field.Fields(field.Text("secret"), field.Text("public"))),
-				field.Array("rows", field.Localized(), field.Fields(field.Text("secret"), field.Text("public"))),
-				field.Blocks("layout", field.Localized(), field.BlockTypes(field.BlockType("hero", "Hero", field.Text("secret"), field.Text("public")))),
-			},
-			FieldAccess: map[string]ridu.FieldAccess{
-				"summary":            {Read: readSecret},
-				"details.secret":     {Read: readSecret},
-				"rows.secret":        {Read: readSecret},
-				"layout.hero.secret": {Read: readSecret},
-			},
+			Slug:   "pages",
+			Fields: field.Fields{field.Text("summary").Localized().Access(field.Access{Read: readSecret}), field.Group("details", field.Fields{field.Text("secret").Access(field.Access{Read: readSecret}), field.Text("public")}).Localized(), field.Array("rows", field.Fields{field.Text("secret").Access(field.Access{Read: readSecret}), field.Text("public")}).Localized(), field.Blocks("layout", field.Block{Slug: "hero", Fields: field.Fields{field.Text("secret").Access(field.Access{Read: readSecret}), field.Text("public")}}).Localized()},
 		}},
 	}, teststore.New())
 	if err != nil {
@@ -760,7 +732,7 @@ func TestAllLocalesFieldAccessTraversesLocalizedContainers(t *testing.T) {
 	}
 	requireLocaleSecret := func(name string, value store.Value, nested func(store.Value) store.Values) {
 		t.Helper()
-		locales, ok := value.ObjectValue()
+		locales, ok := value.CopyObject()
 		if !ok {
 			t.Fatalf("%s = %#v, want locale object", name, value)
 		}
@@ -777,21 +749,21 @@ func TestAllLocalesFieldAccessTraversesLocalizedContainers(t *testing.T) {
 		}
 	}
 	object := func(value store.Value) store.Values {
-		result, _ := value.ObjectValue()
+		result, _ := value.CopyObject()
 		return result
 	}
 	firstRow := func(value store.Value) store.Values {
-		rows, _ := value.Values()
+		rows, _ := value.CopyList()
 		if len(rows) == 0 {
 			return nil
 		}
-		result, _ := rows[0].ObjectValue()
+		result, _ := rows[0].CopyObject()
 		return result
 	}
 	requireLocaleSecret("details", all.Values["details"], object)
 	requireLocaleSecret("rows", all.Values["rows"], firstRow)
 	requireLocaleSecret("layout", all.Values["layout"], firstRow)
-	summaries, ok := all.Values["summary"].ObjectValue()
+	summaries, ok := all.Values["summary"].CopyObject()
 	if !ok || stringValue(summaries["en"]) != "English summary" {
 		t.Fatalf("all-locales summary = %#v", all.Values["summary"])
 	}
@@ -799,33 +771,34 @@ func TestAllLocalesFieldAccessTraversesLocalizedContainers(t *testing.T) {
 		t.Fatalf("French summary was not redacted: %#v", summaries)
 	}
 
-	want := map[observation]bool{
-		{locale: "en", path: "summary.en"}:         true,
-		{locale: "fr", path: "summary.fr"}:         true,
-		{locale: "en", path: "details.en.secret"}:  true,
-		{locale: "fr", path: "details.fr.secret"}:  true,
-		{locale: "en", path: "rows.en.0.secret"}:   true,
-		{locale: "fr", path: "rows.fr.0.secret"}:   true,
-		{locale: "en", path: "layout.en.0.secret"}: true,
-		{locale: "fr", path: "layout.fr.0.secret"}: true,
-	}
-	if len(observations) != len(want) {
-		t.Fatalf("field access observations = %#v", observations)
-	}
+	seen := map[observation]bool{}
+	counts := map[schema.LocaleCode]int{}
 	for _, observed := range observations {
-		if !want[observed] {
-			t.Fatalf("unexpected field access observation %#v", observed)
+		if observed.path == "" || seen[observed] {
+			t.Fatalf("invalid occurrence: %#v", observed)
 		}
+		seen[observed] = true
+		counts[observed.locale]++
 	}
+	if len(observations) != 8 || counts["en"] != 4 || counts["fr"] != 4 {
+		t.Fatalf("field access occurrences: %#v", observations)
+	}
+
 }
 
 func TestAllLocalesFieldAccessProjectsSiblingDataAndDocumentPerLocale(t *testing.T) {
-	readFromDocument := func(ctx ridu.FieldAccessContext) (bool, error) {
-		hidden, _ := ctx.Document.Values["hidden"].BooleanValue()
+	readFromDocument := func(ctx operation.AccessContext,
+
+	) (bool, error) {
+		hidden, _ := ctx.Root.Get("hidden").
+			BooleanValue()
 		return !hidden, nil
 	}
-	readFromSiblings := func(ctx ridu.FieldAccessContext) (bool, error) {
-		hidden, _ := ctx.SiblingData["hidden"].BooleanValue()
+	readFromSiblings := func(ctx operation.AccessContext,
+
+	) (bool, error) {
+		hidden, _ := ctx.Siblings.Get("hidden").
+			BooleanValue()
 		return !hidden, nil
 	}
 	application, err := ridu.New(ridu.Config{
@@ -834,20 +807,8 @@ func TestAllLocalesFieldAccessProjectsSiblingDataAndDocumentPerLocale(t *testing
 			{Code: "en", Label: "English"}, {Code: "fr", Label: "French"},
 		}},
 		Collections: []ridu.Collection{{
-			Slug: "pages",
-			Fields: []field.Definition{
-				field.Checkbox("hidden", field.Localized()),
-				field.Text("secret", field.Localized()),
-				field.Group("details", field.Fields(field.Checkbox("hidden", field.Localized()), field.Text("secret", field.Localized()))),
-				field.Array("rows", field.Fields(field.Checkbox("hidden", field.Localized()), field.Text("secret", field.Localized()))),
-				field.Blocks("layout", field.BlockTypes(field.BlockType("hero", "Hero", field.Checkbox("hidden", field.Localized()), field.Text("secret", field.Localized())))),
-			},
-			FieldAccess: map[string]ridu.FieldAccess{
-				"secret":             {Read: readFromDocument},
-				"details.secret":     {Read: readFromSiblings},
-				"rows.secret":        {Read: readFromSiblings},
-				"layout.hero.secret": {Read: readFromSiblings},
-			},
+			Slug:   "pages",
+			Fields: field.Fields{field.Checkbox("hidden").Localized(), field.Text("secret").Localized().Access(field.Access{Read: readFromDocument}), field.Group("details", field.Fields{field.Checkbox("hidden").Localized(), field.Text("secret").Localized().Access(field.Access{Read: readFromSiblings})}), field.Array("rows", field.Fields{field.Checkbox("hidden").Localized(), field.Text("secret").Localized().Access(field.Access{Read: readFromSiblings})}), field.Blocks("layout", field.Block{Slug: "hero", Fields: field.Fields{field.Checkbox("hidden").Localized(), field.Text("secret").Localized().Access(field.Access{Read: readFromSiblings})}})},
 		}},
 	}, teststore.New())
 	if err != nil {
@@ -884,7 +845,7 @@ func TestAllLocalesFieldAccessProjectsSiblingDataAndDocumentPerLocale(t *testing
 	}
 	assertFrenchRemoved := func(path string, value store.Value) {
 		t.Helper()
-		locales, valid := value.ObjectValue()
+		locales, valid := value.CopyObject()
 		if !valid || stringValue(locales["en"]) == "" {
 			t.Fatalf("%s English value = %#v", path, value)
 		}
@@ -893,13 +854,13 @@ func TestAllLocalesFieldAccessProjectsSiblingDataAndDocumentPerLocale(t *testing
 		}
 	}
 	assertFrenchRemoved("secret", all.Values["secret"])
-	details, _ := all.Values["details"].ObjectValue()
+	details, _ := all.Values["details"].CopyObject()
 	assertFrenchRemoved("details.secret", details["secret"])
-	rows, _ := all.Values["rows"].Values()
-	row, _ := rows[0].ObjectValue()
+	rows, _ := all.Values["rows"].CopyList()
+	row, _ := rows[0].CopyObject()
 	assertFrenchRemoved("rows.secret", row["secret"])
-	blocks, _ := all.Values["layout"].Values()
-	block, _ := blocks[0].ObjectValue()
+	blocks, _ := all.Values["layout"].CopyList()
+	block, _ := blocks[0].CopyObject()
 	assertFrenchRemoved("layout.hero.secret", block["secret"])
 
 	capabilities, err := application.Local().Capabilities(context.Background(), "pages", created.ID, ridu.CapabilityOptions{AllLocales: true})
@@ -926,8 +887,11 @@ func TestFieldRedactionRemovesFallbackLocalizationProvenance(t *testing.T) {
 			{Code: "en", Label: "English"}, {Code: "fr", Label: "French", FallbackLocales: []schema.LocaleCode{"en"}},
 		}},
 		Collections: []ridu.Collection{{
-			Slug: "posts", Fields: []field.Definition{field.Text("title", field.Localized()), field.Text("secret", field.Localized())},
-			FieldAccess: map[string]ridu.FieldAccess{"secret": {Read: func(ridu.FieldAccessContext) (bool, error) { return false, nil }}},
+			Slug: "posts", Fields: field.Fields{field.Text("title").Localized(), field.Text("secret").Localized().Access(field.Access{Read: func(operation.AccessContext,
+
+			) (bool, error) {
+				return false, nil
+			}})},
 		}},
 	}, teststore.New())
 	if err != nil {
@@ -963,15 +927,13 @@ func TestPopulationSelectionRemovesUnselectedFallbackLocalizationProvenance(t *t
 		Collections: []ridu.Collection{
 			{
 				Slug: "people",
-				Fields: []field.Definition{
-					field.Text("name", field.Localized()),
-					field.Text("secret", field.Localized()),
-				},
-				FieldAccess: map[string]ridu.FieldAccess{
-					"secret": {Read: func(ridu.FieldAccessContext) (bool, error) { return false, nil }},
-				},
+				Fields: field.Fields{field.Text("name").Localized(), field.Text("secret").Localized().Access(field.Access{Read: func(operation.AccessContext,
+
+				) (bool, error) {
+					return false, nil
+				}})},
 			},
-			{Slug: "posts", Fields: []field.Definition{field.Relationship("editor", field.To("people"))}},
+			{Slug: "posts", Fields: field.Fields{field.Relationship("editor", "people")}},
 		},
 	}, teststore.New())
 	if err != nil {
@@ -997,7 +959,7 @@ func TestPopulationSelectionRemovesUnselectedFallbackLocalizationProvenance(t *t
 	if err != nil {
 		t.Fatal(err)
 	}
-	metadataTarget, populated := metadataOnly.Values["editor"].DocumentValue()
+	metadataTarget, populated := metadataOnly.Values["editor"].CopyDocument()
 	if !populated || len(metadataTarget.Values) != 0 || len(metadataTarget.LocalizationSources) != 0 {
 		t.Fatalf("metadata-only populated target = %#v", metadataTarget)
 	}
@@ -1008,7 +970,7 @@ func TestPopulationSelectionRemovesUnselectedFallbackLocalizationProvenance(t *t
 	if err != nil {
 		t.Fatal(err)
 	}
-	selectedTarget, populated := selected.Values["editor"].DocumentValue()
+	selectedTarget, populated := selected.Values["editor"].CopyDocument()
 	if !populated || stringValue(selectedTarget.Values["name"]) != "Public" {
 		t.Fatalf("selected populated target = %#v", selectedTarget)
 	}
@@ -1044,10 +1006,10 @@ func TestLocalizedVersionRestoreAuthorizesEveryPersistedLocale(t *testing.T) {
 		return func(ctx ridu.HookContext) error {
 			if observeAllLocaleRestore {
 				allLocaleHookPhases = append(allLocaleHookPhases, phase)
-				_, dataObject := ctx.Data["secret"].ObjectValue()
+				_, dataObject := ctx.Data["secret"].CopyObject()
 				docObject := false
 				if ctx.Document != nil {
-					_, docObject = ctx.Document.Values["secret"].ObjectValue()
+					_, docObject = ctx.Document.Values["secret"].CopyObject()
 				}
 				allLocaleHookShapes = append(allLocaleHookShapes, hookShape{
 					phase: phase, locale: ctx.Locale, allLocales: ctx.AllLocales,
@@ -1064,7 +1026,22 @@ func TestLocalizedVersionRestoreAuthorizesEveryPersistedLocale(t *testing.T) {
 		}},
 		Collections: []ridu.Collection{{
 			Slug: "posts", Versions: true,
-			Fields: []field.Definition{field.Text("secret", field.Localized())},
+			Fields: field.Fields{field.Text("secret").Localized().Access(field.Access{Update: func(ctx operation.AccessContext,
+
+			) (bool, error) {
+				if observeOriginalLocales &&
+					true {
+					originalByLocale[ctx.Locale] = stringValue(ctx.Prior.Get("secret"))
+				}
+				if value, valid := ctx.Siblings.String("secret"); valid && value == "Forbidden" {
+					return false, nil
+				}
+				if denyUpdate {
+					deniedLocales = append(deniedLocales, ctx.Locale)
+					return ctx.Locale != "fr", nil
+				}
+				return true, nil
+			}})},
 			Access: ridu.CollectionAccess{Update: func(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
 				if denyCollection {
 					collectionLocales = append(collectionLocales, ctx.Locale)
@@ -1074,20 +1051,8 @@ func TestLocalizedVersionRestoreAuthorizesEveryPersistedLocale(t *testing.T) {
 				}
 				return ridu.Allow(), nil
 			}},
-			FieldAccess: map[string]ridu.FieldAccess{"secret": {Update: func(ctx ridu.FieldAccessContext) (bool, error) {
-				if observeOriginalLocales && ctx.Original != nil {
-					originalByLocale[ctx.Locale] = stringValue(ctx.Original.Values["secret"])
-				}
-				if value, valid := ctx.Value.StringValue(); valid && value == "Forbidden" {
-					return false, nil
-				}
-				if denyUpdate {
-					deniedLocales = append(deniedLocales, ctx.Locale)
-					return ctx.Locale != "fr", nil
-				}
-				return true, nil
-			}}},
-			FieldHooks: map[string]ridu.CollectionHooks{"secret": {
+
+			Hooks: ridu.CollectionHooks{
 				BeforeValidate: []ridu.Hook{func(ctx ridu.HookContext) error {
 					if mutateBeforeValidate {
 						ctx.Data["secret"] = store.String("Forbidden")
@@ -1104,7 +1069,7 @@ func TestLocalizedVersionRestoreAuthorizesEveryPersistedLocale(t *testing.T) {
 				AfterOperation: []ridu.Hook{recordAllLocaleHook("afterOperation")},
 				AfterRead:      []ridu.Hook{recordAllLocaleHook("afterRead")},
 				AfterCommit:    []ridu.Hook{recordAllLocaleHook("afterCommit")},
-			}},
+			},
 		}},
 	}, teststore.New())
 	if err != nil {
@@ -1152,7 +1117,7 @@ func TestLocalizedVersionRestoreAuthorizesEveryPersistedLocale(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	secrets, _ := current.Values["secret"].ObjectValue()
+	secrets, _ := current.Values["secret"].CopyObject()
 	if stringValue(secrets["en"]) != "New" || stringValue(secrets["fr"]) != "Ancien" {
 		t.Fatalf("denied restore changed localized values: %#v", secrets)
 	}
@@ -1166,7 +1131,7 @@ func TestLocalizedVersionRestoreAuthorizesEveryPersistedLocale(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	restoredSecrets, _ := restoredAll.Values["secret"].ObjectValue()
+	restoredSecrets, _ := restoredAll.Values["secret"].CopyObject()
 	if stringValue(restoredSecrets["en"]) != "Old" || stringValue(restoredSecrets["fr"]) != "Hooked" {
 		t.Fatalf("restore hook mutations were not merged into canonical values: %#v", restoredSecrets)
 	}
@@ -1215,7 +1180,7 @@ func TestLocalizedVersionRestoreValidatesEveryRelationshipLocale(t *testing.T) {
 		}},
 		Collections: []ridu.Collection{
 			{
-				Slug: "people", Fields: []field.Definition{field.Text("name", field.Required())},
+				Slug: "people", Fields: field.Fields{field.Text("name").Required()},
 				Access: ridu.CollectionAccess{Read: func(ridu.AccessContext) (ridu.AccessDecision, error) {
 					if restrictTargets {
 						return ridu.Where(query.Equal(idPath, query.String(publicID))), nil
@@ -1225,7 +1190,7 @@ func TestLocalizedVersionRestoreValidatesEveryRelationshipLocale(t *testing.T) {
 			},
 			{
 				Slug: "posts", Versions: true,
-				Fields: []field.Definition{field.Text("title"), field.Relationship("editor", field.To("people"), field.Localized())},
+				Fields: field.Fields{field.Text("title"), field.Relationship("editor", "people").Localized()},
 			},
 		},
 	}, teststore.New())
@@ -1263,7 +1228,7 @@ func TestLocalizedVersionRestoreValidatesEveryRelationshipLocale(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	editors, _ := current.Values["editor"].ObjectValue()
+	editors, _ := current.Values["editor"].CopyObject()
 	if stringValue(editors["en"]) != public.ID || stringValue(editors["fr"]) != public.ID || current.Revision != post.Revision {
 		t.Fatalf("failed restore changed document: %#v", current)
 	}
@@ -1277,13 +1242,14 @@ func TestExactLocaleRestorePopulationDoesNotExposeOtherTargetLocales(t *testing.
 		}},
 		Collections: []ridu.Collection{
 			{
-				Slug:   "people",
-				Fields: []field.Definition{field.Text("name", field.Localized()), field.Text("secret", field.Localized())},
-				FieldAccess: map[string]ridu.FieldAccess{"secret": {Read: func(ctx ridu.FieldAccessContext) (bool, error) {
+				Slug: "people",
+				Fields: field.Fields{field.Text("name").Localized(), field.Text("secret").Localized().Access(field.Access{Read: func(ctx operation.AccessContext,
+
+				) (bool, error) {
 					return ctx.Locale == "fr", nil
-				}}},
+				}})},
 			},
-			{Slug: "posts", Versions: true, Fields: []field.Definition{field.Text("title"), field.Relationship("editor", field.To("people"))}},
+			{Slug: "posts", Versions: true, Fields: field.Fields{field.Text("title"), field.Relationship("editor", "people")}},
 		},
 	}, teststore.New())
 	if err != nil {
@@ -1313,11 +1279,11 @@ func TestExactLocaleRestorePopulationDoesNotExposeOtherTargetLocales(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	editor, populated := restored.Values["editor"].DocumentValue()
+	editor, populated := restored.Values["editor"].CopyDocument()
 	if !populated || stringValue(editor.Values["name"]) != "French" || stringValue(editor.Values["secret"]) != "french-secret" {
 		t.Fatalf("French restore population = %#v", restored.Values["editor"])
 	}
-	if _, localized := editor.Values["secret"].ObjectValue(); localized {
+	if _, localized := editor.Values["secret"].CopyObject(); localized {
 		t.Fatalf("exact-locale restore leaked locale map: %#v", editor.Values["secret"])
 	}
 }
@@ -1329,8 +1295,8 @@ func TestLocalizedRelationshipPopulationUsesTheSameEmptyStringFallbackAsProjecti
 			{Code: "en", Label: "English"}, {Code: "fr", Label: "French", FallbackLocales: []schema.LocaleCode{"en"}},
 		}},
 		Collections: []ridu.Collection{
-			{Slug: "people", Fields: []field.Definition{field.Text("name", field.Required())}},
-			{Slug: "posts", Fields: []field.Definition{field.Relationship("editor", field.To("people"), field.Localized())}},
+			{Slug: "people", Fields: field.Fields{field.Text("name").Required()}},
+			{Slug: "posts", Fields: field.Fields{field.Relationship("editor", "people").Localized()}},
 		},
 	}, teststore.New())
 	if err != nil {
@@ -1354,7 +1320,7 @@ func TestLocalizedRelationshipPopulationUsesTheSameEmptyStringFallbackAsProjecti
 	if err != nil {
 		t.Fatal(err)
 	}
-	populated, valid := fallback.Values["editor"].DocumentValue()
+	populated, valid := fallback.Values["editor"].CopyDocument()
 	if !valid || populated.ID != person.ID || stringValue(populated.Values["name"]) != "Editor" || fallback.LocalizationSources["editor"] != "en" {
 		t.Fatalf("fallback relationship population = %#v with sources %#v", fallback.Values["editor"], fallback.LocalizationSources)
 	}
@@ -1381,12 +1347,12 @@ func TestAllLocalesPopulationRequiresTargetAccessForEveryLocale(t *testing.T) {
 		}},
 		Collections: []ridu.Collection{
 			{
-				Slug: "people", Fields: []field.Definition{field.Text("name", field.Required(), field.Localized())},
+				Slug: "people", Fields: field.Fields{field.Text("name").Required().Localized()},
 				Access: ridu.CollectionAccess{Read: func(ridu.AccessContext) (ridu.AccessDecision, error) {
 					return ridu.Where(query.Equal(name, query.String("Public"))), nil
 				}},
 			},
-			{Slug: "posts", Fields: []field.Definition{field.Text("title"), field.Relationship("editor", field.To("people"))}},
+			{Slug: "posts", Fields: field.Fields{field.Text("title"), field.Relationship("editor", "people")}},
 		},
 	}, teststore.New())
 	if err != nil {
@@ -1411,7 +1377,7 @@ func TestAllLocalesPopulationRequiresTargetAccessForEveryLocale(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if populated, ok := english.Values["editor"].DocumentValue(); !ok || stringValue(populated.Values["name"]) != "Public" {
+	if populated, ok := english.Values["editor"].CopyDocument(); !ok || stringValue(populated.Values["name"]) != "Public" {
 		t.Fatalf("English populated target = %#v", english.Values["editor"])
 	}
 	all, err := application.Local().FindWithOptions(ctx, "posts", post.ID, ridu.FindOptions{
@@ -1420,7 +1386,7 @@ func TestAllLocalesPopulationRequiresTargetAccessForEveryLocale(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, populated := all.Values["editor"].DocumentValue(); populated || stringValue(all.Values["editor"]) != person.ID {
+	if _, populated := all.Values["editor"].CopyDocument(); populated || stringValue(all.Values["editor"]) != person.ID {
 		t.Fatalf("all-locales population leaked target = %#v", all.Values["editor"])
 	}
 }
@@ -1436,13 +1402,13 @@ func TestAllLocalesStatusHooksReceiveLocaleProjectedPopulatedTargets(t *testing.
 	var observations []observation
 	record := func(phase string) ridu.Hook {
 		return func(ctx ridu.HookContext) error {
-			if ctx.Operation != ridu.OperationPublish || ctx.Document == nil {
+			if ctx.Operation != operation.Publish || ctx.Document == nil {
 				return nil
 			}
 			item := observation{phase: phase, locale: ctx.Locale, allLocales: ctx.AllLocales}
-			if editor, populated := ctx.Document.Values["editor"].DocumentValue(); populated {
+			if editor, populated := ctx.Document.Values["editor"].CopyDocument(); populated {
 				item.name, _ = editor.Values["name"].StringValue()
-				_, item.nameObject = editor.Values["name"].ObjectValue()
+				_, item.nameObject = editor.Values["name"].CopyObject()
 			}
 			observations = append(observations, item)
 			return nil
@@ -1454,10 +1420,10 @@ func TestAllLocalesStatusHooksReceiveLocaleProjectedPopulatedTargets(t *testing.
 			{Code: "en", Label: "English"}, {Code: "fr", Label: "French"},
 		}},
 		Collections: []ridu.Collection{
-			{Slug: "people", Fields: []field.Definition{field.Text("name", field.Required(), field.Localized())}},
+			{Slug: "people", Fields: field.Fields{field.Text("name").Required().Localized()}},
 			{
 				Slug: "posts", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true},
-				Fields: []field.Definition{field.Text("title", field.Required()), field.Relationship("editor", field.To("people"), field.Required())},
+				Fields: field.Fields{field.Text("title").Required(), field.Relationship("editor", "people").Required()},
 				Hooks: ridu.CollectionHooks{
 					AfterChange:    []ridu.Hook{record("afterChange")},
 					AfterOperation: []ridu.Hook{record("afterOperation")},
@@ -1491,11 +1457,11 @@ func TestAllLocalesStatusHooksReceiveLocaleProjectedPopulatedTargets(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	populated, valid := published.Values["editor"].DocumentValue()
+	populated, valid := published.Values["editor"].CopyDocument()
 	if !valid {
 		t.Fatalf("all-locales response editor = %#v", published.Values["editor"])
 	}
-	if _, valid := populated.Values["name"].ObjectValue(); !valid {
+	if _, valid := populated.Values["name"].CopyObject(); !valid {
 		t.Fatalf("all-locales response target name = %#v, want locale object", populated.Values["name"])
 	}
 	wantPhases := []string{"afterChange", "afterOperation", "afterCommit"}
@@ -1516,8 +1482,8 @@ func TestLocalizedRelationshipPopulationUsesTheRequestLocale(t *testing.T) {
 			{Code: "en", Label: "English"}, {Code: "fr", Label: "French"},
 		}},
 		Collections: []ridu.Collection{
-			{Slug: "people", Fields: []field.Definition{field.Text("name", field.Required(), field.Localized())}},
-			{Slug: "posts", Fields: []field.Definition{field.Text("title", field.Required()), field.Relationship("editor", field.To("people"), field.Required(), field.Localized())}},
+			{Slug: "people", Fields: field.Fields{field.Text("name").Required().Localized()}},
+			{Slug: "posts", Fields: field.Fields{field.Text("title").Required(), field.Relationship("editor", "people").Required().Localized()}},
 		},
 	}, teststore.New())
 	if err != nil {
@@ -1556,8 +1522,8 @@ func TestLocalizedRelationshipPopulationUsesTheRequestLocale(t *testing.T) {
 		t.Fatal(err)
 	}
 	english, french := englishPage.Documents[0], frenchPage.Documents[0]
-	englishEditor, englishPopulated := english.Values["editor"].DocumentValue()
-	frenchEditor, frenchPopulated := french.Values["editor"].DocumentValue()
+	englishEditor, englishPopulated := english.Values["editor"].CopyDocument()
+	frenchEditor, frenchPopulated := french.Values["editor"].CopyDocument()
 	if !englishPopulated || englishEditor.ID != alice.ID || stringValue(englishEditor.Values["name"]) != "Alice" {
 		t.Fatalf("English populated editor = %#v", english.Values["editor"])
 	}
@@ -1567,12 +1533,12 @@ func TestLocalizedRelationshipPopulationUsesTheRequestLocale(t *testing.T) {
 }
 
 func nestedString(value store.Value, name string) string {
-	object, _ := value.ObjectValue()
+	object, _ := value.CopyObject()
 	return stringValue(object[name])
 }
 
 func nestedRowString(value store.Value, index int, name string) string {
-	rows, _ := value.Values()
+	rows, _ := value.CopyList()
 	if index < 0 || index >= len(rows) {
 		return ""
 	}

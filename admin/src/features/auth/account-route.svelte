@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { untrack } from "svelte";
+	import { connectDocumentLiveValidation } from "@admin/core/forms/live-validation.svelte";
 	import { useNavigate } from "@hvniel/svelte-router";
 	import PaletteIcon from "~icons/lucide/palette";
 	import RotateCcwIcon from "~icons/lucide/rotate-ccw";
@@ -19,6 +21,8 @@
 	const notifications = getNotificationCenter();
 	const navigate = useNavigate();
 	const form = new FormController({}, runtime.i18n);
+	connectDocumentLiveValidation(form, runtime.client);
+	$effect(() => () => form.disposeBindings());
 	let loading = $state(true);
 	let error = $state<string>();
 	let profilePending = $state(false);
@@ -69,13 +73,15 @@
 		const locale = contentLocale;
 		if (slug === undefined || id === undefined) return;
 		const abort = new AbortController();
-		void load(slug, id, locale, abort.signal);
+		untrack(() => load(slug, id, locale, abort.signal));
 		return () => abort.abort();
 	});
 
 	$effect(() => runtime.registerContentLocaleBlocker(() => form.dirty || form.submitting));
 
 	async function load(slug: string, id: string, locale: string | undefined, signal: AbortSignal) {
+		form.setResource({ collection: slug, id });
+		form.setLocalization(locale);
 		loading = true;
 		error = undefined;
 		try {
@@ -84,7 +90,7 @@
 				runtime.client.collectionAccess(slug, { id, signal, locale }),
 			]);
 			if (signal.aborted) return;
-			form.reset(document);
+			form.reset(document, collection?.fields ?? []);
 			form.setLocalization(locale, document._localization?.sources);
 			form.setAccess(access, "update");
 		} catch (cause) {
@@ -249,10 +255,9 @@
 						class="justify-self-start"
 						type="submit"
 						disabled={profilePending || !form.dirty || form.access?.operations.update !== true}
+						aria-busy={form.submitting}
 					>
-						{profilePending
-							? runtime.i18n.t("account:savingProfile")
-							: runtime.i18n.t("account:saveProfile")}
+						{runtime.i18n.t("account:saveProfile")}
 					</Button>
 				</form>
 			{/if}

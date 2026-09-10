@@ -55,12 +55,13 @@ const paths = [
 		]
 	},
 	{
-		title: 'Extend Ridu',
-		description: 'Register trusted Go plugins and pair their statically imported admin extensions.',
-		href: '/docs/plugins/',
+		title: 'Custom components',
+		description:
+			'Use your own Svelte components for fields, dashboards, pages, and document screens.',
+		href: '/docs/custom-components/',
 		links: [
-			{ label: 'Rich text', href: '/docs/rich-text/' },
-			{ label: 'Custom fields', href: '/guides/custom-fields/' }
+			{ label: 'Field components', href: '/docs/custom-components/field-components/' },
+			{ label: 'Build a plugin', href: '/docs/plugins/' }
 		]
 	},
 	{
@@ -76,7 +77,14 @@ const paths = [
 ];
 ---
 
-<BaseLayout title={page.title} description={page.description} active="docs" wide footer={false}>
+<BaseLayout
+	title={page.title}
+	description={page.description}
+	active="docs"
+	wide
+	docsLayout={page.layout}
+	footer={false}
+>
 	<DocsShell {page} {toc} prose={false}>
 		<section class="border-b border-line py-10" id="start-building">
 			<h2 class="m-b max-w-170 text-[clamp(1.8rem,4vw,2.65rem)] leading-[1.05]">
@@ -98,6 +106,11 @@ const paths = [
 					>Understand the scaffold</a
 				>
 			</div>
+			<p class="mb-0 mt-6 text-16px leading-[1.65] text-ink-soft">
+				New to the types in Go examples? <a href="/docs/go-packages/">Go packages</a> explains{' '}
+				<code>operation</code>, <code>store</code>, <code>query</code>, and <code>schema</code>
+				with practical examples.
+			</p>
 		</section>
 
 		<section class="border-b border-line py-10" id="choose-a-topic">

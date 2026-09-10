@@ -137,13 +137,16 @@ func fieldShape(field schema.Field, self schema.StableID, collectionMapping map[
 	if field.Default != nil {
 		detail.WriteString("|default=" + *field.Default)
 	}
+	if field.List != nil {
+		fmt.Fprintf(&detail, "|list-min=%d|list-max=%d", field.List.MinRows, field.List.MaxRows)
+	}
 	if field.Select != nil {
 		fmt.Fprintf(&detail, "|many=%t", field.Select.HasMany)
 		for _, value := range field.Select.DefaultValues {
 			detail.WriteString("|select-default=" + value)
 		}
-		for _, choice := range field.Select.Choices {
-			detail.WriteString("|choice=" + choice.Value)
+		for _, option := range field.Select.Options {
+			detail.WriteString("|option=" + option.Value)
 		}
 	}
 	if field.Relationship != nil {
@@ -175,29 +178,39 @@ func fieldShape(field schema.Field, self schema.StableID, collectionMapping map[
 		fmt.Fprintf(&detail, "|upload=%s|many=%t", id, field.Upload.HasMany)
 	}
 	if field.Nested != nil {
-		children := make([]string, len(field.Nested.Fields))
-		for index, child := range field.Nested.Fields {
+		children := make([]string, len(field.Nested.ResolvedFields()))
+		for index, child := range field.Nested.ResolvedFields() {
 			children[index] = fieldShape(child, self, collectionMapping)
 		}
 		sort.Strings(children)
 		detail.WriteString("|nested={" + strings.Join(children, ",") + "}")
 	}
 	if field.Blocks != nil {
-		for _, block := range field.Blocks.Types {
-			children := make([]string, len(block.Fields))
-			for index, child := range block.Fields {
+		for _, block := range field.Blocks.ResolvedTypes() {
+			children := make([]string, len(block.ResolvedFields()))
+			for index, child := range block.ResolvedFields() {
 				children[index] = fieldShape(child, self, collectionMapping)
 			}
 			sort.Strings(children)
-			detail.WriteString("|block=" + block.Key + "{" + strings.Join(children, ",") + "}")
+			detail.WriteString("|block=" + block.Slug + "{" + strings.Join(children, ",") + "}")
 		}
 	}
 	if field.Plugin != nil {
 		detail.WriteString("|plugin=" + field.Plugin.Key + ":" + string(field.Plugin.Config))
+		for _, tree := range field.Plugin.EmbeddedTrees {
+			fmt.Fprintf(&detail, "|tree=%d:%q:%q:%q:%q", tree.Version, tree.Key, tree.Root, tree.Children, tree.Tag)
+			for _, c := range tree.Cases {
+				fmt.Fprintf(&detail, "|case=%q:%q:%q:%q", c.TagValue, c.Payload, c.Discriminator, c.Identity)
+			}
+		}
 		for _, key := range field.Plugin.ReferenceKeys {
 			detail.WriteString("|reference-key=" + key)
 		}
 	}
+	for _, container := range schema.EmbeddedBlocks(field) {
+		detail.WriteString("|embedded=" + container.Name + ":" + fieldShape(container, self, collectionMapping))
+	}
+
 	return detail.String()
 }
 
@@ -278,32 +291,47 @@ func pairFieldDescendants(before, after schema.Field, beforeCollectionID, afterC
 		if before.Nested == nil || after.Nested == nil {
 			return nil, false
 		}
-		children, complete := pairFields(before.Nested.Fields, after.Nested.Fields, beforeCollectionID, afterCollectionID, collectionMapping)
+		children, complete := pairFields(before.Nested.ResolvedFields(), after.Nested.ResolvedFields(), beforeCollectionID, afterCollectionID, collectionMapping)
 		if !complete {
 			return nil, false
 		}
 		pairs = append(pairs, children...)
 	}
 	if before.Blocks != nil || after.Blocks != nil {
-		if before.Blocks == nil || after.Blocks == nil || len(before.Blocks.Types) != len(after.Blocks.Types) {
+		if before.Blocks == nil || after.Blocks == nil || len(before.Blocks.ResolvedTypes()) != len(after.Blocks.ResolvedTypes()) {
 			return nil, false
 		}
-		afterBlocks := make(map[string]schema.BlockType, len(after.Blocks.Types))
-		for _, block := range after.Blocks.Types {
-			afterBlocks[block.Key] = block
+		afterBlocks := make(map[string]schema.BlockType, len(after.Blocks.ResolvedTypes()))
+		for _, block := range after.Blocks.ResolvedTypes() {
+			afterBlocks[block.Slug] = block
 		}
-		for _, block := range before.Blocks.Types {
-			matched, exists := afterBlocks[block.Key]
+		for _, block := range before.Blocks.ResolvedTypes() {
+			matched, exists := afterBlocks[block.Slug]
 			if !exists {
 				return nil, false
 			}
-			children, complete := pairFields(block.Fields, matched.Fields, beforeCollectionID, afterCollectionID, collectionMapping)
+			children, complete := pairFields(block.ResolvedFields(), matched.ResolvedFields(), beforeCollectionID, afterCollectionID, collectionMapping)
 			if !complete {
 				return nil, false
 			}
 			pairs = append(pairs, children...)
 		}
 	}
+	beforeEmbedded, afterEmbedded := schema.EmbeddedBlocks(before), schema.EmbeddedBlocks(after)
+	if len(beforeEmbedded) != len(afterEmbedded) {
+		return nil, false
+	}
+	for i, container := range beforeEmbedded {
+		if container.Name != afterEmbedded[i].Name {
+			return nil, false
+		}
+		children, complete := pairFieldDescendants(container, afterEmbedded[i], beforeCollectionID, afterCollectionID, collectionMapping)
+		if !complete {
+			return nil, false
+		}
+		pairs = append(pairs, children...)
+	}
+
 	return pairs, true
 }
 
@@ -352,16 +380,16 @@ func fieldRenameCandidatesWithin(before, after schema.Collection, beforeFields, 
 			continue
 		}
 		if beforeField.Nested != nil && afterField.Nested != nil {
-			candidates = append(candidates, fieldRenameCandidatesWithin(before, after, beforeField.Nested.Fields, afterField.Nested.Fields, collectionMapping)...)
+			candidates = append(candidates, fieldRenameCandidatesWithin(before, after, beforeField.Nested.ResolvedFields(), afterField.Nested.ResolvedFields(), collectionMapping)...)
 		}
 		if beforeField.Blocks != nil && afterField.Blocks != nil {
-			afterBlocks := make(map[string]schema.BlockType, len(afterField.Blocks.Types))
-			for _, block := range afterField.Blocks.Types {
-				afterBlocks[block.Key] = block
+			afterBlocks := make(map[string]schema.BlockType, len(afterField.Blocks.ResolvedTypes()))
+			for _, block := range afterField.Blocks.ResolvedTypes() {
+				afterBlocks[block.Slug] = block
 			}
-			for _, block := range beforeField.Blocks.Types {
-				if matched, exists := afterBlocks[block.Key]; exists {
-					candidates = append(candidates, fieldRenameCandidatesWithin(before, after, block.Fields, matched.Fields, collectionMapping)...)
+			for _, block := range beforeField.Blocks.ResolvedTypes() {
+				if matched, exists := afterBlocks[block.Slug]; exists {
+					candidates = append(candidates, fieldRenameCandidatesWithin(before, after, block.ResolvedFields(), matched.ResolvedFields(), collectionMapping)...)
 				}
 			}
 		}

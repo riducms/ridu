@@ -1,3 +1,5 @@
+import { resolveBlockTypes } from "@riducms/protocol";
+import { embeddedOccurrences, transformEmbeddedPayloads } from "@admin/core/forms/embedded-fields";
 import type { SchemaField } from "@riducms/protocol";
 
 export type FormValues = Record<string, unknown>;
@@ -31,9 +33,10 @@ export function localizationSource(
 	path: string,
 	values: FormValues,
 	original: FormValues,
-	sources: Readonly<Record<string, string>>
+	sources: Readonly<Record<string, string>>,
+	fields: readonly SchemaField[] = []
 ) {
-	return sources[localizationProvenancePath(path, values, original)];
+	return sources[localizationProvenancePath(path, values, original, fields)];
 }
 
 export function shouldSubmitLocalizedPath(
@@ -41,9 +44,10 @@ export function shouldSubmitLocalizedPath(
 	values: FormValues,
 	original: FormValues,
 	locale: string | undefined,
-	sources: Readonly<Record<string, string>>
+	sources: Readonly<Record<string, string>>,
+	fields: readonly SchemaField[] = []
 ) {
-	const provenancePath = localizationProvenancePath(path, values, original);
+	const provenancePath = localizationProvenancePath(path, values, original, fields);
 	const source = sources[provenancePath];
 	return (
 		source === undefined ||
@@ -60,10 +64,18 @@ export function submissionFormValues(
 	return submissionRecord(fields, input, "", include);
 }
 
-export function initialFormValues(fields: readonly SchemaField[]): FormValues {
-	const values: FormValues = {};
+/** Initialize a new record, retaining supplied values and container metadata. */
+export function initialFormValues(
+	fields: readonly SchemaField[],
+	input: FormValues = {}
+): FormValues {
+	const values = cloneFormValues(input);
 	for (const field of fields) {
-		const defaultValue = initialFieldValue(field);
+		const defaultValue = initialFieldValue(
+			field,
+			input[field.name],
+			Object.hasOwn(input, field.name)
+		);
 		if (defaultValue.present) values[field.name] = cloneFormValue(defaultValue.value);
 	}
 	return values;
@@ -108,9 +120,31 @@ function submissionRecord(
 		} else if (field.type === "blocks" && Array.isArray(value)) {
 			submitted[field.name] = value.map((row, index) => {
 				if (!isRecord(row) || typeof row.blockType !== "string") return cloneFormValue(row);
-				const block = field.blocks?.types.find((candidate) => candidate.key === row.blockType);
-				return submissionRecord(block?.fields ?? [], row, `${path}.${index}`, include);
+				const block = resolveBlockTypes(field.blocks).find(
+					(candidate) => candidate.slug === row.blockType
+				);
+				return block === undefined
+					? cloneFormValue(row)
+					: submissionRecord(block.fields, row, `${path}.${index}`, include);
 			});
+		} else if (field.type === "plugin" && field.plugin?.embeddedTrees !== undefined) {
+			submitted[field.name] = transformEmbeddedPayloads(
+				field,
+				cloneFormValue(value),
+				path,
+				(occurrence) => ({
+					...submissionRecord(
+						occurrence.block.fields,
+						occurrence.payload,
+						occurrence.path,
+						include
+					),
+					[occurrence.case.discriminator]: occurrence.block.slug,
+					...(occurrence.identity === undefined
+						? {}
+						: { [occurrence.case.identity]: occurrence.identity }),
+				})
+			);
 		} else {
 			submitted[field.name] = cloneFormValue(value);
 		}
@@ -120,7 +154,14 @@ function submissionRecord(
 	return submitted;
 }
 
-function localizationProvenancePath(path: string, values: FormValues, originalValues: FormValues) {
+function localizationProvenancePath(
+	path: string,
+	values: FormValues,
+	originalValues: FormValues,
+	fields: readonly SchemaField[] = []
+) {
+	const embeddedPath = embeddedProvenancePath(fields, values, originalValues, path);
+	if (embeddedPath !== undefined) return embeddedPath;
 	const segments = path.split(".");
 	const resolved: string[] = [];
 	let current: unknown = values;
@@ -358,6 +399,58 @@ function reconcileFieldValue(
 		);
 	}
 
+	if (
+		previous.type === "plugin" &&
+		next.type === "plugin" &&
+		next.plugin?.embeddedTrees !== undefined
+	) {
+		const reconcilePayloads = (value: unknown, before: unknown, report: DetachedDraftValue[]) => {
+			const copy = cloneFormValue(value);
+			const fieldPath = joinPath(parentPath, next.name);
+			const old = embeddedOccurrences(previous, before, fieldPath);
+			const currentOld = embeddedOccurrences(previous, value, fieldPath);
+			const candidates = embeddedOccurrences(next, copy, fieldPath);
+			// Unknown definitions remain intact for the submission recovery guard.
+			if (candidates.issues.length > 0) return copy;
+			return transformEmbeddedPayloads(next, copy, fieldPath, (occurrence) => {
+				const match = (candidate: (typeof old.occurrences)[number]) =>
+					candidate.tree.key === occurrence.tree.key &&
+					candidate.case.tagValue === occurrence.case.tagValue &&
+					candidate.block.slug === occurrence.block.slug &&
+					candidate.identity === occurrence.identity;
+				const prior = old.occurrences.find(match);
+				const previousOccurrence = currentOld.occurrences.find(match);
+				if (previousOccurrence === undefined)
+					return {
+						...(initializeDefaults ? initialFormValues(occurrence.block.fields) : {}),
+						...occurrence.payload,
+					};
+				const priorSchema = previousOccurrence.block.fields;
+				const reconciled = reconcileRecord(
+					priorSchema,
+					occurrence.block.fields,
+					occurrence.payload,
+					prior?.payload,
+					report,
+					occurrence.path,
+					initializeDefaults
+				);
+				return {
+					...reconciled.values,
+					[occurrence.case.discriminator]: occurrence.block.slug,
+					...(occurrence.identity === undefined
+						? {}
+						: { [occurrence.case.identity]: occurrence.identity }),
+				};
+			});
+		};
+		return {
+			currentPresent,
+			current: reconcilePayloads(currentValue, originalValue, detached),
+			originalPresent,
+			original: reconcilePayloads(originalValue, originalValue, []),
+		};
+	}
 	return {
 		currentPresent,
 		current: cloneFormValue(currentValue),
@@ -442,13 +535,20 @@ function reconcileBlocksValue(
 	}
 	const currentRows = Array.isArray(currentValue) ? currentValue : [];
 	const originalRows = Array.isArray(originalValue) ? originalValue : [];
-	const previousBlocks = new Map((previous.blocks?.types ?? []).map((block) => [block.key, block]));
-	const nextBlocks = new Map((next.blocks?.types ?? []).map((block) => [block.key, block]));
+	const previousBlocks = new Map(
+		(resolveBlockTypes(previous.blocks) ?? []).map((block) => [block.slug, block])
+	);
+	const nextBlocks = new Map(
+		(resolveBlockTypes(next.blocks) ?? []).map((block) => [block.slug, block])
+	);
 	const rowPath = joinPath(parentPath, next.name);
-	const keptCurrent: FormValues[] = [];
+	const keptCurrent: unknown[] = [];
 
 	for (const [index, row] of currentRows.entries()) {
-		if (!isRecord(row)) continue;
+		if (!isRecord(row)) {
+			keptCurrent.push(cloneFormValue(row));
+			continue;
+		}
 		const blockType = String(row.blockType ?? "");
 		const previousBlock = previousBlocks.get(blockType);
 		const nextBlock = nextBlocks.get(blockType);
@@ -463,6 +563,7 @@ function reconcileBlocksValue(
 					value: cloneFormValue(row),
 				});
 			}
+			keptCurrent.push(cloneFormValue(row));
 			continue;
 		}
 		keptCurrent.push(
@@ -479,11 +580,11 @@ function reconcileBlocksValue(
 	}
 
 	const keptOriginal = originalRows.flatMap((row, index) => {
-		if (!isRecord(row)) return [];
+		if (!isRecord(row)) return [cloneFormValue(row)];
 		const blockType = String(row.blockType ?? "");
 		const previousBlock = previousBlocks.get(blockType);
 		const nextBlock = nextBlocks.get(blockType);
-		if (previousBlock === undefined || nextBlock === undefined) return [];
+		if (previousBlock === undefined || nextBlock === undefined) return [cloneFormValue(row)];
 		return [
 			reconcileRecord(
 				previousBlock.fields,
@@ -530,12 +631,40 @@ function fieldDefault(field: SchemaField) {
 		return { present: true, value: field.select.defaultValues };
 	}
 	if (field.default === undefined) return { present: false };
+	if (field.type === "text-list" || field.type === "number-list")
+		return { present: true, value: JSON.parse(field.default) };
 	if (field.type === "number") return { present: true, value: Number(field.default) };
 	if (field.type === "checkbox") return { present: true, value: field.default === "true" };
 	return { present: true, value: field.default };
 }
 
-function initialFieldValue(field: SchemaField): { present: boolean; value?: unknown } {
+function initialFieldValue(
+	field: SchemaField,
+	value?: unknown,
+	present = false
+): { present: boolean; value?: unknown } {
+	if (present) {
+		if (field.type === "group" && isRecord(value)) {
+			value = initialFormValues(field.nested?.fields ?? [], value);
+		} else if (field.type === "array" && Array.isArray(value)) {
+			value = value.map((row) =>
+				isRecord(row) ? initialFormValues(field.nested?.fields ?? [], row) : row
+			);
+		} else if (field.type === "blocks" && Array.isArray(value)) {
+			value = value.map((row) => {
+				if (!isRecord(row)) return row;
+				const block = resolveBlockTypes(field.blocks).find(
+					(candidate) => candidate.slug === row.blockType
+				);
+				return block === undefined ? row : initialFormValues(block.fields, row);
+			});
+		} else if (field.type === "plugin" && field.plugin?.embeddedTrees !== undefined) {
+			value = transformEmbeddedPayloads(field, cloneFormValue(value), field.path, (occurrence) =>
+				initialFormValues(occurrence.block.fields, occurrence.payload)
+			);
+		}
+		return { present: true, value };
+	}
 	const direct = fieldDefault(field);
 	if (direct.present) return direct;
 	if (field.type === "group") {
@@ -606,4 +735,69 @@ export function cloneFormValue(value: unknown): unknown {
 		);
 	}
 	return value;
+}
+
+function embeddedProvenancePath(
+	fields: readonly SchemaField[],
+	current: FormValues,
+	original: FormValues,
+	path: string,
+	prefix = ""
+): string | undefined {
+	for (const field of fields) {
+		const fieldPath = joinPath(prefix, field.name);
+		if (!path.startsWith(`${fieldPath}.`)) continue;
+		const value = current[field.name];
+		const before = original[field.name];
+		if (field.type === "plugin") {
+			const now = embeddedOccurrences(field, value, fieldPath);
+			const previous = embeddedOccurrences(field, before, fieldPath);
+			const occurrence = now.occurrences.find((candidate) => path.startsWith(`${candidate.path}.`));
+			if (occurrence !== undefined && occurrence.identity !== undefined) {
+				const match = previous.occurrences.find(
+					(candidate) =>
+						candidate.tree.key === occurrence.tree.key &&
+						candidate.case.tagValue === occurrence.case.tagValue &&
+						candidate.block.slug === occurrence.block.slug &&
+						candidate.identity === occurrence.identity
+				);
+				if (match !== undefined) {
+					const suffix = path.slice(occurrence.path.length + 1);
+					return `${match.path}.${localizationProvenancePath(suffix, occurrence.payload, match.payload, occurrence.block.fields)}`;
+				}
+				return "";
+			}
+		}
+		if (field.type === "group" && isRecord(value))
+			return embeddedProvenancePath(
+				field.nested?.fields ?? [],
+				value,
+				isRecord(before) ? before : {},
+				path,
+				fieldPath
+			);
+		if ((field.type === "array" || field.type === "blocks") && Array.isArray(value)) {
+			for (const [index, row] of value.entries()) {
+				if (!isRecord(row) || !path.startsWith(`${fieldPath}.${index}.`)) continue;
+				const prior = Array.isArray(before) ? matchingRow(row, before, index) : {};
+				const children =
+					field.type === "blocks"
+						? (resolveBlockTypes(field.blocks).find((block) => block.slug === row.blockType)
+								?.fields ?? [])
+						: (field.nested?.fields ?? []);
+				const resolved = embeddedProvenancePath(
+					children,
+					row,
+					isRecord(prior) ? prior : {},
+					path,
+					`${fieldPath}.${index}`
+				);
+				const priorIndex = Array.isArray(before) ? before.indexOf(prior) : -1;
+				return resolved === undefined || priorIndex < 0
+					? resolved
+					: resolved.replace(`${fieldPath}.${index}.`, `${fieldPath}.${priorIndex}.`);
+			}
+		}
+	}
+	return undefined;
 }

@@ -5,7 +5,13 @@ product: data
 eyebrow: 'Data and APIs'
 order: 105
 aliases:
-  ['cross origin', 'AllowedOrigins', 'AllowedRequestHeaders', 'RIDU_ALLOWED_ORIGINS', 'preflight']
+  [
+    'cross origin',
+    'AllowedOrigins',
+    'AllowedRequestHeaders',
+    'RIDU_ALLOWED_ORIGINS',
+    'preflight'
+  ]
 navigation:
   section: 'Work with data'
   parent: 'data-access'

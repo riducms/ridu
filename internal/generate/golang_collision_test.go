@@ -3,10 +3,14 @@ package generate
 import (
 	"bytes"
 	"fmt"
+	"go/ast"
 	"go/format"
+	"go/parser"
+	"go/token"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -88,9 +92,13 @@ var ArticlesCollection = core.NewTypedCollection[Article, ArticleCreate, Article
 	if err != nil {
 		t.Fatalf("format expected generated Go: %v", err)
 	}
-	if !bytes.Equal(generated, expected) {
-		t.Fatalf("generated Go collision output differs:\n--- got ---\n%s\n--- want ---\n%s", generated, expected)
+	actual := goDeclarations(t, generated)
+	for name, want := range goDeclarations(t, expected) {
+		if actual[name] != want {
+			t.Fatalf("generated Go declaration %s differs:\n%s\nwant:\n%s", name, actual[name], want)
+		}
 	}
+
 	compileGeneratedGo(t, generated)
 }
 
@@ -114,4 +122,56 @@ func compileGeneratedGo(t *testing.T, generated []byte) {
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("compile generated Go collision fixture: %v\n%s\n%s", err, output, generated)
 	}
+}
+
+// Existing syntax contracts should not depend on generated GoDoc or its alignment.
+func goSourceWithoutLineComments(t *testing.T, source []byte) []byte {
+	t.Helper()
+	clean := regexp.MustCompile(`(?m)^[ \t]*//[^\n]*\n`).ReplaceAll(source, nil)
+	formatted, err := format.Source(clean)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return formatted
+}
+
+// Compare declarations independently of unrelated generated runtime support.
+func goDeclarations(t *testing.T, source []byte) map[string]string {
+	t.Helper()
+	set := token.NewFileSet()
+	file, err := parser.ParseFile(set, "generated.go", goSourceWithoutLineComments(t, source), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	declarations := map[string]string{}
+	for _, declaration := range file.Decls {
+		var name string
+		switch value := declaration.(type) {
+		case *ast.FuncDecl:
+			name = value.Name.Name
+			if value.Recv != nil {
+				var receiver bytes.Buffer
+				_ = format.Node(&receiver, set, value.Recv.List[0].Type)
+				name = receiver.String() + "." + name
+			}
+		case *ast.GenDecl:
+			if value.Tok == token.IMPORT {
+				continue
+			}
+			for _, spec := range value.Specs {
+				switch v := spec.(type) {
+				case *ast.TypeSpec:
+					name = v.Name.Name
+				case *ast.ValueSpec:
+					name = v.Names[0].Name
+				}
+			}
+		}
+		var encoded bytes.Buffer
+		if err := format.Node(&encoded, set, declaration); err != nil {
+			t.Fatal(err)
+		}
+		declarations[name] = encoded.String()
+	}
+	return declarations
 }

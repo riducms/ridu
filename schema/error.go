@@ -5,11 +5,20 @@ import (
 	"strings"
 )
 
-// Issue is one path-aware schema configuration failure.
+// Issue describes one configuration or document validation failure at a field path.
 type Issue struct {
 	Code    string `json:"code"`
 	Path    string `json:"path"`
 	Message string `json:"message"`
+	// Target correlates a save issue by portable schema and stable row identity.
+	// It is opaque to transports and scoped to the operation's locale/form snapshot.
+	Target string `json:"target,omitempty"`
+	// FieldID and resource identity describe a resolved application-validator target.
+	FieldID      StableID `json:"fieldId,omitempty"`
+	CollectionID StableID `json:"collectionId,omitempty"`
+	GlobalID     StableID `json:"globalId,omitempty"`
+	// Locale is the exact translation addressed by a save issue, without fallback.
+	Locale LocaleCode `json:"locale,omitempty"`
 }
 
 // ValidationError contains every schema issue found during one deterministic

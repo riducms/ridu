@@ -11,10 +11,8 @@ func TestRootFacadeResolvesCoreConfig(t *testing.T) {
 	manifest, err := ridu.Resolve(ridu.Config{
 		Name: "Facade contract",
 		Collections: []ridu.Collection{{
-			Slug: "posts",
-			Fields: []field.Definition{
-				field.Text("title"),
-			},
+			Slug:   "posts",
+			Fields: field.Fields{field.Text("title")},
 		}},
 	})
 	if err != nil {

@@ -1,10 +1,15 @@
 <script lang="ts" module>
+	import { resolveBlockTypes } from "@riducms/protocol";
+
 	import type { SchemaField } from "@riducms/protocol";
 
 	function fieldUsesLocalization(field: SchemaField): boolean {
 		if (field.localized === true) return true;
 		if (field.nested?.fields.some(fieldUsesLocalization)) return true;
-		return field.blocks?.types.some((block) => block.fields.some(fieldUsesLocalization)) === true;
+		return (
+			resolveBlockTypes(field.blocks).some((block) => block.fields.some(fieldUsesLocalization)) ===
+			true
+		);
 	}
 
 	function withContentLocale(path: string, locale: string | undefined) {
@@ -14,6 +19,7 @@
 </script>
 
 <script lang="ts">
+	import { focusFieldIssue } from "@admin/core/forms/field-issue-focus";
 	import type { AdminDocumentExtensionHost } from "@riducms/plugin";
 	import { Link, useBlocker, useLocation, useNavigate, useParams } from "@hvniel/svelte-router";
 	import { tick, untrack } from "svelte";
@@ -242,6 +248,18 @@
 	let previousLivePreviewRouteKey: string | undefined;
 	let dismissedLock = $state<string>();
 	const livePreview = $derived(collection?.admin.livePreview);
+	$effect(() => {
+		const state = location.state as { openLivePreview?: boolean } | null;
+		if (routeDocumentView !== "edit" || state?.openLivePreview !== true) return;
+		livePreviewOpen = true;
+		// API and edit views have separate route instances. Consume the transient
+		// intent on arrival so Back or reload cannot reopen a dismissed preview.
+		const { openLivePreview: _, ...remainingState } = state;
+		navigate(`${location.pathname}${location.search}${location.hash}`, {
+			replace: true,
+			state: remainingState,
+		});
+	});
 	const creatingAuthUser = $derived(
 		creating && !globalResource && collection?.capabilities.auth === true
 	);
@@ -321,10 +339,13 @@
 	}
 
 	function toggleLivePreview() {
+		if (!livePreviewOpen && routeDocumentView === "api") {
+			navigate(editPath, { replace: true, state: { openLivePreview: true } });
+			return;
+		}
 		livePreviewOpen = !livePreviewOpen;
 		if (livePreviewOpen) {
 			controller.documentView = "edit";
-			navigate(editPath, { replace: true });
 		}
 	}
 
@@ -413,7 +434,7 @@
 		const issuePath = controller.revealFirstIssue();
 		if (issuePath === undefined) return;
 		await tick();
-		focusIssue(issuePath);
+		await focusFieldIssue(issuePath);
 	}
 
 	async function handleSave(event: Event) {
@@ -463,24 +484,6 @@
 		if (newUserPassword !== newUserPasswordConfirmation)
 			return runtime.i18n.t("documents:passwordsDoNotMatch");
 		return undefined;
-	}
-
-	function focusIssue(path: string) {
-		const segments = path.split(".");
-		while (segments.length > 0) {
-			const candidate = segments.join(".");
-			const container = document.querySelector<HTMLElement>(
-				`[data-field-path="${CSS.escape(candidate)}"]`
-			);
-			if (container !== null) {
-				container.scrollIntoView({ behavior: "smooth", block: "center" });
-				container
-					.querySelector<HTMLElement>("input, textarea, button, [tabindex]:not([tabindex='-1'])")
-					?.focus({ preventScroll: true });
-				return;
-			}
-			segments.pop();
-		}
 	}
 </script>
 
@@ -634,14 +637,10 @@
 					aria-busy={form.submitting}
 					onclick={handleSave}
 				>
-					{form.submitting
-						? runtime.i18n.t("documents:saving")
-						: runtime.i18n.t("documents:saveDraft")}
+					{runtime.i18n.t("documents:saveDraft")}
 				</Button>
 				<Button size="sm" disabled={!canSave} aria-busy={form.submitting} onclick={handlePublish}>
-					{form.submitting
-						? runtime.i18n.t("documents:publishing")
-						: runtime.i18n.t("documents:publish")}
+					{runtime.i18n.t("documents:publish")}
 				</Button>
 			{:else if creating && versionedCollection && !draftsCollection}
 				<Button
@@ -650,9 +649,7 @@
 					aria-busy={form.submitting}
 					onclick={handlePublish}
 				>
-					{form.submitting
-						? runtime.i18n.t("documents:publishing")
-						: runtime.i18n.t("documents:publish")}
+					{runtime.i18n.t("documents:publish")}
 				</Button>
 			{:else}
 				<Button
@@ -662,19 +659,13 @@
 					aria-busy={form.submitting}
 					onclick={handleSave}
 				>
-					{form.submitting
-						? runtime.i18n.t(
-								versionedCollection && currentStatus === "published"
-									? "documents:publishing"
-									: "documents:saving"
-							)
-						: creating && draftsCollection
-							? runtime.i18n.t("documents:saveDraft")
-							: versionedCollection
-								? currentStatus === "published"
-									? runtime.i18n.t("documents:publishChanges")
-									: runtime.i18n.t("documents:saveDraft")
-								: runtime.i18n.t("documents:save")}
+					{creating && draftsCollection
+						? runtime.i18n.t("documents:saveDraft")
+						: versionedCollection
+							? currentStatus === "published"
+								? runtime.i18n.t("documents:publishChanges")
+								: runtime.i18n.t("documents:saveDraft")
+							: runtime.i18n.t("documents:save")}
 				</Button>
 			{/if}
 			{#if !creating && versionedCollection && currentStatus === "draft" && canPublish}
@@ -812,6 +803,8 @@
 						<Skeleton class="mt-5 h-10.5" />
 						<Skeleton class="h-28" />
 					</div>
+				{:else if !creating && currentDocument === undefined}
+					<!-- A failed read has no editable document; the recovery/error banner remains visible. -->
 				{:else if documentView === "api"}
 					<DocumentAPIView
 						resourceSlug={slug}

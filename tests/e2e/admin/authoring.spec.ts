@@ -289,7 +289,8 @@ test("relationship browsers, inline documents, uploads, and the document API vie
 	const inlineUploadGate = new Promise<void>((resolve) => {
 		releaseInlineUpload = resolve;
 	});
-	await page.route("**/api/collections/media", async (route) => {
+	const inlineUploadURL = (url: URL) => url.pathname === "/api/collections/media";
+	await page.route(inlineUploadURL, async (route) => {
 		if (route.request().method() !== "POST") {
 			await route.continue();
 			return;
@@ -307,7 +308,7 @@ test("relationship browsers, inline documents, uploads, and the document API vie
 	await expect(
 		relationDialog.getByRole("radio", { name: "Select inline-cover.png" })
 	).toBeChecked();
-	await page.unroute("**/api/collections/media");
+	await page.unroute(inlineUploadURL);
 	await relationDialog.getByRole("button", { name: "Select", exact: true }).click();
 	await expect(page.getByText("inline-cover.png", { exact: true })).toBeVisible();
 

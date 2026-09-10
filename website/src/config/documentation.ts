@@ -323,7 +323,7 @@ export async function getDocumentationNavigation(): Promise<DocumentationNavigat
 			}))
 	];
 	const groupOrder: Record<string, number> = {
-		'Scalar & choice': 10,
+		'Basic fields': 10,
 		Structured: 20,
 		'Relationship & media': 30,
 		Layout: 40,

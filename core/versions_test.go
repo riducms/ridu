@@ -10,6 +10,7 @@ import (
 	ridu "github.com/riducms/ridu/core"
 	"github.com/riducms/ridu/field"
 	"github.com/riducms/ridu/internal/teststore"
+	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
@@ -20,7 +21,7 @@ func TestDraftPublishingConflictsAndRestore(t *testing.T) {
 	application, err := ridu.New(ridu.Config{Name: "versions", Collections: []ridu.Collection{{
 		Slug: "posts", Versions: true,
 		VersionConfig: ridu.VersionConfig{Drafts: true, MaxPerDocument: 10},
-		Fields:        []field.Definition{field.Text("title", field.Required())},
+		Fields:        field.Fields{field.Text("title").Required()},
 	}}}, backend)
 	if err != nil {
 		t.Fatal(err)
@@ -87,16 +88,18 @@ func TestRestoreExactlyReplacesValuesAfterAdditiveSchemaChange(t *testing.T) {
 	var restoreHookData store.Values
 
 	config := func(additive bool) ridu.Config {
-		details := []field.Definition{field.Text("headline")}
-		postFields := []field.Definition{
-			field.Text("title", field.Required()),
-			field.Relationship("author", field.To("authors"), field.Required()),
-		}
+		details := field.Fields{field.Text("headline")}
+		postFields := field.Fields{field.Text("title").Required(), field.Relationship("author", "authors").Required()}
 		if additive {
 			details = append(details, field.Text("summary"))
-			postFields = append(postFields, field.Text("summary"))
+			postFields = append(postFields, field.Text("summary").Access(field.Access{Update: func(operation.AccessContext) (bool, error) {
+				if restoring {
+					restoreFieldAccess++
+				}
+				return true, nil
+			}}))
 		}
-		postFields = append(postFields, field.Group("details", field.Localized(), field.Fields(details...)))
+		postFields = append(postFields, field.Group("details", details).Localized())
 		post := ridu.Collection{
 			Slug: "posts", Versions: true, Fields: postFields,
 			Access: ridu.CollectionAccess{Publish: func(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
@@ -113,20 +116,13 @@ func TestRestoreExactlyReplacesValuesAfterAdditiveSchemaChange(t *testing.T) {
 				restoreHooks++
 				restoreHookData = store.CloneValues(ctx.Data)
 				_, hasSummary := ctx.Data["summary"]
-				details, _ := ctx.Data["details"].ObjectValue()
+				details, _ := ctx.Data["details"].CopyObject()
 				_, hasNestedSummary := details["summary"]
 				hookSawSnapshot = !hasSummary && !hasNestedSummary
 				return nil
 			}}},
 		}
-		if additive {
-			post.FieldAccess = map[string]ridu.FieldAccess{"summary": {Update: func(ridu.FieldAccessContext) (bool, error) {
-				if restoring {
-					restoreFieldAccess++
-				}
-				return true, nil
-			}}}
-		}
+
 		return ridu.Config{
 			Name: "Exact version replacement",
 			Localization: ridu.LocalizationConfig{DefaultLocale: "en", Locales: []ridu.Locale{
@@ -134,7 +130,7 @@ func TestRestoreExactlyReplacesValuesAfterAdditiveSchemaChange(t *testing.T) {
 			}},
 			Collections: []ridu.Collection{
 				{
-					Slug: "authors", Fields: []field.Definition{field.Text("name", field.Required())},
+					Slug: "authors", Fields: field.Fields{field.Text("name").Required()},
 					Access: ridu.CollectionAccess{Read: func(ridu.AccessContext) (ridu.AccessDecision, error) {
 						if restoring {
 							restoreReferenceReads++
@@ -204,9 +200,9 @@ func TestRestoreExactlyReplacesValuesAfterAdditiveSchemaChange(t *testing.T) {
 	if stringValue(beforeRestore.Values["summary"]) != "Current summary" {
 		t.Fatalf("ordinary patch removed omitted top-level value: %#v", beforeRestore.Values)
 	}
-	currentDetails, _ := beforeRestore.Values["details"].ObjectValue()
-	englishCurrent, _ := currentDetails["en"].ObjectValue()
-	frenchCurrent, _ := currentDetails["fr"].ObjectValue()
+	currentDetails, _ := beforeRestore.Values["details"].CopyObject()
+	englishCurrent, _ := currentDetails["en"].CopyObject()
+	frenchCurrent, _ := currentDetails["fr"].CopyObject()
 	if stringValue(englishCurrent["summary"]) != "English current summary" || stringValue(frenchCurrent["summary"]) != "French current summary" {
 		t.Fatalf("ordinary patch removed omitted localized nested values: %#v", currentDetails)
 	}
@@ -234,12 +230,12 @@ func TestRestoreExactlyReplacesValuesAfterAdditiveSchemaChange(t *testing.T) {
 	if _, exists := allLocales.Values["summary"]; exists {
 		t.Fatalf("restore retained top-level field absent from snapshot: %#v", allLocales.Values)
 	}
-	localizedDetails, valid := allLocales.Values["details"].ObjectValue()
+	localizedDetails, valid := allLocales.Values["details"].CopyObject()
 	if !valid {
 		t.Fatalf("restored localized details = %#v", allLocales.Values["details"])
 	}
 	for locale, wantHeadline := range map[string]string{"en": "English snapshot", "fr": "French snapshot"} {
-		details, valid := localizedDetails[locale].ObjectValue()
+		details, valid := localizedDetails[locale].CopyObject()
 		if !valid || stringValue(details["headline"]) != wantHeadline {
 			t.Fatalf("restored %s details = %#v", locale, localizedDetails[locale])
 		}
@@ -265,7 +261,7 @@ func TestRestoreExactlyReplacesValuesAfterAdditiveSchemaChange(t *testing.T) {
 func TestPublishChangesRequiresUpdateAndPublishAccess(t *testing.T) {
 	application, err := ridu.New(ridu.Config{Name: "publish edit access", Collections: []ridu.Collection{{
 		Slug: "posts", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true},
-		Fields: []field.Definition{field.Text("title", field.Required())},
+		Fields: field.Fields{field.Text("title").Required()},
 		Access: ridu.CollectionAccess{
 			Update:  func(ridu.AccessContext) (ridu.AccessDecision, error) { return ridu.Deny(), nil },
 			Publish: func(ridu.AccessContext) (ridu.AccessDecision, error) { return ridu.Allow(), nil },
@@ -292,8 +288,8 @@ func TestPublishChangesRequiresUpdateAndPublishAccess(t *testing.T) {
 
 func TestDraftMutationIntentCannotBypassVersionOrPublicationContracts(t *testing.T) {
 	application, err := ridu.New(ridu.Config{Name: "Draft mutation boundaries", Collections: []ridu.Collection{
-		{Slug: "pages", Fields: []field.Definition{field.Text("title", field.Required())}},
-		{Slug: "posts", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true}, Fields: []field.Definition{field.Text("title", field.Required())}, Access: ridu.CollectionAccess{
+		{Slug: "pages", Fields: field.Fields{field.Text("title").Required()}},
+		{Slug: "posts", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true}, Fields: field.Fields{field.Text("title").Required()}, Access: ridu.CollectionAccess{
 			Create: func(ridu.AccessContext) (ridu.AccessDecision, error) { return ridu.Allow(), nil },
 			Update: func(ridu.AccessContext) (ridu.AccessDecision, error) { return ridu.Deny(), nil },
 		}},
@@ -324,7 +320,7 @@ func TestPublishChangesUsesPublishAccessAndLifecycle(t *testing.T) {
 	var publishHookTitle string
 	application, err := ridu.New(ridu.Config{Name: "publish changes", Collections: []ridu.Collection{{
 		Slug: "posts", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true},
-		Fields: []field.Definition{field.Text("title", field.Required())},
+		Fields: field.Fields{field.Text("title").Required()},
 		Access: ridu.CollectionAccess{
 			Update: func(ridu.AccessContext) (ridu.AccessDecision, error) { return ridu.Allow(), nil },
 			Publish: func(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
@@ -336,7 +332,7 @@ func TestPublishChangesUsesPublishAccessAndLifecycle(t *testing.T) {
 			},
 		},
 		Hooks: ridu.CollectionHooks{BeforeChange: []ridu.Hook{func(ctx ridu.HookContext) error {
-			if ctx.Operation == ridu.OperationPublish {
+			if ctx.Operation == operation.Publish {
 				publishHooks++
 				publishHookTitle, _ = ctx.Data["title"].StringValue()
 				ctx.Data["title"] = store.String("Approved by publish hook")
@@ -368,34 +364,31 @@ func TestPublishChangesUsesPublishAccessAndLifecycle(t *testing.T) {
 }
 
 func TestPublishAndUnpublishRunConfiguredFieldLifecycle(t *testing.T) {
-	seen := make(map[string][]ridu.Operation)
-	record := func(phase string) ridu.Hook {
-		return func(ctx ridu.HookContext) error {
+	seen := make(map[string][]operation.Kind)
+	record := func(phase string) field.Observer[string] {
+		return func(ctx operation.EventContext, _ operation.Value[string]) error {
 			seen[phase] = append(seen[phase], ctx.Operation)
 			return nil
 		}
 	}
-	mutateBeforeChange := func(ctx ridu.HookContext) error {
-		seen["beforeChange"] = append(seen["beforeChange"], ctx.Operation)
-		if ctx.Operation == ridu.OperationPublish {
-			ctx.Data["title"] = store.String("Published by hook")
-		} else {
-			ctx.Data["title"] = store.String("Unpublished by hook")
+	recordWrite := func(phase string) field.Transform[string] {
+		return func(ctx operation.WriteContext, _ operation.Value[string]) (operation.Change[string], error) {
+			seen[phase] = append(seen[phase], ctx.Operation)
+			return operation.Keep[string](), nil
 		}
-		return nil
 	}
-	application, err := ridu.New(ridu.Config{Name: "status field hooks", Collections: []ridu.Collection{{
-		Slug: "posts", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true},
-		Fields: []field.Definition{field.Text("title", field.Required())},
-		FieldHooks: map[string]ridu.CollectionHooks{"title": {
-			BeforeValidate:  []ridu.Hook{record("beforeValidate")},
-			BeforeChange:    []ridu.Hook{mutateBeforeChange},
-			BeforeOperation: []ridu.Hook{record("beforeOperation")},
-			AfterChange:     []ridu.Hook{record("afterChange")},
-			AfterOperation:  []ridu.Hook{record("afterOperation")},
-			AfterCommit:     []ridu.Hook{record("afterCommit")},
-		}},
-	}}}, teststore.New())
+	title := field.Text("title").Required().Hooks(field.Hooks[string]{BeforeValidate: []field.RawTransform{func(ctx operation.WriteContext, _ operation.Value[store.Value]) (operation.Change[store.Value], error) {
+		seen["beforeValidate"] = append(seen["beforeValidate"], ctx.Operation)
+		return operation.Keep[store.Value](), nil
+	}}, BeforeChange: []field.Transform[string]{func(ctx operation.WriteContext, _ operation.Value[string]) (operation.Change[string], error) {
+		seen["beforeChange"] = append(seen["beforeChange"], ctx.Operation)
+		value := "Unpublished by hook"
+		if ctx.Operation == operation.Publish {
+			value = "Published by hook"
+		}
+		return operation.Replace(operation.Present(value)), nil
+	}}, BeforeOperation: []field.Transform[string]{recordWrite("beforeOperation")}, AfterChange: []field.Observer[string]{record("afterChange")}, AfterOperation: []field.Observer[string]{record("afterOperation")}, AfterCommit: []field.Observer[string]{record("afterCommit")}})
+	application, err := ridu.New(ridu.Config{Name: "Status field hooks", Collections: []ridu.Collection{{Slug: "posts", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true}, Fields: field.Fields{title}}}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -425,8 +418,8 @@ func TestPublishAndUnpublishRunConfiguredFieldLifecycle(t *testing.T) {
 	if len(versions) != 3 || stringValue(versions[0].Snapshot.Values["title"]) != "Unpublished by hook" || stringValue(versions[1].Snapshot.Values["title"]) != "Published by hook" {
 		t.Fatalf("status hook versions = %#v", versions)
 	}
-	statusWant := []ridu.Operation{ridu.OperationPublish, ridu.OperationUnpublish}
-	readWant := []ridu.Operation{ridu.OperationPublish, ridu.OperationUnpublish, ridu.OperationReadVersions}
+	statusWant := []operation.Kind{operation.Publish, operation.Unpublish}
+	readWant := []operation.Kind{operation.Publish, operation.Unpublish, operation.ReadVersions}
 	for _, phase := range []string{"beforeValidate", "beforeOperation", "afterOperation", "afterCommit"} {
 		if !slices.Equal(seen[phase], readWant) {
 			t.Errorf("%s operations = %v, want %v", phase, seen[phase], readWant)
@@ -441,10 +434,8 @@ func TestPublishAndUnpublishRunConfiguredFieldLifecycle(t *testing.T) {
 
 func TestMutationPopulationNeverEntersVersionSnapshots(t *testing.T) {
 	application, err := ridu.New(ridu.Config{Name: "Canonical version snapshots", Collections: []ridu.Collection{
-		{Slug: "categories", Fields: []field.Definition{field.Text("name", field.Required())}},
-		{Slug: "posts", Versions: true, Fields: []field.Definition{
-			field.Text("title", field.Required()), field.Text("body"), field.Relationship("category", field.To("categories")),
-		}},
+		{Slug: "categories", Fields: field.Fields{field.Text("name").Required()}},
+		{Slug: "posts", Versions: true, Fields: field.Fields{field.Text("title").Required(), field.Text("body"), field.Relationship("category", "categories")}},
 	}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -460,7 +451,7 @@ func TestMutationPopulationNeverEntersVersionSnapshots(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, populated := created.Values["category"].DocumentValue(); !populated {
+	if _, populated := created.Values["category"].CopyDocument(); !populated {
 		t.Fatalf("mutation response was not populated: %#v", created.Values["category"])
 	}
 	versions, err := application.Local().Versions(context.Background(), "posts", created.ID, nil)
@@ -491,24 +482,27 @@ func TestVersionReadsRunComputedAndAfterReadLifecycleBeforeRedaction(t *testing.
 	var collectionReads, fieldReads int
 	application, err := ridu.New(ridu.Config{Name: "Version read lifecycle", Collections: []ridu.Collection{{
 		Slug: "posts", Versions: true,
-		Fields: []field.Definition{
-			field.Text("title", field.Required()),
-			field.Text("secret"),
-			field.Virtual("summary", field.ValueString),
-		},
-		Computed: map[string]ridu.Computed{"summary": func(ridu.ComputedContext) (store.Value, error) {
-			return store.String("computed"), nil
-		}},
-		FieldAccess: map[string]ridu.FieldAccess{"secret": {Read: func(ridu.FieldAccessContext) (bool, error) { return false, nil }}},
+		Fields: field.Fields{field.Text("title").Required().ReadHooks(field.ReadHooks[string]{AfterRead: []field.OutputTransform[string]{func(operation.ReadContext, operation.Value[string]) (operation.Change[string], error) {
+			fieldReads++
+			return operation.Keep[string](), nil
+		}}}), field.Text("secret").Access(field.Access{Read: func(operation.AccessContext,
+
+		) (bool, error) {
+			return false, nil
+		}}), field.Virtual("summary", field.ValueString, func(operation.ReadContext,
+
+		) (operation.Value[store.
+			Value],
+
+			error) {
+			return operation.Present(store.String("computed")), nil
+		})},
+
 		Hooks: ridu.CollectionHooks{AfterRead: []ridu.Hook{func(ctx ridu.HookContext) error {
 			collectionReads++
 			ctx.Document.Values["marker"] = store.String("after-read")
 			return nil
 		}}},
-		FieldHooks: map[string]ridu.CollectionHooks{"title": {AfterRead: []ridu.Hook{func(ridu.HookContext) error {
-			fieldReads++
-			return nil
-		}}}},
 	}}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -556,7 +550,7 @@ func TestVersionHistoryChangesOnlyAfterMutations(t *testing.T) {
 	application, err := ridu.New(ridu.Config{Name: "read-only versions", Collections: []ridu.Collection{{
 		Slug: "posts", Versions: true,
 		VersionConfig: ridu.VersionConfig{Drafts: true, MaxPerDocument: 10},
-		Fields:        []field.Definition{field.Text("title", field.Required())},
+		Fields:        field.Fields{field.Text("title").Required()},
 	}}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -587,7 +581,7 @@ func TestVersionHistoryChangesOnlyAfterMutations(t *testing.T) {
 func TestRestoreAsDraftRejectsVersionedCollectionWithoutDrafts(t *testing.T) {
 	application, err := ridu.New(ridu.Config{Name: "versions without drafts", Collections: []ridu.Collection{{
 		Slug: "posts", Versions: true,
-		Fields: []field.Definition{field.Text("title", field.Required())},
+		Fields: field.Fields{field.Text("title").Required()},
 	}}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -604,10 +598,11 @@ func TestRestoreAsDraftRejectsVersionedCollectionWithoutDrafts(t *testing.T) {
 func TestVersionHistoryRedactsUnreadableFields(t *testing.T) {
 	application, err := ridu.New(ridu.Config{Name: "redacted versions", Collections: []ridu.Collection{{
 		Slug: "posts", Versions: true,
-		Fields: []field.Definition{field.Text("title", field.Required()), field.Text("secret")},
-		FieldAccess: map[string]ridu.FieldAccess{
-			"secret": {Read: func(ridu.FieldAccessContext) (bool, error) { return false, nil }},
-		},
+		Fields: field.Fields{field.Text("title").Required(), field.Text("secret").Access(field.Access{Read: func(operation.AccessContext,
+
+		) (bool, error) {
+			return false, nil
+		}})},
 	}}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -629,14 +624,14 @@ func TestVersionHistoryRedactsUnreadableFields(t *testing.T) {
 }
 
 func TestVersionHistoryUsesDistinctAccessRule(t *testing.T) {
-	var operation ridu.Operation
+	var operationKind operation.Kind
 	application, err := ridu.New(ridu.Config{Name: "version access", Collections: []ridu.Collection{{
 		Slug: "posts", Versions: true,
-		Fields: []field.Definition{field.Text("title", field.Required())},
+		Fields: field.Fields{field.Text("title").Required()},
 		Access: ridu.CollectionAccess{
 			Read: func(ridu.AccessContext) (ridu.AccessDecision, error) { return ridu.Allow(), nil },
 			ReadVersions: func(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
-				operation = ctx.Operation
+				operationKind = ctx.Operation
 				return ridu.Deny(), nil
 			},
 		},
@@ -657,8 +652,8 @@ func TestVersionHistoryUsesDistinctAccessRule(t *testing.T) {
 	if _, err := application.Local().Restore(context.Background(), "posts", document.ID, 1, document.Revision, nil); !operationCode(err, "access_denied") {
 		t.Fatalf("version restore without readVersions access = %v", err)
 	}
-	if operation != ridu.OperationReadVersions {
-		t.Fatalf("version access operation = %q", operation)
+	if operationKind != operation.ReadVersions {
+		t.Fatalf("version access operation = %q", operationKind)
 	}
 }
 
@@ -676,7 +671,7 @@ func TestVersionHistoryAppliesFilteredAccessToEverySnapshot(t *testing.T) {
 	application, err := ridu.New(ridu.Config{Name: "version snapshot access", Collections: []ridu.Collection{{
 		Slug: "posts", Versions: true,
 		VersionConfig: ridu.VersionConfig{MaxPerDocument: 10},
-		Fields:        []field.Definition{field.Text("title"), field.Text("owner", field.Required())},
+		Fields:        field.Fields{field.Text("title"), field.Text("owner").Required()},
 		Access: ridu.CollectionAccess{
 			Create:       func(ridu.AccessContext) (ridu.AccessDecision, error) { return ridu.Allow(), nil },
 			Read:         owned,
@@ -744,11 +739,11 @@ func TestVersionHistoryAppliesFilteredAccessToEverySnapshot(t *testing.T) {
 func TestScheduledPublishUsesDurableJobBoundary(t *testing.T) {
 	backend := teststore.New()
 	application, err := ridu.New(ridu.Config{Name: "scheduled", Admin: ridu.AdminConfig{User: "users"}, Collections: []ridu.Collection{
-		{Slug: "users", Auth: true, Fields: []field.Definition{field.Text("email", field.Required(), field.Unique())}},
+		{Slug: "users", Auth: true, Fields: field.Fields{field.Text("email").Required().Unique()}},
 		{
 			Slug: "books", Versions: true,
 			VersionConfig: ridu.VersionConfig{Drafts: true},
-			Fields:        []field.Definition{field.Text("title", field.Required())},
+			Fields:        field.Fields{field.Text("title").Required()},
 		},
 	}}, backend)
 	if err != nil {
@@ -782,11 +777,11 @@ func TestScheduledPublishUsesDurableJobBoundary(t *testing.T) {
 func TestScheduledPublishTerminalFailureRemainsActionableAndDismissible(t *testing.T) {
 	backend := teststore.New()
 	application, err := ridu.New(ridu.Config{Name: "scheduled failure", Admin: ridu.AdminConfig{User: "users"}, Collections: []ridu.Collection{
-		{Slug: "users", Auth: true, Fields: []field.Definition{field.Text("email", field.Required(), field.Unique())}},
+		{Slug: "users", Auth: true, Fields: field.Fields{field.Text("email").Required().Unique()}},
 		{
 			Slug: "books", Versions: true,
 			VersionConfig: ridu.VersionConfig{Drafts: true},
-			Fields:        []field.Definition{field.Text("title", field.Required())},
+			Fields:        field.Fields{field.Text("title").Required()},
 		},
 	}}, backend)
 	if err != nil {
@@ -846,8 +841,8 @@ func TestScheduledPublishRehydratesRequestingActor(t *testing.T) {
 		Name:  "scheduled actor",
 		Admin: ridu.AdminConfig{User: "users"},
 		Collections: []ridu.Collection{
-			{Slug: "users", Auth: true, Fields: []field.Definition{field.Text("email", field.Required(), field.Unique()), field.Text("role", field.Required())}},
-			{Slug: "books", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true}, Access: ridu.CollectionAccess{Update: publishersOnly}, Fields: []field.Definition{field.Text("title", field.Required())}},
+			{Slug: "users", Auth: true, Fields: field.Fields{field.Text("email").Required().Unique(), field.Text("role").Required()}},
+			{Slug: "books", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true}, Access: ridu.CollectionAccess{Update: publishersOnly}, Fields: field.Fields{field.Text("title").Required()}},
 		},
 	}, backend)
 	if err != nil {
@@ -893,9 +888,9 @@ func TestScheduledPublishRechecksExactAuthCollectionAtExecution(t *testing.T) {
 	application, err := ridu.New(ridu.Config{
 		Name: "scheduled exact identity", Admin: ridu.AdminConfig{User: "users"},
 		Collections: []ridu.Collection{
-			{Slug: "users", Auth: true, Fields: []field.Definition{field.Text("email", field.Required(), field.Unique()), field.Text("role", field.Required())}},
-			{Slug: "staff", Auth: true, Fields: []field.Definition{field.Text("email", field.Required(), field.Unique()), field.Text("role", field.Required())}},
-			{Slug: "books", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true}, Access: ridu.CollectionAccess{Update: publishersOnly}, Fields: []field.Definition{field.Text("title", field.Required())}},
+			{Slug: "users", Auth: true, Fields: field.Fields{field.Text("email").Required().Unique(), field.Text("role").Required()}},
+			{Slug: "staff", Auth: true, Fields: field.Fields{field.Text("email").Required().Unique(), field.Text("role").Required()}},
+			{Slug: "books", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true}, Access: ridu.CollectionAccess{Update: publishersOnly}, Fields: field.Fields{field.Text("title").Required()}},
 		},
 	}, backend)
 	if err != nil {

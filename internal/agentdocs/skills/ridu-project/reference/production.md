@@ -51,9 +51,10 @@ npm run ridu -- build
 
 `ridu build` resolves config, updates generated contracts, compiles the Svelte admin, embeds its
 assets and the exact ordered migration filename/digest fingerprint, and writes the Go binary to
-`dist/`. Build with the Go and Bun versions listed in [Releases and compatibility](https://riducms.com/docs/releases/)
-and committed locks. The runtime
-image needs the binary, certificates, and application environment; it does not need source,
+`dist/`. Build with the supported Go and Node.js versions listed in
+[Releases and compatibility](https://riducms.com/docs/releases/), the package manager recorded in `ridu.toml`, and the
+committed lockfiles. The runtime image needs the binary, certificates, and application environment;
+it does not need source,
 `node_modules`, Bun, or Node. A direct `go build` omits the fingerprint and therefore fails closed
 in ordinary production startup with an official database adapter.
 
@@ -193,11 +194,11 @@ destructive and maintenance admission, stable safety codes, and immutable artifa
 
 ## Liveness, readiness, and drain {#health}
 
-| Signal                | Meaning                                                                                                                                                                                                   | Use                                                                            |
-| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `/healthz`            | The process is alive.                                                                                                                                                                                     | Restart policy. It does not confirm a matching schema or reachable dependency. |
-| `/readyz`             | The process is not draining and its migration ledger/manifest, document store, upload backend, and custom checks pass within the readiness timeout; MongoDB also verifies the exact Ridu-managed indexes. | Load-balancer traffic admission.                                               |
-| `ridu migrate status` | Immutable ledger, phase/step completion, and managed database schema agree with committed history.                                                                                                        | Explicit operator deployment/drift report; readiness does not replace it.      |
+| Signal                | Meaning                                                                                                                                                                                                                                                         | Use                                                                            |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `/healthz`            | The process is alive.                                                                                                                                                                                                                                           | Restart policy. It does not confirm a matching schema or reachable dependency. |
+| `/readyz`             | The process is not draining and its migration ledger/manifest, document store, upload backend, and custom checks pass within the readiness timeout; PostgreSQL also verifies the expected physical schema, and MongoDB verifies the exact Ridu-managed indexes. | Load-balancer traffic admission.                                               |
+| `ridu migrate status` | Immutable ledger, phase/step completion, and managed database schema agree with committed history.                                                                                                                                                              | Explicit operator deployment/drift report; readiness does not replace it.      |
 
 On `SIGTERM` or interrupt, Ridu marks the instance draining so readiness fails, waits the configured
 drain delay, performs bounded HTTP shutdown, cancels request contexts, drains cooperative workers,
@@ -229,7 +230,7 @@ callbacks are structured observations, not a tamper-aware durable audit log.
 At minimum, alert on readiness failures, login throttle/recovery anomalies, migration and physical
 drift, exhausted database pools, repeated task retries or terminal failures, upload reconciliation
 deltas, elevated conflicts, and sustained latency or error-rate changes. Track RSS and connection
-use per replica; the [performance baseline](https://riducms.com/docs/performance/) is not capacity planning for your
+use per replica; the [performance baseline](https://riducms.com/docs/performance/measurement/#headline) is not capacity planning for your
 schema.
 
 ## Back up and test restoration {#backup}

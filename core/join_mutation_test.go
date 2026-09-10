@@ -8,6 +8,7 @@ import (
 	ridu "github.com/riducms/ridu/core"
 	"github.com/riducms/ridu/field"
 	"github.com/riducms/ridu/internal/teststore"
+	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/store"
 )
 
@@ -16,20 +17,14 @@ func TestJoinMutationUsesTargetPipelineAndRollsBackEveryDelta(t *testing.T) {
 	var rejectedID string
 	application, err := ridu.New(ridu.Config{Name: "Atomic inverse joins", Collections: []ridu.Collection{
 		{
-			Slug: "categories",
-			Fields: []field.Definition{
-				field.Text("name", field.Required()),
-				field.Join("posts", "posts", "category", field.JoinLimit(1)),
-			},
+			Slug:   "categories",
+			Fields: field.Fields{field.Text("name").Required(), field.Join("posts", "posts", "category").Limit(1)},
 		},
 		{
 			Slug: "posts", Versions: true,
-			Fields: []field.Definition{
-				field.Text("title", field.Required()),
-				field.Relationship("category", field.To("categories")),
-			},
+			Fields: field.Fields{field.Text("title").Required(), field.Relationship("category", "categories")},
 			Hooks: ridu.CollectionHooks{BeforeOperation: []ridu.Hook{func(hook ridu.HookContext) error {
-				if hook.Operation == ridu.OperationPublish && hook.Original != nil && hook.Original.ID == rejectedID {
+				if hook.Operation == operation.Publish && hook.Original != nil && hook.Original.ID == rejectedID {
 					return errors.New("target rejected the relation change")
 				}
 				return nil
@@ -89,20 +84,14 @@ func TestJoinMutationRejectsAReparentedTarget(t *testing.T) {
 	reparented := false
 	application, err := ridu.New(ridu.Config{Name: "Concurrent inverse join", Collections: []ridu.Collection{
 		{
-			Slug: "categories",
-			Fields: []field.Definition{
-				field.Text("name", field.Required()),
-				field.Join("posts", "posts", "category"),
-			},
+			Slug:   "categories",
+			Fields: field.Fields{field.Text("name").Required(), field.Join("posts", "posts", "category")},
 		},
 		{
-			Slug: "posts",
-			Fields: []field.Definition{
-				field.Text("title", field.Required()),
-				field.Relationship("category", field.To("categories")),
-			},
+			Slug:   "posts",
+			Fields: field.Fields{field.Text("title").Required(), field.Relationship("category", "categories")},
 			Hooks: ridu.CollectionHooks{BeforeOperation: []ridu.Hook{func(hook ridu.HookContext) error {
-				if hook.Operation != ridu.OperationUpdate || hook.Original == nil || hook.Original.ID != targetID || reparented {
+				if hook.Operation != operation.Update || hook.Original == nil || hook.Original.ID != targetID || reparented {
 					return nil
 				}
 				reparented = true
@@ -142,20 +131,15 @@ func TestJoinMutationEnforcesSourceFieldAndTargetUpdateAccess(t *testing.T) {
 	application, err := ridu.New(ridu.Config{Name: "Authorized inverse joins", Collections: []ridu.Collection{
 		{
 			Slug: "categories",
-			Fields: []field.Definition{
-				field.Text("name", field.Required()),
-				field.Join("posts", "posts", "category"),
-			},
-			FieldAccess: map[string]ridu.FieldAccess{"posts": {Read: func(fieldContext ridu.FieldAccessContext) (bool, error) {
-				return joinReadable && fieldContext.Value.Kind() == store.ValueList, nil
-			}}},
+			Fields: field.Fields{field.Text("name").Required(), field.Join("posts", "posts", "category").Access(field.Access{Read: func(fieldContext operation.AccessContext,
+
+			) (bool, error) {
+				return joinReadable && fieldContext.Siblings.Get("posts").Kind() == store.ValueList, nil
+			}})},
 		},
 		{
-			Slug: "posts",
-			Fields: []field.Definition{
-				field.Text("title", field.Required()),
-				field.Relationship("category", field.To("categories")),
-			},
+			Slug:   "posts",
+			Fields: field.Fields{field.Text("title").Required(), field.Relationship("category", "categories")},
 			Access: ridu.CollectionAccess{Update: func(ridu.AccessContext) (ridu.AccessDecision, error) {
 				if targetWritable {
 					return ridu.Allow(), nil
@@ -207,23 +191,18 @@ func TestJoinMutationGatesOnInitialResolvedFieldVisibility(t *testing.T) {
 	application, err := ridu.New(ridu.Config{Name: "Content-sensitive inverse join access", Collections: []ridu.Collection{
 		{
 			Slug: "categories",
-			Fields: []field.Definition{
-				field.Text("name", field.Required()),
-				field.Join("posts", "posts", "category"),
-			},
-			FieldAccess: map[string]ridu.FieldAccess{"posts": {Read: func(fieldContext ridu.FieldAccessContext) (bool, error) {
-				items, list := fieldContext.Value.Values()
+			Fields: field.Fields{field.Text("name").Required(), field.Join("posts", "posts", "category").Access(field.Access{Read: func(fieldContext operation.AccessContext,
+
+			) (bool, error) {
+				items, list := fieldContext.Siblings.Get("posts").CopyList()
 				return list && len(items) > 0, nil
-			}}},
+			}})},
 		},
 		{
-			Slug: "posts",
-			Fields: []field.Definition{
-				field.Text("title", field.Required()),
-				field.Relationship("category", field.To("categories")),
-			},
+			Slug:   "posts",
+			Fields: field.Fields{field.Text("title").Required(), field.Relationship("category", "categories")},
 			Hooks: ridu.CollectionHooks{BeforeOperation: []ridu.Hook{func(hook ridu.HookContext) error {
-				if hook.Operation == ridu.OperationUpdate {
+				if hook.Operation == operation.Update {
 					targetHooks++
 				}
 				return nil
@@ -278,29 +257,27 @@ func TestJoinMutationCountsFinalMembershipAfterHooks(t *testing.T) {
 	rewriteResponse := false
 	redactInverse := false
 	application, err := ridu.New(ridu.Config{Name: "Hook-adjusted inverse joins", Collections: []ridu.Collection{
-		{Slug: "categories", Fields: []field.Definition{
-			field.Text("name", field.Required()),
-			field.Join("posts", "posts", "category"),
-		}},
-		{Slug: "posts", Fields: []field.Definition{
-			field.Text("title", field.Required()),
-			field.Relationship("category", field.To("categories")),
-		}, FieldAccess: map[string]ridu.FieldAccess{"category": {Read: func(ridu.FieldAccessContext) (bool, error) {
+		{Slug: "categories", Fields: field.Fields{field.Text("name").Required(), field.Join("posts", "posts", "category")}},
+		{Slug: "posts", Fields: field.Fields{field.Text("title").Required(), field.Relationship("category", "categories").Access(field.Access{Read: func(operation.AccessContext,
+
+		) (bool, error) {
 			return !redactInverse, nil
-		}}}, Hooks: ridu.CollectionHooks{
-			BeforeOperation: []ridu.Hook{func(hook ridu.HookContext) error {
-				if hook.Operation == ridu.OperationUpdate && rewriteBefore {
-					hook.Data["category"] = store.Null()
-				}
-				return nil
+		}})},
+
+			Hooks: ridu.CollectionHooks{
+				BeforeOperation: []ridu.Hook{func(hook ridu.HookContext) error {
+					if hook.Operation == operation.Update && rewriteBefore {
+						hook.Data["category"] = store.Null()
+					}
+					return nil
+				}},
+				AfterChange: []ridu.Hook{func(hook ridu.HookContext) error {
+					if hook.Operation == operation.Update && rewriteResponse && hook.Document != nil {
+						hook.Document.Values["category"] = store.Null()
+					}
+					return nil
+				}},
 			}},
-			AfterChange: []ridu.Hook{func(hook ridu.HookContext) error {
-				if hook.Operation == ridu.OperationUpdate && rewriteResponse && hook.Document != nil {
-					hook.Document.Values["category"] = store.Null()
-				}
-				return nil
-			}},
-		}},
 	}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -332,7 +309,7 @@ func TestJoinMutationCountsFinalMembershipAfterHooks(t *testing.T) {
 	if result.Added != 1 || result.Removed != 0 {
 		t.Fatalf("persisted counts under response redaction = added %d, removed %d", result.Added, result.Removed)
 	}
-	items, list := result.Document.Values["posts"].Values()
+	items, list := result.Document.Values["posts"].CopyList()
 	if !list || len(items) != 1 {
 		t.Fatalf("authoritative source join = %#v", result.Document.Values["posts"])
 	}

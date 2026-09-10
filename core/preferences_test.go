@@ -11,6 +11,7 @@ import (
 	operationengine "github.com/riducms/ridu/internal/operation"
 	"github.com/riducms/ridu/internal/teststore"
 	"github.com/riducms/ridu/store"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func TestPreferencesArePersistentAndScopedToAdminUsers(t *testing.T) {
@@ -19,7 +20,8 @@ func TestPreferencesArePersistentAndScopedToAdminUsers(t *testing.T) {
 		Admin: ridu.AdminConfig{User: "users"},
 		Collections: []ridu.Collection{{
 			Slug: "users", Auth: true,
-			Fields: []field.Definition{field.Text("email", field.Required(), field.Unique())},
+			AuthConfig: ridu.AuthConfig{Password: ridu.PasswordPolicy{BcryptCost: bcrypt.MinCost}},
+			Fields:     field.Fields{field.Text("email").Required().Unique()},
 		}},
 	}, teststore.New())
 	if err != nil {
@@ -76,7 +78,7 @@ func TestPreferencesRejectAnonymousInvalidKeysAndInvalidJSON(t *testing.T) {
 	application, err := ridu.New(ridu.Config{
 		Name:        "Preferences",
 		Admin:       ridu.AdminConfig{User: "users"},
-		Collections: []ridu.Collection{{Slug: "users", Auth: true, Fields: []field.Definition{field.Text("email", field.Required(), field.Unique())}}},
+		Collections: []ridu.Collection{{Slug: "users", Auth: true, Fields: field.Fields{field.Text("email").Required().Unique()}}},
 	}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -97,8 +99,8 @@ func TestPreferencesUseExactAuthCollectionForSameIDActors(t *testing.T) {
 	application, err := ridu.New(ridu.Config{
 		Name: "Exact preference identity", Admin: ridu.AdminConfig{User: "users"},
 		Collections: []ridu.Collection{
-			{Slug: "users", Auth: true, Fields: []field.Definition{field.Text("email", field.Required(), field.Unique())}},
-			{Slug: "staff", Auth: true, Fields: []field.Definition{field.Text("email", field.Required(), field.Unique())}},
+			{Slug: "users", Auth: true, Fields: field.Fields{field.Text("email").Required().Unique()}},
+			{Slug: "staff", Auth: true, Fields: field.Fields{field.Text("email").Required().Unique()}},
 		},
 	}, teststore.New())
 	if err != nil {

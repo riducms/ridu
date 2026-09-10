@@ -34,6 +34,12 @@ type ValidationIssue struct {
 	Code    string `json:"code"`
 	Path    string `json:"path"`
 	Message string `json:"message"`
+	// Target is an opaque schema/stable-occurrence correlation token for structured field issues.
+	Target       string            `json:"target,omitempty"`
+	FieldID      schema.StableID   `json:"fieldId,omitempty"`
+	CollectionID schema.StableID   `json:"collectionId,omitempty"`
+	GlobalID     schema.StableID   `json:"globalId,omitempty"`
+	Locale       schema.LocaleCode `json:"locale,omitempty"`
 }
 
 // ErrorPayload is the stable structured error carried by ErrorEnvelope.

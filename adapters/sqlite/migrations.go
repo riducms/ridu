@@ -13,7 +13,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/riducms/ridu/internal/embedded"
 	"github.com/riducms/ridu/internal/migrationartifact"
+	"github.com/riducms/ridu/internal/primitivefield"
 	ridumigration "github.com/riducms/ridu/migration"
 	"github.com/riducms/ridu/schema"
 )
@@ -528,6 +530,12 @@ func validateSQLitePluginTransition(ctx context.Context, before *schema.Manifest
 }
 
 func validateSQLiteAdditiveTransition(before, after schema.Snapshot) error {
+	return validateSQLiteAdditiveSnapshotTransition(sqliteWithoutPresentation(before), sqliteWithoutPresentation(after))
+}
+
+// validateSQLiteAdditiveSnapshotTransition also preserves the original planner
+// comparison for reconstructing artifacts created before presentation projection.
+func validateSQLiteAdditiveSnapshotTransition(before, after schema.Snapshot) error {
 	// Caller-supplied ID admission is an operation-layer policy flag. It has no
 	// SQLite storage representation, so changing only this setting must not
 	// manufacture a physical migration incompatibility.
@@ -612,26 +620,25 @@ func validateSQLiteAdditiveFields(location string, before, after []schema.Field)
 		if !previous.Unique && comparison.Unique {
 			comparison.Unique = false
 		}
-		if previous.Nested != nil && comparison.Nested != nil {
-			nested := *comparison.Nested
-			nested.Fields = previous.Nested.Fields
-			comparison.Nested = &nested
+		var embeddedErr error
+		comparison, embeddedErr = embedded.CompareEvolution(previous, comparison, validateSQLiteAdditiveBlockTypes)
+		if embeddedErr != nil {
+			return embeddedErr
 		}
-		if previous.Blocks != nil && comparison.Blocks != nil {
-			blocks := *comparison.Blocks
-			blocks.Types = previous.Blocks.Types
-			comparison.Blocks = &blocks
+
+		if previous.Type != comparison.Type && (primitivefield.IsList(previous) || primitivefield.IsList(comparison)) {
+			return fmt.Errorf("field %q changes value shape from %q to %q; add a new field and migrate existing values explicitly, or register a supported compiled data transform; automatic list conversion is not available", previous.Path.String(), previous.Type, comparison.Type)
 		}
-		if !reflect.DeepEqual(previous, comparison) {
+		if !reflect.DeepEqual(sqliteFieldComparisonMetadata(previous), sqliteFieldComparisonMetadata(comparison)) {
 			return fmt.Errorf("SQLite artifact planner supports only additive transitions; field %q in %s changed", previous.ID, location)
 		}
 		if previous.Nested != nil {
-			if err := validateSQLiteAdditiveFields(fmt.Sprintf("field %q in %s", previous.ID, location), previous.Nested.Fields, current.Nested.Fields); err != nil {
+			if err := validateSQLiteAdditiveFields(fmt.Sprintf("field %q in %s", previous.ID, location), previous.Nested.ResolvedFields(), current.Nested.ResolvedFields()); err != nil {
 				return err
 			}
 		}
 		if previous.Blocks != nil {
-			if err := validateSQLiteAdditiveBlockTypes(fmt.Sprintf("field %q in %s", previous.ID, location), previous.Blocks.Types, current.Blocks.Types); err != nil {
+			if err := validateSQLiteAdditiveBlockTypes(fmt.Sprintf("field %q in %s", previous.ID, location), previous.Blocks.ResolvedTypes(), current.Blocks.ResolvedTypes()); err != nil {
 				return err
 			}
 		}
@@ -648,25 +655,37 @@ func validateSQLiteAdditiveFields(location string, before, after []schema.Field)
 	return nil
 }
 
+// Child evolution is checked separately. Compare only container metadata here,
+// excluding lazy placement bindings and their definition caches.
+func sqliteFieldComparisonMetadata(value schema.Field) schema.Field {
+	if n := value.Nested; n != nil {
+		value.Nested = &schema.NestedField{MinRows: n.MinRows, MaxRows: n.MaxRows, RowLabel: n.RowLabel, RowLabelComponent: n.RowLabelComponent, RowLabels: n.RowLabels}
+	}
+	if b := value.Blocks; b != nil {
+		value.Blocks = &schema.BlocksField{MinRows: b.MinRows, MaxRows: b.MaxRows}
+	}
+	return value
+}
+
 func validateSQLiteAdditiveBlockTypes(location string, before, after []schema.BlockType) error {
 	afterByKey := make(map[string]schema.BlockType, len(after))
 	for _, block := range after {
-		afterByKey[block.Key] = block
+		afterByKey[block.Slug] = block
 	}
 	for _, previous := range before {
-		current, exists := afterByKey[previous.Key]
+		current, exists := afterByKey[previous.Slug]
 		if !exists {
-			return fmt.Errorf("SQLite artifact planner supports only additive transitions; block type %q in %s was removed", previous.Key, location)
+			return fmt.Errorf("SQLite artifact planner supports only additive transitions; block type %q in %s was removed", previous.Slug, location)
 		}
-		comparison := current
-		comparison.Fields = previous.Fields
-		if !reflect.DeepEqual(previous, comparison) {
-			return fmt.Errorf("SQLite artifact planner supports only additive transitions; block type %q in %s changed", previous.Key, location)
+		// Children are checked below; placement caches and generated type names
+		// are not part of the stored block contract.
+		if !reflect.DeepEqual(previous.Labels, current.Labels) {
+			return fmt.Errorf("SQLite artifact planner supports only additive transitions; block type %q in %s changed", previous.Slug, location)
 		}
-		if err := validateSQLiteAdditiveFields(fmt.Sprintf("block type %q in %s", previous.Key, location), previous.Fields, current.Fields); err != nil {
+		if err := validateSQLiteAdditiveFields(fmt.Sprintf("block type %q in %s", previous.Slug, location), previous.ResolvedFields(), current.ResolvedFields()); err != nil {
 			return err
 		}
-		delete(afterByKey, previous.Key)
+		delete(afterByKey, previous.Slug)
 	}
 	return nil
 }
@@ -854,7 +873,7 @@ func preflightSQLiteArtifactsWithResolver(ctx context.Context, files []migration
 		if err != nil {
 			return err
 		}
-		expected, err := buildSQLiteArtifactWithDataTransformDescriptors(ctx, file.Artifact.Name, before, after, previousPlannerVersion, contract, descriptors, sqliteArtifactAllowsTransformedSchema(file.Artifact))
+		expected, err := rebuildSQLiteArtifactWithDataTransformDescriptors(ctx, file.Artifact.Name, before, after, previousPlannerVersion, contract, descriptors, sqliteArtifactAllowsTransformedSchema(file.Artifact))
 		if err != nil {
 			return fmt.Errorf("validate SQLite migration %s against planner: %w", file.Name, err)
 		}
@@ -884,6 +903,7 @@ func (backend *Store) applySQLiteArtifact(ctx context.Context, connection *sql.C
 		}
 		before = &manifest
 	}
+	presentationOnly := sqlitePresentationOnlyArtifact(file.Artifact, before, after)
 	var pluginBoundary *sqlitePluginSchemaBoundary
 	requirePluginBoundary := func() (*sqlitePluginSchemaBoundary, error) {
 		if pluginBoundary != nil {
@@ -950,14 +970,16 @@ func (backend *Store) applySQLiteArtifact(ctx context.Context, connection *sql.C
 				if err := boundary.validateFinal(ctx, connection); err != nil {
 					return fmt.Errorf("apply SQLite migration %s step %s (%s): %w", file.Name, step.ID, step.Name, err)
 				}
-				if err := contract.reconcileIndexes(ctx, connection, after); err != nil {
-					return fmt.Errorf("apply SQLite migration %s step %s (%s): %w", file.Name, step.ID, step.Name, err)
-				}
-				if err := rebuildDocumentReferences(ctx, connection, after); err != nil {
-					return fmt.Errorf("apply SQLite migration %s step %s (%s): rebuild references: %w", file.Name, step.ID, step.Name, err)
-				}
-				if err := contract.rebuildUniqueness(ctx, connection, after); err != nil {
-					return fmt.Errorf("apply SQLite migration %s step %s (%s): rebuild uniqueness: %w", file.Name, step.ID, step.Name, err)
+				if !presentationOnly {
+					if err := contract.reconcileIndexes(ctx, connection, after); err != nil {
+						return fmt.Errorf("apply SQLite migration %s step %s (%s): %w", file.Name, step.ID, step.Name, err)
+					}
+					if err := rebuildDocumentReferences(ctx, connection, after); err != nil {
+						return fmt.Errorf("apply SQLite migration %s step %s (%s): rebuild references: %w", file.Name, step.ID, step.Name, err)
+					}
+					if err := contract.rebuildUniqueness(ctx, connection, after); err != nil {
+						return fmt.Errorf("apply SQLite migration %s step %s (%s): rebuild uniqueness: %w", file.Name, step.ID, step.Name, err)
+					}
 				}
 				if err := assertSQLitePhysicalSchema(ctx, connection, after, true, contract); err != nil {
 					return fmt.Errorf("apply SQLite migration %s step %s (%s): %w", file.Name, step.ID, step.Name, err)

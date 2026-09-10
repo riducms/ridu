@@ -33,8 +33,9 @@ export interface GenerateReferenceOptions {
 	seedRoutes?: boolean;
 }
 
-export const REFERENCE_CATALOG_MAX_BYTES = 4 * 1024 * 1024;
-export const REFERENCE_CATALOG_MAX_GZIP_BYTES = 400 * 1024;
+// Includes the live-validation methods and their authored callback contracts.
+export const REFERENCE_CATALOG_MAX_BYTES = 4.25 * 1024 * 1024;
+export const REFERENCE_CATALOG_MAX_GZIP_BYTES = 440 * 1024;
 
 export function generateReferenceCatalog(options: GenerateReferenceOptions): ReferenceCatalogFile {
 	const go = extractGo(options.repositoryRoot);
@@ -264,6 +265,16 @@ function buildSymbol(
 		signature: declaration.signature,
 		parameters,
 		parametersLabel: overlay?.parametersLabel ?? '',
+		...(overlay?.options?.length
+			? {
+					options: overlay.options.map(({ name, type, description }) => ({
+						name,
+						type,
+						description
+					})),
+					optionsLabel: overlay.optionsLabel ?? 'Options'
+				}
+			: {}),
 		...(returns ? { returns } : {}),
 		details: overlay?.details ?? [],
 		example: overlay?.example ?? '',
@@ -358,7 +369,7 @@ function synchronizeGoFacadeAliases(modules: ReferenceModule[]): void {
 		if (!targetName) continue;
 		const target = core.symbols.find((symbol) => symbol.name === targetName);
 		if (!target) continue;
-		if (alias.parameters.length === 0 && target.parameters.length > 0) {
+		if (target.parameters.length > 0) {
 			alias.parameters = target.parameters.map((parameter) => ({ ...parameter }));
 		}
 		if (!alias.parametersLabel) alias.parametersLabel = target.parametersLabel;
@@ -392,6 +403,13 @@ function resolveEditorialLinks(modules: ReferenceModule[]): void {
 				if (!href) throw new Error(`${symbol.id} member links to missing ${editorial.targetID}`);
 				const parameter = symbol.parameters.find((candidate) => candidate.name === editorial.name);
 				if (parameter) parameter.href = href;
+			}
+			for (const editorial of overlay.options ?? []) {
+				if (!editorial.targetID) continue;
+				const href = hrefFor(editorial.targetID);
+				if (!href) throw new Error(`${symbol.id} option links to missing ${editorial.targetID}`);
+				const option = symbol.options?.find((candidate) => candidate.name === editorial.name);
+				if (option) option.href = href;
 			}
 		}
 	}

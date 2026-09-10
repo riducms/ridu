@@ -23,10 +23,8 @@ func TestListWindowUsesManifestJSONIndexAndBoundsMaterialization(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	config := ridu.Config{Name: "SQLite bounded window", Collections: []ridu.Collection{{
-		Slug: "actions",
-		Fields: []field.Definition{
-			field.Text("reconcileQueueKey", field.Required(), field.Unique(), field.Index()),
-		},
+		Slug:   "actions",
+		Fields: field.Fields{field.Text("reconcileQueueKey").Required().Unique().Index()},
 	}}}
 	manifest, err := ridu.Resolve(config)
 	if err != nil {
@@ -147,7 +145,7 @@ func TestAuthIdentityUsesCanonicalExactUniqueIndex(t *testing.T) {
 		Name: "SQLite auth identity index", Admin: ridu.AdminConfig{User: "users"},
 		Collections: []ridu.Collection{{
 			Slug: "users", Auth: true,
-			Fields: []field.Definition{field.Email("email", field.Required(), field.Unique())},
+			Fields: field.Fields{field.Email("email").Required().Unique()},
 		}},
 	}
 	manifest, err := ridu.Resolve(config)
@@ -224,11 +222,8 @@ func TestSQLiteCompoundUniqueIndexUsesExactLocalizedTuples(t *testing.T) {
 			{Code: "en", Label: "English"}, {Code: "fr", Label: "French"},
 		}},
 		Collections: []ridu.Collection{{
-			Slug: "posts",
-			Fields: []field.Definition{
-				field.Text("tenant", field.Index()),
-				field.Text("localizedCode", field.Localized(), field.Index()),
-			},
+			Slug:    "posts",
+			Fields:  field.Fields{field.Text("tenant").Index(), field.Text("localizedCode").Localized().Index()},
 			Indexes: []ridu.CollectionIndex{{Fields: []string{"tenant", "localizedCode"}, Unique: true}},
 		}},
 	}
@@ -285,12 +280,8 @@ func TestSQLiteUniqueNumbersTreatSignedZeroAsEqual(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	config := ridu.Config{Name: "SQLite signed-zero uniqueness", Collections: []ridu.Collection{{
-		Slug: "numbers",
-		Fields: []field.Definition{
-			field.Number("single", field.Unique()),
-			field.Text("tenant", field.Index()),
-			field.Number("tuple", field.Index()),
-		},
+		Slug:    "numbers",
+		Fields:  field.Fields{field.Number("single").Unique(), field.Text("tenant").Index(), field.Number("tuple").Index()},
 		Indexes: []ridu.CollectionIndex{{Fields: []string{"tenant", "tuple"}, Unique: true}},
 	}}}
 	manifest, err := ridu.Resolve(config)
@@ -343,7 +334,7 @@ func TestSQLiteNativeNumberPredicatesCompareInFloat64Space(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	config := ridu.Config{Name: "SQLite large numeric predicates", Collections: []ridu.Collection{{
-		Slug: "measurements", Fields: []field.Definition{field.Number("score", field.Index())},
+		Slug: "measurements", Fields: field.Fields{field.Number("score").Index()},
 	}}}
 	manifest, err := ridu.Resolve(config)
 	if err != nil {
@@ -424,12 +415,8 @@ func TestComplexAccessRemainsAnAtomicSQLitePredicate(t *testing.T) {
 			{Code: "en", Label: "English"}, {Code: "fr", Label: "French"},
 		}},
 		Collections: []ridu.Collection{{
-			Slug: "posts",
-			Fields: []field.Definition{
-				field.Text("title", field.Localized()),
-				field.Array("rows", field.Fields(field.Text("label"))),
-				field.Text("note"),
-			},
+			Slug:   "posts",
+			Fields: field.Fields{field.Text("title").Localized(), field.Array("rows", field.Fields{field.Text("label")}), field.Text("note")},
 		}},
 	}
 	manifest, err := ridu.Resolve(config)
@@ -536,7 +523,7 @@ func TestSQLiteResidualListMaximumPageDoesNotOverflow(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	manifest, err := ridu.Resolve(ridu.Config{Name: "SQLite residual pagination", Collections: []ridu.Collection{{
-		Slug: "posts", Fields: []field.Definition{field.Array("rows", field.Fields(field.Text("label")))},
+		Slug: "posts", Fields: field.Fields{field.Array("rows", field.Fields{field.Text("label")})},
 	}}})
 	if err != nil {
 		t.Fatal(err)
@@ -598,7 +585,7 @@ func TestNativePredicateNullTruthTableMatchesFunctionalOracle(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	config := ridu.Config{Name: "SQLite null truth table", Collections: []ridu.Collection{{
-		Slug: "items", Fields: []field.Definition{field.Text("value")},
+		Slug: "items", Fields: field.Fields{field.Text("value")},
 	}}}
 	manifest, err := ridu.Resolve(config)
 	if err != nil {

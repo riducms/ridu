@@ -18,11 +18,7 @@ func TestCompoundUniqueIndexesMatchNullLocaleAndTrashSemantics(t *testing.T) {
 		}},
 		Collections: []ridu.Collection{{
 			Slug: "posts", Trash: true,
-			Fields: []field.Definition{
-				field.Text("tenant"),
-				field.Group("seo", field.Fields(field.Text("slug"))),
-				field.Text("localizedCode", field.Localized()),
-			},
+			Fields: field.Fields{field.Text("tenant"), field.Group("seo", field.Fields{field.Text("slug")}), field.Text("localizedCode").Localized()},
 			Indexes: []ridu.CollectionIndex{
 				{Fields: []string{"tenant", "seo.slug"}, Unique: true},
 				{Fields: []string{"tenant", "localizedCode"}, Unique: true},

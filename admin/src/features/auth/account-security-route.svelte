@@ -333,7 +333,7 @@
 						<span class="ridu-field-label">{runtime.i18n.t("account:expiration")}</span>
 						<DateValueControl
 							id="api-key-expiry"
-							appearance="dayAndTime"
+							appearance="date-time"
 							value={apiKeyExpiry}
 							label={runtime.i18n.t("account:expiration")}
 							onValueChange={(next) => (apiKeyExpiry = next)}

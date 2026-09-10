@@ -64,7 +64,7 @@ func TestMongoDBCLICommandsExecuteFinalValidatedHistorySnapshot(t *testing.T) {
 
 func resolveMongoDBCLITestManifest(t *testing.T, summary bool) schema.Manifest {
 	t.Helper()
-	fields := []field.Definition{field.Text("title")}
+	fields := field.Fields{field.Text("title")}
 	if summary {
 		fields = append(fields, field.Text("summary"))
 	}

@@ -4,7 +4,14 @@ description: 'Add an optional manifest-derived GraphQL endpoint with typed resou
 product: plugins
 eyebrow: 'Plugins'
 order: 200
-aliases: ['GraphQL API', 'SDL', 'introspection', 'query complexity', 'GraphQL mutation']
+aliases:
+  [
+    'GraphQL API',
+    'SDL',
+    'introspection',
+    'query complexity',
+    'GraphQL mutation'
+  ]
 capabilities: ['plugin.graphql']
 availability:
   status: experimental
@@ -221,11 +228,17 @@ graphqlplugin.New(graphqlplugin.Options{
 			Name: "postTotal",
 			Type: graphql.NewNonNull(graphql.Int),
 			Cost: 5,
-			Resolve: func(input graphqlplugin.ExtensionContext) (any, error) {
-				page, err := input.Local.List(input.Context, "posts", ridu.ListOptions{
-					Page: 1, Limit: 1,
-					Actor: input.Actor, ActorCollection: input.ActorCollection,
-				})
+			Resolve: func(
+				input graphqlplugin.ExtensionContext,
+			) (any, error) {
+				page, err := input.Local.List(
+					input.Context,
+					"posts",
+					ridu.ListOptions{
+						Page: 1, Limit: 1,
+						Actor: input.Actor, ActorCollection: input.ActorCollection,
+					},
+				)
 				return page.Total, err
 			},
 		},

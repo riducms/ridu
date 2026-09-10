@@ -168,10 +168,10 @@ func TestMaximumCallerIDRemainsReachableByScheduledPublishing(t *testing.T) {
 	application, err := ridu.New(ridu.Config{
 		Name: "Caller ID scheduled publishing", AllowIDOnCreate: true, Admin: ridu.AdminConfig{User: "users"},
 		Collections: []ridu.Collection{
-			{Slug: "users", Auth: true, Fields: []field.Definition{field.Email("email", field.Required(), field.Unique())}},
+			{Slug: "users", Auth: true, Fields: field.Fields{field.Email("email").Required().Unique()}},
 			{
 				Slug: "posts", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true},
-				Fields: []field.Definition{field.Text("title", field.Required())},
+				Fields: field.Fields{field.Text("title").Required()},
 			},
 		},
 	}, teststore.New())
@@ -231,7 +231,7 @@ func callerIDConfig(allow bool, beforeValidate ridu.Hook) ridu.Config {
 		Name: "Caller IDs", AllowIDOnCreate: allow,
 		Collections: []ridu.Collection{{
 			Slug: "posts", Hooks: hooks,
-			Fields: []field.Definition{field.Text("title", field.Required())},
+			Fields: field.Fields{field.Text("title").Required()},
 		}},
 	}
 }

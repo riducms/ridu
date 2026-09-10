@@ -53,14 +53,14 @@ var Media = ridu.Collection{
 			{Name: "thumb", Width: 320, Height: 320, Fit: "cover"},
 		},
 	},
-	Fields: []field.Definition{
-		field.Text(
-			"alt",
-			field.Label("Alt text"),
-			field.Required(),
-			field.Description("Describe the image for people who cannot see it."),
-		),
-		field.Textarea("caption", field.Label("Caption")),
+	Fields: field.Fields{
+		field.Text("alt").
+			Label("Alt text").
+			Required().
+			Admin(field.Admin{
+				Description: "Describe the image for people who cannot see it.",
+			}),
+		field.Textarea("caption").Label("Caption"),
 	},
 	Access: ridu.CollectionAccess{
 		Create: authenticatedOnly,
@@ -123,7 +123,7 @@ and do not share it with another application using the same storage location.
 Keep the storage setup in the generated `cmd/server/main.go`. First add the local-storage and
 storage-contract imports alongside the existing SQLite imports:
 
-```go title="cmd/server/main.go" add={14,17}
+```go title="cmd/server/main.go" add={16-17}
 package main
 
 import (
@@ -137,9 +137,9 @@ import (
 	"time"
 
 	"example.com/acme/internal/adminassets"
-	localstorage "github.com/riducms/ridu/adapters/storage/local"
 	"github.com/riducms/ridu"
 	"github.com/riducms/ridu/adapters/sqlite"
+	localstorage "github.com/riducms/ridu/adapters/storage/local"
 	"github.com/riducms/ridu/storage"
 	"github.com/riducms/ridu/store"
 )
@@ -150,12 +150,16 @@ PostgreSQL or MongoDB `WithStore` block unchanged and add the same highlighted
 `WithUploadStorage` block after it.
 
 ```go title="cmd/server/main.go" add={6-12}
-func runtimeOptions(applicationConfig ridu.Config) []ridu.ExecuteOption {
+func runtimeOptions(
+	applicationConfig ridu.Config,
+) []ridu.ExecuteOption {
 	return []ridu.ExecuteOption{
 		ridu.WithStore(func(ctx context.Context) (store.Store, error) {
 			return sqlite.Open(ctx, sqliteDatabasePath())
 		}),
-		ridu.WithUploadStorage(func(_ context.Context) (storage.Backend, error) {
+		ridu.WithUploadStorage(func(
+			_ context.Context,
+		) (storage.Backend, error) {
 			root := os.Getenv("RIDU_UPLOAD_PATH")
 			if root == "" {
 				root = ".ridu/uploads"
@@ -182,7 +186,7 @@ Set an absolute `RIDU_UPLOAD_PATH` when the files must survive a process working
 Add `field.Upload` to the starter `Posts` collection. The target is the `media` collection slug,
 not a filesystem path or storage bucket:
 
-```go title="content/posts.go" add={24}
+```go title="content/posts.go"
 package content
 
 import (
@@ -199,22 +203,18 @@ var Posts = ridu.Collection{
 		Update: authenticatedOnly,
 		Delete: authenticatedOnly,
 	},
-	Fields: []field.Definition{
-		field.Text("title", field.Required()),
-		field.Select(
-			"status",
-			field.OneOf("draft", "published"),
-			field.Default("draft"),
-		),
-		field.Upload("heroImage", field.To("media")),
-		field.Relationship("author", field.To("users")),
+	Fields: field.Fields{
+		field.Text("title").Required(),
+		field.Select("status", "draft", "published").Default("draft"),
+		field.Upload("heroImage", "media"),
+		field.Relationship("author", "users"),
 		richtext.Field("content"),
 	},
 }
 ```
 
-This stores one media document ID in `heroImage`. Add `field.Required()` when every post must have
-an image, or `field.HasMany()` when the field should be a gallery. Read the focused
+This stores one media document ID in `heroImage`. Add `.Required()` when every post must have
+an image, or `field.Uploads` when the field should be a gallery. Read the focused
 [Upload field guide](https://riducms.com/docs/fields/upload/) for filtering and delete behavior.
 
 ## 5. Run in development {#generate-and-run}
@@ -297,7 +297,10 @@ import { createClient } from '../../../generated/ridu.generated';
 const ridu = createClient({ baseURL: 'http://localhost:8080' });
 
 export async function createPost(file: File) {
-	const hero = await uploadHero(file, 'The Ridu team outside the studio');
+	const hero = await uploadHero(
+		file,
+		'The Ridu team outside the studio'
+	);
 
 	return ridu.create('posts', {
 		title: 'Studio notes',
@@ -344,12 +347,16 @@ import { createClient } from '../../generated/ridu.generated';
 const ridu = createClient({ baseURL: 'https://cms.example.com' });
 
 export async function importLaunchGraphic() {
-	return ridu.uploadFromURL('media', 'https://images.example.com/launch.png', {
-		data: {
-			alt: 'Launch graphic',
-			caption: 'Imported from the campaign image service'
+	return ridu.uploadFromURL(
+		'media',
+		'https://images.example.com/launch.png',
+		{
+			data: {
+				alt: 'Launch graphic',
+				caption: 'Imported from the campaign image service'
+			}
 		}
-	});
+	);
 }
 ```
 
@@ -369,8 +376,16 @@ import { createClient } from '../../generated/ridu.generated';
 
 const ridu = createClient({ baseURL: 'https://cms.example.com' });
 
-export async function keepSubjectInFrame(assetID: string, revision: number) {
-	return ridu.updateUploadImage('media', assetID, { focalX: 40, focalY: 35 }, { revision });
+export async function keepSubjectInFrame(
+	assetID: string,
+	revision: number
+) {
+	return ridu.updateUploadImage(
+		'media',
+		assetID,
+		{ focalX: 40, focalY: 35 },
+		{ revision }
+	);
 }
 ```
 
@@ -401,21 +416,24 @@ In `cmd/server/main.go`, replace the `localstorage` import with
 `WithUploadStorage` option:
 
 ```go title="cmd/server/main.go"
-		ridu.WithStore(func(ctx context.Context) (store.Store, error) {
-			return postgres.Open(ctx, os.Getenv("DATABASE_URL"))
-		}),
-		ridu.WithUploadStorage(func(_ context.Context) (storage.Backend, error) {
-			return s3storage.New(s3storage.Config{
-				Endpoint:       os.Getenv("S3_ENDPOINT"),
-				Region:         os.Getenv("S3_REGION"),
-				Bucket:         os.Getenv("S3_BUCKET"),
-				AccessKey:      os.Getenv("S3_ACCESS_KEY"),
-				SecretKey:      os.Getenv("S3_SECRET_KEY"),
-				MaxSpoolBytes:  256 << 20, // 256 × 2²⁰ = 268,435,456 bytes (256 MiB)
-				SpoolDirectory: "/var/tmp/ridu-spool",
-			})
-		}),
-		ridu.WithAddress(env("RIDU_ADDRESS", ":8080")),
+ridu.WithStore(func(ctx context.Context) (store.Store, error) {
+	return postgres.Open(ctx, os.Getenv("DATABASE_URL"))
+}),
+ridu.WithUploadStorage(func(
+	_ context.Context,
+) (storage.Backend, error) {
+	return s3storage.New(s3storage.Config{
+		Endpoint:       os.Getenv("S3_ENDPOINT"),
+		Region:         os.Getenv("S3_REGION"),
+		Bucket:         os.Getenv("S3_BUCKET"),
+		AccessKey:      os.Getenv("S3_ACCESS_KEY"),
+		SecretKey:      os.Getenv("S3_SECRET_KEY"),
+		// 256 × 2²⁰ = 268,435,456 bytes (256 MiB)
+		MaxSpoolBytes:  256 << 20,
+		SpoolDirectory: "/var/tmp/ridu-spool",
+	})
+}),
+ridu.WithAddress(env("RIDU_ADDRESS", ":8080")),
 ```
 
 Use HTTPS for production endpoints. Size the private spool directory for concurrent uploads and

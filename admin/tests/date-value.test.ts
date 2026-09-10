@@ -17,22 +17,22 @@ describe("date field presentation", () => {
 	});
 
 	test("keeps day-only and time-only values free of timezone conversion", () => {
-		expect(formatDateDisplay("2026-09-15", "dayOnly", i18n)).toBe("Sep 15, 2026");
-		expect(formatDateDisplay("09:30", "timeOnly", i18n)).toBe("09:30");
+		expect(formatDateDisplay("2026-09-15", "date", i18n)).toBe("Sep 15, 2026");
+		expect(formatDateDisplay("09:30", "time", i18n)).toBe("09:30");
 	});
 
 	test("uses Bits values without introducing a timezone for day-only or time-only fields", () => {
-		const day = datePickerValue("2026-09-15", "dayOnly");
+		const day = datePickerValue("2026-09-15", "date");
 		const time = timeFieldValue("09:30:00");
 
-		expect(datePickerFormValue(day, "dayOnly")).toBe("2026-09-15");
+		expect(datePickerFormValue(day, "date")).toBe("2026-09-15");
 		expect(timeFieldFormValue(time)).toBe("09:30");
 	});
 
 	test("round-trips a Bits date-time selection through RFC 3339", () => {
-		const pickerValue = datePickerValue("2026-09-15T09:30:00.000Z", "dayAndTime", "Europe/Paris");
+		const pickerValue = datePickerValue("2026-09-15T09:30:00.000Z", "date-time", "Europe/Paris");
 
-		expect(datePickerFormValue(pickerValue, "dayAndTime", "Europe/Paris")).toBe(
+		expect(datePickerFormValue(pickerValue, "date-time", "Europe/Paris")).toBe(
 			"2026-09-15T09:30:00.000Z"
 		);
 	});

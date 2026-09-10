@@ -105,6 +105,7 @@ test("account profile, theme preferences, reset, and force unlock are available"
 	await page.reload();
 	await expectRiduSelectValue(page.getByLabel("Theme"), "Light");
 	await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+	const resetOrder: string[] = [];
 	let releaseThemeWrite!: () => void;
 	let markThemeWriteStarted!: () => void;
 	const themeWriteRelease = new Promise<void>((resolve) => (releaseThemeWrite = resolve));
@@ -117,6 +118,7 @@ test("account profile, theme preferences, reset, and force unlock are available"
 		markThemeWriteStarted();
 		await themeWriteRelease;
 		const response = await route.fetch();
+		resetOrder.push("theme complete");
 		await route.fulfill({ response });
 	});
 	let preferenceResetCount = 0;
@@ -126,16 +128,18 @@ test("account profile, theme preferences, reset, and force unlock are available"
 			return;
 		}
 		preferenceResetCount += 1;
+		resetOrder.push("reset");
 		await route.continue();
 	});
 	await chooseRiduSelect(page, page.getByLabel("Theme"), "Dark");
 	await themeWriteStarted;
 	await page.getByRole("button", { name: "Reset all preferences" }).click();
-	await page.waitForTimeout(100);
+	await expect(page.getByRole("button", { name: "Resetting…" })).toBeDisabled();
 	expect(preferenceResetCount).toBe(0);
 	releaseThemeWrite();
 	await expect(page.getByText("Admin preferences reset.")).toBeVisible();
 	expect(preferenceResetCount).toBe(1);
+	expect(resetOrder).toEqual(["theme complete", "reset"]);
 	await expectRiduSelectValue(page.getByLabel("Theme"), "System");
 	await page.unroute("**/api/preferences");
 	await page.unroute("**/api/preferences/theme");
@@ -224,7 +228,6 @@ test("account profile, theme preferences, reset, and force unlock are available"
 	await chooseRiduSelect(page, page.getByLabel("Theme"), "Dark");
 	await newSessionThemeStarted;
 	await expectRiduSelectValue(page.getByLabel("Theme"), "Dark");
-	await page.waitForTimeout(100);
 	expect(crossSessionResetCount).toBe(0);
 	const oldSessionThemeResponse = page.waitForResponse(
 		(response) =>
@@ -250,6 +253,7 @@ test("account profile, theme preferences, reset, and force unlock are available"
 		return (await response.json()) as { value: unknown };
 	});
 	expect(storedTheme.value).toBe("dark");
+	expect(crossSessionResetCount).toBe(0);
 	await page.getByRole("button", { name: "Reset all preferences" }).click();
 	await expect(page.getByText("Admin preferences reset.")).toBeVisible();
 	expect(crossSessionResetCount).toBe(1);

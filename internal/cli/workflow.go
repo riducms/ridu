@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -25,6 +26,7 @@ import (
 	"github.com/riducms/ridu/adapters/mongodb"
 	"github.com/riducms/ridu/adapters/postgres"
 	"github.com/riducms/ridu/adapters/sqlite"
+	"github.com/riducms/ridu/internal/commandrun"
 	"github.com/riducms/ridu/internal/generate"
 	"github.com/riducms/ridu/internal/goworkspace"
 	"github.com/riducms/ridu/internal/migrationartifact"
@@ -351,6 +353,11 @@ func runCheck(ctx context.Context, args []string, stdout, stderr io.Writer, opti
 			return 1
 		}
 		fmt.Fprintln(stdout, "ok       TypeScript and Svelte")
+		if err := checkAdminRegistrations(ctx, definition, stdout, stderr); err != nil {
+			output.Error("admin registrations", err)
+			return 1
+		}
+		fmt.Fprintln(stdout, "ok       admin registrations")
 	}
 	fmt.Fprintln(stdout, "All checks passed.")
 	return 0
@@ -402,6 +409,10 @@ func runBuild(ctx context.Context, args []string, stdout, stderr io.Writer, opti
 	if definition.Admin != "" {
 		if err := ensureFrontendDependencies(ctx, definition, stdout, stderr, reporter); err != nil {
 			reporter.Error("install frontend dependencies", err)
+			return 1
+		}
+		if err := checkAdminRegistrations(ctx, definition, stdout, stderr); err != nil {
+			reporter.Error("admin registrations", err)
 			return 1
 		}
 		if err := runPackageManagerScript(ctx, definition, definition.Absolute(definition.Admin), "build", nil, stdout, stderr); err != nil {
@@ -591,8 +602,7 @@ func runDev(ctx context.Context, args []string, stdout, stderr io.Writer, option
 	}
 	if !*noInstall {
 		if err := ensureFrontendDependencies(ctx, definition, stdout, stderr, output); err != nil {
-			output.Error("install frontend dependencies", err)
-			return 1
+			return developmentFailure(ctx, output, "install frontend dependencies", err)
 		}
 	}
 	if database.startPostgres {
@@ -602,8 +612,7 @@ func runDev(ctx context.Context, args []string, stdout, stderr io.Writer, option
 		}
 		output.Info("Starting development PostgreSQL")
 		if err := runForeground(ctx, definition.Root, nil, stdout, stderr, "docker", "compose", "up", "-d", "postgres"); err != nil {
-			output.Error("start PostgreSQL", err)
-			return 1
+			return developmentFailure(ctx, output, "start PostgreSQL", err)
 		}
 	}
 	if database.startMongoDB {
@@ -613,8 +622,7 @@ func runDev(ctx context.Context, args []string, stdout, stderr io.Writer, option
 		}
 		output.Info("Starting development MongoDB replica set")
 		if err := runForeground(ctx, definition.Root, nil, stdout, stderr, "docker", "compose", "up", "-d", "mongodb"); err != nil {
-			output.Error("start MongoDB", err)
-			return 1
+			return developmentFailure(ctx, output, "start MongoDB", err)
 		}
 	}
 	version := frameworkVersion(options)
@@ -633,8 +641,7 @@ func runDev(ctx context.Context, args []string, stdout, stderr io.Writer, option
 		initialRevision := watcher.Revision()
 		activeBinary, buildDuration, err = buildDevelopmentBinary(ctx, definition, stdout, stderr)
 		if err != nil {
-			output.Error("prepare development runtime", err)
-			return 1
+			return developmentFailure(ctx, output, "prepare development runtime", err)
 		}
 		fresh := func() bool { return watcher.Revision() == initialRevision }
 		activeBinary, buildDuration, preparation, err = stabilizeDevelopmentCandidate(ctx, definition, version, activeBinary, buildDuration, !*noSync, fresh, stdout, stderr, output)
@@ -645,14 +652,12 @@ func runDev(ctx context.Context, args []string, stdout, stderr io.Writer, option
 		}
 		if err != nil {
 			_ = activeBinary.remove()
-			output.Error("prepare development runtime", err)
-			return 1
+			return developmentFailure(ctx, output, "prepare development runtime", err)
 		}
 		preparation, err = synchronizeDevelopmentSchema(ctx, definition.Database, database.databaseURL, database.databasePath, !*noSync, true, preparation, output)
 		if err != nil {
 			_ = activeBinary.remove()
-			output.Error("prepare development runtime", err)
-			return 1
+			return developmentFailure(ctx, output, "prepare development runtime", err)
 		}
 		if !fresh() && canDiscardStaleDevelopmentCandidate(definition.Database, preparation) {
 			_ = activeBinary.remove()
@@ -722,8 +727,7 @@ func runDev(ctx context.Context, args []string, stdout, stderr io.Writer, option
 	activeServerAddress, err := availableDevelopmentServerAddress()
 	if err != nil {
 		_ = activeBinary.remove()
-		output.Error("start server", err)
-		return 1
+		return developmentFailure(ctx, output, "start server", err)
 	}
 	activeServerURL := developmentServerURL(activeServerAddress)
 	activeServerEnvironment := developmentServerEnvironment(serverEnvironment, activeServerAddress)
@@ -732,8 +736,7 @@ func runDev(ctx context.Context, args []string, stdout, stderr io.Writer, option
 	server, err := startManagedProcess(ctx, "server", definition.Root, activeServerEnvironment, output, activeBinary.path, serverArguments...)
 	if err != nil {
 		_ = activeBinary.remove()
-		output.Error("start server", err)
-		return 1
+		return developmentFailure(ctx, output, "start server", err)
 	}
 	defer func() { _ = activeBinary.remove() }()
 	var admin *managedProcess
@@ -742,8 +745,7 @@ func runDev(ctx context.Context, args []string, stdout, stderr io.Writer, option
 		admin, err = startManagedProcess(ctx, "admin", definition.Absolute(definition.Admin), adminEnvironment, output, managerCommand, managerArguments...)
 		if err != nil {
 			server.stop()
-			output.Error("start admin", err)
-			return 1
+			return developmentFailure(ctx, output, "start admin", err)
 		}
 	}
 	if err := waitForDevelopmentURLWithHost(ctx, activeServerURL+"/readyz", publicServerHost, server); err != nil {
@@ -751,8 +753,7 @@ func runDev(ctx context.Context, args []string, stdout, stderr io.Writer, option
 		if admin != nil {
 			admin.stop()
 		}
-		output.Error("start server", err)
-		return 1
+		return developmentFailure(ctx, output, "start server", err)
 	}
 	if err := handoffProxy.setTarget(activeServerURL); err != nil {
 		server.stop()
@@ -766,8 +767,7 @@ func runDev(ctx context.Context, args []string, stdout, stderr io.Writer, option
 		if err := waitForDevelopmentURL(ctx, adminURL, admin); err != nil {
 			server.stop()
 			admin.stop()
-			output.Error("start admin", err)
-			return 1
+			return developmentFailure(ctx, output, "start admin", err)
 		}
 	}
 	output.DevelopmentReady(version, developmentDuration(time.Since(developmentStarted)), adminURL, serverURL)
@@ -781,7 +781,7 @@ watchLoop:
 			if admin != nil {
 				admin.stop()
 			}
-			return 0
+			return developmentFailure(ctx, output, "development stopped", ctx.Err())
 		case <-server.done:
 			if ctx.Err() == nil && !server.stopping.Load() {
 				if admin != nil {
@@ -817,7 +817,7 @@ watchLoop:
 				output.Info("Go configuration changed")
 				candidate, candidateBuildDuration, buildError := buildDevelopmentBinary(ctx, definition, stdout, stderr)
 				if buildError != nil {
-					output.Error("Reload rejected; the previous server is still running", buildError)
+					developmentFailure(ctx, output, "Reload rejected; the previous server is still running", buildError)
 					continue watchLoop
 				}
 				if watcher.Revision() != changeRevision {
@@ -835,7 +835,7 @@ watchLoop:
 						output.Info("Newer Go change arrived; skipping the stale replacement")
 						continue
 					}
-					output.Error("Reload rejected; the previous server is still running", prepareError)
+					developmentFailure(ctx, output, "Reload rejected; the previous server is still running", prepareError)
 					continue watchLoop
 				}
 				if watcher.Revision() != changeRevision {
@@ -846,7 +846,7 @@ watchLoop:
 				preparation, prepareError = synchronizeDevelopmentSchema(ctx, definition.Database, database.databaseURL, database.databasePath, !*noSync, false, preparation, output)
 				if prepareError != nil {
 					_ = candidate.remove()
-					output.Error("Reload rejected; the previous server is still running", prepareError)
+					developmentFailure(ctx, output, "Reload rejected; the previous server is still running", prepareError)
 					continue watchLoop
 				}
 				if watcher.Revision() != changeRevision && canDiscardStaleDevelopmentCandidate(definition.Database, preparation) {
@@ -867,13 +867,13 @@ watchLoop:
 				candidateServer, startError := startManagedProcess(ctx, "server", definition.Root, candidateEnvironment, output, candidate.path, serverArguments...)
 				if startError != nil {
 					_ = candidate.remove()
-					output.Error("replacement failed to start", fmt.Errorf("%w%s", startError, rejectedDevelopmentCandidateSuffix(preparation)))
+					developmentFailure(ctx, output, "replacement failed to start", fmt.Errorf("%w%s", startError, rejectedDevelopmentCandidateSuffix(preparation)))
 					continue watchLoop
 				}
 				if readyError := waitForDevelopmentURLWithHost(ctx, candidateURL+"/readyz", publicServerHost, candidateServer); readyError != nil {
 					candidateServer.stop()
 					_ = candidate.remove()
-					output.Error("replacement server was unhealthy", fmt.Errorf("%w%s", readyError, rejectedDevelopmentCandidateSuffix(preparation)))
+					developmentFailure(ctx, output, "replacement server was unhealthy", fmt.Errorf("%w%s", readyError, rejectedDevelopmentCandidateSuffix(preparation)))
 					continue watchLoop
 				}
 				if watcher.Revision() != changeRevision && canDiscardStaleDevelopmentCandidate(definition.Database, preparation) {
@@ -929,6 +929,9 @@ func waitForDevelopmentURLWithHost(ctx context.Context, url, host string, proces
 	defer ticker.Stop()
 	client := &http.Client{Timeout: time.Second}
 	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		request, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 		if err != nil {
 			return err
@@ -947,6 +950,9 @@ func waitForDevelopmentURLWithHost(ctx context.Context, url, host string, proces
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-process.done:
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			return fmt.Errorf("process exited before %s became ready: %v", url, process.waitError())
 		case <-deadline.C:
 			return fmt.Errorf("timed out waiting for %s", url)
@@ -1345,6 +1351,9 @@ type managedProcess struct {
 }
 
 func startManagedProcess(parent context.Context, label, directory string, environment []string, output *cliOutput, name string, arguments ...string) (*managedProcess, error) {
+	if err := parent.Err(); err != nil {
+		return nil, err
+	}
 	// The lifecycle owner translates parent cancellation into a graceful
 	// process-group termination. Detaching the command context prevents
 	// exec.CommandContext from sending an immediate SIGKILL before the server
@@ -1523,7 +1532,7 @@ func runForeground(ctx context.Context, directory string, environment []string, 
 	}
 	command.Stdout = unwrapCLIWriter(stdout)
 	command.Stderr = unwrapCLIWriter(stderr)
-	return command.Run()
+	return commandrun.Run(ctx, command)
 }
 
 type cliWriterUnwrapper interface {
@@ -1544,8 +1553,11 @@ func commandOutput(ctx context.Context, directory string, environment []string, 
 	if name == "go" {
 		command.Env = goworkspace.IsolateUnlistedModule(directory, command.Env)
 	}
-	encoded, err := command.CombinedOutput()
-	return string(encoded), err
+	var encoded bytes.Buffer
+	command.Stdout = &encoded
+	command.Stderr = &encoded
+	err := commandrun.Run(ctx, command)
+	return encoded.String(), err
 }
 
 func relativePath(root, path string) string {
@@ -1565,4 +1577,31 @@ func developmentServerURL(address string) string {
 		host = "127.0.0.1:" + strings.TrimPrefix(host, "0.0.0.0:")
 	}
 	return "http://" + host
+}
+
+// Use the same script as the shipped build, including its mode, config arguments
+// and environment. The shared Vite config substitutes an in-memory registry check.
+func checkAdminRegistrations(ctx context.Context, definition projectfile.File, stdout, stderr io.Writer) error {
+	cache := definition.Absolute(".ridu")
+	if err := os.MkdirAll(cache, 0o755); err != nil {
+		return err
+	}
+	temporary, err := os.MkdirTemp(cache, "admin-check-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(temporary)
+	receipt := filepath.Join(temporary, "complete")
+	command, arguments := packageManagerRunCommand(definition.FrontendPackageManager(), "build")
+	if err := runForeground(ctx, definition.Absolute(definition.Admin), []string{
+		"RIDU_ADMIN_CHECK_SCHEMA=" + definition.Absolute(definition.Schema),
+		"RIDU_ADMIN_CHECK_RECEIPT=" + receipt,
+	}, stdout, stderr, command, arguments...); err != nil {
+		return err
+	}
+	checked, err := os.ReadFile(receipt)
+	if err != nil || string(checked) != "checked\n" {
+		return errors.New("admin build did not verify admin registrations; retain createAdminApplicationConfig from @riducms/build/vite in the Vite configuration used by the build script")
+	}
+	return nil
 }

@@ -16,6 +16,7 @@ import (
 	"github.com/riducms/ridu"
 	"github.com/riducms/ridu/field"
 	"github.com/riducms/ridu/internal/teststore"
+	"github.com/riducms/ridu/operation"
 	graphqlplugin "github.com/riducms/ridu/plugins/graphql"
 	"github.com/riducms/ridu/storage"
 	"github.com/riducms/ridu/store"
@@ -103,7 +104,7 @@ func (backend *graphQLUploadStorage) count() int {
 }
 
 type graphQLUploadObservation struct {
-	operation       ridu.Operation
+	operation       operation.Kind
 	actorID         string
 	actorCollection string
 }
@@ -113,7 +114,7 @@ func TestGraphQLUploadMutationsMatchExecutableStorageContract(t *testing.T) {
 	var observationsMu sync.Mutex
 	var accessObservations, hookObservations []graphQLUploadObservation
 	recordAccess := func(ctx ridu.AccessContext) {
-		if ctx.Operation != ridu.OperationCreate && ctx.Operation != ridu.OperationDuplicate {
+		if ctx.Operation != operation.Create && ctx.Operation != operation.Duplicate {
 			return
 		}
 		observation := graphQLUploadObservation{operation: ctx.Operation, actorCollection: string(ctx.ActorCollection)}
@@ -149,14 +150,18 @@ func TestGraphQLUploadMutationsMatchExecutableStorageContract(t *testing.T) {
 			{
 				Slug: "staff", Auth: true,
 				AuthConfig: ridu.AuthConfig{Password: ridu.PasswordPolicy{BcryptCost: bcrypt.MinCost}},
-				Fields:     []field.Definition{field.Email("email", field.Required(), field.Unique())},
+				Fields: field.Fields{
+					field.Email("email").Required().Unique(),
+				},
 			},
 			{
 				Slug: "media", Upload: true,
 				UploadConfig: ridu.UploadConfig{MaxFileSize: 1024, MimeTypes: []string{"text/plain"}},
-				Fields:       []field.Definition{field.Text("caption")},
-				Access:       ridu.CollectionAccess{Create: staffOnly, Read: staffOnly, Update: staffOnly, Delete: staffOnly},
-				Hooks:        ridu.CollectionHooks{BeforeDuplicate: []ridu.Hook{recordHook}, BeforeChange: []ridu.Hook{recordHook}},
+				Fields: field.Fields{
+					field.Text("caption"),
+				},
+				Access: ridu.CollectionAccess{Create: staffOnly, Read: staffOnly, Update: staffOnly, Delete: staffOnly},
+				Hooks:  ridu.CollectionHooks{BeforeDuplicate: []ridu.Hook{recordHook}, BeforeChange: []ridu.Hook{recordHook}},
 			},
 		},
 	}, teststore.New())
@@ -257,7 +262,7 @@ func TestGraphQLUploadMutationsMatchExecutableStorageContract(t *testing.T) {
 		t.Helper()
 		foundDuplicate := false
 		for _, observation := range observations {
-			if observation.operation != ridu.OperationDuplicate {
+			if observation.operation != operation.Duplicate {
 				continue
 			}
 			foundDuplicate = true

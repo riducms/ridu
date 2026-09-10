@@ -17,7 +17,9 @@ launchers, scaffold flags, existing services, and recovery.
 ## Requirements {#requirements}
 
 - Go 1.25 or newer.
-- Node.js 20 or newer and one supported package manager: npm, Bun, pnpm, or Yarn.
+- Node.js 24 or newer is recommended. The generated admin also supports Node.js 20.19+ on the
+  20.x line and 22.12+ on the 22.x line.
+- One supported package manager: npm, Bun, pnpm, or Yarn.
 - PostgreSQL projects: Docker/OrbStack for the generated local service, or an existing PostgreSQL
   17 database.
 - MongoDB projects: Docker/OrbStack for the generated replica set, or an existing transaction-capable
@@ -259,9 +261,12 @@ npm run dev
 ```
 
 The example uses npm; replace its commands with the manager recorded in `ridu.toml`.
-`npm run ridu -- doctor` checks Go, the selected manager, `ridu.toml`, config discovery, and adapter
-prerequisites without mutating production data. Continue with
-[Troubleshooting](/docs/troubleshooting/) when a healthy scaffold still does not start.
+`npm run ridu -- doctor` checks tool availability, structural `ridu.toml` settings, the presence of
+frontend dependencies, and basic adapter prerequisites. It does not compile Go config, compare all
+release versions, check generated-contract drift, or connect to the database. Use
+`npm run ridu -- generate --check` to resolve config and check committed contracts, then
+`npm run ridu -- check` for Go and frontend validation. Continue with
+[Troubleshooting](/docs/troubleshooting/) when a scaffold still does not start.
 
 Next read [Project structure](/guides/project-structure/), [Fields](/docs/fields/), and
 [Generated contracts](/docs/generated-contracts/).

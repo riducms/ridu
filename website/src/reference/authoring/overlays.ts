@@ -10,6 +10,8 @@ export interface ReferenceEditorialOverlay {
 	group: string;
 	parametersLabel: string;
 	parameters: ReferenceOverlayParameter[];
+	options?: ReferenceOverlayParameter[];
+	optionsLabel?: string;
 	returns?: ReferenceReturn;
 	details: string[];
 	example: string;

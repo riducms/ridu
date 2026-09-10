@@ -30,17 +30,17 @@ export interface DateFormField extends FormFieldBase {
 	defaultValue?: string;
 }
 
-export interface ChoiceOption {
+export interface FormOption {
 	_key?: string;
 	label: string;
 	value: string;
 }
 
-export interface ChoiceFormField extends FormFieldBase {
+export interface OptionFormField extends FormFieldBase {
 	blockType: "radio" | "select";
 	defaultValue?: string;
 	placeholder?: string;
-	options: ChoiceOption[];
+	options: FormOption[];
 }
 
 export interface CountryFormField extends FormFieldBase {
@@ -84,7 +84,7 @@ export interface PaymentFormField extends FormFieldBase {
 
 export type FormField =
 	| CheckboxFormField
-	| ChoiceFormField
+	| OptionFormField
 	| CountryFormField
 	| DateFormField
 	| EmailFormField

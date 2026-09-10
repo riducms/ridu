@@ -1,0 +1,11 @@
+package probe
+
+import (
+	"context"
+	"example.com/ridu-gate1/operation"
+)
+
+type embeddedContext struct { operation.Context }
+
+// Embedding under Context hides its cancellation field behind another selector.
+var _ context.Context = embeddedContext{}.Context

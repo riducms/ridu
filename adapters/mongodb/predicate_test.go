@@ -864,7 +864,7 @@ func mongoPredicateCollection() schema.Collection {
 				{ID: "row-label", Name: "label", Type: schema.FieldTypeText},
 			}}},
 			{ID: "layout", Name: "layout", Type: schema.FieldTypeBlocks, Blocks: &schema.BlocksField{Types: []schema.BlockType{{
-				Key: "hero", Fields: []schema.Field{{ID: "hero-heading", Name: "heading", Type: schema.FieldTypeText}},
+				Slug: "hero", Fields: []schema.Field{{ID: "hero-heading", Name: "heading", Type: schema.FieldTypeText}},
 			}}}},
 		},
 	}

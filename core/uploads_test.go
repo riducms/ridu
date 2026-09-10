@@ -22,6 +22,7 @@ import (
 	ridu "github.com/riducms/ridu/core"
 	"github.com/riducms/ridu/field"
 	"github.com/riducms/ridu/internal/teststore"
+	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/protocol"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/storage"
@@ -305,9 +306,9 @@ func (backend *singleSessionObjectLockStore) LockUploadObjects(ctx context.Conte
 	}, nil
 }
 
-func blockingChangeHook(operation ridu.Operation, entered chan<- struct{}, proceed <-chan struct{}) ridu.Hook {
+func blockingChangeHook(operationKind operation.Kind, entered chan<- struct{}, proceed <-chan struct{}) ridu.Hook {
 	return func(ctx ridu.HookContext) error {
-		if ctx.Operation != operation {
+		if ctx.Operation != operationKind {
 			return nil
 		}
 		select {
@@ -396,7 +397,7 @@ func TestUploadValidationDeliveryAndAfterCommitCleanup(t *testing.T) {
 	application, err := ridu.New(ridu.Config{Name: "uploads", Storage: backend, StorageNamespace: "uploads-test", Collections: []ridu.Collection{{
 		Slug: "media", Upload: true, Trash: true,
 		UploadConfig: ridu.UploadConfig{MaxFileSize: 1024, MimeTypes: []string{"text/plain"}, Private: true},
-		Fields:       []field.Definition{field.Text("alt", field.Required())},
+		Fields:       field.Fields{field.Text("alt").Required()},
 	}}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -457,12 +458,12 @@ func TestUploadSpecializedOperationsPreserveExactActorCollection(t *testing.T) {
 	application, err := ridu.New(ridu.Config{
 		Name: "exact upload identity", Admin: ridu.AdminConfig{User: "staff"}, Storage: backend, StorageNamespace: "exact-upload-identity",
 		Collections: []ridu.Collection{
-			{Slug: "staff", Auth: true, Fields: []field.Definition{field.Text("email", field.Required(), field.Unique())}},
+			{Slug: "staff", Auth: true, Fields: field.Fields{field.Text("email").Required().Unique()}},
 			{
 				Slug: "media", Upload: true,
 				UploadConfig: ridu.UploadConfig{MaxFileSize: 4096, MimeTypes: []string{"image/png"}, Private: true, ImageSizes: []ridu.ImageSize{{Name: "thumb", Width: 2, Height: 2, Fit: "cover"}}},
 				Access:       ridu.CollectionAccess{Create: staffOnly, Read: staffOnly, Update: staffOnly},
-				Fields:       []field.Definition{field.Text("alt")},
+				Fields:       field.Fields{field.Text("alt")},
 			},
 		},
 	}, teststore.New())
@@ -520,7 +521,7 @@ func TestActiveUploadDeliveryCannotExecuteFromApplicationOrigin(t *testing.T) {
 	application, err := ridu.New(ridu.Config{Name: "active upload", Storage: backend, StorageNamespace: "active-upload-test", Collections: []ridu.Collection{{
 		Slug: "media", Upload: true,
 		UploadConfig: ridu.UploadConfig{MaxFileSize: 4096, MimeTypes: []string{"text/html"}},
-		Fields:       []field.Definition{field.Text("alt")},
+		Fields:       field.Fields{field.Text("alt")},
 	}}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -668,7 +669,7 @@ func TestRenamedUploadURLFallbackCannotBypassActualOwnerAccess(t *testing.T) {
 					}
 					return ridu.Where(query.Equal(ownerPath, query.String(ctx.Actor.ID))), nil
 				}},
-				Fields: []field.Definition{field.Text("owner")},
+				Fields: field.Fields{field.Text("owner")},
 			},
 			{Slug: "media", Upload: true, UploadConfig: ridu.UploadConfig{MaxFileSize: 1024, MimeTypes: []string{"text/plain"}}},
 		},
@@ -718,7 +719,7 @@ func TestDeniedUploadDoesNotReadOrStoreBytes(t *testing.T) {
 	application, err := ridu.New(ridu.Config{Name: "denied upload", Storage: backend, StorageNamespace: "denied-upload-test", Collections: []ridu.Collection{{
 		Slug: "media", Upload: true,
 		UploadConfig: ridu.UploadConfig{MaxFileSize: 1024, MimeTypes: []string{"text/plain"}},
-		Fields:       []field.Definition{field.Text("alt")},
+		Fields:       field.Fields{field.Text("alt")},
 		Access: ridu.CollectionAccess{Create: func(ridu.AccessContext) (ridu.AccessDecision, error) {
 			return ridu.Deny(), nil
 		}},
@@ -747,7 +748,7 @@ func TestCommittedUploadObjectsSurviveAfterCommitFailure(t *testing.T) {
 	application, err := ridu.New(ridu.Config{Name: "committed upload", Storage: backend, StorageNamespace: "committed-upload-test", Collections: []ridu.Collection{{
 		Slug: "media", Upload: true,
 		UploadConfig: ridu.UploadConfig{MaxFileSize: 1024, MimeTypes: []string{"text/plain"}},
-		Fields:       []field.Definition{field.Text("alt")},
+		Fields:       field.Fields{field.Text("alt")},
 		Hooks: ridu.CollectionHooks{AfterCommit: []ridu.Hook{func(ridu.HookContext) error {
 			if failAfterCommit {
 				return errors.New("delivery failed")
@@ -779,14 +780,14 @@ func TestCommittedDuplicateAndRegenerationObjectsSurviveAfterCommitFailure(t *te
 	if err != nil {
 		t.Fatal(err)
 	}
-	failingOperation := ridu.Operation("")
+	failingOperation := operation.Kind("")
 	application, err := ridu.New(ridu.Config{Name: "committed image operations", Storage: backend, StorageNamespace: "committed-image-test", Collections: []ridu.Collection{{
 		Slug: "media", Upload: true,
 		UploadConfig: ridu.UploadConfig{
 			MaxFileSize: 4096, MimeTypes: []string{"image/png"},
 			ImageSizes: []ridu.ImageSize{{Name: "thumb", Width: 2, Height: 2, Fit: "cover"}},
 		},
-		Fields: []field.Definition{field.Text("alt")},
+		Fields: field.Fields{field.Text("alt")},
 		Hooks: ridu.CollectionHooks{AfterCommit: []ridu.Hook{func(ctx ridu.HookContext) error {
 			if ctx.Operation == failingOperation {
 				return errors.New("delivery failed")
@@ -806,7 +807,7 @@ func TestCommittedDuplicateAndRegenerationObjectsSurviveAfterCommitFailure(t *te
 	if err != nil {
 		t.Fatal(err)
 	}
-	failingOperation = ridu.OperationDuplicate
+	failingOperation = operation.Duplicate
 	if _, err := application.Duplicate(context.Background(), "media", original.ID, store.Values{"alt": store.String("Copy")}, nil); !operationCode(err, "hook_failed") {
 		t.Fatalf("duplicate after-commit error = %v", err)
 	}
@@ -825,7 +826,7 @@ func TestCommittedDuplicateAndRegenerationObjectsSurviveAfterCommitFailure(t *te
 		}
 	}
 
-	failingOperation = ridu.OperationUpdate
+	failingOperation = operation.Update
 	if _, err := application.UpdateUploadImage(context.Background(), "media", original.ID, ridu.UpdateUploadImageInput{FocalX: 25, FocalY: 75, ExpectedRevision: original.Revision}); !operationCode(err, "hook_failed") {
 		t.Fatalf("regeneration after-commit error = %v", err)
 	}
@@ -857,7 +858,7 @@ func TestAmbiguousUploadCommitsRetainGeneratedObjects(t *testing.T) {
 			Slug: "media", Upload: true,
 			UploadConfig: ridu.UploadConfig{MaxFileSize: 1024, MimeTypes: []string{"text/plain"}},
 			Hooks: ridu.CollectionHooks{BeforeChange: []ridu.Hook{func(ctx ridu.HookContext) error {
-				if ctx.Operation == ridu.OperationCreate {
+				if ctx.Operation == operation.Create {
 					documentStore.arm()
 				}
 				return nil
@@ -890,7 +891,7 @@ func TestAmbiguousUploadCommitsRetainGeneratedObjects(t *testing.T) {
 			Slug: "media", Upload: true,
 			UploadConfig: ridu.UploadConfig{MaxFileSize: 1024, MimeTypes: []string{"text/plain"}},
 			Hooks: ridu.CollectionHooks{BeforeChange: []ridu.Hook{func(ctx ridu.HookContext) error {
-				if ctx.Operation == ridu.OperationDuplicate {
+				if ctx.Operation == operation.Duplicate {
 					documentStore.arm()
 				}
 				return nil
@@ -930,7 +931,7 @@ func TestAmbiguousUploadCommitsRetainGeneratedObjects(t *testing.T) {
 			Slug: "media", Upload: true,
 			UploadConfig: ridu.UploadConfig{MaxFileSize: 4096, MimeTypes: []string{"image/png"}, ImageSizes: []ridu.ImageSize{{Name: "thumb", Width: 2, Height: 2, Fit: "cover"}}},
 			Hooks: ridu.CollectionHooks{BeforeChange: []ridu.Hook{func(ctx ridu.HookContext) error {
-				if ctx.Operation == ridu.OperationUpdate {
+				if ctx.Operation == operation.Update {
 					documentStore.arm()
 				}
 				return nil
@@ -978,13 +979,13 @@ func uploadKeysForTest(values store.Values) []string {
 }
 
 func imageSizeKeysFromValues(values store.Values) []string {
-	sizes, valid := values["sizes"].ObjectValue()
+	sizes, valid := values["sizes"].CopyObject()
 	if !valid {
 		return nil
 	}
 	keys := make([]string, 0, len(sizes))
 	for _, size := range sizes {
-		metadata, _ := size.ObjectValue()
+		metadata, _ := size.CopyObject()
 		if key, valid := metadata["objectKey"].StringValue(); valid {
 			keys = append(keys, key)
 		}
@@ -1000,7 +1001,7 @@ func TestUploadMetadataIsServerOwned(t *testing.T) {
 	application, err := ridu.New(ridu.Config{Name: "server-owned upload", Storage: backend, StorageNamespace: "server-owned-test", Collections: []ridu.Collection{{
 		Slug: "media", Upload: true,
 		UploadConfig: ridu.UploadConfig{MaxFileSize: 1024, MimeTypes: []string{"text/plain"}},
-		Fields:       []field.Definition{field.Text("alt")},
+		Fields:       field.Fields{field.Text("alt")},
 	}}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -1106,7 +1107,7 @@ func TestDuplicateUploadCopiesObjectsAndDeletesIndependently(t *testing.T) {
 	application, err := ridu.New(ridu.Config{Name: "upload duplicate", Storage: backend, StorageNamespace: "duplicate-test", Collections: []ridu.Collection{{
 		Slug: "media", Upload: true,
 		UploadConfig: ridu.UploadConfig{MaxFileSize: 1024, MimeTypes: []string{"text/plain"}},
-		Fields:       []field.Definition{field.Text("alt", field.Required())},
+		Fields:       field.Fields{field.Text("alt").Required()},
 	}}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -1176,7 +1177,7 @@ func TestUpdateUploadImageCommitsFocalMetadataAndRetainsVersionedVariants(t *tes
 	application, err := ridu.New(ridu.Config{Name: "image editing", Storage: backend, StorageNamespace: "image-editing-test", Collections: []ridu.Collection{{
 		Slug: "media", Upload: true, Versions: true,
 		UploadConfig: ridu.UploadConfig{MaxFileSize: 4096, MimeTypes: []string{"image/png"}, ImageSizes: []ridu.ImageSize{{Name: "thumb", Width: 2, Height: 2, Fit: "cover"}}},
-		Fields:       []field.Definition{field.Text("alt", field.Required())},
+		Fields:       field.Fields{field.Text("alt").Required()},
 	}}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -1351,7 +1352,7 @@ func TestUploadRestoreLocksAndRevalidatesKeysAfterVersionPruningCleanup(t *testi
 		VersionConfig: ridu.VersionConfig{MaxPerDocument: 2},
 		UploadConfig:  ridu.UploadConfig{MaxFileSize: 4096, MimeTypes: []string{"image/png"}, ImageSizes: []ridu.ImageSize{{Name: "thumb", Width: 2, Height: 2, Fit: "cover"}}},
 		Hooks: ridu.CollectionHooks{BeforeChange: []ridu.Hook{func(ctx ridu.HookContext) error {
-			if ctx.Operation != ridu.OperationPublish {
+			if ctx.Operation != operation.Publish {
 				return nil
 			}
 			pauseMu.Lock()
@@ -1517,13 +1518,13 @@ func TestHardDeleteCleanupContinuesAfterPanickingAfterCommitHook(t *testing.T) {
 		UploadConfig: ridu.UploadConfig{MaxFileSize: 1024, MimeTypes: []string{"text/plain"}},
 		Hooks: ridu.CollectionHooks{AfterCommit: []ridu.Hook{
 			func(ctx ridu.HookContext) error {
-				if ctx.Operation == ridu.OperationDelete {
+				if ctx.Operation == operation.Delete {
 					panic(panicSecret)
 				}
 				return nil
 			},
 			func(ctx ridu.HookContext) error {
-				if ctx.Operation == ridu.OperationDelete {
+				if ctx.Operation == operation.Delete {
 					laterRan = true
 				}
 				return nil
@@ -1772,7 +1773,7 @@ func TestFailedUploadRollbackSurfacesStorageFailureAndReportsOrphans(t *testing.
 	application, err := ridu.New(ridu.Config{Name: "rollback failure", Storage: backend, StorageNamespace: "rollback-failure-test", Collections: []ridu.Collection{{
 		Slug: "media", Upload: true,
 		UploadConfig: ridu.UploadConfig{MaxFileSize: 1024, MimeTypes: []string{"text/plain"}},
-		Fields:       []field.Definition{field.Text("alt", field.Required())},
+		Fields:       field.Fields{field.Text("alt").Required()},
 	}}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -1857,13 +1858,13 @@ func TestFailedUploadRollbackSurfacesStorageFailureAndReportsOrphans(t *testing.
 
 func imageSizeKeys(t *testing.T, values store.Values) []string {
 	t.Helper()
-	sizes, valid := values["sizes"].ObjectValue()
+	sizes, valid := values["sizes"].CopyObject()
 	if !valid {
 		t.Fatal("sizes metadata is missing")
 	}
 	keys := make([]string, 0, len(sizes))
 	for _, size := range sizes {
-		metadata, _ := size.ObjectValue()
+		metadata, _ := size.CopyObject()
 		key, _ := metadata["objectKey"].StringValue()
 		keys = append(keys, key)
 	}
@@ -1878,7 +1879,7 @@ func TestRESTUpdatesUploadImageFocalPoint(t *testing.T) {
 	application, err := ridu.New(ridu.Config{Name: "image REST", Storage: backend, StorageNamespace: "image-rest-test", Collections: []ridu.Collection{{
 		Slug: "media", Upload: true,
 		UploadConfig: ridu.UploadConfig{MaxFileSize: 4096, MimeTypes: []string{"image/png"}, ImageSizes: []ridu.ImageSize{{Name: "thumb", Width: 2, Height: 2, Fit: "cover"}}},
-		Fields:       []field.Definition{field.Text("alt", field.Required())},
+		Fields:       field.Fields{field.Text("alt").Required()},
 	}}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -1918,7 +1919,7 @@ func TestRESTRemoteUploadRejectsPrivateNetworkTargets(t *testing.T) {
 	application, err := ridu.New(ridu.Config{Name: "remote upload REST", Storage: backend, StorageNamespace: "remote-upload-test", Collections: []ridu.Collection{{
 		Slug: "media", Upload: true,
 		UploadConfig: ridu.UploadConfig{MaxFileSize: 4096, MimeTypes: []string{"image/png"}},
-		Fields:       []field.Definition{field.Text("alt", field.Required())},
+		Fields:       field.Fields{field.Text("alt").Required()},
 	}}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -1939,7 +1940,7 @@ func TestUploadReconciliationReportsBeforeExplicitCleanup(t *testing.T) {
 	application, err := ridu.New(ridu.Config{Name: "reconciliation", Storage: backend, StorageNamespace: "reconciliation-test", Collections: []ridu.Collection{{
 		Slug: "media", Upload: true,
 		UploadConfig: ridu.UploadConfig{MaxFileSize: 1024, MimeTypes: []string{"text/plain"}},
-		Fields:       []field.Definition{field.Text("alt")},
+		Fields:       field.Fields{field.Text("alt")},
 	}}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -2061,7 +2062,7 @@ func TestGeneratedUploadPreparationBlocksCleanupUntilDocumentCommit(t *testing.T
 	application, err := ridu.New(ridu.Config{Name: "generated upload race", Storage: storageBackend, StorageNamespace: "generated-upload-race", Collections: []ridu.Collection{{
 		Slug: "media", Upload: true,
 		UploadConfig: ridu.UploadConfig{MaxFileSize: 1024, MimeTypes: []string{"text/plain"}},
-		Hooks:        ridu.CollectionHooks{BeforeChange: []ridu.Hook{blockingChangeHook(ridu.OperationCreate, entered, proceed)}},
+		Hooks:        ridu.CollectionHooks{BeforeChange: []ridu.Hook{blockingChangeHook(operation.Create, entered, proceed)}},
 	}}}, documentStore)
 	if err != nil {
 		t.Fatal(err)
@@ -2281,7 +2282,7 @@ func TestSwallowedNestedUploadFailurePoisonsOuterTransactionAndCleansPreparation
 		{
 			Slug: "media", Upload: true,
 			UploadConfig: ridu.UploadConfig{MaxFileSize: 1024, MimeTypes: []string{"text/plain"}},
-			Fields:       []field.Definition{field.Text("alt", field.Required())},
+			Fields:       field.Fields{field.Text("alt").Required()},
 		},
 		{
 			Slug: "posts",
@@ -2328,7 +2329,7 @@ func TestGeneratedDuplicatePreparationBlocksCleanupUntilDocumentCommit(t *testin
 	application, err := ridu.New(ridu.Config{Name: "generated duplicate race", Storage: storageBackend, StorageNamespace: "generated-duplicate-race", Collections: []ridu.Collection{{
 		Slug: "media", Upload: true,
 		UploadConfig: ridu.UploadConfig{MaxFileSize: 1024, MimeTypes: []string{"text/plain"}},
-		Hooks:        ridu.CollectionHooks{BeforeChange: []ridu.Hook{blockingChangeHook(ridu.OperationDuplicate, entered, proceed)}},
+		Hooks:        ridu.CollectionHooks{BeforeChange: []ridu.Hook{blockingChangeHook(operation.Duplicate, entered, proceed)}},
 	}}}, documentStore)
 	if err != nil {
 		t.Fatal(err)
@@ -2414,7 +2415,7 @@ func TestGeneratedImageRegenerationBlocksCleanupUntilUnversionedCommit(t *testin
 	application, err := ridu.New(ridu.Config{Name: "generated image race", Storage: storageBackend, StorageNamespace: "generated-image-race", Collections: []ridu.Collection{{
 		Slug: "media", Upload: true,
 		UploadConfig: ridu.UploadConfig{MaxFileSize: 4096, MimeTypes: []string{"image/png"}, ImageSizes: []ridu.ImageSize{{Name: "thumb", Width: 2, Height: 2, Fit: "cover"}}},
-		Hooks:        ridu.CollectionHooks{BeforeChange: []ridu.Hook{blockingChangeHook(ridu.OperationUpdate, entered, proceed)}},
+		Hooks:        ridu.CollectionHooks{BeforeChange: []ridu.Hook{blockingChangeHook(operation.Update, entered, proceed)}},
 	}}}, documentStore)
 	if err != nil {
 		t.Fatal(err)
@@ -2653,7 +2654,7 @@ func TestMultipartUploadUsesCollectionSizeLimit(t *testing.T) {
 	application, err := ridu.New(ridu.Config{Name: "multipart limit", Storage: backend, StorageNamespace: "multipart-test", Collections: []ridu.Collection{{
 		Slug: "media", Upload: true,
 		UploadConfig: ridu.UploadConfig{MaxFileSize: 2 << 20, MimeTypes: []string{"text/plain"}},
-		Fields:       []field.Definition{field.Text("alt", field.Required())},
+		Fields:       field.Fields{field.Text("alt").Required()},
 	}}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)

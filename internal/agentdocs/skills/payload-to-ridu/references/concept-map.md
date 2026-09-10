@@ -8,9 +8,9 @@ tests before marking anything supported.
 | --- | --- | --- |
 | `buildConfig` | `ridu.Config` | Compose executable Go constructors. Do not create a YAML/JSON schema or parse Go source. |
 | Collection/global config | `ridu.Collection` / `ridu.Global` | Preserve slugs, labels, admin metadata, indexes, auth/upload/version policy, and executable rules deliberately. |
-| Fields | `field.Definition` helpers or compiled field plugin | Map validation, nested shape, localization, defaults, relationships, and admin presentation—not only the field name. |
+| Fields | Concrete fluent field factories or compiled field plugin | Map validation, nested shape, localization, defaults, relationships, and admin presentation—not only the field name. |
 | Collection access | `ridu.CollectionAccess` / `ridu.GlobalAccess` | Return allow, deny, or a query predicate; filtered decisions stay atomic in the store operation. |
-| Field access | `ridu.FieldAccess` | Port read redaction separately from create/update admission and prove nested paths. |
+| Field access | Attached `field.Access` | Port read redaction separately from create/update admission and prove occurrence-bound nested behavior. |
 | Hooks | collection, field, global, or auth hooks | Preserve phase, transaction reuse, original/current document semantics, and after-commit side effects. |
 | Payload Local API | Ridu `LocalAPI` / generated typed handles | Pass the actor and exact actor collection; do not call a store adapter directly. |
 | REST/GraphQL | REST + generated Fetch SDK; optional compiled GraphQL plugin | Do not preserve Payload wire shapes unless a consumer explicitly requires a reviewed adapter. |

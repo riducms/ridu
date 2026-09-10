@@ -20,7 +20,7 @@ func TestRequiredFieldsRejectExplicitEmptyValues(t *testing.T) {
 		{name: "date", field: validationField(t, "publishedAt", schema.FieldTypeDate, true), value: store.String("")},
 		{
 			name:  "select",
-			field: withSelect(validationField(t, "status", schema.FieldTypeSelect, true), schema.SelectChoice{Value: "draft", Label: "Draft"}),
+			field: withSelect(validationField(t, "status", schema.FieldTypeSelect, true), schema.SelectOption{Value: "draft", Label: "Draft"}),
 			value: store.String(""),
 		},
 		{
@@ -49,7 +49,7 @@ func TestOptionalStringBackedFieldsAcceptEmptyValues(t *testing.T) {
 	fields := []schema.Field{
 		validationField(t, "email", schema.FieldTypeEmail, false),
 		validationField(t, "publishedAt", schema.FieldTypeDate, false),
-		withSelect(validationField(t, "status", schema.FieldTypeSelect, false), schema.SelectChoice{Value: "draft", Label: "Draft"}),
+		withSelect(validationField(t, "status", schema.FieldTypeSelect, false), schema.SelectOption{Value: "draft", Label: "Draft"}),
 		withRelationship(validationField(t, "author", schema.FieldTypeRelationship, false)),
 		withUpload(validationField(t, "cover", schema.FieldTypeUpload, false)),
 	}
@@ -63,21 +63,21 @@ func TestOptionalStringBackedFieldsAcceptEmptyValues(t *testing.T) {
 	}
 }
 
-func TestDatePickerAppearancesValidateTheirWireShapes(t *testing.T) {
+func TestDateFormatsValidateTheirWireShapes(t *testing.T) {
 	tests := []struct {
 		name       string
-		appearance schema.DatePickerAppearance
+		appearance schema.DateFormat
 		valid      string
 		invalid    string
 	}{
-		{name: "day only", appearance: schema.DatePickerDayOnly, valid: "2026-09-15", invalid: "2026-09-15T09:30:00Z"},
-		{name: "day and time", appearance: schema.DatePickerDayAndTime, valid: "2026-09-15T09:30:00Z", invalid: "2026-09-15"},
-		{name: "time only", appearance: schema.DatePickerTimeOnly, valid: "09:30", invalid: "2026-09-15T09:30:00Z"},
+		{name: "day only", appearance: schema.DateOnly, valid: "2026-09-15", invalid: "2026-09-15T09:30:00Z"},
+		{name: "day and time", appearance: schema.DateTime, valid: "2026-09-15T09:30:00Z", invalid: "2026-09-15"},
+		{name: "time only", appearance: schema.TimeOnly, valid: "09:30", invalid: "2026-09-15T09:30:00Z"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			field := validationField(t, "when", schema.FieldTypeDate, true)
-			field.Date = &schema.DateField{PickerAppearance: test.appearance}
+			field.Date = &schema.DateField{Format: test.appearance}
 			if _, issues := validate([]schema.Field{field}, store.Values{"when": store.String(test.valid)}, true, nil); len(issues) != 0 {
 				t.Fatalf("valid value produced issues: %#v", issues)
 			}
@@ -92,7 +92,7 @@ func TestRequiredCollectionsRejectZeroItems(t *testing.T) {
 	rowField := validationField(t, "items", schema.FieldTypeArray, true)
 	rowField.Nested = &schema.NestedField{Fields: []schema.Field{validationField(t, "items.title", schema.FieldTypeText, true)}}
 	blockField := validationField(t, "content", schema.FieldTypeBlocks, true)
-	blockField.Blocks = &schema.BlocksField{Types: []schema.BlockType{{Key: "heading", Label: "Heading"}}}
+	blockField.Blocks = &schema.BlocksField{Types: []schema.BlockType{{Slug: "heading", Labels: schema.BlockLabels{Singular: "Heading"}}}}
 
 	_, issues := validate(
 		[]schema.Field{rowField, blockField},
@@ -165,7 +165,7 @@ func TestBlockAndPluginIssuesUseConcreteRuntimePaths(t *testing.T) {
 	pluginField.Plugin = &schema.PluginField{Key: "color"}
 	content := validationField(t, "content", schema.FieldTypeBlocks, false)
 	content.Blocks = &schema.BlocksField{Types: []schema.BlockType{{
-		Key: "callout", Label: "Callout", Fields: []schema.Field{pluginField},
+		Slug: "callout", Labels: schema.BlockLabels{Singular: "Callout"}, Fields: []schema.Field{pluginField},
 	}}}
 	validators := map[string]PluginValidator{
 		"color": func(_ schema.Field, _ store.Value, runtimePath string) []schema.Issue {
@@ -206,7 +206,7 @@ func TestMultiSelectValidationAndDefaultsPreserveOrder(t *testing.T) {
 	roles := validationField(t, "roles", schema.FieldTypeSelect, true)
 	roles.Select = &schema.SelectField{
 		HasMany:       true,
-		Choices:       []schema.SelectChoice{{Value: "admin", Label: "Admin"}, {Value: "editor", Label: "Editor"}},
+		Options:       []schema.SelectOption{{Value: "admin", Label: "Admin"}, {Value: "editor", Label: "Editor"}},
 		DefaultValues: []string{"admin"},
 	}
 
@@ -214,7 +214,7 @@ func TestMultiSelectValidationAndDefaultsPreserveOrder(t *testing.T) {
 	if len(issues) != 0 {
 		t.Fatalf("default issues = %#v", issues)
 	}
-	defaults, valid := validated["roles"].Values()
+	defaults, valid := validated["roles"].CopyList()
 	defaultRole := ""
 	if len(defaults) != 0 {
 		defaultRole, _ = defaults[0].StringValue()
@@ -227,7 +227,7 @@ func TestMultiSelectValidationAndDefaultsPreserveOrder(t *testing.T) {
 	if len(issues) != 0 {
 		t.Fatalf("ordered values issues = %#v", issues)
 	}
-	values, _ := validated["roles"].Values()
+	values, _ := validated["roles"].CopyList()
 	first, _ := values[0].StringValue()
 	second, _ := values[1].StringValue()
 	if first != "editor" || second != "admin" {
@@ -236,8 +236,8 @@ func TestMultiSelectValidationAndDefaultsPreserveOrder(t *testing.T) {
 
 	_, issues = validate([]schema.Field{roles}, store.Values{"roles": store.List(store.String("admin"), store.String("admin"), store.String("owner"), store.Number(2))}, true, nil)
 	want := map[string]string{
-		"roles.1": "duplicate_choice",
-		"roles.2": "invalid_choice",
+		"roles.1": "duplicate_option",
+		"roles.2": "invalid_option",
 		"roles.3": "invalid_type",
 	}
 	for _, issue := range issues {
@@ -270,7 +270,7 @@ func TestNestedDefaultsMaterializeForAbsentGroupsAndRepeatingRows(t *testing.T) 
 	items.Nested = &schema.NestedField{Fields: []schema.Field{defaultGroup("items.settings")}}
 	content := validationField(t, "content", schema.FieldTypeBlocks, false)
 	content.Blocks = &schema.BlocksField{Types: []schema.BlockType{{
-		Key: "hero", Label: "Hero", Fields: []schema.Field{defaultGroup("content.hero.settings")},
+		Slug: "hero", Labels: schema.BlockLabels{Singular: "Hero"}, Fields: []schema.Field{defaultGroup("content.hero.settings")},
 	}}}
 
 	validated, issues := validate(
@@ -289,7 +289,7 @@ func TestNestedDefaultsMaterializeForAbsentGroupsAndRepeatingRows(t *testing.T) 
 	}
 	assertTheme := func(label string, values store.Values) {
 		t.Helper()
-		group, valid := values["settings"].ObjectValue()
+		group, valid := values["settings"].CopyObject()
 		if !valid {
 			t.Fatalf("%s settings = %#v, want object", label, values["settings"])
 		}
@@ -299,11 +299,11 @@ func TestNestedDefaultsMaterializeForAbsentGroupsAndRepeatingRows(t *testing.T) 
 		}
 	}
 	assertTheme("root", validated)
-	itemValues, _ := validated["items"].Values()
-	item, _ := itemValues[0].ObjectValue()
+	itemValues, _ := validated["items"].CopyList()
+	item, _ := itemValues[0].CopyObject()
 	assertTheme("array row", item)
-	blockValues, _ := validated["content"].Values()
-	block, _ := blockValues[0].ObjectValue()
+	blockValues, _ := validated["content"].CopyList()
+	block, _ := blockValues[0].CopyObject()
 	assertTheme("block row", block)
 }
 
@@ -311,7 +311,7 @@ func TestConditionalAbsentGroupMaterializesDefaultsAndStillRequiresNestedFields(
 	defaultKind := "reference"
 	kind := validationField(t, "redirect.kind", schema.FieldTypeRadio, false)
 	kind.Default = &defaultKind
-	kind.Select = &schema.SelectField{Choices: []schema.SelectChoice{{Value: defaultKind, Label: "Reference"}}}
+	kind.Select = &schema.SelectField{Options: []schema.SelectOption{{Value: defaultKind, Label: "Reference"}}}
 	reference := validationField(t, "redirect.reference", schema.FieldTypeRelationship, true)
 	reference.Relationship = &schema.RelationshipField{}
 	redirect := validationField(t, "redirect", schema.FieldTypeGroup, false)
@@ -322,7 +322,7 @@ func TestConditionalAbsentGroupMaterializesDefaultsAndStillRequiresNestedFields(
 	if len(issues) != 1 || issues[0].Code != "required" || issues[0].Path != "redirect.reference" {
 		t.Fatalf("conditional absent group issues = %#v, want required redirect.reference", issues)
 	}
-	group, valid := validated["redirect"].ObjectValue()
+	group, valid := validated["redirect"].CopyObject()
 	if !valid {
 		t.Fatalf("conditional absent group was not materialized: %#v", validated["redirect"])
 	}
@@ -349,8 +349,8 @@ func validationField(t *testing.T, path string, fieldType schema.FieldType, requ
 	}
 }
 
-func withSelect(field schema.Field, choices ...schema.SelectChoice) schema.Field {
-	field.Select = &schema.SelectField{Choices: choices}
+func withSelect(field schema.Field, options ...schema.SelectOption) schema.Field {
+	field.Select = &schema.SelectField{Options: options}
 	return field
 }
 

@@ -23,14 +23,18 @@ func TestPluginAddsFormCollectionsAndAdminPair(t *testing.T) {
 			EnabledFields:         []formbuilder.FieldType{formbuilder.FieldText, formbuilder.FieldRadio, formbuilder.FieldDate, formbuilder.FieldUpload, formbuilder.FieldPayment},
 			UploadCollections:     []schema.CollectionSlug{"media"},
 			RedirectRelationships: []schema.CollectionSlug{"pages"},
-			PaymentProcessors:     []field.Choice{{Value: "stripe", Label: "Stripe"}},
+			PaymentProcessors:     []field.Option{{Value: "stripe", Label: "Stripe"}},
 			HandlePayment: func(formbuilder.PaymentContext) (store.Value, error) {
 				return store.Null(), nil
 			},
 		})},
 		Collections: []ridu.Collection{
-			{Slug: "media", Upload: true, Fields: []field.Definition{field.Text("alt")}},
-			{Slug: "pages", Fields: []field.Definition{field.Text("title")}},
+			{Slug: "media", Upload: true, Fields: field.Fields{
+				field.Text("alt"),
+			}},
+			{Slug: "pages", Fields: field.Fields{
+				field.Text("title"),
+			}},
 		},
 	})
 	if err != nil {
@@ -47,7 +51,7 @@ func TestPluginAddsFormCollectionsAndAdminPair(t *testing.T) {
 	if forms.Slug != "forms" || forms.Admin.UseAsTitle != "title" || len(forms.Fields) != 7 {
 		t.Fatalf("forms collection = %#v", forms)
 	}
-	if forms.Fields[1].Blocks == nil || len(forms.Fields[1].Blocks.Types) != 5 {
+	if forms.Fields[1].Blocks == nil || len(forms.Fields[1].Blocks.ResolvedTypes()) != 5 {
 		t.Fatalf("form field blocks = %#v", forms.Fields[1].Blocks)
 	}
 	submissions := snapshot.Collections[3]
@@ -76,7 +80,9 @@ func TestFieldsOverrideCannotBypassReservedPaymentDependencies(t *testing.T) {
 	_, err := ridu.Resolve(ridu.Config{
 		Name: "Forms",
 		Plugins: []ridu.Plugin{formbuilder.New(formbuilder.Config{Fields: func(defaults []field.Block) ([]field.Block, error) {
-			return append(defaults, field.BlockType("payment", "Payment", field.Text("name"))), nil
+			return append(defaults, field.Block{Slug: "payment", Fields: field.Fields{
+				field.Text("name"),
+			}}), nil
 		}})},
 	})
 	var validation *schema.ValidationError
@@ -88,11 +94,11 @@ func TestFieldsOverrideCannotBypassReservedPaymentDependencies(t *testing.T) {
 func TestFieldsOverrideCanAddAProjectOwnedFormBlock(t *testing.T) {
 	application := newApplication(t, formbuilder.Config{
 		Fields: func(defaults []field.Block) ([]field.Block, error) {
-			return append(defaults, field.BlockType("rating", "Rating",
-				field.Text("name", field.Required()),
+			return append(defaults, field.Block{Slug: "rating", Fields: field.Fields{
+				field.Text("name").Required(),
 				field.Text("label"),
 				field.Checkbox("required"),
-			)), nil
+			}}), nil
 		},
 	})
 	form := createForm(t, application, store.Values{
@@ -154,7 +160,7 @@ func TestSubmissionValidationUsesSelectedForm(t *testing.T) {
 	if !errors.As(err, &operationError) || operationError.Code != "validation" || operationError.Status != 422 {
 		t.Fatalf("invalid submission error = %#v / %v", operationError, err)
 	}
-	wantCodes := []string{"required", "invalid_email", "invalid_choice", "unknown_form_field"}
+	wantCodes := []string{"required", "invalid_email", "invalid_option", "unknown_form_field"}
 	for _, code := range wantCodes {
 		if !hasIssueCode(operationError.Issues, code) {
 			t.Errorf("issues %#v do not contain %q", operationError.Issues, code)
@@ -224,7 +230,7 @@ func TestEmailsRunAfterCommitWithEscapedPlaceholders(t *testing.T) {
 func TestPaymentTotalAndCallbackArePersisted(t *testing.T) {
 	application := newApplication(t, formbuilder.Config{
 		EnabledFields:     []formbuilder.FieldType{formbuilder.FieldNumber, formbuilder.FieldPayment},
-		PaymentProcessors: []field.Choice{{Value: "test", Label: "Test"}},
+		PaymentProcessors: []field.Option{{Value: "test", Label: "Test"}},
 		HandlePayment: func(context formbuilder.PaymentContext) (store.Value, error) {
 			return store.Object(store.Values{"processor": store.String("test"), "total": store.Number(context.Total)}), nil
 		},
@@ -250,11 +256,11 @@ func TestPaymentTotalAndCallbackArePersisted(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	payment, valid := created.Values["payment"].ObjectValue()
-	if !valid {
+	payment := created.Values["payment"]
+	if payment.Kind() != store.ValueObject {
 		t.Fatalf("payment = %#v", created.Values["payment"])
 	}
-	total, _ := payment["total"].NumberValue()
+	total, _ := payment.Get("total").NumberValue()
 	if total != 30 {
 		t.Fatalf("payment total = %v, want 30", total)
 	}
@@ -304,8 +310,10 @@ func TestFormManagementRequiresAuthenticationByDefault(t *testing.T) {
 func TestFormManagementRequiresExactAdminCollection(t *testing.T) {
 	application, err := ridu.New(ridu.Config{
 		Name: "Forms", Admin: ridu.AdminConfig{User: "users"},
-		Collections: []ridu.Collection{{Slug: "users", Auth: true, Fields: []field.Definition{field.Email("email", field.Required(), field.Unique())}}},
-		Plugins:     []ridu.Plugin{formbuilder.New(formbuilder.Config{})},
+		Collections: []ridu.Collection{{Slug: "users", Auth: true, Fields: field.Fields{
+			field.Email("email").Required().Unique(),
+		}}},
+		Plugins: []ridu.Plugin{formbuilder.New(formbuilder.Config{})},
 	}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -335,7 +343,9 @@ func TestUploadSubmissionsUseGeneratedRelationshipShapes(t *testing.T) {
 			}
 			collections := make([]ridu.Collection, len(test.collections))
 			for index, slug := range test.collections {
-				collections[index] = ridu.Collection{Slug: slug, Upload: true, UploadConfig: ridu.UploadConfig{MimeTypes: []string{"text/plain"}}, Fields: []field.Definition{field.Text("alt")}}
+				collections[index] = ridu.Collection{Slug: slug, Upload: true, UploadConfig: ridu.UploadConfig{MimeTypes: []string{"text/plain"}}, Fields: field.Fields{
+					field.Text("alt"),
+				}}
 			}
 			application, err := ridu.New(ridu.Config{
 				Name: "Upload forms", Collections: collections,
@@ -378,7 +388,7 @@ func TestUploadSubmissionsUseGeneratedRelationshipShapes(t *testing.T) {
 func TestOptionalPaymentIsNotProcessedAndMultiplePaymentsAreRejected(t *testing.T) {
 	called := 0
 	application := newApplication(t, formbuilder.Config{
-		EnabledFields: []formbuilder.FieldType{formbuilder.FieldPayment}, PaymentProcessors: []field.Choice{{Value: "test", Label: "Test"}},
+		EnabledFields: []formbuilder.FieldType{formbuilder.FieldPayment}, PaymentProcessors: []field.Option{{Value: "test", Label: "Test"}},
 		HandlePayment: func(formbuilder.PaymentContext) (store.Value, error) { called++; return store.Null(), nil },
 	})
 	optional := store.Object(store.Values{

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { SchemaField } from "@riducms/protocol";
+	import { fieldControlARIA } from "@riducms/ui";
 	import XIcon from "~icons/lucide/x";
 
 	import { Button } from "@admin/components/ui/button";
@@ -9,7 +10,7 @@
 	import FieldShell from "@admin/fields/field-shell.svelte";
 	import {
 		removeSelectValue,
-		selectChoiceLabel,
+		selectOptionLabel,
 		selectManyValues,
 	} from "@admin/fields/select/select-value";
 
@@ -27,40 +28,38 @@
 		field.admin.placeholder ?? runtime.i18n.t("fields:select", { label: field.admin.label })
 	);
 	const selectedLabel = $derived(
-		field.select?.choices.find((choice) => choice.value === value)?.label ?? placeholder
+		field.select?.options.find((option) => option.value === value)?.label ?? placeholder
 	);
 	const selectedLabels = $derived(
-		values.map((selected) => selectChoiceLabel(field.select?.choices ?? [], selected))
+		values.map((selected) => selectOptionLabel(field.select?.options ?? [], selected))
 	);
 	const issues = $derived(form.issuesFor(field.path));
-	const hasMessage = $derived(issues.length > 0 || field.admin.description !== undefined);
+	const editingBlocked = $derived(field.admin.readOnly === true || form.editingBlocked);
+	const controlARIA = $derived(
+		fieldControlARIA(field.id, field.admin.description !== undefined, issues.length > 0)
+	);
 
 	$effect(() => form.register(field.path));
 
 	function setValues(next: string[]) {
+		if (editingBlocked) return;
 		form.set(field.path, [...next]);
 	}
 
 	function removeValue(selected: string) {
+		if (editingBlocked) return;
 		form.set(field.path, removeSelectValue(values, selected));
 	}
 </script>
 
 <FieldShell {field} {issues}>
 	{#if hasMany}
-		<Select
-			type="multiple"
-			value={values}
-			onValueChange={setValues}
-			disabled={field.admin.readOnly}
-		>
+		<Select type="multiple" value={values} onValueChange={setValues} disabled={editingBlocked}>
 			<SelectTrigger
 				id={field.id}
 				class="w-full"
-				aria-invalid={issues.length > 0}
+				{...controlARIA}
 				aria-required={field.required}
-				aria-describedby={hasMessage ? `${field.id}-message` : undefined}
-				aria-errormessage={issues.length > 0 ? `${field.id}-message` : undefined}
 				aria-label={field.admin.label}
 			>
 				<span class={values.length === 0 ? "text-foreground-placeholder" : "truncate"}>
@@ -68,8 +67,8 @@
 				</span>
 			</SelectTrigger>
 			<SelectContent>
-				{#each field.select?.choices ?? [] as choice (choice.value)}
-					<SelectItem value={choice.value} label={choice.label} />
+				{#each field.select?.options ?? [] as option (option.value)}
+					<SelectItem value={option.value} label={option.label} />
 				{/each}
 			</SelectContent>
 		</Select>
@@ -83,15 +82,16 @@
 						class="inline-flex max-w-full items-center gap-1 rounded-[3px] border border-control-border bg-background py-0.5 pe-0.5 ps-2 text-[12px] text-foreground-muted"
 					>
 						<span class="max-w-64 truncate">
-							{selectChoiceLabel(field.select?.choices ?? [], selected)}
+							{selectOptionLabel(field.select?.options ?? [], selected)}
 						</span>
 						{#if !field.admin.readOnly}
 							<Button
 								variant="ghost"
 								size="icon-xs"
+								disabled={editingBlocked}
 								onclick={() => removeValue(selected)}
 								aria-label={runtime.i18n.t("fields:remove", {
-									label: selectChoiceLabel(field.select?.choices ?? [], selected),
+									label: selectOptionLabel(field.select?.options ?? [], selected),
 								})}
 							>
 								<XIcon class="size-3" aria-hidden="true" />
@@ -106,16 +106,16 @@
 			type="single"
 			{value}
 			allowDeselect={!field.required}
-			onValueChange={(next) => form.set(field.path, next)}
-			disabled={field.admin.readOnly}
+			onValueChange={(next) => {
+				if (!editingBlocked) form.set(field.path, next);
+			}}
+			disabled={editingBlocked}
 		>
 			<SelectTrigger
 				id={field.id}
 				class="w-full"
-				aria-invalid={issues.length > 0}
+				{...controlARIA}
 				aria-required={field.required}
-				aria-describedby={hasMessage ? `${field.id}-message` : undefined}
-				aria-errormessage={issues.length > 0 ? `${field.id}-message` : undefined}
 				aria-label={field.admin.label}
 			>
 				<span class={value === "" ? "text-foreground-placeholder" : undefined}>
@@ -123,8 +123,8 @@
 				</span>
 			</SelectTrigger>
 			<SelectContent>
-				{#each field.select?.choices ?? [] as choice (choice.value)}
-					<SelectItem value={choice.value} label={choice.label} />
+				{#each field.select?.options ?? [] as option (option.value)}
+					<SelectItem value={option.value} label={option.label} />
 				{/each}
 			</SelectContent>
 		</Select>

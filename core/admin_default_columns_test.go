@@ -15,7 +15,7 @@ func TestCollectionDefaultColumnsAcceptOnlyCapabilityOwnedSystemFields(t *testin
 		{
 			Slug: "posts", Versions: true, Trash: true,
 			Admin:  ridu.CollectionAdmin{DefaultColumns: []string{"title", "id", "createdAt", "updatedAt", "deletedAt", "_status", "_revision"}},
-			Fields: []field.Definition{field.Text("title")},
+			Fields: field.Fields{field.Text("title")},
 		},
 		{
 			Slug: "media", Upload: true,
@@ -23,7 +23,7 @@ func TestCollectionDefaultColumnsAcceptOnlyCapabilityOwnedSystemFields(t *testin
 				"filename", "mimeType", "filesize", "url", "objectKey", "width", "height", "sizes",
 				"focalX", "focalY", "cropX", "cropY", "cropWidth", "cropHeight",
 			}},
-			Fields: []field.Definition{field.Text("alt")},
+			Fields: field.Fields{field.Text("alt")},
 		},
 	}}
 	manifest, err := ridu.Resolve(config)

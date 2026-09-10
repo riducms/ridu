@@ -13,7 +13,6 @@ import (
 	operationengine "github.com/riducms/ridu/internal/operation"
 	"github.com/riducms/ridu/internal/remotefile"
 	"github.com/riducms/ridu/internal/uploads"
-	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/storage"
 	"github.com/riducms/ridu/store"
@@ -377,7 +376,6 @@ func (application *App) OpenUploadWithOptions(ctx context.Context, collection, k
 	sort.Slice(remaining, func(left, right int) bool { return remaining[left].Slug < remaining[right].Slug })
 	candidates = append(candidates, remaining...)
 	var exactAccessError error
-	objectKey, _ := query.NewPath("objectKey")
 	for _, candidate := range candidates {
 		if candidate.Upload.Private && options.Actor == nil {
 			if exactUpload && candidate.Slug == resolved.Slug {
@@ -385,23 +383,11 @@ func (application *App) OpenUploadWithOptions(ctx context.Context, collection, k
 			}
 			continue
 		}
-		predicates := []query.Expression{query.Equal(objectKey, query.String(key))}
-		for _, size := range candidate.Upload.ImageSizes {
-			sizeKey, pathError := query.NewPath("sizes", size.Name, "objectKey")
-			if pathError != nil {
-				return nil, storage.Object{}, pathError
-			}
-			predicates = append(predicates, query.Equal(sizeKey, query.String(key)))
-		}
-		where := predicates[0]
-		if len(predicates) > 1 {
-			where, _ = query.Or(predicates...)
-		}
-		page, err := application.local.List(ctx, string(candidate.Slug), ListOptions{
-			Where: where, Limit: 1, Actor: options.Actor, ActorCollection: options.ActorCollection,
+		result, err := application.local.engine.ReadUploadOwner(ctx, key, listRequest(string(candidate.Slug), ListOptions{
+			Limit: 1, Actor: options.Actor, ActorCollection: options.ActorCollection,
 			Locale: options.Locale, FallbackLocales: append([]schema.LocaleCode(nil), options.FallbackLocales...),
 			DisableFallback: options.DisableFallback, AllLocales: options.AllLocales,
-		})
+		}))
 		if err != nil {
 			var operationError *operationengine.Error
 			if errors.As(err, &operationError) && (operationError.Code == "access_denied" || operationError.Code == "not_found") {
@@ -412,7 +398,7 @@ func (application *App) OpenUploadWithOptions(ctx context.Context, collection, k
 			}
 			return nil, storage.Object{}, err
 		}
-		if len(page.Documents) != 0 {
+		if result.Page != nil && len(result.Page.Documents) != 0 {
 			return application.uploads.Backend.Open(ctx, key)
 		}
 	}
@@ -794,19 +780,14 @@ func uploadObjectKeys(values store.Values) ([]string, error) {
 	if !exists {
 		return keys, nil
 	}
-	object, valid := sizes.ObjectValue()
-	if !valid {
+	if sizes.Kind() != store.ValueObject {
 		return keys, nil
 	}
-	if len(object) > store.MaxUploadReferenceCandidates-1 {
+	if sizes.Len() > store.MaxUploadReferenceCandidates-1 {
 		return nil, fmt.Errorf("upload metadata contains more than %d image variants", store.MaxUploadReferenceCandidates-1)
 	}
-	for _, size := range object {
-		metadata, valid := size.ObjectValue()
-		if !valid {
-			continue
-		}
-		key, exists := metadata["objectKey"]
+	for _, size := range sizes.Entries() {
+		key, exists := size.Lookup("objectKey")
 		if text, valid := key.StringValue(); exists && valid && text != "" {
 			keys = append(keys, text)
 		}

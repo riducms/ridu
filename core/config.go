@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"sort"
 	"time"
 
 	"github.com/riducms/ridu/field"
@@ -29,6 +30,8 @@ type Config struct {
 	// canonical string ID. It is disabled by default; migration imports retain
 	// their separate identity-preserving path regardless of this setting.
 	AllowIDOnCreate bool
+	// Blocks declares shared immutable definitions selected by field and embedded references.
+	Blocks []field.Block
 	// Collections declares every document collection owned by the application.
 	Collections []Collection
 	// Globals declares singleton documents with their own API and admin routes.
@@ -55,6 +58,7 @@ type Config struct {
 	// among applications sharing one backend.
 	StorageNamespace string
 	pluginEndpoints  []runtimePluginEndpoint
+	fieldGraph       configresolver.Graph
 }
 
 // LocalizationConfig declares the application's content locales. Fallback is
@@ -130,8 +134,8 @@ type Collection struct {
 	Labels CollectionLabels
 	// Admin configures collection presentation and editorial organization.
 	Admin CollectionAdmin
-	// Fields defines the collection's stored values and admin presentation.
-	Fields []field.Definition
+	// Fields owns the collection's immutable field shape, behavior, and presentation.
+	Fields field.Fields
 	// Indexes defines ordered multi-field indexes. Unique indexes enforce tuple
 	// uniqueness while allowing multiple rows containing null.
 	Indexes []CollectionIndex
@@ -155,14 +159,8 @@ type Collection struct {
 	VersionConfig VersionConfig
 	// Access defines collection-level authorization for each operation.
 	Access CollectionAccess
-	// FieldAccess maps field paths to field-level read and write authorization.
-	FieldAccess map[string]FieldAccess
-	// FieldHooks maps field paths to lifecycle hooks scoped to those values.
-	FieldHooks map[string]CollectionHooks
 	// Hooks defines collection-wide lifecycle behavior.
 	Hooks CollectionHooks
-	// Computed resolves virtual field values after an operation has produced a document.
-	Computed map[string]Computed
 	// Endpoints declares custom HTTP endpoints below
 	// /api/collections/<slug>. They run before matching built-in collection
 	// routes for the same method.
@@ -221,22 +219,16 @@ type Global struct {
 	LabelTranslations map[string]string
 	// Admin is serializable presentation metadata consumed by the framework admin.
 	Admin GlobalAdmin
-	// Fields defines the global's stored values and admin presentation.
-	Fields []field.Definition
+	// Fields owns the global's immutable field shape, behavior, and presentation.
+	Fields field.Fields
 	// Versions enables revisions for this global.
 	Versions bool
 	// VersionConfig customizes drafts, retention, and autosave behavior.
 	VersionConfig VersionConfig
 	// Access defines read and update authorization.
 	Access GlobalAccess
-	// FieldAccess maps field paths to field-level read and update authorization.
-	FieldAccess map[string]FieldAccess
-	// FieldHooks maps field paths to lifecycle hooks scoped to those values.
-	FieldHooks map[string]CollectionHooks
 	// Hooks defines global-wide lifecycle behavior.
 	Hooks CollectionHooks
-	// Computed resolves virtual field values after an operation has produced the singleton.
-	Computed map[string]Computed
 	// Endpoints declares custom HTTP endpoints below /api/globals/<slug>.
 	// They run before matching built-in global routes for the same method.
 	Endpoints []Endpoint
@@ -397,6 +389,9 @@ func Resolve(applicationConfig Config) (schema.Manifest, error) {
 func resolveConfig(applicationConfig Config) (Config, schema.Manifest, error) {
 	working := cloneConfig(applicationConfig)
 	plugins := append([]Plugin(nil), working.Plugins...)
+	if err := validateGraphPluginKeys(plugins); err != nil {
+		return Config{}, schema.Manifest{}, err
+	}
 	if err := validatePluginCompatibility(plugins); err != nil {
 		return Config{}, schema.Manifest{}, err
 	}
@@ -426,6 +421,12 @@ func resolveConfig(applicationConfig Config) (Config, schema.Manifest, error) {
 		working = cloneConfig(transformed)
 		working.Plugins = plugins
 	}
+	if err := bindConfigBlocks(&working); err != nil {
+		return Config{}, schema.Manifest{}, err
+	}
+	if err := composeFieldGraphs(&working, plugins); err != nil {
+		return Config{}, schema.Manifest{}, err
+	}
 	resolvedPlugins, pluginEndpoints, err := resolverPlugins(plugins)
 	if err != nil {
 		return Config{}, schema.Manifest{}, err
@@ -440,7 +441,8 @@ func resolveConfig(applicationConfig Config) (Config, schema.Manifest, error) {
 	if _, issues := buildTaskRegistry(working.Tasks); len(issues) != 0 {
 		return Config{}, schema.Manifest{}, schema.NewValidationError(issues)
 	}
-	manifest, err := configresolver.Resolve(configresolver.Input{
+	manifest, graph, err := configresolver.ResolveGraph(configresolver.Input{
+		Blocks:           working.Blocks,
 		Name:             working.Name,
 		NameTranslations: cloneStringMap(working.NameTranslations),
 		AllowIDOnCreate:  working.AllowIDOnCreate,
@@ -454,16 +456,49 @@ func resolveConfig(applicationConfig Config) (Config, schema.Manifest, error) {
 	if err != nil {
 		return Config{}, schema.Manifest{}, err
 	}
-	if err := applyPluginHooks(&working, plugins, manifest); err != nil {
+	working.fieldGraph = graph
+	if err := validatePluginValidatorOwnership(plugins, manifest); err != nil {
 		return Config{}, schema.Manifest{}, err
 	}
-	if err := validateFieldRuntime(working, manifest); err != nil {
+	if err := applyPluginHooks(&working, plugins); err != nil {
 		return Config{}, schema.Manifest{}, err
 	}
-	if err := validateComputedRuntime(working, manifest); err != nil {
+	if err := validateResourceHooks(working); err != nil {
 		return Config{}, schema.Manifest{}, err
 	}
 	return working, manifest, nil
+}
+
+// Field validators belong to declared field types, not whichever plugin happens to run last.
+func validatePluginValidatorOwnership(plugins []Plugin, manifest schema.Manifest) error {
+	owners := make(map[string]string)
+	for _, plugin := range manifest.Snapshot().Plugins {
+		if plugin.Version == "" {
+			owners[plugin.Key] = plugin.Key
+		}
+		for _, fieldType := range plugin.FieldTypes {
+			owners[fieldType.Key] = plugin.Key
+		}
+	}
+	for index, plugin := range plugins {
+		provider, ok := plugin.(FieldValidatorProvider)
+		if !ok {
+			continue
+		}
+		validators := provider.FieldValidators()
+		keys := make([]string, 0, len(validators))
+		for key := range validators {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			validator := validators[key]
+			if owners[key] != plugin.Key() || validator == nil {
+				return schema.NewValidationError([]schema.Issue{{Code: "invalid_plugin_field_validator", Path: fmt.Sprintf("plugins[%d].fieldValidators.%s", index, key), Message: fmt.Sprintf("plugin %q must supply non-nil validators only for its declared field types", plugin.Key())}})
+			}
+		}
+	}
+	return nil
 }
 
 func resolverAdmin(admin AdminConfig) configresolver.Admin {
@@ -563,30 +598,10 @@ func validatePluginCompatibility(plugins []Plugin) error {
 	return nil
 }
 
-func applyPluginHooks(config *Config, plugins []Plugin, manifest schema.Manifest) error {
+func applyPluginHooks(config *Config, plugins []Plugin) error {
 	collections := make(map[schema.CollectionSlug]int, len(config.Collections))
-	fieldPaths := make(map[schema.CollectionSlug]map[string]struct{}, len(config.Collections))
 	for index, collection := range config.Collections {
 		collections[collection.Slug] = index
-	}
-	for _, collection := range manifest.Snapshot().Collections {
-		paths := make(map[string]struct{})
-		var inspect func([]schema.Field)
-		inspect = func(fields []schema.Field) {
-			for _, candidate := range fields {
-				paths[candidate.Path.String()] = struct{}{}
-				if candidate.Nested != nil {
-					inspect(candidate.Nested.Fields)
-				}
-				if candidate.Blocks != nil {
-					for _, block := range candidate.Blocks.Types {
-						inspect(block.Fields)
-					}
-				}
-			}
-		}
-		inspect(collection.Fields)
-		fieldPaths[collection.Slug] = paths
 	}
 	var issues []schema.Issue
 	for pluginIndex, plugin := range plugins {
@@ -601,18 +616,8 @@ func applyPluginHooks(config *Config, plugins []Plugin, manifest schema.Manifest
 				issues = append(issues, schema.Issue{Code: "unknown_plugin_hook_collection", Path: path + ".collection", Message: fmt.Sprintf("plugin hook collection %q does not exist", contribution.Collection)})
 				continue
 			}
-			if contribution.FieldPath == "" {
-				config.Collections[collectionIndex].Hooks = appendCollectionHooks(config.Collections[collectionIndex].Hooks, contribution.Hooks)
-				continue
-			}
-			if _, exists := fieldPaths[contribution.Collection][contribution.FieldPath]; !exists {
-				issues = append(issues, schema.Issue{Code: "unknown_plugin_hook_field", Path: path + ".fieldPath", Message: fmt.Sprintf("plugin hook field %q does not exist in collection %q", contribution.FieldPath, contribution.Collection)})
-				continue
-			}
-			if config.Collections[collectionIndex].FieldHooks == nil {
-				config.Collections[collectionIndex].FieldHooks = make(map[string]CollectionHooks)
-			}
-			config.Collections[collectionIndex].FieldHooks[contribution.FieldPath] = appendCollectionHooks(config.Collections[collectionIndex].FieldHooks[contribution.FieldPath], contribution.Hooks)
+			config.Collections[collectionIndex].Hooks = appendCollectionHooks(config.Collections[collectionIndex].Hooks, contribution.Hooks)
+
 		}
 	}
 	if len(issues) != 0 {
@@ -668,7 +673,7 @@ func resolverCollections(collections []Collection) []configresolver.Collection {
 				FolderField: collection.Admin.FolderField, ParentField: collection.Admin.ParentField,
 				LivePreview: resolverLivePreview(collection.Admin.LivePreview),
 			},
-			Fields:             append([]field.Definition(nil), collection.Fields...),
+			Fields:             append(field.Fields(nil), collection.Fields...),
 			Indexes:            resolverIndexes(collection.Indexes),
 			Auth:               collection.Auth,
 			SessionDuration:    collection.AuthConfig.SessionDuration,
@@ -718,7 +723,7 @@ func resolverGlobals(globals []Global) []configresolver.Global {
 				Description: global.Admin.Description, DescriptionTranslations: cloneStringMap(global.Admin.DescriptionTranslations),
 				LivePreview: resolverLivePreview(global.Admin.LivePreview),
 			},
-			Fields:   append([]field.Definition(nil), global.Fields...),
+			Fields:   append(field.Fields(nil), global.Fields...),
 			Versions: global.Versions,
 			VersionConfig: configresolver.VersionConfig{
 				Drafts: global.VersionConfig.Drafts, MaxPerDocument: global.VersionConfig.MaxPerDocument,
@@ -844,7 +849,7 @@ func resolverPluginFieldTypes(types []PluginFieldType) []configresolver.PluginFi
 			Key: fieldType.Key, TypeScriptPackage: fieldType.TypeScriptPackage,
 			TypeScriptOutput: fieldType.TypeScriptOutput, TypeScriptInput: fieldType.TypeScriptInput,
 			TypeScriptWhere: fieldType.TypeScriptWhere, GoPackage: fieldType.GoPackage,
-			GoType: fieldType.GoType, JSONSchema: append([]byte(nil), fieldType.JSONSchema...),
+			GoType: fieldType.GoType, JSONSchema: append([]byte(nil), fieldType.JSONSchema...), EmbeddedTypes: append([]string(nil), fieldType.EmbeddedTypes...),
 		}
 	}
 	return result
@@ -872,6 +877,10 @@ func resolverPluginDatabaseContributions(contributions []PluginDatabaseContribut
 
 func cloneConfig(applicationConfig Config) Config {
 	cloned := applicationConfig
+	cloned.Blocks = make([]field.Block, len(applicationConfig.Blocks))
+	for i, b := range applicationConfig.Blocks {
+		cloned.Blocks[i] = b.Snapshot()
+	}
 	cloned.NameTranslations = cloneStringMap(applicationConfig.NameTranslations)
 	cloned.Admin.Localization.Languages = append([]AdminLanguage(nil), applicationConfig.Admin.Localization.Languages...)
 	for index := range cloned.Admin.Localization.Languages {
@@ -896,7 +905,7 @@ func cloneConfig(applicationConfig Config) Config {
 		cloned.Collections[index].Admin.GroupTranslations = cloneStringMap(collection.Admin.GroupTranslations)
 		cloned.Collections[index].Admin.DescriptionTranslations = cloneStringMap(collection.Admin.DescriptionTranslations)
 		cloned.Collections[index].AuthConfig = cloneAuthConfig(collection.AuthConfig)
-		cloned.Collections[index].Fields = append([]field.Definition(nil), collection.Fields...)
+		cloned.Collections[index].Fields = collection.Fields.Snapshot()
 		cloned.Collections[index].Indexes = make([]CollectionIndex, len(collection.Indexes))
 		for indexIndex, candidate := range collection.Indexes {
 			cloned.Collections[index].Indexes[indexIndex] = candidate
@@ -907,18 +916,6 @@ func cloneConfig(applicationConfig Config) Config {
 		cloned.Collections[index].UploadConfig.MimeTypes = append([]string(nil), collection.UploadConfig.MimeTypes...)
 		cloned.Collections[index].UploadConfig.ImageSizes = append([]ImageSize(nil), collection.UploadConfig.ImageSizes...)
 		cloned.Collections[index].Hooks = collection.Hooks.clone()
-		cloned.Collections[index].FieldAccess = make(map[string]FieldAccess, len(collection.FieldAccess))
-		for path, access := range collection.FieldAccess {
-			cloned.Collections[index].FieldAccess[path] = access
-		}
-		cloned.Collections[index].FieldHooks = make(map[string]CollectionHooks, len(collection.FieldHooks))
-		for path, hooks := range collection.FieldHooks {
-			cloned.Collections[index].FieldHooks[path] = hooks.clone()
-		}
-		cloned.Collections[index].Computed = make(map[string]Computed, len(collection.Computed))
-		for path, resolver := range collection.Computed {
-			cloned.Collections[index].Computed[path] = resolver
-		}
 		cloned.Collections[index].Endpoints = append([]Endpoint(nil), collection.Endpoints...)
 	}
 	cloned.Globals = make([]Global, len(applicationConfig.Globals))
@@ -928,20 +925,8 @@ func cloneConfig(applicationConfig Config) Config {
 		cloned.Globals[index].Admin.GroupTranslations = cloneStringMap(global.Admin.GroupTranslations)
 		cloned.Globals[index].Admin.DescriptionTranslations = cloneStringMap(global.Admin.DescriptionTranslations)
 		cloned.Globals[index].Admin.LivePreview.Breakpoints = clonePreviewBreakpoints(global.Admin.LivePreview.Breakpoints)
-		cloned.Globals[index].Fields = append([]field.Definition(nil), global.Fields...)
+		cloned.Globals[index].Fields = global.Fields.Snapshot()
 		cloned.Globals[index].Hooks = global.Hooks.clone()
-		cloned.Globals[index].FieldAccess = make(map[string]FieldAccess, len(global.FieldAccess))
-		for path, access := range global.FieldAccess {
-			cloned.Globals[index].FieldAccess[path] = access
-		}
-		cloned.Globals[index].FieldHooks = make(map[string]CollectionHooks, len(global.FieldHooks))
-		for path, hooks := range global.FieldHooks {
-			cloned.Globals[index].FieldHooks[path] = hooks.clone()
-		}
-		cloned.Globals[index].Computed = make(map[string]Computed, len(global.Computed))
-		for path, resolver := range global.Computed {
-			cloned.Globals[index].Computed[path] = resolver
-		}
 		cloned.Globals[index].Endpoints = append([]Endpoint(nil), global.Endpoints...)
 	}
 	cloned.Tasks = append([]TaskDefinition(nil), applicationConfig.Tasks...)

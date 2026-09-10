@@ -20,6 +20,7 @@ import (
 	"github.com/riducms/ridu"
 	"github.com/riducms/ridu/field"
 	"github.com/riducms/ridu/internal/teststore"
+	"github.com/riducms/ridu/operation"
 	graphqlplugin "github.com/riducms/ridu/plugins/graphql"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/store"
@@ -30,12 +31,16 @@ func TestGraphQLCollectionCRUDFilteringPaginationAndGlobals(t *testing.T) {
 	application, err := ridu.New(ridu.Config{
 		Name: "GraphQL contracts", Plugins: []ridu.Plugin{graphqlplugin.New()},
 		Collections: []ridu.Collection{{
-			Slug: "posts", Fields: []field.Definition{
-				field.Text("title", field.Required()), field.Number("score"), field.Checkbox("featured"), field.Text("secret"),
+			Slug: "posts", Fields: field.Fields{
+				field.Text("title").Required(),
+				field.Number("score"),
+				field.Checkbox("featured"),
+				field.Text("secret").Access(field.Access{Read: func(operation.AccessContext) (bool, error) { return false, nil }}),
 			},
-			FieldAccess: map[string]ridu.FieldAccess{"secret": {Read: func(ridu.FieldAccessContext) (bool, error) { return false, nil }}},
 		}},
-		Globals: []ridu.Global{{Slug: "settings", Fields: []field.Definition{field.Text("siteName")}}},
+		Globals: []ridu.Global{{Slug: "settings", Fields: field.Fields{
+			field.Text("siteName"),
+		}}},
 	}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -111,7 +116,10 @@ func TestGraphQLCollectionAccessRemainsAnAtomicStorePredicate(t *testing.T) {
 	application, err := ridu.New(ridu.Config{
 		Name: "GraphQL access", Plugins: []ridu.Plugin{graphqlplugin.New()},
 		Collections: []ridu.Collection{{
-			Slug: "posts", Fields: []field.Definition{field.Text("title", field.Required()), field.Checkbox("published")},
+			Slug: "posts", Fields: field.Fields{
+				field.Text("title").Required(),
+				field.Checkbox("published"),
+			},
 			Access: ridu.CollectionAccess{Read: func(ridu.AccessContext) (ridu.AccessDecision, error) {
 				return ridu.Where(query.Equal(publishedPath, query.Boolean(true))), nil
 			}},
@@ -134,10 +142,12 @@ func TestGraphQLDeleteRestrictionUsesStableNonOracleError(t *testing.T) {
 	application, err := ridu.New(ridu.Config{
 		Name: "GraphQL reference delete restriction", Plugins: []ridu.Plugin{graphqlplugin.New()},
 		Collections: []ridu.Collection{
-			{Slug: "users", Fields: []field.Definition{field.Text("name")}},
-			{Slug: "posts", Fields: []field.Definition{
+			{Slug: "users", Fields: field.Fields{
+				field.Text("name"),
+			}},
+			{Slug: "posts", Fields: field.Fields{
 				field.Text("title"),
-				field.Relationship("protectedOwner", field.To("users"), field.OnDelete(field.ReferenceDeleteRestrict)),
+				field.Relationship("protectedOwner", "users").OnDelete(field.ReferenceDeleteRestrict),
 			}},
 		},
 	}, teststore.New())
@@ -188,9 +198,13 @@ func TestGraphQLGlobalAccessFiltersCurrentAndVersionSnapshots(t *testing.T) {
 	}
 	application, err := ridu.New(ridu.Config{
 		Name: "GraphQL filtered globals", Plugins: []ridu.Plugin{graphqlplugin.New()},
-		Collections: []ridu.Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title")}}},
+		Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{
+			field.Text("title"),
+		}}},
 		Globals: []ridu.Global{{
-			Slug: "settings", Versions: true, Fields: []field.Definition{field.Text("siteName", field.Required())},
+			Slug: "settings", Versions: true, Fields: field.Fields{
+				field.Text("siteName").Required(),
+			},
 			Access: ridu.GlobalAccess{Read: filtered, ReadVersions: filtered},
 		}},
 	}, teststore.New())
@@ -229,8 +243,15 @@ func TestGraphQLSelectionPopulatesRelationshipsThroughTheEngine(t *testing.T) {
 	application, err := ridu.New(ridu.Config{
 		Name: "GraphQL relationships", Plugins: []ridu.Plugin{graphqlplugin.New()},
 		Collections: []ridu.Collection{
-			{Slug: "categories", Fields: []field.Definition{field.Text("name", field.Required()), field.Text("privateNote"), field.Relationship("parent", field.To("categories"))}, FieldAccess: map[string]ridu.FieldAccess{"privateNote": {Read: func(ridu.FieldAccessContext) (bool, error) { return false, nil }}}},
-			{Slug: "posts", Fields: []field.Definition{field.Text("title", field.Required()), field.Relationship("category", field.To("categories"))}},
+			{Slug: "categories", Fields: field.Fields{
+				field.Text("name").Required(),
+				field.Text("privateNote").Access(field.Access{Read: func(operation.AccessContext) (bool, error) { return false, nil }}),
+				field.Relationship("parent", "categories"),
+			}},
+			{Slug: "posts", Fields: field.Fields{
+				field.Text("title").Required(),
+				field.Relationship("category", "categories"),
+			}},
 		},
 	}, teststore.New())
 	if err != nil {
@@ -267,12 +288,13 @@ func TestGraphQLSelectionPopulatesRelationshipsThroughTheEngine(t *testing.T) {
 func TestGraphQLBlocksExposeTypedUnions(t *testing.T) {
 	application, err := ridu.New(ridu.Config{
 		Name: "GraphQL blocks", Plugins: []ridu.Plugin{graphqlplugin.New()},
-		Collections: []ridu.Collection{{Slug: "posts", Fields: []field.Definition{
-			field.Text("title", field.Required()),
-			field.Blocks("layout", field.BlockTypes(
-				field.BlockType("hero", "Hero", field.Text("heading", field.Required())),
-				field.BlockType("quote", "Quote", field.Text("quote", field.Required())),
-			)),
+		Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{
+			field.Text("title").Required(),
+			field.Blocks("layout", field.Block{Slug: "hero", Fields: field.Fields{
+				field.Text("heading").Required(),
+			}}, field.Block{Slug: "quote", Fields: field.Fields{
+				field.Text("quote").Required(),
+			}}),
 		}}},
 	}, teststore.New())
 	if err != nil {
@@ -303,11 +325,17 @@ func TestGraphQLBlocksExposeTypedUnions(t *testing.T) {
 func TestGraphQLNestedFieldsAndSelectEnumsRemainTyped(t *testing.T) {
 	application, err := ridu.New(ridu.Config{
 		Name: "GraphQL nested fields", Plugins: []ridu.Plugin{graphqlplugin.New()},
-		Collections: []ridu.Collection{{Slug: "pages", Fields: []field.Definition{
-			field.Text("title", field.Required()),
-			field.Group("seo", field.Fields(field.Text("description"), field.Select("tone", field.Choices(field.Choice{Value: "warm", Label: "Warm"}, field.Choice{Value: "cool", Label: "Cool"})))),
-			field.Select("roles", field.OneOf("admin", "editor"), field.Multiple()),
-			field.Array("links", field.Fields(field.Text("label", field.Required()), field.Text("url", field.Required()))),
+		Collections: []ridu.Collection{{Slug: "pages", Fields: field.Fields{
+			field.Text("title").Required(),
+			field.Group("seo", field.Fields{
+				field.Text("description"),
+				field.Select("tone", "warm", "cool"),
+			}),
+			field.MultiSelect("roles").Options(field.Option{Value: "admin", Label: "admin"}, field.Option{Value: "editor", Label: "editor"}),
+			field.Array("links", field.Fields{
+				field.Text("label").Required(),
+				field.Text("url").Required(),
+			}),
 		}}},
 	}, teststore.New())
 	if err != nil {
@@ -340,17 +368,25 @@ func TestGraphQLSelectionPopulatesRelationshipsInsideGroupsArraysAndBlocks(t *te
 	application, err := ridu.New(ridu.Config{
 		Name: "GraphQL nested relationships", Plugins: []ridu.Plugin{graphqlplugin.New()},
 		Collections: []ridu.Collection{
-			{Slug: "people", Fields: []field.Definition{
-				field.Text("name", field.Required()), field.Text("secret"),
-			}, FieldAccess: map[string]ridu.FieldAccess{"secret": {Read: func(ridu.FieldAccessContext) (bool, error) { return false, nil }}}},
-			{Slug: "teams", Fields: []field.Definition{
-				field.Text("name", field.Required()), field.Relationship("owner", field.To("people")),
+			{Slug: "people", Fields: field.Fields{
+				field.Text("name").Required(),
+				field.Text("secret").Access(field.Access{Read: func(operation.AccessContext) (bool, error) { return false, nil }}),
 			}},
-			{Slug: "pages", Fields: []field.Definition{
-				field.Text("title", field.Required()),
-				field.Group("meta", field.Fields(field.Relationship("reviewer", field.To("people")))),
-				field.Array("sections", field.Fields(field.Relationship("reviewer", field.To("people")))),
-				field.Blocks("layout", field.BlockTypes(field.BlockType("quote", "Quote", field.Relationship("source", field.To("teams"))))),
+			{Slug: "teams", Fields: field.Fields{
+				field.Text("name").Required(),
+				field.Relationship("owner", "people"),
+			}},
+			{Slug: "pages", Fields: field.Fields{
+				field.Text("title").Required(),
+				field.Group("meta", field.Fields{
+					field.Relationship("reviewer", "people"),
+				}),
+				field.Array("sections", field.Fields{
+					field.Relationship("reviewer", "people"),
+				}),
+				field.Blocks("layout", field.Block{Slug: "quote", Fields: field.Fields{
+					field.Relationship("source", "teams"),
+				}}),
 			}},
 		},
 	}, teststore.New())
@@ -418,9 +454,16 @@ func TestGraphQLPolymorphicRelationshipsUseTypedWrappers(t *testing.T) {
 	application, err := ridu.New(ridu.Config{
 		Name: "GraphQL polymorphic relationships", Plugins: []ridu.Plugin{graphqlplugin.New()},
 		Collections: []ridu.Collection{
-			{Slug: "categories", Fields: []field.Definition{field.Text("name", field.Required())}},
-			{Slug: "authors", Fields: []field.Definition{field.Text("name", field.Required())}},
-			{Slug: "posts", Fields: []field.Definition{field.Text("title", field.Required()), field.Relationship("owner", field.ToAny("categories", "authors"))}},
+			{Slug: "categories", Fields: field.Fields{
+				field.Text("name").Required(),
+			}},
+			{Slug: "authors", Fields: field.Fields{
+				field.Text("name").Required(),
+			}},
+			{Slug: "posts", Fields: field.Fields{
+				field.Text("title").Required(),
+				field.PolymorphicRelationship("owner", "categories", "authors"),
+			}},
 		},
 	}, teststore.New())
 	if err != nil {
@@ -451,8 +494,15 @@ func TestGraphQLJoinsExposeRedactedTargetDocuments(t *testing.T) {
 	application, err := ridu.New(ridu.Config{
 		Name: "GraphQL joins", Plugins: []ridu.Plugin{graphqlplugin.New()},
 		Collections: []ridu.Collection{
-			{Slug: "categories", Fields: []field.Definition{field.Text("name", field.Required()), field.Join("posts", "posts", "category", field.JoinLimit(10))}},
-			{Slug: "posts", Fields: []field.Definition{field.Text("title", field.Required()), field.Text("privateNote"), field.Relationship("category", field.To("categories"))}, FieldAccess: map[string]ridu.FieldAccess{"privateNote": {Read: func(ridu.FieldAccessContext) (bool, error) { return false, nil }}}},
+			{Slug: "categories", Fields: field.Fields{
+				field.Text("name").Required(),
+				field.Join("posts", "posts", "category").Limit(10),
+			}},
+			{Slug: "posts", Fields: field.Fields{
+				field.Text("title").Required(),
+				field.Text("privateNote").Access(field.Access{Read: func(operation.AccessContext) (bool, error) { return false, nil }}),
+				field.Relationship("category", "categories").Access(field.Access{Read: func(operation.AccessContext) (bool, error) { return false, nil }}),
+			}},
 		},
 	}, teststore.New())
 	if err != nil {
@@ -473,6 +523,56 @@ func TestGraphQLJoinsExposeRedactedTargetDocuments(t *testing.T) {
 	if join["totalDocs"] != float64(1) || join["hasNextPage"] != false {
 		t.Fatalf("join pagination = %#v", join)
 	}
+	for _, predicate := range []string{`where: {privateNote: {contains: "redact"}}`, `sort: "privateNote"`, `where: {category: {equals: "` + categoryID + `"}}`} {
+		denied := graphQL(t, server.URL, `query { Category(id: "`+categoryID+`") { posts(count: true, `+predicate+`) { docs { title } totalDocs } } }`)
+		if strings.HasPrefix(predicate, "where:") {
+			assertPrivateWhereRejected(t, denied)
+		} else {
+			assertErrorCode(t, denied, "field_access_denied")
+		}
+	}
+	filtered := graphQL(t, server.URL, `query { Category(id: "`+categoryID+`") { posts(count: true, where: {title: {equals: "Story"}}, sort: "title") { docs { title category { id } } totalDocs } } }`)
+	if objectAt(t, filtered, "data", "Category", "posts")["totalDocs"] != float64(1) {
+		t.Fatalf("authorized configured join with caller filter = %#v", filtered)
+	}
+}
+
+func TestGraphQLRejectsPrivateFieldQueryOracles(t *testing.T) {
+	application, err := ridu.New(ridu.Config{Name: "Private GraphQL queries", Plugins: []ridu.Plugin{graphqlplugin.New()}, Collections: []ridu.Collection{{
+		Slug: "employees", Fields: field.Fields{
+			field.Text("name"),
+			field.Number("salary").Access(field.Access{Read: func(operation.AccessContext) (bool, error) { return false, nil }}),
+			field.Text("secret").Access(field.Access{Read: func(operation.AccessContext) (bool, error) { return false, nil }}),
+		},
+	}}}, teststore.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(application.Handler(ridu.HandlerOptions{}))
+	defer server.Close()
+	graphQL(t, server.URL, `mutation { createEmployee(data: {name: "Alice", salary: 73500, secret: "sapphire"}) { id } }`)
+	for _, text := range []string{
+		`{ Employees(where: {salary: {greater_than: 70000}}) { docs { name } totalDocs } }`,
+		`{ countEmployees(where: {salary: {less_than: 75000}}) { totalDocs } }`,
+		`{ countEmployees(where: {secret: {contains: "app"}}) { totalDocs } }`,
+		`{ Employees(sort: "salary") { docs { name } } }`,
+		`{ Employees(sort: "-salary") { docs { name } } }`,
+	} {
+		result := graphQL(t, server.URL, text)
+		if strings.Contains(text, "where:") {
+			assertPrivateWhereRejected(t, result)
+		} else {
+			assertErrorCode(t, result, "field_access_denied")
+		}
+	}
+}
+
+func assertPrivateWhereRejected(t *testing.T, result map[string]interface{}) {
+	t.Helper()
+	errors, _ := result["errors"].([]interface{})
+	if len(errors) == 0 || !strings.Contains(fmt.Sprint(errors), "Unknown field") {
+		t.Fatalf("protected field was exposed in GraphQL filtering input: %#v", result)
+	}
 }
 
 func TestGraphQLSelectionSkipsUnrequestedComputedOutput(t *testing.T) {
@@ -480,12 +580,15 @@ func TestGraphQLSelectionSkipsUnrequestedComputedOutput(t *testing.T) {
 	application, err := ridu.New(ridu.Config{
 		Name: "GraphQL computed selection", Plugins: []ridu.Plugin{graphqlplugin.New()},
 		Collections: []ridu.Collection{{
-			Slug: "posts", Fields: []field.Definition{field.Text("title"), field.Virtual("label", field.ValueString)},
-			Computed: map[string]ridu.Computed{"label": func(ctx ridu.ComputedContext) (store.Value, error) {
-				computedCalls++
-				title, _ := ctx.Document.Values["title"].StringValue()
-				return store.String("Label: " + title), nil
-			}},
+			Slug: "posts", Fields: field.Fields{
+				field.Text("title"),
+				field.Virtual("label", field.ValueString, func(ctx operation.ReadContext) (operation.Value[store.Value], error) {
+					computedCalls++
+					titleValue := ctx.Root.Get("title")
+					title, _ := titleValue.StringValue()
+					return operation.Present(store.String("Label: " + title)), nil
+				}),
+			},
 		}},
 	}, teststore.New())
 	if err != nil {
@@ -513,7 +616,9 @@ func TestGraphQLLocalizationAliasesAndOrderedFallback(t *testing.T) {
 		Localization: ridu.LocalizationConfig{DefaultLocale: "en", Locales: []ridu.Locale{
 			{Code: "en", Label: "English"}, {Code: "es", Label: "Spanish"}, {Code: "pt", Label: "Portuguese"},
 		}},
-		Collections: []ridu.Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title", field.Required(), field.Localized())}}},
+		Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{
+			field.Text("title").Required().Localized(),
+		}}},
 	}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -538,8 +643,13 @@ func TestGraphQLAuthenticationUsesRiduSessionsAndActorCollection(t *testing.T) {
 	application, err := ridu.New(ridu.Config{
 		Name: "GraphQL auth", Plugins: []ridu.Plugin{graphqlplugin.New()}, Admin: ridu.AdminConfig{User: "users"},
 		Collections: []ridu.Collection{
-			{Slug: "users", Auth: true, AuthConfig: ridu.AuthConfig{Password: ridu.PasswordPolicy{BcryptCost: bcrypt.MinCost}, MaxLoginAttempts: 2}, Access: ridu.CollectionAccess{Update: func(ridu.AccessContext) (ridu.AccessDecision, error) { return ridu.Allow(), nil }}, Fields: []field.Definition{field.Email("email", field.Required(), field.Unique()), field.Text("name")}},
-			{Slug: "staff", Auth: true, Fields: []field.Definition{field.Email("email", field.Required(), field.Unique())}},
+			{Slug: "users", Auth: true, AuthConfig: ridu.AuthConfig{Password: ridu.PasswordPolicy{BcryptCost: bcrypt.MinCost}, MaxLoginAttempts: 2}, Access: ridu.CollectionAccess{Update: func(ridu.AccessContext) (ridu.AccessDecision, error) { return ridu.Allow(), nil }}, Fields: field.Fields{
+				field.Email("email").Required().Unique(),
+				field.Text("name"),
+			}},
+			{Slug: "staff", Auth: true, Fields: field.Fields{
+				field.Email("email").Required().Unique(),
+			}},
 		},
 	}, teststore.New())
 	if err != nil {
@@ -616,8 +726,12 @@ func TestGraphQLPreferencesPreserveExactAdminIdentityWithCollidingAuthIDs(t *tes
 	application, err := ridu.New(ridu.Config{
 		Name: "GraphQL exact preference identity", Plugins: []ridu.Plugin{graphqlplugin.New()}, Admin: ridu.AdminConfig{User: "users"},
 		Collections: []ridu.Collection{
-			{Slug: "users", Auth: true, Fields: []field.Definition{field.Email("email", field.Required(), field.Unique())}},
-			{Slug: "staff", Auth: true, Fields: []field.Definition{field.Email("email", field.Required(), field.Unique())}},
+			{Slug: "users", Auth: true, Fields: field.Fields{
+				field.Email("email").Required().Unique(),
+			}},
+			{Slug: "staff", Auth: true, Fields: field.Fields{
+				field.Email("email").Required().Unique(),
+			}},
 		},
 	}, teststore.New())
 	if err != nil {
@@ -684,7 +798,9 @@ func TestGraphQLAndRESTLoginRecordTrustedTransportMetadata(t *testing.T) {
 					return nil
 				}}},
 			},
-			Fields: []field.Definition{field.Email("email", field.Required(), field.Unique())},
+			Fields: field.Fields{
+				field.Email("email").Required().Unique(),
+			},
 		}},
 	}, teststore.New())
 	if err != nil {
@@ -762,7 +878,9 @@ func TestGraphQLVersionsDraftsAndTrashUseRiduLifecycleOperations(t *testing.T) {
 		Collections: []ridu.Collection{{
 			Slug: "posts", Versions: true, Trash: true,
 			VersionConfig: ridu.VersionConfig{Drafts: true, MaxPerDocument: 10},
-			Fields:        []field.Definition{field.Text("title", field.Required())},
+			Fields: field.Fields{
+				field.Text("title").Required(),
+			},
 		}},
 	}, teststore.New())
 	if err != nil {
@@ -813,7 +931,10 @@ func TestGraphQLVersionsDraftsAndTrashUseRiduLifecycleOperations(t *testing.T) {
 func TestGraphQLSafeguardsRejectIntrospectionAliasesAndOversizedVariables(t *testing.T) {
 	application, err := ridu.New(ridu.Config{
 		Name: "GraphQL safeguards", Plugins: []ridu.Plugin{graphqlplugin.New(graphqlplugin.Options{MaxAliases: 1, MaxDepth: 4, MaxVariableBytes: 8})},
-		Collections: []ridu.Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title"), field.Relationship("parent", field.To("posts"))}}},
+		Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{
+			field.Text("title"),
+			field.Relationship("parent", "posts"),
+		}}},
 	}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -878,7 +999,9 @@ func TestGraphQLAuthAliasesShareDistributedRESTAdmission(t *testing.T) {
 				PasswordReset: ridu.PasswordResetConfig{Send: func(context.Context, ridu.PasswordResetNotification) error { return nil }},
 				Verify:        &ridu.VerifyEmailConfig{Send: func(context.Context, ridu.VerifyEmailNotification) error { return nil }},
 			},
-			Fields: []field.Definition{field.Email("email", field.Required(), field.Unique())},
+			Fields: field.Fields{
+				field.Email("email").Required().Unique(),
+			},
 		}},
 	}, backend)
 	if err != nil {
@@ -951,7 +1074,9 @@ func TestGraphQLAuthAliasesShareDistributedRESTAdmission(t *testing.T) {
 func TestGraphQLParserAndFragmentAnalysisRejectHostileDocumentsBeforeValidation(t *testing.T) {
 	application, err := ridu.New(ridu.Config{
 		Name: "GraphQL parser safeguards", Plugins: []ridu.Plugin{graphqlplugin.New()},
-		Collections: []ridu.Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title")}}},
+		Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{
+			field.Text("title"),
+		}}},
 	}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -992,7 +1117,9 @@ func TestGraphQLParserAndFragmentAnalysisRejectHostileDocumentsBeforeValidation(
 func TestGraphQLFragmentExpansionAndTokenBudgetsAreIndependentOfFieldComplexity(t *testing.T) {
 	application, err := ridu.New(ridu.Config{
 		Name: "GraphQL document budgets", Plugins: []ridu.Plugin{graphqlplugin.New(graphqlplugin.Options{MaxComplexity: 100_000})},
-		Collections: []ridu.Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title")}}},
+		Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{
+			field.Text("title"),
+		}}},
 	}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -1016,7 +1143,9 @@ func TestGraphQLFragmentExpansionAndTokenBudgetsAreIndependentOfFieldComplexity(
 
 	limitedApplication, err := ridu.New(ridu.Config{
 		Name: "GraphQL token budget", Plugins: []ridu.Plugin{graphqlplugin.New(graphqlplugin.Options{MaxComplexity: 1})},
-		Collections: []ridu.Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title")}}},
+		Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{
+			field.Text("title"),
+		}}},
 	}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -1030,7 +1159,9 @@ func TestGraphQLFragmentExpansionAndTokenBudgetsAreIndependentOfFieldComplexity(
 func TestGraphQLImmutableSchemaServesConcurrentRequests(t *testing.T) {
 	application, err := ridu.New(ridu.Config{
 		Name: "GraphQL concurrency", Plugins: []ridu.Plugin{graphqlplugin.New()},
-		Collections: []ridu.Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title")}}},
+		Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{
+			field.Text("title"),
+		}}},
 	}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -1078,8 +1209,14 @@ func TestGraphQLHTTPAndDefaultListComplexityAreBounded(t *testing.T) {
 	application, err := ridu.New(ridu.Config{
 		Name: "GraphQL HTTP safeguards", Plugins: []ridu.Plugin{graphqlplugin.New(graphqlplugin.Options{MaxBodyBytes: 128, MaxComplexity: 5})},
 		Collections: []ridu.Collection{
-			{Slug: "categories", Fields: []field.Definition{field.Text("name"), field.Join("posts", "posts", "category")}},
-			{Slug: "posts", Fields: []field.Definition{field.Text("title"), field.Relationship("category", field.To("categories"))}},
+			{Slug: "categories", Fields: field.Fields{
+				field.Text("name"),
+				field.Join("posts", "posts", "category"),
+			}},
+			{Slug: "posts", Fields: field.Fields{
+				field.Text("title"),
+				field.Relationship("category", "categories"),
+			}},
 		},
 	}, teststore.New())
 	if err != nil {
@@ -1142,7 +1279,9 @@ func TestGraphQLHTTPAndDefaultListComplexityAreBounded(t *testing.T) {
 func TestGraphQLNonPositiveListLimitCannotBypassMaximum(t *testing.T) {
 	application, err := ridu.New(ridu.Config{
 		Name: "GraphQL list cap", Plugins: []ridu.Plugin{graphqlplugin.New(graphqlplugin.Options{MaxListLimit: 3})},
-		Collections: []ridu.Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title")}}},
+		Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{
+			field.Text("title"),
+		}}},
 	}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -1162,7 +1301,9 @@ func TestGraphQLRunsConfiguredValidationRules(t *testing.T) {
 	}
 	application, err := ridu.New(ridu.Config{
 		Name: "GraphQL validation rules", Plugins: []ridu.Plugin{graphqlplugin.New(graphqlplugin.Options{ValidationRules: []enginegraphql.ValidationRuleFn{customRule}})},
-		Collections: []ridu.Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title")}}},
+		Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{
+			field.Text("title"),
+		}}},
 	}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -1179,8 +1320,11 @@ func TestGraphQLRunsConfiguredValidationRules(t *testing.T) {
 
 func TestGraphQLSDLIsDeterministicWithoutStartingATransport(t *testing.T) {
 	manifest, err := ridu.Resolve(ridu.Config{
-		Name:        "GraphQL SDL",
-		Collections: []ridu.Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title", field.Required()), field.Number("score")}}},
+		Name: "GraphQL SDL",
+		Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{
+			field.Text("title").Required(),
+			field.Number("score"),
+		}}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -1224,7 +1368,9 @@ func TestGraphQLGenerationProviderUsesExactCompiledOptions(t *testing.T) {
 	compiled := graphqlplugin.New(options)
 	manifest, err := ridu.Resolve(ridu.Config{
 		Name: "Exact GraphQL generation", Plugins: []ridu.Plugin{compiled},
-		Collections: []ridu.Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title")}}},
+		Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{
+			field.Text("title"),
+		}}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -1309,7 +1455,9 @@ func TestGraphQLSDLIncludesInterfacesAndArgumentDefaults(t *testing.T) {
 		},
 	}}
 	manifest, err := ridu.Resolve(ridu.Config{
-		Name: "SDL fidelity", Collections: []ridu.Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title")}}},
+		Name: "SDL fidelity", Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{
+			field.Text("title"),
+		}}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -1341,7 +1489,9 @@ func TestGraphQLSDLRejectsUnrepresentableScalarObjectDefault(t *testing.T) {
 		ParseLiteral: func(ast.Value) interface{} { return nil },
 	})
 	manifest, err := ridu.Resolve(ridu.Config{
-		Name: "Invalid SDL default", Collections: []ridu.Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title")}}},
+		Name: "Invalid SDL default", Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{
+			field.Text("title"),
+		}}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -1362,7 +1512,9 @@ func TestGraphQLUploadMetadataInputsExcludeStorageOwnedFields(t *testing.T) {
 		Collections: []ridu.Collection{{
 			Slug: "media", Upload: true,
 			UploadConfig: ridu.UploadConfig{MaxFileSize: 1024, MimeTypes: []string{"text/plain"}},
-			Fields:       []field.Definition{field.Text("caption")},
+			Fields: field.Fields{
+				field.Text("caption"),
+			},
 		}},
 	})
 	if err != nil {
@@ -1419,8 +1571,12 @@ func TestGraphQLRejectsGeneratedNameCollisionsAtStartup(t *testing.T) {
 	_, err := ridu.New(ridu.Config{
 		Name: "GraphQL collisions", Plugins: []ridu.Plugin{graphqlplugin.New()},
 		Collections: []ridu.Collection{
-			{Slug: "news-posts", Labels: ridu.CollectionLabels{Singular: "Post", Plural: "News Posts"}, Fields: []field.Definition{field.Text("title")}},
-			{Slug: "blog-posts", Labels: ridu.CollectionLabels{Singular: "Post", Plural: "Blog Posts"}, Fields: []field.Definition{field.Text("title")}},
+			{Slug: "news-posts", Labels: ridu.CollectionLabels{Singular: "Post", Plural: "News Posts"}, Fields: field.Fields{
+				field.Text("title"),
+			}},
+			{Slug: "blog-posts", Labels: ridu.CollectionLabels{Singular: "Post", Plural: "Blog Posts"}, Fields: field.Fields{
+				field.Text("title"),
+			}},
 		},
 	}, teststore.New())
 	if err == nil || !strings.Contains(err.Error(), "duplicate GraphQL type name") {
@@ -1444,13 +1600,17 @@ func TestGraphQLCompiledExtensionsReceiveOnlySafeRuntimeFacades(t *testing.T) {
 	application, err := ridu.New(ridu.Config{
 		Name: "GraphQL extensions", Plugins: []ridu.Plugin{plugin}, Admin: ridu.AdminConfig{User: "users"},
 		Collections: []ridu.Collection{
-			{Slug: "users", Auth: true, AuthConfig: ridu.AuthConfig{Password: ridu.PasswordPolicy{BcryptCost: bcrypt.MinCost}}, Fields: []field.Definition{field.Email("email", field.Required(), field.Unique())}},
+			{Slug: "users", Auth: true, AuthConfig: ridu.AuthConfig{Password: ridu.PasswordPolicy{BcryptCost: bcrypt.MinCost}}, Fields: field.Fields{
+				field.Email("email").Required().Unique(),
+			}},
 			{Slug: "posts", Access: ridu.CollectionAccess{Read: func(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
 				if ctx.ActorCollection != "users" {
 					return ridu.Deny(), nil
 				}
 				return ridu.Allow(), nil
-			}}, Fields: []field.Definition{field.Text("title", field.Required())}},
+			}}, Fields: field.Fields{
+				field.Text("title").Required(),
+			}},
 		},
 	}, teststore.New())
 	if err != nil {
@@ -1480,7 +1640,9 @@ func TestGraphQLInternalErrorsAreRedactedReportedAndObserved(t *testing.T) {
 	}}})
 	application, err := ridu.New(ridu.Config{
 		Name: "GraphQL diagnostics", Plugins: []ridu.Plugin{plugin},
-		Collections: []ridu.Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title")}}},
+		Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{
+			field.Text("title"),
+		}}},
 	}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -1531,7 +1693,9 @@ func TestGraphQLPanicsAndSerializationFailuresNeverReachClients(t *testing.T) {
 	}})
 	application, err := ridu.New(ridu.Config{
 		Name: "GraphQL panic redaction", Plugins: []ridu.Plugin{plugin},
-		Collections: []ridu.Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title")}}},
+		Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{
+			field.Text("title"),
+		}}},
 	}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -1582,7 +1746,9 @@ func TestGraphQLPanicsAndSerializationFailuresNeverReachClients(t *testing.T) {
 func TestGraphQLTransportPropagatesItsConfiguredBodyLimit(t *testing.T) {
 	application, err := ridu.New(ridu.Config{
 		Name: "GraphQL transport body limit", Plugins: []ridu.Plugin{graphqlplugin.New(graphqlplugin.Options{MaxBodyBytes: 512})},
-		Collections: []ridu.Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title")}}},
+		Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{
+			field.Text("title"),
+		}}},
 	}, teststore.New())
 	if err != nil {
 		t.Fatal(err)

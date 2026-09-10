@@ -13,6 +13,8 @@
 		withContentLocaleLabel,
 	} from "@admin/fields/localized-field-presentation";
 
+	import PluginField from "@admin/fields/plugin-field.svelte";
+	import LocalFieldEditor from "@admin/fields/local-field-editor.svelte";
 	import SelectField from "@admin/fields/select/select-field.svelte";
 	import RadioField from "@admin/fields/radio/radio-field.svelte";
 	import PointField from "@admin/fields/point/point-field.svelte";
@@ -22,7 +24,9 @@
 	import ScalarField from "@admin/fields/scalar/scalar-field.svelte";
 	import NestedField from "@admin/fields/nested/nested-field.svelte";
 	import RelationshipField from "@admin/fields/relationship/relationship-field.svelte";
+	import PrimitiveListField from "@admin/fields/primitive-list/primitive-list-field.svelte";
 	import TextField from "@admin/fields/text/text-field.svelte";
+	import LiveValidationFeedback from "@admin/fields/live-validation-feedback.svelte";
 
 	interface Props {
 		field: SchemaField;
@@ -48,15 +52,13 @@
 		referenceBrowser: ReferenceBrowser,
 		findDocument: (collection, id, signal) =>
 			runtime.client.find(collection, id, { signal, locale: form.contentLocale }),
-		async requestPlugin<Result>(path: string, body: unknown, signal?: AbortSignal) {
-			const owner = field.admin.component?.plugin ?? field.plugin?.key;
-			if (owner === undefined) {
-				throw new Error("This field renderer does not have an owning plugin");
-			}
-			return runtime.client.requestPlugin<Result>(owner, path, body, { signal });
-		},
 	};
-	const plugin = $derived(runtime.fields.resolve(field));
+	const editor = $derived(
+		field.admin.editor === undefined
+			? undefined
+			: runtime.editors[field.admin.editor.reference as `app:${string}`]
+	);
+	const plugin = $derived(editor === undefined ? runtime.fields.resolve(field) : undefined);
 	const accessPath = $derived(fieldAccessPath(field));
 	const visible = $derived(
 		field.admin.hidden !== true &&
@@ -65,7 +67,7 @@
 				evaluateFieldCondition(field.admin.condition, field.path, (path) => form.get(path)))
 	);
 	const renderedField = $derived(
-		field.type === "join" || field.admin.readOnly || form.canWrite(field.path, accessPath)
+		field.admin.readOnly || form.canWrite(field.path, accessPath)
 			? field
 			: { ...field, admin: { ...field.admin, readOnly: true } }
 	);
@@ -101,11 +103,12 @@
 	);
 
 	function renderField() {
-		if (plugin.component !== undefined) return plugin.component;
-
-		switch (plugin.type) {
+		switch (plugin?.type) {
 			case "text":
 				return TextField;
+			case "text-list":
+			case "number-list":
+				return PrimitiveListField;
 			case "select":
 				return SelectField;
 			case "radio":
@@ -131,9 +134,45 @@
 	}
 </script>
 
-{#if visible}<div class={columnClass}>
+{#if visible}<div
+		class={columnClass}
+		data-live-validation-field={field.path}
+		onfocusout={(event) => {
+			if (
+				event.target instanceof Element &&
+				event.target.closest("[data-live-validation-field]") === event.currentTarget &&
+				!(event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget))
+			)
+				form.liveValidation.flush(field.path);
+		}}
+	>
 		{const RenderField = $derived(renderField())}
-		<RenderField field={presentedField} {form} {authoring} i18n={runtime.i18n} />
+		{#if editor !== undefined}
+			{#key form}
+				{#key `${form.editorEpoch}:${runtime.manifestRevision}:${field.id}`}
+					<LocalFieldEditor
+						schema={presentedField}
+						{form}
+						{editor}
+						{authoring}
+						i18n={runtime.i18n}
+					/>
+				{/key}
+			{/key}
+		{:else if plugin?.extension !== undefined}
+			{#key form}
+				{#key `${form.editorEpoch}:${runtime.manifestRevision}:${field.id}`}
+					<PluginField schema={presentedField} {form} extension={plugin.extension} />
+				{/key}
+			{/key}
+		{:else}
+			<RenderField field={presentedField} {form} {authoring} />
+		{/if}
+		<LiveValidationFeedback
+			feedback={form.liveValidation.forField(field.path)}
+			i18n={runtime.i18n}
+			path={field.path}
+		/>
 		{#if inheritedFrom !== undefined}<p
 				class="mt-1 font-mono text-[10px] text-foreground-faint"
 				data-localization-source={inheritedFrom}

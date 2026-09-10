@@ -44,8 +44,25 @@ const measurements = {
 };
 // The English interface catalog and data-router navigation blocking are part of the first usable
 // screen; optional project languages remain application-owned imports. Keep the explicit allowance
-// tight enough to catch unrelated growth.
-const budgets = { initialJS: 288 * 1024, initialCSS: 20 * 1024, largestAsyncJS: 150 * 1024 };
+// tight enough to catch unrelated growth. Host-owned scalar-editor lifetimes and registration
+// validation add a reviewed 1 KiB allowance (295,106 measured bytes against the former 294,912 cap).
+// Application contribution validation and app translations add a further 1 KiB allowance
+// (296,389 measured bytes against the former 295,936 cap), with no new runtime dependencies.
+// Paired plugin identity/config checks and advanced occurrence bindings add 3 KiB
+// (299,770 measured bytes), reusing the form controller with no new runtime dependencies.
+// Repeating-row mount lifetimes reuse schema identity correlation and add a 1 KiB allowance
+// (300,037 measured bytes), with no new production dependencies.
+// Opt-in live-validation scheduling, cancellation, input leases, feedback and SDK transport
+// measure 303,028 bytes. Extend the allowance by 2 KiB; no new runtime dependencies are added.
+// Primitive list controls, typed bindings, and positional-feedback invalidation add 2 KiB of
+// budget (302,502 measured bytes, up from 300,311 at the preceding checkpoint). They reuse the
+// existing form controller and controls without new runtime dependencies.
+// The combined live-validation and primitive-list build measures 305,288 bytes. Both branches
+// independently consumed the same 296 KiB cap; allow 3 KiB for their combined controls and typed
+// input availability checks, preserving the CSS/async caps and adding no runtime dependencies.
+// Compact block registries and lazy placement/extension views add 1 KiB of allowance
+// (307,052 measured bytes), with no new dependencies or changes to authorization.
+const budgets = { initialJS: 300 * 1024, initialCSS: 20 * 1024, largestAsyncJS: 150 * 1024 };
 const exceeded = Object.entries(budgets).filter(
 	([name, budget]) => measurements[name as keyof typeof measurements] > budget
 );

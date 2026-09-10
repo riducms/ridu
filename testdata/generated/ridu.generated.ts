@@ -35,6 +35,42 @@ export interface ExistsWhere {
 	exists?: boolean;
 }
 
+export type PostsLayoutQuoteInput = {
+	"source"?: ID | null;
+} & { blockType: "quote"; _key?: string };
+
+/** Patch a retained row by _key. New identities must satisfy the input contract at runtime. */
+export type PostsLayoutQuoteUpdate = {
+	"source"?: ID | null;
+} & { blockType: "quote"; _key: string };
+
+export type PostsLayoutQuote = {
+	"source"?: ID | Authors | null;
+} & { blockType: "quote"; _key: string };
+
+export type PostsLayoutQuoteAllLocales = {
+	"source"?: ID | AuthorsAllLocales | null;
+} & { blockType: "quote"; _key: string };
+
+export type PostsLayoutQuoteAllLocalesValue = {
+	"source"?: ID | AuthorsAllLocales | null;
+} & { blockType: "quote"; _key: string };
+
+export type PostsLayoutBlockInput = PostsLayoutQuoteInput;
+export type PostsLayoutInput = Array<PostsLayoutBlockInput>;
+
+export type PostsLayoutBlockUpdate = PostsLayoutQuoteUpdate | PostsLayoutQuoteInput;
+export type PostsLayoutUpdate = Array<PostsLayoutBlockUpdate>;
+
+export type PostsLayoutBlock = PostsLayoutQuote;
+export type PostsLayout = Array<PostsLayoutBlock>;
+
+export type PostsLayoutBlockAllLocales = PostsLayoutQuoteAllLocales;
+export type PostsLayoutAllLocales = Array<PostsLayoutBlockAllLocales>;
+
+export type PostsLayoutBlockAllLocalesValue = PostsLayoutQuoteAllLocalesValue;
+export type PostsLayoutAllLocalesValue = Array<PostsLayoutBlockAllLocalesValue>;
+
 export interface Authors {
 	id: ID;
 	createdAt: string;
@@ -195,13 +231,10 @@ export interface Posts {
 		"reviewer"?: ID | Authors | null;
 	} | null;
 	"sections"?: Array<{
-		_key?: string;
+		_key: string;
 		"reviewer"?: ID | Authors | null;
 	}> | null;
-	"layout"?: Array<({
-		_key?: string;
-		"source"?: ID | Authors | null;
-	} & { blockType: "quote" })> | null;
+	"layout"?: PostsLayout | null;
 	"localeNamed"?: {
 		"en"?: ID | Authors | null;
 	} | null;
@@ -222,13 +255,10 @@ export interface PostsAllLocales {
 		"reviewer"?: ID | AuthorsAllLocales | null;
 	} | null;
 	"sections"?: Array<{
-		_key?: string;
+		_key: string;
 		"reviewer"?: ID | AuthorsAllLocales | null;
 	}> | null;
-	"layout"?: Array<({
-		_key?: string;
-		"source"?: ID | AuthorsAllLocales | null;
-	} & { blockType: "quote" })> | null;
+	"layout"?: PostsLayoutAllLocales | null;
 	"localeNamed"?: {
 		"en"?: ID | AuthorsAllLocales | null;
 	} | null;
@@ -247,10 +277,7 @@ export interface PostsCreate {
 		_key?: string;
 		"reviewer"?: ID | null;
 	}> | null;
-	"layout"?: Array<({
-		_key?: string;
-		"source"?: ID | null;
-	} & { blockType: "quote" })> | null;
+	"layout"?: PostsLayoutInput | null;
 	"localeNamed"?: {
 		"en"?: ID | null;
 	} | null;
@@ -268,11 +295,11 @@ export interface PostsUpdate {
 	"sections"?: Array<{
 		_key?: string;
 		"reviewer"?: ID | null;
+	} | {
+		_key: string;
+		"reviewer"?: ID | null;
 	}> | null;
-	"layout"?: Array<({
-		_key?: string;
-		"source"?: ID | null;
-	} & { blockType: "quote" })> | null;
+	"layout"?: PostsLayoutUpdate | null;
 	"localeNamed"?: {
 		"en"?: ID | null;
 	} | null;
@@ -425,7 +452,7 @@ export interface RiduConfig {
 
 declare module "@riducms/sdk" {
 	interface GeneratedRiduConfigRegistry {
-		"manifest-24e48b0136d6de389c6c46b1421ffd5778d6c5e95b996063ea06b838f5af148f": RiduConfig;
+		"manifest-c7990cc64e61e6c168e87667279da5327ab95ea47b423d857b2f9d02accb348d": RiduConfig;
 	}
 }
 

@@ -118,8 +118,8 @@ The plugin injects one `meta` group in this order:
 | `meta.image`       | Optional upload reference when `UploadsCollection` is configured.                 |
 | `meta.preview`     | Presentation-only result preview using the current unsaved title and description. |
 
-The character ranges are authoring guidance, not validation. Add `field.MinLength` or
-`field.MaxLength` through a field override when the server must reject values outside a range.
+The character ranges are authoring guidance, not validation. Add `.MinLength(...)` or
+`.MaxLength(...)` through a field override when the server must reject values outside a range.
 
 Injected metadata fields become localized when application content localization is enabled. The
 admin shows exact-language values, reports missing fallback values, and passes the selected locale
@@ -170,14 +170,14 @@ presenting it as current.
 injected `meta` group. Use it to add validation, change labels, insert fields, or remove a default:
 
 ```go
-Fields: func(defaults []field.Definition) ([]field.Definition, error) {
-	return []field.Definition{
-		defaults[0],
-		seo.MetaTitle(true, field.Required(), field.MaxLength(70)),
-		seo.MetaDescription(true, field.MaxLength(180)),
-		defaults[3],
-		defaults[4],
-	}, nil
+Fields: func(defaults field.Fields) (field.Fields, error) {
+	return defaults.Edit(func(fields *field.ChildrenDraft) error {
+		return fields.EditText("title", func(
+			title field.TextField,
+		) field.TextField {
+			return title.Required().MaxLength(70)
+		})
+	})
 },
 ```
 

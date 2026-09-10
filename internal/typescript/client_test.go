@@ -9,6 +9,7 @@ import (
 	"github.com/riducms/ridu"
 	"github.com/riducms/ridu/field"
 	"github.com/riducms/ridu/internal/typescript"
+	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
@@ -57,7 +58,7 @@ func TestGeneratedClientRegistryDistinguishesManifestsWithTheSameTypeShape(t *te
 			Name: name,
 			Collections: []ridu.Collection{{
 				Slug:   "posts",
-				Fields: []field.Definition{field.Text("title", field.Required())},
+				Fields: field.Fields{field.Text("title").Required()},
 			}},
 		})
 		if err != nil {
@@ -93,7 +94,7 @@ func TestGeneratedCreateIncludesCallerIDOnlyWhenEnabled(t *testing.T) {
 			Name: "Caller IDs", AllowIDOnCreate: allow,
 			Collections: []ridu.Collection{{
 				Slug:   "posts",
-				Fields: []field.Definition{field.Text("title", field.Required())},
+				Fields: field.Fields{field.Text("title").Required()},
 			}},
 		})
 		if err != nil {
@@ -153,10 +154,10 @@ func TestGeneratedClientUsesPluginOwnedExactTypes(t *testing.T) {
 func TestGeneratedClientIncludesTypedGlobals(t *testing.T) {
 	manifest, err := ridu.Resolve(ridu.Config{
 		Name:        "Generated globals",
-		Collections: []ridu.Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title")}}},
+		Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{field.Text("title")}}},
 		Globals: []ridu.Global{{
 			Slug: "site-settings", Label: "Site settings", Versions: true,
-			Fields: []field.Definition{field.Text("siteName", field.Required())},
+			Fields: field.Fields{field.Text("siteName").Required()},
 		}},
 	})
 	if err != nil {
@@ -183,12 +184,8 @@ func TestGeneratedClientDistinguishesSingleAndAllLocaleDocuments(t *testing.T) {
 			{Code: "en", Label: "English"}, {Code: "fr", Label: "French"},
 		}},
 		Collections: []ridu.Collection{
-			{Slug: "authors", Fields: []field.Definition{field.Text("name", field.Localized())}},
-			{Slug: "posts", Fields: []field.Definition{
-				field.Text("title", field.Required(), field.Localized()),
-				field.Relationship("author", field.To("authors"), field.Localized()),
-				field.Group("seo", field.Fields(field.Text("description", field.Localized()), field.Text("slug"))),
-			}},
+			{Slug: "authors", Fields: field.Fields{field.Text("name").Localized()}},
+			{Slug: "posts", Fields: field.Fields{field.Text("title").Required().Localized(), field.Relationship("author", "authors").Localized(), field.Group("seo", field.Fields{field.Text("description").Localized(), field.Text("slug")})}},
 		},
 	})
 	if err != nil {
@@ -256,7 +253,7 @@ func TestGeneratedClientMatchesRESTSelectAndPopulateShapes(t *testing.T) {
 					{ID: "sections", Name: "sections", Path: path("sections"), Type: schema.FieldTypeArray, Nested: &schema.NestedField{Fields: []schema.Field{
 						{ID: "sections-editor", Name: "editor", Path: path("sections", "editor"), Type: schema.FieldTypeRelationship, Relationship: &people},
 					}}},
-					{ID: "layout", Name: "layout", Path: path("layout"), Type: schema.FieldTypeBlocks, Blocks: &schema.BlocksField{Types: []schema.BlockType{{Key: "quote", Fields: []schema.Field{
+					{ID: "layout", Name: "layout", Path: path("layout"), Type: schema.FieldTypeBlocks, Blocks: &schema.BlocksField{Types: []schema.BlockType{{Slug: "quote", Fields: []schema.Field{
 						{ID: "layout-quote-source", Name: "source", Path: path("layout", "quote", "source"), Type: schema.FieldTypeRelationship, Relationship: &people},
 					}}}}},
 					{ID: "subject", Name: "subject", Path: path("subject"), Type: schema.FieldTypeRelationship, Relationship: &schema.RelationshipField{Polymorphic: true, Targets: []schema.RelationshipTarget{
@@ -368,14 +365,8 @@ func TestGeneratedClientMatchesRESTSelectAndPopulateShapes(t *testing.T) {
 
 func TestGeneratedClientIncludesStoredFieldFamiliesAndOmitsUIFields(t *testing.T) {
 	manifest, err := ridu.Resolve(ridu.Config{
-		Name: "Field contracts",
-		Collections: []ridu.Collection{{Slug: "showcases", Fields: []field.Definition{
-			field.Code("source", field.Language("typescript")),
-			field.Radio("priority", field.OneOf("low", "high")),
-			field.Point("location"),
-			field.UI("guide", field.Description("presentation only")),
-			field.Collapsible("advanced", true, field.Text("internalName")),
-		}}},
+		Name:        "Field contracts",
+		Collections: []ridu.Collection{{Slug: "showcases", Fields: field.Fields{field.Code("source").Admin(field.Admin{CodeLanguage: "typescript"}), field.Radio("priority", "low", "high"), field.Point("location"), field.UI("guide").Admin(field.Admin{Description: "presentation only"}), field.Collapsible("advanced", field.Fields{field.Text("internalName")}).Admin(field.Admin{InitiallyCollapsed: true})}}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -394,12 +385,10 @@ func TestGeneratedClientIncludesStoredFieldFamiliesAndOmitsUIFields(t *testing.T
 	}
 }
 
-func TestGeneratedClientTypesMultiSelectAsOrderedChoiceArray(t *testing.T) {
+func TestGeneratedClientTypesMultiSelectAsOrderedOptionArray(t *testing.T) {
 	manifest, err := ridu.Resolve(ridu.Config{
-		Name: "Multi-select contracts",
-		Collections: []ridu.Collection{{Slug: "users", Fields: []field.Definition{
-			field.Select("roles", field.OneOf("admin", "editor"), field.Multiple(), field.DefaultChoices("admin"), field.Required()),
-		}}},
+		Name:        "Multi-select contracts",
+		Collections: []ridu.Collection{{Slug: "users", Fields: field.Fields{field.MultiSelect("roles", "admin", "editor").Default("admin").Required()}}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -465,16 +454,12 @@ func TestGeneratedClientModelsServerOwnedUploadsDraftsAndValidationPaths(t *test
 	manifest, err := ridu.Resolve(ridu.Config{
 		Name: "Precision contracts",
 		Collections: []ridu.Collection{
-			{Slug: "media", Upload: true, Fields: []field.Definition{field.Text("alt")}},
+			{Slug: "media", Upload: true, Fields: field.Fields{field.Text("alt")}},
 			{
 				Slug: "posts", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true},
-				Fields: []field.Definition{
-					field.Upload("cover", field.To("media")),
-					field.Array("sections", field.Fields(field.Select("roles", field.OneOf("author", "editor"), field.Multiple()))),
-					field.Blocks("layout", field.BlockTypes(field.BlockType("quote", "Quote", field.Relationship("reviewer", field.To("media"))))),
-				},
+				Fields: field.Fields{field.Upload("cover", "media"), field.Array("sections", field.Fields{field.MultiSelect("roles", "author", "editor")}), field.Blocks("layout", field.Block{Slug: "quote", Fields: field.Fields{field.Relationship("reviewer", "media")}})},
 			},
-			{Slug: "history", Versions: true, Fields: []field.Definition{field.Text("event")}},
+			{Slug: "history", Versions: true, Fields: field.Fields{field.Text("event")}},
 		},
 	})
 	if err != nil {
@@ -539,45 +524,23 @@ func clientFixtureConfig() ridu.Config {
 		Collections: []ridu.Collection{
 			{
 				Slug: "authors", Versions: true, Trash: true,
-				Fields: []field.Definition{
-					field.Text("name", field.Required(), field.Localized()),
-					field.Text("bio"),
-					field.Virtual("displayName", field.ValueString),
-					field.Join("posts", "posts", "author"),
-				},
-				Computed: map[string]ridu.Computed{
-					"displayName": func(ridu.ComputedContext) (store.Value, error) { return store.String("Ada"), nil },
-				},
+				Fields: field.Fields{field.Text("name").Required().Localized(), field.Text("bio"), field.Virtual("displayName", field.ValueString,
+
+					func(operation.ReadContext,
+
+					) (operation.Value[store.Value],
+
+						error) {
+						return operation.Present(store.String("Ada")), nil
+					}), field.Join("posts", "posts", "author")},
 			},
 			{
 				Slug: "history", Versions: true,
-				Fields: []field.Definition{field.Text("event", field.Required())},
+				Fields: field.Fields{field.Text("event").Required()},
 			},
 			{
 				Slug: "posts", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true},
-				Fields: []field.Definition{
-					field.Text("title", field.Required(), field.Localized()),
-					field.Select(
-						"status",
-						field.Choices(
-							field.Choice{Value: "draft", Label: "Draft"},
-							field.Choice{Value: "published", Label: "Published"},
-						),
-						field.Default("draft"),
-					),
-					field.Relationship("author", field.To("authors"), field.Localized()),
-					field.Group(
-						"seo",
-						field.Fields(
-							field.Text("description"),
-							field.Relationship("reviewer", field.To("authors")),
-						),
-					),
-					field.Array("sections", field.Fields(field.Relationship("reviewer", field.To("authors")))),
-					field.Blocks("layout", field.BlockTypes(field.BlockType("quote", "Quote", field.Relationship("source", field.To("authors"))))),
-					field.Group("localeNamed", field.Fields(field.Relationship("en", field.To("authors")))),
-					field.Relationship("subject", field.ToAny("authors", "posts")),
-				},
+				Fields: field.Fields{field.Text("title").Required().Localized(), field.Select("status", "draft", "published").Default("draft"), field.Relationship("author", "authors").Localized(), field.Group("seo", field.Fields{field.Text("description"), field.Relationship("reviewer", "authors")}), field.Array("sections", field.Fields{field.Relationship("reviewer", "authors")}), field.Blocks("layout", field.Block{Slug: "quote", Fields: field.Fields{field.Relationship("source", "authors")}}), field.Group("localeNamed", field.Fields{field.Relationship("en", "authors")}), field.PolymorphicRelationship("subject", "authors", "posts")},
 			},
 		},
 	}

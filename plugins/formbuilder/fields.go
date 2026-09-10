@@ -5,22 +5,25 @@ import (
 
 	ridu "github.com/riducms/ridu"
 	"github.com/riducms/ridu/field"
+	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/schema"
 )
 
 func (plugin *Plugin) formFieldBlocks(localized bool) ([]field.Block, error) {
 	definitions := make(map[FieldType]field.Block, 13)
-	definitions[FieldText] = field.BlockType(string(FieldText), "Text", commonInputFields(localized, localizedText("defaultValue", localized, field.Label("Default value")))...)
-	definitions[FieldTextarea] = field.BlockType(string(FieldTextarea), "Textarea", commonInputFields(localized, localizedTextarea("defaultValue", localized, field.Label("Default value")))...)
-	definitions[FieldNumber] = field.BlockType(string(FieldNumber), "Number", commonInputFields(localized, field.Number("defaultValue", field.Label("Default value")))...)
-	definitions[FieldEmail] = field.BlockType(string(FieldEmail), "Email", commonInputFields(localized)...)
-	definitions[FieldCheckbox] = field.BlockType(string(FieldCheckbox), "Checkbox", append(commonInputFields(localized), field.Checkbox("defaultValue", field.Label("Checked by default")))...)
-	definitions[FieldDate] = field.BlockType(string(FieldDate), "Date", append(commonInputFields(localized), field.Date("defaultValue", field.Label("Default value"), field.PickerAppearance(field.DatePickerDayAndTime)))...)
-	definitions[FieldState] = field.BlockType(string(FieldState), "State", commonInputFields(localized)...)
-	definitions[FieldCountry] = field.BlockType(string(FieldCountry), "Country", commonInputFields(localized)...)
-	definitions[FieldMessage] = field.BlockType(string(FieldMessage), "Message", localizedTextarea("message", localized, field.Label("Message")))
-	definitions[FieldSelect] = choiceBlock(FieldSelect, "Select", localized, true)
-	definitions[FieldRadio] = choiceBlock(FieldRadio, "Radio", localized, false)
+	definitions[FieldText] = field.Block{Slug: string(FieldText), Fields: commonInputFields(localized, field.Text("defaultValue").Localized(localized).Label("Default value"))}
+	definitions[FieldTextarea] = field.Block{Slug: string(FieldTextarea), Fields: commonInputFields(localized, field.Textarea("defaultValue").Localized(localized).Label("Default value"))}
+	definitions[FieldNumber] = field.Block{Slug: string(FieldNumber), Fields: commonInputFields(localized, field.Number("defaultValue").Label("Default value"))}
+	definitions[FieldEmail] = field.Block{Slug: string(FieldEmail), Fields: commonInputFields(localized)}
+	definitions[FieldCheckbox] = field.Block{Slug: string(FieldCheckbox), Fields: append(commonInputFields(localized), field.Checkbox("defaultValue").Label("Checked by default"))}
+	definitions[FieldDate] = field.Block{Slug: string(FieldDate), Fields: append(commonInputFields(localized), field.Date("defaultValue").Label("Default value").Format(field.DateTime))}
+	definitions[FieldState] = field.Block{Slug: string(FieldState), Fields: commonInputFields(localized)}
+	definitions[FieldCountry] = field.Block{Slug: string(FieldCountry), Fields: commonInputFields(localized)}
+	definitions[FieldMessage] = field.Block{Slug: string(FieldMessage), Fields: field.Fields{
+		field.Textarea("message").Localized(localized).Label("Message"),
+	}}
+	definitions[FieldSelect] = optionBlock(FieldSelect, "Select", localized, true)
+	definitions[FieldRadio] = optionBlock(FieldRadio, "Radio", localized, false)
 	definitions[FieldUpload] = plugin.uploadBlock(localized)
 	definitions[FieldPayment] = plugin.paymentBlock(localized)
 
@@ -44,136 +47,110 @@ func (plugin *Plugin) formFieldBlocks(localized bool) ([]field.Block, error) {
 	return append([]field.Block(nil), overridden...), nil
 }
 
-func commonInputFields(localized bool, additional ...field.Definition) []field.Definition {
-	definitions := []field.Definition{
-		field.Row(
-			field.Text("name", field.Label("Name"), field.Required(), field.Columns(6)),
-			localizedText("label", localized, field.Label("Label"), field.Columns(6)),
-		),
-		field.Row(
-			field.Number("width", field.Label("Field width (%)"), field.Min(1), field.Max(100), field.Columns(6)),
-			field.Checkbox("required", field.Label("Required"), field.Columns(6)),
-		),
+func commonInputFields(localized bool, additional ...field.Node) field.Fields {
+	definitions := field.Fields{
+		field.Row(field.Fields{
+			field.Text("name").Label("Name").Required().Admin(field.Admin{Columns: 6}),
+			field.Text("label").Localized(localized).Label("Label").Admin(field.Admin{Columns: 6}),
+		}),
+		field.Row(field.Fields{
+			field.Number("width").Label("Field width (%)").Min(1).Max(100).Admin(field.Admin{Columns: 6}),
+			field.Checkbox("required").Label("Required").Admin(field.Admin{Columns: 6}),
+		}),
 	}
 	return append(definitions, additional...)
 }
 
-func choiceBlock(kind FieldType, label string, localized, placeholder bool) field.Block {
-	definitions := commonInputFields(localized, localizedText("defaultValue", localized, field.Label("Default value")))
+func optionBlock(kind FieldType, label string, localized, placeholder bool) field.Block {
+	definitions := commonInputFields(localized, field.Text("defaultValue").Localized(localized).Label("Default value"))
 	if placeholder {
-		definitions = append(definitions, localizedText("placeholder", localized, field.Label("Placeholder")))
+		definitions = append(definitions, field.Text("placeholder").Localized(localized).Label("Placeholder"))
 	}
-	definitions = append(definitions, field.Array("options",
-		field.Label(label+" options"),
-		field.Required(),
-		field.MinRows(1),
-		field.RowLabel("label"),
-		field.ArrayRowLabels(field.RowLabels{Singular: "Option", Plural: "Options"}),
-		field.Fields(
-			localizedText("label", localized, field.Label("Label"), field.Required(), field.Columns(6)),
-			field.Text("value", field.Label("Value"), field.Required(), field.Columns(6)),
-		),
-	))
-	return field.BlockType(string(kind), label, definitions...)
+	definitions = append(definitions, field.Array("options", field.Fields{
+		field.Text("label").Localized(localized).Label("Label").Required().Admin(field.Admin{Columns: 6}),
+		field.Text("value").Label("Value").Required().Admin(field.Admin{Columns: 6}),
+	}).Label(label+" options").Required().MinRows(1).Admin(field.Admin{RowLabelPath: "label", RowLabels: field.RowLabels{Singular: "Option", Plural: "Options"}}))
+	return field.Block{Slug: string(kind), Fields: definitions}
 }
 
 func (plugin *Plugin) uploadBlock(localized bool) field.Block {
-	choices := make([]field.Choice, len(plugin.config.UploadCollections))
+	options := make([]field.Option, len(plugin.config.UploadCollections))
 	for index, slug := range plugin.config.UploadCollections {
-		choices[index] = field.Choice{Value: string(slug), Label: string(slug)}
+		options[index] = field.Option{Value: string(slug), Label: string(slug)}
 	}
 	definitions := commonInputFields(localized)
-	definitions = append(definitions,
-		field.Select("uploadCollection", field.Label("Upload collection"), field.Required(), field.Choices(choices...)),
-		field.Array("mimeTypes", field.Label("Allowed MIME types"), field.ArrayRowLabels(field.RowLabels{Singular: "MIME type", Plural: "MIME types"}), field.Fields(field.Text("mimeType", field.Required(), field.Label("MIME type")))),
-		field.Row(
-			field.Number("maxFileSize", field.Label("Maximum file size (bytes)"), field.Min(1), field.Columns(6)),
-			field.Checkbox("multiple", field.Label("Allow multiple files"), field.Columns(6)),
-		),
-	)
-	return field.BlockType(string(FieldUpload), "Upload", definitions...)
+	definitions = append(definitions, field.Select("uploadCollection").Options(options...).Label("Upload collection").Required(), field.Array("mimeTypes", field.Fields{
+		field.Text("mimeType").Required().Label("MIME type"),
+	}).Label("Allowed MIME types").Admin(field.Admin{RowLabels: field.RowLabels{Singular: "MIME type", Plural: "MIME types"}}), field.Row(field.Fields{
+		field.Number("maxFileSize").Label("Maximum file size (bytes)").Min(1).Admin(field.Admin{Columns: 6}),
+		field.Checkbox("multiple").Label("Allow multiple files").Admin(field.Admin{Columns: 6}),
+	}))
+	return field.Block{Slug: string(FieldUpload), Fields: definitions}
 }
 
 func (plugin *Plugin) paymentBlock(localized bool) field.Block {
-	definitions := commonInputFields(localized,
-		field.Number("basePrice", field.Label("Base price"), field.Required(), field.Min(0)),
-		field.Select("paymentProcessor", field.Label("Payment processor"), field.Required(), field.Choices(plugin.config.PaymentProcessors...)),
-		field.Array("priceConditions", field.Label("Price conditions"), field.ArrayRowLabels(field.RowLabels{Singular: "Price condition", Plural: "Price conditions"}), field.Fields(
-			field.Text("fieldToUse", field.Label("Field to use"), field.Required()),
-			field.Select("condition", field.Label("Condition"), field.Required(), field.Default("hasValue"), field.Choices(
-				field.Choice{Value: "hasValue", Label: "Has any value"},
-				field.Choice{Value: "equals", Label: "Equals"},
-				field.Choice{Value: "notEquals", Label: "Does not equal"},
-			)),
-			field.Text("valueForCondition", field.Label("Comparison value"), field.Description("Used by equals and does-not-equal conditions.")),
-			field.Select("operator", field.Label("Operator"), field.Required(), field.Default("add"), field.Choices(
-				field.Choice{Value: "add", Label: "Add"}, field.Choice{Value: "subtract", Label: "Subtract"},
-				field.Choice{Value: "multiply", Label: "Multiply"}, field.Choice{Value: "divide", Label: "Divide"},
-			)),
-			field.Radio("valueType", field.Label("Value type"), field.Required(), field.Default("static"), field.Choices(
-				field.Choice{Value: "static", Label: "Static value"}, field.Choice{Value: "valueOfField", Label: "Value of another field"},
-			)),
-			field.Text("valueForOperator", field.Label("Value"), field.Required()),
-		)),
+	definitions := commonInputFields(localized, field.Number("basePrice").Label("Base price").Required().Min(0), field.Select("paymentProcessor").Options(plugin.config.PaymentProcessors...).Label("Payment processor").Required(), field.Array("priceConditions", field.Fields{
+		field.Text("fieldToUse").Label("Field to use").Required(),
+		field.Select("condition").Options(
+			field.Option{Value: "hasValue", Label: "Has any value"},
+			field.Option{Value: "equals", Label: "Equals"},
+			field.Option{Value: "notEquals", Label: "Does not equal"}).Label("Condition").Required().Default("hasValue"),
+		field.Text("valueForCondition").Label("Comparison value").Admin(field.Admin{Description: "Used by equals and does-not-equal conditions."}),
+		field.Select("operator", "add", "subtract", "multiply", "divide").Label("Operator").Required().Default("add"),
+		field.Radio("valueType").Options(
+			field.Option{Value: "static", Label: "Static value"}, field.Option{Value: "valueOfField", Label: "Value of another field"}).Label("Value type").Required().Default("static"),
+		field.Text("valueForOperator").Label("Value").Required(),
+	}).Label("Price conditions").Admin(field.Admin{RowLabels: field.RowLabels{Singular: "Price condition", Plural: "Price conditions"}}),
 	)
-	return field.BlockType(string(FieldPayment), "Payment", definitions...)
-}
-
-func localizedText(name string, localized bool, options ...field.StringOption) field.Definition {
-	if localized {
-		options = append(options, field.Localized())
-	}
-	return field.Text(name, options...)
-}
-
-func localizedTextarea(name string, localized bool, options ...field.StringOption) field.Definition {
-	if localized {
-		options = append(options, field.Localized())
-	}
-	return field.Textarea(name, options...)
+	return field.Block{Slug: string(FieldPayment), Fields: definitions}
 }
 
 func (plugin *Plugin) formsCollection(blocks []field.Block, localized bool, adminCollection schema.CollectionSlug) ridu.Collection {
-	redirectFields := []field.Definition{}
+	redirectFields := field.Fields{}
 	if len(plugin.config.RedirectRelationships) != 0 {
-		redirectFields = append(redirectFields, field.Radio("type", field.Label("Redirect type"), field.Default("reference"), field.Choices(
-			field.Choice{Value: "custom", Label: "Custom URL"}, field.Choice{Value: "reference", Label: "Internal link"},
-		)))
-		targets := make([]string, len(plugin.config.RedirectRelationships))
-		for index, slug := range plugin.config.RedirectRelationships {
-			targets[index] = string(slug)
+		redirectFields = append(redirectFields, field.Radio("type").Options(
+			field.Option{Value: "custom", Label: "Custom URL"}, field.Option{Value: "reference", Label: "Internal link"}).Label("Redirect type").Default("reference"),
+		)
+		presentation := field.Admin{VisibleWhen: field.Equal(field.Sibling("type"), "reference")}
+		if len(plugin.config.RedirectRelationships) == 1 {
+			redirectFields = append(redirectFields, field.Relationship("reference", plugin.config.RedirectRelationships[0]).Label("Document to link to").Admin(presentation))
+		} else {
+			redirectFields = append(redirectFields, field.PolymorphicRelationship("reference", plugin.config.RedirectRelationships...).Label("Document to link to").Admin(presentation))
 		}
-		redirectFields = append(redirectFields, field.Relationship("reference", field.Label("Document to link to"), field.ToAny(targets...), field.ShowWhen("type", "reference")))
-		redirectFields = append(redirectFields, field.Text("url", field.Label("URL to redirect to"), field.ShowWhen("type", "custom")))
+		redirectFields = append(redirectFields, field.Text("url").Label("URL to redirect to").Admin(field.Admin{VisibleWhen: field.Equal(field.Sibling("type"), "custom")}))
 	} else {
-		redirectFields = append(redirectFields, field.Text("url", field.Label("URL to redirect to")))
+		redirectFields = append(redirectFields, field.Text("url").Label("URL to redirect to"))
 	}
 
 	return ridu.Collection{
 		Slug:   plugin.config.FormsSlug,
 		Labels: ridu.CollectionLabels{Singular: "Form", Plural: "Forms"},
 		Admin:  ridu.CollectionAdmin{UseAsTitle: "title", Group: "Form Builder", DefaultColumns: []string{"title"}},
-		FieldAccess: map[string]ridu.FieldAccess{
-			"emails": {Read: func(context ridu.FieldAccessContext) (bool, error) {
-				return (context.Actor != nil && (adminCollection == "" || context.ActorCollection == adminCollection)) || context.Context.Value(emailConfigReadKey{}) == true, nil
-			}},
-		},
-		Fields: []field.Definition{
-			field.Text("title", field.Label("Title"), field.Required()),
-			field.Blocks("fields", field.Label("Fields"), field.BlockTypes(blocks...)),
-			localizedText("submitButtonLabel", localized, field.Label("Submit button"), field.Default("Submit")),
-			field.Radio("confirmationType", field.Label("Confirmation type"), field.Default("message"), field.Required(), field.Description("Choose whether successful submissions show a message or redirect."), field.Choices(
-				field.Choice{Value: "message", Label: "Message"}, field.Choice{Value: "redirect", Label: "Redirect"},
-			)),
-			localizedTextarea("confirmationMessage", localized, field.Label("Confirmation message"), field.ShowWhen("confirmationType", "message")),
-			field.Group("redirect", field.Label("Redirect"), field.ShowWhen("confirmationType", "redirect"), field.Fields(redirectFields...)),
-			field.Array("emails", field.Label("Emails"), field.Description("Send dynamic emails after a submission. Use {{field_name}}, {{*}}, or {{*:table}} in text."), field.ArrayRowLabels(field.RowLabels{Singular: "Email", Plural: "Emails"}), field.Fields(
-				field.Text("emailTo", field.Label("Email to")),
-				field.Row(field.Text("cc", field.Label("CC"), field.Columns(6)), field.Text("bcc", field.Label("BCC"), field.Columns(6))),
-				field.Row(field.Text("replyTo", field.Label("Reply to"), field.Columns(6)), field.Text("emailFrom", field.Label("Email from"), field.Columns(6))),
-				localizedText("subject", localized, field.Label("Subject"), field.Required(), field.Default("You've received a new message.")),
-				localizedTextarea("message", localized, field.Label("Message"), field.Description("Submission placeholders are HTML-escaped before insertion.")),
-			)),
+		Fields: field.Fields{
+			field.Text("title").Label("Title").Required(),
+			field.Blocks("fields", blocks...).Label("Fields"),
+			field.Text("submitButtonLabel").Localized(localized).Label("Submit button").Default("Submit"),
+			field.Radio("confirmationType", "message", "redirect").Label("Confirmation type").Default("message").Required().Admin(field.Admin{Description: "Choose whether successful submissions show a message or redirect."}),
+			field.Textarea("confirmationMessage").Localized(localized).Label("Confirmation message").Admin(field.Admin{VisibleWhen: field.Equal(field.Root("confirmationType"), "message")}),
+			field.Group("redirect", redirectFields).Label("Redirect").Admin(field.Admin{VisibleWhen: field.Equal(field.Root("confirmationType"), "redirect")}),
+			field.Array("emails", field.Fields{
+				field.Text("emailTo").Label("Email to"),
+				field.Row(field.Fields{
+					field.Text("cc").Label("CC").Admin(field.Admin{Columns: 6}),
+					field.Text("bcc").Label("BCC").Admin(field.Admin{Columns: 6}),
+				}),
+				field.Row(field.Fields{
+					field.Text("replyTo").Label("Reply to").Admin(field.Admin{Columns: 6}),
+					field.Text("emailFrom").Label("Email from").Admin(field.Admin{Columns: 6}),
+				}),
+				field.Text("subject").Localized(localized).Label("Subject").Required().Default("You've received a new message."),
+				field.Textarea("message").Localized(localized).Label("Message").Admin(field.Admin{Description: "Submission placeholders are HTML-escaped before insertion."}),
+			}).Label("Emails").Admin(field.Admin{
+				Description: "Send dynamic emails after a submission. Use {{field_name}}, {{*}}, or {{*:table}} in text.",
+				RowLabels:   field.RowLabels{Singular: "Email", Plural: "Emails"},
+			}).Access(field.Access{Read: func(context operation.AccessContext) (bool, error) {
+				return (context.Actor.ID != "" && (adminCollection == "" || context.Actor.Collection == adminCollection)) || context.Context.Value(emailConfigReadKey{}) == true, nil
+			}}),
 		},
 		Access: ridu.CollectionAccess{
 			Create: allowAdminCollection(adminCollection), Read: allowAll,
@@ -183,25 +160,27 @@ func (plugin *Plugin) formsCollection(blocks []field.Block, localized bool, admi
 }
 
 func (plugin *Plugin) submissionsCollection(adminCollection schema.CollectionSlug, allowedFieldTypes map[FieldType]struct{}) ridu.Collection {
-	fields := []field.Definition{
-		field.Relationship("form", field.Label("Form"), field.To(string(plugin.config.FormsSlug)), field.Required(), field.OnDelete(field.ReferenceDeleteRestrict)),
-		field.Array("submissionData", field.Label("Submission data"), field.ArrayRowLabels(field.RowLabels{Singular: "Submitted field", Plural: "Submission data"}), field.Fields(
-			field.Text("field", field.Label("Field"), field.Required()),
-			field.JSON("value", field.Label("Value"), field.Required()),
-		)),
+	fields := field.Fields{
+		field.Relationship("form", plugin.config.FormsSlug).Label("Form").Required().OnDelete(field.ReferenceDeleteRestrict),
+		field.Array("submissionData", field.Fields{
+			field.Text("field").Label("Field").Required(),
+			field.JSON("value").Label("Value").Required(),
+		}).Label("Submission data").Admin(field.Admin{RowLabels: field.RowLabels{Singular: "Submitted field", Plural: "Submission data"}}),
 	}
 	if len(plugin.config.UploadCollections) != 0 {
-		targets := make([]string, len(plugin.config.UploadCollections))
-		for index, slug := range plugin.config.UploadCollections {
-			targets[index] = string(slug)
+		var references field.Node
+		if len(plugin.config.UploadCollections) == 1 {
+			references = field.Relationships("value", plugin.config.UploadCollections[0]).Label("Files").Required().OnDelete(field.ReferenceDeleteRestrict)
+		} else {
+			references = field.PolymorphicRelationships("value", plugin.config.UploadCollections...).Label("Files").Required().OnDelete(field.ReferenceDeleteRestrict)
 		}
-		fields = append(fields, field.Array("submissionUploads", field.Label("Submission uploads"), field.ArrayRowLabels(field.RowLabels{Singular: "Submitted upload", Plural: "Submission uploads"}), field.Fields(
-			field.Text("field", field.Label("Field"), field.Required()),
-			field.Relationship("value", field.Label("Files"), field.ToAny(targets...), field.HasMany(), field.Required(), field.OnDelete(field.ReferenceDeleteRestrict)),
-		)))
+		fields = append(fields, field.Array("submissionUploads", field.Fields{
+			field.Text("field").Label("Field").Required(),
+			references,
+		}).Label("Submission uploads").Admin(field.Admin{RowLabels: field.RowLabels{Singular: "Submitted upload", Plural: "Submission uploads"}}))
 	}
 	if _, enabled := allowedFieldTypes[FieldPayment]; enabled {
-		fields = append(fields, field.JSON("payment", field.Label("Payment details"), field.ReadOnly()))
+		fields = append(fields, field.JSON("payment").Label("Payment details").Admin(field.Admin{ReadOnly: true}))
 	}
 	return ridu.Collection{
 		Slug:   plugin.config.SubmissionsSlug,

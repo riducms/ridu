@@ -60,13 +60,14 @@ Generated applications expose the relevant policy through `HandlerOptions`:
 
 ```go title="cmd/server/main.go"
 ridu.WithHandlerOptions(ridu.HandlerOptions{
-	AdminAssets:       adminassets.FS(),
-	SecureCookies:     true,
-	AllowedOrigins:    []string{"https://admin.example.com"},
-	AllowedHosts:      []string{"cms.example.com"},
-	TrustedProxyCIDRs: []string{"10.0.0.0/8"},
-	MaxBodyBytes:      8 << 20, // 8 × 2²⁰ = 8,388,608 bytes (8 MiB)
-	RequestTimeout:    20 * time.Second,
+	AdminAssets:             adminassets.FS(),
+	SecureCookies:           true,
+	AllowedOrigins:          []string{"https://admin.example.com"},
+	AllowedHosts:            []string{"cms.example.com"},
+	TrustedProxyCIDRs:       []string{"10.0.0.0/8"},
+	// 8 × 2²⁰ = 8,388,608 bytes (8 MiB)
+	MaxBodyBytes:            8 << 20,
+	RequestTimeout:          20 * time.Second,
 	StrictTransportSecurity: "max-age=31536000; includeSubDomains",
 })
 ```

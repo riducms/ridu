@@ -9,9 +9,10 @@ localization are the same engine used by REST, the SDK, GraphQL, and the admin.
 
 ## Dynamic values {#dynamic-values}
 
-The dynamic surface uses `store.Values`, a map whose values have a finite JSON-shaped vocabulary.
-Construct values with `store.String`, `Number`, `Boolean`, `Object`, `List`, and `Null` rather than
-passing `any`.
+The dynamic API uses `store.Values`, a map from field names to document values. Construct a value
+with `store.String`, `Number`, `Boolean`, `Object`, `List`, or `Null`.
+[Documents and values](./go-packages/store.md) explains these constructors, reading their
+results, nested objects, and the difference between omitting a field and clearing it.
 
 ```go title="service/posts.go"
 package service
@@ -24,7 +25,11 @@ import (
 	"github.com/riducms/ridu/store"
 )
 
-func RecentPosts(ctx context.Context, app *ridu.App, actor *store.Document) (store.Page, error) {
+func RecentPosts(
+	ctx context.Context,
+	app *ridu.App,
+	actor *store.Document,
+) (store.Page, error) {
 	post, err := app.Local().Create(ctx, "posts", store.Values{
 		"title":   store.String("Hello, Ridu"),
 		"summary": store.String("An in-process write."),
@@ -73,10 +78,15 @@ if err != nil {
 	return err
 }
 
-post, err := app.Local().FindWithOptions(ctx, "posts", postID, ridu.FindOptions{
-	Actor:           &session.User,
-	ActorCollection: session.Collection,
-})
+post, err := app.Local().FindWithOptions(
+	ctx,
+	"posts",
+	postID,
+	ridu.FindOptions{
+		Actor:           &session.User,
+		ActorCollection: session.Collection,
+	},
+)
 ```
 
 All option-bearing reads, mutations, and capability checks accept `ActorCollection`. Transport
@@ -97,6 +107,15 @@ request needs more control:
 | `MutationOptions`   | Exact actor identity, optimistic `ExpectedRevision`, returned population/output fields, draft status, and write locale                          |
 | `CapabilityOptions` | Candidate `Data`, exact actor identity, trash mode, and locale for a side-effect-free permission summary                                        |
 | `LocaleOptions`     | Locale, replacement fallback chain, fallback disablement, or all-locales reads for concise methods                                              |
+
+Caller `Where`, `Sort`, `Distinct` and `ListWindow` paths follow the
+[field query-access contract](./access-control.md#field-access). A configured Read rule on
+the field or an ancestor makes the path unavailable for queries, even to actors who can read it
+in individual documents. Collection access predicates remain trusted.
+
+`Local().ListJoin(ctx, sourceCollection, sourceID, joinField, options)` reads an authored inverse
+join through source and target read access. The engine derives the membership constraint from
+config; `options.Where` and `options.Sort` retain ordinary caller query restrictions.
 
 `Select` projects stored fields. `OutputFields` independently controls computed fields and inverse
 joins: nil resolves all, while a non-nil empty slice resolves none. `Populate` changes the returned
@@ -149,7 +168,7 @@ settings, err := app.Local().UpdateGlobalWithOptions(
 	store.Values{"siteName": store.String("Acme")},
 	ridu.MutationOptions{
 		Actor:            actor,
-		ActorCollection: "users",
+		ActorCollection:  "users",
 		ExpectedRevision: currentRevision,
 	},
 )
@@ -191,16 +210,18 @@ Non-null slices, maps, fallback `json.RawMessage` fields, and plugin-owned Go ty
 nullability cannot be proven use `core.NonNullInput[T]`: construct a required value with
 `core.NonNull(value)`, or an omittable default/update value with `core.SetNonNull(value)`. Encoding
 rejects nil or otherwise null-encoding wrapped values. Other non-null fields that are optional only
-in an update or because a server default exists use `*T`. Generated mutation wrappers are
-write-only, not general-purpose JSON-unmarshal contracts. `TypedListOptions` excludes population
-and all-locale reads because those operations change relationship and localized field shapes; use
-the dynamic local API when you need either.
+in an update or because a server default exists use `*T`. Generated mutation wrappers expose `Get()` for inspecting a concrete value, and generated field
+codecs preserve explicit nulls when decoding mutations.
 
-Except for typed `List`, these generated methods currently take an actor document rather than an
-options struct, so they cannot carry `ActorCollection`, locale selection, draft intent, or returned
-population. In a multi-auth or option-rich operation, keep the generated input/output types where
-useful but call the dynamic `WithOptions` method so the exact identity and request semantics are not
-lost.
+Use the ordinary collection handle for reads and writes. `Find` accepts `core.TypedReadOptions`,
+and `List` accepts `core.TypedListOptions`; both support population, projection, actor identity,
+draft intent and locale selection. Global `Find` uses the same read options. Generated relationship
+values expose an `ID` and an optional typed `Document`, so population does not require switching
+handles. Localized projects generate separate `AllLocales` read bindings with locale-map models.
+
+Typed writes take an actor document and optional locale settings. For writes that also require
+`ActorCollection`, returned population or other advanced options, use the dynamic `WithOptions`
+method with the exact identity and request semantics.
 
 ## Optimistic revisions {#optimistic-writes}
 
@@ -210,11 +231,17 @@ restore. Zero means no revision fence; a stale positive revision returns a `conf
 error instead of replacing a newer edit.
 
 ```go
-updated, err := app.Local().UpdateWithOptions(ctx, "posts", post.ID, values, ridu.MutationOptions{
-	Actor:            actor,
-	ActorCollection: "users",
-	ExpectedRevision: post.Revision,
-})
+updated, err := app.Local().UpdateWithOptions(
+	ctx,
+	"posts",
+	post.ID,
+	values,
+	ridu.MutationOptions{
+		Actor:            actor,
+		ActorCollection:  "users",
+		ExpectedRevision: post.Revision,
+	},
+)
 ```
 
 Document locks coordinate editors but do not replace this fence. Prefer revisions on every
@@ -222,7 +249,8 @@ interactive write.
 
 ## Nested calls and transactions {#nested-transactions}
 
-`HookContext.Local`, `AccessContext.Local`, and `FieldAccessContext.Local` expose the same API.
+Resource `HookContext.Local` and `AccessContext.Local` expose the same API. Field callbacks
+receive `operation.Reader`, a bound read-only lookup that preserves the actor, locale, and transaction.
 Calls made during a pre-commit operation phase automatically reuse the outer store transaction.
 The nested operation still runs its own access, validation, hooks, version snapshot, and redaction;
 if it fails, the transaction becomes rollback-only even when a hook tries to swallow the error.

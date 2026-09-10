@@ -9,6 +9,8 @@
 	} from "@hvniel/lexical-svelte";
 	import { $isParagraphNode, type TextNode } from "lexical";
 
+	import { getRichTextField } from "@plugin-richtext/field/rich-text-context.svelte";
+	import { richTextBlockTypes } from "@plugin-richtext/field/rich-text-blocks";
 	import type { RichTextConfig } from "@plugin-richtext/field/rich-text-config";
 	import RichTextMenu from "@plugin-richtext/menu/rich-text-menu.svelte";
 	import {
@@ -24,7 +26,13 @@
 	const trigger = createBasicTypeaheadTriggerMatch("/", { allowWhitespace: true, minLength: 0 });
 	// Menu options carry attachment identity and the mounted field's feature set is fixed.
 	// svelte-ignore state_referenced_locally
-	const baseOptions = buildRichTextOptions(editor, config, i18n, authoring);
+	const baseOptions = buildRichTextOptions(
+		editor,
+		config,
+		i18n,
+		authoring,
+		richTextBlockTypes(getRichTextField().field)
+	);
 	let query = $state<string | null>(null);
 	let menuAnchor = $state.raw<{
 		contextElement: HTMLElement;

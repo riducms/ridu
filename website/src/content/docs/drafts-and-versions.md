@@ -35,8 +35,8 @@ var Posts = ridu.Collection{
 		MaxPerDocument:   100,
 		AutosaveInterval: 30 * time.Second,
 	},
-	Fields: []field.Definition{
-		field.Text("title", field.Required()),
+	Fields: field.Fields{
+		field.Text("title").Required(),
 		field.Textarea("summary"),
 	},
 }
@@ -85,7 +85,7 @@ are driven by that setting.
 
 ## Draft read semantics {#draft-reads}
 
-`FindOptions.Draft` and `ListOptions.Draft` are also three-state:
+The Local Go API’s `FindOptions.Draft` and `ListOptions.Draft` are also three-state:
 
 | Read option                   | Result set                                                         |
 | ----------------------------- | ------------------------------------------------------------------ |
@@ -94,10 +94,50 @@ are driven by that setting.
 | `Draft: nil`, anonymous actor | Published only                                                     |
 | `Draft: nil`, non-nil actor   | No status filter; collection/field access still decides visibility |
 
-This default gives public anonymous local reads the published view while letting an authenticated
-author see a draft when access allows it. For application code, do not rely on actor presence as an
-implicit content mode—set `Draft` at preview, public-rendering, and background-job boundaries.
-REST and the generated SDK likewise require `draft: true` for draft reads.
+Ordinary REST and generated SDK reads use the actor-sensitive default above: anonymous reads see
+published documents, while authenticated reads may include drafts when access allows it. These
+read routes do not accept a `draft` option; REST rejects `?draft=true`. The SDK's `draft` option on
+supported writes does not enable draft reads.
+
+For a published-only REST or SDK collection list, filter on the version metadata:
+
+```ts
+const page = await client.list('posts', {
+	where: { _status: { equals: 'published' } }
+});
+```
+
+For Local Go reads, set `Draft` explicitly at public-rendering, preview, and background-job
+boundaries. The GraphQL plugin also exposes explicit draft selection. Requesting drafts through
+these surfaces can include them even for an anonymous actor if the authored Read rule allows it.
+To enforce published-only anonymous access across ordinary read surfaces, assign a predicate rule
+to `Posts.Access.Read`, for example:
+
+```go title="content/access.go"
+package content
+
+import (
+	"github.com/riducms/ridu"
+	"github.com/riducms/ridu/query"
+)
+
+func readPosts(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
+	if ctx.Actor != nil {
+		return ridu.Allow(), nil
+	}
+	statusPath, err := query.NewPath("_status")
+	if err != nil {
+		return ridu.Deny(), err
+	}
+	return ridu.Where(
+		query.Equal(statusPath, query.String("published")),
+	), nil
+}
+```
+
+Set `Access: ridu.CollectionAccess{Read: readPosts}` on the collection. This example treats every
+authenticated actor as an editor; replace that branch with your application's editorial access
+rule. See [Access control](/docs/access-control/) for role and ownership predicates.
 
 A draft is not a security boundary. Collection and field access always run, and requesting draft
 content does not grant permission. Preview tokens provide a separate, short-lived, target-scoped

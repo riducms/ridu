@@ -14,14 +14,10 @@ var Posts = ridu.Collection{
 		Update: authenticatedOnly,
 		Delete: authenticatedOnly,
 	},
-	Fields: []field.Definition{
-		field.Text("title", field.Label("let's win today interesting"), field.Required()),
-		field.Select(
-			"status",
-			field.OneOf("draft", "published"),
-			field.Default("draft"),
-		),
-		field.Relationship("author", field.To("users")),
+	Fields: field.Fields{
+		field.Text("title").Required().Admin(field.Admin{Editor: field.Component("app:text")}),
+		field.Select("status", "draft", "published").Default("draft"),
+		field.Relationship("author", "users"),
 		richtext.Field("content"),
 	},
 }

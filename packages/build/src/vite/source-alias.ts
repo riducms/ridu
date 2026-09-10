@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { dirname, join, parse, resolve } from "node:path";
 import type { Plugin } from "vite";
 
-const frameworkAliases = ["@admin/", "@ui/", "@plugin-richtext/", "@plugin-seo/"] as const;
+export const frameworkAliases = ["@admin/", "@ui/", "@plugin-richtext/", "@plugin-seo/"] as const;
 
 export function packageSourceAliasPlugin(): Plugin {
 	const sourceRoots = new Map<string, string>();

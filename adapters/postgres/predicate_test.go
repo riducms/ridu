@@ -123,7 +123,7 @@ func TestPredicateCompilerTreatsMultiSelectContainsAsExactMembership(t *testing.
 	}
 	collection := schema.Collection{ID: "users", Slug: "users", Fields: []schema.Field{{
 		ID: "users-roles", Name: "roles", Type: schema.FieldTypeSelect,
-		Select: &schema.SelectField{HasMany: true, Choices: []schema.SelectChoice{{Value: "admin"}, {Value: "editor"}}},
+		Select: &schema.SelectField{HasMany: true, Options: []schema.SelectOption{{Value: "admin"}, {Value: "editor"}}},
 	}}}
 	compiler := predicateCompiler{collection: collection}
 	compiled, err := compiler.compile(query.Contains(roles, "admin").Node())
@@ -495,7 +495,7 @@ func TestPredicateCompilerKeepsOptionalValueComparisonsTwoValued(t *testing.T) {
 		},
 		{
 			ID: "layout", Name: "layout", Type: schema.FieldTypeBlocks,
-			Blocks: &schema.BlocksField{Types: []schema.BlockType{{Key: "hero", Fields: []schema.Field{{ID: "layout-hero-heading", Name: "heading", Type: schema.FieldTypeText}}}}},
+			Blocks: &schema.BlocksField{Types: []schema.BlockType{{Slug: "hero", Fields: []schema.Field{{ID: "layout-hero-heading", Name: "heading", Type: schema.FieldTypeText}}}}},
 		},
 	}}
 	path, err := query.ParsePath("subtitle")
@@ -835,7 +835,7 @@ func localizedIntermediatePredicateCollection() schema.Collection {
 			},
 			{
 				ID: "content-layout", Name: "layout", Type: schema.FieldTypeBlocks, Localized: true,
-				Blocks: &schema.BlocksField{Types: []schema.BlockType{{Key: "hero", Fields: []schema.Field{{ID: "content-layout-hero-heading", Name: "heading", Type: schema.FieldTypeText}}}}},
+				Blocks: &schema.BlocksField{Types: []schema.BlockType{{Slug: "hero", Fields: []schema.Field{{ID: "content-layout-hero-heading", Name: "heading", Type: schema.FieldTypeText}}}}},
 			},
 			{
 				ID: "content-entries", Name: "entries", Type: schema.FieldTypeArray,
@@ -853,7 +853,7 @@ func localizedIntermediatePredicateCollection() schema.Collection {
 					},
 					{
 						ID: "content-sections-panels", Name: "panels", Type: schema.FieldTypeBlocks,
-						Blocks: &schema.BlocksField{Types: []schema.BlockType{{Key: "hero", Fields: []schema.Field{{ID: "content-sections-panels-hero-heading", Name: "heading", Type: schema.FieldTypeText}}}}},
+						Blocks: &schema.BlocksField{Types: []schema.BlockType{{Slug: "hero", Fields: []schema.Field{{ID: "content-sections-panels-hero-heading", Name: "heading", Type: schema.FieldTypeText}}}}},
 					},
 				}},
 			},

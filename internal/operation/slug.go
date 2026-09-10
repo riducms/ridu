@@ -5,12 +5,13 @@ import (
 	"fmt"
 
 	"github.com/riducms/ridu/field"
+	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
 )
 
-func normalizeSlugFields(fields []schema.Field, data, submitted store.Values, original *store.Document, operation Kind) {
+func normalizeSlugFields(fields []schema.Field, data, submitted store.Values, original *store.Document, operationKind operation.Kind) {
 	for _, candidate := range fields {
 		if candidate.Text == nil || candidate.Text.Slug == nil {
 			continue
@@ -25,7 +26,7 @@ func normalizeSlugFields(fields []schema.Field, data, submitted store.Values, or
 		currentValue, currentExists := data[candidate.Name]
 		currentSlug, currentString := currentValue.StringValue()
 
-		if operation == Create || operation == Duplicate || original == nil {
+		if operationKind == operation.Create || operationKind == operation.Duplicate || original == nil {
 			if currentExists && !currentString {
 				continue
 			}
@@ -170,10 +171,10 @@ func mergedStringAtPath(current, original store.Values, segments []string) strin
 	}
 	var currentObject, originalObject store.Values
 	if currentExists {
-		currentObject, _ = currentValue.ObjectValue()
+		currentObject, _ = currentValue.CopyObject()
 	}
 	if originalExists {
-		originalObject, _ = originalValue.ObjectValue()
+		originalObject, _ = originalValue.CopyObject()
 	}
 	return mergedStringAtPath(currentObject, originalObject, segments[1:])
 }

@@ -126,11 +126,11 @@ describe('parseCodeLineAnnotations', () => {
 			.map((annotation) => lines[annotation.lineNumber - 1]?.trim());
 
 		expect(addedLines).toEqual([
-			'field.Textarea(',
-			'"summary",',
-			'field.MaxLength(240),',
-			'field.Description("A short introduction used by post cards."),',
-			'),'
+			'field.Textarea("summary").',
+			'MaxLength(240).',
+			'Admin(field.Admin{',
+			'Description: "A short introduction used by post cards.",',
+			'}),'
 		]);
 	});
 

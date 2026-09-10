@@ -302,17 +302,17 @@ func TestMongoNestedGroupEnvelopeSupportsPortableObjects(t *testing.T) {
 		t.Fatalf("nested scalar group envelope rejected: %v", err)
 	}
 	indexed := mongoGroupCollection()
-	indexed.Fields[1].Nested.Fields[0].Index = true
+	indexed.Fields[1].Nested.ResolvedFields()[0].Index = true
 	if err := validateCollectionEnvelope(indexed); err != nil {
 		t.Fatalf("nested non-unique index rejected: %v", err)
 	}
 	localized := mongoGroupCollection()
-	localized.Fields[1].Nested.Fields[0].Localized = true
+	localized.Fields[1].Nested.ResolvedFields()[0].Localized = true
 	if err := validateCollectionEnvelope(localized); err != nil {
 		t.Fatalf("localized scalar group child rejected: %v", err)
 	}
 	repeated := mongoGroupCollection()
-	repeatedChild := &repeated.Fields[1].Nested.Fields[0]
+	repeatedChild := &repeated.Fields[1].Nested.ResolvedFields()[0]
 	repeatedChild.Type = schema.FieldTypeArray
 	repeatedChild.Category = schema.FieldCategoryNested
 	repeatedChild.Text = nil
@@ -329,14 +329,14 @@ func TestMongoNestedGroupEnvelopeSupportsPortableObjects(t *testing.T) {
 		{
 			name: "unique nested child",
 			mutate: func(collection *schema.Collection) {
-				collection.Fields[1].Nested.Fields[0].Unique = true
+				collection.Fields[1].Nested.ResolvedFields()[0].Unique = true
 			},
 			want: "cannot enforce unique nested field \"seo.headline\"",
 		},
 		{
 			name: "relationship child",
 			mutate: func(collection *schema.Collection) {
-				child := &collection.Fields[1].Nested.Fields[0]
+				child := &collection.Fields[1].Nested.ResolvedFields()[0]
 				child.Type = schema.FieldTypeRelationship
 				child.Text = nil
 				child.Relationship = &schema.RelationshipField{CollectionID: "users", CollectionSlug: "users"}
@@ -346,7 +346,7 @@ func TestMongoNestedGroupEnvelopeSupportsPortableObjects(t *testing.T) {
 		{
 			name: "noncanonical child path",
 			mutate: func(collection *schema.Collection) {
-				collection.Fields[1].Nested.Fields[0].Path, _ = query.NewPath("headline")
+				collection.Fields[1].Nested.ResolvedFields()[0].Path, _ = query.NewPath("headline")
 			},
 			want: "canonical resolved path \"seo.headline\"",
 		},
@@ -424,11 +424,11 @@ func TestMongoRepeatedFieldEnvelopeIsBounded(t *testing.T) {
 		mutate func(*schema.Collection)
 	}{
 		{name: "localized root", mutate: func(collection *schema.Collection) { collection.Fields[2].Localized = true }},
-		{name: "localized row child", mutate: func(collection *schema.Collection) { collection.Fields[2].Nested.Fields[0].Localized = true }},
+		{name: "localized row child", mutate: func(collection *schema.Collection) { collection.Fields[2].Nested.ResolvedFields()[0].Localized = true }},
 		{
 			name: "relationship row child",
 			mutate: func(collection *schema.Collection) {
-				child := &collection.Fields[2].Nested.Fields[0]
+				child := &collection.Fields[2].Nested.ResolvedFields()[0]
 				child.Type, child.Category, child.Text = schema.FieldTypeRelationship, schema.FieldCategoryRelationship, nil
 				child.Relationship = &schema.RelationshipField{CollectionID: "users", CollectionSlug: "users", OnDelete: schema.ReferenceDeleteRestrict}
 			},
@@ -449,14 +449,14 @@ func TestMongoRepeatedFieldEnvelopeIsBounded(t *testing.T) {
 		want   string
 	}{
 		{name: "indexed root", mutate: func(collection *schema.Collection) { collection.Fields[2].Index = true }, want: "indexed or unique repeated"},
-		{name: "indexed row child", mutate: func(collection *schema.Collection) { collection.Fields[2].Nested.Fields[0].Index = true }, want: "indexes on field"},
+		{name: "indexed row child", mutate: func(collection *schema.Collection) { collection.Fields[2].Nested.ResolvedFields()[0].Index = true }, want: "indexes on field"},
 		{
 			name: "block discriminator child",
 			mutate: func(collection *schema.Collection) {
-				child := collection.Fields[3].Blocks.Types[0].Fields[0]
+				child := collection.Fields[3].Blocks.ResolvedTypes()[0].ResolvedFields()[0]
 				child.Name = "blockType"
 				child.Path, _ = query.NewPath("layout", "hero", "blockType")
-				collection.Fields[3].Blocks.Types[0].Fields[0] = child
+				collection.Fields[3].Blocks.ResolvedTypes()[0].ResolvedFields()[0] = child
 			},
 			want: "reserved discriminator",
 		},
@@ -491,8 +491,8 @@ func TestMongoRepeatedValuesRequireCanonicalWholeRoots(t *testing.T) {
 		want   string
 	}{
 		{name: "select scalar", values: store.Values{"tags": store.String("alpha")}, want: "does not match field type"},
-		{name: "unknown select", values: store.Values{"tags": store.List(store.String("missing"))}, want: "unknown select choice"},
-		{name: "duplicate select", values: store.Values{"tags": store.List(store.String("alpha"), store.String("alpha"))}, want: "duplicates select choice"},
+		{name: "unknown select", values: store.Values{"tags": store.List(store.String("missing"))}, want: "unknown select option"},
+		{name: "duplicate select", values: store.Values{"tags": store.List(store.String("alpha"), store.String("alpha"))}, want: "duplicates select option"},
 		{name: "array scalar", values: store.Values{"rows": store.String("unsafe")}, want: "does not match field type"},
 		{name: "array row scalar", values: store.Values{"rows": store.List(store.String("unsafe"))}, want: "must be an object"},
 		{name: "unknown row field", values: store.Values{"rows": store.List(store.Object(store.Values{"kind": store.String("a"), "label": store.String("b"), "removed": store.String("unsafe")}))}, want: "not a stored field"},
@@ -502,8 +502,8 @@ func TestMongoRepeatedValuesRequireCanonicalWholeRoots(t *testing.T) {
 			store.Object(store.Values{"_key": store.String("same"), "kind": store.String("c"), "label": store.String("d")}),
 		)}, want: "duplicates row"},
 		{name: "partial row replacement", patch: true, values: store.Values{"rows": store.List(store.Object(store.Values{"kind": store.String("a")}))}, want: "missing required field"},
-		{name: "block without discriminator", values: store.Values{"layout": store.List(store.Object(store.Values{"heading": store.String("unsafe")}))}, want: "invalid blockType"},
-		{name: "unknown block discriminator", values: store.Values{"layout": store.List(store.Object(store.Values{"blockType": store.String("missing")}))}, want: "invalid blockType"},
+		{name: "block without discriminator", values: store.Values{"layout": store.List(store.Object(store.Values{"heading": store.String("unsafe")}))}, want: "requires schema recovery"},
+		{name: "unknown block discriminator", values: store.Values{"layout": store.List(store.Object(store.Values{"blockType": store.String("missing")}))}, want: "requires schema recovery"},
 		{name: "wrong block fields", values: store.Values{"layout": store.List(store.Object(store.Values{"blockType": store.String("quote"), "tone": store.String("unsafe"), "heading": store.String("quote")}))}, want: "not a stored field"},
 	}
 	for _, test := range tests {
@@ -581,7 +581,7 @@ func mongoRepeatedCollection() schema.Collection {
 			{
 				ID: "repeated-posts-tags", Name: "tags", Path: path("tags"),
 				Type: schema.FieldTypeSelect, Category: schema.FieldCategoryScalar,
-				Select: &schema.SelectField{HasMany: true, Choices: []schema.SelectChoice{
+				Select: &schema.SelectField{HasMany: true, Options: []schema.SelectOption{
 					{Value: "alpha", Label: "Alpha"}, {Value: "beta", Label: "Beta"},
 				}},
 			},
@@ -594,14 +594,14 @@ func mongoRepeatedCollection() schema.Collection {
 					{
 						ID: "repeated-posts-rows-state", Name: "state", Path: path("rows", "state"),
 						Type: schema.FieldTypeSelect, Category: schema.FieldCategoryScalar,
-						Select: &schema.SelectField{Choices: []schema.SelectChoice{
+						Select: &schema.SelectField{Options: []schema.SelectOption{
 							{Value: "draft", Label: "Draft"}, {Value: "published", Label: "Published"},
 						}},
 					},
 					{
 						ID: "repeated-posts-rows-tone", Name: "tone", Path: path("rows", "tone"),
 						Type: schema.FieldTypeRadio, Category: schema.FieldCategoryScalar,
-						Select: &schema.SelectField{Choices: []schema.SelectChoice{
+						Select: &schema.SelectField{Options: []schema.SelectOption{
 							{Value: "quiet", Label: "Quiet"}, {Value: "loud", Label: "Loud"},
 						}},
 					},
@@ -618,11 +618,11 @@ func mongoRepeatedCollection() schema.Collection {
 				ID: "repeated-posts-layout", Name: "layout", Path: path("layout"),
 				Type: schema.FieldTypeBlocks, Category: schema.FieldCategoryNested,
 				Blocks: &schema.BlocksField{Types: []schema.BlockType{
-					{Key: "hero", Label: "Hero", Fields: []schema.Field{
+					{Slug: "hero", Labels: schema.BlockLabels{Singular: "Hero"}, Fields: []schema.Field{
 						text("repeated-posts-layout-hero-heading", "heading", path("layout", "hero", "heading"), true),
 						text("repeated-posts-layout-hero-tone", "tone", path("layout", "hero", "tone"), false),
 					}},
-					{Key: "quote", Label: "Quote", Fields: []schema.Field{
+					{Slug: "quote", Labels: schema.BlockLabels{Singular: "Quote"}, Fields: []schema.Field{
 						text("repeated-posts-layout-quote-heading", "heading", path("layout", "quote", "heading"), true),
 					}},
 				}},

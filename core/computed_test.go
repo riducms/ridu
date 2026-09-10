@@ -9,6 +9,7 @@ import (
 	ridu "github.com/riducms/ridu/core"
 	"github.com/riducms/ridu/field"
 	"github.com/riducms/ridu/internal/teststore"
+	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/store"
 )
@@ -22,35 +23,35 @@ func TestVirtualFieldsAndInverseJoinsResolveOnRead(t *testing.T) {
 	application, err := ridu.New(ridu.Config{Name: "Computed output", Collections: []ridu.Collection{
 		{
 			Slug: "categories",
-			Fields: []field.Definition{
-				field.Text("name", field.Required()),
-				field.Virtual("displayName", field.ValueString),
-				field.Join("posts", "posts", "category", field.JoinLimit(2)),
-			},
-			Computed: map[string]ridu.Computed{"displayName": func(ctx ridu.ComputedContext) (store.Value, error) {
-				name, _ := ctx.Document.Values["name"].StringValue()
-				return store.String("Category: " + name), nil
-			}},
+			Fields: field.Fields{field.Text("name").Required(), field.Virtual("displayName", field.ValueString, func(ctx operation.ReadContext,
+
+			) (operation.Value[store.
+				Value],
+
+				error) {
+				name, _ := ctx.Root.Get("name").
+					StringValue()
+				return operation.Present(store.String("Category: " + name)), nil
+			}),
+
+				field.Join("posts", "posts", "category").Limit(2)},
 		},
 		{
 			Slug: "posts",
-			Fields: []field.Definition{
-				field.Text("title", field.Required()),
-				field.Relationship("category", field.To("categories"), field.Required()),
-				field.Checkbox("visible", field.Required()),
-				field.Text("secret"),
-			},
+			Fields: field.Fields{field.Text("title").Required(), field.Relationship("category", "categories").Required(), field.Checkbox("visible").Required(), field.Text("secret").Access(field.Access{Read: func(operation.AccessContext,
+
+			) (bool, error) {
+				return false, nil
+			}})},
 			Access: ridu.CollectionAccess{Read: func(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
 				if ctx.Actor == nil {
 					return ridu.Deny(), nil
 				}
 				return ridu.Where(query.Equal(visiblePath, query.Boolean(true))), nil
 			}},
-			FieldAccess: map[string]ridu.FieldAccess{"secret": {Read: func(ridu.FieldAccessContext) (bool, error) {
-				return false, nil
-			}}},
+
 			Hooks: ridu.CollectionHooks{AfterRead: []ridu.Hook{func(ctx ridu.HookContext) error {
-				if ctx.Operation == ridu.OperationRead {
+				if ctx.Operation == operation.Read {
 					joinedReadHooks++
 					title, _ := ctx.Document.Values["title"].StringValue()
 					ctx.Document.Values["title"] = store.String("read: " + title)
@@ -83,11 +84,11 @@ func TestVirtualFieldsAndInverseJoinsResolveOnRead(t *testing.T) {
 	if displayName != "Category: News" {
 		t.Fatalf("displayName = %q", displayName)
 	}
-	joined, valid := found.Values["posts"].Values()
+	joined, valid := found.Values["posts"].CopyList()
 	if !valid || len(joined) != 2 {
 		t.Fatalf("joined posts = %#v", joined)
 	}
-	if document, populated := joined[0].DocumentValue(); !populated || document.ID == "" {
+	if document, populated := joined[0].CopyDocument(); !populated || document.ID == "" {
 		t.Fatalf("joined post = %#v", joined[0])
 	} else {
 		if _, leaked := document.Values["secret"]; leaked {
@@ -105,21 +106,27 @@ func TestVirtualFieldsAndInverseJoinsResolveOnRead(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	anonymousJoined, _ := anonymous.Values["posts"].Values()
+	anonymousJoined, _ := anonymous.Values["posts"].CopyList()
 	if len(anonymousJoined) != 0 {
 		t.Fatalf("inverse join bypassed target read access: %#v", anonymousJoined)
 	}
 }
 
 func TestComputedRuntimeRequiresResolversAndExactValues(t *testing.T) {
-	_, err := ridu.New(ridu.Config{Name: "Missing resolver", Collections: []ridu.Collection{{Slug: "posts", Fields: []field.Definition{field.Virtual("label", field.ValueString)}}}}, teststore.New())
+	_, err := ridu.New(ridu.Config{Name: "Missing resolver", Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{field.Virtual("label", field.ValueString, nil)}}}}, teststore.New())
 	if err == nil {
 		t.Fatal("missing computed resolver succeeded")
 	}
 
 	application, err := ridu.New(ridu.Config{Name: "Bad resolver", Collections: []ridu.Collection{{
-		Slug: "posts", Fields: []field.Definition{field.Text("title"), field.Virtual("label", field.ValueString)},
-		Computed: map[string]ridu.Computed{"label": func(ridu.ComputedContext) (store.Value, error) { return store.Number(42), nil }},
+		Slug: "posts", Fields: field.Fields{field.Text("title"), field.Virtual("label", field.ValueString, func(operation.ReadContext,
+
+		) (operation.Value[store.
+			Value],
+
+			error) {
+			return operation.Present(store.Number(42)), nil
+		})},
 	}}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -134,8 +141,8 @@ func TestComputedRuntimeRequiresResolversAndExactValues(t *testing.T) {
 func TestGlobalsRejectInverseJoins(t *testing.T) {
 	_, err := ridu.Resolve(ridu.Config{
 		Name:        "Invalid global join",
-		Collections: []ridu.Collection{{Slug: "posts", Fields: []field.Definition{field.Relationship("category", field.To("posts"))}}},
-		Globals:     []ridu.Global{{Slug: "settings", Fields: []field.Definition{field.Join("posts", "posts", "category")}}},
+		Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{field.Relationship("category", "posts")}}},
+		Globals:     []ridu.Global{{Slug: "settings", Fields: field.Fields{field.Join("posts", "posts", "category")}}},
 	})
 	if err == nil {
 		t.Fatal("global inverse join succeeded")

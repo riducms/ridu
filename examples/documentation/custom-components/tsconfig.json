@@ -1,0 +1,23 @@
+{
+	"extends": "../../../tsconfig.svelte.json",
+	"compilerOptions": {
+		"lib": ["ES2023", "DOM", "DOM.Iterable"],
+		"strict": true,
+		"allowJs": true,
+		"checkJs": true,
+		"allowArbitraryExtensions": true,
+		"exactOptionalPropertyTypes": true,
+		"noUncheckedIndexedAccess": true,
+		"types": ["svelte"],
+		"skipLibCheck": true,
+		"paths": {
+			"@ui/*": ["../../../packages/ui/src/*"]
+		}
+	},
+	"include": [
+		"admin/src/**/*.ts",
+		"admin/src/**/*.svelte",
+		"color/admin/src/**/*.ts",
+		"color/admin/src/**/*.svelte"
+	]
+}

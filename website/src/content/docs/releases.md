@@ -11,7 +11,7 @@ navigation:
 ---
 
 Ridu uses one version across its Go module, project-local CLI, npm packages, and official plugins.
-Keep them on the same release line. Mixing versions can fail during generation, plugin registration,
+Keep them on the same exact release version. Mixing versions can fail during generation, plugin registration,
 or startup.
 
 ## Supported matrix {#supported-matrix}
@@ -19,7 +19,8 @@ or startup.
 | Surface         | Supported environment                                                                                 |
 | --------------- | ----------------------------------------------------------------------------------------------------- |
 | Go              | Go 1.25 or newer                                                                                      |
-| Initializer     | Node.js 20 or newer                                                                                   |
+| Initializer     | Node.js 20 or newer for the launcher alone; generated admin tooling has stricter requirements below.  |
+| Generated admin | Node.js 20.19+ (20.x), 22.12+ (22.x), or 24+; use 24+ for a new project.                              |
 | Source checkout | Bun 1.4.0                                                                                             |
 | PostgreSQL      | PostgreSQL 17.x                                                                                       |
 | SQLite          | The bundled driver, using a local file on one application host                                        |
@@ -72,7 +73,7 @@ editing generated output.
 Read the release notes, then upgrade the project as one unit:
 
 1. Update `@riducms/cli` to the target version.
-2. Update the Go module, framework npm packages, and official plugins to the same release line.
+2. Update the Go module, framework npm packages, and official plugins to the same exact release version.
 3. Run `ridu generate` and review the generated changes.
 4. Create and review a [migration](/docs/migrations/) when the model changed.
 5. Run `ridu check`, `ridu migrate verify`, and the application's tests.
@@ -119,8 +120,11 @@ ridu version
 go list -m github.com/riducms/ridu
 ```
 
-Then run `ridu doctor` to find a mismatched CLI, Go module, package, project file, or generated
-contract.
+Compare those versions with the `@riducms/*` versions in the project's package files and lockfile.
+`ridu doctor` checks basic prerequisites and structural project settings; it does not compare all
+release versions, compile Go config, verify generated contracts, or test database connectivity.
+Run `ridu generate --check` to resolve executable config and detect generated-contract drift, then
+`ridu check` for the project's Go and frontend checks.
 
 ## Before production {#application-gate}
 

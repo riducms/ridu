@@ -1,0 +1,6 @@
+package nodescalarmethod
+
+import "example.com/ridu-gate1/field"
+
+var node field.Node = field.Text("title")
+var _ = node.MaxLength(120)

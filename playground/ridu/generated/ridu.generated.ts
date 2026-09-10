@@ -18,11 +18,56 @@ export interface ScalarWhere<Value> {
 	exists?: boolean;
 }
 
+export type TimestampWhere = Omit<ScalarWhere<string>, "contains" | "like">;
+
+export interface MultiSelectWhere<Value extends string> {
+	contains?: Value;
+	exists?: boolean;
+}
+
+export interface ExistsWhere {
+	exists?: boolean;
+}
+
+export type WorkshopsDescriptionBlocksBlockWorkshopInput = {
+	"city": "London" | "Bristol";
+	"title": string;
+} & { blockType: "workshop"; _key?: string };
+
+/** Patch a retained row by _key. New identities must satisfy the input contract at runtime. */
+export type WorkshopsDescriptionBlocksBlockWorkshopUpdate = {
+	"city"?: "London" | "Bristol";
+	"title"?: string;
+} & { blockType: "workshop"; _key: string };
+
+export type WorkshopsDescriptionBlocksBlockWorkshop = {
+	"city"?: "London" | "Bristol";
+	"title"?: string;
+} & { blockType: "workshop"; _key: string };
+
+export type PostsContentBlocksBlockBlockInput = never;
+export type PostsContentBlocksBlockInput = Array<PostsContentBlocksBlockBlockInput>;
+
+export type PostsContentBlocksBlockBlockUpdate = never;
+export type PostsContentBlocksBlockUpdate = Array<PostsContentBlocksBlockBlockUpdate>;
+
+export type PostsContentBlocksBlockBlock = never;
+export type PostsContentBlocksBlock = Array<PostsContentBlocksBlockBlock>;
+
+export type WorkshopsDescriptionBlocksBlockBlockInput = WorkshopsDescriptionBlocksBlockWorkshopInput;
+export type WorkshopsDescriptionBlocksBlockInput = Array<WorkshopsDescriptionBlocksBlockBlockInput>;
+
+export type WorkshopsDescriptionBlocksBlockBlockUpdate = WorkshopsDescriptionBlocksBlockWorkshopUpdate | WorkshopsDescriptionBlocksBlockWorkshopInput;
+export type WorkshopsDescriptionBlocksBlockUpdate = Array<WorkshopsDescriptionBlocksBlockBlockUpdate>;
+
+export type WorkshopsDescriptionBlocksBlockBlock = WorkshopsDescriptionBlocksBlockWorkshop;
+export type WorkshopsDescriptionBlocksBlock = Array<WorkshopsDescriptionBlocksBlockBlock>;
+
 export interface Users {
 	id: ID;
 	createdAt: string;
 	updatedAt: string;
-	"email": string;
+	"email"?: string;
 }
 
 export interface UsersCreate {
@@ -37,6 +82,9 @@ export interface UsersWhere {
 	and?: readonly UsersWhere[];
 	or?: readonly UsersWhere[];
 	not?: UsersWhere;
+	id?: ScalarWhere<ID>;
+	createdAt?: TimestampWhere;
+	updatedAt?: TimestampWhere;
 	"email"?: ScalarWhere<string>;
 }
 
@@ -47,40 +95,54 @@ export interface UsersSelect {
 	"email"?: boolean;
 }
 
-export type UsersPopulate = Record<never, never>;
+export interface UsersPopulationSelect {
+	id?: boolean;
+	createdAt?: boolean;
+	updatedAt?: boolean;
+	"email"?: boolean;
+}
+
+export type UsersPopulate = Record<string, never>;
+
+export type UsersPopulateOutput = Record<string, never>;
+
+export type UsersValidationPath = "email";
 
 export interface Posts {
 	id: ID;
 	createdAt: string;
 	updatedAt: string;
-	"title": string;
-	"status": "draft" | "published" | null;
-	"author": ID | Users | null;
-	"content": import("@riducms/plugin-richtext").RichTextDocument | null;
+	"title"?: string;
+	"status"?: "draft" | "published" | null;
+	"author"?: ID | Users | null;
+	"content"?: import("@riducms/plugin-richtext/document").RichTextDocument<never[][number]> | null;
 }
 
 export interface PostsCreate {
 	"title": string;
 	"status"?: "draft" | "published" | null;
 	"author"?: ID | null;
-	"content"?: import("@riducms/plugin-richtext").RichTextDocument | null;
+	"content"?: import("@riducms/plugin-richtext/document").RichTextDocumentInput<never[][number]> | null;
 }
 
 export interface PostsUpdate {
 	"title"?: string;
 	"status"?: "draft" | "published" | null;
 	"author"?: ID | null;
-	"content"?: import("@riducms/plugin-richtext").RichTextDocument | null;
+	"content"?: import("@riducms/plugin-richtext/document").RichTextDocumentInput<never[][number]> | null;
 }
 
 export interface PostsWhere {
 	and?: readonly PostsWhere[];
 	or?: readonly PostsWhere[];
 	not?: PostsWhere;
+	id?: ScalarWhere<ID>;
+	createdAt?: TimestampWhere;
+	updatedAt?: TimestampWhere;
 	"title"?: ScalarWhere<string>;
 	"status"?: ScalarWhere<"draft" | "published">;
 	"author"?: ScalarWhere<ID>;
-	"content"?: ScalarWhere<import("@riducms/plugin-richtext").RichTextDocument>;
+	"content"?: ScalarWhere<import("@riducms/plugin-richtext/document").RichTextDocument<never[][number]>>;
 }
 
 export interface PostsSelect {
@@ -93,17 +155,116 @@ export interface PostsSelect {
 	"content"?: boolean;
 }
 
-export interface PostsPopulate {
-	"author"?: boolean | UsersSelect | { depth?: number; select?: UsersSelect };
+export interface PostsPopulationSelect {
+	id?: boolean;
+	createdAt?: boolean;
+	updatedAt?: boolean;
+	"title"?: boolean;
+	"status"?: boolean;
+	"author"?: boolean;
+	"content"?: boolean;
 }
 
+export interface PostsPopulate {
+	"author"?: boolean | UsersPopulationSelect | { depth?: number; select?: UsersPopulationSelect };
+}
+
+export interface PostsPopulateOutput {
+	"author": ID | Users | null;
+}
+
+export type PostsValidationPath = "title" | "status" | "author" | "content" | `content.${string}`;
+
+export interface Workshops {
+	id: ID;
+	createdAt: string;
+	updatedAt: string;
+	"city"?: "London" | "Bristol";
+	"title"?: string;
+	"sessions"?: Array<{
+		_key: string;
+		"city"?: "London" | "Bristol";
+		"title"?: string;
+	}> | null;
+	"description"?: import("@riducms/plugin-richtext/document").RichTextDocument<WorkshopsDescriptionBlocksBlock[number]> | null;
+}
+
+export interface WorkshopsCreate {
+	"city": "London" | "Bristol";
+	"title": string;
+	"sessions"?: Array<{
+		_key?: string;
+		"city": "London" | "Bristol";
+		"title": string;
+	}> | null;
+	"description"?: import("@riducms/plugin-richtext/document").RichTextDocumentInput<WorkshopsDescriptionBlocksBlockInput[number]> | null;
+}
+
+export interface WorkshopsUpdate {
+	"city"?: "London" | "Bristol";
+	"title"?: string;
+	"sessions"?: Array<{
+		_key?: string;
+		"city": "London" | "Bristol";
+		"title": string;
+	} | {
+		_key: string;
+		"city"?: "London" | "Bristol";
+		"title"?: string;
+	}> | null;
+	"description"?: import("@riducms/plugin-richtext/document").RichTextDocumentInput<WorkshopsDescriptionBlocksBlockUpdate[number]> | null;
+}
+
+export interface WorkshopsWhere {
+	and?: readonly WorkshopsWhere[];
+	or?: readonly WorkshopsWhere[];
+	not?: WorkshopsWhere;
+	id?: ScalarWhere<ID>;
+	createdAt?: TimestampWhere;
+	updatedAt?: TimestampWhere;
+	"city"?: ScalarWhere<"London" | "Bristol">;
+	"title"?: ScalarWhere<string>;
+	"sessions"?: ExistsWhere;
+	"sessions.city"?: ScalarWhere<"London" | "Bristol">;
+	"sessions.title"?: ScalarWhere<string>;
+	"description"?: ScalarWhere<import("@riducms/plugin-richtext/document").RichTextDocument<WorkshopsDescriptionBlocksBlock[number]>>;
+}
+
+export interface WorkshopsSelect {
+	id?: boolean;
+	createdAt?: boolean;
+	updatedAt?: boolean;
+	"city"?: boolean;
+	"title"?: boolean;
+	"sessions"?: boolean;
+	"description"?: boolean;
+}
+
+export interface WorkshopsPopulationSelect {
+	id?: boolean;
+	createdAt?: boolean;
+	updatedAt?: boolean;
+	"city"?: boolean;
+	"title"?: boolean;
+	"sessions"?: boolean;
+	"description"?: boolean;
+}
+
+export type WorkshopsPopulate = Record<string, never>;
+
+export type WorkshopsPopulateOutput = Record<string, never>;
+
+export type WorkshopsValidationPath = "city" | "title" | "sessions" | `sessions.${number}` | `sessions.${number}._key` | `sessions.${number}.city` | `sessions.${number}.title` | "description" | `description.${string}`;
+
 export interface RiduConfig {
+	locale: never;
 	collections: {
 		"users": {
 			slug: "users";
 			auth: true;
 			upload: false;
 			versions: false;
+			drafts: false;
 			trash: false;
 			output: Users;
 			create: UsersCreate;
@@ -111,12 +272,15 @@ export interface RiduConfig {
 			where: UsersWhere;
 			select: UsersSelect;
 			populate: UsersPopulate;
+			populateOutput: UsersPopulateOutput;
+			validationPath: UsersValidationPath;
 		};
 		"posts": {
 			slug: "posts";
 			auth: false;
 			upload: false;
 			versions: false;
+			drafts: false;
 			trash: false;
 			output: Posts;
 			create: PostsCreate;
@@ -124,13 +288,31 @@ export interface RiduConfig {
 			where: PostsWhere;
 			select: PostsSelect;
 			populate: PostsPopulate;
+			populateOutput: PostsPopulateOutput;
+			validationPath: PostsValidationPath;
+		};
+		"workshops": {
+			slug: "workshops";
+			auth: false;
+			upload: false;
+			versions: false;
+			drafts: false;
+			trash: false;
+			output: Workshops;
+			create: WorkshopsCreate;
+			update: WorkshopsUpdate;
+			where: WorkshopsWhere;
+			select: WorkshopsSelect;
+			populate: WorkshopsPopulate;
+			populateOutput: WorkshopsPopulateOutput;
+			validationPath: WorkshopsValidationPath;
 		};
 	};
 }
 
 declare module "@riducms/sdk" {
 	interface GeneratedRiduConfigRegistry {
-		"manifest-ad8f05177ebaa06f25db383e5f688944425c453166b2287b1b6cb10897101436": RiduConfig;
+		"manifest-b5f406f51cf5d3a2efb5e608b750ad952ab3b4cacb702e0c03fcb28a835aae0d": RiduConfig;
 	}
 }
 

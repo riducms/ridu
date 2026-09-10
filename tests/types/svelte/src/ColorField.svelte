@@ -1,15 +1,15 @@
 <script lang="ts">
-	import type { FieldComponentProps } from "@riducms/plugin";
+	import type { PluginFieldProps } from "@riducms/plugin";
 
-	let { field, form }: FieldComponentProps = $props();
-	const value = $derived(String(form.get(field.path) ?? "#000000"));
+	let { field }: PluginFieldProps<string> = $props();
+	const value = $derived(field.value ?? "#000000");
 </script>
 
-<label for={field.id}>{field.admin.label}</label>
+<label for={field.schema.id}>{field.schema.admin.label}</label>
 <input
-	id={field.id}
+	id={field.schema.id}
 	type="color"
 	{value}
-	disabled={field.admin.readOnly}
-	oninput={(event) => form.set(field.path, event.currentTarget.value)}
+	disabled={field.readOnly}
+	oninput={(event) => field.set(event.currentTarget.value)}
 />

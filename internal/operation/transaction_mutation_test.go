@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/riducms/ridu/internal/teststore"
+	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
@@ -62,7 +63,7 @@ func TestTransactionMutationFailureRollsBackDocumentCreate(t *testing.T) {
 	}
 
 	_, err = engine.Execute(context.Background(), Request{
-		Operation: Create, Collection: "users",
+		Operation: operation.Create, Collection: "users",
 		TransactionMutation: func(context.Context, store.Transaction, schema.Collection, store.Document) error {
 			return errors.New("credential write failed")
 		},
@@ -71,7 +72,7 @@ func TestTransactionMutationFailureRollsBackDocumentCreate(t *testing.T) {
 	if !errors.As(err, &operationError) || operationError.Code != "store_failed" {
 		t.Fatalf("mutation error = %v", err)
 	}
-	result, err := engine.Execute(context.Background(), Request{Operation: Read, Collection: "users", Page: 1, Limit: 10})
+	result, err := engine.Execute(context.Background(), Request{Operation: operation.Read, Collection: "users", Page: 1, Limit: 10})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,21 +92,21 @@ func TestReadOnlyOperationUsesSnapshotTransaction(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := engine.Execute(context.Background(), Request{Operation: Create, Collection: "posts", ImportID: "post_1"}); err != nil {
+	if _, err := engine.Execute(context.Background(), Request{Operation: operation.Create, Collection: "posts", ImportID: "post_1"}); err != nil {
 		t.Fatal(err)
 	}
 	if backend.writeBegins != 1 || backend.snapshotBegins != 0 {
 		t.Fatalf("create begins = write:%d snapshot:%d, want write:1 snapshot:0", backend.writeBegins, backend.snapshotBegins)
 	}
-	if _, err := engine.Execute(context.Background(), Request{Operation: Read, Collection: "posts", ID: "post_1"}); err != nil {
+	if _, err := engine.Execute(context.Background(), Request{Operation: operation.Read, Collection: "posts", ID: "post_1"}); err != nil {
 		t.Fatal(err)
 	}
 	if backend.writeBegins != 1 || backend.snapshotBegins != 1 {
 		t.Fatalf("read begins = write:%d snapshot:%d, want write:1 snapshot:1", backend.writeBegins, backend.snapshotBegins)
 	}
 	if _, err := engine.ExecuteBatch(context.Background(), []Request{
-		{Operation: Read, Collection: "posts", ID: "post_1"},
-		{Operation: Read, Collection: "posts", Page: 1, Limit: 10},
+		{Operation: operation.Read, Collection: "posts", ID: "post_1"},
+		{Operation: operation.Read, Collection: "posts", Page: 1, Limit: 10},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -151,14 +152,14 @@ func TestReadOnlyOperationRejectsNestedMutationBeforeAdmission(t *testing.T) {
 					}},
 				},
 				Hooks: Hooks{BeforeOperation: []Hook{func(hookContext Context) error {
-					if hookContext.Operation != Read {
+					if hookContext.Operation != operation.Read {
 						return nil
 					}
 					_, nestedJoinError = engine.MutateJoin(hookContext.Context, JoinMutationRequest{
 						Collection: "posts", ID: "post_1", Field: "assets", Additions: []string{"asset_1"},
 					})
 					_, nestedError = engine.Execute(hookContext.Context, Request{
-						Operation: Create, Collection: "assets", ImportID: "asset_1", TransactionResource: resource,
+						Operation: operation.Create, Collection: "assets", ImportID: "asset_1", TransactionResource: resource,
 						TransactionMutation: func(context.Context, store.Transaction, schema.Collection, store.Document) error {
 							transactionMutationRan = true
 							return nil
@@ -184,7 +185,7 @@ func TestReadOnlyOperationRejectsNestedMutationBeforeAdmission(t *testing.T) {
 	}
 	engine = configured
 
-	_, err = engine.Execute(context.Background(), Request{Operation: Read, Collection: "posts", Page: 1, Limit: 10})
+	_, err = engine.Execute(context.Background(), Request{Operation: operation.Read, Collection: "posts", Page: 1, Limit: 10})
 	var operationError *Error
 	if !errors.As(nestedError, &operationError) || operationError.Code != "transaction_read_only" || operationError.Status != 409 {
 		t.Fatalf("nested mutation error = %#v, %v", operationError, nestedError)
@@ -256,12 +257,12 @@ func TestPermanentDeleteFenceSpansCommitAndLifecycleInvalidation(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := engine.Execute(context.Background(), Request{
-		Operation: Create, Collection: "posts", ImportID: "post_1",
+		Operation: operation.Create, Collection: "posts", ImportID: "post_1",
 	}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := engine.Execute(context.Background(), Request{
-		Operation: Delete, Collection: "posts", ID: "post_1",
+		Operation: operation.Delete, Collection: "posts", ID: "post_1",
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -282,7 +283,7 @@ func TestPermanentDeleteCleanupIsCoalescedAfterUserHooks(t *testing.T) {
 		Collections: []Collection{{
 			Schema: collection,
 			Hooks: Hooks{AfterCommit: []Hook{func(ctx Context) error {
-				if ctx.Operation == Delete {
+				if ctx.Operation == operation.Delete {
 					order = append(order, "hook:"+ctx.ID)
 				}
 				return nil
@@ -301,13 +302,13 @@ func TestPermanentDeleteCleanupIsCoalescedAfterUserHooks(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, id := range []string{"post_1", "post_2"} {
-		if _, err := engine.Execute(context.Background(), Request{Operation: Create, Collection: "posts", ImportID: id}); err != nil {
+		if _, err := engine.Execute(context.Background(), Request{Operation: operation.Create, Collection: "posts", ImportID: id}); err != nil {
 			t.Fatal(err)
 		}
 	}
 	_, err = engine.ExecuteBatch(context.Background(), []Request{
-		{Operation: Delete, Collection: "posts", ID: "post_1"},
-		{Operation: Delete, Collection: "posts", ID: "post_2"},
+		{Operation: operation.Delete, Collection: "posts", ID: "post_1"},
+		{Operation: operation.Delete, Collection: "posts", ID: "post_2"},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -340,13 +341,13 @@ func TestPermanentDeleteCleanupContinuesAfterDirectAndDispatcherPanics(t *testin
 					Schema: collection,
 					Hooks: Hooks{AfterCommit: []Hook{
 						func(ctx Context) error {
-							if ctx.Operation == Delete && !test.dispatcher {
+							if ctx.Operation == operation.Delete && !test.dispatcher {
 								panic(panicSecret)
 							}
 							return nil
 						},
 						func(ctx Context) error {
-							if ctx.Operation == Delete {
+							if ctx.Operation == operation.Delete {
 								laterRan = true
 							}
 							return nil
@@ -360,7 +361,7 @@ func TestPermanentDeleteCleanupContinuesAfterDirectAndDispatcherPanics(t *testin
 			}
 			if test.dispatcher {
 				config.DispatchAfterCommit = func(ctx Context, hook Hook) error {
-					if ctx.Operation == Delete && firstDispatch {
+					if ctx.Operation == operation.Delete && firstDispatch {
 						firstDispatch = false
 						panic(panicSecret)
 					}
@@ -371,10 +372,10 @@ func TestPermanentDeleteCleanupContinuesAfterDirectAndDispatcherPanics(t *testin
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, err := engine.Execute(context.Background(), Request{Operation: Create, Collection: "posts", ImportID: "post_1"}); err != nil {
+			if _, err := engine.Execute(context.Background(), Request{Operation: operation.Create, Collection: "posts", ImportID: "post_1"}); err != nil {
 				t.Fatal(err)
 			}
-			_, err = engine.Execute(context.Background(), Request{Operation: Delete, Collection: "posts", ID: "post_1"})
+			_, err = engine.Execute(context.Background(), Request{Operation: operation.Delete, Collection: "posts", ID: "post_1"})
 			var operationError *Error
 			if !errors.As(err, &operationError) || operationError.Code != "hook_failed" || !operationError.Committed {
 				t.Fatalf("delete error = %#v, %v", operationError, err)
@@ -421,9 +422,9 @@ func TestCommitConflictsKeepStableOperationAndBatchSemantics(t *testing.T) {
 			t.Fatalf("%s commit error did not preserve the uncertain commit outcome", label)
 		}
 	}
-	_, err = engine.Execute(context.Background(), Request{Operation: Create, Collection: "posts", ImportID: "post_1"})
+	_, err = engine.Execute(context.Background(), Request{Operation: operation.Create, Collection: "posts", ImportID: "post_1"})
 	assertConflict("single", err)
-	_, err = engine.ExecuteBatch(context.Background(), []Request{{Operation: Create, Collection: "posts", ImportID: "post_2"}})
+	_, err = engine.ExecuteBatch(context.Background(), []Request{{Operation: operation.Create, Collection: "posts", ImportID: "post_2"}})
 	assertConflict("batch", err)
 }
 
@@ -473,7 +474,7 @@ func TestTransactionResourceFinalizesBeforeAfterCommit(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := engine.Execute(context.Background(), Request{
-		Operation: Create, Collection: "posts", ImportID: "post_1", TransactionResource: resource,
+		Operation: operation.Create, Collection: "posts", ImportID: "post_1", TransactionResource: resource,
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -506,7 +507,7 @@ func TestTransactionResourceRollsBackAfterDefiniteOperationFailure(t *testing.T)
 		t.Fatal(err)
 	}
 	_, err = engine.Execute(context.Background(), Request{
-		Operation: Create, Collection: "posts", ImportID: "post_1", TransactionResource: resource,
+		Operation: operation.Create, Collection: "posts", ImportID: "post_1", TransactionResource: resource,
 		TransactionMutation: func(context.Context, store.Transaction, schema.Collection, store.Document) error {
 			return errors.New("credential write failed")
 		},
@@ -542,7 +543,7 @@ func TestTransactionResourceIsRetainedWhenCommitOutcomeIsUnknown(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err = engine.Execute(context.Background(), Request{
-		Operation: Create, Collection: "posts", ImportID: "post_1", TransactionResource: resource,
+		Operation: operation.Create, Collection: "posts", ImportID: "post_1", TransactionResource: resource,
 	})
 	var operationError *Error
 	if !errors.As(err, &operationError) || !operationError.CommitAttempted {
@@ -585,7 +586,7 @@ func TestSwallowedNestedFailurePoisonsOuterTransactionAndRollsBackResource(t *te
 				},
 				Hooks: Hooks{BeforeOperation: []Hook{func(hookContext Context) error {
 					_, _ = engine.Execute(hookContext.Context, Request{
-						Operation: Create, Collection: "assets", ImportID: "asset_1", TransactionResource: resource,
+						Operation: operation.Create, Collection: "assets", ImportID: "asset_1", TransactionResource: resource,
 						TransactionMutation: func(context.Context, store.Transaction, schema.Collection, store.Document) error {
 							return errors.New("nested mutation failed after its row write")
 						},
@@ -603,7 +604,7 @@ func TestSwallowedNestedFailurePoisonsOuterTransactionAndRollsBackResource(t *te
 		t.Fatal(err)
 	}
 	engine = configured
-	_, err = engine.Execute(context.Background(), Request{Operation: Create, Collection: "posts", ImportID: "post_1"})
+	_, err = engine.Execute(context.Background(), Request{Operation: operation.Create, Collection: "posts", ImportID: "post_1"})
 	var operationError *Error
 	if !errors.As(err, &operationError) || operationError.Code != "store_failed" || operationError.CommitAttempted {
 		t.Fatalf("outer transaction error = %#v, %v", operationError, err)
@@ -643,7 +644,7 @@ func TestTransactionResourceIsNotClaimedBeforeTransactionAdmission(t *testing.T)
 		t.Fatal(err)
 	}
 	if _, err := engine.Execute(context.Background(), Request{
-		Operation: Create, Collection: "missing", TransactionResource: resource,
+		Operation: operation.Create, Collection: "missing", TransactionResource: resource,
 	}); err == nil {
 		t.Fatal("unknown collection unexpectedly succeeded")
 	}
@@ -681,9 +682,9 @@ func TestRestoreVersionReadRollsBackNestedTransactionResource(t *testing.T) {
 		Collections: []Collection{
 			{
 				Schema: posts,
-				Access: map[Kind]Access{ReadVersions: func(accessContext Context) (Decision, error) {
+				Access: map[operation.Kind]Access{operation.ReadVersions: func(accessContext Context) (Decision, error) {
 					if _, nestedError := engine.Execute(accessContext.Context, Request{
-						Operation: Create, Collection: "assets", ImportID: "asset_1", TransactionResource: resource,
+						Operation: operation.Create, Collection: "assets", ImportID: "asset_1", TransactionResource: resource,
 					}); nestedError != nil {
 						return Decision{}, nestedError
 					}
@@ -697,7 +698,7 @@ func TestRestoreVersionReadRollsBackNestedTransactionResource(t *testing.T) {
 		t.Fatal(err)
 	}
 	engine = configured
-	created, err := engine.Execute(context.Background(), Request{Operation: Create, Collection: "posts", ImportID: "post_1"})
+	created, err := engine.Execute(context.Background(), Request{Operation: operation.Create, Collection: "posts", ImportID: "post_1"})
 	if err != nil || created.Document == nil {
 		t.Fatalf("create versioned document = %#v, %v", created.Document, err)
 	}

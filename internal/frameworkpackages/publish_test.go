@@ -1,4 +1,4 @@
-package frameworkpackages_test
+package frameworkpackages
 
 import (
 	"os"
@@ -6,11 +6,12 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-
-	"github.com/riducms/ridu/internal/frameworkpackages"
 )
 
 func TestPublishVendorsUnpublishedPackagesAsOneLocalWorkspaceGraph(t *testing.T) {
+	if testing.Short() {
+		t.Skip("fresh runtime builds are covered by the full publication integration")
+	}
 	frameworkRoot := moduleRoot(t)
 	projectRoot := t.TempDir()
 	stalePackage := filepath.Join(projectRoot, ".ridu", "packages", "ridu-framework-admin-build", "package.json")
@@ -20,7 +21,7 @@ func TestPublishVendorsUnpublishedPackagesAsOneLocalWorkspaceGraph(t *testing.T)
 	if err := os.WriteFile(stalePackage, []byte("{}\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := frameworkpackages.Publish(frameworkRoot, projectRoot, "v0.0.0-dogfood.1"); err != nil {
+	if err := Publish(frameworkRoot, projectRoot, "v0.0.0-dogfood.1"); err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
 	if _, err := os.Stat(stalePackage); !os.IsNotExist(err) {
@@ -112,7 +113,16 @@ func TestPublishVendorsUnpublishedPackagesAsOneLocalWorkspaceGraph(t *testing.T)
 }
 
 func TestPublishPreservesAUserOwnedPackagesDirectory(t *testing.T) {
-	frameworkRoot := moduleRoot(t)
+	frameworkRoot := packageFixture(t)
+	snapshot, err := captureBuiltPackages(frameworkRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := snapshot.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	projectRoot := t.TempDir()
 	customPackage := filepath.Join(projectRoot, "packages", "storefront", "package.json")
 	if err := os.MkdirAll(filepath.Dir(customPackage), 0o755); err != nil {
@@ -123,7 +133,7 @@ func TestPublishPreservesAUserOwnedPackagesDirectory(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := frameworkpackages.Publish(frameworkRoot, projectRoot, "v0.0.0-dogfood.2"); err != nil {
+	if err := snapshot.Publish(projectRoot, "v0.0.0-dogfood.2"); err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
 	actual, err := os.ReadFile(customPackage)
@@ -145,4 +155,115 @@ func moduleRoot(t *testing.T) string {
 		t.Fatal("runtime.Caller failed")
 	}
 	return filepath.Clean(filepath.Join(filepath.Dir(filename), "..", ".."))
+}
+
+// Copy/rewrite contracts use tiny explicit package inputs. The integration above
+// separately proves that actual workspace build scripts produce publishable files.
+func packageFixture(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	write := func(name, content string) {
+		t.Helper()
+		path := filepath.Join(root, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("LICENSE", "fixture license")
+	for _, definition := range packages {
+		write(filepath.Join(definition.source, "package.json"), `{"name":"`+definition.name+`","private":true,"version":"0.0.0","dependencies":{"@riducms/sdk":"workspace:*"},"scripts":{"build":"exit 23"}}`)
+		write(filepath.Join(definition.source, "src", "index.ts"), "original source")
+		write(filepath.Join(definition.source, "src", "tsconfig.json"), "{}")
+		write(filepath.Join(definition.source, "node_modules", "excluded"), "development-only")
+		if definition.build {
+			write(filepath.Join(definition.source, "dist", "index.js"), "fresh compiled source")
+		}
+		if definition.notices != "" {
+			write(definition.notices, "fixture notices")
+		}
+	}
+	return root
+}
+
+func TestPreparedSnapshotCopiesIndependentlyAndRemovesStalePackages(t *testing.T) {
+	root := packageFixture(t)
+	snapshot, err := captureBuiltPackages(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := snapshot.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	// Mutating the original checkout cannot change a captured graph.
+	if err := os.WriteFile(filepath.Join(root, "packages", "sdk", "dist", "index.js"), []byte("later build"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	for _, version := range []string{"v0.0.0-first", "v0.0.0-second"} {
+		project := t.TempDir()
+		stale := filepath.Join(project, ".ridu", "packages", "obsolete", "index.js")
+		if err := os.MkdirAll(filepath.Dir(stale), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(stale, []byte("obsolete"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		if err := snapshot.Publish(project, version); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := os.Stat(stale); !os.IsNotExist(err) {
+			t.Fatal("stale package survived replacement")
+		}
+		for _, definition := range packages {
+			target := filepath.Join(project, ".ridu", "packages", definition.target)
+			manifest, err := os.ReadFile(filepath.Join(target, "package.json"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(string(manifest), "workspace:") || strings.Contains(string(manifest), `"private"`) || !strings.Contains(string(manifest), strings.TrimPrefix(version, "v")) {
+				t.Fatalf("invalid published manifest: %s", manifest)
+			}
+			if _, err := os.Stat(filepath.Join(target, "node_modules")); !os.IsNotExist(err) {
+				t.Fatal("snapshot copied development dependencies")
+			}
+			if definition.omitSourceTSConfig {
+				if _, err := os.Stat(filepath.Join(target, "src", "tsconfig.json")); !os.IsNotExist(err) {
+					t.Fatal("snapshot copied excluded tsconfig")
+				}
+			}
+		}
+		sdk := filepath.Join(project, ".ridu", "packages", "ridu-framework-sdk", "dist", "index.js")
+		content, err := os.ReadFile(sdk)
+		if err != nil || string(content) != "fresh compiled source" {
+			t.Fatalf("snapshot followed changed build output: %q, %v", content, err)
+		}
+		if err := os.WriteFile(sdk, []byte("application modification"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := snapshot.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(snapshot.root); !os.IsNotExist(err) {
+		t.Fatal("snapshot cleanup left private files")
+	}
+	if err := snapshot.Publish(t.TempDir(), "v1.0.0"); err == nil {
+		t.Fatal("closed snapshot published successfully")
+	}
+}
+
+func TestPrepareDoesNotAcceptStaleOutputAfterABuildFailure(t *testing.T) {
+	root := packageFixture(t)
+	snapshot, err := Prepare(root)
+	if err == nil {
+		snapshot.Close()
+		t.Fatal("existing dist masked a failed fresh build")
+	}
+	if !strings.Contains(err.Error(), "build @riducms/protocol release output") {
+		t.Fatalf("unexpected build failure: %v", err)
+	}
 }

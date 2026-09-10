@@ -1,1 +1,1 @@
-This keeps go:embed valid before the first admin build. Ridu replaces it during ridu build.
+This keeps go:embed valid before the first admin build. Ridu replaces it during `ridu build`.

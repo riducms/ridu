@@ -4,7 +4,14 @@ description: 'Understand the schema-driven editor, validation, relationships, di
 product: admin
 eyebrow: 'Admin tasks'
 order: 123
-aliases: ['document editor', 'create document', 'edit document', 'save document', 'admin form']
+aliases:
+  [
+    'document editor',
+    'create document',
+    'edit document',
+    'save document',
+    'admin form'
+  ]
 navigation:
   section: 'Admin & workflows'
   parent: admin
@@ -13,8 +20,21 @@ navigation:
   title: 'Edit documents'
 ---
 
-Ridu's document editor supports built-in scalar and nested fields, relationships/uploads, layout
-fields, localization, joins/virtual output, and statically registered plugin fields.
+Ridu's document editor turns your field definitions into inputs for text, numbers, relationships,
+uploads, nested content, and plugin fields. Your configuration also controls translations,
+layout, permissions, and validation messages.
+
+## Editing configuration {#configuration}
+
+| Configuration                           | What authors see                                                 | Server behavior                                               |
+| --------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------- |
+| `.Required()`, range/length/row methods | Required marker and input constraints                            | Enforced on every save path.                                  |
+| `.Default(...)` / `.DefaultFrom(...)`   | Initial server value after eligible creation                     | Applies only to omitted values in new scopes.                 |
+| `.Validate(...)`                        | Field-addressed message after submit                             | Always runs during authoritative save validation.             |
+| `.LiveValidate(...)`                    | Advisory message while editing                                   | Runs only when requested; no defaults or save hooks.          |
+| `field.Admin` metadata                  | Description, width, condition, read-only state, or custom editor | Presentation does not grant access or bypass validation.      |
+| `field.Access`                          | Hidden/read-only controls where possible                         | Rechecked for every API operation and final response.         |
+| Versions and `_revision`                | Conflict recovery and history                                    | Rejects a stale revision instead of overwriting a newer save. |
 
 ## Create the first document {#create}
 
@@ -24,6 +44,16 @@ access, defaults, validation, hooks, persistence, and response redaction.
 
 Server issues return to exact paths, including nested row indexes. Fix those inputs and submit
 again; a rejected operation does not partially persist other fields.
+
+## Get validation feedback while editing {#live-validation}
+
+Fields with `.LiveValidate(...)` can show server validation messages before you save. A live
+check does not save your changes or run defaults and save hooks. Saving still runs the full
+validation rules, so a form without live messages may still need corrections when submitted.
+
+The admin handles requesting checks and discarding outdated feedback. Use the
+[Live server validation guide](/docs/fields/live-validation/) to add a rule or connect a custom
+field editor.
 
 ## Edit safely {#edit}
 
@@ -45,7 +75,7 @@ proposed document allow them. The server always rechecks the action when invoked
 ## Presentation is not authorization {#access}
 
 `ReadOnly`, `Hidden`, conditions, tabs, and plugin controls affect the editor. They cannot protect a
-field from raw REST/SDK input. Use `FieldAccess` for read/create/update security and hooks/validation
+field from raw REST/SDK input. Attach `field.Access` for read/create/update security and hooks/validation
 for business invariants.
 
 ## If saving fails {#troubleshooting}

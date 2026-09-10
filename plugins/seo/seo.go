@@ -14,6 +14,7 @@ import (
 	"sync"
 
 	ridu "github.com/riducms/ridu"
+	"github.com/riducms/ridu/core"
 	"github.com/riducms/ridu/field"
 	"github.com/riducms/ridu/protocol"
 	"github.com/riducms/ridu/schema"
@@ -53,7 +54,7 @@ type GenerateImage func(GenerateContext) (string, error)
 
 // FieldsOverride receives the immutable default field definitions and returns
 // the complete ordered contents of the meta group.
-type FieldsOverride func(defaultFields []field.Definition) ([]field.Definition, error)
+type FieldsOverride func(defaultFields field.Fields) (field.Fields, error)
 
 // Config selects resources and executable generation behavior.
 type Config struct {
@@ -89,8 +90,7 @@ type PreviewConfig struct {
 	DescriptionPath string
 }
 
-// MetaImageConfig customizes the direct image constructor without composing
-// duplicate-sensitive field options over the Payload-compatible defaults.
+// MetaImageConfig configures the upload target and image presentation.
 type MetaImageConfig struct {
 	Collection  schema.CollectionSlug
 	Generate    bool
@@ -104,6 +104,7 @@ type Plugin struct {
 	mu          sync.RWMutex
 	collections map[schema.CollectionSlug]ridu.Collection
 	globals     map[schema.CollectionSlug]ridu.Global
+	fieldsGraph field.Fields
 }
 
 // New returns one compiled plugin. Slices are copied so later application
@@ -131,7 +132,8 @@ func (*Plugin) Descriptor() ridu.PluginDescriptor {
 	}
 }
 
-// TransformConfig injects one meta group into each selected resource.
+// TransformConfig validates resource selection and snapshots generator context.
+// Field injection runs in the canonical graph phase after resource transforms.
 func (plugin *Plugin) TransformConfig(config ridu.Config) (ridu.Config, error) {
 	issues := plugin.validateTargets(config)
 	if len(issues) != 0 {
@@ -142,6 +144,7 @@ func (plugin *Plugin) TransformConfig(config ridu.Config) (ridu.Config, error) {
 		return ridu.Config{}, fmt.Errorf("seo fields override: %w", err)
 	}
 	plugin.mu.Lock()
+	plugin.fieldsGraph = fields.Snapshot()
 	plugin.collections = make(map[schema.CollectionSlug]ridu.Collection, len(config.Collections))
 	plugin.globals = make(map[schema.CollectionSlug]ridu.Global, len(config.Globals))
 	for _, collection := range config.Collections {
@@ -151,90 +154,101 @@ func (plugin *Plugin) TransformConfig(config ridu.Config) (ridu.Config, error) {
 		plugin.globals[global.Slug] = cloneGlobal(global)
 	}
 	plugin.mu.Unlock()
-	for index := range config.Collections {
-		collection := &config.Collections[index]
-		if !slices.Contains(plugin.config.Collections, collection.Slug) {
-			continue
-		}
-		collection.Fields = plugin.inject(collection.Fields, collection.Labels.Singular, fields, collection.Auth)
-		plugin.mu.Lock()
-		plugin.collections[collection.Slug] = cloneCollection(*collection)
-		plugin.mu.Unlock()
-	}
-	for index := range config.Globals {
-		global := &config.Globals[index]
-		if !slices.Contains(plugin.config.Globals, global.Slug) {
-			continue
-		}
-		global.Fields = plugin.inject(global.Fields, global.Label, fields, false)
-		plugin.mu.Lock()
-		plugin.globals[global.Slug] = cloneGlobal(*global)
-		plugin.mu.Unlock()
-	}
 	return config, nil
 }
 
-func (plugin *Plugin) fields(localized bool) ([]field.Definition, error) {
-	defaults := []field.Definition{
-		Overview(),
-		metaTitle(plugin.config.GenerateTitle != nil, localized),
-		metaDescription(plugin.config.GenerateDescription != nil, localized),
+// TransformFields attaches the SEO group through the same immutable graph used
+// by application fields, preserving behavior on every existing node.
+func (plugin *Plugin) TransformFields(context core.FieldGraphContext, graph field.Fields) (field.Fields, error) {
+	selected := slices.Contains(plugin.config.Collections, context.Slug)
+	if context.ResourceKind == "global" {
+		selected = slices.Contains(plugin.config.Globals, context.Slug)
+	}
+	if !selected {
+		return graph, nil
+	}
+	plugin.mu.Lock()
+	defer plugin.mu.Unlock()
+	label, auth := "", false
+	if context.ResourceKind == "collection" {
+		collection := plugin.collections[context.Slug]
+		label, auth = collection.Labels.Singular, collection.Auth
+	} else {
+		label = plugin.globals[context.Slug].Label
+	}
+	result, err := plugin.inject(graph, label, plugin.fieldsGraph, auth)
+	if err != nil {
+		return graph, err
+	}
+	if context.ResourceKind == "collection" {
+		collection := plugin.collections[context.Slug]
+		collection.Fields = result.Snapshot()
+		plugin.collections[context.Slug] = collection
+	} else {
+		global := plugin.globals[context.Slug]
+		global.Fields = result.Snapshot()
+		plugin.globals[context.Slug] = global
+	}
+	return result, nil
+}
+
+func (plugin *Plugin) fields(localized bool) (field.Fields, error) {
+	defaults := field.Fields{
+		Overview(OverviewConfig{}),
+		MetaTitle(plugin.config.GenerateTitle != nil).Localized(localized),
+		MetaDescription(plugin.config.GenerateDescription != nil).Localized(localized),
 	}
 	if plugin.config.UploadsCollection != "" {
-		defaults = append(defaults, metaImage(plugin.config.UploadsCollection, plugin.config.GenerateImage != nil, localized))
+		defaults = append(defaults, MetaImage(MetaImageConfig{Collection: plugin.config.UploadsCollection, Generate: plugin.config.GenerateImage != nil}).Localized(localized))
 	}
-	defaults = append(defaults, Preview(plugin.config.GenerateURL != nil))
+	defaults = append(defaults, Preview(PreviewConfig{Generate: plugin.config.GenerateURL != nil}))
 	if plugin.config.Fields == nil {
 		return defaults, nil
 	}
-	fields, err := plugin.config.Fields(append([]field.Definition(nil), defaults...))
+	fields, err := plugin.config.Fields(defaults.Snapshot())
 	if err != nil {
 		return nil, err
 	}
 	if len(fields) == 0 {
 		return nil, errors.New("override returned no fields")
 	}
-	return append([]field.Definition(nil), fields...), nil
+	return fields.Snapshot(), nil
 }
 
-func (plugin *Plugin) inject(existing []field.Definition, contentLabel string, fields []field.Definition, auth bool) []field.Definition {
-	meta := field.Group("meta", field.Label("SEO"), field.Fields(fields...))
+func (plugin *Plugin) inject(existing field.Fields, contentLabel string, fields field.Fields, auth bool) (field.Fields, error) {
+	meta := field.Group("meta", fields).Label("SEO")
 	if !plugin.config.TabbedUI {
-		return append(append([]field.Definition(nil), existing...), meta)
+		return existing.Edit(func(draft *field.ChildrenDraft) error { return draft.Insert(len(existing), meta) })
 	}
+	seoTab := field.UnnamedTab("SEO", field.Fields{
+		meta,
+	})
 	if len(existing) != 0 && existing[0].Kind() == field.KindTabs {
-		tabs := existing[0].Tabs()
-		tabs = append(tabs, field.UnnamedTab("SEO", meta))
-		return append([]field.Definition{field.Tabs(tabs...)}, existing[1:]...)
-	}
-	if len(existing) == 0 {
-		return []field.Definition{field.Tabs(field.UnnamedTab("SEO", meta))}
-	}
-	leading := make([]field.Definition, 0, 1)
-	content := make([]field.Definition, 0, len(existing))
-	var nestedTabs []field.TabDefinition
-	for _, definition := range existing {
-		if auth && definition.Name() == "email" {
-			leading = append(leading, definition)
-			continue
+		result := field.Fields{
+			existing[0],
+			seoTab,
 		}
-		if definition.Kind() == field.KindTabs {
-			nestedTabs = append(nestedTabs, definition.Tabs()...)
-			continue
+		return append(result, existing[1:]...).Snapshot(), nil
+	}
+	leading, content, tabs := field.Fields{}, field.Fields{}, field.Fields{}
+	for _, node := range existing {
+		if auth && node.Name() == "email" {
+			leading = append(leading, node)
+		} else if node.Kind() == field.KindTabs || field.Snapshot(node).IsNamedTab() {
+			tabs = append(tabs, node)
+		} else {
+			content = append(content, node)
 		}
-		content = append(content, definition)
 	}
 	contentLabel = strings.TrimSpace(contentLabel)
 	if contentLabel == "" {
 		contentLabel = "Content"
 	}
-	tabs := make([]field.TabDefinition, 0, len(nestedTabs)+2)
 	if len(content) > 0 {
-		tabs = append(tabs, field.UnnamedTab(contentLabel, content...))
+		leading = append(leading, field.UnnamedTab(contentLabel, content))
 	}
-	tabs = append(tabs, nestedTabs...)
-	tabs = append(tabs, field.UnnamedTab("SEO", meta))
-	return append(leading, field.Tabs(tabs...))
+	leading = append(leading, tabs...)
+	return append(leading, seoTab).Snapshot(), nil
 }
 
 func (plugin *Plugin) validateTargets(config ridu.Config) []schema.Issue {
@@ -471,14 +485,9 @@ type lengthConfig struct {
 	MaxLength int  `json:"maxLength"`
 }
 
-// Overview returns the default presentation-only checks summary.
-func Overview(options ...field.CommonOption) field.Definition {
-	return OverviewWithConfig(OverviewConfig{}, options...)
-}
-
-// OverviewWithConfig returns overview checks mapped to explicit field paths
-// and guidance bounds. Zero values use the default meta paths and bounds.
-func OverviewWithConfig(selected OverviewConfig, options ...field.CommonOption) field.Definition {
+// Overview returns presentation-only checks mapped to explicit stored field paths.
+// Zero values use the default meta paths and guidance bounds.
+func Overview(selected OverviewConfig) field.LayoutField {
 	if selected.Label == "" {
 		selected.Label = "Overview"
 	}
@@ -512,44 +521,21 @@ func OverviewWithConfig(selected OverviewConfig, options ...field.CommonOption) 
 		DescriptionMin  int    `json:"descriptionMin"`
 		DescriptionMax  int    `json:"descriptionMax"`
 	}{selected.TitlePath, selected.DescriptionPath, selected.ImagePath, selected.TitleMin, selected.TitleMax, selected.DescriptionMin, selected.DescriptionMax}
-	return field.UI("overview", append([]field.CommonOption{field.Label(selected.Label), adminComponent("overview", config)}, options...)...)
+	return field.UI("overview").Label(selected.Label).Admin(field.Admin{Editor: adminComponent("overview", config)})
 }
 
 // MetaTitle returns the localized built-in text field with the SEO renderer.
-func MetaTitle(hasGenerator bool, options ...field.StringOption) field.Definition {
-	base := []field.StringOption{field.Localized(), field.AdminComponent(Key, "title", mustJSON(lengthConfig{Generate: hasGenerator, MinLength: defaultTitleMin, MaxLength: defaultTitleMax}))}
-	return field.Text("title", append(base, options...)...)
-}
-
-func metaTitle(hasGenerator, localized bool) field.Definition {
-	base := []field.StringOption{field.AdminComponent(Key, "title", mustJSON(lengthConfig{Generate: hasGenerator, MinLength: defaultTitleMin, MaxLength: defaultTitleMax}))}
-	if localized {
-		base = append([]field.StringOption{field.Localized()}, base...)
-	}
-	return field.Text("title", base...)
+func MetaTitle(hasGenerator bool) field.TextField {
+	return field.Text("title").Localized().Admin(field.Admin{Editor: adminComponent("title", lengthConfig{Generate: hasGenerator, MinLength: defaultTitleMin, MaxLength: defaultTitleMax})})
 }
 
 // MetaDescription returns the localized built-in textarea field with the SEO renderer.
-func MetaDescription(hasGenerator bool, options ...field.StringOption) field.Definition {
-	base := []field.StringOption{field.Localized(), field.AdminComponent(Key, "description", mustJSON(lengthConfig{Generate: hasGenerator, MinLength: defaultDescriptionMin, MaxLength: defaultDescriptionMax}))}
-	return field.Textarea("description", append(base, options...)...)
-}
-
-func metaDescription(hasGenerator, localized bool) field.Definition {
-	base := []field.StringOption{field.AdminComponent(Key, "description", mustJSON(lengthConfig{Generate: hasGenerator, MinLength: defaultDescriptionMin, MaxLength: defaultDescriptionMax}))}
-	if localized {
-		base = append([]field.StringOption{field.Localized()}, base...)
-	}
-	return field.Textarea("description", base...)
+func MetaDescription(hasGenerator bool) field.TextareaField {
+	return field.Textarea("description").Localized().Admin(field.Admin{Editor: adminComponent("description", lengthConfig{Generate: hasGenerator, MinLength: defaultDescriptionMin, MaxLength: defaultDescriptionMax})})
 }
 
 // MetaImage returns the localized upload reference with the SEO renderer.
-func MetaImage(collection schema.CollectionSlug, hasGenerator bool, options ...field.UploadOption) field.Definition {
-	return MetaImageWithConfig(MetaImageConfig{Collection: collection, Generate: hasGenerator}, options...)
-}
-
-// MetaImageWithConfig customizes the direct image field's presentation.
-func MetaImageWithConfig(selected MetaImageConfig, options ...field.UploadOption) field.Definition {
+func MetaImage(selected MetaImageConfig) field.UploadField {
 	if selected.Label == "" {
 		selected.Label = "Meta Image"
 	}
@@ -559,28 +545,13 @@ func MetaImageWithConfig(selected MetaImageConfig, options ...field.UploadOption
 	config := struct {
 		Generate bool `json:"generate,omitempty"`
 	}{selected.Generate}
-	base := []field.UploadOption{field.To(string(selected.Collection)), field.Localized(), field.Label(selected.Label), field.Description(selected.Description), field.AdminComponent(Key, "image", mustJSON(config))}
-	return field.Upload("image", append(base, options...)...)
+	return field.Upload("image", selected.Collection).Localized().Label(selected.Label).Admin(field.Admin{
+		Description: selected.Description, Editor: adminComponent("image", config),
+	})
 }
 
-func metaImage(collection schema.CollectionSlug, hasGenerator, localized bool) field.Definition {
-	config := struct {
-		Generate bool `json:"generate,omitempty"`
-	}{hasGenerator}
-	base := []field.UploadOption{field.To(string(collection)), field.Label("Meta Image"), field.Description("Maximum upload file size: 12MB. Recommended file size for images is <500KB."), field.AdminComponent(Key, "image", mustJSON(config))}
-	if localized {
-		base = append([]field.UploadOption{field.Localized()}, base...)
-	}
-	return field.Upload("image", base...)
-}
-
-// Preview returns the default presentation-only search-result preview.
-func Preview(hasGenerator bool, options ...field.CommonOption) field.Definition {
-	return PreviewWithConfig(PreviewConfig{Generate: hasGenerator}, options...)
-}
-
-// PreviewWithConfig returns a search preview mapped to explicit stored paths.
-func PreviewWithConfig(selected PreviewConfig, options ...field.CommonOption) field.Definition {
+// Preview returns a presentation-only search preview mapped to explicit stored paths.
+func Preview(selected PreviewConfig) field.LayoutField {
 	if selected.Label == "" {
 		selected.Label = "Preview"
 	}
@@ -595,12 +566,12 @@ func PreviewWithConfig(selected PreviewConfig, options ...field.CommonOption) fi
 		TitlePath       string `json:"titlePath"`
 		DescriptionPath string `json:"descriptionPath"`
 	}{selected.Generate, selected.TitlePath, selected.DescriptionPath}
-	return field.UI("preview", append([]field.CommonOption{field.Label(selected.Label), adminComponent("preview", config)}, options...)...)
+	return field.UI("preview").Label(selected.Label).Admin(field.Admin{Editor: adminComponent("preview", config)})
 }
 
 func cloneCollection(collection ridu.Collection) ridu.Collection {
 	cloned := collection
-	cloned.Fields = append([]field.Definition(nil), collection.Fields...)
+	cloned.Fields = collection.Fields.Snapshot()
 	cloned.Indexes = append([]ridu.CollectionIndex(nil), collection.Indexes...)
 	for index := range cloned.Indexes {
 		cloned.Indexes[index].Fields = append([]string(nil), collection.Indexes[index].Fields...)
@@ -613,9 +584,6 @@ func cloneCollection(collection ridu.Collection) ridu.Collection {
 	cloned.Admin.LivePreview = cloneLivePreview(collection.Admin.LivePreview)
 	cloned.UploadConfig.MimeTypes = append([]string(nil), collection.UploadConfig.MimeTypes...)
 	cloned.UploadConfig.ImageSizes = append([]ridu.ImageSize(nil), collection.UploadConfig.ImageSizes...)
-	cloned.FieldAccess = cloneMap(collection.FieldAccess)
-	cloned.FieldHooks = cloneHookMap(collection.FieldHooks)
-	cloned.Computed = cloneMap(collection.Computed)
 	cloned.Hooks = cloneHooks(collection.Hooks)
 	cloned.AuthConfig.Strategies = append([]ridu.AuthStrategy(nil), collection.AuthConfig.Strategies...)
 	cloned.AuthConfig.Hooks = cloneAuthHooks(collection.AuthConfig.Hooks)
@@ -647,14 +615,11 @@ func cloneAuthHooks(hooks ridu.AuthHooks) ridu.AuthHooks {
 
 func cloneGlobal(global ridu.Global) ridu.Global {
 	cloned := global
-	cloned.Fields = append([]field.Definition(nil), global.Fields...)
+	cloned.Fields = global.Fields.Snapshot()
 	cloned.LabelTranslations = cloneMap(global.LabelTranslations)
 	cloned.Admin.GroupTranslations = cloneMap(global.Admin.GroupTranslations)
 	cloned.Admin.DescriptionTranslations = cloneMap(global.Admin.DescriptionTranslations)
 	cloned.Admin.LivePreview = cloneLivePreview(global.Admin.LivePreview)
-	cloned.FieldAccess = cloneMap(global.FieldAccess)
-	cloned.FieldHooks = cloneHookMap(global.FieldHooks)
-	cloned.Computed = cloneMap(global.Computed)
 	cloned.Hooks = cloneHooks(global.Hooks)
 	return cloned
 }
@@ -678,14 +643,6 @@ func cloneMap[Value any](source map[string]Value) map[string]Value {
 	return cloned
 }
 
-func cloneHookMap(source map[string]ridu.CollectionHooks) map[string]ridu.CollectionHooks {
-	cloned := cloneMap(source)
-	for path, hooks := range cloned {
-		cloned[path] = cloneHooks(hooks)
-	}
-	return cloned
-}
-
 func cloneHooks(hooks ridu.CollectionHooks) ridu.CollectionHooks {
 	hooks.BeforeDuplicate = append([]ridu.Hook(nil), hooks.BeforeDuplicate...)
 	hooks.BeforeValidate = append([]ridu.Hook(nil), hooks.BeforeValidate...)
@@ -702,16 +659,16 @@ func cloneHooks(hooks ridu.CollectionHooks) ridu.CollectionHooks {
 	return hooks
 }
 
-func adminComponent(component string, config any) field.CommonOption {
-	return field.AdminComponent(Key, component, mustJSON(config))
-}
-
-func mustJSON(value any) json.RawMessage {
-	encoded, err := json.Marshal(value)
+func adminComponent(component string, config any) field.ComponentRef {
+	encoded, err := json.Marshal(config)
 	if err != nil {
 		panic(err)
 	}
-	return encoded
+	var value store.Value
+	if err := json.Unmarshal(encoded, &value); err != nil {
+		panic(err)
+	}
+	return field.PluginComponent(Key, component, value)
 }
 
 var (

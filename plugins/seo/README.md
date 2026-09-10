@@ -35,8 +35,19 @@ responses are discarded if the draft changes while a request is pending.
 use generator endpoints outside those selectors. Ridu checks the actor's resource access before
 invoking a generator.
 
-Direct metadata constructors are localized by default. Without localization, use the injected
-defaults or fields configured with the SEO admin component.
+Each factory returns a concrete immutable field. Refine it directly; access, hooks and editor
+configuration follow every placement:
+
+```go
+title := seo.MetaTitle(true).Localized(false).Required().MaxLength(80)
+image := seo.MetaImage(seo.MetaImageConfig{Collection: "media"}).Localized(false)
+overview := seo.Overview(seo.OverviewConfig{})
+preview := seo.Preview(seo.PreviewConfig{Generate: true})
+```
+
+`MetaTitle`, `MetaDescription` and `MetaImage` are localized by default. Use `.Localized(false)`
+when placing them in an application without localization. Overview, image and preview settings
+are policy structs; ordinary field refinements use the concrete fluent surface.
 
 See the [SEO guide](../../website/src/content/docs/seo.md) for installation, callbacks, field
 placement, migrations, and verification.

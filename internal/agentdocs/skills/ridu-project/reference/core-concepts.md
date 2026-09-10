@@ -8,6 +8,10 @@ OpenAPI, and TypeScript contracts, and applies one operation engine to every run
 The generated contracts are shared by the server and browser, while the application server remains
 a Go binary. See [Go for TypeScript developers](./go-for-typescript.md) for the syntax and tooling.
 
+For the types used in examples, read [Go packages](./go-packages.md). It explains `operation`,
+`store`, `query`, and `schema`, including the differences between callback values, document data,
+and filter values.
+
 ## 1. Config is executable authoring code {#config}
 
 Your application returns a `ridu.Config`. Collections, globals, fields, access rules, hooks, tasks,

@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/riducms/ridu/internal/localization"
+	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
@@ -60,7 +61,7 @@ func (engine *Engine) ResolveFilteredSelection(ctx context.Context, request Filt
 	}
 
 	operationContext := Context{
-		Context: transactionContext, Operation: Read, Collection: collection.Schema,
+		Context: transactionContext, Operation: operation.Read, Collection: collection.Schema,
 		Actor: cloneDocumentPointer(request.Actor), ActorCollection: request.ActorCollection, Locale: localeSelection.Locale, AllLocales: localeSelection.All,
 		Locales: append([]schema.LocaleCode(nil), localeSelection.Configured...),
 	}
@@ -70,6 +71,9 @@ func (engine *Engine) ResolveFilteredSelection(ctx context.Context, request Filt
 	}
 	if readDecision.Kind == Deny {
 		return FilteredSelectionResult{Items: []FilteredSelectionItem{}}, nil
+	}
+	if err := authorizeQuery(collection, request.Filter, nil); err != nil {
+		return FilteredSelectionResult{}, err
 	}
 	var filter *query.Node
 	if request.Filter != nil {

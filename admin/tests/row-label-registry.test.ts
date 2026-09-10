@@ -36,8 +36,14 @@ function repeatedField(type: "array" | "blocks", plugin = "curriculum", key = "c
 describe("row label registry", () => {
 	it("resolves exact plugin/component identities for arrays and blocks", () => {
 		const registry = createRowLabelRegistry([registration]);
-		expect(registry.resolve(repeatedField("array"))).toBe(registration);
-		expect(registry.resolve(repeatedField("blocks"))).toBe(registration);
+		expect(registry.resolve(repeatedField("array"))).toEqual({
+			component: registration.component,
+			config: { key: "optionKey" },
+		});
+		expect(registry.resolve(repeatedField("blocks"))).toEqual({
+			component: registration.component,
+			config: { key: "optionKey" },
+		});
 		expect(
 			registry.resolve({
 				...repeatedField("array"),

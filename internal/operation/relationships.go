@@ -3,11 +3,14 @@ package operation
 import (
 	"errors"
 	"fmt"
+	"iter"
 	"sort"
 	"strconv"
 	"strings"
 
+	"github.com/riducms/ridu/internal/embedded"
 	"github.com/riducms/ridu/internal/localization"
+	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
@@ -37,7 +40,7 @@ type documentReference struct {
 }
 
 func (engine *Engine) validateDocumentReferences(ctx Context, transaction store.Transaction, values store.Values, selection localization.Selection) ([]schema.Issue, error) {
-	references, limitIssue, err := engine.collectReferenceValidationCandidates(ctx.Collection.Fields, values, selection)
+	references, limitIssue, err := engine.collectReferenceValidationCandidates(ctx.Collection.Fields, values, selection, ctx.projections)
 	if err != nil {
 		return nil, &Error{Code: "validation", Status: 422, Message: "localized reference validation failed", Cause: err}
 	}
@@ -59,8 +62,7 @@ func (engine *Engine) validateDocumentReferences(ctx Context, transaction store.
 		for _, referenceSelection := range selections {
 			sourceValues := values
 			if selection.All && referenceSelection.Locale != "" {
-				projected := localization.ProjectDocument(store.Document{Values: values}, ctx.Collection.Fields, referenceSelection)
-				sourceValues = projected.Values
+				sourceValues = projectValues(ctx.projections, ctx.Collection.Fields, values, referenceSelection)
 			}
 			filter, filterIdentity, filterError := referenceOptionPredicate(reference, sourceValues)
 			if filterError != nil {
@@ -86,7 +88,7 @@ func (engine *Engine) validateDocumentReferences(ctx Context, transaction store.
 			return nil, &Error{Code: "store_failed", Status: 500, Message: "reference target collection is unavailable"}
 		}
 		targetContext := Context{
-			Context: ctx.Context, Operation: Read, Collection: target.Schema, ID: reference.id,
+			Context: ctx.Context, Operation: operation.Read, Collection: target.Schema, ID: reference.id,
 			Actor: cloneDocumentPointer(ctx.Actor), ActorCollection: ctx.ActorCollection, Data: store.Values{}, Locale: referenceSelection.Locale, AllLocales: referenceSelection.All,
 			Locales: append([]schema.LocaleCode(nil), referenceSelection.Configured...),
 		}
@@ -129,7 +131,7 @@ func (engine *Engine) validateDocumentReferences(ctx Context, transaction store.
 	return issues, nil
 }
 
-func (engine *Engine) collectReferenceValidationCandidates(fields []schema.Field, values store.Values, selection localization.Selection) ([]documentReference, *schema.Issue, error) {
+func (engine *Engine) collectReferenceValidationCandidates(fields []schema.Field, values store.Values, selection localization.Selection, projections *localization.Projector) ([]documentReference, *schema.Issue, error) {
 	if !selection.All || len(selection.Configured) == 0 {
 		collector := newDocumentReferenceCollector()
 		collectDocumentReferences(fields, values, "", referenceCollectionMode{}, collector)
@@ -149,9 +151,9 @@ func (engine *Engine) collectReferenceValidationCandidates(fields []schema.Field
 		if err != nil {
 			return nil, nil, err
 		}
-		projected := localization.ProjectDocument(store.Document{Values: values}, fields, localeSelection)
+		projected := projectValues(projections, fields, values, localeSelection)
 		collector := newDocumentReferenceCollector()
-		collectDocumentReferences(fields, projected.Values, "", referenceCollectionMode{projectedLocale: locale}, collector)
+		collectDocumentReferences(fields, projected, "", referenceCollectionMode{projectedLocale: locale}, collector)
 		localeReferences, limitIssue, _ := collector.result()
 		if limitIssue != nil {
 			return nil, limitIssue, nil
@@ -319,22 +321,14 @@ func referenceFilterSource(values store.Values, path query.Path) (store.Value, b
 	if len(segments) == 0 {
 		return store.Value{}, false
 	}
-	current := values
-	for index, segment := range segments {
-		value, exists := current[segment]
+	value, exists := values[segments[0]]
+	for _, segment := range segments[1:] {
 		if !exists {
 			return store.Value{}, false
 		}
-		if index == len(segments)-1 {
-			return value, true
-		}
-		nested, object := value.ObjectValue()
-		if !object {
-			return store.Value{}, false
-		}
-		current = nested
+		value, exists = value.Lookup(segment)
 	}
-	return store.Value{}, false
+	return value, exists
 }
 
 func referenceQueryValue(value store.Value) (query.Value, string, bool) {
@@ -383,8 +377,9 @@ type referenceCollectionMode struct {
 }
 
 type documentReferenceCollector struct {
-	references   []documentReference
-	exceededPath string
+	references     []documentReference
+	exceededPath   string
+	traversalError error
 }
 
 func newDocumentReferenceCollector() *documentReferenceCollector {
@@ -401,10 +396,13 @@ func (collector *documentReferenceCollector) append(reference documentReference)
 }
 
 func (collector *documentReferenceCollector) full() bool {
-	return collector.exceededPath != ""
+	return collector.exceededPath != "" || collector.traversalError != nil
 }
 
 func (collector *documentReferenceCollector) result() ([]documentReference, *schema.Issue, error) {
+	if collector.traversalError != nil {
+		return nil, nil, collector.traversalError
+	}
 	if collector.full() {
 		return nil, maxDocumentReferencesIssue(collector.exceededPath), nil
 	}
@@ -419,11 +417,15 @@ func maxDocumentReferencesIssue(path string) *schema.Issue {
 }
 
 func collectDocumentReferences(fields []schema.Field, values store.Values, prefix string, mode referenceCollectionMode, collector *documentReferenceCollector) {
+	collectDocumentReferenceObject(fields, store.Object(values), prefix, mode, collector)
+}
+
+func collectDocumentReferenceObject(fields []schema.Field, values store.Value, prefix string, mode referenceCollectionMode, collector *documentReferenceCollector) {
 	for _, field := range fields {
 		if collector.full() {
 			return
 		}
-		value, exists := values[field.Name]
+		value, exists := values.Lookup(field.Name)
 		if !exists || value.Kind() == store.ValueNull {
 			continue
 		}
@@ -439,12 +441,11 @@ func collectDocumentReferences(fields []schema.Field, values store.Values, prefi
 			continue
 		}
 		if mode.allLocales && field.Localized {
-			localized, valid := value.ObjectValue()
-			if !valid {
+			if value.Kind() != store.ValueObject {
 				continue
 			}
-			locales := make([]string, 0, len(localized))
-			for locale := range localized {
+			locales := make([]string, 0, value.Len())
+			for locale := range value.Entries() {
 				locales = append(locales, locale)
 			}
 			sort.Strings(locales)
@@ -457,7 +458,7 @@ func collectDocumentReferences(fields []schema.Field, values store.Values, prefi
 				localizedMode := mode
 				localizedMode.inheritedLocale = schema.LocaleCode(locale)
 				collectDocumentReferenceFieldValue(
-					unlocalized, localized[locale], joinFieldPath(path, locale), localizedMode, collector,
+					unlocalized, value.Get(locale), joinFieldPath(path, locale), localizedMode, collector,
 				)
 			}
 			continue
@@ -468,43 +469,52 @@ func collectDocumentReferences(fields []schema.Field, values store.Values, prefi
 
 func collectDocumentReferenceFieldValue(field schema.Field, value store.Value, path string, mode referenceCollectionMode, collector *documentReferenceCollector) {
 	switch field.Type {
+	case schema.FieldTypePlugin:
+		err := embedded.Visit(field, value, path, nil, func(occurrence embedded.ReadOccurrence) error {
+			collectDocumentReferenceObject(occurrence.Fields, occurrence.Payload, occurrence.RuntimePath, mode, collector)
+			return nil
+		})
+		if err != nil {
+			collector.traversalError = embeddedOperationError(err, false)
+		}
 	case schema.FieldTypeRelationship:
 		collectRelationshipFieldReferences(field, value, path, mode.inheritedLocale, collector)
 	case schema.FieldTypeUpload:
 		collectUploadFieldReferences(field, value, path, mode.inheritedLocale, collector)
 	case schema.FieldTypeGroup:
-		if object, valid := value.ObjectValue(); valid && field.Nested != nil {
-			collectDocumentReferences(field.Nested.Fields, object, path, mode, collector)
+		if value.Kind() == store.ValueObject && field.Nested != nil {
+			collectDocumentReferenceObject(field.Nested.ResolvedFields(), value, path, mode, collector)
 		}
 	case schema.FieldTypeArray:
-		items, valid := value.Values()
-		if !valid || field.Nested == nil {
+		if value.Kind() != store.ValueList || field.Nested == nil {
 			return
 		}
-		for index, item := range items {
+		index := -1
+		for item := range value.Elements() {
+			index++
 			if collector.full() {
 				return
 			}
-			if object, valid := item.ObjectValue(); valid {
-				collectDocumentReferences(field.Nested.Fields, object, fmt.Sprintf("%s.%d", path, index), mode, collector)
+			if item.Kind() == store.ValueObject {
+				collectDocumentReferenceObject(field.Nested.ResolvedFields(), item, fmt.Sprintf("%s.%d", path, index), mode, collector)
 			}
 		}
 	case schema.FieldTypeBlocks:
-		items, valid := value.Values()
-		if !valid || field.Blocks == nil {
+		if value.Kind() != store.ValueList || field.Blocks == nil {
 			return
 		}
-		for index, item := range items {
+		index := -1
+		for item := range value.Elements() {
+			index++
 			if collector.full() {
 				return
 			}
-			object, valid := item.ObjectValue()
-			if !valid {
+			if item.Kind() != store.ValueObject {
 				continue
 			}
-			blockKey, _ := object["blockType"].StringValue()
-			if block := findBlock(field.Blocks.Types, blockKey); block != nil {
-				collectDocumentReferences(block.Fields, object, fmt.Sprintf("%s.%d", path, index), mode, collector)
+			blockKey, _ := item.Get("blockType").StringValue()
+			if block := findBlock(field.Blocks.ResolvedTypes(), blockKey); block != nil {
+				collectDocumentReferenceObject(block.ResolvedFields(), item, fmt.Sprintf("%s.%d", path, index), mode, collector)
 			}
 		}
 	}
@@ -514,11 +524,9 @@ func collectRelationshipFieldReferences(field schema.Field, value store.Value, p
 	if field.Relationship == nil {
 		return
 	}
-	values := []store.Value{value}
-	if field.Relationship.HasMany {
-		values, _ = value.Values()
-	}
-	for index, item := range values {
+	index := -1
+	for item := range referenceElements(value, field.Relationship.HasMany) {
+		index++
 		if collector.full() {
 			return
 		}
@@ -538,12 +546,11 @@ func collectRelationshipFieldReferences(field schema.Field, value store.Value, p
 			}
 			continue
 		}
-		object, valid := item.ObjectValue()
-		if !valid {
+		if item.Kind() != store.ValueObject {
 			continue
 		}
-		slug, slugValid := object["relationTo"].StringValue()
-		id, idValid := object["id"].StringValue()
+		slug, slugValid := item.Get("relationTo").StringValue()
+		id, idValid := item.Get("id").StringValue()
 		if !slugValid || !idValid {
 			continue
 		}
@@ -564,11 +571,9 @@ func collectUploadFieldReferences(field schema.Field, value store.Value, path st
 	if field.Upload == nil {
 		return
 	}
-	values := []store.Value{value}
-	if field.Upload.HasMany {
-		values, _ = value.Values()
-	}
-	for index, item := range values {
+	index := -1
+	for item := range referenceElements(value, field.Upload.HasMany) {
+		index++
 		if collector.full() {
 			return
 		}
@@ -587,4 +592,13 @@ func collectUploadFieldReferences(field schema.Field, value store.Value, path st
 			optionFilters: append([]schema.RelationshipFilter(nil), field.Upload.OptionFilters...),
 		})
 	}
+}
+
+// referenceElements applies the singular/has-many field contract without
+// materializing an intermediate slice for a read-only reference pass.
+func referenceElements(value store.Value, many bool) iter.Seq[store.Value] {
+	if many {
+		return value.Elements()
+	}
+	return func(yield func(store.Value) bool) { yield(value) }
 }

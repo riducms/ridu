@@ -1,7 +1,7 @@
 {
 	"name": "@riducms/admin",
 	"description": "Framework-owned Svelte 5 authoring application embedded by Ridu servers.",
-	"version": "0.1.5",
+	"version": "0.2.0",
 	"license": "MIT",
 	"repository": {
 		"type": "git",
@@ -29,8 +29,10 @@
 		"build": "vite build",
 		"preview": "vite preview",
 		"lint": "tsc -p tsconfig.node.json && bun ../scripts/check-admin-ui-policy.ts",
-		"check": "svelte-check --tsconfig ./tsconfig.app.json && tsc -p tsconfig.test.json",
-		"test": "bun test"
+		"check": "svelte-check --tsconfig ./tsconfig.app.json && svelte-check --tsconfig ./tsconfig.test.json",
+		"test": "bun run test:unit && bun run test:components",
+		"test:unit": "bun test tests",
+		"test:components": "vitest run --config vitest.config.ts"
 	},
 	"dependencies": {
 		"@dnd-kit-svelte/svelte": "^0.1.6",

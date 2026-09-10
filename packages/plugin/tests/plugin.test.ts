@@ -2,26 +2,27 @@ import { describe, expect, it } from "bun:test";
 
 import {
 	ADMIN_PLUGIN_API_VERSION,
-	defineAdminPlugin,
 	defineAdminMessages,
-	defineFieldPlugin,
 	defineRowLabelPlugin,
-	resolveAdminPluginExtensions,
+	resolveAdminExtensions,
 	resolveAdminPluginPairs,
 } from "../src";
+import { defineAdminPlugin, definePluginField, defineFieldComponent } from "../src/authoring/v1";
+import { resolvePluginFields, validatePluginManifest } from "../src/plugin-registry";
 import type { Component } from "svelte";
 
-const field = defineFieldPlugin({
-	type: "plugin",
-	key: "color",
-	canRender: (candidate) => candidate.plugin?.key === "color",
+const field = definePluginField({
+	component: () => ({}),
+	decodeValue: (value: unknown): string => {
+		if (typeof value !== "string") throw new Error("Expected string");
+		return value;
+	},
 });
 
 const admin = defineAdminPlugin({
-	apiVersion: ADMIN_PLUGIN_API_VERSION,
 	key: "color",
 	pairingVersion: 2,
-	fields: [field],
+	fields: { color: field },
 });
 
 const backend = {
@@ -29,6 +30,7 @@ const backend = {
 	export: "colorAdminPlugin",
 	key: "color",
 	package: "@example/color-admin",
+	fieldTypes: ["color"],
 	pairingVersion: 2,
 };
 
@@ -37,7 +39,7 @@ describe("admin plugin pairing", () => {
 		const resolved = resolveAdminPluginPairs([{ admin, backend }]);
 
 		expect(resolved.plugins).toEqual([admin]);
-		expect(resolved.fields).toEqual([field]);
+		expect(resolved.fields.map((item) => item.registration)).toEqual([field]);
 		expect(Object.isFrozen(resolved.plugins)).toBe(true);
 		expect(Object.isFrozen(resolved.fields)).toBe(true);
 		expect(resolved.rowLabels).toEqual([]);
@@ -139,7 +141,7 @@ describe("admin plugin pairing", () => {
 		const component = (() => undefined) as unknown as Component;
 		const messages = defineAdminMessages({ fallback: { route: "Route" } });
 		expect(() =>
-			resolveAdminPluginExtensions([
+			resolveAdminExtensions([
 				{
 					...admin,
 					messages,
@@ -155,7 +157,7 @@ describe("admin plugin pairing", () => {
 		).toThrow("must use its own plugin.color: namespace");
 
 		expect(() =>
-			resolveAdminPluginExtensions([
+			resolveAdminExtensions([
 				{
 					...admin,
 					messages,
@@ -184,32 +186,31 @@ describe("admin plugin pairing", () => {
 		);
 	});
 
-	it("rejects plugin fields owned by another backend key", () => {
-		const wrongField = { ...field, key: "other" };
+	it("requires exact backend field-type declarations independently of plugin identity", () => {
 		expect(() =>
-			resolveAdminPluginPairs([{ admin: { ...admin, fields: [wrongField] }, backend }])
-		).toThrow("registered plugin field other");
+			resolveAdminPluginPairs([{ admin: { ...admin, fields: { other: field } }, backend }])
+		).toThrow("field types");
+		const result = resolveAdminPluginPairs([
+			{
+				admin: { ...admin, fields: { other: field } },
+				backend: { ...backend, fieldTypes: ["other"] },
+			},
+		]);
+		expect(result.fields[0]?.owner).toBe("color");
+		expect(result.fields[0]?.key).toBe("other");
 	});
-
-	it("requires named built-in renderers to belong to their paired backend", () => {
-		const renderer = defineFieldPlugin({
+	it("derives named built-in renderer ownership from the enclosing plugin", () => {
+		const title = defineFieldComponent({
 			type: "text",
-			key: "other",
-			componentKey: "title",
-			canRender: () => true,
+			component: () => ({}),
+			decodeValue: (value: unknown): string => String(value),
 		});
-		expect(() =>
-			resolveAdminPluginPairs([{ admin: { ...admin, fields: [renderer] }, backend }])
-		).toThrow("registered plugin field other");
+		const resolved = resolvePluginFields([{ ...admin, components: { title } }]);
+		expect(resolved.find((item) => item.componentKey === "title")?.owner).toBe("color");
 	});
-
-	it("rejects duplicate exact built-in renderer identities before mounting", () => {
-		const fields = [
-			{ type: "text" as const, key: "color", componentKey: "title", canRender: () => true },
-			{ type: "text" as const, key: "color", componentKey: "title", canRender: () => true },
-		];
-		expect(() => resolveAdminPluginPairs([{ backend, admin: { ...admin, fields } }])).toThrow(
-			"Admin field renderer text:color:title is registered more than once"
+	it("rejects competing field-type claims from independent plugins", () => {
+		expect(() => resolvePluginFields([admin, { ...admin, key: "other" }])).toThrow(
+			"Duplicate admin field renderer field:color"
 		);
 	});
 
@@ -239,12 +240,13 @@ describe("admin plugin pairing", () => {
 		const route = { path: "tools/import", component };
 		const firstAdmin = { ...admin, routes: [route] };
 		const firstBackend = { ...backend, routes: [route.path] };
-		const secondAdmin = { ...firstAdmin, key: "other", pairingVersion: 1, fields: [] };
+		const secondAdmin = { ...firstAdmin, key: "other", pairingVersion: 1, fields: {} };
 		const secondBackend = {
 			...firstBackend,
 			key: "other",
 			pairingVersion: 1,
 			package: "@example/other-admin",
+			fieldTypes: [],
 		};
 
 		expect(() =>
@@ -298,7 +300,7 @@ describe("admin plugin pairing", () => {
 						...admin,
 						key: "other",
 						pairingVersion: 1,
-						fields: [],
+						fields: {},
 						dashboard: extendedAdmin.dashboard,
 					},
 					backend: {
@@ -306,6 +308,7 @@ describe("admin plugin pairing", () => {
 						key: "other",
 						pairingVersion: 1,
 						package: "@example/other-admin",
+						fieldTypes: [],
 					},
 				},
 			])
@@ -320,7 +323,7 @@ describe("admin plugin pairing", () => {
 			...admin,
 			key: "other",
 			pairingVersion: 1,
-			fields: [],
+			fields: {},
 			dashboard: [{ ...replacement, key: "other" }],
 		};
 
@@ -334,6 +337,7 @@ describe("admin plugin pairing", () => {
 						key: "other",
 						pairingVersion: 1,
 						package: "@example/other-admin",
+						fieldTypes: [],
 					},
 				},
 			])
@@ -355,7 +359,7 @@ describe("admin plugin pairing", () => {
 			...firstAdmin,
 			key: "other",
 			pairingVersion: 1,
-			fields: [],
+			fields: {},
 			login: [{ key: "other-login", component, position: "replace" as const }],
 			account: [
 				{
@@ -373,6 +377,7 @@ describe("admin plugin pairing", () => {
 			key: "other",
 			pairingVersion: 1,
 			package: "@example/other-admin",
+			fieldTypes: [],
 		};
 
 		expect(() =>
@@ -420,7 +425,7 @@ describe("admin plugin pairing", () => {
 			...admin,
 			key: "other",
 			pairingVersion: 1,
-			fields: [],
+			fields: {},
 			views: [
 				{ key: "duplicate", surface: "collectionList" as const, collection: "posts", component },
 			],
@@ -437,6 +442,7 @@ describe("admin plugin pairing", () => {
 						key: "other",
 						pairingVersion: 1,
 						package: "@example/other-admin",
+						fieldTypes: [],
 					},
 				},
 			])
@@ -457,7 +463,7 @@ describe("admin plugin pairing", () => {
 			...admin,
 			key: "other",
 			pairingVersion: 1,
-			fields: [],
+			fields: {},
 			branding: [{ key: "other-logo", surface: "navigationLogo" as const, component }],
 		};
 
@@ -474,6 +480,7 @@ describe("admin plugin pairing", () => {
 						key: "other",
 						pairingVersion: 1,
 						package: "@example/other-admin",
+						fieldTypes: [],
 					},
 				},
 			])
@@ -487,7 +494,7 @@ describe("admin plugin pairing", () => {
 			...admin,
 			key: "other",
 			pairingVersion: 1,
-			fields: [],
+			fields: {},
 			providers: [{ key: "theme", component }],
 		};
 
@@ -504,9 +511,196 @@ describe("admin plugin pairing", () => {
 						key: "other",
 						pairingVersion: 1,
 						package: "@example/other-admin",
+						fieldTypes: [],
 					},
 				},
 			])
 		).toThrow("provider theme");
 	});
+});
+
+it("rejects unsupported versions for embedded schema host plugins", () => {
+	expect(() =>
+		resolveAdminPluginPairs([{ backend: { ...backend, apiVersion: 99 }, admin }])
+	).toThrow("requires admin plugin API 99");
+});
+
+it("freezes registration ownership independently of caller objects", () => {
+	const entries = { color: field };
+	const plugin = defineAdminPlugin({ key: "immutable", pairingVersion: 1, fields: entries });
+	entries.color = definePluginField({ component: () => ({}), decodeValue: () => "changed" });
+	expect(plugin.fields.color).toBe(field);
+	expect(Object.isFrozen(plugin.fields)).toBe(true);
+});
+it("rejects malformed declarations and does not restamp incompatible APIs", () => {
+	expect(admin.apiVersion).toBe(1);
+	for (const fields of [[], new Map(), { bad: { type: "plugin", component: () => ({}) } }]) {
+		expect(() => defineAdminPlugin({ key: "bad", pairingVersion: 1, fields } as never)).toThrow();
+	}
+	expect(() => defineAdminPlugin({ ...admin, apiVersion: 1 } as never)).toThrow("restamp");
+	expect(() => resolvePluginFields([{ ...admin, apiVersion: 99 } as never])).toThrow("uses API 99");
+	expect(() =>
+		definePluginField({
+			component: () => ({}),
+			decodeValue: () => 1,
+			canRender: () => true,
+		} as never)
+	).toThrow("matching");
+});
+it("checks decoder results, serialized configuration and builtin input values at runtime", () => {
+	const schema = {
+		type: "plugin",
+		path: "body",
+		admin: { label: "Body" },
+		plugin: { key: "body", config: { required: true } },
+	} as import("@riducms/protocol").SchemaField;
+	expect(() => field.decodeConfig(schema)).toThrow("no decodeConfig");
+	const asyncConfig = definePluginField({
+		component: () => ({}),
+		decodeValue: () => 1,
+		decodeConfig: async () => ({}),
+	});
+	expect(() => asyncConfig.decodeConfig(schema)).toThrow("synchronous");
+	const nonJSON = definePluginField({ component: () => ({}), decodeValue: () => new Date() });
+	expect(() => nonJSON.decodeValue({})).toThrow("JSON");
+	const badInput = defineFieldComponent({
+		type: "number",
+		component: () => ({}),
+		decodeValue: () => 1,
+		decodeInput: () => "bad",
+	} as never);
+	expect(() => badInput.decodeInput(1)).toThrow("Invalid decoded number");
+});
+it("named plugin renderer config is independent of backend value config", () => {
+	const renderer = defineFieldComponent({
+		type: "plugin",
+		fieldType: "color",
+		component: () => ({}),
+		decodeValue: (raw: unknown) => raw,
+	});
+	const schema = {
+		type: "plugin",
+		path: "color",
+		admin: { label: "Color", component: { plugin: "tools", component: "Compact" } },
+		plugin: { key: "color", config: { backend: true } },
+	} as import("@riducms/protocol").SchemaField;
+	expect(renderer.decodeConfig(schema)).toBeUndefined();
+	expect(() =>
+		renderer.decodeConfig({ ...schema, plugin: { key: "outline", config: {} } })
+	).toThrow("expects plugin field type color");
+});
+
+it("keeps default field identities separate from named component identities", () => {
+	const plugin = defineAdminPlugin({
+		key: "plugin",
+		pairingVersion: 1,
+		fields: { color: field },
+		components: {
+			color: defineFieldComponent({
+				type: "text",
+				component: () => ({}),
+				decodeValue: (raw: unknown) => String(raw),
+			}),
+		},
+	});
+	expect(resolvePluginFields([plugin]).map(({ key, componentKey }) => [key, componentKey])).toEqual(
+		[
+			["color", undefined],
+			["color", "color"],
+		]
+	);
+});
+
+it("checks completeness at build time while validating selected fields in partial startup manifests", () => {
+	const plugin = defineAdminPlugin({
+		key: "tools",
+		pairingVersion: 1,
+		components: {
+			Compact: defineFieldComponent({
+				type: "plugin",
+				fieldType: "color",
+				component: () => ({}),
+				decodeValue: (raw: unknown) => raw,
+			}),
+		},
+	});
+	const partial = { collections: [], globals: [], plugins: [] };
+	expect(() => validatePluginManifest([plugin], partial, false)).not.toThrow();
+	expect(() => validatePluginManifest([plugin], partial, true)).toThrow(
+		"undeclared field type color"
+	);
+	const schema = {
+		type: "plugin",
+		path: "body",
+		admin: { label: "Body", component: { plugin: "tools", component: "Compact" } },
+		plugin: { key: "outline", config: {} },
+	} as import("@riducms/protocol").SchemaField;
+	const collection = {
+		slug: "pages",
+		fields: [schema],
+	} as import("@riducms/protocol").SchemaCollection;
+	expect(() =>
+		validatePluginManifest([plugin], { ...partial, collections: [collection] }, false)
+	).toThrow("expects plugin field type color");
+});
+
+it("paired components distinguish omitted settings from supplied component configuration", () => {
+	const component = defineFieldComponent({
+		type: "text",
+		component: () => ({}),
+		decodeValue: (value: unknown) => String(value),
+	});
+	const configured = defineFieldComponent({
+		type: "text",
+		component: () => ({}),
+		decodeValue: (value: unknown) => String(value),
+		decodeConfig: () => ({ checked: true }),
+	});
+	const schema = {
+		type: "text",
+		path: "title",
+		admin: { label: "Title", component: { plugin: "tools", component: "Title" } },
+	} as import("@riducms/protocol").SchemaField;
+	expect(component.decodeConfig(schema)).toBeUndefined();
+	expect(() => configured.decodeConfig(schema)).toThrow("config is required by decodeConfig");
+	const supplied = {
+		...schema,
+		admin: { ...schema.admin, component: { ...schema.admin.component!, config: {} } },
+	};
+	expect(() => component.decodeConfig(supplied)).toThrow("no decodeConfig");
+	expect(configured.decodeConfig(supplied)).toEqual({ checked: true });
+	for (const config of [undefined, null, [], { nested: undefined }]) {
+		const malformed = {
+			...supplied,
+			admin: { ...supplied.admin, component: { ...supplied.admin.component, config } },
+		};
+		expect(() => configured.decodeConfig(malformed)).toThrow("config");
+	}
+});
+
+it("paired primitive list components validate real element types and detach array values", () => {
+	const text = defineFieldComponent({
+		type: "text-list",
+		component: () => ({}),
+		decodeValue: (value: unknown) => value as string[],
+	});
+	const numbers = defineFieldComponent({
+		type: "number-list",
+		component: () => ({}),
+		decodeValue: (value: unknown) => value as number[],
+	});
+	for (const [component, value] of [
+		[text, ["", "oak", "oak"]],
+		[numbers, [0, 8, 8]],
+	] as const) {
+		const decoded = component.decodeValue(value);
+		expect(decoded).toEqual(value);
+		expect(decoded).not.toBe(value);
+	}
+	for (const value of [[null], [{}], [1], Array(2), "scalar"])
+		expect(() => text.decodeValue(value)).toThrow("Invalid decoded text-list value");
+	for (const value of [[null], ["1"], Array(2), 1])
+		expect(() => numbers.decodeValue(value)).toThrow("Invalid decoded number-list value");
+	for (const value of [[NaN], [Infinity]])
+		expect(() => numbers.decodeValue(value)).toThrow("finite, acyclic JSON data");
 });

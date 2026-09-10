@@ -44,8 +44,8 @@ var Posts = ridu.Collection{
 	DocumentLockConfig: ridu.DocumentLockConfig{
 		Duration: 5 * time.Minute,
 	},
-	Fields: []field.Definition{
-		field.Text("title", field.Required()),
+	Fields: field.Fields{
+		field.Text("title").Required(),
 	},
 }
 ```
@@ -97,11 +97,18 @@ if (!state.owned && state.canTakeOver) {
 }
 
 if (!state.owned) {
-	throw new Error(`This post is being edited by ${state.lock?.ownerLabel ?? 'another author'}.`);
+	throw new Error(
+		`This post is being edited by ${state.lock?.ownerLabel ?? 'another author'}.`
+	);
 }
 
 try {
-	await ridu.update('posts', post.id, { title: 'Reviewed title' }, { revision: post._revision });
+	await ridu.update(
+		'posts',
+		post.id,
+		{ title: 'Reviewed title' },
+		{ revision: post._revision }
+	);
 } finally {
 	await ridu.releaseDocumentLock('posts', post.id);
 }

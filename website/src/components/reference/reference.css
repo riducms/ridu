@@ -191,115 +191,139 @@
 	background: color-mix(in srgb, var(--colors-surface-raised) 72%, transparent);
 }
 
-.reference-api-tags {
-	display: grid;
-	gap: 0.7rem;
-	margin: 0.7rem 0 0;
-}
-
-.reference-api-tags div {
-	display: grid;
-	gap: 0.08rem;
-}
-
-.reference-api-tags dt {
-	color: var(--colors-ink-soft);
-	font-family: var(--font-mono);
-	font-size: 0.82rem;
-	font-style: italic;
-	font-weight: 650;
-}
-
-.reference-api-tags dt code {
-	color: #ffb977;
-	font-family: inherit;
-	font-size: inherit;
-}
-
-.reference-api-tags dd {
-	margin: 0;
-	color: var(--colors-ink-soft);
-	font-size: 0.85rem;
-	line-height: 1.55;
-}
-
-.reference-member-list {
-	display: grid;
-	gap: 1.7rem;
-	margin: 0.9rem 0 0;
-	padding-left: 1.25rem;
-	border-left: 1px solid color-mix(in srgb, var(--colors-accent) 30%, var(--colors-line));
-}
-
-.reference-member-label {
-	margin: 1.7rem 0 0.55rem;
-	color: var(--colors-ink-faint);
-	font-family: var(--font-mono);
-	font-size: 0.68rem;
-	font-weight: 600;
-	letter-spacing: 0.12em;
-	text-transform: uppercase;
-}
-
-.reference-member dt {
+/* Arguments and config properties share a scannable name / type / description table. */
+.reference-on-page {
 	display: flex;
-	min-width: 0;
 	flex-wrap: wrap;
-	align-items: baseline;
-	gap: 0.42rem;
-	color: var(--colors-ink-faint);
-	font-family: var(--font-mono);
-	font-size: 0.84rem;
+	gap: 0.5rem 1rem;
+	margin: 1.25rem 0 2rem;
+	font-size: 0.8rem;
 }
 
-.reference-member-name {
-	color: var(--colors-ink);
-	font-family: inherit;
-	font-size: inherit;
-	font-weight: 700;
-	text-decoration: underline;
-	text-decoration-color: var(--colors-line-strong);
-	text-underline-offset: 3px;
+.reference-on-page a {
+	color: var(--colors-ink-soft);
+	text-underline-offset: 4px;
 }
 
-.reference-member-link {
-	color: inherit;
-	text-decoration: none;
+.reference-api-section {
+	margin-top: 2.5rem;
+	scroll-margin-top: 6rem;
 }
 
-.reference-member-link:hover .reference-member-name {
-	text-decoration-color: currentColor;
+.reference-api-section > :is(h2, h3) {
+	margin: 0 0 1rem;
+	font-size: 1.25rem;
+	line-height: 1.3;
 }
 
-.reference-member-type,
-.reference-return-type {
-	min-width: 0;
-	color: var(--colors-cyan);
-	font-family: var(--font-mono);
-	font-size: 0.82rem;
-	line-height: 1.55;
+.reference-property-table table {
+	width: 100%;
+	table-layout: fixed;
+	border-collapse: collapse;
+	font-size: 0.875rem;
+	line-height: 1.6;
+}
+
+.reference-property-table :is(th, td) {
+	padding: 1rem 0.9rem 1rem 0;
+	border-bottom: 1px solid var(--colors-line);
+	text-align: left;
+	vertical-align: top;
 	overflow-wrap: anywhere;
 }
 
-.reference-member-type a,
-.reference-return-type a {
+.reference-property-table thead th {
+	padding-block: 0.5rem;
+	color: var(--colors-ink-faint);
+	font-size: 0.78rem;
+	font-weight: 500;
+}
+
+.reference-property-table th:first-child {
+	width: 23%;
+}
+.reference-property-table th:nth-child(2) {
+	width: 29%;
+}
+.reference-property-table--description th:nth-child(2) {
+	width: auto;
+}
+
+.reference-property-table td {
+	color: var(--colors-ink-soft);
+}
+.reference-property-table tbody th {
+	font-weight: 600;
+}
+.reference-property-table .reference-property-type {
+	font-size: 0.76rem;
+}
+.reference-property-type code {
+	color: var(--colors-ink-faint);
+}
+.reference-property-table a {
 	color: var(--colors-blue);
-	font-weight: 650;
-	text-decoration-color: var(--reference-token-underline);
 	text-underline-offset: 3px;
 }
 
-.reference-member-type a:hover,
-.reference-return-type a:hover {
-	text-decoration-color: currentColor;
+.reference-property-table code,
+.reference-lede code,
+.reference-detail code,
+.reference-return code {
+	font-family: var(--font-mono);
+	font-size: 0.88em;
 }
 
-.reference-member dd {
-	max-width: 780px;
-	margin: 0.25rem 0 0;
-	color: var(--colors-ink-soft);
-	font-size: 0.875rem;
-	line-height: 1.55;
+.reference-property-table tbody th code {
+	padding: 0.2rem 0.35rem;
+	border-radius: 3px;
+	background: var(--colors-surface-raised);
+}
+
+.reference-full-signature {
+	padding: 1rem;
+	border: 1px solid var(--colors-line);
+	border-radius: 4px;
+}
+
+@media (width < 48rem) {
+	.reference-property-table thead {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+		white-space: nowrap;
+	}
+	.reference-property-table :is(table, tbody) {
+		display: block;
+	}
+	.reference-property-table tr {
+		display: grid;
+		gap: 0.6rem;
+		padding-block: 1.1rem;
+		border-bottom: 1px solid var(--colors-line);
+	}
+	.reference-property-table :is(th, td) {
+		width: auto !important;
+		padding: 0;
+		border: 0;
+	}
+}
+
+.reference-return-type {
+	display: block;
+	margin-top: 0.5rem;
+	color: var(--colors-ink-faint);
+	font-family: var(--font-mono);
+	font-size: 0.8rem;
+	line-height: 1.6;
+	overflow-wrap: anywhere;
+}
+
+.reference-return-type a {
+	color: var(--colors-blue);
+	text-underline-offset: 3px;
 }
 
 .reference-return {
@@ -310,17 +334,8 @@
 	line-height: 1.6;
 }
 
-.reference-return-label {
-	margin-right: 0.35rem;
-	font-family: var(--font-mono);
-	font-size: 0.76rem;
-	font-style: italic;
-	font-weight: 650;
-}
-
 .reference-detail {
 	max-width: 780px;
-	margin-top: 0.85rem;
 	color: var(--colors-ink-soft);
 	font-size: 0.875rem;
 	line-height: 1.6;
@@ -336,13 +351,7 @@
 
 .reference-example {
 	max-width: 780px;
-	margin-top: 1rem;
-}
-
-.reference-example > p {
-	margin: 0 0 0.45rem;
-	color: var(--colors-ink-soft);
-	font-size: 0.85rem;
+	margin-top: 2.5rem;
 }
 
 .reference-example .code-block {

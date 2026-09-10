@@ -5,6 +5,20 @@
 Saved views preserve an author's list workspace. Folder and parent fields add relationships that
 the list can use for organization. Neither feature changes access.
 
+## Configuration {#configuration}
+
+| Option or method                | What it controls                                                            |
+| ------------------------------- | --------------------------------------------------------------------------- |
+| `Collection.Admin.FolderField`  | Names a direct singular relationship whose target documents become folders. |
+| `Collection.Admin.ParentField`  | Names a direct singular self-relationship used to build the hierarchy.      |
+| SDK `preference(key)`           | Reads the current actor's private saved preference.                         |
+| SDK `setPreference(key, value)` | Creates or replaces one saved preference.                                   |
+| SDK `deletePreference(key)`     | Removes one saved preference without changing content.                      |
+| SDK `resetPreferences()`        | Removes the current actor's saved admin preferences.                        |
+
+Saved views also capture filters, columns, sort, locale, folder, page size, and list/hierarchy mode
+from the list UI; they never preserve access the actor later loses.
+
 ## Save a list workspace {#saved-views}
 
 Configure filters, columns, sort, locale, folder, and list/hierarchy mode in a collection list, then
@@ -19,24 +33,24 @@ state and cannot preserve access that the actor later loses. The SDK also expose
 
 ```go title="content/pages.go"
 var Folders = ridu.Collection{
-	Slug: "folders",
+	Slug:  "folders",
 	Admin: ridu.CollectionAdmin{UseAsTitle: "name"},
-	Fields: []field.Definition{
-		field.Text("name", field.Required()),
+	Fields: field.Fields{
+		field.Text("name").Required(),
 	},
 }
 
 var Pages = ridu.Collection{
 	Slug: "pages",
 	Admin: ridu.CollectionAdmin{
-		UseAsTitle: "title",
+		UseAsTitle:  "title",
 		FolderField: "folder",
 		ParentField: "parent",
 	},
-	Fields: []field.Definition{
-		field.Text("title", field.Required()),
-		field.Relationship("folder", field.To("folders")),
-		field.Relationship("parent", field.To("pages")),
+	Fields: field.Fields{
+		field.Text("title").Required(),
+		field.Relationship("folder", "folders"),
+		field.Relationship("parent", "pages"),
 	},
 }
 ```

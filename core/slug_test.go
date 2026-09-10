@@ -14,11 +14,8 @@ import (
 
 func TestSlugLifecycleIsServerAuthoritative(t *testing.T) {
 	application, err := ridu.New(ridu.Config{Name: "Slugs", Collections: []ridu.Collection{{
-		Slug: "posts",
-		Fields: []field.Definition{
-			field.Group("seo", field.Fields(field.Text("title", field.Required()))),
-			field.Slug("slug", "seo.title", field.Label("URL slug")),
-		},
+		Slug:   "posts",
+		Fields: field.Fields{field.Group("seo", field.Fields{field.Text("title").Required()}), field.Slug("slug", "seo.title").Label("URL slug")},
 	}}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -87,11 +84,8 @@ func TestSlugLifecycleIsServerAuthoritative(t *testing.T) {
 
 func TestSlugCreateNormalizesManualValues(t *testing.T) {
 	application, err := ridu.New(ridu.Config{Name: "Manual slugs", Collections: []ridu.Collection{{
-		Slug: "posts",
-		Fields: []field.Definition{
-			field.Text("title", field.Required()),
-			field.Slug("slug", "title"),
-		},
+		Slug:   "posts",
+		Fields: field.Fields{field.Text("title").Required(), field.Slug("slug", "title")},
 	}}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -108,11 +102,8 @@ func TestSlugCreateNormalizesManualValues(t *testing.T) {
 
 func TestSlugNormalizesFinalHookMutations(t *testing.T) {
 	application, err := ridu.New(ridu.Config{Name: "Hook slugs", Collections: []ridu.Collection{{
-		Slug: "posts",
-		Fields: []field.Definition{
-			field.Text("title", field.Required()),
-			field.Slug("slug", "title"),
-		},
+		Slug:   "posts",
+		Fields: field.Fields{field.Text("title").Required(), field.Slug("slug", "title")},
 		Hooks: ridu.CollectionHooks{BeforeOperation: []ridu.Hook{func(ctx ridu.HookContext) error {
 			title, _ := ctx.Data["title"].StringValue()
 			switch title {
@@ -148,33 +139,24 @@ func TestSlugNormalizesFinalHookMutations(t *testing.T) {
 func TestSlugSourceValidationReportsAuthoringPaths(t *testing.T) {
 	tests := []struct {
 		name   string
-		fields []field.Definition
+		fields field.Fields
 		code   string
 		path   string
 	}{
 		{
-			name: "missing source field",
-			fields: []field.Definition{
-				field.Text("title"),
-				field.Slug("slug", "missing"),
-			},
-			code: "invalid_slug_source", path: "collections[0].fields[1].sourcePath",
+			name:   "missing source field",
+			fields: field.Fields{field.Text("title"), field.Slug("slug", "missing")},
+			code:   "invalid_slug_source", path: "collections[0].fields[1].sourcePath",
 		},
 		{
-			name: "localized source field",
-			fields: []field.Definition{
-				field.Text("title", field.Localized()),
-				field.Slug("slug", "title"),
-			},
-			code: "unsupported_localized_slug_source", path: "collections[0].fields[1].sourcePath",
+			name:   "localized source field",
+			fields: field.Fields{field.Text("title").Localized(), field.Slug("slug", "title")},
+			code:   "unsupported_localized_slug_source", path: "collections[0].fields[1].sourcePath",
 		},
 		{
-			name: "nested slug",
-			fields: []field.Definition{
-				field.Text("title"),
-				field.Group("seo", field.Fields(field.Slug("slug", "title"))),
-			},
-			code: "unsupported_nested_slug", path: "collections[0].fields[1].options.fields[0].sourcePath",
+			name:   "nested slug",
+			fields: field.Fields{field.Text("title"), field.Group("seo", field.Fields{field.Slug("slug", "title")})},
+			code:   "unsupported_nested_slug", path: "collections[0].fields[1].fields[0].sourcePath",
 		},
 	}
 	for _, test := range tests {

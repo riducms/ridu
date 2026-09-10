@@ -12,47 +12,157 @@ const containsPath = (candidate: DocumentationNavigationItem): boolean =>
 	candidate.href === path || candidate.children.some(containsPath);
 const active = item.href === path;
 const branchActive = containsPath(item);
-const linkClasses = [
-	'block border-l py-1.15 leading-[1.4] no-underline transition-colors',
-	depth === 0
-		? 'border-line pl-3.5 text-14px text-ink-faint'
-		: 'border-transparent pl-3 text-14px text-ink-faint',
-	'hover:(border-accent text-ink) aria-[current=page]:(border-accent text-ink)'
-];
+const childrenID = `docs-navigation-${item.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+const overviewItem: DocumentationNavigationItem | undefined = item.href
+	? {
+			id: `${item.id}:overview`,
+			label: 'Overview',
+			href: item.href,
+			children: []
+		}
+	: undefined;
 ---
 
-<li data-depth={depth} data-active-branch={branchActive || undefined}>
-	{
-		item.children.length > 0 ? (
-			<details open={branchActive}>
-				<summary class="cursor-pointer py-1.2 text-14px text-ink-faint hover:text-ink marker:text-ink-faint">
+<li
+	class="docs-navigation-item"
+	style={`--docs-navigation-depth: ${depth}`}
+	data-depth={depth}
+	data-navigation-item
+	data-active-branch={branchActive || undefined}
+>
+	<div class="docs-navigation-row">
+		{
+			item.children.length > 0 ? (
+				<button
+					class="docs-navigation-disclosure"
+					type="button"
+					aria-expanded={branchActive ? 'true' : 'false'}
+					aria-controls={childrenID}
+					data-navigation-toggle
+				>
+					<span>{item.label}</span>
+					<svg viewBox="0 0 16 16" aria-hidden="true">
+						<path d="m5.75 3.5 4.5 4.5-4.5 4.5" />
+					</svg>
+				</button>
+			) : item.href ? (
+				<a class="docs-navigation-link" href={item.href} aria-current={active ? 'page' : undefined}>
 					{item.label}
-				</summary>
-				<ul class="m-0 ml-1.5 list-none border-l border-line/70 py-0.75 pl-1.5">
-					{item.href && (
-						<li>
-							<a
-								class:list={linkClasses}
-								href={item.href}
-								aria-current={active ? 'page' : undefined}
-							>
-								Overview
-							</a>
-						</li>
-					)}
-					{item.children.map((child) => (
-						<Astro.self item={child} {path} depth={depth + 1} />
-					))}
-				</ul>
-			</details>
-		) : item.href ? (
-			<a class:list={linkClasses} href={item.href} aria-current={active ? 'page' : undefined}>
-				{item.label}
-			</a>
-		) : (
-			<p class="m-0 border-l border-transparent py-1.25 pl-3 font-mono text-9.5px font-600 tracking-[0.08em] text-ink-soft uppercase">
-				{item.label}
-			</p>
+				</a>
+			) : (
+				<span class="docs-navigation-label">{item.label}</span>
+			)
+		}
+	</div>
+	{
+		item.children.length > 0 && (
+			<ul
+				class="docs-navigation-children"
+				id={childrenID}
+				hidden={!branchActive}
+				data-navigation-children
+			>
+				{overviewItem && <Astro.self item={overviewItem} {path} depth={depth + 1} />}
+				{item.children.map((child) => (
+					<Astro.self item={child} {path} depth={depth + 1} />
+				))}
+			</ul>
 		)
 	}
 </li>
+
+<style>
+	.docs-navigation-item {
+		margin: 0;
+	}
+
+	.docs-navigation-row {
+		display: flex;
+		min-width: 0;
+		align-items: center;
+	}
+
+	.docs-navigation-link,
+	.docs-navigation-label,
+	.docs-navigation-disclosure {
+		position: relative;
+		display: block;
+		min-width: 0;
+		width: 100%;
+		padding: 0.3rem 0.2rem;
+		border: 0;
+		background: transparent;
+		color: var(--colors-ink-soft);
+		font: inherit;
+		font-size: 0.95rem;
+		font-weight: 400;
+		line-height: 1.4;
+		text-align: left;
+		text-decoration: none;
+		transition: color 140ms ease;
+	}
+
+	.docs-navigation-link:hover,
+	.docs-navigation-link[aria-current='page'],
+	.docs-navigation-disclosure:hover,
+	.docs-navigation-disclosure[aria-expanded='true'] {
+		color: var(--colors-ink);
+	}
+
+	.docs-navigation-link[aria-current='page']::before {
+		position: absolute;
+		top: 0.22rem;
+		bottom: 0.22rem;
+		left: calc(-0.875rem - var(--docs-navigation-depth) * 0.75rem);
+		width: 2px;
+		background: var(--colors-accent);
+		content: '';
+	}
+
+	.docs-navigation-disclosure {
+		display: flex;
+		cursor: pointer;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.5rem;
+	}
+
+	.docs-navigation-disclosure svg {
+		width: 0.8rem;
+		height: 0.8rem;
+		flex: none;
+		fill: none;
+		stroke: currentColor;
+		stroke-linecap: round;
+		stroke-linejoin: round;
+		stroke-width: 1.5;
+		transition: transform 140ms ease;
+	}
+
+	.docs-navigation-disclosure[aria-expanded='true'] svg {
+		transform: rotate(90deg);
+	}
+
+	.docs-navigation-children {
+		margin: 0.1rem 0 0.35rem;
+		padding: 0 0 0 0.75rem;
+		list-style: none;
+	}
+
+	.docs-navigation-children[hidden] {
+		display: none;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.docs-navigation-link,
+		.docs-navigation-disclosure svg {
+			transition: none;
+		}
+	}
+
+	@media (min-width: 48rem) {
+		.docs-navigation-link[aria-current='page']::before {
+			left: calc(-1.25rem - var(--docs-navigation-depth) * 0.75rem);
+		}
+	}
+</style>

@@ -47,7 +47,7 @@ func TestDuplicateLegacyRowKeysCannotCollapseChangedFieldLocations(t *testing.T)
 			fields: []schema.Field{{
 				Name: "content", Path: path("content"), Type: schema.FieldTypeBlocks,
 				Blocks: &schema.BlocksField{Types: []schema.BlockType{{
-					Key: "quote", Fields: []schema.Field{{Name: "secret", Path: path("content.quote.secret"), Type: schema.FieldTypeText}},
+					Slug: "quote", Fields: []schema.Field{{Name: "secret", Path: path("content.quote.secret"), Type: schema.FieldTypeText}},
 				}}},
 			}},
 			fieldPath: "content.quote.secret",

@@ -1,15 +1,15 @@
 ---
 title: 'Collapsible field'
-description: 'Group advanced controls behind an accessible disclosure without nesting their stored values.'
+description: 'Put optional or advanced fields in a section that authors can expand and collapse.'
 product: core
 eyebrow: 'Layout fields'
 order: 80
-aliases: ['field.Collapsible', 'collapsible fields', 'advanced settings']
+aliases:
+  ['field.Collapsible', 'collapsible fields', 'advanced settings']
 relatedSymbolIds: ['go:github.com/riducms/ridu/field#Collapsible']
 navigation:
   section: 'Model content'
   parent: fields
-  group: 'Layout'
   order: 200
   title: 'Collapsible'
 ---
@@ -23,30 +23,39 @@ editor overwhelming. It changes presentation only; children stay at their curren
 
 _Collapsing changes only presentation; child values remain at their existing document paths._
 
-## Smallest working example {#example}
+## Add a collapsible section {#example}
 
 ```go title="content/pages.go"
-field.Collapsible(
-	"advancedSettings",
-	true,
-	field.Text("canonicalURL", field.Label("Canonical URL")),
+field.Collapsible("advancedSettings", field.Fields{
+	field.Text("canonicalURL").Label("Canonical URL"),
 	field.JSON("providerMetadata"),
-)
+}).Admin(field.Admin{InitiallyCollapsed: true})
 ```
 
-The second argument controls whether the disclosure starts collapsed. The document has root
+`Admin.InitiallyCollapsed` controls whether the section starts collapsed. The document has root
 `canonicalURL` and `providerMetadata` properties; there is no `advancedSettings` object.
 
-Child fields retain their own labels, descriptions, validation, access, conditions, and generated
-contracts. Opening or closing the disclosure never changes submitted values.
+Child fields keep their own settings, validation, and access rules. Opening or closing the section
+does not change their values.
+
+## Configuration {#configuration}
+
+| Constructor or method                          | What it controls                                                                             |
+| ---------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `field.Collapsible(name, fields)`              | Groups child controls in an expandable layout without adding a stored object.                |
+| `.Admin(field.Admin{InitiallyCollapsed: ...})` | Chooses whether the section starts closed.                                                   |
+| `.Label(...)` / `.LabelTranslations(...)`      | Sets the section heading.                                                                    |
+| Child field methods                            | Keep each child's requiredness, access, validation, hooks, and storage at its existing path. |
+
+Collapsible is a layout field. It has no requiredness, localization, validator, hook, access rule,
+or persisted value of its own.
 
 ## When to use it {#when-to-use}
 
-Collapsibles work well for infrequent metadata and power-user settings. Do not put required fields
-or the primary task behind a closed disclosure without a clear error path—the author should be able
-to find and correct validation issues.
+Collapsibles work well for settings that authors change less often. Keep frequently used fields
+visible, and make sure authors can find required fields when a validation error occurs.
 
-Use [Group](/docs/fields/group/) when children need a stored object boundary, and
+Use [Group](/docs/fields/group/) when children should be stored in a nested object, and
 [Tabs](/docs/fields/tabs/) when a long form needs peer sections rather than optional detail.
 
 ## Common mistakes {#troubleshooting}

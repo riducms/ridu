@@ -30,13 +30,21 @@ func TestPluginInjectsCoreSEOFieldsAndPairedRenderers(t *testing.T) {
 		Localization: ridu.LocalizationConfig{Locales: []ridu.Locale{{Code: "en", Label: "English"}}, DefaultLocale: "en"},
 		Plugins:      []ridu.Plugin{plugin},
 		Collections: []ridu.Collection{
-			{Slug: "posts", Labels: ridu.CollectionLabels{Singular: "Post"}, Fields: []field.Definition{
-				field.Tabs(field.UnnamedTab("General", field.Text("headline"))),
+			{Slug: "posts", Labels: ridu.CollectionLabels{Singular: "Post"}, Fields: field.Fields{
+				field.Tabs(field.Fields{
+					field.UnnamedTab("General", field.Fields{
+						field.Text("headline"),
+					}),
+				}),
 				field.Text("sidebarNote"),
 			}},
-			{Slug: "media", Upload: true, Fields: []field.Definition{field.Text("alt")}},
+			{Slug: "media", Upload: true, Fields: field.Fields{
+				field.Text("alt"),
+			}},
 		},
-		Globals: []ridu.Global{{Slug: "site", Label: "Site", Fields: []field.Definition{field.Text("name")}}},
+		Globals: []ridu.Global{{Slug: "site", Label: "Site", Fields: field.Fields{
+			field.Text("name"),
+		}}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -50,7 +58,7 @@ func TestPluginInjectsCoreSEOFieldsAndPairedRenderers(t *testing.T) {
 		t.Fatalf("tabbed post fields = %#v", posts.Fields)
 	}
 	meta := posts.Fields[1]
-	if meta.Admin.Tab != "SEO" || meta.Nested == nil || len(meta.Nested.Fields) != 5 {
+	if meta.Admin.Tab != "SEO" || meta.Nested == nil || len(meta.Nested.ResolvedFields()) != 5 {
 		t.Fatalf("SEO meta field = %#v", meta)
 	}
 	want := []struct {
@@ -64,18 +72,18 @@ func TestPluginInjectsCoreSEOFieldsAndPairedRenderers(t *testing.T) {
 		{"preview", "ui", "preview", false},
 	}
 	for index, expected := range want {
-		candidate := meta.Nested.Fields[index]
+		candidate := meta.Nested.ResolvedFields()[index]
 		if candidate.Name != expected.name || string(candidate.Type) != expected.fieldType || candidate.Localized != expected.localized || candidate.Admin.Component == nil || candidate.Admin.Component.Plugin != seo.Key || candidate.Admin.Component.Component != expected.component {
 			t.Errorf("SEO child %d = %#v, want %#v", index, candidate, expected)
 		}
 	}
-	componentConfig := meta.Nested.Fields[0].Admin.Component.Config
+	componentConfig := meta.Nested.ResolvedFields()[0].Admin.Component.Config
 	componentConfig[0] = '['
 	freshMeta := manifest.Snapshot().Collections[0].Fields[1]
-	if freshMeta.Nested == nil || string(freshMeta.Nested.Fields[0].Admin.Component.Config[:1]) != "{" {
+	if freshMeta.Nested == nil || string(freshMeta.Nested.ResolvedFields()[0].Admin.Component.Config[:1]) != "{" {
 		t.Fatal("manifest snapshot exposed mutable admin component config")
 	}
-	if image := meta.Nested.Fields[3]; image.Upload == nil || image.Upload.CollectionSlug != "media" {
+	if image := meta.Nested.ResolvedFields()[3]; image.Upload == nil || image.Upload.CollectionSlug != "media" {
 		t.Fatalf("SEO image = %#v", image)
 	}
 	global := snapshot.Globals[0]
@@ -87,13 +95,15 @@ func TestPluginInjectsCoreSEOFieldsAndPairedRenderers(t *testing.T) {
 func TestPluginWithoutLocalizationKeepsDefaultFieldsUsable(t *testing.T) {
 	manifest, err := ridu.Resolve(ridu.Config{
 		Name: "SEO", Plugins: []ridu.Plugin{seo.New(seo.Config{Collections: []schema.CollectionSlug{"posts"}})},
-		Collections: []ridu.Collection{{Slug: "posts", Fields: []field.Definition{field.Text("headline")}}},
+		Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{
+			field.Text("headline"),
+		}}},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	meta := manifest.Snapshot().Collections[0].Fields[1]
-	if meta.Nested == nil || meta.Nested.Fields[1].Localized || meta.Nested.Fields[2].Localized {
+	if meta.Nested == nil || meta.Nested.ResolvedFields()[1].Localized || meta.Nested.ResolvedFields()[2].Localized {
 		t.Fatalf("non-localized SEO fields = %#v", meta.Nested)
 	}
 }
@@ -101,10 +111,14 @@ func TestPluginWithoutLocalizationKeepsDefaultFieldsUsable(t *testing.T) {
 func TestTabbedUIKeepsAuthEmailTopLevelAndLiftsExistingTabs(t *testing.T) {
 	manifest, err := ridu.Resolve(ridu.Config{
 		Name: "SEO", Admin: ridu.AdminConfig{User: "users"}, Plugins: []ridu.Plugin{seo.New(seo.Config{Collections: []schema.CollectionSlug{"users"}, TabbedUI: true})},
-		Collections: []ridu.Collection{{Slug: "users", Auth: true, Fields: []field.Definition{
-			field.Email("email", field.Required(), field.Unique()),
+		Collections: []ridu.Collection{{Slug: "users", Auth: true, Fields: field.Fields{
+			field.Email("email").Required().Unique(),
 			field.Text("displayName"),
-			field.Tabs(field.NamedTab("preferences", "Preferences", field.Text("timezone"))),
+			field.Tabs(field.Fields{
+				field.NamedTab("preferences", "Preferences", field.Fields{
+					field.Text("timezone"),
+				}),
+			}),
 		}}},
 	})
 	if err != nil {
@@ -126,23 +140,23 @@ func TestTabbedUIKeepsAuthEmailTopLevelAndLiftsExistingTabs(t *testing.T) {
 }
 
 func TestDirectPresentationConstructorsAcceptExplicitOverrides(t *testing.T) {
-	overview := seo.OverviewWithConfig(seo.OverviewConfig{Label: "Search checks", TitlePath: "search.title"})
-	preview := seo.PreviewWithConfig(seo.PreviewConfig{Label: "Result card", TitlePath: "search.title"})
-	image := seo.MetaImageWithConfig(seo.MetaImageConfig{Collection: "media", Label: "Social card", Description: "Use 1200 by 630."})
-	for name, definition := range map[string]field.Definition{"overview": overview, "preview": preview, "image": image} {
-		if issues := definition.Issues(); len(issues) != 0 {
+	overview := seo.Overview(seo.OverviewConfig{Label: "Search checks", TitlePath: "search.title"})
+	preview := seo.Preview(seo.PreviewConfig{Label: "Result card", TitlePath: "search.title"})
+	image := seo.MetaImage(seo.MetaImageConfig{Collection: "media", Label: "Social card", Description: "Use 1200 by 630."})
+	for name, definition := range map[string]field.Node{"overview": overview, "preview": preview, "image": image} {
+		if issues := field.Snapshot(definition).Issues(); len(issues) != 0 {
 			t.Fatalf("%s issues = %#v", name, issues)
 		}
 	}
-	if overview.Label() != "Search checks" || preview.Label() != "Result card" || image.Label() != "Social card" || image.Description() != "Use 1200 by 630." {
-		t.Fatalf("direct labels = %q / %q / %q (%q)", overview.Label(), preview.Label(), image.Label(), image.Description())
+	if field.Snapshot(overview).Label() != "Search checks" || field.Snapshot(preview).Label() != "Result card" || field.Snapshot(image).Label() != "Social card" || field.Snapshot(image).Description() != "Use 1200 by 630." {
+		t.Fatalf("direct labels = %q / %q / %q (%q)", field.Snapshot(overview).Label(), field.Snapshot(preview).Label(), field.Snapshot(image).Label(), field.Snapshot(image).Description())
 	}
 }
 
 func TestPluginFieldOverrideAndTargetValidation(t *testing.T) {
 	plugin := seo.New(seo.Config{
 		Collections: []schema.CollectionSlug{"posts"},
-		Fields: func(defaults []field.Definition) ([]field.Definition, error) {
+		Fields: func(defaults field.Fields) (field.Fields, error) {
 			return append(defaults, field.Text("ogTitle")), nil
 		},
 	})
@@ -151,7 +165,7 @@ func TestPluginFieldOverrideAndTargetValidation(t *testing.T) {
 		t.Fatal(err)
 	}
 	meta := manifest.Snapshot().Collections[0].Fields[0]
-	if meta.Nested == nil || meta.Nested.Fields[len(meta.Nested.Fields)-1].Name != "ogTitle" {
+	if meta.Nested == nil || meta.Nested.ResolvedFields()[len(meta.Nested.ResolvedFields())-1].Name != "ogTitle" {
 		t.Fatalf("overridden SEO fields = %#v", meta.Nested)
 	}
 
@@ -172,7 +186,9 @@ func TestGenerationEndpointRequiresActorAndUsesCurrentDraft(t *testing.T) {
 	})
 	application, err := ridu.New(ridu.Config{
 		Name: "SEO", Plugins: []ridu.Plugin{plugin},
-		Collections: []ridu.Collection{{Slug: "posts", Fields: []field.Definition{field.Text("headline")}}},
+		Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{
+			field.Text("headline"),
+		}}},
 	}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -216,12 +232,16 @@ func TestEndpointCapturesApplicationResourceDefinitions(t *testing.T) {
 	plugin := seo.New(seo.Config{GenerateTitle: func(context seo.GenerateContext) (string, error) {
 		return context.Collection.Labels.Singular, nil
 	}})
-	first, err := ridu.New(ridu.Config{Name: "First", Localization: ridu.LocalizationConfig{Locales: []ridu.Locale{{Code: "en", Label: "English"}}, DefaultLocale: "en"}, Plugins: []ridu.Plugin{plugin}, Collections: []ridu.Collection{{Slug: "pages", Labels: ridu.CollectionLabels{Singular: "First page"}, Fields: []field.Definition{seo.MetaTitle(true)}}}}, teststore.New())
+	first, err := ridu.New(ridu.Config{Name: "First", Localization: ridu.LocalizationConfig{Locales: []ridu.Locale{{Code: "en", Label: "English"}}, DefaultLocale: "en"}, Plugins: []ridu.Plugin{plugin}, Collections: []ridu.Collection{{Slug: "pages", Labels: ridu.CollectionLabels{Singular: "First page"}, Fields: field.Fields{
+		seo.MetaTitle(true),
+	}}}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
 	}
 	firstEndpoint := plugin.Endpoints()[0]
-	if _, err := ridu.New(ridu.Config{Name: "Second", Localization: ridu.LocalizationConfig{Locales: []ridu.Locale{{Code: "en", Label: "English"}}, DefaultLocale: "en"}, Plugins: []ridu.Plugin{plugin}, Collections: []ridu.Collection{{Slug: "pages", Labels: ridu.CollectionLabels{Singular: "Second page"}, Fields: []field.Definition{seo.MetaTitle(true)}}}}, teststore.New()); err != nil {
+	if _, err := ridu.New(ridu.Config{Name: "Second", Localization: ridu.LocalizationConfig{Locales: []ridu.Locale{{Code: "en", Label: "English"}}, DefaultLocale: "en"}, Plugins: []ridu.Plugin{plugin}, Collections: []ridu.Collection{{Slug: "pages", Labels: ridu.CollectionLabels{Singular: "Second page"}, Fields: field.Fields{
+		seo.MetaTitle(true),
+	}}}}, teststore.New()); err != nil {
 		t.Fatal(err)
 	}
 	response := httptest.NewRecorder()
@@ -234,7 +254,9 @@ func TestEndpointCapturesApplicationResourceDefinitions(t *testing.T) {
 func TestSEOValuesUseOrdinaryEnginePersistence(t *testing.T) {
 	application, err := ridu.New(ridu.Config{
 		Name: "SEO", Plugins: []ridu.Plugin{seo.New(seo.Config{Collections: []schema.CollectionSlug{"posts"}})},
-		Collections: []ridu.Collection{{Slug: "posts", Fields: []field.Definition{field.Text("headline")}}},
+		Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{
+			field.Text("headline"),
+		}}},
 	}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -246,7 +268,7 @@ func TestSEOValuesUseOrdinaryEnginePersistence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	meta, _ := created.Values["meta"].ObjectValue()
+	meta, _ := created.Values["meta"].CopyObject()
 	if title, _ := meta["title"].StringValue(); title != "Search title" {
 		t.Fatalf("persisted meta = %#v", meta)
 	}

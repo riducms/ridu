@@ -1,6 +1,6 @@
 ---
 title: 'Tabs field'
-description: 'Organise document editing into named stored objects or presentation-only sections.'
+description: 'Split a long form into tabs, with optional nested objects in the saved document.'
 product: core
 eyebrow: 'Structured fields'
 order: 76
@@ -14,7 +14,6 @@ relatedSymbolIds:
 navigation:
   section: 'Model content'
   parent: fields
-  group: 'Structured'
   order: 160
   title: 'Tabs'
 ---
@@ -27,40 +26,52 @@ their current level.
 
 ![A Tabs field in the Ridu admin with the Content tab active and Settings available beside it.](../../../../../docs/assets/fields/tabs.png)
 
-_Unnamed tabs alter layout only; named tabs add an object boundary to document paths._
+_Tabs separate the form into sections. Named tabs also group their values in a nested object._
 
 ## Named and unnamed tabs {#example}
 
 ```go title="content/pages.go"
-field.Tabs(
-	field.UnnamedTab("Content",
-		field.Text("title", field.Required()),
-		field.Blocks("layout", field.BlockTypes(/* … */)),
-	),
-	field.NamedTab("seo", "Search & sharing",
-		field.Text("title", field.MaxLength(60)),
-		field.Textarea("description", field.MaxLength(160)),
-	),
-)
+field.Tabs(field.Fields{
+	field.UnnamedTab("Content", field.Fields{
+		field.Text("title").Required(),
+		field.Textarea("body"),
+	}),
+	field.NamedTab("seo", "Search & sharing", field.Fields{
+		field.Text("title").MaxLength(60),
+		field.Textarea("description").MaxLength(160),
+	}),
+})
 ```
 
-The resulting document has root `title` and `layout` properties plus a nested `seo` object. Choose
-named tabs when the object boundary is meaningful to API consumers; choose unnamed tabs when only
-the authoring experience needs separation.
+The resulting document has root `title` and `body` properties plus a nested `seo` object. Choose
+named tabs when you want those fields in a nested object. Use unnamed tabs to organize the
+form while keeping the document structure unchanged.
 
-Tab labels and `LabelTranslations` are admin-interface copy. They do not localize content. Configure
-`Localized` on stored child fields or on another nested container according to the value that
-actually varies.
+Translate tab labels with `LabelTranslations`. To store translated content, add `.Localized()`
+to the child fields or the container whose values vary by locale.
+
+## Configuration {#configuration}
+
+| Constructor                           | Stored shape and options                                                                                                      |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `field.Tabs(tabs)`                    | Creates the tab set; its children must be `NamedTab` or `UnnamedTab` definitions.                                             |
+| `field.UnnamedTab(label, fields)`     | Adds a presentation-only tab. Children stay at their current data paths.                                                      |
+| `field.NamedTab(name, label, fields)` | Adds a stored object. It returns a `GroupField`, so it supports `.Required()`, `.Localized()`, validation, access, and hooks. |
+| `.Admin(...)` on a tab/layout         | Sets description and other presentation metadata.                                                                             |
+| Child field methods                   | Continue to control each child's value, access, validation, and editor.                                                       |
+
+`Tabs` and `UnnamedTab` are layout fields and do not have stored values. A `NamedTab` is the only
+variant that adds an object property.
 
 ## Constraints and common mistakes {#troubleshooting}
 
 - Every tab needs a label and fields. Named tab names must obey field-name rules and be
   unique at that level.
-- Presentation-only tabs do not grant access or change validation. Hidden fields still pass through
-  the operation engine.
+- Presentation-only tabs do not grant access or change validation. Hidden fields are still validated and
+  checked against access rules when saving.
 - Changing an unnamed tab to a named tab changes document paths and requires a migration. Changing
   only its label does not.
-- For a few direct fields, the concise `field.Tab("Label")` option may be enough. Use Tabs when you
+- For a few direct fields, `.Admin(field.Admin{Tab: "Label"})` may be enough. Use Tabs when you
   want an explicit ordered set of sections or stored named objects.
 
 See [`field.Tabs`](/reference/field/tabs/), [`field.NamedTab`](/reference/field/named-tab/), and

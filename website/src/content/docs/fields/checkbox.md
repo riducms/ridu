@@ -1,15 +1,14 @@
 ---
 title: 'Checkbox field'
-description: 'Store an explicit boolean and present it as an authoring toggle.'
+description: 'Add a checkbox for a true-or-false setting such as featured or archived.'
 product: core
-eyebrow: 'Scalar and choice fields'
+eyebrow: 'Basic fields'
 order: 67
 aliases: ['field.Checkbox', 'boolean field', 'toggle']
 relatedSymbolIds: ['go:github.com/riducms/ridu/field#Checkbox']
 navigation:
   section: 'Model content'
   parent: fields
-  group: 'Scalar & choice'
   order: 70
   title: 'Checkbox'
 ---
@@ -24,37 +23,50 @@ control.
 
 _The control writes a JSON boolean, so API callers must send `true` or `false` rather than form strings._
 
-## Smallest working example {#example}
+## Add a checkbox {#example}
 
 ```go title="content/posts.go"
-field.Checkbox("featured", field.Default(false))
+field.Checkbox("featured").Default(false)
 ```
 
-Use a boolean default when callers that omit the property should receive a concrete initial value.
-Without `Required` or a default, omission and an explicit `false` have different create-input
-meanings.
+The default stores `false` when the property is omitted on create. An explicit `true` or `false`
+keeps the caller's choice. Without a default, an omitted optional checkbox has no boolean value;
+it does not automatically become `false`.
 
-## Conditional authoring {#options}
+Use `.DefaultFrom(callback)` when the initial choice depends on the request. Its result is an
+`operation.Value[bool]`; `operation.Present(false)` supplies a value just as `true` does. See
+[Set default field values](/docs/fields/defaults/) for callback and admin behavior.
+
+## Configuration {#configuration}
+
+| Constructor or method                             | What it controls                                                                    |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `field.Checkbox(name)`                            | Creates a stored JSON boolean shown as a checkbox or toggle.                        |
+| `.Required()`                                     | Requires a boolean value; `false` still counts as present.                          |
+| `.Default(value)` / `.DefaultFrom(callback)`      | Supplies a fixed or request-aware initial boolean.                                  |
+| `.Index()` / `.Unique()`                          | Adds an index or uniqueness rule where the data model needs it.                     |
+| `.Localized()`                                    | Stores a separate boolean for each configured content locale.                       |
+| `.Admin(...)`                                     | Sets label, description, visibility condition, width, or a supported custom editor. |
+| `.Validate(callback)` / `.LiveValidate(callback)` | Adds save validation or optional live feedback.                                     |
+
+## Show another field when checked {#options}
 
 ```go title="content/posts.go"
-field.Checkbox("sponsored", field.Default(false)),
-field.Text(
-	"sponsorName",
-	field.ShowWhenCondition(
-		field.Sibling("sponsored", field.ConditionEquals, true),
-	),
-),
+field.Checkbox("sponsored").Default(false),
+field.Text("sponsorName").Admin(field.Admin{
+	VisibleWhen: field.Equal(field.Sibling("sponsored"), true),
+}),
 ```
 
 Conditions only change what the admin displays. A hidden `sponsorName` still exists in submitted
 data and remains subject to validation, access, and hooks. Enforce a cross-field business rule in
 validation or a hook when `sponsorName` must be empty unless `sponsored` is true.
 
-Read [Conditional fields](/docs/fields/conditional-fields/) for sibling scope, typed operators,
-root-document conditions, compound expressions, and server-side enforcement.
+See [Conditional fields](/docs/fields/conditional-fields/) to combine conditions or read values
+from a group or array row.
 
-Checkbox supports `Required`, boolean `Default`, localization, indexing/uniqueness where meaningful,
-and common presentation options. Query it with boolean equality rather than the strings `"true"`
+You can also make the field required, set a boolean default, store a different value per locale,
+or customize its appearance with `Admin`. Query it with boolean equality rather than the strings `"true"`
 or `"false"`.
 
 ## Common mistakes {#troubleshooting}

@@ -101,34 +101,34 @@ dataset between adapters is an application-owned export, transform, validation, 
    Keep the generated address, admin assets, handler options, and server options around it. Lazy
    opening keeps config resolution and generation offline:
 
-   ```go title="cmd/server/main.go" remove={7,15} add={8,16-20}
+   ```go title="cmd/server/main.go" remove={8,15} add={7,16-20}
    import (
-       "context"
-       "os"
+     "context"
+     "os"
 
-       "github.com/acme/content/internal/adminassets"
-       "github.com/riducms/ridu"
-       "github.com/riducms/ridu/adapters/sqlite"
-       "github.com/riducms/ridu/adapters/postgres"
-       "github.com/riducms/ridu/store"
+     "github.com/acme/content/internal/adminassets"
+     "github.com/riducms/ridu"
+     "github.com/riducms/ridu/adapters/postgres"
+     "github.com/riducms/ridu/adapters/sqlite"
+     "github.com/riducms/ridu/store"
    )
 
    func runtimeOptions(applicationConfig ridu.Config) []ridu.ExecuteOption {
-       return []ridu.ExecuteOption{
-           ridu.WithStore(func(ctx context.Context) (store.Store, error) {
-               return sqlite.Open(ctx, sqliteDatabasePath())
-               return postgres.OpenWithConfig(ctx, postgres.PoolConfig{
-                   DatabaseURL:              os.Getenv("DATABASE_URL"),
-                   AllowInsecureTransport:   envBool("RIDU_ALLOW_INSECURE_DATABASE"),
-                   MaxUploadLockConnections: envInt32("RIDU_POSTGRES_UPLOAD_LOCK_CONNECTIONS"),
-               })
-           }),
-           ridu.WithAddress(env("RIDU_ADDRESS", ":8080")),
-           ridu.WithHandlerOptions(ridu.HandlerOptions{
-               AdminAssets:    adminassets.FS(),
-               AllowedOrigins: envList("RIDU_ALLOWED_ORIGINS"),
-           }),
-       }
+     return []ridu.ExecuteOption{
+       ridu.WithStore(func(ctx context.Context) (store.Store, error) {
+         return sqlite.Open(ctx, sqliteDatabasePath())
+         return postgres.OpenWithConfig(ctx, postgres.PoolConfig{
+           DatabaseURL:              os.Getenv("DATABASE_URL"),
+           AllowInsecureTransport:   envBool("RIDU_ALLOW_INSECURE_DATABASE"),
+           MaxUploadLockConnections: envInt32("RIDU_POSTGRES_UPLOAD_LOCK_CONNECTIONS"),
+         })
+       }),
+       ridu.WithAddress(env("RIDU_ADDRESS", ":8080")),
+       ridu.WithHandlerOptions(ridu.HandlerOptions{
+         AdminAssets:    adminassets.FS(),
+         AllowedOrigins: envList("RIDU_ALLOWED_ORIGINS"),
+       }),
+     }
    }
    ```
 
@@ -191,12 +191,12 @@ pool or session tuning:
 return postgres.OpenWithConfig(ctx, postgres.PoolConfig{
 	DatabaseURL:                     os.Getenv("DATABASE_URL"),
 	ApplicationName:                 "acme-content",
-	MaxConnections:                 30,
-	MinConnections:                 2,
-	MaxUploadLockConnections:       4,
-	ConnectTimeout:                 10 * time.Second,
-	StatementTimeout:               45 * time.Second,
-	LockTimeout:                    5 * time.Second,
+	MaxConnections:                  30,
+	MinConnections:                  2,
+	MaxUploadLockConnections:        4,
+	ConnectTimeout:                  10 * time.Second,
+	StatementTimeout:                45 * time.Second,
+	LockTimeout:                     5 * time.Second,
 	IdleInTransactionSessionTimeout: 30 * time.Second,
 })
 ```
@@ -239,22 +239,24 @@ use a least-privilege application role.
 
 ## Readiness checks {#readiness}
 
-The store exposes connectivity, manifest, and exact-history checks:
+The store exposes connectivity, manifest, physical-schema, and exact-history checks:
 
-| Check                                            | Required state                                                                                                                                                        |
-| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Ping(ctx)`                                      | Both document and upload-lock pools can reach PostgreSQL.                                                                                                             |
-| `Ready(ctx, manifest)`                           | Ping succeeds, the immutable migration ledger exists, its latest complete digest exactly matches the executable manifest, and no phased migration work is incomplete. |
-| `ReadyWithMigrationHistory(ctx, manifest, hash)` | Ordinary readiness passes and the complete ordered ledger matches the filename/digest fingerprint embedded by `ridu build`.                                           |
+| Check                                            | Required state                                                                                                                                                                                                          |
+| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Ping(ctx)`                                      | Both document and upload-lock pools can reach PostgreSQL.                                                                                                                                                               |
+| `Ready(ctx, manifest)`                           | Ping succeeds, the immutable migration ledger exists, its latest complete digest exactly matches the executable manifest, no phased migration work is incomplete, and the expected physical schema passes verification. |
+| `ReadyWithMigrationHistory(ctx, manifest, hash)` | Ordinary readiness passes and the complete ordered ledger matches the filename/digest fingerprint embedded by `ridu build`.                                                                                             |
 
 `ridu.Execute` runs aggregate readiness before binding its listener and includes the same store
 check in `/readyz`. Production uses the exact-history form, so it also rejects a missing, altered,
 renamed, reordered, or additional artifact even when the final manifest happens to be unchanged.
 An older binary becomes unready after a migration, and a new binary is unready before it.
 
-Readiness does not inspect every physical table and index. Run `ridu migrate status` for complete
-ledger, phase/step, and physical-schema drift inspection. See [Production](/docs/production/) for
-probe and drain behaviour.
+Readiness verifies the expected Ridu-managed physical schema, including required tables and
+indexes, index build health, and trigger enablement. It shares this non-mutating verification with
+migration status and completed-migration preflight. Run `ridu migrate status` for the detailed
+ledger, phase/step, and physical-schema drift report. See [Production](/docs/production/) for probe
+and drain behaviour.
 
 ## Transactions and access remain atomic {#transactions}
 

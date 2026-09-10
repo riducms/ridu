@@ -28,6 +28,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/riducms/ridu"
+	"github.com/riducms/ridu/adapters/mongodb"
 	"github.com/riducms/ridu/adapters/postgres"
 	sqliteadapter "github.com/riducms/ridu/adapters/sqlite"
 	localstorage "github.com/riducms/ridu/adapters/storage/local"
@@ -50,6 +51,26 @@ func main() {
 func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	address := os.Getenv("RIDU_BROWSER_ADDRESS")
+	if address == "" {
+		address = "127.0.0.1:18081"
+	}
+	previewAddress := os.Getenv("RIDU_BROWSER_PREVIEW_ADDRESS")
+	if previewAddress == "" {
+		previewAddress = "127.0.0.1:18082"
+	}
+	adminListener, previewListener, err := listenFixtureServers(address, previewAddress)
+	if err != nil {
+		return err
+	}
+	defer adminListener.Close()
+	defer previewListener.Close()
+	address, previewAddress = adminListener.Addr().String(), previewListener.Addr().String()
+	// Worker fixtures bind port zero. Resolve the preview origin before building
+	// the config so preview tokens and links use this worker's actual listener.
+	if err := os.Setenv("RIDU_BROWSER_PREVIEW_ADDRESS", previewAddress); err != nil {
+		return err
+	}
 	uploadRoot, err := os.MkdirTemp("", "ridu-admin-uploads-")
 	if err != nil {
 		return err
@@ -64,10 +85,6 @@ func run() error {
 	if bootstrapFixture {
 		config = bootstrapFixtureConfig()
 	}
-	address := os.Getenv("RIDU_BROWSER_ADDRESS")
-	if address == "" {
-		address = "127.0.0.1:18081"
-	}
 	resetToken := os.Getenv("RIDU_BROWSER_RESET_TOKEN")
 	if !bootstrapFixture && resetToken != "" {
 		if err := requireLoopbackListener(address); err != nil {
@@ -79,9 +96,23 @@ func run() error {
 		adminAssets = os.DirFS(directory)
 	}
 	baseDatabaseURL := os.Getenv("RIDU_POSTGRES_URL")
+	mongoDatabaseURL := os.Getenv("RIDU_MONGODB_URL")
 	sqliteFixture := os.Getenv("RIDU_SQLITE_FIXTURE") == "true"
-	if baseDatabaseURL != "" && sqliteFixture {
-		return fmt.Errorf("RIDU_POSTGRES_URL and RIDU_SQLITE_FIXTURE cannot be used together")
+	if (baseDatabaseURL != "" && (sqliteFixture || mongoDatabaseURL != "")) || (sqliteFixture && mongoDatabaseURL != "") {
+		return fmt.Errorf("select only one of RIDU_POSTGRES_URL, RIDU_SQLITE_FIXTURE and RIDU_MONGODB_URL")
+	}
+	if mongoDatabaseURL != "" {
+		mongoDatabaseURL, err = mongoFixtureURL(mongoDatabaseURL)
+		if err != nil {
+			return err
+		}
+		defer func() {
+			cleanupContext, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+			if cleanupErr := resetMongoFixture(cleanupContext, mongoDatabaseURL); cleanupErr != nil {
+				log.Printf("clean up MongoDB fixture: %v", cleanupErr)
+			}
+		}()
 	}
 	sqlitePath := ""
 	if sqliteFixture {
@@ -120,7 +151,7 @@ func run() error {
 			return err
 		}
 	}
-	applicationHandler, closeBackend, err := fixtureApplicationHandler(ctx, config, bootstrapFixture, adminAssets, databaseURL, sqlitePath)
+	applicationHandler, closeBackend, err := fixtureApplicationHandler(ctx, config, bootstrapFixture, adminAssets, databaseURL, sqlitePath, mongoDatabaseURL)
 	if err != nil {
 		return err
 	}
@@ -160,10 +191,16 @@ func run() error {
 					return
 				}
 			}
+			if mongoDatabaseURL != "" {
+				if resetErr := resetMongoFixture(request.Context(), mongoDatabaseURL); resetErr != nil {
+					http.Error(response, resetErr.Error(), http.StatusInternalServerError)
+					return
+				}
+			}
 			// The replacement handler outlives this reset request. Build it with the
 			// server context so pooled database work is not tied to a cancelled
 			// request context after the 204 response is sent.
-			replacement, replacementClose, resetErr := fixtureApplicationHandler(ctx, config, false, adminAssets, databaseURL, sqlitePath)
+			replacement, replacementClose, resetErr := fixtureApplicationHandler(ctx, config, false, adminAssets, databaseURL, sqlitePath, mongoDatabaseURL)
 			if resetErr != nil {
 				http.Error(response, resetErr.Error(), http.StatusInternalServerError)
 				return
@@ -178,20 +215,13 @@ func run() error {
 		defer activeMu.RUnlock()
 		activeHandler.ServeHTTP(response, request)
 	})
-	previewAddress := os.Getenv("RIDU_BROWSER_PREVIEW_ADDRESS")
-	if previewAddress == "" {
-		previewAddress = "127.0.0.1:18082"
-	}
 	previewMux := http.NewServeMux()
 	previewMux.HandleFunc("GET /preview/posts/{id}", func(response http.ResponseWriter, request *http.Request) {
-		livePreview(response, request, "http://"+address)
+		livePreview(response, request, "http://"+address, "posts")
 	})
-	adminListener, previewListener, err := listenFixtureServers(address, previewAddress)
-	if err != nil {
-		return err
-	}
-	defer adminListener.Close()
-	defer previewListener.Close()
+	previewMux.HandleFunc("GET /preview/block-articles/{id}", func(response http.ResponseWriter, request *http.Request) {
+		livePreview(response, request, "http://"+address, "block-articles")
+	})
 	adminServer := &http.Server{Handler: mux}
 	previewServer := &http.Server{Handler: previewMux}
 	serveErrors := make(chan error, 2)
@@ -246,8 +276,8 @@ func resetTokenMatches(provided, expected string) bool {
 	return expected != "" && subtle.ConstantTimeCompare([]byte(provided), []byte(expected)) == 1
 }
 
-func fixtureApplicationHandler(ctx context.Context, config ridu.Config, bootstrapFixture bool, adminAssets fs.FS, databaseURL, sqlitePath string) (http.Handler, func(), error) {
-	backend, closeBackend, err := fixtureBackend(ctx, config, databaseURL, sqlitePath)
+func fixtureApplicationHandler(ctx context.Context, config ridu.Config, bootstrapFixture bool, adminAssets fs.FS, databaseURL, sqlitePath, mongoDatabaseURL string) (http.Handler, func(), error) {
+	backend, closeBackend, err := fixtureBackend(ctx, config, databaseURL, sqlitePath, mongoDatabaseURL)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -262,7 +292,7 @@ func fixtureApplicationHandler(ctx context.Context, config ridu.Config, bootstra
 			return nil, nil, err
 		}
 	}
-	return application.Handler(ridu.HandlerOptions{
+	options := ridu.HandlerOptions{
 		AllowedOrigins: []string{"http://127.0.0.1:5173"},
 		AdminAssets:    adminAssets,
 		// Browser cases intentionally authenticate for each flow. Keep the fixture
@@ -275,10 +305,27 @@ func fixtureApplicationHandler(ctx context.Context, config ridu.Config, bootstra
 			}
 			log.Printf("fixture request failed: method=%s path=%s request_id=%s error_chain=%q", event.Method, event.Path, event.RequestID, chain)
 		},
-	}), closeBackend, nil
+	}
+	return blockSchemaRecoveryFixture(application.Handler(options), config, backend, options), closeBackend, nil
 }
 
-func fixtureBackend(ctx context.Context, config ridu.Config, databaseURL, sqlitePath string) (store.Store, func(), error) {
+func fixtureBackend(ctx context.Context, config ridu.Config, databaseURL, sqlitePath, mongoDatabaseURL string) (store.Store, func(), error) {
+	if mongoDatabaseURL != "" {
+		backend, err := mongodb.OpenWithConfig(ctx, mongodb.Config{DatabaseURL: mongoDatabaseURL, AllowInsecureTransport: true})
+		if err != nil {
+			return nil, nil, err
+		}
+		manifest, err := ridu.Resolve(config)
+		if err != nil {
+			_ = backend.Close()
+			return nil, nil, err
+		}
+		if err := backend.SyncIndexes(ctx, manifest); err != nil {
+			_ = backend.Close()
+			return nil, nil, err
+		}
+		return backend, func() { _ = backend.Close() }, nil
+	}
 	if databaseURL == "" && sqlitePath == "" {
 		return teststore.New(), func() {}, nil
 	}
@@ -457,58 +504,63 @@ func acquirePostgresFixtureLock(ctx context.Context, databaseURL, schemaName str
 	}, nil
 }
 
-func livePreview(response http.ResponseWriter, request *http.Request, adminOrigin string) {
-	title, summary := serverRenderedPreview(request, adminOrigin)
+func livePreview(response http.ResponseWriter, request *http.Request, adminOrigin, collection string) {
+	title, summary, blocks := serverRenderedPreview(request, adminOrigin, collection)
+	blocksHidden := ""
+	if blocks == "" {
+		blocksHidden = " hidden"
+	}
 	response.Header().Set("Content-Type", "text/html; charset=utf-8")
 	response.Header().Set("Cache-Control", "no-store")
 	_, _ = io.WriteString(response, `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Ridu live preview</title><style>
 *{box-sizing:border-box}body{margin:0;min-height:100vh;background:#f4f0e8;color:#181714;font-family:ui-sans-serif,system-ui,sans-serif}main{padding:clamp(2rem,8vw,8rem)}.kicker{font-size:12px;letter-spacing:.16em;text-transform:uppercase}h1{font-family:Georgia,serif;font-size:clamp(3rem,9vw,8rem);line-height:1;margin:1rem 0}p{font-size:clamp(1rem,2vw,1.5rem);line-height:1.6;max-width:760px}
-</style></head><body><main><div class="kicker">Ridu comparison preview</div><h1 id="title">`+html.EscapeString(title)+`</h1><p id="summary">`+html.EscapeString(summary)+`</p></main>
+</style></head><body><main><div class="kicker">Ridu comparison preview</div><h1 id="title">`+html.EscapeString(title)+`</h1><p id="summary">`+html.EscapeString(summary)+`</p><pre data-preview-blocks`+blocksHidden+`>`+html.EscapeString(blocks)+`</pre></main>
 <script>const adminOrigin=`+strconv.Quote(adminOrigin)+`;
 const channel=new URL(location.href).searchParams.get('__ridu_preview');
 const target=window.opener||window.parent;
 function ready(){if(channel&&target!==window)target.postMessage({type:'ridu-live-preview',ready:true,channel},adminOrigin)}
-addEventListener('message',(event)=>{if(event.origin!==adminOrigin||event.source!==target||!event.data||event.data.type!=='ridu-live-preview'||event.data.channel!==channel||!Number.isSafeInteger(event.data.sequence)||typeof event.data.data!=='object')return;const data=event.data.data;document.querySelector('#title').textContent=typeof data.title==='string'&&data.title?data.title:'Live preview';document.querySelector('#summary').textContent=typeof data.summary==='string'&&data.summary?data.summary:'Edit the Ridu form to stream the current draft into this viewport.'});
+addEventListener('message',(event)=>{if(event.origin!==adminOrigin||event.source!==target||!event.data||event.data.type!=='ridu-live-preview'||event.data.channel!==channel||!Number.isSafeInteger(event.data.sequence)||typeof event.data.data!=='object')return;const data=event.data.data;document.querySelector('#title').textContent=typeof data.title==='string'&&data.title?data.title:'Live preview';document.querySelector('#summary').textContent=typeof data.summary==='string'&&data.summary?data.summary:'Edit the Ridu form to stream the current draft into this viewport.';const blocks=document.querySelector('[data-preview-blocks]');blocks.textContent=data.body?JSON.stringify(data.body,null,2):'';blocks.hidden=!data.body});
 addEventListener('pageshow',ready);addEventListener('focus',ready);addEventListener('online',ready);ready();
 </script></body></html>`)
 }
 
-func serverRenderedPreview(request *http.Request, adminOrigin string) (string, string) {
+func serverRenderedPreview(request *http.Request, adminOrigin, collection string) (string, string, string) {
 	const fallbackTitle = "Live preview"
 	const fallbackSummary = "Edit the Ridu form to stream the current draft into this viewport."
 	token := request.URL.Query().Get("__ridu_preview_token")
 	documentID := request.PathValue("id")
 	if token == "" || documentID == "" {
-		return fallbackTitle, fallbackSummary
+		return fallbackTitle, fallbackSummary, ""
 	}
 	previewRequest, err := http.NewRequestWithContext(
 		request.Context(),
 		http.MethodGet,
-		adminOrigin+"/api/preview/collections/posts/"+url.PathEscape(documentID),
+		adminOrigin+"/api/preview/collections/"+url.PathEscape(collection)+"/"+url.PathEscape(documentID),
 		nil,
 	)
 	if err != nil {
-		return fallbackTitle, fallbackSummary
+		return fallbackTitle, fallbackSummary, ""
 	}
 	previewRequest.Header.Set("Authorization", "Bearer "+token)
 	previewResponse, err := http.DefaultClient.Do(previewRequest)
 	if err != nil {
-		return fallbackTitle, fallbackSummary
+		return fallbackTitle, fallbackSummary, ""
 	}
 	defer previewResponse.Body.Close()
 	if previewResponse.StatusCode != http.StatusOK {
-		return fallbackTitle, fallbackSummary
+		return fallbackTitle, fallbackSummary, ""
 	}
 	var envelope struct {
 		Doc struct {
-			Title   string `json:"title"`
-			Summary string `json:"summary"`
+			Title   string          `json:"title"`
+			Summary string          `json:"summary"`
+			Body    json.RawMessage `json:"body"`
 		} `json:"doc"`
 	}
 	if err := json.NewDecoder(previewResponse.Body).Decode(&envelope); err != nil {
-		return fallbackTitle, fallbackSummary
+		return fallbackTitle, fallbackSummary, ""
 	}
 	if envelope.Doc.Title == "" {
 		envelope.Doc.Title = fallbackTitle
@@ -516,5 +568,5 @@ func serverRenderedPreview(request *http.Request, adminOrigin string) (string, s
 	if envelope.Doc.Summary == "" {
 		envelope.Doc.Summary = fallbackSummary
 	}
-	return envelope.Doc.Title, envelope.Doc.Summary
+	return envelope.Doc.Title, envelope.Doc.Summary, string(envelope.Doc.Body)
 }

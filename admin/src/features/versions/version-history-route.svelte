@@ -480,7 +480,7 @@
 						{runtime.i18n.t("versions:publishDateTime")}
 						<DateValueControl
 							id="scheduled-publish-at"
-							appearance="dayAndTime"
+							appearance="date-time"
 							value={scheduleAt}
 							label={runtime.i18n.t("versions:publishDateTime")}
 							onValueChange={(next) => (scheduleAt = next)}

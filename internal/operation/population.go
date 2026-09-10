@@ -5,6 +5,7 @@ import (
 
 	"github.com/riducms/ridu/internal/localization"
 	populationwalk "github.com/riducms/ridu/internal/population"
+	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
@@ -57,7 +58,8 @@ func (engine *Engine) preparePopulations(collection Collection, operationContext
 			continue
 		}
 		populationContext := operationContext
-		populationContext.Operation, populationContext.Collection = Read, targetCollection.Schema
+		populationContext.projections = nil
+		populationContext.Operation, populationContext.Collection = operation.Read, targetCollection.Schema
 		populationContext.ID, populationContext.Data = "", store.Values{}
 		populationContext.Value, populationContext.SiblingData = store.Value{}, nil
 		populationContext.Document, populationContext.Original, populationContext.FieldPath = nil, nil, ""

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/riducms/ridu/internal/primitivefield"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
@@ -55,6 +56,7 @@ const (
 
 type mongoPredicatePath struct {
 	storagePath        string
+	primitiveList      *schema.Field
 	objectAncestors    []string
 	localePaths        []string
 	kind               mongoScalarKind
@@ -77,6 +79,9 @@ type mongoSortPlan struct {
 // filter. Filter and Access are deliberately siblings in the same $and so an
 // adapter cannot authorize a broader read and post-filter it afterward.
 func requestPredicate(request store.Request, requireID bool) (bson.D, error) {
+	if err := primitivefield.ValidateRequest(request); err != nil {
+		return nil, err
+	}
 	predicates := make([]bson.D, 0, 7)
 	if requireID {
 		if request.ID == "" {
@@ -285,7 +290,13 @@ func compileMongoNode(collection schema.Collection, node query.Node, role string
 		}
 		resolved, err := resolveMongoPredicatePath(collection, node.Comparison.Path, role, scope)
 		if err != nil {
+			if role == "filter" {
+				return nil, primitivefield.UnsupportedPath(collection.Fields, node.Comparison.Path, err)
+			}
 			return nil, err
+		}
+		if resolved.primitiveList != nil {
+			return compileMongoPrimitiveList(resolved, *node.Comparison)
 		}
 		if len(resolved.localePaths) != 0 {
 			return compileMongoLocalizedComparison(resolved, *node.Comparison)
@@ -580,13 +591,13 @@ func mongoObjectKeyUniquenessExpression(value string, fields []schema.Field) bso
 		case field.Localized:
 			conditions = append(conditions, mongoObjectKeyUniquenessExpression(fieldValue, nil))
 		case field.Type == schema.FieldTypeGroup:
-			conditions = append(conditions, mongoObjectKeyUniquenessExpression(fieldValue, field.Nested.Fields))
+			conditions = append(conditions, mongoObjectKeyUniquenessExpression(fieldValue, field.Nested.ResolvedFields()))
 		case field.Type == schema.FieldTypeArray:
-			conditions = append(conditions, mongoRepeatedObjectKeyUniquenessExpression(fieldValue, field.Nested.Fields))
+			conditions = append(conditions, mongoRepeatedObjectKeyUniquenessExpression(fieldValue, field.Nested.ResolvedFields()))
 		case field.Type == schema.FieldTypeBlocks:
 			var blockFields []schema.Field
-			for _, block := range field.Blocks.Types {
-				blockFields = append(blockFields, block.Fields...)
+			for _, block := range field.Blocks.ResolvedTypes() {
+				blockFields = append(blockFields, block.ResolvedFields()...)
 			}
 			conditions = append(conditions, mongoRepeatedObjectKeyUniquenessExpression(fieldValue, blockFields))
 		case field.Type == schema.FieldTypeRelationship && field.Relationship != nil && field.Relationship.Polymorphic:
@@ -639,7 +650,7 @@ func mongoRelationshipIDLengthPredicates(fields []schema.Field, prefix string) [
 		}
 		path := prefix + field.Name
 		if field.Type == schema.FieldTypeGroup {
-			predicates = append(predicates, mongoRelationshipIDLengthPredicates(field.Nested.Fields, path+".")...)
+			predicates = append(predicates, mongoRelationshipIDLengthPredicates(field.Nested.ResolvedFields(), path+".")...)
 			continue
 		}
 		reference := mongoReferenceDetails(field)
@@ -710,20 +721,20 @@ func mongoRepeatedRootJSONSchema(root schema.Field, locales []schema.LocaleCode)
 	var item bson.D
 	switch root.Type {
 	case schema.FieldTypeSelect:
-		choices := make(bson.A, len(root.Select.Choices))
-		for index, choice := range root.Select.Choices {
-			choices[index] = choice.Value
+		options := make(bson.A, len(root.Select.Options))
+		for index, option := range root.Select.Options {
+			options[index] = option.Value
 		}
 		item = bson.D{
 			{Key: "bsonType", Value: "string"},
-			{Key: "enum", Value: choices},
+			{Key: "enum", Value: options},
 		}
 	case schema.FieldTypeArray:
-		item = mongoCollectionObjectJSONSchema(root.Nested.Fields, true, "", locales)
+		item = mongoCollectionObjectJSONSchema(root.Nested.ResolvedFields(), true, "", locales)
 	case schema.FieldTypeBlocks:
-		blockSchemas := make(bson.A, len(root.Blocks.Types))
-		for index, block := range root.Blocks.Types {
-			blockSchemas[index] = mongoCollectionObjectJSONSchema(block.Fields, true, block.Key, locales)
+		blockSchemas := make(bson.A, len(root.Blocks.ResolvedTypes()))
+		for index, block := range root.Blocks.ResolvedTypes() {
+			blockSchemas[index] = mongoCollectionObjectJSONSchema(block.ResolvedFields(), true, block.Slug, locales)
 		}
 		item = bson.D{{Key: "oneOf", Value: blockSchemas}}
 	}
@@ -743,11 +754,17 @@ func mongoRepeatedRootJSONSchema(root schema.Field, locales []schema.LocaleCode)
 	if root.Type == schema.FieldTypeArray && root.Nested.MinRows > minimum {
 		minimum = root.Nested.MinRows
 	}
+	if root.Type == schema.FieldTypeBlocks && root.Blocks.MinRows > minimum {
+		minimum = root.Blocks.MinRows
+	}
 	if minimum > 0 {
 		result = append(result, bson.E{Key: "minItems", Value: minimum})
 	}
 	if root.Type == schema.FieldTypeArray && root.Nested.MaxRows > 0 {
 		result = append(result, bson.E{Key: "maxItems", Value: root.Nested.MaxRows})
+	}
+	if root.Type == schema.FieldTypeBlocks && root.Blocks.MaxRows > 0 {
+		result = append(result, bson.E{Key: "maxItems", Value: root.Blocks.MaxRows})
 	}
 	if root.Type == schema.FieldTypeSelect {
 		result = append(result, bson.E{Key: "uniqueItems", Value: true})
@@ -795,8 +812,11 @@ func mongoCollectionFieldJSONSchema(field schema.Field, locales []schema.LocaleC
 	if field.Localized {
 		return mongoLocalizedFieldJSONSchema(field, locales)
 	}
+	if primitivefield.IsList(field) {
+		return mongoPrimitiveListJSONSchema(field)
+	}
 	if field.Type == schema.FieldTypeGroup {
-		result := mongoCollectionObjectJSONSchema(field.Nested.Fields, false, "", locales)
+		result := mongoCollectionObjectJSONSchema(field.Nested.ResolvedFields(), false, "", locales)
 		if !field.Required {
 			result[0].Value = bson.A{"object", "null"}
 		}
@@ -976,17 +996,17 @@ func mongoScalarFieldJSONSchema(field schema.Field, nullable bool) bson.D {
 		)
 	}
 	if (field.Type == schema.FieldTypeSelect || field.Type == schema.FieldTypeRadio) && field.Select != nil {
-		choices := make(bson.A, 0, len(field.Select.Choices)+2)
-		for _, choice := range field.Select.Choices {
-			choices = append(choices, choice.Value)
+		options := make(bson.A, 0, len(field.Select.Options)+2)
+		for _, option := range field.Select.Options {
+			options = append(options, option.Value)
 		}
 		if !field.Required {
-			choices = append(choices, "")
+			options = append(options, "")
 		}
 		if nullable {
-			choices = append(choices, nil)
+			options = append(options, nil)
 		}
-		result = append(result, bson.E{Key: "enum", Value: choices})
+		result = append(result, bson.E{Key: "enum", Value: options})
 	}
 	return result
 }
@@ -1229,6 +1249,13 @@ func mongoNodeRepeatedShapeGuards(collection schema.Collection, node query.Node,
 			if err != nil {
 				return err
 			}
+			if resolved.primitiveList != nil {
+				key := "primitive-list:" + resolved.storagePath
+				if _, duplicate := seen[key]; !duplicate {
+					seen[key] = struct{}{}
+					guards = append(guards, mongoPrimitiveListShape(resolved))
+				}
+			}
 			if resolved.repeated != mongoNotRepeated {
 				key := fmt.Sprintf(
 					"%d:%s:%s:%s:%s:%s:%s",
@@ -1358,7 +1385,7 @@ func resolveMongoPredicatePath(collection schema.Collection, path query.Path, ro
 			return mongoPredicatePath{}, fmt.Errorf("MongoDB %s field %q is not a non-repeated group and cannot be traversed", role, strings.Join(segments[:index+1], "."))
 		}
 		objectAncestors = append(objectAncestors, scope.path(mongoAuthoredValuesPath+strings.Join(storageSegments, ".")))
-		child, childFound := mongoFieldNamed(field.Nested.Fields, segments[index+1])
+		child, childFound := mongoFieldNamed(field.Nested.ResolvedFields(), segments[index+1])
 		if !childFound {
 			return mongoPredicatePath{}, fmt.Errorf("MongoDB %s field %q is not in collection %q", role, path.String(), collection.Slug)
 		}
@@ -1367,6 +1394,12 @@ func resolveMongoPredicatePath(collection schema.Collection, path query.Path, ro
 	}
 
 	kind, supported := mongoScalarFieldKind(field)
+	if primitivefield.IsList(field) {
+		if !mongoRepeatedPredicateRole(role) {
+			return mongoPredicatePath{}, fmt.Errorf("MongoDB %s does not support primitive list %q", role, path.String())
+		}
+		kind, supported = mongoNumberScalar, true
+	}
 	if !supported {
 		return mongoPredicatePath{}, fmt.Errorf("MongoDB %s path %q ends at unsupported non-scalar field type %q", role, path.String(), field.Type)
 	}
@@ -1374,6 +1407,10 @@ func resolveMongoPredicatePath(collection schema.Collection, path query.Path, ro
 		storagePath:     scope.path(mongoAuthoredValuesPath + strings.Join(storageSegments, ".")),
 		objectAncestors: objectAncestors,
 		kind:            kind,
+	}
+	if primitivefield.IsList(field) {
+		copy := field
+		resolved.primitiveList = &copy
 	}
 	if localized {
 		resolved.objectAncestors = append(resolved.objectAncestors, resolved.storagePath)
@@ -1463,18 +1500,18 @@ func resolveMongoRepeatedPredicatePath(
 		}
 		resolved.repeated = mongoRepeatedArray
 		segmentIndex = 1
-		field, found = mongoFieldNamed(root.Nested.Fields, segments[segmentIndex])
+		field, found = mongoFieldNamed(root.Nested.ResolvedFields(), segments[segmentIndex])
 	case schema.FieldTypeBlocks:
 		if root.Blocks == nil || len(segments) < 3 {
 			return mongoPredicatePath{}, fmt.Errorf("MongoDB %s path %q must select a block type and scalar field inside blocks %q", role, path.String(), root.Name)
 		}
 		resolved.repeated = mongoRepeatedBlocks
 		resolved.blockType = segments[1]
-		resolved.allowedBlockTypes = make([]string, len(root.Blocks.Types))
+		resolved.allowedBlockTypes = make([]string, len(root.Blocks.ResolvedTypes()))
 		var block schema.BlockType
-		for index, candidate := range root.Blocks.Types {
-			resolved.allowedBlockTypes[index] = candidate.Key
-			if candidate.Key == resolved.blockType {
+		for index, candidate := range root.Blocks.ResolvedTypes() {
+			resolved.allowedBlockTypes[index] = candidate.Slug
+			if candidate.Slug == resolved.blockType {
 				block = candidate
 				found = true
 			}
@@ -1483,7 +1520,7 @@ func resolveMongoRepeatedPredicatePath(
 			return mongoPredicatePath{}, fmt.Errorf("MongoDB %s block type %q is not in field %q", role, resolved.blockType, root.Name)
 		}
 		segmentIndex = 2
-		field, found = mongoFieldNamed(block.Fields, segments[segmentIndex])
+		field, found = mongoFieldNamed(block.ResolvedFields(), segments[segmentIndex])
 	default:
 		return mongoPredicatePath{}, fmt.Errorf("MongoDB %s path %q is not a supported repeated field", role, path.String())
 	}
@@ -1510,7 +1547,7 @@ func resolveMongoRepeatedPredicatePath(
 		}
 		resolved.rowObjectAncestors = append(resolved.rowObjectAncestors, strings.Join(rowSegments, "."))
 		segmentIndex++
-		field, found = mongoFieldNamed(field.Nested.Fields, segments[segmentIndex])
+		field, found = mongoFieldNamed(field.Nested.ResolvedFields(), segments[segmentIndex])
 		if !found {
 			return mongoPredicatePath{}, fmt.Errorf("MongoDB %s field %q is not in collection %q", role, path.String(), collection.Slug)
 		}
@@ -1589,7 +1626,7 @@ func resolveMongoProjectionPath(collection schema.Collection, path query.Path) (
 		if field.Type != schema.FieldTypeGroup || field.Nested == nil {
 			return "", fmt.Errorf("projection field %q is not a non-repeated group and cannot be traversed", strings.Join(segments[:index+1], "."))
 		}
-		child, childFound := mongoFieldNamed(field.Nested.Fields, segments[index+1])
+		child, childFound := mongoFieldNamed(field.Nested.ResolvedFields(), segments[index+1])
 		if !childFound {
 			return "", fmt.Errorf("projection field %q is not in collection %q", path.String(), collection.Slug)
 		}
@@ -1600,7 +1637,7 @@ func resolveMongoProjectionPath(collection schema.Collection, path query.Path) (
 		return mongoAuthoredValuesPath + strings.Join(storageSegments, "."), nil
 	}
 	if field.Type != schema.FieldTypeGroup && field.Type != schema.FieldTypeRelationship && field.Type != schema.FieldTypeUpload &&
-		field.Type != schema.FieldTypeJSON && field.Type != schema.FieldTypePlugin && field.Type != schema.FieldTypePoint {
+		field.Type != schema.FieldTypeJSON && field.Type != schema.FieldTypePlugin && field.Type != schema.FieldTypePoint && !primitivefield.IsList(field) {
 		if _, supported := mongoScalarFieldKind(field); !supported {
 			return "", fmt.Errorf("projection path %q ends at unsupported field type %q", path.String(), field.Type)
 		}

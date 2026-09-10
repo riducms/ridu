@@ -22,6 +22,20 @@ Ridu's optional MCP plugin lets coding agents and other Model Context Protocol c
 read selected CMS content. It is a compiled Go plugin served by the application binary at
 `/api/mcp`; no Node server or separate authorization layer is introduced.
 
+## Configuration {#configuration}
+
+| Option         | Default    | What it controls                                                                |
+| -------------- | ---------- | ------------------------------------------------------------------------------- |
+| `Path`         | `/api/mcp` | Absolute transport path below `/api`, without a trailing slash.                 |
+| `MaxBodyBytes` | 1 MiB      | Maximum MCP request body size.                                                  |
+| `DefaultLimit` | `20`       | Collection documents returned when a tool call omits its limit.                 |
+| `MaxLimit`     | `100`      | Highest collection limit a tool call may request.                               |
+| `Collections`  | None       | Explicit collection allowlist; each entry can add a task-focused `Description`. |
+| `Globals`      | None       | Explicit global allowlist; each entry can add a task-focused `Description`.     |
+
+`ridumcp.New(config)` returns the compiled plugin. Only listed resources become tools, and every
+tool call still uses the authenticated actor's ordinary Ridu access rules.
+
 ## Use it in a new project {#new-project}
 
 Start with a generated project, enable API keys on the auth collection that will own agent

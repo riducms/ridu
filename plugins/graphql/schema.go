@@ -366,8 +366,8 @@ func (builder *schemaBuilder) fieldAccessType(name string, fields []schema.Field
 		operations := enginegraphql.Fields{
 			"read": &enginegraphql.Field{Type: builder.permissionType()}, "create": &enginegraphql.Field{Type: builder.permissionType()}, "update": &enginegraphql.Field{Type: builder.permissionType()},
 		}
-		if field.Nested != nil {
-			operations["fields"] = &enginegraphql.Field{Type: builder.fieldAccessType(fieldTypeName+"Fields", field.Nested.Fields)}
+		if field.Nested != nil && len(field.Nested.ResolvedFields()) != 0 {
+			operations["fields"] = &enginegraphql.Field{Type: builder.fieldAccessType(fieldTypeName+"Fields", field.Nested.ResolvedFields())}
 		}
 		result[fieldName(field.Name)] = &enginegraphql.Field{Type: enginegraphql.NewObject(enginegraphql.ObjectConfig{Name: fieldTypeName, Fields: operations})}
 	}
@@ -414,8 +414,8 @@ func fieldCapabilityMap(fields []schema.Field, capabilities map[string]ridu.Fiel
 		value := map[string]interface{}{
 			"read": permission(current.Read), "create": permission(current.Create), "update": permission(current.Update),
 		}
-		if field.Nested != nil {
-			value["fields"] = fieldCapabilityMap(field.Nested.Fields, capabilities)
+		if field.Nested != nil && len(field.Nested.ResolvedFields()) != 0 {
+			value["fields"] = fieldCapabilityMap(field.Nested.ResolvedFields(), capabilities)
 		}
 		result[fieldName(field.Name)] = value
 	}
@@ -514,6 +514,9 @@ func (builder *schemaBuilder) addCollection(current resource, queries, mutations
 			createArgs["data"] = &enginegraphql.ArgumentConfig{Type: enginegraphql.NewNonNull(create)}
 		}
 		if err := addRootField(mutations, "create"+current.name, &enginegraphql.Field{Type: object, Args: createArgs, Resolve: func(params enginegraphql.ResolveParams) (interface{}, error) {
+			if err := primitiveListInputError(params, current.Fields); err != nil {
+				return nil, clientError(err)
+			}
 			request := requestFromContext(params)
 			var document store.Document
 			var err error
@@ -536,6 +539,9 @@ func (builder *schemaBuilder) addCollection(current resource, queries, mutations
 		updateArgs["data"] = &enginegraphql.ArgumentConfig{Type: enginegraphql.NewNonNull(update)}
 	}
 	if err := addRootField(mutations, "update"+current.name, &enginegraphql.Field{Type: object, Args: updateArgs, Resolve: func(params enginegraphql.ResolveParams) (interface{}, error) {
+		if err := primitiveListInputError(params, current.Fields); err != nil {
+			return nil, clientError(err)
+		}
 		request := requestFromContext(params)
 		document, err := builder.local.UpdateWithOptions(params.Context, string(current.Slug), fmt.Sprint(params.Args["id"]), valuesArg(params.Args, "data", current.Fields), builder.mutationOptions(current, params, request, intArg(params.Args, "expectedRevision", 0)))
 		if err != nil {
@@ -560,6 +566,9 @@ func (builder *schemaBuilder) addCollection(current resource, queries, mutations
 		duplicateArgs["data"] = &enginegraphql.ArgumentConfig{Type: update}
 	}
 	if err := addRootField(mutations, "duplicate"+current.name, &enginegraphql.Field{Type: object, Args: duplicateArgs, Resolve: func(params enginegraphql.ResolveParams) (interface{}, error) {
+		if err := primitiveListInputError(params, current.Fields); err != nil {
+			return nil, clientError(err)
+		}
 		request := requestFromContext(params)
 		options := builder.mutationOptions(current, params, request, 0)
 		var document store.Document
@@ -906,6 +915,9 @@ func (builder *schemaBuilder) addGlobal(current resource, queries, mutations eng
 		updateArgs["data"] = &enginegraphql.ArgumentConfig{Type: enginegraphql.NewNonNull(input)}
 	}
 	if err := addRootField(mutations, "update"+current.name, &enginegraphql.Field{Type: object, Args: updateArgs, Resolve: func(params enginegraphql.ResolveParams) (interface{}, error) {
+		if err := primitiveListInputError(params, current.Fields); err != nil {
+			return nil, clientError(err)
+		}
 		request := requestFromContext(params)
 		document, err := builder.local.UpdateGlobalWithOptions(params.Context, string(current.Slug), valuesArg(params.Args, "data", current.Fields), builder.mutationOptions(current, params, request, intArg(params.Args, "expectedRevision", 0)))
 		if err != nil {
@@ -999,7 +1011,7 @@ func (builder *schemaBuilder) outputFields(current resource, parent string, fiel
 			continue
 		}
 		if field.Type == schema.FieldTypeJoin && field.Join != nil {
-			result[name] = builder.joinOutputField(parent, field)
+			result[name] = builder.joinOutputField(current, parent, field)
 			continue
 		}
 		result[name] = &enginegraphql.Field{Type: builder.outputType(current, parent, field)}
@@ -1007,7 +1019,7 @@ func (builder *schemaBuilder) outputFields(current resource, parent string, fiel
 	return result
 }
 
-func (builder *schemaBuilder) joinOutputField(parent string, field schema.Field) *enginegraphql.Field {
+func (builder *schemaBuilder) joinOutputField(sourceResource resource, parent string, field schema.Field) *enginegraphql.Field {
 	target, available := builder.resources[field.Join.CollectionID]
 	object := builder.objects[field.Join.CollectionID]
 	if !available || object == nil {
@@ -1034,13 +1046,6 @@ func (builder *schemaBuilder) joinOutputField(parent string, field schema.Field)
 		if err != nil {
 			return nil, clientError(err)
 		}
-		joined := query.Equal(field.Join.On, query.String(id))
-		if where != nil {
-			joined, err = query.And(joined, where)
-			if err != nil {
-				return nil, clientError(err)
-			}
-		}
 		var sorts []query.Sort
 		if rawSort := stringArg(params.Args, "sort", ""); rawSort != "" {
 			sorts, err = sortArgs(map[string]interface{}{"sort": []interface{}{rawSort}})
@@ -1054,14 +1059,14 @@ func (builder *schemaBuilder) joinOutputField(parent string, field schema.Field)
 		}
 		request := requestFromContext(params)
 		options := ridu.ListOptions{
-			Where: joined, Page: intArg(params.Args, "page", 1), Limit: limit, Sort: sorts,
+			Where: where, Page: intArg(params.Args, "page", 1), Limit: limit, Sort: sorts,
 			Populate: builder.populationsFor(target.Fields, params.Info), Actor: request.actor, ActorCollection: request.actorCollection,
 			OutputFields:    builder.outputFieldsFor(target.Fields, params.Info),
 			Locale:          schema.LocaleCode(stringMapValue(source, "__riduLocale")),
 			FallbackLocales: localeCodesValue(source["__riduFallbackLocales"]),
 			DisableFallback: boolMapValue(source, "__riduDisableFallback"), AllLocales: boolMapValue(source, "__riduAllLocales"),
 		}
-		page, err := builder.local.List(params.Context, string(target.Slug), options)
+		page, err := builder.local.ListJoin(params.Context, string(sourceResource.Slug), id, field.Path.String(), options)
 		if err != nil {
 			return nil, transportError(err)
 		}
@@ -1081,6 +1086,10 @@ func (builder *schemaBuilder) outputType(current resource, parent string, field 
 	switch field.Type {
 	case schema.FieldTypeNumber:
 		return enginegraphql.Float
+	case schema.FieldTypeTextList:
+		return enginegraphql.NewList(enginegraphql.NewNonNull(enginegraphql.String))
+	case schema.FieldTypeNumberList:
+		return enginegraphql.NewList(enginegraphql.NewNonNull(enginegraphql.Float))
 	case schema.FieldTypeCheckbox:
 		return enginegraphql.Boolean
 	case schema.FieldTypeSelect, schema.FieldTypeRadio:
@@ -1121,8 +1130,14 @@ func (builder *schemaBuilder) outputType(current resource, parent string, field 
 		return enginegraphql.NewList(builder.blockUnion(current, parent, field))
 	case schema.FieldTypeGroup, schema.FieldTypeArray:
 		name := parent + typeName(field.Name)
-		childFields := field.Nested.Fields
-		object := enginegraphql.NewObject(enginegraphql.ObjectConfig{Name: name, Fields: enginegraphql.FieldsThunk(func() enginegraphql.Fields { return builder.outputFields(current, name, childFields, false) })})
+		childFields := field.Nested.ResolvedFields()
+		object := enginegraphql.NewObject(enginegraphql.ObjectConfig{Name: name, Fields: enginegraphql.FieldsThunk(func() enginegraphql.Fields {
+			fields := builder.outputFields(current, name, childFields, false)
+			if field.Type == schema.FieldTypeArray {
+				fields["_key"] = &enginegraphql.Field{Type: enginegraphql.NewNonNull(enginegraphql.String)}
+			}
+			return fields
+		})})
 		if field.Type == schema.FieldTypeArray {
 			return enginegraphql.NewList(object)
 		}
@@ -1207,24 +1222,24 @@ func (builder *schemaBuilder) blockUnion(current resource, parent string, field 
 	if existing := builder.unions[name]; existing != nil {
 		return existing
 	}
-	objects := make([]*enginegraphql.Object, 0, len(field.Blocks.Types))
-	byKey := make(map[string]*enginegraphql.Object, len(field.Blocks.Types))
-	for _, block := range field.Blocks.Types {
+	objects := make([]*enginegraphql.Object, 0, len(field.Blocks.ResolvedTypes()))
+	bySlug := make(map[string]*enginegraphql.Object, len(field.Blocks.ResolvedTypes()))
+	for _, block := range field.Blocks.ResolvedTypes() {
 		blockCopy := block
-		objectName := name + typeName(block.Key)
+		objectName := name + typeName(block.Slug)
 		object := enginegraphql.NewObject(enginegraphql.ObjectConfig{Name: objectName, Fields: enginegraphql.FieldsThunk(func() enginegraphql.Fields {
-			fields := builder.outputFields(current, objectName, blockCopy.Fields, false)
-			fields["_key"] = &enginegraphql.Field{Type: enginegraphql.String}
+			fields := builder.outputFields(current, objectName, blockCopy.ResolvedFields(), false)
+			fields["_key"] = &enginegraphql.Field{Type: enginegraphql.NewNonNull(enginegraphql.String)}
 			fields["blockType"] = &enginegraphql.Field{Type: enginegraphql.NewNonNull(enginegraphql.String)}
 			return fields
 		})})
 		objects = append(objects, object)
-		byKey[block.Key] = object
+		bySlug[block.Slug] = object
 	}
 	union := enginegraphql.NewUnion(enginegraphql.UnionConfig{Name: name, Types: objects, ResolveType: func(params enginegraphql.ResolveTypeParams) *enginegraphql.Object {
 		value, _ := params.Value.(map[string]interface{})
 		blockType, _ := value["blockType"].(string)
-		return byKey[blockType]
+		return bySlug[blockType]
 	}})
 	builder.unions[name] = union
 	return union
@@ -1253,7 +1268,7 @@ func (builder *schemaBuilder) inputFields(current resource, parent string, field
 			continue
 		}
 		input := builder.inputType(current, parent, field, create)
-		if create && field.Required && !fieldHasDefault(field) {
+		if create && (field.Required || primitiveListNeedsValue(field)) && !fieldHasDefault(field) {
 			input = enginegraphql.NewNonNull(input)
 		}
 		result[fieldName(field.Name)] = &enginegraphql.InputObjectFieldConfig{Type: input}
@@ -1265,6 +1280,10 @@ func (builder *schemaBuilder) inputType(current resource, parent string, field s
 	switch field.Type {
 	case schema.FieldTypeNumber:
 		return enginegraphql.Float
+	case schema.FieldTypeTextList:
+		return enginegraphql.NewList(enginegraphql.NewNonNull(enginegraphql.String))
+	case schema.FieldTypeNumberList:
+		return enginegraphql.NewList(enginegraphql.NewNonNull(enginegraphql.Float))
 	case schema.FieldTypeCheckbox:
 		return enginegraphql.Boolean
 	case schema.FieldTypeSelect, schema.FieldTypeRadio:
@@ -1279,8 +1298,14 @@ func (builder *schemaBuilder) inputType(current resource, parent string, field s
 		return builder.json
 	case schema.FieldTypeGroup, schema.FieldTypeArray:
 		name := parent + typeName(field.Name)
-		childFields := field.Nested.Fields
-		input := enginegraphql.NewInputObject(enginegraphql.InputObjectConfig{Name: name, Fields: builder.inputFields(current, name, childFields, create)})
+		childFields := field.Nested.ResolvedFields()
+		fields := builder.inputFields(current, name, childFields, create)
+		if field.Type == schema.FieldTypeArray {
+			// Optional on creation, and supplied on retained rows during updates.
+			// The local operation engine owns identity generation and validation.
+			fields["_key"] = &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.String}
+		}
+		input := enginegraphql.NewInputObject(enginegraphql.InputObjectConfig{Name: name, Fields: fields})
 		if field.Type == schema.FieldTypeArray {
 			return enginegraphql.NewList(input)
 		}
@@ -1312,7 +1337,7 @@ func (builder *schemaBuilder) inputType(current resource, parent string, field s
 }
 
 func fieldHasDefault(field schema.Field) bool {
-	return field.Default != nil ||
+	return field.Default != nil || field.DynamicDefault ||
 		field.Select != nil && field.Select.HasMany && len(field.Select.DefaultValues) != 0 ||
 		field.Text != nil && field.Text.Slug != nil
 }
@@ -1324,8 +1349,8 @@ func (builder *schemaBuilder) selectEnum(parent string, field schema.Field) *eng
 	}
 	values := enginegraphql.EnumValueConfigMap{}
 	if field.Select != nil {
-		for _, choice := range field.Select.Choices {
-			values[enumName(choice.Value)] = &enginegraphql.EnumValueConfig{Value: choice.Value, Description: choice.Label}
+		for _, option := range field.Select.Options {
+			values[enumName(option.Value)] = &enginegraphql.EnumValueConfig{Value: option.Value, Description: option.Label}
 		}
 	}
 	result := enginegraphql.NewEnum(enginegraphql.EnumConfig{Name: name, Values: values})
@@ -1353,31 +1378,31 @@ func validateGraphQLFields(fields []schema.Field, document bool) error {
 		}
 		seen[name] = field.Name
 		if field.Nested != nil {
-			if err := validateGraphQLFields(field.Nested.Fields, false); err != nil {
+			if err := validateGraphQLFields(field.Nested.ResolvedFields(), false); err != nil {
 				return err
 			}
 		}
 		if field.Blocks != nil {
-			blockNames := make(map[string]string, len(field.Blocks.Types))
-			for _, block := range field.Blocks.Types {
-				blockName := typeName(block.Key)
+			blockNames := make(map[string]string, len(field.Blocks.ResolvedTypes()))
+			for _, block := range field.Blocks.ResolvedTypes() {
+				blockName := typeName(block.Slug)
 				if owner, exists := blockNames[blockName]; exists {
-					return fmt.Errorf("blocks %q and %q produce duplicate GraphQL type name %q", owner, block.Key, blockName)
+					return fmt.Errorf("blocks %q and %q produce duplicate GraphQL type name %q", owner, block.Slug, blockName)
 				}
-				blockNames[blockName] = block.Key
-				if err := validateGraphQLFields(block.Fields, false); err != nil {
+				blockNames[blockName] = block.Slug
+				if err := validateGraphQLFields(block.ResolvedFields(), false); err != nil {
 					return err
 				}
 			}
 		}
 		if field.Select != nil {
-			choices := make(map[string]string, len(field.Select.Choices))
-			for _, choice := range field.Select.Choices {
-				choiceName := enumName(choice.Value)
-				if owner, exists := choices[choiceName]; exists {
-					return fmt.Errorf("select choices %q and %q produce duplicate GraphQL enum name %q", owner, choice.Value, choiceName)
+			options := make(map[string]string, len(field.Select.Options))
+			for _, option := range field.Select.Options {
+				optionName := enumName(option.Value)
+				if owner, exists := options[optionName]; exists {
+					return fmt.Errorf("select options %q and %q produce duplicate GraphQL enum name %q", owner, option.Value, optionName)
 				}
-				choices[choiceName] = choice.Value
+				options[optionName] = option.Value
 			}
 		}
 	}
@@ -1407,6 +1432,10 @@ func (builder *schemaBuilder) whereInput(current resource) *enginegraphql.InputO
 			switch field.Type {
 			case schema.FieldTypeNumber:
 				fieldType = builder.numberOperators(typeBase)
+			case schema.FieldTypeTextList:
+				fieldType = builder.primitiveListOperators(typeBase, enginegraphql.String)
+			case schema.FieldTypeNumberList:
+				fieldType = builder.primitiveListOperators(typeBase, enginegraphql.Float)
 			case schema.FieldTypeCheckbox:
 				fieldType = builder.booleanOperators(typeBase)
 			case schema.FieldTypeSelect, schema.FieldTypeRadio:
@@ -1441,6 +1470,14 @@ func (builder *schemaBuilder) multiSelectOperators(name string, value *enginegra
 	return enginegraphql.NewInputObject(enginegraphql.InputObjectConfig{Name: name, Fields: enginegraphql.InputObjectConfigFieldMap{
 		"contains": &enginegraphql.InputObjectFieldConfig{Type: value},
 		"exists":   &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.Boolean},
+	}})
+}
+
+func (builder *schemaBuilder) primitiveListOperators(name string, value enginegraphql.Input) *enginegraphql.InputObject {
+	return enginegraphql.NewInputObject(enginegraphql.InputObjectConfig{Name: name, Fields: enginegraphql.InputObjectConfigFieldMap{
+		"in":     {Type: enginegraphql.NewList(enginegraphql.NewNonNull(value))},
+		"not_in": {Type: enginegraphql.NewList(enginegraphql.NewNonNull(value))},
+		"exists": {Type: enginegraphql.Boolean},
 	}})
 }
 

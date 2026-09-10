@@ -6,6 +6,19 @@ Open a collection list to search, filter, sort, select, and organize documents. 
 workflow and locale states, and actions come from the resolved schema and the current actor's
 capabilities.
 
+## List configuration {#configuration}
+
+| Option                            | What it controls                                                            |
+| --------------------------------- | --------------------------------------------------------------------------- |
+| `Collection.Admin.UseAsTitle`     | Direct field used for document labels and the default text search.          |
+| `Collection.Admin.DefaultColumns` | Initial ordered field/metadata columns for the list.                        |
+| `Collection.Admin.Group`          | Navigation section that contains the collection.                            |
+| `Collection.Admin.Description`    | Explanatory copy above the collection workspace.                            |
+| `Collection.Admin.FolderField`    | Direct singular relationship used by the folder filter.                     |
+| `Collection.Admin.ParentField`    | Direct self-relationship used by the hierarchy view.                        |
+| Field `.Index()`                  | Adds an adapter-owned index for a frequent supported filter or sort path.   |
+| Collection and field access       | Determines visible documents, columns, filters, and permitted bulk actions. |
+
 ## Give the list a useful default {#configure}
 
 ```go title="content/posts.go"
@@ -17,10 +30,10 @@ ridu.Collection{
 		Group:          "Editorial",
 		Description:    "Draft, review, and publish site articles.",
 	},
-	Fields: []field.Definition{
-		field.Text("title", field.Required()),
-		field.Select("status", field.OneOf("draft", "review", "published")),
-		field.Relationship("author", field.To("users")),
+	Fields: field.Fields{
+		field.Text("title").Required(),
+		field.Select("status", "draft", "review", "published"),
+		field.Relationship("author", "users"),
 	},
 }
 ```

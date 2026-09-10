@@ -170,6 +170,7 @@ test("collection list workspace is schema-driven and persisted", async ({ page }
 
 	const postsWorkspacePattern = "**/api/preferences/collection%3Aposts%3Aworkspace";
 	let workspaceWriteCount = 0;
+	const workspaceWriteOrder: string[] = [];
 	let releaseFirstWorkspaceWrite!: () => void;
 	let markFirstWorkspaceWriteStarted!: () => void;
 	let markSecondWorkspaceWriteStarted!: (value: Record<string, unknown>) => void;
@@ -191,7 +192,9 @@ test("collection list workspace is schema-driven and persisted", async ({ page }
 		if (workspaceWriteCount === 1) {
 			markFirstWorkspaceWriteStarted();
 			await firstWorkspaceWriteRelease;
+			workspaceWriteOrder.push("first released");
 		} else {
+			workspaceWriteOrder.push("second started");
 			markSecondWorkspaceWriteStarted(
 				(route.request().postDataJSON() as { value: Record<string, unknown> }).value
 			);
@@ -202,11 +205,12 @@ test("collection list workspace is schema-driven and persisted", async ({ page }
 	await page.getByRole("checkbox", { name: "Show updated column" }).click();
 	await firstWorkspaceWriteStarted;
 	await page.getByRole("checkbox", { name: "Show created column" }).click();
-	await page.waitForTimeout(100);
+	await expect(page.getByRole("checkbox", { name: "Show created column" })).not.toBeChecked();
 	expect(workspaceWriteCount).toBe(1);
 	releaseFirstWorkspaceWrite();
 	const latestWorkspace = await secondWorkspaceWriteStarted;
 	expect(latestWorkspace).toMatchObject({ showCreated: false, showUpdated: false });
+	expect(workspaceWriteOrder).toEqual(["first released", "second started"]);
 	await page.keyboard.press("Escape");
 	await page.unroute(postsWorkspacePattern);
 
@@ -247,6 +251,7 @@ test("collection list workspace is schema-driven and persisted", async ({ page }
 	await expect(page.getByRole("columnheader", { name: "ID", exact: true })).toBeVisible();
 	await page.unroute(eventsWorkspacePattern);
 
+	const workspaceResetOrder: string[] = [];
 	let resetWorkspaceWriteCount = 0;
 	let releaseResetWorkspaceWrite!: () => void;
 	let markResetWorkspaceWriteStarted!: () => void;
@@ -266,11 +271,13 @@ test("collection list workspace is schema-driven and persisted", async ({ page }
 			return;
 		}
 		const writeNumber = ++resetWorkspaceWriteCount;
+		workspaceResetOrder.push(`write ${writeNumber} started`);
 		if (writeNumber === 1) {
 			markResetWorkspaceWriteStarted();
 			await resetWorkspaceWriteRelease;
 		}
 		const response = await route.fetch();
+		workspaceResetOrder.push(`write ${writeNumber} complete`);
 		await route.fulfill({ response });
 		if (writeNumber === 2) markResetWorkspaceWritesFinished();
 	});
@@ -278,7 +285,7 @@ test("collection list workspace is schema-driven and persisted", async ({ page }
 	await page.getByRole("checkbox", { name: "Show created column" }).click();
 	await resetWorkspaceWriteStarted;
 	await page.getByRole("checkbox", { name: "Show updated column" }).click();
-	await page.waitForTimeout(100);
+	await expect(page.getByRole("checkbox", { name: "Show updated column" })).not.toBeChecked();
 	expect(resetWorkspaceWriteCount).toBe(1);
 	await page.keyboard.press("Escape");
 	await page.getByRole("button", { name: /Open account menu for Ridu Editor/ }).click();
@@ -296,17 +303,25 @@ test("collection list workspace is schema-driven and persisted", async ({ page }
 			return;
 		}
 		preferenceResetCount += 1;
+		workspaceResetOrder.push("reset");
 		markPreferenceResetStarted();
 		await route.continue();
 	});
 	await page.getByRole("button", { name: "Reset all preferences" }).click();
-	await page.waitForTimeout(100);
+	await expect(page.getByRole("button", { name: "Resetting…" })).toBeDisabled();
 	expect(preferenceResetCount).toBe(0);
 	releaseResetWorkspaceWrite();
 	await resetWorkspaceWritesFinished;
 	await preferenceResetStarted;
 	await expect(page.getByText("Admin preferences reset.")).toBeVisible();
 	expect(resetWorkspaceWriteCount).toBe(2);
+	expect(workspaceResetOrder).toEqual([
+		"write 1 started",
+		"write 1 complete",
+		"write 2 started",
+		"write 2 complete",
+		"reset",
+	]);
 	await page.unroute("**/api/preferences");
 	await page.unroute(eventsWorkspacePattern);
 

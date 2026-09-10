@@ -175,7 +175,10 @@ test("image editing recovers committed responses and blocks unknown outcomes", a
 	).toBeVisible();
 	await expect(documentSaveButton(page)).toBeDisabled();
 	await assetAlt.press("Enter");
+	// A denied submit has no completion signal. Observe a bounded window for
+	// forbidden writes instead of treating a still-disabled button as proof.
 	await page.waitForTimeout(250);
+	await expect(documentSaveButton(page)).toBeDisabled();
 	expect(staleDocumentWrites).toBe(0);
 	expect(consoleErrors.length).toBeGreaterThanOrEqual(2);
 	expect(

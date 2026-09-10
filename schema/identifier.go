@@ -8,6 +8,7 @@ import (
 )
 
 var (
+	blockTypeNamePattern  = regexp.MustCompile(`^[A-Z][A-Za-z0-9]*$`)
 	stableIDPattern       = regexp.MustCompile(`^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$`)
 	collectionSlugPattern = regexp.MustCompile(`^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$`)
 	fieldNamePattern      = regexp.MustCompile(`^[a-z][A-Za-z0-9_]*$`)
@@ -350,3 +351,6 @@ func isPluginSQLWord(value byte) bool {
 func isPluginSQLIdentifierByte(value byte) bool {
 	return isPluginSQLWord(value) || value == '$' || value >= 0x80
 }
+
+// IsValidBlockTypeName reports whether a generated block name is portable to Go and TypeScript.
+func IsValidBlockTypeName(value string) bool { return blockTypeNamePattern.MatchString(value) }

@@ -76,9 +76,12 @@ type RiduCompatibility struct {
 // field. TypeScript names are imported with `import type`; GoPackage and GoType
 // are optional and fall back to encoding/json.RawMessage when omitted.
 type PluginFieldType struct {
+	// EmbeddedTypes lists tree.case selectors supplying ordered generic payload type arguments.
+	EmbeddedTypes []string `json:"embeddedTypes,omitempty"`
 	// Key matches the PluginField key stored in the schema manifest.
 	Key string
-	// TypeScriptPackage exports the named output, input, and where types.
+	// TypeScriptPackage is the static import specifier exporting the named output,
+	// input, and where types. It may select a package export subpath.
 	TypeScriptPackage string
 	// TypeScriptOutput is the stored document value type export.
 	TypeScriptOutput string
@@ -166,13 +169,11 @@ type AdminPluginMetadata struct {
 	Assets []string
 }
 
-// PluginHookContribution appends hooks to one resolved collection or field.
+// PluginHookContribution appends resource hooks to one resolved collection.
 // Contributions run in Config.Plugins order after application-authored hooks.
 type PluginHookContribution struct {
 	// Collection identifies the collection receiving Hooks.
 	Collection schema.CollectionSlug
-	// FieldPath optionally limits Hooks to one canonical field path.
-	FieldPath string
 	// Hooks are appended after application-authored hooks.
 	Hooks CollectionHooks
 }

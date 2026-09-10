@@ -5,6 +5,7 @@ import { gzipSync } from 'node:zlib';
 import { referenceModules } from '../src/reference';
 import { frameworkVersion } from '../src/llms';
 import { rankSearchCatalog } from '../src/search/rank';
+import referenceRouteLock from '../src/reference/authoring/route-lock.json';
 
 const websiteRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const distRoot = resolve(websiteRoot, 'dist');
@@ -15,9 +16,18 @@ const sourceRoot = resolve(websiteRoot, 'src');
 // payloads copied into every page without penalizing legitimately large reference indexes.
 const htmlBaseSizeAllowance = 2 * 1024 * 1024;
 const htmlPerRouteSizeAllowance = 34 * 1024;
-const searchIndexRawCeiling = 8 * 1024 * 1024;
+// Includes the complete authored descriptions for all 3,130 public declarations.
+// Keep the compressed transfer budget unchanged as the authored reference grows.
+const searchIndexRawCeiling = 10 * 1024 * 1024;
 const searchIndexGzipCeiling = 1536 * 1024;
 const diagnosticLimit = 30;
+const referenceRedirectRoutes = new Map<string, string>(
+	Object.values(referenceRouteLock.routes).flatMap((route) =>
+		'redirect' in route && typeof route.redirect === 'string'
+			? [[`/reference/${route.module}/${route.symbol}/`, route.redirect] as const]
+			: []
+	)
+);
 
 class Diagnostics {
 	readonly groups = new Map<string, Set<string>>();
@@ -326,6 +336,12 @@ function expectedRoutes(): Map<string, string> {
 			);
 		}
 	}
+	for (const [route, target] of referenceRedirectRoutes) {
+		addExpectedRoute(expected, route, `reference redirect to ${target}`);
+		if (!expected.has(target)) {
+			diagnostics.add('Expected route definition', `${route} redirects to missing route ${target}`);
+		}
+	}
 	return expected;
 }
 
@@ -431,7 +447,13 @@ function validateSearchIndex(expected: Map<string, string>, fallbackSource: stri
 	}
 
 	for (const route of expected.keys()) {
-		if (route === '/' || route === '/reference/' || route === '/search/') continue;
+		if (
+			route === '/' ||
+			route === '/reference/' ||
+			route === '/search/' ||
+			referenceRedirectRoutes.has(route)
+		)
+			continue;
 		if (!pageTargets.has(route)) {
 			diagnostics.add('Search index', `No page-level search entry targets ${route}`);
 		}
@@ -445,6 +467,34 @@ function validateSearchIndex(expected: Map<string, string>, fallbackSource: stri
 	}> = [
 		{ query: 'field.Select', expectedHref: '/reference/field/select/' },
 		{ query: 'Select field', expectedHref: '/docs/fields/select/' },
+		{ query: 'custom components', expectedHref: '/docs/custom-components/' },
+		{ query: 'collection hooks', expectedHref: '/docs/hooks/collections/' },
+		{ query: 'global hooks', expectedHref: '/docs/hooks/globals/' },
+		{ query: 'field hooks', expectedHref: '/docs/hooks/fields/' },
+		{ query: 'hook context', expectedHref: '/docs/hooks/context/' },
+		{ query: 'Go packages', expectedHref: '/docs/go-packages/' },
+		{ query: 'operations and callbacks', expectedHref: '/docs/go-packages/operation/' },
+		{ query: 'documents and values', expectedHref: '/docs/go-packages/store/' },
+		{ query: 'filters and paths', expectedHref: '/docs/go-packages/query/' },
+		{ query: 'schema and identifiers', expectedHref: '/docs/go-packages/schema/' },
+		{ query: 'operation package', expectedHref: '/docs/go-packages/operation/' },
+		{ query: 'store package', expectedHref: '/docs/go-packages/store/' },
+		{ query: 'defineAdminPlugin', expectedHref: '/reference/plugin/define-admin-plugin/' },
+		{ query: 'definePluginField', expectedHref: '/reference/plugin/define-plugin-field/' },
+		{ query: 'defineFieldEditor', expectedHref: '/reference/plugin/define-field-editor/' },
+		{ query: 'custom field components', expectedHref: '/docs/custom-components/field-components/' },
+		{ query: 'custom validation', expectedHref: '/docs/fields/validation/' },
+		{ query: 'text and number lists', expectedHref: '/docs/fields/lists/' },
+		{ query: 'list of strings', expectedHref: '/docs/fields/lists/' },
+		{ query: 'list of numbers', expectedHref: '/docs/fields/lists/' },
+		{ query: 'live server validation', expectedHref: '/docs/fields/live-validation/' },
+		{ query: 'LiveValidate', expectedHref: '/docs/fields/live-validation/' },
+		{ query: 'validation while typing', expectedHref: '/docs/fields/live-validation/' },
+		{ query: 'dynamic defaults', expectedHref: '/docs/fields/defaults/' },
+		{ query: 'default field values', expectedHref: '/docs/fields/defaults/' },
+		{ query: 'DefaultFrom', expectedHref: '/docs/fields/defaults/' },
+		{ query: 'using other field values', expectedHref: '/docs/fields/callback-values/' },
+		{ query: 'custom table cells', expectedHref: '/docs/custom-components/list-cells/' },
 		{ query: 'LocalAPI.Find', expectedLabel: 'LocalAPI.Find' },
 		{ query: 'RiduClient.list', expectedLabel: 'RiduClient.list' },
 		{ query: 'ridu migrate verify', expectedLabel: 'ridu migrate verify' },
@@ -520,6 +570,33 @@ if (!existsSync(distRoot)) {
 }
 
 validateThemeVariables();
+
+// Preserve the reading order and property explanations on the helper API pages.
+for (const symbol of referenceModules.flatMap((module) => module.symbols)) {
+	if (!symbol.options?.length) continue;
+	const module = referenceModules.find((candidate) => candidate.symbols.includes(symbol))!;
+	const file = resolve(distRoot, routeToHTMLFile(`/reference/${module.slug}/${symbol.slug}/`));
+	if (!existsSync(file)) continue;
+	const html = readFileSync(file, 'utf8');
+	for (const id of [
+		'options',
+		'signature',
+		...(symbol.parameters.length ? ['arguments'] : []),
+		...(symbol.returns ? ['returns'] : [])
+	]) {
+		if (!parseHTML(file).ids.has(id))
+			diagnostics.add('API explanations', `${symbol.name} is missing ${id}`);
+	}
+	if (!html.includes('class="reference-property-table"')) {
+		diagnostics.add('API explanations', `${symbol.name} is missing its property table`);
+	}
+	if (symbol.example && html.indexOf('id="example"') > html.indexOf('id="signature"')) {
+		diagnostics.add(
+			'API explanations',
+			`${symbol.name} hides its example below the full signature`
+		);
+	}
+}
 
 const expected = expectedRoutes();
 const htmlSizeCeiling = htmlBaseSizeAllowance + expected.size * htmlPerRouteSizeAllowance;

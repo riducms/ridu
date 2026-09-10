@@ -1,17 +1,27 @@
 <script lang="ts">
-	import type { FieldComponentProps, FieldDocument } from "@riducms/plugin";
-	import { Button, FieldFrame } from "@riducms/ui";
+	import type { PluginFieldProps, FieldDocument } from "@riducms/plugin";
+	import { Button, FieldFrame, fieldControlARIA } from "@riducms/ui";
 	import ImageIcon from "~icons/lucide/image";
 	import SearchIcon from "~icons/lucide/search";
 	import XIcon from "~icons/lucide/x";
 
 	import { GenerationController } from "@plugin-seo/generation-controller.svelte";
-	import { imageGenerationEnabled } from "@plugin-seo/seo-config";
 
-	let { field, form, i18n, authoring }: FieldComponentProps = $props();
-	const generationEnabled = $derived(imageGenerationEnabled(field));
-	const value = $derived(String(form.get(field.path) ?? ""));
-	const issues = $derived(form.issuesFor(field.path));
+	let {
+		field: binding,
+		form,
+		config,
+		i18n,
+		authoring,
+	}: PluginFieldProps<string, { generate: boolean }, "upload"> = $props();
+	const field = $derived(binding.schema);
+	const editingBlocked = $derived(binding.readOnly);
+	const generationEnabled = $derived(config.generate);
+	const value = $derived(String(binding.value ?? ""));
+	const issues = $derived(binding.issues);
+	const controlARIA = $derived(
+		fieldControlARIA(field.id, field.admin.description !== undefined, issues.length > 0)
+	);
 	const target = $derived(
 		authoring?.collections.find(
 			(collection) =>
@@ -26,7 +36,6 @@
 	let loadFailed = $state(false);
 	const generation = new GenerationController();
 
-	$effect(() => form.register(field.path));
 	$effect(() => () => generation.cancel());
 	$effect(() => {
 		const id = value;
@@ -53,11 +62,11 @@
 
 	async function generate() {
 		const result = await generation.run(authoring, form, "generate-image");
-		if (result !== undefined) form.set(field.path, result);
+		if (result !== undefined) binding.set(result);
 	}
 
 	function commit(ids: string[]) {
-		form.set(field.path, ids[0] ?? null);
+		binding.set(ids[0] ?? null);
 		browserOpen = false;
 	}
 
@@ -92,7 +101,7 @@
 					variant="link"
 					size="xs"
 					class="h-auto px-0"
-					disabled={field.admin.readOnly || generation.status === "pending"}
+					disabled={editingBlocked || generation.status === "pending"}
 					aria-busy={generation.status === "pending"}
 					onclick={generate}
 				>
@@ -103,8 +112,10 @@
 			<Button
 				id={field.id}
 				aria-label={i18n.t("plugin.seo:selectImage")}
+				{...controlARIA}
 				variant="outline"
-				disabled={field.admin.readOnly || target === undefined || ReferenceBrowser === undefined}
+				class="aria-invalid:!border-destructive"
+				disabled={editingBlocked || target === undefined || ReferenceBrowser === undefined}
 				onclick={() => openBrowser("select")}
 			>
 				<SearchIcon />
@@ -112,14 +123,16 @@
 			</Button>
 		{:else}
 			<div
-				class="flex min-w-0 items-center gap-2.5 rounded-[4px] border border-control-border bg-control p-2"
+				class="flex min-w-0 items-center gap-2.5 rounded-[4px] border border-control-border bg-control p-2 aria-invalid:!border-destructive/65"
+				aria-invalid={controlARIA["aria-invalid"]}
 			>
 				<button
 					id={field.id}
 					aria-label={i18n.t("plugin.seo:inspectImage")}
+					{...controlARIA}
 					type="button"
 					class="flex min-w-0 flex-1 items-center gap-2.5 rounded-[3px] text-start outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed"
-					disabled={target === undefined || ReferenceBrowser === undefined}
+					disabled={editingBlocked || target === undefined || ReferenceBrowser === undefined}
 					onclick={() => openBrowser("inspect")}
 				>
 					<span
@@ -142,14 +155,20 @@
 					</span>
 				</button>
 				{#if !field.admin.readOnly}<div class="flex shrink-0 gap-1">
-						<Button variant="outline" size="xs" onclick={() => openBrowser("select")}>
+						<Button
+							variant="outline"
+							size="xs"
+							disabled={editingBlocked}
+							onclick={() => openBrowser("select")}
+						>
 							<SearchIcon aria-hidden="true" />
 							{i18n.t("plugin.seo:replaceImage")}
 						</Button>
 						<Button
 							variant="ghost"
 							size="icon-xs"
-							onclick={() => form.set(field.path, null)}
+							disabled={editingBlocked}
+							onclick={() => binding.set(null)}
 							aria-label={i18n.t("plugin.seo:removeImage")}
 						>
 							<XIcon />

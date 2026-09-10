@@ -18,7 +18,8 @@ func TestExtractUsesStableIDsAndReceiverNames(t *testing.T) {
 	}
 	for _, id := range []string{
 		"go:github.com/riducms/ridu/field#Select",
-		"go:github.com/riducms/ridu/field#Definition.Name",
+		"go:github.com/riducms/ridu/field#TextField.Required",
+		"go:github.com/riducms/ridu/field#View.Name",
 		"go:github.com/riducms/ridu/migration/payload#ID",
 	} {
 		if _, ok := declarations[id]; !ok {

@@ -33,7 +33,7 @@ func TestUploadReferencesRequireReadableTargetsAcrossShapesAndMutations(t *testi
 		Collections: []ridu.Collection{
 			{
 				Slug: "media", Upload: true, UploadConfig: ridu.UploadConfig{MaxFileSize: 1024, MimeTypes: []string{"text/plain"}},
-				Fields: []field.Definition{field.Checkbox("visible", field.Required())},
+				Fields: field.Fields{field.Checkbox("visible").Required()},
 				Access: ridu.CollectionAccess{Read: func(ridu.AccessContext) (ridu.AccessDecision, error) {
 					if !restrictUploads {
 						return ridu.Allow(), nil
@@ -43,14 +43,7 @@ func TestUploadReferencesRequireReadableTargetsAcrossShapesAndMutations(t *testi
 			},
 			{
 				Slug: "entries", Versions: true,
-				Fields: []field.Definition{
-					field.Upload("hero", field.To("media")),
-					field.Upload("gallery", field.ToMany("media")),
-					field.Upload("localizedHero", field.To("media"), field.Localized()),
-					field.Group("meta", field.Fields(field.Upload("asset", field.To("media")))),
-					field.Array("sections", field.Fields(field.Upload("asset", field.To("media")))),
-					field.Blocks("content", field.BlockTypes(field.BlockType("image", "Image", field.Upload("asset", field.To("media"))))),
-				},
+				Fields: field.Fields{field.Upload("hero", "media"), field.Uploads("gallery", "media"), field.Upload("localizedHero", "media").Localized(), field.Group("meta", field.Fields{field.Upload("asset", "media")}), field.Array("sections", field.Fields{field.Upload("asset", "media")}), field.Blocks("content", field.Block{Slug: "image", Fields: field.Fields{field.Upload("asset", "media")}})},
 			},
 		},
 	}, teststore.New())
@@ -180,7 +173,7 @@ func TestAcceptedUploadReferencesRequestReferenceLocks(t *testing.T) {
 		Name: "Upload reference locks", Storage: storageBackend, StorageNamespace: "upload-reference-locks",
 		Collections: []ridu.Collection{
 			{Slug: "media", Upload: true, UploadConfig: ridu.UploadConfig{MaxFileSize: 1024, MimeTypes: []string{"text/plain"}}},
-			{Slug: "entries", Fields: []field.Definition{field.Upload("hero", field.To("media"))}},
+			{Slug: "entries", Fields: field.Fields{field.Upload("hero", "media")}},
 		},
 	}, backend)
 	if err != nil {

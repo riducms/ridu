@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/riducms/ridu/internal/embedded"
 	"github.com/riducms/ridu/internal/migrationartifact"
 	ridumigration "github.com/riducms/ridu/migration"
 	"github.com/riducms/ridu/schema"
@@ -235,7 +236,7 @@ func (transaction mongoDBMigrationDataTransaction) validateValue(field schema.Fi
 		return nil
 	}
 	if field.Localized {
-		localized, valid := value.ObjectValue()
+		localized, valid := value.CopyObject()
 		if !valid {
 			return fmt.Errorf("MongoDB data transform localized value %q must be an object", path)
 		}
@@ -250,37 +251,47 @@ func (transaction mongoDBMigrationDataTransaction) validateValue(field schema.Fi
 		}
 		return nil
 	}
+	if embedded.HasFields(field) {
+		if err := embedded.ValidateValue(field, value, path, true, nil); err != nil {
+			return err
+		}
+		_, err := embedded.Transform(field, value, path, embedded.NewBudget(), func(o embedded.Occurrence) (store.Values, error) {
+			return o.Payload, transaction.validateValues(o.Fields, o.Payload, o.RuntimePath, map[string]struct{}{o.Case.Identity: {}, o.Case.Discriminator: {}})
+		})
+		return err
+	}
+
 	switch field.Type {
 	case schema.FieldTypeGroup:
-		object, valid := value.ObjectValue()
+		object, valid := value.CopyObject()
 		if !valid || field.Nested == nil {
 			return fmt.Errorf("MongoDB data transform group value %q must match its immutable resource shape", path)
 		}
-		return transaction.validateValues(field.Nested.Fields, object, path, nil)
+		return transaction.validateValues(field.Nested.ResolvedFields(), object, path, nil)
 	case schema.FieldTypeArray:
-		items, valid := value.Values()
+		items, valid := value.CopyList()
 		if !valid || field.Nested == nil {
 			return fmt.Errorf("MongoDB data transform array value %q must match its immutable resource shape", path)
 		}
 		special := map[string]struct{}{"_key": {}}
 		for index, item := range items {
-			object, valid := item.ObjectValue()
+			object, valid := item.CopyObject()
 			if !valid {
 				return fmt.Errorf("MongoDB data transform array row %q must be an object", fmt.Sprintf("%s.%d", path, index))
 			}
-			if err := transaction.validateValues(field.Nested.Fields, object, fmt.Sprintf("%s.%d", path, index), special); err != nil {
+			if err := transaction.validateValues(field.Nested.ResolvedFields(), object, fmt.Sprintf("%s.%d", path, index), special); err != nil {
 				return err
 			}
 		}
 	case schema.FieldTypeBlocks:
-		items, valid := value.Values()
+		items, valid := value.CopyList()
 		if !valid || field.Blocks == nil {
 			return fmt.Errorf("MongoDB data transform blocks value %q must match its immutable resource shape", path)
 		}
 		special := map[string]struct{}{"_key": {}, "blockType": {}}
 		for index, item := range items {
 			itemPath := fmt.Sprintf("%s.%d", path, index)
-			object, valid := item.ObjectValue()
+			object, valid := item.CopyObject()
 			if !valid {
 				return fmt.Errorf("MongoDB data transform block %q must be an object", itemPath)
 			}
@@ -290,9 +301,9 @@ func (transaction mongoDBMigrationDataTransaction) validateValue(field schema.Fi
 			}
 			var blockFields []schema.Field
 			found := false
-			for _, block := range field.Blocks.Types {
-				if block.Key == blockKey {
-					blockFields = block.Fields
+			for _, block := range field.Blocks.ResolvedTypes() {
+				if block.Slug == blockKey {
+					blockFields = block.ResolvedFields()
 					found = true
 					break
 				}

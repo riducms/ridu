@@ -1,0 +1,14 @@
+package wrongwritehook
+
+import (
+	"example.com/ridu-gate1/field"
+	"example.com/ridu-gate1/operation"
+)
+
+var _ = field.Text("title").Hooks(field.Hooks[string]{
+	BeforeChange: []field.Transform[string]{
+		func(operation.WriteContext, operation.Value[float64]) (operation.Change[float64], error) {
+			return operation.Change[float64]{}, nil
+		},
+	},
+})

@@ -7,6 +7,8 @@ type Kind string
 
 const (
 	KindText         Kind = "text"
+	KindTextList     Kind = "text-list"
+	KindNumberList   Kind = "number-list"
 	KindCode         Kind = "code"
 	KindSelect       Kind = "select"
 	KindRadio        Kind = "radio"
@@ -45,64 +47,56 @@ const (
 	CategoryPlugin       Category = "plugin"
 )
 
-// Choice is one allowed value and its author-facing label for a select field.
-type Choice struct {
+// Option is one allowed value and its author-facing label for a select field.
+type Option struct {
 	// Value is the exact string stored in documents and sent over APIs.
 	Value string
 	// Label is the author-facing name shown in selection controls.
+	// When omitted, resolution generates it from Value.
 	Label string
 	// LabelTranslations overrides Label for configured admin interface languages.
 	LabelTranslations map[string]string
 }
 
-// WithLabelTranslations returns a detached choice with localized display labels.
-func (choice Choice) WithLabelTranslations(translations map[string]string) Choice {
-	choice.LabelTranslations = cloneTranslations(translations)
-	return choice
+// BlockAdmin configures the ordinary block row heading.
+type BlockAdmin struct {
+	// RowLabelPath names a direct stored scalar child; empty values use the block type label.
+	RowLabelPath string
+}
+
+// BlockLabels overrides the singular and plural names derived from a block slug.
+// Translations select admin interface language, independently of content locale.
+type BlockLabels struct {
+	Singular             string
+	Plural               string
+	SingularTranslations map[string]string
+	PluralTranslations   map[string]string
 }
 
 // Block is one discriminated layout allowed by a blocks field.
 type Block struct {
-	// Key is the stable discriminator stored with block values.
-	Key string
-	// Label is the author-facing block type name.
-	Label string
-	// LabelTranslations overrides Label for configured admin interface languages.
-	LabelTranslations map[string]string
+	// TypeName optionally names a reusable generated type family; it never changes the stored slug.
+	TypeName string
+	// Slug is the stable discriminator stored with block values.
+	Slug string
+	// Labels overrides the singular and plural names shown to authors.
+	Labels BlockLabels
 	// Fields defines the values stored by this block type.
-	Fields []Definition
+	Fields Fields
+	// Admin configures this block type in the framework admin.
+	Admin BlockAdmin
 }
 
-// WithLabelTranslations returns a detached block type with localized display labels.
-func (block Block) WithLabelTranslations(translations map[string]string) Block {
-	block.LabelTranslations = cloneTranslations(translations)
-	block.Fields = cloneDefinitions(block.Fields)
+// Snapshot returns a detached block, copying child fields and label translations.
+// Executable callbacks retain their original behavior.
+func (block Block) Snapshot() Block {
+	block.Fields = block.Fields.Snapshot()
+	block.Labels = cloneBlockLabels(block.Labels)
 	return block
 }
 
-// TabDefinition is one authoring section inside a Tabs presentation field. Tabs with a
-// Name store their children beneath that document property; unnamed tabs only
-// affect the admin layout and leave child document paths unchanged.
-type TabDefinition struct {
-	// Name is the optional document property contributed by a data-bearing tab.
-	Name string
-	// Label is the author-facing tab trigger.
-	Label string
-	// LabelTranslations overrides Label for configured admin interface languages.
-	LabelTranslations map[string]string
-	// Fields defines the values shown inside the tab.
-	Fields []Definition
-}
-
-// WithLabelTranslations returns a detached tab with localized trigger labels.
-func (tab TabDefinition) WithLabelTranslations(translations map[string]string) TabDefinition {
-	tab.LabelTranslations = cloneTranslations(translations)
-	tab.Fields = cloneDefinitions(tab.Fields)
-	return tab
-}
-
 // RowLabels contains optional singular and plural display names for array rows.
-// RowLabel remains the separate child-field path used to derive each row heading.
+// RowLabelPath remains the separate child-field path used to derive each row heading.
 type RowLabels struct {
 	Singular             string
 	Plural               string
@@ -118,16 +112,6 @@ const (
 	ConditionKindAny       ConditionKind = "any"
 	ConditionKindNot       ConditionKind = "not"
 	ConditionKindPredicate ConditionKind = "predicate"
-)
-
-// ConditionScope selects the value tree used by a condition predicate.
-type ConditionScope string
-
-const (
-	// ConditionScopeDocument resolves paths from the document root.
-	ConditionScopeDocument ConditionScope = "document"
-	// ConditionScopeSibling resolves paths from the current field's parent object or row.
-	ConditionScopeSibling ConditionScope = "sibling"
 )
 
 // ConditionOperator identifies one scalar predicate operation.
@@ -150,8 +134,7 @@ type ConditionScalar interface {
 type Condition struct {
 	kind       ConditionKind
 	conditions []Condition
-	scope      ConditionScope
-	path       string
+	reference  Reference
 	operator   ConditionOperator
 	values     []DefaultValue
 	issues     []Issue
@@ -163,11 +146,11 @@ func (condition Condition) Kind() ConditionKind { return condition.kind }
 // Conditions returns detached child expressions for All, Any, and Not nodes.
 func (condition Condition) Conditions() []Condition { return cloneConditions(condition.conditions) }
 
-// Scope reports which value tree a predicate reads.
-func (condition Condition) Scope() ConditionScope { return condition.scope }
+// Reference returns the predicate's authored field selector.
+func (condition Condition) Reference() Reference { return condition.reference }
 
-// Path returns the predicate path relative to its configured scope.
-func (condition Condition) Path() string { return condition.path }
+// IsZero reports that no visibility condition was supplied.
+func (condition Condition) IsZero() bool { return condition.kind == "" }
 
 // Operator returns the predicate's scalar comparison operator.
 func (condition Condition) Operator() ConditionOperator { return condition.operator }
@@ -187,7 +170,7 @@ const (
 	ValueJSON    ValueType = "json"
 )
 
-// RelationshipFilterOperator is the finite predicate vocabulary used to narrow admin choices.
+// RelationshipFilterOperator is the finite predicate vocabulary used to narrow admin options.
 type RelationshipFilterOperator string
 
 const (
@@ -236,138 +219,121 @@ type Issue struct {
 	Message string
 }
 
-// DefaultKind identifies the scalar type carried by a field default.
+// DefaultKind identifies the logical value carried by a field default.
 type DefaultKind string
 
 const (
+	DefaultList    DefaultKind = "list"
 	DefaultString  DefaultKind = "string"
 	DefaultNumber  DefaultKind = "number"
 	DefaultBoolean DefaultKind = "boolean"
 )
 
-// DefaultValue is the normalized scalar value produced by Default.
+// DefaultValue is the normalized literal value produced by Default.
 type DefaultValue struct {
 	kind DefaultKind
 	text string
 }
 
-// DatePickerAppearance controls the native date control shown by the admin.
-// Values remain strings on the wire: dates use YYYY-MM-DD, times use HH:mm,
-// and date-times use RFC 3339 timestamps.
-type DatePickerAppearance string
+// DateFormat selects a date field's accepted value contract. The admin control
+// follows this format; changing presentation never changes accepted API values.
+type DateFormat string
 
 const (
-	DatePickerDayOnly    DatePickerAppearance = "dayOnly"
-	DatePickerDayAndTime DatePickerAppearance = "dayAndTime"
-	DatePickerTimeOnly   DatePickerAppearance = "timeOnly"
+	DateOnly DateFormat = "date"
+	DateTime DateFormat = "date-time"
+	TimeOnly DateFormat = "time"
 )
 
-// Kind reports whether the normalized default is a string, number, or boolean.
+// Kind reports whether the normalized default is a string, number, boolean, or primitive list.
 func (value DefaultValue) Kind() DefaultKind { return value.kind }
 
 // String returns the canonical textual encoding written to the manifest.
 func (value DefaultValue) String() string { return value.text }
 
-// Definition is an immutable authoring description created by a field
-// constructor. Slice-bearing accessors return copies so plugins and callers
-// cannot mutate a definition after construction.
-type Definition struct {
-	name                        string
-	kind                        Kind
-	label                       string
-	labelTranslations           map[string]string
-	required                    bool
-	unique                      bool
-	index                       bool
-	localized                   bool
-	minLength                   *int
-	maxLength                   *int
-	minimum                     *float64
-	maximum                     *float64
-	step                        *float64
-	defaultValue                *DefaultValue
-	slugSource                  string
-	slugConfigured              bool
-	choices                     []Choice
-	selectMany                  bool
-	selectDefaults              []string
-	relationTo                  []string
-	relationMany                bool
-	fields                      []Definition
-	blocks                      []Block
-	tabs                        []TabDefinition
-	pluginKey                   string
-	pluginConfig                json.RawMessage
-	pluginReferenceKeys         []string
-	adminPluginKey              string
-	adminComponent              string
-	adminComponentConfig        json.RawMessage
-	adminComponentConfigured    bool
-	description                 string
-	descriptionTranslations     map[string]string
-	placeholder                 string
-	placeholderTranslations     map[string]string
-	readOnly                    bool
-	hidden                      bool
-	sidebar                     bool
-	columns                     int
-	tab                         string
-	tabTranslations             map[string]string
-	condition                   *Condition
-	codeLanguage                string
-	datePickerAppearance        DatePickerAppearance
-	minRows                     int
-	maxRows                     int
-	rowLabel                    string
-	rowLabelAdminPluginKey      string
-	rowLabelComponent           string
-	rowLabelComponentConfig     json.RawMessage
-	rowLabelComponentConfigured bool
-	rowLabels                   RowLabels
-	initiallyCollapsed          bool
-	joinCollection              string
-	joinOn                      string
-	joinLimit                   int
-	joinDefaultColumns          []string
-	joinDefaultSort             string
-	joinAllowCreate             bool
-	joinCreateConfigured        bool
-	valueType                   ValueType
-	relationshipFilters         []RelationshipFilterRule
-	referenceDeleteAction       ReferenceDeleteAction
-	issues                      []Issue
+// View is a read-only snapshot of a canonical immutable node. Its readers
+// detach mutable values; author fields through their concrete fluent facades.
+type View struct{ nodeData }
+
+// nodeData is the canonical, privately owned field representation.
+// Concrete facades and read-only views share this representation.
+type nodeData struct {
+	graph                 *graphPolicies
+	name                  string
+	kind                  Kind
+	label                 string
+	required              bool
+	unique                bool
+	index                 bool
+	localized             bool
+	minLength             *int
+	maxLength             *int
+	minimum               *float64
+	maximum               *float64
+	step                  *float64
+	defaultValue          *DefaultValue
+	dateFormat            DateFormat
+	slugSource            string
+	slugConfigured        bool
+	options               []Option
+	selectMany            bool
+	selectDefaults        []string
+	relationTo            []string
+	relationMany          bool
+	fields                Fields
+	blocks                []Block
+	blockReferences       []string
+	referencesBound       bool
+	pluginKey             string
+	pluginConfig          json.RawMessage
+	pluginReferenceKeys   []string
+	pluginTrees           []EmbeddedTree
+	minRows               int
+	maxRows               int
+	joinCollection        string
+	joinOn                string
+	joinLimit             int
+	joinDefaultColumns    []string
+	joinDefaultSort       string
+	joinAllowCreate       bool
+	joinCreateConfigured  bool
+	valueType             ValueType
+	relationshipFilters   []RelationshipFilterRule
+	referenceDeleteAction ReferenceDeleteAction
+	issues                []Issue
+	admin                 Admin
 }
 
 // Name returns the document property name authored for the field.
-func (d Definition) Name() string { return d.name }
+func (d View) Name() string { return d.name }
 
 // Kind returns the concrete authoring field kind.
-func (d Definition) Kind() Kind { return d.kind }
+func (d View) Kind() Kind { return d.kind }
 
 // Label returns the explicit author-facing label, if one was configured.
-func (d Definition) Label() string { return d.label }
+func (d View) Label() string { return d.label }
 
 // LabelTranslations returns localized author-facing labels by admin language.
-func (d Definition) LabelTranslations() map[string]string {
-	return cloneTranslations(d.labelTranslations)
+func (d View) LabelTranslations() map[string]string {
+	return cloneTranslations(d.admin.LabelTranslations)
 }
 
 // Required reports whether validation rejects a missing, null, or field-type-specific empty value.
-func (d Definition) Required() bool { return d.required }
+func (d View) Required() bool { return d.required }
 
 // Unique reports whether values must be distinct within the collection.
-func (d Definition) Unique() bool { return d.unique }
+func (d View) Unique() bool { return d.unique }
 
 // Index reports whether the field should have a non-unique database index.
 // Unique fields already receive a unique index even when this is false.
-func (d Definition) Index() bool { return d.index }
+func (d View) Index() bool { return d.index }
 
 // Localized reports whether the field stores an independent value for each
 // configured application locale.
-func (d Definition) Localized() bool { return d.localized }
+func (d View) Localized() bool { return d.localized }
 
 // RelationshipTarget returns the first configured target slug, or an empty string.
-func (d Definition) RelationshipTarget() string {
+func (d View) RelationshipTarget() string {
 	if len(d.relationTo) == 0 {
 		return ""
 	}
@@ -375,23 +341,24 @@ func (d Definition) RelationshipTarget() string {
 }
 
 // RelationshipTargets returns a copy of all configured target slugs.
-func (d Definition) RelationshipTargets() []string { return append([]string(nil), d.relationTo...) }
+func (d View) RelationshipTargets() []string { return append([]string(nil), d.relationTo...) }
 
 // RelationshipHasMany reports whether the field stores multiple references.
-func (d Definition) RelationshipHasMany() bool { return d.relationMany }
+func (d View) RelationshipHasMany() bool { return d.relationMany }
 
-// SelectHasMany reports whether a select stores an ordered list of choices.
-func (d Definition) SelectHasMany() bool { return d.selectMany }
+// SelectHasMany reports whether a select stores an ordered list of options.
+func (d View) SelectHasMany() bool { return d.selectMany }
 
-// SelectDefaults returns the configured ordered default choices for a multi-select.
-func (d Definition) SelectDefaults() []string {
+// SelectDefaults returns the configured literal default options for a multi-select.
+// Dynamic defaults are executable policies and are not evaluated by this reader.
+func (d View) SelectDefaults() []string {
 	return append([]string(nil), d.selectDefaults...)
 }
 
 // Category returns the behavioral category for the definition's field kind.
-func (d Definition) Category() Category {
+func (d View) Category() Category {
 	switch d.kind {
-	case KindText, KindCode, KindSelect, KindRadio, KindPoint, KindTextarea, KindEmail, KindDate, KindNumber, KindCheckbox, KindJSON:
+	case KindText, KindTextList, KindNumberList, KindCode, KindSelect, KindRadio, KindPoint, KindTextarea, KindEmail, KindDate, KindNumber, KindCheckbox, KindJSON:
 		return CategoryScalar
 	case KindRelationship:
 		return CategoryRelationship
@@ -406,8 +373,9 @@ func (d Definition) Category() Category {
 	}
 }
 
-// Default returns the configured typed scalar default.
-func (d Definition) Default() (DefaultValue, bool) {
+// Default returns the configured typed literal default. List defaults use canonical JSON arrays.
+// Dynamic defaults are executable policies and are not evaluated by this reader.
+func (d View) Default() (DefaultValue, bool) {
 	if d.defaultValue == nil {
 		return DefaultValue{}, false
 	}
@@ -416,85 +384,74 @@ func (d Definition) Default() (DefaultValue, bool) {
 
 // SlugSource returns the source field path for a text-backed slug helper.
 // The boolean distinguishes an invalid empty source from an ordinary text field.
-func (d Definition) SlugSource() (string, bool) { return d.slugSource, d.slugConfigured }
+func (d View) SlugSource() (string, bool) { return d.slugSource, d.slugConfigured }
 
-// Choices returns a copy of the select choices.
-func (d Definition) Choices() []Choice {
-	return cloneChoices(d.choices)
+// Options returns a copy of the select options.
+func (d View) Options() []Option {
+	return cloneOptions(d.options)
 }
 
 // Fields returns a deep copy of the nested child definitions.
-func (d Definition) Fields() []Definition {
-	return cloneDefinitions(d.fields)
+func (d View) Fields() Fields {
+	return d.fields.Snapshot()
 }
 
 // Blocks returns a deep copy of the allowed block types.
-func (d Definition) Blocks() []Block { return cloneBlocks(d.blocks) }
-
-// Tabs returns a deep copy of the configured named and unnamed tabs.
-func (d Definition) Tabs() []TabDefinition { return cloneTabs(d.tabs) }
+func (d View) Blocks() []Block { return cloneBlocks(d.blocks) }
 
 // PluginKey returns the compiled plugin responsible for a custom field.
-func (d Definition) PluginKey() string { return d.pluginKey }
+func (d View) PluginKey() string { return d.pluginKey }
 
 // AdminComponent returns the optional statically registered admin plugin
 // renderer selected for this field. The returned configuration is detached
 // from the immutable definition.
-func (d Definition) AdminComponent() (pluginKey, component string, config json.RawMessage, ok bool) {
-	if !d.adminComponentConfigured {
+func (d View) AdminComponent() (pluginKey, component string, config json.RawMessage, ok bool) {
+	c := d.admin.Editor
+	if c.PluginKey == "" {
 		return "", "", nil, false
 	}
-	return d.adminPluginKey, d.adminComponent, append(json.RawMessage(nil), d.adminComponentConfig...), true
+	return c.PluginKey, c.Key, componentConfig(c), true
 }
 
 // Description returns the configured author-facing supporting text.
-func (d Definition) Description() string { return d.description }
+func (d View) Description() string { return d.admin.Description }
 
 // DescriptionTranslations returns localized supporting text by admin language.
-func (d Definition) DescriptionTranslations() map[string]string {
-	return cloneTranslations(d.descriptionTranslations)
+func (d View) DescriptionTranslations() map[string]string {
+	return cloneTranslations(d.admin.DescriptionTranslations)
 }
 
 // Placeholder returns the canonical empty-state prompt for compatible admin controls.
-func (d Definition) Placeholder() string { return d.placeholder }
+func (d View) Placeholder() string { return d.admin.Placeholder }
 
 // PlaceholderTranslations returns localized placeholder text by admin language.
-func (d Definition) PlaceholderTranslations() map[string]string {
-	return cloneTranslations(d.placeholderTranslations)
+func (d View) PlaceholderTranslations() map[string]string {
+	return cloneTranslations(d.admin.PlaceholderTranslations)
 }
 
 // ReadOnly reports whether the admin should prevent editing this field.
-func (d Definition) ReadOnly() bool { return d.readOnly }
+func (d View) ReadOnly() bool { return d.admin.ReadOnly }
 
 // Hidden reports whether the admin should omit this field from presentation.
-func (d Definition) Hidden() bool { return d.hidden }
+func (d View) Hidden() bool { return d.admin.Hidden }
 
 // Sidebar reports whether a root field belongs in the document editor's right rail.
-func (d Definition) Sidebar() bool { return d.sidebar }
+func (d View) Sidebar() bool { return d.admin.Sidebar }
 
 // Columns returns the requested one-to-twelve-column admin grid width, or zero.
-func (d Definition) Columns() int { return d.columns }
+func (d View) Columns() int { return d.admin.Columns }
 
 // Tab returns the named admin form tab, or an empty string.
-func (d Definition) Tab() string { return d.tab }
+func (d View) Tab() string { return d.admin.Tab }
 
 // TabTranslations returns localized direct-tab labels by admin language.
-func (d Definition) TabTranslations() map[string]string { return cloneTranslations(d.tabTranslations) }
-
-// Condition returns a copy of the configured presentation condition, if any.
-func (d Definition) Condition() *Condition {
-	if d.condition == nil {
-		return nil
-	}
-	condition := cloneCondition(*d.condition)
-	return &condition
-}
+func (d View) TabTranslations() map[string]string { return cloneTranslations(d.admin.TabTranslations) }
 
 // CodeLanguage is the editor language hint for a code field.
-func (d Definition) CodeLanguage() string { return d.codeLanguage }
+func (d View) CodeLanguage() string { return d.admin.CodeLanguage }
 
 // MinLength returns the minimum accepted Unicode code-point length.
-func (d Definition) MinLength() (int, bool) {
+func (d View) MinLength() (int, bool) {
 	if d.minLength == nil {
 		return 0, false
 	}
@@ -502,7 +459,7 @@ func (d Definition) MinLength() (int, bool) {
 }
 
 // MaxLength returns the maximum accepted Unicode code-point length.
-func (d Definition) MaxLength() (int, bool) {
+func (d View) MaxLength() (int, bool) {
 	if d.maxLength == nil {
 		return 0, false
 	}
@@ -510,7 +467,7 @@ func (d Definition) MaxLength() (int, bool) {
 }
 
 // Min returns the inclusive minimum accepted by a number field.
-func (d Definition) Min() (float64, bool) {
+func (d View) Min() (float64, bool) {
 	if d.minimum == nil {
 		return 0, false
 	}
@@ -518,7 +475,7 @@ func (d Definition) Min() (float64, bool) {
 }
 
 // Max returns the inclusive maximum accepted by a number field.
-func (d Definition) Max() (float64, bool) {
+func (d View) Max() (float64, bool) {
 	if d.maximum == nil {
 		return 0, false
 	}
@@ -527,161 +484,103 @@ func (d Definition) Max() (float64, bool) {
 
 // Step returns the positive admin input increment for a number field. It is
 // presentation metadata and does not impose divisibility validation.
-func (d Definition) Step() (float64, bool) {
+func (d View) Step() (float64, bool) {
 	if d.step == nil {
 		return 0, false
 	}
 	return *d.step, true
 }
 
-// DatePickerAppearance returns the configured date control, defaulting to day-only.
-func (d Definition) DatePickerAppearance() DatePickerAppearance {
-	if d.datePickerAppearance == "" {
-		return DatePickerDayOnly
+// DateFormat returns the accepted date value format, defaulting to DateOnly.
+func (d View) DateFormat() DateFormat {
+	if d.dateFormat == "" {
+		return DateOnly
 	}
-	return d.datePickerAppearance
+	return d.dateFormat
 }
 
-// MinRows is the minimum accepted length for an array.
-func (d Definition) MinRows() int { return d.minRows }
+// MinRows is the minimum accepted length for an array or blocks list.
+func (d View) MinRows() int { return d.minRows }
 
-// MaxRows is the maximum accepted length for an array, or zero when unbounded.
-func (d Definition) MaxRows() int { return d.maxRows }
+// MaxRows is the maximum accepted length for an array or blocks list, or zero when unbounded.
+func (d View) MaxRows() int { return d.maxRows }
 
 // RowLabel is the child property used to label array rows in the admin.
-func (d Definition) RowLabel() string { return d.rowLabel }
+func (d View) RowLabel() string { return d.admin.RowLabelPath }
 
 // RowLabelComponent returns the optional statically registered admin plugin
 // component selected for array or blocks row headings. The returned
 // configuration is detached from the immutable definition.
-func (d Definition) RowLabelComponent() (pluginKey, component string, config json.RawMessage, ok bool) {
-	if !d.rowLabelComponentConfigured {
+func (d View) RowLabelComponent() (pluginKey, component string, config json.RawMessage, ok bool) {
+	c := d.admin.RowLabel
+	if c.PluginKey == "" {
 		return "", "", nil, false
 	}
-	return d.rowLabelAdminPluginKey, d.rowLabelComponent, append(json.RawMessage(nil), d.rowLabelComponentConfig...), true
+	return c.PluginKey, c.Key, componentConfig(c), true
 }
 
 // RowLabels returns optional singular and plural author-facing array row names.
-func (d Definition) RowLabels() RowLabels { return cloneRowLabels(d.rowLabels) }
-
-// WithLabelTranslations returns an immutable copy with localized labels. It is
-// useful for presentation definitions such as Collapsible that do not accept options.
-func (d Definition) WithLabelTranslations(translations map[string]string) Definition {
-	d.labelTranslations = cloneTranslations(translations)
-	return cloneDefinitions([]Definition{d})[0]
-}
+func (d View) RowLabels() RowLabels { return cloneRowLabels(d.admin.RowLabels) }
 
 // InitiallyCollapsed reports whether a collapsible presentation group starts closed.
-func (d Definition) InitiallyCollapsed() bool { return d.initiallyCollapsed }
+func (d View) InitiallyCollapsed() bool { return d.admin.InitiallyCollapsed }
 
 // JoinCollection is the collection queried by an inverse join.
-func (d Definition) JoinCollection() string { return d.joinCollection }
+func (d View) JoinCollection() string { return d.joinCollection }
 
 // JoinOn is the target relationship path matched against the source document ID.
-func (d Definition) JoinOn() string { return d.joinOn }
+func (d View) JoinOn() string { return d.joinOn }
 
 // JoinLimit is the maximum related documents returned for an inverse join.
-func (d Definition) JoinLimit() int { return d.joinLimit }
+func (d View) JoinLimit() int { return d.joinLimit }
 
 // JoinDefaultColumns returns the target fields shown by the inverse-join table.
-func (d Definition) JoinDefaultColumns() []string {
+func (d View) JoinDefaultColumns() []string {
 	return append([]string(nil), d.joinDefaultColumns...)
 }
 
 // JoinDefaultSort returns the target sort expression, including an optional descending prefix.
-func (d Definition) JoinDefaultSort() string { return d.joinDefaultSort }
+func (d View) JoinDefaultSort() string { return d.joinDefaultSort }
 
 // JoinAllowCreate reports whether the admin may offer inline target creation.
-func (d Definition) JoinAllowCreate() bool { return d.joinAllowCreate }
+func (d View) JoinAllowCreate() bool { return d.joinAllowCreate }
 
 // ValueType is the declared output contract for a virtual field.
-func (d Definition) ValueType() ValueType { return d.valueType }
+func (d View) ValueType() ValueType { return d.valueType }
 
 // RelationshipFilters returns configured multi-rule and polymorphic option filters.
-func (d Definition) RelationshipFilters() []RelationshipFilterRule {
+func (d View) RelationshipFilters() []RelationshipFilterRule {
 	return cloneRelationshipFilterRules(d.relationshipFilters)
 }
 
 // ReferenceDeleteAction returns the explicitly authored hard-delete policy.
 // An empty action means config resolution must apply the deterministic default
 // for the reference shape.
-func (d Definition) ReferenceDeleteAction() ReferenceDeleteAction {
+func (d View) ReferenceDeleteAction() ReferenceDeleteAction {
 	return d.referenceDeleteAction
 }
 
 // PluginConfig returns a copy of the plugin-owned serialized configuration.
-func (d Definition) PluginConfig() json.RawMessage {
+func (d View) PluginConfig() json.RawMessage {
 	return append(json.RawMessage(nil), d.pluginConfig...)
 }
 
 // PluginReferenceKeys returns JSON property names whose string values contain
 // public collection slugs and therefore participate in content renames and
 // persisted reference-shape migration safety.
-func (d Definition) PluginReferenceKeys() []string {
+func (d View) PluginReferenceKeys() []string {
 	return append([]string(nil), d.pluginReferenceKeys...)
 }
 
-// Issues returns a copy of constructor and option compatibility issues.
-func (d Definition) Issues() []Issue {
-	return append([]Issue(nil), d.issues...)
-}
-
-func cloneDefinitions(definitions []Definition) []Definition {
-	if definitions == nil {
-		return nil
+// Issues validates the current declaration without executing behavior.
+func (d View) Issues() []Issue {
+	issues := append([]Issue(nil), d.issues...)
+	issues = append(issues, d.shapeIssues()...)
+	issues = append(issues, d.metadataIssues()...)
+	if behavior := d.graphPolicy().behavior; behavior != nil {
+		issues = append(issues, behavior.issues()...)
 	}
-
-	cloned := make([]Definition, len(definitions))
-	for index, definition := range definitions {
-		cloned[index] = definition
-		cloned[index].labelTranslations = cloneTranslations(definition.labelTranslations)
-		cloned[index].descriptionTranslations = cloneTranslations(definition.descriptionTranslations)
-		cloned[index].placeholderTranslations = cloneTranslations(definition.placeholderTranslations)
-		cloned[index].tabTranslations = cloneTranslations(definition.tabTranslations)
-		cloned[index].rowLabels = cloneRowLabels(definition.rowLabels)
-		cloned[index].choices = cloneChoices(definition.choices)
-		cloned[index].selectDefaults = append([]string(nil), definition.selectDefaults...)
-		cloned[index].relationTo = append([]string(nil), definition.relationTo...)
-		cloned[index].joinDefaultColumns = append([]string(nil), definition.joinDefaultColumns...)
-		cloned[index].relationshipFilters = cloneRelationshipFilterRules(definition.relationshipFilters)
-		cloned[index].fields = cloneDefinitions(definition.fields)
-		cloned[index].blocks = cloneBlocks(definition.blocks)
-		cloned[index].tabs = cloneTabs(definition.tabs)
-		cloned[index].pluginConfig = append(json.RawMessage(nil), definition.pluginConfig...)
-		cloned[index].pluginReferenceKeys = append([]string(nil), definition.pluginReferenceKeys...)
-		cloned[index].adminComponentConfig = append(json.RawMessage(nil), definition.adminComponentConfig...)
-		cloned[index].rowLabelComponentConfig = append(json.RawMessage(nil), definition.rowLabelComponentConfig...)
-		if definition.condition != nil {
-			condition := cloneCondition(*definition.condition)
-			cloned[index].condition = &condition
-		}
-		cloned[index].issues = append([]Issue(nil), definition.issues...)
-		if definition.defaultValue != nil {
-			value := *definition.defaultValue
-			cloned[index].defaultValue = &value
-		}
-		if definition.minLength != nil {
-			value := *definition.minLength
-			cloned[index].minLength = &value
-		}
-		if definition.maxLength != nil {
-			value := *definition.maxLength
-			cloned[index].maxLength = &value
-		}
-		if definition.minimum != nil {
-			value := *definition.minimum
-			cloned[index].minimum = &value
-		}
-		if definition.maximum != nil {
-			value := *definition.maximum
-			cloned[index].maximum = &value
-		}
-		if definition.step != nil {
-			value := *definition.step
-			cloned[index].step = &value
-		}
-	}
-	return cloned
+	return issues
 }
 
 func cloneCondition(condition Condition) Condition {
@@ -713,34 +612,33 @@ func cloneRelationshipFilterRules(rules []RelationshipFilterRule) []Relationship
 	return cloned
 }
 
-func cloneTabs(tabs []TabDefinition) []TabDefinition {
-	if tabs == nil {
-		return nil
-	}
-	cloned := make([]TabDefinition, len(tabs))
-	for index, tab := range tabs {
-		cloned[index] = tab
-		cloned[index].LabelTranslations = cloneTranslations(tab.LabelTranslations)
-		cloned[index].Fields = cloneDefinitions(tab.Fields)
-	}
-	return cloned
-}
-
 func cloneBlocks(blocks []Block) []Block {
 	cloned := make([]Block, len(blocks))
 	for index, block := range blocks {
-		cloned[index] = block
-		cloned[index].LabelTranslations = cloneTranslations(block.LabelTranslations)
-		cloned[index].Fields = cloneDefinitions(block.Fields)
+		cloned[index] = block.Snapshot()
 	}
 	return cloned
 }
 
-func cloneChoices(choices []Choice) []Choice {
-	cloned := make([]Choice, len(choices))
-	for index, choice := range choices {
-		cloned[index] = choice
-		cloned[index].LabelTranslations = cloneTranslations(choice.LabelTranslations)
+func cloneBlockLabels(labels BlockLabels) BlockLabels {
+	labels.SingularTranslations = cloneTranslations(labels.SingularTranslations)
+	labels.PluralTranslations = cloneTranslations(labels.PluralTranslations)
+	return labels
+}
+
+func optionsFromValues(values []string) []Option {
+	options := make([]Option, len(values))
+	for index, value := range values {
+		options[index] = Option{Value: value}
+	}
+	return options
+}
+
+func cloneOptions(options []Option) []Option {
+	cloned := make([]Option, len(options))
+	for index, option := range options {
+		cloned[index] = option
+		cloned[index].LabelTranslations = cloneTranslations(option.LabelTranslations)
 	}
 	return cloned
 }

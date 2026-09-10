@@ -6,6 +6,7 @@ import (
 
 	"github.com/riducms/ridu"
 	"github.com/riducms/ridu/field"
+	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/store"
 )
@@ -15,22 +16,17 @@ func TestPostgresRecursivePopulationTraversesNestedShapesWithAccessAndRedaction(
 	publicPath, _ := query.NewPath("public")
 	config := ridu.Config{Name: "PostgreSQL recursive population", Collections: []ridu.Collection{
 		{
-			Slug: "people", Fields: []field.Definition{
-				field.Text("name", field.Required()), field.Checkbox("public", field.Required()), field.Text("secret"),
-			},
+			Slug: "people", Fields: field.Fields{field.Text("name").Required(), field.Checkbox("public").Required(), field.Text("secret").Access(field.Access{Read: func(operation.AccessContext,
+
+			) (bool, error) {
+				return false, nil
+			}})},
 			Access: ridu.CollectionAccess{Read: func(ridu.AccessContext) (ridu.AccessDecision, error) {
 				return ridu.Where(query.Equal(publicPath, query.Boolean(true))), nil
 			}},
-			FieldAccess: map[string]ridu.FieldAccess{"secret": {Read: func(ridu.FieldAccessContext) (bool, error) { return false, nil }}},
 		},
-		{Slug: "teams", Fields: []field.Definition{
-			field.Text("name", field.Required()), field.Relationship("owner", field.To("people")),
-		}},
-		{Slug: "entries", Fields: []field.Definition{
-			field.Group("meta", field.Fields(field.Relationship("reviewer", field.To("people")))),
-			field.Array("sections", field.Fields(field.Relationship("reviewer", field.To("people")))),
-			field.Blocks("layout", field.BlockTypes(field.BlockType("quote", "Quote", field.Relationship("source", field.To("teams"))))),
-		}},
+		{Slug: "teams", Fields: field.Fields{field.Text("name").Required(), field.Relationship("owner", "people")}},
+		{Slug: "entries", Fields: field.Fields{field.Group("meta", field.Fields{field.Relationship("reviewer", "people")}), field.Array("sections", field.Fields{field.Relationship("reviewer", "people")}), field.Blocks("layout", field.Block{Slug: "quote", Fields: field.Fields{field.Relationship("source", "teams")}})}},
 	}}
 	backend, manifest := integrationBackend(t, ctx, config)
 	applyInitialArtifact(t, ctx, backend, manifest)
@@ -80,30 +76,30 @@ func TestPostgresRecursivePopulationTraversesNestedShapesWithAccessAndRedaction(
 	if err != nil {
 		t.Fatal(err)
 	}
-	meta, _ := result.Values["meta"].ObjectValue()
-	reviewer, populated := meta["reviewer"].DocumentValue()
+	meta, _ := result.Values["meta"].CopyObject()
+	reviewer, populated := meta["reviewer"].CopyDocument()
 	if !populated || reviewer.ID != visible.ID {
 		t.Fatalf("PostgreSQL group population = %#v", meta["reviewer"])
 	}
 	if _, leaked := reviewer.Values["secret"]; leaked {
 		t.Fatal("PostgreSQL nested group population leaked a redacted field")
 	}
-	sections, _ := result.Values["sections"].Values()
-	first, _ := sections[0].ObjectValue()
-	if nested, populated := first["reviewer"].DocumentValue(); !populated || nested.ID != visible.ID {
+	sections, _ := result.Values["sections"].CopyList()
+	first, _ := sections[0].CopyObject()
+	if nested, populated := first["reviewer"].CopyDocument(); !populated || nested.ID != visible.ID {
 		t.Fatalf("PostgreSQL array population = %#v", first["reviewer"])
 	}
-	second, _ := sections[1].ObjectValue()
-	if _, populated := second["reviewer"].DocumentValue(); populated {
+	second, _ := sections[1].CopyObject()
+	if _, populated := second["reviewer"].CopyDocument(); populated {
 		t.Fatalf("PostgreSQL access-filtered nested target was populated: %#v", second["reviewer"])
 	}
-	layout, _ := result.Values["layout"].Values()
-	quote, _ := layout[0].ObjectValue()
-	populatedTeam, populated := quote["source"].DocumentValue()
+	layout, _ := result.Values["layout"].CopyList()
+	quote, _ := layout[0].CopyObject()
+	populatedTeam, populated := quote["source"].CopyDocument()
 	if !populated || populatedTeam.ID != team.ID {
 		t.Fatalf("PostgreSQL block population = %#v", quote["source"])
 	}
-	owner, populated := populatedTeam.Values["owner"].DocumentValue()
+	owner, populated := populatedTeam.Values["owner"].CopyDocument()
 	if !populated || owner.ID != visible.ID {
 		t.Fatalf("PostgreSQL depth-two nested target = %#v", populatedTeam.Values["owner"])
 	}

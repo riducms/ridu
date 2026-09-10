@@ -231,17 +231,17 @@ func TestMongoDBUploadDocumentsReferencesPopulationVersionsAndTargetedLookup(t *
 	if err != nil {
 		t.Fatalf("populate upload references: %v", err)
 	}
-	hero, valid := populated.Values["hero"].DocumentValue()
+	hero, valid := populated.Values["hero"].CopyDocument()
 	if !valid || hero.ID != target.ID {
 		t.Fatalf("populated upload = %#v", populated.Values["hero"])
 	}
-	content, _ := populated.Values["content"].ObjectValue()
-	gallery, valid := content["gallery"].Values()
+	content, _ := populated.Values["content"].CopyObject()
+	gallery, valid := content["gallery"].CopyList()
 	if !valid || len(gallery) != 2 {
 		t.Fatalf("populated upload gallery = %#v", content["gallery"])
 	}
 	for _, item := range gallery {
-		asset, populated := item.DocumentValue()
+		asset, populated := item.CopyDocument()
 		if !populated || asset.ID != target.ID {
 			t.Fatalf("populated duplicate upload = %#v", item)
 		}

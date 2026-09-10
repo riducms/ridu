@@ -1,6 +1,7 @@
 package richtext_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"strings"
@@ -22,8 +23,8 @@ func TestRichTextContentCanBeLocalized(t *testing.T) {
 		Localization: ridu.LocalizationConfig{DefaultLocale: "en", Locales: []ridu.Locale{
 			{Code: "en", Label: "English"}, {Code: "fr", Label: "French", FallbackLocales: []schema.LocaleCode{"en"}},
 		}},
-		Collections: []ridu.Collection{{Slug: "pages", Fields: []field.Definition{
-			richtext.Field("content", field.Required(), field.Localized()),
+		Collections: []ridu.Collection{{Slug: "pages", Fields: field.Fields{
+			richtext.Field("content").Required().Localized(),
 		}}},
 	}, teststore.New())
 	if err != nil {
@@ -42,7 +43,7 @@ func TestRichTextContentCanBeLocalized(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	localized, ok := all.Values["content"].ObjectValue()
+	localized, ok := all.Values["content"].CopyObject()
 	if !ok || localized["en"].Kind() != store.ValueObject || localized["fr"].Kind() != store.ValueObject {
 		t.Fatalf("localized rich text = %#v", all.Values["content"])
 	}
@@ -50,7 +51,9 @@ func TestRichTextContentCanBeLocalized(t *testing.T) {
 
 func TestPluginConformance(t *testing.T) {
 	plugintest.Run(t, plugintest.Fixture{
-		Plugin: richtext.New(), Fields: []field.Definition{richtext.Field("content")},
+		Plugin: richtext.New(), Fields: field.Fields{
+			richtext.Field("content"),
+		},
 		ValidData:   store.Values{"content": document()},
 		InvalidData: store.Values{"content": store.String("not a document")},
 		Compatibility: []plugintest.CompatibilityCase{
@@ -72,8 +75,45 @@ func TestDefaultConfigIncludesReferencesAndIsDefensive(t *testing.T) {
 	}
 }
 
-func TestFieldWithConfigInheritsDefaultsOnlyWhenFeaturesAreOmitted(t *testing.T) {
-	inherited := richtext.FieldWithConfig("content", richtext.Config{UploadCollections: []string{"media"}})
+func TestFieldWithoutConfigPreservesTheDefaultManifest(t *testing.T) {
+	resolve := func(candidate field.PluginField) []byte {
+		t.Helper()
+		config := blockConfig(candidate.Required().Localized())
+		config.Localization = ridu.LocalizationConfig{DefaultLocale: "en", Locales: []ridu.Locale{{Code: "en", Label: "English"}}}
+		manifest, err := ridu.Resolve(config)
+		if err != nil {
+			t.Fatal(err)
+		}
+		encoded, err := manifest.Bytes()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return encoded
+	}
+	implicit := richtext.Field("content")
+	if !bytes.Equal(resolve(implicit), resolve(richtext.Field("content", richtext.Config{}))) {
+		t.Fatal("omitting Config changed the resolved schema")
+	}
+	if !bytes.Equal(resolve(implicit), resolve(richtext.Field("content"))) {
+		t.Fatal("default field construction is nondeterministic")
+	}
+	settings := decodeConfig(t, implicit)
+	if !hasFeature(settings.Features, richtext.FeatureLinks) || !hasFeature(settings.Features, richtext.FeatureUploads) || !hasFeature(settings.Features, richtext.FeatureRelationships) {
+		t.Fatalf("omitted Config lost recommended features: %v", settings.Features)
+	}
+}
+
+func TestFieldRejectsMultipleConfigs(t *testing.T) {
+	defer func() {
+		if got := recover(); got != `richtext.Field("content"): expected at most one Config, got 2` {
+			t.Fatalf("multiple Config diagnostic = %v", got)
+		}
+	}()
+	richtext.Field("content", richtext.Config{}, richtext.Config{})
+}
+
+func TestFieldInheritsDefaultsOnlyWhenFeaturesAreOmitted(t *testing.T) {
+	inherited := richtext.Field("content", richtext.Config{UploadCollections: []string{"media"}})
 	inheritedConfig := decodeConfig(t, inherited)
 	if !hasFeature(inheritedConfig.Features, richtext.FeatureUploads) ||
 		!hasFeature(inheritedConfig.Features, richtext.FeatureCode) {
@@ -83,7 +123,7 @@ func TestFieldWithConfigInheritsDefaultsOnlyWhenFeaturesAreOmitted(t *testing.T)
 		t.Fatalf("upload collections = %v", inheritedConfig.UploadCollections)
 	}
 
-	replaced := richtext.FieldWithConfig("content", richtext.Config{Features: []richtext.Feature{}})
+	replaced := richtext.Field("content", richtext.Config{Features: []richtext.Feature{}})
 	replacedConfig := decodeConfig(t, replaced)
 	if len(replacedConfig.Features) != 0 {
 		t.Fatalf("explicit replacement features = %v, want none", replacedConfig.Features)
@@ -95,8 +135,8 @@ func TestVersionedDocumentValidationAndRendering(t *testing.T) {
 		Name:    "Rich text",
 		Plugins: []ridu.Plugin{richtext.New()},
 		Collections: []ridu.Collection{{
-			Slug: "pages", Fields: []field.Definition{
-				richtext.FieldWithConfig("content", richtext.Config{Features: []richtext.Feature{richtext.FeatureLinks}}, field.Required()),
+			Slug: "pages", Fields: field.Fields{
+				richtext.Field("content", richtext.Config{Features: []richtext.Feature{richtext.FeatureLinks}}).Required(),
 			},
 		}},
 	}, teststore.New())
@@ -137,6 +177,40 @@ func TestVersionedDocumentValidationAndRendering(t *testing.T) {
 	}
 }
 
+func TestCustomRendererReceivesDetachedNode(t *testing.T) {
+	value := document(store.Object(store.Values{
+		"type": store.String("paragraph"),
+		"children": store.List(store.Object(store.Values{
+			"type": store.String("text"), "text": store.String("original"),
+		})),
+	}))
+	var retained []store.Values
+	renderers := map[string]func(store.Values) (string, error){
+		"paragraph": func(node store.Values) (string, error) {
+			child, exists := node["children"].ListItem(0)
+			text, _ := child.Get("text").StringValue()
+			if !exists || text != "original" {
+				t.Fatalf("earlier renderer mutation reached a later render: %q", text)
+			}
+			retained = append(retained, node)
+			node["children"] = store.List()
+			return "custom", nil
+		},
+	}
+	for range 2 {
+		if rendered, err := richtext.RenderHTML(value, renderers); err != nil || rendered != "custom" {
+			t.Fatalf("custom rendering = %q, %v", rendered, err)
+		}
+	}
+	retained[0]["type"] = store.String("changed")
+	if nodeType, _ := retained[1]["type"].StringValue(); nodeType != "paragraph" {
+		t.Fatalf("retained renderer nodes share mutable storage: %q", nodeType)
+	}
+	if rendered, err := richtext.RenderHTML(value, nil); err != nil || rendered != "<p>original</p>" {
+		t.Fatalf("renderer changed the immutable input: %q, %v", rendered, err)
+	}
+}
+
 func document(children ...store.Value) store.Value {
 	return store.Object(store.Values{
 		"version": store.Number(richtext.DocumentVersion),
@@ -169,7 +243,9 @@ func TestDefaultFieldValidatesAndRendersPortableAuthoringNodes(t *testing.T) {
 		Name:    "Portable rich text",
 		Plugins: []ridu.Plugin{richtext.New()},
 		Collections: []ridu.Collection{{
-			Slug: "pages", Fields: []field.Definition{richtext.Field("content")},
+			Slug: "pages", Fields: field.Fields{
+				richtext.Field("content"),
+			},
 		}},
 	}, teststore.New())
 	if err != nil {
@@ -216,7 +292,9 @@ func TestDefaultFieldEnablesUploads(t *testing.T) {
 		StorageNamespace: "richtext-test",
 		Collections: []ridu.Collection{
 			{Slug: "media", Upload: true},
-			{Slug: "pages", Fields: []field.Definition{richtext.Field("content")}},
+			{Slug: "pages", Fields: field.Fields{
+				richtext.Field("content"),
+			}},
 		},
 	}, teststore.New())
 	if err != nil {
@@ -235,10 +313,12 @@ func TestRelationshipNodesRespectConfiguredCollections(t *testing.T) {
 		Name:    "Relationship rich text",
 		Plugins: []ridu.Plugin{richtext.New()},
 		Collections: []ridu.Collection{{
-			Slug: "pages", Fields: []field.Definition{richtext.FieldWithConfig("content", richtext.Config{
-				Features:                []richtext.Feature{richtext.FeatureRelationships},
-				RelationshipCollections: []string{"posts"},
-			})},
+			Slug: "pages", Fields: field.Fields{
+				richtext.Field("content", richtext.Config{
+					Features:                []richtext.Feature{richtext.FeatureRelationships},
+					RelationshipCollections: []string{"posts"},
+				}),
+			},
 		}},
 	}, teststore.New())
 	if err != nil {
@@ -279,10 +359,12 @@ func TestUploadNodesRespectConfiguredCollections(t *testing.T) {
 		Name:    "Upload rich text",
 		Plugins: []ridu.Plugin{richtext.New()},
 		Collections: []ridu.Collection{{
-			Slug: "pages", Fields: []field.Definition{richtext.FieldWithConfig("content", richtext.Config{
-				Features:          []richtext.Feature{richtext.FeatureUploads},
-				UploadCollections: []string{"media"},
-			})},
+			Slug: "pages", Fields: field.Fields{
+				richtext.Field("content", richtext.Config{
+					Features:          []richtext.Feature{richtext.FeatureUploads},
+					UploadCollections: []string{"media"},
+				}),
+			},
 		}},
 	}, teststore.New())
 	if err != nil {
@@ -308,10 +390,10 @@ func TestUploadNodesRespectConfiguredCollections(t *testing.T) {
 	}
 }
 
-func decodeConfig(t *testing.T, definition field.Definition) richtext.Config {
+func decodeConfig(t *testing.T, definition field.Node) richtext.Config {
 	t.Helper()
 	config := richtext.Config{}
-	if err := json.Unmarshal(definition.PluginConfig(), &config); err != nil {
+	if err := json.Unmarshal(field.Snapshot(definition).PluginConfig(), &config); err != nil {
 		t.Fatal(err)
 	}
 	return config

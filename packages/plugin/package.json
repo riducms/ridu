@@ -1,7 +1,7 @@
 {
 	"name": "@riducms/plugin",
 	"description": "Public TypeScript contracts for statically registered Ridu admin plugins.",
-	"version": "0.1.5",
+	"version": "0.2.0",
 	"license": "MIT",
 	"repository": {
 		"type": "git",
@@ -18,7 +18,11 @@
 	},
 	"type": "module",
 	"exports": {
-		".": "./src/index.ts"
+		".": "./src/index.ts",
+		"./authoring/v1": "./src/authoring/v1.ts",
+		"./admin": "./src/admin.ts",
+		"./editor": "./src/editor/index.ts",
+		"./editor/field": "./src/editor/field.ts"
 	},
 	"files": [
 		"src"
@@ -29,7 +33,8 @@
 	},
 	"dependencies": {
 		"@riducms/protocol": "workspace:*",
-		"@riducms/translations": "workspace:*"
+		"@riducms/translations": "workspace:*",
+		"@riducms/ui": "workspace:*"
 	},
 	"peerDependencies": {
 		"svelte": "^5.56.8"

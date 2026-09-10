@@ -5,6 +5,9 @@ import { homedir, tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { gunzipSync } from "node:zlib";
 
+import { download, downloadTimeout } from "./download.js";
+import { downloadProgress } from "./progress.js";
+
 const repository = "https://github.com/riducms/ridu";
 
 export function releaseTarget(platform = process.platform, architecture = process.arch) {
@@ -73,17 +76,6 @@ function cacheRoot() {
 	return join(homedir(), ".cache", "ridu", "cli");
 }
 
-async function download(url) {
-	const response = await fetch(url, {
-		headers: { "user-agent": "@riducms/cli" },
-		redirect: "follow",
-	});
-	if (!response.ok) {
-		throw new Error(`download ${url}: ${response.status} ${response.statusText}`);
-	}
-	return Buffer.from(await response.arrayBuffer());
-}
-
 function installWindowsArchive(archive, destination) {
 	const stage = join(tmpdir(), `ridu-cli-${process.pid}-${Date.now()}`);
 	const archivePath = `${stage}.zip`;
@@ -122,14 +114,31 @@ export async function ensureBinary(version) {
 	const filename = archiveName(version, target);
 	const releaseBase =
 		process.env.RIDU_CLI_RELEASE_BASE_URL ?? `${repository}/releases/download/v${version}`;
-	const [archive, checksums] = await Promise.all([
-		download(`${releaseBase}/${filename}`),
-		download(`${releaseBase}/SHA256SUMS`),
-	]);
-	verifyChecksum(archive, expectedChecksum(checksums.toString("utf8"), filename), filename);
-
+	const progress = downloadProgress(`Ridu v${version} (${target.goos}/${target.goarch})`);
+	const controller = new AbortController();
+	const downloads = [];
 	const temporary = `${destination}.${process.pid}.tmp`;
 	try {
+		const options = { signal: controller.signal, timeoutMs: downloadTimeout() };
+		let checksumsReady = false;
+		downloads.push(
+			download(`${releaseBase}/${filename}`, { ...options, onProgress: progress.transfer }).then(
+				(archive) => {
+					progress.stage(
+						checksumsReady ? "Archive downloaded" : "Archive downloaded; waiting for checksums"
+					);
+					return archive;
+				}
+			),
+			download(`${releaseBase}/SHA256SUMS`, options).then((checksums) => {
+				checksumsReady = true;
+				return checksums;
+			})
+		);
+		const [archive, checksums] = await Promise.all(downloads);
+		progress.stage("Verifying download");
+		verifyChecksum(archive, expectedChecksum(checksums.toString("utf8"), filename), filename);
+		progress.stage("Installing CLI");
 		if (target.windows) {
 			installWindowsArchive(archive, temporary);
 		} else {
@@ -140,7 +149,13 @@ export async function ensureBinary(version) {
 		} catch (error) {
 			if (!existsSync(destination)) throw error;
 		}
+		progress.finish("Ridu CLI ready");
+	} catch (error) {
+		progress.finish("Ridu CLI setup failed", true);
+		throw error;
 	} finally {
+		controller.abort();
+		await Promise.allSettled(downloads);
 		rmSync(temporary, { force: true });
 	}
 	return destination;

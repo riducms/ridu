@@ -371,8 +371,8 @@ FROM ridu_versions WHERE collection_id = $1 AND document_id = $2`, string(ids["m
 }
 
 func collectionRetirementConfig(includeRetired bool) ridu.Config {
-	authCollection := func(slug schema.CollectionSlug, extraFields ...field.Definition) ridu.Collection {
-		fields := append([]field.Definition{field.Email("email", field.Required(), field.Unique())}, extraFields...)
+	authCollection := func(slug schema.CollectionSlug, extraFields ...field.Node) ridu.Collection {
+		fields := append(field.Fields{field.Email("email").Required().Unique()}, extraFields...)
 		return ridu.Collection{
 			Slug: slug, Auth: true, Versions: true, LockDocuments: true,
 			AuthConfig:         ridu.AuthConfig{APIKeys: true},
@@ -386,23 +386,23 @@ func collectionRetirementConfig(includeRetired bool) ridu.Config {
 		{Slug: "media", Upload: true, Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true, MaxPerDocument: 10}},
 	}
 	if includeRetired {
-		collections = append(collections, authCollection("retired-users", field.Upload("avatar", field.To("media"))))
+		collections = append(collections, authCollection("retired-users", field.Upload("avatar", "media")))
 	}
-	entryFields := []field.Definition{field.Text("title", field.Required())}
+	entryFields := field.Fields{field.Text("title").Required()}
 	if includeRetired {
-		entryFields = append(entryFields, field.Relationship("retiredUser", field.To("retired-users")))
+		entryFields = append(entryFields, field.Relationship("retiredUser", "retired-users"))
 	}
 	collections = append(collections, ridu.Collection{
 		Slug: "entries", Fields: entryFields, Versions: true,
 		VersionConfig: ridu.VersionConfig{Drafts: true, MaxPerDocument: 10},
 	})
 	globals := []ridu.Global{{
-		Slug: "keeper-settings", Fields: []field.Definition{field.Text("title", field.Required())}, Versions: true,
+		Slug: "keeper-settings", Fields: field.Fields{field.Text("title").Required()}, Versions: true,
 		VersionConfig: ridu.VersionConfig{Drafts: true, MaxPerDocument: 10},
 	}}
 	if includeRetired {
 		globals = append(globals, ridu.Global{
-			Slug: "retired-settings", Fields: []field.Definition{field.Text("title", field.Required())}, Versions: true,
+			Slug: "retired-settings", Fields: field.Fields{field.Text("title").Required()}, Versions: true,
 			VersionConfig: ridu.VersionConfig{Drafts: true, MaxPerDocument: 10},
 		})
 	}

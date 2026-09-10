@@ -19,7 +19,7 @@ func TestSQLiteCreateArtifactIsUsableOutsideTheAdapterPackage(t *testing.T) {
 	manifest, err := ridu.Resolve(ridu.Config{
 		Name: "External SQLite migrations",
 		Collections: []ridu.Collection{{
-			Slug: "posts", Fields: []field.Definition{field.Text("title")},
+			Slug: "posts", Fields: field.Fields{field.Text("title")},
 		}},
 	})
 	if err != nil {
@@ -28,7 +28,7 @@ func TestSQLiteCreateArtifactIsUsableOutsideTheAdapterPackage(t *testing.T) {
 	additive, err := ridu.Resolve(ridu.Config{
 		Name: "External SQLite migrations",
 		Collections: []ridu.Collection{{
-			Slug: "posts", Fields: []field.Definition{field.Text("title"), field.Text("summary", field.Index())},
+			Slug: "posts", Fields: field.Fields{field.Text("title"), field.Text("summary").Index()},
 		}},
 	})
 	if err != nil {

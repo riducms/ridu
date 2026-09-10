@@ -168,8 +168,9 @@ var commonFiles = []templateFile{
 	{Source: "templates/admin-favicon.svg.tmpl", Target: "admin/public/favicon.svg", Mode: 0o644},
 	{Source: "templates/admin-tsconfig.json.tmpl", Target: "admin/tsconfig.json", Mode: 0o644},
 	{Source: "templates/admin-vite.config.ts.tmpl", Target: "admin/vite.config.ts", Mode: 0o644},
+	{Source: "templates/admin-text-editor.svelte.tmpl", Target: "admin/src/fields/text-editor.svelte", Mode: 0o644},
 	{Source: "templates/admin-main.ts.tmpl", Target: "admin/src/main.ts", Mode: 0o644},
-	{Source: "templates/admin-plugins.ts.tmpl", Target: "admin/src/plugins.ts", Mode: 0o644},
+	{Source: "templates/admin-config.ts.tmpl", Target: "admin/src/admin.config.ts", Mode: 0o644},
 	{Source: "templates/plugins.json.tmpl", Target: "ridu.plugins.json", Mode: 0o644},
 }
 

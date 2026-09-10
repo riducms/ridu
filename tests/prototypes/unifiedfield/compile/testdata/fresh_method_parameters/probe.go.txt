@@ -1,0 +1,5 @@
+package freshmethodparameters
+
+type Text struct{}
+
+func (t Text) Validate[T any](validator func(T) bool) Text { return t }

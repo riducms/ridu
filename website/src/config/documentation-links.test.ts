@@ -92,7 +92,7 @@ function internalLinks(file: string): InternalLink[] {
 }
 
 function markdownAnchors(file: string): Set<string> {
-	const anchors = new Set<string>();
+	const anchors = htmlAnchors(file);
 	const slugger = new GithubSlugger();
 	for (const match of readFileSync(file, 'utf8').matchAll(/^(#{2,6})\s+(.+)$/gm)) {
 		const explicit = match[2].match(/\s+\{#([^}]+)\}\s*$/)?.[1];

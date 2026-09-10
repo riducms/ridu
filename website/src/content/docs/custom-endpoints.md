@@ -4,7 +4,14 @@ description: 'Add root, collection, and global HTTP handlers with generated Open
 product: data
 eyebrow: 'Data and APIs'
 order: 102
-aliases: ['endpoint', 'endpoints', 'custom routes', 'Payload endpoints', 'EndpointContext']
+aliases:
+  [
+    'endpoint',
+    'endpoints',
+    'custom routes',
+    'Payload endpoints',
+    'EndpointContext'
+  ]
 navigation:
   section: 'Extend Ridu'
   order: 30
@@ -65,8 +72,8 @@ import (
 
 var Orders = ridu.Collection{
 	Slug: "orders",
-	Fields: []field.Definition{
-		field.Text("reference", field.Required()),
+	Fields: field.Fields{
+		field.Text("reference").Required(),
 	},
 	Endpoints: []ridu.Endpoint{{
 		Method:  http.MethodGet,
@@ -74,12 +81,17 @@ var Orders = ridu.Collection{
 		Summary: "Read order tracking",
 		Handler: func(ctx ridu.EndpointContext) {
 			if ctx.Actor == nil {
-				http.Error(ctx.Writer, "authentication required", http.StatusUnauthorized)
+				http.Error(
+					ctx.Writer,
+					"authentication required",
+					http.StatusUnauthorized,
+				)
 				return
 			}
 
 			id := ctx.RouteParams["id"]
-			// The same value is also available through ctx.Request.PathValue("id").
+			// The same value is also available through
+			// ctx.Request.PathValue("id").
 			ctx.Writer.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(ctx.Writer).Encode(map[string]string{
 				"id":     id,
@@ -109,7 +121,8 @@ order, err := ctx.Local.FindWithOptions(
 	},
 )
 if err != nil {
-	// Translate the operation failure to the endpoint's chosen public response.
+	// Translate the operation failure to the endpoint's chosen public
+	// response.
 	http.Error(ctx.Writer, "order unavailable", http.StatusNotFound)
 	return
 }
@@ -162,12 +175,19 @@ Custom endpoints own arbitrary request and response shapes, so the SDK exposes r
 than pretending they share collection envelopes:
 
 ```ts title="tracking.ts"
-const response = await ridu.request(`/api/collections/orders/${encodeURIComponent(id)}/tracking`, {
-	method: 'GET'
-});
+const response = await ridu.request(
+	`/api/collections/orders/${encodeURIComponent(id)}/tracking`,
+	{
+		method: 'GET'
+	}
+);
 
-if (!response.ok) throw new Error(`tracking failed: ${response.status}`);
-const tracking = (await response.json()) as { id: string; status: string };
+if (!response.ok)
+	throw new Error(`tracking failed: ${response.status}`);
+const tracking = (await response.json()) as {
+	id: string;
+	status: string;
+};
 ```
 
 `request` accepts only a same-origin absolute-path reference. It retains configured credentials,

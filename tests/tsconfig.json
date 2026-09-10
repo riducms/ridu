@@ -3,5 +3,5 @@
 	"compilerOptions": {
 		"allowImportingTsExtensions": true
 	},
-	"include": ["contracts/*.test.ts", "types/bun/**/*.ts"]
+	"include": ["contracts/*.test.ts", "contracts/*.integration.ts", "types/bun/**/*.ts"]
 }

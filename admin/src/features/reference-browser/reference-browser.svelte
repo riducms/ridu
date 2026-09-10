@@ -1,5 +1,7 @@
 <script lang="ts">
+	import LiveValidationFeedback from "@admin/fields/live-validation-feedback.svelte";
 	import type { FieldReferenceBrowserProps } from "@riducms/plugin";
+	import { fieldControlARIA } from "@riducms/ui";
 	import { tick } from "svelte";
 	import ArrowLeftIcon from "~icons/lucide/arrow-left";
 	import ChevronLeftIcon from "~icons/lucide/chevron-left";
@@ -62,8 +64,9 @@
 	const lowerSingularLabel = $derived(singularLabel.toLocaleLowerCase(runtime.i18n.language));
 	const lowerPluralLabel = $derived(pluralLabel.toLocaleLowerCase(runtime.i18n.language));
 	let contentElement = $state<HTMLElement | null>(null);
+	let searchElement = $state<HTMLInputElement | null>(null);
 	// The field mounts a fresh browser for each drawer session, so workflow inputs other than the
-	// controlled open state intentionally describe that session rather than later prop replacements.
+	// controlled open/editability state intentionally describe that session rather than later prop replacements.
 	// svelte-ignore state_referenced_locally
 	const controller = new ReferenceBrowserWorkflow({
 		runtime,
@@ -72,7 +75,9 @@
 		collection,
 		hasMany,
 		selectedIDs,
-		readOnly,
+		get readOnly() {
+			return readOnly;
+		},
 		initialDocument,
 		initialDocumentID,
 		optionFilter,
@@ -136,6 +141,12 @@
 			: (workingSelection[0] ?? "")
 	);
 	const visibleResultIdentity = $derived(docs.map((document) => document.id).join("\u001f"));
+
+	function focusBrowserSearch(event: Event) {
+		if (screen !== "list" || searchElement === null) return;
+		event.preventDefault();
+		searchElement.focus();
+	}
 
 	async function handleSave(event: Event) {
 		event.preventDefault();
@@ -318,6 +329,7 @@
 		class="border-control-border bg-background-surface p-0"
 		style="width: min(760px, 96vw); max-width: 760px"
 		showCloseButton={false}
+		onOpenAutoFocus={focusBrowserSearch}
 		aria-label={screen === "list"
 			? runtime.i18n.t("reference:selectLabel", { label: fieldLabel })
 			: editorTitle}
@@ -379,6 +391,7 @@
 							{runtime.i18n.t("reference:search", { label: pluralLabel })}
 						</label>
 						<Input
+							bind:ref={searchElement}
 							id="{field.id}-relationship-search"
 							type="search"
 							disabled={committing}
@@ -611,207 +624,220 @@
 						</div>
 					{:else}
 						<form class="mx-auto max-w-[620px] px-6 py-8" onsubmit={handleSave}>
-							{#if readOnly}
-								<Banner class="mb-6" tone="warning">
-									{runtime.i18n.t("reference:readOnlyDescription")}
-								</Banner>
-							{/if}
-							{#if editorError !== undefined}
-								<Banner class="mb-6" tone="destructive">{editorError}</Banner>
-							{/if}
-							{#if !readOnly && form.access !== undefined && !form.access.operations[creating ? "create" : "update"]}
-								<Banner class="mb-6" tone="warning">
-									{runtime.i18n.t(creating ? "reference:cannotCreate" : "reference:cannotUpdate", {
-										label: lowerSingularLabel,
-									})}
-								</Banner>
-							{/if}
-
-							{#if collection.capabilities.upload && editorDocument !== undefined}
-								<div
-									class="mb-7 overflow-hidden rounded-[4px] border border-control-border bg-control"
-								>
-									<div class="grid min-h-48 place-items-center bg-background-layer">
-										{#if isImage(editorDocument) && mediaURL(editorDocument) !== undefined}
-											<img
-												class="max-h-72 w-full object-contain"
-												src={mediaURL(editorDocument)}
-												alt={typeof editorDocument.alt === "string" ? editorDocument.alt : ""}
-											/>
-										{:else}
-											<FileIcon class="size-9 text-foreground-faint" />
-										{/if}
-									</div>
-									<dl
-										class="grid grid-cols-[90px_1fr] gap-x-4 gap-y-2 border-t border-control-border px-4 py-3 text-[11.5px]"
-									>
-										<dt class="text-foreground-faint">{runtime.i18n.t("uploads:filename")}</dt>
-										<dd class="min-w-0 truncate text-foreground-muted">
-											{String(editorDocument.filename ?? "—")}
-										</dd>
-										<dt class="text-foreground-faint">{runtime.i18n.t("uploads:type")}</dt>
-										<dd class="font-mono text-[10.5px] text-foreground-muted">
-											{String(editorDocument.mimeType ?? "—")}
-										</dd>
-										<dt class="text-foreground-faint">{runtime.i18n.t("uploads:size")}</dt>
-										<dd class="font-mono text-[10.5px] text-foreground-muted">
-											{formatBytes(editorDocument.filesize) || "—"}
-										</dd>
-										<dt class="text-foreground-faint">
-											{runtime.i18n.t("uploads:dimensions")}
-										</dt>
-										<dd class="font-mono text-[10.5px] text-foreground-muted">
-											{typeof editorDocument.width === "number" &&
-											typeof editorDocument.height === "number"
-												? `${runtime.i18n.formatNumber(editorDocument.width)} × ${runtime.i18n.formatNumber(editorDocument.height)}`
-												: "—"}
-										</dd>
-									</dl>
-								</div>
-							{/if}
-
-							{#if creating && collection.capabilities.upload}
-								<label
-									class="mb-7 grid min-h-44 cursor-pointer place-items-center rounded-[4px] border border-dashed border-control-border-hover bg-control px-6 py-8 text-center transition-colors hover:border-primary/45 hover:bg-primary/[0.025]"
-								>
-									<input
-										class="sr-only"
-										type="file"
-										accept={collection.uploadSettings?.mimeTypes.join(",")}
-										required
-										disabled={form.submitting || form.access?.operations.create !== true}
-										bind:files={controller.selectedFiles}
-									/>
-									<span>
-										<FileUpIcon class="mx-auto size-6 text-foreground-faint" />
-										<span class="mt-3 block text-[13.5px] font-medium text-foreground-muted">
-											{selectedFile?.name ?? runtime.i18n.t("uploads:chooseFileToUpload")}
-										</span>
-										<span class="font-mono mt-1.5 block text-[9.5px] text-foreground-faint">
-											{runtime.i18n.formatList(collection.uploadSettings?.mimeTypes ?? [], {
-												style: "short",
-												type: "disjunction",
-											})}
-										</span>
-									</span>
-								</label>
-							{/if}
-
-							{#if controller.creatingAuthUser}
-								<fieldset
-									class="mb-7 grid gap-4 rounded-[4px] border border-control-border bg-control p-4.5"
-								>
-									<legend class="px-1 text-[13px] font-semibold text-foreground">
-										{runtime.i18n.t("reference:credentials")}
-									</legend>
-									<div class="grid gap-4 sm:grid-cols-2">
-										<label class="grid gap-2" for="ridu-reference-new-user-password">
-											<span class="ridu-field-label">{runtime.i18n.t("reference:password")}</span>
-											<input
-												id="ridu-reference-new-user-password"
-												type="password"
-												autocomplete="new-password"
-												required
-												disabled={form.submitting || form.access?.operations.create !== true}
-												aria-invalid={controller.credentialIssue !== undefined}
-												aria-describedby="ridu-reference-new-user-password-help"
-												bind:value={controller.newUserPassword}
-												oninput={() => (controller.credentialIssue = undefined)}
-											/>
-										</label>
-										<label class="grid gap-2" for="ridu-reference-new-user-password-confirmation">
-											<span class="ridu-field-label">
-												{runtime.i18n.t("reference:confirmPassword")}
-											</span>
-											<input
-												id="ridu-reference-new-user-password-confirmation"
-												type="password"
-												autocomplete="new-password"
-												required
-												disabled={form.submitting || form.access?.operations.create !== true}
-												aria-invalid={controller.credentialIssue !== undefined}
-												aria-describedby="ridu-reference-new-user-password-help"
-												bind:value={controller.newUserPasswordConfirmation}
-												oninput={() => (controller.credentialIssue = undefined)}
-											/>
-										</label>
-									</div>
-									<p
-										id="ridu-reference-new-user-password-help"
-										class={controller.credentialIssue === undefined
-											? "ridu-field-help"
-											: "ridu-field-error"}
-										role={controller.credentialIssue === undefined ? undefined : "alert"}
-									>
-										{controller.credentialIssue ??
-											runtime.i18n.t("reference:passwordMinimum", {
-												minimum: runtime.i18n.formatNumber(
-													collection.authSettings?.passwordMinLength ?? 8
-												),
-											})}
-									</p>
-								</fieldset>
-							{/if}
-
-							<p class="font-mono text-[9.5px] tracking-[0.13em] text-foreground-faint uppercase">
-								{creating
-									? runtime.i18n.t("reference:newMetadata", { label: singularLabel })
-									: `${singularLabel} · ${editorDocument?.id ?? ""}`}
-							</p>
-							{#if headingField !== undefined}
-								<div data-field-path={headingField.path}>
-									<label class="sr-only" for={headingField.id}>
-										{runtime.i18n.text(
-											headingField.admin.label,
-											headingField.admin.labelTranslations
+							<fieldset class="contents" disabled={form.submitting}>
+								{#if readOnly}
+									<Banner class="mb-6" tone="warning">
+										{runtime.i18n.t("reference:readOnlyDescription")}
+									</Banner>
+								{/if}
+								{#if editorError !== undefined}
+									<Banner class="mb-6" tone="destructive">{editorError}</Banner>
+								{/if}
+								{#if !readOnly && form.access !== undefined && !form.access.operations[creating ? "create" : "update"]}
+									<Banner class="mb-6" tone="warning">
+										{runtime.i18n.t(
+											creating ? "reference:cannotCreate" : "reference:cannotUpdate",
+											{
+												label: lowerSingularLabel,
+											}
 										)}
+									</Banner>
+								{/if}
+
+								{#if collection.capabilities.upload && editorDocument !== undefined}
+									<div
+										class="mb-7 overflow-hidden rounded-[4px] border border-control-border bg-control"
+									>
+										<div class="grid min-h-48 place-items-center bg-background-layer">
+											{#if isImage(editorDocument) && mediaURL(editorDocument) !== undefined}
+												<img
+													class="max-h-72 w-full object-contain"
+													src={mediaURL(editorDocument)}
+													alt={typeof editorDocument.alt === "string" ? editorDocument.alt : ""}
+												/>
+											{:else}
+												<FileIcon class="size-9 text-foreground-faint" />
+											{/if}
+										</div>
+										<dl
+											class="grid grid-cols-[90px_1fr] gap-x-4 gap-y-2 border-t border-control-border px-4 py-3 text-[11.5px]"
+										>
+											<dt class="text-foreground-faint">{runtime.i18n.t("uploads:filename")}</dt>
+											<dd class="min-w-0 truncate text-foreground-muted">
+												{String(editorDocument.filename ?? "—")}
+											</dd>
+											<dt class="text-foreground-faint">{runtime.i18n.t("uploads:type")}</dt>
+											<dd class="font-mono text-[10.5px] text-foreground-muted">
+												{String(editorDocument.mimeType ?? "—")}
+											</dd>
+											<dt class="text-foreground-faint">{runtime.i18n.t("uploads:size")}</dt>
+											<dd class="font-mono text-[10.5px] text-foreground-muted">
+												{formatBytes(editorDocument.filesize) || "—"}
+											</dd>
+											<dt class="text-foreground-faint">
+												{runtime.i18n.t("uploads:dimensions")}
+											</dt>
+											<dd class="font-mono text-[10.5px] text-foreground-muted">
+												{typeof editorDocument.width === "number" &&
+												typeof editorDocument.height === "number"
+													? `${runtime.i18n.formatNumber(editorDocument.width)} × ${runtime.i18n.formatNumber(editorDocument.height)}`
+													: "—"}
+											</dd>
+										</dl>
+									</div>
+								{/if}
+
+								{#if creating && collection.capabilities.upload}
+									<label
+										class="mb-7 grid min-h-44 cursor-pointer place-items-center rounded-[4px] border border-dashed border-control-border-hover bg-control px-6 py-8 text-center transition-colors hover:border-primary/45 hover:bg-primary/[0.025]"
+									>
+										<input
+											class="sr-only"
+											type="file"
+											accept={collection.uploadSettings?.mimeTypes.join(",")}
+											required
+											disabled={form.submitting || form.access?.operations.create !== true}
+											bind:files={controller.selectedFiles}
+										/>
+										<span>
+											<FileUpIcon class="mx-auto size-6 text-foreground-faint" />
+											<span class="mt-3 block text-[13.5px] font-medium text-foreground-muted">
+												{selectedFile?.name ?? runtime.i18n.t("uploads:chooseFileToUpload")}
+											</span>
+											<span class="font-mono mt-1.5 block text-[9.5px] text-foreground-faint">
+												{runtime.i18n.formatList(collection.uploadSettings?.mimeTypes ?? [], {
+													style: "short",
+													type: "disjunction",
+												})}
+											</span>
+										</span>
 									</label>
-									<input
-										id={headingField.id}
-										class="font-serif mt-3 w-full border-x-0 border-t-0 border-b border-b-transparent bg-transparent p-0 pb-1 text-[34px] leading-[1.08] text-foreground caret-primary outline-none placeholder:text-foreground-soft aria-invalid:border-b-destructive/65"
-										value={String(form.get(headingField.path) ?? "")}
-										placeholder={runtime.i18n.t("reference:untitledLabel", {
-											label: lowerSingularLabel,
-										})}
-										required={headingField.required}
-										readonly={readOnly || form.submitting || !form.canWrite(headingField.path)}
-										aria-invalid={headingIssues.length > 0}
-										aria-describedby={headingIssues.length > 0
-											? `${headingField.id}-message`
-											: undefined}
-										aria-errormessage={headingIssues.length > 0
-											? `${headingField.id}-message`
-											: undefined}
-										oninput={(event) => form.set(headingField.path, event.currentTarget.value)}
-									/>
-									<FieldMessages
-										id="{headingField.id}-message"
-										issues={headingIssues}
-										class="mt-2"
+								{/if}
+
+								{#if controller.creatingAuthUser}
+									<fieldset
+										class="mb-7 grid gap-4 rounded-[4px] border border-control-border bg-control p-4.5"
+									>
+										<legend class="px-1 text-[13px] font-semibold text-foreground">
+											{runtime.i18n.t("reference:credentials")}
+										</legend>
+										<div class="grid gap-4 sm:grid-cols-2">
+											<label class="grid gap-2" for="ridu-reference-new-user-password">
+												<span class="ridu-field-label">{runtime.i18n.t("reference:password")}</span>
+												<input
+													id="ridu-reference-new-user-password"
+													type="password"
+													autocomplete="new-password"
+													required
+													disabled={form.submitting || form.access?.operations.create !== true}
+													aria-invalid={controller.credentialIssue !== undefined}
+													aria-describedby="ridu-reference-new-user-password-help"
+													bind:value={controller.newUserPassword}
+													oninput={() => (controller.credentialIssue = undefined)}
+												/>
+											</label>
+											<label class="grid gap-2" for="ridu-reference-new-user-password-confirmation">
+												<span class="ridu-field-label">
+													{runtime.i18n.t("reference:confirmPassword")}
+												</span>
+												<input
+													id="ridu-reference-new-user-password-confirmation"
+													type="password"
+													autocomplete="new-password"
+													required
+													disabled={form.submitting || form.access?.operations.create !== true}
+													aria-invalid={controller.credentialIssue !== undefined}
+													aria-describedby="ridu-reference-new-user-password-help"
+													bind:value={controller.newUserPasswordConfirmation}
+													oninput={() => (controller.credentialIssue = undefined)}
+												/>
+											</label>
+										</div>
+										<p
+											id="ridu-reference-new-user-password-help"
+											class={controller.credentialIssue === undefined
+												? "ridu-field-help"
+												: "ridu-field-error"}
+											role={controller.credentialIssue === undefined ? undefined : "alert"}
+										>
+											{controller.credentialIssue ??
+												runtime.i18n.t("reference:passwordMinimum", {
+													minimum: runtime.i18n.formatNumber(
+														collection.authSettings?.passwordMinLength ?? 8
+													),
+												})}
+										</p>
+									</fieldset>
+								{/if}
+
+								<p class="font-mono text-[9.5px] tracking-[0.13em] text-foreground-faint uppercase">
+									{creating
+										? runtime.i18n.t("reference:newMetadata", { label: singularLabel })
+										: `${singularLabel} · ${editorDocument?.id ?? ""}`}
+								</p>
+								{#if headingField !== undefined}
+									<div data-field-path={headingField.path}>
+										<label class="sr-only" for={headingField.id}>
+											{runtime.i18n.text(
+												headingField.admin.label,
+												headingField.admin.labelTranslations
+											)}
+										</label>
+										<FieldMessages
+											controlID={headingField.id}
+											issues={headingIssues}
+											description={headingField.admin.description}
+											class="mt-3"
+										>
+											<input
+												id={headingField.id}
+												class="font-serif w-full border-x-0 border-t-0 border-b border-b-transparent bg-transparent p-0 pb-1 text-[34px] leading-[1.08] text-foreground caret-primary outline-none placeholder:text-foreground-soft aria-invalid:!border-b-destructive/65"
+												value={String(form.get(headingField.path) ?? "")}
+												placeholder={runtime.i18n.t("reference:untitledLabel", {
+													label: lowerSingularLabel,
+												})}
+												required={headingField.required &&
+													(!headingField.dynamicDefault ||
+														form.get(headingField.path) !== undefined)}
+												readonly={readOnly || !form.canWrite(headingField.path)}
+												{...fieldControlARIA(
+													headingField.id,
+													headingField.admin.description !== undefined,
+													headingIssues.length > 0
+												)}
+												oninput={(event) => form.set(headingField.path, event.currentTarget.value)}
+												onblur={() => form.liveValidation.flush(headingField.path)}
+											/>
+										</FieldMessages>
+										<LiveValidationFeedback
+											feedback={form.liveValidation.forField(headingField.path)}
+											i18n={runtime.i18n}
+											path={headingField.path}
+										/>
+									</div>
+								{/if}
+
+								<div class="mt-7">
+									<FieldLayout
+										fields={editorFields.map((candidate) =>
+											readOnly
+												? { ...candidate, admin: { ...candidate.admin, readOnly: true } }
+												: candidate
+										)}
+										{form}
 									/>
 								</div>
-							{/if}
 
-							<div class="mt-7">
-								<FieldLayout
-									fields={editorFields.map((candidate) =>
-										readOnly || form.submitting
-											? { ...candidate, admin: { ...candidate.admin, readOnly: true } }
-											: candidate
-									)}
-									{form}
-								/>
-							</div>
-
-							{#if !readOnly}
-								<div class="mt-8 flex justify-end">
-									<Button type="submit" disabled={!canSave}>
-										{creating
-											? runtime.i18n.t("reference:createLabel", { label: lowerSingularLabel })
-											: runtime.i18n.t("reference:saveLabel", { label: lowerSingularLabel })}
-									</Button>
-								</div>
-							{/if}
+								{#if !readOnly}
+									<div class="mt-8 flex justify-end">
+										<Button type="submit" disabled={!canSave}>
+											{creating
+												? runtime.i18n.t("reference:createLabel", { label: lowerSingularLabel })
+												: runtime.i18n.t("reference:saveLabel", { label: lowerSingularLabel })}
+										</Button>
+									</div>
+								{/if}
+							</fieldset>
 						</form>
 					{/if}
 				</div>

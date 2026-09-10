@@ -19,6 +19,7 @@ export type ErrorCode =
 
 export type FieldType =
 	| "text"
+	| "text-list"
 	| "code"
 	| "select"
 	| "radio"
@@ -33,6 +34,7 @@ export type FieldType =
 	| "email"
 	| "date"
 	| "number"
+	| "number-list"
 	| "checkbox"
 	| "json"
 	| "array"
@@ -55,6 +57,41 @@ export interface ValidationIssue {
 	code: string;
 	path: string;
 	message: string;
+	target?: string;
+	fieldId?: string;
+	collectionId?: string;
+	globalId?: string;
+	locale?: string;
+}
+
+/** Explicit advisory evaluation of an unsaved snapshot; never a write. */
+export interface LiveValidationRequest {
+	id?: string;
+	data: Record<string, unknown>;
+	fields: string[];
+	embedded?: LiveValidationEmbeddedScope[];
+}
+
+/** A detached payload selected through Go-declared plugin metadata. */
+export interface LiveValidationEmbeddedScope {
+	field: string;
+	treeKey: string;
+	caseTag: string;
+	variantSlug: string;
+	identity: string;
+	data: Record<string, unknown>;
+}
+
+export interface LiveValidationEvaluation {
+	path: string;
+	target?: string;
+	status: "checked" | "skipped";
+	issues: ValidationIssue[];
+}
+
+/** Advisory feedback is separate from authoritative save failures. */
+export interface LiveValidationEnvelope {
+	evaluations: LiveValidationEvaluation[];
 }
 
 export interface ErrorPayload {
@@ -265,6 +302,7 @@ export interface APIKeysEnvelope {
 }
 
 export interface SchemaManifest {
+	blocks?: SchemaBlockType[];
 	version: typeof SCHEMA_MANIFEST_VERSION;
 	application: SchemaApplication;
 	collections: SchemaCollection[];
@@ -353,6 +391,7 @@ export interface SchemaPluginAdmin {
 }
 
 export interface SchemaPluginFieldType {
+	embeddedTypes?: string[];
 	key: string;
 	typescriptPackage: string;
 	typescriptOutput: string;
@@ -496,12 +535,16 @@ export interface SchemaField {
 	unique: boolean;
 	index?: boolean;
 	localized?: boolean;
+	queryRestricted?: boolean;
 	default?: string;
+	dynamicDefault?: boolean;
+	liveValidation?: boolean;
 	admin: SchemaFieldAdmin;
 	text?: SchemaTextField;
 	textarea?: SchemaTextField;
 	code?: SchemaCodeField;
 	number?: SchemaNumberField;
+	list?: SchemaPrimitiveListField;
 	date?: SchemaDateField;
 	select?: SchemaSelectField;
 	point?: SchemaPointField;
@@ -516,6 +559,8 @@ export interface SchemaField {
 }
 
 export interface SchemaFieldAdmin {
+	extensions?: Record<string, unknown>;
+	editor?: SchemaFieldEditor;
 	label: string;
 	labelTranslations?: Record<string, string>;
 	description?: string;
@@ -536,14 +581,21 @@ export interface SchemaFieldAdmin {
 	component?: SchemaFieldAdminComponent;
 }
 
+export interface SchemaFieldEditor {
+	reference: string;
+	config?: unknown;
+}
+
 export interface SchemaFieldAdminComponent {
-	plugin: string;
-	component: string;
+	reference?: string;
+	plugin?: string;
+	component?: string;
 	config?: unknown;
 }
 
 export interface SchemaFieldRow {
 	id: string;
+	extensions?: Record<string, unknown>;
 }
 
 export interface SchemaFieldCollapsible {
@@ -551,10 +603,12 @@ export interface SchemaFieldCollapsible {
 	label: string;
 	labelTranslations?: Record<string, string>;
 	initiallyCollapsed?: boolean;
+	extensions?: Record<string, unknown>;
 }
 
 export interface SchemaFieldTabGroup {
 	id: string;
+	extensions?: Record<string, unknown>;
 }
 
 export type SchemaFieldCondition =
@@ -573,6 +627,11 @@ export type SchemaFieldConditionValue =
 	| { type: "string"; value: string }
 	| { type: "number"; value: string }
 	| { type: "boolean"; value: "true" | "false" };
+
+export interface SchemaPrimitiveListField {
+	minRows?: number;
+	maxRows?: number;
+}
 
 export interface SchemaTextField {
 	minLength?: number;
@@ -596,10 +655,10 @@ export interface SchemaNumberField {
 	step?: number;
 }
 
-export type SchemaDatePickerAppearance = "dayOnly" | "dayAndTime" | "timeOnly";
+export type SchemaDateFormat = "date" | "date-time" | "time";
 
 export interface SchemaDateField {
-	pickerAppearance: SchemaDatePickerAppearance;
+	format: SchemaDateFormat;
 }
 
 export type SchemaPointField = Record<never, never>;
@@ -622,12 +681,12 @@ export interface SchemaVirtualField {
 }
 
 export interface SchemaSelectField {
-	choices: SchemaSelectChoice[];
+	options: SchemaSelectOption[];
 	hasMany?: boolean;
 	defaultValues?: string[];
 }
 
-export interface SchemaSelectChoice {
+export interface SchemaSelectOption {
 	value: string;
 	label: string;
 	labelTranslations?: Record<string, string>;
@@ -688,17 +747,47 @@ export interface SchemaArrayRowLabels {
 }
 
 export interface SchemaBlocksField {
-	types: SchemaBlockType[];
+	minRows?: number;
+	maxRows?: number;
+	types?: SchemaBlockType[];
+	blockReferences?: string[];
+}
+
+export interface SchemaBlockLabels {
+	singular: string;
+	plural: string;
+	singularTranslations?: Record<string, string>;
+	pluralTranslations?: Record<string, string>;
 }
 
 export interface SchemaBlockType {
-	key: string;
-	label: string;
-	labelTranslations?: Record<string, string>;
+	typeName?: string;
+	admin?: { rowLabel?: string };
+	slug: string;
+	labels: SchemaBlockLabels;
 	fields: SchemaField[];
 }
 
+export interface SchemaEmbeddedTree {
+	version: number;
+	key: string;
+	root: string[];
+	children: string;
+	tag: string;
+	cases: SchemaEmbeddedTreeCase[];
+}
+
+export interface SchemaEmbeddedTreeCase {
+	tagValue: string;
+	payload: string;
+	discriminator: string;
+	identity: string;
+	types?: SchemaBlockType[];
+	blockReferences?: string[];
+}
+
 export interface SchemaPluginField {
+	embeddedTrees?: SchemaEmbeddedTree[];
 	key: string;
 	config: unknown;
 	referenceKeys?: string[];

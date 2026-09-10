@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	ridu "github.com/riducms/ridu"
+	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/store"
 )
 
@@ -49,7 +50,7 @@ type BeforeEmail func(EmailContext, []Email) ([]Email, error)
 type SendEmail func(stdcontext.Context, Email) error
 
 func (plugin *Plugin) sendSubmissionEmails(context ridu.HookContext) error {
-	if context.Operation != ridu.OperationCreate || plugin.config.SendEmail == nil || context.Document == nil {
+	if context.Operation != operation.Create || plugin.config.SendEmail == nil || context.Document == nil {
 		return nil
 	}
 	formID, valid := relationshipID(context.Document.Values["form"])
@@ -65,34 +66,34 @@ func (plugin *Plugin) sendSubmissionEmails(context ridu.HookContext) error {
 	rows, _ := listValue(context.Document.Values, "submissionData")
 	templateValues := make([]templateValue, 0, len(rows)+1)
 	for _, value := range rows {
-		row, valid := value.ObjectValue()
-		if !valid {
+		row := value
+		if row.Kind() != store.ValueObject {
 			continue
 		}
-		fieldName, _ := stringValue(row, "field")
-		templateValues = append(templateValues, templateValue{Field: fieldName, Value: scalarString(row["value"])})
+		fieldName, _ := row.Get("field").StringValue()
+		templateValues = append(templateValues, templateValue{Field: fieldName, Value: scalarString(row.Get("value"))})
 	}
 	templateValues = append(templateValues, templateValue{Field: "formSubmissionID", Value: context.Document.ID})
 	emailRows, _ := listValue(form.Values, "emails")
 	emails := make([]Email, 0, len(emailRows))
 	for index, value := range emailRows {
-		row, valid := value.ObjectValue()
-		if !valid {
+		row := value
+		if row.Kind() != store.ValueObject {
 			continue
 		}
-		to, _ := stringValue(row, "emailTo")
+		to, _ := row.Get("emailTo").StringValue()
 		if strings.TrimSpace(to) == "" {
 			to = plugin.config.DefaultToEmail
 		}
-		cc, _ := stringValue(row, "cc")
-		bcc, _ := stringValue(row, "bcc")
-		from, _ := stringValue(row, "emailFrom")
-		replyTo, _ := stringValue(row, "replyTo")
+		cc, _ := row.Get("cc").StringValue()
+		bcc, _ := row.Get("bcc").StringValue()
+		from, _ := row.Get("emailFrom").StringValue()
+		replyTo, _ := row.Get("replyTo").StringValue()
 		if strings.TrimSpace(replyTo) == "" {
 			replyTo = from
 		}
-		subject, _ := stringValue(row, "subject")
-		message, _ := stringValue(row, "message")
+		subject, _ := row.Get("subject").StringValue()
+		message, _ := row.Get("message").StringValue()
 		email := Email{
 			To: replacePlaceholders(to, templateValues, false), CC: replacePlaceholders(cc, templateValues, false), BCC: replacePlaceholders(bcc, templateValues, false),
 			From: replacePlaceholders(from, templateValues, false), ReplyTo: replacePlaceholders(replyTo, templateValues, false), Subject: replacePlaceholders(subject, templateValues, false),

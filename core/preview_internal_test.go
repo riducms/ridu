@@ -175,12 +175,12 @@ func TestPreviewTokenBindsExactAuthCollectionAndReloadsActor(t *testing.T) {
 	application, err := New(Config{
 		Name: "preview identity", Admin: AdminConfig{User: "users"},
 		Collections: []Collection{
-			{Slug: "users", Auth: true, Fields: []field.Definition{field.Email("email", field.Required(), field.Unique()), field.Text("role")}},
-			{Slug: "staff", Auth: true, Fields: []field.Definition{field.Email("email", field.Required(), field.Unique()), field.Text("role")}},
+			{Slug: "users", Auth: true, Fields: field.Fields{field.Email("email").Required().Unique(), field.Text("role")}},
+			{Slug: "staff", Auth: true, Fields: field.Fields{field.Email("email").Required().Unique(), field.Text("role")}},
 			{
 				Slug: "posts", Versions: true, VersionConfig: VersionConfig{Drafts: true},
 				Admin:  CollectionAdmin{LivePreview: LivePreviewConfig{URL: "https://preview.example.test/posts/{id}"}},
-				Fields: []field.Definition{field.Text("title")},
+				Fields: field.Fields{field.Text("title")},
 				Access: CollectionAccess{
 					Create: func(AccessContext) (AccessDecision, error) { return Allow(), nil },
 					Read: func(ctx AccessContext) (AccessDecision, error) {
@@ -315,11 +315,11 @@ func TestPreviewTokenActorQuotaAndExplicitRevocation(t *testing.T) {
 	application, err := New(Config{
 		Name: "preview quota", Admin: AdminConfig{User: "users"},
 		Collections: []Collection{
-			{Slug: "users", Auth: true, Fields: []field.Definition{field.Email("email", field.Required(), field.Unique())}},
+			{Slug: "users", Auth: true, Fields: field.Fields{field.Email("email").Required().Unique()}},
 			{
 				Slug: "posts", Versions: true, VersionConfig: VersionConfig{Drafts: true},
 				Admin:  CollectionAdmin{LivePreview: LivePreviewConfig{URL: "https://preview.example.test/posts/{id}"}},
-				Fields: []field.Definition{field.Text("title")},
+				Fields: field.Fields{field.Text("title")},
 			},
 		},
 	}, backend)
@@ -475,11 +475,11 @@ func newPreviewRaceApplication(t *testing.T, backend store.Store) (*App, store.D
 	application, err := New(Config{
 		Name: "preview race", Admin: AdminConfig{User: "users"},
 		Collections: []Collection{
-			{Slug: "users", Auth: true, Fields: []field.Definition{field.Email("email", field.Required(), field.Unique())}},
+			{Slug: "users", Auth: true, Fields: field.Fields{field.Email("email").Required().Unique()}},
 			{
 				Slug: "posts", Versions: true, VersionConfig: VersionConfig{Drafts: true},
 				Admin:  CollectionAdmin{LivePreview: LivePreviewConfig{URL: "https://preview.example.test/posts/{id}"}},
-				Fields: []field.Definition{field.Text("title")},
+				Fields: field.Fields{field.Text("title")},
 			},
 		},
 	}, backend)

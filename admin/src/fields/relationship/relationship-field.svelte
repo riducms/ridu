@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { FieldAuthoringHost } from "@riducms/plugin";
 	import type { SchemaField } from "@riducms/protocol";
+	import { fieldControlARIA } from "@riducms/ui";
 	import FileIcon from "~icons/lucide/file";
 	import PencilIcon from "~icons/lucide/pencil";
 	import PlusIcon from "~icons/lucide/plus";
@@ -59,9 +60,12 @@
 		selectTarget,
 		setBrowserOpen,
 	} = controller;
-	const hasMessage = $derived(issues.length > 0 || field.admin.description !== undefined);
+	const controlARIA = $derived(
+		fieldControlARIA(field.id, field.admin.description !== undefined, issues.length > 0)
+	);
+	const editingBlocked = $derived(field.admin.readOnly === true || form.editingBlocked);
 	const optionFilter = $derived(
-		relationshipOptionFilters(field, form.values, targetCollection?.slug)
+		relationshipOptionFilters(field, (path) => form.get(path), targetCollection?.slug)
 	);
 	const quickPickerTargets = $derived(
 		targets.flatMap((target) => {
@@ -73,18 +77,20 @@
 				: [
 						{
 							collection: localizeSchemaCollection(collection, runtime.i18n),
-							filter: relationshipOptionFilters(field, form.values, collection.slug),
+							filter: relationshipOptionFilters(field, (path) => form.get(path), collection.slug),
 						},
 					];
 		})
 	);
 
 	function pickRelationship(target: string, id: string) {
+		if (editingBlocked) return;
 		selectTarget(target);
 		commit([id]);
 	}
 
 	function browseRelationships(target: string) {
+		if (form.editingBlocked) return;
 		selectTarget(target);
 		openBrowser();
 	}
@@ -101,13 +107,17 @@
 	{:else if field.upload !== undefined && !hasMany && selectedID !== undefined}
 		{const document = documents[selectedID]}
 		<div
-			class="flex min-h-17 items-center gap-2.5 rounded-[4px] border border-control-border bg-control p-2"
+			class="flex min-h-17 items-center gap-2.5 rounded-[4px] border border-control-border bg-control p-2 aria-invalid:!border-destructive/65"
+			aria-invalid={issues.length > 0}
 		>
 			<button
+				id={field.id}
 				type="button"
+				disabled={form.editingBlocked}
 				class="group flex min-w-0 flex-1 items-center gap-2.5 rounded-[3px] text-start outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
 				onclick={() => openBrowser(selectedID)}
 				aria-label={runtime.i18n.t("fields:edit", { label: label(selectedID) })}
+				{...controlARIA}
 			>
 				<span
 					class="grid size-14 shrink-0 place-items-center overflow-hidden rounded-[3px] border border-control-border bg-background"
@@ -137,11 +147,16 @@
 			</button>
 			{#if !field.admin.readOnly}
 				<div class="flex shrink-0 flex-wrap justify-end gap-1">
-					<Button variant="outline" size="xs" onclick={() => openBrowser()}>
+					<Button
+						variant="outline"
+						size="xs"
+						disabled={form.editingBlocked}
+						onclick={() => openBrowser()}
+					>
 						<SearchIcon class="size-3" />
 						{runtime.i18n.t("general:replace")}
 					</Button>
-					<Button variant="ghost" size="xs" onclick={() => commit([])}>
+					<Button variant="ghost" size="xs" disabled={editingBlocked} onclick={() => commit([])}>
 						<XIcon class="size-3" />
 						{runtime.i18n.t("general:remove")}
 					</Button>
@@ -160,27 +175,31 @@
 				selectedInitials={selectedID === undefined ? undefined : initials(selectedID)}
 				placeholder={field.admin.placeholder}
 				readOnly={field.admin.readOnly}
+				blocked={form.editingBlocked}
 				locale={form.contentLocale}
 				upload={field.upload !== undefined}
 				invalid={issues.length > 0}
-				describedBy={hasMessage ? `${field.id}-message` : undefined}
+				hasDescription={field.admin.description !== undefined}
 				onPick={pickRelationship}
-				onRemove={() => commit([])}
+				onRemove={() => {
+					if (!editingBlocked) commit([]);
+				}}
 				onBrowse={browseRelationships}
 				onEdit={selectedID === undefined ? undefined : () => openBrowser(selectedID)}
 			/>
 		{:else}
 			<div
-				class="flex min-h-10 min-w-0 rounded-[3px] border border-control-border bg-control transition-colors hover:border-control-border-hover aria-invalid:border-destructive/65"
+				class="flex min-h-10 min-w-0 rounded-[3px] border border-control-border bg-control transition-colors hover:border-control-border-hover aria-invalid:!border-destructive/65"
 				aria-invalid={issues.length > 0}
 			>
 				{#if selectedIDs.length === 0}
 					<button
 						id={field.id}
 						type="button"
+						disabled={form.editingBlocked}
 						class="flex min-h-10 min-w-0 flex-1 items-center px-3 text-start text-[13px] text-foreground-placeholder outline-none hover:text-foreground focus-visible:text-primary"
 						onclick={() => openBrowser()}
-						aria-describedby={hasMessage ? `${field.id}-message` : undefined}
+						{...controlARIA}
 					>
 						<span class="px-1.5 text-[13px] text-foreground-placeholder">
 							{field.admin.placeholder ??
@@ -197,6 +216,7 @@
 							>
 								<button
 									type="button"
+									disabled={form.editingBlocked}
 									class="min-w-0 flex-1 truncate text-start outline-none hover:text-foreground focus-visible:text-primary"
 									onclick={() => openBrowser(id)}
 									aria-label={runtime.i18n.t("fields:edit", { label: label(id) })}
@@ -207,6 +227,7 @@
 									<Button
 										variant="ghost"
 										size="icon-xs"
+										disabled={editingBlocked}
 										onclick={() => remove(id)}
 										aria-label={runtime.i18n.t("fields:remove", { label: label(id) })}
 									>
@@ -221,8 +242,9 @@
 					variant="ghost"
 					size="icon"
 					class="h-auto min-h-10 w-10 rounded-s-none border-s border-control-border"
+					disabled={form.editingBlocked}
 					onclick={() => openBrowser()}
-					aria-describedby={hasMessage ? `${field.id}-message` : undefined}
+					{...controlARIA}
 					aria-label={runtime.i18n.t("fields:browse", {
 						label: targetCollection.labels.plural.toLocaleLowerCase(runtime.i18n.language),
 					})}
@@ -252,7 +274,9 @@
 		{initialDocumentID}
 		{optionFilter}
 		locale={form.contentLocale}
-		onCommit={commit}
+		onCommit={(ids) => {
+			if (!editingBlocked) commit(ids);
+		}}
 		onClose={() => setBrowserOpen(false)}
 	/>
 {/if}

@@ -13,8 +13,8 @@ Trash is configured per collection:
 ridu.Collection{
 	Slug:  "posts",
 	Trash: true,
-	Fields: []field.Definition{
-		field.Text("title", field.Required()),
+	Fields: field.Fields{
+		field.Text("title").Required(),
 	},
 }
 ```

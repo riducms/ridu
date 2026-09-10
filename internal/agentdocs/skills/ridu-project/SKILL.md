@@ -21,12 +21,25 @@ the reference needed for the change:
 - Requirements, scaffold choices, existing services, and recovery:
   [reference/installation.md](reference/installation.md)
 - Configuration and project assembly: [reference/configuration.md](reference/configuration.md)
+- Go packages and callback return types: [reference/go-packages.md](reference/go-packages.md)
+- Callback values and contexts: [operation](reference/go-packages/operation.md)
+- Document values and nested edits: [store](reference/go-packages/store.md)
+- Filter expressions and paths: [query](reference/go-packages/query.md)
+- Resolved schemas, IDs, and locales: [schema](reference/go-packages/schema.md)
 - Collections, globals, indexes, auth, uploads, and versions:
   [reference/collections.md](reference/collections.md)
 - Field constructors, nesting, layout, relationships, validation, and localization:
   [reference/fields.md](reference/fields.md)
 - Collection and field authorization: [reference/access-control.md](reference/access-control.md)
-- Lifecycle behavior and transactional side effects: [reference/hooks.md](reference/hooks.md)
+- Custom validation rules: [reference/fields/validation.md](reference/fields/validation.md)
+- Server feedback while editing: [reference/fields/live-validation.md](reference/fields/live-validation.md)
+- Fixed and dynamic field defaults: [reference/fields/defaults.md](reference/fields/defaults.md)
+- Nearby and previously saved field values: [reference/fields/callback-values.md](reference/fields/callback-values.md)
+- Choosing a hook: [reference/hooks.md](reference/hooks.md)
+- Document hooks: [collection hooks](reference/hooks/collections.md) and [global hooks](reference/hooks/globals.md)
+- Field transforms and output formatting: [field hooks](reference/hooks/fields.md)
+- Hook values, users, locales, and nested calls: [hook context](reference/hooks/context.md)
+- Related writes, notifications, and failures: [transactions and errors](reference/hooks/transactions-and-errors.md)
 - Filters, projection, population, sorting, and pagination:
   [reference/querying.md](reference/querying.md)
 - In-process operations and generated typed handles: [reference/local-api.md](reference/local-api.md)
@@ -49,7 +62,11 @@ the reference needed for the change:
   [reference/rich-text.md](reference/rich-text.md), [reference/seo.md](reference/seo.md),
   [reference/form-builder.md](reference/form-builder.md),
   [reference/graphql.md](reference/graphql.md), and [reference/mcp.md](reference/mcp.md)
-- Svelte admin customization and task workflows: [reference/admin.md](reference/admin.md),
+- Custom Svelte inputs, row labels, table cells, dashboards, pages, document screens, and branding:
+  [reference/custom-components.md](reference/custom-components.md)
+- New field types with Go validation and Svelte editors:
+  [reference/custom-fields.md](reference/custom-fields.md)
+- Admin task workflows: [reference/admin.md](reference/admin.md),
   [reference/browsing-content.md](reference/browsing-content.md),
   [reference/saved-views-and-hierarchy.md](reference/saved-views-and-hierarchy.md),
   [reference/editing-documents.md](reference/editing-documents.md),

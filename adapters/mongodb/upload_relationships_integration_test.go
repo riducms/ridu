@@ -24,19 +24,12 @@ func TestMongoDBUploadReferenceDeletePlansNullifiesVersionsAndRecreation(t *test
 					ImageSizes: []ridu.ImageSize{{Name: "thumb", Width: 16, Height: 16, Fit: "cover"}},
 				},
 				VersionConfig: ridu.VersionConfig{Drafts: true},
-				Fields:        []field.Definition{field.Text("alt")},
+				Fields:        field.Fields{field.Text("alt")},
 			},
 			{
 				Slug: "owners", Trash: true, Versions: true,
 				VersionConfig: ridu.VersionConfig{Drafts: true},
-				Fields: []field.Definition{
-					field.Text("title", field.Required()),
-					field.Upload("guard", field.To("media"), field.OnDelete(field.ReferenceDeleteRestrict)),
-					field.Upload("hero", field.To("media"), field.OnDelete(field.ReferenceDeleteNullify)),
-					field.Group("content", field.Fields(
-						field.Upload("gallery", field.ToMany("media"), field.OnDelete(field.ReferenceDeleteNullify)),
-					)),
-				},
+				Fields:        field.Fields{field.Text("title").Required(), field.Upload("guard", "media").OnDelete(field.ReferenceDeleteRestrict), field.Upload("hero", "media").OnDelete(field.ReferenceDeleteNullify), field.Group("content", field.Fields{field.Uploads("gallery", "media").OnDelete(field.ReferenceDeleteNullify)})},
 			},
 		},
 	})
@@ -261,11 +254,11 @@ func assertMongoUploadOwnerValues(t *testing.T, document store.Document, hero st
 	} else if id, valid := document.Values["hero"].StringValue(); !valid || id != hero {
 		t.Fatalf("owner %q hero = %#v, want %q", document.ID, document.Values["hero"], hero)
 	}
-	content, valid := document.Values["content"].ObjectValue()
+	content, valid := document.Values["content"].CopyObject()
 	if !valid {
 		t.Fatalf("owner %q content = %#v", document.ID, document.Values["content"])
 	}
-	items, valid := content["gallery"].Values()
+	items, valid := content["gallery"].CopyList()
 	if !valid || len(items) != len(gallery) {
 		t.Fatalf("owner %q gallery = %#v, want %#v", document.ID, content["gallery"], gallery)
 	}

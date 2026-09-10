@@ -16,6 +16,8 @@ interface CodeMetadata {
 	label: string;
 	language: string;
 	packageManager?: PackageManager;
+	group?: string;
+	tab?: string;
 }
 
 const codeMetadataKey = 'riduCodeMetadata';
@@ -112,11 +114,18 @@ export const riduMarkdownCodeMetadata = {
 		const code = normalizeSource(node.value);
 		const language = node.lang ?? 'text';
 		const packageManager = parsePackageManager(node.meta);
+		const group = parseMetaValue(
+			node.meta?.match(/(?:^|\s)group=("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^\s]+)/)?.[1]
+		);
+		const tab = parseMetaValue(
+			node.meta?.match(/(?:^|\s)tab=("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^\s]+)/)?.[1]
+		);
 		const metadata = readCodeMetadata(context.data[codeMetadataKey]);
 		metadata.push({
 			code,
 			label: parseLabel(node.meta, language),
 			language,
+			...(group ? { group, tab: tab ?? parseLabel(node.meta, language) } : {}),
 			...(packageManager ? { packageManager } : {})
 		});
 		context.data[codeMetadataKey] = metadata;
@@ -177,6 +186,9 @@ function createCodeBlock(node: Element, block: CodeMetadata): Element {
 		properties: {
 			className: ['code-block'],
 			'data-code-block': '',
+			...(block.group
+				? { 'data-code-group': block.group, 'data-code-tab-label': block.tab ?? block.label }
+				: {}),
 			...(block.packageManager
 				? {
 						'data-package-manager-source': block.packageManager,
@@ -377,6 +389,93 @@ function createPackageManagerTabs(sources: PackageManagerSource[], groupIndex: n
 	};
 }
 
+/** Collect only adjacent, explicitly named file comparisons; prose ends a group. */
+function collectCodeFileGroups(root: Readonly<Root>) {
+	const groups: {
+		first: Readonly<Element>;
+		sources: Readonly<Element>[];
+		discard: Readonly<Root['children'][number]>[];
+	}[] = [];
+	function visit(parent: Readonly<Root | Parents>) {
+		for (let index = 0; index < parent.children.length; index += 1) {
+			const first = parent.children[index];
+			if (first.type !== 'element') continue;
+			const name = first.properties['data-code-group'];
+			if (first.tagName !== 'figure' || !name) {
+				visit(first);
+				continue;
+			}
+			const sources = [first];
+			const discard: Readonly<Root['children'][number]>[] = [];
+			let cursor = index + 1;
+			for (; cursor < parent.children.length; cursor += 1) {
+				const next = parent.children[cursor];
+				if (isWhitespace(next)) {
+					discard.push(next);
+					continue;
+				}
+				if (
+					next.type !== 'element' ||
+					next.tagName !== 'figure' ||
+					next.properties['data-code-group'] !== name
+				)
+					break;
+				sources.push(next);
+				discard.push(next);
+			}
+			if (sources.length > 1) groups.push({ first, sources, discard });
+			index = cursor - 1;
+		}
+	}
+	visit(root);
+	return groups;
+}
+
+function createCodeFileTabs(sources: Readonly<Element>[], index: number): Element {
+	const id = `code-files-${index}`;
+	return {
+		type: 'element',
+		tagName: 'div',
+		properties: { className: ['code-file-tabs'], 'data-code-file-tabs': '' },
+		children: [
+			{
+				type: 'element',
+				tagName: 'div',
+				properties: {
+					className: ['code-tabs'],
+					role: 'tablist',
+					'aria-label': 'Compare code files',
+					hidden: true
+				},
+				children: sources.map((source, tab) => ({
+					type: 'element',
+					tagName: 'button',
+					properties: {
+						id: `${id}-tab-${tab}`,
+						type: 'button',
+						role: 'tab',
+						'aria-selected': String(tab === 0),
+						'aria-controls': `${id}-panel-${tab}`,
+						tabIndex: tab === 0 ? 0 : -1
+					},
+					children: [{ type: 'text', value: String(source.properties['data-code-tab-label']) }]
+				}))
+			},
+			...sources.map((source, tab): Element => ({
+				type: 'element',
+				tagName: 'div',
+				properties: {
+					id: `${id}-panel-${tab}`,
+					role: 'tabpanel',
+					'aria-labelledby': `${id}-tab-${tab}`,
+					tabIndex: 0
+				},
+				children: [cloneElement(source)]
+			}))
+		]
+	};
+}
+
 /**
  * Restores the labelled code-block chrome used by authored Astro pages,
  * honours explicit `{#id}` heading suffixes, and makes wide tables scroll.
@@ -384,6 +483,10 @@ function createPackageManagerTabs(sources: PackageManagerSource[], groupIndex: n
 export const riduMarkdownComponents = {
 	name: 'ridu-markdown-components',
 	after(root, context) {
+		collectCodeFileGroups(root).forEach((group, index) => {
+			context.replaceNode(group.first, createCodeFileTabs(group.sources, index + 1));
+			group.discard.forEach((node) => context.removeNode(node));
+		});
 		collectPackageManagerGroups(root).forEach((group, index) => {
 			context.replaceNode(group.first, createPackageManagerTabs(group.sources, index + 1));
 			group.discard.forEach((node) => context.removeNode(node));

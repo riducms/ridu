@@ -20,7 +20,7 @@ command—it never parses Go source as a substitute.
 | Command         | Purpose                                                                                                                          |
 | --------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | `ridu new`      | Scaffold a generated application and write its initial contracts.                                                                |
-| `ridu doctor`   | Diagnose Go, Bun, project discovery, frontend dependencies, and selected database prerequisites.                                 |
+| `ridu doctor`   | Diagnose Go, the selected package manager, project discovery, frontend dependencies, and selected database prerequisites.        |
 | `ridu dev`      | Prepare the selected database and generation, then run/watch the Go API and Vite admin.                                          |
 | `ridu generate` | Resolve executable config and atomically write the manifest, clients, OpenAPI, plugin registry, and configured plugin artifacts. |
 | `ridu check`    | Verify generated and migration drift, Go format/vet/tests, and TypeScript/Svelte.                                                |
@@ -43,6 +43,16 @@ paths, URLs, and machine-readable output—remain plain text. During `ridu dev`,
 startup banner is suppressed and its warning/error output retains Vite's own formatting. Go server
 output remains identifiable by a `[server]` badge. Foreground dependency installation retains the
 selected manager's native progress and summary output.
+
+On its first run, `create-ridu` downloads the matching native CLI before opening the wizard. It
+shows elapsed time and received bytes, with a percentage when the server provides a usable total.
+CI and piped output receive plain progress lines every five seconds. Download messages go to stderr;
+cached runs skip them. Any earlier package-registry download uses your package runner's own output.
+
+If the release server sends no response or further data for 30 seconds, the download stops with
+the failing URL and recovery instructions. Check connectivity and access to that URL, then retry.
+For a slow connection, increase `RIDU_CLI_DOWNLOAD_TIMEOUT_MS` (milliseconds), or set `RIDU_BINARY`
+to an already-installed binary matching your Ridu release.
 
 Colour is detected and downsampled for the active terminal. Set `NO_COLOR` (including to an empty
 value) to disable Ridu-owned ANSI styling, or set `RIDU_ACCESSIBLE=1` to combine unstyled logs with
@@ -107,7 +117,9 @@ work without reaching into Ridu's private development repository or requiring ne
 dependency setup or initial generation fails, Ridu keeps the new directory and prints recovery
 commands; it does not discard your scaffold.
 
-Run `ridu doctor` when setup is uncertain. It accepts no flags or positional arguments. PostgreSQL
+Run `ridu doctor` when setup is uncertain. It accepts no flags or positional arguments and checks
+basic prerequisites, not executable config, release-version alignment, generated-contract drift,
+or database connectivity. Use `ridu generate --check` and `ridu check` for deeper validation. PostgreSQL
 projects need `DATABASE_URL` or Docker/OrbStack for the scaffolded service. SQLite projects report
 their configured path or the `.ridu/development.sqlite` default and do not require Docker. MongoDB
 projects need a replica-set `DATABASE_URL` or Docker/OrbStack for the scaffolded development

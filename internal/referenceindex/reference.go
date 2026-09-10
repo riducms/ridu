@@ -6,6 +6,7 @@ package referenceindex
 import (
 	"sort"
 
+	"github.com/riducms/ridu/internal/embedded"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
 )
@@ -23,7 +24,7 @@ type Entry struct {
 
 // Collect derives every relationship and upload reference in one canonical
 // current document, including nested containers and localized values.
-func Collect(collection schema.Collection, document store.Document) []Entry {
+func collectUnchecked(collection schema.Collection, document store.Document) []Entry {
 	owner := store.DocumentReference{CollectionID: collection.ID, DocumentID: document.ID}
 	var entries []Entry
 	for _, field := range collection.Fields {
@@ -31,7 +32,7 @@ func Collect(collection schema.Collection, document store.Document) []Entry {
 		if !exists {
 			continue
 		}
-		entries = append(entries, CollectField(owner, field, value, "")...)
+		entries = append(entries, collectFieldUnchecked(owner, field, value, "")...)
 	}
 	assignOccurrences(entries)
 	return entries
@@ -41,7 +42,7 @@ func Collect(collection schema.Collection, document store.Document) []Entry {
 // localized physical column, locale identifies the column and value is the
 // unwrapped locale value. An empty locale means value has canonical storage
 // shape and may itself contain locale maps.
-func CollectField(owner store.DocumentReference, field schema.Field, value store.Value, locale schema.LocaleCode) []Entry {
+func collectFieldUnchecked(owner store.DocumentReference, field schema.Field, value store.Value, locale schema.LocaleCode) []Entry {
 	var entries []Entry
 	if locale != "" && field.Localized {
 		field.Localized = false
@@ -68,18 +69,17 @@ func collectField(owner store.DocumentReference, field schema.Field, value store
 		return
 	}
 	if field.Localized {
-		localized, valid := value.ObjectValue()
-		if !valid {
+		if value.Kind() != store.ValueObject {
 			return
 		}
-		locales := make([]string, 0, len(localized))
-		for locale := range localized {
+		locales := make([]string, 0, value.Len())
+		for locale := range value.Entries() {
 			locales = append(locales, locale)
 		}
 		sort.Strings(locales)
 		field.Localized = false
 		for _, locale := range locales {
-			collectFieldValue(owner, field, localized[locale], schema.LocaleCode(locale), entries)
+			collectFieldValue(owner, field, value.Get(locale), schema.LocaleCode(locale), entries)
 		}
 		return
 	}
@@ -90,42 +90,55 @@ func collectFieldValue(owner store.DocumentReference, field schema.Field, value 
 	if value.Kind() == store.ValueNull {
 		return
 	}
+	if embedded.HasFields(field) {
+		_ = embedded.Visit(field, value, field.Name, embedded.NewBudget(), func(o embedded.ReadOccurrence) error {
+			collectObjectFields(owner, o.Fields, o.Payload, locale, entries)
+			return nil
+		})
+		return
+	}
+
 	switch field.Type {
 	case schema.FieldTypeRelationship:
 		collectRelationship(owner, field, value, locale, entries)
 	case schema.FieldTypeUpload:
 		collectUpload(owner, field, value, locale, entries)
 	case schema.FieldTypeGroup:
-		if object, valid := value.ObjectValue(); valid && field.Nested != nil {
-			collectFields(owner, field.Nested.Fields, object, locale, entries)
+		if value.Kind() == store.ValueObject && field.Nested != nil {
+			collectObjectFields(owner, field.Nested.ResolvedFields(), value, locale, entries)
 		}
 	case schema.FieldTypeArray:
-		items, valid := value.Values()
-		if !valid || field.Nested == nil {
+		if value.Kind() != store.ValueList || field.Nested == nil {
 			return
 		}
-		for _, item := range items {
-			if object, valid := item.ObjectValue(); valid {
-				collectFields(owner, field.Nested.Fields, object, locale, entries)
+		for item := range value.Elements() {
+			if item.Kind() == store.ValueObject {
+				collectObjectFields(owner, field.Nested.ResolvedFields(), item, locale, entries)
 			}
 		}
 	case schema.FieldTypeBlocks:
-		items, valid := value.Values()
-		if !valid || field.Blocks == nil {
+		if value.Kind() != store.ValueList || field.Blocks == nil {
 			return
 		}
-		for _, item := range items {
-			object, valid := item.ObjectValue()
-			if !valid {
+		for item := range value.Elements() {
+			if item.Kind() != store.ValueObject {
 				continue
 			}
-			blockType, _ := object["blockType"].StringValue()
-			for _, block := range field.Blocks.Types {
-				if block.Key == blockType {
-					collectFields(owner, block.Fields, object, locale, entries)
+			blockType, _ := item.Get("blockType").StringValue()
+			for _, block := range field.Blocks.ResolvedTypes() {
+				if block.Slug == blockType {
+					collectObjectFields(owner, block.ResolvedFields(), item, locale, entries)
 					break
 				}
 			}
+		}
+	}
+}
+
+func collectObjectFields(owner store.DocumentReference, fields []schema.Field, object store.Value, locale schema.LocaleCode, entries *[]Entry) {
+	for _, field := range fields {
+		if value, exists := object.Lookup(field.Name); exists {
+			collectField(owner, field, value, locale, entries)
 		}
 	}
 }
@@ -135,11 +148,7 @@ func collectRelationship(owner store.DocumentReference, field schema.Field, valu
 	if relationship == nil {
 		return
 	}
-	values := []store.Value{value}
-	if relationship.HasMany {
-		values, _ = value.Values()
-	}
-	for _, item := range values {
+	collect := func(item store.Value) {
 		if !relationship.Polymorphic {
 			id, valid := item.StringValue()
 			if valid && id != "" {
@@ -148,16 +157,12 @@ func collectRelationship(owner store.DocumentReference, field schema.Field, valu
 					Target: store.DocumentReference{CollectionID: relationship.CollectionID, DocumentID: id},
 				})
 			}
-			continue
+			return
 		}
-		object, valid := item.ObjectValue()
-		if !valid {
-			continue
-		}
-		slug, slugValid := object["relationTo"].StringValue()
-		id, idValid := object["id"].StringValue()
+		slug, slugValid := item.Get("relationTo").StringValue()
+		id, idValid := item.Get("id").StringValue()
 		if !slugValid || !idValid || id == "" {
-			continue
+			return
 		}
 		for _, target := range relationship.Targets {
 			if string(target.CollectionSlug) == slug {
@@ -169,6 +174,13 @@ func collectRelationship(owner store.DocumentReference, field schema.Field, valu
 			}
 		}
 	}
+	if relationship.HasMany {
+		for item := range value.Elements() {
+			collect(item)
+		}
+	} else {
+		collect(value)
+	}
 }
 
 func collectUpload(owner store.DocumentReference, field schema.Field, value store.Value, locale schema.LocaleCode, entries *[]Entry) {
@@ -176,11 +188,7 @@ func collectUpload(owner store.DocumentReference, field schema.Field, value stor
 	if upload == nil {
 		return
 	}
-	values := []store.Value{value}
-	if upload.HasMany {
-		values, _ = value.Values()
-	}
-	for _, item := range values {
+	collect := func(item store.Value) {
 		id, valid := item.StringValue()
 		if valid && id != "" {
 			*entries = append(*entries, Entry{
@@ -188,6 +196,13 @@ func collectUpload(owner store.DocumentReference, field schema.Field, value stor
 				Target: store.DocumentReference{CollectionID: upload.CollectionID, DocumentID: id},
 			})
 		}
+	}
+	if upload.HasMany {
+		for item := range value.Elements() {
+			collect(item)
+		}
+	} else {
+		collect(value)
 	}
 }
 
@@ -217,22 +232,12 @@ func findReferenceField(field schema.Field, fieldID schema.StableID) (schema.Fie
 	if field.ID == fieldID && (field.Relationship != nil || field.Upload != nil) {
 		return field, true
 	}
-	if field.Nested != nil {
-		for _, child := range field.Nested.Fields {
-			if found, ok := findReferenceField(child, fieldID); ok {
-				return found, true
-			}
+	for _, child := range schema.ChildFields(field) {
+		if found, ok := findReferenceField(child, fieldID); ok {
+			return found, true
 		}
 	}
-	if field.Blocks != nil {
-		for _, block := range field.Blocks.Types {
-			for _, child := range block.Fields {
-				if found, ok := findReferenceField(child, fieldID); ok {
-					return found, true
-				}
-			}
-		}
-	}
+
 	return schema.Field{}, false
 }
 
@@ -248,17 +253,8 @@ func collectReferenceFieldIDs(field schema.Field, ids *[]schema.StableID) {
 	if field.Relationship != nil || field.Upload != nil {
 		*ids = append(*ids, field.ID)
 	}
-	if field.Nested != nil {
-		for _, child := range field.Nested.Fields {
-			collectReferenceFieldIDs(child, ids)
-		}
-	}
-	if field.Blocks != nil {
-		for _, block := range field.Blocks.Types {
-			for _, child := range block.Fields {
-				collectReferenceFieldIDs(child, ids)
-			}
-		}
+	for _, child := range schema.ChildFields(field) {
+		collectReferenceFieldIDs(child, ids)
 	}
 }
 
@@ -295,22 +291,12 @@ func fieldTargetsAnyResource(field schema.Field, targets map[schema.StableID]str
 			return true
 		}
 	}
-	if field.Nested != nil {
-		for _, child := range field.Nested.Fields {
-			if fieldTargetsAnyResource(child, targets) {
-				return true
-			}
+	for _, child := range schema.ChildFields(field) {
+		if fieldTargetsAnyResource(child, targets) {
+			return true
 		}
 	}
-	if field.Blocks != nil {
-		for _, block := range field.Blocks.Types {
-			for _, child := range block.Fields {
-				if fieldTargetsAnyResource(child, targets) {
-					return true
-				}
-			}
-		}
-	}
+
 	return false
 }
 
@@ -319,7 +305,7 @@ func fieldTargetsAnyResource(field schema.Field, targets map[schema.StableID]str
 // document-delete policy. A schema rollback removes the target type itself,
 // so retaining restrict-policy values would only leave dormant identities that
 // could reappear on a later up migration.
-func RemoveResourceTargets(collection schema.Collection, values store.Values, resourceIDs []schema.StableID) (store.Values, bool) {
+func removeResourceTargetsUnchecked(collection schema.Collection, values store.Values, resourceIDs []schema.StableID) (store.Values, bool) {
 	targets := stableIDSet(resourceIDs)
 	result := store.CloneValues(values)
 	changed := false
@@ -364,11 +350,11 @@ func removeResourceFields(fields []schema.Field, values store.Values, targets ma
 
 func removeResourceField(field schema.Field, value store.Value, targets map[schema.StableID]struct{}) (store.Value, bool) {
 	if field.Localized {
-		localized, valid := value.ObjectValue()
+		localized, valid := value.CopyObject()
 		if !valid {
 			return value, false
 		}
-		result := store.CloneValues(localized)
+		result := localized
 		field.Localized = false
 		changed := false
 		for locale, localizedValue := range localized {
@@ -387,33 +373,46 @@ func removeResourceField(field schema.Field, value store.Value, targets map[sche
 }
 
 func removeResourceFieldValue(field schema.Field, value store.Value, targets map[schema.StableID]struct{}) (store.Value, bool) {
+	if embedded.HasFields(field) {
+		changed := false
+		updated, err := embedded.Transform(field, value, field.Name, embedded.NewBudget(), func(o embedded.Occurrence) (store.Values, error) {
+			payload, didChange := removeResourceFields(o.Fields, o.Payload, targets)
+			changed = changed || didChange
+			return payload, nil
+		})
+		if err != nil {
+			return value, false
+		}
+		return updated, changed
+	}
+
 	switch field.Type {
 	case schema.FieldTypeRelationship:
 		return removeResourceRelationship(field, value, targets)
 	case schema.FieldTypeUpload:
 		return removeResourceUpload(field, value, targets)
 	case schema.FieldTypeGroup:
-		object, valid := value.ObjectValue()
+		object, valid := value.CopyObject()
 		if !valid || field.Nested == nil {
 			return value, false
 		}
-		updated, changed := removeResourceFields(field.Nested.Fields, object, targets)
+		updated, changed := removeResourceFields(field.Nested.ResolvedFields(), object, targets)
 		if changed {
 			return store.Object(updated), true
 		}
 	case schema.FieldTypeArray:
-		items, valid := value.Values()
+		items, valid := value.CopyList()
 		if !valid || field.Nested == nil {
 			return value, false
 		}
-		updated := append([]store.Value(nil), items...)
+		updated := items
 		changed := false
 		for index, item := range items {
-			object, valid := item.ObjectValue()
+			object, valid := item.CopyObject()
 			if !valid {
 				continue
 			}
-			itemValues, itemChanged := removeResourceFields(field.Nested.Fields, object, targets)
+			itemValues, itemChanged := removeResourceFields(field.Nested.ResolvedFields(), object, targets)
 			if itemChanged {
 				updated[index] = store.Object(itemValues)
 				changed = true
@@ -423,23 +422,23 @@ func removeResourceFieldValue(field schema.Field, value store.Value, targets map
 			return store.List(updated...), true
 		}
 	case schema.FieldTypeBlocks:
-		items, valid := value.Values()
+		items, valid := value.CopyList()
 		if !valid || field.Blocks == nil {
 			return value, false
 		}
-		updated := append([]store.Value(nil), items...)
+		updated := items
 		changed := false
 		for index, item := range items {
-			object, valid := item.ObjectValue()
+			object, valid := item.CopyObject()
 			if !valid {
 				continue
 			}
 			blockType, _ := object["blockType"].StringValue()
-			for _, block := range field.Blocks.Types {
-				if block.Key != blockType {
+			for _, block := range field.Blocks.ResolvedTypes() {
+				if block.Slug != blockType {
 					continue
 				}
-				itemValues, itemChanged := removeResourceFields(block.Fields, object, targets)
+				itemValues, itemChanged := removeResourceFields(block.ResolvedFields(), object, targets)
 				if itemChanged {
 					updated[index] = store.Object(itemValues)
 					changed = true
@@ -464,8 +463,7 @@ func removeResourceRelationship(field schema.Field, value store.Value, targets m
 			return value, false
 		}
 		if relationship.HasMany {
-			items, valid := value.Values()
-			if !valid || len(items) == 0 {
+			if value.Kind() != store.ValueList || value.Len() == 0 {
 				return value, false
 			}
 			return store.List(), true
@@ -476,18 +474,17 @@ func removeResourceRelationship(field schema.Field, value store.Value, targets m
 		return value, false
 	}
 	if relationship.HasMany {
-		items, valid := value.Values()
-		if !valid {
+		if value.Kind() != store.ValueList {
 			return value, false
 		}
-		filtered := make([]store.Value, 0, len(items))
-		for _, item := range items {
+		filtered := make([]store.Value, 0, value.Len())
+		for item := range value.Elements() {
 			if polymorphicValueTargetsResource(*relationship, item, targets) {
 				continue
 			}
 			filtered = append(filtered, item)
 		}
-		if len(filtered) != len(items) {
+		if len(filtered) != value.Len() {
 			return store.List(filtered...), true
 		}
 		return value, false
@@ -499,11 +496,7 @@ func removeResourceRelationship(field schema.Field, value store.Value, targets m
 }
 
 func polymorphicValueTargetsResource(relationship schema.RelationshipField, value store.Value, targets map[schema.StableID]struct{}) bool {
-	object, valid := value.ObjectValue()
-	if !valid {
-		return false
-	}
-	slug, valid := object["relationTo"].StringValue()
+	slug, valid := value.Get("relationTo").StringValue()
 	if !valid {
 		return false
 	}
@@ -526,8 +519,7 @@ func removeResourceUpload(field schema.Field, value store.Value, targets map[sch
 		return value, false
 	}
 	if upload.HasMany {
-		items, valid := value.Values()
-		if !valid || len(items) == 0 {
+		if value.Kind() != store.ValueList || value.Len() == 0 {
 			return value, false
 		}
 		return store.List(), true
@@ -541,7 +533,7 @@ func removeResourceUpload(field schema.Field, value store.Value, targets map[sch
 // NullifyTarget reconciles every nullify-policy reference in a current
 // document. Callers must plan restrict matches across the whole transaction
 // before invoking it.
-func NullifyTarget(collection schema.Collection, values store.Values, target store.DocumentReference) (store.Values, bool) {
+func nullifyTargetUnchecked(collection schema.Collection, values store.Values, target store.DocumentReference) (store.Values, bool) {
 	result := store.CloneValues(values)
 	changed := false
 	for _, field := range collection.Fields {
@@ -560,7 +552,7 @@ func NullifyTarget(collection schema.Collection, values store.Values, target sto
 
 // NullifyField reconciles a target beneath one stored root field. locale is
 // non-empty only when value came from one localized physical column.
-func NullifyField(field schema.Field, value store.Value, target store.DocumentReference, locale schema.LocaleCode) (store.Value, bool) {
+func nullifyFieldUnchecked(field schema.Field, value store.Value, target store.DocumentReference, locale schema.LocaleCode) (store.Value, bool) {
 	if locale != "" && field.Localized {
 		field.Localized = false
 		return nullifyFieldValue(field, value, target)
@@ -587,11 +579,11 @@ func nullifyFields(fields []schema.Field, values store.Values, target store.Docu
 
 func nullifyField(field schema.Field, value store.Value, target store.DocumentReference) (store.Value, bool) {
 	if field.Localized {
-		localized, valid := value.ObjectValue()
+		localized, valid := value.CopyObject()
 		if !valid {
 			return value, false
 		}
-		result := store.CloneValues(localized)
+		result := localized
 		field.Localized = false
 		changed := false
 		for locale, localizedValue := range localized {
@@ -610,33 +602,46 @@ func nullifyField(field schema.Field, value store.Value, target store.DocumentRe
 }
 
 func nullifyFieldValue(field schema.Field, value store.Value, target store.DocumentReference) (store.Value, bool) {
+	if embedded.HasFields(field) {
+		changed := false
+		updated, err := embedded.Transform(field, value, field.Name, embedded.NewBudget(), func(o embedded.Occurrence) (store.Values, error) {
+			payload, didChange := nullifyFields(o.Fields, o.Payload, target)
+			changed = changed || didChange
+			return payload, nil
+		})
+		if err != nil {
+			return value, false
+		}
+		return updated, changed
+	}
+
 	switch field.Type {
 	case schema.FieldTypeRelationship:
 		return nullifyRelationship(field, value, target)
 	case schema.FieldTypeUpload:
 		return nullifyUpload(field, value, target)
 	case schema.FieldTypeGroup:
-		object, valid := value.ObjectValue()
+		object, valid := value.CopyObject()
 		if !valid || field.Nested == nil {
 			return value, false
 		}
-		updated, changed := nullifyFields(field.Nested.Fields, object, target)
+		updated, changed := nullifyFields(field.Nested.ResolvedFields(), object, target)
 		if changed {
 			return store.Object(updated), true
 		}
 	case schema.FieldTypeArray:
-		items, valid := value.Values()
+		items, valid := value.CopyList()
 		if !valid || field.Nested == nil {
 			return value, false
 		}
-		updated := append([]store.Value(nil), items...)
+		updated := items
 		changed := false
 		for index, item := range items {
-			object, valid := item.ObjectValue()
+			object, valid := item.CopyObject()
 			if !valid {
 				continue
 			}
-			itemValues, itemChanged := nullifyFields(field.Nested.Fields, object, target)
+			itemValues, itemChanged := nullifyFields(field.Nested.ResolvedFields(), object, target)
 			if itemChanged {
 				updated[index] = store.Object(itemValues)
 				changed = true
@@ -646,23 +651,23 @@ func nullifyFieldValue(field schema.Field, value store.Value, target store.Docum
 			return store.List(updated...), true
 		}
 	case schema.FieldTypeBlocks:
-		items, valid := value.Values()
+		items, valid := value.CopyList()
 		if !valid || field.Blocks == nil {
 			return value, false
 		}
-		updated := append([]store.Value(nil), items...)
+		updated := items
 		changed := false
 		for index, item := range items {
-			object, valid := item.ObjectValue()
+			object, valid := item.CopyObject()
 			if !valid {
 				continue
 			}
 			blockType, _ := object["blockType"].StringValue()
-			for _, block := range field.Blocks.Types {
-				if block.Key != blockType {
+			for _, block := range field.Blocks.ResolvedTypes() {
+				if block.Slug != blockType {
 					continue
 				}
-				itemValues, itemChanged := nullifyFields(block.Fields, object, target)
+				itemValues, itemChanged := nullifyFields(block.ResolvedFields(), object, target)
 				if itemChanged {
 					updated[index] = store.Object(itemValues)
 					changed = true
@@ -683,18 +688,17 @@ func nullifyRelationship(field schema.Field, value store.Value, target store.Doc
 		return value, false
 	}
 	if relationship.HasMany {
-		items, valid := value.Values()
-		if !valid {
+		if value.Kind() != store.ValueList {
 			return value, false
 		}
-		filtered := make([]store.Value, 0, len(items))
-		for _, item := range items {
+		filtered := make([]store.Value, 0, value.Len())
+		for item := range value.Elements() {
 			if relationshipValueMatches(*relationship, item, target) {
 				continue
 			}
 			filtered = append(filtered, item)
 		}
-		if len(filtered) != len(items) {
+		if len(filtered) != value.Len() {
 			return store.List(filtered...), true
 		}
 		return value, false
@@ -710,12 +714,8 @@ func relationshipValueMatches(relationship schema.RelationshipField, value store
 		id, valid := value.StringValue()
 		return valid && relationship.CollectionID == target.CollectionID && id == target.DocumentID
 	}
-	object, valid := value.ObjectValue()
-	if !valid {
-		return false
-	}
-	slug, slugValid := object["relationTo"].StringValue()
-	id, idValid := object["id"].StringValue()
+	slug, slugValid := value.Get("relationTo").StringValue()
+	id, idValid := value.Get("id").StringValue()
 	if !slugValid || !idValid || id != target.DocumentID {
 		return false
 	}
@@ -733,19 +733,18 @@ func nullifyUpload(field schema.Field, value store.Value, target store.DocumentR
 		return value, false
 	}
 	if upload.HasMany {
-		items, valid := value.Values()
-		if !valid {
+		if value.Kind() != store.ValueList {
 			return value, false
 		}
-		filtered := make([]store.Value, 0, len(items))
-		for _, item := range items {
+		filtered := make([]store.Value, 0, value.Len())
+		for item := range value.Elements() {
 			id, valid := item.StringValue()
 			if valid && id == target.DocumentID {
 				continue
 			}
 			filtered = append(filtered, item)
 		}
-		if len(filtered) != len(items) {
+		if len(filtered) != value.Len() {
 			return store.List(filtered...), true
 		}
 		return value, false

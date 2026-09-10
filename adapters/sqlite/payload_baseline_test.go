@@ -18,16 +18,11 @@ func TestSQLitePayloadBaselineWorkflow(t *testing.T) {
 	config := ridu.Config{
 		Name: "SQLite Payload baseline",
 		Collections: []ridu.Collection{
-			{Slug: "authors", Fields: []field.Definition{field.Text("name", field.Required())}},
-			{Slug: "categories", Fields: []field.Definition{field.Text("name", field.Required())}},
+			{Slug: "authors", Fields: field.Fields{field.Text("name").Required()}},
+			{Slug: "categories", Fields: field.Fields{field.Text("name").Required()}},
 			{
 				Slug: "posts", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true},
-				Fields: []field.Definition{
-					field.Text("title", field.Required()),
-					field.Textarea("summary"),
-					field.Relationship("author", field.To("authors"), field.Required()),
-					field.Relationship("category", field.To("categories"), field.Required()),
-				},
+				Fields: field.Fields{field.Text("title").Required(), field.Textarea("summary"), field.Relationship("author", "authors").Required(), field.Relationship("category", "categories").Required()},
 			},
 		},
 	}
@@ -118,14 +113,14 @@ func TestSQLitePayloadBaselineWorkflow(t *testing.T) {
 	if title, _ := page.Documents[0].Values["title"].StringValue(); title != "Pinned Payload SQLite" {
 		t.Fatalf("filtered post title = %q", title)
 	}
-	populatedAuthor, ok := page.Documents[0].Values["author"].DocumentValue()
+	populatedAuthor, ok := page.Documents[0].Values["author"].CopyDocument()
 	if !ok || populatedAuthor.ID != author.ID {
 		t.Fatalf("populated author = %#v", page.Documents[0].Values["author"])
 	}
 	if name, _ := populatedAuthor.Values["name"].StringValue(); name != "Ada Lovelace" {
 		t.Fatalf("populated author name = %q", name)
 	}
-	populatedCategory, ok := page.Documents[0].Values["category"].DocumentValue()
+	populatedCategory, ok := page.Documents[0].Values["category"].CopyDocument()
 	if !ok || populatedCategory.ID != category.ID {
 		t.Fatalf("populated category = %#v", page.Documents[0].Values["category"])
 	}

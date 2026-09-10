@@ -1,4 +1,4 @@
-import type { AccessCapabilitiesEnvelope, Pagination, SchemaSelectChoice } from "@riducms/protocol";
+import type { AccessCapabilitiesEnvelope, Pagination, SchemaSelectOption } from "@riducms/protocol";
 import type { AdminI18n } from "@riducms/translations";
 
 import type { AdminClient, AdminDocument } from "@admin/core/api/admin-client";
@@ -15,7 +15,7 @@ interface CollectionListControllerOptions {
 	get titleField(): string | undefined;
 	get status(): string;
 	get statusField(): string | undefined;
-	get statusChoices(): readonly SchemaSelectChoice[];
+	get statusOptions(): readonly SchemaSelectOption[];
 	get versioned(): boolean;
 	get trashOnly(): boolean;
 	get folderField(): string | undefined;
@@ -92,7 +92,7 @@ export class CollectionListController {
 				titleField: this.options.titleField,
 				status: this.options.status,
 				statusField: this.options.statusField,
-				statusValues: this.options.statusChoices.map((choice) => choice.value),
+				statusValues: this.options.statusOptions.map((option) => option.value),
 				trashOnly: this.options.trashOnly,
 				folderField: this.options.folderField,
 				folderID: this.options.folderID,
@@ -278,7 +278,7 @@ export class CollectionListController {
 	};
 
 	statusLabel = (value: string) => {
-		const configured = this.options.statusChoices.find((choice) => choice.value === value)?.label;
+		const configured = this.options.statusOptions.find((option) => option.value === value)?.label;
 		if (configured !== undefined) return configured;
 		const normalized = value.toLocaleLowerCase(this.options.i18n.language);
 		if (normalized === "published") return this.options.i18n.t("documents:published");
@@ -296,7 +296,7 @@ export class CollectionListController {
 	updated = (document: AdminDocument) => formatUpdated(document.updatedAt, this.options.i18n);
 	created = (document: AdminDocument) => formatUpdated(document.createdAt, this.options.i18n);
 
-	choiceCount = (choice: SchemaSelectChoice) => this.statusCounts[choice.value];
+	optionCount = (option: SchemaSelectOption) => this.statusCounts[option.value];
 
 	toggleDocument = (id: string, checked: boolean) => {
 		if (!this.selectionControlsReady || !this.docs.some((document) => document.id === id)) return;

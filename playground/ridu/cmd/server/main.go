@@ -8,24 +8,25 @@ import (
 	"strings"
 	"time"
 
-	"example.com/ridu-playground/content"
-	"example.com/ridu-playground/internal/adminassets"
+	"example.com/ridu-dogfood/content"
+	"example.com/ridu-dogfood/internal/adminassets"
 	"github.com/riducms/ridu"
 	"github.com/riducms/ridu/adapters/postgres"
 	"github.com/riducms/ridu/store"
 )
 
 func main() {
+	applicationConfig := content.Config()
 	var options []ridu.ExecuteOption
 	if len(os.Args) == 1 {
-		options = runtimeOptions()
+		options = runtimeOptions(applicationConfig)
 	}
-	if err := ridu.Execute(content.Config(), options...); err != nil {
+	if err := ridu.Execute(applicationConfig, options...); err != nil {
 		log.Fatal(err)
 	}
 }
 
-func runtimeOptions() []ridu.ExecuteOption {
+func runtimeOptions(applicationConfig ridu.Config) []ridu.ExecuteOption {
 	return []ridu.ExecuteOption{
 		ridu.WithStore(func(ctx context.Context) (store.Store, error) {
 			return postgres.OpenWithConfig(ctx, postgres.PoolConfig{

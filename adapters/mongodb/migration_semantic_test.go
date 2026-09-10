@@ -94,7 +94,7 @@ func TestRenameMongoStoreFieldBySchemaHandlesLocalizedRepeatedAndRecursiveContai
 		},
 		{
 			Name: "layout", Path: path("layout"), Type: schema.FieldTypeBlocks, Localized: true,
-			Blocks: &schema.BlocksField{Types: []schema.BlockType{{Key: "feature", Fields: []schema.Field{
+			Blocks: &schema.BlocksField{Types: []schema.BlockType{{Slug: "feature", Fields: []schema.Field{
 				text("oldCaption", path("layout", "feature", "oldCaption")),
 			}}}},
 		},
@@ -110,7 +110,7 @@ func TestRenameMongoStoreFieldBySchemaHandlesLocalizedRepeatedAndRecursiveContai
 		},
 		{
 			Name: "layout", Path: path("layout"), Type: schema.FieldTypeBlocks, Localized: true,
-			Blocks: &schema.BlocksField{Types: []schema.BlockType{{Key: "feature", Fields: []schema.Field{
+			Blocks: &schema.BlocksField{Types: []schema.BlockType{{Slug: "feature", Fields: []schema.Field{
 				text("caption", path("layout", "feature", "caption")),
 			}}}},
 		},
@@ -147,14 +147,14 @@ func TestRenameMongoStoreFieldBySchemaHandlesLocalizedRepeatedAndRecursiveContai
 			t.Fatalf("rename %s -> %s did not change data", pair.Before, pair.After)
 		}
 	}
-	content, _ := values["content"].ObjectValue()
-	englishContent, _ := content["en"].ObjectValue()
-	rows, _ := values["rows"].ObjectValue()
-	englishRows, _ := rows["en"].Values()
-	row, _ := englishRows[0].ObjectValue()
-	layout, _ := values["layout"].ObjectValue()
-	englishLayout, _ := layout["en"].Values()
-	block, _ := englishLayout[0].ObjectValue()
+	content, _ := values["content"].CopyObject()
+	englishContent, _ := content["en"].CopyObject()
+	rows, _ := values["rows"].CopyObject()
+	englishRows, _ := rows["en"].CopyList()
+	row, _ := englishRows[0].CopyObject()
+	layout, _ := values["layout"].CopyObject()
+	englishLayout, _ := layout["en"].CopyList()
+	block, _ := englishLayout[0].CopyObject()
 	if _, stale := values["meta"]; stale {
 		t.Fatalf("recursive container source remains: %#v", values)
 	}
@@ -241,8 +241,8 @@ func TestRenameMongoStoreFieldsBySchemaOrdersNestedMappings(t *testing.T) {
 				if err != nil || !changed {
 					t.Fatalf("ordered nested rename = %t, %v", changed, err)
 				}
-				x, _ := values["x"].ObjectValue()
-				y, _ := x["y"].ObjectValue()
+				x, _ := values["x"].CopyObject()
+				y, _ := x["y"].CopyObject()
 				if value, _ := y["z"].StringValue(); value != "preserved" {
 					t.Fatalf("nested rename result = %#v", values)
 				}
@@ -317,7 +317,7 @@ func TestRewriteMongoPolymorphicRelationshipSlugsFollowsImmutableFieldShapes(t *
 		{
 			Name: "layout", Type: schema.FieldTypeBlocks,
 			Blocks: &schema.BlocksField{Types: []schema.BlockType{{
-				Key: "feature", Fields: []schema.Field{
+				Slug: "feature", Fields: []schema.Field{
 					polymorphic("subject", false, false),
 					{Name: "relationTo", Type: schema.FieldTypeText},
 				},
@@ -396,13 +396,13 @@ func TestRewriteMongoPolymorphicRelationshipSlugsFollowsImmutableFieldShapes(t *
 		),
 	}
 
-	if !rewriteMongoCollectionReferences(fields, values, "authors", "members") {
+	if changed, err := rewriteMongoCollectionReferences(fields, values, "authors", "members"); err != nil || !changed {
 		t.Fatal("schema-declared polymorphic references were not rewritten")
 	}
 	if !reflect.DeepEqual(values, want) {
 		t.Fatalf("schema-driven relationship rewrite = %#v, want %#v", values, want)
 	}
-	if rewriteMongoCollectionReferences(fields, values, "authors", "members") {
+	if changed, err := rewriteMongoCollectionReferences(fields, values, "authors", "members"); err != nil || changed {
 		t.Fatal("idempotent relationship rewrite reported another change")
 	}
 }
@@ -444,12 +444,16 @@ func TestMongoDBMigrationReferenceFieldSetsUseBeforeAndAfterOwnerSchemas(t *test
 	})}
 	changed := false
 	for _, fields := range fieldSchemas.all() {
-		changed = rewriteMongoCollectionReferences(fields, values, "authors", "members") || changed
+		fieldChanged, err := rewriteMongoCollectionReferences(fields, values, "authors", "members")
+		if err != nil {
+			t.Fatal(err)
+		}
+		changed = fieldChanged || changed
 	}
 	if !changed {
 		t.Fatal("before-schema relationship hidden by simultaneous owner rename was not rewritten")
 	}
-	oldSubject, _ := values["oldSubject"].ObjectValue()
+	oldSubject, _ := values["oldSubject"].CopyObject()
 	if relationTo, _ := oldSubject["relationTo"].StringValue(); relationTo != "members" {
 		t.Fatalf("before-schema relationship slug = %q", relationTo)
 	}

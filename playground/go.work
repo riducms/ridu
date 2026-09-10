@@ -1,7 +1,8 @@
 go 1.25.13
 
 use (
-	..
 	.
 	./ridu
 )
+
+replace github.com/riducms/ridu => ..

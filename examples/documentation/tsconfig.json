@@ -12,9 +12,10 @@
 		"noUncheckedIndexedAccess": true,
 		"skipLibCheck": true,
 		"paths": {
+			"~/generated/*": ["./live-validation/generated/*"],
 			"@riducms/protocol": ["../../packages/protocol/src/index.ts"],
 			"@riducms/sdk": ["../../packages/sdk/src/index.ts"]
 		}
 	},
-	"include": ["quickstart/**/*.ts"]
+	"include": ["quickstart/**/*.ts", "live-validation.ts"]
 }

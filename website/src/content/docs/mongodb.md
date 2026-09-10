@@ -248,7 +248,22 @@ services:
       test:
         - CMD-SHELL
         - >-
-          mongosh --quiet --eval 'try { const h=db.hello(); if (h.setName === "ridu-rs0" && h.isWritablePrimary) { quit(0) }; if (!h.setName) { try { rs.initiate({_id:"ridu-rs0",members:[{_id:0,host:"mongodb:27017"}]}) } catch (_) {} } } catch (_) {}; quit(1)'
+          mongosh --quiet --eval '
+          try {
+            const h = db.hello();
+            if (h.setName === "ridu-rs0" && h.isWritablePrimary) {
+              quit(0);
+            }
+            if (!h.setName) {
+              try {
+                rs.initiate({
+                  _id: "ridu-rs0",
+                  members: [{ _id: 0, host: "mongodb:27017" }]
+                });
+              } catch (_) {}
+            }
+          } catch (_) {}
+          quit(1);'
       interval: 2s
       timeout: 5s
       retries: 30

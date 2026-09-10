@@ -12,14 +12,17 @@ import (
 
 func TestMissingGeneratedTypeScriptDependenciesUsesRootManifest(t *testing.T) {
 	root := t.TempDir()
-	if err := os.WriteFile(filepath.Join(root, "package.json"), []byte(`{"dependencies":{"@acme/installed":"1.0.0"}}`), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "package.json"), []byte(`{"dependencies":{"@acme/installed":"1.0.0","plain-package":"1.0.0"}}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	manifest := schema.NewManifest(schema.Snapshot{Plugins: []schema.Plugin{{FieldTypes: []schema.PluginFieldType{
 		{TypeScriptPackage: "@acme/missing-b"},
 		{TypeScriptPackage: "@acme/installed"},
+		{TypeScriptPackage: "@acme/installed/document"},
+		{TypeScriptPackage: "plain-package/document"},
 		{TypeScriptPackage: "@acme/missing-a"},
 		{TypeScriptPackage: "@acme/missing-b"},
+		{TypeScriptPackage: "@acme/missing-b/document"},
 	}}}})
 	definition := projectfile.File{Root: root, Client: "generated/ridu.generated.ts"}
 
@@ -32,7 +35,7 @@ func TestMissingGeneratedTypeScriptDependenciesUsesRootManifest(t *testing.T) {
 func TestManifestPackageRequirementsKeepSharedDependencies(t *testing.T) {
 	manifest := schema.NewManifest(schema.Snapshot{Plugins: []schema.Plugin{
 		{Admin: &schema.PluginAdmin{Package: "@acme/shared-admin"}},
-		{FieldTypes: []schema.PluginFieldType{{TypeScriptPackage: "@acme/shared-types"}}},
+		{FieldTypes: []schema.PluginFieldType{{TypeScriptPackage: "@acme/shared-types/document"}}},
 	}})
 
 	if !manifestRequiresAdminPackage(manifest, "@acme/shared-admin") {

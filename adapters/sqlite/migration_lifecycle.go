@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/riducms/ridu/internal/embedded"
 	"github.com/riducms/ridu/internal/migrationartifact"
 	"github.com/riducms/ridu/internal/referenceindex"
 	ridumigration "github.com/riducms/ridu/migration"
@@ -280,20 +281,22 @@ func (backend *Store) rollbackSQLiteArtifact(ctx context.Context, connection *sq
 	if err := boundary.validateFinal(ctx, connection); err != nil {
 		return fmt.Errorf("verify SQLite rollback %s plugin schema: %w", file.Name, err)
 	}
-	if err := backend.scrubSQLiteRollbackFields(ctx, connection, current, target); err != nil {
-		return fmt.Errorf("roll back SQLite migration %s fields: %w", file.Name, err)
-	}
-	if err := backend.retireSQLiteRollbackResources(ctx, connection, current, target); err != nil {
-		return fmt.Errorf("roll back SQLite migration %s resources: %w", file.Name, err)
-	}
-	if err := targetContract.reconcileIndexes(ctx, connection, target); err != nil {
-		return fmt.Errorf("roll back SQLite migration %s indexes: %w", file.Name, err)
-	}
-	if err := rebuildDocumentReferences(ctx, connection, target); err != nil {
-		return fmt.Errorf("roll back SQLite migration %s references: %w", file.Name, err)
-	}
-	if err := targetContract.rebuildUniqueness(ctx, connection, target); err != nil {
-		return fmt.Errorf("roll back SQLite migration %s uniqueness: %w", file.Name, err)
+	if !sqlitePresentationOnlyArtifact(file.Artifact, &target, current) {
+		if err := backend.scrubSQLiteRollbackFields(ctx, connection, current, target); err != nil {
+			return fmt.Errorf("roll back SQLite migration %s fields: %w", file.Name, err)
+		}
+		if err := backend.retireSQLiteRollbackResources(ctx, connection, current, target); err != nil {
+			return fmt.Errorf("roll back SQLite migration %s resources: %w", file.Name, err)
+		}
+		if err := targetContract.reconcileIndexes(ctx, connection, target); err != nil {
+			return fmt.Errorf("roll back SQLite migration %s indexes: %w", file.Name, err)
+		}
+		if err := rebuildDocumentReferences(ctx, connection, target); err != nil {
+			return fmt.Errorf("roll back SQLite migration %s references: %w", file.Name, err)
+		}
+		if err := targetContract.rebuildUniqueness(ctx, connection, target); err != nil {
+			return fmt.Errorf("roll back SQLite migration %s uniqueness: %w", file.Name, err)
+		}
 	}
 	if err := assertSQLitePhysicalSchema(ctx, connection, target, true, targetContract); err != nil {
 		return fmt.Errorf("roll back SQLite migration %s: %w", file.Name, err)
@@ -427,6 +430,9 @@ func (backend *Store) scrubSQLiteRollbackFields(ctx context.Context, connection 
 			return fmt.Errorf("load resource %s: %w", currentResource.ID, err)
 		}
 		for _, document := range documents {
+			if err := embedded.ValidateValues(targetResource.Fields, document.Values, "", true, nil); err != nil {
+				return fmt.Errorf("rollback requires an explicit data migration for embedded payloads: %w", err)
+			}
 			values, changed := scrubSQLiteRollbackValues(currentResource.Fields, targetResource.Fields, document.Values)
 			if !changed {
 				continue
@@ -460,6 +466,10 @@ FROM ridu_versions WHERE collection_id = ? ORDER BY document_id, revision`, stri
 			if err := json.Unmarshal([]byte(encoded), &update.document); err != nil {
 				rows.Close()
 				return fmt.Errorf("decode version snapshot for %s/%s revision %d: %w", currentResource.ID, update.documentID, update.revision, err)
+			}
+			if err := embedded.ValidateValues(targetResource.Fields, update.document.Values, "", true, nil); err != nil {
+				rows.Close()
+				return fmt.Errorf("rollback requires an explicit data migration for embedded revision payloads: %w", err)
 			}
 			values, changed := scrubSQLiteRollbackValues(currentResource.Fields, targetResource.Fields, update.document.Values)
 			if changed {
@@ -536,7 +546,7 @@ func scrubSQLiteRollbackValues(currentFields, targetFields []schema.Field, value
 
 func scrubSQLiteRollbackField(current, target schema.Field, value store.Value) (store.Value, bool) {
 	if current.Localized {
-		localized, valid := value.ObjectValue()
+		localized, valid := value.CopyObject()
 		if !valid {
 			return value, false
 		}
@@ -560,29 +570,54 @@ func scrubSQLiteRollbackField(current, target schema.Field, value store.Value) (
 }
 
 func scrubSQLiteRollbackFieldValue(current, target schema.Field, value store.Value) (store.Value, bool) {
+	if embedded.HasFields(current) && embedded.HasFields(target) {
+		targets := map[string][]schema.Field{}
+		for _, tree := range target.Plugin.EmbeddedTrees {
+			for _, c := range tree.Cases {
+				for _, variant := range c.ResolvedTypes() {
+					targets[tree.Key+"/"+c.TagValue+"/"+variant.Slug] = variant.ResolvedFields()
+				}
+			}
+		}
+		changed := false
+		transformed, err := embedded.Transform(current, value, current.Name, nil, func(o embedded.Occurrence) (store.Values, error) {
+			fields, exists := targets[o.Tree.Key+"/"+o.Case.TagValue+"/"+o.Type.Slug]
+			if !exists {
+				return o.Payload, nil
+			}
+			updated, didChange := scrubSQLiteRollbackValues(o.Fields, fields, o.Payload)
+			changed = changed || didChange
+			return updated, nil
+		})
+		if err != nil {
+			return value, false
+		}
+		return transformed, changed
+	}
+
 	switch current.Type {
 	case schema.FieldTypeGroup:
-		object, valid := value.ObjectValue()
+		object, valid := value.CopyObject()
 		if !valid || current.Nested == nil || target.Nested == nil {
 			return value, false
 		}
-		updated, changed := scrubSQLiteRollbackValues(current.Nested.Fields, target.Nested.Fields, object)
+		updated, changed := scrubSQLiteRollbackValues(current.Nested.ResolvedFields(), target.Nested.ResolvedFields(), object)
 		if changed {
 			return store.Object(updated), true
 		}
 	case schema.FieldTypeArray:
-		items, valid := value.Values()
+		items, valid := value.CopyList()
 		if !valid || current.Nested == nil || target.Nested == nil {
 			return value, false
 		}
 		updated := append([]store.Value(nil), items...)
 		changed := false
 		for index, item := range items {
-			object, valid := item.ObjectValue()
+			object, valid := item.CopyObject()
 			if !valid {
 				continue
 			}
-			itemValues, itemChanged := scrubSQLiteRollbackValues(current.Nested.Fields, target.Nested.Fields, object)
+			itemValues, itemChanged := scrubSQLiteRollbackValues(current.Nested.ResolvedFields(), target.Nested.ResolvedFields(), object)
 			if itemChanged {
 				updated[index] = store.Object(itemValues)
 				changed = true
@@ -592,22 +627,22 @@ func scrubSQLiteRollbackFieldValue(current, target schema.Field, value store.Val
 			return store.List(updated...), true
 		}
 	case schema.FieldTypeBlocks:
-		items, valid := value.Values()
+		items, valid := value.CopyList()
 		if !valid || current.Blocks == nil || target.Blocks == nil {
 			return value, false
 		}
-		currentTypes := make(map[string]schema.BlockType, len(current.Blocks.Types))
-		for _, block := range current.Blocks.Types {
-			currentTypes[block.Key] = block
+		currentTypes := make(map[string]schema.BlockType, len(current.Blocks.ResolvedTypes()))
+		for _, block := range current.Blocks.ResolvedTypes() {
+			currentTypes[block.Slug] = block
 		}
-		targetTypes := make(map[string]schema.BlockType, len(target.Blocks.Types))
-		for _, block := range target.Blocks.Types {
-			targetTypes[block.Key] = block
+		targetTypes := make(map[string]schema.BlockType, len(target.Blocks.ResolvedTypes()))
+		for _, block := range target.Blocks.ResolvedTypes() {
+			targetTypes[block.Slug] = block
 		}
 		updated := make([]store.Value, 0, len(items))
 		changed := false
 		for _, item := range items {
-			object, valid := item.ObjectValue()
+			object, valid := item.CopyObject()
 			if !valid {
 				updated = append(updated, item)
 				continue
@@ -620,7 +655,7 @@ func scrubSQLiteRollbackFieldValue(current, target schema.Field, value store.Val
 				continue
 			}
 			if known && survives {
-				itemValues, itemChanged := scrubSQLiteRollbackValues(currentBlock.Fields, targetBlock.Fields, object)
+				itemValues, itemChanged := scrubSQLiteRollbackValues(currentBlock.ResolvedFields(), targetBlock.ResolvedFields(), object)
 				if itemChanged {
 					item = store.Object(itemValues)
 					changed = true
@@ -662,7 +697,10 @@ func (backend *Store) retireSQLiteRollbackResources(ctx context.Context, connect
 			return fmt.Errorf("load reference-bearing resource %s: %w", resource.ID, err)
 		}
 		for _, document := range documents {
-			values, changed := referenceindex.RemoveResourceTargets(resource, document.Values, retired)
+			values, changed, referenceErr := referenceindex.RemoveResourceTargets(resource, document.Values, retired)
+			if referenceErr != nil {
+				return referenceErr
+			}
 			if !changed {
 				continue
 			}

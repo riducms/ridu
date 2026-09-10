@@ -12,8 +12,8 @@ import (
 func TestGraphQLCreateInputAllowsServerGeneratedSlug(t *testing.T) {
 	manifest, err := ridu.Resolve(ridu.Config{Name: "Slug GraphQL", Collections: []ridu.Collection{{
 		Slug: "posts",
-		Fields: []field.Definition{
-			field.Text("title", field.Required()),
+		Fields: field.Fields{
+			field.Text("title").Required(),
 			field.Slug("slug", "title"),
 		},
 	}}})

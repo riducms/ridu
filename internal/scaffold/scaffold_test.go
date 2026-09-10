@@ -56,7 +56,7 @@ func TestCreateRendersProjectWithoutAbsoluteFrameworkPaths(t *testing.T) {
 		"admin/tsconfig.json",
 		"admin/vite.config.ts",
 		"admin/src/main.ts",
-		"admin/src/plugins.ts",
+		"admin/src/admin.config.ts",
 		"ridu.plugins.json",
 	} {
 		if _, err := os.Stat(filepath.Join(target, relative)); err != nil {

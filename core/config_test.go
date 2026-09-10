@@ -14,13 +14,14 @@ import (
 	ridu "github.com/riducms/ridu/core"
 	"github.com/riducms/ridu/field"
 	"github.com/riducms/ridu/schema"
+	"github.com/riducms/ridu/store"
 )
 
 func TestUploadFileSizeHasAProductionMemoryCeiling(t *testing.T) {
 	_, err := ridu.Resolve(ridu.Config{Name: "Upload ceiling", Collections: []ridu.Collection{{
 		Slug: "media", Upload: true,
 		UploadConfig: ridu.UploadConfig{MaxFileSize: (256 << 20) + 1},
-		Fields:       []field.Definition{field.Text("alt")},
+		Fields:       field.Fields{field.Text("alt")},
 	}}})
 	var validation *schema.ValidationError
 	if !errors.As(err, &validation) || !strings.Contains(err.Error(), "256 MiB") {
@@ -31,7 +32,7 @@ func TestUploadFileSizeHasAProductionMemoryCeiling(t *testing.T) {
 func TestAuthSessionConfigurationIsCanonical(t *testing.T) {
 	manifest, err := ridu.Resolve(ridu.Config{Name: "Auth", Admin: ridu.AdminConfig{User: "users"}, Collections: []ridu.Collection{{
 		Slug: "users", Auth: true, AuthConfig: ridu.AuthConfig{SessionDuration: 2 * time.Hour},
-		Fields: []field.Definition{field.Text("email", field.Required(), field.Unique())},
+		Fields: field.Fields{field.Text("email").Required().Unique()},
 	}}})
 	if err != nil {
 		t.Fatal(err)
@@ -51,22 +52,18 @@ func TestTypedFieldConditionsResolveWithDocumentAndSiblingScopes(t *testing.T) {
 		Name: "Conditional authoring",
 		Collections: []ridu.Collection{{
 			Slug: "questions",
-			Fields: []field.Definition{
-				field.Checkbox("archived"),
-				field.Array("answers", field.Fields(
-					field.Select("kind", field.OneOf("lesson", "question", "note")),
-					field.Text("copy", field.ShowWhenCondition(field.All(
-						field.Sibling("kind", field.ConditionOneOf, "lesson", "question"),
-						field.Not(field.Document("archived", field.ConditionEquals, true)),
-					))),
-				)),
+			Fields: field.Fields{
+				field.Checkbox("archived"), field.Array("answers", field.Fields{field.Select("kind", "lesson", "question", "note"), field.Text("copy").Admin(field.Admin{VisibleWhen: field.All(
+					field.OneOf(field.Sibling("kind"), "lesson", "question"),
+					field.Not(field.Equal(field.Root("archived"), true)),
+				)})}),
 			},
 		}},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	condition := manifest.Snapshot().Collections[0].Fields[1].Nested.Fields[1].Admin.Condition
+	condition := manifest.Snapshot().Collections[0].Fields[1].Nested.ResolvedFields()[1].Admin.Condition
 	if condition == nil || condition.Kind != schema.FieldConditionKindAll || len(condition.Conditions) != 2 {
 		t.Fatalf("resolved condition = %#v", condition)
 	}
@@ -83,43 +80,29 @@ func TestTypedFieldConditionsResolveWithDocumentAndSiblingScopes(t *testing.T) {
 func TestTypedFieldConditionsRejectUnknownRepeatedAndMismatchedPaths(t *testing.T) {
 	tests := []struct {
 		name   string
-		fields []field.Definition
+		fields field.Fields
 		code   string
 		path   string
 	}{
 		{
-			name: "unknown document field",
-			fields: []field.Definition{
-				field.Text("title"),
-				field.Text("summary", field.ShowWhenCondition(field.Document("missing", field.ConditionEquals, "yes"))),
-			},
-			code: "invalid_field_condition_path", path: "collections[0].fields[1].options.condition.path",
+			name:   "unknown document field",
+			fields: field.Fields{field.Text("title"), field.Text("summary").Admin(field.Admin{VisibleWhen: field.Equal(field.Root("missing"), "yes")})},
+			code:   "invalid_field_condition_path", path: "collections[0].fields[1].admin.visibleWhen.reference.path",
 		},
 		{
-			name: "unknown row sibling",
-			fields: []field.Definition{
-				field.Array("answers", field.Fields(
-					field.Text("kind"),
-					field.Text("copy", field.ShowWhenCondition(field.Sibling("missing", field.ConditionEquals, "yes"))),
-				)),
-			},
-			code: "invalid_field_condition_path", path: "collections[0].fields[0].options.fields[1].options.condition.path",
+			name:   "unknown row sibling",
+			fields: field.Fields{field.Array("answers", field.Fields{field.Text("kind"), field.Text("copy").Admin(field.Admin{VisibleWhen: field.Equal(field.Sibling("missing"), "yes")})})},
+			code:   "invalid_field_condition_path", path: "collections[0].fields[0].fields[1].admin.visibleWhen.reference.path",
 		},
 		{
-			name: "document path crosses repeated rows",
-			fields: []field.Definition{
-				field.Array("answers", field.Fields(field.Text("kind"))),
-				field.Text("summary", field.ShowWhenCondition(field.Document("answers.kind", field.ConditionEquals, "lesson"))),
-			},
-			code: "invalid_field_condition_path", path: "collections[0].fields[1].options.condition.path",
+			name:   "document path crosses repeated rows",
+			fields: field.Fields{field.Array("answers", field.Fields{field.Text("kind")}), field.Text("summary").Admin(field.Admin{VisibleWhen: field.Equal(field.Root("answers.kind"), "lesson")})},
+			code:   "invalid_field_condition_path", path: "collections[0].fields[1].admin.visibleWhen.reference.path",
 		},
 		{
-			name: "operand type differs from field",
-			fields: []field.Definition{
-				field.Number("score"),
-				field.Text("summary", field.ShowWhenCondition(field.Document("score", field.ConditionEquals, "three"))),
-			},
-			code: "invalid_field_condition_type", path: "collections[0].fields[1].options.condition.values[0]",
+			name:   "operand type differs from field",
+			fields: field.Fields{field.Number("score"), field.Text("summary").Admin(field.Admin{VisibleWhen: field.Equal(field.Root("score"), "three")})},
+			code:   "invalid_field_condition_type", path: "collections[0].fields[1].admin.visibleWhen.values[0]",
 		},
 	}
 	for _, test := range tests {
@@ -145,15 +128,8 @@ func TestTypedSiblingConditionTraversesOnlyNonRepeatedGroupsInItsCurrentRow(t *t
 	_, err := ridu.Resolve(ridu.Config{
 		Name: "Nested condition",
 		Collections: []ridu.Collection{{
-			Slug: "questions",
-			Fields: []field.Definition{
-				field.Array("answers", field.Fields(
-					field.Group("settings", field.Fields(
-						field.Select("kind", field.OneOf("lesson", "question")),
-					)),
-					field.Text("copy", field.ShowWhenCondition(field.Sibling("settings.kind", field.ConditionEquals, "lesson"))),
-				)),
-			},
+			Slug:   "questions",
+			Fields: field.Fields{field.Array("answers", field.Fields{field.Group("settings", field.Fields{field.Select("kind", "lesson", "question")}), field.Text("copy").Admin(field.Admin{VisibleWhen: field.Equal(field.Sibling("settings.kind"), "lesson")})})},
 		}},
 	})
 	if err != nil {
@@ -164,7 +140,7 @@ func TestTypedSiblingConditionTraversesOnlyNonRepeatedGroupsInItsCurrentRow(t *t
 func TestAdminUserCollectionValidation(t *testing.T) {
 	authCollection := ridu.Collection{
 		Slug: "users", Auth: true,
-		Fields: []field.Definition{field.Text("email", field.Required(), field.Unique())},
+		Fields: field.Fields{field.Text("email").Required().Unique()},
 	}
 	tests := []struct {
 		name   string
@@ -185,7 +161,7 @@ func TestAdminUserCollectionValidation(t *testing.T) {
 			name: "not auth enabled",
 			config: ridu.Config{Name: "Admin", Admin: ridu.AdminConfig{User: "posts"}, Collections: []ridu.Collection{
 				authCollection,
-				{Slug: "posts", Fields: []field.Definition{field.Text("title")}},
+				{Slug: "posts", Fields: field.Fields{field.Text("title")}},
 			}},
 			code: "invalid_admin_user",
 		},
@@ -216,8 +192,8 @@ func TestAdminUserCollectionCanSelectAmongAuthCollections(t *testing.T) {
 		Name:  "Admin",
 		Admin: ridu.AdminConfig{User: "staff"},
 		Collections: []ridu.Collection{
-			{Slug: "customers", Auth: true, Fields: []field.Definition{field.Text("email", field.Required(), field.Unique())}},
-			{Slug: "staff", Auth: true, Fields: []field.Definition{field.Text("email", field.Required(), field.Unique())}},
+			{Slug: "customers", Auth: true, Fields: field.Fields{field.Text("email").Required().Unique()}},
+			{Slug: "staff", Auth: true, Fields: field.Fields{field.Text("email").Required().Unique()}},
 		},
 	})
 	if err != nil {
@@ -246,7 +222,7 @@ func TestAdminLocalizationConfigurationIsCanonicalAndIndependentFromContentLocal
 				{ID: "+05:30", Label: " India offset "},
 			},
 		}},
-		Collections: []ridu.Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title")}}},
+		Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{field.Text("title")}}},
 	}
 	manifest, err := ridu.Resolve(config)
 	if err != nil {
@@ -291,7 +267,7 @@ func TestAdminLocalizationRejectsUnsafeConfiguration(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			_, err := ridu.Resolve(ridu.Config{
 				Name: "Translated admin", Admin: ridu.AdminConfig{Localization: test.localization},
-				Collections: []ridu.Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title")}}},
+				Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{field.Text("title")}}},
 			})
 			var validationError *schema.ValidationError
 			if !errors.As(err, &validationError) {
@@ -319,11 +295,8 @@ func TestLocalizationConfigurationIsCanonical(t *testing.T) {
 			},
 		},
 		Collections: []ridu.Collection{{
-			Slug: "posts",
-			Fields: []field.Definition{
-				field.Text("title", field.Required(), field.Localized()),
-				field.Group("seo", field.Fields(field.Text("description", field.Localized()))),
-			},
+			Slug:   "posts",
+			Fields: field.Fields{field.Text("title").Required().Localized(), field.Group("seo", field.Fields{field.Text("description").Localized()})},
 		}},
 	}
 	manifest, err := ridu.Resolve(config)
@@ -341,7 +314,7 @@ func TestLocalizationConfigurationIsCanonical(t *testing.T) {
 	if got := localization.Locales[1].FallbackLocales; len(got) != 1 || got[0] != "en" {
 		t.Fatalf("fallback locales = %#v", got)
 	}
-	if !snapshot.Collections[0].Fields[0].Localized || !snapshot.Collections[0].Fields[1].Nested.Fields[0].Localized {
+	if !snapshot.Collections[0].Fields[0].Localized || !snapshot.Collections[0].Fields[1].Nested.ResolvedFields()[0].Localized {
 		t.Fatalf("localized field metadata was not preserved: %#v", snapshot.Collections[0].Fields)
 	}
 
@@ -367,7 +340,7 @@ func TestLocalizationConfigurationRejectsUnsafeGraphs(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := ridu.Resolve(ridu.Config{Name: "Localized", Localization: test.localization, Collections: []ridu.Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title", field.Localized())}}}})
+			_, err := ridu.Resolve(ridu.Config{Name: "Localized", Localization: test.localization, Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{field.Text("title").Localized()}}}})
 			var validationError *schema.ValidationError
 			if !errors.As(err, &validationError) {
 				t.Fatalf("Resolve error = %T, want *schema.ValidationError", err)
@@ -383,13 +356,13 @@ func TestLocalizationConfigurationRejectsUnsafeGraphs(t *testing.T) {
 }
 
 func TestLocalizedFieldRequiresApplicationLocalization(t *testing.T) {
-	_, err := ridu.Resolve(ridu.Config{Name: "Localized", Collections: []ridu.Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title", field.Localized())}}}})
+	_, err := ridu.Resolve(ridu.Config{Name: "Localized", Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{field.Text("title").Localized()}}}})
 	var validationError *schema.ValidationError
 	if !errors.As(err, &validationError) {
 		t.Fatalf("Resolve error = %T, want *schema.ValidationError", err)
 	}
 	for _, issue := range validationError.Issues {
-		if issue.Code == "missing_localization_config" && issue.Path == "collections[0].fields[0].options.localized" {
+		if issue.Code == "missing_localization_config" && issue.Path == "collections[0].fields[0].localized" {
 			return
 		}
 	}
@@ -405,7 +378,7 @@ func TestLivePreviewConfigurationIsCanonical(t *testing.T) {
 				URL:         " /preview/{collection}/{id}?slug={field:slug} ",
 				Breakpoints: []ridu.PreviewBreakpoint{{Name: "mobile", Width: 375, Height: 667}},
 			}},
-			Fields: []field.Definition{field.Text("slug")},
+			Fields: field.Fields{field.Text("slug")},
 		}},
 	})
 	if err != nil {
@@ -428,7 +401,7 @@ func TestLivePreviewConfigurationRejectsUnknownFields(t *testing.T) {
 			Admin: ridu.CollectionAdmin{LivePreview: ridu.LivePreviewConfig{
 				URL: "/preview/{field:missing}",
 			}},
-			Fields: []field.Definition{field.Text("slug")},
+			Fields: field.Fields{field.Text("slug")},
 		}},
 	})
 	var validationError *schema.ValidationError
@@ -512,12 +485,8 @@ func TestStableIdentitiesDefaultFromCollectionAndFieldPaths(t *testing.T) {
 	manifest, err := ridu.Resolve(ridu.Config{
 		Name: "Derived identities",
 		Collections: []ridu.Collection{{
-			Slug: "blog-posts",
-			Fields: []field.Definition{
-				field.Text("title", field.Required()),
-				field.Group("seo", field.Fields(field.Text("metaTitle"))),
-				field.Select("status", field.OneOf("draft", "in_review")),
-			},
+			Slug:   "blog-posts",
+			Fields: field.Fields{field.Text("title").Required(), field.Group("seo", field.Fields{field.Text("metaTitle")}), field.Select("status", "draft", "in_review")},
 		}},
 	})
 	if err != nil {
@@ -530,11 +499,11 @@ func TestStableIdentitiesDefaultFromCollectionAndFieldPaths(t *testing.T) {
 	if collection.Fields[0].ID != "blog-posts-title" {
 		t.Fatalf("title ID = %q, want blog-posts-title", collection.Fields[0].ID)
 	}
-	if collection.Fields[1].ID != "blog-posts-seo" || collection.Fields[1].Nested.Fields[0].ID != "blog-posts-seo-meta-title" {
-		t.Fatalf("nested derived IDs = %q / %q", collection.Fields[1].ID, collection.Fields[1].Nested.Fields[0].ID)
+	if collection.Fields[1].ID != "blog-posts-seo" || collection.Fields[1].Nested.ResolvedFields()[0].ID != "blog-posts-seo-meta-title" {
+		t.Fatalf("nested derived IDs = %q / %q", collection.Fields[1].ID, collection.Fields[1].Nested.ResolvedFields()[0].ID)
 	}
-	if got := collection.Fields[2].Select.Choices[1].Label; got != "In review" {
-		t.Fatalf("derived choice label = %q, want In review", got)
+	if got := collection.Fields[2].Select.Options[1].Label; got != "In review" {
+		t.Fatalf("derived option label = %q, want In review", got)
 	}
 }
 
@@ -542,13 +511,8 @@ func TestTabsResolveNamedDataAndUnnamedPresentationShapes(t *testing.T) {
 	manifest, err := ridu.Resolve(ridu.Config{
 		Name: "Tabs",
 		Collections: []ridu.Collection{{
-			Slug: "posts",
-			Fields: []field.Definition{
-				field.Tabs(
-					field.UnnamedTab("Content", field.Text("title"), field.Textarea("summary")),
-					field.NamedTab("seo", "SEO", field.Text("title"), field.Textarea("description")),
-				),
-			},
+			Slug:   "posts",
+			Fields: field.Fields{field.Tabs(field.Fields{field.UnnamedTab("Content", field.Fields{field.Text("title"), field.Textarea("summary")}), field.NamedTab("seo", "SEO", field.Fields{field.Text("title"), field.Textarea("description")})})},
 		}},
 	})
 	if err != nil {
@@ -571,7 +535,7 @@ func TestTabsResolveNamedDataAndUnnamedPresentationShapes(t *testing.T) {
 	if seo.Admin.TabGroup == nil || seo.Admin.TabGroup.ID != fields[0].Admin.TabGroup.ID {
 		t.Fatalf("named tab group = %#v, want %#v", seo.Admin.TabGroup, fields[0].Admin.TabGroup)
 	}
-	if got := seo.Nested.Fields[0].Path.String(); got != "seo.title" {
+	if got := seo.Nested.ResolvedFields()[0].Path.String(); got != "seo.title" {
 		t.Fatalf("named tab child path = %q, want seo.title", got)
 	}
 }
@@ -580,12 +544,8 @@ func TestDirectTabMetadataRetainsOneLocalGroup(t *testing.T) {
 	manifest, err := ridu.Resolve(ridu.Config{
 		Name: "Direct tabs",
 		Collections: []ridu.Collection{{
-			Slug: "posts",
-			Fields: []field.Definition{
-				field.Text("title"),
-				field.Number("score", field.Tab("Scoring")),
-				field.Checkbox("published", field.Tab("Scoring")),
-			},
+			Slug:   "posts",
+			Fields: field.Fields{field.Text("title"), field.Number("score").Admin(field.Admin{Tab: "Scoring"}), field.Checkbox("published").Admin(field.Admin{Tab: "Scoring"})},
 		}},
 	})
 	if err != nil {
@@ -603,7 +563,7 @@ func TestDirectTabMetadataRetainsOneLocalGroup(t *testing.T) {
 func TestFieldRenameChangesDerivedIdentityForMigrationMatching(t *testing.T) {
 	resolve := func(name string) schema.Manifest {
 		manifest, err := ridu.Resolve(ridu.Config{Name: "Rename", Collections: []ridu.Collection{{
-			Slug: "posts", Fields: []field.Definition{field.Text(name)},
+			Slug: "posts", Fields: field.Fields{field.Text(name)},
 		}}})
 		if err != nil {
 			t.Fatal(err)
@@ -619,11 +579,8 @@ func TestFieldRenameChangesDerivedIdentityForMigrationMatching(t *testing.T) {
 
 func TestDerivedFieldIdentityCollisionsAreRejected(t *testing.T) {
 	_, err := ridu.Resolve(ridu.Config{Name: "Collision", Collections: []ridu.Collection{{
-		Slug: "posts",
-		Fields: []field.Definition{
-			field.Text("metaTitle"),
-			field.Text("meta_title"),
-		},
+		Slug:   "posts",
+		Fields: field.Fields{field.Text("metaTitle"), field.Text("meta_title")},
 	}}})
 	var validationError *schema.ValidationError
 	if !errors.As(err, &validationError) {
@@ -644,17 +601,11 @@ func TestRowGroupsFlatManifestFieldsWithoutChangingDocumentPaths(t *testing.T) {
 	manifest, err := ridu.Resolve(ridu.Config{
 		Name: "Editorial rows",
 		Collections: []ridu.Collection{{
-			Slug: "posts",
-			Fields: []field.Definition{
-				field.Text("title"),
-				field.Row(
-					field.Relationship("author", field.To("users"), field.Columns(6)),
-					field.Select("status", field.Columns(6), field.OneOf("draft", "published")),
-				),
-			},
+			Slug:   "posts",
+			Fields: field.Fields{field.Text("title"), field.Row(field.Fields{field.Relationship("author", "users").Admin(field.Admin{Columns: 6}), field.Select("status", "draft", "published").Admin(field.Admin{Columns: 6})})},
 		}, {
 			Slug:   "users",
-			Fields: []field.Definition{field.Text("name")},
+			Fields: field.Fields{field.Text("name")},
 		}},
 	})
 	if err != nil {
@@ -684,7 +635,7 @@ func TestRowGroupsFlatManifestFieldsWithoutChangingDocumentPaths(t *testing.T) {
 
 func TestRowRequiresChildren(t *testing.T) {
 	_, err := ridu.Resolve(ridu.Config{Name: "Invalid row", Collections: []ridu.Collection{{
-		Slug: "posts", Fields: []field.Definition{field.Row()},
+		Slug: "posts", Fields: field.Fields{field.Row(field.Fields{})},
 	}}})
 	if err == nil || !strings.Contains(err.Error(), "collections[0].fields[0].fields") || !strings.Contains(err.Error(), "missing_row_fields") {
 		t.Fatalf("Resolve empty row error = %v, want path-aware missing_row_fields", err)
@@ -693,12 +644,8 @@ func TestRowRequiresChildren(t *testing.T) {
 
 func TestTabsRequireSectionsLabelsAndChildren(t *testing.T) {
 	_, err := ridu.Resolve(ridu.Config{Name: "Invalid tabs", Collections: []ridu.Collection{{
-		Slug: "posts",
-		Fields: []field.Definition{
-			field.Tabs(),
-			field.Tabs(field.UnnamedTab("", field.Text("title"))),
-			field.Tabs(field.NamedTab("seo", "SEO")),
-		},
+		Slug:   "posts",
+		Fields: field.Fields{field.Tabs(field.Fields{}), field.Tabs(field.Fields{field.UnnamedTab("", field.Fields{field.Text("title")})}), field.Tabs(field.Fields{field.NamedTab("seo", "SEO", field.Fields{})})},
 	}}})
 	if err == nil {
 		t.Fatal("Resolve invalid tabs succeeded")
@@ -745,7 +692,7 @@ func TestZeroValueFieldFailsNameValidation(t *testing.T) {
 		Name: "Invalid field",
 		Collections: []ridu.Collection{{
 			Slug:   "posts",
-			Fields: []field.Definition{{}},
+			Fields: field.Fields{field.TextField{}},
 		}},
 	})
 	var validationError *schema.ValidationError
@@ -764,7 +711,7 @@ func TestFrameworkDocumentFieldNamesAreReserved(t *testing.T) {
 				Name: "Reserved field",
 				Collections: []ridu.Collection{{
 					Slug:   "posts",
-					Fields: []field.Definition{field.Text(name)},
+					Fields: field.Fields{field.Text(name)},
 				}},
 			})
 			var validationError *schema.ValidationError
@@ -782,12 +729,8 @@ func TestWhereControlNamesRemainAvailableBelowTheResourceRoot(t *testing.T) {
 	_, err := ridu.Resolve(ridu.Config{
 		Name: "Nested query control names",
 		Collections: []ridu.Collection{{
-			Slug: "posts",
-			Fields: []field.Definition{field.Group("metadata", field.Fields(
-				field.Text("and"),
-				field.Text("or"),
-				field.Text("not"),
-			))},
+			Slug:   "posts",
+			Fields: field.Fields{field.Group("metadata", field.Fields{field.Text("and"), field.Text("or"), field.Text("not")})},
 		}},
 	})
 	if err != nil {
@@ -799,10 +742,8 @@ func TestBlockDiscriminatorFieldNameIsReserved(t *testing.T) {
 	_, err := ridu.Resolve(ridu.Config{
 		Name: "Reserved block discriminator",
 		Collections: []ridu.Collection{{
-			Slug: "posts",
-			Fields: []field.Definition{field.Blocks("content", field.BlockTypes(
-				field.BlockType("hero", "Hero", field.Row(field.Text("blockType"))),
-			))},
+			Slug:   "posts",
+			Fields: field.Fields{field.Blocks("content", field.Block{Slug: "hero", Fields: field.Fields{field.Row(field.Fields{field.Text("blockType")})}})},
 		}},
 	})
 	var validationError *schema.ValidationError
@@ -810,7 +751,7 @@ func TestBlockDiscriminatorFieldNameIsReserved(t *testing.T) {
 		t.Fatalf("Resolve error = %T, want *schema.ValidationError", err)
 	}
 	for _, issue := range validationError.Issues {
-		if issue.Code == "reserved_field_name" && strings.Contains(issue.Path, "options.blocks[0].fields") {
+		if issue.Code == "reserved_field_name" && strings.Contains(issue.Path, "blocks[0].fields") {
 			return
 		}
 	}
@@ -863,20 +804,8 @@ func TestRowLabelComponentsResolveForArraysAndBlocks(t *testing.T) {
 			PairingVersion: 1,
 		}}},
 		Collections: []ridu.Collection{{
-			Slug: "questions",
-			Fields: []field.Definition{
-				field.Array(
-					"options",
-					field.RowLabel("label"),
-					field.RowLabelComponent("curriculum", "questionOption", json.RawMessage(`{"key":"optionKey","label":"label"}`)),
-					field.Fields(field.Text("optionKey"), field.Text("label")),
-				),
-				field.Blocks(
-					"content",
-					field.RowLabelComponent("curriculum", "blockSummary", json.RawMessage(`{"type":"blockType","order":"orderIndex"}`)),
-					field.BlockTypes(field.BlockType("lesson", "Lesson", field.Number("orderIndex"))),
-				),
-			},
+			Slug:   "questions",
+			Fields: field.Fields{field.Array("options", field.Fields{field.Text("optionKey"), field.Text("label")}).Admin(field.Admin{RowLabelPath: "label", RowLabel: field.PluginComponent("curriculum", "questionOption", store.Object(store.Values{"key": store.String("optionKey"), "label": store.String("label")}))}), field.Blocks("content", field.Block{Slug: "lesson", Fields: field.Fields{field.Number("orderIndex")}}).Admin(field.Admin{RowLabel: field.PluginComponent("curriculum", "blockSummary", store.Object(store.Values{"type": store.String("blockType"), "order": store.String("orderIndex")}))})},
 		}},
 	})
 	if err != nil {
@@ -888,28 +817,22 @@ func TestRowLabelComponentsResolveForArraysAndBlocks(t *testing.T) {
 		t.Fatalf("array row label metadata = %#v", fields[0].Nested)
 	}
 	blocksComponent := fields[1].Nested.RowLabelComponent
-	if blocksComponent == nil || blocksComponent.Plugin != "curriculum" || blocksComponent.Component != "blockSummary" || string(blocksComponent.Config) != `{"type":"blockType","order":"orderIndex"}` || len(fields[1].Nested.Fields) != 0 {
+	if blocksComponent == nil || blocksComponent.Plugin != "curriculum" || blocksComponent.Component != "blockSummary" || string(blocksComponent.Config) != `{"order":"orderIndex","type":"blockType"}` || len(fields[1].Nested.ResolvedFields()) != 0 {
 		t.Fatalf("blocks row label metadata = %#v", fields[1].Nested)
 	}
 }
 
 func TestRowLabelComponentRequiresPairedAdminPlugin(t *testing.T) {
 	_, err := ridu.Resolve(ridu.Config{
-		Name: "Missing row label plugin",
-		Collections: []ridu.Collection{{Slug: "posts", Fields: []field.Definition{
-			field.Array(
-				"items",
-				field.RowLabelComponent("missing", "summary", json.RawMessage(`{}`)),
-				field.Fields(field.Text("label")),
-			),
-		}}},
+		Name:        "Missing row label plugin",
+		Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{field.Array("items", field.Fields{field.Text("label")}).Admin(field.Admin{RowLabel: field.PluginComponent("missing", "summary", store.Object(store.Values{}))})}}},
 	})
 	var validationError *schema.ValidationError
 	if !errors.As(err, &validationError) {
 		t.Fatalf("Resolve error = %T, want *schema.ValidationError", err)
 	}
 	if !slices.ContainsFunc(validationError.Issues, func(issue schema.Issue) bool {
-		return issue.Code == "missing_row_label_component_plugin" && issue.Path == "collections[0].fields[0].options.rowLabelComponent.plugin"
+		return issue.Code == "missing_row_label_component_plugin" && issue.Path == "collections[0].fields[0].admin.rowLabel.pluginKey"
 	}) {
 		t.Fatalf("row label component issues = %#v", validationError.Issues)
 	}
@@ -981,7 +904,7 @@ func TestPluginDescriptorCompatibilityAndMigrationsAreValidated(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := ridu.Resolve(ridu.Config{Name: "Plugin descriptor", Plugins: []ridu.Plugin{descriptorPlugin{key: "audit", descriptor: test.descriptor}}, Collections: []ridu.Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title")}}}})
+			_, err := ridu.Resolve(ridu.Config{Name: "Plugin descriptor", Plugins: []ridu.Plugin{descriptorPlugin{key: "audit", descriptor: test.descriptor}}, Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{field.Text("title")}}}})
 			var validationError *schema.ValidationError
 			if !errors.As(err, &validationError) {
 				t.Fatalf("Resolve error = %v", err)
@@ -1010,17 +933,7 @@ func validConfig() ridu.Config {
 				Singular: "Post",
 				Plural:   "Posts",
 			},
-			Fields: []field.Definition{
-				field.Text("title", field.Label("Title"), field.Required(), field.Unique()),
-				field.Select(
-					"status",
-					field.Choices(
-						field.Choice{Value: "draft", Label: "Draft"},
-						field.Choice{Value: "published", Label: "Published"},
-					),
-					field.Default("draft"),
-				),
-			},
+			Fields: field.Fields{field.Text("title").Label("Title").Required().Unique(), field.Select("status", "draft", "published").Default("draft")},
 		}},
 	}
 }
@@ -1029,17 +942,8 @@ func nestedConfig() ridu.Config {
 	return ridu.Config{
 		Name: "Nested",
 		Collections: []ridu.Collection{{
-			Slug: "pages",
-			Fields: []field.Definition{
-				field.Group(
-					"seo",
-					field.Label("Search metadata"),
-					field.Fields(
-						field.Text("metaTitle", field.Required()),
-						field.Text("description"),
-					),
-				),
-			},
+			Slug:   "pages",
+			Fields: field.Fields{field.Group("seo", field.Fields{field.Text("metaTitle").Required(), field.Text("description")}).Label("Search metadata")},
 		}},
 	}
 }
@@ -1049,17 +953,12 @@ func relationshipConfig() ridu.Config {
 		Name: "Relationships",
 		Collections: []ridu.Collection{
 			{
-				Slug: "authors",
-				Fields: []field.Definition{
-					field.Text("name", field.Required()),
-				},
+				Slug:   "authors",
+				Fields: field.Fields{field.Text("name").Required()},
 			},
 			{
-				Slug: "posts",
-				Fields: []field.Definition{
-					field.Text("title", field.Required()),
-					field.Relationship("author", field.To("authors"), field.Required()),
-				},
+				Slug:   "posts",
+				Fields: field.Fields{field.Text("title").Required(), field.Relationship("author", "authors").Required()},
 			},
 		},
 	}
@@ -1069,21 +968,8 @@ func TestNestedRelationshipOptionFiltersAreValidatedRecursively(t *testing.T) {
 	_, err := ridu.Resolve(ridu.Config{
 		Name: "Nested relationship filters",
 		Collections: []ridu.Collection{
-			{Slug: "authors", Fields: []field.Definition{field.Text("name")}},
-			{Slug: "posts", Fields: []field.Definition{
-				field.Text("category"),
-				field.Group("meta", field.Fields(
-					field.Relationship("author", field.To("authors"), field.FilterOptionRules(field.OptionFilter("missing", field.FilterEquals, "category"))),
-				)),
-				field.Array("rows", field.Fields(
-					field.Relationship("author", field.To("authors"), field.FilterOptionRules(field.OptionFilter("name", field.FilterEquals, "missing"))),
-				)),
-				field.Blocks("layout", field.BlockTypes(field.BlockType("hero", "Hero",
-					field.Relationship("author", field.To("authors"), field.FilterOptionRules(
-						field.OptionFilterFor("editors", "name", field.FilterEquals, "category"),
-					)),
-				))),
-			}},
+			{Slug: "authors", Fields: field.Fields{field.Text("name")}},
+			{Slug: "posts", Fields: field.Fields{field.Text("category"), field.Group("meta", field.Fields{field.Relationship("author", "authors").FilterOptionRules(field.OptionFilter("missing", field.FilterEquals, "category"))}), field.Array("rows", field.Fields{field.Relationship("author", "authors").FilterOptionRules(field.OptionFilter("name", field.FilterEquals, "missing"))}), field.Blocks("layout", field.Block{Slug: "hero", Fields: field.Fields{field.Relationship("author", "authors").FilterOptionRules(field.OptionFilterFor("editors", "name", field.FilterEquals, "category"))}})}},
 		},
 	})
 	var validationError *schema.ValidationError
@@ -1110,13 +996,7 @@ func TestUploadOptionFiltersResolveIntoTheSharedReferenceContract(t *testing.T) 
 		Name: "Upload filters",
 		Collections: []ridu.Collection{
 			{Slug: "media", Upload: true},
-			{Slug: "posts", Fields: []field.Definition{
-				field.Text("assetType"), field.Text("assetName"),
-				field.Upload("hero", field.To("media"),
-					field.FilterOptionRules(field.OptionFilter("mimeType", field.FilterEquals, "assetType")),
-					field.FilterOptionRules(field.OptionFilter("filename", field.FilterLike, "assetName")),
-				),
-			}},
+			{Slug: "posts", Fields: field.Fields{field.Text("assetType"), field.Text("assetName"), field.Upload("hero", "media").FilterOptionRules(field.OptionFilter("mimeType", field.FilterEquals, "assetType"), field.OptionFilter("filename", field.FilterLike, "assetName"))}},
 		},
 	})
 	if err != nil {
@@ -1135,14 +1015,8 @@ func TestMultiSelectCardinalityAndDefaultsResolve(t *testing.T) {
 	manifest, err := ridu.Resolve(ridu.Config{
 		Name: "Multi select",
 		Collections: []ridu.Collection{{
-			Slug: "users",
-			Fields: []field.Definition{field.Select(
-				"roles",
-				field.OneOf("admin", "editor"),
-				field.Multiple(),
-				field.DefaultChoices("admin"),
-				field.Required(),
-			)},
+			Slug:   "users",
+			Fields: field.Fields{field.MultiSelect("roles", "admin", "editor").Default("admin").Required()},
 		}},
 	})
 	if err != nil {
@@ -1158,12 +1032,10 @@ func TestLiteralReferenceFiltersResolvePublishedStatus(t *testing.T) {
 	manifest, err := ridu.Resolve(ridu.Config{
 		Name: "Published references",
 		Collections: []ridu.Collection{
-			{Slug: "lessons", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true}, Fields: []field.Definition{field.Text("title")}},
-			{Slug: "islands", Fields: []field.Definition{field.Relationship(
-				"lesson",
-				field.To("lessons"),
-				field.FilterOptionRules(field.OptionFilterValue("_status", field.FilterEquals, "published")),
-			)}},
+			{Slug: "lessons", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true}, Fields: field.Fields{field.Text("title")}},
+			{Slug: "islands", Fields: field.Fields{field.Relationship("lesson",
+				"lessons").FilterOptionRules(field.OptionFilterValue("_status", field.FilterEquals, "published")),
+			}},
 		},
 	})
 	if err != nil {
@@ -1179,25 +1051,9 @@ func TestReferenceOptionFiltersRejectIncompatibleScalarTypes(t *testing.T) {
 	_, err := ridu.Resolve(ridu.Config{
 		Name: "Reference filter types",
 		Collections: []ridu.Collection{
-			{Slug: "authors", Fields: []field.Definition{field.Text("name"), field.Number("score"), field.Checkbox("active")}},
+			{Slug: "authors", Fields: field.Fields{field.Text("name"), field.Number("score"), field.Checkbox("active")}},
 			{Slug: "media", Upload: true},
-			{Slug: "posts", Fields: []field.Definition{
-				field.Text("title"), field.Number("score"), field.Checkbox("active"),
-				field.Relationship("tags", field.ToMany("authors")),
-				field.Relationship("badLike", field.To("authors"), field.FilterOptionRules(
-					field.OptionFilter("name", field.FilterLike, "score"),
-				)),
-				field.Relationship("badRange", field.To("authors"), field.FilterOptionRules(
-					field.OptionFilter("score", field.FilterGreaterThan, "title"),
-				)),
-				field.Relationship("badBoolean", field.To("authors"), field.FilterOptionRules(
-					field.OptionFilter("active", field.FilterEquals, "title"),
-				)),
-				field.Relationship("badManySource", field.To("authors"), field.FilterOptionRules(
-					field.OptionFilter("name", field.FilterEquals, "tags"),
-				)),
-				field.Upload("badUpload", field.To("media"), field.FilterOptionRules(field.OptionFilter("mimeType", field.FilterEquals, "score"))),
-			}},
+			{Slug: "posts", Fields: field.Fields{field.Text("title"), field.Number("score"), field.Checkbox("active"), field.Relationships("tags", "authors"), field.Relationship("badLike", "authors").FilterOptionRules(field.OptionFilter("name", field.FilterLike, "score")), field.Relationship("badRange", "authors").FilterOptionRules(field.OptionFilter("score", field.FilterGreaterThan, "title")), field.Relationship("badBoolean", "authors").FilterOptionRules(field.OptionFilter("active", field.FilterEquals, "title")), field.Relationship("badManySource", "authors").FilterOptionRules(field.OptionFilter("name", field.FilterEquals, "tags")), field.Upload("badUpload", "media").FilterOptionRules(field.OptionFilter("mimeType", field.FilterEquals, "score"))}},
 		},
 	})
 	var validationError *schema.ValidationError
@@ -1225,19 +1081,8 @@ func TestReferenceOptionFiltersAcceptCompatibleScalarTypes(t *testing.T) {
 	_, err := ridu.Resolve(ridu.Config{
 		Name: "Compatible reference filter types",
 		Collections: []ridu.Collection{
-			{Slug: "authors", Fields: []field.Definition{field.Text("name"), field.Number("score"), field.Checkbox("active")}},
-			{Slug: "posts", Fields: []field.Definition{
-				field.Text("title"), field.Number("score"), field.Checkbox("active"),
-				field.Relationship("byName", field.To("authors"), field.FilterOptionRules(
-					field.OptionFilter("name", field.FilterLike, "title"),
-				)),
-				field.Relationship("byScore", field.To("authors"), field.FilterOptionRules(
-					field.OptionFilter("score", field.FilterGreaterThanEqual, "score"),
-				)),
-				field.Relationship("byActive", field.To("authors"), field.FilterOptionRules(
-					field.OptionFilter("active", field.FilterEquals, "active"),
-				)),
-			}},
+			{Slug: "authors", Fields: field.Fields{field.Text("name"), field.Number("score"), field.Checkbox("active")}},
+			{Slug: "posts", Fields: field.Fields{field.Text("title"), field.Number("score"), field.Checkbox("active"), field.Relationship("byName", "authors").FilterOptionRules(field.OptionFilter("name", field.FilterLike, "title")), field.Relationship("byScore", "authors").FilterOptionRules(field.OptionFilter("score", field.FilterGreaterThanEqual, "score")), field.Relationship("byActive", "authors").FilterOptionRules(field.OptionFilter("active", field.FilterEquals, "active"))}},
 		},
 	})
 	if err != nil {
@@ -1249,31 +1094,27 @@ func pluginConfig() ridu.Config {
 	return ridu.Config{
 		Name: "Plugin contribution",
 		Collections: []ridu.Collection{{
-			Slug: "posts",
-			Fields: []field.Definition{
-				field.Text("title"),
-			},
+			Slug:   "posts",
+			Fields: field.Fields{field.Text("title")},
 		}},
 		Plugins: []ridu.Plugin{
 			appendFieldPlugin{
 				key:   "seo-fields",
-				field: field.Text("pluginNote", field.Label("Plugin note")),
+				field: field.Text("pluginNote").Label("Plugin note"),
 			},
 		},
 	}
 }
 
-func TestMultiwordBlockKeysProduceCanonicalFieldPaths(t *testing.T) {
+func TestMultiwordBlockSlugsProduceCanonicalFieldPaths(t *testing.T) {
 	manifest, err := ridu.Resolve(ridu.Config{Name: "Blocks", Collections: []ridu.Collection{{
-		Slug: "pages",
-		Fields: []field.Definition{field.Blocks("layout", field.BlockTypes(
-			field.BlockType("featured-post", "Featured post", field.Text("title", field.Required())),
-		))},
+		Slug:   "pages",
+		Fields: field.Fields{field.Blocks("layout", field.Block{Slug: "featured-post", Fields: field.Fields{field.Text("title").Required()}})},
 	}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	blockField := manifest.Snapshot().Collections[0].Fields[0].Blocks.Types[0].Fields[0]
+	blockField := manifest.Snapshot().Collections[0].Fields[0].Blocks.ResolvedTypes()[0].ResolvedFields()[0]
 	if got := blockField.Path.String(); got != "layout.featured-post.title" {
 		t.Fatalf("block field path = %q", got)
 	}
@@ -1301,17 +1142,10 @@ func TestAdminDisplayTranslationsResolveAcrossAuthoringSurfaces(t *testing.T) {
 					Breakpoints: []ridu.PreviewBreakpoint{{Name: "mobile", Label: "Mobile", LabelTranslations: map[string]string{"fr": "Téléphone"}, Width: 375, Height: 667}},
 				},
 			},
-			Fields: []field.Definition{
-				field.Text("title", field.Label("Title"), field.LabelTranslations(map[string]string{"fr": "Titre"}), field.Description("Public title"), field.DescriptionTranslations(map[string]string{"fr": "Titre public"})),
-				field.Select("status", field.Choices(field.Choice{Value: "draft", Label: "Draft", LabelTranslations: map[string]string{"fr": "Brouillon"}})),
-				field.Array("items", field.ArrayRowLabels(field.RowLabels{
-					Singular: "Item", SingularTranslations: map[string]string{"fr": "Élément"},
-					Plural: "Items", PluralTranslations: map[string]string{"fr": "Éléments"},
-				}), field.Fields(field.Text("name"))),
-				field.Blocks("layout", field.BlockTypes(field.Block{Key: "hero", Label: "Hero", LabelTranslations: map[string]string{"fr": "Bannière"}, Fields: []field.Definition{field.Text("heading")}})),
-				field.Tabs(field.UnnamedTab("Details", field.Text("summary")).WithLabelTranslations(map[string]string{"fr": "Détails"})),
-				field.Collapsible("settings", false, field.Text("notes")).WithLabelTranslations(map[string]string{"fr": "Paramètres"}),
-				field.Text("slug", field.Tab("Metadata"), field.TabTranslations(map[string]string{"fr": "Métadonnées"})),
+			Fields: field.Fields{field.Text("title").Label("Title").Admin(field.Admin{LabelTranslations: map[string]string{"fr": "Titre"}, Description: "Public title", DescriptionTranslations: map[string]string{"fr": "Titre public"}}), field.Select("status").Options(field.Option{Value: "draft", Label: "Draft", LabelTranslations: map[string]string{"fr": "Brouillon"}}), field.Array("items", field.Fields{field.Text("name")}).Admin(field.Admin{RowLabels: field.RowLabels{
+				Singular: "Item", SingularTranslations: map[string]string{"fr": "Élément"},
+				Plural: "Items", PluralTranslations: map[string]string{"fr": "Éléments"},
+			}}), field.Blocks("layout", field.Block{Slug: "hero", Labels: field.BlockLabels{SingularTranslations: map[string]string{"fr": "Bannière"}}, Fields: field.Fields{field.Text("heading")}}), field.Tabs(field.Fields{field.UnnamedTab("Details", field.Fields{field.Text("summary")}).LabelTranslations(map[string]string{"fr": "Détails"})}), field.Collapsible("settings", field.Fields{field.Text("notes")}).Admin(field.Admin{InitiallyCollapsed: false}).LabelTranslations(map[string]string{"fr": "Paramètres"}), field.Text("slug").Admin(field.Admin{Tab: "Metadata", TabTranslations: map[string]string{"fr": "Métadonnées"}}),
 			},
 		}},
 		Globals: []ridu.Global{{
@@ -1320,7 +1154,7 @@ func TestAdminDisplayTranslationsResolveAcrossAuthoringSurfaces(t *testing.T) {
 				Group: "Configuration", GroupTranslations: map[string]string{"fr": "Configuration"},
 				Description: "Site settings", DescriptionTranslations: map[string]string{"fr": "Réglages du site"},
 			},
-			Fields: []field.Definition{field.Text("siteName")},
+			Fields: field.Fields{field.Text("siteName")},
 		}},
 	}
 	manifest, err := ridu.Resolve(config)
@@ -1341,14 +1175,14 @@ func TestAdminDisplayTranslationsResolveAcrossAuthoringSurfaces(t *testing.T) {
 	if collection.Fields[0].Admin.LabelTranslations["fr"] != "Titre" || collection.Fields[0].Admin.DescriptionTranslations["fr"] != "Titre public" {
 		t.Fatalf("field translations = %#v", collection.Fields[0].Admin)
 	}
-	if collection.Fields[1].Select.Choices[0].LabelTranslations["fr"] != "Brouillon" {
-		t.Fatalf("choice translations = %#v", collection.Fields[1].Select.Choices)
+	if collection.Fields[1].Select.Options[0].LabelTranslations["fr"] != "Brouillon" {
+		t.Fatalf("option translations = %#v", collection.Fields[1].Select.Options)
 	}
 	if rows := collection.Fields[2].Nested.RowLabels; rows == nil || rows.SingularTranslations["fr"] != "Élément" || rows.PluralTranslations["fr"] != "Éléments" {
 		t.Fatalf("array row labels = %#v", rows)
 	}
-	if collection.Fields[3].Blocks.Types[0].LabelTranslations["fr"] != "Bannière" {
-		t.Fatalf("block translations = %#v", collection.Fields[3].Blocks.Types)
+	if collection.Fields[3].Blocks.ResolvedTypes()[0].Labels.SingularTranslations["fr"] != "Bannière" {
+		t.Fatalf("block translations = %#v", collection.Fields[3].Blocks.ResolvedTypes())
 	}
 	if collection.Fields[4].Admin.TabTranslations["fr"] != "Détails" || collection.Fields[5].Admin.Collapsible.LabelTranslations["fr"] != "Paramètres" || collection.Fields[6].Admin.TabTranslations["fr"] != "Métadonnées" {
 		t.Fatalf("presentation translations = %#v %#v %#v", collection.Fields[4].Admin, collection.Fields[5].Admin, collection.Fields[6].Admin)
@@ -1364,10 +1198,10 @@ func TestAdminDisplayTranslationsResolveAcrossAuthoringSurfaces(t *testing.T) {
 	config.Globals[0].LabelTranslations["fr"] = "mutated"
 	snapshot.Application.NameTranslations["fr"] = "snapshot-mutated"
 	snapshot.Collections[0].Fields[0].Admin.LabelTranslations["fr"] = "snapshot-mutated"
-	snapshot.Collections[0].Fields[1].Select.Choices[0].LabelTranslations["fr"] = "snapshot-mutated"
+	snapshot.Collections[0].Fields[1].Select.Options[0].LabelTranslations["fr"] = "snapshot-mutated"
 	snapshot.Collections[0].Fields[2].Nested.RowLabels.SingularTranslations["fr"] = "snapshot-mutated"
-	snapshot.Collections[0].Fields[3].Blocks.Types[0].LabelTranslations["fr"] = "snapshot-mutated"
-	if after := manifest.Snapshot(); after.Application.NameTranslations["fr"] != "Éditorial" || after.Collections[0].Labels.SingularTranslations["fr"] != "Article" || after.Collections[0].Admin.LivePreview.Breakpoints[0].LabelTranslations["fr"] != "Téléphone" || after.Collections[0].Fields[0].Admin.LabelTranslations["fr"] != "Titre" || after.Collections[0].Fields[1].Select.Choices[0].LabelTranslations["fr"] != "Brouillon" || after.Collections[0].Fields[2].Nested.RowLabels.SingularTranslations["fr"] != "Élément" || after.Collections[0].Fields[3].Blocks.Types[0].LabelTranslations["fr"] != "Bannière" || after.Globals[0].Labels.SingularTranslations["fr"] != "Réglages" {
+	snapshot.Collections[0].Fields[3].Blocks.ResolvedTypes()[0].Labels.SingularTranslations["fr"] = "snapshot-mutated"
+	if after := manifest.Snapshot(); after.Application.NameTranslations["fr"] != "Éditorial" || after.Collections[0].Labels.SingularTranslations["fr"] != "Article" || after.Collections[0].Admin.LivePreview.Breakpoints[0].LabelTranslations["fr"] != "Téléphone" || after.Collections[0].Fields[0].Admin.LabelTranslations["fr"] != "Titre" || after.Collections[0].Fields[1].Select.Options[0].LabelTranslations["fr"] != "Brouillon" || after.Collections[0].Fields[2].Nested.RowLabels.SingularTranslations["fr"] != "Élément" || after.Collections[0].Fields[3].Blocks.ResolvedTypes()[0].Labels.SingularTranslations["fr"] != "Bannière" || after.Globals[0].Labels.SingularTranslations["fr"] != "Réglages" {
 		t.Fatalf("manifest retained caller-owned translation maps: %#v", after)
 	}
 }
@@ -1380,14 +1214,8 @@ func TestAdminFieldPresentationMetadataResolvesWithoutChangingFieldIdentity(t *t
 			Languages:       []ridu.AdminLanguage{{Code: "en", Label: "English"}, {Code: "fr", Label: "Français"}},
 		}},
 		Collections: []ridu.Collection{{
-			Slug: "posts",
-			Fields: []field.Definition{field.Text(
-				"summary",
-				field.Placeholder("Write a summary"),
-				field.PlaceholderTranslations(map[string]string{"fr": "Rédigez un résumé"}),
-				field.Hidden(),
-				field.Sidebar(),
-			)},
+			Slug:   "posts",
+			Fields: field.Fields{field.Text("summary").Admin(field.Admin{Placeholder: "Write a summary", PlaceholderTranslations: map[string]string{"fr": "Rédigez un résumé"}, Hidden: true, Sidebar: true})},
 		}},
 	})
 	if err != nil {
@@ -1407,10 +1235,8 @@ func TestNestedSidebarPlacementIsRejected(t *testing.T) {
 	_, err := ridu.Resolve(ridu.Config{
 		Name: "Nested sidebar",
 		Collections: []ridu.Collection{{
-			Slug: "posts",
-			Fields: []field.Definition{field.Group("seo", field.Fields(
-				field.Text("title", field.Sidebar()),
-			))},
+			Slug:   "posts",
+			Fields: field.Fields{field.Group("seo", field.Fields{field.Text("title").Admin(field.Admin{Sidebar: true})})},
 		}},
 	})
 	var validationError *schema.ValidationError
@@ -1418,7 +1244,7 @@ func TestNestedSidebarPlacementIsRejected(t *testing.T) {
 		t.Fatalf("Resolve error = %T, want *schema.ValidationError", err)
 	}
 	if !slices.ContainsFunc(validationError.Issues, func(issue schema.Issue) bool {
-		return issue.Code == "unsupported_sidebar" && issue.Path == "collections[0].fields[0].options.fields[0].options.sidebar"
+		return issue.Code == "unsupported_sidebar" && issue.Path == "collections[0].fields[0].fields[0].admin.sidebar"
 	}) {
 		t.Fatalf("issues = %#v, want nested sidebar rejection", validationError.Issues)
 	}
@@ -1433,13 +1259,13 @@ func TestAdminDisplayTranslationsRejectUnknownLanguagesAndBlankValues(t *testing
 	}{
 		{
 			name:   "unknown language",
-			config: ridu.Config{Name: "Example", NameTranslations: map[string]string{"fr": "Exemple"}, Admin: ridu.AdminConfig{Localization: ridu.AdminLocalizationConfig{DefaultLanguage: "en", Languages: []ridu.AdminLanguage{{Code: "en", Label: "English"}}}}, Collections: []ridu.Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title")}}}},
+			config: ridu.Config{Name: "Example", NameTranslations: map[string]string{"fr": "Exemple"}, Admin: ridu.AdminConfig{Localization: ridu.AdminLocalizationConfig{DefaultLanguage: "en", Languages: []ridu.AdminLanguage{{Code: "en", Label: "English"}}}}, Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{field.Text("title")}}}},
 			code:   "unknown_admin_translation_language", path: `nameTranslations["fr"]`,
 		},
 		{
 			name:   "blank value",
-			config: ridu.Config{Name: "Example", Admin: ridu.AdminConfig{Localization: ridu.AdminLocalizationConfig{DefaultLanguage: "en", Languages: []ridu.AdminLanguage{{Code: "en", Label: "English"}}}}, Collections: []ridu.Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title", field.LabelTranslations(map[string]string{"en": " "}))}}}},
-			code:   "missing_admin_translation_value", path: `collections[0].fields[0].options.labelTranslations["en"]`,
+			config: ridu.Config{Name: "Example", Admin: ridu.AdminConfig{Localization: ridu.AdminLocalizationConfig{DefaultLanguage: "en", Languages: []ridu.AdminLanguage{{Code: "en", Label: "English"}}}}, Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{field.Text("title").Admin(field.Admin{LabelTranslations: map[string]string{"en": " "}})}}}},
+			code:   "missing_admin_translation_value", path: `collections[0].fields[0].admin.labelTranslations["en"]`,
 		},
 	}
 	for _, test := range tests {
@@ -1465,19 +1291,10 @@ func invalidConfig() ridu.Config {
 		Collections: []ridu.Collection{
 			{
 				Slug: "posts",
-				Fields: []field.Definition{
-					field.Text("Title"),
-					field.Text("Title"),
-					field.Group("meta"),
-					field.Select(
-						"status",
-						field.Choices(
-							field.Choice{Value: "draft", Label: "Draft"},
-							field.Choice{Value: "draft", Label: "Duplicate"},
-						),
-						field.Default("published"),
-					),
-					field.Relationship("author", field.To("missing")),
+				Fields: field.Fields{field.Text("Title"), field.Text("Title"), field.Group("meta", field.Fields{}), field.Select("status").Options(
+
+					field.Option{Value: "draft", Label: "Draft"},
+					field.Option{Value: "draft", Label: "Duplicate"}).Default("published"), field.Relationship("author", "missing"),
 				},
 			},
 			{Slug: "posts"},
@@ -1488,7 +1305,7 @@ func invalidConfig() ridu.Config {
 
 type appendFieldPlugin struct {
 	key   string
-	field field.Definition
+	field field.Node
 }
 
 func (plugin appendFieldPlugin) Key() string { return plugin.key }
@@ -1509,7 +1326,7 @@ type pairedPlugin struct {
 
 func (plugin pairedPlugin) Key() string { return plugin.key }
 func (plugin pairedPlugin) Descriptor() ridu.PluginDescriptor {
-	return ridu.PluginDescriptor{Version: "1.0.0", GoPackage: "example.com/plugins/" + plugin.key, APIVersion: ridu.PluginAPIVersion, Ridu: ridu.RiduCompatibility{Minimum: ridu.FrameworkVersion, MaximumExclusive: "0.2.0"}, Admin: &plugin.admin}
+	return ridu.PluginDescriptor{Version: "1.0.0", GoPackage: "example.com/plugins/" + plugin.key, APIVersion: ridu.PluginAPIVersion, Ridu: ridu.RiduCompatibility{Minimum: ridu.FrameworkVersion, MaximumExclusive: "0.3.0"}, Admin: &plugin.admin}
 }
 
 type pointerPlugin struct{}

@@ -1,46 +1,56 @@
 ---
 title: 'Email field'
-description: 'Store and validate an email-shaped string with a purpose-built admin control.'
+description: 'Add an email input that checks whether the value is a valid email address.'
 product: core
-eyebrow: 'Scalar and choice fields'
+eyebrow: 'Basic fields'
 order: 63
 aliases: ['field.Email', 'email address field']
 relatedSymbolIds: ['go:github.com/riducms/ridu/field#Email']
 navigation:
   section: 'Model content'
   parent: fields
-  group: 'Scalar & choice'
   order: 30
   title: 'Email'
 ---
 
-Use `field.Email` when a document property is an email address. It retains a string value contract
-but adds server-side email-shape validation and an email control in the admin.
+Use `field.Email` to store an email address as a string. The admin shows an email input, and the
+server checks the address format when saving.
 
 ## In the admin {#admin-behavior}
 
 ![A populated Contact email field in the Ridu admin.](../../../../../docs/assets/fields/email.png)
 
-_The email input and server share shape validation; the stored value remains a string._
+_The admin and API both check the email address format._
 
-## Smallest working example {#example}
+## Add an email address {#example}
 
 ```go title="content/contacts.go"
-field.Email("contactEmail", field.Required())
+field.Email("contactEmail").Required()
 ```
 
-The operation engine validates requests from every transport, not only values entered in the
-admin. Invalid input produces a `422 validation` response with an issue at `contactEmail`.
+The same validation runs when you save through the admin, REST, the SDK, or the Local API. Invalid input produces a `422 validation` response with an issue at `contactEmail`.
 
-## Options and behavior {#options}
+## Configuration {#configuration}
+
+| Constructor or method                                           | What it controls                                                            |
+| --------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `field.Email(name)`                                             | Creates a stored string field with built-in email-format validation.        |
+| `.Required()`                                                   | Rejects a missing, null, or empty address.                                  |
+| `.Unique()` / `.Index()`                                        | Enforces a distinct address or adds a query index.                          |
+| `.Default(value)` / `.DefaultFrom(callback)`                    | Supplies an initial address for an omitted new field.                       |
+| `.Localized()`                                                  | Stores a separate address for each content locale when that is intentional. |
+| `.Validate(callback)` / `.LiveValidate(callback)`               | Adds application-specific save or live checks after format validation.      |
+| `.Admin(...)`, `.Access(...)`, `.Hooks(...)`, `.ReadHooks(...)` | Configures presentation, authorization, write hooks, and response hooks.    |
+
+## Require a unique address {#options}
 
 ```go title="content/teams.go"
-field.Email(
-	"billingEmail",
-	field.Required(),
-	field.Unique(),
-	field.Description("Invoices and payment notices are sent here."),
-)
+field.Email("billingEmail").
+	Required().
+	Unique().
+	Admin(field.Admin{
+		Description: "Invoices and payment notices are sent here.",
+	})
 ```
 
 Email supports common string-field presentation, default, localization, uniqueness, and indexing
@@ -48,13 +58,13 @@ options. Use `Unique` when one address must identify at most one document in tha
 email field does not send mail, verify ownership, or make a collection authenticate users; those
 are separate application and [authentication](/docs/authentication/) concerns.
 
-Email values can be selected, sorted, and queried with the string filter vocabulary. A localized
-email is valid when each locale genuinely needs a different address; translating the label uses
+Email values can be selected, sorted, and filtered like other text fields. A localized
+email is valid when each locale needs a different address; translating the label uses
 `LabelTranslations` instead.
 
 ## Common mistakes {#troubleshooting}
 
-- Syntactic validation does not confirm that an inbox exists or belongs to the actor. Use a
+- Syntactic validation does not confirm that an inbox exists or belongs to the person submitting it. Use a
   verification workflow for that claim.
 - Normalize addresses according to your product policy before relying on uniqueness. Ridu does not
   invent provider-specific equivalence rules such as stripping dots or `+` suffixes.

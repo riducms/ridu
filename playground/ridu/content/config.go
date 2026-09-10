@@ -9,6 +9,6 @@ func Config() ridu.Config {
 		Name:        "Ridu",
 		Admin:       ridu.AdminConfig{User: "users"},
 		Plugins:     installedPlugins(),
-		Collections: []ridu.Collection{Users, Posts},
+		Collections: []ridu.Collection{Users, Posts, Workshops},
 	}
 }

@@ -18,7 +18,7 @@ func (portableCollectionPlugin) Key() string { return "portable-records" }
 func (portableCollectionPlugin) TransformConfig(config ridu.Config) (ridu.Config, error) {
 	config.Collections[0].Fields = append(config.Collections[0].Fields, field.Text("pluginNote"))
 	config.Collections = append(config.Collections, ridu.Collection{
-		Slug: "plugin-records", Fields: []field.Definition{field.Text("title")},
+		Slug: "plugin-records", Fields: field.Fields{field.Text("title")},
 	})
 	return config, nil
 }
@@ -27,7 +27,7 @@ func TestPluginCollectionContributionsPlanAcrossPostgresAndSQLite(t *testing.T) 
 	manifest, err := ridu.Resolve(ridu.Config{
 		Name: "Portable plugin storage",
 		Collections: []ridu.Collection{{
-			Slug: "posts", Fields: []field.Definition{field.Text("title")},
+			Slug: "posts", Fields: field.Fields{field.Text("title")},
 		}},
 		Plugins: []ridu.Plugin{portableCollectionPlugin{}},
 	})

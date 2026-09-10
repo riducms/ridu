@@ -1,5 +1,8 @@
 <script lang="ts">
+	import { resolveBlockTypes } from "@riducms/protocol";
+
 	import type { SchemaField } from "@riducms/protocol";
+	import { fieldControlARIA } from "@riducms/ui";
 	import { DragDropProvider, type DragDropEvents } from "@dnd-kit-svelte/svelte";
 	import ChevronDownIcon from "~icons/lucide/chevron-down";
 	import CirclePlusIcon from "~icons/lucide/circle-plus";
@@ -28,10 +31,12 @@
 	import { initialFormValues } from "@admin/core/forms/form-schema";
 	import { immutableRowLabelSnapshot } from "@admin/core/plugins/row-label-registry";
 	import { getAdminRuntime } from "@admin/core/runtime/admin-runtime.svelte";
+	import { focusFieldIssue, fieldIssueRevealEvent } from "@admin/core/forms/field-issue-focus";
 	import FieldLayout from "@admin/fields/field-layout.svelte";
 	import FieldMessages from "@admin/fields/field-messages.svelte";
 	import {
 		compatibleClipboardValue,
+		cloneFieldForPaste,
 		createFieldClipboardPayload,
 		readFieldClipboard,
 		writeFieldClipboard,
@@ -44,18 +49,32 @@
 	const customRowLabel = $derived(runtime.rowLabels.resolve(field));
 	const rows = $derived((form.get(field.path) as Record<string, unknown>[] | undefined) ?? []);
 	const issues = $derived(form.issuesFor(field.path).filter((issue) => issue.path === field.path));
-	const hasMessage = $derived(issues.length > 0 || field.admin.description !== undefined);
-	const minRows = $derived(field.nested?.minRows ?? 0);
-	const maxRows = $derived(field.nested?.maxRows ?? 0);
-	const readOnly = $derived(field.admin.readOnly === true);
-	const canAdd = $derived(!readOnly && (maxRows === 0 || rows.length < maxRows));
+	const controlARIA = $derived(
+		fieldControlARIA(field.id, field.admin.description !== undefined, issues.length > 0)
+	);
+	const minRows = $derived(
+		(field.type === "blocks" ? field.blocks?.minRows : field.nested?.minRows) ?? 0
+	);
+	const maxRows = $derived(
+		(field.type === "blocks" ? field.blocks?.maxRows : field.nested?.maxRows) ?? 0
+	);
+	const unknownRows = $derived(
+		field.type === "blocks" &&
+			rows.some(
+				(row) => !resolveBlockTypes(field.blocks).some((block) => block.slug === row.blockType)
+			)
+	);
+	const readOnly = $derived(field.admin.readOnly === true || unknownRows);
+	const editingBlocked = $derived(readOnly || form.editingBlocked);
+	const canAdd = $derived(!editingBlocked && (maxRows === 0 || rows.length < maxRows));
 	let collapsed = $state(new Set<string>());
 	let clipboardMessage = $state("");
 	let blockPickerOpen = $state(false);
 	let blockQuery = $state("");
+	let insertAfter = $state<string>();
 	const visibleBlockTypes = $derived(
-		(field.blocks?.types ?? []).filter((block) =>
-			block.label
+		(resolveBlockTypes(field.blocks) ?? []).filter((block) =>
+			block.labels.singular
 				.toLocaleLowerCase(runtime.i18n.language)
 				.includes(blockQuery.trim().toLocaleLowerCase(runtime.i18n.language))
 		)
@@ -63,7 +82,10 @@
 
 	function changeBlockPickerOpen(open: boolean) {
 		blockPickerOpen = open;
-		if (!open) blockQuery = "";
+		if (!open) {
+			blockQuery = "";
+			insertAfter = undefined;
+		}
 	}
 
 	function rowField(child: SchemaField, index: number, rowKey: string) {
@@ -79,7 +101,7 @@
 	function createRow(blockType?: string) {
 		const children =
 			field.type === "blocks"
-				? (field.blocks?.types.find((block) => block.key === blockType)?.fields ?? [])
+				? (resolveBlockTypes(field.blocks).find((block) => block.slug === blockType)?.fields ?? [])
 				: (field.nested?.fields ?? []);
 		return {
 			...initialFormValues(children),
@@ -89,25 +111,32 @@
 	}
 
 	function add(blockType?: string) {
-		if (readOnly || !canAdd) return;
+		if (editingBlocked || !canAdd) return;
 		if (field.type === "blocks" && blockType === undefined) {
 			blockPickerOpen = true;
 			return;
 		}
-		updateRows([...rows, createRow(blockType)]);
+		const next = [...rows];
+		const index =
+			insertAfter === undefined
+				? rows.length
+				: rows.findIndex((row) => row._key === insertAfter) + 1;
+		next.splice(index, 0, createRow(blockType));
+		updateRows(next);
+		insertAfter = undefined;
 		blockPickerOpen = false;
 		blockQuery = "";
 	}
 
 	function addBelow(index: number) {
-		if (readOnly || !canAdd) return;
-		const blockType =
-			field.type === "blocks"
-				? String(rows[index]?.blockType ?? field.blocks?.types[0]?.key ?? "")
-				: undefined;
-		const row = createRow(blockType);
+		if (editingBlocked || !canAdd) return;
+		if (field.type === "blocks") {
+			insertAfter = String(rows[index]?._key);
+			blockPickerOpen = true;
+			return;
+		}
 		const next = [...rows];
-		next.splice(index + 1, 0, row);
+		next.splice(index + 1, 0, createRow());
 		updateRows(next);
 	}
 
@@ -117,7 +146,7 @@
 	}
 
 	async function pasteField() {
-		if (readOnly) return;
+		if (editingBlocked) return;
 		const value = compatibleClipboardValue(await readFieldClipboard(), field, "field");
 		if (value === undefined) {
 			clipboardMessage = runtime.i18n.t("errors:clipboardField");
@@ -162,7 +191,7 @@
 	}
 
 	async function pasteRow(index: number) {
-		if (readOnly || !canAdd) return;
+		if (editingBlocked || !canAdd) return;
 		const value = compatibleClipboardValue(await readFieldClipboard(), field, "row");
 		if (value === null || typeof value !== "object" || Array.isArray(value)) {
 			clipboardMessage = runtime.i18n.t("errors:clipboardRow");
@@ -172,7 +201,7 @@
 		row._key = crypto.randomUUID();
 		if (
 			field.type === "blocks" &&
-			!field.blocks?.types.some((block) => block.key === row.blockType)
+			!resolveBlockTypes(field.blocks).some((block) => block.slug === row.blockType)
 		) {
 			clipboardMessage = runtime.i18n.t("errors:clipboardBlockType");
 			return;
@@ -184,22 +213,24 @@
 	}
 
 	function updateRows(next: Record<string, unknown>[]) {
-		if (readOnly) return;
-		form.invalidateIndexedFieldCapabilities(field.path);
-		form.set(field.path, next);
+		if (editingBlocked) return;
+		form.setRows(field.path, next);
 	}
 
 	function duplicate(index: number) {
-		if (readOnly || !canAdd) return;
-		const copy = JSON.parse(JSON.stringify(rows[index] ?? {})) as Record<string, unknown>;
-		copy._key = crypto.randomUUID();
+		if (editingBlocked || !canAdd) return;
+		const copy = cloneFieldForPaste(field, rows[index], "row") as Record<string, unknown>;
 		const next = [...rows];
 		next.splice(index + 1, 0, copy);
 		updateRows(next);
 	}
 
 	function rowLabel(row: Record<string, unknown>, index: number) {
-		const key = field.nested?.rowLabel;
+		const key =
+			field.type === "blocks"
+				? resolveBlockTypes(field.blocks).find((block) => block.slug === row.blockType)?.admin
+						?.rowLabel
+				: field.nested?.rowLabel;
 		const configured = key === undefined ? undefined : row[key];
 		if (configured !== undefined && configured !== null && String(configured).trim() !== "") {
 			return String(configured);
@@ -215,7 +246,8 @@
 
 	function visibleRowLabel(row: Record<string, unknown>, index: number) {
 		if (field.type !== "blocks") return rowLabel(row, index);
-		const key = field.nested?.rowLabel;
+		const key = resolveBlockTypes(field.blocks).find((block) => block.slug === row.blockType)?.admin
+			?.rowLabel;
 		const configured = key === undefined ? undefined : row[key];
 		return configured === undefined || configured === null || String(configured).trim() === ""
 			? runtime.i18n.t("fields:untitled", {
@@ -226,7 +258,20 @@
 
 	function blockLabel(row: Record<string, unknown>) {
 		if (field.type !== "blocks") return undefined;
-		return field.blocks?.types.find((block) => block.key === row.blockType)?.label;
+		return (
+			resolveBlockTypes(field.blocks).find((block) => block.slug === row.blockType)?.labels
+				.singular ?? (typeof row.blockType === "string" ? row.blockType : undefined)
+		);
+	}
+
+	function revealRow(key: string) {
+		return (element: HTMLElement) => {
+			const reveal = () => {
+				if (collapsed.has(key)) toggleCollapsed(key);
+			};
+			element.addEventListener(fieldIssueRevealEvent, reveal);
+			return () => element.removeEventListener(fieldIssueRevealEvent, reveal);
+		};
 	}
 
 	function toggleCollapsed(key: string) {
@@ -245,7 +290,9 @@
 
 	function fieldsFor(row: Record<string, unknown>) {
 		if (field.type !== "blocks") return field.nested?.fields ?? [];
-		return field.blocks?.types.find((block) => block.key === row.blockType)?.fields ?? [];
+		return (
+			resolveBlockTypes(field.blocks).find((block) => block.slug === row.blockType)?.fields ?? []
+		);
 	}
 
 	function fieldsForRow(row: Record<string, unknown>, index: number) {
@@ -254,7 +301,7 @@
 	}
 
 	function reorder(event: Parameters<DragDropEvents["dragend"]>[0]) {
-		if (readOnly) return;
+		if (editingBlocked) return;
 		const source = String(event.operation.source?.id ?? "");
 		const target = String(event.operation.target?.id ?? "");
 		const from = rows.findIndex((row) => row._key === source);
@@ -279,7 +326,7 @@
 			<DropdownMenuItem onSelect={copyField}>
 				{runtime.i18n.t("fields:copyField")}
 			</DropdownMenuItem>
-			<DropdownMenuItem disabled={field.admin.readOnly} onSelect={pasteField}>
+			<DropdownMenuItem disabled={editingBlocked} onSelect={pasteField}>
 				{runtime.i18n.t("fields:pasteField")}
 			</DropdownMenuItem>
 		</DropdownMenuContent>
@@ -296,25 +343,26 @@
 		data-field-path={field.path}
 		data-invalid={issues.length > 0}
 		aria-labelledby={`${field.id}-label`}
-		aria-describedby={hasMessage ? `${field.id}-message` : undefined}
+		{...controlARIA}
 	>
-		<div class="flex items-start justify-between gap-3 border-b border-control-border pb-2.5">
-			<div class="min-w-0">
-				<h2 id={`${field.id}-label`} class="text-[17px] font-medium text-foreground">
-					{field.admin.label}{#if field.required}<span
-							class="ridu-field-required"
-							aria-hidden="true"
-						>
-							*
+		<FieldMessages controlID={field.id} {issues} description={field.admin.description}>
+			<div class="flex items-start justify-between gap-3 border-b border-control-border pb-2.5">
+				<div class="min-w-0">
+					<h2 id={`${field.id}-label`} class="text-[17px] font-medium text-foreground">
+						{field.admin.label}{#if field.required}<span
+								class="ridu-field-required"
+								aria-hidden="true"
+							>
+								*
+							</span>{/if}
+					</h2>
+					{#if field.admin.readOnly}<span class="ridu-field-status mt-1">
+							{runtime.i18n.t("fields:readOnly")}
 						</span>{/if}
-				</h2>
-				{#if field.admin.readOnly}<span class="ridu-field-status mt-1">
-						{runtime.i18n.t("fields:readOnly")}
-					</span>{/if}
+				</div>
+				{@render fieldActions()}
 			</div>
-			{@render fieldActions()}
-		</div>
-		<FieldMessages id="{field.id}-message" {issues} description={field.admin.description} />
+		</FieldMessages>
 		<FieldLayout fields={inheritedFields} {form} />
 		{#if clipboardMessage !== ""}<p
 				class="font-mono text-[10px] text-foreground-faint"
@@ -329,42 +377,47 @@
 		data-field-path={field.path}
 		data-invalid={issues.length > 0}
 		aria-labelledby={`${field.id}-label`}
-		aria-describedby={hasMessage ? `${field.id}-message` : undefined}
+		{...controlARIA}
 	>
-		<div class="flex flex-wrap items-end justify-between gap-3">
-			<div class="min-w-0">
-				<h2 id={`${field.id}-label`} class="text-[19px] leading-7 font-medium text-foreground">
-					{field.admin.label}{#if field.required}<span
-							class="ridu-field-required"
-							aria-hidden="true"
-						>
-							*
+		<FieldMessages controlID={field.id} {issues} description={field.admin.description}>
+			<div class="flex flex-wrap items-end justify-between gap-3">
+				<div class="min-w-0">
+					<h2 id={`${field.id}-label`} class="text-[19px] leading-7 font-medium text-foreground">
+						{field.admin.label}{#if field.required}<span
+								class="ridu-field-required"
+								aria-hidden="true"
+							>
+								*
+							</span>{/if}
+					</h2>
+					{#if field.admin.readOnly}<span class="ridu-field-status mt-1">
+							{runtime.i18n.t("fields:readOnly")}
 						</span>{/if}
-				</h2>
-				{#if field.admin.readOnly}<span class="ridu-field-status mt-1">
-						{runtime.i18n.t("fields:readOnly")}
-					</span>{/if}
+				</div>
+				<div class="flex items-center gap-1">
+					{#if rows.length > 0}
+						<Button size="xs" variant="ghost" class="px-1.5" onclick={collapseAll}>
+							{runtime.i18n.t("fields:collapseAll")}
+						</Button>
+						<Button size="xs" variant="ghost" class="px-1.5" onclick={showAll}>
+							{runtime.i18n.t("fields:showAll")}
+						</Button>
+					{/if}
+					{@render fieldActions()}
+				</div>
 			</div>
-			<div class="flex items-center gap-1">
-				{#if rows.length > 0}
-					<Button size="xs" variant="ghost" class="px-1.5" onclick={collapseAll}>
-						{runtime.i18n.t("fields:collapseAll")}
-					</Button>
-					<Button size="xs" variant="ghost" class="px-1.5" onclick={showAll}>
-						{runtime.i18n.t("fields:showAll")}
-					</Button>
-				{/if}
-				{@render fieldActions()}
-			</div>
-		</div>
-		<FieldMessages id="{field.id}-message" {issues} description={field.admin.description} />
+		</FieldMessages>
+		{#if unknownRows}<p role="alert" class="text-sm text-destructive">
+				{runtime.i18n.t("errors:unknownBlockRecovery")}
+			</p>{/if}
 		<DragDropProvider onDragEnd={reorder}>
 			<div class="grid gap-3">
-				{#each rows as row, index (String(row._key))}
+				{#each rows as row, index (form.rowMountKey(row))}
 					{const rowKey = String(row._key)}
 					{const rowCollapsed = $derived(collapsed.has(rowKey))}
+					{const rowIssues = $derived(form.issuesFor(`${field.path}.${index}`))}
 					{const rowSnapshot = $derived(immutableRowLabelSnapshot(row))}
-					<SortableRow id={String(row._key)} {index} disabled={readOnly}>
+					<SortableRow id={String(row._key)} {index} disabled={editingBlocked}>
 						{#snippet children(sortable)}
 							<div class="flex min-h-10 items-center justify-between gap-2 bg-control px-3 py-2">
 								<Button
@@ -374,7 +427,7 @@
 									aria-label={runtime.i18n.t("fields:drag", {
 										label: rowLabel(row, index),
 									})}
-									disabled={readOnly}
+									disabled={editingBlocked}
 									{@attach sortable.handleRef}
 								>
 									<GripVerticalIcon class="size-3.5 text-foreground-faint" />
@@ -403,7 +456,9 @@
 												row={rowSnapshot}
 												rowNumber={index + 1}
 												i18n={runtime.i18n}
-												config={field.nested?.rowLabelComponent?.config}
+												{...customRowLabel.config === undefined
+													? {}
+													: { config: customRowLabel.config }}
 											/>
 										{/if}
 									</div>
@@ -437,7 +492,7 @@
 										</DropdownMenuTrigger>
 										<DropdownMenuContent>
 											<DropdownMenuItem
-												disabled={readOnly || index === 0}
+												disabled={editingBlocked || index === 0}
 												onSelect={() => {
 													const next = [...rows];
 													[next[index - 1], next[index]] = [next[index], next[index - 1]];
@@ -447,7 +502,7 @@
 												{runtime.i18n.t("fields:moveUp")}
 											</DropdownMenuItem>
 											<DropdownMenuItem
-												disabled={readOnly || index === rows.length - 1}
+												disabled={editingBlocked || index === rows.length - 1}
 												onSelect={() => {
 													const next = [...rows];
 													[next[index], next[index + 1]] = [next[index + 1], next[index]];
@@ -457,7 +512,7 @@
 												{runtime.i18n.t("fields:moveDown")}
 											</DropdownMenuItem>
 											<DropdownMenuItem
-												disabled={readOnly || !canAdd}
+												disabled={editingBlocked || !canAdd}
 												onSelect={() => addBelow(index)}
 											>
 												{runtime.i18n.t("fields:addBelow")}
@@ -467,13 +522,13 @@
 												{runtime.i18n.t("fields:copyRow")}
 											</DropdownMenuItem>
 											<DropdownMenuItem
-												disabled={readOnly || !canAdd}
+												disabled={editingBlocked || !canAdd}
 												onSelect={() => pasteRow(index)}
 											>
 												{runtime.i18n.t("fields:pasteRow")}
 											</DropdownMenuItem>
 											<DropdownMenuItem
-												disabled={readOnly || !canAdd}
+												disabled={editingBlocked || !canAdd}
 												onSelect={() => duplicate(index)}
 											>
 												{runtime.i18n.t("fields:duplicate")}
@@ -481,7 +536,8 @@
 											<DropdownMenuSeparator />
 											<DropdownMenuItem
 												class="text-destructive data-[highlighted]:text-destructive"
-												disabled={readOnly || rows.length <= minRows}
+												disabled={editingBlocked ||
+													rows.length <= Math.max(minRows, field.required ? 1 : 0)}
 												onSelect={() =>
 													updateRows(rows.filter((_, rowIndex) => rowIndex !== index))}
 											>
@@ -491,7 +547,19 @@
 									</DropdownMenu>
 								</div>
 							</div>
+							{#if rowIssues.length > 0}
+								<button
+									type="button"
+									class="px-4 py-2 text-start text-sm text-destructive underline"
+									onclick={() => focusFieldIssue(rowIssues[0].path)}
+								>
+									{runtime.i18n.t("fields:rowErrors", { count: rowIssues.length })}: {rowIssues[0]
+										.message}
+								</button>
+							{/if}
 							<div
+								{@attach revealRow(rowKey)}
+								data-field-path={`${field.path}.${index}`}
 								id={`${field.id}-${rowKey}-content`}
 								class={[
 									"grid transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none",
@@ -504,7 +572,7 @@
 							>
 								<div class="min-h-0 overflow-hidden">
 									<div class="grid gap-5 p-4">
-										<FieldLayout fields={fieldsForRow(row, index)} {form} />
+										{#if !rowCollapsed}<FieldLayout fields={fieldsForRow(row, index)} {form} />{/if}
 									</div>
 								</div>
 							</div>
@@ -517,7 +585,7 @@
 			variant="ghost"
 			size="sm"
 			class="w-fit px-0 text-foreground-faint hover:bg-transparent hover:text-foreground"
-			disabled={field.admin.readOnly || !canAdd}
+			disabled={editingBlocked || !canAdd}
 			onclick={() => add()}
 		>
 			<CirclePlusIcon class="size-5" />
@@ -527,7 +595,7 @@
 					? runtime.i18n.t("fields:addRow")
 					: runtime.i18n.t("fields:add", { label: field.nested.rowLabels.singular })}
 		</Button>
-		{#if field.type === "array" && (minRows > 0 || maxRows > 0)}
+		{#if minRows > 0 || maxRows > 0}
 			<p class="font-mono text-[10px] text-foreground-faint">
 				{runtime.i18n.t("fields:rowLimits", {
 					count: rows.length,
@@ -579,11 +647,11 @@
 				</p>
 			{:else}
 				<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-					{#each visibleBlockTypes as block (block.key)}
+					{#each visibleBlockTypes as block (block.slug)}
 						<button
 							type="button"
 							class="group overflow-hidden rounded-[3px] border border-control-border bg-background text-start transition-colors hover:border-control-border-hover focus-visible:border-ring focus-visible:outline-none"
-							onclick={() => add(block.key)}
+							onclick={() => add(block.slug)}
 						>
 							<span
 								class="flex aspect-video items-center justify-center border-b border-control-border bg-control text-foreground-faint transition-colors group-hover:bg-control-hover group-hover:text-foreground-muted"
@@ -591,7 +659,7 @@
 								<LayoutTemplateIcon class="size-8" />
 							</span>
 							<span class="block px-3 py-2.5 text-[13px] font-medium text-foreground">
-								{block.label}
+								{block.labels.singular}
 							</span>
 						</button>
 					{/each}

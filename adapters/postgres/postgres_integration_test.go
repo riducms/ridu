@@ -19,6 +19,7 @@ import (
 	"github.com/riducms/ridu/internal/migrationartifact"
 	"github.com/riducms/ridu/internal/schemadiff"
 	ridumigration "github.com/riducms/ridu/migration"
+	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/plugins/richtext"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
@@ -124,17 +125,17 @@ func TestPostgresMigrationsAndStoreConformance(t *testing.T) {
 	if score, valid := page.Documents[0].Values["score"].NumberValue(); !valid || score != 9.5 {
 		t.Fatalf("number field round trip = %#v", page.Documents[0].Values["score"])
 	}
-	if content, valid := page.Documents[0].Values["content"].ObjectValue(); !valid || content["root"].Kind() != store.ValueObject {
+	if content, valid := page.Documents[0].Values["content"].CopyObject(); !valid || content["root"].Kind() != store.ValueObject {
 		t.Fatalf("rich-text JSONB round trip = %#v", page.Documents[0].Values["content"])
 	}
-	watchers, _ := page.Documents[0].Values["watchers"].Values()
-	if watcher, populated := watchers[0].DocumentValue(); !populated || watcher.ID != author.ID {
+	watchers, _ := page.Documents[0].Values["watchers"].CopyList()
+	if watcher, populated := watchers[0].CopyDocument(); !populated || watcher.ID != author.ID {
 		t.Fatalf("has-many PostgreSQL population = %#v", watchers)
 	}
-	related, _ := page.Documents[0].Values["related"].ObjectValue()
-	if relatedUser, populated := related["id"].DocumentValue(); !populated || relatedUser.ID != author.ID {
+	related, _ := page.Documents[0].Values["related"].CopyObject()
+	if relatedUser, populated := related["id"].CopyDocument(); !populated || relatedUser.ID != author.ID {
 		t.Fatalf("polymorphic PostgreSQL population = %#v", related)
-	} else if populatedManager, populated := relatedUser.Values["manager"].DocumentValue(); !populated || populatedManager.ID != manager.ID {
+	} else if populatedManager, populated := relatedUser.Values["manager"].CopyDocument(); !populated || populatedManager.ID != manager.ID {
 		t.Fatalf("depth-2 PostgreSQL population = %#v", relatedUser.Values["manager"])
 	}
 	if _, err := application.Local().Find(ctx, "posts", private.ID, nil); !hasOperationCode(err, "not_found") {
@@ -156,13 +157,7 @@ func TestPostgresExpectedRevisionDoesNotRevealFilteredDocuments(t *testing.T) {
 	}
 	config := ridu.Config{Name: "PostgreSQL filtered optimistic concurrency", Collections: []ridu.Collection{{
 		Slug: "posts", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true},
-		Fields: []field.Definition{
-			field.Text("title", field.Required()),
-			field.Select("status", field.Required(), field.Choices(
-				field.Choice{Value: "draft", Label: "Draft"},
-				field.Choice{Value: "published", Label: "Published"},
-			)),
-		},
+		Fields: field.Fields{field.Text("title").Required(), field.Select("status", "draft", "published").Required()},
 		Access: ridu.CollectionAccess{Update: func(ridu.AccessContext) (ridu.AccessDecision, error) {
 			return ridu.Where(query.Equal(statusPath, query.String("published"))), nil
 		}},
@@ -216,10 +211,10 @@ func TestPostgresGlobalFilteredAccessUsesRowsAndVersionSnapshots(t *testing.T) {
 	allowInitialization := false
 	config := ridu.Config{
 		Name:        "PostgreSQL filtered global access",
-		Collections: []ridu.Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title")}}},
+		Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{field.Text("title")}}},
 		Globals: []ridu.Global{{
 			Slug: "site-settings", Versions: true,
-			Fields: []field.Definition{field.Text("siteName", field.Required())},
+			Fields: field.Fields{field.Text("siteName").Required()},
 			Access: ridu.GlobalAccess{
 				Read:         filtered,
 				ReadVersions: filtered,
@@ -297,13 +292,10 @@ func TestPostgresGlobalAllLocalesAccessRequiresEveryLocalizedSnapshot(t *testing
 		Localization: ridu.LocalizationConfig{DefaultLocale: "en", Locales: []ridu.Locale{
 			{Code: "en", Label: "English"}, {Code: "fr", Label: "French"},
 		}},
-		Collections: []ridu.Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title")}}},
+		Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{field.Text("title")}}},
 		Globals: []ridu.Global{{
 			Slug: "site-settings", Versions: true,
-			Fields: []field.Definition{
-				field.Text("title", field.Required(), field.Localized()),
-				field.Array("audiences", field.Localized(), field.Fields(field.Text("name", field.Required()))),
-			},
+			Fields: field.Fields{field.Text("title").Required().Localized(), field.Array("audiences", field.Fields{field.Text("name").Required()}).Localized()},
 			Access: ridu.GlobalAccess{Read: filtered, ReadVersions: filtered},
 		}},
 	}
@@ -362,12 +354,12 @@ func TestPostgresAllLocalesPopulationRequiresTargetAccessForEveryLocale(t *testi
 		}},
 		Collections: []ridu.Collection{
 			{
-				Slug: "people", Fields: []field.Definition{field.Text("name", field.Required(), field.Localized())},
+				Slug: "people", Fields: field.Fields{field.Text("name").Required().Localized()},
 				Access: ridu.CollectionAccess{Read: func(ridu.AccessContext) (ridu.AccessDecision, error) {
 					return ridu.Where(query.Equal(name, query.String("Public"))), nil
 				}},
 			},
-			{Slug: "posts", Fields: []field.Definition{field.Text("title"), field.Relationship("editor", field.To("people"))}},
+			{Slug: "posts", Fields: field.Fields{field.Text("title"), field.Relationship("editor", "people")}},
 		},
 	}
 	backend, manifest := integrationBackend(t, ctx, config)
@@ -398,7 +390,7 @@ func TestPostgresAllLocalesPopulationRequiresTargetAccessForEveryLocale(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	if populated, ok := english.Values["editor"].DocumentValue(); !ok || stringValue(populated.Values["name"]) != "Public" {
+	if populated, ok := english.Values["editor"].CopyDocument(); !ok || stringValue(populated.Values["name"]) != "Public" {
 		t.Fatalf("English PostgreSQL populated target = %#v", english.Values["editor"])
 	}
 	all, err := application.Local().FindWithOptions(ctx, "posts", post.ID, ridu.FindOptions{
@@ -407,7 +399,7 @@ func TestPostgresAllLocalesPopulationRequiresTargetAccessForEveryLocale(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, populated := all.Values["editor"].DocumentValue(); populated || stringValue(all.Values["editor"]) != person.ID {
+	if _, populated := all.Values["editor"].CopyDocument(); populated || stringValue(all.Values["editor"]) != person.ID {
 		t.Fatalf("all-locales PostgreSQL population leaked target = %#v", all.Values["editor"])
 	}
 }
@@ -423,13 +415,13 @@ func TestPostgresAllLocalesStatusHooksReceiveLocaleProjectedPopulatedTargets(t *
 	var observations []observation
 	record := func(phase string) ridu.Hook {
 		return func(ctx ridu.HookContext) error {
-			if ctx.Operation != ridu.OperationPublish || ctx.Document == nil {
+			if ctx.Operation != operation.Publish || ctx.Document == nil {
 				return nil
 			}
 			item := observation{phase: phase, locale: ctx.Locale, allLocales: ctx.AllLocales}
-			if editor, populated := ctx.Document.Values["editor"].DocumentValue(); populated {
+			if editor, populated := ctx.Document.Values["editor"].CopyDocument(); populated {
 				item.name, _ = editor.Values["name"].StringValue()
-				_, item.nameObject = editor.Values["name"].ObjectValue()
+				_, item.nameObject = editor.Values["name"].CopyObject()
 			}
 			observations = append(observations, item)
 			return nil
@@ -442,13 +434,10 @@ func TestPostgresAllLocalesStatusHooksReceiveLocaleProjectedPopulatedTargets(t *
 			{Code: "en", Label: "English"}, {Code: "fr", Label: "French"},
 		}},
 		Collections: []ridu.Collection{
-			{Slug: "people", Fields: []field.Definition{field.Text("name", field.Required(), field.Localized())}},
+			{Slug: "people", Fields: field.Fields{field.Text("name").Required().Localized()}},
 			{
 				Slug: "posts", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true},
-				Fields: []field.Definition{
-					field.Text("title", field.Required()),
-					field.Relationship("editor", field.To("people"), field.Required()),
-				},
+				Fields: field.Fields{field.Text("title").Required(), field.Relationship("editor", "people").Required()},
 				Hooks: ridu.CollectionHooks{
 					AfterChange:    []ridu.Hook{record("afterChange")},
 					AfterOperation: []ridu.Hook{record("afterOperation")},
@@ -489,11 +478,11 @@ func TestPostgresAllLocalesStatusHooksReceiveLocaleProjectedPopulatedTargets(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	populated, valid := published.Values["editor"].DocumentValue()
+	populated, valid := published.Values["editor"].CopyDocument()
 	if !valid {
 		t.Fatalf("all-locales PostgreSQL response editor = %#v", published.Values["editor"])
 	}
-	if _, valid := populated.Values["name"].ObjectValue(); !valid {
+	if _, valid := populated.Values["name"].CopyObject(); !valid {
 		t.Fatalf("all-locales PostgreSQL response target name = %#v, want locale object", populated.Values["name"])
 	}
 	wantPhases := []string{"afterChange", "afterOperation", "afterCommit"}
@@ -539,13 +528,7 @@ func TestPostgresLocalizedIntermediateContainerPredicatesMatchProjectedDocuments
 		}},
 		Collections: []ridu.Collection{{
 			Slug: "pages", Versions: true,
-			Fields: []field.Definition{field.Group("content", field.Fields(
-				field.Group("details", field.Localized(), field.Fields(field.Text("name", field.Required()))),
-				field.Array("rows", field.Localized(), field.Fields(field.Text("label", field.Required()))),
-				field.Blocks("layout", field.Localized(), field.BlockTypes(
-					field.BlockType("hero", "Hero", field.Text("heading", field.Required())),
-				)),
-			))},
+			Fields: field.Fields{field.Group("content", field.Fields{field.Group("details", field.Fields{field.Text("name").Required()}).Localized(), field.Array("rows", field.Fields{field.Text("label").Required()}).Localized(), field.Blocks("layout", field.Block{Slug: "hero", Fields: field.Fields{field.Text("heading").Required()}}).Localized()})},
 			Access: ridu.CollectionAccess{Read: filtered, ReadVersions: filtered},
 		}},
 	}
@@ -623,7 +606,7 @@ func TestPostgresExactLocaleAccessPreservesEmptyLocalizedScalars(t *testing.T) {
 		}},
 		Collections: []ridu.Collection{{
 			Slug: "pages", Versions: true,
-			Fields: []field.Definition{field.Text("gate", field.Localized())},
+			Fields: field.Fields{field.Text("gate").Localized()},
 			Access: ridu.CollectionAccess{Read: nullGate, ReadVersions: nullGate},
 		}},
 	}
@@ -684,12 +667,7 @@ func TestPostgresRepeatedNullPredicatesMatchProjectedAccessSemantics(t *testing.
 		}},
 		Collections: []ridu.Collection{{
 			Slug: "pages", Versions: true,
-			Fields: []field.Definition{
-				field.Text("title", field.Required()),
-				field.Array("rows", field.Fields(field.Text("label"))),
-				field.Blocks("layout", field.BlockTypes(field.BlockType("hero", "Hero", field.Text("heading")))),
-				field.Array("localizedRows", field.Localized(), field.Fields(field.Text("label"))),
-			},
+			Fields: field.Fields{field.Text("title").Required(), field.Array("rows", field.Fields{field.Text("label")}), field.Blocks("layout", field.Block{Slug: "hero", Fields: field.Fields{field.Text("heading")}}), field.Array("localizedRows", field.Fields{field.Text("label")}).Localized()},
 			Access: ridu.CollectionAccess{Read: filtered, ReadVersions: filtered},
 		}},
 	}
@@ -808,7 +786,7 @@ func TestPostgresJSONStringPredicatesRemainTypeAwareUnderNot(t *testing.T) {
 		Name: "PostgreSQL JSON string predicates",
 		Collections: []ridu.Collection{{
 			Slug: "pages", Versions: true,
-			Fields: []field.Definition{field.Text("title", field.Required()), field.JSON("payload")},
+			Fields: field.Fields{field.Text("title").Required(), field.JSON("payload")},
 			Access: ridu.CollectionAccess{Read: filtered, ReadVersions: filtered},
 		}},
 	}
@@ -911,15 +889,7 @@ func TestPostgresLocalizedScalarStorageQueryAndFallback(t *testing.T) {
 				{Code: "ar", Label: "Arabic", RTL: true, FallbackLocales: []schema.LocaleCode{"en"}},
 			},
 		},
-		Collections: []ridu.Collection{{Slug: "posts", Versions: true, Fields: []field.Definition{
-			field.Text("title", field.Required(), field.Unique(), field.Localized()),
-			field.Text("summary", field.Localized()),
-			field.Text("slug", field.Required()),
-			field.Group("seo", field.Fields(field.Text("description", field.Required(), field.Localized()))),
-			field.Group("details", field.Localized(), field.Fields(field.Text("name", field.Required()))),
-			field.Array("links", field.Fields(field.Text("label", field.Required(), field.Localized()), field.Text("href", field.Required()))),
-			field.Blocks("layout", field.BlockTypes(field.BlockType("hero", "Hero", field.Text("heading", field.Required(), field.Localized())))),
-		}}},
+		Collections: []ridu.Collection{{Slug: "posts", Versions: true, Fields: field.Fields{field.Text("title").Required().Unique().Localized(), field.Text("summary").Localized(), field.Text("slug").Required(), field.Group("seo", field.Fields{field.Text("description").Required().Localized()}), field.Group("details", field.Fields{field.Text("name").Required()}).Localized(), field.Array("links", field.Fields{field.Text("label").Required().Localized(), field.Text("href").Required()}), field.Blocks("layout", field.Block{Slug: "hero", Fields: field.Fields{field.Text("heading").Required().Localized()}})}}},
 	}
 	backend, manifest := integrationBackend(t, ctx, config)
 	applyInitialArtifact(t, ctx, backend, manifest)
@@ -1000,7 +970,7 @@ func TestPostgresLocalizedScalarStorageQueryAndFallback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	values, ok := all.Values["title"].ObjectValue()
+	values, ok := all.Values["title"].CopyObject()
 	if !ok || stringValue(values["en"]) != "Hello" || stringValue(values["fr"]) != "Bonjour" {
 		t.Fatalf("all locale values = %#v", all.Values["title"])
 	}
@@ -1009,7 +979,7 @@ func TestPostgresLocalizedScalarStorageQueryAndFallback(t *testing.T) {
 func TestPostgresFilteredSelectionUsesOneCanonicalOverflowSentinel(t *testing.T) {
 	ctx := context.Background()
 	config := ridu.Config{Name: "PostgreSQL filtered selection", Collections: []ridu.Collection{{
-		Slug: "posts", Fields: []field.Definition{field.Text("title", field.Required())},
+		Slug: "posts", Fields: field.Fields{field.Text("title").Required()},
 	}}}
 	backend, manifest := integrationBackend(t, ctx, config)
 	applyInitialArtifact(t, ctx, backend, manifest)
@@ -1064,7 +1034,7 @@ func TestPostgresAuthHardeningConformance(t *testing.T) {
 				}},
 				APIKeys: true,
 			},
-			Fields: []field.Definition{field.Text("email", field.Required(), field.Unique())},
+			Fields: field.Fields{field.Text("email").Required().Unique()},
 		}},
 	}
 	backend, manifest := integrationBackend(t, ctx, config)
@@ -1134,12 +1104,9 @@ func TestPostgresAuthHardeningConformance(t *testing.T) {
 func TestArtifactRunnerPreservesNestedFieldsReferencesAndVersionHistory(t *testing.T) {
 	ctx := context.Background()
 	beforeConfig := ridu.Config{Name: "Artifact rename", Admin: ridu.AdminConfig{User: "users"}, Collections: []ridu.Collection{
-		{Slug: "users", Auth: true, Fields: []field.Definition{field.Text("email", field.Required(), field.Unique()), field.Relationship("manager", field.To("users"))}},
-		{Slug: "posts", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true, MaxPerDocument: 10}, Fields: []field.Definition{
-			field.Group("seo", field.Fields(field.Text("title", field.Required()))),
-			field.Relationship("related", field.ToAny("users", "posts"), field.OnDelete(field.ReferenceDeleteRestrict)),
-		}},
-		{Slug: "news", Versions: true, LockDocuments: true, VersionConfig: ridu.VersionConfig{Drafts: true}, DocumentLockConfig: ridu.DocumentLockConfig{Duration: time.Minute}, Fields: []field.Definition{field.Text("title", field.Required())}},
+		{Slug: "users", Auth: true, Fields: field.Fields{field.Text("email").Required().Unique(), field.Relationship("manager", "users")}},
+		{Slug: "posts", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true, MaxPerDocument: 10}, Fields: field.Fields{field.Group("seo", field.Fields{field.Text("title").Required()}), field.PolymorphicRelationship("related", "users", "posts").OnDelete(field.ReferenceDeleteRestrict)}},
+		{Slug: "news", Versions: true, LockDocuments: true, VersionConfig: ridu.VersionConfig{Drafts: true}, DocumentLockConfig: ridu.DocumentLockConfig{Duration: time.Minute}, Fields: field.Fields{field.Text("title").Required()}},
 	}}
 	backend, before := integrationBackend(t, ctx, beforeConfig)
 	directory := t.TempDir()
@@ -1202,12 +1169,9 @@ func TestArtifactRunnerPreservesNestedFieldsReferencesAndVersionHistory(t *testi
 	}
 
 	afterConfig := ridu.Config{Name: "Artifact rename", Admin: ridu.AdminConfig{User: "members"}, Collections: []ridu.Collection{
-		{Slug: "members", Auth: true, Fields: []field.Definition{field.Text("email", field.Required(), field.Unique()), field.Relationship("manager", field.To("members"))}},
-		{Slug: "posts", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true, MaxPerDocument: 10}, Fields: []field.Definition{
-			field.Group("seo", field.Fields(field.Text("headline", field.Required()))),
-			field.Relationship("related", field.ToAny("members", "posts"), field.OnDelete(field.ReferenceDeleteRestrict)),
-		}},
-		{Slug: "articles", Versions: true, LockDocuments: true, VersionConfig: ridu.VersionConfig{Drafts: true}, DocumentLockConfig: ridu.DocumentLockConfig{Duration: time.Minute}, Fields: []field.Definition{field.Text("title", field.Required())}},
+		{Slug: "members", Auth: true, Fields: field.Fields{field.Text("email").Required().Unique(), field.Relationship("manager", "members")}},
+		{Slug: "posts", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true, MaxPerDocument: 10}, Fields: field.Fields{field.Group("seo", field.Fields{field.Text("headline").Required()}), field.PolymorphicRelationship("related", "members", "posts").OnDelete(field.ReferenceDeleteRestrict)}},
+		{Slug: "articles", Versions: true, LockDocuments: true, VersionConfig: ridu.VersionConfig{Drafts: true}, DocumentLockConfig: ridu.DocumentLockConfig{Duration: time.Minute}, Fields: field.Fields{field.Text("title").Required()}},
 	}}
 	after, err := ridu.Resolve(afterConfig)
 	if err != nil {
@@ -1260,7 +1224,7 @@ func TestArtifactRunnerPreservesNestedFieldsReferencesAndVersionHistory(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	unchangedSEO, _ := unchanged.Values["seo"].ObjectValue()
+	unchangedSEO, _ := unchanged.Values["seo"].CopyObject()
 	if title, _ := unchangedSEO["title"].StringValue(); title != "Preserved nested value" {
 		t.Fatalf("refused content rename changed stored content: %#v", unchanged.Values)
 	}
@@ -1315,11 +1279,11 @@ func TestArtifactRunnerPreservesNestedFieldsReferencesAndVersionHistory(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	seo, _ := preserved.Values["seo"].ObjectValue()
+	seo, _ := preserved.Values["seo"].CopyObject()
 	if headline, _ := seo["headline"].StringValue(); headline != "Preserved nested value" {
 		t.Fatalf("nested value = %#v", seo)
 	}
-	related, _ := preserved.Values["related"].ObjectValue()
+	related, _ := preserved.Values["related"].CopyObject()
 	if relationTo, _ := related["relationTo"].StringValue(); relationTo != "members" {
 		t.Fatalf("relationship target = %#v", related)
 	}
@@ -1327,11 +1291,11 @@ func TestArtifactRunnerPreservesNestedFieldsReferencesAndVersionHistory(t *testi
 	if err != nil || len(versions) != 1 {
 		t.Fatalf("versions = %#v, %v", versions, err)
 	}
-	versionSEO, _ := versions[0].Snapshot.Values["seo"].ObjectValue()
+	versionSEO, _ := versions[0].Snapshot.Values["seo"].CopyObject()
 	if headline, _ := versionSEO["headline"].StringValue(); headline != "Preserved nested value" {
 		t.Fatalf("version nested value = %#v", versionSEO)
 	}
-	versionRelated, _ := versions[0].Snapshot.Values["related"].ObjectValue()
+	versionRelated, _ := versions[0].Snapshot.Values["related"].CopyObject()
 	if relationTo, _ := versionRelated["relationTo"].StringValue(); relationTo != "members" {
 		t.Fatalf("version relationship target = %#v", versionRelated)
 	}
@@ -1382,11 +1346,9 @@ func TestArtifactRunnerPreservesNestedFieldsReferencesAndVersionHistory(t *testi
 func TestPostgresRollbackReferenceLocksAndOptimisticConcurrency(t *testing.T) {
 	ctx := context.Background()
 	rollbackConfig := ridu.Config{Name: "PostgreSQL transaction safety", Collections: []ridu.Collection{
-		{Slug: "targets", Fields: []field.Definition{field.Text("name", field.Required())}},
-		{Slug: "entries", Fields: []field.Definition{
-			field.Text("title", field.Required()), field.Relationship("target", field.To("targets"), field.Required()),
-		}, Hooks: ridu.CollectionHooks{AfterOperation: []ridu.Hook{func(ctx ridu.HookContext) error {
-			if ctx.Operation == ridu.OperationCreate {
+		{Slug: "targets", Fields: field.Fields{field.Text("name").Required()}},
+		{Slug: "entries", Fields: field.Fields{field.Text("title").Required(), field.Relationship("target", "targets").Required()}, Hooks: ridu.CollectionHooks{AfterOperation: []ridu.Hook{func(ctx ridu.HookContext) error {
+			if ctx.Operation == operation.Create {
 				return errors.New("force rollback after insert")
 			}
 			return nil
@@ -1457,7 +1419,7 @@ func TestPostgresRollbackReferenceLocksAndOptimisticConcurrency(t *testing.T) {
 	}
 
 	versionConfig := ridu.Config{Name: "PostgreSQL optimistic concurrency", Collections: []ridu.Collection{{
-		Slug: "documents", Versions: true, Fields: []field.Definition{field.Text("title", field.Required())},
+		Slug: "documents", Versions: true, Fields: field.Fields{field.Text("title").Required()},
 	}}}
 	versionBackend, versionManifest := integrationBackend(t, ctx, versionConfig)
 	applyInitialArtifact(t, ctx, versionBackend, versionManifest)
@@ -1501,15 +1463,9 @@ func TestPostgresAtomicJoinMutationRollsBackMidBatch(t *testing.T) {
 	ctx := context.Background()
 	var rejectedID string
 	config := ridu.Config{Name: "PostgreSQL atomic inverse joins", Collections: []ridu.Collection{
-		{Slug: "categories", Fields: []field.Definition{
-			field.Text("name", field.Required()),
-			field.Join("posts", "posts", "category"),
-		}},
-		{Slug: "posts", Versions: true, Fields: []field.Definition{
-			field.Text("title", field.Required()),
-			field.Relationship("category", field.To("categories")),
-		}, Hooks: ridu.CollectionHooks{BeforeOperation: []ridu.Hook{func(hook ridu.HookContext) error {
-			if hook.Operation != ridu.OperationPublish || hook.Original == nil {
+		{Slug: "categories", Fields: field.Fields{field.Text("name").Required(), field.Join("posts", "posts", "category")}},
+		{Slug: "posts", Versions: true, Fields: field.Fields{field.Text("title").Required(), field.Relationship("category", "categories")}, Hooks: ridu.CollectionHooks{BeforeOperation: []ridu.Hook{func(hook ridu.HookContext) error {
+			if hook.Operation != operation.Publish || hook.Original == nil {
 				return nil
 			}
 			if hook.Original.ID == rejectedID {
@@ -1554,12 +1510,9 @@ func TestPostgresPublishLocksTheRowBeforeStatusHooks(t *testing.T) {
 	defer release()
 	config := ridu.Config{Name: "PostgreSQL status mutation row lock", Collections: []ridu.Collection{{
 		Slug: "posts", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true},
-		Fields: []field.Definition{
-			field.Text("title", field.Required()),
-			field.Textarea("summary"),
-		},
+		Fields: field.Fields{field.Text("title").Required(), field.Textarea("summary")},
 		Hooks: ridu.CollectionHooks{BeforeChange: []ridu.Hook{func(hook ridu.HookContext) error {
-			if hook.Operation != ridu.OperationPublish {
+			if hook.Operation != operation.Publish {
 				return nil
 			}
 			hook.Data["summary"] = store.String("written by publish hook")
@@ -1646,14 +1599,8 @@ func TestPostgresPublishLocksTheRowBeforeStatusHooks(t *testing.T) {
 func TestPostgresConcurrentJoinReparentUsesObservedValueConflict(t *testing.T) {
 	ctx := context.Background()
 	config := ridu.Config{Name: "PostgreSQL concurrent inverse joins", Collections: []ridu.Collection{
-		{Slug: "categories", Fields: []field.Definition{
-			field.Text("name", field.Required()),
-			field.Join("posts", "posts", "category"),
-		}},
-		{Slug: "posts", Fields: []field.Definition{
-			field.Text("title", field.Required()),
-			field.Relationship("category", field.To("categories")),
-		}},
+		{Slug: "categories", Fields: field.Fields{field.Text("name").Required(), field.Join("posts", "posts", "category")}},
+		{Slug: "posts", Fields: field.Fields{field.Text("title").Required(), field.Relationship("category", "categories")}},
 	}}
 	backend, manifest := integrationBackend(t, ctx, config)
 	applyInitialArtifact(t, ctx, backend, manifest)
@@ -1718,11 +1665,7 @@ func TestPostgresConcurrentJoinReparentUsesObservedValueConflict(t *testing.T) {
 func TestPostgresSelfJoinMutationsAcquireCrossedRowsWithoutDeadlock(t *testing.T) {
 	ctx := context.Background()
 	config := ridu.Config{Name: "PostgreSQL self inverse joins", Collections: []ridu.Collection{{
-		Slug: "nodes", Fields: []field.Definition{
-			field.Text("name", field.Required()),
-			field.Relationship("parent", field.To("nodes")),
-			field.Join("children", "nodes", "parent"),
-		},
+		Slug: "nodes", Fields: field.Fields{field.Text("name").Required(), field.Relationship("parent", "nodes"), field.Join("children", "nodes", "parent")},
 	}}}
 	backend, manifest := integrationBackend(t, ctx, config)
 	applyInitialArtifact(t, ctx, backend, manifest)
@@ -1876,10 +1819,10 @@ func assertPostgresRelationship(t *testing.T, application *ridu.App, documentID,
 func TestPostgresDestructiveArtifactRequiresApprovalAndAppliesInIsolation(t *testing.T) {
 	ctx := context.Background()
 	beforeConfig := ridu.Config{Name: "Destructive migration", Collections: []ridu.Collection{{
-		Slug: "posts", Fields: []field.Definition{field.Text("title", field.Required()), field.Text("summary")},
+		Slug: "posts", Fields: field.Fields{field.Text("title").Required(), field.Text("summary")},
 	}}}
 	afterConfig := ridu.Config{Name: "Destructive migration", Collections: []ridu.Collection{{
-		Slug: "posts", Fields: []field.Definition{field.Text("title", field.Required())},
+		Slug: "posts", Fields: field.Fields{field.Text("title").Required()},
 	}}}
 	backend, before := integrationBackend(t, ctx, beforeConfig)
 	directory := t.TempDir()
@@ -1977,7 +1920,7 @@ func TestPostgresRejectsDeclaredPluginTableMissingFromMigration(t *testing.T) {
 	ctx := context.Background()
 	config := ridu.Config{
 		Name: "Missing plugin table", Plugins: []ridu.Plugin{integrationMissingTablePlugin{}},
-		Collections: []ridu.Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title")}}},
+		Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{field.Text("title")}}},
 	}
 	backend, manifest := integrationBackend(t, ctx, config)
 	artifact, err := postgres.BuildArtifact(ctx, "missing-plugin-table", nil, manifest, nil, false)
@@ -1995,8 +1938,8 @@ func TestPostgresRejectsDeclaredPluginTableMissingFromMigration(t *testing.T) {
 
 func TestPluginMigrationsUpgradeDowngradeAndReplayAgainstPostgres(t *testing.T) {
 	ctx := context.Background()
-	withPlugin := ridu.Config{Name: "Plugin migration", Plugins: []ridu.Plugin{integrationMigrationPlugin{}}, Collections: []ridu.Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title")}}}}
-	withoutPlugin := ridu.Config{Name: "Plugin migration", Collections: []ridu.Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title")}}}}
+	withPlugin := ridu.Config{Name: "Plugin migration", Plugins: []ridu.Plugin{integrationMigrationPlugin{}}, Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{field.Text("title")}}}}
+	withoutPlugin := ridu.Config{Name: "Plugin migration", Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{field.Text("title")}}}}
 	backend, before := integrationBackend(t, ctx, withPlugin)
 	directory := t.TempDir()
 	initial, err := postgres.BuildArtifact(ctx, "initial-with-plugin", nil, before, nil, false)
@@ -2038,36 +1981,13 @@ func integrationConfig() ridu.Config {
 		Admin:   ridu.AdminConfig{User: "users"},
 		Plugins: []ridu.Plugin{richtext.New()},
 		Collections: []ridu.Collection{
-			{Slug: "users", Auth: true, Fields: []field.Definition{
-				field.Text("email", field.Required(), field.Unique()),
-				field.Relationship("manager", field.To("users")),
-			}},
+			{Slug: "users", Auth: true, Fields: field.Fields{field.Text("email").Required().Unique(), field.Relationship("manager", "users")}},
 			{
 				Slug: "posts",
-				Fields: []field.Definition{
-					field.Text("title", field.Required()),
-					field.Select("status", field.Required(), field.Choices(
-						field.Choice{Value: "draft", Label: "Draft"}, field.Choice{Value: "published", Label: "Published"},
-					)),
-					field.Relationship("author", field.To("users"), field.Required()),
-					field.Textarea("summary"),
+				Fields: field.Fields{field.Text("title").Required(), field.Select("status", "draft", "published").Required(), field.Relationship("author", "users").Required(), field.Textarea("summary"),
 					field.Email("contact"),
-					field.Date("publishedOn"),
-					field.Number("score"),
-					field.Checkbox("featured"),
-					field.JSON("metadata"),
-					field.Group("seo", field.Fields(
-						field.Text("description"),
-					)),
-					field.Array("tags", field.Fields(
-						field.Text("label", field.Required()),
-					)),
-					field.Blocks("layout", field.BlockTypes(
-						field.BlockType("quote", "Quote", field.Text("quote", field.Required())),
-					)),
-					richtext.Field("content"),
-					field.Relationship("watchers", field.ToMany("users")),
-					field.Relationship("related", field.ToAny("users", "posts")),
+					field.Date("publishedOn"), field.Number("score"), field.Checkbox("featured"),
+					field.JSON("metadata"), field.Group("seo", field.Fields{field.Text("description")}), field.Array("tags", field.Fields{field.Text("label").Required()}), field.Blocks("layout", field.Block{Slug: "quote", Fields: field.Fields{field.Text("quote").Required()}}), richtext.Field("content"), field.Relationships("watchers", "users"), field.PolymorphicRelationship("related", "users", "posts"),
 				},
 				Access: ridu.CollectionAccess{
 					Read: func(ridu.AccessContext) (ridu.AccessDecision, error) {
@@ -2086,12 +2006,12 @@ func integrationConfig() ridu.Config {
 }
 
 func postgresNestedString(value store.Value, name string) string {
-	object, _ := value.ObjectValue()
+	object, _ := value.CopyObject()
 	return stringValue(object[name])
 }
 
 func postgresNestedRowString(value store.Value, index int, name string) string {
-	rows, _ := value.Values()
+	rows, _ := value.CopyList()
 	if index < 0 || index >= len(rows) {
 		return ""
 	}
@@ -2115,14 +2035,14 @@ func TestPostgresPermanentDeleteRemovesDocumentState(t *testing.T) {
 						return nil
 					}},
 				},
-				Fields: []field.Definition{field.Text("email", field.Required(), field.Unique()), field.Text("name")},
+				Fields: field.Fields{field.Text("email").Required().Unique(), field.Text("name")},
 			},
-			{Slug: "staff", Auth: true, Fields: []field.Definition{field.Text("email", field.Required(), field.Unique())}},
+			{Slug: "staff", Auth: true, Fields: field.Fields{field.Text("email").Required().Unique()}},
 			{
 				Slug: "posts", Versions: true, LockDocuments: true,
 				VersionConfig:      ridu.VersionConfig{Drafts: true},
 				DocumentLockConfig: ridu.DocumentLockConfig{Duration: time.Minute},
-				Fields:             []field.Definition{field.Text("title", field.Required())},
+				Fields:             field.Fields{field.Text("title").Required()},
 			},
 		},
 	}

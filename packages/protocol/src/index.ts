@@ -1,3 +1,9 @@
+export {
+	cloneSchemaField,
+	bindSchemaManifest,
+	resolveBlockTypes,
+	mapBlockTypes,
+} from "./schema-registry.js";
 export * from "./generated.js";
 
 import type {
@@ -30,7 +36,10 @@ export function isValidationIssue(value: unknown): value is ValidationIssue {
 		isRecord(value) &&
 		typeof value.code === "string" &&
 		typeof value.path === "string" &&
-		typeof value.message === "string"
+		typeof value.message === "string" &&
+		["target", "fieldId", "collectionId", "globalId", "locale"].every(
+			(key) => value[key] === undefined || typeof value[key] === "string"
+		)
 	);
 }
 

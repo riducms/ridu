@@ -8,7 +8,7 @@ output.
 
 ```text
 content/*.go
-    ↓  ridu generate / ridu dev
+    ↓  bun run ridu -- generate / bun run dev
 schema + typed Go/TypeScript contracts
     ↓
 Go API + framework-owned admin
@@ -25,19 +25,19 @@ of the schema in TypeScript or JSON.
 | Path | What it does | When you edit it |
 | --- | --- | --- |
 | `content/config.go` | Assembles the application and collections. | Add/remove a collection or application-level service. Use `ridu add` for packaged plugins. |
-| `content/posts.go` | Defines the starter Posts collection. | Add fields, change labels, access rules, hooks, or collection behavior. |
+
 | `content/users.go` | Defines the authentication collection. | Change user fields or authentication-related rules. |
-| `admin/src/plugins.ts` | Registers application-owned admin field plugins. | Add a custom Svelte field or another application admin extension. |
+| `admin/src/admin.config.ts` | Registers application components, custom field editors and paired plugins. | Add a custom Svelte field or another application admin extension. |
 | `admin/src/fields/` | A conventional home for your custom field components. | Build or change a custom field UI. The directory exists only when you need it. |
 
-You can split `content/` however you like. `posts.go` and `users.go` are ordinary Go files, not
+You can split `content/` however you like. `users.go` is ordinary Go code, not
 special filenames. Ridu only cares about the `ridu.Config` returned by `content.Config()`.
 
 ### Configure these occasionally
 
 | Path | What it does | Touch it when… |
 | --- | --- | --- |
-| `cmd/server/main.go` | Opens PostgreSQL and starts Ridu. | You need runtime wiring such as observability, server options, or another store setup. |
+| `cmd/server/main.go` | Opens PostgreSQL and starts Ridu. | You need runtime wiring such as observability or server options. |
 | `compose.yaml` | Runs the development PostgreSQL container. | You need different local ports or database settings. |
 | `ridu.toml` | Tells the CLI where the entry, admin, generated contracts, migrations, and assets live. | You deliberately move one of those directories. |
 | `ridu.plugins.json` | Records packaged plugin dependencies and constructors. | Normally use `ridu add` or `ridu plugin remove`; review the resulting diff. |
@@ -50,6 +50,25 @@ special filenames. Ridu only cares about the `ridu.Config` returned by `content.
 | `admin/package.json` | Admin-only dependencies and scripts. | Add an admin build dependency. |
 | `.gitignore` | Keeps caches, secrets, builds, and embedded admin output out of Git. | You add another disposable local artifact. |
 
+### Coding-agent guidance
+
+When selected during `ridu new`, Ridu installs two complete local skills: `ridu-project` for
+ordinary application work and `payload-to-ridu` for Payload assessment or migration. Codex and
+Cursor read them from `.agents/skills/`; Claude Code reads them from `.claude/skills/`. The root
+`AGENTS.md` or `CLAUDE.md` is your project entrypoint and remains user-owned.
+
+`.ridu-agent-docs.json` records the framework-owned skill files and their digests. Commit the
+manifest and skill directories. After upgrading the project-local Ridu CLI, run:
+
+```sh
+bun run ridu -- agent sync
+```
+
+Sync refuses to proceed if a managed file was edited. Move project-specific notes into this file or
+the root agent entrypoint, then restore or reinstall the managed reference. Add another supported
+layout with `bun run ridu -- agent install --agent codex|claude|cursor|all`; existing root instructions and
+unmanaged skill files are never replaced.
+
 ### Do not hand-edit these
 
 | Path | Owner | Why |
@@ -59,15 +78,16 @@ special filenames. Ridu only cares about the `ridu.Config` returned by `content.
 | `generated/ridu.graphql` | `ridu generate` when `generated.graphql.schema` is configured | Exact SDL emitted by the compiled GraphQL plugin, including executable naming and extension options. |
 | `generated/ridu.generated.go` | `ridu generate` | Exact Go document/input types and local collection handles. |
 | `generated/ridu.generated.ts` | `ridu generate` | Exact TypeScript document, input, query types, and typed Fetch client factory. |
-| `admin/src/ridu.plugins.generated.ts` | `ridu generate` | Static imports for packaged plugins declared by Go config. Put application-local plugins in `plugins.ts`. |
+| `admin/src/ridu.plugins.generated.ts` | `ridu generate` | Static imports for packaged plugins declared by Go config. Put application components in `admin.config.ts`. |
 | `content/ridu_plugins.generated.go` | `ridu add` / `ridu plugin remove` | Compiled registration for packaged Go plugins. |
 | `internal/adminassets/dist/` | `ridu build` / Vite | Compiled static admin embedded into the Go binary. |
 | `dist/` | `ridu build` | Final production binary. |
 | `.ridu/` | Ridu development tools | Disposable CLI, Vite, generation, and dogfood caches. |
+| `.agents/skills/**`, `.claude/skills/**` | `ridu agent sync` | Release-matched public guidance tracked by `.ridu-agent-docs.json`. |
 | `node_modules/` | Bun | Installed frontend dependencies. |
 
 Generated contracts are committed so CI can catch drift, but they are still machine-owned. Change
-`content/*.go`, then run `ridu generate`; never fix a generated file by hand.
+`content/*.go`, then run `bun run ridu -- generate`; never fix a generated file by hand.
 
 When the optional GraphQL plugin is enabled, set
 `generated.graphql.schema = "./generated/ridu.graphql"` in `ridu.toml`. Ridu then generates and checks the
@@ -112,22 +132,26 @@ Edit the collection in `content/posts.go`, for example:
 Labels: ridu.Labels{Singular: "Article", Plural: "Articles"},
 ```
 
-With `ridu dev` running, Ridu builds one disposable candidate, executes that exact binary to
+With `bun run dev` running, Ridu builds one disposable candidate, executes that exact binary to
 regenerate the manifest, and reuses it as the replacement Go server. After it is healthy, a custom
-Vite event refreshes the admin manifest in place. The CLI prints build, manifest, contract,
-database, and total timings. This is not ordinary module replacement because the source is
-executable Go rather than a frontend module.
+Vite event refreshes the admin manifest in place. The CLI-owned proxy has already removed the
+previous process from new traffic, so that process drains without production's
+readiness-propagation delay. The CLI prints build, manifest, contract, database, startup, and
+handoff-total timings in one reload summary without charging previous-process cleanup to API
+readiness. Initial startup uses one readiness block for the admin and API; Vite's duplicate banner
+is suppressed while its warnings and errors remain visible. This is not ordinary module replacement
+because the source is executable Go rather than a frontend module.
 
 ### Add a built-in field
 
 Add it to the collection's `Fields` slice:
 
 ```go
-field.Text("summary", field.Label("Summary"), field.Required()),
+field.Text("summary").Label("Summary").Required(),
 ```
 
-Save the file. `ridu dev` handles development generation and non-destructive database additions.
-Run `ridu check` before committing.
+Save the file. `bun run dev` handles development generation and non-destructive database additions.
+Run `bun run ridu -- check` before committing.
 
 ### Rename a field safely
 
@@ -137,20 +161,31 @@ Rename the field normally in executable config:
 field.Text("headline")
 ```
 
-Then run `ridu migrate create --name rename-post-title`. Ridu compares the latest immutable
+Then run `bun run ridu -- migrate create --name rename-post-title`. Ridu compares the latest immutable
 migration artifact with current config and asks you to confirm an unambiguous rename before it
 records the physical and semantic data-preservation steps. Review the artifact before applying it.
 
+
 ### Add a custom field
 
-A persisted custom field has two halves:
+For application-local scalar customization, use `.Admin(field.Admin{Editor: field.Component("app:name")})` in Go and
+`defineFieldEditor` from `@riducms/plugin/editor` in `admin/src/admin.config.ts`. The generated
+`admin/src/fields/text-editor.svelte` is a complete example. Components without settings need no
+`decodeConfig` function or `config` prop. When a component needs settings, pass one object as
+the second argument to `field.Component` and validate it with `decodeConfig` in the registration.
+Advanced field renderers for complex
+or plugin-owned values belong to a paired Go/admin plugin, not a local `fieldPlugins` list.
 
-1. A Go helper/plugin that defines validation and public manifest config.
-2. A Svelte field plugin that edits the value in the admin.
+### Customize an existing admin surface
 
-Put the Go package somewhere under `content/` (for example `content/colorfield/`), register it from
-`content/config.go`, create the Svelte component under `admin/src/fields/`, and register its admin
-plugin in `admin/src/plugins.ts`. The Go and Svelte halves share one plugin key.
+Import `defineAdmin` from `@riducms/plugin/admin`. Register local `dashboard`, `routes`, `login`,
+`account`, `navigation`, `logoutButton`, `views`, `branding`, `shell`, `providers`, `listCells`,
+`documentActions`, and `documentViews` directly in `admin.config.ts`. Their props are the public
+host contracts exported by `@riducms/plugin`. Keep `plugins: generatedAdminPlugins` to compose the
+paired plugins declared in Go. Entries compose in plugin-then-application order and conflicts fail.
+Application messages use `app:message` keys. Local routes use literal relative paths outside the
+framework's reserved namespaces. Use `.Admin(field.Admin{RowLabel: field.Component("app:summary")})` with a
+`rowLabels` registration created by `defineRowLabel` for read-only array and blocks headings.
 
 ### Change only the custom field UI
 
@@ -162,14 +197,18 @@ field definition or plugin config, Ridu regenerates the schema and reloads the p
 Keep them with the collection that owns them or in another clearly named Go file under `content/`.
 They are executable server behavior and are never serialized into the public schema manifest.
 
-### Change the database
+### Configure the database
+
 
 `compose.yaml` is only the local container. PostgreSQL integration is opened in
 `cmd/server/main.go`, and the connection URL comes from `DATABASE_URL`. Development schema sync is
-non-destructive. Review production changes through `ridu migrate create`, then apply them with
-`ridu migrate up`.
+non-destructive. Review production changes through `bun run ridu -- migrate create`, then apply them with
+`bun run ridu -- migrate up`.
+
 
 ### Configure the production boundary
+
+
 
 The generated server keeps production checks in `cmd/server/main.go` and uses secure framework
 defaults when an environment value is absent:
@@ -184,50 +223,64 @@ defaults when an environment value is absent:
 | `RIDU_STRICT_TRANSPORT_SECURITY` | HSTS value emitted by Ridu. Set it only when the TLS terminator guarantees HTTPS for the complete declared scope. |
 | `RIDU_READINESS_TIMEOUT` | Optional Go duration bounding the combined database, object-storage, and application readiness probe. |
 | `RIDU_SKIP_READINESS_PREFLIGHT` | Development-only startup escape used by `ridu dev`; never set it for an ordinary production server. |
-| `RIDU_READINESS_DRAIN_DELAY` | Optional delay after readiness turns false and before request shutdown begins. |
+
+| `RIDU_READINESS_DRAIN_DELAY` | Optional delay after readiness turns false and before request shutdown begins. Unset or zero uses two seconds; a negative duration disables this propagation delay without disabling graceful shutdown. |
 | `RIDU_SHUTDOWN_TIMEOUT` | Optional bound for HTTP shutdown and runtime-resource cleanup. |
 | `RIDU_WORKER_DRAIN_TIMEOUT` | Optional bound for cooperative task-worker drain. |
 
+On Railway, where traffic cutover precedes termination, set
+`RIDU_READINESS_DRAIN_DELAY=-1s` and use the platform's separate drain window for in-flight work.
+
 TLS normally terminates at the platform edge. It must sanitize untrusted forwarding headers before
 sending them from one of `RIDU_TRUSTED_PROXY_CIDRS`. Ridu enables secure cookies by default; never
-set `RIDU_SECURE_COOKIES=false` in production. `RIDU_ALLOW_INSECURE_DATABASE=true` and
-`RIDU_ALLOW_UNVERIFIABLE_READINESS=true` are development/explicit-adapter escape hatches.
-`RIDU_SKIP_READINESS_PREFLIGHT=true` is used only by `ridu dev`; it is not production
-configuration.
+set `RIDU_SECURE_COOKIES=false` in production. `RIDU_ALLOW_INSECURE_DATABASE=true` and `RIDU_ALLOW_UNVERIFIABLE_READINESS=true`
+are development/explicit-adapter escape hatches. `RIDU_SKIP_READINESS_PREFLIGHT=true` is used only
+by `ridu dev`; it is not production configuration.
 
-Production startup performs readiness before binding the listener. The official PostgreSQL store
-requires a reachable database, a complete immutable migration ledger whose digest matches the
-executable manifest, and no interrupted migration phase. Apply and verify the exact release's
-migrations before starting it. If uploads are configured with `ridu.WithUploadStorage`, the backend
+
+Production startup performs readiness before binding the listener. `ridu build` embeds a fingerprint
+of the exact ordered migration filenames and artifact digests in the binary. The official
+PostgreSQL store requires a reachable database, the matching executable manifest, and an applied ledger whose
+complete ordered history matches that fingerprint. A direct `go build` has no fingerprint and fails
+closed in ordinary production startup.
+Apply and verify the exact release's migrations before starting it. If uploads are configured with `ridu.WithUploadStorage`, the backend
 must implement `storage.HealthBackend`; the official local and S3 backends do. A custom backend may
 opt out only after equivalent external dependency checks exist.
 
 Give the platform termination grace period more time than the readiness-drain, HTTP-shutdown,
 worker-drain, and resource-close budgets combined. A code-only replacement with the same manifest
-digest may overlap: keep the old instance available until the replacement passes `/readyz`.
-For every manifest-changing release, drain old replicas and workers first, run
-`verify`/`up`/`status` with the new exact history, then start only the new digest. `/healthz` only
-proves that a process is alive and never admits mixed manifests.
+digest and migration-history fingerprint may overlap: keep the old instance available until the
+replacement passes `/readyz`.
+For every release with a new migration artifact, drain old replicas and
+workers first, run
+`verify`/`up`/`status` with the new exact history, then start only the target release binary. `/healthz`
+only proves that a process is alive and never admits mixed manifests or migration histories.
 
 ## What the commands actually do
 
 | Command | Use it for |
 | --- | --- |
-| `ridu dev` | Install frontend dependencies, start PostgreSQL, generate contracts, sync safe development schema changes, run API + admin, and watch Go. |
-| `ridu generate` | Re-resolve Go config and atomically update generated contracts without starting the app. |
-| `ridu check` | Check generated drift, a non-empty migration history at the exact executable manifest, formatting, Go vet/tests, TypeScript, and Svelte. |
-| `ridu build` | Generate, build the static admin, and compile one production Go binary. |
-| `ridu migrate create --name …` | Create reviewable SQL for production schema changes. |
-| `ridu migrate plan --json` | Inspect immutable pending phase, step, and checkpoint state without applying it. |
-| `ridu migrate verify` | Replay committed history in a shadow schema and reject drift before deployment. |
-| `ridu migrate up` | Apply reviewed artifacts under the production migration lock. |
+| `bun run dev` | Run the project-local `ridu dev`: start PostgreSQL, generate contracts, sync safe postgres development schema changes, run API + admin, and watch Go. |
+| `bun run dev:admin` | Run only the Vite admin when another process already owns the API lifecycle. |
+| `bun run ridu -- <command>` | Run any command with the exact `@riducms/cli` version pinned by this project. |
+| `bun run ridu -- generate` | Re-resolve Go config and atomically update generated contracts without starting the app. |
+| `bun run ridu -- check` | Check generated drift, a non-empty migration history at the exact executable manifest, formatting, Go vet/tests, TypeScript, and Svelte. |
+| `bun run ridu -- build` | Generate, build the static admin, and compile one production Go binary. |
+| `bun run ridu -- migrate create --name …` | Create a reviewable immutable migration artifact without opening the database. |
+
+| `bun run ridu -- migrate plan --json` | Inspect immutable pending phase, step, and checkpoint state without applying it. |
+| `bun run ridu -- migrate verify` | Replay committed history in a shadow schema and reject drift before deployment. |
+| `bun run ridu -- migrate up` | Apply reviewed artifacts under the production migration lock. |
+
+
 
 ## Why some changes hot-update and others reload
 
 - Svelte, TypeScript, and CSS changes belong to Vite, so they use normal hot module replacement.
 - Go changes build one candidate reused for manifest resolution and the replacement server.
-- If that Go change alters the canonical schema, Ridu waits for the replacement server, sends a
-  custom Vite event, and the admin fetches and reconciles the new manifest in place.
+- If that Go change alters the canonical schema, Ridu waits for the replacement server, atomically
+  hands traffic to it, sends a custom Vite event, and the admin fetches and reconciles the new
+  manifest before the previous server completes its bounded drain.
 - If the Go change only alters a hook or access rule, the server restarts but the page stays put
   because the admin schema did not change.
 

@@ -62,7 +62,7 @@ type Config struct {
 	EnabledFields         []FieldType
 	UploadCollections     []schema.CollectionSlug
 	RedirectRelationships []schema.CollectionSlug
-	PaymentProcessors     []field.Choice
+	PaymentProcessors     []field.Option
 	Fields                FieldsOverride
 	Forms                 CollectionOverride
 	Submissions           CollectionOverride
@@ -84,7 +84,7 @@ func New(config Config) *Plugin {
 	config.EnabledFields = append([]FieldType(nil), config.EnabledFields...)
 	config.UploadCollections = append([]schema.CollectionSlug(nil), config.UploadCollections...)
 	config.RedirectRelationships = append([]schema.CollectionSlug(nil), config.RedirectRelationships...)
-	config.PaymentProcessors = cloneChoices(config.PaymentProcessors)
+	config.PaymentProcessors = cloneOptions(config.PaymentProcessors)
 	if config.FormsSlug == "" {
 		config.FormsSlug = DefaultFormsSlug
 	}
@@ -240,7 +240,7 @@ func validFieldType(value FieldType) bool {
 func formFieldTypes(blocks []field.Block) map[FieldType]struct{} {
 	types := make(map[FieldType]struct{}, len(blocks))
 	for _, block := range blocks {
-		types[FieldType(block.Key)] = struct{}{}
+		types[FieldType(block.Slug)] = struct{}{}
 	}
 	return types
 }
@@ -261,13 +261,13 @@ func allowAdminCollection(collection schema.CollectionSlug) ridu.AccessRule {
 	}
 }
 
-func cloneChoices(choices []field.Choice) []field.Choice {
-	cloned := make([]field.Choice, len(choices))
-	for index, choice := range choices {
-		cloned[index] = choice
-		if choice.LabelTranslations != nil {
-			cloned[index].LabelTranslations = make(map[string]string, len(choice.LabelTranslations))
-			for language, label := range choice.LabelTranslations {
+func cloneOptions(options []field.Option) []field.Option {
+	cloned := make([]field.Option, len(options))
+	for index, option := range options {
+		cloned[index] = option
+		if option.LabelTranslations != nil {
+			cloned[index].LabelTranslations = make(map[string]string, len(option.LabelTranslations))
+			for language, label := range option.LabelTranslations {
 				cloned[index].LabelTranslations[language] = label
 			}
 		}

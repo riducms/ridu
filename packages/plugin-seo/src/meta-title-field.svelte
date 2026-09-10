@@ -1,26 +1,35 @@
 <script lang="ts">
-	import type { FieldComponentProps } from "@riducms/plugin";
-	import { Button, FieldFrame, Input } from "@riducms/ui";
+	import type { PluginFieldProps } from "@riducms/plugin";
+	import { Button, FieldFrame, Input, fieldControlARIA } from "@riducms/ui";
 
 	import { GenerationController } from "@plugin-seo/generation-controller.svelte";
 	import LengthIndicator from "@plugin-seo/length-indicator.svelte";
-	import { lengthConfig } from "@plugin-seo/seo-config";
+	import type { LengthConfig } from "@plugin-seo/seo-config";
 
-	let { field, form, i18n, authoring }: FieldComponentProps = $props();
-	const config = $derived(lengthConfig(field));
+	let {
+		field: binding,
+		form,
+		config,
+		i18n,
+		authoring,
+	}: PluginFieldProps<string, LengthConfig, "text"> = $props();
+	const field = $derived(binding.schema);
+	const editingBlocked = $derived(binding.readOnly);
+
 	const minLength = $derived(field.text?.minLength ?? config.minLength);
 	const maxLength = $derived(field.text?.maxLength ?? config.maxLength);
-	const value = $derived(String(form.get(field.path) ?? ""));
-	const issues = $derived(form.issuesFor(field.path));
-	const hasMessage = $derived(issues.length > 0 || field.admin.description !== undefined);
+	const value = $derived(String(binding.value ?? ""));
+	const issues = $derived(binding.issues);
+	const inputARIA = $derived(
+		fieldControlARIA(field.id, field.admin.description !== undefined, issues.length > 0)
+	);
 	const generation = new GenerationController();
 
-	$effect(() => form.register(field.path));
 	$effect(() => () => generation.cancel());
 
 	async function generate() {
 		const result = await generation.run(authoring, form, "generate-title");
-		if (result !== undefined) form.set(field.path, result);
+		if (result !== undefined) binding.set(result);
 	}
 </script>
 
@@ -49,7 +58,7 @@
 					variant="link"
 					size="xs"
 					class="h-auto px-0"
-					disabled={field.admin.readOnly || generation.status === "pending"}
+					disabled={editingBlocked || generation.status === "pending"}
 					aria-busy={generation.status === "pending"}
 					onclick={generate}
 				>
@@ -61,14 +70,14 @@
 			id={field.id}
 			name={field.path}
 			required={field.required}
-			readonly={field.admin.readOnly}
+			readonly={editingBlocked}
 			minlength={field.text?.minLength}
 			maxlength={field.text?.maxLength}
-			aria-invalid={issues.length > 0}
-			aria-describedby={hasMessage ? `${field.id}-message` : undefined}
-			aria-errormessage={issues.length > 0 ? `${field.id}-message` : undefined}
+			aria-invalid={inputARIA["aria-invalid"]}
+			aria-describedby={inputARIA["aria-describedby"]}
+			aria-errormessage={inputARIA["aria-errormessage"]}
 			{value}
-			oninput={(event) => form.set(field.path, event.currentTarget.value)}
+			oninput={(event) => binding.set(event.currentTarget.value)}
 		/>
 		<LengthIndicator text={value} {minLength} {maxLength} {i18n} />
 		{#if generation.status === "error"}<p class="text-[12px] text-destructive" role="alert">

@@ -16,6 +16,7 @@ import (
 	atlaspostgres "ariga.io/atlas/sql/postgres"
 	atlasschema "ariga.io/atlas/sql/schema"
 	"github.com/jackc/pgx/v5/stdlib"
+	"github.com/riducms/ridu/internal/embedded"
 	"github.com/riducms/ridu/internal/migrationartifact"
 	ridumigration "github.com/riducms/ridu/migration"
 	"github.com/riducms/ridu/schema"
@@ -604,6 +605,10 @@ func bindReferenceShapeFieldRename(
 	beforeCollection, afterCollection schema.Collection,
 	beforePath, afterPath string,
 ) error {
+	if beforePath != afterPath && (embedded.DescendantPath(beforeCollection.Fields, beforePath) || embedded.DescendantPath(afterCollection.Fields, afterPath)) {
+		return fmt.Errorf("embedded field rename %q to %q requires an explicit data migration", beforePath, afterPath)
+	}
+
 	if beforePath == "" || afterPath == "" {
 		return fmt.Errorf("field content rename requires both before and after paths")
 	}
@@ -631,17 +636,8 @@ func schemaFieldByPath(fields []schema.Field, path string) (schema.Field, bool) 
 		if field.Path.String() == path {
 			return field, true
 		}
-		if field.Nested != nil {
-			if found, exists := schemaFieldByPath(field.Nested.Fields, path); exists {
-				return found, true
-			}
-		}
-		if field.Blocks != nil {
-			for _, block := range field.Blocks.Types {
-				if found, exists := schemaFieldByPath(block.Fields, path); exists {
-					return found, true
-				}
-			}
+		if found, exists := schemaFieldByPath(schema.ChildFields(field), path); exists {
+			return found, true
 		}
 	}
 	return schema.Field{}, false
@@ -968,6 +964,7 @@ func assertPhysicalSchemaShape(ctx context.Context, transaction *sql.Tx, expecte
 		// manifest contract, so they do not impose catalogue purity.
 		table.Triggers = nil
 	}
+	normalizePostgresJSONBDefaults(actual, expected)
 	changes, err := atlaspostgres.DefaultDiff.SchemaDiff(actual, expected)
 	if err != nil {
 		return fmt.Errorf("compare PostgreSQL schema: %w", err)
@@ -979,7 +976,7 @@ func assertPhysicalSchemaShape(ctx context.Context, transaction *sql.Tx, expecte
 		}
 		var descriptions []string
 		for _, change := range plan.Changes {
-			descriptions = append(descriptions, change.Comment)
+			descriptions = append(descriptions, fmt.Sprintf("%s: %s", change.Comment, change.Cmd))
 		}
 		return fmt.Errorf("physical schema drift detected: %s", strings.Join(descriptions, "; "))
 	}
@@ -1296,7 +1293,10 @@ func rewriteCollectionReferences(ctx context.Context, transaction *sql.Tx, artif
 						continue
 					}
 					if err := rewriteJSONColumn(ctx, transaction, table, column, func(value any) (bool, error) {
-						return rewriteFieldCollectionReferences(value, field, true, string(before), string(after)), nil
+						if err := validateEmbeddedJSON(field, value, true); err != nil {
+							return false, err
+						}
+						return rewriteFieldCollectionReferences(value, field, true, string(before), string(after))
 					}); err != nil {
 						return err
 					}
@@ -1384,7 +1384,16 @@ func rewriteAllVersionReferences(
 				if !exists || !fieldContainsCollectionReferences(field) {
 					continue
 				}
-				changed = rewriteFieldCollectionReferences(value, field, false, before, after) || changed
+				if err := validateEmbeddedJSON(field, value, false); err != nil {
+					rows.Close()
+					return err
+				}
+				fieldChanged, err := rewriteFieldCollectionReferences(value, field, false, before, after)
+				if err != nil {
+					rows.Close()
+					return err
+				}
+				changed = fieldChanged || changed
 			}
 		}
 		if changed {
@@ -1597,29 +1606,37 @@ func replacePolymorphicReference(value any, before, after string) bool {
 	return false
 }
 
-func rewriteFieldCollectionReferences(value any, field schema.Field, currentRoot bool, before, after string) bool {
+func rewriteFieldCollectionReferences(value any, field schema.Field, currentRoot bool, before, after string) (bool, error) {
 	if field.Localized && !currentRoot {
 		localized, ok := value.(map[string]any)
 		if !ok {
-			return false
+			return false, nil
 		}
 		changed := false
 		unlocalized := field
 		unlocalized.Localized = false
 		for _, candidate := range localized {
-			changed = rewriteFieldCollectionReferences(candidate, unlocalized, false, before, after) || changed
+			fieldChanged, err := rewriteFieldCollectionReferences(candidate, unlocalized, false, before, after)
+			if err != nil {
+				return false, err
+			}
+			changed = fieldChanged || changed
 		}
-		return changed
+		return changed, nil
 	}
+	if embedded.HasFields(field) {
+		return rewriteEmbeddedCollectionReferences(value, field, before, after)
+	}
+
 	if field.Plugin != nil && len(field.Plugin.ReferenceKeys) != 0 {
 		keys := make(map[string]bool, len(field.Plugin.ReferenceKeys))
 		for _, key := range field.Plugin.ReferenceKeys {
 			keys[key] = true
 		}
-		return replaceDeclaredPluginReferences(value, keys, before, after)
+		return replaceDeclaredPluginReferences(value, keys, before, after), nil
 	}
 	if field.Relationship != nil && field.Relationship.Polymorphic {
-		return replacePolymorphicReference(value, before, after)
+		return replacePolymorphicReference(value, before, after), nil
 	}
 
 	changed := false
@@ -1627,35 +1644,43 @@ func rewriteFieldCollectionReferences(value any, field schema.Field, currentRoot
 	case schema.FieldTypeGroup:
 		object, ok := value.(map[string]any)
 		if !ok || field.Nested == nil {
-			return false
+			return false, nil
 		}
-		for _, child := range field.Nested.Fields {
+		for _, child := range field.Nested.ResolvedFields() {
 			candidate, exists := object[child.Name]
 			if exists {
-				changed = rewriteFieldCollectionReferences(candidate, child, false, before, after) || changed
+				fieldChanged, err := rewriteFieldCollectionReferences(candidate, child, false, before, after)
+				if err != nil {
+					return false, err
+				}
+				changed = fieldChanged || changed
 			}
 		}
 	case schema.FieldTypeArray:
 		items, ok := value.([]any)
 		if !ok || field.Nested == nil {
-			return false
+			return false, nil
 		}
 		for _, item := range items {
 			object, ok := item.(map[string]any)
 			if !ok {
 				continue
 			}
-			for _, child := range field.Nested.Fields {
+			for _, child := range field.Nested.ResolvedFields() {
 				candidate, exists := object[child.Name]
 				if exists {
-					changed = rewriteFieldCollectionReferences(candidate, child, false, before, after) || changed
+					fieldChanged, err := rewriteFieldCollectionReferences(candidate, child, false, before, after)
+					if err != nil {
+						return false, err
+					}
+					changed = fieldChanged || changed
 				}
 			}
 		}
 	case schema.FieldTypeBlocks:
 		items, ok := value.([]any)
 		if !ok || field.Blocks == nil {
-			return false
+			return false, nil
 		}
 		for _, item := range items {
 			object, ok := item.(map[string]any)
@@ -1663,41 +1688,34 @@ func rewriteFieldCollectionReferences(value any, field schema.Field, currentRoot
 				continue
 			}
 			blockType, _ := object["blockType"].(string)
-			for _, block := range field.Blocks.Types {
-				if block.Key != blockType {
+			for _, block := range field.Blocks.ResolvedTypes() {
+				if block.Slug != blockType {
 					continue
 				}
-				for _, child := range block.Fields {
+				for _, child := range block.ResolvedFields() {
 					candidate, exists := object[child.Name]
 					if exists {
-						changed = rewriteFieldCollectionReferences(candidate, child, false, before, after) || changed
+						fieldChanged, err := rewriteFieldCollectionReferences(candidate, child, false, before, after)
+						if err != nil {
+							return false, err
+						}
+						changed = fieldChanged || changed
 					}
 				}
 				break
 			}
 		}
 	}
-	return changed
+	return changed, nil
 }
 
 func fieldContainsCollectionReferences(field schema.Field) bool {
 	if field.Relationship != nil && field.Relationship.Polymorphic || field.Plugin != nil && len(field.Plugin.ReferenceKeys) != 0 {
 		return true
 	}
-	if field.Nested != nil {
-		for _, child := range field.Nested.Fields {
-			if fieldContainsCollectionReferences(child) {
-				return true
-			}
-		}
-	}
-	if field.Blocks != nil {
-		for _, block := range field.Blocks.Types {
-			for _, child := range block.Fields {
-				if fieldContainsCollectionReferences(child) {
-					return true
-				}
-			}
+	for _, child := range schema.ChildFields(field) {
+		if fieldContainsCollectionReferences(child) {
+			return true
 		}
 	}
 	return false
