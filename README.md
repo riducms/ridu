@@ -1,13 +1,14 @@
 # Ridu
 
-Ridu is an open-source, **config-as-code headless CMS for Go** with an included Svelte 5 admin.
+Ridu is an open-source, **config-as-code backend framework for Go** with a **headless CMS** and
+Svelte 5 admin built in. It includes authentication, access control, APIs, and background jobs.
 Define collections, fields, access control, hooks, and plugins in Go. That executable configuration
 is the source of truth for database migrations, the REST API, generated TypeScript contracts,
 the Fetch SDK, and the authoring interface. Deploy the application and admin as one Go binary.
 
 If you like Payload's code-first content modelling and PocketBase's single-binary deployment,
-Ridu brings those ideas together in a Go CMS. It includes field-level access control, lifecycle
-hooks, computed fields, typed content blocks, and drafts and versions.
+Ridu brings those ideas together in a Go backend framework. It includes field-level access control,
+lifecycle hooks, computed fields, typed content blocks, and drafts and versions.
 [Compare the configuration and deployment models](https://riducms.com/guides/config-as-code-cms/)
 and check the [current feature limits](https://riducms.com/docs/status/).
 

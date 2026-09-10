@@ -1,6 +1,6 @@
 ---
 title: 'Introduction'
-description: 'Ridu is a config-as-code headless CMS for Go. Define content, access control, hooks, and blocks in code, then deploy the API and admin as one binary.'
+description: 'Ridu is a config-as-code backend framework for Go with a headless CMS built in. Define data and business logic in code; deploy the API and admin as one binary.'
 product: core
 eyebrow: 'Start here'
 order: 10
@@ -21,7 +21,8 @@ navigation:
 
 ## What is Ridu? {#what-is-ridu}
 
-Ridu is an open-source, config-as-code headless CMS for Go with a built-in Svelte 5 admin. You define
+Ridu is an open-source, config-as-code backend framework for Go with a headless CMS and Svelte 5
+admin built in. It includes authentication, access control, APIs, and background jobs. You define
 collections, fields, permissions, hooks, and plugins in Go. Ridu uses that configuration to build
 the database structure, API, TypeScript client, and admin forms.
 
