@@ -19,9 +19,9 @@ npm create ridu@latest -- --template blank --database sqlite my-app
 ```
 
 The initializer runs the matching `@riducms/cli` release. Generated projects retain that launcher
-as an exact development dependency. After
-creation, install and run scripts with the same package manager. For example, npm users run
-`npm install`, `npm run dev`, and `npm run ridu -- <command>` without installing a global CLI.
+as an exact development dependency. After creation, install and run the generated `dev`, `check`,
+`build`, `migrate`, and `start` scripts with the selected package manager. The documentation writes
+other project commands as `ridu <command>` so examples do not change between package managers.
 
 On the first run, the launcher shows the native CLI download status immediately, with elapsed time
 and received bytes. A percentage appears when the server supplies a usable total. CI and piped
@@ -31,3 +31,7 @@ millisecond value on a slow connection. A cached CLI starts without download mes
 
 Any earlier registry download is managed by your package runner, before `create-ridu` can print.
 See the [launcher README](../cli/README.md) for download details and a local preview command.
+
+Use `npm create ridu@latest .` to create a project in the current directory. Ridu warns before
+creation, derives the project name from that directory, and preserves unrelated files. Conflicting
+project paths stop creation before any project files are added.

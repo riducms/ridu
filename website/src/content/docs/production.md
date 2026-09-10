@@ -1,6 +1,6 @@
 ---
-title: 'Production'
-description: 'Build, configure, deploy, observe, drain, migrate, and recover a Ridu application.'
+title: 'Production overview'
+description: 'Choose a deployment path, then configure health checks, security, migrations, and recovery.'
 product: core
 eyebrow: 'Ship'
 order: 220
@@ -14,6 +14,10 @@ Ridu deploys as one Go binary containing the API, operation engine, workers, gen
 static admin. PostgreSQL and MongoDB remain external durable dependencies; SQLite runs in the
 process against a local file. An optional object backend remains separate. Bun and Node are
 build-time tools, not production servers.
+
+Start with [Build and run](/docs/production/build-and-run/) to produce the binary and launch it on
+your own machine. Use [Deploy to Railway](/docs/production/railway/) for a complete hosted example.
+The sections below cover the settings and operating rules shared by production platforms.
 
 > [!IMPORTANT]
 > SQLite supports one application host, a local filesystem, and small or local
@@ -52,9 +56,9 @@ build-time tools, not production servers.
 ## Build one runtime artifact {#build}
 
 ```sh title="terminal"
-npm run ridu -- check
-npm run ridu -- migrate verify
-npm run ridu -- build
+ridu check
+ridu migrate verify
+ridu build
 ```
 
 `ridu build` resolves config, updates generated contracts, compiles the Svelte admin, embeds its
@@ -85,22 +89,62 @@ MongoDB all compare the live ordered ledger with the fingerprint embedded by `ri
 
 ## Configure the generated boundary {#environment}
 
-Generated projects expose the deployment-owned topology as environment:
+Generated projects read the deployment topology from environment variables:
 
-| Environment                             | Production use                                                                                                                                                                                                    |
-| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`                          | PostgreSQL URL using `sslmode=require`, `verify-ca`, or preferably `verify-full`; or a MongoDB URL selecting one database, SCRAM-SHA-256, replica set, and verified TLS. Plaintext and TLS fallback are rejected. |
-| `RIDU_SQLITE_PATH`                      | Absolute local SQLite file path or `file:` URI. Do not use a shared network filesystem or mount the file on multiple hosts.                                                                                       |
-| `RIDU_ADDRESS`                          | Listener address, default `:8080`. Put TLS at the platform edge unless the application deliberately supplies it elsewhere.                                                                                        |
-| `RIDU_POSTGRES_UPLOAD_LOCK_CONNECTIONS` | Additional bounded pool for cross-process object locks; default 4. Count it alongside document connections across all replicas.                                                                                   |
-| `RIDU_ALLOWED_HOSTS`                    | Comma-separated public hosts, optionally with ports. Set it because an empty list accepts any syntactically valid host for development compatibility.                                                             |
-| `RIDU_ALLOWED_ORIGINS`                  | Exact browser origins allowed to make [cross-origin requests](/docs/cors/). Same-origin embedded admin traffic needs no entry.                                                                                    |
-| `RIDU_TRUSTED_PROXY_CIDRS`              | Immediate proxy networks allowed to supply forwarded address and scheme. Leave empty when directly exposed.                                                                                                       |
-| `RIDU_STRICT_TRANSPORT_SECURITY`        | HSTS header value. Set only when HTTPS is permanent for the complete declared scope.                                                                                                                              |
-| `RIDU_READINESS_TIMEOUT`                | Bound for combined database, object-storage, and custom readiness checks.                                                                                                                                         |
-| `RIDU_READINESS_DRAIN_DELAY`            | Time between becoming unready and beginning request shutdown. Unset or zero uses two seconds; a negative duration disables this propagation delay without disabling graceful shutdown.                            |
-| `RIDU_SHUTDOWN_TIMEOUT`                 | Bound for HTTP shutdown and runtime-resource cleanup.                                                                                                                                                             |
-| `RIDU_WORKER_DRAIN_TIMEOUT`             | Bound for cooperative task and maintenance-worker drain.                                                                                                                                                          |
+<dl class="doc-option-list">
+  <div>
+    <dt><code>DATABASE_URL</code></dt>
+    <dd>Supply a PostgreSQL URL using <code>sslmode=require</code>, <code>verify-ca</code>, or preferably <code>verify-full</code>; or a MongoDB URL selecting one database, SCRAM-SHA-256, a replica set, and verified TLS. Plaintext and TLS fallback are rejected.</dd>
+  </div>
+  <div>
+    <dt><code>RIDU_SQLITE_PATH</code></dt>
+    <dd>Supply an absolute local SQLite path or <code>file:</code> URI. Do not use a shared network filesystem or mount the file on multiple hosts.</dd>
+  </div>
+  <div>
+    <dt><code>RIDU_ADDRESS</code></dt>
+    <dd>Set the complete listener address. It defaults to <code>:8080</code>.</dd>
+  </div>
+  <div>
+    <dt><code>PORT</code></dt>
+    <dd>Set only the port. Hosting platforms commonly provide this variable; Ridu uses it when <code>RIDU_ADDRESS</code> is unset.</dd>
+  </div>
+  <div>
+    <dt><code>RIDU_POSTGRES_UPLOAD_LOCK_CONNECTIONS</code></dt>
+    <dd>Size the separate pool for cross-process object locks. Its default is four; count these connections alongside document connections on every replica.</dd>
+  </div>
+  <div>
+    <dt><code>RIDU_ALLOWED_HOSTS</code></dt>
+    <dd>List public hosts, optionally with ports. Set it in production because an empty list accepts every syntactically valid host for development compatibility.</dd>
+  </div>
+  <div>
+    <dt><code>RIDU_ALLOWED_ORIGINS</code></dt>
+    <dd>List exact browser origins allowed to make <a href="/docs/cors/">cross-origin requests</a>. Same-origin admin traffic needs no entry.</dd>
+  </div>
+  <div>
+    <dt><code>RIDU_TRUSTED_PROXY_CIDRS</code></dt>
+    <dd>List immediate proxy networks allowed to supply the forwarded address and scheme. Leave it empty when the Go process is directly exposed.</dd>
+  </div>
+  <div>
+    <dt><code>RIDU_STRICT_TRANSPORT_SECURITY</code></dt>
+    <dd>Set the HSTS header. Use it only when HTTPS is permanent for the complete declared scope.</dd>
+  </div>
+  <div>
+    <dt><code>RIDU_READINESS_TIMEOUT</code></dt>
+    <dd>Bound database, object-storage, and custom readiness checks.</dd>
+  </div>
+  <div>
+    <dt><code>RIDU_READINESS_DRAIN_DELAY</code></dt>
+    <dd>Control the delay between becoming unready and beginning request shutdown. Unset or zero uses two seconds; a negative duration removes this propagation delay without disabling graceful shutdown.</dd>
+  </div>
+  <div>
+    <dt><code>RIDU_SHUTDOWN_TIMEOUT</code></dt>
+    <dd>Bound HTTP shutdown and runtime-resource cleanup.</dd>
+  </div>
+  <div>
+    <dt><code>RIDU_WORKER_DRAIN_TIMEOUT</code></dt>
+    <dd>Bound cooperative task and maintenance-worker drain.</dd>
+  </div>
+</dl>
 
 Disable the readiness-propagation delay on platforms that atomically remove the old deployment
 from routing before sending its termination signal. For Kubernetes or a self-managed load
@@ -175,8 +219,8 @@ because a plugin needs broad execution hides a supply-chain problem rather than 
 Use the exact target binary and committed artifacts for planning and rehearsal:
 
 ```sh title="terminal"
-npm run ridu -- migrate plan --json
-npm run ridu -- migrate verify
+ridu migrate plan --json
+ridu migrate verify
 ```
 
 Shadow replay checks migration history, not production data volume or lock timing. Rehearse against a
@@ -202,11 +246,20 @@ destructive and maintenance admission, stable safety codes, and immutable artifa
 
 ## Liveness, readiness, and drain {#health}
 
-| Signal                | Meaning                                                                                                                                                                                                                                                         | Use                                                                            |
-| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `/healthz`            | The process is alive.                                                                                                                                                                                                                                           | Restart policy. It does not confirm a matching schema or reachable dependency. |
-| `/readyz`             | The process is not draining and its migration ledger/manifest, document store, upload backend, and custom checks pass within the readiness timeout; PostgreSQL also verifies the expected physical schema, and MongoDB verifies the exact Ridu-managed indexes. | Load-balancer traffic admission.                                               |
-| `ridu migrate status` | Immutable ledger, phase/step completion, and managed database schema agree with committed history.                                                                                                                                                              | Explicit operator deployment/drift report; readiness does not replace it.      |
+<dl class="doc-option-list">
+  <div>
+    <dt><code>/healthz</code></dt>
+    <dd>Reports that the process is alive. Use it for restart policy; it does not confirm a matching schema or reachable dependency.</dd>
+  </div>
+  <div>
+    <dt><code>/readyz</code></dt>
+    <dd>Admits load-balancer traffic when the process is not draining and its migration ledger, document store, upload backend, and custom checks pass. PostgreSQL also verifies its physical schema, and MongoDB verifies the exact Ridu-managed indexes.</dd>
+  </div>
+  <div>
+    <dt><code>ridu migrate status</code></dt>
+    <dd>Provides the operator's deployment and drift report. It checks that the immutable ledger, phase and step completion, and managed database schema match committed history. Readiness does not replace it.</dd>
+  </div>
+</dl>
 
 On `SIGTERM` or interrupt, Ridu marks the instance draining so readiness fails, waits the configured
 drain delay, performs bounded HTTP shutdown, cancels request contexts, drains cooperative workers,

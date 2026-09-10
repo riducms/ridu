@@ -148,6 +148,41 @@
 	margin: 0.3rem 0 0 1.25rem;
 }
 
+.docs-prose .doc-option-list {
+	max-width: var(--prose-width);
+	margin: 1.7rem 0;
+	border-top: 1px solid var(--colors-line);
+}
+
+.docs-prose .doc-option-list > div {
+	padding: 1.15rem 0 1.2rem;
+	border-bottom: 1px solid var(--colors-line);
+}
+
+.docs-prose .doc-option-list dt {
+	margin: 0;
+	font-family: var(--font-mono);
+	font-size: 0.9rem;
+	font-weight: 650;
+	line-height: 1.5;
+}
+
+.docs-prose .doc-option-list dt > code {
+	padding: 0;
+	border: 0;
+	background: transparent;
+	color: var(--colors-accent);
+	font-size: inherit;
+	font-weight: normal;
+	overflow-wrap: anywhere;
+}
+
+.docs-prose .doc-option-list dd {
+	margin: 0.5rem 0 0;
+	color: var(--colors-ink-soft);
+	line-height: 1.65;
+}
+
 .docs-prose :is(p, li, dd, td, th, blockquote, .callout) a {
 	color: var(--colors-ink);
 	text-decoration-line: underline;

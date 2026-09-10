@@ -24,7 +24,7 @@ For dashboards, navigation, document screens, and other UI changes, use
 ## 1. Create the plugin files {#scaffold}
 
 ```sh title="terminal"
-bun run ridu plugin new ./ridu-color \
+ridu plugin new ./ridu-color \
   --key color \
   --module example.com/acme/ridu-color \
   --admin-package @acme/ridu-color-admin
@@ -323,7 +323,7 @@ its migrations on each supported database. See [Testing](./testing.md) and [Plug
 After publishing the Go and admin packages, install them into an application:
 
 ```sh title="terminal"
-bun run ridu plugin add color \
+ridu plugin add color \
   --go-package example.com/acme/ridu-color \
   --go-version v1.0.0 \
   --admin-package @acme/ridu-color-admin \

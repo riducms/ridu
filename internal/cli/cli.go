@@ -699,7 +699,7 @@ func runMigrate(ctx context.Context, args []string, stdout, stderr io.Writer, op
 		return 2
 	}
 	if definition.Database == projectfile.DatabaseSQLite && command != "create" && command != "verify" && *databasePath == "" {
-		fmt.Fprintln(stderr, "SQLite path is required through --database-path or RIDU_SQLITE_PATH")
+		fmt.Fprintf(stderr, "ridu migrate %s needs a SQLite database to inspect or change\nset RIDU_SQLITE_PATH to an absolute file path, or pass --database-path <path>\nexample: ridu migrate %s --database-path .ridu/development.sqlite\n", command, command)
 		return 2
 	}
 	if definition.Database == projectfile.DatabaseSQLite && lifecycleCommand && !*allowDestructive {
@@ -1577,7 +1577,18 @@ func runNew(ctx context.Context, args []string, stdout, stderr io.Writer, option
 		fmt.Fprintln(stdout, "Project creation cancelled.")
 		return 0
 	}
-	projectName := filepath.Base(filepath.Clean(target))
+	inPlace := strings.TrimSpace(target) != "" && filepath.Clean(target) == "."
+	if !filepath.IsAbs(target) {
+		target = filepath.Join(options.WorkingDirectory, target)
+	}
+	target, projectName, err := scaffold.ResolveTarget(target, inPlace)
+	if err != nil {
+		output.Error("create project", err)
+		return 1
+	}
+	if inPlace {
+		output.Warn("Creating a Ridu project in the current directory. Existing files will be preserved; conflicting paths stop creation.", nil)
+	}
 	if *modulePath == "" {
 		*modulePath = "example.com/" + projectName
 	}
@@ -1593,6 +1604,7 @@ func runNew(ctx context.Context, args []string, stdout, stderr io.Writer, option
 	}
 	created, err := scaffold.Create(scaffold.Options{
 		Target:           target,
+		InPlace:          inPlace,
 		ModulePath:       *modulePath,
 		NPMScope:         *npmScope,
 		FrameworkVersion: releaseVersion,
@@ -1628,13 +1640,23 @@ func runNew(ctx context.Context, args []string, stdout, stderr io.Writer, option
 		printNewRecovery(created, "initial contract generation", err, output, stderr)
 		return 1
 	}
+	migrationOptions := options
+	migrationOptions.WorkingDirectory = created
+	if exitCode := runMigrate(ctx, []string{"create", "--name", "initial"}, stdout, stderr, migrationOptions); exitCode != 0 {
+		printNewRecovery(created, "initial migration creation", errors.New("ridu migrate create --name initial failed"), output, stderr)
+		return 1
+	}
 	if err := writeNewProjectResult(options.NewProjectResultFile, created); err != nil {
 		output.Error("record created project", err)
 		return 1
 	}
-	fmt.Fprintln(stdout, "Generated initial schema, clients, and admin plugin registry.")
+	fmt.Fprintln(stdout, "Generated initial schema, clients, admin plugin registry, and migration.")
 	installCommand, runCommand := packageManagerUserCommands(packageManager)
-	fmt.Fprintf(stdout, "\nNext:\n  cd %s\n  %s\n  %s dev\n", filepath.Base(created), installCommand, runCommand)
+	fmt.Fprintln(stdout, "\nNext:")
+	if !inPlace {
+		fmt.Fprintf(stdout, "  cd %s\n", filepath.Base(created))
+	}
+	fmt.Fprintf(stdout, "  %s\n  %s dev\n", installCommand, runCommand)
 	return 0
 }
 
@@ -1694,10 +1716,16 @@ func selectNewProject(ctx context.Context, requestedTarget, requestedTemplate, r
 	if needsTarget {
 		fields = append(fields, huh.NewInput().
 			Title("Where should Ridu live?").
-			Description("Choose a new directory with a lowercase kebab-case name.").
+			Description("Choose a new lowercase kebab-case directory, or . for the current directory.").
 			Placeholder("my-ridu-project").
 			Value(&target).
-			Validate(scaffold.ValidateTarget))
+			Validate(func(value string) error {
+				inPlace := strings.TrimSpace(value) != "" && filepath.Clean(value) == "."
+				if !filepath.IsAbs(value) && strings.TrimSpace(value) != "" {
+					value = filepath.Join(options.WorkingDirectory, value)
+				}
+				return scaffold.ValidateTarget(value, inPlace)
+			}))
 		summaries = append(summaries, func() string {
 			return completedNewProjectStep("Where should Ridu live?", target)
 		})
@@ -1765,7 +1793,11 @@ func selectNewProject(ctx context.Context, requestedTarget, requestedTemplate, r
 	fields = append(fields, huh.NewConfirm().
 		Title("Create this Ridu project?").
 		DescriptionFunc(func() string {
-			return fmt.Sprintf("%s template in %s using %s and %s", selected, target, newProjectDatabaseLabel(database), packageManagerLabel(packageManager))
+			description := fmt.Sprintf("%s template in %s using %s and %s", selected, target, newProjectDatabaseLabel(database), packageManagerLabel(packageManager))
+			if filepath.Clean(target) == "." {
+				description += ". Warning: this creates files in the current directory; conflicting paths stop creation."
+			}
+			return description
 		}, []any{&selected, &target, &database, &packageManager}).
 		Affirmative("Create project").
 		Negative("Cancel").
@@ -1930,7 +1962,7 @@ func printNewRecovery(created, stage string, err error, output *cliOutput, stder
 	output.Error(stage+" failed", err)
 	fmt.Fprintf(stderr, "\nRidu created the project at %s.\n", created)
 	fmt.Fprintln(stderr, "The project was kept so the problem can be fixed without starting over.")
-	fmt.Fprintf(stderr, "\nAfter fixing the error:\n  cd %q\n  go mod tidy\n  ridu generate\n", created)
+	fmt.Fprintf(stderr, "\nAfter fixing the error:\n  cd %q\n  go mod tidy\n  ridu generate\n  ridu migrate create --name initial\n", created)
 }
 
 func runGenerate(ctx context.Context, args []string, stdout, stderr io.Writer, options Options) int {

@@ -53,8 +53,14 @@ ridu new
 
 ## Choose scaffold options {#create-project}
 
-The target directory must not exist. The wizard derives `example.com/<project>` and `@<project>`
-defaults from that directory. Supply `--module` and `--scope` when those import/package identities
+For a new named directory, the target must not already exist. To create a project in the current
+directory, use `npm create ridu@latest .` (or enter `.` in the wizard). Ridu prints a warning and
+preserves unrelated files, including an existing `.git` directory. If a scaffold-owned path such as
+`README.md`, `.gitignore`, `admin`, or `content` already exists, creation stops before adding any
+project files. Move conflicting paths aside or choose a new directory.
+
+The wizard derives `example.com/<project>` and `@<project>`
+defaults from that directory, normalizing its name to lowercase kebab-case when using `.`. Supply `--module` and `--scope` when those import/package identities
 must match names already reserved by your organization.
 
 | Choice          | Values                                     | Meaning                                                                                             |
@@ -92,8 +98,8 @@ arguments without it.
 </div>
 </details>
 
-The created project includes `go.sum` and its generated manifest, OpenAPI, Go, TypeScript, and admin
-plugin contracts.
+The created project includes `go.sum`, its initial migration, and generated manifest, OpenAPI, Go,
+TypeScript, and admin plugin contracts.
 
 ## Use the project-local CLI {#project-local-cli}
 
@@ -103,28 +109,28 @@ scripts:
 ```bash title="terminal" package-manager="npm"
 cd content
 npm install
-npm run ridu -- version
+ridu version
 npm run dev
 ```
 
 ```bash title="terminal" package-manager="bun"
 cd content
 bun install
-bun run ridu -- version
+ridu version
 bun run dev
 ```
 
 ```bash title="terminal" package-manager="pnpm"
 cd content
 pnpm install
-pnpm run ridu version
+ridu version
 pnpm run dev
 ```
 
 ```bash title="terminal" package-manager="yarn"
 cd content
 yarn install
-yarn run ridu version
+ridu version
 yarn run dev
 ```
 
@@ -247,16 +253,16 @@ development:
 cd content
 go mod tidy
 npm install
-npm run ridu -- doctor
+ridu doctor
 npm run dev
 ```
 
 The example uses npm; replace its commands with the manager recorded in `ridu.toml`.
-`npm run ridu -- doctor` checks tool availability, structural `ridu.toml` settings, the presence of
+`ridu doctor` checks tool availability, structural `ridu.toml` settings, the presence of
 frontend dependencies, and basic adapter prerequisites. It does not compile Go config, compare all
 release versions, check generated-contract drift, or connect to the database. Use
-`npm run ridu -- generate --check` to resolve config and check committed contracts, then
-`npm run ridu -- check` for Go and frontend validation. Continue with
+`ridu generate --check` to resolve config and check committed contracts, then
+`ridu check` for Go and frontend validation. Continue with
 [Troubleshooting](./troubleshooting.md) when a scaffold still does not start.
 
 Next read [Project structure](https://riducms.com/guides/project-structure/), [Fields](./fields.md), and

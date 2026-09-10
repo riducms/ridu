@@ -1,0 +1,17 @@
+---
+import BaseLayout from '@/layouts/base-layout.astro';
+---
+
+<BaseLayout title="Page not found" description="This page could not be found on Ridu." noindex>
+	<section class="max-w-180 py-[clamp(4rem,10vw,8rem)]">
+		<p class="mt-0 mb-3 font-mono text-sm text-accent">404</p>
+		<h1 class="m-0 text-[clamp(2.5rem,7vw,4.5rem)] leading-[1.05]">Page not found</h1>
+		<p class="my-6 text-lg leading-relaxed text-ink-soft">
+			The address may have changed, or the page may no longer be available.
+		</p>
+		<p class="flex flex-wrap gap-6">
+			<a class="text-accent underline underline-offset-3" href="/">Go to the homepage</a>
+			<a class="text-accent underline underline-offset-3" href="/docs/">Browse the documentation</a>
+		</p>
+	</section>
+</BaseLayout>

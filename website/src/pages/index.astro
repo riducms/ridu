@@ -2,6 +2,7 @@
 import { Image } from 'astro:assets';
 import adminPostEditor from '../../../docs/assets/ridu-admin-post-editor.png';
 import CodeBlock from '@/components/code/code-block.astro';
+import HomeFeatures from '@/components/home-features.astro';
 import HomeWorkflow from '@/components/home-workflow.astro';
 import BaseLayout from '@/layouts/base-layout.astro';
 
@@ -17,9 +18,9 @@ const createCommand = `npm create ridu@latest my-app`;
 				A CMS that ships like Go software.
 			</h1>
 			<p class="mt-6 mb-0 max-w-590px text-16px leading-[1.65] text-ink-soft sm:text-18px">
-				Define collections, access rules, hooks, and plugins in Go. Ridu turns that configuration
-				into database migrations, a REST API, a generated TypeScript client, and an embedded Svelte
-				admin. The application ships as one Go binary.
+				Define collections, fields, access control, and hooks in Go. Ridu is an open-source headless
+				CMS that turns your configuration into database migrations, a REST API, a generated
+				TypeScript client, and an embedded Svelte admin. The application ships as one Go binary.
 			</p>
 			<div class="mt-7 flex flex-wrap items-center gap-5">
 				<a
@@ -58,6 +59,8 @@ const createCommand = `npm create ridu@latest my-app`;
 	</section>
 
 	<HomeWorkflow />
+
+	<HomeFeatures />
 
 	<section
 		class="mb-20 grid items-center gap-7 rounded-6px bg-surface px-6 py-8 sm:(px-9 py-10) lg:(grid-cols-[1fr_auto] gap-14)"

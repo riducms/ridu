@@ -520,15 +520,16 @@ or object storage for uploads—run when the application is bound to its backend
 ## Update the application as you develop {#generation-workflow}
 
 While `ridu dev` is running, saving a config change automatically resolves it, regenerates every
-derived contract, synchronizes safe additive database changes, and restarts the application. Before
-committing, verify that the generated files are current:
+derived contract, synchronizes safe additive database changes, and restarts the application. After
+changing fields or collections, create the production migration before running the full check:
 
 ```bash title="terminal"
-npm run ridu -- generate --check
-npm run ridu -- check
+ridu migrate create --name describe-the-change
+ridu generate --check
+ridu check
 ```
 
-If the development loop is not running, `npm run ridu -- generate` performs the same generation as
+If the development loop is not running, `ridu generate` performs the same generation as
 a one-shot command. It resolves the Go config once, then atomically updates the canonical manifest,
 OpenAPI document, generated Go models and handles, application-bound TypeScript client, and static
 admin plugin registry. `ridu check` fails when committed generated output has drifted.
@@ -541,12 +542,11 @@ ridu.Resolve + plugin transforms
 schema · OpenAPI · Go types · TypeScript SDK · admin forms
 ```
 
-For a database change, generation describes the desired application but does not silently define a
-production migration. Create and review an immutable migration artifact separately:
+`ridu migrate create` writes an immutable artifact without opening a database. Review it, then
+replay the complete history:
 
 ```bash title="terminal"
-npm run ridu -- migrate create --name add-post-summary
-npm run ridu -- migrate verify
+ridu migrate verify
 ```
 
 Apply that reviewed artifact with `migrate up` during deployment. `ridu dev` handles local schema

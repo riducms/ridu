@@ -540,6 +540,83 @@ func TestGenerateCheckReportsDriftWithoutOverwriting(t *testing.T) {
 	}
 }
 
+func TestNewCurrentDirectoryGeneratesCompleteProject(t *testing.T) {
+	frameworkRoot := moduleRoot(t)
+	setFrameworkProxy(t, frameworkRoot)
+	for _, argument := range []string{".", "./"} {
+		t.Run(argument, func(t *testing.T) {
+			target := newProjectTarget(t, "My CMS")
+			if err := os.Mkdir(target, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(target, "notes.txt"), []byte("keep me"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			var stdout, stderr bytes.Buffer
+			options := cli.Options{WorkingDirectory: target, Version: testReleaseVersion, FrameworkVersion: ridu.FrameworkVersion}
+			if exitCode := cli.Run(context.Background(), []string{"new", "--package-manager", "npm", argument, "--template", "blank", "--database", "sqlite", "--no-agent"}, &stdout, &stderr, options); exitCode != 0 {
+				t.Fatalf("ridu new %s: %s\n%s", argument, stdout.String(), stderr.String())
+			}
+			if !strings.Contains(stderr.String(), "current directory") || strings.Contains(stdout.String(), "  cd ") || !strings.Contains(stdout.String(), "npm install") {
+				t.Fatalf("current directory instructions: stdout=%s stderr=%s", stdout.String(), stderr.String())
+			}
+			for _, path := range []string{"go.sum", "generated/ridu.schema.json", "generated/ridu.generated.ts"} {
+				if _, err := os.Stat(filepath.Join(target, path)); err != nil {
+					t.Fatal(err)
+				}
+			}
+			module, err := os.ReadFile(filepath.Join(target, "go.mod"))
+			if err != nil || !strings.Contains(string(module), "module example.com/my-cms") {
+				t.Fatalf("default module: %s, %v", module, err)
+			}
+			files, err := migrationartifact.ReadAll(filepath.Join(target, "migrations"))
+			if err != nil || len(files) != 1 {
+				t.Fatalf("initial migration = %#v, %v", files, err)
+			}
+			notes, err := os.ReadFile(filepath.Join(target, "notes.txt"))
+			if err != nil || string(notes) != "keep me" {
+				t.Fatalf("existing notes changed: %s, %v", notes, err)
+			}
+		})
+	}
+}
+
+func TestNewProjectIncludesTheMigrationRequiredByFirstBuild(t *testing.T) {
+	frameworkRoot := moduleRoot(t)
+	target := newProjectTarget(t, "first-build")
+	setFrameworkProxy(t, frameworkRoot)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	options := cli.Options{WorkingDirectory: target, Version: testReleaseVersion, FrameworkVersion: ridu.FrameworkVersion}
+	if exitCode := cli.Run(context.Background(), []string{"new", "--database", "sqlite", "--module", "example.com/first/build", target}, &stdout, &stderr, options); exitCode != 0 {
+		t.Fatalf("ridu new: %s", stderr.String())
+	}
+	files, err := migrationartifact.ReadAll(filepath.Join(target, "migrations"))
+	if err != nil || len(files) != 1 || !strings.HasSuffix(files[0].Name, "_initial.ridu.json") {
+		t.Fatalf("initial migration = %#v, %v", files, err)
+	}
+
+	projectPath := filepath.Join(target, "ridu.toml")
+	project, err := os.ReadFile(projectPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	projectText := strings.ReplaceAll(string(project), "admin = \"./admin\"\n", "")
+	projectText = strings.ReplaceAll(projectText, "assets = \"./internal/adminassets/dist\"\n", "")
+	if err := os.WriteFile(projectPath, []byte(projectText), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if exitCode := cli.Run(context.Background(), []string{"build"}, &stdout, &stderr, options); exitCode != 0 {
+		t.Fatalf("first ridu build exit = %d\nstdout: %s\nstderr: %s", exitCode, stdout.String(), stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "Built dist/first-build") {
+		t.Fatalf("first ridu build output = %q", stdout.String())
+	}
+}
+
 func TestNewMongoDBStarterAndBlankGenerateWithoutOpeningTheDatabase(t *testing.T) {
 	frameworkRoot := moduleRoot(t)
 	setFrameworkProxy(t, frameworkRoot)
@@ -570,20 +647,9 @@ func TestNewMongoDBStarterAndBlankGenerateWithoutOpeningTheDatabase(t *testing.T
 			if exitCode := cli.Run(context.Background(), []string{"generate", "--check"}, &stdout, &stderr, options); exitCode != 0 {
 				t.Fatalf("ridu generate --check MongoDB %s exit = %d\nstdout: %s\nstderr: %s", selectedTemplate, exitCode, stdout.String(), stderr.String())
 			}
-			for _, command := range []string{"check", "build"} {
-				stdout.Reset()
-				stderr.Reset()
-				if exitCode := cli.Run(context.Background(), []string{command}, &stdout, &stderr, options); exitCode != 1 || !strings.Contains(stderr.String(), "migration artifact history is empty") {
-					t.Fatalf("ridu %s MongoDB %s without history exit = %d\nstdout: %s\nstderr: %s", command, selectedTemplate, exitCode, stdout.String(), stderr.String())
-				}
-				if strings.Contains(stdout.String(), offlineSecret) || strings.Contains(stderr.String(), offlineSecret) {
-					t.Fatalf("ridu %s MongoDB %s exposed offline database credentials", command, selectedTemplate)
-				}
-			}
-			stdout.Reset()
-			stderr.Reset()
-			if exitCode := cli.Run(context.Background(), []string{"migrate", "create", "--name", "initial"}, &stdout, &stderr, options); exitCode != 0 {
-				t.Fatalf("ridu migrate create MongoDB %s exit = %d\nstdout: %s\nstderr: %s", selectedTemplate, exitCode, stdout.String(), stderr.String())
+			files, err := migrationartifact.ReadAll(filepath.Join(target, "migrations"))
+			if err != nil || len(files) != 1 || !strings.HasSuffix(files[0].Name, "_initial.ridu.json") {
+				t.Fatalf("ridu new MongoDB %s initial migrations = %#v, %v", selectedTemplate, files, err)
 			}
 
 			if err := filepath.WalkDir(target, func(path string, entry os.DirEntry, err error) error {
@@ -630,6 +696,9 @@ func TestCheckAndBuildOwnTheGeneratedGoWorkflow(t *testing.T) {
 	}
 	projectText := strings.ReplaceAll(string(projectBytes), "admin = \"./admin\"\n", "")
 	projectText = strings.ReplaceAll(projectText, "assets = \"./internal/adminassets/dist\"\n", "")
+	if err := os.RemoveAll(filepath.Join(target, "migrations")); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(projectPath, []byte(projectText), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -638,12 +707,12 @@ func TestCheckAndBuildOwnTheGeneratedGoWorkflow(t *testing.T) {
 	}
 	stdout.Reset()
 	stderr.Reset()
-	if exitCode := cli.Run(context.Background(), []string{"check"}, &stdout, &stderr, options); exitCode != 1 || !strings.Contains(stderr.String(), "migration artifact history is empty") {
+	if exitCode := cli.Run(context.Background(), []string{"check"}, &stdout, &stderr, options); exitCode != 1 || !strings.Contains(stderr.String(), "migration artifact history is empty") || !strings.Contains(stderr.String(), "ridu migrate create --name initial") {
 		t.Fatalf("ridu check without history exit = %d\nstdout: %s\nstderr: %s", exitCode, stdout.String(), stderr.String())
 	}
 	stdout.Reset()
 	stderr.Reset()
-	if exitCode := cli.Run(context.Background(), []string{"build"}, &stdout, &stderr, options); exitCode != 1 || !strings.Contains(stderr.String(), "migration artifact history is empty") {
+	if exitCode := cli.Run(context.Background(), []string{"build"}, &stdout, &stderr, options); exitCode != 1 || !strings.Contains(stderr.String(), "migration artifact history is empty") || !strings.Contains(stderr.String(), "ridu migrate create --name initial") {
 		t.Fatalf("ridu build without history exit = %d\nstdout: %s\nstderr: %s", exitCode, stdout.String(), stderr.String())
 	}
 	if _, err := os.Stat(filepath.Join(target, "dist", "workflow-content")); !os.IsNotExist(err) {
@@ -855,7 +924,6 @@ func TestGeneratedProjectMigratesAgainstPostgres(t *testing.T) {
 		t.Fatalf("unknown PostgreSQL transform: exit=%d stderr=%q", exitCode, stderr.String())
 	}
 	for _, invocation := range [][]string{
-		{"migrate", "create", "--name", "initial"},
 		{"migrate", "plan", "--database-url", parsed.String(), "--allow-insecure-database", "--json"},
 		{"migrate", "verify", "--database-url", parsed.String(), "--allow-insecure-database"},
 		{"migrate", "up", "--database-url", parsed.String(), "--allow-insecure-database"},
@@ -942,12 +1010,6 @@ func TestGeneratedProjectUsesSQLiteMigrationLifecycle(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(databaseFile), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	stdout.Reset()
-	stderr.Reset()
-	if exitCode := cli.Run(ctx, []string{"migrate", "create", "--name", "initial"}, &stdout, &stderr, options); exitCode != 0 {
-		t.Fatalf("ridu migrate create initial: %s", stderr.String())
-	}
-
 	missingDatabase := filepath.Join(target, ".ridu", "inspection-missing.sqlite")
 	for _, invocation := range [][]string{
 		{"migrate", "plan", "--database-path", missingDatabase, "--json"},
@@ -1042,11 +1104,6 @@ func TestSQLiteCanonicalAuthUpgradeCLIRequiresDestructiveCreationApproval(t *tes
 		t.Fatalf("ridu generate: %s", stderr.String())
 	}
 
-	stdout.Reset()
-	stderr.Reset()
-	if exitCode := cli.Run(ctx, []string{"migrate", "create", "--name", "initial"}, &stdout, &stderr, options); exitCode != 0 {
-		t.Fatalf("ordinary SQLite initial migration required destructive approval: %s", stderr.String())
-	}
 	directory := filepath.Join(target, "migrations")
 	files, err := migrationartifact.ReadAll(directory)
 	if err != nil || len(files) != 1 {

@@ -504,11 +504,11 @@
   "plugins": [
     {
       "key": "richtext",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "goPackage": "github.com/riducms/ridu/plugins/richtext",
       "apiVersion": 1,
       "ridu": {
-        "minimum": "0.2.0"
+        "minimum": "0.2.1"
       },
       "admin": {
         "package": "@riducms/plugin-richtext",

@@ -1,0 +1,132 @@
+---
+import CodeBlock from '@/components/code/code-block.astro';
+
+const access = `ridu.CollectionAccess{
+	Read: func(
+		_ ridu.AccessContext,
+	) (ridu.AccessDecision, error) {
+		status, err := query.NewPath("status")
+		if err != nil {
+			return ridu.Deny(), err
+		}
+		return ridu.Where(
+			query.Equal(status, query.String("published")),
+		), nil
+	},
+}`;
+
+const hooks = `ridu.CollectionHooks{
+	BeforeChange: []ridu.Hook{
+		func(ctx ridu.HookContext) error {
+			title, ok := ctx.Data["title"].StringValue()
+			if ok {
+				ctx.Data["title"] = store.String(
+					strings.TrimSpace(title),
+				)
+			}
+			return nil
+		},
+	},
+}`;
+
+const computed = `field.Virtual("displayName", field.ValueString,
+	func(
+		ctx operation.ReadContext,
+	) (operation.Value[store.Value], error) {
+		first, _ := ctx.Root.String("firstName")
+		last, _ := ctx.Root.String("lastName")
+		return operation.Present(
+			store.String(first + " " + last),
+		), nil
+	}),`;
+
+const blocks = `field.Blocks("layout",
+	field.Block{
+		Slug: "hero",
+		Fields: field.Fields{
+			field.Text("heading").Required(),
+		},
+	},
+	field.Block{
+		Slug: "text",
+		Fields: field.Fields{
+			field.Textarea("body").Required(),
+		},
+	},
+).MaxRows(12),`;
+
+const features = [
+	{
+		title: 'Access control',
+		description: 'Limit reads to published posts. The rule runs inside the database query.',
+		href: '/docs/access-control/',
+		label: 'Collection.Access',
+		code: access
+	},
+	{
+		title: 'Lifecycle hooks',
+		description: 'Trim a title before saving it. Hooks run for the admin, API, and local Go calls.',
+		href: '/docs/hooks/',
+		label: 'Collection.Hooks',
+		code: hooks
+	},
+	{
+		title: 'Computed fields',
+		description:
+			'Calculate a display name in Go and return it through the API, without storing another column.',
+		href: '/docs/fields/virtual/',
+		label: 'Collection.Fields',
+		code: computed
+	},
+	{
+		title: 'Typed content blocks',
+		description: 'Give editors hero and text sections they can add, edit, and reorder.',
+		href: '/docs/fields/blocks/',
+		label: 'Collection.Fields',
+		code: blocks
+	}
+];
+---
+
+<section class="mb-20 border-t border-line-strong pt-10" aria-labelledby="features-title">
+	<div class="grid gap-6 lg:(grid-cols-2 gap-14)">
+		<h2 id="features-title" class="m-0 max-w-590px text-32px leading-[1.08] sm:text-40px">
+			Content and behaviour, defined together.
+		</h2>
+		<div class="text-15px leading-[1.65] text-ink-soft sm:text-16px">
+			<p class="m-0">
+				Your Go configuration describes how content is structured, who can change it, and what
+				should happen when they do. The API and admin use the same rules.
+			</p>
+			<p class="mt-4 mb-0">
+				If you like Payload’s config-as-code approach and PocketBase’s single-binary deployment,{
+					' '
+				}
+				<a class="muted-link" href="/guides/config-as-code-cms/"
+					>see how Ridu brings those ideas together</a
+				>.
+			</p>
+		</div>
+	</div>
+
+	<div class="mt-10 grid gap-x-8 gap-y-10 lg:grid-cols-2">
+		{
+			features.map((feature) => (
+				<article class="min-w-0">
+					<h3 class="m-0 text-24px leading-[1.2]">
+						<a class="text-ink no-underline hover:text-accent" href={feature.href}>
+							{feature.title}
+							<span class="ml-2 text-16px text-ink-faint" aria-hidden="true">
+								↗
+							</span>
+						</a>
+					</h3>
+					<p class="mt-3 mb-0 max-w-520px text-15px leading-[1.65] text-ink-soft lg:min-h-50px">
+						{feature.description}
+					</p>
+					<CodeBlock code={feature.code} lang="go" label={feature.label} compact />
+				</article>
+			))
+		}
+	</div>
+</section>

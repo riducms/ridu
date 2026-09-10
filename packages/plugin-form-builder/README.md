@@ -13,7 +13,7 @@ npm run dev
 ```
 
 Create and test a form locally. Before deployment, create and review the adapter migration with
-`npm run ridu -- migrate create --name add-form-builder`.
+`ridu migrate create --name add-form-builder`.
 
 Application frontends import helpers from the package root:
 

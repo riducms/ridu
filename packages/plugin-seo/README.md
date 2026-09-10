@@ -14,7 +14,7 @@ npm run dev
 
 `ridu dev` regenerates contracts and synchronizes safe additive development changes. Before
 deployment, create and review the immutable adapter migration with
-`npm run ridu -- migrate create --name add-seo`.
+`ridu migrate create --name add-seo`.
 
 The generated registry imports `seoAdminPlugin`; do not register it again. Generated title,
 description, image, and URL values remain editable and pass through normal validation and access

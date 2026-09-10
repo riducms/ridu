@@ -68,7 +68,7 @@ npm run dev
 
 The transport alone adds no adapter tables, so it does not need a migration. If enabling API keys
 or the same change alters the resolved resource schema, prepare the selected adapter's reviewed
-migration before deployment. Run `npm run ridu -- check` before committing. Test `initialize`,
+migration before deployment. Run `ridu check` before committing. Test `initialize`,
 `tools/list`, and one allowed read with an expiring key; also confirm that an anonymous request, an
 unlisted collection, and a field denied to that actor are rejected.
 

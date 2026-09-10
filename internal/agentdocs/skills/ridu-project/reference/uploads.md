@@ -447,32 +447,10 @@ backend contract.
 collection, create a migration, review its plan, verify the complete history, and run the project
 check. Do this after the local workflow above succeeds—not before `ridu dev`.
 
-```bash title="terminal" package-manager="npm"
-npm run ridu -- migrate create --name add-media
-npm run ridu -- migrate plan
-npm run ridu -- migrate verify
-npm run ridu -- check
-```
-
-```bash title="terminal" package-manager="bun"
-bun run ridu -- migrate create --name add-media
-bun run ridu -- migrate plan
-bun run ridu -- migrate verify
-bun run ridu -- check
-```
-
-```bash title="terminal" package-manager="pnpm"
-pnpm run ridu migrate create --name add-media
-pnpm run ridu migrate plan
-pnpm run ridu migrate verify
-pnpm run ridu check
-```
-
-```bash title="terminal" package-manager="yarn"
-yarn run ridu migrate create --name add-media
-yarn run ridu migrate plan
-yarn run ridu migrate verify
-yarn run ridu check
+```bash title="terminal"
+ridu migrate create --name add-media
+ridu migrate verify
+ridu check
 ```
 
 Commit the migration and changed files under `generated/`. Apply the reviewed history with

@@ -129,6 +129,17 @@ func TestSelectNewProjectAccessibleWizardCollectsTarget(t *testing.T) {
 	}
 }
 
+func TestSelectNewProjectAccessibleWizardAcceptsCurrentDirectory(t *testing.T) {
+	var output bytes.Buffer
+	target, _, _, _, _, cancelled, err := selectNewProject(context.Background(), "", "blank", "sqlite", "npm", "none", &output, Options{
+		WorkingDirectory: t.TempDir(),
+		Stdin:            strings.NewReader(".\ny\n"), Interactive: true, Accessible: true,
+	})
+	if err != nil || cancelled || target != "." {
+		t.Fatalf("target=%q cancelled=%v err=%v output=%s", target, cancelled, err, output.String())
+	}
+}
+
 func TestSelectNewProjectAccessibleWizardCanCancelAtReview(t *testing.T) {
 	target := filepath.Join(t.TempDir(), "cancelled-project")
 	_, _, _, _, _, cancelled, err := selectNewProject(context.Background(), target, "", "", "", "", &bytes.Buffer{}, Options{

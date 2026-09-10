@@ -296,36 +296,12 @@ prefixes are validated as part of descriptor resolution.
 `ridu dev` can apply additive, non-destructive development synchronization. It pauses when a
 possible rename needs explicit intent. Production uses committed immutable artifacts:
 
-```sh title="terminal" package-manager="npm"
-npm run ridu -- migrate create --name rename-post-title
-npm run ridu -- migrate plan
-npm run ridu -- migrate verify
-npm run ridu -- migrate status
-npm run ridu -- migrate up
-```
-
-```sh title="terminal" package-manager="bun"
-bun run ridu -- migrate create --name rename-post-title
-bun run ridu -- migrate plan
-bun run ridu -- migrate verify
-bun run ridu -- migrate status
-bun run ridu -- migrate up
-```
-
-```sh title="terminal" package-manager="pnpm"
-pnpm run ridu migrate create --name rename-post-title
-pnpm run ridu migrate plan
-pnpm run ridu migrate verify
-pnpm run ridu migrate status
-pnpm run ridu migrate up
-```
-
-```sh title="terminal" package-manager="yarn"
-yarn run ridu migrate create --name rename-post-title
-yarn run ridu migrate plan
-yarn run ridu migrate verify
-yarn run ridu migrate status
-yarn run ridu migrate up
+```sh title="terminal"
+ridu migrate create --name rename-post-title
+ridu migrate verify
+ridu migrate plan
+ridu migrate up
+ridu migrate status
 ```
 
 Creation is offline. The database-backed commands use their own bounded pools, TLS policy,

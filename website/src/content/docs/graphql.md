@@ -79,7 +79,7 @@ npm run dev
 `ridu dev` regenerates the committed SDL and other contracts before starting the API and admin.
 Enabling only the transport does not add stored fields or adapter tables, so it does not need a
 database migration. If the same change also modifies resources, prepare the selected adapter's
-reviewed migration before deployment. Run `npm run ridu -- check` before committing so generated
+reviewed migration before deployment. Run `ridu check` before committing so generated
 SDL drift is caught.
 
 With the server running, send an authenticated bounded query to `POST /api/graphql`. Also confirm
@@ -263,8 +263,8 @@ The development loop now writes the exact compiled schema without enabling netwo
 npm run dev
 ```
 
-Use `npm run ridu -- generate --check` in CI to verify that the committed SDL matches executable
-config. Use `npm run ridu -- generate` only when you need a one-shot write without starting the
+Use `ridu generate --check` in CI to verify that the committed SDL matches executable
+config. Use `ridu generate` only when you need a one-shot write without starting the
 development server.
 
 Resource renames, disabled surfaces, and custom root fields come from the same executable plugin

@@ -39,6 +39,29 @@ anonymous registration is not enabled accidentally.{{if .Starter}} The starter i
 deletable example.{{end}} See `PROJECT.md` for the non-interactive REST shape and for how to opt into
 intentional public registration.
 
+## Build and run
+
+New projects include an initial migration, so the first build works after dependencies are
+installed:
+
+```sh
+{{.RunCommand}} build
+```
+
+The binary is `dist/{{.ProjectName}}`. Apply its committed migrations to the target database, then
+start it:
+
+```sh
+{{if .SQLite}}export RIDU_SQLITE_PATH="$PWD/.ridu/production.sqlite"
+{{else}}export DATABASE_URL='replace-with-the-production-database-url'
+{{end}}{{.RunCommand}} migrate
+{{.RunCommand}} start
+```
+
+`RIDU_ADDRESS` defaults to `:8080`. Hosting platforms such as Railway can supply `PORT` instead.
+See the [build and run guide](https://riducms.com/docs/production/build-and-run/) and
+[Railway guide](https://riducms.com/docs/production/railway/) for the complete deployment steps.
+
 {{if .MongoDB}}MongoDB production support in this release is deliberately bounded to ordinary generated starter
 and blank projects on Linux x86-64, using digest-pinned MongoDB Community 8.2.9 as a writable three-member
 replica set with SCRAM-SHA-256 authentication and CA- and hostname-verified TLS. Give
@@ -87,7 +110,8 @@ network-partition matrices, or point-in-time recovery.
 Before release:
 
 ```sh
-{{.RiduCommand}} migrate create --name schema-change
+# After changing the schema:
+{{.RiduCommand}} migrate create --name describe-change
 {{.RiduCommand}} generate --check
 {{.RiduCommand}} check
 {{.RiduCommand}} build
@@ -102,7 +126,8 @@ DATABASE_URL="$MONGODB_APPLICATION_URL" ./dist/{{.ProjectName}}
 {{else}}Before release:
 
 ```sh
-{{.RiduCommand}} migrate create --name initial
+# After changing the schema:
+{{.RiduCommand}} migrate create --name describe-change
 {{.RiduCommand}} generate --check
 {{.RiduCommand}} check
 {{.RiduCommand}} migrate verify
@@ -116,5 +141,6 @@ environment variables; {{.PackageManagerLabel}} and Node.js are build-time depen
 binary. Follow the production boundary and cutover checklist in `PROJECT.md`.
 
 If `ridu new` retained this project after dependency or generation setup failed, fix the reported
-error and finish initialization with `go mod tidy && {{.InstallCommand}} && {{.RiduCommand}} generate`
+error and finish initialization with
+`go mod tidy && {{.InstallCommand}} && {{.RiduCommand}} generate && {{.RiduCommand}} migrate create --name initial`
 before starting development.

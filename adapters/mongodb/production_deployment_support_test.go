@@ -358,6 +358,15 @@ func (harness *mongoDBProductionDeploymentHarness) newProject(
 		t.Fatalf("create generated MongoDB %s deployment project: %v\n%s", template, err, mongoDBProductionRedacted(output, poisonURL, "offline-deployment-user", "offline-deployment-secret"))
 	}
 	mongoDBProductionAssertSecretsAbsent(t, output, poisonURL, "offline-deployment-user", "offline-deployment-secret")
+	initialHistory, err := migrationartifact.ReadAll(filepath.Join(root, "migrations"))
+	if err != nil || len(initialHistory) != 1 {
+		t.Fatalf("generated MongoDB %s scaffold initial migration = %#v, %v", template, initialHistory, err)
+	}
+	// This fixture defines its deployment baseline after customizing the
+	// scaffold. Replan its still-unapplied initial artifact for that baseline.
+	if err := os.Remove(filepath.Join(root, "migrations", initialHistory[0].Name)); err != nil {
+		t.Fatal(err)
+	}
 	if err := frameworkpackages.Publish(harness.frameworkRoot, root, mongoDBProductionDeploymentRelease); err != nil {
 		t.Fatalf("publish release-shaped frontend packages into generated MongoDB %s project: %v", template, err)
 	}
@@ -464,8 +473,8 @@ var Media = ridu.Collection{
 		"\t\"github.com/riducms/ridu/adapters/mongodb\"\n\tlocalstorage \"github.com/riducms/ridu/adapters/storage/local\"\n\t\"github.com/riducms/ridu/storage\"\n\t\"github.com/riducms/ridu/store\"",
 	)
 	mongoDBProductionReplaceFile(t, serverPath,
-		"\t\t}),\n\t\tridu.WithAddress(env(\"RIDU_ADDRESS\", \":8080\")),",
-		"\t\t}),\n\t\tridu.WithUploadStorage(func(context.Context) (storage.Backend, error) {\n\t\t\troot := strings.TrimSpace(os.Getenv(\"RIDU_UPLOAD_ROOT\"))\n\t\t\tif root == \"\" {\n\t\t\t\treturn nil, fmt.Errorf(\"RIDU_UPLOAD_ROOT is required\")\n\t\t\t}\n\t\t\treturn localstorage.New(root)\n\t\t}),\n\t\tridu.WithAddress(env(\"RIDU_ADDRESS\", \":8080\")),",
+		"\t\t}),\n\t\tridu.WithAddress(serverAddress()),",
+		"\t\t}),\n\t\tridu.WithUploadStorage(func(context.Context) (storage.Backend, error) {\n\t\t\troot := strings.TrimSpace(os.Getenv(\"RIDU_UPLOAD_ROOT\"))\n\t\t\tif root == \"\" {\n\t\t\t\treturn nil, fmt.Errorf(\"RIDU_UPLOAD_ROOT is required\")\n\t\t\t}\n\t\t\treturn localstorage.New(root)\n\t\t}),\n\t\tridu.WithAddress(serverAddress()),",
 	)
 }
 

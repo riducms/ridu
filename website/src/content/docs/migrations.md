@@ -10,10 +10,9 @@ navigation:
   title: 'Migrations'
 ---
 
-Ridu derives PostgreSQL and MongoDB migrations from executable Go config, but it never treats a
-schema diff as permission to change a database. The CLI writes an immutable artifact for review,
-verifies complete history in an isolated shadow target, and applies it only through an explicit
-command.
+Migrations keep the database in step with the fields and collections in your Go config. New Ridu
+projects include their initial migration. After changing the schema, create one more migration,
+review it, and commit it with the code.
 
 > [!NOTE]
 > This page covers the shared forward workflow and the PostgreSQL and MongoDB production runners.
@@ -26,33 +25,57 @@ command.
 > corrective migration after deployment. During the MongoDB cutover, capture the matched
 > selected-database/upload recovery point after the drained production `verify` and before `up`.
 
-## The ordinary workflow {#workflow}
+## Create and check a migration {#workflow}
 
 Change application config, then create and inspect one artifact:
 
 ```sh title="terminal"
-npm run ridu -- migrate create --name add-post-summary
-npm run ridu -- migrate plan
-npm run ridu -- migrate verify
+ridu migrate create --name add-post-summary
+ridu migrate verify
 ```
 
-Commit the `*.ridu.json` file with the config and generated-contract changes. Deploy the exact
-binary and artifact history that passed verification. This preparation example is not the MongoDB
-production cutover order; follow the exact sequence under
-[Deployment and recovery](#deployment-recovery).
+`create` compares the new config with the latest migration and writes a `*.ridu.json` file without
+connecting to a database. Read the file, then run `verify` to replay the full history in an isolated
+target. SQLite uses a temporary database automatically. PostgreSQL and MongoDB need `DATABASE_URL`
+for their shadow target.
 
-| Command  | Database connection | What it does                                                                                                                                                                        | What it never does                                                                                                       |
-| -------- | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `create` | No                  | Resolves current config, compares it with the latest artifact manifest, detects renames, binds a compiled transform when selected, plans phases, and writes one immutable artifact. | It does not inspect or change the database.                                                                              |
-| `plan`   | Yes                 | Compares local history with the database and shows each artifact, phase, step, and committed checkpoint. Add `--json` for automation.                                               | It does not apply a step.                                                                                                |
-| `status` | Yes                 | Reports applied and pending artifacts and checks the exact ledger and adapter-managed physical state.                                                                               | It does not repair drift or apply history.                                                                               |
-| `verify` | Yes                 | Creates a random temporary PostgreSQL schema or MongoDB database, replays complete admitted history, checks final assertions/readiness, then drops that exact target.               | It does not test production data volume, lock timing, or content-specific collisions. It cannot stop at a phase or step. |
-| `up`     | Yes                 | Validates history and the ledger, takes the adapter's bounded migration lock/lease, and applies pending work with durable resumption where supported.                               | It does not invent a rollback or bypass a safety finding.                                                                |
+Commit the migration with the config and generated contracts. `ridu build` rejects a schema that
+does not match the last migration.
 
-Every command except `create` requires a non-empty artifact history whose newest manifest digest
-matches executable config. This prevents a database from being reported as current while config and
-migrations describe different applications. Supply PostgreSQL or MongoDB through `DATABASE_URL` or
-`--database-url`.
+## Inspect a target database {#inspect}
+
+`plan` is optional during authoring. It answers a different question: which committed migrations
+are pending in a particular database? Select that database first:
+
+```sh title="terminal" group="migration-plan" tab="SQLite"
+export RIDU_SQLITE_PATH="$PWD/.ridu/development.sqlite"
+ridu migrate plan
+```
+
+```sh title="terminal" group="migration-plan" tab="PostgreSQL or MongoDB"
+export DATABASE_URL='replace-with-the-target-database-url'
+ridu migrate plan
+```
+
+Apply and confirm the same target during deployment:
+
+```sh title="terminal"
+ridu migrate up
+ridu migrate status
+```
+
+`plan` reports what is pending and any stored progress; it never changes the database. `up`
+validates history, takes the adapter's migration lock or lease, and applies the pending work.
+`status` then compares the database ledger and physical schema with the committed artifacts.
+
+`verify` is a rehearsal. It creates an isolated PostgreSQL schema, temporary SQLite database, or
+random MongoDB database, replays every migration, checks the result, and removes the temporary
+target. It cannot reproduce production data volume, lock timing, or content-specific collisions.
+
+Every command except `create` requires a non-empty artifact history whose newest manifest matches
+the executable config. Database-backed commands use `DATABASE_URL` for PostgreSQL and MongoDB, or
+`RIDU_SQLITE_PATH` for SQLite. `verify` is the one SQLite exception because it uses a temporary
+database.
 
 ## What is in an artifact {#artifact}
 
@@ -109,14 +132,18 @@ Disabling versions or editing an immutable artifact is not a supported way to by
 
 ## Destructive and maintenance admission {#admission}
 
-Safety flags have the following scope:
+Safety flags have narrow scopes:
 
-| Admission                   | Accepted by              | Meaning                                                                                                                                                                 |
-| --------------------------- | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--allow-destructive`       | `create`                 | Record a planner-confirmed destructive finding in the artifact after review. It does **not** connect to or change a database.                                           |
-| `--allow-maintenance`       | `verify`, `up`           | Admit a traffic-sensitive phase after every old application process, writer, and worker has been stopped. Keep them stopped through retries until `status` is complete. |
-| `--allow-insecure-database` | database-backed commands | Permit plaintext or bypass certificate verification only for a local PostgreSQL or MongoDB environment. `create` is offline and rejects the flag.                       |
-| `--allow-unbounded`         | `up`, `verify`           | Permit an applicable zero runner wait/timeout. Ordinary production defaults remain bounded; MongoDB lease expiry is always bounded.                                     |
+- **`--allow-destructive` on `create`** records a planner-confirmed destructive finding in the
+  artifact after review. It does not connect to or change a database.
+- **`--allow-maintenance` on `verify` or `up`** admits a traffic-sensitive phase after every old
+  application process, writer, and worker has stopped. Keep them stopped through retries until
+  `status` completes.
+- **`--allow-insecure-database` on database-backed commands** permits plaintext or bypassed
+  certificate verification only for a local PostgreSQL or MongoDB environment. The offline
+  `create` command rejects it.
+- **`--allow-unbounded` on `up` or `verify`** permits an applicable zero runner wait or timeout.
+  Ordinary production defaults remain bounded, and MongoDB lease expiry is always bounded.
 
 Deleting ordinary resources can require both destructive approval at creation and maintenance
 approval at execution because the runner also purges sessions, credentials, versions, tasks,
@@ -128,15 +155,36 @@ fails closed even with `--allow-destructive`.
 
 Stable codes are intended for CI policy and runbook search, not for bypass scripts.
 
-| Code                                                                        | What it protects                                                                                                                      | Safe response                                                                                                                                 |
-| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `RIDU_MIGRATION_PLAN_MISMATCH`                                              | The artifact no longer exactly matches the plan regenerated from its embedded manifests and rename intent.                            | Restore or recreate the reviewed artifact; do not trust or apply the changed file.                                                            |
-| `RIDU_REFERENCE_SHAPE_DECREASE_UNSAFE`                                      | Stored current values or version snapshots could retain dormant references after a field/target/cardinality decrease.                 | Keep the shape, remove the entire owning root with typed retirement, or design an application-owned data-cleanup contract first.              |
-| `RIDU_REFERENCE_RENAME_MAPPING_AMBIGUOUS`                                   | A source or destination field is mapped more than once.                                                                               | Split the change into unambiguous artifacts.                                                                                                  |
-| `RIDU_COLLECTION_SLUG_REWRITE_OVERLAP_UNSAFE`                               | A collection rename chain or swap could rewrite a value twice.                                                                        | Use a unique temporary slug across separate reviewed artifacts.                                                                               |
-| `RIDU_UPLOAD_COLLECTION_REMOVAL_UNSAFE`                                     | A database migration cannot manage external objects.                                                                                  | Transfer/delete through upload operations, reconcile, and verify matched backups; retain the collection until a typed retirement path exists. |
-| `RIDU_AUTH_DISABLE_STATE_UNSAFE` and related `*_DISABLE_STATE_UNSAFE` codes | Disabling auth, API keys, recovery, verification, versions, drafts, locks, or trash could leave dormant state that reactivates later. | Keep the capability enabled or introduce the narrower cleanup contract the finding requires.                                                  |
-| `RIDU_RETIRE_DEPENDENT_VERSION_HISTORY`                                     | Resource retirement must also delete dependent owner history to prevent references from returning on restore.                         | Treat the version-history loss as destructive and include it in backup, review, and acceptance.                                               |
+<dl class="doc-option-list">
+  <div>
+    <dt><code>RIDU_MIGRATION_PLAN_MISMATCH</code></dt>
+    <dd>The artifact no longer matches the plan regenerated from its embedded manifests and rename intent. Restore or recreate the reviewed artifact; do not apply the changed file.</dd>
+  </div>
+  <div>
+    <dt><code>RIDU_REFERENCE_SHAPE_DECREASE_UNSAFE</code></dt>
+    <dd>Current values or version snapshots could retain dormant references after a field, target, or cardinality decrease. Keep the shape, retire the complete owning root, or design an application-owned cleanup first.</dd>
+  </div>
+  <div>
+    <dt><code>RIDU_REFERENCE_RENAME_MAPPING_AMBIGUOUS</code></dt>
+    <dd>A source or destination field is mapped more than once. Split the change into unambiguous artifacts.</dd>
+  </div>
+  <div>
+    <dt><code>RIDU_COLLECTION_SLUG_REWRITE_OVERLAP_UNSAFE</code></dt>
+    <dd>A rename chain or swap could rewrite one value twice. Use a unique temporary slug across separate reviewed artifacts.</dd>
+  </div>
+  <div>
+    <dt><code>RIDU_UPLOAD_COLLECTION_REMOVAL_UNSAFE</code></dt>
+    <dd>A database migration cannot manage external objects. Transfer or delete them through upload operations, reconcile the result, and verify matched backups before retiring the collection.</dd>
+  </div>
+  <div>
+    <dt><code>RIDU_AUTH_DISABLE_STATE_UNSAFE</code> and related <code>*_DISABLE_STATE_UNSAFE</code> codes</dt>
+    <dd>Dormant auth, API-key, recovery, verification, version, draft, lock, or trash state could reactivate later. Keep the capability enabled or add the cleanup contract named by the finding.</dd>
+  </div>
+  <div>
+    <dt><code>RIDU_RETIRE_DEPENDENT_VERSION_HISTORY</code></dt>
+    <dd>Resource retirement must also delete dependent owner history. Include that version-history loss in backup, review, and acceptance.</dd>
+  </div>
+</dl>
 
 The error is useful information. `--allow-destructive` does not silence semantic safeguards.
 

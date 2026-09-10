@@ -67,7 +67,7 @@ func runtimeOptions(applicationConfig ridu.Config{{if .MongoDB}}, internalDevelo
 			return backend, nil
 {{else if .SQLite}}			return sqlite.Open(ctx, sqliteDatabasePath())
 {{end}}		}),
-		ridu.WithAddress(env("RIDU_ADDRESS", ":8080")),
+		ridu.WithAddress(serverAddress()),
 		ridu.WithHandlerOptions(ridu.HandlerOptions{
 			AdminAssets:             adminassets.FS(),
 			AllowedOrigins:          envList("RIDU_ALLOWED_ORIGINS"),
@@ -84,6 +84,16 @@ func runtimeOptions(applicationConfig ridu.Config{{if .MongoDB}}, internalDevelo
 			SkipReadinessPreflight:     {{if .MongoDB}}internalDevelopmentServer{{else}}envBool("RIDU_SKIP_READINESS_PREFLIGHT"){{end}},
 		}),
 	}
+}
+
+func serverAddress() string {
+	if address := strings.TrimSpace(os.Getenv("RIDU_ADDRESS")); address != "" {
+		return address
+	}
+	if port := strings.TrimSpace(os.Getenv("PORT")); port != "" {
+		return ":" + port
+	}
+	return ":8080"
 }
 
 {{if .SQLite}}func sqliteDatabasePath() string {

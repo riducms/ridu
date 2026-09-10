@@ -47,7 +47,7 @@
 				{
 					"name": "directory",
 					"type": "string",
-					"description": "New project directory, which must not already exist."
+					"description": "New project directory, or . for the current directory. In-place creation warns and rejects conflicting project paths before adding files."
 				}
 			],
 			"aliases": ["ridu new"],

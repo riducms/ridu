@@ -87,6 +87,9 @@ yarn install
 yarn run dev
 ```
 
+The initializer writes the initial migration with the generated contracts. After installing
+dependencies, the project is ready for its first production build.
+
 <details class="docs-disclosure">
 <summary>Non-interactive scaffolding and custom package identities</summary>
 <div class="docs-disclosure-body">
@@ -134,7 +137,8 @@ yarn create ridu \
 	content
 ```
 
-The target directory must not already exist. Replace `--no-agent` with
+A new named target directory must not already exist. Use `.` to create the project in your current
+directory; Ridu warns first and stops if any project paths conflict with existing files. Replace `--no-agent` with
 `--agent codex|claude|cursor|all` when automation should install agent guidance. See
 [Installation](/docs/installation/#create-project) for every scaffold option and recovery behavior.
 
@@ -280,34 +284,15 @@ control should now be available.
 
 Run this before committing:
 
-```bash title="terminal" package-manager="npm"
-npm run ridu -- doctor
-npm run ridu -- generate --check
-npm run ridu -- check
+```bash title="terminal"
+ridu doctor
+ridu migrate create --name add-post-summary
+ridu generate --check
+ridu check
 ```
 
-```bash title="terminal" package-manager="bun"
-bun run ridu -- doctor
-bun run ridu -- generate --check
-bun run ridu -- check
-```
-
-```bash title="terminal" package-manager="pnpm"
-pnpm run ridu doctor
-pnpm run ridu generate --check
-pnpm run ridu check
-```
-
-```bash title="terminal" package-manager="yarn"
-yarn run ridu doctor
-yarn run ridu generate --check
-yarn run ridu check
-```
-
-Commit `generated/` with your Go config. `.ridu/` remains disposable local state.
-
-Create and commit migrations for production schema changes; development sync is not a deployment
-plan.
+Review the new migration, then commit it with `generated/` and your Go config. `.ridu/` remains
+disposable local state. Development sync is not a deployment plan.
 
 ## If something does not start {#troubleshooting}
 

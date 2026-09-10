@@ -85,28 +85,28 @@ Set the version once so the CLI and Go module cannot drift:
 TARGET_VERSION="X.Y.Z"
 npm install --save-dev --save-exact "@riducms/cli@$TARGET_VERSION"
 go get "github.com/riducms/ridu@v$TARGET_VERSION"
-npm run ridu -- generate
+ridu generate
 ```
 
 ```bash title="terminal" package-manager="bun"
 TARGET_VERSION="X.Y.Z"
 bun add --dev --exact "@riducms/cli@$TARGET_VERSION"
 go get "github.com/riducms/ridu@v$TARGET_VERSION"
-bun run ridu -- generate
+ridu generate
 ```
 
 ```bash title="terminal" package-manager="pnpm"
 TARGET_VERSION="X.Y.Z"
 pnpm add --save-dev --save-exact --workspace-root "@riducms/cli@$TARGET_VERSION"
 go get "github.com/riducms/ridu@v$TARGET_VERSION"
-pnpm run ridu generate
+ridu generate
 ```
 
 ```bash title="terminal" package-manager="yarn"
 TARGET_VERSION="X.Y.Z"
 yarn add --dev --exact --ignore-workspace-root-check "@riducms/cli@$TARGET_VERSION"
 go get "github.com/riducms/ridu@v$TARGET_VERSION"
-yarn run ridu generate
+ridu generate
 ```
 
 Never edit an applied migration. Add a forward migration to correct it.

@@ -36,7 +36,7 @@ If you chose the `blank` template, follow the existing-project installation belo
 Add the Go and admin packages together:
 
 ```bash title="terminal"
-npm run ridu -- add richtext \
+ridu add richtext \
   --go-package github.com/riducms/ridu/plugins/richtext \
   --admin-package @riducms/plugin-richtext
 ```
@@ -82,10 +82,9 @@ The formatting should remain. Read the document through your generated SDK to se
 Before deploying the new field, create and check its database migration:
 
 ```bash title="terminal"
-npm run ridu -- migrate create --name add-rich-text
-npm run ridu -- migrate plan
-npm run ridu -- migrate verify
-npm run ridu -- check
+ridu migrate create --name add-rich-text
+ridu migrate verify
+ridu check
 ```
 
 Review the migration, apply it with `migrate up` during deployment, and confirm `migrate status`

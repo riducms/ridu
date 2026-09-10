@@ -575,7 +575,7 @@ export interface RiduConfig {
 
 declare module "@riducms/sdk" {
 	interface GeneratedRiduConfigRegistry {
-		"manifest-e2d830d5359697f03f266934137320202507453c231d151c48df669d2d32935f": RiduConfig;
+		"manifest-d15619e39b2085eab36c56a7e5669a879c953050624cd6c183a5fa3cfe5e3026": RiduConfig;
 	}
 }
 

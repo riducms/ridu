@@ -88,14 +88,35 @@ const parsedHTML = new Map<string, ParsedHTML>();
 const linkIssues = new Map<string, LinkIssue>();
 
 for (const requiredOutput of [
+	'robots.txt',
+	'404.html',
 	'llms.txt',
 	'llms-full.txt',
 	`v/${frameworkVersion}/llms.txt`,
 	`v/${frameworkVersion}/llms-full.txt`
 ]) {
 	if (!existsSync(resolve(distRoot, requiredOutput))) {
-		diagnostics.add('LLM documentation', `missing ${requiredOutput}`);
+		diagnostics.add('Crawler and documentation output', `missing ${requiredOutput}`);
 	}
+}
+
+const robotsPath = resolve(distRoot, 'robots.txt');
+if (existsSync(robotsPath)) {
+	const robots = readFileSync(robotsPath, 'utf8');
+	if (robots.includes('<html') || !/^Sitemap: https?:\/\/\S+\/sitemap-index\.xml$/m.test(robots)) {
+		diagnostics.add(
+			'Crawler output',
+			'robots.txt must be plain text and advertise the sitemap index'
+		);
+	}
+}
+
+const notFoundPath = resolve(distRoot, '404.html');
+if (
+	existsSync(notFoundPath) &&
+	!/<meta\s+name="robots"\s+content="noindex"\s*\/?\s*>/.test(readFileSync(notFoundPath, 'utf8'))
+) {
+	diagnostics.add('Crawler output', '404.html must opt out of indexing');
 }
 
 function toPosix(value: string): string {
@@ -112,6 +133,7 @@ function walkFiles(directory: string): string[] {
 
 function routeToHTMLFile(route: string): string {
 	if (route === '/') return 'index.html';
+	if (route.endsWith('.html')) return route.replace(/^\//, '');
 	return `${route.replace(/^\//, '')}index.html`;
 }
 
@@ -315,6 +337,7 @@ function contentRoutes(expected: Map<string, string>, area: 'docs' | 'guides'): 
 function expectedRoutes(): Map<string, string> {
 	const expected = new Map<string, string>();
 	addExpectedRoute(expected, '/', 'src/pages/index.astro');
+	addExpectedRoute(expected, '/404.html', 'src/pages/404.astro');
 	addExpectedRoute(expected, '/docs/', 'src/pages/docs/index.astro');
 	addExpectedRoute(expected, '/guides/', 'src/pages/guides/index.astro');
 	addExpectedRoute(expected, '/search/', 'src/pages/search/index.astro');
@@ -449,6 +472,7 @@ function validateSearchIndex(expected: Map<string, string>, fallbackSource: stri
 	for (const route of expected.keys()) {
 		if (
 			route === '/' ||
+			route === '/404.html' ||
 			route === '/reference/' ||
 			route === '/search/' ||
 			referenceRedirectRoutes.has(route)

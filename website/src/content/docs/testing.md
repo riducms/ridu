@@ -90,24 +90,9 @@ behavior. A field with an admin component also needs frontend type checks and a 
 
 Run these commands in CI after installing project dependencies:
 
-```sh title="terminal" package-manager="npm"
-npm run ridu -- generate --check
-npm run ridu -- check
-```
-
-```sh title="terminal" package-manager="bun"
-bun run ridu -- generate --check
-bun run ridu -- check
-```
-
-```sh title="terminal" package-manager="pnpm"
-pnpm run ridu generate --check
-pnpm run ridu check
-```
-
-```sh title="terminal" package-manager="yarn"
-yarn run ridu generate --check
-yarn run ridu check
+```sh title="terminal"
+ridu generate --check
+ridu check
 ```
 
 `generate --check` reports missing or stale generated files without rewriting them. `ridu check`
@@ -173,10 +158,10 @@ An ordinary project CI job usually needs:
 
 ```sh title="terminal" package-manager="npm"
 go test ./...
-npm run ridu -- generate --check
-npm run ridu -- migrate verify
-npm run ridu -- check
-npm run ridu -- build
+ridu generate --check
+ridu migrate verify
+ridu check
+ridu build
 ```
 
 The equivalent project-local commands work with Bun, pnpm, and Yarn. When one fails, identify the

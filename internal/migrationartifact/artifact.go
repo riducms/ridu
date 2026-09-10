@@ -289,7 +289,7 @@ func RequireCurrentHistory(directory string, executable schema.Manifest) ([]File
 		return nil, err
 	}
 	if len(files) == 0 {
-		return nil, fmt.Errorf("migration artifact history is empty; create and commit an initial migration before checking or deploying this manifest")
+		return nil, fmt.Errorf("migration artifact history is empty\ncreate the initial migration with `ridu migrate create --name initial`, review and commit the generated file, then rerun this command")
 	}
 	digest, err := migration.DigestManifest(executable)
 	if err != nil {
