@@ -219,28 +219,21 @@ func TestSQLiteArtifactAllowsRecursiveOptionalFieldAdditions(t *testing.T) {
 	ctx := context.Background()
 	resolve := func(additive bool) schema.Manifest {
 		t.Helper()
-		metaFields := []field.Definition{field.Text("title")}
-		sectionFields := []field.Definition{field.Text("heading")}
-		heroFields := []field.Definition{field.Text("heading")}
-		blocks := []field.Block{field.BlockType("hero", "Hero", heroFields...)}
+		metaFields := field.Fields{field.Text("title")}
+		sectionFields := field.Fields{field.Text("heading")}
+		heroFields := field.Fields{field.Text("heading")}
+		blocks := []field.Block{field.Block{Slug: "hero", Fields: heroFields}}
 		if additive {
 			metaFields = append(metaFields, field.Text("description"))
 			sectionFields = append(sectionFields, field.Text("caption"))
 			heroFields = append(heroFields, field.Text("eyebrow"))
-			blocks = []field.Block{
-				field.BlockType("hero", "Hero", heroFields...),
-				field.BlockType("quote", "Quote", field.Text("body", field.Required())),
-			}
+			blocks = []field.Block{field.Block{Slug: "hero", Fields: heroFields}, field.Block{Slug: "quote", Fields: field.Fields{field.Text("body").Required()}}}
 		}
 		manifest, err := ridu.Resolve(ridu.Config{
 			Name: "SQLite recursive migrations",
 			Collections: []ridu.Collection{{
-				Slug: "posts",
-				Fields: []field.Definition{
-					field.Group("meta", field.Fields(metaFields...)),
-					field.Array("sections", field.Fields(sectionFields...)),
-					field.Blocks("layout", field.BlockTypes(blocks...)),
-				},
+				Slug:   "posts",
+				Fields: field.Fields{field.Group("meta", metaFields), field.Array("sections", sectionFields), field.Blocks("layout", blocks...)},
 			}},
 		})
 		if err != nil {
@@ -295,7 +288,7 @@ func TestSQLiteArtifactAllowsAppendOnlyCollectionIndexes(t *testing.T) {
 	ctx := context.Background()
 	resolve := func(indexed bool) schema.Manifest {
 		t.Helper()
-		collection := ridu.Collection{Slug: "posts", Fields: []field.Definition{field.Text("tenant"), field.Text("slug")}}
+		collection := ridu.Collection{Slug: "posts", Fields: field.Fields{field.Text("tenant"), field.Text("slug")}}
 		if indexed {
 			collection.Indexes = []ridu.CollectionIndex{{Fields: []string{"tenant", "slug"}}}
 		}
@@ -343,7 +336,7 @@ func TestSQLiteArtifactAddsIndexAndUniquenessAtomically(t *testing.T) {
 	indexed, err := ridu.Resolve(ridu.Config{
 		Name: "SQLite migrations",
 		Collections: []ridu.Collection{{
-			Slug: "posts", Fields: []field.Definition{field.Text("title", field.Index(), field.Unique())},
+			Slug: "posts", Fields: field.Fields{field.Text("title").Index().Unique()},
 		}},
 	})
 	if err != nil {
@@ -415,7 +408,7 @@ func TestSQLiteArtifactRebuildsAddedRelationshipReferencesAtomically(t *testing.
 	withoutRelationship, err := ridu.Resolve(ridu.Config{
 		Name: "SQLite artifact references",
 		Collections: []ridu.Collection{
-			{Slug: "tags", Fields: []field.Definition{field.Text("name")}},
+			{Slug: "tags", Fields: field.Fields{field.Text("name")}},
 			{Slug: "posts"},
 		},
 	})
@@ -425,8 +418,8 @@ func TestSQLiteArtifactRebuildsAddedRelationshipReferencesAtomically(t *testing.
 	withRelationship, err := ridu.Resolve(ridu.Config{
 		Name: "SQLite artifact references",
 		Collections: []ridu.Collection{
-			{Slug: "tags", Fields: []field.Definition{field.Text("name")}},
-			{Slug: "posts", Fields: []field.Definition{field.Relationship("tag", field.To("tags"))}},
+			{Slug: "tags", Fields: field.Fields{field.Text("name")}},
+			{Slug: "posts", Fields: field.Fields{field.Relationship("tag", "tags")}},
 		},
 	})
 	if err != nil {
@@ -851,7 +844,7 @@ func TestSQLiteDevelopmentMigrateRebuildsRelationshipReferences(t *testing.T) {
 	withoutRelationship, err := ridu.Resolve(ridu.Config{
 		Name: "SQLite development references",
 		Collections: []ridu.Collection{
-			{Slug: "tags", Fields: []field.Definition{field.Text("name")}},
+			{Slug: "tags", Fields: field.Fields{field.Text("name")}},
 			{Slug: "posts"},
 		},
 	})
@@ -861,8 +854,8 @@ func TestSQLiteDevelopmentMigrateRebuildsRelationshipReferences(t *testing.T) {
 	withRelationship, err := ridu.Resolve(ridu.Config{
 		Name: "SQLite development references",
 		Collections: []ridu.Collection{
-			{Slug: "tags", Fields: []field.Definition{field.Text("name")}},
-			{Slug: "posts", Fields: []field.Definition{field.Relationship("tag", field.To("tags"))}},
+			{Slug: "tags", Fields: field.Fields{field.Text("name")}},
+			{Slug: "posts", Fields: field.Fields{field.Relationship("tag", "tags")}},
 		},
 	})
 	if err != nil {
@@ -1536,9 +1529,9 @@ func newSQLiteMigrationStore(t *testing.T) *Store {
 
 func sqliteMigrationManifest(t *testing.T, summary bool) schema.Manifest {
 	t.Helper()
-	fields := []field.Definition{field.Text("title")}
+	fields := field.Fields{field.Text("title")}
 	if summary {
-		fields = append(fields, field.Text("summary", field.Index(), field.Unique()))
+		fields = append(fields, field.Text("summary").Index().Unique())
 	}
 	manifest, err := ridu.Resolve(ridu.Config{
 		Name:        "SQLite migrations",

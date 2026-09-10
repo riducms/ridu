@@ -12,8 +12,8 @@ const { sections, path } = Astro.props;
 
 {
 	sections.map((section) => (
-		<section class="mt-6 first:mt-0">
-			<h2 class="mt-0 mb-1.5 font-body text-13.5px font-650 text-ink">{section.label}</h2>
+		<section class="mt-7 first:mt-0">
+			<h2 class="mt-0 mb-1.5 font-body text-15.5px font-700 text-ink">{section.label}</h2>
 			<ul class="m-0 list-none p-0">
 				{section.items.map((item) => (
 					<DocumentationNavigationItem {item} {path} />

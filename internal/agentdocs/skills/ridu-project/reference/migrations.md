@@ -86,6 +86,19 @@ Ambiguous mappings are rejected rather than guessed. Collection slug swaps and c
 into separate artifacts with a temporary slug so a value cannot be rewritten twice. Application
 task input and arbitrary JSON remain opaque; the generic runner never searches them heuristically.
 
+## Data transforms and versioned resources {#data-transforms}
+
+Compiled data transforms can perform admitted data changes on unversioned resources. PostgreSQL,
+SQLite, and MongoDB reject transform mutations of versioned collections and globals: a general
+transform cannot yet rewrite the current document and all retained snapshots atomically. This
+applies to revision history even when drafts are disabled, and can block backfills, retypes, or
+required-field transitions that need to rewrite versioned content.
+
+Supported typed rename executors preserve retained history; the restriction does not prohibit all
+schema evolution. Prefer an admitted additive change or confirmed typed rename when it fits the
+application. Rehearse the complete history and representative retained versions before deployment.
+Disabling versions or editing an immutable artifact is not a supported way to bypass this limit.
+
 ## Destructive and maintenance admission {#admission}
 
 Safety flags have the following scope:

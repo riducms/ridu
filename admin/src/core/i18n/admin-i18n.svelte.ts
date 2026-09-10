@@ -45,7 +45,8 @@ export class AdminI18nController implements AdminI18n {
 		private readonly client: AdminClient,
 		private readonly session: () => AuthSession<AdminDocument> | undefined,
 		catalogs: readonly TranslationLanguage[] = [en],
-		messages: Readonly<Record<string, PluginMessageCatalog>> = {}
+		messages: Readonly<Record<string, PluginMessageCatalog>> = {},
+		private readonly applicationMessages?: PluginMessageCatalog
 	) {
 		this.#catalogs = catalogs.length === 0 ? [en] : [...catalogs];
 		this.#catalogByCode = new Map(this.#catalogs.map((catalog) => [catalog.code, catalog]));
@@ -100,6 +101,9 @@ export class AdminI18nController implements AdminI18n {
 			fallbackLanguage: this.#fallbackLanguage,
 			...(this.#timeZone === undefined ? {} : { timeZone: this.#timeZone }),
 			pluginMessages: this.#messages,
+			...(this.applicationMessages === undefined
+				? {}
+				: { applicationMessages: this.applicationMessages }),
 		}));
 	}
 
@@ -167,6 +171,9 @@ export class AdminI18nController implements AdminI18n {
 			fallbackLanguage,
 			...(timeZone === undefined ? {} : { timeZone }),
 			pluginMessages: this.#messages,
+			...(this.applicationMessages === undefined
+				? {}
+				: { applicationMessages: this.applicationMessages }),
 		});
 
 		// Commit only after every catalog, direction, locale, and timezone validates.

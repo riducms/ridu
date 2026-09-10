@@ -20,7 +20,7 @@ import (
 // a compiled plugin's manifest and generation contracts.
 type Fixture struct {
 	Plugin ridu.Plugin
-	Fields []field.Definition
+	Fields field.Fields
 	// ValidData and InvalidData opt into runtime storage, local API, REST, and
 	// validator conformance. InvalidData must be rejected as validation.
 	ValidData   store.Values
@@ -127,11 +127,11 @@ func assertFieldMappings(t *testing.T, snapshot schema.Snapshot, key string) {
 				t.Errorf("plugin field %q has no generated type mapping", candidate.Plugin.Key)
 			}
 			if candidate.Nested != nil {
-				inspect(candidate.Nested.Fields)
+				inspect(candidate.Nested.ResolvedFields())
 			}
 			if candidate.Blocks != nil {
-				for _, block := range candidate.Blocks.Types {
-					inspect(block.Fields)
+				for _, block := range candidate.Blocks.ResolvedTypes() {
+					inspect(block.ResolvedFields())
 				}
 			}
 		}

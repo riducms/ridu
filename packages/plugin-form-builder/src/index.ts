@@ -1,8 +1,8 @@
 export { buildSubmissionInput, confirmationFor, getPaymentTotal, validateFormValues } from "./form";
 export type {
 	CheckboxFormField,
-	ChoiceFormField,
-	ChoiceOption,
+	OptionFormField,
+	FormOption,
 	Confirmation,
 	CountryFormField,
 	DateFormField,

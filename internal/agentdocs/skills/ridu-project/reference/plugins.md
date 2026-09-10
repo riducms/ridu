@@ -2,22 +2,21 @@
 
 # Plugins
 
-Ridu plugins are trusted build dependencies. Their Go code is compiled into the server, optional
-Svelte/TypeScript code is bundled into the admin, and a descriptor connects both halves for
-generation, compatibility checks, and migrations.
+Plugins add reusable features to your application, such as rich text, SEO fields, or a GraphQL API.
+A plugin has a Go package and may also include a Svelte/TypeScript package for its admin components.
+Both become part of your application when you build it.
 
-Plugins add behavior such as fields, hooks, transports, endpoints, or admin views. Database and
-object-storage packages are [adapters](https://riducms.com/docs/adapters/) instead: they supply one runtime service and
-do not belong in `Config.Plugins`.
+If you want to change an input, add a dashboard panel, or customize another part of the admin,
+start with [Custom components](./custom-components.md). You can register application components
+directly. The guide below is for installing or building plugins that add server behavior or new
+field types. For database connections and file storage, use [adapters](https://riducms.com/docs/adapters/).
 
-> [!WARNING]
-> Ridu never downloads plugin code at runtime and does not sandbox compiled dependencies. A plugin
-> and its SQL have every capability granted to the application process and database role. Review,
-> pin, test, and update them like any other server dependency.
+Install plugins you trust: their Go code runs with the same permissions as your application.
+Choose package versions explicitly and test updates before deploying them.
 
 ## Install a plugin {#install}
 
-Install both halves together when a package provides an admin integration:
+If a plugin includes admin components, install its Go and admin packages together:
 
 ```sh title="terminal"
 npm run ridu -- plugin add color \
@@ -32,50 +31,52 @@ registers the Go and admin packages, and regenerates application types. If field
 different npm package, install that package at the project root too. Failed setup or generation
 restores the changed files.
 
-Removal cleans up the paired admin package only when no remaining plugin uses it. Remove a separately
-installed field-type package yourself after confirming nothing else imports it.
-
 Use `--constructor` when the Go package exports a zero-argument constructor other than `New`.
-`--no-install` is for an already-resolved package; it does not weaken compatibility checks.
+Use `--no-install` when you have already installed the dependencies; Ridu still checks compatibility.
 
-Generated registration keeps application config small:
+Keep the generated `installedPlugins()` call in your Go config. The CLI updates the function when
+you add or remove a plugin:
 
-```go title="content/config.go" add={4}
+```go title="content/config.go" add={4-5}
 func Config() ridu.Config {
 	return ridu.Config{
-		Name:        "Acme Editorial",
+		Name: "Acme Editorial",
+		// Load the plugins registered by ridu plugin add.
 		Plugins:     installedPlugins(),
 		Collections: []ridu.Collection{Users, Posts},
 	}
 }
 ```
 
-Production never installs or discovers new code dynamically. A dependency change requires a new
-build of the Go binary and admin assets.
+Rebuild and deploy your application after changing its plugins.
 
-## What a plugin can contribute {#capabilities}
+## Choose what your plugin adds {#capabilities}
 
-The base `ridu.Plugin` interface contains only `Key() string`. Add the interfaces needed for each
-capability:
+Every plugin implements `Key() string` to give it a unique name. Add the interfaces needed for
+the features you want to provide:
 
-| Capability               | Public interface            | Purpose                                                                                                               |
-| ------------------------ | --------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| Deterministic metadata   | `DescriptorProvider`        | Versions, compatibility, generated field types, admin pairing, and exceptional adapter-scoped database contributions. |
-| Config transformation    | `ConfigTransformer`         | Add or transform authoring config before final validation. Plugins run in `Config.Plugins` order on defensive copies. |
-| Lifecycle hooks          | `HookProvider`              | Append collection or field hooks after application-authored hooks, preserving plugin order.                           |
-| Stored field validation  | `FieldValidatorProvider`    | Validate plugin field values with the resolved field, concrete runtime path, and candidate value.                     |
-| Namespaced HTTP endpoint | `EndpointProvider`          | Add exact method/path handlers below `/api/plugins/<key>/`.                                                           |
-| Protocol transport       | `TransportProvider`         | Bind an established absolute transport such as `/api/graphql` once the manifest and application are ready.            |
-| Admin extensions         | descriptor `Admin` metadata | Statically register fields, routes, views, panels, navigation, document actions, shell components, and providers.     |
+| I want to…                                     | Use                               | What it does                                                                                |
+| ---------------------------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------- |
+| Declare versions and generated types           | `DescriptorProvider`              | Describes supported Ridu versions, field types, and the admin package.                      |
+| Add collections or change application settings | `ConfigTransformer`               | Changes the Go config before Ridu validates it.                                             |
+| Add or change fields                           | `FieldGraphTransformer`           | Edits a collection or global's fields, including their access rules, hooks, and validation. |
+| Check field configuration                      | `FieldGraphValidator`             | Checks the final field definitions after plugins have changed them.                         |
+| Run code when documents change                 | `HookProvider`                    | Adds collection hooks after the application's own hooks.                                    |
+| Validate a custom field's data                 | `FieldValidatorProvider`          | Checks the value being saved and reports errors at the affected field.                      |
+| Add an HTTP endpoint                           | `EndpointProvider`                | Registers a method and path below `/api/plugins/<key>/`.                                    |
+| Add an API such as GraphQL                     | `TransportProvider`               | Registers an API at a fixed path such as `/api/graphql`.                                    |
+| Add admin components                           | The descriptor's `Admin` property | Loads the plugin's fields, pages, dashboard panels, and other components.                   |
 
-Executable functions, handlers, hooks, validators, credentials, and secrets never enter the public
-manifest. Only deterministic metadata needed by generation and tooling belongs in the descriptor.
+Plugins run in the order of `Config.Plugins`. Descriptors are public: include package and type
+information, but keep executable functions, credentials, and secrets in Go code or server settings.
 
 ## Describe compatibility and generated types {#descriptor}
 
-An advanced plugin returns a `ridu.PluginDescriptor`:
+Implement `Descriptor()` when a plugin supplies generated types, an admin package, endpoints,
+or other features that need build configuration. For a custom color field, it describes which
+types the application will use:
 
-```go title="plugin.go"
+```go title="plugin.go" focus={9-19}
 func (plugin) Descriptor() ridu.PluginDescriptor {
 	return ridu.PluginDescriptor{
 		Version:    "1.2.0",
@@ -84,6 +85,7 @@ func (plugin) Descriptor() ridu.PluginDescriptor {
 		Ridu: ridu.RiduCompatibility{
 			Minimum: ridu.FrameworkVersion,
 		},
+		// Name the types that generated Go and TypeScript code imports.
 		FieldTypes: []ridu.PluginFieldType{{
 			Key:               "color",
 			TypeScriptPackage: "@acme/ridu-color-admin",
@@ -98,72 +100,78 @@ func (plugin) Descriptor() ridu.PluginDescriptor {
 }
 ```
 
-The descriptor's TypeScript exports and optional Go type keep generated models, create/update input,
-and query operands aligned. A JSON Schema adds the OpenAPI value schema. Omitting both Go type fields
-uses `encoding/json.RawMessage`; a TypeScript value mapping is still required.
+`TypeScriptOutput` names the type returned when reading a document. `TypeScriptInput` names the
+type accepted when creating or updating it, and `TypeScriptWhere` describes its query filters.
+`GoPackage` and `GoType` name the Go value type. If you omit both Go settings, generated Go code
+uses `encoding/json.RawMessage`.
 
-Schema resolution validates semantic versions, unique keys, capability/descriptor requirements,
-field mappings, route conflicts, migration continuity, and table prefixes before the application
-starts.
+`JSONSchema` describes the value in OpenAPI. Ridu checks these settings, plugin versions, and route
+conflicts before the application starts. [Build a field plugin](./custom-fields.md) shows a
+complete descriptor, editor, and validator working together.
 
 ## Add endpoints {#endpoints}
 
 Plugin endpoints declare an exact HTTP method and a relative path. Ridu mounts them below
 `/api/plugins/<key>/`; a known path with the wrong method returns `405`.
 
-The handler receives the request and writer, client IP, authenticated actor and auth collection,
-local API, auth-attempt admission, and diagnostic reporting. Use `PluginEndpointContext.Local` for
-content operations so access, validation, hooks, transactions, and redaction still apply.
+The handler receives the HTTP request, response writer, and information about the signed-in user.
+Use `PluginEndpointContext.Local` to read or change content with Ridu's normal permissions,
+validation, and hooks.
 
-Each endpoint may set `MaxBodyBytes`. Zero inherits the application handler bound; a negative value
-opts trusted streaming code out, so the endpoint must supply its own explicit work and byte limits.
-Authentication transports must call the provided admission function before amplifiable work.
+Set `MaxBodyBytes` to limit request size, or leave it at zero to use the application's limit.
+A negative value disables that limit; a streaming handler must then enforce its own limits.
+If your endpoint handles authentication, call `AdmitAuthAttempt` before checking credentials or
+performing other expensive work. See the [endpoint context reference](https://riducms.com/reference/core/plugin-endpoint-context/).
 
-Use `TransportProvider` only for an established absolute protocol location. It binds once from the
-immutable manifest and application runtime; it should not rebuild schema state per request. The
-[GraphQL plugin](./graphql.md) is the reference example.
+Use `TransportProvider` for an API with a fixed top-level path, such as GraphQL. Set it up once
+when the application starts. The [GraphQL plugin](./graphql.md) shows this approach.
 
-## Pair the admin half {#admin-pairing}
+## Connect the admin package {#admin-pairing}
 
-`AdminPluginMetadata` names the installed npm package and named export, declares
-`AdminPluginAPIVersion`, and carries a `PairingVersion`. It also lists authenticated
-admin routes and package-relative assets in deterministic order.
+Set the descriptor's `Admin` property to identify the JavaScript package and its exported plugin
+object. `APIVersion` must match `ridu.AdminPluginAPIVersion`. `PairingVersion` is your own version
+number for the connection between the Go and admin packages: increase it when an older version
+of either package would no longer work with the other.
 
-Generation writes static imports. Before the admin is used, pairing resolution verifies
-the backend/admin key, API versions, pairing version, field declarations, route and asset lists, and
-route collisions. An admin route is mounted inside the authenticated shell, but route visibility is
-presentation—not authorization. Its API calls still need server access rules.
+Ridu generates the imports and checks that both packages agree on their key, versions, fields,
+routes, and assets. Publish compatible Go and admin packages together.
 
-Increment `PairingVersion` whenever separately published backend and admin versions cease to be
-interchangeable. Publish both packages together for such a change.
+Create the JavaScript export with [defineAdminPlugin](https://riducms.com/reference/plugin/define-admin-plugin/).
+Use [definePluginField](https://riducms.com/reference/plugin/define-plugin-field/) for each new field type's default
+editor, or [defineFieldComponent](https://riducms.com/reference/plugin/define-field-component/) for an alternative
+editor selected by an application. Each reference page lists its options and includes a working
+registration example. [Build a field plugin](./custom-fields.md) connects them to a Go plugin
+from start to finish.
 
-## Plugin data and database escape hatches {#migrations}
+Plugin pages require sign-in. Their API requests still need server access rules, just like requests
+from the built-in admin.
 
-Plugins should normally add stored records as ordinary collections and fields through
-`ConfigTransformer`. The selected adapter then plans their storage while Ridu keeps access,
-validation, hooks, transactions, REST, generated contracts, and admin behavior on the normal path.
+## Store plugin data {#migrations}
 
-Only a feature that genuinely needs private dialect-specific schema should use
-`DatabaseContributions`. Each bundle names `PluginDatabaseAdapterPostgres` or
-`PluginDatabaseAdapterSQLite`; Ridu executes only the matching bundle and fails clearly when the
-active adapter is unsupported. SQL is never translated between adapters.
+Store plugin data in ordinary collections and fields when possible. Add them through
+`ConfigTransformer` to get Ridu's usual permissions, validation, API, generated types, and admin.
 
-Each adapter's migration history starts at version 1. Every entry has a stable lowercase kebab-case
-name and non-empty `UpSQL` and `DownSQL` arrays. Ridu copies the chosen direction into the
-application's immutable migration artifact with a checksum and validates it again before execution.
-Each SQL entry is one statement and cannot take control of the migration transaction or
-connection. SQLite rejects `ATTACH`, `DETACH`, and `PRAGMA` entries.
+If a feature needs its own SQL tables, use `DatabaseContributions`. Write a separate set of
+migrations for PostgreSQL (`PluginDatabaseAdapterPostgres`) and SQLite
+(`PluginDatabaseAdapterSQLite`). Ridu runs only the set for the selected adapter; it cannot
+translate one database's SQL for another.
 
-Plugin tables must use `ridu_plugin_<key>_...`. This lets schema verification distinguish plugin
-objects from Ridu tables. The prefix does not sandbox SQL.
+Number each adapter's migrations from 1 without gaps. Give each a name such as `add-audit-log`,
+SQL statements to apply it in `UpSQL`, and SQL statements to undo it in `DownSQL`. Each array entry
+must contain one statement. Ridu manages the connection and transaction; SQLite also rejects
+`ATTACH`, `DETACH`, and `PRAGMA` statements.
 
-Migration entries are immutable, including after removal and later reinstallation.
-Changing a version, name, or SQL direction is rejected. Declared private tables must exist after
-replay; SQLite also rejects changes to Ridu-managed schema and objects outside the plugin prefix.
-Plugin downgrade steps run newest-first and require destructive approval when an application
-artifact removes the plugin version. This reversible plugin history does not add automatic down
-migrations for application schema; follow [Migrations](./migrations.md) for recovery and forward
-corrections.
+Start table names with `ridu_plugin_<key>_`, replacing hyphens in the plugin key with underscores.
+For example, a plugin named `audit-log` could create `ridu_plugin_audit_log_entries`. This lets
+Ridu check which tables the plugin owns. The prefix does not restrict what the plugin's SQL can do.
+
+Ridu includes the plugin's SQL in the application's generated migration and checks that it has not
+changed before running it. Once published, do not edit a migration's version, name, or SQL. Add a
+new migration to make further changes, even after removing and reinstalling a plugin.
+
+Removing a plugin version runs its undo steps in reverse order and requires approval for the
+destructive migration. This applies to the plugin's tables; it does not add automatic rollback for
+the rest of the application's schema. See [Migrations](./migrations.md) for recovery options.
 
 ## Remove a plugin {#remove}
 
@@ -172,14 +180,16 @@ npm run ridu -- plugin remove color
 npm run ridu -- migrate create --name remove-color
 ```
 
-Removal unregisters generated code, removes Go and configured frontend dependencies, and regenerates contracts. The
-CLI rolls those file changes back if the workflow fails. It never silently changes the database.
+Removal updates the generated imports and types, removes the Go dependency, and removes the admin
+package if no remaining plugin uses it. Remove any separately installed type package yourself after
+checking that nothing else imports it. The CLI restores changed files if removal fails; it does not
+change the database.
 
-Review the resulting plugin down steps, data loss, and table removal in the application migration.
-Back up and rehearse the removal before accepting a destructive artifact. If data must survive,
-export or migrate it while the plugin and its handlers are still installed.
+Review which tables and data the generated migration will remove. Back up the database and try
+the migration on a copy before applying it in production. Export or migrate any data you need to
+keep while the plugin is still installed.
 
-## Scaffold and test your own plugin {#create-and-test}
+## Create and test a plugin {#create-and-test}
 
 ```sh title="terminal"
 npm run ridu -- plugin new ./ridu-color \
@@ -193,13 +203,16 @@ type, and tests.
 
 Call `plugintest.Run` from an external-package Go test:
 
-```go title="plugin_test.go"
+```go title="plugin_test.go" focus={7-9}
 func TestPluginConformance(t *testing.T) {
 	plugintest.Run(t, plugintest.Fixture{
-		Plugin:      color.New(),
-		Fields:      []field.Definition{color.Field("accent")},
-		ValidData:   store.Values{"accent": "#663399"},
-		InvalidData: store.Values{"accent": "not-a-color"},
+		Plugin: color.New(),
+		Fields: field.Fields{
+			color.Field("accent"),
+		},
+		// Exercise acceptance and rejection through the plugin test suite.
+		ValidData:   store.Values{"accent": store.String("#663399")},
+		InvalidData: store.Values{"accent": store.String("not-a-color")},
 		Compatibility: []plugintest.CompatibilityCase{
 			{RiduVersion: ridu.FrameworkVersion, Compatible: true},
 		},
@@ -207,24 +220,24 @@ func TestPluginConformance(t *testing.T) {
 }
 ```
 
-The suite checks deterministic resolution, manifest round-trip, exact field mappings, capability
-versioning, compatibility rows, in-memory storage, local API, REST, and validation. Also compile the
-generated Go/TypeScript/OpenAPI contracts, run admin checks and tests, and exercise both migration
-directions plus full replay against every adapter the plugin declares.
+The test checks that the plugin loads, generates its declared types, accepts valid data, and rejects
+invalid data through both the local API and REST. It also checks the Ridu versions you list under
+`Compatibility`.
 
-## Version compatibility {#versioning}
+Compile a generated application that uses the plugin and run its admin checks. If the plugin adds
+database tables, test applying and reversing its migrations on every supported adapter.
+
+## Choose version numbers {#versioning}
 
 | Version                   | Changes when                                                                |
 | ------------------------- | --------------------------------------------------------------------------- |
 | Plugin semantic `Version` | Every plugin publication.                                                   |
-| `PluginAPIVersion`        | Ridu makes a breaking change to compiled Go capability interfaces.          |
-| `AdminPluginAPIVersion`   | Ridu makes a breaking change to TypeScript/admin extension contracts.       |
+| `PluginAPIVersion`        | Ridu makes a breaking change to its Go plugin API.                          |
+| `AdminPluginAPIVersion`   | Ridu makes a breaking change to its admin plugin API.                       |
 | Plugin `PairingVersion`   | This plugin's backend and admin packages are no longer mutually compatible. |
 
-Keep compatibility test rows for every Ridu version you support, including rejected lower and upper
-boundaries. Silent behaviour changes under an existing API or pairing version are defects.
+Test every Ridu version you claim to support, along with versions just outside that range.
 
-Official examples include [PostgreSQL](./postgres.md), [SQLite](./sqlite.md), [Rich
-text](./rich-text.md), [SEO](./seo.md), [Form Builder](./form-builder.md),
-[GraphQL](./graphql.md), and [local/S3 object storage](https://riducms.com/docs/storage/). For a paired stored field,
-follow [Build a custom field](https://riducms.com/guides/custom-fields/).
+Official plugins include [Rich text](./rich-text.md), [SEO](./seo.md),
+[Form Builder](./form-builder.md), and [GraphQL](./graphql.md).
+For a complete new field type, follow [Build a field plugin](./custom-fields.md).

@@ -54,7 +54,9 @@ wrong schema.
 import { createClient } from '@riducms/sdk';
 import type { RiduConfig } from '~/generated/ridu.generated';
 
-const cms = createClient<RiduConfig>({ baseURL: process.env.RIDU_URL! });
+const cms = createClient<RiduConfig>({
+	baseURL: process.env.RIDU_URL!
+});
 ```
 
 When `ridu dev` is running, a Go config change regenerates this module automatically. Commit the
@@ -71,7 +73,10 @@ const page = await ridu.list('posts', {
 	page: 1,
 	limit: 24,
 	where: {
-		and: [{ status: { equals: 'published' } }, { title: { contains: 'ridu' } }]
+		and: [
+			{ status: { equals: 'published' } },
+			{ title: { contains: 'ridu' } }
+		]
 	},
 	sort: ['-createdAt', 'title'],
 	select: { title: true, status: true, author: true },
@@ -146,6 +151,98 @@ and `copyGlobalLocale` take their locale scope from `from` and `to`; `updateUplo
 The type system removes collection slugs from capability-specific methods when the generated
 manifest says the capability is absent; the server remains the authorization authority.
 
+## Check a field before saving {#live-validation}
+
+Use `collectionLiveValidation` or `globalLiveValidation` to request feedback for an unsaved form
+in a custom client. The built-in admin already handles these requests; configure
+`.LiveValidate(...)` in Go to enable them. See [Live server validation](./fields/live-validation.md)
+for the server setup and custom admin editor bindings.
+
+This example checks that a sale price is lower than the regular price, using the `products`
+collection from that guide. Include both unsaved values so the server can compare them.
+
+```ts title="scripts/check-sale-price.ts" focus={7-15,23-31}
+import { createClient } from '~/generated/ridu.generated';
+
+const ridu = createClient({
+	baseURL: 'http://localhost:8080'
+});
+const controller = new AbortController();
+const pending = ridu.collectionLiveValidation(
+	'products',
+	{
+		// Send the regular price too: the rule compares these values.
+		data: { price: 100, salePrice: 120 },
+		fields: ['salePrice']
+		// Add id: product.id when checking an existing document.
+	},
+	{ signal: controller.signal }
+);
+
+// Call controller.abort() when input changes or the editor closes.
+try {
+	const { evaluations } = await pending;
+	// A superseded response must not put old messages back in the UI.
+	if (!controller.signal.aborted) {
+		for (const evaluation of evaluations) {
+			if (evaluation.status === 'skipped') {
+				console.info(evaluation.path, 'Not checked');
+				continue;
+			}
+			// "checked" means the callback ran; it may have found issues.
+			for (const issue of evaluation.issues) {
+				console.info(issue.path, issue.message);
+			}
+		}
+	}
+} catch (error) {
+	// Fetch cancellation is expected when a newer edit replaces this check.
+	if (!controller.signal.aborted) throw error;
+}
+```
+
+This request returns a message on `salePrice` because 120 is greater than 100. Changing
+`salePrice` to 80 passes this live check.
+
+For your form, replace the example data with its current values and display the returned
+`issue.message` beside `issue.path`. Clear old feedback immediately after a relevant edit, call
+`controller.abort()`, then create a new controller for the next request. Also cancel when the
+editor closes or switches documents or locales. Cancellation and the response guard prevent a
+slower, older request from restoring obsolete messages. They do not schedule requests: choose
+when your client checks, such as on blur or after a short typing pause.
+
+### Choose the document and fields {#live-validation-input}
+
+| Input            | What to send                                                                                                                                                                                             |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Collection slug  | The resource name, such as `products`, as the first argument.                                                                                                                                            |
+| `id`             | The saved collection document's ID when editing it. Omit it for a new document.                                                                                                                          |
+| `data`           | The unsaved field values, including other fields the rule reads. Incomplete input is allowed; this is not a generated create or update contract.                                                         |
+| `fields`         | Field paths to check, such as `salePrice`, `seo.title`, or `variants.0.salePrice`. These are paths through the submitted data, not field IDs. A container path also selects live checks on its children. |
+| `options.locale` | One content locale. Locale fallback and `"all"` are unavailable for live checks.                                                                                                                         |
+| `options.signal` | An `AbortSignal` for cancelling an outdated request. Headers and authentication work like other SDK calls.                                                                                               |
+
+For a global, call `globalLiveValidation('site-settings', { data, fields }, options)` with your
+global's slug and fields. Do not send `id`; globals are checked as updates even before their first
+save. Plugin editors with detached data can also send `embedded` scopes; see
+[Live server validation](./fields/live-validation.md) before building that request.
+
+### Read the result {#live-validation-results}
+
+The response contains `evaluations`. Each evaluation includes `path`, optional `target`, `status`,
+and an `issues` array. Preserve a supplied `target` when associating feedback with nested or
+embedded fields; it is an opaque identifier, not a string to parse or manufacture.
+
+| Result                    | What it means for your UI                                                                                               |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `checked`, with issues    | The callback ran and returned feedback to show.                                                                         |
+| `checked`, without issues | That live check found no problem in this snapshot. Saving may still fail another rule.                                  |
+| `skipped`                 | The check did not run, for example because the input had the wrong type. Do not show it as a successful check.          |
+| Rejected request          | Handle `RiduError` for server failures and the Fetch abort error for cancellation. It is not a clean validation result. |
+
+Live checks do not save data or run `.Validate(...)`. Use `create`, `update`, or `updateGlobal` to
+save the form and handle their validation errors separately.
+
 ## Drafts, versions, and publishing {#versions}
 
 For versioned collections, use `versions` and `version` to inspect snapshots, then `publish`,
@@ -158,14 +255,24 @@ publishing is collection-only today.
 
 ```ts title="publishing.ts"
 const history = await ridu.versions('posts', post.id);
-const restored = await ridu.restore('posts', post.id, history[0].Revision, {
-	draft: true,
-	revision: post._revision
-});
+const restored = await ridu.restore(
+	'posts',
+	post.id,
+	history[0].Revision,
+	{
+		draft: true,
+		revision: post._revision
+	}
+);
 
-const job = await ridu.schedulePublish('posts', restored.id, new Date('2027-01-02T09:00:00Z'), {
-	revision: restored._revision
-});
+const job = await ridu.schedulePublish(
+	'posts',
+	restored.id,
+	new Date('2027-01-02T09:00:00Z'),
+	{
+		revision: restored._revision
+	}
+);
 ```
 
 ## Uploads and media {#uploads}
@@ -177,9 +284,13 @@ const asset = await ridu.upload('media', file, {
 	data: { alt: 'Team gathered outside the studio' }
 });
 
-const imported = await ridu.uploadFromURL('media', 'https://assets.example.com/photo.jpg', {
-	data: { alt: 'Imported photo' }
-});
+const imported = await ridu.uploadFromURL(
+	'media',
+	'https://assets.example.com/photo.jpg',
+	{
+		data: { alt: 'Imported photo' }
+	}
+);
 
 await ridu.updateUploadImage(
 	'media',
@@ -280,7 +391,8 @@ const response = await ridu.request('/api/revalidate/storefront', {
 	headers: { 'Content-Type': 'application/json' }
 });
 
-if (!response.ok) throw new Error(`revalidation failed: ${response.status}`);
+if (!response.ok)
+	throw new Error(`revalidation failed: ${response.status}`);
 ```
 
 The path must begin with one `/`, stay on the configured origin, and omit a fragment. The method
@@ -304,7 +416,11 @@ const cms = createClient({
 	middleware: [
 		async (request, next) => {
 			const response = await next(request);
-			console.debug(request.method, request.url, response.headers.get('X-Request-ID'));
+			console.debug(
+				request.method,
+				request.url,
+				response.headers.get('X-Request-ID')
+			);
 			return response;
 		}
 	]
@@ -332,7 +448,8 @@ try {
 	await ridu.update('posts', id, { title: '' }, { revision });
 } catch (error) {
 	if (error instanceof RiduError && error.code === 'validation') {
-		for (const issue of error.issues) console.error(issue.path, issue.message);
+		for (const issue of error.issues)
+			console.error(issue.path, issue.message);
 		return;
 	}
 	if (error instanceof RiduError && error.code === 'conflict') {
@@ -349,9 +466,13 @@ document against the generated TypeScript type. Validation and authorization rem
 
 ## Current type boundaries {#boundaries}
 
-Generated `where`, `select`, and `populate` inputs are resource-specific, but a selected or populated
-read currently retains the collection’s complete output type rather than computing a projected
-return type. Sort terms are checked as strings rather than a generated union of sortable paths.
+Generated `where`, `select`, and `populate` inputs are resource-specific. Literal `select` options
+narrow collection and global results while retaining framework metadata. Explicit `populate` paths
+infer target documents and target selections, including references inside groups, arrays, Blocks,
+and all-locale results. Preserve literal options when reusing a query; widened runtime options
+retain broader types. Authored fields can still be omitted by access rules. A numeric `depth` alone
+does not provide the same population inference, and sort terms remain strings rather than a
+generated union of sortable paths.
 The client does not cache, coalesce, or retry automatically; add policy in middleware only when the
 operation is safe to repeat. There is no required result-wrapper library and no Node-only transport.
 

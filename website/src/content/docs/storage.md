@@ -131,7 +131,8 @@ func openUploadStorage(context.Context) (storage.Backend, error) {
 		Bucket:         os.Getenv("S3_BUCKET"),
 		AccessKey:      os.Getenv("S3_ACCESS_KEY"),
 		SecretKey:      os.Getenv("S3_SECRET_KEY"),
-		MaxSpoolBytes:  256 << 20, // 256 × 2²⁰ = 268,435,456 bytes (256 MiB)
+		// 256 × 2²⁰ = 268,435,456 bytes (256 MiB)
+		MaxSpoolBytes:  256 << 20,
 		SpoolDirectory: "/var/tmp/ridu-spool",
 	})
 }

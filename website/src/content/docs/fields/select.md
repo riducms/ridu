@@ -1,80 +1,107 @@
 ---
 title: 'Select field'
-description: 'Define a typed single or multiple choice with stable stored values and translated author labels.'
+description: 'Add a dropdown for one choice or a multi-select for several choices.'
 product: core
-eyebrow: 'Scalar and choice fields'
+eyebrow: 'Basic fields'
 order: 68
-aliases: ['field.Select', 'select field', 'dropdown', 'multi-select', 'Choices', 'OneOf']
+aliases:
+  [
+    'field.Select',
+    'select field',
+    'dropdown',
+    'multi-select',
+    'Options'
+  ]
 relatedSymbolIds:
   [
     'go:github.com/riducms/ridu/field#Select',
-    'go:github.com/riducms/ridu/field#Choices',
-    'go:github.com/riducms/ridu/field#Multiple'
+    'go:github.com/riducms/ridu/field#Option',
+    'go:github.com/riducms/ridu/field#MultiSelect'
   ]
 navigation:
   section: 'Model content'
   parent: fields
-  group: 'Scalar & choice'
   order: 80
   title: 'Select'
 ---
 
-Use `field.Select` when a value must come from a finite set. It renders a dropdown for one choice
-and a multi-select when you add `field.Multiple()`. Generated TypeScript narrows input and output to
+Use `field.Select` when authors must choose from a fixed list of options. It renders a dropdown for one choice.
+Use `field.MultiSelect` for several choices. Generated TypeScript narrows input and output to
 the configured string values instead of a free-form `string`.
 
 ## In the admin {#admin-behavior}
 
 ![An open multiple Status select in the Ridu admin showing In review and Published as selected choices.](../../../../../docs/assets/fields/select.png)
 
-_The menu displays labels; stored and generated values use the configured choice keys._
+_The menu displays labels; stored and generated values use the configured option values._
 
-## Smallest working example {#example}
+## Add a dropdown {#example}
 
 ```go title="content/posts.go"
-field.Select(
-	"status",
-	field.OneOf("draft", "review", "published"),
-	field.Default("draft"),
+field.Select("status", "draft", "review", "published").Default("draft")
+```
+
+Pass strings directly for generated labels: `"in-review"` displays as “In review”, while the
+stored value remains `"in-review"`. Use `.Options(...)` with `field.Option` for custom labels or
+translations:
+
+```go title="content/posts.go"
+field.Select("visibility").Options(
+	field.Option{
+		Value:             "public",
+		Label:             "Everyone",
+		LabelTranslations: map[string]string{"fr": "Tout le monde"},
+	},
+	field.Option{Value: "members", Label: "Signed-in members"},
 )
 ```
 
-`OneOf` derives labels from the stored values. Use `Choices` when author-facing labels should differ:
-
-```go title="content/posts.go"
-field.Select(
-	"visibility",
-	field.Choices(
-		field.Choice{Value: "public", Label: "Everyone"},
-		field.Choice{Value: "members", Label: "Signed-in members"},
-	),
-)
-```
+`.Options(...)` replaces the entire option list, including any constructor values. Omit an
+option’s `Label` to generate it from `Value`. Reuse a typed slice with `.Options(options...)`,
+where `options` is a `[]field.Option`; string slices work in the constructor with `values...`.
 
 Values are stable data; labels and `LabelTranslations` are presentation. Changing `members` to
 `registered` is a data/API migration, while changing its label is not.
 
-## Multiple choices {#multiple}
+## Configuration {#configuration}
+
+| Constructor or method                                                 | What it controls                                                                |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `field.Select(name, values...)`                                       | Stores one configured string and renders a dropdown.                            |
+| `field.MultiSelect(name, values...)`                                  | Stores an ordered list of configured strings and renders a multi-select.        |
+| `.Options(options...)`                                                | Replaces inferred options with explicit values, labels, and label translations. |
+| `.Required()`                                                         | Requires one value, or a non-empty list for `MultiSelect`.                      |
+| `.Default(...)` / `.DefaultFrom(callback)`                            | Supplies the initial choice or choices when a new scope omits the field.        |
+| `.Localized()`                                                        | Stores a separate choice or list for each configured content locale.            |
+| `.Unique()` / `.Index()`                                              | Available on singular `Select`; enforces uniqueness or adds a query index.      |
+| `.Validate(...)`, `.LiveValidate(...)`, `.Access(...)`, `.Hooks(...)` | Adds application checks, authorization, and lifecycle behavior.                 |
+
+## Allow several choices {#multiple}
 
 ```go title="content/posts.go"
-field.Select(
-	"channels",
-	field.OneOf("web", "email", "social"),
-	field.Multiple(),
-	field.DefaultChoices("web", "email"),
-)
+field.MultiSelect("channels", "web", "email", "social").Default("web", "email")
 ```
 
-Multi-selects store an ordered list of unique configured values. Use `DefaultChoices` rather than
-the scalar `Default`. `Radio` cannot be multiple.
+Multi-selects store an ordered list of unique configured values. Its `Default` method accepts several strings. `Radio` cannot be multiple.
 
-## Validation, queries, and localization {#options}
+## Choose the initial selection {#defaults}
 
-At least one non-empty unique choice is required. Defaults must be in the choice list. Select also
+Use `.Default("draft")` for a fixed choice or `.DefaultFrom(callback)` to choose on the server.
+For example, a callback could choose a review status from the signed-in user's role. Select and
+Radio callbacks return `operation.Value[string]`; MultiSelect callbacks return
+`operation.Value[[]string]`. Return option values such as `"draft"`, rather than display labels.
+
+Defaults fill omitted selections; they preserve an author's explicit selection or empty input.
+All returned options must be declared on the field. See
+[Set default field values](/docs/fields/defaults/) for a complete callback and when it runs.
+
+## Validate and translate choices {#options}
+
+At least one non-empty unique option is required. Defaults must be in the option list. Select also
 supports `Required`, localization, indexing/uniqueness where appropriate, conditions, and common
-admin options. Query single choices with scalar equality/inequality and multi-selects with the
-generated list-aware operators. Localizing the field stores different selected values per content
-locale; translating choice labels alone uses `Choice.WithLabelTranslations`.
+admin options. Query single choices with equality or inequality and multi-selects with the
+list operators accepted by the generated SDK. Localizing the field stores different selected values per content
+locale; translating option labels alone uses `Option.LabelTranslations`.
 
 ## Common mistakes {#troubleshooting}
 
@@ -83,5 +110,5 @@ locale; translating choice labels alone uses `Choice.WithLabelTranslations`.
 - Use [Relationship](/docs/fields/relationship/) when choices are managed documents rather than a
   fixed list compiled into config.
 
-See [`field.Select`](/reference/field/select/), [`field.Choices`](/reference/field/choices/), and
-[`field.Multiple`](/reference/field/multiple/).
+See [`field.Select`](/reference/field/select/), [`SelectField.Options`](/reference/field/select-field-options-method/), and
+[`field.MultiSelect`](/reference/field/multi-select/).

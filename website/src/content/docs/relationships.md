@@ -28,11 +28,9 @@ operation response. This distinction determines storage, mutation, and read cost
 ## Store one relationship {#one}
 
 ```go
-field.Relationship("author",
-	field.To("users"),
-	field.Required(),
-	field.OnDelete(field.ReferenceDeleteRestrict),
-)
+field.Relationship("author", "users").
+	Required().
+	OnDelete(field.ReferenceDeleteRestrict)
 ```
 
 The stored value is the target document ID. The target collection must exist, and writes validate
@@ -42,15 +40,12 @@ ordinary validation rejects.
 
 ## Store many or polymorphic relationships {#many-polymorphic}
 
-Use `ToMany` for a list to one collection, or combine `ToAny` and `HasMany` for a polymorphic list:
+Use `Relationships` for a list to one collection, or `PolymorphicRelationships` for a polymorphic list:
 
 ```go
-field.Relationship("reviewers", field.ToMany("users"))
+field.Relationships("reviewers", "users")
 
-field.Relationship("subjects",
-	field.ToAny("posts", "media"),
-	field.HasMany(),
-)
+field.PolymorphicRelationships("subjects", "posts", "media")
 ```
 
 A polymorphic wire value carries both the target collection and document ID so an ID collision
@@ -66,12 +61,10 @@ Option filters derive server-validated predicates from the current document. A c
 example, limit an editor picker to users with a matching category:
 
 ```go
-field.Relationship("editor",
-	field.To("users"),
-	field.FilterOptionRules(
-		field.OptionFilter("category", field.FilterEquals, "category"),
-	),
-)
+field.Relationship("editor", "users").
+	FilterOptionRules(field.OptionFilter(
+		"category", field.FilterEquals, "category",
+	))
 ```
 
 Add more rules for multiple conditions, or use `OptionFilterFor` for polymorphic targets. Supported
@@ -105,20 +98,19 @@ duplicating IDs:
 ```go
 ridu.Collection{
 	Slug: "categories",
-	Fields: []field.Definition{
-		field.Text("name", field.Required()),
-		field.Join("posts", "posts", "category",
-			field.JoinLimit(20),
-			field.JoinColumns("title", "status", "updatedAt"),
-			field.JoinDefaultSort("-updatedAt"),
-			field.JoinAllowCreate(true),
-		),
+	Fields: field.Fields{
+		field.Text("name").Required(),
+		field.Join("posts", "posts", "category").
+			Limit(20).
+			DefaultColumns("title", "status", "updatedAt").
+			DefaultSort("-updatedAt").
+			AllowCreate(true),
 	},
 }
 ```
 
 Join fields are read-only computed output and are supported on collections, not globals. The target
-path must be a compatible relationship back to the source collection. `JoinLimit` is between 1 and 100. Columns, default sort, and inline-create preference configure the admin table; they do not
+path must be a compatible relationship back to the source collection. `Limit` is between 1 and 100. Columns, default sort, and inline-create preference configure the admin table; they do not
 authorize target reads or creates.
 
 Reads query the target collection through its access rule, hooks, localization, and redaction.
@@ -130,10 +122,15 @@ The join itself is derived, so changing membership updates the target documents'
 Use the delta operation:
 
 ```ts
-const result = await client.mutateJoin('categories', category.id, 'posts', {
-	additions: ['post_123', 'post_456'],
-	removals: ['post_789']
-});
+const result = await client.mutateJoin(
+	'categories',
+	category.id,
+	'posts',
+	{
+		additions: ['post_123', 'post_456'],
+		removals: ['post_789']
+	}
+);
 
 console.log(result.added, result.removed, result.doc.posts);
 ```

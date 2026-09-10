@@ -1,6 +1,39 @@
 import type { CoreTranslationCatalog } from "../types";
 
 export const frMessages = {
+	"fields:liveValidationPending": "Vérification…",
+	"fields:liveValidationFailed": "Cette vérification n’a pas pu aboutir.",
+	"fields:liveValidationRetry": "Réessayer",
+	"fields:liveValidationSkipped": "Cette valeur ne peut pas encore être vérifiée.",
+	"collections:operatorIncludesItem": "Contient un élément",
+	"fields:listAdd": "Ajouter un élément",
+	"fields:listEmpty": "Aucun élément.",
+	"fields:listItem": "{label}, élément {number}",
+	"fields:listMoveUp": "Monter l’élément {number}",
+	"fields:listMoveDown": "Descendre l’élément {number}",
+	"fields:listRemove": "Supprimer l’élément {number}",
+	"fields:listAdded": "Élément {number} ajouté.",
+	"fields:listRemoved": "Élément {number} supprimé.",
+	"fields:listMoved": "Élément déplacé de {from} à {to}.",
+	"errors:listMinItems": "{label} doit contenir au moins {count} éléments",
+	"errors:listMaxItems": "{label} doit contenir au maximum {count} éléments",
+	"errors:listItemString": "{label}, élément {number} : saisissez du texte",
+	"errors:listItemNumber": "{label}, élément {number} : saisissez un nombre fini",
+	"errors:listItemMinLength": "{label}, élément {number} : utilisez au moins {count} caractères",
+	"errors:listItemMaxLength": "{label}, élément {number} : utilisez au maximum {count} caractères",
+	"errors:listItemMin": "{label}, élément {number} : saisissez un nombre supérieur ou égal à {min}",
+	"errors:listItemMax": "{label}, élément {number} : saisissez un nombre inférieur ou égal à {max}",
+
+	"fields:embeddedEditTitle": "Modifier le bloc",
+	"fields:embeddedEditDescription":
+		"Appliquez les modifications au document ou annulez cette modification.",
+	"errors:pendingEmbeddedEdit":
+		"Appliquez ou annulez la modification du bloc ouvert avant d’enregistrer ce document.",
+	"errors:staleEmbeddedEdit":
+		"Ce bloc ou document a changé pendant la modification. Annulez et rouvrez-le avant d’appliquer les modifications.",
+	"errors:unknownBlockRecovery":
+		"Ce document contient un type de bloc qui n’est plus configuré. Son contenu est conservé. Restaurez le schéma du bloc ou migrez le document avant de l’enregistrer.",
+	"fields:rowErrors": "{count} erreurs de validation",
 	"account:account": "Compte",
 	"account:accountMenu": "Paramètres du compte",
 	"account:accountMenuLabel": "Ouvrir le menu du compte de {name}",
@@ -574,7 +607,7 @@ export const frMessages = {
 	"errors:required": "Ce champ est obligatoire.",
 	"errors:save": "Impossible d’enregistrer les modifications.",
 	"errors:unknown": "Une erreur est survenue.",
-	"errors:allowedChoice": "{label} ne fait pas partie des choix autorisés",
+	"errors:allowedOption": "{label} ne fait pas partie des choix autorisés",
 	"errors:array": "{label} doit être un tableau",
 	"errors:blockObject": "Le bloc doit être un objet",
 	"errors:blockType": "Ce type de bloc n’est pas autorisé",
@@ -594,7 +627,7 @@ export const frMessages = {
 	"errors:clipboardRow": "Les données du presse-papiers ne sont pas compatibles avec cette ligne",
 	"errors:clipboardRows": "Les données du presse-papiers ne constituent pas un ensemble de lignes",
 	"errors:correctInvalidFields": "Corrigez les champs non valides.",
-	"errors:duplicateChoice": "{label} ne doit pas contenir de choix en double",
+	"errors:duplicateOption": "{label} ne doit pas contenir de choix en double",
 	"errors:fieldRequired": "{label} est obligatoire",
 	"errors:finiteNumber": "{label} doit être un nombre fini",
 	"errors:maxRows": {

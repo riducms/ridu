@@ -16,8 +16,8 @@ func TestHardDeletesCleanStateWhileTrashRetainsIt(t *testing.T) {
 	application, err := ridu.New(ridu.Config{
 		Name: "delete lifecycle",
 		Collections: []ridu.Collection{
-			{Slug: "posts", Fields: []field.Definition{field.Text("title")}},
-			{Slug: "archived-posts", Trash: true, Fields: []field.Definition{field.Text("title")}},
+			{Slug: "posts", Fields: field.Fields{field.Text("title")}},
+			{Slug: "archived-posts", Trash: true, Fields: field.Fields{field.Text("title")}},
 		},
 	}, backend)
 	if err != nil {
@@ -59,7 +59,7 @@ func TestAfterCommitCleanupContinuesAfterFailure(t *testing.T) {
 	application, err := ridu.New(ridu.Config{
 		Name: "after commit cleanup",
 		Collections: []ridu.Collection{{
-			Slug: "posts", Fields: []field.Definition{field.Text("title")},
+			Slug: "posts", Fields: field.Fields{field.Text("title")},
 			Hooks: ridu.CollectionHooks{AfterCommit: []ridu.Hook{
 				func(ridu.HookContext) error { return errors.New("first cleanup failed") },
 				func(ridu.HookContext) error { secondRan = true; return nil },
@@ -82,7 +82,7 @@ func TestBulkDeleteCleanupRollsBackWithLaterHookFailure(t *testing.T) {
 	application, err := ridu.New(ridu.Config{
 		Name: "bulk delete cleanup rollback",
 		Collections: []ridu.Collection{{
-			Slug: "posts", Versions: true, Fields: []field.Definition{field.Text("title")},
+			Slug: "posts", Versions: true, Fields: field.Fields{field.Text("title")},
 			Hooks: ridu.CollectionHooks{AfterDelete: []ridu.Hook{func(ctx ridu.HookContext) error {
 				if ctx.Document != nil && ctx.Document.ID == failingID {
 					return errors.New("reject second delete")

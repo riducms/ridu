@@ -18,11 +18,8 @@ import (
 func TestRESTHardDeleteRestrictionUsesStableNonOracleEnvelope(t *testing.T) {
 	ctx := context.Background()
 	application, err := ridu.New(ridu.Config{Name: "reference delete REST", Collections: []ridu.Collection{
-		{Slug: "users", Fields: []field.Definition{field.Text("name")}},
-		{Slug: "posts", Fields: []field.Definition{
-			field.Text("title"),
-			field.Relationship("protectedOwner", field.To("users"), field.OnDelete(field.ReferenceDeleteRestrict)),
-		}},
+		{Slug: "users", Fields: field.Fields{field.Text("name")}},
+		{Slug: "posts", Fields: field.Fields{field.Text("title"), field.Relationship("protectedOwner", "users").OnDelete(field.ReferenceDeleteRestrict)}},
 	}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)

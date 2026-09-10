@@ -304,12 +304,12 @@ func collectMongoRelationshipIDs(
 		populationwalk.VisitAtPath(fields, document.Values, path, locales, func(_ schema.Field, value store.Value) {
 			items := []store.Value{value}
 			if relationship.HasMany {
-				items, _ = value.Values()
+				items, _ = value.CopyList()
 			}
 			for _, reference := range items {
 				id := ""
 				if relationship.Polymorphic {
-					object, valid := reference.ObjectValue()
+					object, valid := reference.CopyObject()
 					if !valid {
 						continue
 					}
@@ -347,7 +347,7 @@ func populateMongoRelationshipValue(value store.Value, relationship *schema.Rela
 			}
 			return reference
 		}
-		object, valid := reference.ObjectValue()
+		object, valid := reference.CopyObject()
 		if !valid {
 			return reference
 		}
@@ -367,7 +367,7 @@ func populateMongoRelationshipValue(value store.Value, relationship *schema.Rela
 	if !relationship.HasMany {
 		return populateOne(value)
 	}
-	items, valid := value.Values()
+	items, valid := value.CopyList()
 	if !valid {
 		return value
 	}

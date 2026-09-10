@@ -14,10 +14,7 @@
 		],
 		"adapters": ["postgres", "sqlite", "mongodb"],
 		"guides": ["/docs/fields/"],
-		"symbols": [
-			"go:github.com/riducms/ridu/field#Definition",
-			"go:github.com/riducms/ridu/field#Select"
-		]
+		"symbols": ["go:github.com/riducms/ridu/field#Node", "go:github.com/riducms/ridu/field#Select"]
 	},
 	{
 		"id": "model.relationships",
@@ -105,8 +102,8 @@
 		"qualificationLimits": [],
 		"owners": ["admin", "@riducms/admin", "@riducms/ui"],
 		"evidence": [
-			"admin/tests/admin-runtime.test.ts",
-			"admin/tests/form-controller.test.ts",
+			"admin/tests/browser/admin-runtime.browser.ts",
+			"admin/tests/browser/form-controller.browser.ts",
 			"admin/tests/list-workspace.test.ts"
 		],
 		"adapters": ["postgres", "sqlite", "mongodb"],
@@ -226,7 +223,7 @@
 		"name": "MongoDB adapter",
 		"category": "Database adapters",
 		"status": "limited",
-		"summary": "Use MongoDB only with Ridu’s supported version, security, topology, and platform configuration.",
+		"summary": "Use MongoDB only with Ridu\u2019s supported version, security, topology, and platform configuration.",
 		"qualificationLimits": [
 			"Support covers generated starter and blank projects on Linux x86-64, MongoDB Community 8.2.9, SCRAM-SHA-256, verified TLS, and a writable three-member replica set.",
 			"Atlas, DocumentDB, Cosmos DB, standalone servers, other versions or topologies, and generic live cross-adapter data migration are not supported."
@@ -383,6 +380,30 @@
 		"symbols": [
 			"go:github.com/riducms/ridu/core#TaskDefinition",
 			"go:github.com/riducms/ridu/core#TaskHandler"
+		]
+	},
+	{
+		"id": "fields.live-validation",
+		"name": "Live server validation",
+		"category": "Model content",
+		"status": "available",
+		"summary": "Show server validation messages before saving, including in custom and embedded field editors. Save rules run separately.",
+		"qualificationLimits": [
+			"Only fields with LiveValidate callbacks are checked. Checks do not run defaults or save hooks; callbacks must avoid side effects and respect cancellation.",
+			"Checks use one exact content locale. The first-user setup form does not request live checks."
+		],
+		"owners": ["field", "operation", "internal/operation", "admin"],
+		"evidence": [
+			"core/live_validation_test.go",
+			"internal/operation/live_validation_test.go",
+			"admin/tests/browser/live-validation.browser.ts",
+			"tests/e2e/admin/live-validation.spec.ts"
+		],
+		"adapters": ["postgres", "sqlite", "mongodb"],
+		"guides": ["/docs/fields/live-validation/"],
+		"symbols": [
+			"go:github.com/riducms/ridu/field#LiveValidator",
+			"go:github.com/riducms/ridu/operation#LiveValidationContext"
 		]
 	}
 ]

@@ -1,6 +1,32 @@
 import type { TranslationMessage } from "../types";
 
 export const enMessages = {
+	"fields:liveValidationPending": "Checking…",
+	"fields:liveValidationFailed": "This check could not be completed.",
+	"fields:liveValidationRetry": "Retry check",
+	"fields:liveValidationSkipped": "This input could not be checked yet.",
+	"collections:operatorIncludesItem": "Includes item",
+	"fields:listAdd": "Add item",
+	"fields:listEmpty": "No items yet.",
+	"fields:listItem": "{label}, item {number}",
+	"fields:listMoveUp": "Move item {number} up",
+	"fields:listMoveDown": "Move item {number} down",
+	"fields:listRemove": "Remove item {number}",
+	"fields:listAdded": "Added item {number}.",
+	"fields:listRemoved": "Removed item {number}.",
+	"fields:listMoved": "Moved item {from} to {to}.",
+	"errors:listMinItems": "{label} must contain at least {count} items",
+	"errors:listMaxItems": "{label} must contain no more than {count} items",
+	"errors:listItemString": "{label}, item {number}: enter a string",
+	"errors:listItemNumber": "{label}, item {number}: enter a finite number",
+	"errors:listItemMinLength": "{label}, item {number}: use at least {count} characters",
+	"errors:listItemMaxLength": "{label}, item {number}: use no more than {count} characters",
+	"errors:listItemMin": "{label}, item {number}: enter a number at least {min}",
+	"errors:listItemMax": "{label}, item {number}: enter a number no greater than {max}",
+
+	"errors:unknownBlockRecovery":
+		"This document contains a block type that is no longer configured. Its content is preserved. Restore the block schema or migrate the document before saving.",
+	"fields:rowErrors": "{count} validation errors",
 	"account:account": "Account",
 	"account:accountMenu": "Account settings",
 	"account:accountMenuLabel": "Open account menu for {name}",
@@ -556,7 +582,7 @@ export const enMessages = {
 	"errors:required": "This field is required.",
 	"errors:save": "The changes could not be saved.",
 	"errors:unknown": "Something went wrong.",
-	"errors:allowedChoice": "{label} is not an allowed choice",
+	"errors:allowedOption": "{label} is not an allowed option",
 	"errors:array": "{label} must be an array",
 	"errors:blockObject": "Block must be an object",
 	"errors:blockType": "Block type is not allowed",
@@ -575,7 +601,7 @@ export const enMessages = {
 	"errors:clipboardRow": "Clipboard data is not compatible with this row",
 	"errors:clipboardRows": "Clipboard data is not a row collection",
 	"errors:correctInvalidFields": "Please correct the invalid fields.",
-	"errors:duplicateChoice": "{label} must not contain duplicate choices",
+	"errors:duplicateOption": "{label} must not contain duplicate options",
 	"errors:fieldRequired": "{label} is required",
 	"errors:finiteNumber": "{label} must be a finite number",
 	"errors:maxRows": {
@@ -695,6 +721,12 @@ export const enMessages = {
 	"fields:upload": "upload",
 	"general:add": "Add",
 	"general:apply": "Apply",
+	"fields:embeddedEditTitle": "Edit block",
+	"fields:embeddedEditDescription": "Apply changes to the document or cancel this edit.",
+	"errors:pendingEmbeddedEdit":
+		"Apply or cancel the open block editor before saving this document.",
+	"errors:staleEmbeddedEdit":
+		"This block or document changed while its editor was open. Cancel and reopen it before applying changes.",
 	"general:back": "Back",
 	"general:bulkActions": "Bulk actions",
 	"general:cancel": "Cancel",

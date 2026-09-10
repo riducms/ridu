@@ -91,6 +91,25 @@ describe('documentation image capture', () => {
 		}
 	});
 
+	test('shows the field in use before listing every configuration option', () => {
+		for (const field of manifest.fields) {
+			const page = readFileSync(resolve(repositoryRoot, field.documentationOwner), 'utf8');
+			const figure = page.indexOf('![', page.indexOf('\n---', 4));
+			const example = page.indexOf('```go', figure);
+			const configuration = page.indexOf('## Configuration');
+
+			expect(figure, `${field.slug} figure`).toBeGreaterThan(0);
+			expect(example, `${field.slug} starter example`).toBeGreaterThan(figure);
+			expect(configuration, `${field.slug} configuration`).toBeGreaterThan(example);
+		}
+
+		const lists = readFileSync(
+			resolve(repositoryRoot, 'website/src/content/docs/fields/lists.md'),
+			'utf8'
+		);
+		expect(lists.indexOf('## Configuration')).toBeGreaterThan(lists.indexOf('```go'));
+	});
+
 	test('has no missing or orphaned focused field image', () => {
 		const captured = manifest.fields.map(({ output }) => basename(output)).sort();
 		const committed = readdirSync(resolve(repositoryRoot, 'docs/assets/fields'))

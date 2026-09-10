@@ -297,10 +297,10 @@ func TestDuplicateCopiesOriginalAndDerivedSizes(t *testing.T) {
 	if originalKey == duplicateKey {
 		t.Fatalf("original key was reused: %q", originalKey)
 	}
-	originalSizes, _ := prepared.Values["sizes"].ObjectValue()
-	duplicateSizes, _ := duplicate.Values["sizes"].ObjectValue()
-	originalThumb, _ := originalSizes["thumb"].ObjectValue()
-	duplicateThumb, _ := duplicateSizes["thumb"].ObjectValue()
+	originalSizes, _ := prepared.Values["sizes"].CopyObject()
+	duplicateSizes, _ := duplicate.Values["sizes"].CopyObject()
+	originalThumb, _ := originalSizes["thumb"].CopyObject()
+	duplicateThumb, _ := duplicateSizes["thumb"].CopyObject()
 	originalThumbKey, _ := originalThumb["objectKey"].StringValue()
 	duplicateThumbKey, _ := duplicateThumb["objectKey"].StringValue()
 	if originalKey == originalThumbKey {
@@ -479,8 +479,8 @@ func TestNewUploadKeysDoNotEncodeMutableCollectionSlug(t *testing.T) {
 
 func variantPixel(t *testing.T, backend *localstorage.Backend, prepared uploads.Prepared, name string) color.Color {
 	t.Helper()
-	sizes, _ := prepared.Values["sizes"].ObjectValue()
-	metadata, _ := sizes[name].ObjectValue()
+	sizes, _ := prepared.Values["sizes"].CopyObject()
+	metadata, _ := sizes[name].CopyObject()
 	key, _ := metadata["objectKey"].StringValue()
 	reader, _, err := backend.Open(context.Background(), key)
 	if err != nil {

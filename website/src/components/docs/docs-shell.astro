@@ -91,7 +91,7 @@ const wide = page.layout === 'wide';
 	]}
 >
 	<details
-		class="docs-navigation-panel mx-5 mt-4.5 border border-line bg-surface md:(sticky top-$page-header-height m-0 bg-transparent b-0 h-page self-start overflow-hidden border-r)"
+		class="docs-navigation-panel mx-5 mt-4.5 border border-line bg-surface md:(sticky top-$page-header-height m-0 bg-transparent b-0 h-page self-start overflow-hidden border-x)"
 		open
 		transition:persist="documentation-navigation"
 		data-documentation-navigation
@@ -140,7 +140,7 @@ const wide = page.layout === 'wide';
 						)
 					}
 					<span class="font-mono text-ink-faint" aria-hidden="true">›</span>
-					<span class="text-accent">{page.eyebrow}</span>
+					<span class="text-accent" aria-current="page">{page.title}</span>
 				</nav>
 				{pageActions && <DocumentPageActions title={page.title} href={page.href} />}
 			</div>

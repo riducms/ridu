@@ -1,0 +1,9 @@
+version = 1
+database = "sqlite"
+entry = "./cmd/server"
+schema = "generated/ridu.schema.json"
+client = "generated/ridu.generated.ts"
+openapi = "generated/ridu.openapi.json"
+plugins = "generated/ridu.plugins.ts"
+plugin_go = "generated/ridu.plugins.go"
+migrations = "migrations"

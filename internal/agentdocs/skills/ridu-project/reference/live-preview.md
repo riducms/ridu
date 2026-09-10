@@ -85,7 +85,8 @@ const ridu = createClient<RiduConfig>({
 
 export async function load({ params, url, setHeaders }) {
 	const token = url.searchParams.get('__ridu_preview_token');
-	if (!token) throw new Response('Missing preview capability', { status: 401 });
+	if (!token)
+		throw new Response('Missing preview capability', { status: 401 });
 
 	setHeaders({
 		'cache-control': 'private, no-store',
@@ -115,7 +116,10 @@ identity.
 import { connectLivePreview } from '@riducms/sdk';
 import type { Posts } from '~/generated/ridu.generated';
 
-export function connectPostPreview(id: string, onPost: (post: Posts) => void) {
+export function connectPostPreview(
+	id: string,
+	onPost: (post: Posts) => void
+) {
 	const connection = connectLivePreview<Posts>({
 		adminOrigin: 'https://cms.example.com',
 		target: { resource: 'collection', slug: 'posts', id },

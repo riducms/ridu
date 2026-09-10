@@ -10,6 +10,7 @@ import (
 	ridu "github.com/riducms/ridu/core"
 	"github.com/riducms/ridu/field"
 	"github.com/riducms/ridu/internal/teststore"
+	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
@@ -19,10 +20,10 @@ func TestAppRejectsCrossKindStableResourceIdentityCollision(t *testing.T) {
 	application, err := ridu.New(ridu.Config{
 		Name: "Colliding resource identities",
 		Collections: []ridu.Collection{{
-			Slug: "global-site-settings", Fields: []field.Definition{field.Text("title")},
+			Slug: "global-site-settings", Fields: field.Fields{field.Text("title")},
 		}},
 		Globals: []ridu.Global{{
-			Slug: "site-settings", Fields: []field.Definition{field.Text("title")},
+			Slug: "site-settings", Fields: field.Fields{field.Text("title")},
 		}},
 	}, teststore.New())
 	if application != nil {
@@ -50,7 +51,7 @@ func TestLocalCRUDUsesValidationAccessAndOnePipeline(t *testing.T) {
 		Name: "Operations",
 		Collections: []ridu.Collection{{
 			Slug:   "posts",
-			Fields: []field.Definition{field.Text("title", field.Required())},
+			Fields: field.Fields{field.Text("title").Required()},
 			Access: ridu.CollectionAccess{
 				Create: func(ridu.AccessContext) (ridu.AccessDecision, error) { return ridu.Allow(), nil },
 				Read: func(ridu.AccessContext) (ridu.AccessDecision, error) {
@@ -107,8 +108,8 @@ func TestLocalReadPreservesMetadataOnlyRootAndPopulationSelections(t *testing.T)
 	application, err := ridu.New(ridu.Config{
 		Name: "Projection presence",
 		Collections: []ridu.Collection{
-			{Slug: "authors", Versions: true, Trash: true, Fields: []field.Definition{field.Text("name"), field.Text("bio")}},
-			{Slug: "posts", Fields: []field.Definition{field.Text("title"), field.Relationship("author", field.To("authors"))}},
+			{Slug: "authors", Versions: true, Trash: true, Fields: field.Fields{field.Text("name"), field.Text("bio")}},
+			{Slug: "posts", Fields: field.Fields{field.Text("title"), field.Relationship("author", "authors")}},
 		},
 	}, teststore.New())
 	if err != nil {
@@ -133,7 +134,7 @@ func TestLocalReadPreservesMetadataOnlyRootAndPopulationSelections(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	projectedAuthor, ok := populated.Values["author"].DocumentValue()
+	projectedAuthor, ok := populated.Values["author"].CopyDocument()
 	if !ok || projectedAuthor.ID != author.ID || len(projectedAuthor.Values) != 0 {
 		t.Fatalf("metadata-only populated author = %#v, %t", projectedAuthor, ok)
 	}
@@ -147,7 +148,7 @@ func TestLocalReadPreservesMetadataOnlyRootAndPopulationSelections(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	metadataAuthor, ok := generatedMetadata.Values["author"].DocumentValue()
+	metadataAuthor, ok := generatedMetadata.Values["author"].CopyDocument()
 	if !ok || metadataAuthor.Status != store.StatusPublished || metadataAuthor.Revision < 1 || len(metadataAuthor.Values) != 0 {
 		t.Fatalf("generated metadata populated author = %#v, %t", metadataAuthor, ok)
 	}
@@ -155,9 +156,9 @@ func TestLocalReadPreservesMetadataOnlyRootAndPopulationSelections(t *testing.T)
 
 func TestTrashLifecycleHidesRestoresAndPermanentlyDeletes(t *testing.T) {
 	backend := teststore.New()
-	var operations []ridu.Operation
+	var operations []operation.Kind
 	application, err := ridu.New(ridu.Config{Name: "Trash", Collections: []ridu.Collection{{
-		Slug: "posts", Trash: true, Fields: []field.Definition{field.Text("title", field.Required())},
+		Slug: "posts", Trash: true, Fields: field.Fields{field.Text("title").Required()},
 		Hooks: ridu.CollectionHooks{AfterOperation: []ridu.Hook{func(ctx ridu.HookContext) error {
 			operations = append(operations, ctx.Operation)
 			return nil
@@ -195,7 +196,7 @@ func TestTrashLifecycleHidesRestoresAndPermanentlyDeletes(t *testing.T) {
 	if err != nil || trash.Total != 0 {
 		t.Fatalf("trash after permanent delete = %#v, %v", trash, err)
 	}
-	want := []ridu.Operation{ridu.OperationCreate, ridu.OperationDelete, ridu.OperationRead, ridu.OperationRestoreDeleted, ridu.OperationDelete, ridu.OperationDeletePermanent, ridu.OperationRead}
+	want := []operation.Kind{operation.Create, operation.Delete, operation.Read, operation.RestoreDeleted, operation.Delete, operation.DeletePermanent, operation.Read}
 	if !slices.Equal(operations, want) {
 		t.Fatalf("operations = %v, want %v", operations, want)
 	}
@@ -204,7 +205,7 @@ func TestTrashLifecycleHidesRestoresAndPermanentlyDeletes(t *testing.T) {
 func TestTrashCapabilitiesMatchDeleteAccessWhenReadIsDenied(t *testing.T) {
 	denyRead := false
 	application, err := ridu.New(ridu.Config{Name: "Unreadable trash capabilities", Collections: []ridu.Collection{{
-		Slug: "posts", Trash: true, Fields: []field.Definition{field.Text("title", field.Required())},
+		Slug: "posts", Trash: true, Fields: field.Fields{field.Text("title").Required()},
 		Access: ridu.CollectionAccess{
 			Read: func(ridu.AccessContext) (ridu.AccessDecision, error) {
 				if denyRead {
@@ -246,7 +247,7 @@ func TestTrashCapabilitiesMatchDeleteAccessWhenReadIsDenied(t *testing.T) {
 
 func TestBulkTrashRestoreAndPermanentDeleteAreAtomic(t *testing.T) {
 	application, err := ridu.New(ridu.Config{Name: "Bulk trash", Collections: []ridu.Collection{{
-		Slug: "posts", Trash: true, Fields: []field.Definition{field.Text("title", field.Required())},
+		Slug: "posts", Trash: true, Fields: field.Fields{field.Text("title").Required()},
 	}}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -296,11 +297,8 @@ func TestDuplicateHooksAndAtomicBulkRollback(t *testing.T) {
 	backend := teststore.New()
 	titlePath, _ := query.NewPath("title")
 	application, err := ridu.New(ridu.Config{Name: "Bulk and duplicate", Collections: []ridu.Collection{{
-		Slug: "posts",
-		Fields: []field.Definition{
-			field.Text("title", field.Required()),
-			field.Text("slug", field.Unique()),
-		},
+		Slug:   "posts",
+		Fields: field.Fields{field.Text("title").Required(), field.Text("slug").Unique()},
 		Access: ridu.CollectionAccess{
 			Create: func(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
 				if _, hasCopiedTitle := ctx.Data["title"]; !hasCopiedTitle {
@@ -313,7 +311,7 @@ func TestDuplicateHooksAndAtomicBulkRollback(t *testing.T) {
 			},
 		},
 		Hooks: ridu.CollectionHooks{BeforeValidate: []ridu.Hook{func(ctx ridu.HookContext) error {
-			if ctx.Operation == ridu.OperationDuplicate {
+			if ctx.Operation == operation.Duplicate {
 				title, _ := ctx.Data["title"].StringValue()
 				ctx.Data["title"] = store.String("Copy of " + title)
 				delete(ctx.Data, "slug")
@@ -362,14 +360,17 @@ func TestDuplicateHooksAndAtomicBulkRollback(t *testing.T) {
 func TestDuplicateCannotLaunderSourceHiddenFieldsThroughNewOwnership(t *testing.T) {
 	application, err := ridu.New(ridu.Config{Name: "Duplicate source field access", Collections: []ridu.Collection{{
 		Slug: "posts",
-		Fields: []field.Definition{
-			field.Text("owner", field.Required()),
-			field.Text("secret"),
-		},
-		FieldAccess: map[string]ridu.FieldAccess{"secret": {Read: func(ctx ridu.FieldAccessContext) (bool, error) {
-			owner, _ := ctx.Document.Values["owner"].StringValue()
-			return ctx.Actor != nil && owner == ctx.Actor.ID, nil
-		}}},
+		Fields: field.Fields{field.Text("owner").Required(), field.Text("secret").Access(field.Access{Read: func(ctx operation.AccessContext,
+
+		) (bool, error) {
+			owner, _ := ctx.Root.Get("owner").
+				StringValue()
+			return ctx.Actor.ID != "" &&
+					owner ==
+						string(ctx.Actor.ID),
+
+				nil
+		}})},
 	}}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -409,7 +410,7 @@ func TestDuplicateCannotLaunderSourceHiddenFieldsThroughNewOwnership(t *testing.
 
 func TestFullDocumentGlobalAndErrorHookMatrix(t *testing.T) {
 	backend := teststore.New()
-	seen := make(map[string][]ridu.Operation)
+	seen := make(map[string][]operation.Kind)
 	record := func(name string) ridu.Hook {
 		return func(ctx ridu.HookContext) error {
 			seen[name] = append(seen[name], ctx.Operation)
@@ -445,17 +446,33 @@ func TestFullDocumentGlobalAndErrorHookMatrix(t *testing.T) {
 		Name:  "Hook matrix",
 		Hooks: ridu.RootHooks{AfterError: []ridu.Hook{record("rootAfterError")}},
 		Collections: []ridu.Collection{{
-			Slug: "posts", Fields: []field.Definition{field.Text("title", field.Required())}, Hooks: hooks,
-			FieldHooks: map[string]ridu.CollectionHooks{"title": {
-				BeforeDuplicate: []ridu.Hook{record("fieldBeforeDuplicate")},
-				BeforeChange:    []ridu.Hook{record("fieldBeforeChange")},
-				AfterChange:     []ridu.Hook{record("fieldAfterChange")},
-				AfterRead:       []ridu.Hook{record("fieldAfterRead")},
-				BeforeDelete:    []ridu.Hook{record("fieldBeforeDelete")},
-				AfterDelete:     []ridu.Hook{record("fieldAfterDelete")},
-			}},
+			Slug: "posts", Fields: field.Fields{field.Text("title").Required().Hooks(field.Hooks[string]{
+				BeforeDuplicate: []field.RawTransform{func(ctx operation.WriteContext, _ operation.Value[store.Value]) (operation.Change[store.Value], error) {
+					seen["fieldBeforeDuplicate"] = append(seen["fieldBeforeDuplicate"], ctx.Operation)
+					return operation.Keep[store.Value](), nil
+				}},
+				BeforeChange: []field.Transform[string]{func(ctx operation.WriteContext, _ operation.Value[string]) (operation.Change[string], error) {
+					seen["fieldBeforeChange"] = append(seen["fieldBeforeChange"], ctx.Operation)
+					return operation.Keep[string](), nil
+				}},
+				AfterChange: []field.Observer[string]{func(ctx operation.EventContext, _ operation.Value[string]) error {
+					seen["fieldAfterChange"] = append(seen["fieldAfterChange"], ctx.Operation)
+					return nil
+				}},
+				BeforeDelete: []field.Observer[string]{func(ctx operation.EventContext, _ operation.Value[string]) error {
+					seen["fieldBeforeDelete"] = append(seen["fieldBeforeDelete"], ctx.Operation)
+					return nil
+				}},
+				AfterDelete: []field.Observer[string]{func(ctx operation.EventContext, _ operation.Value[string]) error {
+					seen["fieldAfterDelete"] = append(seen["fieldAfterDelete"], ctx.Operation)
+					return nil
+				}},
+			}).ReadHooks(field.ReadHooks[string]{AfterRead: []field.OutputTransform[string]{func(ctx operation.ReadContext, _ operation.Value[string]) (operation.Change[string], error) {
+				seen["fieldAfterRead"] = append(seen["fieldAfterRead"], ctx.Operation)
+				return operation.Keep[string](), nil
+			}}})}, Hooks: hooks,
 		}},
-		Globals: []ridu.Global{{Slug: "settings", Fields: []field.Definition{field.Text("title", field.Required())}, Hooks: globalHooks}},
+		Globals: []ridu.Global{{Slug: "settings", Fields: field.Fields{field.Text("title").Required()}, Hooks: globalHooks}},
 	}, backend)
 	if err != nil {
 		t.Fatal(err)
@@ -490,18 +507,18 @@ func TestFullDocumentGlobalAndErrorHookMatrix(t *testing.T) {
 		t.Fatalf("unknown collection error = %v", err)
 	}
 
-	wantOperations := map[string][]ridu.Operation{
-		"beforeDuplicate":      {ridu.OperationDuplicate},
-		"fieldBeforeDuplicate": {ridu.OperationDuplicate},
-		"beforeRead":           {ridu.OperationRead, ridu.OperationRead},
-		"beforeDelete":         {ridu.OperationDelete},
-		"fieldBeforeDelete":    {ridu.OperationDelete},
-		"afterDelete":          {ridu.OperationDelete},
-		"fieldAfterDelete":     {ridu.OperationDelete},
-		"afterRead":            {ridu.OperationCreate, ridu.OperationDuplicate, ridu.OperationRead, ridu.OperationDelete, ridu.OperationUpdate, ridu.OperationRead},
-		"fieldAfterRead":       {ridu.OperationCreate, ridu.OperationDuplicate, ridu.OperationRead, ridu.OperationDelete},
-		"afterError":           {ridu.OperationCreate},
-		"rootAfterError":       {ridu.OperationCreate, ridu.OperationRead},
+	wantOperations := map[string][]operation.Kind{
+		"beforeDuplicate":      {operation.Duplicate},
+		"fieldBeforeDuplicate": {operation.Duplicate},
+		"beforeRead":           {operation.Read, operation.Read},
+		"beforeDelete":         {operation.Delete},
+		"fieldBeforeDelete":    {operation.Delete},
+		"afterDelete":          {operation.Delete},
+		"fieldAfterDelete":     {operation.Delete},
+		"afterRead":            {operation.Create, operation.Duplicate, operation.Read, operation.Delete, operation.Update, operation.Read},
+		"fieldAfterRead":       {operation.Create, operation.Duplicate, operation.Read, operation.Delete},
+		"afterError":           {operation.Create},
+		"rootAfterError":       {operation.Create, operation.Read},
 	}
 	for name, want := range wantOperations {
 		if !slices.Equal(seen[name], want) {
@@ -518,16 +535,12 @@ func TestFullDocumentGlobalAndErrorHookMatrix(t *testing.T) {
 func TestOmittedOptionalFieldHookCanSupplyAValue(t *testing.T) {
 	afterCommit := 0
 	application, err := ridu.New(ridu.Config{Name: "Optional field hook", Collections: []ridu.Collection{{
-		Slug: "posts", Fields: []field.Definition{field.Text("optional")},
-		FieldHooks: map[string]ridu.CollectionHooks{"optional": {
-			BeforeValidate: []ridu.Hook{func(ctx ridu.HookContext) error {
-				if _, supplied := ctx.Data["optional"]; !supplied {
-					ctx.Data["optional"] = store.String("hook default")
-				}
-				return nil
-			}},
-			AfterCommit: []ridu.Hook{func(ridu.HookContext) error { afterCommit++; return nil }},
-		}},
+		Slug: "posts", Fields: field.Fields{field.Text("optional").Hooks(field.Hooks[string]{BeforeValidate: []field.RawTransform{func(_ operation.WriteContext, input operation.Value[store.Value]) (operation.Change[store.Value], error) {
+			if _, supplied := input.Get(); !supplied {
+				return operation.Replace(operation.Present(store.String("hook default"))), nil
+			}
+			return operation.Keep[store.Value](), nil
+		}}, AfterCommit: []field.Observer[string]{func(operation.EventContext, operation.Value[string]) error { afterCommit++; return nil }}})},
 	}}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -551,7 +564,7 @@ func TestNestedLocalOperationReusesTransactionAndDefersAfterCommit(t *testing.T)
 		Collections: []ridu.Collection{
 			{
 				Slug:   "audits",
-				Fields: []field.Definition{field.Text("message", field.Required())},
+				Fields: field.Fields{field.Text("message").Required()},
 				Hooks: ridu.CollectionHooks{AfterCommit: []ridu.Hook{func(ridu.HookContext) error {
 					lifecycle = append(lifecycle, "audit committed")
 					return nil
@@ -559,7 +572,7 @@ func TestNestedLocalOperationReusesTransactionAndDefersAfterCommit(t *testing.T)
 			},
 			{
 				Slug:   "posts",
-				Fields: []field.Definition{field.Text("title", field.Required())},
+				Fields: field.Fields{field.Text("title").Required()},
 				Hooks: ridu.CollectionHooks{
 					AfterOperation: []ridu.Hook{func(ctx ridu.HookContext) error {
 						lifecycle = append(lifecycle, "post stored")
@@ -614,7 +627,7 @@ func TestHookFailureAndCancellationRollbackInOrder(t *testing.T) {
 		Name: "Rollback",
 		Collections: []ridu.Collection{{
 			Slug:   "posts",
-			Fields: []field.Definition{field.Text("title", field.Required())},
+			Fields: field.Fields{field.Text("title").Required()},
 			Hooks: ridu.CollectionHooks{AfterOperation: []ridu.Hook{func(ridu.HookContext) error {
 				return errors.New("stop")
 			}}},
@@ -644,28 +657,15 @@ func TestRecursiveFieldVocabularyValidatesAndRoundTrips(t *testing.T) {
 	application, err := ridu.New(ridu.Config{
 		Name: "Recursive fields",
 		Collections: []ridu.Collection{{
-			Slug: "questions",
-			Fields: []field.Definition{
-				field.Email("owner", field.Required(), field.Description("Editorial contact")),
-				field.Number("score", field.Required(), field.Columns(6), field.Tab("Scoring")),
-				field.Checkbox("published", field.Required(), field.Columns(6), field.Tab("Scoring")),
-				field.Date("due", field.PickerAppearance(field.DatePickerDayAndTime), field.ShowWhenCondition(field.Sibling("published", field.ConditionEquals, true)), field.Tab("Scoring")),
-				field.JSON("metadata"),
-				field.Array("answers", field.Fields(
-					field.Textarea("copy", field.Required()),
-				)),
-				field.Blocks("content", field.BlockTypes(
-					field.BlockType("heading", "Heading", field.Text("text", field.Required())),
-					field.BlockType("notice", "Notice", field.Textarea("body", field.Required())),
-				)),
-			},
+			Slug:   "questions",
+			Fields: field.Fields{field.Email("owner").Required().Admin(field.Admin{Description: "Editorial contact"}), field.Number("score").Required().Admin(field.Admin{Columns: 6, Tab: "Scoring"}), field.Checkbox("published").Required().Admin(field.Admin{Columns: 6, Tab: "Scoring"}), field.Date("due").Format(field.DateTime).Admin(field.Admin{VisibleWhen: field.Equal(field.Sibling("published"), true), Tab: "Scoring"}), field.JSON("metadata"), field.Array("answers", field.Fields{field.Textarea("copy").Required()}), field.Blocks("content", field.Block{Slug: "heading", Fields: field.Fields{field.Text("text").Required()}}, field.Block{Slug: "notice", Fields: field.Fields{field.Textarea("body").Required()}})},
 		}},
 	}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
 	}
 	resolvedFields := application.Manifest().Snapshot().Collections[0].Fields
-	if resolvedFields[1].Admin.Columns != 6 || resolvedFields[1].Admin.Tab != "Scoring" || resolvedFields[3].Admin.Condition == nil || resolvedFields[3].Date == nil || resolvedFields[3].Date.PickerAppearance != schema.DatePickerDayAndTime {
+	if resolvedFields[1].Admin.Columns != 6 || resolvedFields[1].Admin.Tab != "Scoring" || resolvedFields[3].Admin.Condition == nil || resolvedFields[3].Date == nil || resolvedFields[3].Date.Format != schema.DateTime {
 		t.Fatalf("admin row/tab/condition metadata = %#v, %#v", resolvedFields[1].Admin, resolvedFields[3].Admin)
 	}
 	created, err := application.Local().Create(context.Background(), "questions", store.Values{
@@ -677,11 +677,11 @@ func TestRecursiveFieldVocabularyValidatesAndRoundTrips(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	answers, valid := created.Values["answers"].Values()
+	answers, valid := created.Values["answers"].CopyList()
 	if !valid || len(answers) != 1 {
 		t.Fatalf("answers = %#v", created.Values["answers"])
 	}
-	answer, _ := answers[0].ObjectValue()
+	answer, _ := answers[0].CopyObject()
 	if key, _ := answer["_key"].StringValue(); key != "row-1" {
 		t.Fatalf("stable row key = %q", key)
 	}
@@ -698,7 +698,7 @@ func TestHooksReceiveDetachedAuthenticatedActor(t *testing.T) {
 		Name: "Hook actor",
 		Collections: []ridu.Collection{{
 			Slug:   "posts",
-			Fields: []field.Definition{field.Text("title", field.Required())},
+			Fields: field.Fields{field.Text("title").Required()},
 			Hooks: ridu.CollectionHooks{BeforeValidate: []ridu.Hook{func(ctx ridu.HookContext) error {
 				received = ctx.Actor
 				ctx.Actor.Values["role"] = store.String("mutated")
@@ -725,21 +725,15 @@ func TestHooksReceiveDetachedAuthenticatedActor(t *testing.T) {
 func TestHasManyPolymorphicPopulationHonorsTargetAccessAndRedaction(t *testing.T) {
 	publicPath, _ := query.NewPath("public")
 	application, err := ridu.New(ridu.Config{Name: "Relationship shapes", Collections: []ridu.Collection{
-		{Slug: "people", Fields: []field.Definition{
-			field.Text("name", field.Required()),
-			field.Checkbox("public", field.Required()),
-			field.Text("secret"),
-		}, Access: ridu.CollectionAccess{Read: func(ridu.AccessContext) (ridu.AccessDecision, error) {
+		{Slug: "people", Fields: field.Fields{field.Text("name").Required(), field.Checkbox("public").Required(), field.Text("secret").Access(field.Access{Read: func(operation.AccessContext,
+
+		) (bool, error) {
+			return false, nil
+		}})}, Access: ridu.CollectionAccess{Read: func(ridu.AccessContext) (ridu.AccessDecision, error) {
 			return ridu.Where(query.Equal(publicPath, query.Boolean(true))), nil
-		}}, FieldAccess: map[string]ridu.FieldAccess{"secret": {Read: func(ridu.FieldAccessContext) (bool, error) { return false, nil }}}},
-		{Slug: "teams", Fields: []field.Definition{
-			field.Text("name", field.Required()),
-			field.Relationship("owner", field.To("people")),
-		}},
-		{Slug: "feeds", Fields: []field.Definition{
-			field.Relationship("watchers", field.ToMany("people")),
-			field.Relationship("subject", field.ToAny("people", "teams")),
-		}},
+		}}},
+		{Slug: "teams", Fields: field.Fields{field.Text("name").Required(), field.Relationship("owner", "people")}},
+		{Slug: "feeds", Fields: field.Fields{field.Relationships("watchers", "people"), field.PolymorphicRelationship("subject", "people", "teams")}},
 	}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -766,20 +760,20 @@ func TestHasManyPolymorphicPopulationHonorsTargetAccessAndRedaction(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	watchers, _ := page.Documents[0].Values["watchers"].Values()
-	person, populated := watchers[0].DocumentValue()
+	watchers, _ := page.Documents[0].Values["watchers"].CopyList()
+	person, populated := watchers[0].CopyDocument()
 	if !populated || person.ID != visible.ID {
 		t.Fatalf("has-many population = %#v", watchers)
 	}
 	if _, leaked := person.Values["secret"]; leaked {
 		t.Fatal("populated field access leaked secret")
 	}
-	subject, _ := page.Documents[0].Values["subject"].ObjectValue()
-	teamDocument, populated := subject["id"].DocumentValue()
+	subject, _ := page.Documents[0].Values["subject"].CopyObject()
+	teamDocument, populated := subject["id"].CopyDocument()
 	if !populated || teamDocument.ID != team.ID || page.Documents[0].ID != feed.ID {
 		t.Fatalf("polymorphic population = %#v", subject)
 	}
-	owner, populated := teamDocument.Values["owner"].DocumentValue()
+	owner, populated := teamDocument.Values["owner"].CopyDocument()
 	if !populated || owner.ID != visible.ID {
 		t.Fatalf("depth-2 population = %#v", teamDocument.Values["owner"])
 	}
@@ -790,9 +784,7 @@ func TestRelationshipWritesRejectMissingFilteredAndNestedTargets(t *testing.T) {
 	var checkedIDs []string
 	var deniedID string
 	application, err := ridu.New(ridu.Config{Name: "Relationship integrity", Collections: []ridu.Collection{
-		{Slug: "people", Fields: []field.Definition{
-			field.Text("name", field.Required()), field.Checkbox("visible", field.Required()),
-		}, Access: ridu.CollectionAccess{Read: func(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
+		{Slug: "people", Fields: field.Fields{field.Text("name").Required(), field.Checkbox("visible").Required()}, Access: ridu.CollectionAccess{Read: func(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
 			if ctx.ID == "" || ctx.Local == nil || len(ctx.Data) != 0 {
 				return ridu.Deny(), errors.New("relationship access context is incomplete")
 			}
@@ -802,17 +794,8 @@ func TestRelationshipWritesRejectMissingFilteredAndNestedTargets(t *testing.T) {
 			}
 			return ridu.Where(query.Equal(visiblePath, query.Boolean(true))), nil
 		}}},
-		{Slug: "teams", Fields: []field.Definition{field.Text("name", field.Required())}},
-		{Slug: "entries", Fields: []field.Definition{
-			field.Relationship("owner", field.To("people")),
-			field.Relationship("watchers", field.ToMany("people")),
-			field.Relationship("subject", field.ToAny("people", "teams")),
-			field.Group("meta", field.Fields(field.Relationship("reviewer", field.To("people")))),
-			field.Array("sections", field.Fields(field.Relationship("editor", field.To("people")))),
-			field.Blocks("content", field.BlockTypes(
-				field.BlockType("quote", "Quote", field.Relationship("source", field.To("people"))),
-			)),
-		}},
+		{Slug: "teams", Fields: field.Fields{field.Text("name").Required()}},
+		{Slug: "entries", Fields: field.Fields{field.Relationship("owner", "people"), field.Relationships("watchers", "people"), field.PolymorphicRelationship("subject", "people", "teams"), field.Group("meta", field.Fields{field.Relationship("reviewer", "people")}), field.Array("sections", field.Fields{field.Relationship("editor", "people")}), field.Blocks("content", field.Block{Slug: "quote", Fields: field.Fields{field.Relationship("source", "people")}})}},
 	}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -879,22 +862,23 @@ func TestAccessContextsReuseTransactionAndExposeWriteState(t *testing.T) {
 	backend := teststore.New()
 	var policyID string
 	var collectionContext ridu.AccessContext
-	var fieldContext ridu.FieldAccessContext
+	var fieldContext operation.AccessContext
 	application, err := ridu.New(ridu.Config{Name: "Access contexts", Collections: []ridu.Collection{
-		{Slug: "policies", Fields: []field.Definition{field.Text("name", field.Required())}},
+		{Slug: "policies", Fields: field.Fields{field.Text("name").Required()}},
 		{
-			Slug: "notes", Fields: []field.Definition{field.Text("title", field.Required()), field.Text("summary")},
+			Slug: "notes", Fields: field.Fields{field.Text("title").Required().Access(field.Access{Update: func(ctx operation.AccessContext,
+
+			) (bool, error) {
+				fieldContext = ctx
+				_, err := ctx.Local.FindByID(ctx.Context, "policies", operation.ID(policyID))
+				return true, err
+			}}), field.Text("summary")},
 			Access: ridu.CollectionAccess{Update: func(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
 				collectionContext = ctx
 				ctx.Data["title"] = store.String("mutated access snapshot")
 				_, err := ctx.Local.Find(ctx.Context, "policies", policyID, ctx.Actor)
 				return ridu.Allow(), err
 			}},
-			FieldAccess: map[string]ridu.FieldAccess{"title": {Update: func(ctx ridu.FieldAccessContext) (bool, error) {
-				fieldContext = ctx
-				_, err := ctx.Local.Find(ctx.Context, "policies", policyID, ctx.Actor)
-				return true, err
-			}}},
 		},
 	}}, backend)
 	if err != nil {
@@ -930,11 +914,11 @@ func TestAccessContextsReuseTransactionAndExposeWriteState(t *testing.T) {
 	if got, _ := collectionContext.Data["title"].StringValue(); got != "mutated access snapshot" {
 		t.Fatalf("captured detached access data = %q", got)
 	}
-	value, _ := fieldContext.Value.StringValue()
-	sibling, _ := fieldContext.SiblingData["summary"].StringValue()
-	original, _ := fieldContext.Original.Values["title"].StringValue()
-	document, _ := fieldContext.Document.Values["title"].StringValue()
-	if fieldContext.ID != note.ID || fieldContext.Local == nil || value != "After" || sibling != "Updated sibling" || original != "Before" || document != "Before" {
+	value, _ := fieldContext.Siblings.String("title")
+	sibling, _ := fieldContext.Siblings.String("summary")
+	original, _ := fieldContext.Prior.String("title")
+	document, _ := fieldContext.Root.String("title")
+	if string(fieldContext.ID) != note.ID || fieldContext.Local == nil || value != "After" || sibling != "Updated sibling" || original != "Before" || document != "After" {
 		t.Fatalf("field access context = %#v", fieldContext)
 	}
 }
@@ -943,20 +927,23 @@ func TestNestedFieldAccessUsesRuntimePathsAndSiblingRows(t *testing.T) {
 	var readPaths []string
 	application, err := ridu.New(ridu.Config{Name: "Nested field access", Collections: []ridu.Collection{{
 		Slug: "notes",
-		Fields: []field.Definition{field.Array("rows", field.Fields(
-			field.Text("secret"), field.Checkbox("visible", field.Required()),
-		))},
-		FieldAccess: map[string]ridu.FieldAccess{"rows.secret": {
-			Read: func(ctx ridu.FieldAccessContext) (bool, error) {
-				readPaths = append(readPaths, ctx.RuntimePath)
-				visible, _ := ctx.SiblingData["visible"].BooleanValue()
+		Fields: field.Fields{field.Array("rows", field.Fields{field.Text("secret").Access(field.Access{
+			Read: func(ctx operation.AccessContext,
+
+			) (bool, error) {
+				readPaths = append(readPaths, string(ctx.OccurrenceID))
+				visible, _ := ctx.Siblings.Get("visible").
+					BooleanValue()
 				return visible, nil
 			},
-			Update: func(ctx ridu.FieldAccessContext) (bool, error) {
-				visible, _ := ctx.SiblingData["visible"].BooleanValue()
+			Update: func(ctx operation.AccessContext,
+
+			) (bool, error) {
+				visible, _ := ctx.Siblings.Get("visible").
+					BooleanValue()
 				return visible, nil
 			},
-		}},
+		}), field.Checkbox("visible").Required()})},
 	}}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -970,16 +957,16 @@ func TestNestedFieldAccessUsesRuntimePathsAndSiblingRows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rows, _ := created.Values["rows"].Values()
-	first, _ := rows[0].ObjectValue()
-	second, _ := rows[1].ObjectValue()
+	rows, _ := created.Values["rows"].CopyList()
+	first, _ := rows[0].CopyObject()
+	second, _ := rows[1].CopyObject()
 	if _, exists := first["secret"]; !exists {
 		t.Fatal("visible row secret was redacted")
 	}
 	if _, exists := second["secret"]; exists {
 		t.Fatal("hidden row secret was not redacted")
 	}
-	if !slices.Equal(readPaths, []string{"rows.0.secret", "rows.1.secret"}) {
+	if len(readPaths) != 2 || readPaths[0] == "" || readPaths[0] == readPaths[1] {
 		t.Fatalf("nested read runtime paths = %v", readPaths)
 	}
 	if _, err := application.Local().Update(context.Background(), "notes", created.ID, store.Values{
@@ -994,22 +981,15 @@ func TestNestedFieldAccessUsesRuntimePathsAndSiblingRows(t *testing.T) {
 
 func TestNestedPatchesPreserveOmittedProtectedFields(t *testing.T) {
 	protectedUpdateCalls := 0
-	denyUpdate := func(ridu.FieldAccessContext) (bool, error) {
+	denyUpdate := func(operation.AccessContext,
+
+	) (bool, error) {
 		protectedUpdateCalls++
 		return false, nil
 	}
 	application, err := ridu.New(ridu.Config{Name: "Nested patch protection", Collections: []ridu.Collection{{
-		Slug: "pages",
-		Fields: []field.Definition{
-			field.Group("meta", field.Fields(field.Text("public"), field.Text("secret"))),
-			field.Array("rows", field.Fields(field.Text("public"), field.Text("secret"))),
-			field.Blocks("content", field.BlockTypes(field.BlockType("quote", "Quote", field.Text("public"), field.Text("secret")))),
-		},
-		FieldAccess: map[string]ridu.FieldAccess{
-			"meta.secret":          {Update: denyUpdate},
-			"rows.secret":          {Update: denyUpdate},
-			"content.quote.secret": {Update: denyUpdate},
-		},
+		Slug:   "pages",
+		Fields: field.Fields{field.Group("meta", field.Fields{field.Text("public"), field.Text("secret").Access(field.Access{Update: denyUpdate})}), field.Array("rows", field.Fields{field.Text("public"), field.Text("secret").Access(field.Access{Update: denyUpdate})}), field.Blocks("content", field.Block{Slug: "quote", Fields: field.Fields{field.Text("public"), field.Text("secret").Access(field.Access{Update: denyUpdate})}})},
 	}}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -1040,11 +1020,11 @@ func TestNestedPatchesPreserveOmittedProtectedFields(t *testing.T) {
 	if protectedUpdateCalls != 0 {
 		t.Fatalf("omitted protected fields ran update access %d times", protectedUpdateCalls)
 	}
-	meta, _ := updated.Values["meta"].ObjectValue()
-	rows, _ := updated.Values["rows"].Values()
-	row, _ := rows[0].ObjectValue()
-	content, _ := updated.Values["content"].Values()
-	block, _ := content[0].ObjectValue()
+	meta, _ := updated.Values["meta"].CopyObject()
+	rows, _ := updated.Values["rows"].CopyList()
+	row, _ := rows[0].CopyObject()
+	content, _ := updated.Values["content"].CopyList()
+	block, _ := content[0].CopyObject()
 	if stringValue(meta["public"]) != "new meta" || stringValue(meta["secret"]) != "meta secret" ||
 		stringValue(row["public"]) != "new row" || stringValue(row["secret"]) != "row secret" ||
 		stringValue(block["public"]) != "new block" || stringValue(block["secret"]) != "block secret" {
@@ -1073,28 +1053,25 @@ func TestNestedPatchesPreserveOmittedProtectedFields(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	meta, _ = current.Values["meta"].ObjectValue()
-	rows, _ = current.Values["rows"].Values()
-	row, _ = rows[0].ObjectValue()
-	content, _ = current.Values["content"].Values()
-	block, _ = content[0].ObjectValue()
+	meta, _ = current.Values["meta"].CopyObject()
+	rows, _ = current.Values["rows"].CopyList()
+	row, _ = rows[0].CopyObject()
+	content, _ = current.Values["content"].CopyList()
+	block, _ = content[0].CopyObject()
 	if stringValue(meta["secret"]) != "meta secret" || stringValue(row["secret"]) != "row secret" || stringValue(block["secret"]) != "block secret" {
 		t.Fatalf("denied nested removal changed storage: %#v", current.Values)
 	}
 }
 
 func TestDuplicateStructuredRowKeysCannotBypassFieldAccess(t *testing.T) {
-	denySecret := func(ridu.FieldAccessContext) (bool, error) { return false, nil }
+	denySecret := func(operation.AccessContext,
+
+	) (bool, error) {
+		return false, nil
+	}
 	application, err := ridu.New(ridu.Config{Name: "Structured row identity", Collections: []ridu.Collection{{
-		Slug: "pages",
-		Fields: []field.Definition{
-			field.Array("rows", field.Fields(field.Text("secret"))),
-			field.Blocks("content", field.BlockTypes(field.BlockType("quote", "Quote", field.Text("secret")))),
-		},
-		FieldAccess: map[string]ridu.FieldAccess{
-			"rows.secret":          {Update: denySecret},
-			"content.quote.secret": {Update: denySecret},
-		},
+		Slug:   "pages",
+		Fields: field.Fields{field.Array("rows", field.Fields{field.Text("secret").Access(field.Access{Update: denySecret})}), field.Blocks("content", field.Block{Slug: "quote", Fields: field.Fields{field.Text("secret").Access(field.Access{Update: denySecret})}})},
 	}}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -1143,21 +1120,23 @@ func TestBlockFieldAccessUsesCanonicalTypeAndRuntimeRows(t *testing.T) {
 	var readPaths []string
 	application, err := ridu.New(ridu.Config{Name: "Block field access", Collections: []ridu.Collection{{
 		Slug: "pages",
-		Fields: []field.Definition{field.Blocks("content", field.BlockTypes(
-			field.BlockType("quote", "Quote", field.Text("source"), field.Checkbox("visible", field.Required())),
-			field.BlockType("heading", "Heading", field.Text("text")),
-		))},
-		FieldAccess: map[string]ridu.FieldAccess{"content.quote.source": {
-			Read: func(ctx ridu.FieldAccessContext) (bool, error) {
-				readPaths = append(readPaths, ctx.RuntimePath)
-				visible, _ := ctx.SiblingData["visible"].BooleanValue()
+		Fields: field.Fields{field.Blocks("content", field.Block{Slug: "quote", Fields: field.Fields{field.Text("source").Access(field.Access{
+			Read: func(ctx operation.AccessContext,
+
+			) (bool, error) {
+				readPaths = append(readPaths, string(ctx.OccurrenceID))
+				visible, _ := ctx.Siblings.Get("visible").
+					BooleanValue()
 				return visible, nil
 			},
-			Update: func(ctx ridu.FieldAccessContext) (bool, error) {
-				visible, _ := ctx.SiblingData["visible"].BooleanValue()
+			Update: func(ctx operation.AccessContext,
+
+			) (bool, error) {
+				visible, _ := ctx.Siblings.Get("visible").
+					BooleanValue()
 				return visible, nil
 			},
-		}},
+		}), field.Checkbox("visible").Required()}}, field.Block{Slug: "heading", Fields: field.Fields{field.Text("text")}})},
 	}}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -1172,16 +1151,16 @@ func TestBlockFieldAccessUsesCanonicalTypeAndRuntimeRows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	content, _ := created.Values["content"].Values()
-	shown, _ := content[0].ObjectValue()
-	hidden, _ := content[2].ObjectValue()
+	content, _ := created.Values["content"].CopyList()
+	shown, _ := content[0].CopyObject()
+	hidden, _ := content[2].CopyObject()
 	if _, exists := shown["source"]; !exists {
 		t.Fatal("visible quote source was redacted")
 	}
 	if _, exists := hidden["source"]; exists {
 		t.Fatal("hidden quote source was not redacted")
 	}
-	if !slices.Equal(readPaths, []string{"content.0.source", "content.2.source"}) {
+	if len(readPaths) != 2 || readPaths[0] == "" || readPaths[0] == readPaths[1] {
 		t.Fatalf("block read runtime paths = %v", readPaths)
 	}
 	if _, err := application.Local().Update(context.Background(), "pages", created.ID, store.Values{
@@ -1198,24 +1177,30 @@ func TestBlockFieldAccessUsesCanonicalTypeAndRuntimeRows(t *testing.T) {
 func TestFieldAccessHookMutationOriginalDocumentAndRecursionGuard(t *testing.T) {
 	backend := teststore.New()
 	var originalTitle string
-	var fieldHookPath string
+	var fieldHookID operation.OccurrenceID
 	application, err := ridu.New(ridu.Config{
 		Name: "Lifecycle security",
 		Collections: []ridu.Collection{{
 			Slug: "notes",
-			Fields: []field.Definition{
-				field.Text("title", field.Required()),
-				field.Text("secret"),
-				field.Group("meta", field.Fields(field.Text("hidden"))),
-			},
-			FieldAccess: map[string]ridu.FieldAccess{
-				"secret": {
-					Read:   func(ridu.FieldAccessContext) (bool, error) { return false, nil },
-					Update: func(ridu.FieldAccessContext) (bool, error) { return false, nil },
+			Fields: field.Fields{field.Text("title").Required().Hooks(field.Hooks[string]{BeforeValidate: []field.RawTransform{func(ctx operation.WriteContext, _ operation.Value[store.Value]) (operation.Change[store.Value], error) {
+				fieldHookID = ctx.OccurrenceID
+				return operation.Keep[store.Value](), nil
+			}}}), field.Text("secret").Access(field.Access{
+				Read: func(operation.AccessContext,
+
+				) (bool, error) {
+					return false, nil
 				},
-				"meta.hidden": {Read: func(ridu.FieldAccessContext) (bool, error) { return false, nil }},
-			},
-			FieldHooks: map[string]ridu.CollectionHooks{"title": {BeforeValidate: []ridu.Hook{func(ctx ridu.HookContext) error { fieldHookPath = ctx.FieldPath; return nil }}}},
+				Update: func(operation.AccessContext,
+
+				) (bool, error) {
+					return false, nil
+				},
+			}), field.Group("meta", field.Fields{field.Text("hidden").Access(field.Access{Read: func(operation.AccessContext,
+
+			) (bool, error) {
+				return false, nil
+			}})})},
 			Hooks: ridu.CollectionHooks{
 				BeforeValidate: []ridu.Hook{func(ctx ridu.HookContext) error {
 					if _, exists := ctx.Data["title"]; !exists {
@@ -1245,12 +1230,12 @@ func TestFieldAccessHookMutationOriginalDocumentAndRecursionGuard(t *testing.T) 
 	if _, leaked := created.Values["secret"]; leaked {
 		t.Fatal("field read access leaked secret on create result")
 	}
-	meta, _ := created.Values["meta"].ObjectValue()
+	meta, _ := created.Values["meta"].CopyObject()
 	if _, leaked := meta["hidden"]; leaked {
 		t.Fatal("nested field read access leaked meta.hidden")
 	}
-	if fieldHookPath != "title" {
-		t.Fatalf("field hook path = %q", fieldHookPath)
+	if fieldHookID == "" {
+		t.Fatalf("field hook path = %q", fieldHookID)
 	}
 	if _, err := application.Local().Update(context.Background(), "notes", created.ID, store.Values{"secret": store.String("changed")}, nil); !operationCode(err, "field_access_denied") {
 		t.Fatalf("protected field update error = %v", err)
@@ -1264,7 +1249,7 @@ func TestFieldAccessHookMutationOriginalDocumentAndRecursionGuard(t *testing.T) 
 
 	recursiveBackend := teststore.New()
 	recursive, err := ridu.New(ridu.Config{Name: "Recursion", Collections: []ridu.Collection{{
-		Slug: "loops", Fields: []field.Definition{field.Text("title", field.Required())},
+		Slug: "loops", Fields: field.Fields{field.Text("title").Required()},
 		Hooks: ridu.CollectionHooks{AfterOperation: []ridu.Hook{func(ctx ridu.HookContext) error {
 			_, err := ctx.Local.Create(ctx.Context, "loops", store.Values{"title": store.String("again")}, nil)
 			return err

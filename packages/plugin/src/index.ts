@@ -1,10 +1,20 @@
 export type {
+	EmbeddedSchemaFormScope,
+	EmbeddedSchemaVariantScope,
+	EmbeddedSchemaDraft,
+	EmbeddedSchemaDraftEditorProps,
 	FieldAuthoringHost,
 	FieldDocument,
 	FieldReferenceBrowserProps,
 	FieldReferenceFilter,
 } from "./authoring";
-export { defineFieldPlugin, type FieldComponentProps, type FieldPlugin } from "./field";
+export type {
+	PluginFieldBinding,
+	PluginFieldProps,
+	PluginForm,
+	RegisteredPluginField,
+	PluginFieldRegistration,
+} from "./field";
 export {
 	defineRowLabelPlugin,
 	type RowLabelComponentProps,
@@ -12,7 +22,7 @@ export {
 	type RowLabelSnapshot,
 	type RowLabelValue,
 } from "./row-label";
-export type { FieldForm, FieldFormResource } from "./form";
+export type { FieldDocumentForm, FieldFormResource, FieldLiveValidation } from "./form";
 export {
 	defineAdminMessages,
 	getAdminI18n,
@@ -25,10 +35,10 @@ export {
 } from "./i18n";
 export {
 	ADMIN_PLUGIN_API_VERSION,
-	defineAdminPlugin,
-	resolveAdminPluginExtensions,
+	resolveAdminExtensions,
 	resolveAdminPluginPairs,
 	type AdminPlugin,
+	type AdminContributions,
 	type AdminDashboardPanel,
 	type AdminDashboardPanelProps,
 	type AdminExtensionProps,
@@ -64,10 +74,12 @@ export {
 	type AdminExtensionNotificationTone,
 	type AdminListCell,
 	type AdminListCellProps,
-	type AdminPluginNavigation,
+	type AdminRouteNavigation,
 	type AdminPluginPair,
-	type AdminPluginRoute,
+	type AdminRoute,
 	type BackendAdminPlugin,
-	type ResolvedAdminPluginExtensions,
+	type ResolvedAdminExtensions,
 	type ResolvedAdminPluginPairs,
 } from "./plugin";
+
+export { resolvePluginFields, type ResolvedPluginField } from "./plugin-registry";

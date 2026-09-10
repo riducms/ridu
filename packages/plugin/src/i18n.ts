@@ -2,6 +2,7 @@ import type {
 	AdminI18n,
 	PluginMessageCatalog,
 	PluginTranslationKey,
+	ExtensionTranslationKey,
 	TranslationMessage,
 } from "@riducms/translations";
 import { validatePluginMessageCatalog } from "@riducms/translations";
@@ -67,11 +68,21 @@ type CheckedAdminMessages<Input extends AdminMessagesShape> =
 export interface DefineAdminMessagesInput<
 	Fallback extends Readonly<Record<string, TranslationMessage>>,
 > {
+	/** Default text for every message key. Keys here do not include the plugin/app namespace. */
 	fallback: Fallback;
+	/** Catalogs by language code; each supplied language must translate every fallback key. */
 	translations?: Readonly<Record<string, ExactCatalog<Fallback>>>;
 }
 
-/** Defines one plugin-owned message catalog with exact translated key coverage. */
+/**
+ * Define interface text for a plugin or application. Every supplied translation
+ * must have the fallback catalog's keys, message kinds and `{placeholder}` names.
+ * The helper checks and freezes the catalogs; literals also receive TypeScript checks.
+ *
+ * For plugin key `"notes"`, fallback key `"copy"` is read as
+ * `i18n.t("plugin.notes:copy")`. In `defineAdmin({ messages })`, it is `"app:copy"`.
+ * These are admin interface translations, not translations of saved content.
+ */
 export function defineAdminMessages<const Input extends AdminMessagesShape>(
 	input: Input & CheckedAdminMessages<Input>
 ): DefineAdminMessagesInput<Input["fallback"]> {
@@ -79,6 +90,7 @@ export function defineAdminMessages<const Input extends AdminMessagesShape>(
 	return freezeAdminMessages(input) as DefineAdminMessagesInput<Input["fallback"]>;
 }
 
+/** Check a catalog at runtime, throwing with its owner key on invalid messages/translations. */
 export function validateAdminMessages(key: string, messages: PluginMessageCatalog) {
 	validatePluginMessageCatalog(key, messages);
 }
@@ -91,7 +103,20 @@ export function freezeAdminMessages(messages: PluginMessageCatalog): PluginMessa
 	return Object.freeze(messages);
 }
 
-const [getAdminI18n, setAdminI18n] = createContext<AdminI18n>();
+// Separate named exports let TypeScript show their docs at call sites; these remain the same functions.
+const [readAdminI18n, provideAdminI18n] = createContext<AdminI18n>();
 
-export { getAdminI18n, setAdminI18n };
-export type { AdminI18n, PluginMessageCatalog, PluginTranslationKey };
+/**
+ * Read Ridu's translation context during Svelte component setup. Field/extension
+ * components already receive `i18n` in props; nested components can use this getter.
+ * Throws outside a provider, such as a standalone component test without context.
+ */
+export const getAdminI18n = readAdminI18n;
+
+/**
+ * Provide translations to child components during Svelte component setup.
+ * Ridu normally does this. Use it when hosting components independently, for
+ * example in a test that needs to supply its own AdminI18n instance.
+ */
+export const setAdminI18n = provideAdminI18n;
+export type { AdminI18n, PluginMessageCatalog, PluginTranslationKey, ExtensionTranslationKey };

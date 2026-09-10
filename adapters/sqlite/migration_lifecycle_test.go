@@ -228,12 +228,12 @@ func TestSQLiteRollbackDoesNotResurrectAddedRelationshipValues(t *testing.T) {
 	ctx := context.Background()
 	resolve := func(withAuthor bool) (ridu.Config, schema.Manifest) {
 		t.Helper()
-		postFields := []field.Definition{field.Text("title")}
+		postFields := field.Fields{field.Text("title")}
 		if withAuthor {
-			postFields = append(postFields, field.Relationship("author", field.To("authors")))
+			postFields = append(postFields, field.Relationship("author", "authors"))
 		}
 		config := ridu.Config{Name: "SQLite rollback relationship", Collections: []ridu.Collection{
-			{Slug: "authors", Fields: []field.Definition{field.Text("name")}},
+			{Slug: "authors", Fields: field.Fields{field.Text("name")}},
 			{Slug: "posts", Fields: postFields},
 		}}
 		manifest, err := ridu.Resolve(config)
@@ -960,7 +960,7 @@ func TestSQLiteDataOnlyArtifactAndReviewedFieldRename(t *testing.T) {
 	}
 
 	renamed, err := ridu.Resolve(ridu.Config{Name: "SQLite migrations", Collections: []ridu.Collection{{
-		Slug: "posts", Fields: []field.Definition{field.Text("headline", field.Required())},
+		Slug: "posts", Fields: field.Fields{field.Text("headline").Required()},
 	}}})
 	if err != nil {
 		t.Fatal(err)
@@ -989,19 +989,13 @@ func TestSQLiteDataOnlyArtifactAndReviewedFieldRename(t *testing.T) {
 func TestSQLiteDataTransformDownPreservesRestoredFieldDuringRollbackScrub(t *testing.T) {
 	ctx := context.Background()
 	before, err := ridu.Resolve(ridu.Config{Name: "SQLite rollback transform", Collections: []ridu.Collection{{
-		Slug: "posts", Fields: []field.Definition{
-			field.Text("title"),
-			field.Group("metadata", field.Fields(field.Text("stable"))),
-		},
+		Slug: "posts", Fields: field.Fields{field.Text("title"), field.Group("metadata", field.Fields{field.Text("stable")})},
 	}}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	after, err := ridu.Resolve(ridu.Config{Name: "SQLite rollback transform", Collections: []ridu.Collection{{
-		Slug: "posts", Fields: []field.Definition{
-			field.Text("headline"),
-			field.Group("metadata", field.Fields(field.Text("stable"), field.Text("temporary"))),
-		},
+		Slug: "posts", Fields: field.Fields{field.Text("headline"), field.Group("metadata", field.Fields{field.Text("stable"), field.Text("temporary")})},
 	}}})
 	if err != nil {
 		t.Fatal(err)
@@ -1106,7 +1100,7 @@ func TestSQLiteDataTransformDownPreservesRestoredFieldDuringRollbackScrub(t *tes
 	if _, exists := values["headline"]; exists {
 		t.Fatalf("rollback retained after-only headline: %s", encoded)
 	}
-	metadata, ok := values["metadata"].ObjectValue()
+	metadata, ok := values["metadata"].CopyObject()
 	if !ok {
 		t.Fatalf("rollback lost metadata: %s", encoded)
 	}
@@ -1124,14 +1118,16 @@ func TestSQLiteReviewedTransformsRemainFailClosedOutsideUnversionedFields(t *tes
 	initial := sqliteMigrationManifest(t, false)
 
 	applicationChangedSnapshot := initial.Snapshot()
-	applicationChangedSnapshot.Application.Name = "Changed application"
+	applicationChangedSnapshot.Application.Localization = &schema.LocalizationSettings{
+		DefaultLocale: "en", Locales: []schema.Locale{{Code: "en", Label: "English"}},
+	}
 	applicationChanged := schema.NewManifest(applicationChangedSnapshot)
 	if _, err := planArtifact(ctx, "application-change", &initial, applicationChanged, true, descriptor); err == nil || !strings.Contains(err.Error(), "application settings") {
 		t.Fatalf("application setting transform error = %v", err)
 	}
 
 	capabilityChanged, err := ridu.Resolve(ridu.Config{Name: "SQLite migrations", Collections: []ridu.Collection{{
-		Slug: "posts", Trash: true, Fields: []field.Definition{field.Text("title", field.Required())},
+		Slug: "posts", Trash: true, Fields: field.Fields{field.Text("title").Required()},
 	}}})
 	if err != nil {
 		t.Fatal(err)
@@ -1141,13 +1137,13 @@ func TestSQLiteReviewedTransformsRemainFailClosedOutsideUnversionedFields(t *tes
 	}
 
 	versionedBefore, err := ridu.Resolve(ridu.Config{Name: "Versioned SQLite migration", Collections: []ridu.Collection{{
-		Slug: "posts", Versions: true, Fields: []field.Definition{field.Text("title", field.Required())},
+		Slug: "posts", Versions: true, Fields: field.Fields{field.Text("title").Required()},
 	}}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	versionedAfter, err := ridu.Resolve(ridu.Config{Name: "Versioned SQLite migration", Collections: []ridu.Collection{{
-		Slug: "posts", Versions: true, Fields: []field.Definition{field.Text("headline", field.Required())},
+		Slug: "posts", Versions: true, Fields: field.Fields{field.Text("headline").Required()},
 	}}})
 	if err != nil {
 		t.Fatal(err)
@@ -1161,7 +1157,7 @@ func TestSQLiteDataTransformCannotDivergeVersionHistory(t *testing.T) {
 	ctx := context.Background()
 	directory := t.TempDir()
 	config := ridu.Config{Name: "Versioned SQLite data transform", Collections: []ridu.Collection{{
-		Slug: "posts", Versions: true, Fields: []field.Definition{field.Text("title", field.Required())},
+		Slug: "posts", Versions: true, Fields: field.Fields{field.Text("title").Required()},
 	}}}
 	manifest, err := ridu.Resolve(config)
 	if err != nil {
@@ -1276,22 +1272,22 @@ func sqliteRollbackResourceManifest(t *testing.T, additive bool) schema.Manifest
 	t.Helper()
 	keepers := ridu.Collection{
 		Slug: "keepers", Versions: true,
-		Fields: []field.Definition{field.Text("title")},
+		Fields: field.Fields{field.Text("title")},
 	}
 	config := ridu.Config{Name: "SQLite rollback resources", Collections: []ridu.Collection{keepers}}
 	if additive {
-		keepers.Fields = append(keepers.Fields, field.Relationship("retiredUser", field.To("retired-users"), field.OnDelete(field.ReferenceDeleteRestrict)))
+		keepers.Fields = append(keepers.Fields, field.Relationship("retiredUser", "retired-users").OnDelete(field.ReferenceDeleteRestrict))
 		config.Admin = ridu.AdminConfig{User: "retired-users"}
 		config.Collections = []ridu.Collection{
 			keepers,
 			{
 				Slug: "retired-users", Auth: true, Versions: true, LockDocuments: true,
-				Fields: []field.Definition{field.Email("email", field.Required(), field.Unique())},
+				Fields: field.Fields{field.Email("email").Required().Unique()},
 			},
 		}
 		config.Globals = []ridu.Global{{
 			Slug: "retired-settings", Versions: true,
-			Fields: []field.Definition{field.Text("title")},
+			Fields: field.Fields{field.Text("title")},
 		}}
 	}
 	manifest, err := ridu.Resolve(config)

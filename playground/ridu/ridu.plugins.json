@@ -4,16 +4,10 @@
     {
       "key": "richtext",
       "goPackage": "github.com/riducms/ridu/plugins/richtext",
-      "goVersion": "v0.0.0-dogfood.1787424314091508000",
+      "goVersion": "v0.0.0-dogfood.1788901341006834000",
       "constructor": "New",
       "adminPackage": "@riducms/plugin-richtext",
-      "adminVersion": "0.0.0-dogfood.1787424314091508000"
-    },
-    {
-      "key": "graphql",
-      "goPackage": "github.com/riducms/ridu/plugins/graphql",
-      "goVersion": "v0.0.0-dogfood.1787424314091508000",
-      "constructor": "New"
+      "adminVersion": "0.0.0-dogfood.1788901341006834000"
     }
   ]
 }

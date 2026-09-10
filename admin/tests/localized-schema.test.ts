@@ -1,6 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { createAdminI18n, en, fr } from "@riducms/translations";
-import type { SchemaCollection, SchemaField } from "@riducms/protocol";
+import {
+	bindSchemaManifest,
+	resolveBlockTypes,
+	type SchemaBlockType,
+	type SchemaCollection,
+	type SchemaField,
+} from "@riducms/protocol";
 
 import { localizeSchemaCollection, localizeSchemaField } from "@admin/core/i18n/localized-schema";
 
@@ -21,7 +27,7 @@ const field: SchemaField = {
 		placeholderTranslations: { fr: "Choisissez un statut" },
 	},
 	select: {
-		choices: [{ value: "draft", label: "Draft", labelTranslations: { fr: "Brouillon" } }],
+		options: [{ value: "draft", label: "Draft", labelTranslations: { fr: "Brouillon" } }],
 	},
 };
 
@@ -35,7 +41,7 @@ describe("localized schema display metadata", () => {
 		expect(localized.admin.label).toBe("Statut");
 		expect(localized.admin.description).toBe("État éditorial");
 		expect(localized.admin.placeholder).toBe("Choisissez un statut");
-		expect(localized.select?.choices[0]?.label).toBe("Brouillon");
+		expect(localized.select?.options[0]?.label).toBe("Brouillon");
 		expect(field.admin.label).toBe("Status");
 	});
 
@@ -80,4 +86,96 @@ describe("localized schema display metadata", () => {
 		expect(localized.fields[0]?.admin.label).toBe("Statut");
 		expect(collection.labels.singular).toBe("Post");
 	});
+});
+
+test("both block label forms localize identically through inline and shared embedded placements", () => {
+	const definition: SchemaBlockType = {
+		slug: "people",
+		labels: {
+			singular: "Person",
+			plural: "People",
+			singularTranslations: { fr: "Personne" },
+			pluralTranslations: { fr: "Personnes" },
+		},
+		fields: [field],
+	};
+	for (const references of [false, true]) {
+		const types = references ? { blockReferences: ["people"] } : { types: [definition] };
+		const ordinary: SchemaField = {
+			...field,
+			name: "layout",
+			path: "layout",
+			id: "pages-layout",
+			type: "blocks",
+			category: "nested",
+			blocks: types,
+		};
+		const embedded: SchemaField = {
+			...field,
+			name: "body",
+			path: "body",
+			id: "pages-body",
+			type: "plugin",
+			category: "plugin",
+			plugin: {
+				key: "test",
+				config: {},
+				embeddedTrees: [
+					{
+						version: 1,
+						key: "blocks",
+						root: ["root"],
+						children: "children",
+						tag: "type",
+						cases: [
+							{
+								tagValue: "block",
+								payload: "fields",
+								discriminator: "blockType",
+								identity: "_key",
+								...types,
+							},
+						],
+					},
+				],
+			},
+		};
+		const schema = bindSchemaManifest({
+			blocks: references ? [definition] : [],
+			collections: [
+				{
+					id: "pages",
+					slug: "pages",
+					labels: { singular: "Page", plural: "Pages" },
+					admin: {},
+					capabilities: {
+						auth: false,
+						upload: false,
+						versions: false,
+						trash: false,
+						locking: false,
+					},
+					fields: [ordinary, embedded],
+				},
+			],
+			globals: [],
+		});
+		const wire = JSON.stringify(schema);
+		for (const language of ["fr", "en"] as const) {
+			const i18n = createAdminI18n({ languages: [en, fr], language });
+			const layout = localizeSchemaField(ordinary, i18n);
+			const body = localizeSchemaField(embedded, i18n);
+			const labels = resolveBlockTypes(layout.blocks)[0]!.labels;
+			expect(labels).toMatchObject(
+				language === "fr"
+					? { singular: "Personne", plural: "Personnes" }
+					: { singular: "Person", plural: "People" }
+			);
+			expect(resolveBlockTypes(body.plugin!.embeddedTrees![0]!.cases[0])[0]!.labels).toEqual(
+				labels
+			);
+			expect(JSON.stringify(schema)).toBe(wire);
+			expect(resolveBlockTypes(layout.blocks)[0]!.slug).toBe("people");
+		}
+	}
 });

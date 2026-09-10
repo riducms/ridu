@@ -2,8 +2,27 @@
 
 # Rich text
 
-The rich-text plugin pairs a Go field and validator with a Svelte 5 Lexical editor. It stores
-portable, versioned JSON rather than browser editor state. Choose the enabled features in Go config.
+The rich-text plugin lets editors write formatted content, insert media, and add custom blocks
+such as callouts. Choose the available tools and block fields in Go. The admin provides a Svelte 5
+editor built with Lexical, and your frontend can display the saved content with Go, JavaScript,
+or Svelte.
+
+Content is saved as JSON. You decide how it looks on your website; the admin editor does not become
+part of your frontend.
+
+## Configuration {#configuration}
+
+| Option or method                     | Default                                                     | What it controls                                                                                       |
+| ------------------------------------ | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `richtext.Field(name)`               | Recommended feature set                                     | Adds the official rich-text plugin field.                                                              |
+| `richtext.Field(name, config)`       | —                                                           | Supplies one explicit `richtext.Config`; more than one config panics.                                  |
+| `Config.Features`                    | Links, lists, code, horizontal rule, uploads, relationships | Replaces the optional toolbar/insert features. An explicit empty slice disables all optional features. |
+| `Config.UploadCollections`           | All compatible upload collections                           | Restricts media choices and server validation to the listed slugs.                                     |
+| `Config.RelationshipCollections`     | All compatible collections                                  | Restricts related-document choices and server validation to the listed slugs.                          |
+| `Config.Blocks`                      | None                                                        | Adds inline block definitions owned by this rich-text field.                                           |
+| `Config.BlockReferences`             | None                                                        | Selects definitions registered in root `Config.Blocks`; exclusive with inline `Blocks`.                |
+| Field `.Required()` / `.Localized()` | Optional, shared value                                      | Requires content or stores a complete rich-text document per locale.                                   |
+| `richtext.RenderHTML(...)`           | —                                                           | Renders a validated document in Go with callbacks for application blocks and references.               |
 
 ## Use it in a new project {#new-project}
 
@@ -22,7 +41,8 @@ npm run ridu -- add richtext \
   --admin-package @riducms/plugin-richtext
 ```
 
-Register the backend once and use `richtext.Field` like a built-in field:
+The command registers the plugin for you. Keep `installedPlugins()` in your existing Go config,
+and add a rich-text field to a collection. For example:
 
 ```go title="content/config.go"
 package content
@@ -36,30 +56,30 @@ import (
 func Config() ridu.Config {
 	return ridu.Config{
 		Name:        "Acme Editorial",
-		Plugins:     []ridu.Plugin{richtext.New()},
+		Plugins:     installedPlugins(),
 		Collections: []ridu.Collection{Posts},
 	}
 }
 
 var Posts = ridu.Collection{
 	Slug: "posts",
-	Fields: []field.Definition{
-		field.Text("title", field.Required()),
-		richtext.Field("content", field.Required()),
+	Fields: field.Fields{
+		field.Text("title").Required(),
+		richtext.Field("content").Required(),
 	},
 }
 ```
 
-Start the development loop and verify the editor locally:
+Start the development server:
 
 ```bash title="terminal"
 npm run dev
 ```
 
-Create a document containing formatting and a link, reload it, and read the same value through the
-generated SDK. If uploads or relationships are enabled, verify those targets too.
+Open Posts in the admin and create a document. Add bold text and a link, save, then reload the page.
+The formatting should remain. Read the document through your generated SDK to see its JSON value.
 
-Before deployment, create and verify the immutable migration:
+Before deploying the new field, create and check its database migration:
 
 ```bash title="terminal"
 npm run ridu -- migrate create --name add-rich-text
@@ -68,33 +88,28 @@ npm run ridu -- migrate verify
 npm run ridu -- check
 ```
 
-Apply the reviewed artifact with `migrate up` during deployment, then require a clean
-`migrate status`. Supply the selected adapter's URL/path and production safety flags as described
-in its guide.
+Review the migration, apply it with `migrate up` during deployment, and confirm `migrate status`
+has no pending steps. See [Migrations](./migrations.md) for the database connection options.
 
-## Default authoring features {#defaults}
+## What editors can do {#defaults}
 
-`richtext.Field` enables the recommended set:
+With the default configuration, editors can add:
 
-- links with in-place editing and safe URL validation;
-- ordered, unordered, and check lists;
+- links;
+- numbered, bulleted, and check lists;
 - code blocks and horizontal rules;
-- access-aware upload cards with per-placement captions;
-- relationship cards; and
+- uploaded media with a caption for each use;
+- links to documents in other collections; and
 - headings, quotes, alignment, indentation, line breaks, and inline bold, italic, underline,
-  strike-through, subscript, superscript, and code as editor baseline nodes.
+  strike-through, subscript, superscript, and code.
 
-Authors use a slash/insert menu, keyboard navigation, floating selection toolbar, and the admin's
-shared relationship/upload browser. Upload and relationship cards store only a stable collection
-slug and document ID; selecting a card can inspect, replace, or remove the placement without
-deleting the referenced document.
+Type `/` to open the insert menu, or select text to open the formatting toolbar. Media and related
+documents use the same picker as ordinary upload and relationship fields. Removing one of these
+cards removes it from the article without deleting the original file or document.
 
-![The official Ridu rich-text field in a Post editor with portable Lexical content and the surrounding schema-driven form.](https://raw.githubusercontent.com/riducms/ridu/main/docs/assets/ridu-admin-rich-text.png)
+![A Post editor showing rich text alongside the other document fields.](https://raw.githubusercontent.com/riducms/ridu/main/docs/assets/ridu-admin-rich-text.png)
 
-_Saving persists the portable document value described below, not DOM or browser editor state._
-
-An upload node can add a placement-specific caption without changing the asset's reusable `alt`
-field:
+A media card can have its own caption without changing the file's shared `alt` text:
 
 ```json
 {
@@ -106,16 +121,23 @@ field:
 }
 ```
 
-Reference pickers and hydrated cards respect target collection access. The server also validates
-the collection slug and ID when saving; an editor preview is never the authorization boundary.
+The picker only shows documents the user may access. These simple media and relationship cards
+store a collection name and document ID. Saving checks their format and whether that collection is
+allowed, but it does not check that the document still exists. Deleting the original can leave a
+broken reference.
 
-## Choose a feature set {#features}
+For stronger reference handling, put an ordinary upload or relationship field inside a
+[custom block](#blocks). Those fields can check that the target exists, populate its data, and
+control what happens when it is deleted.
 
-`FieldWithConfig` accepts an allowlist. `Features: nil` inherits the defaults; any non-nil slice
-replaces them, including an empty slice:
+## Choose the available editing tools {#features}
+
+Pass a `richtext.Config` to choose optional tools and restrict which collections can be selected.
+Omit `Features` to keep the defaults. If you supply a list, it replaces the default list;
+`Features: []richtext.Feature{}` disables all optional tools while keeping basic text formatting.
 
 ```go
-richtext.FieldWithConfig("content", richtext.Config{
+richtext.Field("content", richtext.Config{
 	Features: []richtext.Feature{
 		richtext.FeatureLinks,
 		richtext.FeatureLists,
@@ -126,18 +148,94 @@ richtext.FieldWithConfig("content", richtext.Config{
 	},
 	UploadCollections:       []string{"media"},
 	RelationshipCollections: []string{"posts", "pages"},
-}, field.Required())
+}).Required()
 ```
 
-An empty upload/relationship collection list allows every compatible collection; a non-empty list
-restricts both admin choices and server validation.
+In this example, the media picker shows only `media`, and the relationship picker shows `posts`
+and `pages`. Omit a collection list to allow all compatible collections. Ridu checks these
+restrictions when saving as well as in the picker.
 
-`FeatureBlocks` does not provide custom block registration or a complete authoring workflow. Custom
-blocks still need a versioned node schema, editor integration, and renderer.
+## Add custom blocks {#blocks}
 
-## Portable document contract {#document}
+A block adds structured content between paragraphs: a callout, image gallery, or call-to-action,
+for example. Define its fields in Go just as you would for a collection. This example adds a
+Callout block with a title, a translatable message, and a related Post:
 
-Every value has exactly one document version and one root:
+```go title="content/articles.go"
+callout := field.Block{
+	Slug:     "callout",
+	TypeName: "ArticleCallout",
+	Fields: field.Fields{
+		field.Text("title").Required(),
+		field.Textarea("message").Localized(),
+		field.Relationship("related", "posts"),
+	},
+}
+
+body := richtext.Field("body", richtext.Config{
+	Blocks: []field.Block{callout},
+})
+```
+
+Add `body` to the collection's `Fields` list. With the development server running, open the editor
+and choose Callout from the insert menu. Fill in its fields, then choose Apply to insert it into
+the article or Cancel to discard it. You can edit, duplicate, move, or remove the card afterward,
+and undo or redo those changes.
+
+Finish or cancel changes in a block drawer before saving the article. Apply updates the editor;
+the article's Save button sends the complete document to Go, where validators and hooks run.
+Errors appear on the affected card and its fields.
+
+Adding `Blocks` enables the block tools alongside the defaults. If you also provide a `Features`
+list, include `richtext.FeatureBlocks`. Ridu only accepts block types listed in `Blocks`.
+
+Blocks can contain groups, arrays, uploads, relationships, and another rich-text field. Their
+fields keep the normal defaults, validation, hooks, and permissions. [Dynamic defaults](./fields/defaults.md)
+run on the server when the parent document is saved; they do not prefill an unsaved embedded form. A field cannot contain its
+own definition through an endless chain of nested blocks.
+
+### Translate blocks {#block-localization}
+
+Call `.Localized()` on the rich-text field to give each locale its own complete article.
+Alternatively, localize individual fields inside a block, such as `message` above. In that case,
+the surrounding text and block order stay shared: moving or deleting a block affects every locale.
+Copying a locale copies those translated values into the same blocks.
+
+Block values belong to the article, so they are saved in its drafts and version history.
+Permissions on a child field can also prevent removing the block that contains it.
+
+### Read block data {#block-data}
+
+In the saved JSON, a block's values appear under `fields`:
+
+```json
+{
+	"type": "block",
+	"version": 1,
+	"fields": {
+		"_key": "stable-key",
+		"blockType": "callout",
+		"title": "Read first"
+	}
+}
+```
+
+`blockType` identifies the block, and `_key` identifies this particular use of it. Ridu supplies
+a missing key when a block is inserted. Do not use either reserved name for your own fields.
+Unknown block types and undeclared fields cause validation errors.
+
+Ridu generates Go and TypeScript types for each configured block, including separate types for
+creating and updating it. The same definitions appear in OpenAPI. See the
+[blocks example](https://github.com/riducms/ridu/tree/main/examples/blocks) for an application that
+creates, updates, and renders typed blocks.
+
+A rich-text field is stored as one JSON value. If you need to filter or update content independently
+of its article, use a separate collection or a regular field outside the rich text. Large articles
+also produce larger reads, writes, and version snapshots.
+
+## Understand the saved JSON {#document}
+
+The saved field has a `version` and a `root` containing its text and other content. For example:
 
 ```json
 {
@@ -147,59 +245,95 @@ Every value has exactly one document version and one root:
 		"children": [
 			{
 				"type": "paragraph",
-				"children": [{ "type": "text", "text": "Hello, Ridu", "format": 1 }]
+				"children": [
+					{ "type": "text", "text": "Hello, Ridu", "format": 1 }
+				]
 			}
 		]
 	}
 }
 ```
 
-Ridu rejects an unsupported document version, disabled or unknown node, malformed child/reference,
-missing text/link data, a tree deeper than 64, or more than 10,000 nodes with path-aware validation
-issues. Changing `DocumentVersion` requires a content migration; the server never silently upgrades
-stored JSON during a read.
+Each object inside `children` is called a **node**. A paragraph contains text nodes; a list contains
+list items. Ridu checks these objects when saving and reports the path of invalid content, such as
+a link with no URL or a block type you have not configured.
 
-Required, localized, read-only, and layout options work as they do for other fields. Test the exact
-combination of localization, versions, and live preview that your application uses.
+Documents may contain at most 10,000 nodes and nest at most 64 levels deep. Unsupported document
+versions are rejected. Changing the document version requires a content migration.
 
-## Render safe HTML in Go {#render-html}
+## Display rich text with Go {#render-html}
 
-`RenderHTML` escapes text and renders paragraphs, headings, quotes, formatting, links, lists,
-check-list state, code, line breaks, alignment/indent metadata, and horizontal rules. It accepts
-only relative URLs or `http`, `https`, `mailto`, and `tel` links.
+Use `richtext.RenderDocument` with a generated Go document type. It renders the built-in formatting
+and calls your function for custom blocks, so you can choose their HTML. The
+[Go rendering example](https://github.com/riducms/ridu/blob/main/examples/blocks/render/article.go)
+shows how to handle each generated block type.
 
-Provide upload, relationship, and block renderers by node type. Inspect the collection and ID or
-`blockType`:
+If you are working with a raw `store.Value`, use `richtext.RenderHTML`. Supply functions for media,
+relationships, and custom blocks:
 
 ```go
-html, err := richtext.RenderHTML(value, map[string]func(store.Values) (string, error){
-	"upload": func(node store.Values) (string, error) {
-		return renderUploadReference(ctx, node)
+html, err := richtext.RenderHTML(
+	value,
+	map[string]func(store.Values) (string, error){
+		"upload": func(node store.Values) (string, error) {
+			return renderUploadReference(ctx, node)
+		},
+		"relationship": func(node store.Values) (string, error) {
+			return renderRelationshipReference(ctx, node)
+		},
+		"block": func(node store.Values) (string, error) {
+			return renderApplicationBlock(ctx, node)
+		},
 	},
-	"relationship": func(node store.Values) (string, error) {
-		return renderRelationshipReference(ctx, node)
-	},
-	"block": func(node store.Values) (string, error) {
-		return renderApplicationBlock(ctx, node)
-	},
-})
+)
 if err != nil {
 	return err
 }
 ```
 
-Resolve referenced content through the local API so access and redaction still apply. Do not trust
-stored reference data as an HTML URL or concatenate unescaped application fields.
+Built-in text is escaped, and links must be relative or use `http`, `https`, `mailto`, or `tel`.
+Your rendering functions must escape their own field values. Fetch related content through the
+local API so the user's permissions still apply; do not treat a stored document ID as a URL.
 
-## Frontend rendering boundary {#frontend}
+## Display rich text on your frontend {#frontend}
 
-Ridu supplies safe Go HTML rendering, not a generic read-only Svelte component. A frontend can
-render the JSON, call an endpoint that uses `RenderHTML`, or provide a custom renderer.
+Fetch the document through your generated SDK, then pass its rich-text field to a renderer.
+For JavaScript or TypeScript, use `renderRichTextHTML`:
 
-Not included: tables, embeds, custom block authoring, Markdown shortcuts, HTML/Markdown import and
-export, plain-text rendering, custom-node migration hooks, Yjs collaboration, and a read-only Svelte
-renderer.
+```ts
+import { renderRichTextHTML } from '@riducms/plugin-richtext/render';
+
+const html = renderRichTextHTML(article.content);
+```
+
+Here, `article.content` is a saved rich-text value. Check it is present before rendering an optional
+field. This renderer works without Svelte or a browser and does not include the admin editor.
+
+For Svelte, import `RichText` from `@riducms/plugin-richtext/svelte` and render
+`<RichText value={article.content} />`. To display custom blocks, pass a `blocks` object that maps
+each block's key to a Svelte component. Each component receives the fields for its block type.
+The [Svelte rendering example](https://github.com/riducms/ridu/blob/main/examples/blocks/render/Article.svelte)
+shows a complete mapping.
+
+The TypeScript equivalent maps keys to functions that return HTML. Use
+`RichTextBlockRenderers` to check that every block has a function, or `RichTextBlockComponents`
+for Svelte components. Missing renderers cause an error unless you provide a visible fallback.
+Renderers do not fetch related documents; load that data before rendering it.
+
+Tables, custom inline content, Markdown shortcuts, HTML/Markdown import and export, plain-text
+rendering, and collaborative editing are not available yet.
+
+## Change block definitions safely {#migrations}
+
+Renaming a block, removing it, or changing its fields may affect existing articles and revisions.
+Use [Migrations](./migrations.md) to update stored content, including the locales and revision
+history you intend to keep. Disposable development content can be recreated instead.
+
+If saved content contains a block type that is no longer configured, Ridu reports
+`block_recovery_required` and blocks saving. Restore the previous block definition to read and edit
+it again, or export the original JSON and write a Go migration to convert it. The admin keeps
+unsaved values after a schema reload and offers a recovery export.
 
 See the [`richtext` Go reference](https://riducms.com/reference/richtext/), the
 [`@riducms/plugin-richtext` reference](https://riducms.com/reference/plugin-richtext/), [Uploads](./uploads.md),
-and [Build a custom field](https://riducms.com/guides/custom-fields/).
+and [Build a field plugin](./custom-fields.md).

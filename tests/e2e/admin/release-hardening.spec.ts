@@ -39,13 +39,16 @@ test("new versioned documents make draft and publish intent explicit", async ({ 
 });
 
 test("in-app navigation cannot silently discard an unsaved document edit", async ({ page }) => {
+	await page.clock.install();
 	await loginAsEditor(page);
 	await page.goto("/admin/collections/posts");
 	await page.getByRole("link", { name: "Welcome to Ridu", exact: true }).click();
 	const navigationProgress = page.locator('[role="progressbar"]');
 	const navigationProgressRegion = navigationProgress.locator("..");
 	const expectNavigationProgressSettled = async () => {
-		await page.waitForTimeout(800);
+		// Pending and idle are both hidden. Drain the reveal, nested animation
+		// frames and completion timers before asserting the final idle state.
+		await page.clock.runFor(800);
 		await expect(navigationProgressRegion).toHaveAttribute("aria-hidden", "true");
 		await expect(navigationProgress).toHaveAttribute("aria-valuenow", "0");
 	};
@@ -238,16 +241,21 @@ test("no-draft collection creation requires publish capability", async ({ page }
 	await expect(publish).toBeVisible();
 	await expect(publish).toBeDisabled();
 	await page.locator('input[name="title"]').press("Enter");
-	await page.waitForTimeout(100);
+	// A denied submit has no completion event. Allow a bounded request-observation
+	// window; the disabled button alone also describes an illicit pending save.
+	await page.waitForTimeout(250);
+	await expect(publish).toBeDisabled();
 	expect(createRequests).toBe(0);
 });
 
 test("published edits checkpoint locally without being background-published", async ({ page }) => {
+	await page.clock.install();
 	await loginAsEditor(page);
 	await page.goto("/admin/collections/posts");
 	await page.getByRole("link", { name: "Welcome to Ridu", exact: true }).click();
 	const documentID = new URL(page.url()).pathname.split("/").at(-1);
 	await page.locator('input[name="title"]').fill("Must remain an explicit publish");
+	await page.clock.fastForward(15_000);
 
 	await expect
 		.poll(
@@ -262,7 +270,7 @@ test("published edits checkpoint locally without being background-published", as
 					} | null;
 					return checkpoint?.values?.title;
 				}),
-			{ timeout: 20_000 }
+			{ timeout: 5_000 }
 		)
 		.toBe("Must remain an explicit publish");
 	const response = await page.request.get(`/api/collections/posts/${documentID}`);
@@ -328,11 +336,14 @@ test("published edits require publish capability", async ({ page }) => {
 	const publish = page.getByRole("button", { name: "Publish changes", exact: true });
 	await expect(publish).toBeDisabled();
 	await page.locator('input[name="title"]').press("Enter");
-	await page.waitForTimeout(100);
+	// Keep the request observer active beyond the completed keyboard event.
+	await page.waitForTimeout(250);
+	await expect(publish).toBeDisabled();
 	expect(publishRequests).toBe(0);
 });
 
 test("dirty drafts autosave to a new server revision", async ({ page }) => {
+	await page.clock.install();
 	await loginAsEditor(page);
 	const created = await page.request.post("/api/collections/posts?draft=true", {
 		data: { title: "Autosave draft", summary: "Before the timer." },
@@ -341,6 +352,7 @@ test("dirty drafts autosave to a new server revision", async ({ page }) => {
 	const initial = (await created.json()).doc;
 	await page.goto(`/admin/collections/posts/${initial.id}`);
 	await page.locator('input[name="title"]').fill("Autosaved draft revision");
+	await page.clock.fastForward(15_000);
 
 	await expect
 		.poll(
@@ -349,7 +361,7 @@ test("dirty drafts autosave to a new server revision", async ({ page }) => {
 				if (!response.ok()) return undefined;
 				return (await response.json()).doc;
 			},
-			{ timeout: 20_000 }
+			{ timeout: 5_000 }
 		)
 		.toMatchObject({
 			title: "Autosaved draft revision",

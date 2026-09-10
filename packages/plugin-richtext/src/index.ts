@@ -1,4 +1,6 @@
-import { ADMIN_PLUGIN_API_VERSION, defineAdminPlugin, defineFieldPlugin } from "@riducms/plugin";
+import { defineAdminPlugin, definePluginField } from "@riducms/plugin/authoring/v1";
+import { decodeRichTextDocument } from "@plugin-richtext/document-validation";
+import { decodeRichTextConfig } from "@plugin-richtext/field/rich-text-config";
 import Prism from "prismjs";
 
 import { richTextMessages } from "@plugin-richtext/messages";
@@ -8,25 +10,27 @@ browserGlobals.Prism ??= Prism;
 
 const { default: RichTextField } = await import("@plugin-richtext/field/rich-text-field.svelte");
 
-export const richTextFieldPlugin = defineFieldPlugin({
-	type: "plugin",
-	key: "richtext",
-	component: RichTextField,
-	canRender: (field) => field.plugin?.key === "richtext",
-});
-
 export const richTextAdminPlugin = defineAdminPlugin({
-	apiVersion: ADMIN_PLUGIN_API_VERSION,
 	key: "richtext",
 	pairingVersion: 1,
-	fields: [richTextFieldPlugin],
+	fields: {
+		richtext: definePluginField({
+			component: RichTextField,
+			decodeValue: decodeRichTextDocument,
+			decodeConfig: decodeRichTextConfig,
+		}),
+	},
 	messages: richTextMessages,
 });
 
-export interface RichTextDocument {
-	version: 1;
-	root: Record<string, unknown>;
-}
+export type {
+	RichTextDocument,
+	RichTextDocumentInput,
+	RichTextNode,
+	RichTextRootNode,
+	RichTextBlockNode,
+	RichTextBlockRenderers,
+} from "#richtext/document";
 
 export { richTextMessages } from "@plugin-richtext/messages";
 export type { RichTextConfig, RichTextFeature } from "@plugin-richtext/field/rich-text-config";

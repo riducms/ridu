@@ -30,15 +30,13 @@ func RunFrameworkAdminDev(ctx context.Context, root string, stdout, stderr io.Wr
 	serverEnvironment := []string{"RIDU_BROWSER_ADDRESS=" + frameworkAdminAddress}
 	server, err := startManagedProcess(ctx, "server", root, serverEnvironment, output, "go", "run", "./tests/contracts/admin_server")
 	if err != nil {
-		output.Error("start admin fixture", err)
-		return 1
+		return developmentFailure(ctx, output, "start admin fixture", err)
 	}
 	adminEnvironment := []string{"RIDU_FRAMEWORK_ADMIN_FIXTURE=true"}
 	admin, err := startManagedProcess(ctx, "admin", root, adminEnvironment, output, "bun", "run", "--cwd", "admin", "dev", "--", "--host", "127.0.0.1", "--port", "5173", "--strictPort")
 	if err != nil {
 		server.stop()
-		output.Error("start Vite admin", err)
-		return 1
+		return developmentFailure(ctx, output, "start Vite admin", err)
 	}
 	stopProcesses := func() {
 		server.stop()
@@ -47,13 +45,11 @@ func RunFrameworkAdminDev(ctx context.Context, root string, stdout, stderr io.Wr
 
 	if err := waitForDevelopmentURL(ctx, "http://"+frameworkAdminAddress+"/healthz", server); err != nil {
 		stopProcesses()
-		output.Error("start admin fixture", err)
-		return 1
+		return developmentFailure(ctx, output, "start admin fixture", err)
 	}
 	if err := waitForDevelopmentURL(ctx, frameworkAdminURL, admin); err != nil {
 		stopProcesses()
-		output.Error("start Vite admin", err)
-		return 1
+		return developmentFailure(ctx, output, "start Vite admin", err)
 	}
 	output.Info("Ridu framework admin is ready")
 	fmt.Fprintf(stdout, "  Admin  %s\n  API    http://%s\n", frameworkAdminURL, frameworkAdminAddress)
@@ -72,7 +68,7 @@ func RunFrameworkAdminDev(ctx context.Context, root string, stdout, stderr io.Wr
 		select {
 		case <-ctx.Done():
 			stopProcesses()
-			return 0
+			return developmentFailure(ctx, output, "development stopped", ctx.Err())
 		case <-server.done:
 			if ctx.Err() == nil && !server.stopping.Load() {
 				admin.stop()
@@ -93,13 +89,11 @@ func RunFrameworkAdminDev(ctx context.Context, root string, stdout, stderr io.Wr
 			server, err = startManagedProcess(ctx, "server", root, serverEnvironment, output, "go", "run", "./tests/contracts/admin_server")
 			if err != nil {
 				admin.stop()
-				output.Error("restart admin fixture", err)
-				return 1
+				return developmentFailure(ctx, output, "restart admin fixture", err)
 			}
 			if err := waitForDevelopmentURL(ctx, "http://"+frameworkAdminAddress+"/healthz", server); err != nil {
-				admin.stop()
-				output.Error("restart admin fixture", err)
-				return 1
+				stopProcesses()
+				return developmentFailure(ctx, output, "restart admin fixture", err)
 			}
 			if err := writeAdminSchemaReloadSignal(root, false); err != nil {
 				output.Warn("admin schema refresh", err)

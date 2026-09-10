@@ -19,7 +19,7 @@ describe("repeating-row field scope", () => {
 		const choices = scoped.nested?.fields[1];
 		const title = choices?.nested?.fields[0];
 		const content = scoped.nested?.fields[2];
-		const caption = content?.blocks?.types[0]?.fields[0];
+		const caption = content?.blocks?.types?.[0]?.fields[0];
 		expect(mode?.path).toBe("sections.2.settings.mode");
 		expect(title?.path).toBe("sections.2.settings.choices.title");
 		expect(caption?.path).toBe("sections.2.settings.content.caption");
@@ -105,8 +105,8 @@ function groupField(): SchemaField {
 					blocks: {
 						types: [
 							{
-								key: "hero",
-								label: "Hero",
+								slug: "hero",
+								labels: { singular: "Hero", plural: "Heroes" },
 								fields: [textField("caption", "sections.settings.content.hero.caption")],
 							},
 						],

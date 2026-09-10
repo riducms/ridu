@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/riducms/ridu/internal/embedded"
 	"github.com/riducms/ridu/internal/migrationartifact"
 	ridumigration "github.com/riducms/ridu/migration"
 	"github.com/riducms/ridu/schema"
@@ -14,6 +15,23 @@ import (
 )
 
 func buildSQLiteArtifactWithDataTransformDescriptors(ctx context.Context, name string, before *schema.Manifest, after schema.Manifest, previousPlannerVersion string, contract sqlitePlannerContract, transforms []ridumigration.DataTransformDescriptor, allowTransformedSchema bool) (ridumigration.Artifact, error) {
+	return buildSQLiteArtifactWithTransitionValidation(ctx, name, before, after, previousPlannerVersion, contract, transforms, allowTransformedSchema, validateSQLiteAdditiveTransition, validateSQLiteTransformedTransition)
+}
+
+// rebuildSQLiteArtifactWithDataTransformDescriptors preserves the exact risk
+// classification of historical transformed artifacts. Earlier planners compared
+// presentation metadata too, so an otherwise additive edit could require a
+// transform. Reconstruct that original plan rather than altering its recorded
+// risks or relaxing the caller's full artifact digest comparison.
+func rebuildSQLiteArtifactWithDataTransformDescriptors(ctx context.Context, name string, before *schema.Manifest, after schema.Manifest, previousPlannerVersion string, contract sqlitePlannerContract, transforms []ridumigration.DataTransformDescriptor, transformedSchema bool) (ridumigration.Artifact, error) {
+	artifact, err := buildSQLiteArtifactWithDataTransformDescriptors(ctx, name, before, after, previousPlannerVersion, contract, transforms, transformedSchema)
+	if err != nil || !transformedSchema || sqliteArtifactAllowsTransformedSchema(artifact) {
+		return artifact, err
+	}
+	return buildSQLiteArtifactWithTransitionValidation(ctx, name, before, after, previousPlannerVersion, contract, transforms, true, validateSQLiteAdditiveSnapshotTransition, validateSQLiteTransformedSnapshotTransition)
+}
+
+func buildSQLiteArtifactWithTransitionValidation(ctx context.Context, name string, before *schema.Manifest, after schema.Manifest, previousPlannerVersion string, contract sqlitePlannerContract, transforms []ridumigration.DataTransformDescriptor, allowTransformedSchema bool, validateAdditive, validateTransformed func(schema.Snapshot, schema.Snapshot) error) (ridumigration.Artifact, error) {
 	if len(transforms) != 0 && before != nil && previousPlannerVersion == contract.version {
 		fromDigest, err := ridumigration.DigestManifest(*before)
 		if err != nil {
@@ -31,12 +49,12 @@ func buildSQLiteArtifactWithDataTransformDescriptors(ctx context.Context, name s
 			return bindSQLiteDataTransforms(artifact, transforms)
 		}
 	}
-	artifact, err := buildSQLiteArtifact(ctx, name, before, after, previousPlannerVersion, contract)
+	artifact, err := buildSQLiteArtifactWithValidation(ctx, name, before, after, previousPlannerVersion, contract, validateAdditive)
 	if err != nil {
 		if len(transforms) == 0 || !allowTransformedSchema {
 			return ridumigration.Artifact{}, err
 		}
-		artifact, err = buildSQLiteArtifactWithValidation(ctx, name, before, after, previousPlannerVersion, contract, validateSQLiteTransformedTransition)
+		artifact, err = buildSQLiteArtifactWithValidation(ctx, name, before, after, previousPlannerVersion, contract, validateTransformed)
 		if err != nil {
 			return ridumigration.Artifact{}, err
 		}
@@ -58,6 +76,10 @@ func buildSQLiteArtifactWithDataTransformDescriptors(ctx context.Context, name s
 // preference state. Versioned field changes remain unsupported until callbacks
 // can rewrite retained snapshots atomically as well as current documents.
 func validateSQLiteTransformedTransition(before, after schema.Snapshot) error {
+	return validateSQLiteTransformedSnapshotTransition(sqliteWithoutPresentation(before), sqliteWithoutPresentation(after))
+}
+
+func validateSQLiteTransformedSnapshotTransition(before, after schema.Snapshot) error {
 	currentApplication := after.Application
 	currentApplication.AllowIDOnCreate = before.Application.AllowIDOnCreate
 	if !reflect.DeepEqual(before.Application, currentApplication) {
@@ -473,7 +495,7 @@ func (transaction sqliteMigrationDataTransaction) validateValue(field schema.Fie
 		return nil
 	}
 	if field.Localized {
-		localized, valid := value.ObjectValue()
+		localized, valid := value.CopyObject()
 		if !valid {
 			return fmt.Errorf("SQLite data transform localized value %q must be an object", path)
 		}
@@ -488,37 +510,50 @@ func (transaction sqliteMigrationDataTransaction) validateValue(field schema.Fie
 		}
 		return nil
 	}
+	if embedded.HasFields(field) {
+		if err := embedded.ValidateValue(field, value, path, true, nil); err != nil {
+			return err
+		}
+		_, err := embedded.Transform(field, value, path, embedded.NewBudget(), func(o embedded.Occurrence) (store.Values, error) {
+			return o.Payload, transaction.validateValues(o.Fields, o.Payload, o.RuntimePath, map[string]struct{}{o.Case.Identity: {}, o.Case.Discriminator: {}})
+		})
+		return err
+	}
+
 	switch field.Type {
 	case schema.FieldTypeGroup:
-		object, valid := value.ObjectValue()
+		object, valid := value.CopyObject()
 		if !valid || field.Nested == nil {
 			return fmt.Errorf("SQLite data transform group value %q must match its immutable resource shape", path)
 		}
-		return transaction.validateValues(field.Nested.Fields, object, path, nil)
+		return transaction.validateValues(field.Nested.ResolvedFields(), object, path, nil)
 	case schema.FieldTypeArray:
-		items, valid := value.Values()
+		items, valid := value.CopyList()
 		if !valid || field.Nested == nil {
 			return fmt.Errorf("SQLite data transform array value %q must match its immutable resource shape", path)
 		}
 		special := map[string]struct{}{"_key": {}}
 		for index, item := range items {
-			object, valid := item.ObjectValue()
+			object, valid := item.CopyObject()
 			if !valid {
 				return fmt.Errorf("SQLite data transform array row %q must be an object", fmt.Sprintf("%s.%d", path, index))
 			}
-			if err := transaction.validateValues(field.Nested.Fields, object, fmt.Sprintf("%s.%d", path, index), special); err != nil {
+			if err := transaction.validateValues(field.Nested.ResolvedFields(), object, fmt.Sprintf("%s.%d", path, index), special); err != nil {
 				return err
 			}
 		}
 	case schema.FieldTypeBlocks:
-		items, valid := value.Values()
+		items, valid := value.CopyList()
 		if !valid || field.Blocks == nil {
 			return fmt.Errorf("SQLite data transform blocks value %q must match its immutable resource shape", path)
+		}
+		if len(items) < field.Blocks.MinRows || field.Blocks.MaxRows > 0 && len(items) > field.Blocks.MaxRows {
+			return fmt.Errorf("SQLite data transform blocks value %q violates its row bounds", path)
 		}
 		special := map[string]struct{}{"_key": {}, "blockType": {}}
 		for index, item := range items {
 			itemPath := fmt.Sprintf("%s.%d", path, index)
-			object, valid := item.ObjectValue()
+			object, valid := item.CopyObject()
 			if !valid {
 				return fmt.Errorf("SQLite data transform block %q must be an object", itemPath)
 			}
@@ -528,9 +563,9 @@ func (transaction sqliteMigrationDataTransaction) validateValue(field schema.Fie
 			}
 			var blockFields []schema.Field
 			found := false
-			for _, block := range field.Blocks.Types {
-				if block.Key == blockKey {
-					blockFields = block.Fields
+			for _, block := range field.Blocks.ResolvedTypes() {
+				if block.Slug == blockKey {
+					blockFields = block.ResolvedFields()
 					found = true
 					break
 				}

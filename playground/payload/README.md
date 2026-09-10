@@ -21,9 +21,10 @@ bun install --frozen-lockfile
 bun dev
 ```
 
-Open <http://localhost:3100/admin> and create the first user when prompted. The starter contains
-Payload's generated `users` and `media` collections. Its SQLite database, uploaded media,
-dependencies, Next.js build output, and local environment are ignored.
+Open <http://localhost:3100/admin> and create the first user when prompted. Alongside Payload's
+generated `users` and `media` collections, `workshops` mirrors the Ridu playground's fields,
+nested sessions, rich-text Workshop card, and city-in-title validation rule. Its SQLite database,
+uploaded media, dependencies, Next.js build output, and local environment are ignored.
 
 ## Check it
 
@@ -34,5 +35,5 @@ bun run lint
 bun run build
 ```
 
-This is a generator baseline, not yet a Ridu parity fixture. Stable comparisons belong in
-`tests/contracts/`; this application is where we can first experiment and learn.
+This remains an exploratory UI comparison rather than a compatibility claim. Stable comparisons
+belong in `tests/contracts/`; this application is where we can first experiment and learn.

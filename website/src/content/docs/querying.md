@@ -4,11 +4,22 @@ description: 'Filter, sort, paginate, select, populate, and localize collection 
 product: data
 eyebrow: 'Data and APIs'
 order: 95
-aliases: ['query', 'where', 'filter', 'sort', 'select', 'populate', 'depth', 'pagination', 'search']
+aliases:
+  [
+    'query',
+    'where',
+    'filter',
+    'sort',
+    'select',
+    'populate',
+    'depth',
+    'pagination',
+    'search'
+  ]
 availability:
   status: limited
   label: 'Finite query vocabulary'
-  description: 'Typed filtering, stable sorting, selection, and bounded population work today; full-text, distinct, notIn, array, and geospatial operators are not implemented.'
+  description: 'Typed filtering, stable sorting, selection, bounded population, and direct-field Local Go distinct work today; full-text, notIn, array all-elements, and geospatial operators remain unavailable.'
   anchor: limits
 navigation:
   section: 'Work with data'
@@ -18,6 +29,27 @@ navigation:
 ---
 
 Ridu uses one query vocabulary across the local Go API, REST, SDK, access rules, and store adapters.
+
+## Read options {#options}
+
+| Option              | SDK / REST                 | Local Go API                                                 | Default and purpose                                                  |
+| ------------------- | -------------------------- | ------------------------------------------------------------ | -------------------------------------------------------------------- |
+| Filter              | `where`                    | `ListOptions.Where`                                          | No caller filter. Combine finite comparisons before pagination.      |
+| Sort                | `sort`                     | `ListOptions.Sort`                                           | Stable store order; add one or more supported authored paths.        |
+| Page                | `page`                     | `ListOptions.Page`                                           | Page 1. Values are one-based.                                        |
+| Page size           | `limit`                    | `ListOptions.Limit`                                          | 10 over HTTP; the HTTP maximum is 100.                               |
+| Selection           | `select`                   | `ListOptions.Select`                                         | All readable authored fields. Restrict top-level output fields.      |
+| Explicit population | `populate`                 | `ListOptions.Populate`                                       | None. Expand named relationship/upload paths with per-target access. |
+| Uniform population  | `depth`                    | Build matching `query.Population` values                     | 0; maximum HTTP/SDK depth is 5. Do not combine with `populate`.      |
+| Content locale      | `locale`, `fallbackLocale` | `Locale`, `FallbackLocales`, `DisableFallback`, `AllLocales` | Project defaults. Choose exact, fallback, or all-locale output.      |
+| Lifecycle state     | `draft`, trash options     | `Draft`, `TrashOnly`                                         | Published and non-trashed content.                                   |
+
+`find` accepts the output, population, locale, and lifecycle options that apply to one document.
+`count` accepts filtering, locale, draft, and trash options but does not build document output.
+
+For Go examples, start with [Filters and paths](/docs/go-packages/query/) if `query.Path`,
+`query.Expression`, or `query.String(...)` is new to you. It explains how those pieces form a
+filter and how to use one in an access rule or local API call.
 
 ## Filter with `where` {#where}
 
@@ -29,7 +61,10 @@ const page = await client.list('posts', {
 		and: [
 			{ status: { equals: 'published' } },
 			{
-				or: [{ title: { contains: 'ridu' } }, { 'author.name': { like: 'Ada Lovelace' } }]
+				or: [
+					{ title: { contains: 'ridu' } },
+					{ 'author.name': { like: 'Ada Lovelace' } }
+				]
 			}
 		]
 	}
@@ -63,7 +98,7 @@ implying a radius or bounding-box query API.
 ## Nested and repeated paths {#paths}
 
 Paths use authored field names separated by dots, such as `seo.title`. Blocks include their stable
-block key in the schema path. Runtime array indexes are not part of a path: one nested path applies
+block slug in the schema path. Runtime array indexes are not part of a path: one nested path applies
 to matching rows. The resolver validates a path against the schema and rejects layout-only,
 non-sortable, or incompatible fields for the requested operation.
 
@@ -76,11 +111,11 @@ Pass repeated sort terms in priority order. Prefix a path with `-` for descendin
 
 ```ts
 const page = await client.list('posts', {
-	sort: ['-publishedAt', 'title']
+	sort: ['-createdAt', 'title']
 });
 ```
 
-REST repeats the query key: `?sort=-publishedAt&sort=title`. The HTTP API accepts at most 16 unique
+REST repeats the query key: `?sort=-createdAt&sort=title`. The HTTP API accepts at most 16 unique
 sort fields. Nested repeated structures, groups, arrays, blocks, JSON, and opaque plugin fields are
 not sortable. The store appends `id` as the final tie-breaker when needed, which keeps page ordering
 deterministic when authored values are equal.
@@ -94,7 +129,10 @@ REST list requests default to page 1 and limit 10. Both values must be positive;
 limit is 100. SDK page results keep metadata under `pagination`:
 
 ```ts
-const { docs, pagination } = await client.list('posts', { page: 2, limit: 25 });
+const { docs, pagination } = await client.list('posts', {
+	page: 2,
+	limit: 25
+});
 
 console.log(pagination.totalDocs);
 console.log(pagination.totalPages);
@@ -123,9 +161,11 @@ const post = await client.find('posts', 'post_123', {
 HTTP selection is a JSON object and accepts at most 256 entries. Selecting a relationship does not
 populate it; it remains an ID or polymorphic reference unless `populate` is also requested.
 
-Selection changes the runtime response, but the current TypeScript method still returns the
-collection's complete output type. Projection-dependent result inference is planned, so code must
-not assume an unselected field exists at runtime merely because its static property is present.
+Literal `select` options narrow the TypeScript result to the selected fields and framework
+metadata, so unselected authored fields are absent from the inferred type. Selected fields can
+still be omitted by access rules. When reusing options, preserve their literal types with `as const`
+or a suitable `satisfies` constraint; a selection widened to runtime booleans retains the broader
+output type.
 
 ## Populate relationships {#populate}
 
@@ -152,8 +192,10 @@ ceilings, not per row.
 REST also accepts `depth=1` to expand every root reference field. Do not combine `depth` and
 `populate`; use explicit population for production queries that need predictable shape and cost.
 
-As with `select`, current SDK return types are not narrowed or expanded according to the population
-object yet.
+Explicit literal `populate` paths infer target document types and apply target selections. This
+also works for references nested in groups, arrays, and Blocks, and for all-locale output. Widened
+runtime options retain broader types. A numeric `depth` alone does not provide the same inference;
+use explicit population for a precisely typed consumer.
 
 ## Query localized and trashed content {#modes}
 
@@ -175,3 +217,49 @@ and other target operations. It never reads an unauthorized page and removes row
 
 Use the [`query` Go reference](/reference/query/) for constructors and types, or continue with the
 [TypeScript SDK](/docs/typescript-sdk/) and [REST API](/docs/rest-api/) representations.
+For the performance effect of indexes, selection, population, and pool sizing, see
+[Database and query performance](/docs/performance/database-and-queries/).
+
+## Find a value in a text or number list {#primitive-list-membership}
+
+For [TextList and NumberList](/docs/fields/lists/), `in` matches a document when any item equals
+any candidate. This finds products with the tag `"sale"` or `"featured"`:
+
+```go title="content/find_tagged.go" focus={15-23}
+package content
+
+import (
+	"context"
+
+	"github.com/riducms/ridu"
+	"github.com/riducms/ridu/query"
+	"github.com/riducms/ridu/store"
+)
+
+func FindTaggedProducts(
+	ctx context.Context,
+	local *ridu.LocalAPI,
+) (store.Page, error) {
+	tags, err := query.NewPath("tags")
+	if err != nil {
+		return store.Page{}, err
+	}
+	// Match either tag anywhere in the list, using exact values.
+	return local.List(ctx, "products", ridu.ListOptions{
+		Where: query.In(tags, query.String("sale"), query.String("featured")),
+		Page:  1,
+		Limit: 20,
+	})
+}
+```
+
+The SDK filter is `{ tags: { in: ['sale', 'featured'] } }`. For numbers, use numeric candidates:
+`{ availableSizes: { in: [10, 12] } }`. These match either candidate; to require both, combine
+separate `in` filters with `and` (or `query.And` in Go).
+
+Matching is exact, so `"sale"` does not match `"wholesale"`. Order and repeated values do not
+change the result. Use `query.Not` to negate membership. Existence and null checks also work.
+
+Scalar equality, whole-list equality, substring search, range comparisons, sorting, and
+indexes are unavailable. Generated `PrimitiveListWhere<T>` exposes the supported operators.
+See [nested list queries](/docs/fields/lists/#nested-queries) for adapter restrictions.

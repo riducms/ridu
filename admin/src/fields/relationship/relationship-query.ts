@@ -33,7 +33,7 @@ export function combineRelationshipFilters(
 
 export function relationshipOptionFilters(
 	field: SchemaField,
-	values: Record<string, unknown>,
+	values: Record<string, unknown> | ((path: string) => unknown),
 	targetCollection: string | undefined
 ): readonly FieldReferenceFilter[] | undefined {
 	const reference = field.relationship ?? field.upload;
@@ -46,7 +46,9 @@ export function relationshipOptionFilters(
 			candidate.value === undefined
 				? candidate.sourcePath === undefined
 					? undefined
-					: readPath(values, candidate.sourcePath)
+					: typeof values === "function"
+						? values(candidate.sourcePath)
+						: readPath(values, candidate.sourcePath)
 				: relationshipFilterLiteral(candidate.value);
 		if (typeof value !== "string" && typeof value !== "number" && typeof value !== "boolean") {
 			return [];

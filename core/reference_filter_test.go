@@ -10,6 +10,7 @@ import (
 	ridu "github.com/riducms/ridu/core"
 	"github.com/riducms/ridu/field"
 	"github.com/riducms/ridu/internal/teststore"
+	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/store"
 )
@@ -29,42 +30,26 @@ func TestReferenceOptionFiltersAreServerEnforcedAcrossRelationshipsUploadsAndNes
 		Name: "Reference option filter admission", Storage: storageBackend, StorageNamespace: "reference-option-filter-admission",
 		Collections: []ridu.Collection{
 			{
-				Slug: "people", Fields: []field.Definition{
-					field.Text("category"), field.Text("region"), field.Checkbox("visible", field.Required()),
-				},
+				Slug: "people", Fields: field.Fields{field.Text("category"), field.Text("region"), field.Checkbox("visible").Required()},
 				Access: ridu.CollectionAccess{Read: func(ridu.AccessContext) (ridu.AccessDecision, error) {
 					return ridu.Where(query.Equal(visiblePath, query.Boolean(true))), nil
 				}},
 			},
-			{Slug: "teams", Fields: []field.Definition{field.Text("category")}},
+			{Slug: "teams", Fields: field.Fields{field.Text("category")}},
 			{
 				Slug: "media", Upload: true, UploadConfig: ridu.UploadConfig{MaxFileSize: 1024, MimeTypes: []string{"text/plain"}},
-				Fields: []field.Definition{field.Text("assetType"), field.Checkbox("visible", field.Required())},
+				Fields: field.Fields{field.Text("assetType"), field.Checkbox("visible").Required()},
 				Access: ridu.CollectionAccess{Read: func(ridu.AccessContext) (ridu.AccessDecision, error) {
 					return ridu.Where(query.Equal(visiblePath, query.Boolean(true))), nil
 				}},
 			},
 			{
 				Slug: "entries", Trash: true,
-				Fields: []field.Definition{
-					field.Text("category"), field.Text("region"),
-					field.Relationship("author", field.To("people"),
-						field.FilterOptionRules(field.OptionFilter("category", field.FilterEquals, "category")),
-						field.FilterOptionRules(field.OptionFilter("region", field.FilterEquals, "region")),
-					),
-					field.Relationship("subject", field.ToAny("people", "teams"), field.FilterOptionRules(
-						field.OptionFilterFor("people", "region", field.FilterEquals, "region"),
-						field.OptionFilterFor("teams", "category", field.FilterEquals, "category"),
-					)),
-					field.Upload("hero", field.To("media"), field.FilterOptionRules(field.OptionFilter("assetType", field.FilterEquals, "category"))),
-					field.Group("meta", field.Fields(field.Relationship("author", field.To("people"), field.FilterOptionRules(field.OptionFilter("category", field.FilterEquals, "category"))))),
-					field.Array("rows", field.Fields(field.Relationship("author", field.To("people"), field.FilterOptionRules(field.OptionFilter("category", field.FilterEquals, "category"))))),
-					field.Blocks("content", field.BlockTypes(field.BlockType("quote", "Quote",
-						field.Relationship("author", field.To("people"), field.FilterOptionRules(field.OptionFilter("category", field.FilterEquals, "category"))),
-					))),
+				Fields: field.Fields{field.Text("category"), field.Text("region"), field.Relationship("author", "people").FilterOptionRules(field.OptionFilter("category", field.FilterEquals, "category"), field.OptionFilter("region", field.FilterEquals, "region")), field.PolymorphicRelationship("subject", "people", "teams").FilterOptionRules(field.OptionFilterFor("people", "region", field.FilterEquals, "region"),
+					field.OptionFilterFor("teams", "category", field.FilterEquals, "category")), field.Upload("hero", "media").FilterOptionRules(field.OptionFilter("assetType", field.FilterEquals, "category")), field.Group("meta", field.Fields{field.Relationship("author", "people").FilterOptionRules(field.OptionFilter("category", field.FilterEquals, "category"))}), field.Array("rows", field.Fields{field.Relationship("author", "people").FilterOptionRules(field.OptionFilter("category", field.FilterEquals, "category"))}), field.Blocks("content", field.Block{Slug: "quote", Fields: field.Fields{field.Relationship("author", "people").FilterOptionRules(field.OptionFilter("category", field.FilterEquals, "category"))}}),
 				},
 				Hooks: ridu.CollectionHooks{BeforeOperation: []ridu.Hook{func(hookContext ridu.HookContext) error {
-					if hookContext.Operation == ridu.OperationUpdate && hookCategory != "" {
+					if hookContext.Operation == operation.Update && hookCategory != "" {
 						hookContext.Data["category"] = store.String(hookCategory)
 					}
 					return nil
@@ -229,13 +214,8 @@ func TestLiteralPublishedReferenceFilterIsServerEnforced(t *testing.T) {
 	application, err := ridu.New(ridu.Config{
 		Name: "Published reference admission",
 		Collections: []ridu.Collection{
-			{Slug: "lessons", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true}, Fields: []field.Definition{field.Text("title", field.Required())}},
-			{Slug: "islands", Fields: []field.Definition{
-				field.Text("title"),
-				field.Relationship("lesson", field.To("lessons"), field.Required(), field.FilterOptionRules(
-					field.OptionFilterValue("_status", field.FilterEquals, "published"),
-				)),
-			}},
+			{Slug: "lessons", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true}, Fields: field.Fields{field.Text("title").Required()}},
+			{Slug: "islands", Fields: field.Fields{field.Text("title"), field.Relationship("lesson", "lessons").Required().FilterOptionRules(field.OptionFilterValue("_status", field.FilterEquals, "published"))}},
 		},
 	}, teststore.New())
 	if err != nil {
@@ -279,11 +259,8 @@ func TestReferenceOptionFiltersRevalidateEveryRetainedLocale(t *testing.T) {
 			{Code: "en", Label: "English"}, {Code: "fr", Label: "French"},
 		}},
 		Collections: []ridu.Collection{
-			{Slug: "people", Fields: []field.Definition{field.Text("category")}},
-			{Slug: "entries", Fields: []field.Definition{
-				field.Text("category"),
-				field.Relationship("editor", field.To("people"), field.Localized(), field.FilterOptionRules(field.OptionFilter("category", field.FilterEquals, "category"))),
-			}},
+			{Slug: "people", Fields: field.Fields{field.Text("category")}},
+			{Slug: "entries", Fields: field.Fields{field.Text("category"), field.Relationship("editor", "people").Localized().FilterOptionRules(field.OptionFilter("category", field.FilterEquals, "category"))}},
 		},
 	}, teststore.New())
 	if err != nil {
@@ -333,7 +310,7 @@ func TestReferenceAdmissionChecksFallbackSourcedLocales(t *testing.T) {
 		}},
 		Collections: []ridu.Collection{
 			{
-				Slug: "people", Fields: []field.Definition{field.Text("name")},
+				Slug: "people", Fields: field.Fields{field.Text("name")},
 				Access: ridu.CollectionAccess{Read: func(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
 					if denyFrenchAccess && ctx.Locale == "fr" {
 						return ridu.Deny(), nil
@@ -341,12 +318,8 @@ func TestReferenceAdmissionChecksFallbackSourcedLocales(t *testing.T) {
 					return ridu.Allow(), nil
 				}},
 			},
-			{Slug: "categories", Fields: []field.Definition{field.Text("category", field.Localized())}},
-			{Slug: "entries", Fields: []field.Definition{
-				field.Text("category", field.Localized()), field.Text("marker"),
-				field.Relationship("accessEditor", field.To("people"), field.Localized()),
-				field.Relationship("filteredEditor", field.To("categories"), field.Localized(), field.FilterOptionRules(field.OptionFilter("category", field.FilterEquals, "category"))),
-			}},
+			{Slug: "categories", Fields: field.Fields{field.Text("category").Localized()}},
+			{Slug: "entries", Fields: field.Fields{field.Text("category").Localized(), field.Text("marker"), field.Relationship("accessEditor", "people").Localized(), field.Relationship("filteredEditor", "categories").Localized().FilterOptionRules(field.OptionFilter("category", field.FilterEquals, "category"))}},
 		},
 	}, teststore.New())
 	if err != nil {
@@ -433,38 +406,8 @@ func TestReferenceOptionFilterOperatorsAndCacheIdentity(t *testing.T) {
 	application, err := ridu.New(ridu.Config{
 		Name: "Reference option filter operators",
 		Collections: []ridu.Collection{
-			{Slug: "targets", Fields: []field.Definition{field.Text("label"), field.Number("score")}},
-			{Slug: "entries", Fields: []field.Definition{
-				field.Text("likeNeedle"), field.Text("containsNeedle"), field.Text("notLabel"),
-				field.Number("gtThreshold"), field.Number("gteThreshold"), field.Number("ltThreshold"), field.Number("lteThreshold"), field.Text("lexicalThreshold"),
-				field.Text("allowedLabel"), field.Text("deniedLabel"),
-				field.Relationship("likeRef", field.To("targets"), field.FilterOptionRules(
-					field.OptionFilter("label", field.FilterLike, "likeNeedle"),
-				)),
-				field.Relationship("containsRef", field.To("targets"), field.FilterOptionRules(
-					field.OptionFilter("label", field.FilterContains, "containsNeedle"),
-				)),
-				field.Relationship("notEqualRef", field.To("targets"), field.FilterOptionRules(
-					field.OptionFilter("label", field.FilterNotEquals, "notLabel"),
-				)),
-				field.Relationship("greaterThanRef", field.To("targets"), field.FilterOptionRules(
-					field.OptionFilter("score", field.FilterGreaterThan, "gtThreshold"),
-				)),
-				field.Relationship("greaterThanEqualRef", field.To("targets"), field.FilterOptionRules(
-					field.OptionFilter("score", field.FilterGreaterThanEqual, "gteThreshold"),
-				)),
-				field.Relationship("lessThanRef", field.To("targets"), field.FilterOptionRules(
-					field.OptionFilter("score", field.FilterLessThan, "ltThreshold"),
-				)),
-				field.Relationship("lessThanEqualRef", field.To("targets"), field.FilterOptionRules(
-					field.OptionFilter("score", field.FilterLessThanEqual, "lteThreshold"),
-				)),
-				field.Relationship("orderedTextRef", field.To("targets"), field.FilterOptionRules(
-					field.OptionFilter("label", field.FilterGreaterThan, "lexicalThreshold"),
-				)),
-				field.Relationship("allowedRef", field.To("targets"), field.FilterOptionRules(field.OptionFilter("label", field.FilterEquals, "allowedLabel"))),
-				field.Relationship("deniedRef", field.To("targets"), field.FilterOptionRules(field.OptionFilter("label", field.FilterEquals, "deniedLabel"))),
-			}},
+			{Slug: "targets", Fields: field.Fields{field.Text("label"), field.Number("score")}},
+			{Slug: "entries", Fields: field.Fields{field.Text("likeNeedle"), field.Text("containsNeedle"), field.Text("notLabel"), field.Number("gtThreshold"), field.Number("gteThreshold"), field.Number("ltThreshold"), field.Number("lteThreshold"), field.Text("lexicalThreshold"), field.Text("allowedLabel"), field.Text("deniedLabel"), field.Relationship("likeRef", "targets").FilterOptionRules(field.OptionFilter("label", field.FilterLike, "likeNeedle")), field.Relationship("containsRef", "targets").FilterOptionRules(field.OptionFilter("label", field.FilterContains, "containsNeedle")), field.Relationship("notEqualRef", "targets").FilterOptionRules(field.OptionFilter("label", field.FilterNotEquals, "notLabel")), field.Relationship("greaterThanRef", "targets").FilterOptionRules(field.OptionFilter("score", field.FilterGreaterThan, "gtThreshold")), field.Relationship("greaterThanEqualRef", "targets").FilterOptionRules(field.OptionFilter("score", field.FilterGreaterThanEqual, "gteThreshold")), field.Relationship("lessThanRef", "targets").FilterOptionRules(field.OptionFilter("score", field.FilterLessThan, "ltThreshold")), field.Relationship("lessThanEqualRef", "targets").FilterOptionRules(field.OptionFilter("score", field.FilterLessThanEqual, "lteThreshold")), field.Relationship("orderedTextRef", "targets").FilterOptionRules(field.OptionFilter("label", field.FilterGreaterThan, "lexicalThreshold")), field.Relationship("allowedRef", "targets").FilterOptionRules(field.OptionFilter("label", field.FilterEquals, "allowedLabel")), field.Relationship("deniedRef", "targets").FilterOptionRules(field.OptionFilter("label", field.FilterEquals, "deniedLabel"))}},
 		},
 	}, teststore.New())
 	if err != nil {
@@ -530,13 +473,10 @@ func TestReferenceOptionFiltersGuardDuplicateStatusVersionAndTrashRestore(t *tes
 	application, err := ridu.New(ridu.Config{
 		Name: "Reference option filter lifecycle",
 		Collections: []ridu.Collection{
-			{Slug: "people", Fields: []field.Definition{field.Text("category")}},
+			{Slug: "people", Fields: field.Fields{field.Text("category")}},
 			{
 				Slug: "entries", Versions: true, Trash: true,
-				Fields: []field.Definition{
-					field.Text("category"),
-					field.Relationship("author", field.To("people"), field.FilterOptionRules(field.OptionFilter("category", field.FilterEquals, "category"))),
-				},
+				Fields: field.Fields{field.Text("category"), field.Relationship("author", "people").FilterOptionRules(field.OptionFilter("category", field.FilterEquals, "category"))},
 			},
 		},
 	}, teststore.New())

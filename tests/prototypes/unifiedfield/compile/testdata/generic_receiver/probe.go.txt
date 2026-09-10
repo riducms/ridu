@@ -1,0 +1,8 @@
+package genericreceiver
+
+type Field[T any] struct{ value T }
+
+func (f Field[string]) MaxLength(n int) Field[string] {
+	_ = len(f.value)
+	return f
+}

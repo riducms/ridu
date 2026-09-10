@@ -9,6 +9,7 @@ import (
 )
 
 type Input struct {
+	Blocks           []field.Block
 	Name             string
 	NameTranslations map[string]string
 	AllowIDOnCreate  bool
@@ -62,7 +63,7 @@ type Collection struct {
 	Slug                 schema.CollectionSlug
 	Labels               schema.CollectionLabels
 	Admin                CollectionAdmin
-	Fields               []field.Definition
+	Fields               field.Fields
 	Indexes              []CollectionIndex
 	Auth                 bool
 	SessionDuration      time.Duration
@@ -121,7 +122,7 @@ type Global struct {
 	Label             string
 	LabelTranslations map[string]string
 	Admin             GlobalAdmin
-	Fields            []field.Definition
+	Fields            field.Fields
 	Versions          bool
 	VersionConfig     VersionConfig
 	Endpoints         []Endpoint
@@ -181,6 +182,8 @@ type PluginAdmin struct {
 }
 
 type PluginFieldType struct {
+	// EmbeddedTypes lists tree.case selectors supplying ordered generic payload type arguments.
+	EmbeddedTypes     []string `json:"embeddedTypes,omitempty"`
 	Key               string
 	TypeScriptPackage string
 	TypeScriptOutput  string

@@ -8,6 +8,7 @@ require (
 	charm.land/lipgloss/v2 v2.0.1
 	github.com/charmbracelet/colorprofile v0.4.2
 	github.com/fsnotify/fsnotify v1.9.0
+	github.com/gertd/go-pluralize v0.2.1
 	github.com/gofrs/flock v0.13.1
 	github.com/graphql-go/graphql v0.8.2-0.20260623012937-6acef3563ff7
 	github.com/jackc/pgx/v5 v5.9.2

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	operationengine "github.com/riducms/ridu/internal/operation"
+	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
@@ -19,12 +20,14 @@ type LocalAPI struct {
 // ListOptions controls filtering, pagination, projection, and authorization for a list read.
 type ListOptions struct {
 	// Where filters documents before pagination and remains atomic with access predicates.
+	// Paths with a Read rule on the field or an ancestor are not queryable.
 	Where query.Expression
 	// Page is the one-based result page. Zero selects the first page.
 	Page int
 	// Limit is the maximum documents returned per page.
 	Limit int
-	// Sort orders results by authored field paths.
+	// Sort orders results by authored field paths without Read rules on the field or ancestors.
+	// Container sorts also require all descendants to have no Read rules.
 	Sort []query.Sort
 	// Select restricts returned document fields.
 	Select []query.Path
@@ -222,7 +225,7 @@ func (local *LocalAPI) Create(ctx context.Context, collection string, values sto
 // CreateWithOptions creates a document and applies the requested bounded
 // population plan to the response inside the write transaction.
 func (local *LocalAPI) CreateWithOptions(ctx context.Context, collection string, values store.Values, options MutationOptions) (store.Document, error) {
-	request := operationengine.Request{Operation: operationengine.Create, Collection: collection, Data: values}
+	request := operationengine.Request{Operation: operation.Create, Collection: collection, Data: values}
 	applyMutationOptions(&request, options)
 	result, err := local.engine.Execute(ctx, request)
 	return requiredDocument(result, err)
@@ -233,7 +236,7 @@ func (local *LocalAPI) createStoragePrepared(ctx context.Context, collection str
 }
 
 func (local *LocalAPI) createStoragePreparedWithOptions(ctx context.Context, collection string, values store.Values, options MutationOptions, resource *operationengine.TransactionResource) (store.Document, error) {
-	request := operationengine.Request{Operation: operationengine.Create, Collection: collection, Data: values, StoragePrepared: true, TransactionResource: resource}
+	request := operationengine.Request{Operation: operation.Create, Collection: collection, Data: values, StoragePrepared: true, TransactionResource: resource}
 	applyMutationOptions(&request, options)
 	result, err := local.engine.Execute(ctx, request)
 	return requiredDocument(result, err)
@@ -249,7 +252,7 @@ func (local *LocalAPI) createWithTransactionMutationOptions(ctx context.Context,
 
 func (local *LocalAPI) createWithTransactionMutationAndFieldAccess(ctx context.Context, collection string, values store.Values, options MutationOptions, mutation operationengine.TransactionMutation, skipFieldAccess bool) (store.Document, error) {
 	request := operationengine.Request{
-		Operation: operationengine.Create, Collection: collection, Data: values,
+		Operation: operation.Create, Collection: collection, Data: values,
 		TransactionMutation: mutation, SkipFieldAccess: skipFieldAccess,
 	}
 	applyMutationOptions(&request, options)
@@ -266,7 +269,7 @@ func (local *LocalAPI) Duplicate(ctx context.Context, collection, id string, ove
 // DuplicateWithOptions duplicates a document and populates the returned copy
 // inside the write transaction.
 func (local *LocalAPI) DuplicateWithOptions(ctx context.Context, collection, id string, overrides store.Values, options MutationOptions) (store.Document, error) {
-	request := operationengine.Request{Operation: operationengine.Duplicate, Collection: collection, ID: id, Data: overrides}
+	request := operationengine.Request{Operation: operation.Duplicate, Collection: collection, ID: id, Data: overrides}
 	applyMutationOptions(&request, options)
 	result, err := local.engine.Execute(ctx, request)
 	return requiredDocument(result, err)
@@ -277,7 +280,7 @@ func (local *LocalAPI) duplicateStoragePrepared(ctx context.Context, collection,
 }
 
 func (local *LocalAPI) duplicateStoragePreparedWithOptions(ctx context.Context, collection, id string, overrides store.Values, options MutationOptions, resource *operationengine.TransactionResource) (store.Document, error) {
-	request := operationengine.Request{Operation: operationengine.Duplicate, Collection: collection, ID: id, Data: overrides, StoragePrepared: true, TransactionResource: resource}
+	request := operationengine.Request{Operation: operation.Duplicate, Collection: collection, ID: id, Data: overrides, StoragePrepared: true, TransactionResource: resource}
 	applyMutationOptions(&request, options)
 	result, err := local.engine.Execute(ctx, request)
 	return requiredDocument(result, err)
@@ -293,7 +296,7 @@ func (local *LocalAPI) Import(ctx context.Context, collection string, values sto
 			Cause:  err,
 		}
 	}
-	result, err := local.engine.Execute(ctx, operationengine.Request{Operation: operationengine.Create, Collection: collection, ImportID: options.ID, ImportCreatedAt: options.CreatedAt, ImportUpdatedAt: options.UpdatedAt, Data: values, Status: &options.Status, Actor: actor})
+	result, err := local.engine.Execute(ctx, operationengine.Request{Operation: operation.Create, Collection: collection, ImportID: options.ID, ImportCreatedAt: options.CreatedAt, ImportUpdatedAt: options.UpdatedAt, Data: values, Status: &options.Status, Actor: actor})
 	return requiredDocument(result, err)
 }
 
@@ -313,7 +316,7 @@ func (local *LocalAPI) Find(ctx context.Context, collection, id string, actor *s
 // transport-owned projection and population plan.
 func (local *LocalAPI) FindWithOptions(ctx context.Context, collection, id string, options FindOptions) (store.Document, error) {
 	request := operationengine.Request{
-		Operation: operationengine.Read, Collection: collection, ID: id, Actor: options.Actor, ActorCollection: options.ActorCollection,
+		Operation: operation.Read, Collection: collection, ID: id, Actor: options.Actor, ActorCollection: options.ActorCollection,
 		Select: options.Select, Populate: options.Populate, OutputFields: cloneOptionalPaths(options.OutputFields), Draft: cloneOptionalBool(options.Draft), TrashOnly: options.TrashOnly,
 		Locale: string(options.Locale), FallbackLocales: append([]schema.LocaleCode(nil), options.FallbackLocales...),
 		DisableFallback: options.DisableFallback, AllLocales: options.AllLocales,
@@ -323,13 +326,7 @@ func (local *LocalAPI) FindWithOptions(ctx context.Context, collection, id strin
 }
 
 func (local *LocalAPI) List(ctx context.Context, collection string, options ListOptions) (store.Page, error) {
-	result, err := local.engine.Execute(ctx, operationengine.Request{
-		Operation: operationengine.Read, Collection: collection, Filter: options.Where,
-		Page: options.Page, Limit: options.Limit, Actor: options.Actor, ActorCollection: options.ActorCollection,
-		Sort: options.Sort, Select: options.Select, Populate: options.Populate, OutputFields: cloneOptionalPaths(options.OutputFields), Draft: cloneOptionalBool(options.Draft), TrashOnly: options.TrashOnly,
-		Locale: string(options.Locale), FallbackLocales: append([]schema.LocaleCode(nil), options.FallbackLocales...),
-		DisableFallback: options.DisableFallback, AllLocales: options.AllLocales,
-	})
+	result, err := local.engine.Execute(ctx, listRequest(collection, options))
 	if err != nil {
 		return store.Page{}, err
 	}
@@ -337,6 +334,30 @@ func (local *LocalAPI) List(ctx context.Context, collection string, options List
 		return store.Page{}, fmt.Errorf("operation engine returned no page")
 	}
 	return *result.Page, nil
+}
+
+// ListJoin reads a configured inverse join through source and target read access.
+// Only the engine derives the membership predicate; caller Where and Sort keep
+// ordinary List field-query restrictions even when the backing relation is private.
+func (local *LocalAPI) ListJoin(ctx context.Context, collection, id, field string, options ListOptions) (store.Page, error) {
+	result, err := local.engine.ListJoin(ctx, collection, id, field, listRequest("", options))
+	if err != nil {
+		return store.Page{}, err
+	}
+	if result.Page == nil {
+		return store.Page{}, fmt.Errorf("operation engine returned no join page")
+	}
+	return *result.Page, nil
+}
+
+func listRequest(collection string, options ListOptions) operationengine.Request {
+	return operationengine.Request{
+		Operation: operation.Read, Collection: collection, Filter: options.Where,
+		Page: options.Page, Limit: options.Limit, Actor: options.Actor, ActorCollection: options.ActorCollection,
+		Sort: options.Sort, Select: options.Select, Populate: options.Populate, OutputFields: cloneOptionalPaths(options.OutputFields), Draft: cloneOptionalBool(options.Draft), TrashOnly: options.TrashOnly,
+		Locale: string(options.Locale), FallbackLocales: append([]schema.LocaleCode(nil), options.FallbackLocales...),
+		DisableFallback: options.DisableFallback, AllLocales: options.AllLocales,
+	}
 }
 
 // Distinct returns paginated unique values for one direct field. Collection
@@ -358,7 +379,7 @@ func (local *LocalAPI) Distinct(ctx context.Context, collection string, options 
 // implement the optional store.WindowTransaction capability.
 func (local *LocalAPI) ListWindow(ctx context.Context, collection string, options ListWindowOptions) (store.Window, error) {
 	result, err := local.engine.Execute(ctx, operationengine.Request{
-		Operation: operationengine.Read, Collection: collection,
+		Operation: operation.Read, Collection: collection,
 		Limit: options.Limit, IndexWindow: &store.IndexWindow{Path: options.Index, LowerBound: options.LowerBound, UpperBound: options.UpperBound}, Actor: options.Actor, ActorCollection: options.ActorCollection,
 		Select: options.Select,
 		Locale: string(options.Locale), FallbackLocales: append([]schema.LocaleCode(nil), options.FallbackLocales...),
@@ -405,7 +426,7 @@ func (local *LocalAPI) Update(ctx context.Context, collection, id string, values
 // UpdateWithOptions updates a document and applies the requested bounded
 // population plan to the response inside the write transaction.
 func (local *LocalAPI) UpdateWithOptions(ctx context.Context, collection, id string, values store.Values, options MutationOptions) (store.Document, error) {
-	request := operationengine.Request{Operation: operationengine.Update, Collection: collection, ID: id, Data: values}
+	request := operationengine.Request{Operation: operation.Update, Collection: collection, ID: id, Data: values}
 	applyMutationOptions(&request, options)
 	result, err := local.engine.Execute(ctx, request)
 	return requiredDocument(result, err)
@@ -436,7 +457,7 @@ func mutationOptions(actor *store.Document, expectedRevision int, localeOptions 
 }
 
 func applyMutationOptions(request *operationengine.Request, options MutationOptions) {
-	if request.Operation == operationengine.Create && options.ID != "" {
+	if request.Operation == operation.Create && options.ID != "" {
 		request.ID = options.ID
 	}
 	request.Actor = options.Actor
@@ -506,14 +527,14 @@ func (local *LocalAPI) updateStoragePrepared(ctx context.Context, collection, id
 }
 
 func (local *LocalAPI) updateStoragePreparedWithOptions(ctx context.Context, collection, id string, values store.Values, options MutationOptions, resource *operationengine.TransactionResource) (store.Document, error) {
-	request := operationengine.Request{Operation: operationengine.Update, Collection: collection, ID: id, Data: values, StoragePrepared: true, TransactionResource: resource}
+	request := operationengine.Request{Operation: operation.Update, Collection: collection, ID: id, Data: values, StoragePrepared: true, TransactionResource: resource}
 	applyMutationOptions(&request, options)
 	result, err := local.engine.Execute(ctx, request)
 	return requiredDocument(result, err)
 }
 
 func (local *LocalAPI) publishStoragePreparedWithOptions(ctx context.Context, collection, id string, values store.Values, options MutationOptions, resource *operationengine.TransactionResource) (store.Document, error) {
-	request := operationengine.Request{Operation: operationengine.Publish, Collection: collection, ID: id, Data: values, StoragePrepared: true, TransactionResource: resource}
+	request := operationengine.Request{Operation: operation.Publish, Collection: collection, ID: id, Data: values, StoragePrepared: true, TransactionResource: resource}
 	applyMutationOptions(&request, options)
 	result, err := local.engine.Execute(ctx, request)
 	return requiredDocument(result, err)
@@ -549,7 +570,7 @@ func (local *LocalAPI) Publish(ctx context.Context, collection, id string, expec
 }
 
 func (local *LocalAPI) PublishWithOptions(ctx context.Context, collection, id string, options MutationOptions) (store.Document, error) {
-	request := operationengine.Request{Operation: operationengine.Publish, Collection: collection, ID: id}
+	request := operationengine.Request{Operation: operation.Publish, Collection: collection, ID: id}
 	applyMutationOptions(&request, options)
 	result, err := local.engine.Execute(ctx, request)
 	return requiredDocument(result, err)
@@ -562,7 +583,7 @@ func (local *LocalAPI) PublishChanges(ctx context.Context, collection, id string
 }
 
 func (local *LocalAPI) PublishChangesWithOptions(ctx context.Context, collection, id string, values store.Values, options MutationOptions) (store.Document, error) {
-	request := operationengine.Request{Operation: operationengine.Publish, Collection: collection, ID: id, Data: values}
+	request := operationengine.Request{Operation: operation.Publish, Collection: collection, ID: id, Data: values}
 	applyMutationOptions(&request, options)
 	result, err := local.engine.Execute(ctx, request)
 	return requiredDocument(result, err)
@@ -573,7 +594,7 @@ func (local *LocalAPI) Unpublish(ctx context.Context, collection, id string, exp
 }
 
 func (local *LocalAPI) UnpublishWithOptions(ctx context.Context, collection, id string, options MutationOptions) (store.Document, error) {
-	request := operationengine.Request{Operation: operationengine.Unpublish, Collection: collection, ID: id}
+	request := operationengine.Request{Operation: operation.Unpublish, Collection: collection, ID: id}
 	applyMutationOptions(&request, options)
 	result, err := local.engine.Execute(ctx, request)
 	return requiredDocument(result, err)
@@ -638,7 +659,7 @@ func (local *LocalAPI) Delete(ctx context.Context, collection, id string, actor 
 }
 
 func (local *LocalAPI) DeleteWithOptions(ctx context.Context, collection, id string, options MutationOptions) (store.Document, error) {
-	request := operationengine.Request{Operation: operationengine.Delete, Collection: collection, ID: id}
+	request := operationengine.Request{Operation: operation.Delete, Collection: collection, ID: id}
 	applyMutationOptions(&request, options)
 	result, err := local.engine.Execute(ctx, request)
 	return requiredDocument(result, err)
@@ -650,7 +671,7 @@ func (local *LocalAPI) RestoreDeleted(ctx context.Context, collection, id string
 }
 
 func (local *LocalAPI) RestoreDeletedWithOptions(ctx context.Context, collection, id string, options MutationOptions) (store.Document, error) {
-	request := operationengine.Request{Operation: operationengine.RestoreDeleted, Collection: collection, ID: id}
+	request := operationengine.Request{Operation: operation.RestoreDeleted, Collection: collection, ID: id}
 	applyMutationOptions(&request, options)
 	result, err := local.engine.Execute(ctx, request)
 	return requiredDocument(result, err)
@@ -662,7 +683,7 @@ func (local *LocalAPI) DeletePermanent(ctx context.Context, collection, id strin
 }
 
 func (local *LocalAPI) DeletePermanentWithOptions(ctx context.Context, collection, id string, options MutationOptions) (store.Document, error) {
-	request := operationengine.Request{Operation: operationengine.DeletePermanent, Collection: collection, ID: id}
+	request := operationengine.Request{Operation: operation.DeletePermanent, Collection: collection, ID: id}
 	applyMutationOptions(&request, options)
 	result, err := local.engine.Execute(ctx, request)
 	return requiredDocument(result, err)
@@ -670,32 +691,32 @@ func (local *LocalAPI) DeletePermanentWithOptions(ctx context.Context, collectio
 
 // BulkUpdate atomically applies the same partial values to every document.
 func (local *LocalAPI) BulkUpdate(ctx context.Context, collection string, ids []string, values store.Values, actor *store.Document, localeOptions ...LocaleOptions) ([]store.Document, error) {
-	return local.bulk(ctx, collection, ids, operationengine.Update, values, actor, localeOptions...)
+	return local.bulk(ctx, collection, ids, operation.Update, values, actor, localeOptions...)
 }
 
 // BulkPublish atomically publishes every selected versioned document.
 func (local *LocalAPI) BulkPublish(ctx context.Context, collection string, ids []string, actor *store.Document, localeOptions ...LocaleOptions) ([]store.Document, error) {
-	return local.bulk(ctx, collection, ids, operationengine.Publish, nil, actor, localeOptions...)
+	return local.bulk(ctx, collection, ids, operation.Publish, nil, actor, localeOptions...)
 }
 
 // BulkUnpublish atomically returns every selected versioned document to draft.
 func (local *LocalAPI) BulkUnpublish(ctx context.Context, collection string, ids []string, actor *store.Document, localeOptions ...LocaleOptions) ([]store.Document, error) {
-	return local.bulk(ctx, collection, ids, operationengine.Unpublish, nil, actor, localeOptions...)
+	return local.bulk(ctx, collection, ids, operation.Unpublish, nil, actor, localeOptions...)
 }
 
 // BulkDelete atomically deletes or trashes every selected document.
 func (local *LocalAPI) BulkDelete(ctx context.Context, collection string, ids []string, actor *store.Document, localeOptions ...LocaleOptions) ([]store.Document, error) {
-	return local.bulk(ctx, collection, ids, operationengine.Delete, nil, actor, localeOptions...)
+	return local.bulk(ctx, collection, ids, operation.Delete, nil, actor, localeOptions...)
 }
 
 // BulkRestoreDeleted atomically restores selected documents from trash.
 func (local *LocalAPI) BulkRestoreDeleted(ctx context.Context, collection string, ids []string, actor *store.Document, localeOptions ...LocaleOptions) ([]store.Document, error) {
-	return local.bulk(ctx, collection, ids, operationengine.RestoreDeleted, nil, actor, localeOptions...)
+	return local.bulk(ctx, collection, ids, operation.RestoreDeleted, nil, actor, localeOptions...)
 }
 
 // BulkDeletePermanent atomically permanently deletes selected trashed documents.
 func (local *LocalAPI) BulkDeletePermanent(ctx context.Context, collection string, ids []string, actor *store.Document, localeOptions ...LocaleOptions) ([]store.Document, error) {
-	return local.bulk(ctx, collection, ids, operationengine.DeletePermanent, nil, actor, localeOptions...)
+	return local.bulk(ctx, collection, ids, operation.DeletePermanent, nil, actor, localeOptions...)
 }
 
 // EmptyTrash permanently deletes every accessible trashed document in one
@@ -726,7 +747,7 @@ func (local *LocalAPI) EmptyTrash(ctx context.Context, collection string, actor 
 	return local.BulkDeletePermanent(ctx, collection, ids, actor, localeOptions...)
 }
 
-func (local *LocalAPI) bulk(ctx context.Context, collection string, ids []string, kind operationengine.Kind, values store.Values, actor *store.Document, localeOptions ...LocaleOptions) ([]store.Document, error) {
+func (local *LocalAPI) bulk(ctx context.Context, collection string, ids []string, kind operation.Kind, values store.Values, actor *store.Document, localeOptions ...LocaleOptions) ([]store.Document, error) {
 	requests := make([]operationengine.Request, len(ids))
 	for index, id := range ids {
 		requests[index] = operationengine.Request{Operation: kind, Collection: collection, ID: id, Data: store.CloneValues(values), Actor: actor}
@@ -764,7 +785,7 @@ func (local *LocalAPI) Global(ctx context.Context, slug string, actor *store.Doc
 // population through the ordinary operation engine.
 func (local *LocalAPI) GlobalWithOptions(ctx context.Context, slug string, options FindOptions) (store.Document, error) {
 	request := operationengine.Request{
-		Operation: operationengine.Read, Collection: "global:" + slug, ID: slug, Actor: options.Actor, ActorCollection: options.ActorCollection,
+		Operation: operation.Read, Collection: "global:" + slug, ID: slug, Actor: options.Actor, ActorCollection: options.ActorCollection,
 		Select: options.Select, Populate: options.Populate, OutputFields: cloneOptionalPaths(options.OutputFields), Draft: cloneOptionalBool(options.Draft),
 		Locale: string(options.Locale), FallbackLocales: append([]schema.LocaleCode(nil), options.FallbackLocales...),
 		DisableFallback: options.DisableFallback, AllLocales: options.AllLocales,
@@ -782,7 +803,7 @@ func (local *LocalAPI) UpdateGlobal(ctx context.Context, slug string, values sto
 // the same write transaction.
 func (local *LocalAPI) UpdateGlobalWithOptions(ctx context.Context, slug string, values store.Values, options MutationOptions) (store.Document, error) {
 	request := operationengine.Request{
-		Operation: operationengine.Update, Collection: "global:" + slug, ID: slug,
+		Operation: operation.Update, Collection: "global:" + slug, ID: slug,
 		Data: values,
 	}
 	applyMutationOptions(&request, options)
@@ -797,7 +818,7 @@ func (local *LocalAPI) PublishGlobal(ctx context.Context, slug string, expectedR
 
 func (local *LocalAPI) PublishGlobalWithOptions(ctx context.Context, slug string, options MutationOptions) (store.Document, error) {
 	request := operationengine.Request{
-		Operation: operationengine.Publish, Collection: "global:" + slug, ID: slug,
+		Operation: operation.Publish, Collection: "global:" + slug, ID: slug,
 	}
 	applyMutationOptions(&request, options)
 	result, err := local.engine.Execute(ctx, request)
@@ -812,7 +833,7 @@ func (local *LocalAPI) PublishGlobalChanges(ctx context.Context, slug string, va
 
 func (local *LocalAPI) PublishGlobalChangesWithOptions(ctx context.Context, slug string, values store.Values, options MutationOptions) (store.Document, error) {
 	request := operationengine.Request{
-		Operation: operationengine.Publish, Collection: "global:" + slug, ID: slug, Data: values,
+		Operation: operation.Publish, Collection: "global:" + slug, ID: slug, Data: values,
 	}
 	applyMutationOptions(&request, options)
 	result, err := local.engine.Execute(ctx, request)
@@ -826,7 +847,7 @@ func (local *LocalAPI) UnpublishGlobal(ctx context.Context, slug string, expecte
 
 func (local *LocalAPI) UnpublishGlobalWithOptions(ctx context.Context, slug string, options MutationOptions) (store.Document, error) {
 	request := operationengine.Request{
-		Operation: operationengine.Unpublish, Collection: "global:" + slug, ID: slug,
+		Operation: operation.Unpublish, Collection: "global:" + slug, ID: slug,
 	}
 	applyMutationOptions(&request, options)
 	result, err := local.engine.Execute(ctx, request)

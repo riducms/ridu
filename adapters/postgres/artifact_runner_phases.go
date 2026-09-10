@@ -909,7 +909,12 @@ func referenceBackfillBatch(ctx context.Context, transaction *sql.Tx, manifest s
 			rows.Close()
 			return false, checkpoint, err
 		}
-		documents = append(documents, schemaDocument{ID: document.ID, Entries: referenceindex.Collect(resource, document)})
+		entries, referenceErr := referenceindex.Collect(resource, document)
+		if referenceErr != nil {
+			rows.Close()
+			return false, checkpoint, referenceErr
+		}
+		documents = append(documents, schemaDocument{ID: document.ID, Entries: entries})
 	}
 	if err := rows.Err(); err != nil {
 		rows.Close()

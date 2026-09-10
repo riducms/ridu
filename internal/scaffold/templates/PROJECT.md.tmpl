@@ -28,7 +28,7 @@ of the schema in TypeScript or JSON.
 {{if .Starter}}| `content/posts.go` | Defines the starter Posts collection. | Add fields, change labels, access rules, hooks, or collection behavior. |
 {{end}}
 | `content/users.go` | Defines the authentication collection. | Change user fields or authentication-related rules. |
-| `admin/src/plugins.ts` | Registers application-owned admin field plugins. | Add a custom Svelte field or another application admin extension. |
+| `admin/src/admin.config.ts` | Registers application components, custom field editors and paired plugins. | Add a custom Svelte field or another application admin extension. |
 | `admin/src/fields/` | A conventional home for your custom field components. | Build or change a custom field UI. The directory exists only when you need it. |
 
 You can split `content/` however you like.{{if .Starter}} `posts.go` and{{end}} `users.go` {{if .Starter}}are{{else}}is{{end}} ordinary Go {{if .Starter}}files{{else}}code{{end}}, not
@@ -76,11 +76,11 @@ unmanaged skill files are never replaced.
 | Path | Owner | Why |
 | --- | --- | --- |
 | `generated/ridu.schema.json` | `ridu generate` | Canonical resolved schema used for review and drift checks. |
-| `generated/ridu.openapi.json` | `ridu generate` | OpenAPI description of the REST API. |
+| `generated/ridu.openapi.json` | `ridu generate` when `openapi` is configured | Optional OpenAPI description of the REST API. |
 | `generated/ridu.graphql` | `ridu generate` when `generated.graphql.schema` is configured | Exact SDL emitted by the compiled GraphQL plugin, including executable naming and extension options. |
 | `generated/ridu.generated.go` | `ridu generate` | Exact Go document/input types and local collection handles. |
 | `generated/ridu.generated.ts` | `ridu generate` | Exact TypeScript document, input, query types, and typed Fetch client factory. |
-| `admin/src/ridu.plugins.generated.ts` | `ridu generate` | Static imports for packaged plugins declared by Go config. Put application-local plugins in `plugins.ts`. |
+| `admin/src/ridu.plugins.generated.ts` | `ridu generate` | Static imports for packaged plugins declared by Go config. Put application components in `admin.config.ts`. |
 | `content/ridu_plugins.generated.go` | `ridu add` / `ridu plugin remove` | Compiled registration for packaged Go plugins. |
 | `internal/adminassets/dist/` | `ridu build` / Vite | Compiled static admin embedded into the Go binary. |
 | `dist/` | `ridu build` | Final production binary. |
@@ -149,7 +149,7 @@ because the source is executable Go rather than a frontend module.
 Add it to the collection's `Fields` slice:
 
 ```go
-field.Text("summary", field.Label("Summary"), field.Required()),
+field.Text("summary").Label("Summary").Required(),
 ```
 
 Save the file. `{{.RunCommand}} dev` handles development generation and non-destructive database additions.
@@ -184,14 +184,24 @@ and artifact before applying either form.
 
 ### Add a custom field
 
-A persisted custom field has two halves:
+For application-local scalar customization, use `.Admin(field.Admin{Editor: field.Component("app:name")})` in Go and
+`defineFieldEditor` from `@riducms/plugin/editor` in `admin/src/admin.config.ts`. The generated
+`admin/src/fields/text-editor.svelte` is a complete example. Components without settings need no
+`decodeConfig` function or `config` prop. When a component needs settings, pass one object as
+the second argument to `field.Component` and validate it with `decodeConfig` in the registration.
+Advanced field renderers for complex
+or plugin-owned values belong to a paired Go/admin plugin, not a local `fieldPlugins` list.
 
-1. A Go helper/plugin that defines validation and public manifest config.
-2. A Svelte field plugin that edits the value in the admin.
+### Customize an existing admin surface
 
-Put the Go package somewhere under `content/` (for example `content/colorfield/`), register it from
-`content/config.go`, create the Svelte component under `admin/src/fields/`, and register its admin
-plugin in `admin/src/plugins.ts`. The Go and Svelte halves share one plugin key.
+Import `defineAdmin` from `@riducms/plugin/admin`. Register local `dashboard`, `routes`, `login`,
+`account`, `navigation`, `logoutButton`, `views`, `branding`, `shell`, `providers`, `listCells`,
+`documentActions`, and `documentViews` directly in `admin.config.ts`. Their props are the public
+host contracts exported by `@riducms/plugin`. Keep `plugins: generatedAdminPlugins` to compose the
+paired plugins declared in Go. Entries compose in plugin-then-application order and conflicts fail.
+Application messages use `app:message` keys. Local routes use literal relative paths outside the
+framework's reserved namespaces. Use `.Admin(field.Admin{RowLabel: field.Component("app:summary")})` with a
+`rowLabels` registration created by `defineRowLabel` for read-only array and blocks headings.
 
 ### Change only the custom field UI
 

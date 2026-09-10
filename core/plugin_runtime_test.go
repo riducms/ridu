@@ -3,7 +3,6 @@ package core_test
 import (
 	"encoding/json"
 	"net/http"
-	"strings"
 	"testing"
 
 	ridu "github.com/riducms/ridu/core"
@@ -17,7 +16,7 @@ type runtimePlugin struct{}
 func (runtimePlugin) Key() string { return "runtime" }
 
 func (runtimePlugin) Descriptor() ridu.PluginDescriptor {
-	return ridu.PluginDescriptor{Version: "1.0.0", GoPackage: "example.com/plugins/runtime", APIVersion: ridu.PluginAPIVersion, Ridu: ridu.RiduCompatibility{Minimum: ridu.FrameworkVersion, MaximumExclusive: "0.2.0"}}
+	return ridu.PluginDescriptor{Version: "1.0.0", GoPackage: "example.com/plugins/runtime", APIVersion: ridu.PluginAPIVersion, Ridu: ridu.RiduCompatibility{Minimum: ridu.FrameworkVersion, MaximumExclusive: "0.3.0"}}
 }
 
 func (runtimePlugin) Hooks() []ridu.PluginHookContribution {
@@ -37,7 +36,7 @@ func (runtimePlugin) Endpoints() []ridu.PluginEndpoint {
 func TestPluginHooksAndNamespacedEndpointsUsePublicRuntimeContracts(t *testing.T) {
 	application, err := ridu.New(ridu.Config{
 		Name: "Plugin runtime", Plugins: []ridu.Plugin{runtimePlugin{}},
-		Collections: []ridu.Collection{{Slug: "posts", Fields: []field.Definition{field.Text("fromPlugin", field.Required())}}},
+		Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{field.Text("fromPlugin").Required()}}},
 	}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -83,7 +82,7 @@ type transportPlugin struct {
 func (plugin *transportPlugin) Key() string { return "transport" }
 
 func (plugin *transportPlugin) Descriptor() ridu.PluginDescriptor {
-	return ridu.PluginDescriptor{Version: "1.0.0", GoPackage: "example.com/plugins/transport", APIVersion: ridu.PluginAPIVersion, Ridu: ridu.RiduCompatibility{Minimum: ridu.FrameworkVersion, MaximumExclusive: "0.2.0"}}
+	return ridu.PluginDescriptor{Version: "1.0.0", GoPackage: "example.com/plugins/transport", APIVersion: ridu.PluginAPIVersion, Ridu: ridu.RiduCompatibility{Minimum: ridu.FrameworkVersion, MaximumExclusive: "0.3.0"}}
 }
 
 func (plugin *transportPlugin) BindTransports(ctx ridu.PluginTransportContext) ([]ridu.PluginTransport, error) {
@@ -98,7 +97,7 @@ func TestPluginTransportBindsAtStartupAndUsesExactPublicPath(t *testing.T) {
 	plugin := &transportPlugin{}
 	application, err := ridu.New(ridu.Config{
 		Name: "Transport runtime", Plugins: []ridu.Plugin{plugin},
-		Collections: []ridu.Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title")}}},
+		Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{field.Text("title")}}},
 	}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -118,17 +117,3 @@ func TestPluginTransportBindsAtStartupAndUsesExactPublicPath(t *testing.T) {
 }
 
 var _ ridu.TransportProvider = (*transportPlugin)(nil)
-
-type invalidHookPlugin struct{ runtimePlugin }
-
-func (invalidHookPlugin) Key() string { return "invalid-hook" }
-func (invalidHookPlugin) Hooks() []ridu.PluginHookContribution {
-	return []ridu.PluginHookContribution{{Collection: "posts", FieldPath: "missing", Hooks: ridu.CollectionHooks{BeforeValidate: []ridu.Hook{func(ridu.HookContext) error { return nil }}}}}
-}
-
-func TestPluginFieldHooksMustTargetAResolvedField(t *testing.T) {
-	_, err := ridu.New(ridu.Config{Name: "Invalid hook", Plugins: []ridu.Plugin{invalidHookPlugin{}}, Collections: []ridu.Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title")}}}}, teststore.New())
-	if err == nil || !strings.Contains(err.Error(), "unknown_plugin_hook_field") {
-		t.Fatalf("New error = %v", err)
-	}
-}

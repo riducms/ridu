@@ -10,13 +10,91 @@ import (
 	"github.com/riducms/ridu/store"
 )
 
+// AccessContext gives an AccessRule the current operation, actor, submitted
+// data, locale, and access-controlled Local API.
+type AccessContext = core.AccessContext
+
+// AccessDecision is the result of an AccessRule. Construct one with Allow,
+// Deny, or Where rather than its zero value.
+type AccessDecision = core.AccessDecision
+
+// AccessRule authorizes one collection or global operation. Assign it through
+// CollectionAccess or GlobalAccess; returning an error stops the operation.
+type AccessRule = core.AccessRule
+
+// CollectionAccess configures per-operation authorization for a Collection.
+// Assign it to Collection.Access. Use Where when access to existing documents
+// depends on their stored values.
+//
+// For example:
+//
+//	Access: ridu.CollectionAccess{
+//		Create: func(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
+//			if ctx.Actor == nil {
+//				return ridu.Deny(), nil
+//			}
+//			return ridu.Allow(), nil
+//		},
+//	}
+type CollectionAccess = core.CollectionAccess
+
+// GlobalAccess configures read and write authorization for a Global. Assign it
+// to Global.Access. Existing singleton operations may use Where, while the first
+// update must return Allow because there is no stored row to filter.
+type GlobalAccess = core.GlobalAccess
+
+// HookContext gives a Hook the current operation, actor, values, document, and
+// access-controlled Local API. Which values are available depends on the phase.
+type HookContext = core.HookContext
+
+// Hook runs during one collection or global lifecycle phase. Register hooks in
+// CollectionHooks. An error stops the phase and rolls back an uncommitted write;
+// AfterCommit is the exception because the write has committed and later effects
+// still run while their errors are reported.
+type Hook = core.Hook
+
+// CollectionHooks groups resource-level lifecycle callbacks. Assign it to
+// Collection.Hooks or Global.Hooks; use BeforeChange to change stored values,
+// AfterRead to change a response, and AfterCommit for post-commit effects.
+//
+// For example:
+//
+//	Hooks: ridu.CollectionHooks{
+//		BeforeChange: []ridu.Hook{
+//			func(ctx ridu.HookContext) error {
+//				ctx.Data["status"] = store.String("draft")
+//				return nil
+//			},
+//		},
+//	}
+type CollectionHooks = core.CollectionHooks
+
+// Endpoint declares an application-owned HTTP route on Config, Collection, or
+// Global. Its handler must enforce any endpoint-specific authorization.
+//
+// For example, inside Collection.Endpoints:
+//
+//	{
+//		Method: http.MethodGet,
+//		Path:   "/:id/tracking",
+//		Handler: func(ctx ridu.EndpointContext) {
+//			fmt.Fprint(ctx.Writer, ctx.RouteParams["id"])
+//		},
+//	}
+type Endpoint = core.Endpoint
+
+// EndpointContext gives an EndpointHandler its matched HTTP request, response
+// writer, route parameters, actor, and access-controlled Local API.
+type EndpointContext = core.EndpointContext
+
+// EndpointHandler serves one custom Endpoint by writing its response through
+// EndpointContext.Writer.
+type EndpointHandler = core.EndpointHandler
+
 // Public authoring and runtime contracts live in core. These aliases keep the
 // root package as the ergonomic application-facing entry point.
 type (
-	AccessContext                = core.AccessContext
-	AccessDecision               = core.AccessDecision
 	AccessDecisionKind           = core.AccessDecisionKind
-	AccessRule                   = core.AccessRule
 	AfterCommitDispatcher        = core.AfterCommitDispatcher
 	AfterCommitEffect            = core.AfterCommitEffect
 	AdminConfig                  = core.AdminConfig
@@ -28,9 +106,6 @@ type (
 	DistinctOptions              = core.DistinctOptions
 	GenerationProvider           = core.GenerationProvider
 	EndpointProvider             = core.EndpointProvider
-	Endpoint                     = core.Endpoint
-	EndpointContext              = core.EndpointContext
-	EndpointHandler              = core.EndpointHandler
 	TransportProvider            = core.TransportProvider
 	App                          = core.App
 	AuditEvent                   = core.AuditEvent
@@ -63,27 +138,17 @@ type (
 	PreviewBreakpoint            = core.PreviewBreakpoint
 	LocalizationConfig           = core.LocalizationConfig
 	Locale                       = core.Locale
-	CollectionAccess             = core.CollectionAccess
-	CollectionHooks              = core.CollectionHooks
 	DocumentLockConfig           = core.DocumentLockConfig
 	CollectionLabels             = core.CollectionLabels
 	Global                       = core.Global
 	GlobalAdmin                  = core.GlobalAdmin
-	GlobalAccess                 = core.GlobalAccess
 	Config                       = core.Config
 	ConfigTransformer            = core.ConfigTransformer
-	Computed                     = core.Computed
-	ComputedContext              = core.ComputedContext
 	ExecuteOption                = core.ExecuteOption
-	FieldAccess                  = core.FieldAccess
-	FieldAccessContext           = core.FieldAccessContext
-	FieldAccessRule              = core.FieldAccessRule
 	FieldValidatorProvider       = core.FieldValidatorProvider
 	FindOptions                  = core.FindOptions
 	FieldCapabilities            = core.FieldCapabilities
 	HandlerOptions               = core.HandlerOptions
-	Hook                         = core.Hook
-	HookContext                  = core.HookContext
 	ImageSize                    = core.ImageSize
 	ImportOptions                = core.ImportOptions
 	JoinMutationResult           = core.JoinMutationResult
@@ -92,7 +157,6 @@ type (
 	LocaleOptions                = core.LocaleOptions
 	LocalAPI                     = core.LocalAPI
 	MutationOptions              = core.MutationOptions
-	Operation                    = core.Operation
 	OperationCapabilities        = core.OperationCapabilities
 	OperationError               = core.OperationError
 	AccessCapabilities           = core.AccessCapabilities
@@ -143,18 +207,6 @@ const (
 
 	AdminPluginAPIVersion = core.AdminPluginAPIVersion
 	PluginAPIVersion      = core.PluginAPIVersion
-
-	OperationCreate          = core.OperationCreate
-	OperationDuplicate       = core.OperationDuplicate
-	OperationAdmin           = core.OperationAdmin
-	OperationRead            = core.OperationRead
-	OperationReadVersions    = core.OperationReadVersions
-	OperationUpdate          = core.OperationUpdate
-	OperationDelete          = core.OperationDelete
-	OperationRestoreDeleted  = core.OperationRestoreDeleted
-	OperationDeletePermanent = core.OperationDeletePermanent
-	OperationPublish         = core.OperationPublish
-	OperationUnpublish       = core.OperationUnpublish
 
 	FrameworkVersion = core.FrameworkVersion
 

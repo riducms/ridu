@@ -14,7 +14,7 @@ import (
 
 func TestPostgresReadinessRequiresExactAppliedManifest(t *testing.T) {
 	ctx := context.Background()
-	config := ridu.Config{Name: "readiness", Collections: []ridu.Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title")}}}}
+	config := ridu.Config{Name: "readiness", Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{field.Text("title")}}}}
 	backend, manifest := integrationBackend(t, ctx, config)
 	if err := backend.Ready(ctx, manifest); err == nil {
 		t.Fatal("readiness succeeded without an immutable migration ledger")
@@ -41,7 +41,7 @@ func TestPostgresReadinessRequiresExactAppliedManifest(t *testing.T) {
 	if err := backend.ReadyWithMigrationHistory(ctx, manifest, firstHistory); err != nil {
 		t.Fatalf("exact initial history readiness: %v", err)
 	}
-	ahead, err := ridu.Resolve(ridu.Config{Name: "readiness", Collections: []ridu.Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title"), field.Text("summary")}}}})
+	ahead, err := ridu.Resolve(ridu.Config{Name: "readiness", Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{field.Text("title"), field.Text("summary")}}}})
 	if err != nil {
 		t.Fatal(err)
 	}

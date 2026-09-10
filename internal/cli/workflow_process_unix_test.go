@@ -76,6 +76,7 @@ func TestManagedProcessStopRemovesDescendantAfterGracefulRootExit(t *testing.T) 
 	drainedPath := filepath.Join(directory, "drained")
 	childPIDPath := filepath.Join(directory, "child-pid")
 	childSurvivedPath := filepath.Join(directory, "child-survived")
+	stoppedPath := filepath.Join(directory, "stopped")
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	output := newCLIOutput(&stdout, &stderr, cliOutputOptions{})
@@ -88,6 +89,7 @@ func TestManagedProcessStopRemovesDescendantAfterGracefulRootExit(t *testing.T) 
 			"RIDU_TEST_DRAINED=" + drainedPath,
 			"RIDU_TEST_CHILD_PID=" + childPIDPath,
 			"RIDU_TEST_CHILD_SURVIVED=" + childSurvivedPath,
+			"RIDU_TEST_STOPPED=" + stoppedPath,
 		},
 		output,
 		"sh",
@@ -95,7 +97,9 @@ func TestManagedProcessStopRemovesDescendantAfterGracefulRootExit(t *testing.T) 
 		`trap 'printf drained > "$RIDU_TEST_DRAINED"; exit 0' TERM
 sh -c '
 trap "" TERM
-printf "%s" "$$" > "$RIDU_TEST_CHILD_PID"
+printf "%s" "$$" > "$RIDU_TEST_CHILD_PID.tmp"
+mv "$RIDU_TEST_CHILD_PID.tmp" "$RIDU_TEST_CHILD_PID"
+while [ ! -f "$RIDU_TEST_STOPPED" ]; do sleep 0.01; done
 sleep 1
 printf survived > "$RIDU_TEST_CHILD_SURVIVED"
 while :; do sleep 1; done
@@ -125,6 +129,11 @@ while :; do sleep 1; done`,
 
 	started := time.Now()
 	process.stop()
+	// Probe survival after cleanup returns, not after a startup-relative delay
+	// that could expire while the root is still draining under scheduler load.
+	if err := os.WriteFile(stoppedPath, []byte("stopped"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	if elapsed := time.Since(started); elapsed >= process.stopTimeout {
 		t.Fatalf("managed stop waited for the force timeout instead of cleaning the post-drain process group: %s", elapsed)
 	}

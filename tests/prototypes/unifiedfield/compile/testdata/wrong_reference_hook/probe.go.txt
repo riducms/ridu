@@ -1,0 +1,14 @@
+package wrongreferencehook
+
+import (
+	"example.com/ridu-gate1/field"
+	"example.com/ridu-gate1/operation"
+)
+
+var _ = field.Relationship("owner", "users").Hooks(field.Hooks[operation.ID]{
+	BeforeChange: []field.Transform[operation.ID]{
+		func(operation.WriteContext, operation.Value[string]) (operation.Change[string], error) {
+			return operation.Change[string]{}, nil
+		},
+	},
+})

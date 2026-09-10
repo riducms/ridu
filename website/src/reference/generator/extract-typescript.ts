@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { svelte2tsx } from 'svelte2tsx';
 import ts from 'typescript';
@@ -428,6 +429,7 @@ function resolveSveltePath(
 	options: ts.CompilerOptions
 ): string {
 	if (specifier.startsWith('.')) return path.resolve(path.dirname(from), specifier);
+	if (specifier.startsWith('#')) return createRequire(from).resolve(specifier);
 	for (const [pattern, replacements] of Object.entries(options.paths ?? {})) {
 		const wildcard = pattern.indexOf('*');
 		const prefix = wildcard >= 0 ? pattern.slice(0, wildcard) : pattern;

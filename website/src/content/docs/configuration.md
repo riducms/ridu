@@ -1,6 +1,6 @@
 ---
 title: 'Configuration'
-description: 'Compose the application, admin, localization, collections, globals, plugins, and runtime services.'
+description: 'Configure your collections, admin, translations, plugins, and server settings in Go.'
 product: core
 eyebrow: 'Core'
 order: 40
@@ -10,13 +10,13 @@ navigation:
   title: 'Configuration'
 ---
 
-Your content model and server behaviour begin as a typed `ridu.Config` value. Ridu resolves it into
-the schema used by the database, REST API, generated Go and TypeScript contracts, and the admin.
+Use `ridu.Config` to describe your application: its collections, fields, permissions, plugins,
+and admin settings. Ridu uses it to build the database structure, API, generated types, and admin.
 
-Projects put the composition function in `content/config.go` by default, but you may split config
+Projects put this configuration in `content/config.go` by default, but you may split config
 across any number of Go files.
 
-## Application config {#application-config}
+## Create your configuration {#application-config}
 
 At minimum, a config needs a non-empty application name and one collection:
 
@@ -34,8 +34,8 @@ func Config() ridu.Config {
 		Collections: []ridu.Collection{
 			{
 				Slug: "posts",
-				Fields: []field.Definition{
-					field.Text("title", field.Required()),
+				Fields: field.Fields{
+					field.Text("title").Required(),
 					field.Textarea("summary"),
 				},
 			},
@@ -44,10 +44,9 @@ func Config() ridu.Config {
 }
 ```
 
-Because config is Go, the compiler catches misspelled fields, wrong callback signatures, and field
-options used with incompatible constructors. Resolution then handles rules that require the whole
-application, such as duplicate slugs, missing relationship targets, invalid locale graphs, and
-plugin compatibility.
+Go catches misspelled options, incorrect callback arguments, and methods used on the wrong
+field type. Ridu checks the full configuration for duplicate slugs, missing relationship
+targets, invalid language fallbacks, and incompatible plugins.
 
 ### Config options {#config-options}
 
@@ -56,6 +55,7 @@ plugin compatibility.
 | `Name`             | Yes                      | The author-facing application name shown by Ridu tooling and the admin. Whitespace is trimmed and an empty name is rejected.                               |
 | `Collections`      | Yes                      | Repeatable document models. At least one collection is required.                                                                                           |
 | `Globals`          | No                       | Singleton documents such as site settings or navigation.                                                                                                   |
+| `Blocks`           | No                       | Reusable block definitions selected by Blocks and rich-text fields through explicit references.                                                            |
 | `Endpoints`        | No                       | Compiled root custom endpoints below `/api`; handlers are anonymous by default.                                                                            |
 | `Admin`            | When auth is enabled     | `Admin.User` selects which auth-enabled collection may enter the admin.                                                                                    |
 | `Localization`     | No                       | Content locales, the default locale, ordered fallbacks, right-to-left metadata, and request-visible locales. The zero value disables content localization. |
@@ -103,7 +103,7 @@ in the Go runtime.
 Change `content/*.go` rather than generated JSON. The development loop regenerates the manifest and
 other derived files.
 
-## Compose a larger application {#compose-configuration}
+## Split configuration across files {#compose-configuration}
 
 As the application grows, declare static collections and globals as focused package variables.
 Their filenames and package layout are yours to choose.
@@ -143,13 +143,9 @@ var Posts = ridu.Collection{
 		DefaultColumns: []string{"title", "status"},
 		Group:          "Editorial",
 	},
-	Fields: []field.Definition{
-		field.Text("title", field.Required()),
-		field.Select(
-			"status",
-			field.OneOf("draft", "published"),
-			field.Default("draft"),
-		),
+	Fields: field.Fields{
+		field.Text("title").Required(),
+		field.Select("status", "draft", "published").Default("draft"),
 		richtext.Field("content"),
 	},
 }
@@ -166,7 +162,26 @@ imports together. Add application-local plugins directly to `Config.Plugins`.
 See [Collections and globals](/docs/collections/) for capabilities and lifecycle behaviour, and
 [Fields](/docs/fields/) for the complete field vocabulary.
 
-## Configure the admin identity {#admin-config}
+## Choose initial values {#initial-values}
+
+Use `.Default(value)` for a fixed initial value, such as `"draft"`. Use `.DefaultFrom(callback)`
+when the server should choose an initial value from the request, such as the content locale or
+signed-in user. Defaults apply to omitted fields in new documents or new nested objects and rows;
+they do not overwrite supplied values or refill existing fields during an update.
+
+[Set default field values](/docs/fields/defaults/) explains callback arguments and return values,
+nested content, and what authors see before and after saving in the admin.
+
+## Show server feedback while editing {#live-validation}
+
+Attach `.LiveValidate(callback)` to a field to show server validation messages before the author
+saves. The admin requests these checks while editing. Attach `.Validate(callback)` separately
+to enforce the rule when saving; you can share the rule's logic between the two callbacks.
+
+[Live server validation](/docs/fields/live-validation/) shows a complete example and explains
+when checks run, what their callbacks receive, and how they work with custom editors.
+
+## Choose who can sign in to the admin {#admin-config}
 
 `Config.Admin` selects which auth collection owns admin sessions. It does not enable authentication
 by itself. Set `Auth: true` on the collection, then name that collection in `Admin.User`:
@@ -187,8 +202,8 @@ func Config() ridu.Config {
 			{
 				Slug: "users",
 				Auth: true,
-				Fields: []field.Definition{
-					field.Text("email", field.Required(), field.Unique()),
+				Fields: field.Fields{
+					field.Text("email").Required().Unique(),
 				},
 			},
 			Posts,
@@ -213,9 +228,9 @@ choice from the account screen; the whole interface, accessibility text, plural 
 and right-to-left layout update together. Application, resource, field, choice, relationship,
 language, and timezone labels can provide `LabelTranslations` maps without changing stable IDs.
 
-## Add content localization {#localization}
+## Add content languages {#localization}
 
-Localization is opt-in. Once it is configured, mark individual fields with `field.Localized()`;
+Localization is opt-in. Once it is configured, mark individual fields with `.Localized()`;
 ordinary fields continue to store one shared value.
 
 ```go title="content/config.go"
@@ -250,9 +265,9 @@ func Config() ridu.Config {
 		Collections: []ridu.Collection{
 			{
 				Slug: "posts",
-				Fields: []field.Definition{
-					field.Text("title", field.Required(), field.Localized()),
-					field.Text("slug", field.Required(), field.Unique()),
+				Fields: field.Fields{
+					field.Text("title").Required().Localized(),
+					field.Text("slug").Required().Unique(),
 				},
 			},
 		},
@@ -301,7 +316,7 @@ API version, and pairing version against the backend descriptor. Production neve
 installs plugin code dynamically. See [Plugins](/docs/plugins/) for installation, removal, and
 authoring.
 
-## Configure root hooks and after-commit dispatch {#hooks-and-after-commit}
+## Handle failures and work after a save {#hooks-and-after-commit}
 
 `Config.Hooks` contains application-wide failure observation. Put operation lifecycle behaviour on
 the collection or global that owns it; those resource hooks have the document, original values,
@@ -343,9 +358,10 @@ dispatcher Ridu runs them immediately. Set `Config.AfterCommit` to an implementa
 otherwise control committed effects. The dispatcher receives operation and resource identity plus
 the callback to run; an error at this point cannot roll the committed document back.
 
-See [Hooks](/docs/hooks/) for the full lifecycle and transaction boundaries.
+See [Collection hooks](/docs/hooks/collections/#lifecycle) for hook timing and
+[Transactions and errors](/docs/hooks/transactions-and-errors/) for commit and rollback behavior.
 
-## Configure upload storage {#upload-storage}
+## Choose where uploaded files are stored {#upload-storage}
 
 Upload collections store document metadata in the document-store adapter and file bytes in an
 object-storage adapter. Every upload-enabled application also needs a stable `StorageNamespace`;
@@ -377,7 +393,9 @@ func main() {
 			return postgres.Open(ctx, os.Getenv("DATABASE_URL"))
 		}),
 		ridu.WithAddress(":8080"),
-		ridu.WithUploadStorage(func(context.Context) (storage.Backend, error) {
+		ridu.WithUploadStorage(func(
+			context.Context,
+		) (storage.Backend, error) {
 			return s3.New(s3.Config{
 				Endpoint:  os.Getenv("S3_ENDPOINT"),
 				Region:    os.Getenv("S3_REGION"),
@@ -413,7 +431,7 @@ func Config() ridu.Config {
 that upload storage is present and that the document store supports every enabled capability. See
 [Uploads](/docs/uploads/) and [Object storage](/docs/storage/) for backend and privacy options.
 
-## Server entry {#server-entry}
+## Start the server {#server-entry}
 
 `ridu.Execute` joins config to runtime services. A PostgreSQL server entry looks like this:
 
@@ -460,7 +478,7 @@ Use `ridu.New(config, store)` for tests, embedded use, or a custom HTTP process.
 access, validation, and hooks. Build production applications with `ridu build`; a direct `go build`
 omits the migration-history fingerprint, so `/readyz` fails with an official adapter.
 
-## Validate before runtime {#validate-before-runtime}
+## Check the configuration {#validate-before-runtime}
 
 Use `ridu.Resolve` in focused tests to validate config and inspect the immutable manifest without
 opening a database:
@@ -499,7 +517,7 @@ can report several independent issues, which is more useful than fixing a large 
 at a time. Runtime-only capability checks—such as requiring `store.AuthStore` for auth collections
 or object storage for uploads—run when the application is bound to its backends.
 
-## Develop and review generated contracts {#generation-workflow}
+## Update the application as you develop {#generation-workflow}
 
 While `ridu dev` is running, saving a config change automatically resolves it, regenerates every
 derived contract, synchronizes safe additive database changes, and restarts the application. Before

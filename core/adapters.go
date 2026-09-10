@@ -4,6 +4,7 @@ import (
 	"context"
 
 	operationengine "github.com/riducms/ridu/internal/operation"
+	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
 )
@@ -28,19 +29,19 @@ func adaptCollection(authored Collection, resolved schema.Collection, local **Lo
 	return operationengine.Collection{
 		Key:    string(resolved.Slug),
 		Schema: resolved,
-		Access: map[operationengine.Kind]operationengine.Access{
-			operationengine.Admin:           adaptAccess(authored.Access.Admin, local),
-			operationengine.Create:          adaptAccess(authored.Access.Create, local),
-			operationengine.Duplicate:       adaptAccess(authored.Access.Create, local),
-			operationengine.Read:            adaptAccess(authored.Access.Read, local),
-			operationengine.ReadVersions:    adaptAccess(readVersions, local),
-			operationengine.Update:          adaptAccess(authored.Access.Update, local),
-			operationengine.Publish:         adaptAccess(publish, local),
-			operationengine.Unpublish:       adaptAccess(unpublish, local),
-			operationengine.Delete:          adaptAccess(authored.Access.Delete, local),
-			operationengine.RestoreDeleted:  adaptAccess(authored.Access.Delete, local),
-			operationengine.DeletePermanent: adaptAccess(authored.Access.Delete, local),
-			operationengine.Unlock:          adaptAccess(unlock, local),
+		Access: map[operation.Kind]operationengine.Access{
+			operation.Admin:           adaptAccess(authored.Access.Admin, local),
+			operation.Create:          adaptAccess(authored.Access.Create, local),
+			operation.Duplicate:       adaptAccess(authored.Access.Create, local),
+			operation.Read:            adaptAccess(authored.Access.Read, local),
+			operation.ReadVersions:    adaptAccess(readVersions, local),
+			operation.Update:          adaptAccess(authored.Access.Update, local),
+			operation.Publish:         adaptAccess(publish, local),
+			operation.Unpublish:       adaptAccess(unpublish, local),
+			operation.Delete:          adaptAccess(authored.Access.Delete, local),
+			operation.RestoreDeleted:  adaptAccess(authored.Access.Delete, local),
+			operation.DeletePermanent: adaptAccess(authored.Access.Delete, local),
+			operation.Unlock:          adaptAccess(unlock, local),
 		},
 		Hooks: operationengine.Hooks{
 			BeforeDuplicate: adaptHooks(authored.Hooks.BeforeDuplicate, local),
@@ -56,9 +57,6 @@ func adaptCollection(authored Collection, resolved schema.Collection, local **Lo
 			AfterError:      adaptHooks(authored.Hooks.AfterError, local),
 			AfterCommit:     adaptHooks(authored.Hooks.AfterCommit, local),
 		},
-		Fields:     adaptFieldAccess(authored.FieldAccess, local),
-		FieldHooks: adaptFieldHooks(authored.FieldHooks, local),
-		Computed:   adaptComputed(authored.Computed, local),
 	}
 }
 
@@ -78,12 +76,12 @@ func adaptGlobal(authored Global, resolved schema.Global, local **LocalAPI) oper
 	return operationengine.Collection{
 		Key:    "global:" + string(resolved.Slug),
 		Schema: resolved,
-		Access: map[operationengine.Kind]operationengine.Access{
-			operationengine.Read:         adaptAccess(authored.Access.Read, local),
-			operationengine.ReadVersions: adaptAccess(readVersions, local),
-			operationengine.Update:       adaptAccess(authored.Access.Update, local),
-			operationengine.Publish:      adaptAccess(publish, local),
-			operationengine.Unpublish:    adaptAccess(unpublish, local),
+		Access: map[operation.Kind]operationengine.Access{
+			operation.Read:         adaptAccess(authored.Access.Read, local),
+			operation.ReadVersions: adaptAccess(readVersions, local),
+			operation.Update:       adaptAccess(authored.Access.Update, local),
+			operation.Publish:      adaptAccess(publish, local),
+			operation.Unpublish:    adaptAccess(unpublish, local),
 		},
 		Hooks: operationengine.Hooks{
 			BeforeDuplicate: adaptHooks(authored.Hooks.BeforeDuplicate, local),
@@ -99,22 +97,7 @@ func adaptGlobal(authored Global, resolved schema.Global, local **LocalAPI) oper
 			AfterError:      adaptHooks(authored.Hooks.AfterError, local),
 			AfterCommit:     adaptHooks(authored.Hooks.AfterCommit, local),
 		},
-		Fields:     adaptFieldAccess(authored.FieldAccess, local),
-		FieldHooks: adaptFieldHooks(authored.FieldHooks, local),
-		Computed:   adaptComputed(authored.Computed, local),
 	}
-}
-
-func adaptComputed(resolvers map[string]Computed, local **LocalAPI) map[string]operationengine.Computed {
-	result := make(map[string]operationengine.Computed, len(resolvers))
-	for path, resolver := range resolvers {
-		current := resolver
-		result[path] = func(ctx operationengine.Context, document store.Document) (store.Value, error) {
-			collectionID, globalID := resourceIDs(ctx.Collection)
-			return current(ComputedContext{Context: ctx.Context, Operation: Operation(ctx.Operation), CollectionID: collectionID, GlobalID: globalID, Actor: cloneDocument(ctx.Actor), ActorCollection: ctx.ActorCollection, Document: store.CloneDocument(document), Local: *local, Locale: ctx.Locale, AllLocales: ctx.AllLocales})
-		}
-	}
-	return result
 }
 
 func adaptAccess(rule AccessRule, local **LocalAPI) operationengine.Access {
@@ -124,7 +107,7 @@ func adaptAccess(rule AccessRule, local **LocalAPI) operationengine.Access {
 	return func(ctx operationengine.Context) (operationengine.Decision, error) {
 		collectionID, globalID := resourceIDs(ctx.Collection)
 		decision, err := rule(AccessContext{
-			Context: ctx.Context, Operation: Operation(ctx.Operation), CollectionID: collectionID, GlobalID: globalID,
+			Context: ctx.Context, Operation: ctx.Operation, CollectionID: collectionID, GlobalID: globalID,
 			ID: ctx.ID, Actor: cloneDocument(ctx.Actor), ActorCollection: ctx.ActorCollection, Data: store.CloneValues(ctx.Data), Local: *local, Locale: ctx.Locale, AllLocales: ctx.AllLocales,
 		})
 		if err != nil {
@@ -138,56 +121,6 @@ func adaptAccess(rule AccessRule, local **LocalAPI) operationengine.Access {
 	}
 }
 
-func adaptFieldAccess(rules map[string]FieldAccess, local **LocalAPI) map[string]operationengine.FieldRules {
-	adapted := make(map[string]operationengine.FieldRules, len(rules))
-	for path, fieldRules := range rules {
-		adapted[path] = operationengine.FieldRules{
-			Create: adaptFieldRule(fieldRules.Create, local),
-			Read:   adaptFieldRule(fieldRules.Read, local),
-			Update: adaptFieldRule(fieldRules.Update, local),
-		}
-	}
-	return adapted
-}
-
-func adaptFieldRule(rule FieldAccessRule, local **LocalAPI) operationengine.FieldAccess {
-	if rule == nil {
-		return nil
-	}
-	return func(ctx operationengine.Context) (bool, error) {
-		collectionID, globalID := resourceIDs(ctx.Collection)
-		return rule(FieldAccessContext{
-			Context: ctx.Context, Operation: Operation(ctx.Operation), CollectionID: collectionID, GlobalID: globalID,
-			ID: ctx.ID, Path: ctx.FieldPath, RuntimePath: ctx.RuntimePath,
-			Actor: cloneDocument(ctx.Actor), ActorCollection: ctx.ActorCollection, Data: store.CloneValues(ctx.Data),
-			Value: ctx.Value, SiblingData: store.CloneValues(ctx.SiblingData),
-			Document: cloneDocument(ctx.Document), Original: cloneDocument(ctx.Original),
-			Local: *local, Locale: ctx.Locale, AllLocales: ctx.AllLocales,
-		})
-	}
-}
-
-func adaptFieldHooks(hooks map[string]CollectionHooks, local **LocalAPI) map[string]operationengine.Hooks {
-	result := make(map[string]operationengine.Hooks, len(hooks))
-	for path, fieldHooks := range hooks {
-		result[path] = operationengine.Hooks{
-			BeforeDuplicate: adaptHooks(fieldHooks.BeforeDuplicate, local),
-			BeforeValidate:  adaptHooks(fieldHooks.BeforeValidate, local),
-			BeforeChange:    adaptHooks(fieldHooks.BeforeChange, local),
-			BeforeOperation: adaptHooks(fieldHooks.BeforeOperation, local),
-			BeforeRead:      adaptHooks(fieldHooks.BeforeRead, local),
-			BeforeDelete:    adaptHooks(fieldHooks.BeforeDelete, local),
-			AfterChange:     adaptHooks(fieldHooks.AfterChange, local),
-			AfterRead:       adaptHooks(fieldHooks.AfterRead, local),
-			AfterDelete:     adaptHooks(fieldHooks.AfterDelete, local),
-			AfterOperation:  adaptHooks(fieldHooks.AfterOperation, local),
-			AfterError:      adaptHooks(fieldHooks.AfterError, local),
-			AfterCommit:     adaptHooks(fieldHooks.AfterCommit, local),
-		}
-	}
-	return result
-}
-
 func adaptHooks(hooks []Hook, local **LocalAPI) []operationengine.Hook {
 	adapted := make([]operationengine.Hook, len(hooks))
 	for index, hook := range hooks {
@@ -195,9 +128,9 @@ func adaptHooks(hooks []Hook, local **LocalAPI) []operationengine.Hook {
 		adapted[index] = func(ctx operationengine.Context) error {
 			collectionID, globalID := resourceIDs(ctx.Collection)
 			return current(HookContext{
-				Context: ctx.Context, Operation: Operation(ctx.Operation), CollectionID: collectionID, GlobalID: globalID,
+				Context: ctx.Context, Operation: ctx.Operation, CollectionID: collectionID, GlobalID: globalID,
 				Actor: cloneDocument(ctx.Actor), ActorCollection: ctx.ActorCollection, Data: ctx.Data, Document: ctx.Document,
-				Original: cloneDocument(ctx.Original), Local: *local, FieldPath: ctx.FieldPath,
+				Original: cloneDocument(ctx.Original), Local: *local,
 				Error: ctx.Error, Locale: ctx.Locale, AllLocales: ctx.AllLocales,
 			})
 		}
@@ -223,7 +156,7 @@ func adaptAfterCommitDispatcher(dispatcher AfterCommitDispatcher) func(operation
 			documentID = ctx.Document.ID
 		}
 		return dispatcher.Dispatch(ctx.Context, AfterCommitEffect{
-			Operation: Operation(ctx.Operation), CollectionID: collectionID, GlobalID: globalID, DocumentID: documentID,
+			Operation: ctx.Operation, CollectionID: collectionID, GlobalID: globalID, DocumentID: documentID,
 			Run: func(effectContext context.Context) error { ctx.Context = effectContext; return hook(ctx) },
 		})
 	}

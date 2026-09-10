@@ -28,9 +28,13 @@ function blocks(childType: SchemaField["type"] = "text"): SchemaField {
 		blocks: {
 			types: [
 				{
-					key: "hero",
-					label: "Hero",
-					fields: [scalar("heading", childType)],
+					slug: "hero",
+					labels: { singular: "Hero", plural: "Heroes" },
+					fields: [
+						scalar("heading", childType),
+						{ ...scalar("links", "array"), nested: { fields: [scalar("label")] } },
+						scalar("metadata", "json"),
+					],
 				},
 			],
 		},
@@ -44,9 +48,12 @@ describe("field clipboard", () => {
 			_key: "old-row",
 			blockType: "hero",
 			heading: "Copied hero",
-			links: [{ _key: "old-link", label: "Read more" }],
+			links: [{ _key: "old-link", label: "Read more" }, { label: "Keyless" }],
+			metadata: { _key: "business-key", inner: [{ _key: "external" }] },
 		});
 		const pasted = compatibleClipboardValue(payload, field, "row") as Record<string, unknown>;
+		expect(pasted.metadata).toEqual({ _key: "business-key", inner: [{ _key: "external" }] });
+		expect((pasted.links as Record<string, unknown>[])[1]?._key).toBeString();
 		expect(pasted.heading).toBe("Copied hero");
 		expect(pasted._key).not.toBe("old-row");
 		expect((pasted.links as Record<string, unknown>[])[0]?._key).not.toBe("old-link");

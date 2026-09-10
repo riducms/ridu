@@ -13,7 +13,7 @@ func TestNewRegistersScheduledPublishingOnlyForVersionedCollections(t *testing.T
 		Name: "Plain",
 		Collections: []Collection{{
 			Slug:   "posts",
-			Fields: []field.Definition{field.Text("title")},
+			Fields: field.Fields{field.Text("title")},
 		}},
 	}, backend)
 	if err != nil {
@@ -28,7 +28,7 @@ func TestNewRegistersScheduledPublishingOnlyForVersionedCollections(t *testing.T
 		Collections: []Collection{{
 			Slug:     "posts",
 			Versions: true,
-			Fields:   []field.Definition{field.Text("title")},
+			Fields:   field.Fields{field.Text("title")},
 		}},
 	}, backend)
 	if err != nil {

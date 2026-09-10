@@ -1,18 +1,24 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it, mock } from "bun:test";
 
-import { generationScopeToken, generationSnapshotToken, lengthState, seoAdminPlugin } from "../src";
+// Registry tests keep UI bodies inert; Svelte and browser suites compile/render the actual components.
+for (const file of [
+	"overview-field",
+	"preview-field",
+	"meta-title-field",
+	"meta-description-field",
+	"meta-image-field",
+])
+	mock.module(`../src/${file}.svelte`, () => ({ default: () => ({}) }));
+const { generationScopeToken, generationSnapshotToken, lengthState, seoAdminPlugin } =
+	await import("../src");
 
 describe("SEO admin contract", () => {
 	it("registers every exact renderer in backend field order", () => {
 		expect(seoAdminPlugin.key).toBe("seo");
 		expect(seoAdminPlugin.pairingVersion).toBe(1);
-		expect(seoAdminPlugin.fields.map((field) => `${field.type}:${field.componentKey}`)).toEqual([
-			"ui:overview",
-			"text:title",
-			"textarea:description",
-			"upload:image",
-			"ui:preview",
-		]);
+		expect(
+			Object.entries(seoAdminPlugin.components).map(([key, field]) => `${field.type}:${key}`)
+		).toEqual(["ui:overview", "text:title", "textarea:description", "upload:image", "ui:preview"]);
 	});
 
 	it("matches the inclusive Payload length guidance boundaries", () => {

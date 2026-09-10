@@ -876,15 +876,8 @@ func mongoCollectionHasRelationships(collection schema.Collection) bool {
 			if field.Relationship != nil || field.Upload != nil {
 				return true
 			}
-			if field.Nested != nil && visit(field.Nested.Fields) {
+			if visit(schema.ChildFields(field)) {
 				return true
-			}
-			if field.Blocks != nil {
-				for _, block := range field.Blocks.Types {
-					if visit(block.Fields) {
-						return true
-					}
-				}
 			}
 		}
 		return false
@@ -1034,7 +1027,7 @@ func mongoDeclaredIndexesForLocales(collection schema.Collection, locales []sche
 				}
 			}
 			if field.Type == schema.FieldTypeGroup && field.Nested != nil {
-				if err := visit(field.Nested.Fields, identity); err != nil {
+				if err := visit(field.Nested.ResolvedFields(), identity); err != nil {
 					return err
 				}
 			}
@@ -1126,7 +1119,7 @@ func mongoIndexFieldChain(fields []schema.Field, segments []string) ([]schema.Fi
 		if field.Type != schema.FieldTypeGroup || field.Nested == nil {
 			return nil, false
 		}
-		children, found := mongoIndexFieldChain(field.Nested.Fields, segments[1:])
+		children, found := mongoIndexFieldChain(field.Nested.ResolvedFields(), segments[1:])
 		if !found {
 			return nil, false
 		}

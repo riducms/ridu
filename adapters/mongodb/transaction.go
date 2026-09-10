@@ -10,6 +10,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/riducms/ridu/internal/embedded"
+	"github.com/riducms/ridu/internal/primitivefield"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
@@ -300,6 +302,9 @@ func translateMongoError(ctx context.Context, err error) error {
 }
 
 func validateCollectionEnvelope(collection schema.Collection) error {
+	if err := primitivefield.ValidateIndexes(collection); err != nil {
+		return err
+	}
 	if !schema.IsValidStableID(string(collection.ID)) {
 		return fmt.Errorf("MongoDB collection requires a valid stable ID")
 	}
@@ -351,7 +356,7 @@ func validateMongoFieldEnvelopeAt(fields []schema.Field, ancestors []string, ins
 		if field.Unique && len(ancestors) != 0 {
 			return fmt.Errorf("MongoDB adapter cannot enforce unique nested field %q; use a declared compound index from the collection root", path)
 		}
-		if repeatedContainer || repeatedSelect {
+		if repeatedContainer || repeatedSelect || primitivefield.IsList(field) {
 			if field.Index || field.Unique {
 				return fmt.Errorf("MongoDB adapter does not support indexed or unique repeated field %q", path)
 			}
@@ -359,11 +364,24 @@ func validateMongoFieldEnvelopeAt(fields []schema.Field, ancestors []string, ins
 		if field.Name == "" || field.Path.String() != path || len(field.Path.Segments()) != len(segments) {
 			return fmt.Errorf("MongoDB field %q does not have its canonical resolved path %q", field.Name, path)
 		}
+		if embedded.HasFields(field) {
+			for _, tree := range field.Plugin.EmbeddedTrees {
+				for _, c := range tree.Cases {
+					for _, variant := range c.ResolvedTypes() {
+						prefix := append(append([]string(nil), segments...), tree.Key, c.TagValue, variant.Slug)
+						if err := validateMongoFieldEnvelopeAt(variant.ResolvedFields(), prefix, true); err != nil {
+							return err
+						}
+					}
+				}
+			}
+		}
+
 		if field.Type == schema.FieldTypeGroup {
 			if field.Category != schema.FieldCategoryNested || field.Nested == nil {
 				return fmt.Errorf("MongoDB group field %q does not have a nested field contract", path)
 			}
-			if err := validateMongoFieldEnvelopeAt(field.Nested.Fields, segments, insideRepeated); err != nil {
+			if err := validateMongoFieldEnvelopeAt(field.Nested.ResolvedFields(), segments, insideRepeated); err != nil {
 				return err
 			}
 			continue
@@ -372,22 +390,22 @@ func validateMongoFieldEnvelopeAt(fields []schema.Field, ancestors []string, ins
 			if field.Category != schema.FieldCategoryNested || field.Nested == nil {
 				return fmt.Errorf("MongoDB array field %q does not have a nested field contract", path)
 			}
-			if err := validateMongoFieldEnvelopeAt(field.Nested.Fields, segments, true); err != nil {
+			if err := validateMongoFieldEnvelopeAt(field.Nested.ResolvedFields(), segments, true); err != nil {
 				return err
 			}
 			continue
 		}
 		if field.Type == schema.FieldTypeBlocks {
-			if field.Category != schema.FieldCategoryNested || field.Blocks == nil || len(field.Blocks.Types) == 0 {
+			if field.Category != schema.FieldCategoryNested || field.Blocks == nil || len(field.Blocks.ResolvedTypes()) == 0 {
 				return fmt.Errorf("MongoDB blocks field %q does not have a block contract", path)
 			}
-			for _, block := range field.Blocks.Types {
-				for _, blockField := range block.Fields {
+			for _, block := range field.Blocks.ResolvedTypes() {
+				for _, blockField := range block.ResolvedFields() {
 					if blockField.Name == "blockType" {
-						return fmt.Errorf("MongoDB block %q in field %q declares reserved discriminator field \"blockType\"", block.Key, path)
+						return fmt.Errorf("MongoDB block %q in field %q declares reserved discriminator field \"blockType\"", block.Slug, path)
 					}
 				}
-				if err := validateMongoFieldEnvelopeAt(block.Fields, append(append([]string(nil), segments...), block.Key), true); err != nil {
+				if err := validateMongoFieldEnvelopeAt(block.ResolvedFields(), append(append([]string(nil), segments...), block.Slug), true); err != nil {
 					return err
 				}
 			}
@@ -416,7 +434,7 @@ func validateMongoFieldEnvelopeAt(fields []schema.Field, ancestors []string, ins
 		switch field.Type {
 		case schema.FieldTypeText, schema.FieldTypeCode, schema.FieldTypeTextarea, schema.FieldTypeEmail,
 			schema.FieldTypeDate, schema.FieldTypeNumber, schema.FieldTypeCheckbox, schema.FieldTypeRadio,
-			schema.FieldTypeJSON, schema.FieldTypePoint:
+			schema.FieldTypeJSON, schema.FieldTypePoint, schema.FieldTypeTextList, schema.FieldTypeNumberList:
 		case schema.FieldTypeSelect:
 			if field.Select == nil {
 				return fmt.Errorf("MongoDB select field %q does not have a select contract", path)
@@ -433,6 +451,9 @@ func validateMongoFieldEnvelopeAt(fields []schema.Field, ancestors []string, ins
 }
 
 func validateRequestEnvelope(request store.Request) error {
+	if err := primitivefield.ValidateRequest(request); err != nil {
+		return err
+	}
 	if err := validateCollectionEnvelope(request.Collection); err != nil {
 		return err
 	}
@@ -548,12 +569,12 @@ func validateMongoFieldValues(
 			continue
 		}
 		if field.Localized {
-			localized, valid := value.ObjectValue()
-			if !valid {
+			localized := value
+			if localized.Kind() != store.ValueObject {
 				return fmt.Errorf("MongoDB localized field %q requires canonical locale-keyed storage", path)
 			}
-			locales := make([]string, 0, len(localized))
-			for locale := range localized {
+			locales := make([]string, 0, localized.Len())
+			for locale := range localized.Entries() {
 				locales = append(locales, locale)
 			}
 			sort.Strings(locales)
@@ -566,7 +587,7 @@ func validateMongoFieldValues(
 						return fmt.Errorf("MongoDB localized field %q contains unconfigured locale %q", path, locale)
 					}
 				}
-				localizedValue := localized[locale]
+				localizedValue := localized.Get(locale)
 				if localizedValue.Kind() == store.ValueNull {
 					continue
 				}
@@ -617,7 +638,7 @@ func validateMongoFieldValue(
 	}
 
 	if field.Type == schema.FieldTypeGroup {
-		object, valid := value.ObjectValue()
+		object, valid := value.CopyObject()
 		if !valid {
 			return fmt.Errorf("MongoDB value %q does not match field type %q", path, field.Type)
 		}
@@ -631,7 +652,7 @@ func validateMongoFieldValue(
 		if patchRoot {
 			nestedRequireMissing = false
 		}
-		return validateMongoFieldValues(collectionID, field.Nested.Fields, object, pathSegments, nestedRequireMissing, patchRoot, configuredLocales, nil)
+		return validateMongoFieldValues(collectionID, field.Nested.ResolvedFields(), object, pathSegments, nestedRequireMissing, patchRoot, configuredLocales, nil)
 	}
 	if field.Type == schema.FieldTypeSelect && field.Select != nil && field.Select.HasMany {
 		return validateMongoHasManySelectValue(field, value, path)
@@ -642,6 +663,19 @@ func validateMongoFieldValue(
 	if field.Type == schema.FieldTypeBlocks {
 		return validateMongoBlocksValue(collectionID, field, value, pathSegments, configuredLocales)
 	}
+	if embedded.HasFields(field) {
+		if err := embedded.ValidateValue(field, value, path, true, nil); err != nil {
+			return err
+		}
+		_, err := embedded.Transform(field, value, path, embedded.NewBudget(), func(o embedded.Occurrence) (store.Values, error) {
+			if o.Key == "" {
+				return nil, &embedded.Error{Issue: schema.Issue{Code: "missing_embedded_identity", Path: o.RuntimePath + "." + o.Case.Identity, Message: "Migrate this stored payload to assign a stable occurrence identity before using it."}}
+			}
+			return o.Payload, validateMongoFieldValues(collectionID, o.Fields, o.Payload, strings.Split(o.RuntimePath, "."), requireMissing, patchRoot, configuredLocales, map[string]struct{}{o.Case.Identity: {}, o.Case.Discriminator: {}})
+		})
+		return err
+	}
+
 	if field.Type == schema.FieldTypeRelationship {
 		return validateMongoRelationshipValue(field, value, path)
 	}
@@ -655,28 +689,29 @@ func validateMongoFieldValue(
 }
 
 func validateMongoHasManySelectValue(field schema.Field, value store.Value, path string) error {
-	items, valid := value.Values()
-	if !valid || field.Select == nil || !field.Select.HasMany {
+	if value.Kind() != store.ValueList || field.Select == nil || !field.Select.HasMany {
 		return fmt.Errorf("MongoDB value %q does not match field type %q", path, field.Type)
 	}
-	if field.Required && len(items) == 0 {
+	if field.Required && value.Len() == 0 {
 		return fmt.Errorf("MongoDB document is missing required field %q", path)
 	}
-	allowed := make(map[string]struct{}, len(field.Select.Choices))
-	for _, choice := range field.Select.Choices {
-		allowed[choice.Value] = struct{}{}
+	allowed := make(map[string]struct{}, len(field.Select.Options))
+	for _, option := range field.Select.Options {
+		allowed[option.Value] = struct{}{}
 	}
-	seen := make(map[string]struct{}, len(items))
-	for index, item := range items {
+	seen := make(map[string]struct{}, value.Len())
+	index := -1
+	for item := range value.Elements() {
+		index++
 		text, valid := item.StringValue()
 		if !valid {
 			return fmt.Errorf("MongoDB value %q.%d does not match field type %q", path, index, field.Type)
 		}
 		if _, duplicate := seen[text]; duplicate {
-			return fmt.Errorf("MongoDB value %q.%d duplicates select choice %q", path, index, text)
+			return fmt.Errorf("MongoDB value %q.%d duplicates select option %q", path, index, text)
 		}
 		if _, exists := allowed[text]; !exists {
-			return fmt.Errorf("MongoDB value %q.%d contains unknown select choice %q", path, index, text)
+			return fmt.Errorf("MongoDB value %q.%d contains unknown select option %q", path, index, text)
 		}
 		seen[text] = struct{}{}
 	}
@@ -694,23 +729,24 @@ func validateMongoArrayValue(
 	configuredLocales map[string]struct{},
 ) error {
 	path := strings.Join(pathSegments, ".")
-	items, valid := value.Values()
-	if !valid || field.Nested == nil {
+	if value.Kind() != store.ValueList || field.Nested == nil {
 		return fmt.Errorf("MongoDB value %q does not match field type %q", path, field.Type)
 	}
-	if field.Required && len(items) == 0 {
+	if field.Required && value.Len() == 0 {
 		return fmt.Errorf("MongoDB document is missing required field %q", path)
 	}
-	if len(items) < field.Nested.MinRows {
+	if value.Len() < field.Nested.MinRows {
 		return fmt.Errorf("MongoDB value %q must contain at least %d rows", path, field.Nested.MinRows)
 	}
-	if field.Nested.MaxRows > 0 && len(items) > field.Nested.MaxRows {
+	if field.Nested.MaxRows > 0 && value.Len() > field.Nested.MaxRows {
 		return fmt.Errorf("MongoDB value %q must contain at most %d rows", path, field.Nested.MaxRows)
 	}
-	seenKeys := make(map[string]int, len(items))
-	for index, item := range items {
+	seenKeys := make(map[string]int, value.Len())
+	index := -1
+	for item := range value.Elements() {
+		index++
 		itemPath := fmt.Sprintf("%s.%d", path, index)
-		object, valid := item.ObjectValue()
+		object, valid := item.CopyObject()
 		if !valid {
 			return fmt.Errorf("MongoDB array row %q must be an object", itemPath)
 		}
@@ -718,7 +754,7 @@ func validateMongoArrayValue(
 			return err
 		}
 		if err := validateMongoFieldValues(
-			collectionID, field.Nested.Fields, object,
+			collectionID, field.Nested.ResolvedFields(), object,
 			append(append([]string(nil), pathSegments...), fmt.Sprintf("%d", index)),
 			true, false, configuredLocales, map[string]struct{}{"_key": {}},
 		); err != nil {
@@ -739,30 +775,40 @@ func validateMongoBlocksValue(
 	configuredLocales map[string]struct{},
 ) error {
 	path := strings.Join(pathSegments, ".")
-	items, valid := value.Values()
-	if !valid || field.Blocks == nil {
+	if value.Kind() != store.ValueList || field.Blocks == nil {
 		return fmt.Errorf("MongoDB value %q does not match field type %q", path, field.Type)
 	}
-	if field.Required && len(items) == 0 {
+	if field.Required && value.Len() == 0 {
 		return fmt.Errorf("MongoDB document is missing required field %q", path)
 	}
-	seenKeys := make(map[string]int, len(items))
-	for index, item := range items {
+	if value.Len() < field.Blocks.MinRows {
+		return fmt.Errorf("MongoDB value %q must contain at least %d blocks", path, field.Blocks.MinRows)
+	}
+	if field.Blocks.MaxRows > 0 && value.Len() > field.Blocks.MaxRows {
+		return fmt.Errorf("MongoDB value %q must contain at most %d blocks", path, field.Blocks.MaxRows)
+	}
+	seenKeys := make(map[string]int, value.Len())
+	index := -1
+	for item := range value.Elements() {
+		index++
 		itemPath := fmt.Sprintf("%s.%d", path, index)
-		object, valid := item.ObjectValue()
+		object, valid := item.CopyObject()
 		if !valid {
 			return fmt.Errorf("MongoDB block %q must be an object", itemPath)
 		}
 		blockType, valid := object["blockType"].StringValue()
 		block, exists := mongoBlockType(field, blockType)
 		if !valid || !exists {
-			return fmt.Errorf("MongoDB block %q has an invalid blockType", itemPath)
+			return &store.SchemaRecoveryError{Issues: []schema.Issue{{
+				Code: "unknown_block_schema", Path: itemPath + ".blockType",
+				Message: "Restore the missing block schema or migrate the stored document before using it.",
+			}}}
 		}
 		if err := validateMongoRowKey(object, itemPath, index, seenKeys); err != nil {
 			return err
 		}
 		if err := validateMongoFieldValues(
-			collectionID, block.Fields, object,
+			collectionID, block.ResolvedFields(), object,
 			append(append([]string(nil), pathSegments...), fmt.Sprintf("%d", index)),
 			true, false, configuredLocales,
 			map[string]struct{}{"_key": {}, "blockType": {}},
@@ -796,8 +842,8 @@ func mongoBlockType(field schema.Field, key string) (schema.BlockType, bool) {
 	if field.Blocks == nil {
 		return schema.BlockType{}, false
 	}
-	for _, block := range field.Blocks.Types {
-		if block.Key == key {
+	for _, block := range field.Blocks.ResolvedTypes() {
+		if block.Slug == key {
 			return block, true
 		}
 	}
@@ -805,6 +851,31 @@ func mongoBlockType(field schema.Field, key string) (schema.BlockType, bool) {
 }
 
 func validateMongoScalarFieldValue(field schema.Field, value store.Value, path string) error {
+	if primitivefield.IsList(field) {
+		if value.Kind() != store.ValueList {
+			return fmt.Errorf("MongoDB value %q must be a primitive array", path)
+		}
+		if field.Required && value.Len() == 0 {
+			return fmt.Errorf("MongoDB required list %q must not be empty", path)
+		}
+		index := -1
+		for item := range value.Elements() {
+			index++
+			valid := false
+			if field.Type == schema.FieldTypeTextList {
+				_, valid = item.StringValue()
+			} else {
+				number, ok := item.NumberValue()
+				valid = ok && !math.IsNaN(number) && !math.IsInf(number, 0)
+			}
+			if !valid {
+				return fmt.Errorf("MongoDB primitive list %q item %d does not match %q", path, index+1, field.Type)
+			}
+		}
+		_, err := encodeValue(value)
+		return err
+	}
+
 	if field.Type == schema.FieldTypeJSON || field.Type == schema.FieldTypePlugin {
 		if _, err := encodeValue(value); err != nil {
 			return fmt.Errorf("MongoDB value %q does not contain persistable JSON data: %w", path, err)
@@ -822,10 +893,11 @@ func validateMongoScalarFieldValue(field schema.Field, value store.Value, path s
 	case schema.FieldTypeCheckbox:
 		_, valid = value.BooleanValue()
 	case schema.FieldTypePoint:
-		coordinates, point := value.Values()
-		if point && len(coordinates) == 2 {
-			longitude, longitudeValid := coordinates[0].NumberValue()
-			latitude, latitudeValid := coordinates[1].NumberValue()
+		if value.Kind() == store.ValueList && value.Len() == 2 {
+			x, _ := value.ListItem(0)
+			y, _ := value.ListItem(1)
+			longitude, longitudeValid := x.NumberValue()
+			latitude, latitudeValid := y.NumberValue()
 			valid = longitudeValid && latitudeValid &&
 				!math.IsNaN(longitude) && !math.IsInf(longitude, 0) && longitude >= -180 && longitude <= 180 &&
 				!math.IsNaN(latitude) && !math.IsInf(latitude, 0) && latitude >= -90 && latitude <= 90
@@ -836,11 +908,11 @@ func validateMongoScalarFieldValue(field schema.Field, value store.Value, path s
 	}
 	if (field.Type == schema.FieldTypeSelect || field.Type == schema.FieldTypeRadio) && field.Select != nil {
 		allowed := text == "" && !field.Required
-		for _, choice := range field.Select.Choices {
-			allowed = allowed || choice.Value == text
+		for _, option := range field.Select.Options {
+			allowed = allowed || option.Value == text
 		}
 		if !allowed {
-			return fmt.Errorf("MongoDB value %q contains unknown select choice %q", path, text)
+			return fmt.Errorf("MongoDB value %q contains unknown select option %q", path, text)
 		}
 	}
 	if _, err := encodeValue(value); err != nil {

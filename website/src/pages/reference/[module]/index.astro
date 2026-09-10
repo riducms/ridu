@@ -1,6 +1,7 @@
 ---
 import riduArchLogo from '@/assets/ridu-logo-arch.svg';
 import ReferenceShell from '@/components/reference/reference-shell.astro';
+import { getDocumentationPage } from '@/config/documentation';
 import {
 	groupReferenceSymbols,
 	referenceGroupID,
@@ -19,6 +20,7 @@ interface Props {
 
 const { module } = Astro.props;
 const symbolGroups = groupReferenceSymbols(module);
+const guide = await getDocumentationPage('docs', `go-packages/${module.slug}`);
 ---
 
 <ReferenceShell title={`${module.name} reference`} description={module.summary} {module}>
@@ -33,6 +35,20 @@ const symbolGroups = groupReferenceSymbols(module);
 		<p class="reference-module-description">
 			<code>{module.packageName}</code> — {module.summary}
 		</p>
+		{
+			guide && (
+				<aside class="my-6 border border-line bg-surface p-4">
+					<p class="m-0 leading-relaxed">
+						Start with{' '}
+						<a class="text-accent underline underline-offset-3" href={guide.href}>
+							{guide.title}
+						</a>{' '}
+						to learn this package with commented examples. Use the reference below for individual
+						API details.
+					</p>
+				</aside>
+			)
+		}
 
 		<nav class="reference-group-nav" aria-label="Symbol groups">
 			{

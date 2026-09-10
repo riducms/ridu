@@ -17,17 +17,19 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/riducms/ridu"
 	"github.com/riducms/ridu/internal/cli"
+	"github.com/riducms/ridu/internal/frameworkpackages"
 	"github.com/riducms/ridu/internal/frameworkproxy"
 	"github.com/riducms/ridu/internal/migrationartifact"
 	ridumigration "github.com/riducms/ridu/migration"
 	"github.com/riducms/ridu/schema"
 )
 
-const testReleaseVersion = "v0.0.0-test.3"
+var testReleaseVersion = "v0.0.0-test.3"
 
 var sharedFrameworkTestEnvironment struct {
 	once          sync.Once
 	root          string
+	clean         bool
 	frameworkRoot string
 	version       string
 	proxyURL      string
@@ -36,9 +38,34 @@ var sharedFrameworkTestEnvironment struct {
 	err           error
 }
 
+var sharedFrontendTestSnapshot struct {
+	once     sync.Once
+	snapshot *frameworkpackages.Snapshot
+	err      error
+}
+
+func publishFrontendPackages(t *testing.T, target string) {
+	t.Helper()
+	sharedFrontendTestSnapshot.once.Do(func() {
+		sharedFrontendTestSnapshot.snapshot, sharedFrontendTestSnapshot.err = frameworkpackages.Prepare(moduleRoot(t))
+	})
+	if sharedFrontendTestSnapshot.err != nil {
+		t.Fatal(sharedFrontendTestSnapshot.err)
+	}
+	if err := sharedFrontendTestSnapshot.snapshot.Publish(target, testReleaseVersion); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestMain(m *testing.M) {
 	exitCode := m.Run()
-	if root := sharedFrameworkTestEnvironment.root; root != "" {
+	if snapshot := sharedFrontendTestSnapshot.snapshot; snapshot != nil {
+		if err := snapshot.Close(); err != nil {
+			fmt.Fprintf(os.Stderr, "remove frontend publication snapshot: %v\n", err)
+			exitCode = 1
+		}
+	}
+	if root := sharedFrameworkTestEnvironment.root; root != "" && sharedFrameworkTestEnvironment.clean {
 		if err := removeSharedFrameworkTestEnvironment(root); err != nil {
 			fmt.Fprintf(os.Stderr, "remove shared CLI release fixture: %v\n", err)
 			if exitCode == 0 {
@@ -84,7 +111,7 @@ func TestDatabaseCredentialsNeverAppearInHelpDefaults(t *testing.T) {
 func TestNewReleaseOverrideWorksThroughRealBinary(t *testing.T) {
 	frameworkRoot := moduleRoot(t)
 	target := newProjectTarget(t, "binary-dogfood-content")
-	setFrameworkProxy(t, frameworkRoot, testReleaseVersion)
+	setFrameworkProxy(t, frameworkRoot)
 	binary := filepath.Join(t.TempDir(), "ridu")
 	resultFile := filepath.Join(t.TempDir(), "new-project-result")
 
@@ -96,10 +123,10 @@ func TestNewReleaseOverrideWorksThroughRealBinary(t *testing.T) {
 	}
 	command := exec.Command(binary,
 		"new",
+		target,
 		"--release-version", testReleaseVersion,
 		"--module", "example.com/fixture/binary-dogfood",
 		"--scope", "@fixture",
-		target,
 	)
 	command.Dir = frameworkRoot
 	command.Env = append(os.Environ(), "RIDU_NEW_PROJECT_RESULT_FILE="+resultFile)
@@ -121,10 +148,10 @@ func TestNewReleaseOverrideWorksThroughRealBinary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(adminPackage), `"@riducms/admin": "0.0.0-test.3"`) ||
-		!strings.Contains(string(adminPackage), `"@riducms/plugin": "0.0.0-test.3"`) ||
-		!strings.Contains(string(adminPackage), `"@riducms/ui": "0.0.0-test.3"`) ||
-		!strings.Contains(string(adminPackage), `"@riducms/build": "0.0.0-test.3"`) ||
+	if !strings.Contains(string(adminPackage), `"@riducms/admin": "`+strings.TrimPrefix(testReleaseVersion, "v")+`"`) ||
+		!strings.Contains(string(adminPackage), `"@riducms/plugin": "`+strings.TrimPrefix(testReleaseVersion, "v")+`"`) ||
+		!strings.Contains(string(adminPackage), `"@riducms/ui": "`+strings.TrimPrefix(testReleaseVersion, "v")+`"`) ||
+		!strings.Contains(string(adminPackage), `"@riducms/build": "`+strings.TrimPrefix(testReleaseVersion, "v")+`"`) ||
 		!strings.Contains(string(adminPackage), `"@iconify/json": "^2.2.509"`) {
 		t.Fatalf("real CLI did not apply the npm release override:\n%s", adminPackage)
 	}
@@ -132,9 +159,9 @@ func TestNewReleaseOverrideWorksThroughRealBinary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(rootPackage), `"@riducms/sdk": "0.0.0-test.3"`) ||
-		!strings.Contains(string(rootPackage), `"@riducms/plugin-richtext": "0.0.0-test.3"`) ||
-		!strings.Contains(string(rootPackage), `"@riducms/plugin-form-builder": "0.0.0-test.3"`) {
+	if !strings.Contains(string(rootPackage), `"@riducms/sdk": "`+strings.TrimPrefix(testReleaseVersion, "v")+`"`) ||
+		!strings.Contains(string(rootPackage), `"@riducms/plugin-richtext": "`+strings.TrimPrefix(testReleaseVersion, "v")+`"`) ||
+		!strings.Contains(string(rootPackage), `"@riducms/plugin-form-builder": "`+strings.TrimPrefix(testReleaseVersion, "v")+`"`) {
 		t.Fatalf("real CLI did not make the generated contract dependency root-resolvable:\n%s", rootPackage)
 	}
 	if _, err := os.Stat(filepath.Join(target, "generated", "ridu.schema.json")); err != nil {
@@ -152,7 +179,7 @@ func TestNewReleaseOverrideWorksThroughRealBinary(t *testing.T) {
 func TestGeneratedProjectCompilesAndGeneratesOutsideRepository(t *testing.T) {
 	frameworkRoot := moduleRoot(t)
 	target := newProjectTarget(t, "fixture-content")
-	setFrameworkProxy(t, frameworkRoot, testReleaseVersion)
+	setFrameworkProxy(t, frameworkRoot)
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 
@@ -203,12 +230,8 @@ func TestGeneratedProjectCompilesAndGeneratesOutsideRepository(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(target, "packages")); !os.IsNotExist(err) {
 		t.Fatalf("default generated project exposes a packages directory: %v", err)
 	}
-	openAPIBytes, err := os.ReadFile(filepath.Join(target, "generated", "ridu.openapi.json"))
-	if err != nil {
-		t.Fatalf("read generated OpenAPI: %v", err)
-	}
-	if !strings.Contains(string(openAPIBytes), `"/api/collections/posts"`) {
-		t.Fatalf("generated OpenAPI is missing posts CRUD paths: %s", openAPIBytes)
+	if _, err := os.Stat(filepath.Join(target, "generated", "ridu.openapi.json")); !os.IsNotExist(err) {
+		t.Fatalf("default generated project should leave OpenAPI generation disabled: %v", err)
 	}
 	goClientBytes, err := os.ReadFile(filepath.Join(target, "generated", "ridu.generated.go"))
 	if err != nil {
@@ -343,7 +366,7 @@ func (plugin) Descriptor() ridu.PluginDescriptor {
 
 func TestGeneratedProjectIgnoresAnUnlistedEnclosingGoWorkspace(t *testing.T) {
 	frameworkRoot := moduleRoot(t)
-	setFrameworkProxy(t, frameworkRoot, testReleaseVersion)
+	setFrameworkProxy(t, frameworkRoot)
 	workspaceRoot := t.TempDir()
 	if err := os.WriteFile(filepath.Join(workspaceRoot, "go.mod"), []byte("module example.com/outer-workspace\n\ngo 1.25.13\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -406,7 +429,7 @@ func TestNewKeepsProjectWhenDependencySetupFails(t *testing.T) {
 func TestNewKeepsProjectWhenInitialGenerationFails(t *testing.T) {
 	frameworkRoot := moduleRoot(t)
 	target := newProjectTarget(t, "invalid-config-content")
-	setFrameworkProxy(t, frameworkRoot, testReleaseVersion)
+	setFrameworkProxy(t, frameworkRoot)
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 
@@ -489,7 +512,7 @@ func TestInteractiveNewCanCancelBeforeCreatingTarget(t *testing.T) {
 func TestGenerateCheckReportsDriftWithoutOverwriting(t *testing.T) {
 	frameworkRoot := moduleRoot(t)
 	target := newProjectTarget(t, "drift-content")
-	setFrameworkProxy(t, frameworkRoot, testReleaseVersion)
+	setFrameworkProxy(t, frameworkRoot)
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	options := cli.Options{WorkingDirectory: target, Version: testReleaseVersion, FrameworkVersion: ridu.FrameworkVersion}
@@ -519,7 +542,7 @@ func TestGenerateCheckReportsDriftWithoutOverwriting(t *testing.T) {
 
 func TestNewMongoDBStarterAndBlankGenerateWithoutOpeningTheDatabase(t *testing.T) {
 	frameworkRoot := moduleRoot(t)
-	setFrameworkProxy(t, frameworkRoot, testReleaseVersion)
+	setFrameworkProxy(t, frameworkRoot)
 	const offlineSecret = "mongodb-scaffold-must-not-connect"
 	t.Setenv("DATABASE_URL", "mongodb://offline-user:"+offlineSecret+"@127.0.0.1:1/ridu?directConnection=true&replicaSet=ridu-rs0")
 
@@ -593,7 +616,7 @@ func TestNewMongoDBStarterAndBlankGenerateWithoutOpeningTheDatabase(t *testing.T
 func TestCheckAndBuildOwnTheGeneratedGoWorkflow(t *testing.T) {
 	frameworkRoot := moduleRoot(t)
 	target := newProjectTarget(t, "workflow-content")
-	setFrameworkProxy(t, frameworkRoot, testReleaseVersion)
+	setFrameworkProxy(t, frameworkRoot)
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	options := cli.Options{WorkingDirectory: target, Version: testReleaseVersion, FrameworkVersion: ridu.FrameworkVersion}
@@ -676,7 +699,7 @@ func TestCheckAndBuildOwnTheGeneratedGoWorkflow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	changedPosts := strings.Replace(string(posts), `field.Text("title", field.Required())`, `field.Text("headline", field.Required())`, 1)
+	changedPosts := strings.Replace(string(posts), `field.Text("title")`, `field.Text("headline")`, 1)
 	if changedPosts == string(posts) {
 		t.Fatal("generated posts field was not found")
 	}
@@ -775,7 +798,7 @@ func TestGeneratedProjectMigratesAgainstPostgres(t *testing.T) {
 
 	frameworkRoot := moduleRoot(t)
 	target := newProjectTarget(t, "postgres-content")
-	setFrameworkProxy(t, frameworkRoot, testReleaseVersion)
+	setFrameworkProxy(t, frameworkRoot)
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	options := cli.Options{WorkingDirectory: target, Version: testReleaseVersion, FrameworkVersion: ridu.FrameworkVersion}
@@ -870,7 +893,7 @@ func TestGeneratedProjectUsesSQLiteMigrationLifecycle(t *testing.T) {
 	ctx := context.Background()
 	frameworkRoot := moduleRoot(t)
 	target := newProjectTarget(t, "sqlite-content")
-	setFrameworkProxy(t, frameworkRoot, testReleaseVersion)
+	setFrameworkProxy(t, frameworkRoot)
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	options := cli.Options{WorkingDirectory: target, Version: testReleaseVersion, FrameworkVersion: ridu.FrameworkVersion}
@@ -1006,7 +1029,7 @@ func TestSQLiteCanonicalAuthUpgradeCLIRequiresDestructiveCreationApproval(t *tes
 	ctx := context.Background()
 	frameworkRoot := moduleRoot(t)
 	target := newProjectTarget(t, "sqlite-canonical-auth")
-	setFrameworkProxy(t, frameworkRoot, testReleaseVersion)
+	setFrameworkProxy(t, frameworkRoot)
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	options := cli.Options{WorkingDirectory: target, Version: testReleaseVersion, FrameworkVersion: ridu.FrameworkVersion}
@@ -1144,7 +1167,7 @@ func newProjectTarget(t *testing.T, name string) string {
 	return filepath.Join(canonicalPath(t, t.TempDir()), name)
 }
 
-func setFrameworkProxy(t *testing.T, frameworkRoot, version string) {
+func setFrameworkProxy(t *testing.T, frameworkRoot string) {
 	t.Helper()
 	if testing.Short() {
 		t.Skip("release-path fixture is disabled in short mode")
@@ -1152,8 +1175,11 @@ func setFrameworkProxy(t *testing.T, frameworkRoot, version string) {
 	frameworkRoot = filepath.Clean(frameworkRoot)
 	sharedFrameworkTestEnvironment.once.Do(func() {
 		sharedFrameworkTestEnvironment.frameworkRoot = frameworkRoot
-		sharedFrameworkTestEnvironment.version = version
-		sharedFrameworkTestEnvironment.root, sharedFrameworkTestEnvironment.err = os.MkdirTemp("", "ridu-cli-release-fixture-")
+		sharedFrameworkTestEnvironment.clean = os.Getenv("RIDU_TEST_CLEAN_CACHE") == "true"
+		sharedFrameworkTestEnvironment.root = filepath.Join(frameworkRoot, ".ridu", "test-cache", "cli")
+		if sharedFrameworkTestEnvironment.clean {
+			sharedFrameworkTestEnvironment.root, sharedFrameworkTestEnvironment.err = os.MkdirTemp("", "ridu-cli-release-fixture-")
+		}
 		if sharedFrameworkTestEnvironment.err != nil {
 			return
 		}
@@ -1165,27 +1191,26 @@ func setFrameworkProxy(t *testing.T, frameworkRoot, version string) {
 			}
 		}
 		proxyRoot := filepath.Join(sharedFrameworkTestEnvironment.root, "proxy")
-		sharedFrameworkTestEnvironment.proxyURL, sharedFrameworkTestEnvironment.err = frameworkproxy.Publish(frameworkRoot, proxyRoot, version)
+		sharedFrameworkTestEnvironment.proxyURL, sharedFrameworkTestEnvironment.version, sharedFrameworkTestEnvironment.err = frameworkproxy.PublishSnapshot(frameworkRoot, proxyRoot)
 	})
 	if sharedFrameworkTestEnvironment.err != nil {
 		t.Fatalf("prepare shared CLI release fixture: %v", sharedFrameworkTestEnvironment.err)
 	}
-	if sharedFrameworkTestEnvironment.frameworkRoot != frameworkRoot || sharedFrameworkTestEnvironment.version != version {
+	if sharedFrameworkTestEnvironment.frameworkRoot != frameworkRoot {
 		t.Fatalf(
 			"shared CLI release fixture is already configured for %s@%s, not %s@%s",
 			sharedFrameworkTestEnvironment.frameworkRoot,
 			sharedFrameworkTestEnvironment.version,
 			frameworkRoot,
-			version,
+			testReleaseVersion,
 		)
 	}
 
 	t.Setenv("GOWORK", "off")
-	// The local proxy republishes a synthetic version from the current checkout;
-	// isolate it from an older copy in Go's immutable global module cache. These
-	// package-scoped caches are shared only by the release-path tests in this test
-	// process, so later generated projects can reuse downloads and compiled work
-	// without reading from or writing to the developer's global Go caches.
+	// Captured source bytes determine the immutable version, so unchanged modules
+	// can reuse this checkout's dedicated caches across runs. Clean-release checks
+	// explicitly request empty disposable caches with RIDU_TEST_CLEAN_CACHE=true.
+	testReleaseVersion = sharedFrameworkTestEnvironment.version
 	t.Setenv("GOMODCACHE", sharedFrameworkTestEnvironment.moduleCache)
 	t.Setenv("GOCACHE", sharedFrameworkTestEnvironment.buildCache)
 	t.Setenv("GOPROXY", sharedFrameworkTestEnvironment.proxyURL+",https://proxy.golang.org,direct")

@@ -36,8 +36,8 @@
 	let wasOpen = $state(false);
 	const field = $derived(fields.find((candidate) => candidate.name === fieldName));
 	const fieldLabel = $derived(field?.admin.label ?? runtime.i18n.t("collections:chooseField"));
-	const selectedChoiceLabel = $derived(
-		field?.select?.choices.find((choice) => choice.value === value)?.label ??
+	const selectedOptionLabel = $derived(
+		field?.select?.options.find((option) => option.value === value)?.label ??
 			(value === "" ? runtime.i18n.t("collections:clearValue") : value)
 	);
 
@@ -104,13 +104,13 @@
 					<Select type="single" {value} onValueChange={(next) => (value = next)}>
 						<SelectTrigger class="w-full" aria-label={runtime.i18n.t("collections:value")}>
 							<span class={value === "" ? "text-foreground-placeholder" : undefined}>
-								{selectedChoiceLabel}
+								{selectedOptionLabel}
 							</span>
 						</SelectTrigger>
 						<SelectContent>
 							<SelectItem value="" label={runtime.i18n.t("collections:clearValue")} />
-							{#each field.select?.choices ?? [] as choice (choice.value)}
-								<SelectItem value={choice.value} label={choice.label} />
+							{#each field.select?.options ?? [] as option (option.value)}
+								<SelectItem value={option.value} label={option.label} />
 							{/each}
 						</SelectContent>
 					</Select>
@@ -129,7 +129,7 @@
 				{:else if field?.type === "date"}
 					<DateValueControl
 						id={`bulk-edit-${field.id}`}
-						appearance={field.date?.pickerAppearance}
+						appearance={field.date?.format}
 						{value}
 						label={runtime.i18n.t("collections:value")}
 						onValueChange={(next) => (value = next)}

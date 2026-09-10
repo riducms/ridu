@@ -12,6 +12,7 @@ import (
 	"github.com/riducms/ridu/adapters/postgres"
 	localstorage "github.com/riducms/ridu/adapters/storage/local"
 	"github.com/riducms/ridu/field"
+	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
@@ -36,15 +37,15 @@ func TestPostgresUploadReferenceAdmissionAndLockBoundary(t *testing.T) {
 			{
 				Slug: "media", Upload: true,
 				UploadConfig: ridu.UploadConfig{MaxFileSize: 1024, MimeTypes: []string{"text/plain"}},
-				Fields:       []field.Definition{field.Checkbox("visible", field.Required())},
+				Fields:       field.Fields{field.Checkbox("visible").Required()},
 				Access: ridu.CollectionAccess{Read: func(ridu.AccessContext) (ridu.AccessDecision, error) {
 					return ridu.Where(query.Equal(visiblePath, query.Boolean(true))), nil
 				}},
 			},
 			{
-				Slug: "entries", Fields: []field.Definition{field.Upload("assets", field.ToMany("media"))},
+				Slug: "entries", Fields: field.Fields{field.Uploads("assets", "media")},
 				Hooks: ridu.CollectionHooks{AfterOperation: []ridu.Hook{func(hookContext ridu.HookContext) error {
-					if hookContext.Operation != ridu.OperationCreate {
+					if hookContext.Operation != operation.Create {
 						return nil
 					}
 					lockedOnce.Do(func() { close(locked) })
@@ -159,7 +160,7 @@ func TestPostgresHasManyUploadRoundTripsThroughPublishValidation(t *testing.T) {
 				Slug:          "posts",
 				Versions:      true,
 				VersionConfig: ridu.VersionConfig{Drafts: true},
-				Fields:        []field.Definition{field.Text("title", field.Required()), field.Upload("gallery", field.ToMany("media"))},
+				Fields:        field.Fields{field.Text("title").Required(), field.Uploads("gallery", "media")},
 			},
 		},
 	}
@@ -187,7 +188,7 @@ func TestPostgresHasManyUploadRoundTripsThroughPublishValidation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("publish PostgreSQL document after reading has-many upload: %v", err)
 	}
-	gallery, valid := published.Values["gallery"].Values()
+	gallery, valid := published.Values["gallery"].CopyList()
 	if !valid || len(gallery) != 1 {
 		t.Fatalf("published gallery = %#v", published.Values["gallery"])
 	}

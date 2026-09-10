@@ -14,6 +14,7 @@ export interface CreateAdminI18nOptions {
 	language?: string;
 	fallbackLanguage?: string;
 	timeZone?: string;
+	applicationMessages?: PluginMessageCatalog;
 	pluginMessages?: Readonly<Record<string, PluginMessageCatalog>>;
 }
 
@@ -56,6 +57,8 @@ export function createAdminI18n(options: CreateAdminI18nOptions = {}): AdminI18n
 	const pluralRules = new Intl.PluralRules(active.code);
 	const numberFormat = new Intl.NumberFormat(active.code);
 	const plugins = options.pluginMessages ?? {};
+	if (options.applicationMessages !== undefined)
+		validatePluginMessageCatalog("application", options.applicationMessages);
 	for (const [pluginKey, catalog] of Object.entries(plugins)) {
 		validatePluginMessageCatalog(pluginKey, catalog);
 	}
@@ -66,10 +69,12 @@ export function createAdminI18n(options: CreateAdminI18nOptions = {}): AdminI18n
 		text: (canonical, translations) =>
 			translations?.[active.code] ?? translations?.[fallback.code] ?? canonical,
 		t: (key, variables) => {
-			const message = key.startsWith("plugin.")
-				? pluginMessage(plugins, key, active.code, fallback.code)
-				: (active.messages[key as keyof CoreTranslationCatalog] ??
-					fallback.messages[key as keyof CoreTranslationCatalog]);
+			const message = key.startsWith("app:")
+				? catalogMessage(options.applicationMessages, key.slice(4), active.code, fallback.code)
+				: key.startsWith("plugin.")
+					? pluginMessage(plugins, key, active.code, fallback.code)
+					: (active.messages[key as keyof CoreTranslationCatalog] ??
+						fallback.messages[key as keyof CoreTranslationCatalog]);
 			if (message === undefined) throw new Error(`Missing admin translation ${key}.`);
 			return interpolate(
 				selectMessage(message, variables, pluralRules),
@@ -372,6 +377,15 @@ function pluginMessage(
 	const namespace = key.slice("plugin.".length, separator);
 	const localKey = key.slice(separator + 1);
 	const catalog = plugins[namespace];
+	return catalogMessage(catalog, localKey, language, fallbackLanguage);
+}
+
+function catalogMessage(
+	catalog: PluginMessageCatalog | undefined,
+	localKey: string,
+	language: string,
+	fallbackLanguage: string
+): TranslationMessage | undefined {
 	return (
 		catalog?.translations?.[language]?.[localKey] ??
 		catalog?.translations?.[fallbackLanguage]?.[localKey] ??

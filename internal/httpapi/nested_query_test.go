@@ -50,7 +50,7 @@ func nestedQueryCollection() schema.Collection {
 			{ID: "links-label", Name: "label", Type: schema.FieldTypeText},
 		}}},
 		{ID: "layout", Name: "layout", Type: schema.FieldTypeBlocks, Blocks: &schema.BlocksField{Types: []schema.BlockType{
-			{Key: "hero", Label: "Hero", Fields: []schema.Field{{ID: "hero-heading", Name: "heading", Type: schema.FieldTypeText}}},
+			{Slug: "hero", Labels: schema.BlockLabels{Singular: "Hero"}, Fields: []schema.Field{{ID: "hero-heading", Name: "heading", Type: schema.FieldTypeText}}},
 		}}},
 	}}
 }

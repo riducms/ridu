@@ -573,7 +573,7 @@ func TestRunnerRejectsForgedReferenceShapeDecreaseArtifacts(t *testing.T) {
 func TestAmbiguousNestedReferenceRenameMappingsFailClosed(t *testing.T) {
 	beforeRoot := retirementReferenceRoot(t, "group", true)
 	before := referenceShapeDecreaseManifest(beforeRoot)
-	beforeReference := beforeRoot.Nested.Fields[0]
+	beforeReference := beforeRoot.Nested.ResolvedFields()[0]
 	dormantPath, _ := query.ParsePath("content.dormant")
 	dormant := schema.Field{
 		ID: "entries-content-dormant", Name: "dormant", Path: dormantPath,
@@ -706,9 +706,9 @@ func TestStoredReferenceShapeTargetAdditionAndConfirmedRenameRemainPlannable(t *
 		afterRoot := beforeRoot
 		afterRoot.ID, afterRoot.Name = "entries-body", "body"
 		afterRoot.Path, _ = query.NewPath("body")
-		afterRoot.Nested = &schema.NestedField{Fields: append([]schema.Field(nil), beforeRoot.Nested.Fields...)}
-		afterRoot.Nested.Fields[0].ID = "entries-body-reference"
-		afterRoot.Nested.Fields[0].Path, _ = query.ParsePath("body.reference")
+		afterRoot.Nested = &schema.NestedField{Fields: append([]schema.Field(nil), beforeRoot.Nested.ResolvedFields()...)}
+		afterRoot.Nested.ResolvedFields()[0].ID = "entries-body-reference"
+		afterRoot.Nested.ResolvedFields()[0].Path, _ = query.ParsePath("body.reference")
 		afterSnapshot := before.Snapshot()
 		afterSnapshot.Collections[len(afterSnapshot.Collections)-1].Fields = []schema.Field{afterRoot}
 		after := schema.NewManifest(afterSnapshot)
@@ -990,7 +990,7 @@ func referenceRootWithoutChildren(root schema.Field) schema.Field {
 		root.Nested = &schema.NestedField{}
 	}
 	if root.Blocks != nil {
-		blocks := append([]schema.BlockType(nil), root.Blocks.Types...)
+		blocks := append([]schema.BlockType(nil), root.Blocks.ResolvedTypes()...)
 		for index := range blocks {
 			blocks[index].Fields = nil
 		}
@@ -1001,8 +1001,8 @@ func referenceRootWithoutChildren(root schema.Field) schema.Field {
 
 func referenceRootWithLocalizedLeaf(root schema.Field, localized bool) schema.Field {
 	if root.Nested != nil {
-		root.Nested = &schema.NestedField{Fields: append([]schema.Field(nil), root.Nested.Fields...)}
-		root.Nested.Fields[0].Localized = localized
+		root.Nested = &schema.NestedField{Fields: append([]schema.Field(nil), root.Nested.ResolvedFields()...)}
+		root.Nested.ResolvedFields()[0].Localized = localized
 	}
 	return root
 }
@@ -1034,7 +1034,7 @@ func retirementReferenceRoot(t *testing.T, shape string, includeRetired bool) sc
 		root.Nested = &schema.NestedField{Fields: []schema.Field{reference}}
 	case "blocks":
 		root.Type = schema.FieldTypeBlocks
-		root.Blocks = &schema.BlocksField{Types: []schema.BlockType{{Key: "reference", Label: "Reference", Fields: []schema.Field{reference}}}}
+		root.Blocks = &schema.BlocksField{Types: []schema.BlockType{{Slug: "reference", Labels: schema.BlockLabels{Singular: "Reference"}, Fields: []schema.Field{reference}}}}
 	default:
 		t.Fatalf("unknown retirement reference shape %q", shape)
 	}

@@ -6,12 +6,13 @@ import (
 	"fmt"
 
 	"github.com/riducms/ridu/internal/localization"
+	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
 )
 
-const distinctFrameKind Kind = "distinct"
+const distinctFrameKind operation.Kind = "distinct"
 
 // DistinctRequest describes one access-checked local distinct read. The field
 // itself remains deliberately limited by store.ValidateDistinctRequest.
@@ -75,7 +76,7 @@ func (engine *Engine) Distinct(ctx context.Context, request DistinctRequest) (re
 	}
 
 	operationContext := Context{
-		Context: transactionContext, Operation: Read, Collection: collection.Schema,
+		Context: transactionContext, Operation: operation.Read, Collection: collection.Schema,
 		Actor: cloneDocumentPointer(request.Actor), ActorCollection: request.ActorCollection,
 		Locale: selection.Locale, Locales: append([]schema.LocaleCode(nil), selection.Configured...),
 	}
@@ -90,16 +91,8 @@ func (engine *Engine) Distinct(ctx context.Context, request DistinctRequest) (re
 	if decision.Kind == Deny {
 		return store.DistinctPage{}, &Error{Code: "access_denied", Status: 403, Message: "operation is not permitted"}
 	}
-	if rules, configured := collection.Fields[request.Field.String()]; configured && rules.Read != nil {
-		// Ridu field rules may inspect each document, value, and sibling set. A
-		// one-time request-level evaluation (as used by Payload) cannot prove that
-		// every aggregated row is readable, while post-query redaction would have
-		// already selected a secret. Keep the focused aggregate unavailable for
-		// document-aware fields instead of materializing documents in the engine.
-		return store.DistinctPage{}, &Error{
-			Code: "field_access_denied", Status: 403, Message: "distinct reads are not available for fields with read access rules",
-			Issues: []schema.Issue{{Code: "access_denied", Path: request.Field.String(), Message: "field values require document-level read authorization"}},
-		}
+	if err := authorizeQuery(collection, request.Filter, nil, request.Field); err != nil {
+		return store.DistinctPage{}, err
 	}
 	distinctTransaction, supported := state.transaction.(store.DistinctTransaction)
 	if !supported {
@@ -117,7 +110,7 @@ func (engine *Engine) Distinct(ctx context.Context, request DistinctRequest) (re
 	result, err = distinctTransaction.Distinct(transactionContext, store.DistinctRequest{
 		Collection: collection.Schema, Field: request.Field, Filter: filter, Access: decision.Access,
 		Page: request.Page, Limit: request.Limit,
-		PublishedOnly: publishedOnly(Request{Operation: Read, Actor: request.Actor, Draft: request.Draft}, collection.Schema),
+		PublishedOnly: publishedOnly(Request{Operation: operation.Read, Actor: request.Actor, Draft: request.Draft}, collection.Schema),
 		Deletion:      deletion, Locales: selection.Configured, LocaleChain: selection.Chain,
 	})
 	if err != nil {

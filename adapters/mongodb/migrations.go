@@ -8,7 +8,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/riducms/ridu/internal/embedded"
 	"github.com/riducms/ridu/internal/migrationartifact"
+	"github.com/riducms/ridu/internal/primitivefield"
 	ridumigration "github.com/riducms/ridu/migration"
 	"github.com/riducms/ridu/schema"
 )
@@ -559,24 +561,33 @@ func validateMongoDBAdditiveFields(location string, before, after []schema.Field
 		}
 		if previous.Nested != nil && comparison.Nested != nil {
 			nested := *comparison.Nested
-			nested.Fields = previous.Nested.Fields
+			nested.Fields = previous.Nested.ResolvedFields()
 			comparison.Nested = &nested
 		}
 		if previous.Blocks != nil && comparison.Blocks != nil {
 			blocks := *comparison.Blocks
-			blocks.Types = previous.Blocks.Types
+			blocks.Types = previous.Blocks.ResolvedTypes()
 			comparison.Blocks = &blocks
+		}
+		var embeddedErr error
+		comparison, embeddedErr = embedded.CompareEvolution(previous, comparison, validateMongoDBAdditiveBlockTypes)
+		if embeddedErr != nil {
+			return embeddedErr
+		}
+
+		if previous.Type != comparison.Type && (primitivefield.IsList(previous) || primitivefield.IsList(comparison)) {
+			return fmt.Errorf("field %q changes value shape from %q to %q; add a new field and migrate existing values explicitly, or register a supported compiled data transform; automatic list conversion is not available", previous.Path.String(), previous.Type, comparison.Type)
 		}
 		if !reflect.DeepEqual(previous, comparison) {
 			return fmt.Errorf("MongoDB artifact planner supports only additive transitions; field %q in %s changed", previous.ID, location)
 		}
 		if previous.Nested != nil {
-			if err := validateMongoDBAdditiveFields(fmt.Sprintf("field %q in %s", previous.ID, location), previous.Nested.Fields, current.Nested.Fields); err != nil {
+			if err := validateMongoDBAdditiveFields(fmt.Sprintf("field %q in %s", previous.ID, location), previous.Nested.ResolvedFields(), current.Nested.ResolvedFields()); err != nil {
 				return err
 			}
 		}
 		if previous.Blocks != nil {
-			if err := validateMongoDBAdditiveBlockTypes(fmt.Sprintf("field %q in %s", previous.ID, location), previous.Blocks.Types, current.Blocks.Types); err != nil {
+			if err := validateMongoDBAdditiveBlockTypes(fmt.Sprintf("field %q in %s", previous.ID, location), previous.Blocks.ResolvedTypes(), current.Blocks.ResolvedTypes()); err != nil {
 				return err
 			}
 		}
@@ -593,19 +604,22 @@ func validateMongoDBAdditiveFields(location string, before, after []schema.Field
 func validateMongoDBAdditiveBlockTypes(location string, before, after []schema.BlockType) error {
 	afterByKey := make(map[string]schema.BlockType, len(after))
 	for _, block := range after {
-		afterByKey[block.Key] = block
+		afterByKey[block.Slug] = block
 	}
 	for _, previous := range before {
-		current, exists := afterByKey[previous.Key]
+		current, exists := afterByKey[previous.Slug]
 		if !exists {
-			return fmt.Errorf("MongoDB artifact planner supports only additive transitions; block type %q in %s was removed", previous.Key, location)
+			return fmt.Errorf("MongoDB artifact planner supports only additive transitions; block type %q in %s was removed", previous.Slug, location)
 		}
 		comparison := current
-		comparison.Fields = previous.Fields
+		comparison.Fields = previous.ResolvedFields()
+		// Block summaries are presentation metadata, not a stored-data transition.
+		comparison.Admin = previous.Admin
+		comparison.TypeName = previous.TypeName
 		if !reflect.DeepEqual(previous, comparison) {
-			return fmt.Errorf("MongoDB artifact planner supports only additive transitions; block type %q in %s changed", previous.Key, location)
+			return fmt.Errorf("MongoDB artifact planner supports only additive transitions; block type %q in %s changed", previous.Slug, location)
 		}
-		if err := validateMongoDBAdditiveFields(fmt.Sprintf("block type %q in %s", previous.Key, location), previous.Fields, current.Fields); err != nil {
+		if err := validateMongoDBAdditiveFields(fmt.Sprintf("block type %q in %s", previous.Slug, location), previous.ResolvedFields(), current.ResolvedFields()); err != nil {
 			return err
 		}
 	}

@@ -70,8 +70,8 @@ Plugin authors can exercise the shared backend contract with `plugintest.Run`:
 func TestConformance(t *testing.T) {
 	plugintest.Run(t, plugintest.Fixture{
 		Plugin: plugin.New(),
-		Fields: []field.Definition{
-			plugin.Field("value", field.Required()),
+		Fields: field.Fields{
+			plugin.Field("value").Required(),
 		},
 		ValidData:   store.Values{"value": store.String("valid")},
 		InvalidData: store.Values{"value": store.String("")},

@@ -1,5 +1,9 @@
 import {
+	bindSchemaManifest,
 	isPageEnvelope,
+	isValidationIssue,
+	type LiveValidationRequest,
+	type LiveValidationEnvelope,
 	type AuthSession,
 	type AccessCapabilitiesEnvelope,
 	type CollectionSelectionEnvelope,
@@ -23,6 +27,7 @@ import {
 import { RiduError } from "./error.js";
 import type {
 	ClientOptions,
+	LiveValidationOptions,
 	CreateAPIKeyInput,
 	CollectionAccessOptions,
 	CopyLocaleInput,
@@ -76,6 +81,27 @@ import type {
 	DefaultRiduConfig,
 } from "./types.js";
 
+/**
+ * Create a Fetch-backed client for a Ridu application.
+ *
+ * Pass the generated `RiduConfig` type when calling the runtime factory directly so collection,
+ * global, input, query, and result types stay tied to that application. Generated projects also
+ * export a pre-typed wrapper around this function.
+ *
+ * @param options The Ridu origin and optional Fetch, headers, credentials, and middleware.
+ * @returns A client whose methods use the supplied application's generated contracts.
+ * @example
+ * ```ts
+ * import { createClient } from "@riducms/sdk";
+ * import type { RiduConfig } from "./generated/ridu.generated";
+ *
+ * const ridu = createClient<RiduConfig>({ baseURL: "https://cms.example.com" });
+ * const { docs } = await ridu.list("posts", {
+ *   where: { status: { equals: "published" } },
+ *   sort: ["-createdAt"]
+ * });
+ * ```
+ */
 export function createClient<Config extends RiduConfigShape = DefaultRiduConfig>(
 	options: ClientOptions
 ): RiduClient<Config> {
@@ -103,7 +129,7 @@ class FetchClient<Config extends RiduConfigShape> implements RiduClient<Config> 
 		if (!isRecord(body) || !isRecord(body.schema) || !Array.isArray(body.schema.collections)) {
 			throw invalidSuccessEnvelope("schema");
 		}
-		return body.schema as unknown as SchemaManifest;
+		return bindSchemaManifest(body.schema as unknown as SchemaManifest);
 	}
 
 	async request(path: string, init: RequestInit = {}, options?: RequestOptions): Promise<Response> {
@@ -172,6 +198,40 @@ class FetchClient<Config extends RiduConfigShape> implements RiduClient<Config> 
 			throw invalidSuccessEnvelope("preference reset");
 		}
 		return { success: true };
+	}
+
+	async collectionLiveValidation<Slug extends CollectionSlug<Config>>(
+		collection: Slug,
+		input: LiveValidationRequest,
+		options?: LiveValidationOptions
+	): Promise<LiveValidationEnvelope> {
+		const query = new URLSearchParams();
+		if (options?.locale !== undefined) query.set("locale", options.locale);
+		const suffix = query.size === 0 ? "" : `?${query}`;
+		return liveValidationFromEnvelope(
+			await this.#request(
+				`/api/collections/${encodeURIComponent(collection)}/validate${suffix}`,
+				{ method: "POST", body: JSON.stringify(input) },
+				options
+			)
+		);
+	}
+
+	async globalLiveValidation<Slug extends GlobalSlug<Config>>(
+		slug: Slug,
+		input: Omit<LiveValidationRequest, "id"> & { id?: never },
+		options?: LiveValidationOptions
+	): Promise<LiveValidationEnvelope> {
+		const query = new URLSearchParams();
+		if (options?.locale !== undefined) query.set("locale", options.locale);
+		const suffix = query.size === 0 ? "" : `?${query}`;
+		return liveValidationFromEnvelope(
+			await this.#request(
+				`/api/globals/${encodeURIComponent(slug)}/validate${suffix}`,
+				{ method: "POST", body: JSON.stringify(input) },
+				options
+			)
+		);
 	}
 
 	async collectionAccess<Slug extends CollectionSlug<Config>>(
@@ -1592,4 +1652,29 @@ function invalidSuccessEnvelope(kind: string) {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function liveValidationFromEnvelope(value: unknown): LiveValidationEnvelope {
+	if (!isRecord(value) || !Array.isArray(value.evaluations))
+		throw invalidSuccessEnvelope("live validation");
+	return {
+		evaluations: value.evaluations.map((entry: unknown) => {
+			if (
+				!isRecord(entry) ||
+				typeof entry.path !== "string" ||
+				(entry.target !== undefined && typeof entry.target !== "string") ||
+				(entry.status !== "checked" && entry.status !== "skipped") ||
+				!Array.isArray(entry.issues) ||
+				!entry.issues.every(isValidationIssue) ||
+				(entry.status === "skipped" && entry.issues.length !== 0)
+			)
+				throw invalidSuccessEnvelope("live validation");
+			return {
+				path: entry.path,
+				status: entry.status,
+				issues: entry.issues.map((issue) => ({ ...issue })),
+				...(entry.target === undefined ? {} : { target: entry.target }),
+			};
+		}),
+	};
 }

@@ -25,8 +25,9 @@ import (
 
 	"github.com/riducms/ridu/internal/jsonlimit"
 	"github.com/riducms/ridu/internal/localization"
-	"github.com/riducms/ridu/internal/operation"
+	operationengine "github.com/riducms/ridu/internal/operation"
 	populationwalk "github.com/riducms/ridu/internal/population"
+	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/protocol"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
@@ -103,7 +104,7 @@ type LocaleOptions struct {
 type Config struct {
 	Manifest                     schema.Manifest
 	ManifestForRequest           func(context.Context, *AuthIdentity) (schema.Snapshot, error)
-	Engine                       *operation.Engine
+	Engine                       *operationengine.Engine
 	AdminAssets                  fs.FS
 	MaxBodyBytes                 int64
 	SecureCookies                bool
@@ -330,7 +331,7 @@ func (api *API) serveHTTP(writer http.ResponseWriter, request *http.Request) {
 			if !tracked.wroteHeader {
 				writer.Header().Set("Content-Type", "application/json")
 				writeJSON(writer, http.StatusInternalServerError, protocol.ErrorEnvelope{Error: protocol.ErrorPayload{
-					Code: protocol.ErrorInternal, Status: http.StatusInternalServerError, Message: "internal server error", RequestID: requestID,
+					Code: protocol.ErrorInternal, Status: http.StatusInternalServerError, Message: "internal server error", RequestID: requestID, Issues: []protocol.ValidationIssue{},
 				}})
 			}
 		}
@@ -338,7 +339,7 @@ func (api *API) serveHTTP(writer http.ResponseWriter, request *http.Request) {
 	writer.Header().Set("X-Request-ID", requestID)
 	if !api.hostAllowed(request.Host) {
 		writer.Header().Set("Content-Type", "application/json")
-		api.writeError(writer, requestID, &operation.Error{Code: "host_denied", Status: 400, Message: "request host is not allowed"})
+		api.writeError(writer, requestID, &operationengine.Error{Code: "host_denied", Status: 400, Message: "request host is not allowed"})
 		return
 	}
 	if api.cors(writer, request, requestID) {
@@ -451,7 +452,7 @@ func (api *API) serveHTTP(writer http.ResponseWriter, request *http.Request) {
 		api.global(writer, request, requestID)
 		return
 	}
-	api.writeError(writer, requestID, &operation.Error{Code: "not_found", Status: 404, Message: "route was not found"})
+	api.writeError(writer, requestID, &operationengine.Error{Code: "not_found", Status: 404, Message: "route was not found"})
 }
 
 func (api *API) customEndpointScope(path string) (CustomEndpointScope, schema.CollectionSlug, bool) {
@@ -595,7 +596,7 @@ func (api *API) preview(writer http.ResponseWriter, request *http.Request, reque
 			return
 		}
 		if api.config.RevokePreviewToken == nil {
-			api.writeError(writer, requestID, &operation.Error{Code: "not_found", Status: 404, Message: "preview token service is unavailable"})
+			api.writeError(writer, requestID, &operationengine.Error{Code: "not_found", Status: 404, Message: "preview token service is unavailable"})
 			return
 		}
 		var input struct {
@@ -616,7 +617,7 @@ func (api *API) preview(writer http.ResponseWriter, request *http.Request, reque
 	}
 	segments, pathError := decodeEscapedPathSegments(remainder)
 	if pathError != nil {
-		api.writeError(writer, requestID, &operation.Error{Code: "bad_request", Status: 400, Message: "malformed preview path", Cause: pathError})
+		api.writeError(writer, requestID, &operationengine.Error{Code: "bad_request", Status: 400, Message: "malformed preview path", Cause: pathError})
 		return
 	}
 	resource := ""
@@ -633,7 +634,7 @@ func (api *API) preview(writer http.ResponseWriter, request *http.Request, reque
 	case len(segments) == 3 && segments[0] == "globals" && segments[1] != "" && segments[2] == "token":
 		resource, slug, documentID, tokenRoute = "global", segments[1], segments[1], true
 	default:
-		api.writeError(writer, requestID, &operation.Error{Code: "bad_request", Status: 400, Message: "malformed preview path"})
+		api.writeError(writer, requestID, &operationengine.Error{Code: "bad_request", Status: 400, Message: "malformed preview path"})
 		return
 	}
 	if tokenRoute {
@@ -660,7 +661,7 @@ func (api *API) preview(writer http.ResponseWriter, request *http.Request, reque
 		} else if resource == "global" && api.config.CreateGlobalPreviewToken != nil {
 			token, err = api.config.CreateGlobalPreviewToken(request.Context(), slug, identity)
 		} else {
-			err = &operation.Error{Code: "not_found", Status: 404, Message: "preview token service is unavailable"}
+			err = &operationengine.Error{Code: "not_found", Status: 404, Message: "preview token service is unavailable"}
 		}
 		if err != nil {
 			api.writeError(writer, requestID, err)
@@ -686,7 +687,7 @@ func (api *API) preview(writer http.ResponseWriter, request *http.Request, reque
 	} else if resource == "global" && api.config.FindGlobalPreview != nil {
 		document, err = api.config.FindGlobalPreview(request.Context(), credential, slug)
 	} else {
-		err = &operation.Error{Code: "not_found", Status: 404, Message: "preview service is unavailable"}
+		err = &operationengine.Error{Code: "not_found", Status: 404, Message: "preview service is unavailable"}
 	}
 	if err != nil {
 		api.writeError(writer, requestID, err)
@@ -711,7 +712,7 @@ func (api *API) resetPreferences(writer http.ResponseWriter, request *http.Reque
 	}
 	identity := api.optionalIdentity(request)
 	if api.config.ResetPreferences == nil {
-		api.writeError(writer, requestID, &operation.Error{Code: "not_found", Status: 404, Message: "preference reset is not available"})
+		api.writeError(writer, requestID, &operationengine.Error{Code: "not_found", Status: 404, Message: "preference reset is not available"})
 		return
 	}
 	if err := api.config.ResetPreferences(request.Context(), identity); err != nil {
@@ -739,7 +740,7 @@ func (api *API) accessCapabilities(writer http.ResponseWriter, request *http.Req
 		return
 	}
 	if len(segments) != 2 || segments[1] == "" || (segments[0] != "collections" && segments[0] != "globals") {
-		api.writeError(writer, requestID, &operation.Error{Code: "bad_request", Status: 400, Message: "malformed access capability path"})
+		api.writeError(writer, requestID, &operationengine.Error{Code: "bad_request", Status: 400, Message: "malformed access capability path"})
 		return
 	}
 	var input struct {
@@ -754,16 +755,16 @@ func (api *API) accessCapabilities(writer http.ResponseWriter, request *http.Req
 	collectionKey := segments[1]
 	if segments[0] == "globals" {
 		if _, exists := api.globals[segments[1]]; !exists {
-			api.writeError(writer, requestID, &operation.Error{Code: "unknown_global", Status: 404, Message: fmt.Sprintf("global %q was not found", segments[1])})
+			api.writeError(writer, requestID, &operationengine.Error{Code: "unknown_global", Status: 404, Message: fmt.Sprintf("global %q was not found", segments[1])})
 			return
 		}
 		if input.ID != "" || input.Trash {
-			api.writeError(writer, requestID, &operation.Error{Code: "bad_request", Status: 400, Message: "global capabilities do not accept document or trash options"})
+			api.writeError(writer, requestID, &operationengine.Error{Code: "bad_request", Status: 400, Message: "global capabilities do not accept document or trash options"})
 			return
 		}
 		collectionKey, input.ID = "global:"+segments[1], segments[1]
 	} else if _, exists := api.collections[segments[1]]; !exists {
-		api.writeError(writer, requestID, &operation.Error{Code: "unknown_collection", Status: 404, Message: fmt.Sprintf("collection %q was not found", segments[1])})
+		api.writeError(writer, requestID, &operationengine.Error{Code: "unknown_collection", Status: 404, Message: fmt.Sprintf("collection %q was not found", segments[1])})
 		return
 	}
 	localeOptions, err := decodeLocaleQuery(request)
@@ -772,7 +773,7 @@ func (api *API) accessCapabilities(writer http.ResponseWriter, request *http.Req
 		return
 	}
 	identity := api.optionalIdentity(request)
-	capabilities, err := api.config.Engine.Capabilities(request.Context(), operation.CapabilitiesRequest{
+	capabilities, err := api.config.Engine.Capabilities(request.Context(), operationengine.CapabilitiesRequest{
 		Collection: collectionKey, ID: input.ID, Data: input.Data,
 		Actor: identityActor(identity), ActorCollection: identityCollection(identity), TrashOnly: input.Trash,
 		Locale: localeOptions.locale, FallbackLocales: localeOptions.fallbackLocales,
@@ -788,7 +789,7 @@ func (api *API) accessCapabilities(writer http.ResponseWriter, request *http.Req
 func (api *API) filteredCollectionSelection(writer http.ResponseWriter, request *http.Request, requestID, slug string) {
 	collection, exists := api.collections[slug]
 	if !exists {
-		api.writeError(writer, requestID, &operation.Error{Code: "unknown_collection", Status: 404, Message: fmt.Sprintf("collection %q was not found", slug)})
+		api.writeError(writer, requestID, &operationengine.Error{Code: "unknown_collection", Status: 404, Message: fmt.Sprintf("collection %q was not found", slug)})
 		return
 	}
 	var input protocol.CollectionSelectionInput
@@ -801,7 +802,7 @@ func (api *API) filteredCollectionSelection(writer http.ResponseWriter, request 
 	if len(input.Where) != 0 {
 		filter, err = decodeWhere(input.Where, collection)
 		if err != nil {
-			api.writeError(writer, requestID, &operation.Error{Code: "bad_query", Status: 400, Message: "invalid where query", Cause: err})
+			api.writeError(writer, requestID, &operationengine.Error{Code: "bad_query", Status: 400, Message: "invalid where query", Cause: err})
 			return
 		}
 	}
@@ -811,7 +812,7 @@ func (api *API) filteredCollectionSelection(writer http.ResponseWriter, request 
 		return
 	}
 	identity := api.optionalIdentity(request)
-	selection, err := api.config.Engine.ResolveFilteredSelection(request.Context(), operation.FilteredSelectionRequest{
+	selection, err := api.config.Engine.ResolveFilteredSelection(request.Context(), operationengine.FilteredSelectionRequest{
 		Collection: slug, Filter: filter, Actor: identityActor(identity), ActorCollection: identityCollection(identity), TrashOnly: input.Trash,
 		Locale: localeOptions.locale, FallbackLocales: localeOptions.fallbackLocales,
 		DisableFallback: localeOptions.disableFallback, AllLocales: localeOptions.allLocales,
@@ -827,7 +828,7 @@ func (api *API) filteredCollectionSelection(writer http.ResponseWriter, request 
 	writeJSON(writer, http.StatusOK, protocol.CollectionSelectionEnvelope{Items: items, TotalDocs: len(items)})
 }
 
-func accessCapabilitiesJSON(capabilities operation.AccessCapabilities) protocol.AccessCapabilitiesEnvelope {
+func accessCapabilitiesJSON(capabilities operationengine.AccessCapabilities) protocol.AccessCapabilitiesEnvelope {
 	fields := make(map[string]protocol.FieldCapabilities, len(capabilities.Fields))
 	for path, field := range capabilities.Fields {
 		fields[path] = protocol.FieldCapabilities{Read: field.Read, Create: field.Create, Update: field.Update}
@@ -849,7 +850,7 @@ func accessCapabilitiesJSON(capabilities operation.AccessCapabilities) protocol.
 func (api *API) preference(writer http.ResponseWriter, request *http.Request, requestID string) {
 	key := strings.TrimPrefix(request.URL.Path, "/api/preferences/")
 	if key == "" || strings.Contains(key, "/") {
-		api.writeError(writer, requestID, &operation.Error{Code: "bad_request", Status: 400, Message: "malformed preference path"})
+		api.writeError(writer, requestID, &operationengine.Error{Code: "bad_request", Status: 400, Message: "malformed preference path"})
 		return
 	}
 	identity := api.optionalIdentity(request)
@@ -888,18 +889,22 @@ func (api *API) global(writer http.ResponseWriter, request *http.Request, reques
 	remainder := strings.TrimPrefix(request.URL.Path, "/api/globals/")
 	segments := strings.Split(remainder, "/")
 	if len(segments) == 0 || len(segments) > 3 || segments[0] == "" {
-		api.writeError(writer, requestID, &operation.Error{Code: "bad_request", Status: 400, Message: "malformed global path"})
+		api.writeError(writer, requestID, &operationengine.Error{Code: "bad_request", Status: 400, Message: "malformed global path"})
 		return
 	}
 	global, exists := api.globals[segments[0]]
 	if !exists {
-		api.writeError(writer, requestID, &operation.Error{Code: "unknown_global", Status: 404, Message: fmt.Sprintf("global %q was not found", segments[0])})
+		api.writeError(writer, requestID, &operationengine.Error{Code: "unknown_global", Status: 404, Message: fmt.Sprintf("global %q was not found", segments[0])})
 		return
 	}
 	identity := api.optionalIdentity(request)
 	actor := identityActor(identity)
 	actorCollection := identityCollection(identity)
 	key, slug := "global:"+segments[0], segments[0]
+	if len(segments) == 2 && segments[1] == "validate" {
+		api.liveValidation(writer, request, requestID, key, slug)
+		return
+	}
 	if len(segments) == 1 {
 		switch request.Method {
 		case http.MethodGet:
@@ -908,7 +913,7 @@ func (api *API) global(writer http.ResponseWriter, request *http.Request, reques
 				api.writeError(writer, requestID, err)
 				return
 			}
-			result, err := api.config.Engine.Execute(request.Context(), operation.Request{
+			result, err := api.config.Engine.Execute(request.Context(), operationengine.Request{
 				Operation: operation.Read, Collection: key, ID: slug, Actor: actor, ActorCollection: actorCollection,
 				Select: options.selectFields, OutputFields: options.outputFields, Populate: options.populate,
 				Locale: options.locale, FallbackLocales: options.fallbackLocales,
@@ -930,7 +935,7 @@ func (api *API) global(writer http.ResponseWriter, request *http.Request, reques
 				api.writeError(writer, requestID, err)
 				return
 			}
-			operationRequest := operation.Request{Operation: operation.Update, Collection: key, ID: slug, Data: values, Actor: actor, ActorCollection: actorCollection, ExpectedRevision: revisionHeader(request)}
+			operationRequest := operationengine.Request{Operation: operation.Update, Collection: key, ID: slug, Data: values, Actor: actor, ActorCollection: actorCollection, ExpectedRevision: revisionHeader(request)}
 			localeOptions.apply(&operationRequest)
 			result, err := api.config.Engine.Execute(request.Context(), operationRequest)
 			if err != nil {
@@ -949,7 +954,7 @@ func (api *API) global(writer http.ResponseWriter, request *http.Request, reques
 		return
 	}
 	if global.Versions == nil {
-		api.writeError(writer, requestID, &operation.Error{Code: "not_found", Status: 404, Message: "global version route was not found"})
+		api.writeError(writer, requestID, &operationengine.Error{Code: "not_found", Status: 404, Message: "global version route was not found"})
 		return
 	}
 	action := segments[1]
@@ -964,14 +969,14 @@ func (api *API) global(writer http.ResponseWriter, request *http.Request, reques
 			api.writeError(writer, requestID, err)
 			return
 		}
-		versionLocaleOptions := operation.LocalizationOptions{
+		versionLocaleOptions := operationengine.LocalizationOptions{
 			Locale: localeOptions.locale, FallbackLocales: localeOptions.fallbackLocales,
 			DisableFallback: localeOptions.disableFallback, AllLocales: localeOptions.allLocales, ActorCollection: actorCollection,
 		}
 		if len(segments) == 3 {
 			revision, err := strconv.Atoi(segments[2])
 			if err != nil || revision < 1 {
-				api.writeError(writer, requestID, &operation.Error{Code: "bad_request", Status: 400, Message: "version revision must be a positive integer"})
+				api.writeError(writer, requestID, &operationengine.Error{Code: "bad_request", Status: 400, Message: "version revision must be a positive integer"})
 				return
 			}
 			version, err := api.config.Engine.Version(request.Context(), key, slug, revision, actor, versionLocaleOptions)
@@ -1007,7 +1012,7 @@ func (api *API) global(writer http.ResponseWriter, request *http.Request, reques
 			api.writeError(writer, requestID, err)
 			return
 		}
-		operationRequest := operation.Request{Operation: kind, Collection: key, ID: slug, Data: values, Actor: actor, ActorCollection: actorCollection, ExpectedRevision: revisionHeader(request)}
+		operationRequest := operationengine.Request{Operation: kind, Collection: key, ID: slug, Data: values, Actor: actor, ActorCollection: actorCollection, ExpectedRevision: revisionHeader(request)}
 		localeOptions.apply(&operationRequest)
 		result, err := api.config.Engine.Execute(request.Context(), operationRequest)
 		if err != nil {
@@ -1023,7 +1028,7 @@ func (api *API) global(writer http.ResponseWriter, request *http.Request, reques
 		}
 		revision, err := strconv.Atoi(segments[2])
 		if err != nil || revision < 1 {
-			api.writeError(writer, requestID, &operation.Error{Code: "bad_request", Status: 400, Message: "restore revision must be a positive integer"})
+			api.writeError(writer, requestID, &operationengine.Error{Code: "bad_request", Status: 400, Message: "restore revision must be a positive integer"})
 			return
 		}
 		draft, queryError := restoreDraftQuery(request)
@@ -1036,7 +1041,7 @@ func (api *API) global(writer http.ResponseWriter, request *http.Request, reques
 			api.writeError(writer, requestID, localeError)
 			return
 		}
-		result, err := api.config.Engine.Restore(request.Context(), key, slug, revision, revisionHeader(request), draft, actor, operation.LocalizationOptions{
+		result, err := api.config.Engine.Restore(request.Context(), key, slug, revision, revisionHeader(request), draft, actor, operationengine.LocalizationOptions{
 			Locale: localeOptions.locale, FallbackLocales: localeOptions.fallbackLocales,
 			DisableFallback: localeOptions.disableFallback, AllLocales: localeOptions.allLocales, ActorCollection: actorCollection,
 		})
@@ -1051,7 +1056,7 @@ func (api *API) global(writer http.ResponseWriter, request *http.Request, reques
 		}
 		api.audit(request, requestID, actor, action, slug, slug)
 	default:
-		api.writeError(writer, requestID, &operation.Error{Code: "not_found", Status: 404, Message: "global route was not found"})
+		api.writeError(writer, requestID, &operationengine.Error{Code: "not_found", Status: 404, Message: "global route was not found"})
 	}
 }
 
@@ -1072,7 +1077,7 @@ func (api *API) pluginEndpoint(writer http.ResponseWriter, request *http.Request
 		api.methodNotAllowed(writer, requestID, allowed...)
 		return
 	}
-	api.writeError(writer, requestID, &operation.Error{Code: "not_found", Status: 404, Message: "plugin endpoint was not found"})
+	api.writeError(writer, requestID, &operationengine.Error{Code: "not_found", Status: 404, Message: "plugin endpoint was not found"})
 }
 
 func (api *API) pluginActor(request *http.Request) (*store.Document, schema.CollectionSlug) {
@@ -1119,7 +1124,7 @@ func (api *API) admitAuthAttempt(ctx context.Context, clientIP, scope, identity 
 		return err
 	}
 	if !allowed {
-		return &operation.Error{Code: "rate_limited", Status: http.StatusTooManyRequests, Message: "too many requests; try again later"}
+		return &operationengine.Error{Code: "rate_limited", Status: http.StatusTooManyRequests, Message: "too many requests; try again later"}
 	}
 	return nil
 }
@@ -1227,16 +1232,20 @@ func (api *API) collection(writer http.ResponseWriter, request *http.Request, re
 	remainder := strings.TrimPrefix(request.URL.EscapedPath(), "/api/collections/")
 	segments, pathError := decodeEscapedPathSegments(remainder)
 	if pathError != nil {
-		api.writeError(writer, requestID, &operation.Error{Code: "bad_request", Status: 400, Message: "malformed collection path", Cause: pathError})
+		api.writeError(writer, requestID, &operationengine.Error{Code: "bad_request", Status: 400, Message: "malformed collection path", Cause: pathError})
 		return
 	}
 	if len(segments) > 4 || len(segments) == 0 || segments[0] == "" || len(segments) >= 2 && segments[1] == "" {
-		api.writeError(writer, requestID, &operation.Error{Code: "bad_request", Status: 400, Message: "malformed collection path"})
+		api.writeError(writer, requestID, &operationengine.Error{Code: "bad_request", Status: 400, Message: "malformed collection path"})
 		return
 	}
 	collection, exists := api.collections[segments[0]]
 	if !exists {
-		api.writeError(writer, requestID, &operation.Error{Code: "unknown_collection", Status: 404, Message: fmt.Sprintf("collection %q was not found", segments[0])})
+		api.writeError(writer, requestID, &operationengine.Error{Code: "unknown_collection", Status: 404, Message: fmt.Sprintf("collection %q was not found", segments[0])})
+		return
+	}
+	if len(segments) == 2 && segments[1] == "validate" {
+		api.liveValidation(writer, request, requestID, segments[0], "")
 		return
 	}
 	identity := api.optionalIdentity(request)
@@ -1254,7 +1263,7 @@ func (api *API) collection(writer http.ResponseWriter, request *http.Request, re
 				api.writeError(writer, requestID, err)
 				return
 			}
-			result, err := api.config.Engine.Execute(request.Context(), operation.Request{
+			result, err := api.config.Engine.Execute(request.Context(), operationengine.Request{
 				Operation: operation.Read, Collection: segments[0], Filter: options.filter,
 				Page: options.page, Limit: options.limit, Actor: actor, ActorCollection: actorCollection, Sort: options.sort,
 				Select: options.selectFields, OutputFields: options.outputFields, Populate: options.populate, TrashOnly: options.trashOnly,
@@ -1291,7 +1300,7 @@ func (api *API) collection(writer http.ResponseWriter, request *http.Request, re
 				return
 			}
 			if collection.Upload != nil {
-				api.writeError(writer, requestID, &operation.Error{Code: "bad_operation", Status: 400, Message: "upload collections require multipart or remote upload creation"})
+				api.writeError(writer, requestID, &operationengine.Error{Code: "bad_operation", Status: 400, Message: "upload collections require multipart or remote upload creation"})
 				return
 			}
 			values, err := api.decodeValues(writer, request)
@@ -1309,7 +1318,7 @@ func (api *API) collection(writer http.ResponseWriter, request *http.Request, re
 				api.writeError(writer, requestID, err)
 				return
 			}
-			operationRequest := operation.Request{Operation: operation.Create, Collection: segments[0], Data: values, Actor: actor, ActorCollection: actorCollection, Draft: draft}
+			operationRequest := operationengine.Request{Operation: operation.Create, Collection: segments[0], Data: values, Actor: actor, ActorCollection: actorCollection, Draft: draft}
 			localeOptions.apply(&operationRequest)
 			result, err := api.config.Engine.Execute(request.Context(), operationRequest)
 			if err != nil {
@@ -1321,7 +1330,7 @@ func (api *API) collection(writer http.ResponseWriter, request *http.Request, re
 		case http.MethodDelete:
 			trashValues := request.URL.Query()["trash"]
 			if len(trashValues) != 1 || trashValues[0] != "true" {
-				api.writeError(writer, requestID, &operation.Error{Code: "bad_request", Status: 400, Message: "collection-wide delete requires trash=true"})
+				api.writeError(writer, requestID, &operationengine.Error{Code: "bad_request", Status: 400, Message: "collection-wide delete requires trash=true"})
 				return
 			}
 			api.emptyCollectionTrash(writer, request, requestID, collection, identity)
@@ -1336,7 +1345,7 @@ func (api *API) collection(writer http.ResponseWriter, request *http.Request, re
 			api.writeError(writer, requestID, err)
 			return
 		}
-		result, err := api.config.Engine.Execute(request.Context(), operation.Request{
+		result, err := api.config.Engine.Execute(request.Context(), operationengine.Request{
 			Operation: operation.Read, Collection: segments[0], Filter: options.filter,
 			Page: 1, Limit: 1, Actor: actor, ActorCollection: actorCollection, TrashOnly: options.trashOnly,
 			Locale: options.locale, FallbackLocales: options.fallbackLocales,
@@ -1365,7 +1374,7 @@ func (api *API) collection(writer http.ResponseWriter, request *http.Request, re
 			api.writeError(writer, requestID, err)
 			return
 		}
-		result, err := api.config.Engine.Execute(request.Context(), operation.Request{
+		result, err := api.config.Engine.Execute(request.Context(), operationengine.Request{
 			Operation: operation.Read, Collection: segments[0], ID: id, Actor: actor, ActorCollection: actorCollection,
 			Select: options.selectFields, OutputFields: options.outputFields, Populate: options.populate,
 			Locale: options.locale, FallbackLocales: options.fallbackLocales,
@@ -1388,7 +1397,7 @@ func (api *API) collection(writer http.ResponseWriter, request *http.Request, re
 			api.writeError(writer, requestID, err)
 			return
 		}
-		operationRequest := operation.Request{Operation: operation.Update, Collection: segments[0], ID: id, Data: values, Actor: actor, ActorCollection: actorCollection, ExpectedRevision: revisionHeader(request)}
+		operationRequest := operationengine.Request{Operation: operation.Update, Collection: segments[0], ID: id, Data: values, Actor: actor, ActorCollection: actorCollection, ExpectedRevision: revisionHeader(request)}
 		localeOptions.apply(&operationRequest)
 		result, err := api.config.Engine.Execute(request.Context(), operationRequest)
 		if err != nil {
@@ -1402,7 +1411,7 @@ func (api *API) collection(writer http.ResponseWriter, request *http.Request, re
 			api.writeError(writer, requestID, err)
 			return
 		}
-		operationRequest := operation.Request{Operation: operation.Delete, Collection: segments[0], ID: id, Actor: actor, ActorCollection: actorCollection}
+		operationRequest := operationengine.Request{Operation: operation.Delete, Collection: segments[0], ID: id, Actor: actor, ActorCollection: actorCollection}
 		localeOptions.apply(&operationRequest)
 		result, err := api.config.Engine.Execute(request.Context(), operationRequest)
 		if err != nil {
@@ -1424,7 +1433,7 @@ func (api *API) emptyCollectionTrash(writer http.ResponseWriter, request *http.R
 		return
 	}
 	if !collection.Capabilities.Trash {
-		api.writeError(writer, requestID, &operation.Error{Code: "bad_operation", Status: 400, Message: "collection does not support trash"})
+		api.writeError(writer, requestID, &operationengine.Error{Code: "bad_operation", Status: 400, Message: "collection does not support trash"})
 		return
 	}
 	localeOptions, err := decodeLocaleQuery(request)
@@ -1432,7 +1441,7 @@ func (api *API) emptyCollectionTrash(writer http.ResponseWriter, request *http.R
 		api.writeError(writer, requestID, err)
 		return
 	}
-	result, err := api.config.Engine.Execute(request.Context(), operation.Request{
+	result, err := api.config.Engine.Execute(request.Context(), operationengine.Request{
 		Operation: operation.Read, Collection: string(collection.Slug), Page: 1, Limit: 100,
 		Actor: actor, ActorCollection: actorCollection, TrashOnly: true, Locale: localeOptions.locale, FallbackLocales: localeOptions.fallbackLocales,
 		DisableFallback: localeOptions.disableFallback, AllLocales: localeOptions.allLocales,
@@ -1442,16 +1451,16 @@ func (api *API) emptyCollectionTrash(writer http.ResponseWriter, request *http.R
 		return
 	}
 	if result.Page.Total > 100 {
-		api.writeError(writer, requestID, &operation.Error{Code: "bad_request", Status: 400, Message: "empty trash supports at most 100 documents per atomic operation"})
+		api.writeError(writer, requestID, &operationengine.Error{Code: "bad_request", Status: 400, Message: "empty trash supports at most 100 documents per atomic operation"})
 		return
 	}
 	if result.Page.Total == 0 {
 		writeJSON(writer, http.StatusOK, protocol.BulkEnvelope[map[string]any]{Docs: []map[string]any{}})
 		return
 	}
-	requests := make([]operation.Request, len(result.Page.Documents))
+	requests := make([]operationengine.Request, len(result.Page.Documents))
 	for index, document := range result.Page.Documents {
-		requests[index] = operation.Request{Operation: operation.DeletePermanent, Collection: string(collection.Slug), ID: document.ID, Actor: actor, ActorCollection: actorCollection}
+		requests[index] = operationengine.Request{Operation: operation.DeletePermanent, Collection: string(collection.Slug), ID: document.ID, Actor: actor, ActorCollection: actorCollection}
 		localeOptions.apply(&requests[index])
 	}
 	results, err := api.config.Engine.ExecuteBatch(request.Context(), requests)
@@ -1474,7 +1483,7 @@ func (api *API) createRemoteUpload(writer http.ResponseWriter, request *http.Req
 		return
 	}
 	if collection.Upload == nil || api.config.RemoteUpload == nil && api.config.RemoteUploadLocalized == nil {
-		api.writeError(writer, requestID, &operation.Error{Code: "not_found", Status: 404, Message: "remote upload was not found"})
+		api.writeError(writer, requestID, &operationengine.Error{Code: "not_found", Status: 404, Message: "remote upload was not found"})
 		return
 	}
 	if collection.Auth != nil {
@@ -1517,7 +1526,7 @@ func (api *API) documentAction(writer http.ResponseWriter, request *http.Request
 	}
 	if len(segments) == 3 && action == "image" {
 		if collection.Upload == nil || api.config.UpdateUploadImage == nil {
-			api.writeError(writer, requestID, &operation.Error{Code: "not_found", Status: 404, Message: "image workflow was not found"})
+			api.writeError(writer, requestID, &operationengine.Error{Code: "not_found", Status: 404, Message: "image workflow was not found"})
 			return
 		}
 		if request.Method != http.MethodPatch {
@@ -1537,7 +1546,7 @@ func (api *API) documentAction(writer http.ResponseWriter, request *http.Request
 			return
 		}
 		if input.FocalX < 0 || input.FocalX > 100 || input.FocalY < 0 || input.FocalY > 100 {
-			api.writeError(writer, requestID, &operation.Error{Code: "validation", Status: 422, Message: "focal coordinates must be between 0 and 100"})
+			api.writeError(writer, requestID, &operationengine.Error{Code: "validation", Status: 422, Message: "focal coordinates must be between 0 and 100"})
 			return
 		}
 		document, err := api.config.UpdateUploadImage(request.Context(), collectionName, id, input.FocalX, input.FocalY, input.CropX, input.CropY, input.CropWidth, input.CropHeight, revisionHeader(request), identity)
@@ -1564,7 +1573,7 @@ func (api *API) documentAction(writer http.ResponseWriter, request *http.Request
 			return
 		}
 		if api.config.Duplicate == nil {
-			api.writeError(writer, requestID, &operation.Error{Code: "not_found", Status: 404, Message: "document duplication is not available"})
+			api.writeError(writer, requestID, &operationengine.Error{Code: "not_found", Status: 404, Message: "document duplication is not available"})
 			return
 		}
 		localeOptions, err := decodeLocaleQuery(request)
@@ -1586,7 +1595,7 @@ func (api *API) documentAction(writer http.ResponseWriter, request *http.Request
 	}
 	if len(segments) == 3 && (action == "restore-deleted" || action == "permanent") {
 		if !collection.Capabilities.Trash {
-			api.writeError(writer, requestID, &operation.Error{Code: "not_found", Status: 404, Message: "trash route was not found"})
+			api.writeError(writer, requestID, &operationengine.Error{Code: "not_found", Status: 404, Message: "trash route was not found"})
 			return
 		}
 		kind, method := operation.RestoreDeleted, http.MethodPost
@@ -1602,7 +1611,7 @@ func (api *API) documentAction(writer http.ResponseWriter, request *http.Request
 			api.writeError(writer, requestID, err)
 			return
 		}
-		operationRequest := operation.Request{Operation: kind, Collection: collectionName, ID: id, Actor: actor, ActorCollection: actorCollection}
+		operationRequest := operationengine.Request{Operation: kind, Collection: collectionName, ID: id, Actor: actor, ActorCollection: actorCollection}
 		localeOptions.apply(&operationRequest)
 		result, err := api.config.Engine.Execute(request.Context(), operationRequest)
 		if err != nil {
@@ -1636,7 +1645,7 @@ func (api *API) documentAction(writer http.ResponseWriter, request *http.Request
 			api.writeError(writer, requestID, err)
 			return
 		}
-		result, err := api.config.Engine.MutateJoin(request.Context(), operation.JoinMutationRequest{
+		result, err := api.config.Engine.MutateJoin(request.Context(), operationengine.JoinMutationRequest{
 			Collection: collectionName, ID: id, Field: segments[3],
 			Additions: input.Additions, Removals: input.Removals, Actor: actor, ActorCollection: actorCollection,
 			Locale: localeOptions.locale, FallbackLocales: localeOptions.fallbackLocales,
@@ -1653,7 +1662,7 @@ func (api *API) documentAction(writer http.ResponseWriter, request *http.Request
 		return
 	}
 	if collection.Versions == nil {
-		api.writeError(writer, requestID, &operation.Error{Code: "not_found", Status: 404, Message: "version route was not found"})
+		api.writeError(writer, requestID, &operationengine.Error{Code: "not_found", Status: 404, Message: "version route was not found"})
 		return
 	}
 	switch action {
@@ -1667,14 +1676,14 @@ func (api *API) documentAction(writer http.ResponseWriter, request *http.Request
 			api.writeError(writer, requestID, err)
 			return
 		}
-		versionLocaleOptions := operation.LocalizationOptions{
+		versionLocaleOptions := operationengine.LocalizationOptions{
 			Locale: localeOptions.locale, FallbackLocales: localeOptions.fallbackLocales,
 			DisableFallback: localeOptions.disableFallback, AllLocales: localeOptions.allLocales, ActorCollection: actorCollection,
 		}
 		if len(segments) == 4 {
 			revision, err := strconv.Atoi(segments[3])
 			if err != nil || revision < 1 {
-				api.writeError(writer, requestID, &operation.Error{Code: "bad_request", Status: 400, Message: "version revision must be a positive integer"})
+				api.writeError(writer, requestID, &operationengine.Error{Code: "bad_request", Status: 400, Message: "version revision must be a positive integer"})
 				return
 			}
 			version, err := api.config.Engine.Version(request.Context(), collectionName, id, revision, actor, versionLocaleOptions)
@@ -1712,7 +1721,7 @@ func (api *API) documentAction(writer http.ResponseWriter, request *http.Request
 			api.writeError(writer, requestID, err)
 			return
 		}
-		operationRequest := operation.Request{Operation: kind, Collection: collectionName, ID: id, Data: values, Actor: actor, ActorCollection: actorCollection, ExpectedRevision: revisionHeader(request)}
+		operationRequest := operationengine.Request{Operation: kind, Collection: collectionName, ID: id, Data: values, Actor: actor, ActorCollection: actorCollection, ExpectedRevision: revisionHeader(request)}
 		localeOptions.apply(&operationRequest)
 		result, err := api.config.Engine.Execute(request.Context(), operationRequest)
 		if err != nil {
@@ -1728,7 +1737,7 @@ func (api *API) documentAction(writer http.ResponseWriter, request *http.Request
 		}
 		revision, err := strconv.Atoi(segments[3])
 		if err != nil || revision < 1 {
-			api.writeError(writer, requestID, &operation.Error{Code: "bad_request", Status: 400, Message: "restore revision must be a positive integer"})
+			api.writeError(writer, requestID, &operationengine.Error{Code: "bad_request", Status: 400, Message: "restore revision must be a positive integer"})
 			return
 		}
 		draft, queryError := restoreDraftQuery(request)
@@ -1741,7 +1750,7 @@ func (api *API) documentAction(writer http.ResponseWriter, request *http.Request
 			api.writeError(writer, requestID, localeError)
 			return
 		}
-		result, err := api.config.Engine.Restore(request.Context(), collectionName, id, revision, revisionHeader(request), draft, actor, operation.LocalizationOptions{
+		result, err := api.config.Engine.Restore(request.Context(), collectionName, id, revision, revisionHeader(request), draft, actor, operationengine.LocalizationOptions{
 			Locale: localeOptions.locale, FallbackLocales: localeOptions.fallbackLocales,
 			DisableFallback: localeOptions.disableFallback, AllLocales: localeOptions.allLocales, ActorCollection: actorCollection,
 		})
@@ -1756,7 +1765,7 @@ func (api *API) documentAction(writer http.ResponseWriter, request *http.Request
 		}
 		api.audit(request, requestID, actor, action, collectionName, id)
 	default:
-		api.writeError(writer, requestID, &operation.Error{Code: "not_found", Status: 404, Message: "version route was not found"})
+		api.writeError(writer, requestID, &operationengine.Error{Code: "not_found", Status: 404, Message: "version route was not found"})
 	}
 }
 
@@ -1773,7 +1782,7 @@ func (api *API) copyLocale(writer http.ResponseWriter, request *http.Request, re
 		api.writeError(writer, requestID, err)
 		return
 	}
-	document, err := api.config.Engine.CopyLocale(request.Context(), collection, id, input.From, input.To, revisionHeader(request), actor, operation.LocalizationOptions{ActorCollection: actorCollection})
+	document, err := api.config.Engine.CopyLocale(request.Context(), collection, id, input.From, input.To, revisionHeader(request), actor, operationengine.LocalizationOptions{ActorCollection: actorCollection})
 	if err != nil {
 		api.writeError(writer, requestID, err)
 		return
@@ -1783,7 +1792,7 @@ func (api *API) copyLocale(writer http.ResponseWriter, request *http.Request, re
 }
 
 func (api *API) authCollectionCreateError(writer http.ResponseWriter, requestID string, collection schema.Collection) {
-	api.writeError(writer, requestID, &operation.Error{
+	api.writeError(writer, requestID, &operationengine.Error{
 		Code: "bad_operation", Status: 400,
 		Message: fmt.Sprintf("auth collection %q must be created through /api/auth/%s/create-user", collection.Slug, collection.Slug),
 	})
@@ -1791,7 +1800,7 @@ func (api *API) authCollectionCreateError(writer http.ResponseWriter, requestID 
 
 func (api *API) documentLock(writer http.ResponseWriter, request *http.Request, requestID, collection, id string, identity *AuthIdentity) {
 	if api.config.DocumentLock == nil || api.config.AcquireDocumentLock == nil || api.config.ReleaseDocumentLock == nil {
-		api.writeError(writer, requestID, &operation.Error{Code: "not_found", Status: 404, Message: "document locking was not found"})
+		api.writeError(writer, requestID, &operationengine.Error{Code: "not_found", Status: 404, Message: "document locking was not found"})
 		return
 	}
 	actor := identityActor(identity)
@@ -1840,19 +1849,19 @@ func restoreDraftQuery(request *http.Request) (bool, error) {
 	case "true":
 		return true, nil
 	default:
-		return false, &operation.Error{Code: "bad_request", Status: 400, Message: "draft must be true or false"}
+		return false, &operationengine.Error{Code: "bad_request", Status: 400, Message: "draft must be true or false"}
 	}
 }
 
 func (api *API) scheduledPublish(writer http.ResponseWriter, request *http.Request, requestID, collection, documentID string, segments []string, actor *store.Document, identity *AuthIdentity) {
 	if api.config.SchedulePublish == nil || api.config.ScheduledPublishes == nil || api.config.CancelScheduledPublish == nil {
-		api.writeError(writer, requestID, &operation.Error{Code: "not_found", Status: 404, Message: "scheduled publishing is unavailable"})
+		api.writeError(writer, requestID, &operationengine.Error{Code: "not_found", Status: 404, Message: "scheduled publishing is unavailable"})
 		return
 	}
 	switch request.Method {
 	case http.MethodGet:
 		if len(segments) != 3 {
-			api.writeError(writer, requestID, &operation.Error{Code: "not_found", Status: 404, Message: "scheduled publish was not found"})
+			api.writeError(writer, requestID, &operationengine.Error{Code: "not_found", Status: 404, Message: "scheduled publish was not found"})
 			return
 		}
 		jobs, err := api.config.ScheduledPublishes(request.Context(), collection, documentID, identity)
@@ -1867,7 +1876,7 @@ func (api *API) scheduledPublish(writer http.ResponseWriter, request *http.Reque
 		writeJSON(writer, http.StatusOK, protocol.ScheduledPublishesEnvelope{ScheduledPublishes: result})
 	case http.MethodPost:
 		if len(segments) != 3 {
-			api.writeError(writer, requestID, &operation.Error{Code: "not_found", Status: 404, Message: "scheduled publish route was not found"})
+			api.writeError(writer, requestID, &operationengine.Error{Code: "not_found", Status: 404, Message: "scheduled publish route was not found"})
 			return
 		}
 		var input struct {
@@ -1879,7 +1888,7 @@ func (api *API) scheduledPublish(writer http.ResponseWriter, request *http.Reque
 		}
 		runAt, err := time.Parse(time.RFC3339, input.RunAt)
 		if err != nil {
-			api.writeError(writer, requestID, &operation.Error{Code: "validation", Status: 422, Message: "runAt must be an RFC 3339 timestamp"})
+			api.writeError(writer, requestID, &operationengine.Error{Code: "validation", Status: 422, Message: "runAt must be an RFC 3339 timestamp"})
 			return
 		}
 		job, err := api.config.SchedulePublish(request.Context(), collection, documentID, runAt, revisionHeader(request), identity)
@@ -1891,7 +1900,7 @@ func (api *API) scheduledPublish(writer http.ResponseWriter, request *http.Reque
 		api.audit(request, requestID, actor, "schedule-publish", collection, documentID)
 	case http.MethodDelete:
 		if len(segments) != 4 {
-			api.writeError(writer, requestID, &operation.Error{Code: "bad_request", Status: 400, Message: "scheduled publish id is required"})
+			api.writeError(writer, requestID, &operationengine.Error{Code: "bad_request", Status: 400, Message: "scheduled publish id is required"})
 			return
 		}
 		if err := api.config.CancelScheduledPublish(request.Context(), collection, documentID, segments[3], identity); err != nil {
@@ -1929,8 +1938,8 @@ func (api *API) bulkCollection(writer http.ResponseWriter, request *http.Request
 		api.writeError(writer, requestID, err)
 		return
 	}
-	if len(input.IDs) == 0 || len(input.IDs) > operation.MaxBatchDocuments {
-		api.writeError(writer, requestID, &operation.Error{Code: "bad_request", Status: 400, Message: fmt.Sprintf("bulk operations require between 1 and %d document IDs", operation.MaxBatchDocuments)})
+	if len(input.IDs) == 0 || len(input.IDs) > operationengine.MaxBatchDocuments {
+		api.writeError(writer, requestID, &operationengine.Error{Code: "bad_request", Status: 400, Message: fmt.Sprintf("bulk operations require between 1 and %d document IDs", operationengine.MaxBatchDocuments)})
 		return
 	}
 	seen := make(map[string]bool, len(input.IDs))
@@ -1943,7 +1952,7 @@ func (api *API) bulkCollection(writer http.ResponseWriter, request *http.Request
 	switch input.Action {
 	case "update":
 		if input.Data == nil {
-			api.writeError(writer, requestID, &operation.Error{Code: "bad_request", Status: 400, Message: "bulk update requires data"})
+			api.writeError(writer, requestID, &operationengine.Error{Code: "bad_request", Status: 400, Message: "bulk update requires data"})
 			return
 		}
 	case "publish":
@@ -1957,17 +1966,17 @@ func (api *API) bulkCollection(writer http.ResponseWriter, request *http.Request
 	case "deletePermanent":
 		kind = operation.DeletePermanent
 	default:
-		api.writeError(writer, requestID, &operation.Error{Code: "bad_request", Status: 400, Message: "bulk action must be update, publish, unpublish, delete, restoreDeleted, or deletePermanent"})
+		api.writeError(writer, requestID, &operationengine.Error{Code: "bad_request", Status: 400, Message: "bulk action must be update, publish, unpublish, delete, restoreDeleted, or deletePermanent"})
 		return
 	}
-	requests := make([]operation.Request, len(input.IDs))
+	requests := make([]operationengine.Request, len(input.IDs))
 	for index, id := range input.IDs {
 		if id == "" || seen[id] {
-			api.writeError(writer, requestID, &operation.Error{Code: "bad_request", Status: 400, Message: "bulk document IDs must be non-empty and unique"})
+			api.writeError(writer, requestID, &operationengine.Error{Code: "bad_request", Status: 400, Message: "bulk document IDs must be non-empty and unique"})
 			return
 		}
 		seen[id] = true
-		requests[index] = operation.Request{Operation: kind, Collection: string(collection.Slug), ID: id, Data: store.CloneValues(input.Data), Actor: actor, ActorCollection: actorCollection}
+		requests[index] = operationengine.Request{Operation: kind, Collection: string(collection.Slug), ID: id, Data: store.CloneValues(input.Data), Actor: actor, ActorCollection: actorCollection}
 		localeOptions.apply(&requests[index])
 	}
 	results, err := api.config.Engine.ExecuteBatch(request.Context(), requests)
@@ -1992,7 +2001,7 @@ func revisionHeader(request *http.Request) int {
 func (api *API) createUpload(writer http.ResponseWriter, request *http.Request, requestID string, collection schema.Collection, identity *AuthIdentity) {
 	actor := identityActor(identity)
 	if api.config.Upload == nil && api.config.UploadLocalized == nil {
-		api.writeError(writer, requestID, &operation.Error{Code: "upload_unavailable", Status: 503, Message: "upload storage is unavailable"})
+		api.writeError(writer, requestID, &operationengine.Error{Code: "upload_unavailable", Status: 503, Message: "upload storage is unavailable"})
 		return
 	}
 	releaseAdmission := func() {}
@@ -2014,22 +2023,22 @@ func (api *API) createUpload(writer http.ResponseWriter, request *http.Request, 
 	if parseError != nil {
 		var maximum *http.MaxBytesError
 		if errors.As(parseError, &maximum) {
-			api.writeError(writer, requestID, &operation.Error{Code: "body_too_large", Status: 413, Message: fmt.Sprintf("multipart upload exceeds %d bytes", maximum.Limit)})
+			api.writeError(writer, requestID, &operationengine.Error{Code: "body_too_large", Status: 413, Message: fmt.Sprintf("multipart upload exceeds %d bytes", maximum.Limit)})
 			return
 		}
-		api.writeError(writer, requestID, &operation.Error{Code: "bad_request", Status: 400, Message: "invalid multipart upload", Cause: parseError})
+		api.writeError(writer, requestID, &operationengine.Error{Code: "bad_request", Status: 400, Message: "invalid multipart upload", Cause: parseError})
 		return
 	}
 	file, header, err := request.FormFile("file")
 	if err != nil {
-		api.writeError(writer, requestID, &operation.Error{Code: "validation", Status: 422, Message: "multipart field \"file\" is required", Cause: err})
+		api.writeError(writer, requestID, &operationengine.Error{Code: "validation", Status: 422, Message: "multipart field \"file\" is required", Cause: err})
 		return
 	}
 	defer file.Close()
 	values := store.Values{}
 	if encoded := request.FormValue("data"); encoded != "" {
 		if err := decodeDynamicValues([]byte(encoded), &values); err != nil {
-			api.writeError(writer, requestID, &operation.Error{Code: "bad_request", Status: 400, Message: "multipart field \"data\" must be a JSON object", Cause: err})
+			api.writeError(writer, requestID, &operationengine.Error{Code: "bad_request", Status: 400, Message: "multipart field \"data\" must be a JSON object", Cause: err})
 			return
 		}
 	}
@@ -2060,7 +2069,7 @@ func (api *API) upload(writer http.ResponseWriter, request *http.Request, reques
 	remainder := strings.TrimPrefix(request.URL.Path, "/api/uploads/")
 	segments := strings.SplitN(remainder, "/", 2)
 	if len(segments) != 2 || segments[0] == "" || segments[1] == "" || api.config.OpenUpload == nil {
-		api.writeError(writer, requestID, &operation.Error{Code: "not_found", Status: 404, Message: "upload was not found"})
+		api.writeError(writer, requestID, &operationengine.Error{Code: "not_found", Status: 404, Message: "upload was not found"})
 		return
 	}
 	key := remainder
@@ -2136,7 +2145,7 @@ func (api *API) auth(writer http.ResponseWriter, request *http.Request, requestI
 		}
 		collection := strings.TrimSuffix(path, "/login")
 		if collection == "" || strings.Contains(collection, "/") || api.config.Login == nil {
-			api.writeError(writer, requestID, &operation.Error{Code: "unknown_auth_collection", Status: 404, Message: "auth collection was not found"})
+			api.writeError(writer, requestID, &operationengine.Error{Code: "unknown_auth_collection", Status: 404, Message: "auth collection was not found"})
 			return
 		}
 		var credentials struct {
@@ -2173,7 +2182,7 @@ func (api *API) auth(writer http.ResponseWriter, request *http.Request, requestI
 		}
 		cookie, err := request.Cookie(sessionCookie)
 		if err != nil || api.config.LogoutAll == nil {
-			api.writeError(writer, requestID, &operation.Error{Code: "access_denied", Status: 401, Message: "authentication is required"})
+			api.writeError(writer, requestID, &operationengine.Error{Code: "access_denied", Status: 401, Message: "authentication is required"})
 			return
 		}
 		identity := api.optionalIdentity(request)
@@ -2193,7 +2202,7 @@ func (api *API) auth(writer http.ResponseWriter, request *http.Request, requestI
 		}
 		cookie, err := request.Cookie(sessionCookie)
 		if err != nil || api.config.ChangePassword == nil {
-			api.writeError(writer, requestID, &operation.Error{Code: "access_denied", Status: 401, Message: "authentication is required"})
+			api.writeError(writer, requestID, &operationengine.Error{Code: "access_denied", Status: 401, Message: "authentication is required"})
 			return
 		}
 		var input struct {
@@ -2247,7 +2256,7 @@ func (api *API) auth(writer http.ResponseWriter, request *http.Request, requestI
 		}
 		cookie, err := request.Cookie(sessionCookie)
 		if err != nil || api.config.Sessions == nil {
-			api.writeError(writer, requestID, &operation.Error{Code: "access_denied", Status: 401, Message: "authentication is required"})
+			api.writeError(writer, requestID, &operationengine.Error{Code: "access_denied", Status: 401, Message: "authentication is required"})
 			return
 		}
 		sessions, err := api.config.Sessions(request.Context(), cookie.Value)
@@ -2274,12 +2283,12 @@ func (api *API) auth(writer http.ResponseWriter, request *http.Request, requestI
 		}
 		sessionID := strings.TrimPrefix(path, "sessions/")
 		if sessionID == "" || strings.Contains(sessionID, "/") {
-			api.writeError(writer, requestID, &operation.Error{Code: "bad_request", Status: 400, Message: "session ID is invalid"})
+			api.writeError(writer, requestID, &operationengine.Error{Code: "bad_request", Status: 400, Message: "session ID is invalid"})
 			return
 		}
 		cookie, err := request.Cookie(sessionCookie)
 		if err != nil || api.config.RevokeSession == nil {
-			api.writeError(writer, requestID, &operation.Error{Code: "access_denied", Status: 401, Message: "authentication is required"})
+			api.writeError(writer, requestID, &operationengine.Error{Code: "access_denied", Status: 401, Message: "authentication is required"})
 			return
 		}
 		identity := api.optionalIdentity(request)
@@ -2298,7 +2307,7 @@ func (api *API) auth(writer http.ResponseWriter, request *http.Request, requestI
 		}
 		cookie, err := request.Cookie(sessionCookie)
 		if err != nil || api.config.RotateSession == nil {
-			api.writeError(writer, requestID, &operation.Error{Code: "access_denied", Status: 401, Message: "authentication is required"})
+			api.writeError(writer, requestID, &operationengine.Error{Code: "access_denied", Status: 401, Message: "authentication is required"})
 			return
 		}
 		session, err := api.config.RotateSession(request.Context(), cookie.Value)
@@ -2317,7 +2326,7 @@ func (api *API) auth(writer http.ResponseWriter, request *http.Request, requestI
 		}
 		cookie, err := request.Cookie(sessionCookie)
 		if err != nil || api.config.Session == nil {
-			api.writeError(writer, requestID, &operation.Error{Code: "access_denied", Status: 401, Message: "authentication is required"})
+			api.writeError(writer, requestID, &operationengine.Error{Code: "access_denied", Status: 401, Message: "authentication is required"})
 			return
 		}
 		session, err := api.config.Session(request.Context(), cookie.Value)
@@ -2328,7 +2337,7 @@ func (api *API) auth(writer http.ResponseWriter, request *http.Request, requestI
 		writeJSON(writer, http.StatusOK, sessionEnvelope(session))
 		return
 	}
-	api.writeError(writer, requestID, &operation.Error{Code: "not_found", Status: 404, Message: "auth route was not found"})
+	api.writeError(writer, requestID, &operationengine.Error{Code: "not_found", Status: 404, Message: "auth route was not found"})
 }
 
 func authBootstrapAction(path string) (string, bool) {
@@ -2345,7 +2354,7 @@ func (api *API) authBootstrap(writer http.ResponseWriter, request *http.Request,
 		return
 	}
 	if api.config.AuthBootstrapAvailable == nil {
-		api.writeError(writer, requestID, &operation.Error{Code: "unknown_auth_collection", Status: 404, Message: "auth collection was not found"})
+		api.writeError(writer, requestID, &operationengine.Error{Code: "unknown_auth_collection", Status: 404, Message: "auth collection was not found"})
 		return
 	}
 	available, err := api.config.AuthBootstrapAvailable(request.Context(), collection)
@@ -2371,7 +2380,7 @@ func (api *API) createAuthUser(writer http.ResponseWriter, request *http.Request
 		return
 	}
 	if api.config.CreateAuthUser == nil && api.config.CreateAuthUserLocalized == nil {
-		api.writeError(writer, requestID, &operation.Error{Code: "unknown_auth_collection", Status: 404, Message: "auth collection was not found"})
+		api.writeError(writer, requestID, &operationengine.Error{Code: "unknown_auth_collection", Status: 404, Message: "auth collection was not found"})
 		return
 	}
 	var input struct {
@@ -2422,7 +2431,7 @@ func (api *API) accountUnlock(writer http.ResponseWriter, request *http.Request,
 	identity := api.optionalIdentity(request)
 	actor := identityActor(identity)
 	if api.config.ForceUnlock == nil {
-		api.writeError(writer, requestID, &operation.Error{Code: "not_found", Status: 404, Message: "account unlock is not available"})
+		api.writeError(writer, requestID, &operationengine.Error{Code: "not_found", Status: 404, Message: "account unlock is not available"})
 		return
 	}
 	if err := api.config.ForceUnlock(request.Context(), collection, id, identity); err != nil {
@@ -2436,14 +2445,14 @@ func (api *API) accountUnlock(writer http.ResponseWriter, request *http.Request,
 func (api *API) apiKeys(writer http.ResponseWriter, request *http.Request, requestID string) {
 	cookie, err := request.Cookie(sessionCookie)
 	if err != nil {
-		api.writeError(writer, requestID, &operation.Error{Code: "access_denied", Status: 401, Message: "authentication is required"})
+		api.writeError(writer, requestID, &operationengine.Error{Code: "access_denied", Status: 401, Message: "authentication is required"})
 		return
 	}
 	identity := api.optionalIdentity(request)
 	switch request.Method {
 	case http.MethodGet:
 		if api.config.APIKeys == nil {
-			api.writeError(writer, requestID, &operation.Error{Code: "auth_feature_disabled", Status: 404, Message: "API keys are not enabled"})
+			api.writeError(writer, requestID, &operationengine.Error{Code: "auth_feature_disabled", Status: 404, Message: "API keys are not enabled"})
 			return
 		}
 		keys, err := api.config.APIKeys(request.Context(), cookie.Value)
@@ -2458,7 +2467,7 @@ func (api *API) apiKeys(writer http.ResponseWriter, request *http.Request, reque
 		writeJSON(writer, http.StatusOK, response)
 	case http.MethodPost:
 		if api.config.CreateAPIKey == nil {
-			api.writeError(writer, requestID, &operation.Error{Code: "auth_feature_disabled", Status: 404, Message: "API keys are not enabled"})
+			api.writeError(writer, requestID, &operationengine.Error{Code: "auth_feature_disabled", Status: 404, Message: "API keys are not enabled"})
 			return
 		}
 		var input struct {
@@ -2473,7 +2482,7 @@ func (api *API) apiKeys(writer http.ResponseWriter, request *http.Request, reque
 		if input.ExpiresAt != "" {
 			expiresAt, err = time.Parse(time.RFC3339, input.ExpiresAt)
 			if err != nil {
-				api.writeError(writer, requestID, &operation.Error{Code: "validation", Status: 422, Message: "API key expiry must be an RFC 3339 timestamp"})
+				api.writeError(writer, requestID, &operationengine.Error{Code: "validation", Status: 422, Message: "API key expiry must be an RFC 3339 timestamp"})
 				return
 			}
 		}
@@ -2495,12 +2504,12 @@ func (api *API) revokeAPIKey(writer http.ResponseWriter, request *http.Request, 
 		return
 	}
 	if id == "" || strings.Contains(id, "/") {
-		api.writeError(writer, requestID, &operation.Error{Code: "bad_request", Status: 400, Message: "API key ID is invalid"})
+		api.writeError(writer, requestID, &operationengine.Error{Code: "bad_request", Status: 400, Message: "API key ID is invalid"})
 		return
 	}
 	cookie, err := request.Cookie(sessionCookie)
 	if err != nil || api.config.RevokeAPIKey == nil {
-		api.writeError(writer, requestID, &operation.Error{Code: "access_denied", Status: 401, Message: "authentication is required"})
+		api.writeError(writer, requestID, &operationengine.Error{Code: "access_denied", Status: 401, Message: "authentication is required"})
 		return
 	}
 	identity := api.optionalIdentity(request)
@@ -2551,7 +2560,7 @@ func (api *API) collectionAuthAction(writer http.ResponseWriter, request *http.R
 			return
 		}
 		if api.config.RequestPasswordReset == nil {
-			api.writeError(writer, requestID, &operation.Error{Code: "auth_feature_disabled", Status: 404, Message: "password reset is not enabled"})
+			api.writeError(writer, requestID, &operationengine.Error{Code: "auth_feature_disabled", Status: 404, Message: "password reset is not enabled"})
 			return
 		}
 		if api.authActionRateLimited(writer, request, requestID, collection+":"+action, input.Email) {
@@ -2571,7 +2580,7 @@ func (api *API) collectionAuthAction(writer http.ResponseWriter, request *http.R
 			return
 		}
 		if api.config.ResetPassword == nil {
-			api.writeError(writer, requestID, &operation.Error{Code: "auth_feature_disabled", Status: 404, Message: "password reset is not enabled"})
+			api.writeError(writer, requestID, &operationengine.Error{Code: "auth_feature_disabled", Status: 404, Message: "password reset is not enabled"})
 			return
 		}
 		if api.authActionRateLimited(writer, request, requestID, collection+":"+action, "") {
@@ -2590,7 +2599,7 @@ func (api *API) collectionAuthAction(writer http.ResponseWriter, request *http.R
 			return
 		}
 		if api.config.RequestVerification == nil {
-			api.writeError(writer, requestID, &operation.Error{Code: "auth_feature_disabled", Status: 404, Message: "email verification is not enabled"})
+			api.writeError(writer, requestID, &operationengine.Error{Code: "auth_feature_disabled", Status: 404, Message: "email verification is not enabled"})
 			return
 		}
 		if api.authActionRateLimited(writer, request, requestID, collection+":"+action, input.Email) {
@@ -2609,7 +2618,7 @@ func (api *API) collectionAuthAction(writer http.ResponseWriter, request *http.R
 			return
 		}
 		if api.config.VerifyEmail == nil {
-			api.writeError(writer, requestID, &operation.Error{Code: "auth_feature_disabled", Status: 404, Message: "email verification is not enabled"})
+			api.writeError(writer, requestID, &operationengine.Error{Code: "auth_feature_disabled", Status: 404, Message: "email verification is not enabled"})
 			return
 		}
 		if api.authActionRateLimited(writer, request, requestID, collection+":"+action, "") {
@@ -2704,7 +2713,7 @@ func (api *API) cors(writer http.ResponseWriter, request *http.Request, requestI
 	origin := request.Header.Get("Origin")
 	if origin == "" {
 		if request.Method != http.MethodGet && request.Method != http.MethodHead && strings.EqualFold(strings.TrimSpace(request.Header.Get("Sec-Fetch-Site")), "cross-site") {
-			api.writeError(writer, requestID, &operation.Error{Code: "origin_denied", Status: 403, Message: "cross-site request is not allowed"})
+			api.writeError(writer, requestID, &operationengine.Error{Code: "origin_denied", Status: 403, Message: "cross-site request is not allowed"})
 			return true
 		}
 		return false
@@ -2717,15 +2726,15 @@ func (api *API) cors(writer http.ResponseWriter, request *http.Request, requestI
 	}
 	if request.Method == http.MethodOptions && strings.TrimSpace(request.Header.Get("Access-Control-Request-Method")) != "" {
 		if !allowed {
-			api.writeError(writer, requestID, &operation.Error{Code: "origin_denied", Status: 403, Message: "request origin is not allowed"})
+			api.writeError(writer, requestID, &operationengine.Error{Code: "origin_denied", Status: 403, Message: "request origin is not allowed"})
 			return true
 		}
 		if requestedMethod := strings.ToUpper(strings.TrimSpace(request.Header.Get("Access-Control-Request-Method"))); requestedMethod != "" && !corsMethodAllowed(requestedMethod) {
-			api.writeError(writer, requestID, &operation.Error{Code: "cors_method_denied", Status: 403, Message: "requested CORS method is not allowed"})
+			api.writeError(writer, requestID, &operationengine.Error{Code: "cors_method_denied", Status: 403, Message: "requested CORS method is not allowed"})
 			return true
 		}
 		if !api.corsHeadersAllowed(request.Header.Get("Access-Control-Request-Headers")) {
-			api.writeError(writer, requestID, &operation.Error{Code: "cors_header_denied", Status: 403, Message: "requested CORS header is not allowed"})
+			api.writeError(writer, requestID, &operationengine.Error{Code: "cors_header_denied", Status: 403, Message: "requested CORS header is not allowed"})
 			return true
 		}
 		writer.Header().Add("Vary", "Access-Control-Request-Method")
@@ -2739,7 +2748,7 @@ func (api *API) cors(writer http.ResponseWriter, request *http.Request, requestI
 		return true
 	}
 	if request.Method != http.MethodGet && request.Method != http.MethodHead && !allowed {
-		api.writeError(writer, requestID, &operation.Error{Code: "origin_denied", Status: 403, Message: "request origin is not allowed"})
+		api.writeError(writer, requestID, &operationengine.Error{Code: "origin_denied", Status: 403, Message: "request origin is not allowed"})
 		return true
 	}
 	return false
@@ -3084,7 +3093,7 @@ func (api *API) decodeValues(writer http.ResponseWriter, request *http.Request) 
 		return nil, err
 	}
 	if values == nil {
-		return nil, &operation.Error{Code: "bad_request", Status: 400, Message: "JSON body must be an object"}
+		return nil, &operationengine.Error{Code: "bad_request", Status: 400, Message: "JSON body must be an object"}
 	}
 	return values, nil
 }
@@ -3102,26 +3111,26 @@ func (api *API) decodeJSON(writer http.ResponseWriter, request *http.Request, ta
 	if err != nil {
 		var maximum *http.MaxBytesError
 		if errors.As(err, &maximum) {
-			return &operation.Error{Code: "body_too_large", Status: 413, Message: fmt.Sprintf("JSON body exceeds %d bytes", maximum.Limit)}
+			return &operationengine.Error{Code: "body_too_large", Status: 413, Message: fmt.Sprintf("JSON body exceeds %d bytes", maximum.Limit)}
 		}
-		return &operation.Error{Code: "bad_request", Status: 400, Message: "invalid JSON body", Cause: err}
+		return &operationengine.Error{Code: "bad_request", Status: 400, Message: "invalid JSON body", Cause: err}
 	}
 	if err := jsonlimit.Validate(encoded, jsonlimit.DefaultMaxDepth, jsonlimit.DefaultMaxTokens); err != nil {
 		if errors.Is(err, jsonlimit.ErrTooDeep) || errors.Is(err, jsonlimit.ErrTooManyTokens) {
-			return &operation.Error{Code: "body_too_complex", Status: 400, Message: "JSON body exceeds the structural complexity limit", Cause: err}
+			return &operationengine.Error{Code: "body_too_complex", Status: 400, Message: "JSON body exceeds the structural complexity limit", Cause: err}
 		}
 		if errors.Is(err, jsonlimit.ErrDuplicateKey) {
-			return &operation.Error{Code: "bad_request", Status: 400, Message: "JSON body contains a duplicate object key", Cause: err}
+			return &operationengine.Error{Code: "bad_request", Status: 400, Message: "JSON body contains a duplicate object key", Cause: err}
 		}
-		return &operation.Error{Code: "bad_request", Status: 400, Message: "invalid JSON body", Cause: err}
+		return &operationengine.Error{Code: "bad_request", Status: 400, Message: "invalid JSON body", Cause: err}
 	}
 	decoder := json.NewDecoder(bytes.NewReader(encoded))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(target); err != nil {
-		return &operation.Error{Code: "bad_request", Status: 400, Message: "invalid JSON body", Cause: err}
+		return &operationengine.Error{Code: "bad_request", Status: 400, Message: "invalid JSON body", Cause: err}
 	}
 	if err := decoder.Decode(&struct{}{}); err != io.EOF {
-		return &operation.Error{Code: "bad_request", Status: 400, Message: "JSON body contains trailing data"}
+		return &operationengine.Error{Code: "bad_request", Status: 400, Message: "JSON body contains trailing data"}
 	}
 	return nil
 }
@@ -3157,15 +3166,15 @@ type listQuery struct {
 func decodeListQuery(request *http.Request, collection schema.Collection) (listQuery, error) {
 	for key := range request.URL.Query() {
 		if key != "page" && key != "limit" && key != "depth" && key != "where" && key != "select" && key != "populate" && key != "sort" && key != "trash" && key != "locale" && key != "fallback-locale" && key != "fallbackLocale" {
-			return listQuery{}, &operation.Error{Code: "bad_query", Status: 400, Message: fmt.Sprintf("unknown query parameter %q", key)}
+			return listQuery{}, &operationengine.Error{Code: "bad_query", Status: 400, Message: fmt.Sprintf("unknown query parameter %q", key)}
 		}
 	}
 	trashOnly := request.URL.Query().Get("trash") == "true"
 	if encoded := request.URL.Query().Get("trash"); encoded != "" && encoded != "true" && encoded != "false" {
-		return listQuery{}, &operation.Error{Code: "bad_query", Status: 400, Message: "trash query parameter must be true or false"}
+		return listQuery{}, &operationengine.Error{Code: "bad_query", Status: 400, Message: "trash query parameter must be true or false"}
 	}
 	if trashOnly && !collection.Capabilities.Trash {
-		return listQuery{}, &operation.Error{Code: "bad_query", Status: 400, Message: "collection does not support trash"}
+		return listQuery{}, &operationengine.Error{Code: "bad_query", Status: 400, Message: "collection does not support trash"}
 	}
 	page, err := positiveInteger(request.URL.Query().Get("page"), 1, 1_000_000)
 	if err != nil {
@@ -3179,27 +3188,27 @@ func decodeListQuery(request *http.Request, collection schema.Collection) (listQ
 	if encoded := request.URL.Query().Get("where"); encoded != "" {
 		filter, err = decodeWhere([]byte(encoded), collection)
 		if err != nil {
-			return listQuery{}, &operation.Error{Code: "bad_query", Status: 400, Message: "invalid where query", Cause: err}
+			return listQuery{}, &operationengine.Error{Code: "bad_query", Status: 400, Message: "invalid where query", Cause: err}
 		}
 	}
 	sorts, err := decodeSort(request.URL.Query()["sort"], collection)
 	if err != nil {
-		return listQuery{}, &operation.Error{Code: "bad_query", Status: 400, Message: "invalid sort query", Cause: err}
+		return listQuery{}, &operationengine.Error{Code: "bad_query", Status: 400, Message: "invalid sort query", Cause: err}
 	}
 	selection, err := decodeSelection(request.URL.Query().Get("select"), collection)
 	if err != nil {
-		return listQuery{}, &operation.Error{Code: "bad_query", Status: 400, Message: "invalid select query", Cause: err}
+		return listQuery{}, &operationengine.Error{Code: "bad_query", Status: 400, Message: "invalid select query", Cause: err}
 	}
 	population, err := decodePopulation(request.URL.Query().Get("populate"), collection)
 	if err != nil {
-		return listQuery{}, &operation.Error{Code: "bad_query", Status: 400, Message: "invalid populate query", Cause: err}
+		return listQuery{}, &operationengine.Error{Code: "bad_query", Status: 400, Message: "invalid populate query", Cause: err}
 	}
 	depthPopulation, err := decodeDepthPopulation(request.URL.Query().Get("depth"), collection)
 	if err != nil {
-		return listQuery{}, &operation.Error{Code: "bad_query", Status: 400, Message: "invalid depth query", Cause: err}
+		return listQuery{}, &operationengine.Error{Code: "bad_query", Status: 400, Message: "invalid depth query", Cause: err}
 	}
 	if len(population) != 0 && len(depthPopulation) != 0 {
-		return listQuery{}, &operation.Error{Code: "bad_query", Status: 400, Message: "depth and populate cannot be combined"}
+		return listQuery{}, &operationengine.Error{Code: "bad_query", Status: 400, Message: "depth and populate cannot be combined"}
 	}
 	if len(depthPopulation) != 0 {
 		population = depthPopulation
@@ -3219,7 +3228,7 @@ type localeQuery struct {
 	allLocales      bool
 }
 
-func (options localeQuery) apply(request *operation.Request) {
+func (options localeQuery) apply(request *operationengine.Request) {
 	request.Locale = options.locale
 	request.FallbackLocales = append([]schema.LocaleCode(nil), options.fallbackLocales...)
 	request.DisableFallback = options.disableFallback
@@ -3239,13 +3248,13 @@ func decodeLocaleQuery(request *http.Request) (localeQuery, error) {
 	fallbackValue := request.URL.Query().Get("fallback-locale")
 	if alias := request.URL.Query().Get("fallbackLocale"); alias != "" {
 		if fallbackValue != "" && fallbackValue != alias {
-			return localeQuery{}, &operation.Error{Code: "bad_query", Status: 400, Message: "fallback-locale and fallbackLocale must not conflict"}
+			return localeQuery{}, &operationengine.Error{Code: "bad_query", Status: 400, Message: "fallback-locale and fallbackLocale must not conflict"}
 		}
 		fallbackValue = alias
 	}
 	fallbacks, disabled, err := localization.ParseFallbackQuery(fallbackValue)
 	if err != nil {
-		return localeQuery{}, &operation.Error{Code: "bad_query", Status: 400, Message: "invalid fallback locale query", Cause: err}
+		return localeQuery{}, &operationengine.Error{Code: "bad_query", Status: 400, Message: "invalid fallback locale query", Cause: err}
 	}
 	return localeQuery{locale: locale, fallbackLocales: fallbacks, disableFallback: disabled, allLocales: all}, nil
 }
@@ -3256,11 +3265,11 @@ func decodeDraftQuery(request *http.Request) (*bool, error) {
 		return nil, nil
 	}
 	if len(values) != 1 {
-		return nil, &operation.Error{Code: "bad_query", Status: 400, Message: "draft query must be specified once"}
+		return nil, &operationengine.Error{Code: "bad_query", Status: 400, Message: "draft query must be specified once"}
 	}
 	draft, err := strconv.ParseBool(values[0])
 	if err != nil {
-		return nil, &operation.Error{Code: "bad_query", Status: 400, Message: "invalid draft query", Cause: err}
+		return nil, &operationengine.Error{Code: "bad_query", Status: 400, Message: "invalid draft query", Cause: err}
 	}
 	return &draft, nil
 }
@@ -3486,25 +3495,25 @@ func positiveInteger(value string, fallback, maximum int) (int, error) {
 	}
 	parsed, err := strconv.Atoi(value)
 	if err != nil || parsed < 1 || parsed > maximum {
-		return 0, &operation.Error{Code: "bad_query", Status: 400, Message: fmt.Sprintf("pagination value must be between 1 and %d", maximum)}
+		return 0, &operationengine.Error{Code: "bad_query", Status: 400, Message: fmt.Sprintf("pagination value must be between 1 and %d", maximum)}
 	}
 	return parsed, nil
 }
 
 func (api *API) methodNotAllowed(writer http.ResponseWriter, requestID string, methods ...string) {
 	writer.Header().Set("Allow", strings.Join(methods, ", "))
-	api.writeError(writer, requestID, &operation.Error{Code: "method_not_allowed", Status: 405, Message: "HTTP method is not allowed"})
+	api.writeError(writer, requestID, &operationengine.Error{Code: "method_not_allowed", Status: 405, Message: "HTTP method is not allowed"})
 }
 
 func (api *API) writeError(writer http.ResponseWriter, requestID string, err error) {
 	status, code, message := http.StatusInternalServerError, "internal", "internal server error"
-	var issues []protocol.ValidationIssue
-	var operationError *operation.Error
+	issues := []protocol.ValidationIssue{}
+	var operationError *operationengine.Error
 	if errors.As(err, &operationError) {
 		status, code, message = operationError.Status, operationError.Code, operationError.Message
 		issues = make([]protocol.ValidationIssue, len(operationError.Issues))
 		for index, issue := range operationError.Issues {
-			issues[index] = protocol.ValidationIssue{Code: issue.Code, Path: issue.Path, Message: issue.Message}
+			issues[index] = protocol.ValidationIssue{Code: issue.Code, Path: issue.Path, Message: issue.Message, Target: issue.Target, FieldID: issue.FieldID, CollectionID: issue.CollectionID, GlobalID: issue.GlobalID, Locale: issue.Locale}
 		}
 	} else if errors.Is(err, context.DeadlineExceeded) {
 		status, code, message = http.StatusRequestTimeout, "request_timeout", "request deadline was exceeded"
@@ -3517,7 +3526,7 @@ func (api *API) writeError(writer http.ResponseWriter, requestID string, err err
 		if tracked, ok := writer.(*statusWriter); ok {
 			api.reportRequestErrorDetails(tracked.method, tracked.path, requestID, err, false, "")
 		}
-		code, message, issues = "internal", "internal server error", nil
+		code, message, issues = "internal", "internal server error", []protocol.ValidationIssue{}
 	}
 	wireCode := wireErrorCode(code, status)
 	if tracked, ok := writer.(*statusWriter); ok {
@@ -3532,11 +3541,11 @@ func wireErrorCode(code string, status int) protocol.ErrorCode {
 	switch code {
 	case "validation":
 		return protocol.ErrorValidation
-	case "access_denied":
+	case "access_denied", "field_access_denied":
 		return protocol.ErrorAccess
 	case "not_found":
 		return protocol.ErrorNotFound
-	case "conflict":
+	case "conflict", "block_recovery_required":
 		return protocol.ErrorConflict
 	case "delete_restricted":
 		return protocol.ErrorDeleteRestricted
@@ -3608,14 +3617,13 @@ func valueJSON(value store.Value) any {
 		text, _ := value.StringValue()
 		return text
 	case store.ValueObject:
-		object, _ := value.ObjectValue()
-		result := make(map[string]any, len(object))
-		for name, child := range object {
+		result := make(map[string]any, value.Len())
+		for name, child := range value.Entries() {
 			result[name] = valueJSON(child)
 		}
 		return result
 	case store.ValueDocument:
-		document, _ := value.DocumentValue()
+		document, _ := value.CopyDocument()
 		return documentJSON(document)
 	case store.ValueNumber:
 		number, _ := value.NumberValue()
@@ -3624,10 +3632,9 @@ func valueJSON(value store.Value) any {
 		boolean, _ := value.BooleanValue()
 		return boolean
 	case store.ValueList:
-		values, _ := value.Values()
-		result := make([]any, len(values))
-		for index, child := range values {
-			result[index] = valueJSON(child)
+		result := make([]any, 0, value.Len())
+		for child := range value.Elements() {
+			result = append(result, valueJSON(child))
 		}
 		return result
 	default:

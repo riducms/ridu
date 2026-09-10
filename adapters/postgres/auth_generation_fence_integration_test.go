@@ -12,6 +12,7 @@ import (
 	"github.com/riducms/ridu"
 	riducore "github.com/riducms/ridu/core"
 	"github.com/riducms/ridu/field"
+	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/store"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -56,7 +57,7 @@ func TestPostgresCredentialHashFencesLoginUpgradeAndAPIKeyCreation(t *testing.T)
 					}},
 				},
 			},
-			Fields: []field.Definition{field.Email("email", field.Required(), field.Unique())},
+			Fields: field.Fields{field.Email("email").Required().Unique()},
 		}},
 	}
 	backend, manifest := integrationBackend(t, ctx, config)
@@ -150,7 +151,7 @@ func TestPostgresCredentialHashFenceSurvivesHardDeleteAndSameIDRecreation(t *tes
 		Collections: []ridu.Collection{{
 			Slug: "users", Auth: true,
 			AuthConfig: ridu.AuthConfig{Password: ridu.PasswordPolicy{BcryptCost: bcrypt.MinCost}},
-			Fields:     []field.Definition{field.Email("email", field.Required(), field.Unique())},
+			Fields:     field.Fields{field.Email("email").Required().Unique()},
 		}},
 	}
 	backend, manifest := integrationBackend(t, ctx, baseConfig)
@@ -277,9 +278,9 @@ func TestPostgresAnonymousFirstAuthUserBootstrapHasOneWinner(t *testing.T) {
 		Collections: []ridu.Collection{{
 			Slug: "users", Auth: true,
 			AuthConfig: ridu.AuthConfig{Password: ridu.PasswordPolicy{BcryptCost: bcrypt.MinCost}},
-			Fields:     []field.Definition{field.Email("email", field.Required(), field.Unique())},
+			Fields:     field.Fields{field.Email("email").Required().Unique()},
 			Hooks: ridu.CollectionHooks{BeforeOperation: []ridu.Hook{func(hook ridu.HookContext) error {
-				if hook.Operation == ridu.OperationCreate && hook.Actor == nil {
+				if hook.Operation == operation.Create && hook.Actor == nil {
 					arrived <- struct{}{}
 					<-release
 				}

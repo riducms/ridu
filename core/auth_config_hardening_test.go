@@ -25,7 +25,7 @@ func TestAuthHardeningConfigurationIsCanonical(t *testing.T) {
 				Verify:        &ridu.VerifyEmailConfig{TokenDuration: 48 * time.Hour, Send: func(context.Context, ridu.VerifyEmailNotification) error { return nil }},
 				APIKeys:       true,
 			},
-			Fields: []field.Definition{field.Text("email", field.Required(), field.Unique())},
+			Fields: field.Fields{field.Text("email").Required().Unique()},
 		}},
 	})
 	if err != nil {
@@ -46,7 +46,7 @@ func TestAuthHardeningDefaultsAndInvalidPolicy(t *testing.T) {
 		Name: "Auth config", Admin: ridu.AdminConfig{User: "users"},
 		Collections: []ridu.Collection{{
 			Slug: "users", Auth: true,
-			Fields: []field.Definition{field.Text("email", field.Required(), field.Unique())},
+			Fields: field.Fields{field.Text("email").Required().Unique()},
 		}},
 	}
 	manifest, err := ridu.Resolve(base)

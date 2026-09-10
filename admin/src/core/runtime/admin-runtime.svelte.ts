@@ -1,5 +1,6 @@
+import { validateAdminConfig, type AdminConfig } from "@riducms/plugin/admin";
 import {
-	resolveAdminPluginExtensions,
+	resolveAdminExtensions,
 	type AdminDashboardPanel,
 	type AdminLoginComponent,
 	type AdminAccountComponent,
@@ -13,8 +14,7 @@ import {
 	type AdminDocumentView,
 	type AdminListCell,
 	type AdminPlugin,
-	type AdminPluginRoute,
-	type FieldPlugin,
+	type AdminRoute,
 } from "@riducms/plugin";
 import type { AuthSession, OperationCapabilities, SchemaManifest } from "@riducms/protocol";
 import { RiduError } from "@riducms/sdk";
@@ -48,7 +48,7 @@ class StalePreferenceSessionError extends Error {
 }
 
 export class AdminRuntime {
-	manifest = $state<SchemaManifest>();
+	manifest = $state.raw<SchemaManifest>();
 	manifestRevision = $state(0);
 	documentRevision = $state(0);
 	session = $state<AuthSession<AdminDocument>>();
@@ -150,7 +150,7 @@ export class AdminRuntime {
 		return true;
 	}
 
-	readonly pluginRoutes: readonly AdminPluginRoute[];
+	readonly pluginRoutes: readonly AdminRoute[];
 	readonly dashboardPanels: readonly AdminDashboardPanel[];
 	readonly loginComponents: readonly AdminLoginComponent[];
 	readonly accountComponents: readonly AdminAccountComponent[];
@@ -169,14 +169,12 @@ export class AdminRuntime {
 	constructor(
 		readonly client: AdminClient,
 		readonly plugins: readonly AdminPlugin[] = [],
-		fieldPlugins: readonly FieldPlugin[] = [],
 		languages?: readonly TranslationLanguage[],
-		readonly fields: FieldRegistry = createCoreFieldRegistry([
-			...plugins.flatMap((plugin) => plugin.fields),
-			...fieldPlugins,
-		])
+		readonly fields: FieldRegistry = createCoreFieldRegistry(plugins),
+		readonly editors: NonNullable<AdminConfig["fields"]> = {},
+		readonly application: AdminConfig = {}
 	) {
-		const extensions = resolveAdminPluginExtensions(plugins);
+		const extensions = resolveAdminExtensions(plugins, application);
 		this.pluginRoutes = extensions.routes;
 		this.dashboardPanels = extensions.dashboard;
 		this.loginComponents = extensions.login;
@@ -190,8 +188,14 @@ export class AdminRuntime {
 		this.listCells = extensions.listCells;
 		this.documentActions = extensions.documentActions;
 		this.documentViews = extensions.documentViews;
-		this.rowLabels = createRowLabelRegistry(extensions.rowLabels);
-		this.i18n = new AdminI18nController(client, () => this.session, languages, extensions.messages);
+		this.rowLabels = createRowLabelRegistry(extensions.rowLabels, application.rowLabels);
+		this.i18n = new AdminI18nController(
+			client,
+			() => this.session,
+			languages,
+			extensions.messages,
+			extensions.applicationMessages
+		);
 		this.#applyTheme();
 		if (typeof window !== "undefined") {
 			window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
@@ -435,6 +439,10 @@ export class AdminRuntime {
 		try {
 			const manifest = await this.client.schema();
 			if (request !== this.#manifestRequest) return;
+			validateAdminConfig(
+				{ ...this.application, plugins: this.plugins, fields: this.editors },
+				manifest
+			);
 			this.manifest = manifest;
 			this.manifestRevision += 1;
 			this.#configureContentLocale();
@@ -487,6 +495,10 @@ export class AdminRuntime {
 		try {
 			const manifest = await this.client.schema();
 			if (request !== this.#manifestRequest) return;
+			validateAdminConfig(
+				{ ...this.application, plugins: this.plugins, fields: this.editors },
+				manifest
+			);
 			this.manifest = manifest;
 			this.manifestRevision += 1;
 			this.#configureContentLocale();

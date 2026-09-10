@@ -325,7 +325,7 @@ func sqliteAuthMigrationManifest(t *testing.T) schema.Manifest {
 		Name: "auth identity migration", Admin: ridu.AdminConfig{User: "users"},
 		Collections: []ridu.Collection{{
 			Slug: "users", Auth: true,
-			Fields: []field.Definition{field.Email("email", field.Required(), field.Unique())},
+			Fields: field.Fields{field.Email("email").Required().Unique()},
 		}},
 	})
 	if err != nil {

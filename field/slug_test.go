@@ -8,7 +8,7 @@ import (
 )
 
 func TestSlugUsesRequiredUniqueIndexedTextStorage(t *testing.T) {
-	definition := field.Slug("slug", "seo.title", field.Label("URL slug"))
+	definition := field.Snapshot(field.Slug("slug", "seo.title").Label("URL slug"))
 	source, configured := definition.SlugSource()
 	if definition.Kind() != field.KindText || source != "seo.title" || !configured {
 		t.Fatalf("slug identity = %q %q %t", definition.Kind(), source, configured)
@@ -22,7 +22,7 @@ func TestSlugUsesRequiredUniqueIndexedTextStorage(t *testing.T) {
 }
 
 func TestSlugRejectsEmptySourceLocalizationAndDefaults(t *testing.T) {
-	definition := field.Slug("slug", " ", field.Localized(), field.Default("fallback"))
+	definition := field.Snapshot(field.Slug("slug", " ").Localized().Default("fallback"))
 	var codes []string
 	for _, issue := range definition.Issues() {
 		codes = append(codes, issue.Code)

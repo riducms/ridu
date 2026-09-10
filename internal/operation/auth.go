@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
 )
@@ -18,7 +19,7 @@ func (engine *Engine) ForceUnlockAuth(ctx context.Context, collectionName, docum
 	if !exists || collection.Schema.Auth == nil || collection.Schema.Auth.MaxLoginAttempts == 0 {
 		return &Error{Code: "unknown_auth_collection", Status: 404, Message: fmt.Sprintf("auth collection %q with lockout was not found", collectionName)}
 	}
-	if collection.Access[Update] == nil {
+	if collection.Access[operation.Update] == nil {
 		return &Error{Code: "access_denied", Status: 403, Message: "operation is not permitted"}
 	}
 	state, ownsTransaction, transactionError := engine.transaction(ctx, transactionWrite)
@@ -36,7 +37,7 @@ func (engine *Engine) ForceUnlockAuth(ctx context.Context, collectionName, docum
 		}()
 	}
 	operationContext := Context{
-		Context: transactionContext, Operation: Update, Collection: collection.Schema, ID: documentID,
+		Context: transactionContext, Operation: operation.Update, Collection: collection.Schema, ID: documentID,
 		Actor: cloneDocumentPointer(actor), ActorCollection: actorCollection, Data: store.Values{},
 	}
 	decision, accessError := authorize(collection, operationContext)

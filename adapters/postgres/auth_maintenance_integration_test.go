@@ -26,7 +26,7 @@ func TestPostgresExpiredAuthMaintenanceIsBoundedAndConcurrent(t *testing.T) {
 				Password: ridu.PasswordPolicy{BcryptCost: bcrypt.MinCost},
 				APIKeys:  true,
 			},
-			Fields: []field.Definition{field.Email("email", field.Required(), field.Unique())},
+			Fields: field.Fields{field.Email("email").Required().Unique()},
 		}},
 	}
 	backend, manifest := integrationBackend(t, ctx, config)

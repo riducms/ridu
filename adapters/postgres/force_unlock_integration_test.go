@@ -31,10 +31,7 @@ func TestPostgresForceUnlockAuthorizationAndCredentialResetAreAtomic(t *testing.
 				Password:         ridu.PasswordPolicy{BcryptCost: bcrypt.MinCost},
 				MaxLoginAttempts: 1, LockDuration: time.Hour,
 			},
-			Fields: []field.Definition{
-				field.Email("email", field.Required(), field.Unique()),
-				field.Checkbox("mayUnlock", field.Required()),
-			},
+			Fields: field.Fields{field.Email("email").Required().Unique(), field.Checkbox("mayUnlock").Required()},
 			Access: ridu.CollectionAccess{Update: func(access ridu.AccessContext) (ridu.AccessDecision, error) {
 				if access.Actor == nil {
 					return ridu.Deny(), nil

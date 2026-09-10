@@ -1,29 +1,24 @@
 <script lang="ts">
 	import type { ValidationIssue } from "@riducms/protocol";
-	import CircleAlertIcon from "~icons/lucide/circle-alert";
+	import { FieldFeedback } from "@riducms/ui";
+	import type { Snippet } from "svelte";
 
 	let {
-		id,
+		controlID,
 		issues = [],
 		description,
 		class: className,
+		children,
 	}: {
-		id: string;
-		issues?: readonly ValidationIssue[];
-		description?: string;
-		class?: string;
+		controlID: string;
+		issues?: readonly ValidationIssue[] | undefined;
+		description?: string | undefined;
+		class?: string | undefined;
+		children: Snippet;
 	} = $props();
+	const errors = $derived(issues.map((issue) => issue.message));
 </script>
 
-{#if issues.length > 0}
-	<div {id} class={["flex items-start gap-1.5", className]} role="alert" aria-atomic="true">
-		<CircleAlertIcon class="mt-0.5 size-3.5 shrink-0 text-destructive" aria-hidden="true" />
-		<ul class="grid gap-0.5">
-			{#each issues as issue (`${issue.path}:${issue.code}:${issue.message}`)}
-				<li class="ridu-field-error">{issue.message}</li>
-			{/each}
-		</ul>
-	</div>
-{:else if description !== undefined}
-	<p {id} class={["ridu-field-help", className]}>{description}</p>
-{/if}
+<FieldFeedback {controlID} {description} {errors} class={className}>
+	{@render children()}
+</FieldFeedback>

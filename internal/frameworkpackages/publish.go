@@ -43,23 +43,74 @@ var packages = []packageDefinition{
 // dependency graph while keeping dependency declarations release-shaped and
 // repository-only framework plumbing out of the user's project tree.
 func Publish(frameworkRoot, projectRoot, version string) error {
+	if strings.TrimPrefix(strings.TrimSpace(version), "v") == "" {
+		return fmt.Errorf("frontend package version must not be empty")
+	}
+	snapshot, err := Prepare(frameworkRoot)
+	if err != nil {
+		return err
+	}
+	defer snapshot.Close()
+	return snapshot.Publish(projectRoot, version)
+}
+
+// Snapshot owns a private copy of freshly built runtime packages and their source
+// companions. It can populate several independent applications without rebuilding
+// or observing subsequent changes to the checkout. Call Close after the last copy.
+type Snapshot struct{ root string }
+
+// Prepare always builds current runtime sources; existing dist directories are
+// never treated as freshness evidence. It then captures the complete package graph.
+func Prepare(frameworkRoot string) (*Snapshot, error) {
+	if err := buildRuntimePackages(frameworkRoot); err != nil {
+		return nil, err
+	}
+	return captureBuiltPackages(frameworkRoot)
+}
+
+func captureBuiltPackages(frameworkRoot string) (*Snapshot, error) {
+	root, err := os.MkdirTemp("", "ridu-framework-packages-")
+	if err != nil {
+		return nil, err
+	}
+	if err := copyBuiltPackages(frameworkRoot, root); err != nil {
+		_ = os.RemoveAll(root)
+		return nil, err
+	}
+	return &Snapshot{root: root}, nil
+}
+
+// Close removes the private snapshot. Published applications own independent copies.
+func (snapshot *Snapshot) Close() error { return os.RemoveAll(snapshot.root) }
+
+// Publish replaces only the application's framework-owned package workspace.
+func (snapshot *Snapshot) Publish(projectRoot, version string) error {
 	npmVersion := strings.TrimPrefix(strings.TrimSpace(version), "v")
 	if npmVersion == "" {
 		return fmt.Errorf("frontend package version must not be empty")
 	}
-	if err := buildRuntimePackages(frameworkRoot); err != nil {
-		return err
+	if _, err := os.Stat(snapshot.root); err != nil {
+		return fmt.Errorf("read frontend package snapshot: %w", err)
 	}
 	packageRoot := filepath.Join(projectRoot, ".ridu", "packages")
-	// This ignored directory is entirely framework-owned. Replace it as a unit
-	// so package and directory renames cannot leave stale workspaces that Bun
-	// may continue to resolve alongside the current package graph.
 	if err := os.RemoveAll(packageRoot); err != nil {
 		return fmt.Errorf("replace framework package workspace: %w", err)
 	}
+	if err := copyDirectory(snapshot.root, packageRoot); err != nil {
+		return err
+	}
+	for _, definition := range packages {
+		if err := rewritePackageManifest(filepath.Join(packageRoot, definition.target, "package.json"), npmVersion, definition.notices != ""); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyBuiltPackages(frameworkRoot, snapshotRoot string) error {
 	for _, definition := range packages {
 		source := filepath.Join(frameworkRoot, filepath.FromSlash(definition.source))
-		target := filepath.Join(packageRoot, definition.target)
+		target := filepath.Join(snapshotRoot, definition.target)
 		if err := copyPackage(source, target, definition.build, definition.omitSourceTSConfig); err != nil {
 			return fmt.Errorf("publish %s: %w", definition.name, err)
 		}
@@ -70,9 +121,6 @@ func Publish(frameworkRoot, projectRoot, version string) error {
 			if err := copyFile(filepath.Join(frameworkRoot, definition.notices), filepath.Join(target, "THIRD_PARTY_NOTICES.md"), 0o644); err != nil {
 				return fmt.Errorf("publish %s third-party notices: %w", definition.name, err)
 			}
-		}
-		if err := rewritePackageManifest(filepath.Join(target, "package.json"), npmVersion, definition.notices != ""); err != nil {
-			return fmt.Errorf("publish %s: %w", definition.name, err)
 		}
 	}
 	return nil

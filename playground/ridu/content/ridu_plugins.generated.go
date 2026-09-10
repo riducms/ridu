@@ -4,13 +4,11 @@ package content
 
 import (
 	"github.com/riducms/ridu"
-	plugin1 "github.com/riducms/ridu/plugins/graphql"
 	plugin0 "github.com/riducms/ridu/plugins/richtext"
 )
 
 func installedPlugins() []ridu.Plugin {
 	return []ridu.Plugin{
 		plugin0.New(),
-		plugin1.New(),
 	}
 }

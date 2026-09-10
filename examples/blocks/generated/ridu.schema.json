@@ -1,0 +1,1858 @@
+{
+  "version": 1,
+  "application": {
+    "name": "Blocks reference",
+    "localization": {
+      "locales": [
+        {
+          "code": "en",
+          "label": "English"
+        },
+        {
+          "code": "fr",
+          "label": "French"
+        }
+      ],
+      "defaultLocale": "en",
+      "fallback": true
+    }
+  },
+  "collections": [
+    {
+      "id": "assets",
+      "slug": "assets",
+      "labels": {
+        "singular": "Asset",
+        "plural": "Assets"
+      },
+      "admin": {},
+      "capabilities": {
+        "auth": false,
+        "upload": false,
+        "versions": false,
+        "trash": false
+      },
+      "fields": [
+        {
+          "id": "assets-title",
+          "name": "title",
+          "path": "title",
+          "type": "text",
+          "category": "scalar",
+          "required": true,
+          "unique": false,
+          "admin": {
+            "label": "Title"
+          },
+          "text": {}
+        },
+        {
+          "id": "assets-url",
+          "name": "url",
+          "path": "url",
+          "type": "text",
+          "category": "scalar",
+          "required": true,
+          "unique": false,
+          "admin": {
+            "label": "Url"
+          },
+          "text": {}
+        }
+      ]
+    },
+    {
+      "id": "pages",
+      "slug": "pages",
+      "labels": {
+        "singular": "Page",
+        "plural": "Pages"
+      },
+      "admin": {},
+      "capabilities": {
+        "auth": false,
+        "upload": false,
+        "versions": true,
+        "trash": false
+      },
+      "versionSettings": {
+        "drafts": true,
+        "maxPerDocument": 100,
+        "autosaveIntervalSeconds": 30
+      },
+      "fields": [
+        {
+          "id": "pages-title",
+          "name": "title",
+          "path": "title",
+          "type": "text",
+          "category": "scalar",
+          "required": true,
+          "unique": false,
+          "admin": {
+            "label": "Title"
+          },
+          "text": {}
+        },
+        {
+          "id": "pages-layout",
+          "name": "layout",
+          "path": "layout",
+          "type": "blocks",
+          "category": "nested",
+          "required": true,
+          "unique": false,
+          "admin": {
+            "label": "Layout"
+          },
+          "blocks": {
+            "minRows": 1,
+            "maxRows": 12,
+            "types": [
+              {
+                "typeName": "Hero",
+                "admin": {
+                  "rowLabel": "heading"
+                },
+                "slug": "hero",
+                "labels": {
+                  "singular": "Hero",
+                  "plural": "Heroes"
+                },
+                "fields": [
+                  {
+                    "id": "pages-layout-hero-heading",
+                    "name": "heading",
+                    "path": "layout.hero.heading",
+                    "type": "text",
+                    "category": "scalar",
+                    "required": true,
+                    "unique": false,
+                    "localized": true,
+                    "admin": {
+                      "label": "Heading"
+                    },
+                    "text": {}
+                  },
+                  {
+                    "id": "pages-layout-hero-appearance",
+                    "name": "appearance",
+                    "path": "layout.hero.appearance",
+                    "type": "group",
+                    "category": "nested",
+                    "required": false,
+                    "unique": false,
+                    "admin": {
+                      "label": "Appearance"
+                    },
+                    "nested": {
+                      "fields": [
+                        {
+                          "id": "pages-layout-hero-appearance-tone",
+                          "name": "tone",
+                          "path": "layout.hero.appearance.tone",
+                          "type": "select",
+                          "category": "scalar",
+                          "required": false,
+                          "unique": false,
+                          "admin": {
+                            "label": "Tone"
+                          },
+                          "select": {
+                            "options": [
+                              {
+                                "value": "light",
+                                "label": "Light"
+                              },
+                              {
+                                "value": "dark",
+                                "label": "Dark"
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ]
+              },
+              {
+                "typeName": "Content",
+                "admin": {
+                  "rowLabel": "title"
+                },
+                "slug": "content",
+                "labels": {
+                  "singular": "Content",
+                  "plural": "Contents"
+                },
+                "fields": [
+                  {
+                    "id": "pages-layout-content-title",
+                    "name": "title",
+                    "path": "layout.content.title",
+                    "type": "text",
+                    "category": "scalar",
+                    "required": false,
+                    "unique": false,
+                    "localized": true,
+                    "admin": {
+                      "label": "Title"
+                    },
+                    "text": {}
+                  },
+                  {
+                    "id": "pages-layout-content-body",
+                    "name": "body",
+                    "path": "layout.content.body",
+                    "type": "plugin",
+                    "category": "plugin",
+                    "required": false,
+                    "unique": false,
+                    "admin": {
+                      "label": "Body"
+                    },
+                    "plugin": {
+                      "embeddedTrees": [
+                        {
+                          "version": 1,
+                          "key": "blocks",
+                          "root": [
+                            "root"
+                          ],
+                          "children": "children",
+                          "tag": "type",
+                          "cases": [
+                            {
+                              "tagValue": "block",
+                              "payload": "fields",
+                              "discriminator": "blockType",
+                              "identity": "_key"
+                            }
+                          ]
+                        }
+                      ],
+                      "key": "richtext",
+                      "config": {
+                        "features": [
+                          "code",
+                          "horizontal-rule",
+                          "links",
+                          "lists",
+                          "relationships",
+                          "uploads"
+                        ]
+                      },
+                      "referenceKeys": [
+                        "relationTo"
+                      ]
+                    }
+                  },
+                  {
+                    "id": "pages-layout-content-links",
+                    "name": "links",
+                    "path": "layout.content.links",
+                    "type": "array",
+                    "category": "nested",
+                    "required": false,
+                    "unique": false,
+                    "admin": {
+                      "label": "Links"
+                    },
+                    "nested": {
+                      "fields": [
+                        {
+                          "id": "pages-layout-content-links-label",
+                          "name": "label",
+                          "path": "layout.content.links.label",
+                          "type": "text",
+                          "category": "scalar",
+                          "required": true,
+                          "unique": false,
+                          "admin": {
+                            "label": "Label"
+                          },
+                          "text": {}
+                        },
+                        {
+                          "id": "pages-layout-content-links-href",
+                          "name": "href",
+                          "path": "layout.content.links.href",
+                          "type": "text",
+                          "category": "scalar",
+                          "required": true,
+                          "unique": false,
+                          "admin": {
+                            "label": "Href"
+                          },
+                          "text": {}
+                        }
+                      ]
+                    }
+                  }
+                ]
+              },
+              {
+                "typeName": "Media",
+                "admin": {
+                  "rowLabel": "caption"
+                },
+                "slug": "media",
+                "labels": {
+                  "singular": "Media",
+                  "plural": "Media"
+                },
+                "fields": [
+                  {
+                    "id": "pages-layout-media-asset",
+                    "name": "asset",
+                    "path": "layout.media.asset",
+                    "type": "relationship",
+                    "category": "relationship",
+                    "required": true,
+                    "unique": false,
+                    "admin": {
+                      "label": "Asset"
+                    },
+                    "relationship": {
+                      "collectionId": "assets",
+                      "collectionSlug": "assets",
+                      "onDelete": "restrict"
+                    }
+                  },
+                  {
+                    "id": "pages-layout-media-caption",
+                    "name": "caption",
+                    "path": "layout.media.caption",
+                    "type": "text",
+                    "category": "scalar",
+                    "required": false,
+                    "unique": false,
+                    "localized": true,
+                    "admin": {
+                      "label": "Caption"
+                    },
+                    "text": {}
+                  }
+                ]
+              },
+              {
+                "typeName": "CTA",
+                "admin": {
+                  "rowLabel": "label"
+                },
+                "slug": "cta",
+                "labels": {
+                  "singular": "CTA",
+                  "plural": "Ctas"
+                },
+                "fields": [
+                  {
+                    "id": "pages-layout-cta-label",
+                    "name": "label",
+                    "path": "layout.cta.label",
+                    "type": "text",
+                    "category": "scalar",
+                    "required": true,
+                    "unique": false,
+                    "localized": true,
+                    "admin": {
+                      "label": "Label"
+                    },
+                    "text": {}
+                  },
+                  {
+                    "id": "pages-layout-cta-destination",
+                    "name": "destination",
+                    "path": "layout.cta.destination",
+                    "type": "relationship",
+                    "category": "relationship",
+                    "required": false,
+                    "unique": false,
+                    "admin": {
+                      "label": "Destination"
+                    },
+                    "relationship": {
+                      "collectionId": "pages",
+                      "collectionSlug": "pages",
+                      "onDelete": "nullify"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "campaigns",
+      "slug": "campaigns",
+      "labels": {
+        "singular": "Campaign",
+        "plural": "Campaigns"
+      },
+      "admin": {},
+      "capabilities": {
+        "auth": false,
+        "upload": false,
+        "versions": false,
+        "trash": false
+      },
+      "fields": [
+        {
+          "id": "campaigns-title",
+          "name": "title",
+          "path": "title",
+          "type": "text",
+          "category": "scalar",
+          "required": false,
+          "unique": false,
+          "admin": {
+            "label": "Title"
+          },
+          "text": {}
+        },
+        {
+          "id": "campaigns-layout",
+          "name": "layout",
+          "path": "layout",
+          "type": "blocks",
+          "category": "nested",
+          "required": false,
+          "unique": false,
+          "admin": {
+            "label": "Layout"
+          },
+          "blocks": {
+            "types": [
+              {
+                "typeName": "Hero",
+                "admin": {
+                  "rowLabel": "heading"
+                },
+                "slug": "hero",
+                "labels": {
+                  "singular": "Hero",
+                  "plural": "Heroes"
+                },
+                "fields": [
+                  {
+                    "id": "campaigns-layout-hero-heading",
+                    "name": "heading",
+                    "path": "layout.hero.heading",
+                    "type": "text",
+                    "category": "scalar",
+                    "required": true,
+                    "unique": false,
+                    "localized": true,
+                    "admin": {
+                      "label": "Heading"
+                    },
+                    "text": {}
+                  },
+                  {
+                    "id": "campaigns-layout-hero-appearance",
+                    "name": "appearance",
+                    "path": "layout.hero.appearance",
+                    "type": "group",
+                    "category": "nested",
+                    "required": false,
+                    "unique": false,
+                    "admin": {
+                      "label": "Appearance"
+                    },
+                    "nested": {
+                      "fields": [
+                        {
+                          "id": "campaigns-layout-hero-appearance-tone",
+                          "name": "tone",
+                          "path": "layout.hero.appearance.tone",
+                          "type": "select",
+                          "category": "scalar",
+                          "required": false,
+                          "unique": false,
+                          "admin": {
+                            "label": "Tone"
+                          },
+                          "select": {
+                            "options": [
+                              {
+                                "value": "light",
+                                "label": "Light"
+                              },
+                              {
+                                "value": "dark",
+                                "label": "Dark"
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ]
+              },
+              {
+                "typeName": "CTA",
+                "admin": {
+                  "rowLabel": "label"
+                },
+                "slug": "cta",
+                "labels": {
+                  "singular": "CTA",
+                  "plural": "Ctas"
+                },
+                "fields": [
+                  {
+                    "id": "campaigns-layout-cta-label",
+                    "name": "label",
+                    "path": "layout.cta.label",
+                    "type": "text",
+                    "category": "scalar",
+                    "required": true,
+                    "unique": false,
+                    "localized": true,
+                    "admin": {
+                      "label": "Label"
+                    },
+                    "text": {}
+                  },
+                  {
+                    "id": "campaigns-layout-cta-destination",
+                    "name": "destination",
+                    "path": "layout.cta.destination",
+                    "type": "relationship",
+                    "category": "relationship",
+                    "required": false,
+                    "unique": false,
+                    "admin": {
+                      "label": "Destination"
+                    },
+                    "relationship": {
+                      "collectionId": "pages",
+                      "collectionSlug": "pages",
+                      "onDelete": "nullify"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "articles",
+      "slug": "articles",
+      "labels": {
+        "singular": "Article",
+        "plural": "Articles"
+      },
+      "admin": {},
+      "capabilities": {
+        "auth": false,
+        "upload": false,
+        "versions": true,
+        "trash": false
+      },
+      "versionSettings": {
+        "drafts": true,
+        "maxPerDocument": 100,
+        "autosaveIntervalSeconds": 30
+      },
+      "fields": [
+        {
+          "id": "articles-title",
+          "name": "title",
+          "path": "title",
+          "type": "text",
+          "category": "scalar",
+          "required": true,
+          "unique": false,
+          "admin": {
+            "label": "Title"
+          },
+          "text": {}
+        },
+        {
+          "id": "articles-body",
+          "name": "body",
+          "path": "body",
+          "type": "plugin",
+          "category": "plugin",
+          "required": false,
+          "unique": false,
+          "admin": {
+            "label": "Body"
+          },
+          "plugin": {
+            "embeddedTrees": [
+              {
+                "version": 1,
+                "key": "blocks",
+                "root": [
+                  "root"
+                ],
+                "children": "children",
+                "tag": "type",
+                "cases": [
+                  {
+                    "tagValue": "block",
+                    "payload": "fields",
+                    "discriminator": "blockType",
+                    "identity": "_key",
+                    "types": [
+                      {
+                        "typeName": "Callout",
+                        "admin": {
+                          "rowLabel": "title"
+                        },
+                        "slug": "callout",
+                        "labels": {
+                          "singular": "Callout",
+                          "plural": "Callouts"
+                        },
+                        "fields": [
+                          {
+                            "id": "articles-body-blocks-block-callout-title",
+                            "name": "title",
+                            "path": "body.blocks.block.callout.title",
+                            "type": "text",
+                            "category": "scalar",
+                            "required": true,
+                            "unique": false,
+                            "admin": {
+                              "label": "Title"
+                            },
+                            "text": {}
+                          },
+                          {
+                            "id": "articles-body-blocks-block-callout-message",
+                            "name": "message",
+                            "path": "body.blocks.block.callout.message",
+                            "type": "textarea",
+                            "category": "scalar",
+                            "required": false,
+                            "unique": false,
+                            "localized": true,
+                            "admin": {
+                              "label": "Message"
+                            },
+                            "textarea": {}
+                          },
+                          {
+                            "id": "articles-body-blocks-block-callout-detail",
+                            "name": "detail",
+                            "path": "body.blocks.block.callout.detail",
+                            "type": "plugin",
+                            "category": "plugin",
+                            "required": false,
+                            "unique": false,
+                            "admin": {
+                              "label": "Detail"
+                            },
+                            "plugin": {
+                              "embeddedTrees": [
+                                {
+                                  "version": 1,
+                                  "key": "blocks",
+                                  "root": [
+                                    "root"
+                                  ],
+                                  "children": "children",
+                                  "tag": "type",
+                                  "cases": [
+                                    {
+                                      "tagValue": "block",
+                                      "payload": "fields",
+                                      "discriminator": "blockType",
+                                      "identity": "_key",
+                                      "types": [
+                                        {
+                                          "typeName": "CTA",
+                                          "admin": {
+                                            "rowLabel": "label"
+                                          },
+                                          "slug": "cta",
+                                          "labels": {
+                                            "singular": "CTA",
+                                            "plural": "Ctas"
+                                          },
+                                          "fields": [
+                                            {
+                                              "id": "articles-body-blocks-block-callout-detail-blocks-block-cta-label",
+                                              "name": "label",
+                                              "path": "body.blocks.block.callout.detail.blocks.block.cta.label",
+                                              "type": "text",
+                                              "category": "scalar",
+                                              "required": true,
+                                              "unique": false,
+                                              "localized": true,
+                                              "admin": {
+                                                "label": "Label"
+                                              },
+                                              "text": {}
+                                            },
+                                            {
+                                              "id": "articles-body-blocks-block-callout-detail-blocks-block-cta-destination",
+                                              "name": "destination",
+                                              "path": "body.blocks.block.callout.detail.blocks.block.cta.destination",
+                                              "type": "relationship",
+                                              "category": "relationship",
+                                              "required": false,
+                                              "unique": false,
+                                              "admin": {
+                                                "label": "Destination"
+                                              },
+                                              "relationship": {
+                                                "collectionId": "pages",
+                                                "collectionSlug": "pages",
+                                                "onDelete": "nullify"
+                                              }
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ],
+                              "key": "richtext",
+                              "config": {
+                                "features": [
+                                  "blocks",
+                                  "code",
+                                  "horizontal-rule",
+                                  "links",
+                                  "lists",
+                                  "relationships",
+                                  "uploads"
+                                ]
+                              },
+                              "referenceKeys": [
+                                "relationTo"
+                              ]
+                            }
+                          },
+                          {
+                            "id": "articles-body-blocks-block-callout-aside",
+                            "name": "aside",
+                            "path": "body.blocks.block.callout.aside",
+                            "type": "plugin",
+                            "category": "plugin",
+                            "required": false,
+                            "unique": false,
+                            "admin": {
+                              "label": "Aside"
+                            },
+                            "plugin": {
+                              "embeddedTrees": [
+                                {
+                                  "version": 1,
+                                  "key": "blocks",
+                                  "root": [
+                                    "root"
+                                  ],
+                                  "children": "children",
+                                  "tag": "type",
+                                  "cases": [
+                                    {
+                                      "tagValue": "block",
+                                      "payload": "fields",
+                                      "discriminator": "blockType",
+                                      "identity": "_key"
+                                    }
+                                  ]
+                                }
+                              ],
+                              "key": "richtext",
+                              "config": {
+                                "features": [
+                                  "code",
+                                  "horizontal-rule",
+                                  "links",
+                                  "lists",
+                                  "relationships",
+                                  "uploads"
+                                ]
+                              },
+                              "referenceKeys": [
+                                "relationTo"
+                              ]
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "typeName": "Media",
+                        "admin": {
+                          "rowLabel": "caption"
+                        },
+                        "slug": "media",
+                        "labels": {
+                          "singular": "Media",
+                          "plural": "Media"
+                        },
+                        "fields": [
+                          {
+                            "id": "articles-body-blocks-block-media-asset",
+                            "name": "asset",
+                            "path": "body.blocks.block.media.asset",
+                            "type": "relationship",
+                            "category": "relationship",
+                            "required": true,
+                            "unique": false,
+                            "admin": {
+                              "label": "Asset"
+                            },
+                            "relationship": {
+                              "collectionId": "assets",
+                              "collectionSlug": "assets",
+                              "onDelete": "restrict"
+                            }
+                          },
+                          {
+                            "id": "articles-body-blocks-block-media-caption",
+                            "name": "caption",
+                            "path": "body.blocks.block.media.caption",
+                            "type": "text",
+                            "category": "scalar",
+                            "required": false,
+                            "unique": false,
+                            "localized": true,
+                            "admin": {
+                              "label": "Caption"
+                            },
+                            "text": {}
+                          }
+                        ]
+                      },
+                      {
+                        "typeName": "CTA",
+                        "admin": {
+                          "rowLabel": "label"
+                        },
+                        "slug": "cta",
+                        "labels": {
+                          "singular": "CTA",
+                          "plural": "Ctas"
+                        },
+                        "fields": [
+                          {
+                            "id": "articles-body-blocks-block-cta-label",
+                            "name": "label",
+                            "path": "body.blocks.block.cta.label",
+                            "type": "text",
+                            "category": "scalar",
+                            "required": true,
+                            "unique": false,
+                            "localized": true,
+                            "admin": {
+                              "label": "Label"
+                            },
+                            "text": {}
+                          },
+                          {
+                            "id": "articles-body-blocks-block-cta-destination",
+                            "name": "destination",
+                            "path": "body.blocks.block.cta.destination",
+                            "type": "relationship",
+                            "category": "relationship",
+                            "required": false,
+                            "unique": false,
+                            "admin": {
+                              "label": "Destination"
+                            },
+                            "relationship": {
+                              "collectionId": "pages",
+                              "collectionSlug": "pages",
+                              "onDelete": "nullify"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "key": "richtext",
+            "config": {
+              "features": [
+                "blocks",
+                "code",
+                "horizontal-rule",
+                "links",
+                "lists",
+                "relationships",
+                "uploads"
+              ]
+            },
+            "referenceKeys": [
+              "relationTo"
+            ]
+          }
+        },
+        {
+          "id": "articles-localized-body",
+          "name": "localizedBody",
+          "path": "localizedBody",
+          "type": "plugin",
+          "category": "plugin",
+          "required": false,
+          "unique": false,
+          "localized": true,
+          "admin": {
+            "label": "Localized Body"
+          },
+          "plugin": {
+            "embeddedTrees": [
+              {
+                "version": 1,
+                "key": "blocks",
+                "root": [
+                  "root"
+                ],
+                "children": "children",
+                "tag": "type",
+                "cases": [
+                  {
+                    "tagValue": "block",
+                    "payload": "fields",
+                    "discriminator": "blockType",
+                    "identity": "_key",
+                    "types": [
+                      {
+                        "typeName": "Callout",
+                        "admin": {
+                          "rowLabel": "title"
+                        },
+                        "slug": "callout",
+                        "labels": {
+                          "singular": "Callout",
+                          "plural": "Callouts"
+                        },
+                        "fields": [
+                          {
+                            "id": "articles-localized-body-blocks-block-callout-title",
+                            "name": "title",
+                            "path": "localizedBody.blocks.block.callout.title",
+                            "type": "text",
+                            "category": "scalar",
+                            "required": true,
+                            "unique": false,
+                            "admin": {
+                              "label": "Title"
+                            },
+                            "text": {}
+                          },
+                          {
+                            "id": "articles-localized-body-blocks-block-callout-message",
+                            "name": "message",
+                            "path": "localizedBody.blocks.block.callout.message",
+                            "type": "textarea",
+                            "category": "scalar",
+                            "required": false,
+                            "unique": false,
+                            "admin": {
+                              "label": "Message"
+                            },
+                            "textarea": {}
+                          },
+                          {
+                            "id": "articles-localized-body-blocks-block-callout-detail",
+                            "name": "detail",
+                            "path": "localizedBody.blocks.block.callout.detail",
+                            "type": "plugin",
+                            "category": "plugin",
+                            "required": false,
+                            "unique": false,
+                            "admin": {
+                              "label": "Detail"
+                            },
+                            "plugin": {
+                              "embeddedTrees": [
+                                {
+                                  "version": 1,
+                                  "key": "blocks",
+                                  "root": [
+                                    "root"
+                                  ],
+                                  "children": "children",
+                                  "tag": "type",
+                                  "cases": [
+                                    {
+                                      "tagValue": "block",
+                                      "payload": "fields",
+                                      "discriminator": "blockType",
+                                      "identity": "_key",
+                                      "types": [
+                                        {
+                                          "typeName": "CTA",
+                                          "admin": {
+                                            "rowLabel": "label"
+                                          },
+                                          "slug": "cta",
+                                          "labels": {
+                                            "singular": "CTA",
+                                            "plural": "Ctas"
+                                          },
+                                          "fields": [
+                                            {
+                                              "id": "articles-localized-body-blocks-block-callout-detail-blocks-block-cta-label",
+                                              "name": "label",
+                                              "path": "localizedBody.blocks.block.callout.detail.blocks.block.cta.label",
+                                              "type": "text",
+                                              "category": "scalar",
+                                              "required": true,
+                                              "unique": false,
+                                              "admin": {
+                                                "label": "Label"
+                                              },
+                                              "text": {}
+                                            },
+                                            {
+                                              "id": "articles-localized-body-blocks-block-callout-detail-blocks-block-cta-destination",
+                                              "name": "destination",
+                                              "path": "localizedBody.blocks.block.callout.detail.blocks.block.cta.destination",
+                                              "type": "relationship",
+                                              "category": "relationship",
+                                              "required": false,
+                                              "unique": false,
+                                              "admin": {
+                                                "label": "Destination"
+                                              },
+                                              "relationship": {
+                                                "collectionId": "pages",
+                                                "collectionSlug": "pages",
+                                                "onDelete": "nullify"
+                                              }
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ],
+                              "key": "richtext",
+                              "config": {
+                                "features": [
+                                  "blocks",
+                                  "code",
+                                  "horizontal-rule",
+                                  "links",
+                                  "lists",
+                                  "relationships",
+                                  "uploads"
+                                ]
+                              },
+                              "referenceKeys": [
+                                "relationTo"
+                              ]
+                            }
+                          },
+                          {
+                            "id": "articles-localized-body-blocks-block-callout-aside",
+                            "name": "aside",
+                            "path": "localizedBody.blocks.block.callout.aside",
+                            "type": "plugin",
+                            "category": "plugin",
+                            "required": false,
+                            "unique": false,
+                            "admin": {
+                              "label": "Aside"
+                            },
+                            "plugin": {
+                              "embeddedTrees": [
+                                {
+                                  "version": 1,
+                                  "key": "blocks",
+                                  "root": [
+                                    "root"
+                                  ],
+                                  "children": "children",
+                                  "tag": "type",
+                                  "cases": [
+                                    {
+                                      "tagValue": "block",
+                                      "payload": "fields",
+                                      "discriminator": "blockType",
+                                      "identity": "_key"
+                                    }
+                                  ]
+                                }
+                              ],
+                              "key": "richtext",
+                              "config": {
+                                "features": [
+                                  "code",
+                                  "horizontal-rule",
+                                  "links",
+                                  "lists",
+                                  "relationships",
+                                  "uploads"
+                                ]
+                              },
+                              "referenceKeys": [
+                                "relationTo"
+                              ]
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "typeName": "Media",
+                        "admin": {
+                          "rowLabel": "caption"
+                        },
+                        "slug": "media",
+                        "labels": {
+                          "singular": "Media",
+                          "plural": "Media"
+                        },
+                        "fields": [
+                          {
+                            "id": "articles-localized-body-blocks-block-media-asset",
+                            "name": "asset",
+                            "path": "localizedBody.blocks.block.media.asset",
+                            "type": "relationship",
+                            "category": "relationship",
+                            "required": true,
+                            "unique": false,
+                            "admin": {
+                              "label": "Asset"
+                            },
+                            "relationship": {
+                              "collectionId": "assets",
+                              "collectionSlug": "assets",
+                              "onDelete": "restrict"
+                            }
+                          },
+                          {
+                            "id": "articles-localized-body-blocks-block-media-caption",
+                            "name": "caption",
+                            "path": "localizedBody.blocks.block.media.caption",
+                            "type": "text",
+                            "category": "scalar",
+                            "required": false,
+                            "unique": false,
+                            "admin": {
+                              "label": "Caption"
+                            },
+                            "text": {}
+                          }
+                        ]
+                      },
+                      {
+                        "typeName": "CTA",
+                        "admin": {
+                          "rowLabel": "label"
+                        },
+                        "slug": "cta",
+                        "labels": {
+                          "singular": "CTA",
+                          "plural": "Ctas"
+                        },
+                        "fields": [
+                          {
+                            "id": "articles-localized-body-blocks-block-cta-label",
+                            "name": "label",
+                            "path": "localizedBody.blocks.block.cta.label",
+                            "type": "text",
+                            "category": "scalar",
+                            "required": true,
+                            "unique": false,
+                            "admin": {
+                              "label": "Label"
+                            },
+                            "text": {}
+                          },
+                          {
+                            "id": "articles-localized-body-blocks-block-cta-destination",
+                            "name": "destination",
+                            "path": "localizedBody.blocks.block.cta.destination",
+                            "type": "relationship",
+                            "category": "relationship",
+                            "required": false,
+                            "unique": false,
+                            "admin": {
+                              "label": "Destination"
+                            },
+                            "relationship": {
+                              "collectionId": "pages",
+                              "collectionSlug": "pages",
+                              "onDelete": "nullify"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "key": "richtext",
+            "config": {
+              "features": [
+                "blocks",
+                "code",
+                "horizontal-rule",
+                "links",
+                "lists",
+                "relationships",
+                "uploads"
+              ]
+            },
+            "referenceKeys": [
+              "relationTo"
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "plugins": [
+    {
+      "key": "richtext",
+      "version": "0.2.0",
+      "goPackage": "github.com/riducms/ridu/plugins/richtext",
+      "apiVersion": 1,
+      "ridu": {
+        "minimum": "0.2.0"
+      },
+      "admin": {
+        "package": "@riducms/plugin-richtext",
+        "export": "richTextAdminPlugin",
+        "apiVersion": 1,
+        "pairingVersion": 1
+      },
+      "fieldTypes": [
+        {
+          "embeddedTypes": [
+            "blocks.block"
+          ],
+          "key": "richtext",
+          "typescriptPackage": "@riducms/plugin-richtext/document",
+          "typescriptOutput": "RichTextDocument",
+          "typescriptInput": "RichTextDocumentInput",
+          "goPackage": "github.com/riducms/ridu/plugins/richtext",
+          "goType": "Document",
+          "jsonSchema": {
+            "$id": "https://riducms.com/schemas/richtext/document/1",
+            "type": "object",
+            "required": [
+              "version",
+              "root"
+            ],
+            "properties": {
+              "version": {
+                "const": 1
+              },
+              "root": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/node"
+                  },
+                  {
+                    "properties": {
+                      "type": {
+                        "const": "root"
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            "additionalProperties": false,
+            "$defs": {
+              "node": {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "enum": [
+                      "root",
+                      "paragraph",
+                      "heading",
+                      "quote",
+                      "text",
+                      "linebreak",
+                      "link",
+                      "list",
+                      "listitem",
+                      "code",
+                      "horizontalrule",
+                      "upload",
+                      "relationship",
+                      "block"
+                    ]
+                  },
+                  "version": {
+                    "const": 1
+                  },
+                  "children": {
+                    "type": "array",
+                    "items": {
+                      "allOf": [
+                        {
+                          "$ref": "#/$defs/node"
+                        },
+                        {
+                          "properties": {
+                            "type": {
+                              "not": {
+                                "const": "root"
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "fields": {
+                    "type": "object"
+                  },
+                  "text": {
+                    "type": "string"
+                  },
+                  "format": {
+                    "type": [
+                      "integer",
+                      "string"
+                    ]
+                  },
+                  "detail": {
+                    "type": "integer"
+                  },
+                  "mode": {
+                    "enum": [
+                      "normal",
+                      "token",
+                      "segmented"
+                    ]
+                  },
+                  "style": {
+                    "type": "string"
+                  },
+                  "textFormat": {
+                    "type": "integer"
+                  },
+                  "textStyle": {
+                    "type": "string"
+                  },
+                  "direction": {
+                    "enum": [
+                      "ltr",
+                      "rtl",
+                      null
+                    ]
+                  },
+                  "indent": {
+                    "type": "integer"
+                  },
+                  "tag": {
+                    "type": "string"
+                  },
+                  "url": {
+                    "type": "string"
+                  },
+                  "target": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "rel": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "title": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "listType": {
+                    "type": "string"
+                  },
+                  "start": {
+                    "type": "integer"
+                  },
+                  "value": {
+                    "type": "integer"
+                  },
+                  "checked": {
+                    "type": "boolean"
+                  },
+                  "language": {
+                    "type": "string"
+                  },
+                  "theme": {
+                    "type": "string"
+                  },
+                  "relationTo": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "caption": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false,
+                "allOf": [
+                  {
+                    "if": {
+                      "properties": {
+                        "type": {
+                          "const": "block"
+                        }
+                      }
+                    },
+                    "then": {
+                      "required": [
+                        "type",
+                        "version",
+                        "fields"
+                      ],
+                      "properties": {
+                        "type": {
+                          "const": "block"
+                        },
+                        "version": {
+                          "const": 1
+                        },
+                        "fields": {
+                          "type": "object"
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    "else": {
+                      "not": {
+                        "required": [
+                          "fields"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "type": {
+                          "enum": [
+                            "root",
+                            "paragraph",
+                            "heading",
+                            "quote",
+                            "link",
+                            "list",
+                            "listitem",
+                            "code"
+                          ]
+                        }
+                      }
+                    },
+                    "then": {
+                      "required": [
+                        "children"
+                      ]
+                    },
+                    "else": {
+                      "not": {
+                        "required": [
+                          "children"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "type": {
+                          "const": "text"
+                        }
+                      }
+                    },
+                    "then": {
+                      "required": [
+                        "text"
+                      ],
+                      "properties": {
+                        "format": {
+                          "type": "integer"
+                        }
+                      }
+                    },
+                    "else": {
+                      "properties": {
+                        "format": {
+                          "enum": [
+                            "",
+                            "left",
+                            "center",
+                            "right",
+                            "justify",
+                            "start",
+                            "end"
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "type": {
+                          "const": "root"
+                        }
+                      }
+                    },
+                    "then": {
+                      "propertyNames": {
+                        "enum": [
+                          "type",
+                          "version",
+                          "children",
+                          "direction",
+                          "format",
+                          "indent"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "type": {
+                          "const": "paragraph"
+                        }
+                      }
+                    },
+                    "then": {
+                      "propertyNames": {
+                        "enum": [
+                          "type",
+                          "version",
+                          "children",
+                          "direction",
+                          "format",
+                          "indent",
+                          "textFormat",
+                          "textStyle"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "type": {
+                          "const": "quote"
+                        }
+                      }
+                    },
+                    "then": {
+                      "propertyNames": {
+                        "enum": [
+                          "type",
+                          "version",
+                          "children",
+                          "direction",
+                          "format",
+                          "indent",
+                          "textFormat",
+                          "textStyle"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "type": {
+                          "const": "heading"
+                        }
+                      }
+                    },
+                    "then": {
+                      "propertyNames": {
+                        "enum": [
+                          "type",
+                          "version",
+                          "children",
+                          "direction",
+                          "format",
+                          "indent",
+                          "textFormat",
+                          "textStyle",
+                          "tag"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "type": {
+                          "const": "link"
+                        }
+                      }
+                    },
+                    "then": {
+                      "propertyNames": {
+                        "enum": [
+                          "type",
+                          "version",
+                          "children",
+                          "direction",
+                          "format",
+                          "indent",
+                          "textFormat",
+                          "textStyle",
+                          "url",
+                          "target",
+                          "rel",
+                          "title"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "type": {
+                          "const": "list"
+                        }
+                      }
+                    },
+                    "then": {
+                      "propertyNames": {
+                        "enum": [
+                          "type",
+                          "version",
+                          "children",
+                          "direction",
+                          "format",
+                          "indent",
+                          "textFormat",
+                          "textStyle",
+                          "listType",
+                          "start",
+                          "tag"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "type": {
+                          "const": "listitem"
+                        }
+                      }
+                    },
+                    "then": {
+                      "propertyNames": {
+                        "enum": [
+                          "type",
+                          "version",
+                          "children",
+                          "direction",
+                          "format",
+                          "indent",
+                          "textFormat",
+                          "textStyle",
+                          "value",
+                          "checked"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "type": {
+                          "const": "code"
+                        }
+                      }
+                    },
+                    "then": {
+                      "propertyNames": {
+                        "enum": [
+                          "type",
+                          "version",
+                          "children",
+                          "direction",
+                          "format",
+                          "indent",
+                          "textFormat",
+                          "textStyle",
+                          "language",
+                          "theme"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "type": {
+                          "const": "text"
+                        }
+                      }
+                    },
+                    "then": {
+                      "propertyNames": {
+                        "enum": [
+                          "type",
+                          "version",
+                          "text",
+                          "detail",
+                          "format",
+                          "mode",
+                          "style"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "type": {
+                          "const": "linebreak"
+                        }
+                      }
+                    },
+                    "then": {
+                      "propertyNames": {
+                        "enum": [
+                          "type",
+                          "version"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "type": {
+                          "const": "horizontalrule"
+                        }
+                      }
+                    },
+                    "then": {
+                      "propertyNames": {
+                        "enum": [
+                          "type",
+                          "version"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "type": {
+                          "const": "upload"
+                        }
+                      }
+                    },
+                    "then": {
+                      "propertyNames": {
+                        "enum": [
+                          "type",
+                          "version",
+                          "relationTo",
+                          "id",
+                          "format",
+                          "caption"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "type": {
+                          "const": "relationship"
+                        }
+                      }
+                    },
+                    "then": {
+                      "propertyNames": {
+                        "enum": [
+                          "type",
+                          "version",
+                          "relationTo",
+                          "id",
+                          "format"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "type": {
+                          "const": "heading"
+                        }
+                      }
+                    },
+                    "then": {
+                      "required": [
+                        "tag"
+                      ],
+                      "properties": {
+                        "tag": {
+                          "enum": [
+                            "h1",
+                            "h2",
+                            "h3",
+                            "h4",
+                            "h5",
+                            "h6"
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "type": {
+                          "const": "list"
+                        }
+                      }
+                    },
+                    "then": {
+                      "required": [
+                        "listType"
+                      ],
+                      "properties": {
+                        "listType": {
+                          "enum": [
+                            "bullet",
+                            "number",
+                            "check"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

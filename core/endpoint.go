@@ -34,9 +34,13 @@ type Endpoint struct {
 	Handler EndpointHandler
 }
 
-// EndpointContext exposes one matched custom endpoint request.
+// EndpointContext gives an EndpointHandler the matched request, response writer,
+// route metadata, authenticated actor, and access-controlled Local API.
 type EndpointContext struct {
-	Writer  http.ResponseWriter
+	// Writer receives the status, headers, and body chosen by the handler.
+	Writer http.ResponseWriter
+	// Request is the matched HTTP request. Use its Context for cancellation,
+	// deadlines, and dependent work.
 	Request *http.Request
 	// RequestID is the framework request ID also returned in X-Request-ID.
 	RequestID string
@@ -63,7 +67,9 @@ type EndpointContext struct {
 	ReportError func(error, string)
 }
 
-// EndpointHandler handles one trusted compiled custom endpoint.
+// EndpointHandler serves one trusted compiled custom route. It writes the
+// endpoint-owned response through EndpointContext.Writer and must enforce any
+// endpoint-specific authorization before performing protected work.
 type EndpointHandler func(EndpointContext)
 
 type endpointScope uint8

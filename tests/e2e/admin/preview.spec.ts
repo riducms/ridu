@@ -4,7 +4,20 @@ import { documentSaveButton } from "./helpers";
 
 test("document live preview streams unsaved drafts across configured viewports", async ({
 	page,
+	adminServer,
 }) => {
+	await page.route("**/api/schema", async (route) => {
+		const response = await route.fetch();
+		const body = (await response.json()) as {
+			schema: {
+				collections: { slug: string; versionSettings?: { autosaveIntervalSeconds: number } }[];
+			};
+		};
+		const posts = body.schema.collections.find((collection) => collection.slug === "posts");
+		if (!posts?.versionSettings) throw new Error("Posts fixture must expose autosave settings");
+		posts.versionSettings.autosaveIntervalSeconds = 0;
+		await route.fulfill({ response, json: body });
+	});
 	const consoleErrors: string[] = [];
 	page.on("console", (message) => {
 		if (message.type() === "error") consoleErrors.push(message.text());
@@ -23,7 +36,7 @@ test("document live preview streams unsaved drafts across configured viewports",
 		return result.docs.find((document) => document.title === "Relationship field notes")?.id;
 	});
 	expect(postID).toBeDefined();
-	await page.goto(`/admin/collections/posts/${postID}`);
+	await page.goto(`/admin/collections/posts/${postID}/api`);
 	const previewTokenPattern = `**/api/preview/collections/posts/${postID}/token`;
 	const rotatedTokens: string[] = [];
 	let previewTokenMintCount = 0;
@@ -55,6 +68,7 @@ test("document live preview streams unsaved drafts across configured viewports",
 	);
 	await page.getByRole("button", { name: "Live preview", exact: true }).click();
 	expect((await previewTokenResponse).status()).toBe(201);
+	await expect(page).toHaveURL(new RegExp(`/admin/collections/posts/${postID}(?:\\?locale=en)?$`));
 	const preview = page.frameLocator('iframe[title="Live preview"]');
 	await expect(page.getByText("Connected", { exact: true })).toBeVisible();
 	await expect(preview.getByRole("heading", { name: "Relationship field notes" })).toBeVisible();
@@ -67,8 +81,7 @@ test("document live preview streams unsaved drafts across configured viewports",
 	await expect(page.locator('iframe[title="Live preview"]')).toHaveAttribute("width", "375");
 	await expect(page.locator('iframe[title="Live preview"]')).toHaveAttribute("height", "667");
 	const previewWindowLink = page.getByRole("link", { name: "Open preview in new window" });
-	const previewAddress = process.env.RIDU_BROWSER_PREVIEW_ADDRESS ?? "127.0.0.1:18082";
-	const escapedPreviewOrigin = `http://${previewAddress}`.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+	const escapedPreviewOrigin = adminServer.previewURL.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 	await expect(previewWindowLink).toHaveAttribute(
 		"href",
 		new RegExp(
@@ -135,12 +148,16 @@ test("document live preview streams unsaved drafts across configured viewports",
 	await page.getByRole("button", { name: "Live preview", exact: true }).click();
 	expect((await replacementTokenResponse).status()).toBe(201);
 	await expect(page.getByText("Connected", { exact: true })).toBeVisible();
+	await expect(page.getByRole("dialog", { name: "Leave without saving?" })).toHaveCount(0);
 	const replacementPopupPromise = page.waitForEvent("popup");
 	await page.getByRole("link", { name: "Open preview in new window" }).click();
 	const replacementPopup = await replacementPopupPromise;
 	await expect(
 		replacementPopup.getByRole("heading", { name: "Popup reconnect headline" })
 	).toBeVisible();
+	const storedDraft = await page.request.get(`/api/collections/posts/${postID}`);
+	expect(storedDraft.ok()).toBe(true);
+	expect((await storedDraft.json()).doc.title).toBe("Relationship field notes");
 	const routeRevokeResponse = page.waitForResponse(
 		(response) =>
 			response.request().method() === "POST" && response.url().endsWith("/api/preview/token/revoke")
@@ -155,12 +172,14 @@ test("document live preview streams unsaved drafts across configured viewports",
 		.getByRole("link", { name: "Posts", exact: true })
 		.click();
 	const leaveDialog = page.getByRole("dialog", { name: "Leave without saving?" });
-	if (await leaveDialog.isVisible()) {
-		await leaveDialog.getByRole("button", { name: "Leave without saving" }).click();
-	}
+	await expect(leaveDialog).toBeVisible();
+	await leaveDialog.getByRole("button", { name: "Leave without saving" }).click();
 	expect((await routeRevokeResponse).status()).toBe(200);
 	await releasedLock;
 	await expect.poll(() => replacementPopup.isClosed()).toBe(true);
+	await page.goBack();
+	await expect(page.locator('input[name="title"]')).toHaveValue("Relationship field notes");
+	await expect(page.getByRole("region", { name: "Live preview" })).toHaveCount(0);
 	expect(consoleErrors).toEqual([]);
 });
 

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/riducms/ridu/internal/localization"
+	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
@@ -112,7 +113,7 @@ func (engine *Engine) MutateJoin(ctx context.Context, request JoinMutationReques
 	}
 
 	visibleSource, readError := engine.Execute(transactionContext, Request{
-		Operation: Read, Collection: request.Collection, ID: request.ID, Actor: request.Actor, ActorCollection: request.ActorCollection,
+		Operation: operation.Read, Collection: request.Collection, ID: request.ID, Actor: request.Actor, ActorCollection: request.ActorCollection,
 		Locale: request.Locale, FallbackLocales: request.FallbackLocales, DisableFallback: request.DisableFallback, AllLocales: request.AllLocales,
 	})
 	if readError != nil {
@@ -170,13 +171,14 @@ func (engine *Engine) MutateJoin(ctx context.Context, request JoinMutationReques
 		if accessError := engine.preflightJoinTargetUpdate(transactionContext, state.transaction, target, mutation.current, mutation.values, request.Actor, request.ActorCollection, selection); accessError != nil {
 			return JoinMutationResult{}, accessError
 		}
-		operation := Update
+		operationKind := operation.Update
 		if target.Schema.Versions != nil && mutation.current.Status == store.StatusPublished {
-			operation = Publish
+			operationKind = operation.Publish
 		}
+		observedFilter := mutation.observedFilter.Node()
 		update, updateError := engine.Execute(transactionContext, Request{
-			Operation: operation, Collection: string(target.Schema.Slug), ID: mutation.id,
-			Data: mutation.values, Filter: mutation.observedFilter, Actor: request.Actor, ActorCollection: request.ActorCollection,
+			Operation: operationKind, Collection: string(target.Schema.Slug), ID: mutation.id,
+			Data: mutation.values, internalFilter: &observedFilter, Actor: request.Actor, ActorCollection: request.ActorCollection,
 			Locale: request.Locale, FallbackLocales: request.FallbackLocales, DisableFallback: request.DisableFallback, AllLocales: request.AllLocales,
 		})
 		if updateError != nil {
@@ -205,7 +207,7 @@ func (engine *Engine) MutateJoin(ctx context.Context, request JoinMutationReques
 		}
 	}
 	refreshed, readError := engine.Execute(transactionContext, Request{
-		Operation: Read, Collection: request.Collection, ID: request.ID, Actor: request.Actor, ActorCollection: request.ActorCollection,
+		Operation: operation.Read, Collection: request.Collection, ID: request.ID, Actor: request.Actor, ActorCollection: request.ActorCollection,
 		Locale: request.Locale, FallbackLocales: request.FallbackLocales, DisableFallback: request.DisableFallback, AllLocales: request.AllLocales,
 	})
 	if readError != nil {
@@ -263,7 +265,7 @@ func normalizedJoinMutations(additions, removals []string) ([]joinTargetMutation
 }
 
 func (engine *Engine) findJoinMutationDocument(ctx context.Context, transaction store.Transaction, collection Collection, id string, actor *store.Document, actorCollection schema.CollectionSlug, selection localization.Selection) (joinMutationRead, error) {
-	operationContext := Context{Context: ctx, Operation: Read, Collection: collection.Schema, ID: id, Actor: cloneDocumentPointer(actor), ActorCollection: actorCollection, Data: store.Values{}, Locale: selection.Locale, AllLocales: selection.All, Locales: append([]schema.LocaleCode(nil), selection.Configured...)}
+	operationContext := Context{Context: ctx, Operation: operation.Read, Collection: collection.Schema, ID: id, Actor: cloneDocumentPointer(actor), ActorCollection: actorCollection, Data: store.Values{}, Locale: selection.Locale, AllLocales: selection.All, Locales: append([]schema.LocaleCode(nil), selection.Configured...)}
 	decision, err := authorize(collection, operationContext)
 	if err != nil {
 		return joinMutationRead{}, &Error{Code: "access_failed", Status: 500, Message: "join document access rule failed", Cause: err}
@@ -311,7 +313,7 @@ func (engine *Engine) lockJoinMutationDocuments(ctx context.Context, transaction
 func (engine *Engine) preflightJoinTargetUpdate(ctx context.Context, transaction store.Transaction, collection Collection, document store.Document, values store.Values, actor *store.Document, actorCollection schema.CollectionSlug, selection localization.Selection) error {
 	projected := localization.ProjectDocument(document, collection.Schema.Fields, selection)
 	operationContext := Context{
-		Context: ctx, Operation: Update, Collection: collection.Schema, ID: document.ID,
+		Context: ctx, Operation: operation.Update, Collection: collection.Schema, ID: document.ID,
 		Actor: cloneDocumentPointer(actor), ActorCollection: actorCollection, Data: store.CloneValues(values),
 		Original: cloneDocumentPointer(&projected), Locale: selection.Locale, AllLocales: selection.All,
 		Locales: append([]schema.LocaleCode(nil), selection.Configured...),

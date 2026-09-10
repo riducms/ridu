@@ -15,6 +15,7 @@ import (
 	atlasschema "ariga.io/atlas/sql/schema"
 	"ariga.io/atlas/sql/sqlcheck"
 	"github.com/riducms/ridu/internal/postgresmigration"
+	"github.com/riducms/ridu/internal/primitivefield"
 	ridumigration "github.com/riducms/ridu/migration"
 	"github.com/riducms/ridu/schema"
 )
@@ -63,10 +64,18 @@ func BuildArtifactWithPreviousPlanner(ctx context.Context, name string, before *
 }
 
 func buildArtifactWithPlannerContracts(ctx context.Context, name string, before *schema.Manifest, after schema.Manifest, renames []Rename, allowDestructive bool, source, target atlasPlannerContract, transforms ...ridumigration.DataTransformDescriptor) (ridumigration.Artifact, error) {
+	if err := primitivefield.ValidateManifestIndexes(after); err != nil {
+		return ridumigration.Artifact{}, err
+	}
 	if err := validatePostgresDataTransformDescriptors(transforms); err != nil {
 		return ridumigration.Artifact{}, err
 	}
 	if before != nil {
+		if len(transforms) == 0 {
+			if err := primitivefield.ValidateEvolution(before.Snapshot(), after.Snapshot()); err != nil {
+				return ridumigration.Artifact{}, err
+			}
+		}
 		if err := postgresmigration.ValidateVersionedTransition(before.Snapshot(), after.Snapshot(), transforms); err != nil {
 			return ridumigration.Artifact{}, err
 		}
@@ -117,6 +126,14 @@ func buildArtifactWithPlannerContracts(ctx context.Context, name string, before 
 		fieldMapping, err := referenceShapeMappingFromRenames(renames)
 		if err != nil {
 			return ridumigration.Artifact{}, err
+		}
+		if len(transforms) == 0 {
+			if err := validatePostgresEmbeddedEvolution(before.Snapshot(), after.Snapshot(), fieldMapping, mapping); err != nil {
+				return ridumigration.Artifact{}, err
+			}
+			if path := tightenedBlockBounds(before.Snapshot(), after.Snapshot(), fieldMapping, mapping); path != "" {
+				return ridumigration.Artifact{}, fmt.Errorf("PostgreSQL block bounds at %q were tightened; register a compiled data transform that validates or repairs existing values before adopting the new bounds", path)
+			}
 		}
 		if source.version != target.version && len(renames) != 0 {
 			return ridumigration.Artifact{}, fmt.Errorf("PostgreSQL planner upgrade cannot be combined with collection or field renames; create the canonical auth identity artifact first")
@@ -707,22 +724,12 @@ func fieldRootReferencesRemovedResource(field schema.Field, removed, pluginTarge
 			}
 		}
 	}
-	if field.Nested != nil {
-		for _, child := range field.Nested.Fields {
-			if fieldRootReferencesRemovedResource(child, removed, pluginTargets) {
-				return true
-			}
+	for _, child := range schema.ChildFields(field) {
+		if fieldRootReferencesRemovedResource(child, removed, pluginTargets) {
+			return true
 		}
 	}
-	if field.Blocks != nil {
-		for _, block := range field.Blocks.Types {
-			for _, child := range block.Fields {
-				if fieldRootReferencesRemovedResource(child, removed, pluginTargets) {
-					return true
-				}
-			}
-		}
-	}
+
 	return false
 }
 
@@ -778,23 +785,39 @@ func (mapping *referenceShapeMapping) add(ownerID schema.StableID, before, after
 	mapping.fields[sourceKey] = target
 	mapping.targets[targetKey] = sourceKey
 	if before.Nested != nil && after.Nested != nil {
-		if err := mapping.addMatchingChildren(ownerID, before.Nested.Fields, after.Nested.Fields); err != nil {
+		if err := mapping.addMatchingChildren(ownerID, before.Nested.ResolvedFields(), after.Nested.ResolvedFields()); err != nil {
 			return err
 		}
 	}
 	if before.Blocks != nil && after.Blocks != nil {
-		afterBlocks := make(map[string]schema.BlockType, len(after.Blocks.Types))
-		for _, block := range after.Blocks.Types {
-			afterBlocks[block.Key] = block
+		afterBlocks := make(map[string]schema.BlockType, len(after.Blocks.ResolvedTypes()))
+		for _, block := range after.Blocks.ResolvedTypes() {
+			afterBlocks[block.Slug] = block
 		}
-		for _, block := range before.Blocks.Types {
-			if next, exists := afterBlocks[block.Key]; exists {
-				if err := mapping.addMatchingChildren(ownerID, block.Fields, next.Fields); err != nil {
+		for _, block := range before.Blocks.ResolvedTypes() {
+			if next, exists := afterBlocks[block.Slug]; exists {
+				if err := mapping.addMatchingChildren(ownerID, block.ResolvedFields(), next.ResolvedFields()); err != nil {
 					return err
 				}
 			}
 		}
 	}
+	oldEmbedded, newEmbedded := schema.EmbeddedBlocks(before), schema.EmbeddedBlocks(after)
+	for i, container := range oldEmbedded {
+		if i < len(newEmbedded) && container.Name == newEmbedded[i].Name {
+			for _, block := range container.Blocks.ResolvedTypes() {
+				for _, next := range newEmbedded[i].Blocks.ResolvedTypes() {
+					if block.Slug == next.Slug {
+						if err := mapping.addMatchingChildren(ownerID, block.ResolvedFields(), next.ResolvedFields()); err != nil {
+							return err
+						}
+						break
+					}
+				}
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -987,18 +1010,27 @@ func persistedReferenceShapes(
 		}
 		if field.Nested != nil {
 			nested := appendReferenceContainer(containers, string(field.Type), field.Localized)
-			for _, child := range field.Nested.Fields {
+			for _, child := range field.Nested.ResolvedFields() {
 				inspect(child, root, nested, ancestorLocalized || field.Localized)
 			}
 		}
 		if field.Blocks != nil {
-			for _, block := range field.Blocks.Types {
-				blockContainers := appendReferenceContainer(containers, string(field.Type)+":"+block.Key, field.Localized)
-				for _, child := range block.Fields {
+			for _, block := range field.Blocks.ResolvedTypes() {
+				blockContainers := appendReferenceContainer(containers, string(field.Type)+":"+block.Slug, field.Localized)
+				for _, child := range block.ResolvedFields() {
 					inspect(child, root, blockContainers, ancestorLocalized || field.Localized)
 				}
 			}
 		}
+		for _, container := range schema.EmbeddedBlocks(field) {
+			for _, block := range container.Blocks.ResolvedTypes() {
+				parents := appendReferenceContainer(containers, "embedded:"+container.Path.String()+":"+block.Slug, field.Localized)
+				for _, child := range block.ResolvedFields() {
+					inspect(child, root, parents, ancestorLocalized || field.Localized)
+				}
+			}
+		}
+
 	}
 	for _, root := range resource.Fields {
 		inspect(root, root, nil, false)
@@ -1197,14 +1229,16 @@ type referenceIndexResource struct {
 }
 
 type referenceIndexField struct {
-	ID           schema.StableID
-	Name         string
-	Type         schema.FieldType
-	Localized    bool
-	Relationship *referenceIndexRelationship
-	Upload       *referenceIndexUpload
-	Nested       []referenceIndexField
-	Blocks       []referenceIndexBlock
+	ID             schema.StableID
+	Name           string
+	Type           schema.FieldType
+	Localized      bool
+	Relationship   *referenceIndexRelationship
+	Upload         *referenceIndexUpload
+	Nested         []referenceIndexField
+	Blocks         []referenceIndexBlock
+	Embedded       []schema.EmbeddedTree
+	EmbeddedFields []referenceIndexField
 }
 
 type referenceIndexRelationship struct {
@@ -1222,7 +1256,7 @@ type referenceIndexUpload struct {
 }
 
 type referenceIndexBlock struct {
-	Key    string
+	Slug   string
 	Fields []referenceIndexField
 }
 
@@ -1263,17 +1297,37 @@ func referenceTopologyFields(fields []schema.Field) []referenceIndexField {
 			}
 		}
 		if field.Nested != nil {
-			candidate.Nested = referenceTopologyFields(field.Nested.Fields)
+			candidate.Nested = referenceTopologyFields(field.Nested.ResolvedFields())
 		}
 		if field.Blocks != nil {
-			for _, block := range field.Blocks.Types {
-				children := referenceTopologyFields(block.Fields)
+			for _, block := range field.Blocks.ResolvedTypes() {
+				children := referenceTopologyFields(block.ResolvedFields())
 				if len(children) != 0 {
-					candidate.Blocks = append(candidate.Blocks, referenceIndexBlock{Key: block.Key, Fields: children})
+					candidate.Blocks = append(candidate.Blocks, referenceIndexBlock{Slug: block.Slug, Fields: children})
 				}
 			}
 		}
-		if candidate.Relationship != nil || candidate.Upload != nil || len(candidate.Nested) != 0 || len(candidate.Blocks) != 0 {
+		if field.Plugin != nil && len(field.Plugin.EmbeddedTrees) != 0 {
+			candidate.EmbeddedFields = referenceTopologyFields(schema.ChildFields(field))
+			if len(candidate.EmbeddedFields) != 0 {
+				candidate.Embedded = make([]schema.EmbeddedTree, len(field.Plugin.EmbeddedTrees))
+				for ti, source := range field.Plugin.EmbeddedTrees {
+					tree := source
+					tree.Cases = make([]schema.EmbeddedTreeCase, len(source.Cases))
+					for ci, sourceCase := range source.Cases {
+						candidateCase := sourceCase
+						candidateCase.Types = make([]schema.BlockType, len(sourceCase.ResolvedTypes()))
+						for vi, variant := range sourceCase.ResolvedTypes() {
+							candidateCase.ResolvedTypes()[vi] = schema.BlockType{Slug: variant.Slug}
+						}
+						tree.Cases[ci] = candidateCase
+					}
+					candidate.Embedded[ti] = tree
+				}
+			}
+		}
+
+		if candidate.Relationship != nil || candidate.Upload != nil || len(candidate.Nested) != 0 || len(candidate.Blocks) != 0 || len(candidate.EmbeddedFields) != 0 {
 			result = append(result, candidate)
 		}
 	}

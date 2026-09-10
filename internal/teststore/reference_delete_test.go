@@ -99,7 +99,7 @@ func TestApplyReferenceDeletePlansRestrictBeforeReconcilingCurrentTrashValues(t 
 	if reconciled.Values["asset"].Kind() != store.ValueNull {
 		t.Fatalf("singular upload = %#v", reconciled.Values["asset"])
 	}
-	related, _ := reconciled.Values["related"].Values()
+	related, _ := reconciled.Values["related"].CopyList()
 	if len(related) != 1 {
 		t.Fatalf("related = %#v", related)
 	}

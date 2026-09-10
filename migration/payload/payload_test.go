@@ -55,7 +55,7 @@ func TestPayloadExportRejectsRepeatedCollectionBlocksBeforeWriting(t *testing.T)
 		{Slug: "posts", Documents: []payloadmigration.Record{{ID: "1", Data: json.RawMessage(`{}`)}}},
 	}}
 	manifest, err := ridu.Resolve(ridu.Config{Name: "migration", Collections: []ridu.Collection{{
-		Slug: "posts", Fields: []field.Definition{field.Text("title")},
+		Slug: "posts", Fields: field.Fields{field.Text("title")},
 	}}})
 	if err != nil {
 		t.Fatal(err)
@@ -83,7 +83,7 @@ func (target *recordingTarget) Import(context.Context, string, store.Values, rid
 func TestImportPreservesIDsTimestampsAndChosenVersion(t *testing.T) {
 	application, err := ridu.New(ridu.Config{Name: "migration", Collections: []ridu.Collection{{
 		Slug: "posts", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true},
-		Fields: []field.Definition{field.Text("title", field.Required())},
+		Fields: field.Fields{field.Text("title").Required()},
 	}}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)

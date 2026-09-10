@@ -1,12 +1,18 @@
 <script lang="ts">
-	import type { FieldComponentProps } from "@riducms/plugin";
+	import type { PluginFieldProps } from "@riducms/plugin";
 	import CheckIcon from "~icons/lucide/check";
 	import XIcon from "~icons/lucide/x";
 
-	import { overviewConfig } from "@plugin-seo/seo-config";
+	import type { OverviewConfig } from "@plugin-seo/seo-config";
 
-	let { field, form, i18n }: FieldComponentProps = $props();
-	const config = $derived(overviewConfig(field));
+	let {
+		field: binding,
+		form,
+		config,
+		i18n,
+	}: PluginFieldProps<undefined, OverviewConfig, "ui"> = $props();
+	const field = $derived(binding.schema);
+
 	const title = $derived(form.get(config.titlePath));
 	const description = $derived(form.get(config.descriptionPath));
 	const image = $derived(form.get(config.imagePath));

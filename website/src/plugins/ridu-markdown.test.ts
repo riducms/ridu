@@ -269,3 +269,47 @@ describe('riduMarkdownCodeMetadata', () => {
 		expect(packageCommandCount).toBeGreaterThan(0);
 	});
 });
+
+describe('code file comparisons', () => {
+	const fence = (name: string, source: string, group = 'posts') =>
+		`\`\`\`ts title="${name}.ts" group="${group}" tab="${name}"\n${source}\n\`\`\``;
+	const render = (source: string) =>
+		markdownToHtml(source, {
+			mdastPlugins: [riduMarkdownCodeMetadata],
+			hastPlugins: [riduMarkdownComponents]
+		}).html;
+
+	it('connects file tabs to panels and keeps each file copyable without JavaScript', () => {
+		const html = render(
+			[fence('Payload', 'const cms = "Payload";'), fence('Ridu', 'const cms = "Ridu";')].join(
+				'\n\n'
+			)
+		);
+		expect(html.match(/data-code-file-tabs=""/g)).toHaveLength(1);
+		expect(html.match(/role="tab"/g)).toHaveLength(2);
+		expect(html.match(/role="tabpanel"/g)).toHaveLength(2);
+		expect(html).toContain('aria-controls="code-files-1-panel-0"');
+		expect(html).toContain('aria-labelledby="code-files-1-tab-0"');
+		expect(html).toContain('role="tablist" aria-label="Compare code files" hidden');
+		expect(html).not.toMatch(/role="tabpanel"[^>]*hidden/);
+		expect(html.match(/data-copy-code=""/g)).toHaveLength(2);
+		expect(html).toContain('Payload.ts');
+		expect(html).toContain('Ridu.ts');
+		expect(html).toContain('data-code="const cms = &quot;Ridu&quot;;"');
+	});
+
+	it('does not group fences across prose or combine unrelated comparisons', () => {
+		expect(render(`${fence('A', 'a')}\n\nAn explanation.\n\n${fence('B', 'b')}`)).not.toContain(
+			'data-code-file-tabs'
+		);
+		expect(render(`${fence('A', 'a', 'one')}\n\n${fence('B', 'b', 'two')}`)).not.toContain(
+			'data-code-file-tabs'
+		);
+		const html = render(
+			`${fence('A', 'a')}\n\n${fence('B', 'b')}\n\nMore.\n\n${fence('A', 'a')}\n\n${fence('B', 'b')}`
+		);
+		expect(html).toContain('id="code-files-1-tab-0"');
+		expect(html).toContain('id="code-files-2-tab-0"');
+		expect(html).toContain('<p>More.</p>');
+	});
+});

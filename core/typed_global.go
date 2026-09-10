@@ -31,17 +31,17 @@ type BoundTypedGlobal[Document, Update any] struct {
 	local      *LocalAPI
 }
 
-func (global BoundTypedGlobal[Document, Update]) Find(ctx context.Context, actor *store.Document) (Document, error) {
-	document, err := global.local.Global(ctx, global.definition.slug, actor)
+func (global BoundTypedGlobal[Document, Update]) Find(ctx context.Context, options TypedReadOptions) (Document, error) {
+	document, err := global.local.GlobalWithOptions(ctx, global.definition.slug, options.findOptions(false))
 	return decodeTypedDocument[Document](document, err)
 }
 
-func (global BoundTypedGlobal[Document, Update]) Update(ctx context.Context, input Update, expectedRevision int, actor *store.Document) (Document, error) {
+func (global BoundTypedGlobal[Document, Update]) Update(ctx context.Context, input Update, expectedRevision int, actor *store.Document, localeOptions ...TypedLocaleOptions) (Document, error) {
 	values, err := typedInputValues(input)
 	if err != nil {
 		return *new(Document), err
 	}
-	document, err := global.local.UpdateGlobal(ctx, global.definition.slug, values, expectedRevision, actor)
+	document, err := global.local.UpdateGlobal(ctx, global.definition.slug, values, expectedRevision, actor, typedWriteLocales(localeOptions)...)
 	return decodeTypedDocument[Document](document, err)
 }
 

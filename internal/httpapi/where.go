@@ -264,17 +264,17 @@ func schemaFieldIn(
 			return schemaFieldIn(
 				segments,
 				index+1,
-				field.Nested.Fields,
+				field.Nested.ResolvedFields(),
 				many || field.Type == schema.FieldTypeArray,
 			)
 		case schema.FieldTypeBlocks:
 			if field.Blocks == nil || index+2 >= len(segments) {
 				return nil, false, false
 			}
-			for blockIndex := range field.Blocks.Types {
-				block := &field.Blocks.Types[blockIndex]
-				if block.Key == segments[index+1] {
-					return schemaFieldIn(segments, index+2, block.Fields, true)
+			for blockIndex := range field.Blocks.ResolvedTypes() {
+				block := &field.Blocks.ResolvedTypes()[blockIndex]
+				if block.Slug == segments[index+1] {
+					return schemaFieldIn(segments, index+2, block.ResolvedFields(), true)
 				}
 			}
 		}

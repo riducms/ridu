@@ -101,7 +101,7 @@ func validateMongoUploadCollectionMetadata(collection schema.Collection) error {
 	}
 	for _, definition := range mongoUploadMetadataFields {
 		field, exists := byName[definition.name]
-		if !exists || !reflect.DeepEqual(field, expectedMongoUploadMetadataField(definition)) {
+		if !exists || !matchesMongoUploadMetadataField(field, definition) {
 			return fmt.Errorf("MongoDB upload collection %q is missing exact framework metadata field %q", collection.ID, definition.name)
 		}
 	}
@@ -123,11 +123,21 @@ func expectedMongoUploadMetadataField(definition mongoUploadMetadataField) schem
 
 func mongoFrameworkUploadMetadataField(field schema.Field) bool {
 	for _, definition := range mongoUploadMetadataFields {
-		if field.Name == definition.name && reflect.DeepEqual(field, expectedMongoUploadMetadataField(definition)) {
+		if field.Name == definition.name && matchesMongoUploadMetadataField(field, definition) {
 			return true
 		}
 	}
 	return false
+}
+
+func matchesMongoUploadMetadataField(field schema.Field, definition mongoUploadMetadataField) bool {
+	expected := expectedMongoUploadMetadataField(definition)
+	// Field-owned presentation and access do not alter the adapter's fixed
+	// upload storage contract. Keep the framework's read-only requirement.
+	expected.Admin = field.Admin
+	expected.Admin.ReadOnly = true
+	expected.QueryRestricted = field.QueryRestricted
+	return reflect.DeepEqual(field, expected)
 }
 
 func validateMongoUploadEnvelope(field schema.Field, path string) error {
@@ -156,7 +166,7 @@ func validateMongoUploadValue(field schema.Field, value store.Value, path string
 	items := []store.Value{value}
 	if field.Upload.HasMany {
 		var valid bool
-		items, valid = value.Values()
+		items, valid = value.CopyList()
 		if !valid {
 			return fmt.Errorf("MongoDB upload value %q must be a list", path)
 		}
@@ -187,15 +197,15 @@ func validateMongoUploadValue(field schema.Field, value store.Value, path string
 }
 
 func validateMongoUploadSizes(value store.Value, path string) error {
-	sizes, valid := value.ObjectValue()
-	if !valid {
+	sizes := value
+	if sizes.Kind() != store.ValueObject {
 		return fmt.Errorf("MongoDB value %q does not match framework upload-size metadata", path)
 	}
-	if len(sizes) > maxMongoUploadImageSizes {
+	if sizes.Len() > maxMongoUploadImageSizes {
 		return fmt.Errorf("MongoDB value %q exceeds %d image variants", path, maxMongoUploadImageSizes)
 	}
-	names := make([]string, 0, len(sizes))
-	for name := range sizes {
+	names := make([]string, 0, sizes.Len())
+	for name := range sizes.Entries() {
 		names = append(names, name)
 	}
 	sort.Strings(names)
@@ -203,17 +213,17 @@ func validateMongoUploadSizes(value store.Value, path string) error {
 		if name == "" || !utf8.ValidString(name) || stringsContainNUL(name) {
 			return fmt.Errorf("MongoDB value %q contains an invalid image-size name", path)
 		}
-		metadata, valid := sizes[name].ObjectValue()
-		if !valid {
+		metadata := sizes.Get(name)
+		if metadata.Kind() != store.ValueObject {
 			return fmt.Errorf("MongoDB value %q contains invalid image-size metadata", path)
 		}
-		if objectKey, exists := metadata["objectKey"]; exists {
+		if objectKey, exists := metadata.Lookup("objectKey"); exists {
 			text, valid := objectKey.StringValue()
 			if !valid || text == "" || !utf8.ValidString(text) || stringsContainNUL(text) {
 				return fmt.Errorf("MongoDB value %q contains invalid image-size objectKey", path)
 			}
 		}
-		if _, err := encodeValues(metadata); err != nil {
+		if _, err := encodeValue(metadata); err != nil {
 			return fmt.Errorf("MongoDB value %q contains invalid image-size metadata: %w", path, err)
 		}
 	}
@@ -226,7 +236,7 @@ func validateMongoUploadSizes(value store.Value, path string) error {
 func mongoUploadSizesField(field schema.Field) bool {
 	for _, definition := range mongoUploadMetadataFields {
 		if definition.name == "sizes" {
-			return reflect.DeepEqual(field, expectedMongoUploadMetadataField(definition))
+			return matchesMongoUploadMetadataField(field, definition)
 		}
 	}
 	return false

@@ -1038,8 +1038,8 @@ func TestMongoIndexPlannerRejectsNestedUniqueFields(t *testing.T) {
 	collection := mongoIndexTestCollection(t)
 	collection.Fields = append([]schema.Field(nil), collection.Fields...)
 	group := collection.Fields[3]
-	group.Nested = &schema.NestedField{Fields: append([]schema.Field(nil), group.Nested.Fields...)}
-	group.Nested.Fields[0].Unique = true
+	group.Nested = &schema.NestedField{Fields: append([]schema.Field(nil), group.Nested.ResolvedFields()...)}
+	group.Nested.ResolvedFields()[0].Unique = true
 	collection.Fields[3] = group
 	if err := validateCollectionEnvelope(collection); err == nil || !strings.Contains(err.Error(), "cannot enforce unique nested field") {
 		t.Fatalf("nested unique field error = %v", err)
@@ -1080,8 +1080,8 @@ func mongoLocalizedIndexTestCollection(t *testing.T) schema.Collection {
 	collection.Fields = append([]schema.Field(nil), collection.Fields...)
 	collection.Fields[0].Index = true
 	group := collection.Fields[1]
-	group.Nested = &schema.NestedField{Fields: append([]schema.Field(nil), group.Nested.Fields...)}
-	group.Nested.Fields[0].Index = true
+	group.Nested = &schema.NestedField{Fields: append([]schema.Field(nil), group.Nested.ResolvedFields()...)}
+	group.Nested.ResolvedFields()[0].Index = true
 	collection.Fields[1] = group
 	code := mongoIndexMustPath(t, "code")
 	tenant := mongoIndexMustPath(t, "tenant")
@@ -1098,7 +1098,7 @@ func mongoLocalizedIndexTestCollection(t *testing.T) schema.Collection {
 	)
 	collection.Indexes = []schema.CollectionIndex{
 		{Fields: []query.Path{tenant, collection.Fields[0].Path}, Unique: true},
-		{Fields: []query.Path{collection.Fields[0].Path, group.Nested.Fields[0].Path}},
+		{Fields: []query.Path{collection.Fields[0].Path, group.Nested.ResolvedFields()[0].Path}},
 	}
 	return collection
 }

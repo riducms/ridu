@@ -1,3 +1,4 @@
+import { mapBlockTypes } from "@riducms/protocol";
 import type { AdminI18n } from "@riducms/plugin";
 import type { SchemaCollection, SchemaField } from "@riducms/protocol";
 
@@ -35,9 +36,9 @@ export function localizeSchemaField(field: SchemaField, i18n: AdminI18n): Schema
 			: {
 					select: {
 						...field.select,
-						choices: field.select.choices.map((choice) => ({
-							...choice,
-							label: i18n.text(choice.label, choice.labelTranslations),
+						options: field.select.options.map((option) => ({
+							...option,
+							label: i18n.text(option.label, option.labelTranslations),
 						})),
 					},
 				}),
@@ -64,17 +65,39 @@ export function localizeSchemaField(field: SchemaField, i18n: AdminI18n): Schema
 								}),
 					},
 				}),
+		...(field.plugin?.embeddedTrees === undefined
+			? {}
+			: {
+					plugin: {
+						...field.plugin,
+						embeddedTrees: field.plugin.embeddedTrees.map((tree) => ({
+							...tree,
+							cases: tree.cases.map((branch) =>
+								mapBlockTypes(branch, (block) => ({
+									...block,
+									labels: {
+										...block.labels,
+										singular: i18n.text(block.labels.singular, block.labels.singularTranslations),
+										plural: i18n.text(block.labels.plural, block.labels.pluralTranslations),
+									},
+									fields: block.fields.map((child) => localizeSchemaField(child, i18n)),
+								}))
+							),
+						})),
+					},
+				}),
 		...(field.blocks === undefined
 			? {}
 			: {
-					blocks: {
-						...field.blocks,
-						types: field.blocks.types.map((block) => ({
-							...block,
-							label: i18n.text(block.label, block.labelTranslations),
-							fields: block.fields.map((child) => localizeSchemaField(child, i18n)),
-						})),
-					},
+					blocks: mapBlockTypes(field.blocks, (block) => ({
+						...block,
+						labels: {
+							...block.labels,
+							singular: i18n.text(block.labels.singular, block.labels.singularTranslations),
+							plural: i18n.text(block.labels.plural, block.labels.pluralTranslations),
+						},
+						fields: block.fields.map((child) => localizeSchemaField(child, i18n)),
+					})),
 				}),
 	};
 }

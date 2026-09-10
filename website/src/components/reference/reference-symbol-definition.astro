@@ -3,6 +3,8 @@ import CodeBlock from '@/components/code/code-block.astro';
 import { resolvedReferenceTypeLinks, type ReferenceSymbol } from '@/reference';
 import { splitReferenceType } from '@/reference/signature';
 import ReferenceSignature from './reference-signature.astro';
+import ReferenceProperties from './reference-properties.astro';
+import ReferenceProse from './reference-prose.astro';
 
 interface Props {
 	symbol: ReferenceSymbol;
@@ -15,123 +17,124 @@ const typeLinks = resolvedReferenceTypeLinks(symbol);
 const callableType =
 	symbol.kind === 'type' &&
 	(/\bfunc\s*\(/.test(symbol.signature) || /=\s*\(/.test(symbol.signature));
-const callableSymbol =
-	symbol.kind === 'function' ||
-	symbol.kind === 'method' ||
-	symbol.kind === 'command' ||
-	callableType;
+const callableSymbol = ['function', 'method', 'command'].includes(symbol.kind) || callableType;
 const exampleLanguage =
 	symbol.language === 'ts' ? 'ts' : symbol.language === 'shell' ? 'bash' : 'go';
-const bodyStart = symbol.signature.indexOf('{');
-const displaySignature =
-	embedded && symbol.parameters.length > 0 && bodyStart >= 0
-		? symbol.signature.slice(0, bodyStart).trim()
-		: symbol.signature;
+const parametersLabel = callableSymbol ? 'Arguments' : symbol.parametersLabel || 'Properties';
+const sectionID = (name: string) => (embedded ? `${symbol.slug}-${name}` : name);
+const Heading = embedded ? 'h3' : 'h2';
+const sections = [
+	...(!embedded && symbol.example ? [{ id: 'example', label: 'Example' }] : []),
+	...(symbol.parameters.length ? [{ id: 'arguments', label: parametersLabel }] : []),
+	...(symbol.options?.length ? [{ id: 'options', label: symbol.optionsLabel || 'Options' }] : []),
+	...(symbol.returns ? [{ id: 'returns', label: 'Returns' }] : []),
+	...(symbol.details.length ? [{ id: 'behavior', label: 'How it works' }] : []),
+	{ id: 'signature', label: 'Full signature' }
+];
 ---
 
 <div class:list={['reference-definition', { 'reference-definition--embedded': embedded }]}>
-	<ReferenceSignature
-		signature={displaySignature}
-		name={symbol.name}
-		parameters={symbol.parameters}
-		{typeLinks}
-		symbolHref={href}
-	/>
-	<p class="reference-lede">{symbol.summary}</p>
+	<p class="reference-lede"><ReferenceProse text={symbol.summary} /></p>
 	{
-		!embedded && symbol.source && (
-			<p class="reference-source">
-				<a href={symbol.source.url}>
-					Source{' '}
-					<code>
-						{symbol.source.path}:{symbol.source.line}
-					</code>
-				</a>
-			</p>
-		)
-	}
-
-	{
-		callableSymbol && (symbol.parameters.length > 0 || symbol.returns) && (
-			<dl class="reference-api-tags">
-				{symbol.parameters.map((parameter) => (
-					<div>
-						<dt>
-							<span>@param</span> <code>{parameter.name}</code>
-						</dt>
-						<dd>{parameter.description}</dd>
-					</div>
+		!embedded && (
+			<nav class="reference-on-page" aria-label="On this API page">
+				{sections.map((section) => (
+					<a href={`#${section.id}`}>{section.label}</a>
 				))}
-				{symbol.returns && (
-					<div>
-						<dt>@returns</dt>
-						<dd>{symbol.returns.description}</dd>
-					</div>
-				)}
-			</dl>
-		)
-	}
-
-	{
-		!callableSymbol && symbol.parameters.length > 0 && (
-			<>
-				{symbol.parametersLabel && <p class="reference-member-label">{symbol.parametersLabel}</p>}
-				<dl class="reference-member-list">
-					{symbol.parameters.map((parameter) => (
-						<div class="reference-member">
-							<dt>
-								{parameter.href ? (
-									<a class="reference-member-link" href={parameter.href}>
-										<code class="reference-member-name">{parameter.name}</code>
-									</a>
-								) : (
-									<code class="reference-member-name">{parameter.name}</code>
-								)}
-								<span aria-hidden="true">:</span>
-								<span class="reference-member-type">
-									{splitReferenceType(parameter.type).map((part) =>
-										Object.hasOwn(typeLinks, part) ? <a href={typeLinks[part]}>{part}</a> : part
-									)}
-								</span>
-							</dt>
-							<dd>{parameter.description}</dd>
-						</div>
-					))}
-				</dl>
-			</>
-		)
-	}
-
-	{
-		!callableSymbol && symbol.returns && (
-			<p class="reference-return">
-				<span class="reference-return-label">Returns</span>{' '}
-				<code class="reference-return-type">
-					{splitReferenceType(symbol.returns.type).map((part) =>
-						Object.hasOwn(typeLinks, part) ? <a href={typeLinks[part]}>{part}</a> : part
-					)}
-				</code>{' '}
-				<span>{symbol.returns.description}</span>
-			</p>
-		)
-	}
-
-	{
-		symbol.details.length > 0 && (
-			<div class="reference-detail">
-				{symbol.details.map((paragraph) => (
-					<p>{paragraph}</p>
-				))}
-			</div>
+			</nav>
 		)
 	}
 
 	{
 		!embedded && symbol.example && (
-			<div class="reference-example">
-				<p>Example</p>
+			<section class="reference-api-section reference-example" id="example">
+				<Heading>Example</Heading>
 				<CodeBlock code={symbol.example} lang={exampleLanguage} label={symbol.language} />
-			</div>
+			</section>
 		)
 	}
+
+	{
+		symbol.parameters.length > 0 && (
+			<section class="reference-api-section" id={sectionID('arguments')}>
+				<Heading>{parametersLabel}</Heading>
+				<ReferenceProperties
+					parameters={symbol.parameters}
+					{typeLinks}
+					label={parametersLabel}
+					nameLabel={callableSymbol ? 'Argument' : 'Property'}
+					showTypes={!symbol.options?.length}
+				/>
+			</section>
+		)
+	}
+
+	{
+		symbol.options && symbol.options.length > 0 && (
+			<section class="reference-api-section" id={sectionID('options')}>
+				<Heading>{symbol.optionsLabel || 'Options'}</Heading>
+				<ReferenceProperties
+					parameters={symbol.options}
+					{typeLinks}
+					label={symbol.optionsLabel || 'Options'}
+				/>
+			</section>
+		)
+	}
+
+	{
+		symbol.returns && (
+			<section class="reference-api-section" id={sectionID('returns')}>
+				<Heading>Returns</Heading>
+				<p class="reference-return">
+					<ReferenceProse text={symbol.returns.description} />
+				</p>
+				<code class="reference-return-type">
+					{splitReferenceType(symbol.returns.type).map((part) =>
+						Object.hasOwn(typeLinks, part) ? <a href={typeLinks[part]}>{part}</a> : part
+					)}
+				</code>
+			</section>
+		)
+	}
+
+	{
+		symbol.details.length > 0 && (
+			<section class="reference-api-section reference-detail" id={sectionID('behavior')}>
+				<Heading>How it works</Heading>
+				{symbol.details.map((paragraph) => (
+					<p>
+						<ReferenceProse text={paragraph} />
+					</p>
+				))}
+			</section>
+		)
+	}
+
+	<section class="reference-api-section" id={sectionID('signature')}>
+		<Heading>
+			Full signature{symbol.overloads.length > 1 ? ` (${symbol.overloads.length} overloads)` : ''}
+		</Heading>
+		<div class="reference-full-signature">
+			<ReferenceSignature
+				signature={symbol.signature}
+				name={symbol.name}
+				parameters={symbol.parameters}
+				{typeLinks}
+				symbolHref={href}
+			/>
+			{
+				!embedded && symbol.source && (
+					<p class="reference-source">
+						<a href={symbol.source.url}>
+							Source{' '}
+							<code>
+								{symbol.source.path}:{symbol.source.line}
+							</code>
+						</a>
+					</p>
+				)
+			}
+		</div>
+	</section>
 </div>

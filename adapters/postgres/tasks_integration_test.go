@@ -430,7 +430,7 @@ func TestPostgresDurableTaskRejectsUnboundedRawCallsAndDismissesTerminalTargets(
 func postgresTaskConfig(definitions ...ridu.TaskDefinition) ridu.Config {
 	return ridu.Config{
 		Name: "PostgreSQL durable tasks", Tasks: definitions,
-		Collections: []ridu.Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title", field.Required())}}},
+		Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{field.Text("title").Required()}}},
 	}
 }
 

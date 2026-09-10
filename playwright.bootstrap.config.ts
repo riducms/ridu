@@ -6,6 +6,8 @@ const fixtureCommand =
 		: "bun run build:admin-fixture && go build -o .ridu/admin-server-bootstrap-fixture ./tests/contracts/admin_server && exec env RIDU_BROWSER_BOOTSTRAP=true RIDU_BROWSER_ADDRESS=127.0.0.1:18083 RIDU_BROWSER_PREVIEW_ADDRESS=127.0.0.1:18084 RIDU_BROWSER_ADMIN_DIR=.ridu/admin-fixture-build ./.ridu/admin-server-bootstrap-fixture";
 
 export default defineConfig({
+	outputDir: ".ridu/playwright/bootstrap/results",
+	reporter: [["list"]],
 	testDir: "./tests/e2e",
 	testMatch: "**/admin/bootstrap.spec.ts",
 	fullyParallel: false,

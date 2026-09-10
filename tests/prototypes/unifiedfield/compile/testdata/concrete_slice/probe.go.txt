@@ -1,0 +1,5 @@
+package concreteslice
+
+import "example.com/ridu-gate1/field"
+
+var _ field.Fields = []field.TextField{field.Text("title")}

@@ -201,30 +201,20 @@ func mongoDBSemanticLiveBeforeManifest(t *testing.T) schema.Manifest {
 		Name:  "MongoDB semantic migration proof",
 		Admin: ridu.AdminConfig{User: "authors"},
 		Collections: []ridu.Collection{
-			{Slug: "empty-drafts", Fields: []field.Definition{field.Text("note")}},
+			{Slug: "empty-drafts", Fields: field.Fields{field.Text("note")}},
 			{
 				Slug: "authors", Auth: true, Versions: true, LockDocuments: true,
-				Fields: []field.Definition{field.Email("email", field.Required(), field.Unique()), field.Text("name", field.Required())},
+				Fields: field.Fields{field.Email("email").Required().Unique(), field.Text("name").Required()},
 			},
 			{
 				Slug: "retired-users", Auth: true, Versions: true, LockDocuments: true,
-				Fields: []field.Definition{
-					field.Email("email", field.Required(), field.Unique()),
-					field.Relationship("mentor", field.To("authors"), field.OnDelete(field.ReferenceDeleteRestrict)),
-				},
+				Fields: field.Fields{field.Email("email").Required().Unique(), field.Relationship("mentor", "authors").OnDelete(field.ReferenceDeleteRestrict)},
 			},
 			{
-				Slug: "posts",
-				Fields: []field.Definition{
-					field.Text("title", field.Required()),
-					field.Relationship("author", field.To("authors"), field.OnDelete(field.ReferenceDeleteRestrict)),
-					field.Group("metadata", field.Fields(
-						field.Text("relationTo"),
-						field.Relationship("subject", field.ToAny("authors", "settings"), field.OnDelete(field.ReferenceDeleteRestrict)),
-					)),
-				},
+				Slug:   "posts",
+				Fields: field.Fields{field.Text("title").Required(), field.Relationship("author", "authors").OnDelete(field.ReferenceDeleteRestrict), field.Group("metadata", field.Fields{field.Text("relationTo"), field.PolymorphicRelationship("subject", "authors", "settings").OnDelete(field.ReferenceDeleteRestrict)})},
 			},
-			{Slug: "settings", Fields: []field.Definition{field.Text("note")}},
+			{Slug: "settings", Fields: field.Fields{field.Text("note")}},
 		},
 	})
 	if err != nil {
@@ -287,16 +277,16 @@ func mongoDBSemanticLiveRenameAuthorRelationshipTargets(fields []schema.Field) {
 		}
 		if fields[fieldIndex].Nested != nil {
 			nested := *fields[fieldIndex].Nested
-			nested.Fields = append([]schema.Field(nil), nested.Fields...)
-			mongoDBSemanticLiveRenameAuthorRelationshipTargets(nested.Fields)
+			nested.Fields = append([]schema.Field(nil), nested.ResolvedFields()...)
+			mongoDBSemanticLiveRenameAuthorRelationshipTargets(nested.ResolvedFields())
 			fields[fieldIndex].Nested = &nested
 		}
 		if fields[fieldIndex].Blocks != nil {
 			blocks := *fields[fieldIndex].Blocks
-			blocks.Types = append([]schema.BlockType(nil), blocks.Types...)
-			for blockIndex := range blocks.Types {
-				blocks.Types[blockIndex].Fields = append([]schema.Field(nil), blocks.Types[blockIndex].Fields...)
-				mongoDBSemanticLiveRenameAuthorRelationshipTargets(blocks.Types[blockIndex].Fields)
+			blocks.Types = append([]schema.BlockType(nil), blocks.ResolvedTypes()...)
+			for blockIndex := range blocks.ResolvedTypes() {
+				blocks.ResolvedTypes()[blockIndex].Fields = append([]schema.Field(nil), blocks.ResolvedTypes()[blockIndex].ResolvedFields()...)
+				mongoDBSemanticLiveRenameAuthorRelationshipTargets(blocks.ResolvedTypes()[blockIndex].ResolvedFields())
 			}
 			fields[fieldIndex].Blocks = &blocks
 		}
@@ -562,7 +552,7 @@ func mongoDBAssertSemanticLiveRenameAndRetirement(
 		mongoRollback(t, read)
 		t.Fatal(err)
 	}
-	metadata, valid := post.Values["metadata"].ObjectValue()
+	metadata, valid := post.Values["metadata"].CopyObject()
 	if !valid {
 		mongoRollback(t, read)
 		t.Fatalf("renamed post metadata = %#v", post.Values["metadata"])
@@ -571,7 +561,7 @@ func mongoDBAssertSemanticLiveRenameAndRetirement(
 		mongoRollback(t, read)
 		t.Fatalf("authored relationTo field was rewritten = %q", relationTo)
 	}
-	subject, valid := metadata["subject"].ObjectValue()
+	subject, valid := metadata["subject"].CopyObject()
 	if !valid {
 		mongoRollback(t, read)
 		t.Fatalf("nested polymorphic subject = %#v", metadata["subject"])

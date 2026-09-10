@@ -1,4 +1,7 @@
+import { resolveBlockTypes } from "@riducms/protocol";
+import { embeddedOccurrences } from "@admin/core/forms/embedded-fields";
 import type { AdminI18n } from "@riducms/plugin";
+import { createAdminI18n } from "@riducms/translations";
 import type { SchemaField, ValidationIssue } from "@riducms/protocol";
 
 import { initialFormValues, type FormValues } from "@admin/core/forms/form-schema";
@@ -92,7 +95,7 @@ function resolveFieldLabel(
 					),
 				]
 			: labels;
-		const blockFields = field.blocks.types.flatMap((block) => block.fields);
+		const blockFields = resolveBlockTypes(field.blocks).flatMap((block) => block.fields);
 		return resolveFieldLabel(
 			blockFields,
 			isIndex(index) ? childSegments : remaining,
@@ -126,8 +129,14 @@ function validateFields(
 			const defaults = requireMissing ? initialFormValues([field]) : {};
 			if (Object.hasOwn(defaults, field.name)) {
 				validateFields([field], defaults, prefix, true, issues, include, i18n);
-			} else if (requireMissing && field.required) {
+			} else if (requireMissing && field.required && !field.dynamicDefault) {
 				issues.push(requiredIssue(field, path, i18n));
+			} else if (
+				requireMissing &&
+				!field.dynamicDefault &&
+				(field.type === "text-list" || field.type === "number-list")
+			) {
+				validatePrimitiveList(field, [], path, issues, i18n);
 			} else if (requireMissing && field.type === "array" && (field.nested?.minRows ?? 0) > 0) {
 				issues.push(
 					issue(
@@ -146,6 +155,8 @@ function validateFields(
 		}
 		if (value === null || value === undefined) {
 			if (field.required) issues.push(requiredIssue(field, path, i18n));
+			else if (field.type === "text-list" || field.type === "number-list")
+				validatePrimitiveList(field, [], path, issues, i18n);
 			else if (field.type === "array" && (field.nested?.minRows ?? 0) > 0) {
 				issues.push(
 					issue(
@@ -164,6 +175,10 @@ function validateFields(
 		}
 
 		switch (field.type) {
+			case "text-list":
+			case "number-list":
+				validatePrimitiveList(field, value, path, issues, i18n);
+				break;
 			case "text":
 			case "code":
 			case "textarea":
@@ -242,10 +257,71 @@ function validateFields(
 			case "blocks":
 				validateBlocks(field, value, path, issues, include, i18n);
 				break;
-			case "json":
-			case "plugin":
-				// Plugin validators and internal populated-document checks remain server-authoritative.
+			case "plugin": {
+				const embedded = embeddedOccurrences(field, value, path);
+				issues.push(...embedded.issues);
+				for (const occurrence of embedded.occurrences)
+					validateFields(
+						occurrence.block.fields,
+						occurrence.payload,
+						occurrence.path,
+						true,
+						issues,
+						include,
+						i18n
+					);
 				break;
+			}
+			case "json":
+				// Plugin envelope validators and populated-document checks remain server-authoritative.
+				break;
+		}
+	}
+}
+
+function validatePrimitiveList(
+	field: SchemaField,
+	value: unknown,
+	path: string,
+	issues: ValidationIssue[],
+	i18n: AdminI18n = createAdminI18n()
+) {
+	const label = localizedFieldLabel(field, i18n);
+	const report = (
+		code: string,
+		key: Parameters<AdminI18n["t"]>[0],
+		variables: Readonly<Record<string, string | number>> = {}
+	) => issues.push(issue(code, path, i18n.t(key, { label, ...variables })));
+	if (!Array.isArray(value)) {
+		report("invalid_type", "errors:array");
+		return;
+	}
+	const minimum = Math.max(field.required ? 1 : 0, field.list?.minRows ?? 0);
+	if (value.length < minimum)
+		report(field.required && value.length === 0 ? "required" : "min_rows", "errors:listMinItems", {
+			count: minimum,
+		});
+	if (field.list?.maxRows && value.length > field.list.maxRows)
+		report("max_rows", "errors:listMaxItems", { count: field.list.maxRows });
+	for (const [index, item] of value.entries()) {
+		const number = index + 1;
+		if (field.type === "text-list") {
+			if (typeof item !== "string") {
+				report("invalid_type", "errors:listItemString", { number });
+				continue;
+			}
+			const length = Array.from(item).length;
+			if (length < (field.text?.minLength ?? 0))
+				report("min_length", "errors:listItemMinLength", { number, count: field.text!.minLength! });
+			if (field.text?.maxLength !== undefined && length > field.text.maxLength)
+				report("max_length", "errors:listItemMaxLength", { number, count: field.text.maxLength });
+		} else if (typeof item !== "number" || !Number.isFinite(item))
+			report("invalid_number", "errors:listItemNumber", { number });
+		else {
+			if (field.number?.min !== undefined && item < field.number.min)
+				report("min_value", "errors:listItemMin", { number, min: field.number.min });
+			if (field.number?.max !== undefined && item > field.number.max)
+				report("max_value", "errors:listItemMax", { number, max: field.number.max });
 		}
 	}
 }
@@ -330,16 +406,16 @@ function validateSelect(
 		if (field.required) issues.push(requiredIssue(field, path, i18n));
 		return;
 	}
-	if (!field.select?.choices.some((choice) => choice.value === value)) {
+	if (!field.select?.options.some((option) => option.value === value)) {
 		issues.push(
 			issue(
-				"invalid_choice",
+				"invalid_option",
 				path,
 				translate(
 					i18n,
-					"errors:allowedChoice",
+					"errors:allowedOption",
 					{ label: localizedFieldLabel(field, i18n) },
-					`${localizedFieldLabel(field, i18n)} is not an allowed choice`
+					`${localizedFieldLabel(field, i18n)} is not an allowed option`
 				)
 			)
 		);
@@ -373,7 +449,7 @@ function validateSelectMany(
 		return;
 	}
 
-	const choices = new Set((field.select?.choices ?? []).map((choice) => choice.value));
+	const options = new Set((field.select?.options ?? []).map((option) => option.value));
 	const seen = new Set<string>();
 	for (const [index, candidate] of value.entries()) {
 		const candidatePath = `${path}.${index}`;
@@ -392,16 +468,16 @@ function validateSelectMany(
 			);
 			continue;
 		}
-		if (!choices.has(candidate)) {
+		if (!options.has(candidate)) {
 			issues.push(
 				issue(
-					"invalid_choice",
+					"invalid_option",
 					candidatePath,
 					translate(
 						i18n,
-						"errors:allowedChoice",
+						"errors:allowedOption",
 						{ label: localizedFieldLabel(field, i18n) },
-						`${localizedFieldLabel(field, i18n)} is not an allowed choice`
+						`${localizedFieldLabel(field, i18n)} is not an allowed option`
 					)
 				)
 			);
@@ -409,13 +485,13 @@ function validateSelectMany(
 		if (seen.has(candidate)) {
 			issues.push(
 				issue(
-					"duplicate_choice",
+					"duplicate_option",
 					candidatePath,
 					translate(
 						i18n,
-						"errors:duplicateChoice",
+						"errors:duplicateOption",
 						{ label: localizedFieldLabel(field, i18n) },
-						`${localizedFieldLabel(field, i18n)} must not contain duplicate choices`
+						`${localizedFieldLabel(field, i18n)} must not contain duplicate options`
 					)
 				)
 			);
@@ -684,6 +760,37 @@ function validateBlocks(
 			)
 		);
 	}
+	const minRows = field.blocks.minRows ?? 0;
+	const maxRows = field.blocks.maxRows ?? 0;
+	if (value.length < minRows && !(field.required && value.length === 0)) {
+		issues.push(
+			issue(
+				"min_rows",
+				path,
+				translate(
+					i18n,
+					"errors:minRows",
+					{ label: localizedFieldLabel(field, i18n), count: minRows },
+					`${localizedFieldLabel(field, i18n)} must contain at least ${minRows} rows`
+				)
+			)
+		);
+	}
+	if (maxRows > 0 && value.length > maxRows) {
+		issues.push(
+			issue(
+				"max_rows",
+				path,
+				translate(
+					i18n,
+					"errors:maxRows",
+					{ label: localizedFieldLabel(field, i18n), count: maxRows },
+					`${localizedFieldLabel(field, i18n)} must contain no more than ${maxRows} rows`
+				)
+			)
+		);
+	}
+
 	for (const [index, row] of value.entries()) {
 		const rowPath = `${path}.${index}`;
 		if (!isRecord(row)) {
@@ -696,7 +803,9 @@ function validateBlocks(
 			);
 			continue;
 		}
-		const block = field.blocks.types.find((candidate) => candidate.key === row.blockType);
+		const block = resolveBlockTypes(field.blocks).find(
+			(candidate) => candidate.slug === row.blockType
+		);
 		if (block === undefined) {
 			issues.push(
 				issue(
@@ -747,4 +856,61 @@ function translate(
 
 function localizedFieldLabel(field: SchemaField, i18n?: AdminI18n) {
 	return i18n?.text(field.admin.label, field.admin.labelTranslations) ?? field.admin.label;
+}
+
+/** Unknown stored variants require schema recovery even if a UI edit removed the row. */
+export function unknownBlockIssues(
+	fields: readonly SchemaField[],
+	values: FormValues,
+	i18n?: AdminI18n,
+	prefix = ""
+): ValidationIssue[] {
+	const issues: ValidationIssue[] = [];
+	for (const field of fields) {
+		const value = values[field.name];
+		const path = joinPath(prefix, field.name);
+		if (field.type === "group" && isRecord(value))
+			issues.push(...unknownBlockIssues(field.nested?.fields ?? [], value, i18n, path));
+		if (field.type === "plugin") {
+			const embedded = embeddedOccurrences(field, value, path);
+			issues.push(...embedded.issues);
+			for (const occurrence of embedded.occurrences)
+				issues.push(
+					...unknownBlockIssues(occurrence.block.fields, occurrence.payload, i18n, occurrence.path)
+				);
+		}
+		if (!Array.isArray(value)) continue;
+		if (field.type === "array") {
+			value.forEach((row, index) => {
+				if (isRecord(row))
+					issues.push(
+						...unknownBlockIssues(field.nested?.fields ?? [], row, i18n, `${path}.${index}`)
+					);
+			});
+		} else if (field.type === "blocks") {
+			value.forEach((row, index) => {
+				const block = isRecord(row)
+					? resolveBlockTypes(field.blocks).find((candidate) => candidate.slug === row.blockType)
+					: undefined;
+				if (block === undefined)
+					issues.push(
+						issue(
+							"unknown_block_schema",
+							`${path}.${index}.blockType`,
+							translate(
+								i18n,
+								"errors:unknownBlockRecovery",
+								{},
+								"Restore the missing block schema or migrate the document before saving."
+							)
+						)
+					);
+				else
+					issues.push(
+						...unknownBlockIssues(block.fields, row as FormValues, i18n, `${path}.${index}`)
+					);
+			});
+		}
+	}
+	return issues;
 }

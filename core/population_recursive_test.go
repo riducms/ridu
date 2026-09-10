@@ -10,6 +10,7 @@ import (
 	"github.com/riducms/ridu/field"
 	"github.com/riducms/ridu/internal/population"
 	"github.com/riducms/ridu/internal/teststore"
+	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/protocol"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/store"
@@ -20,22 +21,17 @@ func TestRecursivePopulationTraversesNestedShapesWithAccessDepthAndRedaction(t *
 	publicPath, _ := query.NewPath("public")
 	application, err := ridu.New(ridu.Config{Name: "Recursive population", Collections: []ridu.Collection{
 		{
-			Slug: "people", Fields: []field.Definition{
-				field.Text("name", field.Required()), field.Checkbox("public", field.Required()), field.Text("secret"),
-			},
+			Slug: "people", Fields: field.Fields{field.Text("name").Required(), field.Checkbox("public").Required(), field.Text("secret").Access(field.Access{Read: func(operation.AccessContext,
+
+			) (bool, error) {
+				return false, nil
+			}})},
 			Access: ridu.CollectionAccess{Read: func(ridu.AccessContext) (ridu.AccessDecision, error) {
 				return ridu.Where(query.Equal(publicPath, query.Boolean(true))), nil
 			}},
-			FieldAccess: map[string]ridu.FieldAccess{"secret": {Read: func(ridu.FieldAccessContext) (bool, error) { return false, nil }}},
 		},
-		{Slug: "teams", Fields: []field.Definition{
-			field.Text("name", field.Required()), field.Relationship("owner", field.To("people")),
-		}},
-		{Slug: "entries", Fields: []field.Definition{
-			field.Group("meta", field.Fields(field.Relationship("reviewer", field.To("people")))),
-			field.Array("sections", field.Fields(field.Relationship("reviewer", field.To("people")))),
-			field.Blocks("layout", field.BlockTypes(field.BlockType("quote", "Quote", field.Relationship("source", field.To("teams"))))),
-		}},
+		{Slug: "teams", Fields: field.Fields{field.Text("name").Required(), field.Relationship("owner", "people")}},
+		{Slug: "entries", Fields: field.Fields{field.Group("meta", field.Fields{field.Relationship("reviewer", "people")}), field.Array("sections", field.Fields{field.Relationship("reviewer", "people")}), field.Blocks("layout", field.Block{Slug: "quote", Fields: field.Fields{field.Relationship("source", "teams")}})}},
 	}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -85,33 +81,33 @@ func TestRecursivePopulationTraversesNestedShapesWithAccessDepthAndRedaction(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	meta, _ := result.Values["meta"].ObjectValue()
-	reviewer, populated := meta["reviewer"].DocumentValue()
+	meta, _ := result.Values["meta"].CopyObject()
+	reviewer, populated := meta["reviewer"].CopyDocument()
 	if !populated || reviewer.ID != visible.ID {
 		t.Fatalf("group population = %#v", meta["reviewer"])
 	}
 	if _, leaked := reviewer.Values["secret"]; leaked {
 		t.Fatal("nested group population leaked a redacted field")
 	}
-	sections, _ := result.Values["sections"].Values()
-	first, _ := sections[0].ObjectValue()
-	firstReviewer, populated := first["reviewer"].DocumentValue()
+	sections, _ := result.Values["sections"].CopyList()
+	first, _ := sections[0].CopyObject()
+	firstReviewer, populated := first["reviewer"].CopyDocument()
 	if !populated || firstReviewer.ID != visible.ID {
 		t.Fatalf("array population = %#v", first["reviewer"])
 	}
-	second, _ := sections[1].ObjectValue()
-	if _, populated := second["reviewer"].DocumentValue(); populated {
+	second, _ := sections[1].CopyObject()
+	if _, populated := second["reviewer"].CopyDocument(); populated {
 		t.Fatalf("access-filtered nested target was populated: %#v", second["reviewer"])
 	} else if id, _ := second["reviewer"].StringValue(); id != laterHidden.ID {
 		t.Fatalf("access-filtered nested target changed = %q", id)
 	}
-	layout, _ := result.Values["layout"].Values()
-	quote, _ := layout[0].ObjectValue()
-	populatedTeam, populated := quote["source"].DocumentValue()
+	layout, _ := result.Values["layout"].CopyList()
+	quote, _ := layout[0].CopyObject()
+	populatedTeam, populated := quote["source"].CopyDocument()
 	if !populated || populatedTeam.ID != team.ID {
 		t.Fatalf("block population = %#v", quote["source"])
 	}
-	owner, populated := populatedTeam.Values["owner"].DocumentValue()
+	owner, populated := populatedTeam.Values["owner"].CopyDocument()
 	if !populated || owner.ID != visible.ID {
 		t.Fatalf("depth-two nested target population = %#v", populatedTeam.Values["owner"])
 	}
@@ -142,8 +138,8 @@ func TestRecursivePopulationTraversesNestedShapesWithAccessDepthAndRedaction(t *
 func TestAnonymousPopulationDoesNotExposeDraftTargetsFromPublicSources(t *testing.T) {
 	ctx := context.Background()
 	application, err := ridu.New(ridu.Config{Name: "Published population", Collections: []ridu.Collection{
-		{Slug: "lessons", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true}, Fields: []field.Definition{field.Text("title", field.Required())}},
-		{Slug: "links", Fields: []field.Definition{field.Relationship("lesson", field.To("lessons"), field.Required())}},
+		{Slug: "lessons", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true}, Fields: field.Fields{field.Text("title").Required()}},
+		{Slug: "links", Fields: field.Fields{field.Relationship("lesson", "lessons").Required()}},
 	}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -164,7 +160,7 @@ func TestAnonymousPopulationDoesNotExposeDraftTargetsFromPublicSources(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, populated := anonymous.Values["lesson"].DocumentValue(); populated {
+	if _, populated := anonymous.Values["lesson"].CopyDocument(); populated {
 		t.Fatalf("anonymous population exposed draft target: %#v", anonymous.Values["lesson"])
 	}
 	if lessonID, _ := anonymous.Values["lesson"].StringValue(); lessonID != draft.ID {
@@ -177,7 +173,7 @@ func TestAnonymousPopulationDoesNotExposeDraftTargetsFromPublicSources(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, populated := anonymousDraft.Values["lesson"].DocumentValue(); populated {
+	if _, populated := anonymousDraft.Values["lesson"].CopyDocument(); populated {
 		t.Fatalf("anonymous draft override exposed draft target: %#v", anonymousDraft.Values["lesson"])
 	}
 
@@ -185,7 +181,7 @@ func TestAnonymousPopulationDoesNotExposeDraftTargetsFromPublicSources(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	if populated, ok := staffView.Values["lesson"].DocumentValue(); !ok || populated.ID != draft.ID {
+	if populated, ok := staffView.Values["lesson"].CopyDocument(); !ok || populated.ID != draft.ID {
 		t.Fatalf("authorized draft population = %#v", staffView.Values["lesson"])
 	}
 }
@@ -193,8 +189,8 @@ func TestAnonymousPopulationDoesNotExposeDraftTargetsFromPublicSources(t *testin
 func TestTrashMutationsPopulateTheirReturnedDocuments(t *testing.T) {
 	ctx := context.Background()
 	application, err := ridu.New(ridu.Config{Name: "Trash mutation population", Collections: []ridu.Collection{
-		{Slug: "people", Fields: []field.Definition{field.Text("name", field.Required())}},
-		{Slug: "entries", Trash: true, Fields: []field.Definition{field.Relationship("author", field.To("people"), field.Required())}},
+		{Slug: "people", Fields: field.Fields{field.Text("name").Required()}},
+		{Slug: "entries", Trash: true, Fields: field.Fields{field.Relationship("author", "people").Required()}},
 	}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -214,22 +210,22 @@ func TestTrashMutationsPopulateTheirReturnedDocuments(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if author, populated := deleted.Values["author"].DocumentValue(); !populated || author.ID != person.ID {
+	if author, populated := deleted.Values["author"].CopyDocument(); !populated || author.ID != person.ID {
 		t.Fatalf("soft-delete population = %#v", deleted.Values["author"])
 	}
 	restored, err := application.Local().RestoreDeletedWithOptions(ctx, "entries", entry.ID, options)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if author, populated := restored.Values["author"].DocumentValue(); !populated || author.ID != person.ID {
+	if author, populated := restored.Values["author"].CopyDocument(); !populated || author.ID != person.ID {
 		t.Fatalf("trash-restore population = %#v", restored.Values["author"])
 	}
 }
 
 func TestPopulationRejectsUnknownDuplicateAndUnboundedRequests(t *testing.T) {
 	application, err := ridu.New(ridu.Config{Name: "Population bounds", Collections: []ridu.Collection{
-		{Slug: "people", Fields: []field.Definition{field.Text("name")}},
-		{Slug: "posts", Fields: []field.Definition{field.Relationship("author", field.To("people"))}},
+		{Slug: "people", Fields: field.Fields{field.Text("name")}},
+		{Slug: "posts", Fields: field.Fields{field.Relationship("author", "people")}},
 	}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -265,9 +261,7 @@ func TestPopulationRejectsUnknownDuplicateAndUnboundedRequests(t *testing.T) {
 func TestPopulationMaterializationBudgetRejectsDenseRecursiveGraphs(t *testing.T) {
 	ctx := context.Background()
 	application, err := ridu.New(ridu.Config{Name: "Population output budget", Collections: []ridu.Collection{
-		{Slug: "nodes", Fields: []field.Definition{
-			field.Text("name"), field.Relationship("links", field.To("nodes"), field.HasMany()),
-		}},
+		{Slug: "nodes", Fields: field.Fields{field.Text("name"), field.Relationships("links", "nodes")}},
 	}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)

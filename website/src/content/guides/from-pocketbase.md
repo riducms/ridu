@@ -119,7 +119,7 @@ application-specific bridge proves otherwise.
 
 Start with a small parallel model—users, one editorial collection, and media—then exercise its
 author experience and API. Measure your workload and compare it with the
-[performance baseline](/docs/performance/). Use
+[performance baseline](/docs/performance/measurement/#headline). Use
 [Troubleshooting](/docs/troubleshooting/) if installation or local prerequisites get in the way,
 and review [Production](/docs/production/) before interpreting a successful local demo as a
 deployment recommendation.

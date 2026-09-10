@@ -158,6 +158,7 @@
 		sourceID !== undefined && field.join?.allowCreate !== false && targetOperations?.create === true
 	);
 	const canManage = $derived(!field.admin.readOnly && (canAttach || canCreate));
+	const editingBlocked = $derived(form.editingBlocked);
 	let browserOpen = $state(false);
 	let pending = $state(false);
 	let mutationError = $state<string>();
@@ -179,6 +180,7 @@
 	}
 
 	async function commit(ids: string[]) {
+		if (editingBlocked) return false;
 		const source = form.resource;
 		if (
 			source?.id === undefined ||
@@ -270,7 +272,12 @@
 				})}
 			</p>
 			{#if canManage}
-				<Button variant="outline" size="sm" disabled={pending} onclick={() => (browserOpen = true)}>
+				<Button
+					variant="outline"
+					size="sm"
+					disabled={pending || editingBlocked}
+					onclick={() => (browserOpen = true)}
+				>
 					<ListPlusIcon class="size-3" />
 					{runtime.i18n.t(pending ? "fields:updating" : "fields:manageRelationships")}
 				</Button>

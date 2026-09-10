@@ -1,6 +1,6 @@
 ---
 title: 'The Ridu admin'
-description: 'Browse, create, edit, localize, publish, and extend content in Ridu’s embedded admin.'
+description: 'Create and publish content, organize your collections, and customize the admin for your editors.'
 product: admin
 eyebrow: 'Admin'
 order: 140
@@ -10,66 +10,74 @@ navigation:
   title: 'Admin'
 ---
 
-Ridu includes a Svelte 5 admin. Your application provides a Vite entry, theme, and plugin imports.
-Production assets are
-static files embedded in the Go binary, so the authoring UI does not require Node, Bun, SvelteKit,
-or a separate JavaScript server at runtime.
+Ridu includes an admin for browsing, editing, and publishing your content. Define your collections
+and fields in Go, then use the admin at `/admin`. You can change its theme and add your own Svelte
+components to suit your editors.
+
+The admin is bundled into your Go application when you build it. Production needs no separate
+JavaScript server.
+
+## Admin configuration {#configuration}
+
+| Option                                         | What it controls                                                                                   |
+| ---------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `Config.Admin.User`                            | Chooses the auth-enabled collection whose sessions may enter the admin.                            |
+| `Config.Admin.Localization`                    | Declares interface languages and editor timezones, separate from content locales.                  |
+| `Collection.Admin.UseAsTitle`                  | Chooses the direct field used as a document's readable name.                                       |
+| `Collection.Admin.DefaultColumns`              | Sets the initial list columns; authors can personalize their view.                                 |
+| `Collection.Admin.Group` / `Description`       | Organizes and explains the collection in navigation and list screens.                              |
+| `Collection.Admin.FolderField` / `ParentField` | Enables folder filtering or hierarchy for compatible direct relationships.                         |
+| `Collection.Admin.LivePreview`                 | Adds a preview URL template and optional named viewport sizes.                                     |
+| Field `.Admin(field.Admin{...})`               | Sets label-adjacent description, layout, visibility, editor, and row presentation.                 |
+| `admin/src/admin.config.ts`                    | Registers application Svelte components, providers, routes, messages, and installed admin plugins. |
 
 ## How the admin is configured {#framework-owned-shell}
 
-At startup the admin reads the canonical manifest, current identity, and access capabilities. That
-single contract drives navigation, collection columns, field layout, localization, resource
-features, and plugin pairing. The generated Fetch SDK is its transport; REST, local Go calls, and
-the admin therefore enter the same validation, access, hooks, versioning, and transaction engine.
+Your Go config determines which collections appear, how fields are laid out, and what each user
+can do. The admin reads that configuration and displays the available actions for the signed-in
+user. The API checks permissions and validates data again when a document is saved.
 
-The authenticated shell includes:
+After signing in, the dashboard and navigation give you access to your collections and globals.
+Use the command menu to find a screen or start a new document. Account screens let you manage
+your profile, password, sessions, and API keys.
 
-- dashboard, grouped collection/global navigation, breadcrumbs, command-menu navigation and create
-  shortcuts;
-- login plus configured recovery and verification screens;
-- profile, password, session, and API-key account workflows; and
-- responsive navigation, page titles, loading progress, notifications, confirmation dialogs, and
-  safe redirects back to the originally requested admin route.
-
-Admin visibility is not authorization. Hidden navigation or a read-only field only describes the
-current interface; the server re-evaluates collection, document, and field access on every request.
-See [Access control](/docs/access-control/) and [Authentication](/docs/authentication/).
+Hiding a collection or disabling an input does not secure its data. Set the Go access rules to
+control who can read or change it. See [Access control](/docs/access-control/) and
+[Authentication](/docs/authentication/).
 
 ## Find and organize content {#lists}
 
-Collection list routes support title search, pagination, stable sorting, typed filters, selectable
-columns, page-size preferences, saved views, workflow status, and locale switching. ID, created,
-updated, and status metadata can be selected independently. Nested group paths can be columns,
-filters, and sort keys when the schema permits them; relationship and upload cells resolve readable
-labels through access-checked requests.
+Open a collection to search its titles, filter results, sort columns, and choose which columns
+to show. You can include fields inside groups and built-in values such as ID, status, and creation
+date. Relationships and uploads display readable names when the user has permission to see them.
+Save a view to return to the same filters and columns later.
 
-When a collection declares a folder relationship, authors can filter by folder and switch to a
-hierarchical view. Trash-enabled collections have a separate trash workspace. List state is kept in
-the URL and actor preferences, so filtered and saved workspaces remain navigable rather than living
-only in component memory.
+Collections with folders can also be browsed by folder. Collections with trash enabled have a
+separate screen for restoring or permanently deleting documents. Filters are kept in the URL,
+so you can bookmark or share a filtered list.
 
-Authors can select the current page or resolve all filtered results. Bulk edit, publish, unpublish,
-delete, restore, and permanent delete are performed as one access-checked server request. The
-atomic maximum is 100 documents; narrow a filter when it resolves to more. Bulk create/import is
-not a generic admin workflow today—use an application task or purpose-built importer.
+Select documents to edit, publish, unpublish, delete, or restore them together. Each bulk action
+supports up to 100 documents and checks permission for each one. Narrow the filter if it selects
+more. General content import is not built into the admin; use an application task or custom importer.
 
 ## Create and edit documents {#documents}
 
-The schema-driven document route handles collections and globals. It renders scalar fields,
-relationships, uploads, groups, arrays, blocks, rows, tabs, collapsibles, joins, localization, and
-statically registered custom fields. It reconciles a manifest change without silently submitting
-removed or incompatible values.
+Open a collection document or global to edit its fields. The form follows your Go field definitions,
+including groups, arrays, blocks, tabs, and custom fields. If you change those definitions while
+editing, the form detects removed or incompatible fields before saving.
 
-The form controller owns nested values, registration, client validation, dirty state, field access,
-server issues, conditional presentation, localized inheritance, and submit state. Save, save draft,
-publish, unpublish, duplicate, delete/trash, and copy-locale controls appear only when the resource
-and evaluated access allow them. Optimistic revisions turn a competing write into a visible
-conflict instead of overwriting it.
+The editor keeps track of unsaved changes and displays validation errors beside the affected
+fields. Save, publish, duplicate, delete, and copy-locale controls appear when they are enabled
+and you have permission to use them. If another user saves a competing change, Ridu displays a
+conflict instead of silently overwriting it.
 
-Relationship and upload fields open an access-aware reference browser with debounced search,
-pagination, filters, multi-selection, and inline create/edit where permitted. Upload collections
-also provide direct and SSRF-guarded remote ingestion, a retryable bulk-upload queue, media preview,
-metadata editing, replacement, and persisted crop/focal-point controls.
+Relationship and upload fields let you search for an existing document, select one or more results,
+and create or edit a related document when permitted. Upload collections let you upload files or
+import them from a URL, preview media, edit metadata, replace a file, and adjust its crop and focal
+point. Failed uploads can be retried.
+
+This collection configuration turns on drafts and versions, chooses the default columns, and adds
+a live preview URL:
 
 ```go title="content/posts.go"
 package content
@@ -98,131 +106,91 @@ var Posts = ridu.Collection{
 			},
 		},
 	},
-	Fields: []field.Definition{
-		field.Text("title", field.Required()),
-		field.Relationship("author", field.To("users")),
-		field.Select("status", field.OneOf("draft", "published")),
+	Fields: field.Fields{
+		field.Text("title").Required(),
+		field.Relationship("author", "users"),
+		field.Select("status", "draft", "published"),
 	},
 }
 ```
 
 ## Versions, locks, and preview {#editorial}
 
-Version-enabled resources have history and revision-detail routes. Authors can compare field-level
-changes, show only modified values, restore a revision, and publish or unpublish. Collections also
-show durable scheduled publications and allow an authorized author to schedule or cancel them.
-Global scheduling is not implemented.
+Enable versions to browse a document's history, compare changes, and restore an earlier revision.
+Collections also support scheduled publication: an authorized editor can choose a publication time
+or cancel it later. Globals cannot be scheduled yet.
 
-Document locks warn when another editor owns the record, make the form read-only, and allow an
-authorized takeover. Account login-attempt locks are separate: authorized users can force-unlock an
-auth document from its document actions.
+Document locks show when someone else is editing. The form becomes read-only until the lock is
+released or an authorized editor takes over. This is separate from an account lock caused by failed
+sign-in attempts; authorized users can unlock those accounts from their document actions.
 
-Configured live preview opens an isolated iframe panel with named viewport breakpoints. The admin
-mints a short-lived resource-bound preview grant and posts subsequent form updates through the
-framework preview protocol. Preview grants are process-local today, so multi-replica deployments
-need affinity for the preview session. Read [Live preview](/guides/live-preview/) before integrating
-the receiving site.
+Live preview shows your frontend beside the form and sends it unsaved changes. Configure sizes
+such as mobile and desktop to check both layouts. Read [Live preview](/guides/live-preview/) to
+connect your frontend and configure deployments with multiple server instances.
 
-Every create/edit/global route also has a stable API view. Its URL can be linked directly and
-survives reload, which is useful when comparing the current authoring state with JSON consumers.
+Use the API tab to inspect a document's JSON. Its URL can be bookmarked or shared and works after
+a page reload.
 
 ## Field layout {#field-layout}
 
-`Label`, `Description`, `Columns`, `Tab`, `ShowWhen`, `ReadOnly`, rows, tabs, and collapsibles affect
-authoring presentation. They do not grant access or rename stored paths.
+Use `.Label(...)` to name a field and `.Admin(field.Admin{...})` to set its description, width,
+or other display options. Rows, tabs, and collapsible sections organize the form without changing
+where its values are stored.
+
+This example places first and last name side by side and groups SEO fields in a collapsed section:
 
 ```go title="admin-layout.go"
 package content
 
 import "github.com/riducms/ridu/field"
 
-func profileFields() []field.Definition {
-	return []field.Definition{
-		field.Row(
-			field.Text("firstName", field.Columns(6)),
-			field.Text("lastName", field.Columns(6)),
-		),
-		field.Collapsible("SEO", true,
+func profileFields() field.Fields {
+	return field.Fields{
+		field.Row(field.Fields{
+			field.Text("firstName").Admin(field.Admin{Columns: 6}),
+			field.Text("lastName").Admin(field.Admin{Columns: 6}),
+		}),
+		field.Collapsible("SEO", field.Fields{
 			field.Text("metaTitle"),
 			field.Textarea("metaDescription"),
-		),
+		}).Admin(field.Admin{InitiallyCollapsed: true}),
 	}
 }
 ```
 
-Use [Fields](/docs/fields/) for the complete vocabulary and [Rich text](/docs/rich-text/) for the
-official paired editor plugin.
+See [Fields](/docs/fields/) for the available field types and layout options, or
+[Rich text](/docs/rich-text/) to add a formatted-text editor.
 
-## Extend the admin {#extend-the-admin}
+## Custom components {#extend-the-admin}
 
-Admin plugins are published TypeScript/Svelte packages, imported statically into the generated
-registry. Backend partners are compiled Go packages. The generator and startup resolver validate
-the stable plugin key, admin API version, plugin-owned pairing version, exported symbol, route list,
-and asset list before exposing extensions. There is no runtime package installation or dynamic
-code download in production.
+Add your own Svelte components to make the admin fit your editors' work. Register them in
+`admin/src/admin.config.ts`, alongside the plugins your application already uses.
 
-Use `defineAdminPlugin` to register only the surface you need:
+Start with [Custom components](/docs/custom-components/) for a complete first example. Then
+choose the part of the admin you want to change:
 
-```ts title="src/admin.ts"
-import { ADMIN_PLUGIN_API_VERSION, defineAdminPlugin } from '@riducms/plugin';
-import EditorialPanel from './EditorialPanel.svelte';
-import ReviewRoute from './ReviewRoute.svelte';
+- [Field components](/docs/custom-components/field-components/) — replace an input or add a
+  character counter.
+- [Row labels](/docs/custom-components/row-labels/) and
+  [table cells](/docs/custom-components/list-cells/) — make lists easier to scan.
+- [Dashboard](/docs/custom-components/dashboard/) and
+  [custom pages](/docs/custom-components/custom-pages/) — add instructions, reports, or tools.
+- [Document tabs](/docs/custom-components/document-views/),
+  [document buttons](/docs/custom-components/document-actions/), and
+  [list and edit views](/docs/custom-components/custom-views/) — customize document workflows.
+- [Branding and navigation](/docs/custom-components/branding-and-navigation/) — change the logo,
+  login screen, and navigation.
+- [Shared settings](/docs/custom-components/providers/) — share settings between your components.
 
-export const admin = defineAdminPlugin({
-	apiVersion: ADMIN_PLUGIN_API_VERSION,
-	key: 'editorial-tools',
-	pairingVersion: 1,
-	fields: [],
-	dashboard: [{ key: 'queue', component: EditorialPanel, position: 'after' }],
-	routes: [
-		{
-			path: 'editorial/review',
-			component: ReviewRoute,
-			navigation: { label: 'Review queue', group: 'Editorial' }
-		}
-	]
-});
-```
+You can use these components directly from your application. Build a
+[plugin](/docs/plugins/) when your customization also adds Go behavior or a new field type.
+See [Admin localization](/docs/localization/#admin-language) for translated component labels and messages.
 
-Plugins can provide exact namespaced message catalogs with `defineAdminMessages`. Every extension
-receives `i18n`, and route, list-cell, and document-view registrations can use translated
-`labelKey` values. Missing locale keys and changed placeholders fail the TypeScript build.
+## Current limitations {#boundaries}
 
-The public extension families are:
+Related list and edit screens do not yet refresh automatically after every change. Reload the
+screen if it still shows an older value.
 
-| Need                     | Contract                                                                                                                               |
-| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
-| Custom stored field UI   | `FieldPlugin` receives the exact schema field, narrow `FieldForm`, and optional authoring host for document lookup/reference browsing. |
-| Authenticated page       | `routes`; each relative path must match the compiled backend descriptor. Navigation is optional.                                       |
-| Dashboard composition    | `dashboard` panels before/after the default, or one collision-checked replacement.                                                     |
-| Shell composition        | `login`, `account`, `navigation`, `logoutButton`, `branding`, `shell`, and ordered `providers`.                                        |
-| Core route composition   | `views` can wrap/replace collection list/create/edit, global, or not-found surfaces and receive a narrow refresh/notification host.    |
-| Resource details         | `listCells`, `documentActions`, and read-only/operational `documentViews`.                                                             |
-| Static companion modules | `assets`, validated against the backend descriptor and imported by the generated registry.                                             |
-
-Replacement components receive the framework `defaultView` as a Svelte snippet, so a plugin can
-wrap the working screen instead of recreating it. Hosts expose focused operations such as refresh,
-login/logout, document-change notification, and toasts; they do not leak the admin’s internal
-stores. Extension keys and scoped replacement targets are collision-checked for deterministic
-composition.
-
-Start with [Plugins](/docs/plugins/) and [Custom fields](/guides/custom-fields/). Exact contracts are
-in the [`@riducms/plugin` reference](/reference/plugin/); reusable primitives are documented in
-[`@riducms/ui`](/reference/ui/), and generated alias behavior in
-[`@riducms/build`](/reference/build/).
-
-## Current boundaries {#boundaries}
-
-The main author workflows above are implemented, but related list/edit screens do not yet
-live-refresh after every mutation.
-
-- broader tablet acceptance and known dirty-state, leave-guard, and accessibility defects remain in
-  progress;
-- array/block sorting and crop/focal editing work; extend keyboard, touch, and focus coverage when
-  those interactions change or a defect exposes a gap;
-- route/bootstrap recovery exists, but plugin-isolated recovery and route-level plugin chunking do
-  not; and
-- large relationship datasets are paginated and searched, but no virtualized picker is promised.
-
-For an evaluation-level view across the whole product, including planned features that are not
-callable today, see [Capability status](/docs/status/).
+Tablet interactions, keyboard and screen-reader support, and warnings about leaving unsaved changes
+are still being improved. Check the editing tasks your team needs on its intended devices.
+See [Capability status](/docs/status/) for feature availability across Ridu.

@@ -1,4 +1,12 @@
-import { ADMIN_PLUGIN_API_VERSION, defineAdminPlugin, defineFieldPlugin } from "@riducms/plugin";
+import { defineAdminPlugin, defineFieldComponent } from "@riducms/plugin/authoring/v1";
+import {
+	decodeString,
+	decodeUI,
+	decodeLengthConfig,
+	decodeOverviewConfig,
+	decodeImageConfig,
+	decodePreviewConfig,
+} from "@plugin-seo/seo-config";
 
 import { seoMessages } from "@plugin-seo/messages";
 
@@ -8,49 +16,41 @@ import MetaTitleField from "@plugin-seo/meta-title-field.svelte";
 import OverviewField from "@plugin-seo/overview-field.svelte";
 import PreviewField from "@plugin-seo/preview-field.svelte";
 
-export const seoFieldPlugins = [
-	defineFieldPlugin({
-		type: "ui",
-		key: "seo",
-		componentKey: "overview",
-		component: OverviewField,
-		canRender: (field) => field.admin.component?.component === "overview",
-	}),
-	defineFieldPlugin({
-		type: "text",
-		key: "seo",
-		componentKey: "title",
-		component: MetaTitleField,
-		canRender: (field) => field.admin.component?.component === "title",
-	}),
-	defineFieldPlugin({
-		type: "textarea",
-		key: "seo",
-		componentKey: "description",
-		component: MetaDescriptionField,
-		canRender: (field) => field.admin.component?.component === "description",
-	}),
-	defineFieldPlugin({
-		type: "upload",
-		key: "seo",
-		componentKey: "image",
-		component: MetaImageField,
-		canRender: (field) => field.admin.component?.component === "image",
-	}),
-	defineFieldPlugin({
-		type: "ui",
-		key: "seo",
-		componentKey: "preview",
-		component: PreviewField,
-		canRender: (field) => field.admin.component?.component === "preview",
-	}),
-] as const;
-
 export const seoAdminPlugin = defineAdminPlugin({
-	apiVersion: ADMIN_PLUGIN_API_VERSION,
 	key: "seo",
 	pairingVersion: 1,
-	fields: seoFieldPlugins,
+	components: {
+		overview: defineFieldComponent({
+			type: "ui",
+			component: OverviewField,
+			decodeValue: decodeUI,
+			decodeConfig: decodeOverviewConfig,
+		}),
+		title: defineFieldComponent({
+			type: "text",
+			component: MetaTitleField,
+			decodeValue: decodeString,
+			decodeConfig: (raw: unknown) => decodeLengthConfig(raw, "text"),
+		}),
+		description: defineFieldComponent({
+			type: "textarea",
+			component: MetaDescriptionField,
+			decodeValue: decodeString,
+			decodeConfig: (raw: unknown) => decodeLengthConfig(raw, "textarea"),
+		}),
+		image: defineFieldComponent({
+			type: "upload",
+			component: MetaImageField,
+			decodeValue: decodeString,
+			decodeConfig: decodeImageConfig,
+		}),
+		preview: defineFieldComponent({
+			type: "ui",
+			component: PreviewField,
+			decodeValue: decodeUI,
+			decodeConfig: decodePreviewConfig,
+		}),
+	},
 	messages: seoMessages,
 });
 

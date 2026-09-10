@@ -115,12 +115,12 @@ test("a generated MongoDB starter survives ordinary authoring and safe schema re
 	);
 
 	const originalSource = await readFile(postsSource, "utf8");
-	const titleDefinition = 'field.Text("title", field.Required()),';
-	expect(originalSource).toContain(titleDefinition);
-	const indexedSummaryDefinition = 'field.Text("summary", field.Index()),';
+	const titleAnchor = 'field.Text("title")';
+	expect(originalSource.split(titleAnchor)).toHaveLength(2);
+	const indexedSummaryDefinition = 'field.Text("summary").Index(),';
 	const additiveSource = originalSource.replace(
-		titleDefinition,
-		`${titleDefinition}\n\t\t\t${indexedSummaryDefinition}`
+		titleAnchor,
+		`${indexedSummaryDefinition}\n\t\t${titleAnchor}`
 	);
 	await writeFile(postsSource, additiveSource);
 
@@ -153,7 +153,7 @@ test("a generated MongoDB starter survives ordinary authoring and safe schema re
 		"Rich text was edited through the generated MongoDB admin."
 	);
 
-	const uniqueSummaryDefinition = 'field.Text("summary", field.Unique()),';
+	const uniqueSummaryDefinition = 'field.Text("summary").Unique(),';
 	await writeFile(
 		postsSource,
 		additiveSource.replace(indexedSummaryDefinition, uniqueSummaryDefinition)

@@ -1,0 +1,14 @@
+package wrongrawhook
+
+import (
+	"example.com/ridu-gate1/field"
+	"example.com/ridu-gate1/operation"
+)
+
+var _ = field.Text("title").Hooks(field.Hooks[string]{
+	BeforeValidate: []field.RawTransform{
+		func(operation.WriteContext, operation.Value[any]) (operation.Change[any], error) {
+			return operation.Change[any]{}, nil
+		},
+	},
+})

@@ -31,7 +31,7 @@ describe("Form Builder contract", () => {
 	it("pairs with the backend at version one", () => {
 		expect(formBuilderAdminPlugin.key).toBe("form-builder");
 		expect(formBuilderAdminPlugin.pairingVersion).toBe(1);
-		expect(formBuilderAdminPlugin.fields).toEqual([]);
+		expect("fields" in formBuilderAdminPlugin).toBe(false);
 	});
 
 	it("builds ordinary and upload submission rows", () => {

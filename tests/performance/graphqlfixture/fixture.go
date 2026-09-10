@@ -65,17 +65,16 @@ func Config() ridu.Config {
 	collections := make([]ridu.Collection, 39)
 	blocks := make([]field.Block, 28)
 	for index := range blocks {
-		blocks[index] = field.BlockType(fmt.Sprintf("block-%02d", index), fmt.Sprintf("Block %02d", index),
-			field.Text("heading"), field.Text("body"), field.Number("weight"),
-		)
+		blocks[index] = field.Block{Slug: fmt.Sprintf("block-%02d", index), Fields: field.Fields{field.Text("heading"), field.Text("body"), field.Number("weight")}}
+
 	}
 	for index := range collections {
 		slug := fmt.Sprintf("items-%02d", index)
-		fields := []field.Definition{field.Text("title", field.Required()), field.Text("summary"), field.Number("rank"), field.Checkbox("featured")}
+		fields := field.Fields{field.Text("title").Required(), field.Text("summary"), field.Number("rank"), field.Checkbox("featured")}
 		if index == 0 {
-			fields = append(fields, field.Blocks("layout", field.BlockTypes(blocks...)))
+			fields = append(fields, field.Blocks("layout", blocks...))
 		} else {
-			fields = append(fields, field.Relationship("parent", field.To("items-00")))
+			fields = append(fields, field.Relationship("parent", "items-00"))
 		}
 		collections[index] = ridu.Collection{
 			Slug: schema.CollectionSlug(slug), Labels: ridu.CollectionLabels{Singular: fmt.Sprintf("Item%02d", index), Plural: fmt.Sprintf("Items%02d", index)}, Fields: fields,

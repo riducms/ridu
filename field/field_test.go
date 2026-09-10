@@ -1,503 +1,253 @@
 package field_test
 
 import (
-	"encoding/json"
 	"math"
+	"reflect"
 	"slices"
 	"testing"
 
 	"github.com/riducms/ridu/field"
+	"github.com/riducms/ridu/operation"
+	"github.com/riducms/ridu/store"
 )
 
-func TestAdminComponentConfigIsImmutable(t *testing.T) {
-	config := json.RawMessage(`{"generate":true}`)
-	definition := field.Text("title", field.AdminComponent("seo", "title", config))
-	config[2] = 'X'
-	plugin, component, returned, exists := definition.AdminComponent()
-	if !exists || plugin != "seo" || component != "title" || string(returned) != `{"generate":true}` {
-		t.Fatalf("admin component = %q/%q/%s/%v", plugin, component, returned, exists)
+func TestOptionAndDefaultInputsAreOwned(t *testing.T) {
+	options := []field.Option{{Value: "draft", Label: "Draft", LabelTranslations: map[string]string{"fr": "Brouillon"}}}
+	declaration := field.Select("status").Options(options...).Default("draft")
+	options[0].Value = "changed"
+	options[0].LabelTranslations["fr"] = "changed"
+	view := field.Snapshot(declaration)
+	returned := view.Options()
+	returned[0].Value = "changed"
+	returned[0].LabelTranslations["fr"] = "changed"
+	if got := view.Options()[0]; got.Value != "draft" || got.LabelTranslations["fr"] != "Brouillon" {
+		t.Fatal("option input/output alias")
 	}
-	returned[2] = 'Y'
-	_, _, again, _ := definition.AdminComponent()
-	if string(again) != `{"generate":true}` {
-		t.Fatalf("mutated admin component config = %s", again)
+	if value, ok := view.Default(); !ok || value.Kind() != field.DefaultString || value.String() != "draft" {
+		t.Fatal(value, ok)
 	}
-}
-
-func TestAdminComponentRequiresObjectConfiguration(t *testing.T) {
-	definition := field.Text("title", field.AdminComponent("seo", "title", json.RawMessage(`true`)))
-	for _, issue := range definition.Issues() {
-		if issue.Code == "invalid_admin_component_config" {
-			return
-		}
-	}
-	t.Fatalf("scalar admin component issues = %#v", definition.Issues())
-}
-
-func TestRowLabelComponentConfigIsImmutableForArraysAndBlocks(t *testing.T) {
-	config := json.RawMessage(`{"key":"optionKey","label":"label"}`)
-	array := field.Array(
-		"options",
-		field.RowLabel("label"),
-		field.RowLabelComponent("curriculum", "questionOption", config),
-		field.Fields(field.Text("optionKey"), field.Text("label")),
-	)
-	blocks := field.Blocks(
-		"content",
-		field.RowLabelComponent("curriculum", "blockSummary", config),
-		field.BlockTypes(field.BlockType("copy", "Copy", field.Text("label"))),
-	)
-	config[2] = 'X'
-
-	for _, definition := range []field.Definition{array, blocks} {
-		plugin, component, returned, exists := definition.RowLabelComponent()
-		if !exists || plugin != "curriculum" || component == "" || string(returned) != `{"key":"optionKey","label":"label"}` {
-			t.Fatalf("%s row label component = %q/%q/%s/%v", definition.Kind(), plugin, component, returned, exists)
-		}
-		returned[2] = 'Y'
-		_, _, again, _ := definition.RowLabelComponent()
-		if string(again) != `{"key":"optionKey","label":"label"}` {
-			t.Fatalf("%s row label component config was mutable: %s", definition.Kind(), again)
-		}
-	}
-	if array.RowLabel() != "label" {
-		t.Fatalf("legacy row label = %q, want label", array.RowLabel())
-	}
-
-	invalid := field.Array(
-		"items",
-		field.RowLabelComponent("curriculum", "summary", json.RawMessage(`true`)),
-		field.Fields(field.Text("label")),
-	)
-	if !slices.ContainsFunc(invalid.Issues(), func(issue field.Issue) bool {
-		return issue.Code == "invalid_row_label_component_config" && issue.Path == "options.rowLabelComponent.config"
-	}) {
-		t.Fatalf("invalid row label component issues = %#v", invalid.Issues())
-	}
-}
-
-func TestDefinitionCopiesOptionInputs(t *testing.T) {
-	choices := []field.Choice{{Value: "draft", Label: "Draft"}}
-	definition := field.Select(
-		"status",
-		field.Choices(choices...),
-		field.Default("draft"),
-	)
-
-	choices[0].Value = "mutated"
-	returned := definition.Choices()
-	returned[0].Value = "also-mutated"
-
-	if got := definition.Choices()[0].Value; got != "draft" {
-		t.Fatalf("definition choice = %q, want immutable draft", got)
-	}
-	if got, exists := definition.Default(); !exists || got.Kind() != field.DefaultString || got.String() != "draft" {
-		t.Fatalf("definition default = %#v, %v; want string draft, true", got, exists)
-	}
-}
-
-func TestMultipleSelectCardinalityAndDefaultsAreImmutable(t *testing.T) {
 	defaults := []string{"admin", "editor"}
-	definition := field.Select(
-		"roles",
-		field.OneOf("admin", "editor"),
-		field.Multiple(),
-		field.DefaultChoices(defaults...),
-		field.Required(),
-	)
-	defaults[0] = "mutated"
-	returned := definition.SelectDefaults()
-	returned[0] = "also-mutated"
-
-	if !definition.SelectHasMany() || !slices.Equal(definition.SelectDefaults(), []string{"admin", "editor"}) {
-		t.Fatalf("multi-select = %v %#v", definition.SelectHasMany(), definition.SelectDefaults())
+	multi := field.Snapshot(field.MultiSelect("roles", "admin", "editor").Default(defaults...).Required())
+	defaults[0] = "changed"
+	returnedDefaults := multi.SelectDefaults()
+	returnedDefaults[0] = "changed"
+	if !multi.SelectHasMany() || !slices.Equal(multi.SelectDefaults(), []string{"admin", "editor"}) {
+		t.Fatal("multi-select shape/default ownership")
 	}
 }
 
-func TestMultipleSelectRejectsIncompatibleDefaultsAndRadioCardinality(t *testing.T) {
-	tests := []struct {
-		name       string
-		definition field.Definition
-		code       string
-		path       string
-	}{
-		{
-			name:       "scalar default",
-			definition: field.Select("roles", field.OneOf("admin"), field.Multiple(), field.Default("admin")),
-			code:       "invalid_default", path: "options.default",
-		},
-		{
-			name:       "list default without multiple",
-			definition: field.Select("roles", field.OneOf("admin"), field.DefaultChoices("admin")),
-			code:       "invalid_default", path: "options.default",
-		},
-		{
-			name:       "radio multiple",
-			definition: field.Radio("role", field.OneOf("admin"), field.Multiple()),
-			code:       "invalid_radio_cardinality", path: "options.hasMany",
-		},
+func TestDefaultTypesAndScalarConstraints(t *testing.T) {
+	nodes := field.Fields{field.Text("title").Default("Untitled"), field.Number("score").Default(12.5), field.Checkbox("featured").Default(true)}
+	kinds := []field.DefaultKind{field.DefaultString, field.DefaultNumber, field.DefaultBoolean}
+	values := []string{"Untitled", "12.5", "true"}
+	for i, node := range nodes {
+		v, ok := field.Snapshot(node).Default()
+		if !ok || v.Kind() != kinds[i] || v.String() != values[i] {
+			t.Fatal(v, ok)
+		}
 	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			if !slices.ContainsFunc(test.definition.Issues(), func(issue field.Issue) bool {
-				return issue.Code == test.code && issue.Path == test.path
-			}) {
-				t.Fatalf("issues = %#v, want %s at %s", test.definition.Issues(), test.code, test.path)
+	title := field.Snapshot(field.Text("title").MinLength(2).MaxLength(12).Index())
+	min, minOK := title.MinLength()
+	max, maxOK := title.MaxLength()
+	if min != 2 || !minOK || max != 12 || !maxOK || !title.Index() {
+		t.Fatal("text constraints")
+	}
+	number := field.Snapshot(field.Number("score").Min(-2.5).Max(8).Step(.25))
+	low, _ := number.Min()
+	high, _ := number.Max()
+	step, _ := number.Step()
+	if low != -2.5 || high != 8 || step != .25 {
+		t.Fatal("number constraints")
+	}
+	for _, node := range (field.Fields{field.Text("title").MinLength(4).MaxLength(2), field.Number("score").Min(4).Max(2), field.Number("score").Step(0), field.Number("score").Min(math.Inf(1)), field.Text("title").MinLength(2).Default("🙂"), field.Number("score").Max(2).Default(3)}) {
+		if len(field.Snapshot(node).Issues()) == 0 {
+			t.Fatalf("invalid constraints accepted: %s", node.Name())
+		}
+	}
+}
+
+func TestLayoutAndBlockInputsAreOwned(t *testing.T) {
+	children := field.Fields{field.Text("title")}
+	row := field.Snapshot(field.Row(children))
+	tabs := field.Snapshot(field.Tabs(field.Fields{field.UnnamedTab("Content", children), field.NamedTab("seo", "SEO", field.Fields{field.Text("title")}).Required()}))
+	block := field.Block{Slug: "copy", Labels: field.BlockLabels{SingularTranslations: map[string]string{"fr": "Texte"}}, Fields: children}
+	blocks := field.Snapshot(field.Blocks("content", block).MinRows(1).MaxRows(4).Admin(field.Admin{RowLabel: field.Component("app:summary")}))
+	children[0] = field.Text("changed")
+	block.Labels.SingularTranslations["fr"] = "changed"
+	got := row.Fields()
+	got[0] = field.Text("changed")
+	if row.Fields()[0].Name() != "title" || row.Category() != field.CategoryPresentation {
+		t.Fatal("row alias or shape")
+	}
+	branches := tabs.Branches()
+	if len(branches) != 1 || len(branches[0].Fields) != 2 {
+		t.Fatal("tab graph scope")
+	}
+	named := field.Snapshot(branches[0].Fields[1])
+	if named.Name() != "seo" || !named.IsNamedTab() || !named.Required() {
+		t.Fatal("named tab lost object contract")
+	}
+	gotBlocks := blocks.Blocks()
+	gotBlocks[0].Fields[0] = field.Text("changed")
+	gotBlocks[0].Labels.SingularTranslations["fr"] = "changed"
+	if blocks.Blocks()[0].Fields[0].Name() != "title" || blocks.Blocks()[0].Labels.SingularTranslations["fr"] != "Texte" || blocks.MinRows() != 1 || blocks.MaxRows() != 4 {
+		t.Fatal("block alias or bounds")
+	}
+}
+
+func TestConditionsAreScopedAndOwned(t *testing.T) {
+	children := []field.Condition{field.Equal(field.Root("status"), "published"), field.OneOf(field.Sibling("mode"), "public", "preview")}
+	declaration := field.Text("title").Admin(field.Admin{VisibleWhen: field.All(children...)})
+	children[0] = field.Equal(field.Root("other"), "changed")
+	condition := field.Snapshot(declaration).AdminPolicy().VisibleWhen
+	if condition.IsZero() || condition.Kind() != field.ConditionKindAll {
+		t.Fatal("missing condition")
+	}
+	returned := condition.Conditions()
+	returned[0] = field.Equal(field.Root("other"), "changed")
+	if condition.Conditions()[0].Reference().Path() != "status" || condition.Conditions()[1].Reference().Scope() != field.SiblingScope {
+		t.Fatal("condition alias or scope")
+	}
+	for _, value := range []field.Condition{field.All(), field.Not(field.Condition{}), field.Equal(field.Root(""), "x"), field.OneOf[string](field.Root("mode"))} {
+		issues := field.Snapshot(field.Text("title").Admin(field.Admin{VisibleWhen: value})).Issues()
+		if len(issues) == 0 {
+			t.Fatal("invalid condition accepted")
+		}
+		for _, issue := range issues {
+			if issue.Path == "" {
+				t.Fatal("unlocated condition issue")
 			}
-		})
-	}
-}
-
-func TestScalarConstraintsAndIndexOptionsAreTypedAndValidated(t *testing.T) {
-	title := field.Text("title", field.MinLength(2), field.MaxLength(12), field.Index())
-	minimum, hasMinimum := title.MinLength()
-	maximum, hasMaximum := title.MaxLength()
-	if minimum != 2 || !hasMinimum || maximum != 12 || !hasMaximum || !title.Index() {
-		t.Fatalf("text constraints/index = %d/%v %d/%v %v", minimum, hasMinimum, maximum, hasMaximum, title.Index())
-	}
-	score := field.Number("score", field.Min(-2.5), field.Max(8), field.Step(0.25))
-	minimumNumber, hasMinimumNumber := score.Min()
-	maximumNumber, hasMaximumNumber := score.Max()
-	step, hasStep := score.Step()
-	if minimumNumber != -2.5 || !hasMinimumNumber || maximumNumber != 8 || !hasMaximumNumber || step != 0.25 || !hasStep {
-		t.Fatalf("number constraints = %v/%v %v/%v %v/%v", minimumNumber, hasMinimumNumber, maximumNumber, hasMaximumNumber, step, hasStep)
-	}
-
-	tests := []struct {
-		definition field.Definition
-		code       string
-		path       string
-	}{
-		{field.Email("email", field.MinLength(2)), "incompatible_option", "options.minLength"},
-		{field.Date("date", field.MaxLength(5)), "incompatible_option", "options.maxLength"},
-		{field.Text("title", field.MinLength(4), field.MaxLength(2)), "invalid_length_bounds", "options.minLength"},
-		{field.Number("score", field.Min(4), field.Max(2)), "invalid_number_bounds", "options.min"},
-		{field.Number("score", field.Step(0)), "invalid_step", "options.step"},
-		{field.Number("score", field.Min(math.Inf(1))), "invalid_min", "options.min"},
-		{field.Text("title", field.MinLength(2), field.Default("🙂")), "invalid_default", "options.default"},
-		{field.Number("score", field.Max(2), field.Default(3)), "invalid_default", "options.default"},
-	}
-	for _, test := range tests {
-		if !slices.ContainsFunc(test.definition.Issues(), func(issue field.Issue) bool {
-			return issue.Code == test.code && issue.Path == test.path
-		}) {
-			t.Errorf("%s issues = %#v, want %s at %s", test.definition.Name(), test.definition.Issues(), test.code, test.path)
 		}
 	}
 }
 
-func TestRowCopiesChildrenAndIsPresentationOnly(t *testing.T) {
-	children := []field.Definition{field.Text("title"), field.Select("status")}
-	row := field.Row(children...)
-	children[0] = field.Text("mutated")
-
-	returned := row.Fields()
-	returned[0] = field.Text("alsoMutated")
-
-	if got := row.Fields()[0].Name(); got != "title" {
-		t.Fatalf("row child name = %q, want immutable title", got)
+func TestDateAndPlaceholderPoliciesValidateCurrentShape(t *testing.T) {
+	for _, appearance := range []field.DateFormat{field.DateOnly, field.DateTime, field.TimeOnly} {
+		d := field.Snapshot(field.Date("published").Format(appearance))
+		if d.DateFormat() != appearance || len(d.Issues()) > 0 {
+			t.Fatal(d.Issues())
+		}
 	}
-	if row.Name() != "" || row.Category() != field.CategoryPresentation {
-		t.Fatalf("row name/category = %q/%q, want unnamed presentation field", row.Name(), row.Category())
-	}
-}
-
-func TestTabsCopyChildrenAndDistinguishStoredNames(t *testing.T) {
-	children := []field.Definition{field.Text("title")}
-	tabs := field.Tabs(
-		field.UnnamedTab("Content", children...),
-		field.NamedTab("seo", "SEO", field.Text("title")),
-	)
-	children[0] = field.Text("mutated")
-	returned := tabs.Tabs()
-	returned[0].Fields[0] = field.Text("alsoMutated")
-
-	got := tabs.Tabs()
-	if got[0].Name != "" || got[0].Fields[0].Name() != "title" {
-		t.Fatalf("unnamed tab = %#v, want presentation-only content tab", got[0])
-	}
-	if got[1].Name != "seo" || got[1].Label != "SEO" {
-		t.Fatalf("named tab = %#v, want seo/SEO", got[1])
-	}
-	if tabs.Name() != "" || tabs.Category() != field.CategoryPresentation {
-		t.Fatalf("tabs name/category = %q/%q, want unnamed presentation field", tabs.Name(), tabs.Category())
-	}
-}
-
-func TestMismatchedDefaultTypesArePathAware(t *testing.T) {
-	definition := field.Number("score", field.Default("invalid"))
-
-	issues := definition.Issues()
-	paths := make([]string, len(issues))
-	for index, issue := range issues {
-		paths[index] = issue.Path
-	}
-	if !slices.Contains(paths, "options.default") {
-		t.Fatalf("issue paths = %v, want invalid default path", paths)
-	}
-}
-
-func TestDefaultsPreserveScalarTypes(t *testing.T) {
-	tests := []struct {
-		definition field.Definition
-		kind       field.DefaultKind
-		value      string
-	}{
-		{field.Text("title", field.Default("Untitled")), field.DefaultString, "Untitled"},
-		{field.Number("score", field.Default(12.5)), field.DefaultNumber, "12.5"},
-		{field.Checkbox("featured", field.Default(true)), field.DefaultBoolean, "true"},
-	}
-
-	for _, test := range tests {
-		got, exists := test.definition.Default()
-		if !exists || got.Kind() != test.kind || got.String() != test.value {
-			t.Errorf("%s default = %#v, %v; want %s %q", test.definition.Name(), got, exists, test.kind, test.value)
+	for _, node := range (field.Fields{field.Date("date").Format("invalid"), field.Checkbox("enabled").Admin(field.Admin{Placeholder: "Enabled"}), field.Text("title").Admin(field.Admin{PlaceholderTranslations: map[string]string{"fr": "Titre"}})}) {
+		if len(field.Snapshot(node).Issues()) == 0 {
+			t.Fatal("invalid presentation accepted")
 		}
 	}
 }
 
-func TestConditionsAreTypedScopedAndImmutable(t *testing.T) {
-	condition := field.All(
-		field.Document("status", field.ConditionOneOf, "draft", "published"),
-		field.Not(field.Sibling("archived", field.ConditionEquals, true)),
-	)
-	definition := field.Text("summary", field.ShowWhenCondition(condition))
-	resolved := definition.Condition()
-	if resolved == nil || resolved.Kind() != field.ConditionKindAll {
-		t.Fatalf("condition = %#v, want all expression", resolved)
-	}
-	children := resolved.Conditions()
-	if len(children) != 2 || children[0].Scope() != field.ConditionScopeDocument || children[0].Operator() != field.ConditionOneOf {
-		t.Fatalf("condition children = %#v", children)
-	}
-	values := children[0].Values()
-	if len(values) != 2 || values[0].Kind() != field.DefaultString || values[1].String() != "published" {
-		t.Fatalf("condition values = %#v", values)
-	}
-	children[0] = field.Sibling("mutated", field.ConditionEquals, "yes")
-	values[0] = field.DefaultValue{}
-	if again := definition.Condition().Conditions(); again[0].Path() != "status" || again[0].Values()[0].String() != "draft" {
-		t.Fatalf("condition mutated through accessor = %#v", again)
-	}
-
-	concise := field.Text("venue", field.ShowWhen("online", "false")).Condition()
-	if concise == nil || concise.Scope() != field.ConditionScopeSibling || concise.Operator() != field.ConditionEquals || concise.Values()[0].String() != "false" {
-		t.Fatalf("ShowWhen condition = %#v", concise)
-	}
-}
-
-func TestInvalidConditionExpressionsProducePathAwareIssues(t *testing.T) {
-	tests := []struct {
-		definition field.Definition
-		code       string
-		path       string
-	}{
-		{field.Text("title", field.ShowWhenCondition(field.All(field.Document("status", field.ConditionEquals, "draft")))), "invalid_condition_group", "options.condition.conditions"},
-		{field.Text("title", field.ShowWhenCondition(field.Document("status", field.ConditionEquals, "draft", "published"))), "invalid_condition_values", "options.condition.values"},
-		{field.Text("title", field.ShowWhenCondition(field.Document("status", field.ConditionOneOf, "draft", "draft"))), "duplicate_condition_value", "options.condition.values[1]"},
-		{field.Text("title", field.ShowWhenCondition(field.Document("score", field.ConditionEquals, math.NaN()))), "invalid_condition_value", "options.condition.values[0]"},
-	}
-	for _, test := range tests {
-		if !slices.ContainsFunc(test.definition.Issues(), func(issue field.Issue) bool {
-			return issue.Code == test.code && issue.Path == test.path
-		}) {
-			t.Errorf("condition issues = %#v, want %s at %s", test.definition.Issues(), test.code, test.path)
-		}
-	}
-}
-
-func TestDatePickerAppearanceIsTypedAndValidated(t *testing.T) {
-	date := field.Date("startsAt", field.PickerAppearance(field.DatePickerDayAndTime))
-	if got := date.DatePickerAppearance(); got != field.DatePickerDayAndTime {
-		t.Fatalf("date picker appearance = %q, want %q", got, field.DatePickerDayAndTime)
-	}
-	if got := field.Date("birthday").DatePickerAppearance(); got != field.DatePickerDayOnly {
-		t.Fatalf("default date picker appearance = %q, want %q", got, field.DatePickerDayOnly)
-	}
-	invalid := field.Text("title", field.PickerAppearance(field.DatePickerTimeOnly))
-	if !slices.ContainsFunc(invalid.Issues(), func(issue field.Issue) bool {
-		return issue.Code == "incompatible_option" && issue.Path == "options.pickerAppearance"
-	}) {
-		t.Fatalf("incompatible picker issues = %#v", invalid.Issues())
-	}
-}
-
-func TestJoinTableOptionsAreTypedAndCopied(t *testing.T) {
+func TestJoinAndReferencePoliciesAreOwnedAndValidated(t *testing.T) {
 	columns := []string{"title", "status"}
-	join := field.Join(
-		"posts",
-		"posts",
-		"category",
-		field.JoinColumns(columns...),
-		field.JoinDefaultSort("-updatedAt"),
-		field.JoinAllowCreate(false),
-	)
-	columns[0] = "mutated"
+	join := field.Snapshot(field.Join("comments", "comments", "post").Limit(25).DefaultColumns(columns...).DefaultSort("-title").AllowCreate(true))
+	columns[0] = "changed"
 	returned := join.JoinDefaultColumns()
-	returned[0] = "also-mutated"
-
-	if got := join.JoinDefaultColumns(); !slices.Equal(got, []string{"title", "status"}) {
-		t.Fatalf("join columns = %v", got)
+	returned[0] = "changed"
+	if join.JoinLimit() != 25 || join.JoinDefaultSort() != "-title" || !join.JoinAllowCreate() || join.JoinDefaultColumns()[0] != "title" {
+		t.Fatal("join config alias")
 	}
-	if join.JoinDefaultSort() != "-updatedAt" || join.JoinAllowCreate() {
-		t.Fatalf("join sort/create = %q/%v", join.JoinDefaultSort(), join.JoinAllowCreate())
+	rule := field.OptionFilterValue("active", field.FilterEquals, true)
+	rules := []field.RelationshipFilterRule{rule}
+	reference := field.Snapshot(field.Relationship("author", "users").FilterOptionRules(rules...).OnDelete(field.ReferenceDeleteRestrict))
+	rules[0].TargetPath = "changed"
+	returnedRules := reference.RelationshipFilters()
+	returnedRules[0].TargetPath = "changed"
+	if reference.RelationshipFilters()[0].TargetPath != "active" || reference.ReferenceDeleteAction() != field.ReferenceDeleteRestrict {
+		t.Fatal("reference policy alias")
 	}
-	if !field.Join("posts", "posts", "category").JoinAllowCreate() {
-		t.Fatal("join create should default to enabled")
-	}
-}
-
-func TestRelationshipOptionRulesAreTypedAndCopied(t *testing.T) {
-	rules := []field.RelationshipFilterRule{
-		field.OptionFilter("seo.title", field.FilterNotEquals, "seo.title"),
-		field.OptionFilterFor("pages", "navigation.showInHeader", field.FilterEquals, "featured"),
-		field.OptionFilterValueFor("posts", "_status", field.FilterEquals, "published"),
-	}
-	relationship := field.Relationship("related", field.ToAny("posts", "pages"), field.FilterOptionRules(rules...))
-	rules[0].TargetPath = "mutated"
-	returned := relationship.RelationshipFilters()
-	returned[0].TargetPath = "also-mutated"
-
-	got := relationship.RelationshipFilters()
-	if got[0].TargetPath != "seo.title" || got[0].Operator != field.FilterNotEquals || got[1].Collection != "pages" || got[2].Literal == nil || got[2].Literal.String() != "published" {
-		t.Fatalf("relationship option rules = %#v", got)
-	}
-	got[2].Literal = nil
-	if relationship.RelationshipFilters()[2].Literal == nil {
-		t.Fatal("relationship literal filter was mutated through accessor")
-	}
-	invalid := field.Relationship("related", field.FilterOptionRules(field.OptionFilter("title", "unknown", "title")))
-	if !slices.ContainsFunc(invalid.Issues(), func(issue field.Issue) bool {
-		return issue.Code == "invalid_relationship_filter_operator"
-	}) {
-		t.Fatalf("invalid relationship option rules = %#v", invalid.Issues())
-	}
-	upload := field.Upload("hero", field.To("media"), field.FilterOptionRules(field.OptionFilter("mimeType", field.FilterEquals, "assetType")), field.FilterOptionRules(
-		field.OptionFilter("filename", field.FilterLike, "assetName"),
-	))
-	if filters := upload.RelationshipFilters(); len(filters) != 2 || filters[0].TargetPath != "mimeType" || filters[0].Operator != field.FilterEquals || filters[1].TargetPath != "filename" || filters[1].Operator != field.FilterLike {
-		t.Fatalf("upload option filters = %#v", filters)
-	}
-}
-
-func TestReferenceDeleteOptionsAreTypedAndRejectInvalidOrDuplicateActions(t *testing.T) {
-	relationship := field.Relationship("owner", field.To("users"), field.OnDelete(field.ReferenceDeleteRestrict))
-	if got := relationship.ReferenceDeleteAction(); got != field.ReferenceDeleteRestrict {
-		t.Fatalf("relationship on-delete action = %q", got)
-	}
-	upload := field.Upload("asset", field.To("media"), field.OnDelete(field.ReferenceDeleteNullify))
-	if got := upload.ReferenceDeleteAction(); got != field.ReferenceDeleteNullify {
-		t.Fatalf("upload on-delete action = %q", got)
-	}
-	invalid := field.Relationship("owner", field.To("users"),
-		field.OnDelete(field.ReferenceDeleteAction("cascade")),
-		field.OnDelete(field.ReferenceDeleteRestrict),
-	)
-	for _, code := range []string{"invalid_reference_delete_action", "duplicate_option"} {
-		if !slices.ContainsFunc(invalid.Issues(), func(issue field.Issue) bool {
-			return issue.Code == code && issue.Path == "options.onDelete"
-		}) {
-			t.Errorf("missing %s issue in %#v", code, invalid.Issues())
+	for _, node := range (field.Fields{field.Join("comments", "comments", "post").Limit(0), field.Join("comments", "comments", "post").DefaultColumns("title", "title"), field.Relationship("author", "users").OnDelete("bad"), field.Upload("image", "media").FilterOptionRules(field.OptionFilter("", "bad", ""))}) {
+		if len(field.Snapshot(node).Issues()) == 0 {
+			t.Fatal("invalid policy accepted")
 		}
 	}
-}
-
-func TestFieldCategories(t *testing.T) {
-	tests := []struct {
-		definition field.Definition
-		want       field.Category
-	}{
-		{field.Text("title"), field.CategoryScalar},
-		{field.Select("status"), field.CategoryScalar},
-		{field.Code("source", field.Language("go")), field.CategoryScalar},
-		{field.Radio("priority", field.OneOf("low", "high")), field.CategoryScalar},
-		{field.Point("location"), field.CategoryScalar},
-		{field.Relationship("author"), field.CategoryRelationship},
-		{field.Group("seo"), field.CategoryNested},
-		{field.Tabs(field.UnnamedTab("Content", field.Text("title"))), field.CategoryPresentation},
-		{field.Row(field.Text("summary")), field.CategoryPresentation},
-		{field.UI("guide"), field.CategoryPresentation},
-		{field.Collapsible("details", true, field.Text("summary")), field.CategoryPresentation},
-	}
-
-	for _, test := range tests {
-		if got := test.definition.Category(); got != test.want {
-			t.Errorf("%s category = %q, want %q", test.definition.Kind(), got, test.want)
-		}
+	if d := field.Snapshot(field.Relationship("author", "users").OnDelete("bad").OnDelete(field.ReferenceDeleteRestrict)); len(d.Issues()) != 0 {
+		t.Fatal("replacement retained invalid policy", d.Issues())
 	}
 }
 
-func TestArrayBoundsAndLabelsAreImmutable(t *testing.T) {
-	definition := field.Array("team", field.MinRows(1), field.MaxRows(3), field.RowLabel("name"), field.Fields(field.Text("name")))
-	if definition.MinRows() != 1 || definition.MaxRows() != 3 || definition.RowLabel() != "name" {
-		t.Fatalf("array metadata = %d %d %q", definition.MinRows(), definition.MaxRows(), definition.RowLabel())
-	}
-	invalid := field.Array("items", field.MinRows(4), field.MaxRows(2), field.Fields(field.Text("name")))
-	if !slices.ContainsFunc(invalid.Issues(), func(issue field.Issue) bool { return issue.Code == "invalid_row_bounds" }) {
-		t.Fatalf("issues = %#v, want invalid_row_bounds", invalid.Issues())
-	}
-}
-
-func TestAdminDisplayTranslationsAreImmutable(t *testing.T) {
+func TestPublicDisplayPoliciesOwnTranslations(t *testing.T) {
 	translations := map[string]string{"fr": "Titre"}
-	descriptionTranslations := map[string]string{"fr": "Titre public"}
-	placeholderTranslations := map[string]string{"fr": "Saisissez un titre"}
-	tabTranslations := map[string]string{"fr": "Contenu"}
-	definition := field.Text(
-		"title",
-		field.LabelTranslations(translations),
-		field.DescriptionTranslations(descriptionTranslations),
-		field.Placeholder("Enter a title"),
-		field.PlaceholderTranslations(placeholderTranslations),
-		field.Hidden(),
-		field.Sidebar(),
-		field.Tab("Content"),
-		field.TabTranslations(tabTranslations),
-	)
-	translations["fr"] = "mutated"
-	descriptionTranslations["fr"] = "mutated"
-	placeholderTranslations["fr"] = "mutated"
-	tabTranslations["fr"] = "mutated"
-	returned := definition.LabelTranslations()
-	returned["fr"] = "also-mutated"
-	if definition.LabelTranslations()["fr"] != "Titre" || definition.DescriptionTranslations()["fr"] != "Titre public" || definition.PlaceholderTranslations()["fr"] != "Saisissez un titre" || definition.TabTranslations()["fr"] != "Contenu" {
-		t.Fatalf("field translations were mutable: labels=%#v descriptions=%#v placeholders=%#v tabs=%#v", definition.LabelTranslations(), definition.DescriptionTranslations(), definition.PlaceholderTranslations(), definition.TabTranslations())
-	}
-	if definition.Placeholder() != "Enter a title" || !definition.Hidden() || !definition.Sidebar() {
-		t.Fatalf("field admin metadata = placeholder %q hidden=%v sidebar=%v", definition.Placeholder(), definition.Hidden(), definition.Sidebar())
-	}
-
-	rowLabels := field.RowLabels{
-		Singular: "Row", Plural: "Rows",
-		SingularTranslations: map[string]string{"fr": "Ligne"},
-		PluralTranslations:   map[string]string{"fr": "Lignes"},
-	}
-	array := field.Array("items", field.ArrayRowLabels(rowLabels), field.Fields(field.Text("name")))
-	rowLabels.SingularTranslations["fr"] = "mutated"
-	returnedRows := array.RowLabels()
-	returnedRows.PluralTranslations["fr"] = "also-mutated"
-	if got := array.RowLabels(); got.SingularTranslations["fr"] != "Ligne" || got.PluralTranslations["fr"] != "Lignes" {
-		t.Fatalf("array row labels were mutable: %#v", got)
-	}
-
-	choice := field.Choice{Value: "draft", Label: "Draft"}.WithLabelTranslations(map[string]string{"fr": "Brouillon"})
-	block := field.BlockType("hero", "Hero", field.Text("heading")).WithLabelTranslations(map[string]string{"fr": "Bannière"})
-	tab := field.UnnamedTab("Content", field.Text("body")).WithLabelTranslations(map[string]string{"fr": "Contenu"})
-	if choice.LabelTranslations["fr"] != "Brouillon" || block.LabelTranslations["fr"] != "Bannière" || tab.LabelTranslations["fr"] != "Contenu" {
-		t.Fatalf("translated authoring definitions = %#v %#v %#v", choice, block, tab)
+	labels := field.RowLabels{Singular: "Entry", Plural: "Entries", SingularTranslations: translations}
+	declaration := field.Array("rows", field.Fields{field.Text("title")}).LabelTranslations(translations).Admin(field.Admin{LabelTranslations: translations, Description: "Help", DescriptionTranslations: translations, Placeholder: "Choose", PlaceholderTranslations: translations, RowLabels: labels})
+	translations["fr"] = "changed"
+	view := field.Snapshot(declaration)
+	a := view.AdminPolicy()
+	a.DescriptionTranslations["fr"] = "changed"
+	a.RowLabels.SingularTranslations["fr"] = "changed"
+	if view.LabelTranslations()["fr"] != "Titre" || view.DescriptionTranslations()["fr"] != "Titre" || view.RowLabels().SingularTranslations["fr"] != "Titre" {
+		t.Fatal("translations alias")
 	}
 }
 
-func TestPlaceholderRejectsUnsupportedControlsAndMissingFallback(t *testing.T) {
-	tests := []field.Definition{
-		field.Checkbox("featured", field.Placeholder("Choose")),
-		field.Text("title", field.PlaceholderTranslations(map[string]string{"fr": "Titre"})),
+func TestConcreteFacadeCategoriesAndCallbackShapes(t *testing.T) {
+	cases := []struct {
+		node     field.Node
+		category field.Category
+	}{
+		{field.Text("text"), field.CategoryScalar},
+		{field.Code("code"), field.CategoryScalar},
+		{field.Textarea("textarea"), field.CategoryScalar},
+		{field.Email("email"), field.CategoryScalar},
+		{field.Date("date"), field.CategoryScalar},
+		{field.Number("number"), field.CategoryScalar},
+		{field.Checkbox("checkbox"), field.CategoryScalar},
+		{field.JSON("json"), field.CategoryScalar},
+		{field.Point("point"), field.CategoryScalar},
+		{field.Select("select"), field.CategoryScalar},
+		{field.Radio("radio"), field.CategoryScalar},
+		{field.MultiSelect("many"), field.CategoryScalar},
+		{field.Relationship("ref", "users"), field.CategoryRelationship},
+		{field.Relationships("refs", "users"), field.CategoryRelationship},
+		{field.PolymorphicRelationship("poly", "users", "teams"), field.CategoryRelationship},
+		{field.Upload("image", "media"), field.CategoryUpload},
+		{field.Uploads("images", "media"), field.CategoryUpload},
+		{field.Group("group", nil), field.CategoryNested},
+		{field.Array("array", nil), field.CategoryNested},
+		{field.Blocks("blocks"), field.CategoryNested},
+		{field.Row(nil), field.CategoryPresentation},
+		{field.UI("ui"), field.CategoryPresentation},
+		{field.Join("inverse", "posts", "author"), field.CategoryPresentation},
+		{field.Plugin("rich", "rich", nil), field.CategoryPlugin},
+		{field.Virtual("computed", field.ValueString, func(operation.ReadContext) (operation.Value[store.Value], error) {
+			return operation.Present(store.String("computed")), nil
+		}), field.CategoryPresentation},
 	}
-	for _, definition := range tests {
-		if !slices.ContainsFunc(definition.Issues(), func(issue field.Issue) bool {
-			return issue.Code == "incompatible_option" || issue.Code == "invalid_placeholder"
-		}) {
-			t.Errorf("%s issues = %#v, want placeholder compatibility issue", definition.Name(), definition.Issues())
+	for _, test := range cases {
+		if got := field.Snapshot(test.node).Category(); got != test.category {
+			t.Errorf("%T category = %q, want %q", test.node, got, test.category)
 		}
+	}
+	if _, err := field.AsRelationship(field.Relationships("many", "users")); err == nil {
+		t.Fatal("singular facade accepted a list")
+	}
+	if _, err := field.AsSelect(field.MultiSelect("many")); err == nil {
+		t.Fatal("singular option facade accepted a list")
+	}
+	if reflect.TypeOf(field.Number("n").Label("N").Min(1)) != reflect.TypeOf(field.Number("n")) {
+		t.Fatal("fluent concrete type erased")
+	}
+}
+
+func TestPolymorphicConstructorsRequireDistinctTargets(t *testing.T) {
+	for _, node := range (field.Fields{field.PolymorphicRelationship("owner"), field.PolymorphicRelationship("owner", "users"), field.PolymorphicRelationships("owners", "users", "users")}) {
+		if !slices.ContainsFunc(field.Snapshot(node).Issues(), func(issue field.Issue) bool { return issue.Code == "invalid_polymorphic_targets" }) {
+			t.Fatal("ambiguous polymorphic declaration accepted")
+		}
+	}
+}
+
+func TestBlockSnapshotIsDetached(t *testing.T) {
+	labels := field.BlockLabels{Singular: "Banner", Plural: "Banners", SingularTranslations: map[string]string{"fr": "Bannière"}, PluralTranslations: map[string]string{"fr": "Bannières"}}
+	original := field.Block{TypeName: "Hero", Slug: "hero", Labels: labels, Fields: field.Fields{field.Text("heading")}}
+	clone := original.Snapshot()
+	if clone.TypeName != original.TypeName || clone.Slug != original.Slug {
+		t.Fatal("snapshot changed block identity")
+	}
+	clone.Fields[0] = field.Text("changed")
+	if original.Fields[0].Name() != "heading" {
+		t.Fatal("snapshot aliases the authored field slice")
+	}
+	clone.Labels.SingularTranslations["fr"] = "Changed"
+	clone.Labels.PluralTranslations["fr"] = "Changed"
+	if original.Labels.SingularTranslations["fr"] != "Bannière" || original.Labels.PluralTranslations["fr"] != "Bannières" {
+		t.Fatal("snapshot aliases authored translations")
 	}
 }

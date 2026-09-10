@@ -11,6 +11,7 @@ import (
 	"github.com/riducms/ridu/internal/teststore"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func TestDocumentLocksAcquireRefreshTakeOverAndRelease(t *testing.T) {
@@ -18,8 +19,8 @@ func TestDocumentLocksAcquireRefreshTakeOverAndRelease(t *testing.T) {
 	application, err := ridu.New(ridu.Config{
 		Name: "Locks", Admin: ridu.AdminConfig{User: "users"},
 		Collections: []ridu.Collection{
-			{Slug: "users", Auth: true, Fields: []field.Definition{field.Text("email", field.Required(), field.Unique())}},
-			{Slug: "posts", LockDocuments: true, DocumentLockConfig: ridu.DocumentLockConfig{Duration: time.Minute}, Fields: []field.Definition{field.Text("title")}},
+			{Slug: "users", Auth: true, AuthConfig: ridu.AuthConfig{Password: ridu.PasswordPolicy{BcryptCost: bcrypt.MinCost}}, Fields: field.Fields{field.Text("email").Required().Unique()}},
+			{Slug: "posts", LockDocuments: true, DocumentLockConfig: ridu.DocumentLockConfig{Duration: time.Minute}, Fields: field.Fields{field.Text("title")}},
 		},
 	}, backend)
 	if err != nil {
@@ -74,7 +75,7 @@ func TestDocumentLocksAcquireRefreshTakeOverAndRelease(t *testing.T) {
 func TestDocumentLockConfigurationValidatesDuration(t *testing.T) {
 	_, err := ridu.Resolve(ridu.Config{
 		Name:        "Locks",
-		Collections: []ridu.Collection{{Slug: "posts", LockDocuments: true, DocumentLockConfig: ridu.DocumentLockConfig{Duration: time.Second}, Fields: []field.Definition{field.Text("title")}}},
+		Collections: []ridu.Collection{{Slug: "posts", LockDocuments: true, DocumentLockConfig: ridu.DocumentLockConfig{Duration: time.Second}, Fields: field.Fields{field.Text("title")}}},
 	})
 	if err == nil {
 		t.Fatal("Resolve succeeded with a one-second document lock")
@@ -87,9 +88,9 @@ func TestDocumentLockTakeoverUsesUnlockAccess(t *testing.T) {
 	application, err := ridu.New(ridu.Config{
 		Name: "Lock access", Admin: ridu.AdminConfig{User: "users"},
 		Collections: []ridu.Collection{
-			{Slug: "users", Auth: true, Fields: []field.Definition{field.Text("email", field.Required(), field.Unique())}},
+			{Slug: "users", Auth: true, AuthConfig: ridu.AuthConfig{Password: ridu.PasswordPolicy{BcryptCost: bcrypt.MinCost}}, Fields: field.Fields{field.Text("email").Required().Unique()}},
 			{
-				Slug: "posts", LockDocuments: true, Fields: []field.Definition{field.Text("title")},
+				Slug: "posts", LockDocuments: true, Fields: field.Fields{field.Text("title")},
 				Access: ridu.CollectionAccess{
 					Update: func(ridu.AccessContext) (ridu.AccessDecision, error) { return ridu.Allow(), nil },
 					Unlock: func(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
@@ -139,13 +140,13 @@ func TestDocumentLocksUseExactAuthCollectionForSameIDActors(t *testing.T) {
 		Collections: []ridu.Collection{
 			{
 				Slug: "users", Auth: true, Admin: ridu.CollectionAdmin{UseAsTitle: "displayName"},
-				Fields: []field.Definition{field.Text("email", field.Required(), field.Unique()), field.Text("displayName", field.Required())},
+				Fields: field.Fields{field.Text("email").Required().Unique(), field.Text("displayName").Required()},
 			},
 			{
 				Slug: "staff", Auth: true, Admin: ridu.CollectionAdmin{UseAsTitle: "handle"},
-				Fields: []field.Definition{field.Text("email", field.Required(), field.Unique()), field.Text("handle", field.Required())},
+				Fields: field.Fields{field.Text("email").Required().Unique(), field.Text("handle").Required()},
 			},
-			{Slug: "posts", LockDocuments: true, Fields: []field.Definition{field.Text("title")}},
+			{Slug: "posts", LockDocuments: true, Fields: field.Fields{field.Text("title")}},
 		},
 	}, backend)
 	if err != nil {

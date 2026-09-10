@@ -12,6 +12,7 @@ import (
 
 	ridu "github.com/riducms/ridu"
 	"github.com/riducms/ridu/field"
+	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
 )
@@ -26,11 +27,11 @@ type formFieldDefinition struct {
 }
 
 func (plugin *Plugin) validateFormDefinition(context ridu.HookContext, allowedFieldTypes map[FieldType]struct{}) error {
-	if context.Operation != ridu.OperationCreate && context.Operation != ridu.OperationDuplicate && context.Operation != ridu.OperationUpdate {
+	if context.Operation != operation.Create && context.Operation != operation.Duplicate && context.Operation != operation.Update {
 		return nil
 	}
 	values := store.CloneValues(context.Data)
-	if context.Operation == ridu.OperationUpdate && context.Original != nil {
+	if context.Operation == operation.Update && context.Original != nil {
 		values = store.CloneValues(context.Original.Values)
 		for name, value := range context.Data {
 			values[name] = value
@@ -56,7 +57,7 @@ func (plugin *Plugin) validateFormDefinition(context ridu.HookContext, allowedFi
 				issues = append(issues, schema.Issue{Code: "required", Path: "redirect.url", Message: "redirect URL is required for a custom redirect"})
 			}
 		default:
-			issues = append(issues, schema.Issue{Code: "invalid_choice", Path: "confirmationType", Message: "confirmation type must be message or redirect"})
+			issues = append(issues, schema.Issue{Code: "invalid_option", Path: "confirmationType", Message: "confirmation type must be message or redirect"})
 		}
 	}
 	definitions, fieldIssues := parseFormFields(values, allowedFieldTypes)
@@ -90,15 +91,15 @@ func (plugin *Plugin) validateFormDefinition(context ridu.HookContext, allowedFi
 	}
 	if emails, exists := listValue(values, "emails"); exists {
 		for index, value := range emails {
-			email, valid := value.ObjectValue()
-			if !valid {
+			email := value
+			if email.Kind() != store.ValueObject {
 				continue
 			}
-			to, _ := stringValue(email, "emailTo")
+			to, _ := email.Get("emailTo").StringValue()
 			if strings.TrimSpace(to) == "" && strings.TrimSpace(plugin.config.DefaultToEmail) == "" {
 				issues = append(issues, schema.Issue{Code: "required", Path: fmt.Sprintf("emails.%d.emailTo", index), Message: "email recipient is required when no default recipient is configured"})
 			}
-			from, _ := stringValue(email, "emailFrom")
+			from, _ := email.Get("emailFrom").StringValue()
 			if strings.TrimSpace(from) == "" {
 				issues = append(issues, schema.Issue{Code: "required", Path: fmt.Sprintf("emails.%d.emailFrom", index), Message: "email sender is required"})
 			}
@@ -120,11 +121,11 @@ func (plugin *Plugin) validateConfiguredField(definition formFieldDefinition, kn
 		options, _ := listValue(definition.Data, "options")
 		seen := make(map[string]struct{}, len(options))
 		for optionIndex, optionValue := range options {
-			option, valid := optionValue.ObjectValue()
-			if !valid {
+			option := optionValue
+			if option.Kind() != store.ValueObject {
 				continue
 			}
-			value, _ := stringValue(option, "value")
+			value, _ := option.Get("value").StringValue()
 			if _, duplicate := seen[value]; duplicate {
 				issues = append(issues, schema.Issue{Code: "duplicate_form_field_option", Path: fmt.Sprintf("%s.options.%d.value", path, optionIndex), Message: fmt.Sprintf("option value %q is used more than once", value)})
 			}
@@ -139,22 +140,22 @@ func (plugin *Plugin) validateConfiguredField(definition formFieldDefinition, kn
 	}
 	if definition.Type == FieldPayment {
 		processor, _ := stringValue(definition.Data, "paymentProcessor")
-		if !choiceContains(plugin.config.PaymentProcessors, processor) {
+		if !optionContains(plugin.config.PaymentProcessors, processor) {
 			issues = append(issues, schema.Issue{Code: "invalid_form_payment_processor", Path: path + ".paymentProcessor", Message: fmt.Sprintf("payment processor %q is not configured", processor)})
 		}
 		conditions, _ := listValue(definition.Data, "priceConditions")
 		for conditionIndex, conditionValue := range conditions {
-			condition, valid := conditionValue.ObjectValue()
-			if !valid {
+			condition := conditionValue
+			if condition.Kind() != store.ValueObject {
 				continue
 			}
-			fieldToUse, _ := stringValue(condition, "fieldToUse")
+			fieldToUse, _ := condition.Get("fieldToUse").StringValue()
 			if _, exists := knownNames[fieldToUse]; !exists {
 				issues = append(issues, schema.Issue{Code: "unknown_payment_condition_field", Path: fmt.Sprintf("%s.priceConditions.%d.fieldToUse", path, conditionIndex), Message: fmt.Sprintf("payment condition references unknown earlier field %q", fieldToUse)})
 			}
-			valueType, _ := stringValue(condition, "valueType")
+			valueType, _ := condition.Get("valueType").StringValue()
 			if valueType == "valueOfField" {
-				other, _ := stringValue(condition, "valueForOperator")
+				other, _ := condition.Get("valueForOperator").StringValue()
 				if _, exists := knownNames[other]; !exists {
 					issues = append(issues, schema.Issue{Code: "unknown_payment_value_field", Path: fmt.Sprintf("%s.priceConditions.%d.valueForOperator", path, conditionIndex), Message: fmt.Sprintf("payment operation references unknown earlier field %q", other)})
 				}
@@ -165,7 +166,7 @@ func (plugin *Plugin) validateConfiguredField(definition formFieldDefinition, kn
 }
 
 func (plugin *Plugin) validateSubmission(context ridu.HookContext, allowedFieldTypes map[FieldType]struct{}) error {
-	if context.Operation != ridu.OperationCreate {
+	if context.Operation != operation.Create {
 		return nil
 	}
 	formID, valid := relationshipID(context.Data["form"])
@@ -243,7 +244,7 @@ func parseFormFields(values store.Values, allowedFieldTypes map[FieldType]struct
 	definitions := make([]formFieldDefinition, 0, len(rows))
 	var issues []schema.Issue
 	for index, value := range rows {
-		row, valid := value.ObjectValue()
+		row, valid := value.CopyObject()
 		if !valid {
 			continue
 		}
@@ -263,7 +264,7 @@ func submissionValues(rows []store.Value) (map[string]store.Value, map[string]st
 	paths := make(map[string]string, len(rows))
 	var issues []schema.Issue
 	for index, value := range rows {
-		row, valid := value.ObjectValue()
+		row, valid := value.CopyObject()
 		if !valid {
 			continue
 		}
@@ -290,7 +291,7 @@ func submissionUploadValues(rows []store.Value, definitions map[string]formField
 	paths := make(map[string]string, len(rows))
 	var issues []schema.Issue
 	for index, value := range rows {
-		row, valid := value.ObjectValue()
+		row, valid := value.CopyObject()
 		if !valid {
 			continue
 		}
@@ -384,7 +385,7 @@ func validateSubmittedValue(definition formFieldDefinition, value store.Value, p
 		}
 		if definition.Type == FieldSelect || definition.Type == FieldRadio {
 			if !configuredOptionContains(definition.Data, text) {
-				return []schema.Issue{{Code: "invalid_choice", Path: path, Message: fmt.Sprintf("field %q contains an unavailable option", definition.Name)}}
+				return []schema.Issue{{Code: "invalid_option", Path: path, Message: fmt.Sprintf("field %q contains an unavailable option", definition.Name)}}
 			}
 		}
 	case FieldNumber, FieldPayment:
@@ -404,7 +405,7 @@ func validateSubmittedValue(definition formFieldDefinition, value store.Value, p
 			if text, valid := value.StringValue(); valid && strings.TrimSpace(text) == "" {
 				return []schema.Issue{{Code: "required", Path: path, Message: fmt.Sprintf("field %q is required", definition.Name)}}
 			}
-			if values, valid := value.Values(); valid && len(values) == 0 {
+			if value.Kind() == store.ValueList && value.Len() == 0 {
 				return []schema.Issue{{Code: "required", Path: path, Message: fmt.Sprintf("field %q is required", definition.Name)}}
 			}
 		}
@@ -416,29 +417,27 @@ func relationshipID(value store.Value) (string, bool) {
 	if text, valid := value.StringValue(); valid {
 		return text, true
 	}
-	if document, valid := value.DocumentValue(); valid {
+	if document, valid := value.CopyDocument(); valid {
 		return document.ID, true
 	}
 	return "", false
 }
 
 func uploadReferences(value store.Value, defaultCollection schema.CollectionSlug) ([]uploadReference, bool) {
-	items, valid := value.Values()
-	if !valid {
+	if value.Kind() != store.ValueList {
 		return nil, false
 	}
-	references := make([]uploadReference, 0, len(items))
-	for _, item := range items {
+	references := make([]uploadReference, 0, value.Len())
+	for item := range value.Elements() {
 		if id, valid := relationshipID(item); valid && id != "" && defaultCollection != "" {
 			references = append(references, uploadReference{Collection: defaultCollection, ID: id})
 			continue
 		}
-		object, valid := item.ObjectValue()
-		if !valid {
+		if item.Kind() != store.ValueObject {
 			return references, false
 		}
-		collection, collectionValid := stringValue(object, "relationTo")
-		id, idValid := relationshipID(object["id"])
+		collection, collectionValid := item.Get("relationTo").StringValue()
+		id, idValid := relationshipID(item.Get("id"))
 		if !collectionValid || !idValid || collection == "" || id == "" {
 			return references, false
 		}
@@ -451,11 +450,11 @@ func mimeTypes(values store.Values) []string {
 	rows, _ := listValue(values, "mimeTypes")
 	result := make([]string, 0, len(rows))
 	for _, rowValue := range rows {
-		row, valid := rowValue.ObjectValue()
-		if !valid {
+		row := rowValue
+		if row.Kind() != store.ValueObject {
 			continue
 		}
-		if value, exists := stringValue(row, "mimeType"); exists && strings.TrimSpace(value) != "" {
+		if value, exists := row.Get("mimeType").StringValue(); exists && strings.TrimSpace(value) != "" {
 			result = append(result, strings.ToLower(strings.TrimSpace(value)))
 		}
 	}
@@ -475,20 +474,20 @@ func mimeAllowed(candidate string, allowed []string) bool {
 func configuredOptionContains(values store.Values, candidate string) bool {
 	rows, _ := listValue(values, "options")
 	for _, rowValue := range rows {
-		row, valid := rowValue.ObjectValue()
-		if !valid {
+		row := rowValue
+		if row.Kind() != store.ValueObject {
 			continue
 		}
-		if value, _ := stringValue(row, "value"); value == candidate {
+		if value, _ := row.Get("value").StringValue(); value == candidate {
 			return true
 		}
 	}
 	return false
 }
 
-func choiceContains(choices []field.Choice, candidate string) bool {
-	for _, choice := range choices {
-		if choice.Value == candidate {
+func optionContains(options []field.Option, candidate string) bool {
+	for _, option := range options {
+		if option.Value == candidate {
 			return true
 		}
 	}
@@ -524,7 +523,7 @@ func objectValue(values store.Values, key string) (store.Values, bool) {
 	if !exists {
 		return nil, false
 	}
-	return value.ObjectValue()
+	return value.CopyObject()
 }
 
 func listValue(values store.Values, key string) ([]store.Value, bool) {
@@ -532,7 +531,7 @@ func listValue(values store.Values, key string) ([]store.Value, bool) {
 	if !exists {
 		return nil, false
 	}
-	return value.Values()
+	return value.CopyList()
 }
 
 func validDate(value string) bool {

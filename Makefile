@@ -1,4 +1,4 @@
-.PHONY: admin-build admin-dev build check check-dev check-fast check-full demo dependency-check documentation-check dogfood-new format format-check go-format-check go-test go-test-after-vet go-test-dev go-vet go-vuln-check install lint mongodb-fixture-test mongodb-generated-project-test mongodb-production-test mongodb-test packed-release-check playground-ridu-dev playground-ridu-down playground-ridu-hydrate playground-ridu-reset postgres-browser-test postgres-test release-build-check release-check release-version-check security-check sqlite-no-cgo-test sqlite-payload-baseline-test sqlite-race-test sqlite-smoke-test sqlite-test test typecheck
+.PHONY: admin-build admin-dev build check check-dev check-fast check-full cli-clean-install-test demo dependency-check documentation-check dogfood-new format format-check go-format-check go-test go-test-after-vet go-test-dev go-vet go-vuln-check install lint mongodb-fixture-test mongodb-generated-project-test mongodb-production-test mongodb-test packed-release-check performance-check playground-ridu-dev playground-ridu-down playground-ridu-hydrate playground-ridu-reset postgres-browser-test postgres-test release-build-check release-check release-version-check runtime-packages-build security-check sqlite-no-cgo-test sqlite-payload-baseline-test sqlite-race-test sqlite-smoke-test sqlite-test test typecheck
 
 build:
 	bun run build
@@ -21,7 +21,7 @@ playground-ridu-hydrate:
 
 playground-ridu-dev: playground-ridu-hydrate
 	docker compose -p ridu-playground -f ./playground/ridu/compose.yaml up -d postgres
-	cd playground/ridu && ./.ridu/bin/ridu dev --no-docker --database-url 'postgres://ridu:ridu@127.0.0.1:54339/ridu?sslmode=disable'
+	cd playground/ridu && ./.ridu/bin/ridu dev --no-docker
 
 playground-ridu-down:
 	docker compose -p ridu-playground -f ./playground/ridu/compose.yaml down
@@ -37,8 +37,10 @@ check-dev: go-format-check go-test-dev
 check-fast: go-format-check go-test-after-vet
 	bun run check:fast
 
-check-full: go-format-check go-test-after-vet
-	bun run check:full
+# Browser fixtures consume completed static builds. Go tests can overlap them,
+# but not frontend checks: framework-package tests rebuild the runtime packages.
+check-full: go-format-check
+	bun run check:full:repository
 
 dependency-check:
 	go mod verify
@@ -46,8 +48,9 @@ dependency-check:
 	cd website && bun audit --audit-level=high
 
 documentation-check:
+	bun run check:website:clean
 	go test ./examples/documentation/...
-	cd website && bun install --frozen-lockfile
+	bun run prepare:website
 	cd website && bun run verify
 
 go-vuln-check:
@@ -66,7 +69,8 @@ packed-release-check: release-version-check
 	bash ./scripts/check-packed-release.sh
 
 release-check:
-	$(MAKE) check-full RIDU_POSTGRES_URL= RIDU_POSTGRES_RECOVERY_DRILL= RIDU_POSTGRES_CLIENT_IMAGE=
+	$(MAKE) check-full RIDU_TEST_CLEAN_CACHE=true GOFLAGS="$(GOFLAGS) -count=1" RIDU_POSTGRES_URL= RIDU_POSTGRES_RECOVERY_DRILL= RIDU_POSTGRES_CLIENT_IMAGE=
+	$(MAKE) performance-check RIDU_POSTGRES_URL= RIDU_POSTGRES_RECOVERY_DRILL= RIDU_POSTGRES_CLIENT_IMAGE=
 	$(MAKE) sqlite-test RIDU_POSTGRES_URL= RIDU_POSTGRES_RECOVERY_DRILL= RIDU_POSTGRES_CLIENT_IMAGE=
 	$(MAKE) postgres-test
 	$(MAKE) postgres-browser-test
@@ -87,17 +91,42 @@ go-format-check:
 	@unformatted="$$(find . -type d \( -name .git -o -name .ridu -o -name node_modules -o -path ./playground \) -prune -o -type f -name '*.go' -exec gofmt -l {} +)"; \
 	if [ -n "$$unformatted" ]; then printf 'Go files need formatting:\n%s\n' "$$unformatted"; exit 1; fi
 
-go-test:
+# Go example and generated-consumer tests require the built TypeScript packages.
+# Prepare them before every Go test entry point, including short tests.
+runtime-packages-build:
+	bun run build:runtime-packages
+
+go-test: runtime-packages-build
 	go test ./...
 
-go-test-after-vet: go-vet
+go-test-after-vet: go-vet runtime-packages-build
 	go test -vet=off ./...
 
-go-test-dev: go-vet
+go-test-dev: go-vet runtime-packages-build
 	go test -short -vet=off ./...
 
 go-vet:
 	go vet ./...
+
+# Fresh dependency/build caches qualify the real install path independently of
+# the content-addressed development cache. release-check uses this mode for its
+# complete check-full invocation.
+cli-clean-install-test:
+	RIDU_TEST_CLEAN_CACHE=true go test -count=1 ./internal/cli -run '^Test(NewReleaseOverrideWorksThroughRealBinary|GeneratedProjectCompilesAndGeneratesOutsideRepository)$$'
+
+# Keep scale measurements serial and outside correctness-gate CPU contention.
+performance-check:
+	bun run build:runtime-packages
+	go test -run '^$$' -bench '^BenchmarkEmbeddedHookBatch$$' -benchmem -benchtime=1x ./core
+	go test -run '^$$' -bench '^(BenchmarkEmbeddedValueScaling|BenchmarkNativeValueScaling)$$/^None$$' -benchmem -benchtime=1x ./core
+	go test -run '^$$' -bench '^(BenchmarkEmbeddedValueScaling|BenchmarkNativeValueScaling)$$/^ReadAll$$/^100$$' -benchmem -benchtime=1x ./core
+	go test -run '^$$' -bench '^BenchmarkOrdinaryValueScaling$$/^(native|embedded)$$/./^100$$' -benchmem -benchtime=1x ./core
+	go test -run '^$$' -bench '^BenchmarkLocaleViewControls$$/^(native|embedded)$$/./^100$$' -benchmem -benchtime=1x ./core
+	go test -run '^$$' -bench '^BenchmarkOrdinaryLocaleSerialization$$/^(native|embedded)$$/^100$$' -benchmem -benchtime=1x ./core
+	go test -run '^$$' -bench '^BenchmarkPopulationTraversal$$' -benchmem -benchtime=1x ./internal/population
+	RIDU_TEST_GENERATION_PERF=true go test -count=1 ./internal/generate -run '^(TestReusableBlocksGeneratedGrowth|TestRichTextRepeatedDefinitionGrowth)$$'
+	bun run build:admin-fixture
+	RIDU_ADMIN_FIXTURE_PREBUILT=true bun run test:performance
 
 sqlite-test: sqlite-race-test sqlite-no-cgo-test sqlite-smoke-test sqlite-payload-baseline-test
 

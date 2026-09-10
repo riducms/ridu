@@ -774,15 +774,17 @@ func TestAdminPluginRegistryUsesValidatedManifestMetadata(t *testing.T) {
 		Application: schema.Application{Name: "Plugins"},
 		Plugins: []schema.Plugin{
 			{Key: "backend-only"},
-			{Key: "color", Admin: &schema.PluginAdmin{Package: "@example/color-admin", Export: "colorAdminPlugin", APIVersion: 1, PairingVersion: 7, Assets: []string{"styles.css"}}},
+			{Key: "color", FieldTypes: []schema.PluginFieldType{{Key: "swatch", TypeScriptPackage: "@example/color-admin/value", TypeScriptOutput: "Color", TypeScriptInput: "ColorInput"}}, Admin: &schema.PluginAdmin{Package: "@example/color-admin", Export: "colorAdminPlugin", APIVersion: schema.CurrentAdminPluginAPIVersion, PairingVersion: 7, Assets: []string{"styles.css"}}},
 		},
 	})
 	registry := string(adminPluginRegistry(manifest))
 	for _, expected := range []string{
-		`import { resolveAdminPluginPairs } from "@riducms/plugin";`,
+		`import { resolveAdminPluginPairs, type PluginFieldRegistration } from "@riducms/plugin";`,
 		`import { colorAdminPlugin as riduAdminPlugin0 } from "@example/color-admin";`,
 		`key: "color"`,
 		`apiVersion: 1`,
+		`riduAdminPlugin0.fields["swatch"] satisfies PluginFieldRegistration<import("@example/color-admin/value").Color, import("@example/color-admin/value").ColorInput>;`,
+		`fieldTypes: ["swatch"]`,
 		`pairingVersion: 7`,
 		`import "@example/color-admin/styles.css";`,
 		`generatedAdminPlugins = resolvedAdminPluginPairs.plugins`,
@@ -1130,22 +1132,22 @@ func TestGeneratedGoModelsKeepJoinAndVirtualFieldsOutputOnly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	text := string(generated)
-	for _, expected := range []string{"[]map[string]any `json:\"posts,omitempty\"`", "*string          `json:\"label,omitempty\"`", "type CategoriesCreate struct {\n}", "type CategoriesUpdate struct {\n}"} {
+	text := string(goSourceWithoutLineComments(t, generated))
+	for _, expected := range []string{"[]Posts `json:\"posts,omitempty\"`", "*string `json:\"label,omitempty\"`", "type CategoriesCreate struct {\n}", "type CategoriesUpdate struct {\n}"} {
 		if !strings.Contains(text, expected) {
 			t.Fatalf("generated Go client missing %q:\n%s", expected, text)
 		}
 	}
 }
 
-func TestGeneratedGoModelsTypeMultiSelectAsStringSlice(t *testing.T) {
+func TestGeneratedGoModelsTypeMultiSelectAsOptionSlice(t *testing.T) {
 	manifest := schema.NewManifest(schema.Snapshot{
 		Version: schema.CurrentVersion, Application: schema.Application{Name: "Multi-select Go types"},
 		Collections: []schema.Collection{{
 			ID: "users", Slug: "users", Labels: schema.CollectionLabels{Singular: "User", Plural: "Users"},
 			Fields: []schema.Field{{
 				ID: "users-roles", Name: "roles", Type: schema.FieldTypeSelect, Required: true,
-				Select: &schema.SelectField{HasMany: true, DefaultValues: []string{"admin"}, Choices: []schema.SelectChoice{{Value: "admin"}, {Value: "editor"}}},
+				Select: &schema.SelectField{HasMany: true, DefaultValues: []string{"admin"}, Options: []schema.SelectOption{{Value: "admin"}, {Value: "editor"}}},
 			}},
 		}},
 	})
@@ -1155,8 +1157,8 @@ func TestGeneratedGoModelsTypeMultiSelectAsStringSlice(t *testing.T) {
 	}
 	text := string(generated)
 	for _, expected := range []string{
-		`[]string ` + "`json:\"roles,omitempty\"`",
-		`*core.NonNullInput[[]string] ` + "`json:\"roles,omitempty\"`",
+		`[]UserRoles ` + "`json:\"roles,omitempty\"`",
+		`*core.NonNullInput[[]UserRoles] ` + "`json:\"roles,omitempty\"`",
 	} {
 		if !strings.Contains(text, expected) {
 			t.Fatalf("generated Go multi-select missing %q:\n%s", expected, text)
@@ -1187,12 +1189,13 @@ func TestGeneratedGoNonNullNilableInputsCannotEncodeExplicitNull(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	text := string(generated)
+	declarations := goDeclarations(t, generated)
+	text := declarations["Article"] + "\n" + declarations["ArticleCreate"] + "\n" + declarations["ArticleUpdate"]
 	for _, expected := range []string{
-		`(?m)^\s*RequiredTags\s+core\.NonNullInput\[\[\]string\]\s+` + "`json:\"requiredTags\"`$",
-		`(?m)^\s*DefaultTags\s+\*core\.NonNullInput\[\[\]string\]\s+` + "`json:\"defaultTags,omitempty\"`$",
-		`(?m)^\s*OptionalTags\s+\*core\.Input\[\[\]string\]\s+` + "`json:\"optionalTags,omitempty\"`$",
-		`(?m)^\s*RequiredTarget\s+core\.NonNullInput\[map\[string\]any\]\s+` + "`json:\"requiredTarget\"`$",
+		`(?m)^\s*RequiredTags\s+core\.NonNullInput\[\[\]ArticleRequiredTags\]\s+` + "`json:\"requiredTags\"`$",
+		`(?m)^\s*DefaultTags\s+\*core\.NonNullInput\[\[\]ArticleDefaultTags\]\s+` + "`json:\"defaultTags,omitempty\"`$",
+		`(?m)^\s*OptionalTags\s+\*core\.Input\[\[\]ArticleOptionalTags\]\s+` + "`json:\"optionalTags,omitempty\"`$",
+		`(?m)^\s*RequiredTarget\s+ArticleRequiredTargetReferenceInput\s+` + "`json:\"requiredTarget\"`$",
 		`(?m)^\s*RequiredPayload\s+core\.NonNullInput\[json\.RawMessage\]\s+` + "`json:\"requiredPayload\"`$",
 		`(?m)^\s*OptionalPayload\s+\*core\.Input\[json\.RawMessage\]\s+` + "`json:\"optionalPayload,omitempty\"`$",
 	} {
@@ -1200,22 +1203,22 @@ func TestGeneratedGoNonNullNilableInputsCannotEncodeExplicitNull(t *testing.T) {
 			t.Fatalf("generated Go non-null nil-able input missing %q:\n%s", expected, text)
 		}
 	}
-	if count := len(regexp.MustCompile(`(?m)^\s*DefaultTags\s+\*core\.NonNullInput\[\[\]string\]`).FindAllString(text, -1)); count != 2 {
+	if count := len(regexp.MustCompile(`(?m)^\s*DefaultTags\s+\*core\.NonNullInput\[\[\]ArticleDefaultTags\]`).FindAllString(text, -1)); count != 2 {
 		t.Fatalf("defaulted required list wrapper count = %d, want create and update:\n%s", count, text)
 	}
-	if count := len(regexp.MustCompile(`(?m)^\s*RequiredTags\s+\*core\.NonNullInput\[\[\]string\]`).FindAllString(text, -1)); count != 1 {
+	if count := len(regexp.MustCompile(`(?m)^\s*RequiredTags\s+\*core\.NonNullInput\[\[\]ArticleRequiredTags\]`).FindAllString(text, -1)); count != 1 {
 		t.Fatalf("required list optional wrapper count = %d, want update only:\n%s", count, text)
 	}
-	if count := len(regexp.MustCompile(`(?m)^\s*RequiredTarget\s+\*core\.NonNullInput\[map\[string\]any\]`).FindAllString(text, -1)); count != 1 {
-		t.Fatalf("required map optional wrapper count = %d, want update only:\n%s", count, text)
+	if count := len(regexp.MustCompile(`(?m)^\s*RequiredTarget\s+\*ArticleRequiredTargetReferenceUpdate`).FindAllString(text, -1)); count != 1 {
+		t.Fatalf("required polymorphic update pointer count = %d, want update only:\n%s", count, text)
 	}
 	if count := len(regexp.MustCompile(`(?m)^\s*RequiredPayload\s+\*core\.NonNullInput\[json\.RawMessage\]`).FindAllString(text, -1)); count != 1 {
 		t.Fatalf("required raw JSON optional wrapper count = %d, want update only:\n%s", count, text)
 	}
-	if count := len(regexp.MustCompile(`(?m)^\s*NestedTags\s+core\.NonNullInput\[\[\]string\]`).FindAllString(text, -1)); count != 1 {
+	if count := len(regexp.MustCompile(`(?m)^\s*NestedTags\s+core\.NonNullInput\[\[\]ArticleDetailsNestedTags\]`).FindAllString(text, -1)); count != 1 {
 		t.Fatalf("nested required list wrapper count = %d, want create only:\n%s", count, text)
 	}
-	if count := len(regexp.MustCompile(`(?m)^\s*NestedTags\s+\*core\.NonNullInput\[\[\]string\]`).FindAllString(text, -1)); count != 1 {
+	if count := len(regexp.MustCompile(`(?m)^\s*NestedTags\s+\*core\.NonNullInput\[\[\]ArticleDetailsNestedTags\]`).FindAllString(text, -1)); count != 1 {
 		t.Fatalf("nested required list optional wrapper count = %d, want update only:\n%s", count, text)
 	}
 }
@@ -1238,7 +1241,7 @@ func TestGeneratedGoInputsPreserveOmittedAndExplicitNull(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	text := string(generated)
+	text := string(goSourceWithoutLineComments(t, generated))
 	for _, expected := range []string{
 		`(?m)^\s*Title\s+string\s+` + "`json:\"title\"`$",
 		`(?m)^\s*Subtitle\s+\*core\.Input\[string\]\s+` + "`json:\"subtitle,omitempty\"`$",
@@ -1274,7 +1277,7 @@ func TestGeneratedGoOutputModelsPreserveProjectedAndRedactedFieldPresence(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	text := string(generated)
+	text := string(goSourceWithoutLineComments(t, generated))
 	for _, expected := range []string{
 		`(?m)^\s*Title\s+\*string\s+` + "`json:\"title,omitempty\"`$",
 		`(?m)^\s*Location\s+\*\[2\]float64\s+` + "`json:\"location,omitempty\"`$",

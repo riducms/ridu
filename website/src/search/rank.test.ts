@@ -23,7 +23,14 @@ function referenceCatalog(): SiteSearchEntry[] {
 
 test('ranks exact qualified API symbols first', () => {
 	const catalog = referenceCatalog();
-	for (const query of ['field.Select', 'LocalAPI.Find', 'RiduClient.list']) {
+	for (const query of [
+		'field.Select',
+		'LocalAPI.Find',
+		'RiduClient.list',
+		'TextField.EditAdmin',
+		'ChildrenDraft.EditBranchAt',
+		'operation.WriteContext'
+	]) {
 		const results = rankSearchCatalog(catalog, query);
 		expect(results.length, query).toBeGreaterThan(0);
 		expect(results[0].entry.label, query).toBe(query);
@@ -71,4 +78,41 @@ test('normalizes camelCase, acronyms, punctuation, and import paths without losi
 	expect(text).toContain('@riducms/sdk');
 	expect(text).toContain('/api/posts');
 	expect(text).toContain('database_url');
+});
+
+test('deduplicates contained variants while preserving phrases and qualified identifiers', () => {
+	const description = 'Set a maximum length for this text field.';
+	const symbol = 'field.TextField.MaxLength';
+	const text = searchableText(description, symbol);
+	expect(
+		searchableText(description, symbol, 'maximum length', 'TextField.MaxLength', 'MaxLength')
+	).toBe(text);
+	expect(text).toContain(description.toLocaleLowerCase());
+	expect(text).toContain('field.textfield.maxlength');
+	expect(text).toContain('field text field max length');
+});
+
+test('compacts overlapping phrases without dropping variants or changing searchable tokens', () => {
+	const phrases = ['operation context values', 'values available now', 'now operation context'];
+	const compact = searchableText(phrases);
+	for (const phrase of phrases) expect(compact).toContain(phrase);
+	expect(compact.length).toBeLessThan(phrases.join(' ').length);
+	expect(new Set(compact.split(/\s+/))).toEqual(new Set(phrases.join(' ').split(/\s+/)));
+
+	const technical = searchableText(
+		'field.DefaultFrom',
+		'DefaultFrom callback',
+		'callback returns value'
+	);
+	for (const variant of [
+		'field.defaultfrom',
+		'field default from',
+		'field defaultfrom',
+		'defaultfrom callback',
+		'default from callback',
+		'callback returns value'
+	])
+		expect(technical).toContain(variant);
+	// An overlap inside a token would fabricate a new substring, so it cannot be merged.
+	expect(searchableText('field', 'default')).not.toContain('fielddefault');
 });

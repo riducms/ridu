@@ -35,7 +35,10 @@ func (transaction *documentTransaction) replaceDocumentReferences(ctx context.Co
 	if err := transaction.deleteDocumentReferences(ctx, owner); err != nil {
 		return err
 	}
-	entries := referenceindex.Collect(collection, document)
+	entries, referenceErr := referenceindex.Collect(collection, document)
+	if referenceErr != nil {
+		return referenceErr
+	}
 	if len(entries) == 0 {
 		return nil
 	}
@@ -374,7 +377,10 @@ func (transaction *documentTransaction) applyReferenceDelete(ctx context.Context
 		if decodeErr != nil {
 			return decodeErr
 		}
-		values, changed := referenceindex.NullifyTarget(collection, document.Values, request.Target)
+		values, changed, referenceErr := referenceindex.NullifyTarget(collection, document.Values, request.Target)
+		if referenceErr != nil {
+			return referenceErr
+		}
 		if !changed {
 			return fmt.Errorf("reference index for owner collection %q is inconsistent with current values", owner.CollectionID)
 		}

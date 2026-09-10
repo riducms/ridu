@@ -11,6 +11,8 @@ import { createAdminUnoConfig } from "../uno/index.js";
 import { contentCSSHash } from "./compiler-options.js";
 import { riduSchemaReloadPlugin } from "./schema-reload.js";
 import { packageSourceAliasPlugin } from "./source-alias.js";
+import { packageSourceScanPlugin } from "./source-scan.js";
+import { riduAdminCheckPlugins } from "../admin-check.js";
 
 type SvelteOptions = NonNullable<Parameters<typeof svelte>[0]>;
 
@@ -32,15 +34,23 @@ export interface AdminApplicationConfigOptions {
 export function createAdminApplicationConfig(options: AdminApplicationConfigOptions) {
 	const svelteOptions = options.svelte ?? {};
 	const base = options.base ?? "/admin/";
+	const sourcePackages = [
+		"@riducms/admin",
+		"@riducms/ui",
+		"@riducms/plugin-richtext",
+		"@riducms/plugin-seo",
+	];
 	return defineConfig(({ command }) => ({
 		...(options.root === undefined ? {} : { root: options.root }),
 		base,
 		clearScreen: false,
 		...(options.cacheDir === undefined ? {} : { cacheDir: options.cacheDir }),
 		plugins: [
+			...riduAdminCheckPlugins(),
 			canonicalBaseRedirectPlugin(base),
 			riduSchemaReloadPlugin(options.schemaReloadSignal),
 			packageSourceAliasPlugin(),
+			packageSourceScanPlugin(sourcePackages),
 			...(options.pluginsBeforeSvelte ?? []),
 			UnoCSS(createAdminUnoConfig()),
 			Icons({ compiler: "svelte" }),
@@ -68,15 +78,12 @@ export function createAdminApplicationConfig(options: AdminApplicationConfigOpti
 		},
 		optimizeDeps: {
 			// Preserve package-relative aliases and Svelte preprocessing in framework source.
-			exclude: unique([
-				"@riducms/admin",
-				"@riducms/ui",
-				"@riducms/plugin-richtext",
-				"@riducms/plugin-seo",
-				...(options.optimizeDepsExclude ?? []),
-			]),
-			// Lexical loads its React devtools dynamically, beyond the initial dependency scan.
+			exclude: unique([...sourcePackages, ...(options.optimizeDepsExclude ?? [])]),
 			include: [
+				// Plugin source can be excluded from scanning while its editor is prebundled.
+				// Optimize the plugin-owned core too so custom nodes share the editor's classes.
+				"@riducms/plugin-richtext > lexical",
+				// Lexical loads its React devtools dynamically, beyond the initial dependency scan.
 				"react",
 				"react-dom",
 				"react/jsx-runtime",
@@ -109,9 +116,14 @@ function dependencyInventoryPlugin(
 	outputPath: string,
 	iconSourcePackage: string | undefined
 ): Plugin {
+	let writesArtifacts = true;
 	return {
 		name: "ridu-dependency-inventory",
+		configResolved(config) {
+			writesArtifacts = config.build.write;
+		},
 		generateBundle(_outputOptions, bundle) {
+			if (!writesArtifacts) return;
 			const dependencies = new Map<string, BundledDependency>();
 			const iconCollections = new Set<string>();
 			for (const output of Object.values(bundle)) {

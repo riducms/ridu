@@ -8,7 +8,7 @@ import {
 	type DateValue,
 	type Time,
 } from "@internationalized/date";
-import type { SchemaDatePickerAppearance } from "@riducms/protocol";
+import type { SchemaDateFormat } from "@riducms/protocol";
 
 /**
  * Converts a Ridu wire value into the timezone-free value used by Bits' date
@@ -16,13 +16,13 @@ import type { SchemaDatePickerAppearance } from "@riducms/protocol";
  */
 export function datePickerValue(
 	value: unknown,
-	appearance: SchemaDatePickerAppearance | undefined,
+	appearance: SchemaDateFormat | undefined,
 	timeZone = getLocalTimeZone()
 ): DateValue | undefined {
 	const encoded = String(value ?? "");
 	if (encoded === "") return undefined;
 	try {
-		if (appearance === "dayAndTime") {
+		if (appearance === "date-time") {
 			return toCalendarDateTime(parseAbsolute(encoded, timeZone));
 		}
 		return parseDate(encoded.slice(0, 10));
@@ -34,11 +34,11 @@ export function datePickerValue(
 /** Converts a Bits date selection to Ridu's canonical wire value. */
 export function datePickerFormValue(
 	value: DateValue | undefined,
-	appearance: SchemaDatePickerAppearance | undefined,
+	appearance: SchemaDateFormat | undefined,
 	timeZone = getLocalTimeZone()
 ) {
 	if (value === undefined) return "";
-	if (appearance === "dayAndTime") {
+	if (appearance === "date-time") {
 		return toCalendarDateTime(value).toDate(timeZone).toISOString();
 	}
 	return toCalendarDate(value).toString();

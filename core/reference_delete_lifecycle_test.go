@@ -9,6 +9,7 @@ import (
 	ridu "github.com/riducms/ridu/core"
 	"github.com/riducms/ridu/field"
 	"github.com/riducms/ridu/internal/teststore"
+	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/store"
 )
 
@@ -22,7 +23,7 @@ func TestHardDeleteRechecksReferencesAfterBeforeDeleteHooks(t *testing.T) {
 		Name: "reference delete lifecycle",
 		Collections: []ridu.Collection{
 			{
-				Slug: "users", Fields: []field.Definition{field.Text("name", field.Required())},
+				Slug: "users", Fields: field.Fields{field.Text("name").Required()},
 				Hooks: ridu.CollectionHooks{
 					BeforeDelete: []ridu.Hook{func(hook ridu.HookContext) error {
 						if !cleanupEnabled {
@@ -43,14 +44,9 @@ func TestHardDeleteRechecksReferencesAfterBeforeDeleteHooks(t *testing.T) {
 			},
 			{
 				Slug: "posts", Trash: true, Versions: true,
-				Fields: []field.Definition{
-					field.Text("title", field.Required()),
-					field.Relationship("protectedOwner", field.To("users"), field.OnDelete(field.ReferenceDeleteRestrict)),
-					field.Relationship("owner", field.To("users")),
-					field.Relationship("related", field.To("users"), field.HasMany()),
-				},
+				Fields: field.Fields{field.Text("title").Required(), field.Relationship("protectedOwner", "users").OnDelete(field.ReferenceDeleteRestrict), field.Relationship("owner", "users"), field.Relationships("related", "users")},
 				Hooks: ridu.CollectionHooks{AfterChange: []ridu.Hook{func(hook ridu.HookContext) error {
-					if hook.Operation == ridu.OperationUpdate && hook.Document != nil && hook.Document.ID == automaticOwnerID {
+					if hook.Operation == operation.Update && hook.Document != nil && hook.Document.ID == automaticOwnerID {
 						automaticOwnerUpdates++
 					}
 					return nil
@@ -129,7 +125,7 @@ func TestHardDeleteRechecksReferencesAfterBeforeDeleteHooks(t *testing.T) {
 	if reconciled.Values["owner"].Kind() != store.ValueNull {
 		t.Fatalf("trashed singular reference = %#v", reconciled.Values["owner"])
 	}
-	if related, _ := reconciled.Values["related"].Values(); len(related) != 0 {
+	if related, _ := reconciled.Values["related"].CopyList(); len(related) != 0 {
 		t.Fatalf("trashed duplicate members = %#v", related)
 	}
 	if !reconciled.UpdatedAt.Equal(metadataUpdatedAt) || reconciled.Revision != metadataRevision {
@@ -157,10 +153,7 @@ func TestHardDeleteRechecksReferencesAfterBeforeDeleteHooks(t *testing.T) {
 func TestBulkHardDeleteIgnoresOnlyOwnersDeletedInTheSameBatch(t *testing.T) {
 	ctx := context.Background()
 	application, err := ridu.New(ridu.Config{Name: "batch reference deletes", Collections: []ridu.Collection{{
-		Slug: "nodes", Fields: []field.Definition{
-			field.Text("name"),
-			field.Relationship("parent", field.To("nodes"), field.OnDelete(field.ReferenceDeleteRestrict)),
-		},
+		Slug: "nodes", Fields: field.Fields{field.Text("name"), field.Relationship("parent", "nodes").OnDelete(field.ReferenceDeleteRestrict)},
 	}}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)

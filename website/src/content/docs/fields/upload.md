@@ -1,6 +1,6 @@
 ---
 title: 'Upload field'
-description: 'Reference documents in one upload-enabled collection with access-aware media selection.'
+description: 'Let authors select an image, file, or gallery from a media collection.'
 product: core
 eyebrow: 'Relationship and media fields'
 order: 78
@@ -9,67 +9,81 @@ relatedSymbolIds: ['go:github.com/riducms/ridu/field#Upload']
 navigation:
   section: 'Model content'
   parent: fields
-  group: 'Relationship & media'
   order: 180
   title: 'Upload'
 ---
 
-Use `field.Upload` when a document refers to media stored as an upload-enabled collection
-document. The file bytes belong to the configured storage backend; this field stores the media
-document reference.
+Use `field.Upload` to add an image or file picker to a document. For example, a post can select
+a hero image from your media collection. The field stores the media document’s ID; the file
+itself lives in your configured storage.
 
 ## In the admin {#admin-behavior}
 
 ![A populated Cover upload field in the Ridu admin showing the selected field-guide image.](../../../../../docs/assets/fields/upload.png)
 
-_The control selects a media document; the field stores its reference while bytes remain in object storage._
+_Authors select a file from the media collection._
 
-## Define the target and field {#example}
+## Add an image or file picker {#example}
+
+First, define a collection that accepts uploads:
 
 ```go title="content/media.go"
 var Media = ridu.Collection{
 	Slug:   "media",
 	Upload: true,
-	Fields: []field.Definition{
-		field.Text("alt", field.Required()),
+	Fields: field.Fields{
+		field.Text("alt").Required(),
 	},
 }
 ```
 
 ```go title="content/posts.go"
-field.Upload(
-	"heroImage",
-	field.To("media"),
-	field.Required(),
-	field.OnDelete(field.ReferenceDeleteRestrict),
-)
+field.Upload("heroImage", "media").
+	Required().
+	OnDelete(field.ReferenceDeleteRestrict)
 ```
 
-An Upload must target exactly one existing collection with `Upload: true`. Use `HasMany()` or the
-`ToMany("media")` shorthand for a gallery.
+Pass that collection’s slug to `field.Upload`. The collection must exist and have `Upload: true`.
+Use `field.Uploads("gallery", "media")` to let authors select several files.
 
-## Authoring, filtering, and reads {#options}
+## Configuration {#configuration}
 
-The admin provides an access-aware media picker. `FilterOptionRules` can narrow candidates by
-metadata such as MIME type or a current-document value, and the server revalidates the rule on
-write. Upload also supports `Required`, `Localized`, delete behavior, conditions, and common
-presentation options.
+| Constructor or method                                                                  | What it controls                                                               |
+| -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `field.Upload(name, collection)`                                                       | Stores one ID from an upload-enabled collection.                               |
+| `field.Uploads(name, collection)`                                                      | Stores an ordered list of upload document IDs.                                 |
+| `.Required()`                                                                          | Requires one selected file, or a non-empty list for `Uploads`.                 |
+| `.FilterOptionRules(rules...)`                                                         | Narrows picker choices and server admission with finite query predicates.      |
+| `.OnDelete(field.ReferenceDeleteRestrict)` / `.OnDelete(field.ReferenceDeleteNullify)` | Rejects a hard delete while referenced, or clears/removes matching references. |
+| `.Index()` / `.Unique()`                                                               | Available on a singular Upload reference.                                      |
+| `.Localized()`                                                                         | Stores the selected reference or list separately for each locale.              |
+| `.Validate(...)`, `.LiveValidate(...)`, `.Access(...)`, `.Hooks(...)`                  | Adds application rules and lifecycle behavior.                                 |
 
-Without population, reads return the stored ID/reference. Request population when a response needs
-the media document and its server-owned filename, MIME, dimensions, sizes, or authored `alt` data.
-Target access and redaction still apply.
+## Filter the available files {#options}
 
-This field does not upload bytes by itself. Create media through the generated SDK's `upload` or
-`uploadFromURL` methods, the multipart REST endpoint, or the admin, then select the resulting
-document.
+The picker shows files the current user can read. Use `FilterOptionRules` to narrow the choices
+by MIME type or another field value. The server checks these rules again when saving. See
+[filtering relationship choices](/docs/fields/relationship/#option-filters) for an example.
+
+Upload fields also support `Required`, `Localized`, delete behavior, conditions, and admin
+settings.
+
+## Read file details and upload new files
+
+Reads return the selected media ID. Request population to include details such as filename,
+MIME type, image dimensions, generated sizes, and `alt` text. Access rules still apply to the
+media document and its fields.
+
+To add a new file, use the admin, the SDK’s `upload` or `uploadFromURL` method, or the multipart
+REST endpoint. Then select the resulting media document in this field.
 
 ## Common mistakes {#troubleshooting}
 
-- Setting `field.To("media")` does not make `media` upload-enabled.
+- Passing `"media"` to `field.Upload` does not enable uploads on that collection; set `Upload: true`.
 - Never submit or expose raw storage object keys as if they were media references.
 - Required uploads cannot use nullify-on-delete. Decide retention and permanent deletion behavior
   before authors build references.
 - Database and object storage must be backed up and restored as one recovery point.
 
-See [`field.Upload`](/reference/field/upload/) and [Uploads and media](/docs/uploads/) for ingestion,
-image variants, delivery, cleanup, and storage ownership.
+See [`field.Upload`](/reference/field/upload/) and [Uploads and media](/docs/uploads/) for file
+uploading, image sizes, delivery, and storage configuration.

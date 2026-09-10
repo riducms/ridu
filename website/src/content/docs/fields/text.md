@@ -1,22 +1,20 @@
 ---
 title: 'Text field'
-description: 'Store a short string with typed length, uniqueness, localization, and admin options.'
+description: 'Add a single-line text input for a title, name, or reference code.'
 product: core
-eyebrow: 'Scalar and choice fields'
+eyebrow: 'Basic fields'
 order: 61
 aliases: ['field.Text', 'text input', 'string field']
 relatedSymbolIds: ['go:github.com/riducms/ridu/field#Text']
 navigation:
   section: 'Model content'
   parent: fields
-  group: 'Scalar & choice'
   order: 10
   title: 'Text'
 ---
 
 Use `field.Text` for a short, unformatted string: a title, name, reference code, or single-line
-summary. It produces a `string` in generated Go, TypeScript, REST, and OpenAPI contracts and a
-single-line control in the admin.
+summary. It stores a string and shows a single-line input in the admin.
 
 ## In the admin {#admin-behavior}
 
@@ -24,34 +22,53 @@ single-line control in the admin.
 
 _Changing its label affects only the editor; changing `title` changes the stored and API path._
 
-## Smallest working example {#example}
+## Add a text input {#example}
 
 ```go title="content/posts.go"
-field.Text("title", field.Required())
+field.Text("title").Required()
 ```
 
 The document property is `title`. Authors see a label derived from that name unless you provide
-`field.Label("Post title")`.
+`.Label("Post title")`.
 
-## Validation and options {#options}
+## Configuration {#configuration}
+
+| Constructor or method                                           | What it controls                                                                        |
+| --------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `field.Text(name)`                                              | Creates the stored string field; `name` becomes its document and API key.               |
+| `.Required()`                                                   | Rejects missing, null, and empty text.                                                  |
+| `.MinLength(n)` / `.MaxLength(n)`                               | Sets inclusive Unicode-character bounds.                                                |
+| `.Default(value)` / `.DefaultFrom(callback)`                    | Supplies a fixed or request-aware value when a new scope omits the field.               |
+| `.Unique()` / `.Index()`                                        | Adds uniqueness or a query index through adapter-owned migrations.                      |
+| `.Localized()`                                                  | Stores a separate value for each configured content locale.                             |
+| `.Validate(callback)` / `.LiveValidate(callback)`               | Adds save validation or optional feedback while editing.                                |
+| `.Admin(...)`, `.Access(...)`, `.Hooks(...)`, `.ReadHooks(...)` | Configures presentation, authorization, saved-value lifecycle, and response transforms. |
+
+## Limit length and require unique values {#options}
 
 ```go title="content/products.go"
-field.Text(
-	"sku",
-	field.Required(),
-	field.MinLength(3),
-	field.MaxLength(32),
-	field.Unique(),
-	field.Index(),
-	field.Description("The identifier used by fulfilment."),
-)
+field.Text("sku").
+	Required().
+	MinLength(3).
+	MaxLength(32).
+	Unique().
+	Index().
+	Admin(field.Admin{
+		Description: "The identifier used by fulfilment.",
+	})
 ```
 
 `MinLength` and `MaxLength` count the submitted string. `Required` rejects missing, null, and empty
-values. `Unique` is collection-wide and should describe a real business invariant; `Index` is for a
-field you regularly filter or sort. `Default`, `Localized`, `ReadOnly`, `Hidden`,
-`Sidebar`, `Columns`, conditions, labels, descriptions, placeholders, and a paired
-`AdminComponent` are also compatible.
+values. `Unique` prevents two documents in the collection from using the same value. Use `Index`
+for a field you regularly filter or sort.
+
+Use `.Default("Untitled")` for a fixed initial value or `.DefaultFrom(callback)` to choose one
+on the server, for example a title in the content locale. See
+[Set default field values](/docs/fields/defaults/) for a complete example.
+
+Use `.Admin(field.Admin{...})` for descriptions, placeholders, layout, and visibility. To replace
+the text input, set `Admin.Editor` to a
+[custom field component](/docs/custom-components/field-components/).
 
 Presentation options do not grant access. Protect sensitive strings with field access rules even
 when the admin hides or disables the control.
@@ -59,10 +76,10 @@ when the admin hides or disables the control.
 ## Querying and localization {#querying}
 
 Text fields support string operators such as equality, containment, and `like`, plus sorting and
-selection. Use the canonical field path (`title` or `seo.title`) in Local API and REST queries; the
+selection. Use the field path (`title` or `seo.title`) in Local API and REST queries; the
 generated SDK exposes that path in its `where` type.
 
-`field.Localized()` stores one value per configured content locale. Required and unique checks are
+`.Localized()` stores one value per configured content locale. Required and unique checks are
 evaluated per locale, and reads obey the request's locale and fallback chain. Do not add
 `Localized` merely to translate the admin label—use `LabelTranslations` for interface copy.
 
@@ -77,3 +94,6 @@ evaluated per locale, and reads obey the request's locale and fallback chain. Do
   rebuilding slug hooks around a plain text field.
 
 See [`field.Text`](/reference/field/text/) and the shared [field options](/docs/fields/#field-options).
+
+For an ordered list of free strings, use [TextList](/docs/fields/lists/).
+It is a separate concrete field type; scalar Text callbacks continue receiving `string`.

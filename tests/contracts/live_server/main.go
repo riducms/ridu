@@ -13,6 +13,7 @@ import (
 	"github.com/riducms/ridu/adapters/sqlite"
 	"github.com/riducms/ridu/field"
 	"github.com/riducms/ridu/internal/teststore"
+	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/store"
 )
 
@@ -49,22 +50,16 @@ func main() {
 			},
 		},
 		Collections: []ridu.Collection{
-			{Slug: "users", Auth: true, Fields: []field.Definition{field.Text("email", field.Required(), field.Unique())}},
-			{Slug: "authors", Fields: []field.Definition{
-				field.Text("name", field.Required()),
-			}},
+			{Slug: "users", Auth: true, Fields: field.Fields{field.Text("email").Required().Unique()}},
+			{Slug: "authors", Fields: field.Fields{field.Text("name").Required()}},
 			{
 				Slug: "posts",
-				Fields: []field.Definition{
-					field.Text("title", field.Required()),
-					field.Select("status", field.Default("draft"), field.Choices(
-						field.Choice{Value: "draft", Label: "Draft"},
-						field.Choice{Value: "published", Label: "Published"},
-					)),
-					field.Relationship("author", field.To("authors")),
-					field.Group("seo", field.Fields(
-						field.Text("description"),
-					)),
+
+				Fields: field.Fields{field.Text("title").Required(), field.Select("status", "draft", "published").Default("draft"), field.Relationship("author", "authors"), field.Group("seo", field.Fields{field.Text("description").Access(field.Access{Read: func(operation.AccessContext,
+
+				) (bool, error) {
+					return false, nil
+				}})}),
 				},
 				Endpoints: []ridu.Endpoint{{
 					Method: http.MethodGet, Path: "/custom-summary", Summary: "Read the collection endpoint scope",

@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { createBrowserRouter, RouterProvider } from "@hvniel/svelte-router";
-	import { setAdminI18n, type AdminPlugin, type FieldPlugin } from "@riducms/plugin";
-	import type { TranslationLanguage } from "@riducms/translations";
+	import { setAdminI18n } from "@riducms/plugin";
 	import { TooltipProvider } from "@riducms/ui";
 	import { untrack } from "svelte";
 
@@ -17,25 +16,24 @@
 	import type { AdminClient } from "@admin/core/api/admin-client";
 	import DevelopmentTools from "@admin/features/development/development-tools.svelte";
 
+	import type { AdminConfig } from "@riducms/plugin/admin";
 	interface Props {
+		adminConfig?: AdminConfig;
 		clientFactory: () => AdminClient;
 		adminBasePath?: string;
-		plugins?: readonly AdminPlugin[];
-		fieldPlugins?: readonly FieldPlugin[];
-		languages?: readonly TranslationLanguage[];
 	}
-
-	let {
-		clientFactory,
-		adminBasePath = "/admin",
-		plugins = [],
-		fieldPlugins = [],
-		languages,
-	}: Props = $props();
+	let { clientFactory, adminBasePath = "/admin", adminConfig = {} }: Props = $props();
 	// The runtime owns the client and plugin registry selected when this admin instance is mounted.
 	// svelte-ignore state_referenced_locally
 	const runtime = setAdminRuntime(
-		new AdminRuntime(clientFactory(), plugins, fieldPlugins, languages)
+		new AdminRuntime(
+			clientFactory(),
+			adminConfig.plugins,
+			adminConfig.languages,
+			undefined,
+			adminConfig.fields,
+			adminConfig
+		)
 	);
 	setAdminI18n(runtime.i18n);
 	const notifications = setNotificationCenter(new NotificationCenter());

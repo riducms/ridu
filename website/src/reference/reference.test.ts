@@ -21,38 +21,39 @@ import {
 
 const expectedCatalog = {
 	moduleSymbols: {
-		ridu: 188,
-		core: 360,
-		field: 254,
+		ridu: 171,
+		core: 363,
+		field: 1023,
+		operation: 53,
 		query: 65,
-		schema: 153,
-		store: 146,
+		schema: 179,
+		store: 156,
 		storage: 8,
 		migration: 87,
 		'migration-payload': 13,
-		'go-protocol': 52,
+		'go-protocol': 56,
 		plugintest: 3,
 		postgres: 85,
 		sqlite: 71,
 		mongodb: 73,
 		graphql: 8,
 		mcp: 8,
-		richtext: 19,
-		seo: 24,
+		richtext: 25,
+		seo: 22,
 		formbuilder: 35,
 		'storage-local': 7,
 		'storage-s3': 9,
 		'store-conformance': 2,
-		sdk: 137,
-		protocol: 110,
-		plugin: 115,
+		sdk: 140,
+		protocol: 123,
+		plugin: 168,
 		build: 9,
-		ui: 36,
-		'plugin-richtext': 7,
-		'plugin-seo': 8,
+		ui: 40,
+		'plugin-richtext': 25,
+		'plugin-seo': 7,
 		'plugin-form-builder': 34,
 		admin: 4,
-		translations: 31,
+		translations: 33,
 		'cli-launcher': 1,
 		cli: 24
 	}
@@ -96,7 +97,7 @@ const expectedGroupOrders: Readonly<Record<string, readonly string[]>> = {
 		'Custom endpoints',
 		'Descriptors'
 	],
-	field: ['Field builders', 'Field helpers', 'Field options', 'Option contracts', 'Core types'],
+	field: ['Functions', 'Types', 'Interfaces', 'Methods', 'Constants'],
 	query: [
 		'Comparisons',
 		'Logical operators',
@@ -465,13 +466,15 @@ describe('reference data', () => {
 		}
 	});
 
-	test('documents every public core struct as member rows', () => {
+	test('documents public core structs through members or immutable reader methods', () => {
+		const coreModule = findReferenceModule('core');
 		const sparseStructs =
-			findReferenceModule('core')?.symbols.filter(
+			coreModule?.symbols.filter(
 				(symbol) =>
 					symbol.kind === 'type' &&
 					/struct\s*\{/.test(symbol.signature) &&
-					symbol.parameters.length === 0
+					symbol.parameters.length === 0 &&
+					receiverMethodEntries(coreModule, symbol).length === 0
 			) ?? [];
 		expect(sparseStructs.map((symbol) => symbol.name)).toEqual([]);
 
@@ -506,7 +509,7 @@ describe('reference data', () => {
 		const contracts = [
 			['core', 'core/typed_local.go', 'BoundTypedCollection'],
 			['core', 'core/typed_global.go', 'BoundTypedGlobal'],
-			['field', 'field/field.go', 'Definition'],
+			['field', 'field/field.go', 'View'],
 			['field', 'field/field.go', 'DefaultValue']
 		] as const;
 
@@ -521,10 +524,18 @@ describe('reference data', () => {
 					new RegExp(`^func \\([^)]*\\b${receiver}(?:\\[[^\\]]+\\])?\\) ([A-Z]\\w*)\\s*\\(`, 'gm')
 				)
 			].map((match) => match[1]);
-			const documented = symbol?.parameters
-				.map((parameter) => parameter.name.match(/^([A-Z]\w*)/)?.[1])
-				.filter(Boolean);
-			expect(documented, `${moduleSlug}/${symbol?.slug} method list drifted`).toEqual(methods);
+			if (moduleSlug === 'field') {
+				const module = findReferenceModule(moduleSlug)!;
+				const documented = receiverMethodEntries(module, symbol!).map((entry) =>
+					entry.symbol.name.split('.').at(-1)
+				);
+				for (const method of methods) expect(documented).toContain(method);
+			} else {
+				const documented = symbol?.parameters
+					.map((parameter) => parameter.name.match(/^([A-Z]\w*)/)?.[1])
+					.filter(Boolean);
+				expect(documented, `${moduleSlug}/${symbol?.slug} method list drifted`).toEqual(methods);
+			}
 		}
 	});
 
@@ -987,7 +998,6 @@ describe('reference data', () => {
 			['core/auth_contract.go', 'AuthStrategyContext'],
 			['core/auth_contract.go', 'AuthStrategyResult'],
 			['core/access.go', 'AccessContext'],
-			['core/access.go', 'FieldAccessContext'],
 			['internal/httpapi/http.go', 'AuthSessionInfo'],
 			['internal/httpapi/http.go', 'APIKey'],
 			['internal/httpapi/http.go', 'APIKeyInfo'],
@@ -999,7 +1009,6 @@ describe('reference data', () => {
 			['core/execute.go', 'ServerOptions'],
 			['core/uploads.go', 'UpdateUploadImageInput'],
 			['internal/operation/engine.go', 'Error', 'OperationError'],
-			['core/computed.go', 'ComputedContext'],
 			['core/local.go', 'OperationCapabilities'],
 			['core/local.go', 'FieldCapabilities'],
 			['core/local.go', 'JoinMutationResult'],

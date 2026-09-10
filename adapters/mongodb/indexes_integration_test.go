@@ -1316,7 +1316,7 @@ func TestMongoDBSyncIndexesRejectsExistingDuplicatesAndAllowsHarmlessIndexes(t *
 		unindexed.Fields = cloneMongoIndexTestFields(indexed.Fields)
 		unindexed.Fields[0].Unique = false
 		unindexed.Fields[1].Index = false
-		unindexed.Fields[3].Nested.Fields[0].Index = false
+		unindexed.Fields[3].Nested.ResolvedFields()[0].Index = false
 
 		if err := backend.SyncIndexes(t.Context(), mongoIndexTestManifest(unindexed)); err != nil {
 			t.Fatal(err)
@@ -1646,7 +1646,7 @@ func TestMongoDBPopulationRequiresTargetContentIndexVerification(t *testing.T) {
 		mongoRollback(t, verified)
 		t.Fatal(err)
 	}
-	resolved, ok := populated.Values["target"].DocumentValue()
+	resolved, ok := populated.Values["target"].CopyDocument()
 	if !ok || resolved.ID != targetDocument.ID {
 		mongoRollback(t, verified)
 		t.Fatalf("verified population target = %#v", populated.Values["target"])
@@ -1930,7 +1930,7 @@ func cloneMongoIndexTestFields(fields []schema.Field) []schema.Field {
 	for index := range cloned {
 		if cloned[index].Nested != nil {
 			nested := *cloned[index].Nested
-			nested.Fields = cloneMongoIndexTestFields(nested.Fields)
+			nested.Fields = cloneMongoIndexTestFields(nested.ResolvedFields())
 			cloned[index].Nested = &nested
 		}
 	}

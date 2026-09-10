@@ -161,7 +161,7 @@ func (manager Manager) Duplicate(ctx context.Context, collection schema.Collecti
 	}
 	var copies []sizeCopy
 	targetKeys := []string{newKey}
-	sizes, hasSizes := source["sizes"].ObjectValue()
+	sizes, hasSizes := source["sizes"].CopyObject()
 	if hasSizes {
 		names := make([]string, 0, len(sizes))
 		for name := range sizes {
@@ -169,7 +169,7 @@ func (manager Manager) Duplicate(ctx context.Context, collection schema.Collecti
 		}
 		sort.Strings(names)
 		for _, name := range names {
-			metadata, valid := sizes[name].ObjectValue()
+			metadata, valid := sizes[name].CopyObject()
 			if !valid {
 				continue
 			}

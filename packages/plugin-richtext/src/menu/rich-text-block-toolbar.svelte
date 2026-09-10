@@ -30,7 +30,10 @@
 	} from "lexical";
 	import type { Attachment } from "svelte/attachments";
 
+	import { getRichTextField } from "@plugin-richtext/field/rich-text-context.svelte";
+	import { richTextBlockTypes } from "@plugin-richtext/field/rich-text-blocks";
 	import type { RichTextConfig } from "@plugin-richtext/field/rich-text-config";
+	import { OPEN_BLOCK_EDITOR_COMMAND } from "@plugin-richtext/menu/rich-text-commands";
 	import RichTextMenu from "@plugin-richtext/menu/rich-text-menu.svelte";
 	import {
 		buildRichTextOptions,
@@ -63,7 +66,13 @@
 	let restorePickerFocus = true;
 	// The mounted field's authoring surface and feature set are stable.
 	// svelte-ignore state_referenced_locally
-	const baseOptions = buildRichTextOptions(editor, config, i18n, authoring);
+	const baseOptions = buildRichTextOptions(
+		editor,
+		config,
+		i18n,
+		authoring,
+		richTextBlockTypes(getRichTextField().field)
+	);
 	const options = $derived(filterRichTextOptions(baseOptions, query, i18n.language));
 
 	function isOnToolbar(element: HTMLElement) {
@@ -164,6 +173,13 @@
 		restorePickerFocus = option.restoreEditorFocus;
 		closePicker();
 		if (state === null) return;
+		if (option.blockType !== undefined) {
+			editor.dispatchCommand(OPEN_BLOCK_EDITOR_COMMAND, {
+				blockType: option.blockType,
+				position: state,
+			});
+			return;
+		}
 
 		editor.update(() => {
 			const target = $getNodeByKey(state.targetNodeKey);

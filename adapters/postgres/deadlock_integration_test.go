@@ -9,6 +9,7 @@ import (
 
 	"github.com/riducms/ridu"
 	"github.com/riducms/ridu/field"
+	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/store"
 )
 
@@ -17,14 +18,10 @@ func TestPostgresReversedRelationshipUpdatesReturnStableRetryableConflicts(t *te
 	defer cancel()
 	barrier := newPostgresLockCycleBarrier(2)
 	config := ridu.Config{Name: "PostgreSQL relationship deadlock availability", Collections: []ridu.Collection{{
-		Slug: "nodes",
-		Fields: []field.Definition{
-			field.Text("name", field.Required()),
-			field.Text("attempt", field.Required()),
-			field.Relationship("peer", field.To("nodes")),
-		},
+		Slug:   "nodes",
+		Fields: field.Fields{field.Text("name").Required(), field.Text("attempt").Required(), field.Relationship("peer", "nodes")},
 		Hooks: ridu.CollectionHooks{BeforeValidate: []ridu.Hook{func(hook ridu.HookContext) error {
-			if hook.Operation != ridu.OperationUpdate || hook.Original == nil {
+			if hook.Operation != operation.Update || hook.Original == nil {
 				return nil
 			}
 			attempt, _ := hook.Data["attempt"].StringValue()
@@ -129,14 +126,10 @@ func TestPostgresReversedExecuteBatchOperationsReturnStableRetryableConflicts(t 
 	barrier := newPostgresLockCycleBarrier(2)
 	var firstID, secondID string
 	config := ridu.Config{Name: "PostgreSQL batch deadlock availability", Collections: []ridu.Collection{{
-		Slug: "nodes",
-		Fields: []field.Definition{
-			field.Text("name", field.Required()),
-			field.Text("leftMark", field.Required()),
-			field.Text("rightMark", field.Required()),
-		},
+		Slug:   "nodes",
+		Fields: field.Fields{field.Text("name").Required(), field.Text("leftMark").Required(), field.Text("rightMark").Required()},
 		Hooks: ridu.CollectionHooks{BeforeValidate: []ridu.Hook{func(hook ridu.HookContext) error {
-			if hook.Operation != ridu.OperationUpdate || hook.Original == nil {
+			if hook.Operation != operation.Update || hook.Original == nil {
 				return nil
 			}
 			_, left := hook.Data["leftMark"]

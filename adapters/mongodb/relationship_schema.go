@@ -57,7 +57,7 @@ func validateMongoRelationshipValue(field schema.Field, value store.Value, path 
 	items := []store.Value{value}
 	if relationship.HasMany {
 		var valid bool
-		items, valid = value.Values()
+		items, valid = value.CopyList()
 		if !valid {
 			return fmt.Errorf("MongoDB relationship value %q must be a list", path)
 		}
@@ -86,12 +86,11 @@ func validateMongoRelationshipValue(field schema.Field, value store.Value, path 
 			}
 			continue
 		}
-		object, valid := item.ObjectValue()
-		if !valid || len(object) != 2 {
+		if item.Kind() != store.ValueObject || item.Len() != 2 {
 			return fmt.Errorf("MongoDB polymorphic relationship value %q must contain only relationTo and id", itemPath)
 		}
-		relationTo, slugValid := object["relationTo"].StringValue()
-		id, idValid := object["id"].StringValue()
+		relationTo, slugValid := item.Get("relationTo").StringValue()
+		id, idValid := item.Get("id").StringValue()
 		if !slugValid || !idValid || !mongoRelationshipTargetAllowsSlug(relationship, schema.CollectionSlug(relationTo)) {
 			return fmt.Errorf("MongoDB polymorphic relationship value %q has an invalid target", itemPath)
 		}

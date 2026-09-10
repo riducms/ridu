@@ -2,8 +2,10 @@
 import riduArchLogo from '@/assets/ridu-logo-arch.svg';
 import ReferenceShell from '@/components/reference/reference-shell.astro';
 import ReferenceSymbolDefinition from '@/components/reference/reference-symbol-definition.astro';
+import ReferenceProse from '@/components/reference/reference-prose.astro';
 import { getDocumentationPages } from '@/config/documentation';
 import {
+	allReferenceSymbols,
 	inlineReferencedTypeEntries,
 	receiverMethodEntries,
 	referenceModules,
@@ -33,9 +35,10 @@ export async function getStaticPaths() {
 	return referenceModules.flatMap((module) =>
 		module.symbols.map((symbol) => {
 			const relatedDocumentation = [
-				...symbol.relatedDocs.map(
-					(href): RelatedDocumentation => documentationByHref.get(href) ?? { title: href, href }
-				),
+				...symbol.relatedDocs.map((href): RelatedDocumentation => ({
+					title: documentationByHref.get(href.split('#')[0])?.title ?? href,
+					href
+				})),
 				...(documentationBySymbol.get(symbol.id) ?? [])
 			].filter(
 				(candidate, index, candidates) =>
@@ -61,6 +64,11 @@ const fullSymbolName = `${titlePrefix}${symbol.name}`;
 const symbolHref = `/reference/${module.slug}/${symbol.slug}/`;
 const referencedTypes = inlineReferencedTypeEntries(symbol);
 const receiverMethods = receiverMethodEntries(module, symbol);
+const relatedAPIs = allReferenceSymbols.filter(
+	(entry) =>
+		symbol.relatedSymbols.includes(entry.symbol.id) &&
+		!referencedTypes.some((type) => type.symbol.id === entry.symbol.id)
+);
 ---
 
 <ReferenceShell
@@ -99,7 +107,9 @@ const receiverMethods = receiverMethodEntries(module, symbol);
 										<span class="reference-symbol-call">()</span>
 									</code>
 								</a>
-								<p class="reference-symbol-summary">{entry.symbol.summary}</p>
+								<p class="reference-symbol-summary">
+									<ReferenceProse text={entry.symbol.summary} />
+								</p>
 							</li>
 						))}
 					</ul>
@@ -120,7 +130,32 @@ const receiverMethods = receiverMethodEntries(module, symbol);
 								>
 									<code>{entry.symbol.name}</code>
 								</a>
-								<p class="reference-symbol-summary">{entry.symbol.summary}</p>
+								<p class="reference-symbol-summary">
+									<ReferenceProse text={entry.symbol.summary} />
+								</p>
+							</li>
+						))}
+					</ul>
+				</section>
+			)
+		}
+
+		{
+			relatedAPIs.length > 0 && (
+				<section class="reference-section" id="related-apis">
+					<h2 class="reference-section-title">Related APIs</h2>
+					<ul class="reference-symbol-list">
+						{relatedAPIs.map((entry) => (
+							<li class="reference-symbol-row" data-reference-kind={entry.symbol.kind}>
+								<a
+									class="reference-symbol-name"
+									href={`/reference/${entry.module.slug}/${entry.symbol.slug}/`}
+								>
+									<code>{entry.symbol.name}</code>
+								</a>
+								<p class="reference-symbol-summary">
+									<ReferenceProse text={entry.symbol.summary} />
+								</p>
 							</li>
 						))}
 					</ul>

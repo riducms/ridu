@@ -133,7 +133,8 @@ make check-fast
 ```
 
 Use `make check-dev` for the ordinary edit loop. `make check-fast` adds generated-project
-contracts and production frontend builds; run `make check-full` before handing off framework changes.
+contracts, real Vite integration and production frontend builds; run `make check-full` before handing
+off framework changes. Run `make performance-check` separately for scale and browser timing evidence.
 Before publishing, run `make release-check`; it also requires GoReleaser 2.18.0.
 
 Read [CONTRIBUTING.md](./CONTRIBUTING.md) before changing public contracts. The intended Go module is

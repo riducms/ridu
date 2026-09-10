@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/riducms/ridu/internal/teststore"
+	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
@@ -28,10 +29,10 @@ func TestMissingGlobalDefaultsRespectStoredAndOutputSelection(t *testing.T) {
 		Store: teststore.New(),
 		Collections: []Collection{{
 			Key: "global:settings", Schema: global,
-			Computed: map[string]Computed{"summary": func(_ Context, document store.Document) (store.Value, error) {
+			Bindings: []FieldBinding{{ID: "summary", Field: global.Fields[2], Computed: func(_ Context, document store.Document) (store.Value, error) {
 				dependency, _ := document.Values["privateNote"].StringValue()
 				return store.String("Summary: " + dependency), nil
-			}},
+			}}},
 		}},
 	})
 	if err != nil {
@@ -39,7 +40,7 @@ func TestMissingGlobalDefaultsRespectStoredAndOutputSelection(t *testing.T) {
 	}
 
 	stored, err := engine.Execute(t.Context(), Request{
-		Operation: Read, Collection: "global:settings", ID: "settings",
+		Operation: operation.Read, Collection: "global:settings", ID: "settings",
 		Select: []query.Path{headlinePath}, OutputFields: []query.Path{},
 	})
 	if err != nil {
@@ -56,7 +57,7 @@ func TestMissingGlobalDefaultsRespectStoredAndOutputSelection(t *testing.T) {
 	}
 
 	output, err := engine.Execute(t.Context(), Request{
-		Operation: Read, Collection: "global:settings", ID: "settings",
+		Operation: operation.Read, Collection: "global:settings", ID: "settings",
 		Select: []query.Path{}, OutputFields: []query.Path{summaryPath},
 	})
 	if err != nil {

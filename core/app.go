@@ -147,6 +147,10 @@ func New(applicationConfig Config, backend store.Store) (*App, error) {
 			return nil, fmt.Errorf("resolved collection %q has no authored runtime configuration", resolved.ID)
 		}
 		adapted := adaptCollection(authored, resolved, &local)
+		adapted.Bindings, err = lowerFieldGraph(applicationConfig.fieldGraph, "collection", string(resolved.Slug), resolved.Fields, &local)
+		if err != nil {
+			return nil, err
+		}
 		engineCollections = append(engineCollections, adapted)
 	}
 	for _, resolved := range snapshot.Globals {
@@ -154,7 +158,12 @@ func New(applicationConfig Config, backend store.Store) (*App, error) {
 		if !exists {
 			return nil, fmt.Errorf("resolved global %q has no authored runtime configuration", resolved.ID)
 		}
-		engineCollections = append(engineCollections, adaptGlobal(authored, resolved, &local))
+		adapted := adaptGlobal(authored, resolved, &local)
+		adapted.Bindings, err = lowerFieldGraph(applicationConfig.fieldGraph, "global", string(resolved.Slug), resolved.Fields, &local)
+		if err != nil {
+			return nil, err
+		}
+		engineCollections = append(engineCollections, adapted)
 	}
 
 	engine, err := operationengine.New(operationengine.Config{

@@ -1,0 +1,399 @@
+type Query {
+  PrimitiveProduct(disableFallback: Boolean, draft: Boolean, fallbackLocale: [RiduLocale!], id: ID!, locale: RiduLocale, trash: Boolean): PrimitiveProduct
+  PrimitiveProducts(disableFallback: Boolean, draft: Boolean, fallbackLocale: [RiduLocale!], limit: Int, locale: RiduLocale, page: Int, sort: [String!], trash: Boolean, where: PrimitiveProductWhere): PrimitiveProductsPage!
+  countPrimitiveProducts(disableFallback: Boolean, draft: Boolean, fallbackLocale: [RiduLocale!], locale: RiduLocale, trash: Boolean, where: PrimitiveProductWhere): PrimitiveProductCount!
+  docAccessPrimitiveProduct(id: ID!): PrimitiveProductDocAccess
+  versionPrimitiveProduct(disableFallback: Boolean, draft: Boolean, fallbackLocale: [RiduLocale!], id: ID!, locale: RiduLocale, revision: Int!, trash: Boolean): PrimitiveProductVersion
+  versionsPrimitiveProducts(disableFallback: Boolean, draft: Boolean, fallbackLocale: [RiduLocale!], id: ID!, limit: Int, locale: RiduLocale, page: Int, trash: Boolean): PrimitiveProductsVersionsPage!
+}
+
+type Mutation {
+  createPrimitiveProduct(data: PrimitiveProductCreateInput!, disableFallback: Boolean, draft: Boolean, fallbackLocale: [RiduLocale!], locale: RiduLocale): PrimitiveProduct
+  deletePrimitiveProduct(disableFallback: Boolean, fallbackLocale: [RiduLocale!], id: ID!, locale: RiduLocale): PrimitiveProduct
+  duplicatePrimitiveProduct(data: PrimitiveProductUpdateInput, disableFallback: Boolean, fallbackLocale: [RiduLocale!], id: ID!, locale: RiduLocale): PrimitiveProduct
+  restoreVersionPrimitiveProduct(disableFallback: Boolean, draft: Boolean, expectedRevision: Int, fallbackLocale: [RiduLocale!], id: ID!, locale: RiduLocale, revision: Int!): PrimitiveProduct
+  updatePrimitiveProduct(data: PrimitiveProductUpdateInput!, disableFallback: Boolean, expectedRevision: Int, fallbackLocale: [RiduLocale!], id: ID!, locale: RiduLocale): PrimitiveProduct
+}
+
+"An arbitrary JSON value."
+scalar JSON
+
+type PrimitiveProduct {
+  _revision: Int
+  _status: String
+  availableSizes: [Float!]
+  body: JSON
+  content: [PrimitiveProductContentBlock]
+  createdAt: String!
+  details: PrimitiveProductDetails
+  id: ID!
+  localizedBody: JSON
+  localizedPoints: [String!]
+  localizedSizes: [Float!]
+  sellingPoints: [String!]
+  title: String
+  updatedAt: String!
+  variants: [PrimitiveProductVariants]
+}
+
+input PrimitiveProductAvailableSizesWhere {
+  exists: Boolean
+  in: [Float!]
+  not_in: [Float!]
+}
+
+union PrimitiveProductContentBlock = PrimitiveProductContentBlockCard | PrimitiveProductContentBlockNote
+
+type PrimitiveProductContentBlockCard {
+  _key: String!
+  blockType: String!
+  points: [String!]
+  sizes: [Float!]
+}
+
+type PrimitiveProductContentBlockNote {
+  _key: String!
+  blockType: String!
+  points: [String!]
+  sizes: [Float!]
+}
+
+input PrimitiveProductContentCardPointsWhere {
+  exists: Boolean
+  in: [String!]
+  not_in: [String!]
+}
+
+input PrimitiveProductContentCardSizesWhere {
+  exists: Boolean
+  in: [Float!]
+  not_in: [Float!]
+}
+
+input PrimitiveProductContentNotePointsWhere {
+  exists: Boolean
+  in: [String!]
+  not_in: [String!]
+}
+
+input PrimitiveProductContentNoteSizesWhere {
+  exists: Boolean
+  in: [Float!]
+  not_in: [Float!]
+}
+
+type PrimitiveProductCount {
+  totalDocs: Int!
+}
+
+input PrimitiveProductCreateInput {
+  availableSizes: [Float!]
+  body: JSON
+  content: JSON
+  details: PrimitiveProductCreateInputDetails
+  localizedBody: JSON
+  localizedPoints: [String!]
+  localizedSizes: [Float!]
+  sellingPoints: [String!]!
+  title: String!
+  variants: [PrimitiveProductCreateInputVariants]
+}
+
+input PrimitiveProductCreateInputDetails {
+  points: [String!]
+  sizes: [Float!]
+}
+
+input PrimitiveProductCreateInputVariants {
+  _key: String
+  points: [String!]
+  sizes: [Float!]
+}
+
+type PrimitiveProductDetails {
+  points: [String!]
+  sizes: [Float!]
+}
+
+input PrimitiveProductDetailsPointsWhere {
+  exists: Boolean
+  in: [String!]
+  not_in: [String!]
+}
+
+input PrimitiveProductDetailsSizesWhere {
+  exists: Boolean
+  in: [Float!]
+  not_in: [Float!]
+}
+
+type PrimitiveProductDocAccess {
+  create: RiduPermission
+  delete: RiduPermission
+  duplicate: RiduPermission
+  fields: PrimitiveProductDocAccessFields
+  read: RiduPermission
+  readVersions: RiduPermission
+  update: RiduPermission
+}
+
+type PrimitiveProductDocAccessFields {
+  availableSizes: PrimitiveProductDocAccessFieldsAvailableSizes
+  body: PrimitiveProductDocAccessFieldsBody
+  content: PrimitiveProductDocAccessFieldsContent
+  details: PrimitiveProductDocAccessFieldsDetails
+  localizedBody: PrimitiveProductDocAccessFieldsLocalizedBody
+  localizedPoints: PrimitiveProductDocAccessFieldsLocalizedPoints
+  localizedSizes: PrimitiveProductDocAccessFieldsLocalizedSizes
+  sellingPoints: PrimitiveProductDocAccessFieldsSellingPoints
+  title: PrimitiveProductDocAccessFieldsTitle
+  variants: PrimitiveProductDocAccessFieldsVariants
+}
+
+type PrimitiveProductDocAccessFieldsAvailableSizes {
+  create: RiduPermission
+  read: RiduPermission
+  update: RiduPermission
+}
+
+type PrimitiveProductDocAccessFieldsBody {
+  create: RiduPermission
+  read: RiduPermission
+  update: RiduPermission
+}
+
+type PrimitiveProductDocAccessFieldsContent {
+  create: RiduPermission
+  read: RiduPermission
+  update: RiduPermission
+}
+
+type PrimitiveProductDocAccessFieldsDetails {
+  create: RiduPermission
+  fields: PrimitiveProductDocAccessFieldsDetailsFields
+  read: RiduPermission
+  update: RiduPermission
+}
+
+type PrimitiveProductDocAccessFieldsDetailsFields {
+  points: PrimitiveProductDocAccessFieldsDetailsFieldsPoints
+  sizes: PrimitiveProductDocAccessFieldsDetailsFieldsSizes
+}
+
+type PrimitiveProductDocAccessFieldsDetailsFieldsPoints {
+  create: RiduPermission
+  read: RiduPermission
+  update: RiduPermission
+}
+
+type PrimitiveProductDocAccessFieldsDetailsFieldsSizes {
+  create: RiduPermission
+  read: RiduPermission
+  update: RiduPermission
+}
+
+type PrimitiveProductDocAccessFieldsLocalizedBody {
+  create: RiduPermission
+  read: RiduPermission
+  update: RiduPermission
+}
+
+type PrimitiveProductDocAccessFieldsLocalizedPoints {
+  create: RiduPermission
+  read: RiduPermission
+  update: RiduPermission
+}
+
+type PrimitiveProductDocAccessFieldsLocalizedSizes {
+  create: RiduPermission
+  read: RiduPermission
+  update: RiduPermission
+}
+
+type PrimitiveProductDocAccessFieldsSellingPoints {
+  create: RiduPermission
+  read: RiduPermission
+  update: RiduPermission
+}
+
+type PrimitiveProductDocAccessFieldsTitle {
+  create: RiduPermission
+  read: RiduPermission
+  update: RiduPermission
+}
+
+type PrimitiveProductDocAccessFieldsVariants {
+  create: RiduPermission
+  fields: PrimitiveProductDocAccessFieldsVariantsFields
+  read: RiduPermission
+  update: RiduPermission
+}
+
+type PrimitiveProductDocAccessFieldsVariantsFields {
+  points: PrimitiveProductDocAccessFieldsVariantsFieldsPoints
+  sizes: PrimitiveProductDocAccessFieldsVariantsFieldsSizes
+}
+
+type PrimitiveProductDocAccessFieldsVariantsFieldsPoints {
+  create: RiduPermission
+  read: RiduPermission
+  update: RiduPermission
+}
+
+type PrimitiveProductDocAccessFieldsVariantsFieldsSizes {
+  create: RiduPermission
+  read: RiduPermission
+  update: RiduPermission
+}
+
+input PrimitiveProductIDWhere {
+  contains: String
+  equals: String
+  exists: Boolean
+  greater_than: String
+  greater_than_equal: String
+  in: [String!]
+  less_than: String
+  less_than_equal: String
+  like: String
+  not_equals: String
+  not_in: [String!]
+}
+
+input PrimitiveProductLocalizedPointsWhere {
+  exists: Boolean
+  in: [String!]
+  not_in: [String!]
+}
+
+input PrimitiveProductLocalizedSizesWhere {
+  exists: Boolean
+  in: [Float!]
+  not_in: [Float!]
+}
+
+input PrimitiveProductSellingPointsWhere {
+  exists: Boolean
+  in: [String!]
+  not_in: [String!]
+}
+
+input PrimitiveProductTitleWhere {
+  contains: String
+  equals: String
+  exists: Boolean
+  greater_than: String
+  greater_than_equal: String
+  in: [String!]
+  less_than: String
+  less_than_equal: String
+  like: String
+  not_equals: String
+  not_in: [String!]
+}
+
+input PrimitiveProductUpdateInput {
+  availableSizes: [Float!]
+  body: JSON
+  content: JSON
+  details: PrimitiveProductUpdateInputDetails
+  localizedBody: JSON
+  localizedPoints: [String!]
+  localizedSizes: [Float!]
+  sellingPoints: [String!]
+  title: String
+  variants: [PrimitiveProductUpdateInputVariants]
+}
+
+input PrimitiveProductUpdateInputDetails {
+  points: [String!]
+  sizes: [Float!]
+}
+
+input PrimitiveProductUpdateInputVariants {
+  _key: String
+  points: [String!]
+  sizes: [Float!]
+}
+
+type PrimitiveProductVariants {
+  _key: String!
+  points: [String!]
+  sizes: [Float!]
+}
+
+input PrimitiveProductVariantsPointsWhere {
+  exists: Boolean
+  in: [String!]
+  not_in: [String!]
+}
+
+input PrimitiveProductVariantsSizesWhere {
+  exists: Boolean
+  in: [Float!]
+  not_in: [Float!]
+}
+
+type PrimitiveProductVersion {
+  createdAt: String!
+  documentID: ID!
+  id: ID!
+  revision: Int!
+  snapshot: PrimitiveProduct!
+  status: String
+}
+
+input PrimitiveProductWhere {
+  AND: [PrimitiveProductWhere!]
+  NOT: PrimitiveProductWhere
+  OR: [PrimitiveProductWhere!]
+  and: [PrimitiveProductWhere!]
+  availableSizes: PrimitiveProductAvailableSizesWhere
+  content__card__points: PrimitiveProductContentCardPointsWhere
+  content__card__sizes: PrimitiveProductContentCardSizesWhere
+  content__note__points: PrimitiveProductContentNotePointsWhere
+  content__note__sizes: PrimitiveProductContentNoteSizesWhere
+  details__points: PrimitiveProductDetailsPointsWhere
+  details__sizes: PrimitiveProductDetailsSizesWhere
+  id: PrimitiveProductIDWhere
+  localizedPoints: PrimitiveProductLocalizedPointsWhere
+  localizedSizes: PrimitiveProductLocalizedSizesWhere
+  not: PrimitiveProductWhere
+  or: [PrimitiveProductWhere!]
+  sellingPoints: PrimitiveProductSellingPointsWhere
+  title: PrimitiveProductTitleWhere
+  variants__points: PrimitiveProductVariantsPointsWhere
+  variants__sizes: PrimitiveProductVariantsSizesWhere
+}
+
+type PrimitiveProductsPage {
+  docs: [PrimitiveProduct!]!
+  hasNextPage: Boolean!
+  hasPrevPage: Boolean!
+  limit: Int!
+  nextPage: Int
+  page: Int!
+  pagingCounter: Int!
+  prevPage: Int
+  totalDocs: Int!
+  totalPages: Int!
+}
+
+type PrimitiveProductsVersionsPage {
+  docs: [PrimitiveProductVersion!]!
+  limit: Int!
+  page: Int!
+  totalDocs: Int!
+  totalPages: Int!
+}
+
+enum RiduLocale {
+  "English"
+  EN
+  "French"
+  FR
+}
+
+type RiduPermission {
+  permission: Boolean!
+}

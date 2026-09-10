@@ -58,7 +58,7 @@ func TestMongoLocalizedEnvelopeAdmitsPortableShapes(t *testing.T) {
 	}{
 		{name: "localized group", mutate: func(collection *schema.Collection) {
 			collection.Fields[1].Localized = true
-			collection.Fields[1].Nested.Fields[0].Localized = false
+			collection.Fields[1].Nested.ResolvedFields()[0].Localized = false
 		}},
 		{name: "localized relationship", mutate: func(collection *schema.Collection) {
 			collection.Fields[0].Type = schema.FieldTypeRelationship
@@ -71,7 +71,7 @@ func TestMongoLocalizedEnvelopeAdmitsPortableShapes(t *testing.T) {
 		{name: "localized repeated select", mutate: func(collection *schema.Collection) {
 			collection.Fields[0].Type = schema.FieldTypeSelect
 			collection.Fields[0].Text = nil
-			collection.Fields[0].Select = &schema.SelectField{HasMany: true, Choices: []schema.SelectChoice{{Value: "one", Label: "One"}}}
+			collection.Fields[0].Select = &schema.SelectField{HasMany: true, Options: []schema.SelectOption{{Value: "one", Label: "One"}}}
 		}},
 	}
 	for _, test := range tests {
@@ -211,7 +211,7 @@ func TestMongoLocalizedPatchExpressionsMergeMapsAndGroupSiblings(t *testing.T) {
 	}
 
 	collection.Fields[1].Localized = true
-	collection.Fields[1].Nested.Fields[0].Localized = false
+	collection.Fields[1].Nested.ResolvedFields()[0].Localized = false
 	localizedGroup, err := mongoPatchAssignments(collection, store.Values{
 		"seo": store.Object(store.Values{
 			"en": store.Object(store.Values{
@@ -271,6 +271,6 @@ func TestMongoRequestAwareDecodeRejectsUnconfiguredLocales(t *testing.T) {
 func mongoLocalizedScalarCollection() schema.Collection {
 	collection := mongoGroupCollection()
 	collection.Fields[0].Localized = true
-	collection.Fields[1].Nested.Fields[0].Localized = true
+	collection.Fields[1].Nested.ResolvedFields()[0].Localized = true
 	return collection
 }

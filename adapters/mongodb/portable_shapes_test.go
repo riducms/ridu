@@ -103,7 +103,7 @@ func TestMongoPortablePointShapesValidateSchemaAndProjection(t *testing.T) {
 		{
 			name: "nested point has wrong arity",
 			mutate: func(values store.Values) {
-				details, _ := values["details"].ObjectValue()
+				details, _ := values["details"].CopyObject()
 				details["focus"] = store.List(store.Number(151.2093))
 				values["details"] = store.Object(details)
 			},
@@ -203,9 +203,9 @@ func TestMongoPortableLocalizedRepeatedNestedReferencesAdmitCanonicalValues(t *t
 		{
 			name: "relationship inside nested array keeps has-many shape",
 			mutate: func(values store.Values) {
-				content, _ := values["content"].ObjectValue()
-				rows, _ := content["rows"].Values()
-				row, _ := rows[0].ObjectValue()
+				content, _ := values["content"].CopyObject()
+				rows, _ := content["rows"].CopyList()
+				row, _ := rows[0].CopyObject()
 				row["reviewers"] = mongoPortablePolymorphicReference("people", "person-a")
 				rows[0] = store.Object(row)
 				content["rows"] = store.List(rows...)
@@ -216,9 +216,9 @@ func TestMongoPortableLocalizedRepeatedNestedReferencesAdmitCanonicalValues(t *t
 		{
 			name: "localized relationship inside repeated row keeps locale shape",
 			mutate: func(values store.Values) {
-				content, _ := values["content"].ObjectValue()
-				rows, _ := content["rows"].Values()
-				row, _ := rows[0].ObjectValue()
+				content, _ := values["content"].CopyObject()
+				rows, _ := content["rows"].CopyList()
+				row, _ := rows[0].CopyObject()
 				row["localizedReviewer"] = store.Object(store.Values{"en": store.Number(1)})
 				rows[0] = store.Object(row)
 				content["rows"] = store.List(rows...)
@@ -229,11 +229,11 @@ func TestMongoPortableLocalizedRepeatedNestedReferencesAdmitCanonicalValues(t *t
 		{
 			name: "relationship inside doubly nested array stays exact",
 			mutate: func(values store.Values) {
-				content, _ := values["content"].ObjectValue()
-				rows, _ := content["rows"].Values()
-				row, _ := rows[0].ObjectValue()
-				children, _ := row["children"].Values()
-				child, _ := children[0].ObjectValue()
+				content, _ := values["content"].CopyObject()
+				rows, _ := content["rows"].CopyList()
+				row, _ := rows[0].CopyObject()
+				children, _ := row["children"].CopyList()
+				child, _ := children[0].CopyObject()
 				child["subject"] = store.Object(store.Values{
 					"relationTo": store.String("teams"),
 					"id":         store.String("team-a"),
@@ -250,8 +250,8 @@ func TestMongoPortableLocalizedRepeatedNestedReferencesAdmitCanonicalValues(t *t
 		{
 			name: "upload inside block keeps has-many shape",
 			mutate: func(values store.Values) {
-				layout, _ := values["layout"].Values()
-				block, _ := layout[0].ObjectValue()
+				layout, _ := values["layout"].CopyList()
+				block, _ := layout[0].CopyObject()
 				block["assets"] = store.String("asset-a")
 				layout[0] = store.Object(block)
 				values["layout"] = store.List(layout...)
@@ -261,7 +261,7 @@ func TestMongoPortableLocalizedRepeatedNestedReferencesAdmitCanonicalValues(t *t
 		{
 			name: "localized blocks reject unconfigured locale",
 			mutate: func(values store.Values) {
-				localized, _ := values["localizedLayout"].ObjectValue()
+				localized, _ := values["localizedLayout"].CopyObject()
 				localized["es"] = localized["en"]
 				values["localizedLayout"] = store.Object(localized)
 			},
@@ -328,45 +328,17 @@ func mongoPortableShapeCollection(t *testing.T) schema.Collection {
 			},
 		},
 		Collections: []ridu.Collection{
-			{Slug: "people", Fields: []field.Definition{field.Text("name")}},
-			{Slug: "teams", Fields: []field.Definition{field.Text("name")}},
+			{Slug: "people", Fields: field.Fields{field.Text("name")}},
+			{Slug: "teams", Fields: field.Fields{field.Text("name")}},
 			{
 				Slug: "media", Upload: true,
 				UploadConfig: ridu.UploadConfig{MaxFileSize: 1024, MimeTypes: []string{"image/png"}},
-				Fields:       []field.Definition{field.Text("alt")},
+				Fields:       field.Fields{field.Text("alt")},
 			},
 			{
 				Slug: "entries",
-				Fields: []field.Definition{
-					field.Point("location"),
-					field.Group("details", field.Fields(field.Point("focus"))),
-					field.Point("localizedLocation", field.Localized()),
-					field.Relationship("localizedOwner", field.To("people"), field.Localized()),
-					field.Relationship("localizedSubjects", field.ToAny("people", "teams"), field.HasMany(), field.Localized()),
-					field.Upload("localizedGallery", field.ToMany("media"), field.Localized()),
-					field.Group("content", field.Fields(
-						field.Array("rows", field.Fields(
-							field.Relationship("reviewers", field.ToAny("people", "teams"), field.HasMany()),
-							field.Upload("assets", field.ToMany("media")),
-							field.Relationship("localizedReviewer", field.To("people"), field.Localized()),
-							field.Array("children", field.Fields(
-								field.Relationship("subject", field.ToAny("people", "teams")),
-								field.Upload("asset", field.To("media")),
-							)),
-						)),
-					)),
-					field.Blocks("layout", field.BlockTypes(
-						field.BlockType("feature", "Feature",
-							field.Relationship("subjects", field.ToAny("people", "teams"), field.HasMany()),
-							field.Upload("assets", field.ToMany("media")),
-						),
-					)),
-					field.Blocks("localizedLayout", field.Localized(), field.BlockTypes(
-						field.BlockType("image", "Image",
-							field.Relationship("owner", field.To("people")),
-							field.Upload("asset", field.To("media")),
-						),
-					)),
+				Fields: field.Fields{
+					field.Point("location"), field.Group("details", field.Fields{field.Point("focus")}), field.Point("localizedLocation").Localized(), field.Relationship("localizedOwner", "people").Localized(), field.PolymorphicRelationships("localizedSubjects", "people", "teams").Localized(), field.Uploads("localizedGallery", "media").Localized(), field.Group("content", field.Fields{field.Array("rows", field.Fields{field.PolymorphicRelationships("reviewers", "people", "teams"), field.Uploads("assets", "media"), field.Relationship("localizedReviewer", "people").Localized(), field.Array("children", field.Fields{field.PolymorphicRelationship("subject", "people", "teams"), field.Upload("asset", "media")})})}), field.Blocks("layout", field.Block{Slug: "feature", Fields: field.Fields{field.PolymorphicRelationships("subjects", "people", "teams"), field.Uploads("assets", "media")}}), field.Blocks("localizedLayout", field.Block{Slug: "image", Fields: field.Fields{field.Relationship("owner", "people"), field.Upload("asset", "media")}}).Localized(),
 				},
 			},
 		},
@@ -481,16 +453,16 @@ func mongoPortableShapeField(t *testing.T, fields []schema.Field, segments ...st
 			if resolved.Nested == nil {
 				t.Fatalf("portable shape container %q lacks nested metadata", resolved.Name)
 			}
-			current = resolved.Nested.Fields
+			current = resolved.Nested.ResolvedFields()
 		case schema.FieldTypeBlocks:
 			index++
 			if index >= len(segments) || resolved.Blocks == nil {
 				t.Fatalf("portable blocks field %q lacks a block path", resolved.Name)
 			}
 			var found bool
-			for blockIndex := range resolved.Blocks.Types {
-				if resolved.Blocks.Types[blockIndex].Key == segments[index] {
-					current = resolved.Blocks.Types[blockIndex].Fields
+			for blockIndex := range resolved.Blocks.ResolvedTypes() {
+				if resolved.Blocks.ResolvedTypes()[blockIndex].Slug == segments[index] {
+					current = resolved.Blocks.ResolvedTypes()[blockIndex].ResolvedFields()
 					found = true
 					break
 				}

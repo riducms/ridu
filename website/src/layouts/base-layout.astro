@@ -8,6 +8,7 @@ import riduArchLogo from '@/assets/ridu-logo-arch.svg';
 import CodeCopyScript from '@/components/code/code-copy-script.astro';
 import SiteFooter from '@/components/chrome/site-footer.astro';
 import SiteHeader from '@/components/chrome/site-header.astro';
+import type { DocumentationLayout } from '@/config/documentation';
 import { site, type ProductKey } from '@/config/site';
 
 interface Props {
@@ -16,10 +17,18 @@ interface Props {
 	active?: 'docs' | 'guides' | 'reference';
 	product?: ProductKey;
 	wide?: boolean;
+	docsLayout?: DocumentationLayout;
 	footer?: boolean;
 }
 
-const { title, description = site.description, active, wide = false, footer = true } = Astro.props;
+const {
+	title,
+	description = site.description,
+	active,
+	wide = false,
+	docsLayout,
+	footer = true
+} = Astro.props;
 const fullTitle = title ? `${title} · ${site.name}` : site.title;
 const canonical = new URL(Astro.url.pathname, Astro.site ?? site.url);
 ---
@@ -44,7 +53,7 @@ const canonical = new URL(Astro.url.pathname, Astro.site ?? site.url);
 	</head>
 	<body>
 		<a class="skip-link" href="#main">Skip to content</a>
-		<SiteHeader active={active} {wide} />
+		<SiteHeader active={active} {wide} {docsLayout} />
 		<main id="main" class:list={{ 'mx-auto w-site': !wide }}>
 			<slot />
 		</main>

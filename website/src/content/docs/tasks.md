@@ -45,12 +45,20 @@ var SendEmail = ridu.NewTask(
 			)
 		}
 		if invalidAddress(err) {
-			return EmailOutput{}, ridu.AbortTask("email_address_invalid", err)
+			return EmailOutput{}, ridu.AbortTask(
+				"email_address_invalid",
+				err,
+			)
 		}
 		return EmailOutput{ProviderID: providerID}, err
 	},
 	ridu.TaskQueue("email"),
-	ridu.TaskRetries(5, time.Second, time.Hour, ridu.TaskBackoffExponential),
+	ridu.TaskRetries(
+		5,
+		time.Second,
+		time.Hour,
+		ridu.TaskBackoffExponential,
+	),
 	ridu.TaskTimeout(2*time.Minute),
 	ridu.TaskRetention(30*24*time.Hour),
 )
@@ -122,7 +130,10 @@ If application state commits before its task is admitted, attach a bounded recov
 task definition:
 
 ```go
-ridu.TaskAdmissionReconciler(func(ctx context.Context, app *ridu.App) error {
+ridu.TaskAdmissionReconciler(func(
+	ctx context.Context,
+	app *ridu.App,
+) error {
 	return reconcilePendingExports(ctx, app)
 })
 ```
@@ -203,6 +214,6 @@ register that task yourself.
 Tasks do not provide workflow graphs, declarative cron, a job admin, email or webhook adapters,
 exactly-once external effects, or a sandbox for untrusted handlers.
 
-See [Hooks](/docs/hooks/) for after-commit dispatch, [Drafts and versions](/docs/drafts-and-versions/)
+See [Transactions and errors](/docs/hooks/transactions-and-errors/#after-commit) for after-commit dispatch, [Drafts and versions](/docs/drafts-and-versions/)
 for scheduled publishing, [Security](/docs/security/) for trusted-code boundaries, and
 [Production](/docs/production/) for worker drain and monitoring.

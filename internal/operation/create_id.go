@@ -3,12 +3,13 @@ package operation
 import (
 	"fmt"
 
+	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
 )
 
 func (engine *Engine) prepareCreateID(request *Request) error {
-	if request.Operation != Create {
+	if request.Operation != operation.Create {
 		return nil
 	}
 	request.Data = store.CloneValues(request.Data)

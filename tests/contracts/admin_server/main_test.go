@@ -219,31 +219,34 @@ func TestFixtureResolvesEveryImplementedAdminFieldFamily(t *testing.T) {
 		t.Fatal(err)
 	}
 	snapshot := manifest.Snapshot()
-	if len(snapshot.Collections) != 12 {
-		t.Fatalf("collections = %d, want 12", len(snapshot.Collections))
+	if len(snapshot.Collections) != 26 {
+		t.Fatalf("collections = %d, want 26", len(snapshot.Collections))
 	}
-	if len(snapshot.Globals) != 1 || snapshot.Globals[0].Slug != "site-settings" || !snapshot.Globals[0].Capabilities.Global || !snapshot.Globals[0].Capabilities.Versions {
+	if len(snapshot.Globals) != 2 || snapshot.Globals[0].Slug != "site-settings" || !snapshot.Globals[0].Capabilities.Global || !snapshot.Globals[0].Capabilities.Versions || snapshot.Globals[1].Slug != "validation-settings" {
 		t.Fatalf("globals = %#v", snapshot.Globals)
 	}
 
 	wantedCollections := map[schema.CollectionSlug]bool{
-		"users": false, "media": false, "categories": false, "folders": false, "posts": false,
+		"primitive-products": false,
+		"unified-articles":   false,
+		"issue-targets":      false,
+		"dynamic-defaults":   false,
+		"live-validation":    false,
+		"users":              false, "media": false, "categories": false, "folders": false, "posts": false,
 		"pages": false, "events": false, "editorial-notes": false, "redirects": false,
-		"payload-only-capabilities": false, "forms": false, "form-submissions": false,
+		"payload-only-capabilities": false, "forms": false, "form-submissions": false, "outlines": false,
+		"block-articles": false,
+		"block-pages":    false,
+		"inline-pages":   false, "inline-articles": false,
+		"reference-pages": false, "reference-articles": false,
+		"inline-block-labels": false, "reference-block-labels": false,
 	}
 	fieldTypes := make(map[schema.FieldType]bool)
 	var inspectFields func([]schema.Field)
 	inspectFields = func(fields []schema.Field) {
 		for _, candidate := range fields {
 			fieldTypes[candidate.Type] = true
-			if candidate.Nested != nil {
-				inspectFields(candidate.Nested.Fields)
-			}
-			if candidate.Blocks != nil {
-				for _, block := range candidate.Blocks.Types {
-					inspectFields(block.Fields)
-				}
-			}
+			inspectFields(schema.ChildFields(candidate))
 		}
 	}
 	for _, collection := range snapshot.Collections {
@@ -301,6 +304,7 @@ func TestFixtureResolvesEveryImplementedAdminFieldFamily(t *testing.T) {
 	for _, fieldType := range []schema.FieldType{
 		schema.FieldTypeText, schema.FieldTypeCode, schema.FieldTypeTextarea, schema.FieldTypeEmail, schema.FieldTypeDate,
 		schema.FieldTypeNumber, schema.FieldTypeCheckbox, schema.FieldTypeJSON, schema.FieldTypeSelect,
+		schema.FieldTypeTextList, schema.FieldTypeNumberList,
 		schema.FieldTypeRadio, schema.FieldTypePoint, schema.FieldTypeUI, schema.FieldTypeJoin, schema.FieldTypeVirtual,
 		schema.FieldTypeRelationship, schema.FieldTypeUpload, schema.FieldTypeGroup, schema.FieldTypeArray,
 		schema.FieldTypeBlocks, schema.FieldTypePlugin,
@@ -336,7 +340,7 @@ func TestFixtureResolvesEveryImplementedAdminFieldFamily(t *testing.T) {
 		"curriculumNodes": curriculumNodes,
 		"questionParts":   questionParts,
 	} {
-		if candidate.Nested == nil || candidate.Nested.RowLabelComponent == nil || candidate.Nested.RowLabelComponent.Plugin != "contract-route" || candidate.Nested.RowLabelComponent.Component != "compositeRowLabel" {
+		if candidate.Nested == nil || candidate.Nested.RowLabelComponent == nil || candidate.Nested.RowLabelComponent.Reference != "app:compositeRowLabel" {
 			t.Fatalf("showcase %s row-label component metadata = %#v", name, candidate.Nested)
 		}
 	}
@@ -399,7 +403,7 @@ func TestFixtureSeedsPayloadStyleAccessHooksAndVersions(t *testing.T) {
 		t.Fatal("seeded News category is missing")
 	}
 	displayLabel, _ := news.Values["displayLabel"].StringValue()
-	joinedPosts, joined := news.Values["posts"].Values()
+	joinedPosts, joined := news.Values["posts"].CopyList()
 	if displayLabel != "Category · News" || !joined || len(joinedPosts) != 1 {
 		t.Fatalf("computed category output label=%q posts=%#v", displayLabel, joinedPosts)
 	}

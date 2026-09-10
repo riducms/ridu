@@ -1,3 +1,4 @@
+import { resolveBlockTypes } from "@riducms/protocol";
 import type { SchemaCollection, SchemaField } from "@riducms/protocol";
 import type { AdminI18n } from "@riducms/translations";
 
@@ -13,7 +14,8 @@ export type ListFilterOperator =
 	| "greaterThanEqual"
 	| "lessThan"
 	| "lessThanEqual"
-	| "exists";
+	| "exists"
+	| "in";
 
 export interface ListFilter {
 	field: string;
@@ -58,6 +60,7 @@ export function listColumnFields(collection: SchemaCollection | undefined, title
 
 export function filterableFields(fields: readonly SchemaField[]) {
 	return fields.flatMap((field) => {
+		if (field.queryRestricted) return [];
 		if (field.type === "group" || field.type === "array" || field.type === "blocks") {
 			return nestedFields(field, "filters");
 		}
@@ -67,8 +70,11 @@ export function filterableFields(fields: readonly SchemaField[]) {
 
 export function sortableField(field: SchemaField) {
 	return (
+		field.queryRestricted !== true &&
 		field.virtual === undefined &&
 		field.join === undefined &&
+		field.type !== "text-list" &&
+		field.type !== "number-list" &&
 		field.type !== "array" &&
 		field.type !== "blocks" &&
 		field.type !== "group" &&
@@ -96,6 +102,7 @@ export function defaultListColumns(
 }
 
 export function filterOperatorsFor(field: SchemaField): readonly ListFilterOperator[] {
+	if (field.type === "text-list" || field.type === "number-list") return ["in", "exists"];
 	if (field.type === "number" || field.type === "date") return orderedOperators;
 	if (field.type === "text" || field.type === "textarea" || field.type === "email") {
 		return textOperators;
@@ -105,6 +112,7 @@ export function filterOperatorsFor(field: SchemaField): readonly ListFilterOpera
 
 export function filterOperatorLabel(operator: ListFilterOperator, i18n: AdminI18n) {
 	const labels: Record<ListFilterOperator, Parameters<AdminI18n["t"]>[0]> = {
+		in: "collections:operatorIncludesItem",
 		equals: "collections:operatorEquals",
 		notEquals: "collections:operatorNotEquals",
 		like: "collections:operatorLike",
@@ -165,19 +173,19 @@ export function buildListFilterWhere(
 	const byName = new Map(fields.map((field) => [field.path, field]));
 	return filters.flatMap((filter): Record<string, unknown>[] => {
 		const field = byName.get(filter.field);
-		if (field === undefined) return [];
+		if (field === undefined || !filterOperatorsFor(field).includes(filter.operator)) return [];
 		if (filter.operator === "exists") {
 			return [{ [filter.field]: { exists: filter.value !== "false" } }];
 		}
-		if (filter.value === "") return [];
+		if (filter.value === "" && field.type !== "text-list") return [];
 		let value: string | number | boolean = filter.value;
-		if (field.type === "number") {
+		if (field.type === "number" || field.type === "number-list") {
 			value = Number(filter.value);
 			if (!Number.isFinite(value)) return [];
 		} else if (field.type === "checkbox") {
 			value = filter.value === "true";
 		}
-		return [{ [filter.field]: { [filter.operator]: value } }];
+		return [{ [filter.field]: { [filter.operator]: filter.operator === "in" ? [value] : value } }];
 	});
 }
 
@@ -222,16 +230,21 @@ export function visibleColumnNames(encoded: string | null, fallback: readonly st
 }
 
 function nestedFields(field: SchemaField, mode: "columns" | "filters"): SchemaField[] {
+	if (mode === "filters" && field.queryRestricted) return [];
 	if (field.type === "blocks") {
 		if (mode === "columns") return [];
-		return (field.blocks?.types ?? []).flatMap((block) =>
+		return (resolveBlockTypes(field.blocks) ?? []).flatMap((block) =>
 			block.fields.flatMap((child) =>
-				withListLabel(child, `${field.admin.label} > ${block.label}`, mode)
+				withListLabel(child, `${field.admin.label} > ${block.labels.singular}`, mode)
 			)
 		);
 	}
 	return (field.nested?.fields ?? []).flatMap((child) =>
-		withListLabel(child, field.admin.label, mode)
+		withListLabel(
+			field.queryRestricted ? { ...child, queryRestricted: true } : child,
+			field.admin.label,
+			mode
+		)
 	);
 }
 
@@ -254,6 +267,7 @@ function withListLabel(
 
 function filterableLeaf(field: SchemaField) {
 	return (
+		field.queryRestricted !== true &&
 		field.virtual === undefined &&
 		field.join === undefined &&
 		field.plugin === undefined &&

@@ -65,7 +65,7 @@
 	const statusField = $derived(
 		collection?.fields.find((field) => field.type === "select" && field.name === "status")
 	);
-	const statusChoices = $derived(statusField?.select?.choices ?? []);
+	const statusOptions = $derived(statusField?.select?.options ?? []);
 	const searchParams = $derived(new URLSearchParams(location.search));
 	const localization = $derived(runtime.manifest?.application.localization);
 	const requestedLocale = $derived(searchParams.get("locale"));
@@ -95,7 +95,7 @@
 	let referenceLabels = $state.raw<Record<string, string>>({});
 	let searchInput = $state<HTMLInputElement | null>(null);
 	const activeStatus = $derived(
-		statusChoices.some((choice) => choice.value === requestedStatus) ? requestedStatus : ""
+		statusOptions.some((option) => option.value === requestedStatus) ? requestedStatus : ""
 	);
 	const bulkEditableFields = $derived(
 		collection?.fields.filter(
@@ -183,8 +183,8 @@
 		get statusField() {
 			return statusField?.name;
 		},
-		get statusChoices() {
-			return statusChoices;
+		get statusOptions() {
+			return statusOptions;
 		},
 		get versioned() {
 			return collection?.capabilities.versions === true;
@@ -224,7 +224,7 @@
 		statusColumnAvailable,
 	} = $derived(controller);
 	const {
-		choiceCount,
+		optionCount,
 		canReadField,
 		deletePermanent,
 		bulkDelete,
@@ -512,13 +512,12 @@
 			return value === true ? runtime.i18n.t("general:yes") : runtime.i18n.t("general:no");
 		}
 		if (field.type === "select" || field.type === "radio") {
-			return field.select?.choices.find((choice) => choice.value === value)?.label ?? String(value);
+			return field.select?.options.find((option) => option.value === value)?.label ?? String(value);
 		}
 		if (field.type === "array") return summarizeRows(value, "row");
 		if (field.type === "blocks") return summarizeRows(value, "block");
 		if (field.type === "json" || field.plugin !== undefined) return summarizeStructured(value);
-		if (field.type === "date")
-			return formatDateDisplay(value, field.date?.pickerAppearance, runtime.i18n);
+		if (field.type === "date") return formatDateDisplay(value, field.date?.format, runtime.i18n);
 		if (referenceField(field)) {
 			return runtime.i18n.formatList(
 				fieldReferences(field, value).map(
@@ -769,7 +768,7 @@
 		</div>
 	</header>
 
-	{#if statusChoices.length > 0 && !trashOnly}
+	{#if statusOptions.length > 0 && !trashOnly}
 		<div
 			class="mt-6 flex h-9 w-full items-center justify-start gap-5 border-b border-control-border"
 			role="group"
@@ -786,15 +785,15 @@
 					{runtime.i18n.formatNumber(allDocuments)}
 				</span>
 			</button>
-			{#each statusChoices as choice (choice.value)}
-				{const statusCount = $derived(choiceCount(choice))}
+			{#each statusOptions as option (option.value)}
+				{const statusCount = $derived(optionCount(option))}
 				<button
 					type="button"
 					class="relative h-9 flex-none cursor-pointer px-px pb-2.5 text-[13px] text-foreground-muted outline-none after:absolute after:inset-x-0 after:bottom-[-1px] after:h-0.5 after:bg-primary after:opacity-0 after:transition-opacity hover:text-foreground-strong focus-visible:outline-2 focus-visible:outline-primary/60 focus-visible:outline-offset-2 aria-pressed:text-foreground-strong aria-pressed:after:opacity-100"
-					aria-pressed={activeStatus === choice.value}
-					onclick={() => selectStatus(choice.value)}
+					aria-pressed={activeStatus === option.value}
+					onclick={() => selectStatus(option.value)}
 				>
-					{choice.label}
+					{option.label}
 					{#if statusCount !== undefined}
 						<span class="font-mono ms-1 text-[9.5px] text-foreground-faint">
 							{runtime.i18n.formatNumber(statusCount)}

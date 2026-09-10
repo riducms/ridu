@@ -1,4 +1,4 @@
-import type { FieldAuthoringHost, FieldForm } from "@riducms/plugin";
+import type { FieldAuthoringHost, FieldDocumentForm } from "@riducms/plugin";
 
 import { generationScopeToken, generationSnapshotToken } from "@plugin-seo/generation-snapshot";
 
@@ -13,7 +13,7 @@ export class GenerationController {
 
 	async run(
 		authoring: FieldAuthoringHost | undefined,
-		form: FieldForm,
+		form: FieldDocumentForm,
 		path: string
 	): Promise<string | undefined> {
 		const requestPlugin = authoring?.requestPlugin;

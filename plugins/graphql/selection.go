@@ -32,12 +32,12 @@ func (builder *schemaBuilder) populationsFor(fields []schema.Field, info engineg
 					continue
 				}
 				if field.Nested != nil {
-					walk(field.Nested.Fields, selected.SelectionSet, wrapperDepth, fragments)
+					walk(field.Nested.ResolvedFields(), selected.SelectionSet, wrapperDepth, fragments)
 					continue
 				}
 				if field.Blocks != nil {
-					for _, block := range field.Blocks.Types {
-						walk(block.Fields, selected.SelectionSet, wrapperDepth, fragments)
+					for _, block := range field.Blocks.ResolvedTypes() {
+						walk(block.ResolvedFields(), selected.SelectionSet, wrapperDepth, fragments)
 					}
 					continue
 				}
@@ -177,15 +177,15 @@ func (builder *schemaBuilder) selectedRelationshipDepth(fields []schema.Field, s
 					continue
 				}
 				if field.Nested != nil {
-					candidate := builder.selectedRelationshipDepth(field.Nested.Fields, selected.SelectionSet, info, active, level)
+					candidate := builder.selectedRelationshipDepth(field.Nested.ResolvedFields(), selected.SelectionSet, info, active, level)
 					if candidate > maximum {
 						maximum = candidate
 					}
 					continue
 				}
 				if field.Blocks != nil {
-					for _, block := range field.Blocks.Types {
-						candidate := builder.selectedRelationshipDepth(block.Fields, selected.SelectionSet, info, active, level)
+					for _, block := range field.Blocks.ResolvedTypes() {
+						candidate := builder.selectedRelationshipDepth(block.ResolvedFields(), selected.SelectionSet, info, active, level)
 						if candidate > maximum {
 							maximum = candidate
 						}

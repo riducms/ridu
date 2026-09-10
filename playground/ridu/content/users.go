@@ -14,8 +14,8 @@ var Users = ridu.Collection{
 		Update: authenticatedOnly,
 		Delete: authenticatedOnly,
 	},
-	Fields: []field.Definition{
-		field.Text("email", field.Required(), field.Unique()),
+	Fields: field.Fields{
+		field.Text("email").Required().Unique(),
 	},
 }
 

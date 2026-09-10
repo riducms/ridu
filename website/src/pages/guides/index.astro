@@ -40,7 +40,14 @@ const guides = [
 ];
 ---
 
-<BaseLayout title={page.title} description={page.description} active="guides" wide footer={false}>
+<BaseLayout
+	title={page.title}
+	description={page.description}
+	active="guides"
+	wide
+	docsLayout={page.layout}
+	footer={false}
+>
 	<DocsShell {page} {toc} prose={false}>
 		<section class="py-10" id="all-guides">
 			<div class="mt-6 grid grid-cols-[repeat(auto-fit,minmax(min(100%,280px),1fr))] gap-2.8">

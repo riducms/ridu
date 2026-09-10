@@ -4,6 +4,7 @@ import DocsShell from '@/components/docs/docs-shell.astro';
 import DocumentChoiceScript from '@/components/docs/document-choice-script.astro';
 import DocumentPagination from '@/components/docs/document-pagination.astro';
 import PackageManagerTabsScript from '@/components/code/package-manager-tabs-script.astro';
+import CodeFileTabsScript from '@/components/code/code-file-tabs-script.astro';
 import { getAdjacentDocumentationPage, type DocumentationPage } from '@/config/documentation';
 import BaseLayout from '@/layouts/base-layout.astro';
 
@@ -34,6 +35,7 @@ const toc = headings
 	description={page.description}
 	active={page.area}
 	wide
+	docsLayout={page.layout}
 	footer={false}
 >
 	<DocsShell {page} {toc} pageActions>
@@ -46,4 +48,5 @@ const toc = headings
 	</DocsShell>
 	<DocumentChoiceScript />
 	<PackageManagerTabsScript />
+	<CodeFileTabsScript />
 </BaseLayout>

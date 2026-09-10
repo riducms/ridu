@@ -2,14 +2,13 @@
 title: 'Textarea field'
 description: 'Store multi-line plain text as a string.'
 product: core
-eyebrow: 'Scalar and choice fields'
+eyebrow: 'Basic fields'
 order: 62
 aliases: ['field.Textarea', 'multiline text', 'plain text area']
 relatedSymbolIds: ['go:github.com/riducms/ridu/field#Textarea']
 navigation:
   section: 'Model content'
   parent: fields
-  group: 'Scalar & choice'
   order: 20
   title: 'Textarea'
 ---
@@ -24,41 +23,52 @@ admin.
 
 _Line breaks remain part of one string; the control does not create rich-text structure._
 
-## Smallest working example {#example}
+## Add a multi-line input {#example}
 
 ```go title="content/posts.go"
-field.Textarea("summary", field.MaxLength(280))
+field.Textarea("summary").MaxLength(280)
 ```
 
 Create and update inputs accept `summary: string`; optional fields may be omitted. Reads return the
 same plain string through REST, the Local API, and the generated SDK.
 
-## A realistic configuration {#options}
+## Configuration {#configuration}
+
+| Constructor or method                                           | What it controls                                                       |
+| --------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `field.Textarea(name)`                                          | Creates a stored multi-line plain-text string.                         |
+| `.Required()`                                                   | Rejects missing, null, and empty text.                                 |
+| `.MinLength(n)` / `.MaxLength(n)`                               | Sets inclusive Unicode-character bounds.                               |
+| `.Default(value)` / `.DefaultFrom(callback)`                    | Supplies fixed or request-aware initial text.                          |
+| `.Localized()`                                                  | Stores separate text for each configured content locale.               |
+| `.Validate(callback)` / `.LiveValidate(callback)`               | Adds save validation or optional feedback while editing.               |
+| `.Admin(...)`, `.Access(...)`, `.Hooks(...)`, `.ReadHooks(...)` | Configures the editor, authorization, saved value, and returned value. |
+
+## Set length limits and a placeholder {#options}
 
 ```go title="content/reviews.go"
-field.Textarea(
-	"editorNote",
-	field.Required(),
-	field.MinLength(10),
-	field.MaxLength(2_000),
-	field.Placeholder("Explain what must change before publication…"),
-	field.Sidebar(),
-)
+field.Textarea("editorNote").
+	Required().
+	MinLength(10).
+	MaxLength(2_000).
+	Admin(field.Admin{
+		Placeholder: "Explain what must change before publication…",
+		Sidebar:     true,
+	})
 ```
 
 Textarea fields accept the common string options: `Required`, `MinLength`, `MaxLength`, `Default`,
-`Localized`, `Unique`, `Index`, and the shared admin options. Use uniqueness only for a genuine
-invariant; long prose is rarely an appropriate indexed or unique key.
+`Localized`, `Unique`, `Index`, and the shared admin options. Long prose rarely needs to be
+unique or indexed.
 
 Localization stores an independent string per content locale. Admin-language translations for the
 label, description, or placeholder are separate and do not localize content.
 
-## Constraints and querying {#querying}
+## Search and display plain text {#querying}
 
 String filters work as they do for [Text](/docs/fields/text/), including equality, containment,
-`like`, selection, and sorting. Long text queries are not relevance-ranked search. Build a search
-index outside this field when your
-application needs stemming, ranking, or language analysis.
+`like`, selection, and sorting. Long text queries are not relevance-ranked search. Use a separate search integration when
+your application needs ranked results or language-aware matching.
 
 Textarea does not parse Markdown or HTML and does not sanitize it for rendering. Escape plain text
 in your frontend. If authors need formatting, links, uploads, or structured blocks, use the

@@ -67,11 +67,7 @@ func populationDocumentWeight(document Document, ceiling int) (int, bool) {
 			}
 			return visitValues(value.document.Values)
 		case ValueList:
-			for _, item := range value.list {
-				if !visitValue(item) {
-					return false
-				}
-			}
+			return value.list.visit(visitValue)
 		}
 		return true
 	}

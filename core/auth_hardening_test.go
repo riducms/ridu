@@ -16,6 +16,7 @@ import (
 	ridu "github.com/riducms/ridu/core"
 	"github.com/riducms/ridu/field"
 	"github.com/riducms/ridu/internal/teststore"
+	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/protocol"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
@@ -546,9 +547,9 @@ func TestAnonymousFirstAuthUserBootstrapIsAtomic(t *testing.T) {
 		Collections: []ridu.Collection{{
 			Slug: "users", Auth: true,
 			AuthConfig: ridu.AuthConfig{Password: ridu.PasswordPolicy{BcryptCost: bcrypt.MinCost}},
-			Fields:     []field.Definition{field.Email("email", field.Required(), field.Unique())},
+			Fields:     field.Fields{field.Email("email").Required().Unique()},
 			Hooks: ridu.CollectionHooks{BeforeOperation: []ridu.Hook{func(hook ridu.HookContext) error {
-				if hook.Operation == ridu.OperationCreate && hook.Actor == nil {
+				if hook.Operation == operation.Create && hook.Actor == nil {
 					arrived <- struct{}{}
 					<-release
 				}
@@ -611,8 +612,8 @@ func TestAuthBootstrapAvailableIsLimitedToUninitializedAdminCollectionWithOmitte
 	application, err := ridu.New(ridu.Config{
 		Name: "Auth bootstrap availability", Admin: ridu.AdminConfig{User: "users"},
 		Collections: []ridu.Collection{
-			{Slug: "users", Auth: true, Fields: []field.Definition{field.Email("email", field.Required(), field.Unique())}},
-			{Slug: "staff", Auth: true, Fields: []field.Definition{field.Email("email", field.Required(), field.Unique())}},
+			{Slug: "users", Auth: true, Fields: field.Fields{field.Email("email").Required().Unique()}},
+			{Slug: "staff", Auth: true, Fields: field.Fields{field.Email("email").Required().Unique()}},
 		},
 	}, teststore.New())
 	if err != nil {
@@ -638,7 +639,7 @@ func TestAuthBootstrapAvailableIsLimitedToUninitializedAdminCollectionWithOmitte
 		Name: "Public registration", Admin: ridu.AdminConfig{User: "users"},
 		Collections: []ridu.Collection{{
 			Slug: "users", Auth: true,
-			Fields: []field.Definition{field.Email("email", field.Required(), field.Unique())},
+			Fields: field.Fields{field.Email("email").Required().Unique()},
 			Access: ridu.CollectionAccess{Create: func(ridu.AccessContext) (ridu.AccessDecision, error) {
 				return ridu.Allow(), nil
 			}},
@@ -657,13 +658,14 @@ func TestAnonymousFirstAdminBootstrapCanSetFieldsProtectedFromAnonymousCreation(
 		Name: "Protected bootstrap fields", Admin: ridu.AdminConfig{User: "users"},
 		Collections: []ridu.Collection{{
 			Slug: "users", Auth: true,
-			Fields: []field.Definition{
-				field.Email("email", field.Required(), field.Unique()),
-				field.Text("role", field.Required()),
-			},
-			FieldAccess: map[string]ridu.FieldAccess{
-				"role": {Create: func(ctx ridu.FieldAccessContext) (bool, error) { return ctx.Actor != nil, nil }},
-			},
+			AuthConfig: ridu.AuthConfig{Password: ridu.PasswordPolicy{BcryptCost: bcrypt.MinCost}},
+			Fields: field.Fields{field.Email("email").Required().Unique(), field.Text("role").Required().Access(field.Access{Create: func(ctx operation.AccessContext,
+
+			) (bool, error) {
+				return ctx.Actor.ID != "",
+
+					nil
+			}})},
 		}},
 	}, teststore.New())
 	if err != nil {
@@ -769,7 +771,7 @@ func TestAuthorizedAccountUnlockClearsPersistentLockout(t *testing.T) {
 			Slug: "users", Auth: true,
 			AuthConfig: ridu.AuthConfig{Password: ridu.PasswordPolicy{BcryptCost: bcrypt.MinCost}, MaxLoginAttempts: 2, LockDuration: time.Hour},
 			Access:     ridu.CollectionAccess{Update: func(ridu.AccessContext) (ridu.AccessDecision, error) { return ridu.Allow(), nil }},
-			Fields:     []field.Definition{field.Text("email", field.Required(), field.Unique())},
+			Fields:     field.Fields{field.Text("email").Required().Unique()},
 		}},
 	}, backend)
 	if err != nil {
@@ -1380,7 +1382,7 @@ func authReadFixture(t *testing.T, backend store.Store, auth ridu.AuthConfig, re
 		Collections: []ridu.Collection{{
 			Slug: "users", Auth: true, AuthConfig: auth,
 			Access: ridu.CollectionAccess{Read: read},
-			Fields: []field.Definition{field.Text("email", field.Required(), field.Unique())},
+			Fields: field.Fields{field.Text("email").Required().Unique()},
 		}},
 	}, backend)
 	if err != nil {

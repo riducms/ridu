@@ -20,41 +20,13 @@ func TestPostgresReferenceOptionFiltersAreAtomicWithTargetReadAccess(t *testing.
 		Name: "PostgreSQL reference option filters",
 		Collections: []ridu.Collection{
 			{
-				Slug: "people", Fields: []field.Definition{field.Text("label"), field.Number("score"), field.Checkbox("visible", field.Required())},
+				Slug: "people", Fields: field.Fields{field.Text("label"), field.Number("score"), field.Checkbox("visible").Required()},
 				Access: ridu.CollectionAccess{Read: func(ridu.AccessContext) (ridu.AccessDecision, error) {
 					return ridu.Where(query.Equal(visiblePath, query.Boolean(true))), nil
 				}},
 			},
 			{
-				Slug: "entries", Fields: []field.Definition{
-					field.Text("exactLabel"), field.Text("notLabel"), field.Text("likeNeedle"), field.Text("containsNeedle"),
-					field.Number("gtThreshold"), field.Number("gteThreshold"), field.Number("ltThreshold"), field.Number("lteThreshold"), field.Text("lexicalThreshold"),
-					field.Relationship("equalsRef", field.To("people"), field.FilterOptionRules(field.OptionFilter("label", field.FilterEquals, "exactLabel"))),
-					field.Relationship("notEqualRef", field.To("people"), field.FilterOptionRules(
-						field.OptionFilter("label", field.FilterNotEquals, "notLabel"),
-					)),
-					field.Relationship("likeRef", field.To("people"), field.FilterOptionRules(
-						field.OptionFilter("label", field.FilterLike, "likeNeedle"),
-					)),
-					field.Relationship("containsRef", field.To("people"), field.FilterOptionRules(
-						field.OptionFilter("label", field.FilterContains, "containsNeedle"),
-					)),
-					field.Relationship("greaterThanRef", field.To("people"), field.FilterOptionRules(
-						field.OptionFilter("score", field.FilterGreaterThan, "gtThreshold"),
-					)),
-					field.Relationship("greaterThanEqualRef", field.To("people"), field.FilterOptionRules(
-						field.OptionFilter("score", field.FilterGreaterThanEqual, "gteThreshold"),
-					)),
-					field.Relationship("lessThanRef", field.To("people"), field.FilterOptionRules(
-						field.OptionFilter("score", field.FilterLessThan, "ltThreshold"),
-					)),
-					field.Relationship("lessThanEqualRef", field.To("people"), field.FilterOptionRules(
-						field.OptionFilter("score", field.FilterLessThanEqual, "lteThreshold"),
-					)),
-					field.Relationship("orderedTextRef", field.To("people"), field.FilterOptionRules(
-						field.OptionFilter("label", field.FilterGreaterThan, "lexicalThreshold"),
-					)),
-				},
+				Slug: "entries", Fields: field.Fields{field.Text("exactLabel"), field.Text("notLabel"), field.Text("likeNeedle"), field.Text("containsNeedle"), field.Number("gtThreshold"), field.Number("gteThreshold"), field.Number("ltThreshold"), field.Number("lteThreshold"), field.Text("lexicalThreshold"), field.Relationship("equalsRef", "people").FilterOptionRules(field.OptionFilter("label", field.FilterEquals, "exactLabel")), field.Relationship("notEqualRef", "people").FilterOptionRules(field.OptionFilter("label", field.FilterNotEquals, "notLabel")), field.Relationship("likeRef", "people").FilterOptionRules(field.OptionFilter("label", field.FilterLike, "likeNeedle")), field.Relationship("containsRef", "people").FilterOptionRules(field.OptionFilter("label", field.FilterContains, "containsNeedle")), field.Relationship("greaterThanRef", "people").FilterOptionRules(field.OptionFilter("score", field.FilterGreaterThan, "gtThreshold")), field.Relationship("greaterThanEqualRef", "people").FilterOptionRules(field.OptionFilter("score", field.FilterGreaterThanEqual, "gteThreshold")), field.Relationship("lessThanRef", "people").FilterOptionRules(field.OptionFilter("score", field.FilterLessThan, "ltThreshold")), field.Relationship("lessThanEqualRef", "people").FilterOptionRules(field.OptionFilter("score", field.FilterLessThanEqual, "lteThreshold")), field.Relationship("orderedTextRef", "people").FilterOptionRules(field.OptionFilter("label", field.FilterGreaterThan, "lexicalThreshold"))},
 			},
 		},
 	}

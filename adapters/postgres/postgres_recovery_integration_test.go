@@ -57,10 +57,8 @@ func TestPostgresBackupRestoreDrill(t *testing.T) {
 	config := ridu.Config{
 		Name: "PostgreSQL recovery drill", Admin: ridu.AdminConfig{User: "users"},
 		Collections: []ridu.Collection{
-			{Slug: "users", Auth: true, Fields: []field.Definition{field.Text("email", field.Required(), field.Unique())}},
-			{Slug: "posts", Versions: true, Fields: []field.Definition{
-				field.Text("title", field.Required()), field.Relationship("author", field.To("users"), field.Required()),
-			}},
+			{Slug: "users", Auth: true, Fields: field.Fields{field.Text("email").Required().Unique()}},
+			{Slug: "posts", Versions: true, Fields: field.Fields{field.Text("title").Required(), field.Relationship("author", "users").Required()}},
 		},
 	}
 	manifest, err := ridu.Resolve(config)

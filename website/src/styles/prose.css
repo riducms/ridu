@@ -368,42 +368,53 @@
 .docs-prose .doc-table-wrap {
 	margin: 1.7rem 0;
 	overflow-x: auto;
-	border: 1px solid var(--colors-line);
-	border-radius: 4px;
-	background: color-mix(in srgb, var(--colors-surface) 42%, transparent);
 	-webkit-overflow-scrolling: touch;
 }
 
 .docs-prose .doc-table-wrap table {
 	width: 100%;
+	min-width: 36rem;
 	border-collapse: collapse;
-	font-size: 13.75px;
-	line-height: 1.58;
+	font-size: 1em;
+	line-height: 1.65;
 }
 
 .docs-prose .doc-table-wrap th,
 .docs-prose .doc-table-wrap td {
-	padding: 0.78rem 0.9rem;
-	border-right: 1px solid color-mix(in srgb, var(--colors-line) 72%, transparent);
+	min-width: 8rem;
+	padding: 0.9rem 1rem;
 	border-bottom: 1px solid var(--colors-line);
 	text-align: left;
 	vertical-align: top;
 }
 
+.docs-prose .doc-table-wrap :is(th, td):first-child {
+	padding-left: 0;
+}
+
 .docs-prose .doc-table-wrap :is(th, td):last-child {
-	border-right: 0;
+	padding-right: 0;
 }
 
 .docs-prose .doc-table-wrap th {
-	background: var(--colors-surface-raised);
+	border-bottom-color: var(--colors-line-strong);
 	color: var(--colors-ink);
-	font-size: 11.5px;
+	font-size: 0.9375em;
 	font-weight: 650;
-	letter-spacing: 0.025em;
 }
 
-.docs-prose .doc-table-wrap td {
-	color: var(--colors-ink-soft);
+.docs-prose .doc-table-wrap code {
+	font-size: 0.875em;
+	overflow-wrap: normal;
+}
+
+.docs-prose .doc-table-wrap td:first-child {
+	color: var(--colors-ink);
+	font-weight: 600;
+}
+
+.docs-prose .doc-table-wrap td:first-child code {
+	font-weight: 600;
 }
 
 .docs-prose .doc-table-wrap tbody tr {
@@ -412,10 +423,6 @@
 
 .docs-prose .doc-table-wrap tbody tr:hover {
 	background: color-mix(in srgb, var(--colors-surface-hover) 62%, transparent);
-}
-
-.docs-prose .doc-table-wrap tbody tr:last-child td {
-	border-bottom: 0;
 }
 
 @media (width < 48rem) {

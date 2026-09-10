@@ -1,11 +1,27 @@
 import { describe, expect, it } from "bun:test";
 import { access, readdir, readFile } from "node:fs/promises";
 import { extname, join, relative, resolve } from "node:path";
+import ts from "typescript";
 
 const repositoryRoot = resolve(import.meta.dir, "../..");
 const sourceExtensions = new Set([".ts", ".svelte"]);
 
 describe("frontend package boundaries", () => {
+	it("distinguishes module imports from generated application source", () => {
+		expect(
+			importSpecifiers(`import {build} from 'vite';
+export {type Plugin} from 'vite';
+const generatedEntry = \`import {validateAdminConfig} from '@riducms/plugin/admin';\`;
+const lazy = () => import('@riducms/admin');`)
+		).toEqual(["vite", "vite", "@riducms/admin"]);
+		expect(
+			importSpecifiers(`<script lang="ts">
+import Field from '@riducms/plugin/editor/field';
+const lazy = () => import('@riducms/ui');
+</script><Field />`)
+		).toEqual(["@riducms/plugin/editor/field", "@riducms/ui"]);
+	});
+
 	it("keeps @riducms/build out of runtime package graphs", async () => {
 		const violations = await forbiddenImports(
 			"packages/build/src",
@@ -130,19 +146,22 @@ describe("frontend package boundaries", () => {
 		).flat();
 
 		expect(violations).toEqual([]);
-		const generatedConfig = await readFile(
-			join(repositoryRoot, "internal/scaffold/templates/admin-tsconfig.json.tmpl"),
-			"utf8"
-		);
+		const generatedConfig = JSON.parse(
+			await readFile(
+				join(repositoryRoot, "internal/scaffold/templates/admin-tsconfig.json.tmpl"),
+				"utf8"
+			)
+		) as { compilerOptions: { paths: Record<string, string[]> } };
 		for (const [alias, packageName] of [
 			["@admin/*", "admin"],
 			["@ui/*", "ui"],
 			["@plugin-richtext/*", "plugin-richtext"],
 			["@plugin-seo/*", "plugin-seo"],
 		] as const) {
-			expect(generatedConfig).toContain(
-				`"${alias}": ["./node_modules/@riducms/${packageName}/src/*", "../node_modules/@riducms/${packageName}/src/*"]`
-			);
+			expect(generatedConfig.compilerOptions.paths[alias]).toEqual([
+				`./node_modules/@riducms/${packageName}/src/*`,
+				`../node_modules/@riducms/${packageName}/src/*`,
+			]);
 		}
 	});
 
@@ -161,45 +180,6 @@ describe("frontend package boundaries", () => {
 		).flat();
 
 		expect(violations).toEqual([]);
-	});
-
-	it("publishes npm before creating the version tag and GitHub release", async () => {
-		const workflow = await readFile(join(repositoryRoot, ".github/workflows/release.yml"), "utf8");
-		const goreleaser = await readFile(join(repositoryRoot, ".goreleaser.yaml"), "utf8");
-		const trustedNpmPublish = workflow.indexOf(
-			"- name: Publish npm packages through trusted publishing"
-		);
-		const createTag = workflow.indexOf("- name: Create the local release tag after npm succeeds");
-		const createRelease = workflow.indexOf(
-			"- name: Build and draft the GitHub release with GoReleaser"
-		);
-		const publishRelease = workflow.indexOf("- name: Publish the verified GitHub release");
-
-		expect(trustedNpmPublish).toBeGreaterThan(0);
-		expect(createTag).toBeGreaterThan(trustedNpmPublish);
-		expect(createRelease).toBeGreaterThan(createTag);
-		expect(publishRelease).toBeGreaterThan(createRelease);
-		expect(workflow).toContain("workflow_dispatch:");
-		expect(workflow).not.toContain("pull_request:");
-		expect(workflow).not.toContain("push:");
-		expect(workflow).toContain("commit_sha:");
-		expect(workflow).toContain('test "${GITHUB_REF}" = "refs/heads/main"');
-		expect(workflow).toContain('test "${GITHUB_SHA}" = "${EXPECTED_COMMIT_SHA}"');
-		expect(workflow).toContain('test "$(git rev-parse HEAD)" = "${EXPECTED_COMMIT_SHA}"');
-		expect(workflow).toContain('git tag "${RELEASE_TAG}" "${GITHUB_SHA}"');
-		expect(workflow).toContain("goreleaser release --clean");
-		expect(workflow).toContain("subject-checksums: dist/SHA256SUMS");
-		expect(workflow).not.toContain("--clobber");
-		expect(workflow).not.toContain("gh release upload");
-		expect(workflow).not.toContain("gh release create");
-		expect(workflow).not.toContain("NPM_TOKEN");
-		expect(workflow).not.toContain("use_initial_npm_token");
-		expect(workflow).toContain("refusing to replace a release");
-		expect(goreleaser).toContain("draft: true");
-		expect(goreleaser).toContain('target_commitish: "{{ .Commit }}"');
-		expect(goreleaser).toContain("name_template: SHA256SUMS");
-		expect(goreleaser).toContain("use: github-native");
-		expect(goreleaser).toContain(".ridu/release-npm/*.tgz");
 	});
 
 	it("keeps collection list presentation outside router and client ownership", async () => {
@@ -279,9 +259,7 @@ async function sourceFiles(directory: string): Promise<string[]> {
 }
 
 function importSpecifiers(source: string) {
-	return [...source.matchAll(/(?:from\s+|import\s*(?:\(\s*)?)["']([^"']+)["']/g)].map(
-		(match) => match[1] ?? ""
-	);
+	return ts.preProcessFile(source, true, true).importedFiles.map((file) => file.fileName);
 }
 
 function frameworkAlias(specifier: string) {

@@ -4,7 +4,14 @@ description: 'See which Ridu capabilities are available, limited, experimental, 
 product: core
 eyebrow: 'Start here'
 order: 15
-aliases: ['status', 'roadmap', 'feature matrix', 'limitations', 'supported features']
+aliases:
+  [
+    'status',
+    'roadmap',
+    'feature matrix',
+    'limitations',
+    'supported features'
+  ]
 navigation:
   section: 'Develop & operate'
   order: 100
@@ -19,13 +26,17 @@ The matrix above links each capability to its setup guide and relevant API. Use 
 [documentation home](/docs/) for task-oriented guides and the [API reference](/reference/) for
 exported symbols.
 
+Opt-in [live server validation](/docs/fields/live-validation/) shows feedback before saving in
+built-in, custom, and embedded field editors. Configure save validation separately to enforce
+the same rules when a document is saved.
+
 ## Limited capabilities {#limited}
 
 These paths work with explicit constraints:
 
-- **Generated projections.** `select` and `populate` are typed inputs, but TypeScript return types
-  remain the collection's complete output type. Sort terms are strings rather than generated path
-  unions.
+- **Query type precision.** Literal `select` and explicit `populate` options narrow TypeScript
+  results, including selected target fields. Runtime options with widened types retain broader
+  output types. Sort terms remain strings rather than generated path unions.
 - **Query vocabulary.** There is no `notIn`, full-text search, array all-elements operator, or
   general geospatial query API. Direct-field distinct values are available through the Local Go
   API when the selected field has no document-aware read rule; broader aggregation and a public

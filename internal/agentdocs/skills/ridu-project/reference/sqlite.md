@@ -102,63 +102,66 @@ state, uploads, and a rehearsed cutover.
 2. Wire the server to the official adapter inside `runtimeOptions`. Keep the address and handler
    settings beside the store factory; the helper can remain lower in the same file:
 
-   ```go title="cmd/server/main.go" remove={11,19-23} add={4,6,12,24,34-57}
+   ```go title="cmd/server/main.go" remove={11,19-23} add={4,6,12,24,34-60}
    import (
-       "context"
-       "log"
-       "net/url"
-       "os"
-       "path/filepath"
-       "strings"
+     "context"
+     "log"
+     "net/url"
+     "os"
+     "path/filepath"
+     "strings"
 
-       "github.com/acme/content/internal/adminassets"
-       "github.com/riducms/ridu"
-       "github.com/riducms/ridu/adapters/postgres"
-       "github.com/riducms/ridu/adapters/sqlite"
-       "github.com/riducms/ridu/store"
+     "github.com/acme/content/internal/adminassets"
+     "github.com/riducms/ridu"
+     "github.com/riducms/ridu/adapters/postgres"
+     "github.com/riducms/ridu/adapters/sqlite"
+     "github.com/riducms/ridu/store"
    )
 
    func runtimeOptions(applicationConfig ridu.Config) []ridu.ExecuteOption {
-       return []ridu.ExecuteOption{
-           ridu.WithStore(func(ctx context.Context) (store.Store, error) {
-               return postgres.OpenWithConfig(ctx, postgres.PoolConfig{
-                   DatabaseURL:              os.Getenv("DATABASE_URL"),
-                   AllowInsecureTransport:   envBool("RIDU_ALLOW_INSECURE_DATABASE"),
-                   MaxUploadLockConnections: envInt32("RIDU_POSTGRES_UPLOAD_LOCK_CONNECTIONS"),
-               })
-               return sqlite.Open(ctx, sqliteDatabasePath())
-           }),
-           ridu.WithAddress(env("RIDU_ADDRESS", ":8080")),
-           ridu.WithHandlerOptions(ridu.HandlerOptions{
-               AdminAssets:    adminassets.FS(),
-               AllowedOrigins: envList("RIDU_ALLOWED_ORIGINS"),
-           }),
-       }
+     return []ridu.ExecuteOption{
+       ridu.WithStore(func(ctx context.Context) (store.Store, error) {
+         return postgres.OpenWithConfig(ctx, postgres.PoolConfig{
+           DatabaseURL:              os.Getenv("DATABASE_URL"),
+           AllowInsecureTransport:   envBool("RIDU_ALLOW_INSECURE_DATABASE"),
+           MaxUploadLockConnections: envInt32("RIDU_POSTGRES_UPLOAD_LOCK_CONNECTIONS"),
+         })
+         return sqlite.Open(ctx, sqliteDatabasePath())
+       }),
+       ridu.WithAddress(env("RIDU_ADDRESS", ":8080")),
+       ridu.WithHandlerOptions(ridu.HandlerOptions{
+         AdminAssets:    adminassets.FS(),
+         AllowedOrigins: envList("RIDU_ALLOWED_ORIGINS"),
+       }),
+     }
    }
 
    func sqliteDatabasePath() string {
-       path := strings.TrimSpace(os.Getenv("RIDU_SQLITE_PATH"))
-       switch {
-       case path == "":
-           log.Fatal("RIDU_SQLITE_PATH is required")
-       case path == ":memory:":
-           log.Fatal("RIDU_SQLITE_PATH must be a file because migrations and the server run in separate processes")
-       case strings.HasPrefix(path, "file:"):
-           parsed, err := url.Parse(path)
-           if err != nil {
-               log.Fatalf("RIDU_SQLITE_PATH must be a valid SQLite file URI: %v", err)
-           }
-           target := parsed.Path
-           if target == "" {
-               target, err = url.PathUnescape(parsed.Opaque)
-           }
-           if err != nil || !filepath.IsAbs(target) {
-               log.Fatal("RIDU_SQLITE_PATH file URI must contain an absolute path")
-           }
-       case !filepath.IsAbs(path):
-           log.Fatal("RIDU_SQLITE_PATH must be an absolute file path")
+     path := strings.TrimSpace(os.Getenv("RIDU_SQLITE_PATH"))
+     switch {
+     case path == "":
+       log.Fatal("RIDU_SQLITE_PATH is required")
+     case path == ":memory:":
+       log.Fatal(
+         "RIDU_SQLITE_PATH must be a file because migrations " +
+           "and the server run in separate processes",
+       )
+     case strings.HasPrefix(path, "file:"):
+       parsed, err := url.Parse(path)
+       if err != nil {
+         log.Fatalf("RIDU_SQLITE_PATH must be a valid SQLite file URI: %v", err)
        }
-       return path
+       target := parsed.Path
+       if target == "" {
+         target, err = url.PathUnescape(parsed.Opaque)
+       }
+       if err != nil || !filepath.IsAbs(target) {
+         log.Fatal("RIDU_SQLITE_PATH file URI must contain an absolute path")
+       }
+     case !filepath.IsAbs(path):
+       log.Fatal("RIDU_SQLITE_PATH must be an absolute file path")
+     }
+     return path
    }
    ```
 
@@ -258,6 +261,18 @@ SQLite stores canonical document values as JSON. A field rename or other stored-
 therefore use a compiled transaction-bound transform registered by the project and selected with
 `ridu migrate create --transform <name>`. The PostgreSQL-only `--accept-renames` shortcut is not a
 substitute for that transform.
+
+Presentation changes also belong in immutable history. After changing the application display name,
+resource labels or admin presentation, or field labels and presentation metadata (including nested
+fields and Blocks), regenerate and create a migration normally. Select/radio choice order,
+admin-language and editor-timezone labels, picker order and configured defaults, and content-locale
+labels and text direction follow the same rule. Locale codes, timezone IDs, content-locale defaults
+and fallback settings retain their existing restrictions. These artifacts record the updated
+manifest without rebuilding content, retained revisions, references, uniqueness rows, or indexes.
+Versioned resources support the same presentation changes; no transform or `--allow-destructive`
+flag is needed. Changes to stored field identities, validation, or versioning remain subject to
+SQLite's schema-transition restrictions. Supported unversioned data transforms can accompany cosmetic
+changes; destructive approval and the prohibition on transforming versioned resources still apply.
 
 Localized values remain locale maps inside that canonical JSON. SQLite compiles localized filters
 and sorting to JSON expressions and uses expression indexes or focused reference/uniqueness side

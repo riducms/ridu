@@ -13,11 +13,78 @@ import (
 
 	"github.com/riducms/ridu"
 	"github.com/riducms/ridu/field"
+	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
+
+func TestMongoUploadMetadataAllowsFieldPoliciesWithinFixedStorageShape(t *testing.T) {
+	config := mongoUploadTestConfig()
+	config.Collections[0].Fields = append(config.Collections[0].Fields,
+		field.Text("objectKey").Label("Storage key").Access(field.Access{Read: func(operation.AccessContext) (bool, error) { return false, nil }}),
+		field.JSON("sizes").Admin(field.Admin{Description: "Generated image variants"}).Access(field.Access{Read: func(operation.AccessContext) (bool, error) { return false, nil }}),
+	)
+	manifest, err := ridu.Resolve(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	media := mongoCollectionsBySlug(manifest.Snapshot().Collections)["media"]
+	if err := validateCollectionEnvelope(media); err != nil {
+		t.Fatalf("field presentation/access altered upload qualification: %v", err)
+	}
+	sizes, found := mongoFieldNamed(media.Fields, "sizes")
+	if !found || !sizes.QueryRestricted || !mongoUploadSizesField(sizes) {
+		t.Fatalf("private sizes lost the managed upload contract: %#v", sizes)
+	}
+	variantPath, _ := query.NewPath("sizes", "thumb", "objectKey")
+	if _, err := resolveMongoPredicatePath(media, variantPath, "filter", mongoPredicateScope{}); err != nil {
+		t.Fatalf("private metadata blocked an internal upload lookup: %v", err)
+	}
+	values := mongoUploadValues("original", "thumbnail")
+	if err := validateCompleteValues(media, values); err != nil {
+		t.Fatalf("private image-size metadata was rejected: %v", err)
+	}
+	values["sizes"] = store.Object(store.Values{"thumb": store.String("invalid variant")})
+	if err := validateCompleteValues(media, values); err == nil {
+		t.Fatal("private sizes bypassed managed image-size value validation")
+	}
+	for _, mutate := range []func(*schema.Field){
+		func(value *schema.Field) { value.ID = "custom-sizes" },
+		func(value *schema.Field) { value.Type = schema.FieldTypeText },
+		func(value *schema.Field) { value.Category = schema.FieldCategoryScalar },
+		func(value *schema.Field) { value.Localized = true },
+		func(value *schema.Field) { value.Admin.ReadOnly = false },
+	} {
+		changed := sizes
+		mutate(&changed)
+		if mongoUploadSizesField(changed) {
+			t.Fatal("field policies weakened managed image-size storage recognition")
+		}
+	}
+	for index, candidate := range media.Fields {
+		if candidate.Name != "objectKey" {
+			continue
+		}
+		if !candidate.QueryRestricted || candidate.Admin.Label != "Storage key" || !mongoFrameworkUploadMetadataField(candidate) {
+			t.Fatalf("managed field policies were discarded: %#v", candidate)
+		}
+		for _, mutate := range []func(*schema.Field){
+			func(value *schema.Field) { value.Required = false },
+			func(value *schema.Field) { value.Index = false },
+			func(value *schema.Field) { value.Unique = true },
+			func(value *schema.Field) { value.Admin.ReadOnly = false },
+		} {
+			changed := media
+			changed.Fields = append([]schema.Field(nil), media.Fields...)
+			mutate(&changed.Fields[index])
+			if err := validateCollectionEnvelope(changed); err == nil {
+				t.Fatal("field presentation/access weakened managed storage validation")
+			}
+		}
+	}
+}
 
 func TestMongoUploadEnvelopeAdmitsOnlyBoundedFrameworkShapes(t *testing.T) {
 	media, posts, _ := mongoUploadTestSchema(t)
@@ -99,7 +166,7 @@ func TestMongoUploadValuesPreserveRelationshipSemantics(t *testing.T) {
 	media, posts, _ := mongoUploadTestSchema(t)
 	singular := posts.Fields[1]
 	group := posts.Fields[2]
-	hasMany := group.Nested.Fields[0]
+	hasMany := group.Nested.ResolvedFields()[0]
 	if err := validateMongoUploadValue(singular, store.String(""), "hero"); err != nil {
 		t.Fatalf("optional empty upload ID rejected: %v", err)
 	}
@@ -381,17 +448,11 @@ func mongoUploadTestConfig() ridu.Config {
 					ImageSizes: []ridu.ImageSize{{Name: "thumb", Width: 16, Height: 16, Fit: "cover"}},
 				},
 				VersionConfig: ridu.VersionConfig{Drafts: true},
-				Fields:        []field.Definition{field.Text("alt")},
+				Fields:        field.Fields{field.Text("alt")},
 			},
 			{
-				Slug: "posts",
-				Fields: []field.Definition{
-					field.Text("visibility", field.Required()),
-					field.Upload("hero", field.To("media"), field.OnDelete(field.ReferenceDeleteNullify)),
-					field.Group("content", field.Fields(
-						field.Upload("gallery", field.ToMany("media"), field.OnDelete(field.ReferenceDeleteNullify)),
-					)),
-				},
+				Slug:   "posts",
+				Fields: field.Fields{field.Text("visibility").Required(), field.Upload("hero", "media").OnDelete(field.ReferenceDeleteNullify), field.Group("content", field.Fields{field.Uploads("gallery", "media").OnDelete(field.ReferenceDeleteNullify)})},
 				Access: ridu.CollectionAccess{Read: func(ridu.AccessContext) (ridu.AccessDecision, error) {
 					return ridu.Where(query.Equal(visibilityPath, query.String("public"))), nil
 				}},

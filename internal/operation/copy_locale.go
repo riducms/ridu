@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/riducms/ridu/internal/localization"
+	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
 )
@@ -52,11 +53,11 @@ func (engine *Engine) CopyLocale(ctx context.Context, collectionName, documentID
 	// concurrent update can land between the source read and target write and be
 	// silently overwritten by the copied structured value.
 	readRequest := Request{
-		Operation: Read, Collection: collectionName, ID: documentID, Actor: actor, ActorCollection: actorCollection,
+		Operation: operation.Read, Collection: collectionName, ID: documentID, Actor: actor, ActorCollection: actorCollection,
 		Locale: string(source), DisableFallback: true,
 	}
 	readContext := Context{
-		Context: transactionContext, Operation: Read, Collection: collection.Schema,
+		Context: transactionContext, Operation: operation.Read, Collection: collection.Schema,
 		ID: documentID, Actor: cloneDocumentPointer(actor), ActorCollection: actorCollection, Data: store.Values{},
 		Locale: sourceSelection.Locale, AllLocales: false,
 		Locales: append([]schema.LocaleCode(nil), sourceSelection.Configured...),
@@ -85,14 +86,18 @@ func (engine *Engine) CopyLocale(ctx context.Context, collectionName, documentID
 	if issues := localization.CopyLocaleIssues(collection.Schema.Fields, read.Document.Values); len(issues) != 0 {
 		return store.Document{}, &Error{Code: "validation", Status: 422, Message: "localized rows require stable keys before they can be copied", Issues: issues}
 	}
-	values := localization.LocalizedValues(collection.Schema.Fields, read.Document.Values)
-	operation := Update
+	values, err := localization.LocalizedValuesChecked(collection.Schema.Fields, read.Document.Values)
+	if err != nil {
+		return store.Document{}, embeddedOperationError(err, false)
+	}
+	operationKind := operation.Update
 	if collection.Schema.Versions != nil && read.Document.Status == store.StatusPublished {
-		operation = Publish
+		operationKind = operation.Publish
 	}
 	updated, err := engine.Execute(transactionContext, Request{
-		Operation: operation, Collection: collectionName, ID: documentID, Data: values,
+		Operation: operationKind, Collection: collectionName, ID: documentID, Data: values,
 		ExpectedRevision: expectedRevision, Actor: actor, ActorCollection: actorCollection, Locale: string(target), DisableFallback: true,
+		copyLocaleSource: source,
 	})
 	if err != nil {
 		return store.Document{}, err

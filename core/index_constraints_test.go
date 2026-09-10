@@ -15,20 +15,13 @@ func TestResolveCarriesScalarConstraintsAndOrderedIndexes(t *testing.T) {
 	manifest, err := ridu.Resolve(ridu.Config{
 		Name: "Indexed",
 		Globals: []ridu.Global{{
-			Slug: "settings", Fields: []field.Definition{field.Text("siteName", field.Index())},
+			Slug: "settings", Fields: field.Fields{field.Text("siteName").Index()},
 		}},
 		Collections: []ridu.Collection{
 			{Slug: "media", Upload: true},
 			{
-				Slug: "posts",
-				Fields: []field.Definition{
-					field.Text("title", field.MinLength(2), field.MaxLength(20), field.Index()),
-					field.Textarea("summary", field.MaxLength(200)),
-					field.Code("source", field.Language("go"), field.MinLength(1)),
-					field.Number("priority", field.Min(0), field.Max(10), field.Step(0.5)),
-					field.Group("seo", field.Fields(field.Text("slug", field.Index()))),
-					field.Upload("hero", field.To("media"), field.Index()),
-				},
+				Slug:    "posts",
+				Fields:  field.Fields{field.Text("title").MinLength(2).MaxLength(20).Index(), field.Textarea("summary").MaxLength(200), field.Code("source").MinLength(1).Admin(field.Admin{CodeLanguage: "go"}), field.Number("priority").Min(0).Max(10).Step(0.5), field.Group("seo", field.Fields{field.Text("slug").Index()}), field.Upload("hero", "media").Index()},
 				Indexes: []ridu.CollectionIndex{{Fields: configuredPaths, Unique: true}},
 			},
 		},
@@ -65,31 +58,19 @@ func TestResolveRejectsUnsupportedOrAmbiguousIndexes(t *testing.T) {
 		path   string
 	}{
 		{
-			name: "array field index",
-			config: ridu.Config{Name: "Array", Collections: []ridu.Collection{{Slug: "posts", Fields: []field.Definition{
-				field.Array("items", field.Fields(field.Text("slug", field.Index()))),
-			}}}},
-			code: "unsupported_index", path: "collections[0].fields[0].options.fields[0].options.index",
+			name:   "array field index",
+			config: ridu.Config{Name: "Array", Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{field.Array("items", field.Fields{field.Text("slug").Index()})}}}},
+			code:   "unsupported_index", path: "collections[0].fields[0].fields[0].index",
 		},
 		{
-			name: "block field index",
-			config: ridu.Config{Name: "Blocks", Collections: []ridu.Collection{{Slug: "posts", Fields: []field.Definition{
-				field.Blocks("content", field.BlockTypes(field.BlockType("hero", "Hero", field.Text("slug", field.Index())))),
-			}}}},
-			code: "unsupported_index", path: "collections[0].fields[0].options.blocks[0].fields[0].options.index",
-		},
-		{
-			name: "polymorphic index",
-			config: ridu.Config{Name: "Polymorphic", Collections: []ridu.Collection{
-				{Slug: "posts", Fields: []field.Definition{field.Relationship("owner", field.ToAny("users", "teams"), field.Index())}},
-				{Slug: "users"}, {Slug: "teams"},
-			}},
-			code: "unsupported_index", path: "collections[0].fields[0].options.index",
+			name:   "block field index",
+			config: ridu.Config{Name: "Blocks", Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{field.Blocks("content", field.Block{Slug: "hero", Fields: field.Fields{field.Text("slug").Index()}})}}}},
+			code:   "unsupported_index", path: "collections[0].fields[0].blocks[0].fields[0].index",
 		},
 		{
 			name: "compound through array",
 			config: ridu.Config{Name: "Repeated", Collections: []ridu.Collection{{
-				Slug: "posts", Fields: []field.Definition{field.Array("items", field.Fields(field.Text("slug"))), field.Text("title")},
+				Slug: "posts", Fields: field.Fields{field.Array("items", field.Fields{field.Text("slug")}), field.Text("title")},
 				Indexes: []ridu.CollectionIndex{{Fields: []string{"items.slug", "title"}}},
 			}}},
 			code: "unsupported_index_field", path: "collections[0].indexes[0].fields[0]",
@@ -97,7 +78,7 @@ func TestResolveRejectsUnsupportedOrAmbiguousIndexes(t *testing.T) {
 		{
 			name: "compound presentation terminal",
 			config: ridu.Config{Name: "Presentation", Collections: []ridu.Collection{{
-				Slug: "posts", Fields: []field.Definition{field.UI("helper"), field.Text("title")},
+				Slug: "posts", Fields: field.Fields{field.UI("helper"), field.Text("title")},
 				Indexes: []ridu.CollectionIndex{{Fields: []string{"helper", "title"}}},
 			}}},
 			code: "unsupported_index_field", path: "collections[0].indexes[0].fields[0]",
@@ -105,7 +86,7 @@ func TestResolveRejectsUnsupportedOrAmbiguousIndexes(t *testing.T) {
 		{
 			name: "compound json terminal",
 			config: ridu.Config{Name: "JSON", Collections: []ridu.Collection{{
-				Slug: "posts", Fields: []field.Definition{field.JSON("metadata"), field.Text("title")},
+				Slug: "posts", Fields: field.Fields{field.JSON("metadata"), field.Text("title")},
 				Indexes: []ridu.CollectionIndex{{Fields: []string{"metadata", "title"}}},
 			}}},
 			code: "unsupported_index_field", path: "collections[0].indexes[0].fields[0]",
@@ -113,7 +94,7 @@ func TestResolveRejectsUnsupportedOrAmbiguousIndexes(t *testing.T) {
 		{
 			name: "compound point terminal",
 			config: ridu.Config{Name: "Point", Collections: []ridu.Collection{{
-				Slug: "posts", Fields: []field.Definition{field.Point("location"), field.Text("title")},
+				Slug: "posts", Fields: field.Fields{field.Point("location"), field.Text("title")},
 				Indexes: []ridu.CollectionIndex{{Fields: []string{"location", "title"}}},
 			}}},
 			code: "unsupported_index_field", path: "collections[0].indexes[0].fields[0]",
@@ -121,7 +102,7 @@ func TestResolveRejectsUnsupportedOrAmbiguousIndexes(t *testing.T) {
 		{
 			name: "undersized compound index",
 			config: ridu.Config{Name: "Small", Collections: []ridu.Collection{{
-				Slug: "posts", Fields: []field.Definition{field.Text("title")},
+				Slug: "posts", Fields: field.Fields{field.Text("title")},
 				Indexes: []ridu.CollectionIndex{{Fields: []string{"title"}}},
 			}}},
 			code: "invalid_index_size", path: "collections[0].indexes[0].fields",
@@ -129,7 +110,7 @@ func TestResolveRejectsUnsupportedOrAmbiguousIndexes(t *testing.T) {
 		{
 			name: "oversized compound index",
 			config: ridu.Config{Name: "Large", Collections: []ridu.Collection{{
-				Slug: "posts", Fields: []field.Definition{field.Text("title")},
+				Slug: "posts", Fields: field.Fields{field.Text("title")},
 				Indexes: []ridu.CollectionIndex{{Fields: []string{
 					"title", "title", "title", "title", "title", "title", "title", "title", "title", "title", "title",
 					"title", "title", "title", "title", "title", "title", "title", "title", "title", "title", "title",
@@ -141,7 +122,7 @@ func TestResolveRejectsUnsupportedOrAmbiguousIndexes(t *testing.T) {
 		{
 			name: "duplicate compound field",
 			config: ridu.Config{Name: "Duplicate", Collections: []ridu.Collection{{
-				Slug: "posts", Fields: []field.Definition{field.Text("title"), field.Number("priority")},
+				Slug: "posts", Fields: field.Fields{field.Text("title"), field.Number("priority")},
 				Indexes: []ridu.CollectionIndex{{Fields: []string{"title", "title"}}},
 			}}},
 			code: "duplicate_index_field", path: "collections[0].indexes[0].fields[1]",
@@ -149,7 +130,7 @@ func TestResolveRejectsUnsupportedOrAmbiguousIndexes(t *testing.T) {
 		{
 			name: "duplicate ordered index",
 			config: ridu.Config{Name: "Duplicate", Collections: []ridu.Collection{{
-				Slug: "posts", Fields: []field.Definition{field.Text("title"), field.Number("priority")},
+				Slug: "posts", Fields: field.Fields{field.Text("title"), field.Number("priority")},
 				Indexes: []ridu.CollectionIndex{{Fields: []string{"title", "priority"}}, {Fields: []string{"title", "priority"}, Unique: true}},
 			}}},
 			code: "duplicate_index", path: "collections[0].indexes[1].fields",

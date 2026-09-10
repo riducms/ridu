@@ -11,6 +11,7 @@ import (
 	"github.com/riducms/ridu"
 	localstorage "github.com/riducms/ridu/adapters/storage/local"
 	"github.com/riducms/ridu/field"
+	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/store"
 )
 
@@ -20,19 +21,13 @@ func TestPostgresHardDeleteReconcilesCurrentOwnersWithoutObservableOwnerWrites(t
 	automaticOwnerIDs := make(map[string]bool)
 	automaticOwnerUpdates := 0
 	config := ridu.Config{Name: "PostgreSQL reference deletes", Collections: []ridu.Collection{
-		{Slug: "users", Fields: []field.Definition{field.Text("name")}},
-		{Slug: "teams", Fields: []field.Definition{field.Text("name")}},
+		{Slug: "users", Fields: field.Fields{field.Text("name")}},
+		{Slug: "teams", Fields: field.Fields{field.Text("name")}},
 		{
 			Slug: "posts", Trash: true, Versions: true,
-			Fields: []field.Definition{
-				field.Text("title"),
-				field.Relationship("guard", field.To("users"), field.OnDelete(field.ReferenceDeleteRestrict)),
-				field.Relationship("owner", field.To("users")),
-				field.Relationship("related", field.ToMany("users")),
-				field.Relationship("subject", field.ToAny("users", "teams")),
-			},
+			Fields: field.Fields{field.Text("title"), field.Relationship("guard", "users").OnDelete(field.ReferenceDeleteRestrict), field.Relationship("owner", "users"), field.Relationships("related", "users"), field.PolymorphicRelationship("subject", "users", "teams")},
 			Hooks: ridu.CollectionHooks{AfterChange: []ridu.Hook{func(hook ridu.HookContext) error {
-				if hook.Operation == ridu.OperationUpdate && hook.Document != nil && automaticOwnerIDs[hook.Document.ID] {
+				if hook.Operation == operation.Update && hook.Document != nil && automaticOwnerIDs[hook.Document.ID] {
 					automaticOwnerUpdates++
 				}
 				return nil
@@ -133,10 +128,10 @@ func TestPostgresHardDeleteReconcilesCurrentOwnersWithoutObservableOwnerWrites(t
 		if document.Values["owner"].Kind() != store.ValueNull {
 			t.Errorf("%s singular reference = %#v", label, document.Values["owner"])
 		}
-		if related, _ := document.Values["related"].Values(); len(related) != 0 {
+		if related, _ := document.Values["related"].CopyList(); len(related) != 0 {
 			t.Errorf("%s duplicate members = %#v", label, related)
 		}
-		subject, _ := document.Values["subject"].ObjectValue()
+		subject, _ := document.Values["subject"].CopyObject()
 		if relationTo, id := stringValue(subject["relationTo"]), stringValue(subject["id"]); relationTo != "teams" || id != target.ID {
 			t.Errorf("%s same-ID cross-collection relation = %#v", label, subject)
 		}
@@ -182,11 +177,11 @@ func TestPostgresConcurrentReferenceAdmissionAndTargetDeleteCannotCommitDangling
 	admitted := make(chan struct{})
 	release := make(chan struct{})
 	config := ridu.Config{Name: "Concurrent reference delete", Collections: []ridu.Collection{
-		{Slug: "targets", Fields: []field.Definition{field.Text("name")}},
+		{Slug: "targets", Fields: field.Fields{field.Text("name")}},
 		{
-			Slug: "entries", Fields: []field.Definition{field.Relationship("target", field.To("targets"))},
+			Slug: "entries", Fields: field.Fields{field.Relationship("target", "targets")},
 			Hooks: ridu.CollectionHooks{AfterOperation: []ridu.Hook{func(hook ridu.HookContext) error {
-				if hook.Operation != ridu.OperationCreate {
+				if hook.Operation != operation.Create {
 					return nil
 				}
 				close(admitted)
@@ -273,17 +268,17 @@ func TestPostgresRetainedReferenceUpdateAndTargetDeleteResolveWithoutDangling(t 
 	releaseUpdate := make(chan struct{})
 	config := ridu.Config{Name: "Concurrent retained reference delete", Collections: []ridu.Collection{
 		{
-			Slug: "targets", Fields: []field.Definition{field.Text("name")},
+			Slug: "targets", Fields: field.Fields{field.Text("name")},
 			Hooks: ridu.CollectionHooks{BeforeDelete: []ridu.Hook{func(hook ridu.HookContext) error {
 				deleteLocked <- struct{}{}
 				return nil
 			}}},
 		},
 		{
-			Slug: "entries", Fields: []field.Definition{field.Text("label"), field.Relationship("target", field.To("targets"))},
+			Slug: "entries", Fields: field.Fields{field.Text("label"), field.Relationship("target", "targets")},
 			Hooks: ridu.CollectionHooks{BeforeOperation: []ridu.Hook{func(hook ridu.HookContext) error {
 				label, _ := hook.Data["label"].StringValue()
-				if hook.Operation != ridu.OperationUpdate || label != "Updated" {
+				if hook.Operation != operation.Update || label != "Updated" {
 					return nil
 				}
 				ownerLocked <- struct{}{}
@@ -401,16 +396,11 @@ func TestPostgresHardDeleteReconcilesLocalizedNestedUploadColumns(t *testing.T) 
 			{
 				Slug: "media", Upload: true,
 				UploadConfig: ridu.UploadConfig{MaxFileSize: 1024, MimeTypes: []string{"text/plain"}},
-				Fields:       []field.Definition{field.Text("label")},
+				Fields:       field.Fields{field.Text("label")},
 			},
 			{
-				Slug: "posts",
-				Fields: []field.Definition{field.Blocks("gallery", field.Localized(), field.BlockTypes(
-					field.BlockType("image", "Image",
-						field.Upload("asset", field.To("media")),
-						field.Upload("guard", field.To("media"), field.OnDelete(field.ReferenceDeleteRestrict)),
-					),
-				))},
+				Slug:   "posts",
+				Fields: field.Fields{field.Blocks("gallery", field.Block{Slug: "image", Fields: field.Fields{field.Upload("asset", "media"), field.Upload("guard", "media").OnDelete(field.ReferenceDeleteRestrict)}}).Localized()},
 			},
 		},
 	}
@@ -467,19 +457,19 @@ func TestPostgresHardDeleteReconcilesLocalizedNestedUploadColumns(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	locales, valid := reconciled.Values["gallery"].ObjectValue()
+	locales, valid := reconciled.Values["gallery"].CopyObject()
 	if !valid {
 		t.Fatalf("localized gallery = %#v", reconciled.Values["gallery"])
 	}
-	englishBlocks, _ := locales["en"].Values()
-	english, _ := englishBlocks[0].ObjectValue()
+	englishBlocks, _ := locales["en"].CopyList()
+	english, _ := englishBlocks[0].CopyObject()
 	asset, hasAsset := english["asset"]
 	guard, hasGuard := english["guard"]
 	if hasAsset && asset.Kind() != store.ValueNull || hasGuard && guard.Kind() != store.ValueNull {
 		t.Fatalf("English nested upload values = %#v", english)
 	}
-	frenchBlocks, _ := locales["fr"].Values()
-	french, _ := frenchBlocks[0].ObjectValue()
+	frenchBlocks, _ := locales["fr"].CopyList()
+	french, _ := frenchBlocks[0].CopyObject()
 	if got := stringValue(french["asset"]); got != frenchAsset.ID {
 		t.Fatalf("French nested upload changed from %q to %#v", frenchAsset.ID, french["asset"])
 	}
@@ -488,10 +478,7 @@ func TestPostgresHardDeleteReconcilesLocalizedNestedUploadColumns(t *testing.T) 
 func TestPostgresBulkHardDeleteOnlyIgnoresOwnersAlreadyDeletedInTheTransaction(t *testing.T) {
 	ctx := context.Background()
 	config := ridu.Config{Name: "PostgreSQL ordered batch deletes", Collections: []ridu.Collection{{
-		Slug: "nodes", Fields: []field.Definition{
-			field.Text("name"),
-			field.Relationship("parent", field.To("nodes"), field.OnDelete(field.ReferenceDeleteRestrict)),
-		},
+		Slug: "nodes", Fields: field.Fields{field.Text("name"), field.Relationship("parent", "nodes").OnDelete(field.ReferenceDeleteRestrict)},
 	}}}
 	backend, manifest := integrationBackend(t, ctx, config)
 	applyInitialArtifact(t, ctx, backend, manifest)

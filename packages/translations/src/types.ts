@@ -7,7 +7,9 @@ export type CoreTranslationKey = keyof typeof enMessages;
 export type CoreTranslationCatalog = Readonly<Record<CoreTranslationKey, TranslationMessage>>;
 export type TranslationVariables = Readonly<Record<string, string | number>>;
 export type PluginTranslationKey = `plugin.${string}:${string}`;
-export type AdminTranslationKey = CoreTranslationKey | PluginTranslationKey;
+export type ApplicationTranslationKey = `app:${string}`;
+export type ExtensionTranslationKey = PluginTranslationKey | ApplicationTranslationKey;
+export type AdminTranslationKey = CoreTranslationKey | ExtensionTranslationKey;
 
 export interface TranslationLanguage {
 	code: string;

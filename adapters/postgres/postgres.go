@@ -20,6 +20,7 @@ import (
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/riducms/ridu/internal/localization"
 	populationwalk "github.com/riducms/ridu/internal/population"
+	"github.com/riducms/ridu/internal/primitivefield"
 	"github.com/riducms/ridu/internal/referenceindex"
 	ridumigration "github.com/riducms/ridu/migration"
 	"github.com/riducms/ridu/query"
@@ -416,12 +417,12 @@ func (transaction *documentTransaction) Create(ctx context.Context, request stor
 			continue
 		}
 		if field.Localized {
-			localized, valid := value.ObjectValue()
-			if !valid {
+			localized := value
+			if localized.Kind() != store.ValueObject {
 				return store.Document{}, fmt.Errorf("localized field %q requires locale-keyed storage", field.Path.String())
 			}
 			for _, locale := range request.Locales {
-				localizedValue, exists := localized[string(locale)]
+				localizedValue, exists := localized.Lookup(string(locale))
 				if !exists {
 					continue
 				}
@@ -880,20 +881,19 @@ func collectRelationshipIDs(documents []store.Document, fields []schema.Field, p
 		}, func(_ schema.Field, value store.Value) {
 			values := []store.Value{value}
 			if relationship.HasMany {
-				values, _ = value.Values()
+				values, _ = value.CopyList()
 			}
 			for _, reference := range values {
 				id := ""
 				if relationship.Polymorphic {
-					object, valid := reference.ObjectValue()
-					if !valid {
+					if reference.Kind() != store.ValueObject {
 						continue
 					}
-					relationTo, _ := object["relationTo"].StringValue()
+					relationTo, _ := reference.Get("relationTo").StringValue()
 					if relationTo != string(slug) {
 						continue
 					}
-					id, _ = object["id"].StringValue()
+					id, _ = reference.Get("id").StringValue()
 				} else {
 					id, _ = reference.StringValue()
 				}
@@ -920,7 +920,7 @@ func populateRelationshipValue(value store.Value, relationship *schema.Relations
 			}
 			return reference
 		}
-		object, valid := reference.ObjectValue()
+		object, valid := reference.CopyObject()
 		if !valid {
 			return reference
 		}
@@ -939,7 +939,7 @@ func populateRelationshipValue(value store.Value, relationship *schema.Relations
 	if !relationship.HasMany {
 		return populate(value)
 	}
-	items, valid := value.Values()
+	items, valid := value.CopyList()
 	if !valid {
 		return value
 	}
@@ -978,19 +978,15 @@ func (transaction *documentTransaction) Update(ctx context.Context, request stor
 			continue
 		}
 		if field.Localized {
-			localized := store.Values(nil)
-			if exists {
-				var valid bool
-				localized, valid = value.ObjectValue()
-				if !valid {
-					return store.Document{}, fmt.Errorf("localized field %q requires locale-keyed storage", field.Path.String())
-				}
+			localized := value
+			if exists && localized.Kind() != store.ValueObject {
+				return store.Document{}, fmt.Errorf("localized field %q requires locale-keyed storage", field.Path.String())
 			}
-			if localized == nil && !request.ReplaceValues {
+			if !exists && !request.ReplaceValues {
 				return store.Document{}, fmt.Errorf("localized field %q requires locale-keyed storage", field.Path.String())
 			}
 			for _, locale := range request.Locales {
-				localizedValue, exists := localized[string(locale)]
+				localizedValue, exists := localized.Lookup(string(locale))
 				if !exists && !request.ReplaceValues {
 					continue
 				}
@@ -1224,7 +1220,10 @@ FOR UPDATE`, string(request.Target.CollectionID), request.Target.DocumentID)
 			}
 			continue
 		}
-		updated, changed := referenceindex.NullifyField(mutation.root, value, request.Target, mutation.locale)
+		updated, changed, referenceErr := referenceindex.NullifyField(mutation.root, value, request.Target, mutation.locale)
+		if referenceErr != nil {
+			return referenceErr
+		}
 		if !changed {
 			return fmt.Errorf("reference index for owner collection %q is inconsistent with current values", mutation.owner.CollectionID)
 		}
@@ -1319,7 +1318,11 @@ WHERE owner_collection_id = $1 AND owner_document_id = $2 AND field_id = ANY($3)
   owner_collection_id, owner_document_id, field_id,
   target_collection_id, target_document_id, locale, occurrence
 ) VALUES ($1, $2, $3, $4, $5, $6, $7)`
-	for _, entry := range referenceindex.CollectField(owner, root, value, locale) {
+	entries, referenceErr := referenceindex.CollectField(owner, root, value, locale)
+	if referenceErr != nil {
+		return referenceErr
+	}
+	for _, entry := range entries {
 		if _, err := transaction.transaction.Exec(ctx, insert,
 			string(entry.Owner.CollectionID), entry.Owner.DocumentID, string(entry.FieldID),
 			string(entry.Target.CollectionID), entry.Target.DocumentID, string(entry.Locale), entry.Occurrence,
@@ -1374,7 +1377,11 @@ func (transaction *documentTransaction) replaceDocumentReferences(ctx context.Co
   owner_collection_id, owner_document_id, field_id,
   target_collection_id, target_document_id, locale, occurrence
 ) VALUES ($1, $2, $3, $4, $5, $6, $7)`
-	for _, entry := range referenceindex.Collect(collection, document) {
+	entries, referenceErr := referenceindex.Collect(collection, document)
+	if referenceErr != nil {
+		return referenceErr
+	}
+	for _, entry := range entries {
 		if _, err := transaction.transaction.Exec(ctx, statement,
 			string(entry.Owner.CollectionID), entry.Owner.DocumentID, string(entry.FieldID),
 			string(entry.Target.CollectionID), entry.Target.DocumentID, string(entry.Locale), entry.Occurrence,
@@ -1594,6 +1601,9 @@ func requestPredicate(request store.Request, requireID bool) (string, []any, err
 }
 
 func requestPredicateFrom(request store.Request, requireID bool, offset int) (string, []any, error) {
+	if err := primitivefield.ValidateRequest(request); err != nil {
+		return "", nil, err
+	}
 	compiler := predicateCompiler{collection: request.Collection, next: offset, localeChain: request.LocaleChain}
 	var predicates []string
 	if requireID {
@@ -1620,7 +1630,9 @@ func requestPredicateFrom(request store.Request, requireID bool, offset int) (st
 		predicates = append(predicates, fmt.Sprintf("%s = $%d", quote("_revision"), compiler.next))
 	}
 	if request.Filter != nil {
+		compiler.callerFilter = true
 		compiled, err := compiler.compile(*request.Filter)
+		compiler.callerFilter = false
 		if err != nil {
 			return "", nil, err
 		}
@@ -1658,11 +1670,12 @@ func compileAccessPredicate(compiler *predicateCompiler, access query.Node, allL
 }
 
 type predicateCompiler struct {
-	collection  schema.Collection
-	next        int
-	arguments   []any
-	snapshot    bool
-	localeChain []schema.LocaleCode
+	collection   schema.Collection
+	next         int
+	arguments    []any
+	snapshot     bool
+	localeChain  []schema.LocaleCode
+	callerFilter bool
 }
 
 func (compiler *predicateCompiler) compile(node query.Node) (string, error) {
@@ -1673,6 +1686,12 @@ func (compiler *predicateCompiler) compile(node query.Node) (string, error) {
 		}
 		resolved, err := resolvePredicatePath(compiler.collection, node.Comparison.Path)
 		if err != nil {
+			if compiler.callerFilter {
+				return "", primitivefield.UnsupportedPath(compiler.collection.Fields, node.Comparison.Path, err)
+			}
+			return "", err
+		}
+		if err := primitivefield.ValidateComparison(resolved.leaf, *node.Comparison); err != nil {
 			return "", err
 		}
 		resolved.snapshot = compiler.snapshot
@@ -1713,6 +1732,9 @@ func (compiler *predicateCompiler) column(path query.Path) (string, error) {
 	resolved, err := resolvePredicatePath(compiler.collection, path)
 	if err != nil {
 		return "", err
+	}
+	if primitivefield.IsList(resolved.leaf) {
+		return "", fmt.Errorf("primitive list %q cannot be sorted", path.String())
 	}
 	if resolved.many {
 		return "", fmt.Errorf("sort field %q traverses a repeated field", path.String())
@@ -1868,6 +1890,30 @@ func (compiler *predicateCompiler) compileTimestampComparison(column string, com
 }
 
 func (compiler *predicateCompiler) compileJSONComparison(raw string, field schema.Field, comparison query.Comparison) (string, error) {
+	if primitivefield.IsList(field) {
+		if err := primitivefield.ValidateComparison(field, comparison); err != nil {
+			return "", err
+		}
+		if comparison.Operator == query.OperatorIn {
+			predicates := make([]string, 0, len(comparison.Value.Values()))
+			cast := "::text"
+			if field.Type == schema.FieldTypeNumberList {
+				cast = "::double precision"
+			}
+			for _, item := range comparison.Value.Values() {
+				placeholder, err := compiler.operand(item)
+				if err != nil {
+					return "", err
+				}
+				predicates = append(predicates, "COALESCE("+raw+" @> jsonb_build_array("+placeholder+cast+"), FALSE)")
+			}
+			if len(predicates) == 0 {
+				return "FALSE", nil
+			}
+			return "(" + strings.Join(predicates, " OR ") + ")", nil
+		}
+	}
+
 	if comparison.Operator == query.OperatorExists {
 		exists, _ := comparison.Value.BooleanValue()
 		present := "(" + raw + " IS NOT NULL AND " + raw + " <> 'null'::jsonb)"
@@ -2431,7 +2477,7 @@ func supportsStringPredicate(field schema.Field) bool {
 
 func isJSONStoredField(field schema.Field) bool {
 	switch field.Type {
-	case schema.FieldTypeJSON, schema.FieldTypePlugin, schema.FieldTypeGroup, schema.FieldTypeArray, schema.FieldTypeBlocks, schema.FieldTypePoint:
+	case schema.FieldTypeTextList, schema.FieldTypeNumberList, schema.FieldTypeJSON, schema.FieldTypePlugin, schema.FieldTypeGroup, schema.FieldTypeArray, schema.FieldTypeBlocks, schema.FieldTypePoint:
 		return true
 	case schema.FieldTypeSelect:
 		return field.Select != nil && field.Select.HasMany
@@ -2542,9 +2588,9 @@ func resolvePredicatePath(collection schema.Collection, path query.Path) (predic
 				resolved.arrayLocalizedAfter = append([]int(nil), resolved.jsonLocalizedAfter...)
 			}
 			var block *schema.BlockType
-			for blockIndex := range current.Blocks.Types {
-				if current.Blocks.Types[blockIndex].Key == segment {
-					block = &current.Blocks.Types[blockIndex]
+			for blockIndex := range current.Blocks.ResolvedTypes() {
+				if current.Blocks.ResolvedTypes()[blockIndex].Slug == segment {
+					block = &current.Blocks.ResolvedTypes()[blockIndex]
 					break
 				}
 			}
@@ -2553,7 +2599,7 @@ func resolvePredicatePath(collection schema.Collection, path query.Path) (predic
 			}
 			index++
 			segment = segments[index]
-			current = fieldNamed(block.Fields, segment)
+			current = fieldNamed(block.ResolvedFields(), segment)
 		} else {
 			if current.Type == schema.FieldTypeArray {
 				if resolved.many {
@@ -2568,7 +2614,7 @@ func resolvePredicatePath(collection schema.Collection, path query.Path) (predic
 			if current.Nested == nil {
 				return predicatePath{}, fmt.Errorf("predicate field %q is not in collection %q", path.String(), collection.Slug)
 			}
-			current = fieldNamed(current.Nested.Fields, segment)
+			current = fieldNamed(current.Nested.ResolvedFields(), segment)
 		}
 		if current == nil {
 			return predicatePath{}, fmt.Errorf("predicate field %q is not in collection %q", path.String(), collection.Slug)

@@ -83,14 +83,14 @@ var Users = ridu.Collection{
 	Auth: true,
 	AuthConfig: ridu.AuthConfig{
 		MaxLoginAttempts: 5,
-		LockDuration:    15 * time.Minute,
+		LockDuration:     15 * time.Minute,
 		Password: ridu.PasswordPolicy{
 			MinLength: 12,
 			MaxBytes:  72,
 		},
 	},
-	Fields: []field.Definition{
-		field.Email("email", field.Required(), field.Unique()),
+	Fields: field.Fields{
+		field.Email("email").Required().Unique(),
 	},
 }
 ```
@@ -222,7 +222,9 @@ import (
 	"github.com/riducms/ridu/field"
 )
 
-func authenticatedOnly(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
+func authenticatedOnly(
+	ctx ridu.AccessContext,
+) (ridu.AccessDecision, error) {
 	if ctx.Actor == nil {
 		return ridu.Deny(), nil
 	}
@@ -243,8 +245,8 @@ var Media = ridu.Collection{
 		Update: authenticatedOnly,
 		Delete: authenticatedOnly,
 	},
-	Fields: []field.Definition{
-		field.Text("alt", field.Required()),
+	Fields: field.Fields{
+		field.Text("alt").Required(),
 	},
 }
 ```

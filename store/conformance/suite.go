@@ -27,6 +27,7 @@ func Run(t *testing.T, factory Factory) {
 	if factory == nil {
 		t.Fatal("store conformance requires a factory")
 	}
+	t.Run("primitive-lists", func(t *testing.T) { runPrimitiveLists(t, factory) })
 	manifest := conformanceManifest()
 	runTest := func(name string, test func(*testing.T)) {
 		t.Run(name, test)
@@ -514,12 +515,12 @@ func Run(t *testing.T, factory Factory) {
 			rollback(t, transaction)
 			t.Fatalf("replacement retained omitted top-level value: %#v", replaced.Values)
 		}
-		rows, valid := replaced.Values["rows"].Values()
+		rows, valid := replaced.Values["rows"].CopyList()
 		if !valid || len(rows) != 1 {
 			rollback(t, transaction)
 			t.Fatalf("replacement rows = %#v", replaced.Values["rows"])
 		}
-		row, valid := rows[0].ObjectValue()
+		row, valid := rows[0].CopyObject()
 		if !valid {
 			rollback(t, transaction)
 			t.Fatalf("replacement row = %#v", rows[0])
@@ -528,7 +529,7 @@ func Run(t *testing.T, factory Factory) {
 			rollback(t, transaction)
 			t.Fatalf("replacement retained omitted nested value: %#v", row)
 		}
-		localized, valid := replaced.Values["localized"].ObjectValue()
+		localized, valid := replaced.Values["localized"].CopyObject()
 		english, englishValid := localized["en"].StringValue()
 		if !valid || !englishValid || english != "Snapshot" {
 			rollback(t, transaction)
@@ -1140,7 +1141,7 @@ func repeatedPredicateFields() []schema.Field {
 		{
 			ID: "conformance-records-tags", Name: "tags", Path: mustPath("tags"),
 			Type: schema.FieldTypeSelect, Category: schema.FieldCategoryScalar,
-			Select: &schema.SelectField{HasMany: true, Choices: []schema.SelectChoice{
+			Select: &schema.SelectField{HasMany: true, Options: []schema.SelectOption{
 				{Value: "alpha", Label: "Alpha"}, {Value: "beta", Label: "Beta"},
 			}},
 			Admin: schema.FieldAdmin{Label: "tags"},
@@ -1158,11 +1159,11 @@ func repeatedPredicateFields() []schema.Field {
 			ID: "conformance-records-layout", Name: "layout", Path: mustPath("layout"),
 			Type: schema.FieldTypeBlocks, Category: schema.FieldCategoryNested,
 			Blocks: &schema.BlocksField{Types: []schema.BlockType{
-				{Key: "hero", Label: "Hero", Fields: []schema.Field{
+				{Slug: "hero", Labels: schema.BlockLabels{Singular: "Hero"}, Fields: []schema.Field{
 					{ID: "conformance-records-layout-hero-heading", Name: "heading", Path: mustPath("layout.hero.heading"), Type: schema.FieldTypeText, Category: schema.FieldCategoryScalar, Text: &schema.TextField{}, Admin: schema.FieldAdmin{Label: "heading"}},
 					{ID: "conformance-records-layout-hero-tone", Name: "tone", Path: mustPath("layout.hero.tone"), Type: schema.FieldTypeText, Category: schema.FieldCategoryScalar, Text: &schema.TextField{}, Admin: schema.FieldAdmin{Label: "tone"}},
 				}},
-				{Key: "quote", Label: "Quote", Fields: []schema.Field{
+				{Slug: "quote", Labels: schema.BlockLabels{Singular: "Quote"}, Fields: []schema.Field{
 					{ID: "conformance-records-layout-quote-heading", Name: "heading", Path: mustPath("layout.quote.heading"), Type: schema.FieldTypeText, Category: schema.FieldCategoryScalar, Text: &schema.TextField{}, Admin: schema.FieldAdmin{Label: "heading"}},
 				}},
 			}},

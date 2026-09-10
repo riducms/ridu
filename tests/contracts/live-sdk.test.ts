@@ -30,6 +30,39 @@ live("generated SDK against the real Go REST server", () => {
 		expect((await client.delete("posts", created.id)).deleted).toBe(true);
 	});
 
+	it("rejects secret predicates, counts and ordering through generated methods", async () => {
+		const client = createClient({ baseURL: liveURL ?? "http://127.0.0.1" });
+		const created = await client.create("posts", {
+			title: "Private query",
+			seo: { description: "secret-sapphire" },
+		});
+		expect(created.seo?.description).toBeUndefined();
+		try {
+			for (const fragment of ["sapphire", "missing"]) {
+				const where = { "seo.description": { contains: fragment } };
+				await expect(client.list("posts", { where })).rejects.toMatchObject({
+					code: "access_denied",
+					status: 403,
+				});
+				await expect(client.count("posts", { where })).rejects.toMatchObject({
+					code: "access_denied",
+					status: 403,
+				});
+			}
+			for (const sort of ["seo.description", "-seo.description"] as const) {
+				await expect(client.list("posts", { sort: [sort] })).rejects.toMatchObject({
+					code: "access_denied",
+					status: 403,
+				});
+			}
+			expect(
+				(await client.count("posts", { where: { title: { equals: "Private query" } } })).totalDocs
+			).toBe(1);
+		} finally {
+			await client.delete("posts", created.id);
+		}
+	});
+
 	it("dispatches root and collection custom endpoints through the raw SDK transport", async () => {
 		const client = createClient({ baseURL: liveURL ?? "http://127.0.0.1" });
 		const root = await client.request("/api/custom/hello%20world", { method: "POST" });

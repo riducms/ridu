@@ -24,7 +24,7 @@ func TestLocalizedStructuredStorageMergesPreserveOmittedSiblings(t *testing.T) {
 		{
 			Name: "blocks", Type: schema.FieldTypeBlocks, Category: schema.FieldCategoryNested, Localized: true,
 			Blocks: &schema.BlocksField{Types: []schema.BlockType{{
-				Key: "quote", Fields: []schema.Field{text("headline"), text("summary")},
+				Slug: "quote", Fields: []schema.Field{text("headline"), text("summary")},
 			}}},
 		},
 	}

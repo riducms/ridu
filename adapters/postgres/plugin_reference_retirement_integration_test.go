@@ -214,8 +214,8 @@ func TestPostgresStableSlugRewriteCoversPluginGlobalPolymorphicAndVersionsBefore
 	if _, err := transaction.Create(ctx, store.CreateRequest{Collection: target, ID: "shared-target", Values: store.Values{}}); err != nil {
 		t.Fatal(err)
 	}
-	pluginValue := livePluginReferenceDocument("shared-target", "slug-rewrite")
-	opaqueValue := livePluginReferenceDocument("shared-target", "opaque-sibling")
+	pluginValue := historicalPluginReferenceDocument("shared-target", "slug-rewrite")
+	opaqueValue := historicalPluginReferenceDocument("shared-target", "opaque-sibling")
 	structuredValue := store.Object(store.Values{
 		"reference": pluginValue,
 		"opaque":    opaqueValue,
@@ -439,17 +439,17 @@ func pluginReferenceLiveConfig(includeTarget, includeReferenceRoots bool) ridu.C
 	collections := make([]ridu.Collection, 0, 2)
 	if includeTarget {
 		collections = append(collections, ridu.Collection{
-			Slug: "people", Fields: []field.Definition{field.Text("name", field.Required())},
+			Slug: "people", Fields: field.Fields{field.Text("name").Required()},
 		})
 	}
-	entryFields := []field.Definition{field.Text("title", field.Required())}
-	globalFields := []field.Definition{field.Text("title", field.Required())}
+	entryFields := field.Fields{field.Text("title").Required()}
+	globalFields := field.Fields{field.Text("title").Required()}
 	if includeReferenceRoots {
 		config := richtext.Config{
 			Features: []richtext.Feature{richtext.FeatureRelationships}, RelationshipCollections: []string{"people"},
 		}
-		entryFields = append(entryFields, richtext.FieldWithConfig("content", config))
-		globalFields = append(globalFields, richtext.FieldWithConfig("content", config))
+		entryFields = append(entryFields, richtext.Field("content", config))
+		globalFields = append(globalFields, richtext.Field("content", config))
 	}
 	collections = append(collections, ridu.Collection{
 		Slug: "entries", Fields: entryFields, Versions: true,
@@ -624,6 +624,23 @@ func assertMarkedCollectionSlugReference(t *testing.T, label string, encoded []b
 }
 
 func livePluginReferenceDocument(targetID, marker string) store.Value {
+	// Current engine writes require the portable envelope. Keep the version
+	// marker in ordinary text; arbitrary properties are reserved for the raw
+	// historical migration fixtures below.
+	return store.Object(store.Values{
+		"version": store.Number(richtext.DocumentVersion),
+		"root": store.Object(store.Values{
+			"type": store.String("root"), "children": store.List(store.Object(store.Values{
+				"type": store.String("paragraph"), "children": store.List(
+					store.Object(store.Values{"type": store.String("text"), "text": store.String(marker)}),
+					store.Object(store.Values{"type": store.String("relationship"), "relationTo": store.String("people"), "id": store.String(targetID)}),
+				),
+			})),
+		}),
+	})
+}
+
+func historicalPluginReferenceDocument(targetID, marker string) store.Value {
 	reference := store.Object(store.Values{
 		"type": store.String("relationship"), "relationTo": store.String("people"),
 		"id": store.String(targetID), "migrationMarker": store.String(marker),

@@ -13,7 +13,13 @@ aliases:
     'generated SDK quickstart',
     'ridu_session'
   ]
-capabilities: ['admin.authoring', 'data.rest-sdk', 'adapter.sqlite', 'adapter.postgres']
+capabilities:
+  [
+    'admin.authoring',
+    'data.rest-sdk',
+    'adapter.sqlite',
+    'adapter.postgres'
+  ]
 navigation:
   section: 'Get started'
   order: 10
@@ -23,8 +29,10 @@ navigation:
 This guide takes you from an empty directory to a running CMS and a typed SDK read. The **Starter**
 template includes an authenticated `users` collection and a small `posts` collection.
 
-You need [Go 1.25 or newer](https://go.dev/doc/install), Node.js 20 or newer, and one package manager:
-npm, Bun, pnpm, or Yarn. You do not need a global `ridu` command.
+You need [Go 1.25 or newer](https://go.dev/doc/install), a compatible Node.js version, and one package manager:
+npm, Bun, pnpm, or Yarn. Use Node.js 24 or newer for a new project. The generated admin also supports
+Node.js 20.19+ on the 20.x line and 22.12+ on the 22.x line; see
+[Releases and compatibility](/docs/releases/#supported-matrix). You do not need a global `ridu` command.
 
 ## 1. Choose a database and create the project {#choose-a-database}
 
@@ -168,7 +176,9 @@ const email = process.env.RIDU_EMAIL;
 const password = process.env.RIDU_PASSWORD;
 
 if (!email || !password) {
-	throw new Error('Set RIDU_EMAIL and RIDU_PASSWORD to the user created in the admin.');
+	throw new Error(
+		'Set RIDU_EMAIL and RIDU_PASSWORD to the user created in the admin.'
+	);
 }
 
 let sessionCookie = '';
@@ -181,7 +191,9 @@ const ridu = createClient({
 
 			const response = await next(new Request(request, { headers }));
 			const setCookie = response.headers.get('set-cookie');
-			const match = setCookie?.match(/(?:^|,\s*)(ridu_session=[^;,\s]+)/);
+			const match = setCookie?.match(
+				/(?:^|,\s*)(ridu_session=[^;,\s]+)/
+			);
 			const session = match?.[1];
 			if (session) sessionCookie = session;
 			return response;
@@ -248,19 +260,15 @@ var Posts = ridu.Collection{
 		Update: authenticatedOnly,
 		Delete: authenticatedOnly,
 	},
-	Fields: []field.Definition{
-		field.Text("title", field.Required()),
-		field.Textarea(
-			"summary",
-			field.MaxLength(240),
-			field.Description("A short introduction used by post cards."),
-		),
-		field.Select(
-			"status",
-			field.OneOf("draft", "published"),
-			field.Default("draft"),
-		),
-		field.Relationship("author", field.To("users")),
+	Fields: field.Fields{
+		field.Text("title").Required(),
+		field.Textarea("summary").
+			MaxLength(240).
+			Admin(field.Admin{
+				Description: "A short introduction used by post cards.",
+			}),
+		field.Select("status", "draft", "published").Default("draft"),
+		field.Relationship("author", "users"),
 		richtext.Field("content"),
 	},
 }

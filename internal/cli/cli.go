@@ -525,7 +525,7 @@ func missingGeneratedTypeScriptDependencies(definition projectfile.File, manifes
 	var missing []string
 	for _, plugin := range manifest.Snapshot().Plugins {
 		for _, fieldType := range plugin.FieldTypes {
-			name := fieldType.TypeScriptPackage
+			name := npmPackageRoot(fieldType.TypeScriptPackage)
 			if name == "" || packageDeclaresDependency(packageManifest, name) {
 				continue
 			}
@@ -563,7 +563,7 @@ func npmPackageRoot(specifier string) string {
 func manifestRequiresTypeScriptPackage(manifest schema.Manifest, name string) bool {
 	for _, plugin := range manifest.Snapshot().Plugins {
 		for _, fieldType := range plugin.FieldTypes {
-			if fieldType.TypeScriptPackage == name {
+			if npmPackageRoot(fieldType.TypeScriptPackage) == npmPackageRoot(name) {
 				return true
 			}
 		}
@@ -1549,7 +1549,7 @@ func runNew(ctx context.Context, args []string, stdout, stderr io.Writer, option
 	agentName := flags.String("agent", "", "coding agent: codex, claude, cursor, all, or none")
 	noAgent := flags.Bool("no-agent", false, "do not install coding-agent guidance")
 	releaseVersionOverride := flags.String("release-version", "", "framework dependency release override (development only)")
-	if err := flags.Parse(args); err != nil {
+	if err := parseNewProjectFlags(flags, args); err != nil {
 		return 2
 	}
 	if flags.NArg() > 1 || (flags.NArg() == 0 && !options.Interactive) {
@@ -1632,7 +1632,7 @@ func runNew(ctx context.Context, args []string, stdout, stderr io.Writer, option
 		output.Error("record created project", err)
 		return 1
 	}
-	fmt.Fprintln(stdout, "Generated initial schema, clients, OpenAPI, and admin plugin registry.")
+	fmt.Fprintln(stdout, "Generated initial schema, clients, and admin plugin registry.")
 	installCommand, runCommand := packageManagerUserCommands(packageManager)
 	fmt.Fprintf(stdout, "\nNext:\n  cd %s\n  %s\n  %s dev\n", filepath.Base(created), installCommand, runCommand)
 	return 0

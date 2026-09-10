@@ -754,7 +754,7 @@ func TestDecodeListQueryPopulatesNestedGroupArrayAndBlockRelationships(t *testin
 	collection := schema.Collection{Fields: []schema.Field{
 		{Name: "meta", Type: schema.FieldTypeGroup, Nested: &schema.NestedField{Fields: []schema.Field{{Name: "reviewer", Path: groupPath, Type: schema.FieldTypeRelationship, Relationship: &person}}}},
 		{Name: "sections", Type: schema.FieldTypeArray, Nested: &schema.NestedField{Fields: []schema.Field{{Name: "editor", Path: arrayPath, Type: schema.FieldTypeRelationship, Relationship: &person}}}},
-		{Name: "layout", Type: schema.FieldTypeBlocks, Blocks: &schema.BlocksField{Types: []schema.BlockType{{Key: "quote", Fields: []schema.Field{{Name: "source", Path: blockPath, Type: schema.FieldTypeRelationship, Relationship: &person}}}}}},
+		{Name: "layout", Type: schema.FieldTypeBlocks, Blocks: &schema.BlocksField{Types: []schema.BlockType{{Slug: "quote", Fields: []schema.Field{{Name: "source", Path: blockPath, Type: schema.FieldTypeRelationship, Relationship: &person}}}}}},
 	}}
 
 	request := httptest.NewRequest(http.MethodGet, `/api/collections/posts?populate=%7B%22meta.reviewer%22%3Atrue%2C%22sections.editor%22%3Atrue%2C%22layout.quote.source%22%3Atrue%7D`, nil)

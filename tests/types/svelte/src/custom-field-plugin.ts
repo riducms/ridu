@@ -1,10 +1,11 @@
-import { defineFieldPlugin } from "@riducms/plugin";
+import { definePluginField } from "@riducms/plugin/authoring/v1";
 
 import ColorField from "./ColorField.svelte";
 
-export const colorFieldPlugin = defineFieldPlugin({
-	type: "plugin",
-	key: "color",
+export const colorFieldPlugin = definePluginField({
 	component: ColorField,
-	canRender: (field) => field.plugin?.key === "color",
+	decodeValue: (value: unknown): string => {
+		if (typeof value !== "string") throw new Error("Expected string");
+		return value;
+	},
 });

@@ -106,7 +106,7 @@ describe("form schema reconciliation", () => {
 		roles.select = {
 			hasMany: true,
 			defaultValues: ["admin", "editor"],
-			choices: [
+			options: [
 				{ value: "admin", label: "Admin" },
 				{ value: "editor", label: "Editor" },
 			],
@@ -127,7 +127,7 @@ describe("form schema reconciliation", () => {
 		roles.select = {
 			hasMany: true,
 			defaultValues: [],
-			choices: [{ value: "admin", label: "Admin" }],
+			options: [{ value: "admin", label: "Admin" }],
 		};
 		roles.default = undefined;
 
@@ -251,7 +251,7 @@ describe("form schema reconciliation", () => {
 		nextStatus.select = {
 			hasMany: true,
 			defaultValues: ["draft"],
-			choices: [{ value: "draft", label: "Draft" }],
+			options: [{ value: "draft", label: "Draft" }],
 		};
 
 		const result = reconcileFormSchema(
@@ -424,6 +424,6 @@ function selectField(id: string, name: string, defaultValue: string): SelectFiel
 		unique: false,
 		default: defaultValue,
 		admin: { label: name },
-		select: { choices: [{ value: defaultValue, label: defaultValue }] },
+		select: { options: [{ value: defaultValue, label: defaultValue }] },
 	};
 }

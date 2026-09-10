@@ -1,0 +1,49 @@
+<script>
+	function initializeCodeFileTabs() {
+		for (const group of document.querySelectorAll<HTMLElement>('[data-code-file-tabs]')) {
+			if (group.dataset.codeFileReady !== undefined) continue;
+			group.dataset.codeFileReady = '';
+			const tablist = group.querySelector<HTMLElement>('[role="tablist"]');
+			const tabs = [...group.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+			const panels = [...group.querySelectorAll<HTMLElement>('[role="tabpanel"]')];
+			function select(index: number) {
+				tabs.forEach((tab, position) => {
+					tab.setAttribute('aria-selected', String(position === index));
+					tab.tabIndex = position === index ? 0 : -1;
+				});
+				panels.forEach((panel, position) => {
+					panel.hidden = position !== index;
+				});
+			}
+			tabs.forEach((tab, index) => {
+				tab.addEventListener('click', () => select(index));
+				tab.addEventListener('keydown', (event) => {
+					let next: number;
+					switch (event.key) {
+						case 'ArrowRight':
+							next = (index + 1) % tabs.length;
+							break;
+						case 'ArrowLeft':
+							next = (index - 1 + tabs.length) % tabs.length;
+							break;
+						case 'Home':
+							next = 0;
+							break;
+						case 'End':
+							next = tabs.length - 1;
+							break;
+						default:
+							return;
+					}
+					event.preventDefault();
+					select(next);
+					tabs[next].focus();
+				});
+			});
+			select(0);
+			if (tablist) tablist.hidden = false;
+		}
+	}
+	initializeCodeFileTabs();
+	document.addEventListener('astro:page-load', initializeCodeFileTabs);
+</script>

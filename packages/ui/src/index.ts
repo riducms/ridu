@@ -26,6 +26,8 @@ export { default as CommandRoot } from "@ui/command/command-root.svelte";
 export { default as CommandSeparator } from "@ui/command/command-separator.svelte";
 export { default as CommandViewport } from "@ui/command/command-viewport.svelte";
 export { default as ConfirmationDialog } from "@ui/confirmation-dialog/confirmation-dialog.svelte";
+export { fieldControlARIA, fieldDescriptionID, fieldErrorID } from "@ui/field/field-feedback";
+export { default as FieldFeedback } from "@ui/field/field-feedback.svelte";
 export { default as FieldFrame } from "@ui/field/field-frame.svelte";
 export { default as Input } from "@ui/input/input.svelte";
 export { default as PopoverContent } from "@ui/popover/popover-content.svelte";

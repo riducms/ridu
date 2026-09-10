@@ -4,12 +4,14 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math"
 	"sort"
 	"time"
 	"unicode/utf8"
 
+	"github.com/riducms/ridu/internal/embedded"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -149,17 +151,31 @@ func encodeValue(value store.Value) (any, error) {
 		boolean, _ := value.BooleanValue()
 		return boolean, nil
 	case store.ValueObject:
-		object, _ := value.ObjectValue()
-		return encodeValues(object)
+		keys := make([]string, 0, value.Len())
+		for key := range value.Entries() {
+			if !utf8.ValidString(key) || stringsContainNUL(key) {
+				return nil, fmt.Errorf("stored value key %q must be valid UTF-8 without NUL", key)
+			}
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		encoded := make(bson.D, 0, len(keys))
+		for _, key := range keys {
+			child, err := encodeValue(value.Get(key))
+			if err != nil {
+				return nil, fmt.Errorf("encode stored value %q: %w", key, err)
+			}
+			encoded = append(encoded, bson.E{Key: key, Value: child})
+		}
+		return encoded, nil
 	case store.ValueList:
-		items, _ := value.Values()
-		encoded := make(bson.A, len(items))
-		for index, item := range items {
+		encoded := make(bson.A, 0, value.Len())
+		for item := range value.Elements() {
 			value, err := encodeValue(item)
 			if err != nil {
-				return nil, fmt.Errorf("list item %d: %w", index, err)
+				return nil, fmt.Errorf("list item %d: %w", len(encoded), err)
 			}
-			encoded[index] = value
+			encoded = append(encoded, value)
 		}
 		return encoded, nil
 	case store.ValueDocument:
@@ -274,7 +290,7 @@ func decodeCollectionDocument(raw bson.Raw, collection schema.Collection) (store
 		}
 	}
 	if err := validateCompleteValues(collection, document.Values); err != nil {
-		return store.Document{}, fmt.Errorf("stored MongoDB document does not match collection %q: %w", collection.ID, err)
+		return store.Document{}, fmt.Errorf("stored MongoDB document does not match collection %q: %w", collection.ID, storedSchemaRecoveryError(err))
 	}
 	return document, nil
 }
@@ -293,9 +309,19 @@ func decodeCollectionDocumentForLocales(raw bson.Raw, collection schema.Collecti
 		return document, nil
 	}
 	if err := validateCompleteValuesForLocales(collection, document.Values, locales); err != nil {
-		return store.Document{}, fmt.Errorf("stored MongoDB document does not match configured locales for collection %q: %w", collection.ID, err)
+		return store.Document{}, fmt.Errorf("stored MongoDB document does not match configured locales for collection %q: %w", collection.ID, storedSchemaRecoveryError(err))
 	}
 	return document, nil
+}
+
+// Structural embedded failures on stored content use the same recovery port
+// as ordinary blocks. Admission stays strict; only the read diagnostic changes.
+func storedSchemaRecoveryError(err error) error {
+	var failure *embedded.Error
+	if errors.As(err, &failure) {
+		return &store.SchemaRecoveryError{Issues: []schema.Issue{failure.Issue}}
+	}
+	return err
 }
 
 func validateMongoVersionMetadata(collection schema.Collection, status store.Status, revision int) error {

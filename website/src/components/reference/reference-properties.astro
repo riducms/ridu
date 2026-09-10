@@ -1,0 +1,59 @@
+---
+import type { ReferenceParameter } from '@/reference/types';
+import { splitReferenceType } from '@/reference/signature';
+import ReferenceProse from './reference-prose.astro';
+interface Props {
+	parameters: ReferenceParameter[];
+	typeLinks: Record<string, string>;
+	label: string;
+	nameLabel?: string;
+	showTypes?: boolean;
+}
+const { parameters, typeLinks, label, nameLabel = 'Property', showTypes = true } = Astro.props;
+---
+
+<div
+	class:list={['reference-property-table', { 'reference-property-table--description': !showTypes }]}
+>
+	<table aria-label={label}>
+		<thead>
+			<tr>
+				<th scope="col">{nameLabel}</th>
+				{showTypes && <th scope="col">Type</th>}
+				<th scope="col">Description</th>
+			</tr>
+		</thead>
+		<tbody>
+			{
+				parameters.map((parameter) => (
+					<tr>
+						<th scope="row">
+							{parameter.href ? (
+								<a href={parameter.href}>
+									<code>{parameter.name}</code>
+								</a>
+							) : (
+								<code>{parameter.name}</code>
+							)}
+						</th>
+						{showTypes && (
+							<td class="reference-property-type">
+								<code>
+									{splitReferenceType(parameter.type).map((part) => (
+										<Fragment>
+											{Object.hasOwn(typeLinks, part) ? <a href={typeLinks[part]}>{part}</a> : part}
+											{['<', ',', '|', '&'].includes(part) && <wbr />}
+										</Fragment>
+									))}
+								</code>
+							</td>
+						)}
+						<td>
+							<ReferenceProse text={parameter.description} />
+						</td>
+					</tr>
+				))
+			}
+		</tbody>
+	</table>
+</div>

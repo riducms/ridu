@@ -162,7 +162,7 @@ func (plugin) Descriptor() ridu.PluginDescriptor {
 		FieldTypes: []ridu.PluginFieldType{
 		{
 			Key: Key,
-			TypeScriptPackage: "{{.AdminPackage}}",
+			TypeScriptPackage: "{{.AdminPackage}}/value",
 			TypeScriptOutput: "Value",
 			TypeScriptInput: "Value",
 			TypeScriptWhere: "Value",
@@ -174,13 +174,13 @@ func (plugin) Descriptor() ridu.PluginDescriptor {
 	}
 }
 
-func Field(name string, options ...field.PluginOption) field.Definition {
-	return field.Plugin(name, Key, json.RawMessage(` + "`{}`" + `), options...)
+func Field(name string) field.PluginField {
+	return field.Plugin(name, Key, json.RawMessage(` + "`{}`" + `))
 }
 
 func (plugin) FieldValidators() map[string]ridu.PluginFieldValidator {
 	return map[string]ridu.PluginFieldValidator{Key: func(ctx ridu.PluginFieldValidationContext) []schema.Issue {
-		if _, ok := ctx.Value.ObjectValue(); ok { return nil }
+		if _, ok := ctx.Value.CopyObject(); ok { return nil }
 		return []schema.Issue{
 			{Code: "invalid_{{.GoName}}", Path: ctx.Field.Path.String(), Message: "value must be an object"},
 		}
@@ -201,7 +201,7 @@ import (
 func TestConformance(t *testing.T) {
 	plugintest.Run(t, plugintest.Fixture{
 		Plugin: plugin.New(),
-		Fields: []field.Definition{plugin.Field("value")},
+		Fields: field.Fields{plugin.Field("value")},
 		ValidData: store.Values{
 			"value": store.Object(store.Values{"value": store.String("valid")}),
 		},
@@ -216,7 +216,7 @@ func TestConformance(t *testing.T) {
   "name": "{{.AdminPackage}}",
   "version": "0.1.0",
   "type": "module",
-  "exports": { ".": "./src/index.ts" },
+  "exports": { ".": "./src/index.ts", "./value": "./src/value.ts" },
   "peerDependencies": {
     "@riducms/plugin": "{{.NPMVersion}}",
     "svelte": "^5.0.0"
@@ -233,38 +233,43 @@ func TestConformance(t *testing.T) {
 `,
 	"admin/tsconfig.json": `{"compilerOptions":{"strict":true,"noEmit":true,"module":"ESNext","moduleResolution":"Bundler","types":[]},"include":["src/**/*.ts","src/**/*.svelte"]}
 `,
-	"admin/src/index.ts": `import { defineAdminPlugin, defineFieldPlugin } from "@riducms/plugin";
+	"admin/src/index.ts": `import { defineAdminPlugin, definePluginField } from "@riducms/plugin/authoring/v1";
 import Field from "./field.svelte";
-import { pluginContract } from "./contract";
+import { decodeValue } from "./value";
+export type { Value } from "./value";
 
-export interface Value { value: string }
-
-export const fieldPlugin = defineFieldPlugin({ type: "plugin", key: "{{.Key}}", component: Field, canRender: (field) => field.plugin?.key === "{{.Key}}" });
-export const adminPlugin = defineAdminPlugin({ ...pluginContract, fields: [fieldPlugin] });
+export const adminPlugin = defineAdminPlugin({
+	key: "{{.Key}}",
+	pairingVersion: 1,
+	fields: { "{{.Key}}": definePluginField({ component: Field, decodeValue }) },
+});
 `,
-	"admin/src/contract.ts": `import { ADMIN_PLUGIN_API_VERSION } from "@riducms/plugin";
-
-export const pluginContract = { apiVersion: ADMIN_PLUGIN_API_VERSION, key: "{{.Key}}", pairingVersion: 1 } as const;
+	"admin/src/value.ts": `export interface Value { value: string }
+export function decodeValue(value: unknown): Value {
+	if (typeof value !== "object" || value === null || !("value" in value) || typeof value.value !== "string")
+		throw new Error("Expected an object with a string value.");
+	return { value: value.value };
+}
 `,
 	"admin/src/field.svelte": `<script lang="ts">
-	import type { FieldComponentProps } from "@riducms/plugin";
-	let { field, form }: FieldComponentProps = $props();
-	const value = $derived(String((form.get(field.path) as { value?: unknown } | undefined)?.value ?? ""));
-	$effect(() => form.register(field.path));
+	import type { PluginFieldProps } from "@riducms/plugin/authoring/v1";
+	import type { Value } from "./value";
+	let { field }: PluginFieldProps<Value> = $props();
 </script>
 
-<label for={field.id}>{field.admin.label}</label>
-<input id={field.id} value={value} disabled={field.admin.readOnly} oninput={(event) => form.set(field.path, { value: event.currentTarget.value })} />
-{#each form.issuesFor(field.path) as issue (issue.code)}<p>{issue.message}</p>{/each}
+<label for={field.schema.id}>{field.schema.admin.label}</label>
+<input id={field.schema.id} value={field.value?.value ?? ""} disabled={field.readOnly} oninput={(event) => field.set({ value: event.currentTarget.value })} />
+{#each field.issues as issue (issue.code)}<p>{issue.message}</p>{/each}
 `,
 	"admin/tests/plugin.test.ts": `import { expect, test } from "bun:test";
-import { ADMIN_PLUGIN_API_VERSION } from "@riducms/plugin";
-import { pluginContract } from "../src/contract";
+import { defineAdminPlugin, definePluginField } from "@riducms/plugin/authoring/v1";
+import { decodeValue } from "../src/value";
 
-test("declares the paired admin contract", () => {
-	expect(pluginContract.apiVersion).toBe(ADMIN_PLUGIN_API_VERSION);
-	expect(pluginContract.key).toBe("{{.Key}}");
-	expect(pluginContract.pairingVersion).toBe(1);
+test("validates portable values before rendering", () => {
+	const field = definePluginField({ component: () => ({}), decodeValue });
+	const plugin = defineAdminPlugin({key: "{{.Key}}", pairingVersion: 1, fields: {"{{.Key}}": field}});
+	expect(plugin.fields["{{.Key}}"].decodeValue({value: "hello"})).toEqual({value: "hello"});
+	expect(() => field.decodeValue({value: 42})).toThrow();
 });
 `,
 	"README.md": `# {{.Key}}

@@ -251,10 +251,12 @@ test("rich-text formatting, block insertion, embeds, movement, and persistence",
 	await blockFilter.press("Enter");
 	relationDialog = page.getByRole("dialog", { name: /Select asset/i });
 	await expect(relationDialog).toBeVisible();
-	await expect
-		.poll(() => relationDialog.evaluate((dialog) => dialog.contains(document.activeElement)))
-		.toBe(true);
-	await relationDialog.getByRole("radio", { name: "Select ridu-cover.png" }).first().click();
+	const referenceSearch = relationDialog.getByRole("searchbox");
+	await expect(referenceSearch).toBeFocused();
+	await expect(page.locator('[data-slot="tooltip-content"]')).toHaveCount(0);
+	const firstAsset = relationDialog.getByRole("radio", { name: "Select ridu-cover.png" }).first();
+	await firstAsset.click();
+	await expect(firstAsset).toBeChecked();
 	await relationDialog.getByRole("button", { name: "Select", exact: true }).click();
 	const uploadedAsset = richText.getByRole("group", { name: /Asset: ridu-cover.png/ });
 	await expect(uploadedAsset).toBeVisible();
@@ -278,10 +280,20 @@ test("rich-text formatting, block insertion, embeds, movement, and persistence",
 	await uploadedAsset.getByRole("button", { name: "Replace ridu-cover.png" }).click();
 	relationDialog = page.getByRole("dialog", { name: /Select asset/i });
 	await expect(relationDialog).toBeVisible();
+	await expect(relationDialog.getByRole("searchbox")).toBeFocused();
 	await expect(
 		relationDialog.getByRole("radio", { name: "Select ridu-cover.png" }).first()
 	).toBeChecked();
-	await relationDialog.getByRole("button", { name: "Close relationship browser" }).click();
+	await relationDialog.getByRole("searchbox").press("Shift+Tab");
+	const closeReferenceBrowser = relationDialog.getByRole("button", {
+		name: "Close relationship browser",
+	});
+	await expect(closeReferenceBrowser).toBeFocused();
+	await expect(page.locator('[data-slot="tooltip-content"]')).toHaveText(
+		"Close relationship browser"
+	);
+	await closeReferenceBrowser.click();
+	await expect(relationDialog).toBeHidden();
 
 	await uploadedAsset.hover();
 	await uploadedAsset.getByRole("button", { name: "Remove ridu-cover.png" }).click();

@@ -1,10 +1,16 @@
 ---
 title: 'Move from Payload'
-description: 'Translate a Payload project into Ridu config, normalized content, and a rehearsed production cutover.'
+description: 'Compare Payload and Ridu configuration, rewrite access rules and admin components, and plan your content migration.'
 product: guides
 eyebrow: 'Guide'
 order: 10
-aliases: ['Payload migration', 'Payload CMS alternative', 'import Payload', 'Payload comparison']
+aliases:
+  [
+    'Payload migration',
+    'Payload CMS alternative',
+    'import Payload',
+    'Payload comparison'
+  ]
 availability:
   status: limited
   label: 'Importer building block available'
@@ -16,121 +22,248 @@ navigation:
   title: 'Move from Payload'
 ---
 
-Payload and Ridu share executable configuration, collections, globals, access rules, hooks, drafts,
-uploads, generated types, plugins, and an admin. Ridu defines the config and server runtime in Go,
-generates a Fetch client for TypeScript, and serves the admin from the same binary.
+If you know Payload, the core ideas will feel familiar: collections, globals, fields, access
+rules, hooks, and custom admin components. In Ridu, you define the content model and server code
+in Go, write admin components in Svelte, and use a generated TypeScript client from your frontend.
 
-Treat a migration as a model translation and a data migration—not a line-by-line conversion of
-Payload configuration or a copy of Payload's database tables.
+Start by comparing a collection below. If you already have content to move, continue to
+[planning the migration](#fit) and [exporting documents](#normalized-export).
 
-## Give an agent the migration contract {#agent-guidance}
+## Compare a collection {#configuration}
 
-New projects can include the `payload-to-ridu` coding-agent skill. Ask the agent to inventory the
-Payload application, keep a source-to-target ledger, and migrate one complete feature at a time. It
-must stop for decisions about missing semantics, credentials, production writes, or lossy
-conversion.
+These configurations define the same post fields and access rules. Both require a title, a unique
+slug, and an author; the summary is optional. Anyone can read a post, and any signed-in user can
+create, update, or delete one.
 
-For an existing project, install it with `ridu agent install --agent codex|claude|cursor|all`. After
-a CLI upgrade, run `ridu agent sync`; it will not overwrite a managed file with local edits.
+Choose **Payload** or **Ridu** to compare the complete files. Both examples assume an existing
+`users` collection with authentication enabled. Add `Posts` to the application's `collections`
+array in Payload or `Collections` list in Ridu.
 
-## Decide whether the shape fits {#fit}
+```ts title="src/collections/Posts.ts" group="posts-config" tab="Payload" focus={15-18,21-25,30-33}
+import type { Access, CollectionConfig } from 'payload';
 
-Start with the workflows people rely on, not only the field list.
+const signedIn: Access = ({ req: { user } }) => Boolean(user);
 
-| Evaluate                     | Ridu equivalent                                  | Migration question                                                               |
-| ---------------------------- | ------------------------------------------------ | -------------------------------------------------------------------------------- |
-| Collections and globals      | `ridu.Collection` and `ridu.Global`              | Do slugs, IDs, timestamps, and singleton semantics remain stable?                |
-| Fields                       | Constructors in `field`, plus plugin fields      | Which values need conversion rather than a direct JSON mapping?                  |
-| Access callbacks             | allow, deny, or filtered `Where` decisions       | Can every rule be expressed without depending on a Node-only service?            |
-| Hooks                        | typed Go collection, field, and global hooks     | Which side effects must move, and which should become durable tasks?             |
-| Drafts and versions          | versioned resources with optional drafts         | Which revision becomes the imported document? Is old history required elsewhere? |
-| Upload collections           | upload documents plus a storage backend          | How will bytes, checksums, metadata, and derived sizes be copied and verified?   |
-| Admin components             | statically registered Svelte plugins             | Which custom React views or fields need a Svelte replacement?                    |
-| Local API and Payload client | local Go API and generated `@riducms/sdk` client | Which callers move in-process and which remain HTTP clients?                     |
+export const Posts: CollectionConfig = {
+	slug: 'posts',
+	// Match Ridu's default: document locking is off.
+	lockDocuments: false,
+	admin: {
+		useAsTitle: 'title',
+		defaultColumns: ['title', 'author', 'updatedAt']
+	},
+	fields: [
+		{
+			name: 'title',
+			type: 'text',
+			required: true,
+			maxLength: 120
+		},
+		{
+			name: 'slug',
+			type: 'text',
+			required: true,
+			unique: true,
+			index: true
+		},
+		{ name: 'summary', type: 'textarea' },
+		// Store the user's ID. Ownership permissions come later.
+		{
+			name: 'author',
+			type: 'relationship',
+			relationTo: 'users',
+			required: true
+		}
+	],
+	access: {
+		read: () => true,
+		create: signedIn,
+		update: signedIn,
+		delete: signedIn
+	}
+};
+```
 
-The normalized importer accepts collection records only. Payload globals, non-default
-locale values, credentials, upload bytes, and complete revision timelines require custom migration
-code or an archival decision.
-
-Review the [capability status](/docs/status/) before committing to a cutover. In particular, custom
-rich-text blocks, UI localization, resumable uploads, and some long-tail query operators have
-narrower contracts than their Payload counterparts.
-
-## Translate the configuration {#configuration}
-
-The closest conceptual mappings are:
-
-| Payload                           | Ridu                                                                     |
-| --------------------------------- | ------------------------------------------------------------------------ |
-| `buildConfig({...})`              | `func Config() ridu.Config`                                              |
-| `CollectionConfig`                | `ridu.Collection`                                                        |
-| `GlobalConfig`                    | `ridu.Global`                                                            |
-| field object                      | `field.*` constructor plus typed options                                 |
-| access callback                   | `ridu.AccessRule` returning allow, deny, or a query predicate            |
-| lifecycle callback                | a function in `ridu.CollectionHooks` or `ridu.GlobalHooks`               |
-| server plugin                     | a compiled Go `ridu.Plugin`                                              |
-| admin component/import map        | a Svelte/TypeScript plugin registration                                  |
-| `@payloadcms/plugin-seo`          | paired `plugins/seo` and `@riducms/plugin-seo` packages                  |
-| `@payloadcms/plugin-form-builder` | paired `plugins/formbuilder` and `@riducms/plugin-form-builder` packages |
-| `payload.find(...)`               | `app.Local().List(...)` or a generated typed handle                      |
-| generated Payload client/types    | `generated/ridu.generated.ts`, built on `@riducms/sdk`                   |
-
-For example, a versioned post collection becomes:
-
-```go title="content/posts.go"
+```go title="content/posts.go" group="posts-config" tab="Ridu" focus={24-28}
 package content
 
 import (
 	"github.com/riducms/ridu"
 	"github.com/riducms/ridu/field"
-	"github.com/riducms/ridu/plugins/richtext"
 )
 
+func signedIn(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
+	// Actor is nil when no user is signed in.
+	if ctx.Actor == nil {
+		// Denying access is a decision; nil means no execution error.
+		return ridu.Deny(), nil
+	}
+	return ridu.Allow(), nil
+}
+
 var Posts = ridu.Collection{
-	Slug:     "posts",
-	Versions: true,
-	VersionConfig: ridu.VersionConfig{
-		Drafts: true,
-	},
+	Slug: "posts",
 	Admin: ridu.CollectionAdmin{
 		UseAsTitle:     "title",
 		DefaultColumns: []string{"title", "author", "updatedAt"},
 	},
-	Fields: []field.Definition{
-		field.Text("title", field.Required()),
-		field.Text("slug", field.Required(), field.Unique(), field.Index()),
-		field.Relationship("author", field.To("users"), field.Required()),
-		richtext.Field("content"),
+	Fields: field.Fields{
+		field.Text("title").Required().MaxLength(120),
+		field.Text("slug").Required().Unique().Index(),
+		field.Textarea("summary"),
+		// Store the user's ID. Ownership permissions come later.
+		field.Relationship("author", "users").Required(),
 	},
 	Access: ridu.CollectionAccess{
-		Read: postReadAccess,
+		Read: func(ridu.AccessContext) (ridu.AccessDecision, error) {
+			return ridu.Allow(), nil
+		},
+		Create: signedIn,
+		Update: signedIn,
+		Delete: signedIn,
 	},
 }
 ```
 
-Start `ridu dev` early so config resolution, generation, and the local schema stay together.
-`ridu check` catches invalid field paths, relationships, plugin pairing, and manifest problems
-before any data is moved. The [configuration](/docs/configuration/),
-[fields](/docs/fields/), [access control](/docs/access-control/), and [hooks](/docs/hooks/) guides
-cover the corresponding contracts in depth.
+Payload's field objects become Go constructors followed by options:
 
-Payload `endpoints` map to `ridu.Endpoint` values on the root config, a collection, or a global.
-Move the handler to compiled Go, read complete `/:param` segments from
-`EndpointContext.RouteParams`, and use `EndpointContext.Local` for access-controlled content
-operations. Ridu route parameters cover complete `/:param` segments, not Payload's broader
-`path-to-regexp` wildcard, optional, or partial-segment grammar. Encoded slash and backslash values do
-not match, and declarations sharing one path shape across methods must use the same parameter names.
-Collection URLs also change from Payload’s
-`/api/<collection-slug>/…` to Ridu’s `/api/collections/<collection-slug>/…`; global endpoints use
-`/api/globals/<global-slug>/…`. Like Payload, custom endpoints are anonymous unless the handler
-requires an actor. See [Custom endpoints](/docs/custom-endpoints/) for the complete route and
-security contract.
+| In Payload                              | In Ridu                                 |
+| --------------------------------------- | --------------------------------------- |
+| `{ name: 'title', type: 'text' }`       | `field.Text("title")`                   |
+| `required: true`                        | `.Required()`                           |
+| `maxLength: 120`                        | `.MaxLength(120)`                       |
+| `unique: true`                          | `.Unique()`                             |
+| `relationTo: 'users'`                   | `field.Relationship("author", "users")` |
+| `admin.useAsTitle`                      | `Admin.UseAsTitle`                      |
+| `req.user` in a collection access rule  | `ctx.Actor`                             |
+| Return `true` or `false` from that rule | Return `ridu.Allow()` or `ridu.Deny()`  |
 
-[SEO](/docs/seo/) provides localized metadata fields and server-side generators. [Form
-Builder](/docs/form-builder/) provides reusable forms and submissions; your application supplies the
-public renderer, email transport, and payment callbacks.
+`slug` is ordinary text in both examples: the editor supplies it. Use Ridu's
+[Slug field](/docs/fields/slug/) if you want to generate it from the title. The Payload example
+turns document locking off to match Ridu's default; use `LockDocuments: true` in Ridu when you
+want editing locks.
 
-## Produce a normalized export {#normalized-export}
+Run `bun run dev` in your Ridu project after adding the collection. Open Posts in the admin and
+create a post with a title, slug, and author. Saving without a title or reusing a slug should fail.
+A public API request can read posts, but creating one without signing in should be rejected.
+
+The `author` field records authorship; it does not restrict editing by itself. The next example
+adds that restriction.
+
+## Let authors edit only their own posts {#ownership}
+
+Both frameworks let an access rule return a filter. This rule permits an operation only when the
+saved post's `author` matches the signed-in user's ID:
+
+```ts title="src/access/ownPosts.ts" group="post-access" tab="Payload" focus={5-8}
+import type { Access } from 'payload';
+
+export const ownPosts: Access = ({ req: { user } }) => {
+	if (!user) return false;
+	// Apply this author filter within the database operation.
+	return {
+		author: { equals: user.id }
+	};
+};
+```
+
+```go title="content/post_access.go" group="post-access" tab="Ridu" focus={16-19}
+package content
+
+import (
+	"github.com/riducms/ridu"
+	"github.com/riducms/ridu/query"
+)
+
+func ownPosts(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
+	if ctx.Actor == nil {
+		return ridu.Deny(), nil
+	}
+	author, err := query.NewPath("author")
+	if err != nil {
+		return ridu.Deny(), err
+	}
+	// Check ownership in the database operation, without a prior read.
+	return ridu.Where(
+		query.Equal(author, query.String(ctx.Actor.ID)),
+	), nil
+}
+```
+
+In the collection above, replace `signedIn` with `ownPosts` for `update` and `delete` in Payload,
+or `Update` and `Delete` in Ridu. Import the function in the Payload collection file; Go files in
+the same `content` package can already use it. Leave the create and read rules as they are.
+
+Now a signed-in user can create a post, but only its current author can edit or delete it. Try
+editing another user's post: the operation should be rejected. The filter is checked by the
+database as part of the update or delete, so you do not need to fetch the document first.
+
+Payload calls return values `true`, `false`, or a query object; Ridu calls the equivalent
+choices `Allow`, `Deny`, and `Where`. A create rule uses allow or deny because there is no saved
+document to filter yet. See [Access control](/docs/access-control/) for field permissions and
+rules that depend on nearby values.
+
+When testing these rules through Payload's Local API, pass `overrideAccess: false` and the
+intended `user`; that API skips access checks by default. Ridu's local API applies access rules
+and treats a nil actor as anonymous. Carry the user into local calls when moving server code.
+
+## Find the matching Ridu feature {#feature-map}
+
+| Payload feature                           | Start here in Ridu                                                                      |
+| ----------------------------------------- | --------------------------------------------------------------------------------------- |
+| `buildConfig`, collections, and globals   | [Configuration](/docs/configuration/) and [Collections and globals](/docs/collections/) |
+| Field objects and reusable field helpers  | [Fields](/docs/fields/)                                                                 |
+| Custom field validation                   | [Custom validation](/docs/fields/validation/)                                           |
+| Collection, global, and field hooks       | [Hooks](/docs/hooks/)                                                                   |
+| Custom React inputs, views, and providers | [Custom components](/docs/custom-components/): write and register Svelte components     |
+| `versions` and `drafts`                   | [Drafts and versions](/docs/drafts-and-versions/)                                       |
+| `@payloadcms/plugin-seo`                  | [SEO plugin](/docs/seo/)                                                                |
+| `@payloadcms/plugin-form-builder`         | [Form Builder](/docs/form-builder/)                                                     |
+| `payload.find(...)`                       | [Local Go API](/docs/local-api/) or [TypeScript SDK](/docs/typescript-sdk/)             |
+
+You do not need a Go plugin just to customize the admin. Register your Svelte components in
+`admin/src/admin.config.ts`. Build a [plugin](/docs/plugins/) when you need a new field type or a
+reusable server extension. React components need to be rewritten in Svelte; they cannot be
+imported directly into the Ridu admin.
+
+Payload `endpoints` become Go `ridu.Endpoint` handlers on the app, a collection, or a global.
+Collection URLs change from `/api/<collection-slug>/…` to
+`/api/collections/<collection-slug>/…`; globals use `/api/globals/<global-slug>/…`.
+Ridu supports whole path parameters such as `/:id`, but not optional segments or wildcards.
+See [Custom endpoints](/docs/custom-endpoints/) when moving a handler.
+
+## Plan the content migration {#fit}
+
+List the content and workflows your application uses before moving data. Check the
+[capability status](/docs/status/) for the features you depend on, then decide how to move each
+part:
+
+| What you have              | What to decide                                                                        |
+| -------------------------- | ------------------------------------------------------------------------------------- |
+| Collections and fields     | Which fields map directly, and which values need conversion?                          |
+| Globals and translations   | How will you copy these with your own migration code?                                 |
+| Access rules and hooks     | Which rules need rewriting, and should notifications run during import?               |
+| Drafts and version history | Which revision becomes the new document, and where will old history remain available? |
+| Uploaded files             | How will you copy the original files, image sizes, and matching metadata?             |
+| User accounts              | How will users receive new credentials or password-reset invitations?                 |
+| Custom admin components    | Which inputs and views need Svelte replacements?                                      |
+| Frontend callers           | Which calls become Go local API calls, and which use the TypeScript SDK?              |
+
+Ridu's importer accepts prepared collection records. It does not extract your Payload database or
+copy globals, non-default translations, credentials, uploaded files, or a complete version history
+for you. The steps below explain how to prepare the records and import them.
+
+## Use a coding agent to help {#agent-guidance}
+
+New projects can include the `payload-to-ridu` coding-agent skill. It guides the agent through
+inventorying the Payload project, mapping its features, and migrating one complete feature at a
+time. Review decisions about missing features, data loss, credentials, and production changes.
+
+For an existing project, install it with `ridu agent install --agent codex` (or choose `claude`,
+`cursor`, or `all`). After a CLI upgrade, run `ridu agent sync` to update managed guidance that
+you have not edited locally.
+
+## Export documents for Ridu {#normalized-export}
 
 Import from a `migration/payload.Export` instead of reading Payload's database tables directly, which
 can vary by version and adapter.
@@ -138,14 +271,19 @@ can vary by version and adapter.
 ```go
 import payloadmigration "github.com/riducms/ridu/migration/payload"
 
+// Relationship values below are IDs, not populated user objects.
 source := payloadmigration.Export{
 	Collections: []payloadmigration.Collection{
 		{
 			Slug: "posts",
 			Documents: []payloadmigration.Record{
 				{
-					ID:        "post_01",
-					Data:      json.RawMessage(`{"title":"Hello","author":"user_01"}`),
+					ID: "post_01",
+					Data: json.RawMessage(`{
+  "title": "Hello",
+  "slug": "hello",
+  "author": "user_01"
+}`),
 					Status:    store.StatusPublished,
 					CreatedAt: createdAt,
 					UpdatedAt: updatedAt,
@@ -173,7 +311,7 @@ types and Payload APIs. Normalize these shapes:
 Do not export Payload password hashes, sessions, API keys, or reset tokens as content. Provision Ridu
 credentials independently and use a password-reset or invitation process for users.
 
-## Assess before writing {#assessment}
+## Check the export before importing {#assessment}
 
 `payload.Assess` compares the export with Ridu's resolved manifest. It reports unknown collections,
 missing document IDs, version selection against a non-versioned target, and a selected revision that
@@ -185,6 +323,7 @@ if err != nil {
 	return err
 }
 
+// Inspect the export without writing any documents.
 assessment := payloadmigration.Assess(manifest, source)
 log.Printf(
 	"collections=%d documents=%d versions=%d",
@@ -193,7 +332,10 @@ log.Printf(
 	assessment.Versions,
 )
 if len(assessment.Issues) > 0 {
-	return fmt.Errorf("migration assessment failed: %v", assessment.Issues)
+	return fmt.Errorf(
+		"migration assessment failed: %v",
+		assessment.Issues,
+	)
 }
 ```
 
@@ -203,7 +345,7 @@ fields, relationships, row keys, rich-text nodes, upload keys, and hook behavior
 when records enter the operation engine. A project migration should add its own read-only checks for
 those shapes before cutover.
 
-## Import through the operation engine {#import}
+## Import the prepared documents {#import}
 
 The normalized importer calls the local API's migration operation. Stable IDs, status, and
 timestamps are preserved, while access rules, normalization, validation, hooks, transactions,
@@ -214,6 +356,7 @@ result, err := payloadmigration.Import(
 	ctx,
 	app.Local(),
 	source,
+	// Import uses this user's permissions and runs normal hooks.
 	migrationActor,
 )
 if err != nil {
@@ -232,11 +375,11 @@ need no remapping, but validation still rejects a relationship to a document tha
 Resolve dependency cycles in the extractor or with a custom staging pass.
 
 <aside class="callout" data-variant="important">
-<strong>Version history boundary</strong>
+<strong>Choose which version to import</strong>
 <p>The importer selects the base record or <code>SelectedRevision</code> and creates that as the Ridu document. It counts and validates exported versions, but it does not recreate the complete historical revision timeline. Archive old history separately if it must remain queryable.</p>
 </aside>
 
-## Stage upload bytes before their documents {#uploads}
+## Copy uploaded files before importing their records {#uploads}
 
 An upload row is not a complete file migration. Ridu opens the original and configured variants
 while admitting an imported upload document, so the target objects must already exist. For each

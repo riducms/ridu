@@ -67,23 +67,14 @@ export function observePageErrors(page: Page) {
 }
 
 export async function loginAsEditor(page: Page) {
-	await page.goto("/admin/login");
-	await page.getByLabel("Email address").fill("editor@riducms.test");
-	await page.getByRole("textbox", { name: "Password", exact: true }).fill("ridu-browser");
-	const loginResponse = page.waitForResponse(
-		(response) =>
-			response.request().method() === "POST" &&
-			new URL(response.url()).pathname === "/api/auth/users/login"
-	);
-	await page.getByRole("button", { name: "Sign in" }).click();
-	expect((await loginResponse).ok()).toBe(true);
+	// Each test owns a fresh context and reset server. Authenticate again after reset
+	// so sessions cannot leak across tests or bypass the real auth/cookie contract.
+	const response = await page.request.post("/api/auth/users/login", {
+		data: { email: "editor@riducms.test", password: "ridu-browser" },
+	});
+	expect(response.ok(), await response.text()).toBe(true);
+	await page.goto("/admin");
 	const collectionsNavigation = page.getByRole("navigation", { name: "Admin navigation" });
-	await collectionsNavigation.waitFor({ state: "visible" });
-	await expect
-		.poll(async () => {
-			const response = await page.request.get("/api/auth/me");
-			return response.status();
-		})
-		.toBe(200);
+	await expect(collectionsNavigation).toBeVisible();
 	return collectionsNavigation;
 }

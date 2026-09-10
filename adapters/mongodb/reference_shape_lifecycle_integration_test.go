@@ -9,6 +9,7 @@ import (
 	"github.com/riducms/ridu"
 	localstorage "github.com/riducms/ridu/adapters/storage/local"
 	"github.com/riducms/ridu/field"
+	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
@@ -37,69 +38,30 @@ func TestMongoDBReferenceShapeLifecycle(t *testing.T) {
 		}},
 		Collections: []ridu.Collection{
 			{
-				Slug: "direct-records",
-				Fields: []field.Definition{field.Group("localizedMeta", field.Localized(), field.Fields(
-					field.Text("headline"),
-					field.Text("summary"),
-				))},
+				Slug:   "direct-records",
+				Fields: field.Fields{field.Group("localizedMeta", field.Fields{field.Text("headline"), field.Text("summary")}).Localized()},
 			},
 			{
 				Slug: "people",
-				Fields: []field.Definition{
-					field.Text("name", field.Required(), field.Localized()),
-					field.Checkbox("public", field.Required()),
-					field.Text("secret"),
-				},
+				Fields: field.Fields{field.Text("name").Required().Localized(), field.Checkbox("public").Required(), field.Text("secret").Access(field.Access{Read: func(operation.AccessContext,
+
+				) (bool, error) {
+					return false, nil
+				}})},
 				Access: ridu.CollectionAccess{Read: func(ridu.AccessContext) (ridu.AccessDecision, error) {
 					return ridu.Where(query.Equal(public, query.Boolean(true))), nil
 				}},
-				FieldAccess: map[string]ridu.FieldAccess{
-					"secret": {Read: func(ridu.FieldAccessContext) (bool, error) { return false, nil }},
-				},
 			},
-			{Slug: "teams", Fields: []field.Definition{field.Text("name", field.Required())}},
+			{Slug: "teams", Fields: field.Fields{field.Text("name").Required()}},
 			{
 				Slug: "media", Upload: true,
 				UploadConfig: ridu.UploadConfig{MaxFileSize: 1024, MimeTypes: []string{"text/plain"}},
-				Fields:       []field.Definition{field.Text("label", field.Required())},
+				Fields:       field.Fields{field.Text("label").Required()},
 			},
 			{
 				Slug: "records", Trash: true, Versions: true,
 				VersionConfig: ridu.VersionConfig{MaxPerDocument: 20},
-				Fields: []field.Definition{
-					field.Text("title", field.Required()),
-					field.Point("location"),
-					field.Point("localLocation", field.Localized()),
-					field.Group("localizedMeta", field.Localized(), field.Fields(
-						field.Text("headline"),
-						field.Text("summary"),
-					)),
-					field.Relationship("guard", field.To("people"), field.Localized(), field.OnDelete(field.ReferenceDeleteRestrict)),
-					field.Upload("assetGuard", field.To("media"), field.Localized(), field.OnDelete(field.ReferenceDeleteRestrict)),
-					field.Relationship("editor", field.To("people"), field.Localized(), field.OnDelete(field.ReferenceDeleteNullify)),
-					field.Relationship("contributors", field.ToMany("people"), field.Localized(), field.OnDelete(field.ReferenceDeleteNullify)),
-					field.Relationship("subjects", field.ToAny("people", "teams"), field.HasMany(), field.Localized(), field.OnDelete(field.ReferenceDeleteNullify)),
-					field.Upload("assets", field.ToMany("media"), field.Localized(), field.OnDelete(field.ReferenceDeleteNullify)),
-					field.Array("sections", field.Fields(
-						field.Point("waypoint"),
-						field.Relationship("reviewers", field.ToMany("people"), field.OnDelete(field.ReferenceDeleteNullify)),
-						field.Relationship("localSubject", field.ToAny("people", "teams"), field.Localized(), field.OnDelete(field.ReferenceDeleteNullify)),
-						field.Upload("assets", field.ToMany("media"), field.Localized(), field.OnDelete(field.ReferenceDeleteNullify)),
-					)),
-					field.Blocks("layout", field.BlockTypes(field.BlockType("quote", "Quote",
-						field.Relationship("reviewer", field.To("people"), field.OnDelete(field.ReferenceDeleteNullify)),
-						field.Relationship("subjects", field.ToAny("people", "teams"), field.HasMany(), field.OnDelete(field.ReferenceDeleteNullify)),
-						field.Upload("asset", field.To("media"), field.Localized(), field.OnDelete(field.ReferenceDeleteNullify)),
-					))),
-					field.Array("localizedSections", field.Localized(), field.Fields(
-						field.Relationship("reviewer", field.To("people"), field.OnDelete(field.ReferenceDeleteNullify)),
-						field.Upload("assets", field.ToMany("media"), field.OnDelete(field.ReferenceDeleteNullify)),
-					)),
-					field.Blocks("localizedLayout", field.Localized(), field.BlockTypes(field.BlockType("quote", "Quote",
-						field.Relationship("subjects", field.ToAny("people", "teams"), field.HasMany(), field.OnDelete(field.ReferenceDeleteNullify)),
-						field.Upload("asset", field.To("media"), field.OnDelete(field.ReferenceDeleteNullify)),
-					))),
-				},
+				Fields:        field.Fields{field.Text("title").Required(), field.Point("location"), field.Point("localLocation").Localized(), field.Group("localizedMeta", field.Fields{field.Text("headline"), field.Text("summary")}).Localized(), field.Relationship("guard", "people").Localized().OnDelete(field.ReferenceDeleteRestrict), field.Upload("assetGuard", "media").Localized().OnDelete(field.ReferenceDeleteRestrict), field.Relationship("editor", "people").Localized().OnDelete(field.ReferenceDeleteNullify), field.Relationships("contributors", "people").Localized().OnDelete(field.ReferenceDeleteNullify), field.PolymorphicRelationships("subjects", "people", "teams").Localized().OnDelete(field.ReferenceDeleteNullify), field.Uploads("assets", "media").Localized().OnDelete(field.ReferenceDeleteNullify), field.Array("sections", field.Fields{field.Point("waypoint"), field.Relationships("reviewers", "people").OnDelete(field.ReferenceDeleteNullify), field.PolymorphicRelationship("localSubject", "people", "teams").Localized().OnDelete(field.ReferenceDeleteNullify), field.Uploads("assets", "media").Localized().OnDelete(field.ReferenceDeleteNullify)}), field.Blocks("layout", field.Block{Slug: "quote", Fields: field.Fields{field.Relationship("reviewer", "people").OnDelete(field.ReferenceDeleteNullify), field.PolymorphicRelationships("subjects", "people", "teams").OnDelete(field.ReferenceDeleteNullify), field.Upload("asset", "media").Localized().OnDelete(field.ReferenceDeleteNullify)}}), field.Array("localizedSections", field.Fields{field.Relationship("reviewer", "people").OnDelete(field.ReferenceDeleteNullify), field.Uploads("assets", "media").OnDelete(field.ReferenceDeleteNullify)}).Localized(), field.Blocks("localizedLayout", field.Block{Slug: "quote", Fields: field.Fields{field.PolymorphicRelationships("subjects", "people", "teams").OnDelete(field.ReferenceDeleteNullify), field.Upload("asset", "media").OnDelete(field.ReferenceDeleteNullify)}}).Localized()},
 			},
 		},
 	}, backend)
@@ -602,7 +564,7 @@ func mongoReferenceLifecycleAssertPopulation(t *testing.T, document store.Docume
 
 func mongoReferenceLifecycleAssertDocument(t *testing.T, value store.Value, id string, expectRedaction bool) {
 	t.Helper()
-	document, populated := value.DocumentValue()
+	document, populated := value.CopyDocument()
 	if !populated || document.ID != id {
 		t.Fatalf("populated document = %#v, want %q", value, id)
 	}
@@ -661,7 +623,7 @@ func mongoReferenceLifecycleAssertPolyReference(t *testing.T, value store.Value,
 
 func mongoReferenceLifecycleObject(t *testing.T, value store.Value, label string) store.Values {
 	t.Helper()
-	object, valid := value.ObjectValue()
+	object, valid := value.CopyObject()
 	if !valid {
 		t.Fatalf("%s = %#v, want object", label, value)
 	}
@@ -670,7 +632,7 @@ func mongoReferenceLifecycleObject(t *testing.T, value store.Value, label string
 
 func mongoReferenceLifecycleList(t *testing.T, value store.Value, label string) []store.Value {
 	t.Helper()
-	values, valid := value.Values()
+	values, valid := value.CopyList()
 	if !valid || len(values) == 0 {
 		t.Fatalf("%s = %#v, want non-empty list", label, value)
 	}
@@ -689,7 +651,7 @@ func mongoReferenceLifecycleListStrings(t *testing.T, value store.Value, label s
 
 func mongoReferenceLifecycleAssertPoint(t *testing.T, value store.Value, longitude, latitude float64, label string) {
 	t.Helper()
-	coordinates, valid := value.Values()
+	coordinates, valid := value.CopyList()
 	if !valid || len(coordinates) != 2 {
 		t.Fatalf("%s = %#v, want coordinate pair", label, value)
 	}
@@ -754,10 +716,10 @@ func mongoReferenceLifecycleValueContainsString(value store.Value, target string
 	if text, valid := value.StringValue(); valid {
 		return text == target
 	}
-	if object, valid := value.ObjectValue(); valid {
+	if object, valid := value.CopyObject(); valid {
 		return mongoReferenceLifecycleContainsString(object, target)
 	}
-	if list, valid := value.Values(); valid {
+	if list, valid := value.CopyList(); valid {
 		for _, item := range list {
 			if mongoReferenceLifecycleValueContainsString(item, target) {
 				return true

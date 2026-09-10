@@ -1,5 +1,9 @@
 import { describe, expect, it } from "bun:test";
-import { defineFieldPlugin, type FieldComponentProps } from "@riducms/plugin";
+import {
+	defineAdminPlugin,
+	definePluginField,
+	defineFieldComponent,
+} from "@riducms/plugin/authoring/v1";
 import type { SchemaField } from "@riducms/protocol";
 import type { Component } from "svelte";
 
@@ -56,12 +60,18 @@ describe("core field registry", () => {
 	});
 
 	it("resolves a custom plugin field to its statically registered component", () => {
-		const component = (() => undefined) as unknown as Component<FieldComponentProps>;
-		const plugin = defineFieldPlugin({
-			type: "plugin",
-			key: "color",
-			component,
-			canRender: (field) => field.plugin?.key === "color",
+		const component = (() => undefined) as unknown as Component<
+			import("@riducms/plugin").PluginFieldProps<string>
+		>;
+		const plugin = defineAdminPlugin({
+			key: "palette",
+			pairingVersion: 1,
+			fields: {
+				color: definePluginField({
+					component,
+					decodeValue: (value: unknown): string => String(value),
+				}),
+			},
 		});
 		const field: SchemaField = {
 			id: "brand-accent",
@@ -75,29 +85,37 @@ describe("core field registry", () => {
 			plugin: { key: "color", config: { palette: ["#663399"] } },
 		};
 
-		expect(createCoreFieldRegistry([plugin]).resolve(field).component).toBe(component);
+		expect(createCoreFieldRegistry([plugin]).resolve(field).extension?.registration.component).toBe(
+			component
+		);
 		expect(() => createCoreFieldRegistry().resolve(field)).toThrow(
-			"No admin field plugin can render accent (plugin:color)"
+			"No admin field renderer can render accent (plugin:color)"
 		);
 	});
 
 	it("resolves exact plugin renderers without replacing built-in storage semantics", () => {
-		const overview = (() => undefined) as unknown as Component<FieldComponentProps>;
-		const preview = (() => undefined) as unknown as Component<FieldComponentProps>;
+		const overview = (() => undefined) as unknown as Component<
+			import("@riducms/plugin").PluginFieldProps<undefined, undefined, "ui">
+		>;
+		const preview = (() => undefined) as unknown as Component<
+			import("@riducms/plugin").PluginFieldProps<undefined, undefined, "ui">
+		>;
 		const registry = createCoreFieldRegistry([
-			defineFieldPlugin({
-				type: "ui",
+			defineAdminPlugin({
 				key: "seo",
-				componentKey: "overview",
-				component: overview,
-				canRender: () => true,
-			}),
-			defineFieldPlugin({
-				type: "ui",
-				key: "seo",
-				componentKey: "preview",
-				component: preview,
-				canRender: () => true,
+				pairingVersion: 1,
+				components: {
+					overview: defineFieldComponent({
+						type: "ui",
+						component: overview,
+						decodeValue: (): undefined => undefined,
+					}),
+					preview: defineFieldComponent({
+						type: "ui",
+						component: preview,
+						decodeValue: (): undefined => undefined,
+					}),
+				},
 			}),
 		]);
 		const base: SchemaField = {
@@ -112,14 +130,14 @@ describe("core field registry", () => {
 			ui: {},
 		};
 
-		expect(registry.resolve(base).component).toBe(overview);
+		expect(registry.resolve(base).extension?.registration.component).toBe(overview);
 		expect(
 			registry.resolve({
 				...base,
 				name: "preview",
 				path: "meta.preview",
 				admin: { label: "Preview", component: { plugin: "seo", component: "preview" } },
-			}).component
+			}).extension?.registration.component
 		).toBe(preview);
 		expect(() => createCoreFieldRegistry().resolve(base)).toThrow("ui:seo:overview");
 	});

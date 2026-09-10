@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/riducms/ridu/internal/localization"
+	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
 )
@@ -96,7 +97,7 @@ func (engine *Engine) Capabilities(ctx context.Context, request CapabilitiesRequ
 
 	var document *store.Document
 	if request.ID != "" {
-		operationContext.Operation = Read
+		operationContext.Operation = operation.Read
 		readDecision, accessError := authorize(collection, operationContext)
 		if accessError != nil {
 			return AccessCapabilities{}, capabilityAccessError("read access rule failed", accessError)
@@ -112,7 +113,7 @@ func (engine *Engine) Capabilities(ctx context.Context, request CapabilitiesRequ
 				projected := localization.ProjectDocument(found, collection.Schema.Fields, selection)
 				document = cloneDocumentPointer(&projected)
 			} else if !errors.Is(findError, store.ErrNotFound) {
-				return AccessCapabilities{}, &Error{Code: "store_failed", Status: 500, Message: "read capability document", Cause: findError}
+				return AccessCapabilities{}, translateStoreError(fmt.Errorf("read capability document: %w", findError))
 			}
 		}
 	}
@@ -132,7 +133,7 @@ func (engine *Engine) Capabilities(ctx context.Context, request CapabilitiesRequ
 }
 
 func (engine *Engine) operationCapabilities(transaction store.Transaction, collection Collection, base Context, document *store.Document, deletion store.DeletionMode, trashOnly bool, selection localization.Selection) (OperationCapabilities, error) {
-	allowed := func(kind Kind, data store.Values, targetDeletion store.DeletionMode) (bool, error) {
+	allowed := func(kind operation.Kind, data store.Values, targetDeletion store.DeletionMode) (bool, error) {
 		operationContext := base
 		operationContext.Operation = kind
 		operationContext.Data = store.CloneValues(data)
@@ -141,13 +142,13 @@ func (engine *Engine) operationCapabilities(transaction store.Transaction, colle
 		if err != nil {
 			return false, capabilityAccessError("access rule failed", err)
 		}
-		if decision.Kind == Deny || (kind == Create || kind == Admin) && decision.Kind == Where {
+		if decision.Kind == Deny || (kind == operation.Create || kind == operation.Admin) && decision.Kind == Where {
 			return false, nil
 		}
-		if base.ID == "" || kind == Create || kind == Admin {
+		if base.ID == "" || kind == operation.Create || kind == operation.Admin {
 			return decision.Kind == Allow || decision.Kind == Where, nil
 		}
-		if kind == ReadVersions {
+		if kind == operation.ReadVersions {
 			versionTransaction, ok := transaction.(store.VersionTransaction)
 			if !ok {
 				return false, &Error{Code: "store_failed", Status: 500, Message: "version-enabled collection requires store.VersionTransaction"}
@@ -157,12 +158,12 @@ func (engine *Engine) operationCapabilities(transaction store.Transaction, colle
 				Locales: selection.Configured, LocaleChain: selection.Chain, AllLocales: selection.All,
 			})
 			if versionError != nil {
-				return false, &Error{Code: "store_failed", Status: 500, Message: "evaluate filtered version capability", Cause: versionError}
+				return false, translateStoreError(fmt.Errorf("evaluate filtered version capability: %w", versionError))
 			}
 			return len(versions) != 0, nil
 		}
 		if decision.Kind == Allow {
-			if collection.Schema.Capabilities.Global && (kind == Read || kind == Update) {
+			if collection.Schema.Capabilities.Global && (kind == operation.Read || kind == operation.Update) {
 				return true, nil
 			}
 			if document != nil {
@@ -180,7 +181,7 @@ func (engine *Engine) operationCapabilities(transaction store.Transaction, colle
 				return false, nil
 			}
 			if findError != nil {
-				return false, &Error{Code: "store_failed", Status: 500, Message: "evaluate mutation capability existence", Cause: findError}
+				return false, translateStoreError(fmt.Errorf("evaluate mutation capability existence: %w", findError))
 			}
 			return true, nil
 		}
@@ -193,7 +194,7 @@ func (engine *Engine) operationCapabilities(transaction store.Transaction, colle
 			return false, nil
 		}
 		if findError != nil {
-			return false, &Error{Code: "store_failed", Status: 500, Message: "evaluate filtered capability", Cause: findError}
+			return false, translateStoreError(fmt.Errorf("evaluate filtered capability: %w", findError))
 		}
 		return true, nil
 	}
@@ -205,28 +206,28 @@ func (engine *Engine) operationCapabilities(transaction store.Transaction, colle
 	}
 	admin := false
 	if collection.Schema.Capabilities.Auth {
-		admin, err = allowed(Admin, data, deletion)
+		admin, err = allowed(operation.Admin, data, deletion)
 		if err != nil {
 			return OperationCapabilities{}, err
 		}
 	}
 	create := false
 	if !collection.Schema.Capabilities.Global && !selection.All {
-		create, err = allowed(Create, data, store.DeletionActive)
+		create, err = allowed(operation.Create, data, store.DeletionActive)
 		if err != nil {
 			return OperationCapabilities{}, err
 		}
 	}
 	read := document != nil
 	if base.ID == "" || collection.Schema.Capabilities.Global && document == nil {
-		read, err = allowed(Read, data, deletion)
+		read, err = allowed(operation.Read, data, deletion)
 		if err != nil {
 			return OperationCapabilities{}, err
 		}
 	}
 	readVersions := false
 	if collection.Schema.Versions != nil {
-		readVersions, err = allowed(ReadVersions, data, deletion)
+		readVersions, err = allowed(operation.ReadVersions, data, deletion)
 		if err != nil {
 			return OperationCapabilities{}, err
 		}
@@ -234,12 +235,12 @@ func (engine *Engine) operationCapabilities(transaction store.Transaction, colle
 	update, deleteAllowed := false, false
 	if !trashOnly {
 		if !selection.All {
-			update, err = allowed(Update, data, store.DeletionActive)
+			update, err = allowed(operation.Update, data, store.DeletionActive)
 			if err != nil {
 				return OperationCapabilities{}, err
 			}
 		}
-		deleteAllowed, err = allowed(Delete, data, store.DeletionActive)
+		deleteAllowed, err = allowed(operation.Delete, data, store.DeletionActive)
 		if err != nil {
 			return OperationCapabilities{}, err
 		}
@@ -250,18 +251,18 @@ func (engine *Engine) operationCapabilities(transaction store.Transaction, colle
 		for name, value := range base.Data {
 			duplicateData[name] = value
 		}
-		duplicate, err = allowed(Duplicate, duplicateData, store.DeletionActive)
+		duplicate, err = allowed(operation.Duplicate, duplicateData, store.DeletionActive)
 		if err != nil {
 			return OperationCapabilities{}, err
 		}
 	}
 	restoreDeleted, deletePermanent := false, false
 	if trashOnly && base.ID != "" {
-		restoreDeleted, err = allowed(RestoreDeleted, data, deletion)
+		restoreDeleted, err = allowed(operation.RestoreDeleted, data, deletion)
 		if err != nil {
 			return OperationCapabilities{}, err
 		}
-		deletePermanent, err = allowed(DeletePermanent, data, deletion)
+		deletePermanent, err = allowed(operation.DeletePermanent, data, deletion)
 		if err != nil {
 			return OperationCapabilities{}, err
 		}
@@ -269,18 +270,18 @@ func (engine *Engine) operationCapabilities(transaction store.Transaction, colle
 	versioned := collection.Schema.Versions != nil
 	publish, unpublish := false, false
 	if versioned && !trashOnly {
-		publish, err = allowed(Publish, data, store.DeletionActive)
+		publish, err = allowed(operation.Publish, data, store.DeletionActive)
 		if err != nil {
 			return OperationCapabilities{}, err
 		}
-		unpublish, err = allowed(Unpublish, data, store.DeletionActive)
+		unpublish, err = allowed(operation.Unpublish, data, store.DeletionActive)
 		if err != nil {
 			return OperationCapabilities{}, err
 		}
 	}
 	unlock := false
 	if collection.Schema.DocumentLock != nil && !trashOnly && base.ID != "" && document != nil {
-		unlock, err = allowed(Unlock, data, store.DeletionActive)
+		unlock, err = allowed(operation.Unlock, data, store.DeletionActive)
 		if err != nil {
 			return OperationCapabilities{}, err
 		}
@@ -301,20 +302,45 @@ func hasDocumentCapability(operations OperationCapabilities) bool {
 }
 
 func fieldCapabilities(collection Collection, base Context, document *store.Document, operations OperationCapabilities) (map[string]FieldCapabilities, error) {
-	result := make(map[string]FieldCapabilities, len(collection.Fields))
+	result := make(map[string]FieldCapabilities, len(collection.Bindings))
 	data := store.CloneValues(base.Data)
 	if len(data) == 0 && document != nil {
 		data = store.CloneValues(document.Values)
 	}
-	for _, path := range sortedFieldRulePaths(collection.Fields) {
-		rules := collection.Fields[path]
-		locations := fieldLocationsAtPath(collection.Schema.Fields, data, path, base.AllLocales)
-		if len(locations) == 0 {
-			locations = []fieldLocation{{siblings: store.CloneValues(data), runtimePath: path}}
+	// Attached rules use their resolved binding, including optional scalar
+	// occurrences whose current logical value is empty. Presentation capability
+	// discovery must not depend on whether an adapter materialized that key.
+	bound := base
+	bound.Data, bound.Document = data, nil
+	bound.Original = document
+	for _, binding := range collection.Bindings {
+		rules := binding.Access
+		if rules.Read == nil && rules.Create == nil && rules.Update == nil {
+			continue
+		}
+		path := binding.Field.Path.String()
+		locations := fieldLocationsAtPath(collection.Schema.Fields, data, path, base.AllLocales, true)
+		previous := map[string]fieldLocation{}
+		if document != nil {
+			previous = indexFieldLocations(fieldLocationsAtPath(collection.Schema.Fields, document.Values, path, base.AllLocales, true))
 		}
 		canonical := FieldCapabilities{Read: true, Create: true, Update: true}
+		if len(locations) == 0 {
+			// There is no concrete row/object occurrence yet. Existing admin
+			// capability contracts still need a schema-level fallback. Do not
+			// fabricate a repeated identity or borrow root values as siblings.
+			fallback := bound
+			fallback.FieldPath, fallback.RuntimePath = path, path
+			fallback.SiblingData, fallback.OriginalSiblingData = nil, nil
+			var err error
+			canonical, err = evaluateBoundFieldCapabilities(rules, fallback, operations)
+			if err != nil {
+				return nil, err
+			}
+		}
 		for _, location := range locations {
-			capability, err := evaluateFieldCapabilities(rules, base, document, operations, path, location)
+			ctx := scopedBindingContext(bound, binding, location, previous)
+			capability, err := evaluateBoundFieldCapabilities(rules, ctx, operations)
 			if err != nil {
 				return nil, err
 			}
@@ -328,37 +354,27 @@ func fieldCapabilities(collection Collection, base Context, document *store.Docu
 	return result, nil
 }
 
-func evaluateFieldCapabilities(rules FieldRules, base Context, document *store.Document, operations OperationCapabilities, path string, location fieldLocation) (FieldCapabilities, error) {
-	evaluate := func(kind Kind, rule FieldAccess, fallback bool) (bool, error) {
-		if !fallback {
-			return false, nil
+func evaluateBoundFieldCapabilities(rules FieldRules, ctx Context, operations OperationCapabilities) (FieldCapabilities, error) {
+	evaluate := func(kind operation.Kind, rule FieldAccess, fallback bool) (bool, error) {
+		if !fallback || rule == nil {
+			return fallback, nil
 		}
-		if rule == nil {
-			return true, nil
-		}
-		fieldContext := base
-		fieldContext.Operation, fieldContext.FieldPath, fieldContext.RuntimePath = kind, path, location.runtimePath
-		fieldContext.Value, fieldContext.SiblingData = location.value, store.CloneValues(location.siblings)
-		if location.locale != "" {
-			fieldContext.Locale = location.locale
-		}
-		fieldContext.Document = fieldLocaleDocument(document, base.Collection.Fields, base, location.locale)
-		fieldContext.Original = cloneDocumentPointer(fieldContext.Document)
-		allowed, err := rule(fieldContext)
+		ctx.Operation = kind
+		allowed, err := rule(ctx)
 		if err != nil {
 			return false, capabilityAccessError("field access rule failed", err)
 		}
 		return allowed, nil
 	}
-	read, err := evaluate(Read, rules.Read, true)
+	read, err := evaluate(operation.Read, rules.Read, true)
 	if err != nil {
 		return FieldCapabilities{}, err
 	}
-	create, err := evaluate(Create, rules.Create, operations.Create)
+	create, err := evaluate(operation.Create, rules.Create, operations.Create)
 	if err != nil {
 		return FieldCapabilities{}, err
 	}
-	update, err := evaluate(Update, rules.Update, operations.Update)
+	update, err := evaluate(operation.Update, rules.Update, operations.Update)
 	if err != nil {
 		return FieldCapabilities{}, err
 	}

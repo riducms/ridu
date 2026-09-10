@@ -1,3 +1,5 @@
+import { resolveBlockTypes } from "@riducms/protocol";
+import { connectDocumentLiveValidation } from "@admin/core/forms/live-validation.svelte";
 import type { SchemaCollection, SchemaField } from "@riducms/protocol";
 import { RiduError } from "@riducms/sdk";
 
@@ -90,6 +92,7 @@ export class ReferenceBrowserWorkflow {
 
 	constructor(readonly options: ReferenceBrowserWorkflowOptions) {
 		this.form = new FormController({}, options.runtime.i18n);
+		connectDocumentLiveValidation(this.form, options.runtime.client);
 		this.#lookup = new RelationshipLookupController(options.runtime.client);
 		this.form.setLocalization(options.locale);
 		this.pageSize = options.collection.capabilities.upload ? 8 : 10;
@@ -134,6 +137,7 @@ export class ReferenceBrowserWorkflow {
 		});
 
 		$effect(() => () => {
+			this.form.disposeBindings();
 			this.#editorLoad.abort();
 			this.#editorAccess?.abort();
 			this.#saveRequest?.abort();
@@ -225,8 +229,9 @@ export class ReferenceBrowserWorkflow {
 
 	get canCommitSelection() {
 		return (
-			this.workingSelection.length !== this.options.selectedIDs.length ||
-			this.workingSelection.some((id) => !this.options.selectedIDs.includes(id))
+			!this.options.readOnly &&
+			(this.workingSelection.length !== this.options.selectedIDs.length ||
+				this.workingSelection.some((id) => !this.options.selectedIDs.includes(id)))
 		);
 	}
 
@@ -271,11 +276,11 @@ export class ReferenceBrowserWorkflow {
 	};
 
 	commitSelection = async () => {
-		if (this.committing) return;
+		if (this.committing || this.options.readOnly) return;
 		this.committing = true;
 		try {
 			const committed = await this.options.onCommit([...this.workingSelection]);
-			if (committed !== false) this.#closeBrowser();
+			if (committed !== false && !this.options.readOnly) this.#closeBrowser();
 		} catch (cause) {
 			this.options.notifications.error({
 				title: this.options.runtime.i18n.t("reference:updateNotConfirmed"),
@@ -304,11 +309,12 @@ export class ReferenceBrowserWorkflow {
 	openNewDocument = () => {
 		if (this.form.submitting || !this.canCreateDocument) return;
 		this.editorDocument = undefined;
+		this.form.setResource({ collection: this.options.collection.slug });
 		const values = {
 			...initialFormValues(this.options.collection.fields),
 			...this.options.defaultValues,
 		};
-		this.form.reset(values);
+		this.form.reset(values, this.options.collection.fields);
 		this.form.setAccess(undefined, "create");
 		this.selectedFiles = undefined;
 		this.newUserPassword = "";
@@ -338,6 +344,7 @@ export class ReferenceBrowserWorkflow {
 			this.credentialIssue = this.#validateNewUserPassword();
 			if (this.credentialIssue !== undefined) return false;
 			const saved = await this.form.submit(this.validationFields, this.creating, async (values) => {
+				if (this.options.readOnly) throw new Error("This field is read-only.");
 				if (this.editorDocument !== undefined) {
 					return this.options.runtime.client.update(
 						this.options.collection.slug,
@@ -376,7 +383,7 @@ export class ReferenceBrowserWorkflow {
 					locale: this.options.locale,
 				});
 			});
-			if (request.signal.aborted) return false;
+			if (request.signal.aborted || this.options.readOnly) return false;
 			const wasCreating = this.editorDocument === undefined;
 			this.editorDocument = saved;
 			this.#lookup.remember(saved);
@@ -384,7 +391,10 @@ export class ReferenceBrowserWorkflow {
 				? [...new Set([...this.workingSelection, saved.id])]
 				: [saved.id];
 			this.options.runtime.documentsChanged();
-			this.form.reset(documentFormValues(this.options.collection.fields, saved));
+			this.form.reset(
+				documentFormValues(this.options.collection.fields, saved),
+				this.options.collection.fields
+			);
 			this.form.setLocalization(this.options.locale, saved._localization?.sources);
 			this.options.notifications.success({
 				title: wasCreating
@@ -402,7 +412,7 @@ export class ReferenceBrowserWorkflow {
 			this.credentialIssue = undefined;
 			return true;
 		} catch (cause) {
-			if (request.signal.aborted) return false;
+			if (request.signal.aborted || this.options.readOnly) return false;
 			if (
 				creatingUpload &&
 				!(cause instanceof FormValidationError) &&
@@ -550,8 +560,12 @@ export class ReferenceBrowserWorkflow {
 	}
 
 	#openEditor(document: AdminDocument) {
+		this.form.setResource({ collection: this.options.collection.slug, id: document.id });
 		this.editorDocument = document;
-		this.form.reset(documentFormValues(this.options.collection.fields, document));
+		this.form.reset(
+			documentFormValues(this.options.collection.fields, document),
+			this.options.collection.fields
+		);
 		this.form.setLocalization(this.options.locale, document._localization?.sources);
 		this.form.setAccess(undefined, "update");
 		this.selectedFiles = undefined;
@@ -612,6 +626,7 @@ export class ReferenceBrowserWorkflow {
 	}
 
 	#closeBrowser() {
+		this.form.disposeBindings();
 		this.options.setOpen(false);
 		this.options.onClose();
 	}
@@ -645,11 +660,11 @@ function createCollectionFilters(collection: SchemaCollection, i18n: AdminRuntim
 	const select =
 		collection.fields.find((field) => field.name === "status" && field.select !== undefined) ??
 		collection.fields.find((field) => field.select !== undefined);
-	for (const choice of select?.select?.choices ?? []) {
+	for (const option of select?.select?.options ?? []) {
 		result.push({
-			key: choice.value,
-			label: i18n.text(choice.label, choice.labelTranslations),
-			filter: { field: select?.name ?? "", operator: "equals", value: choice.value },
+			key: option.value,
+			label: i18n.text(option.label, option.labelTranslations),
+			filter: { field: select?.name ?? "", operator: "equals", value: option.value },
 		});
 	}
 	return result;
@@ -675,9 +690,9 @@ function scopeField(field: SchemaField, prefix: string): SchemaField {
 			? {}
 			: {
 					blocks: {
-						types: field.blocks.types.map((block) => ({
+						types: resolveBlockTypes(field.blocks).map((block) => ({
 							...block,
-							fields: block.fields.map((child) => scopeField(child, `${prefix}-${block.key}`)),
+							fields: block.fields.map((child) => scopeField(child, `${prefix}-${block.slug}`)),
 						})),
 					},
 				}),

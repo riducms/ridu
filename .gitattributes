@@ -18,9 +18,13 @@ SKILL.md export-ignore
 internal/agentdocs/skills/** -export-ignore
 .agents export-ignore
 .agents/** export-ignore
-docs/*.md export-ignore
-docs/**/*.md export-ignore
-docs/assets/README.md -export-ignore
+docs/** export-ignore
+docs/assets -export-ignore
+docs/assets/** -export-ignore
+# Performance fixtures are public; maintainer investigation reports are not.
+tests/performance/*.md export-ignore
+tests/performance/README.md -export-ignore
+tests/performance/*.csv export-ignore
 admin/docs export-ignore
 admin/docs/** export-ignore
 scripts/export-public.sh export-ignore

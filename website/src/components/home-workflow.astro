@@ -10,10 +10,11 @@ import (
 
 var Posts = ridu.Collection{
 	Slug: "posts",
-	Fields: []field.Definition{
-		field.Text("title", field.Required()),
-		field.Select("status",
-			field.OneOf("draft", "published"),
+	Fields: field.Fields{
+		field.Text("title").Required(),
+		field.Select("status").Options(
+			field.Option{Value: "draft", Label: "draft"},
+			field.Option{Value: "published", Label: "published"},
 		),
 	},
 }`;

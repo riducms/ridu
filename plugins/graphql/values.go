@@ -17,6 +17,7 @@ import (
 )
 
 type requestState struct {
+	rawVariables    map[string]interface{}
 	actor           *store.Document
 	actorCollection schema.CollectionSlug
 	token           string
@@ -141,16 +142,18 @@ func valueInterface(value store.Value) interface{} {
 		result, _ := value.BooleanValue()
 		return result
 	case store.ValueObject:
-		values, _ := value.ObjectValue()
-		return valuesMap(values)
+		result := make(map[string]interface{}, value.Len())
+		for name, child := range value.Entries() {
+			result[fieldName(name)] = valueInterface(child)
+		}
+		return result
 	case store.ValueDocument:
-		document, _ := value.DocumentValue()
+		document, _ := value.CopyDocument()
 		return documentMap(document)
 	case store.ValueList:
-		values, _ := value.Values()
-		result := make([]interface{}, len(values))
-		for index, item := range values {
-			result[index] = valueInterface(item)
+		result := make([]interface{}, 0, value.Len())
+		for item := range value.Elements() {
+			result = append(result, valueInterface(item))
 		}
 		return result
 	default:
@@ -229,7 +232,7 @@ func normalizeInputValue(value interface{}, field schema.Field) interface{} {
 	case schema.FieldTypeGroup:
 		object, _ := value.(map[string]interface{})
 		if object != nil && field.Nested != nil {
-			return normalizeInputObject(object, field.Nested.Fields)
+			return normalizeInputObject(object, field.Nested.ResolvedFields())
 		}
 	case schema.FieldTypeArray:
 		items, _ := value.([]interface{})
@@ -237,7 +240,7 @@ func normalizeInputValue(value interface{}, field schema.Field) interface{} {
 			for index, item := range items {
 				object, _ := item.(map[string]interface{})
 				if object != nil {
-					items[index] = normalizeInputObject(object, field.Nested.Fields)
+					items[index] = normalizeInputObject(object, field.Nested.ResolvedFields())
 				}
 			}
 		}
@@ -250,11 +253,11 @@ func normalizeInputValue(value interface{}, field schema.Field) interface{} {
 		for index, item := range items {
 			object, _ := item.(map[string]interface{})
 			blockType, _ := object["blockType"].(string)
-			for _, block := range field.Blocks.Types {
-				if block.Key != blockType {
+			for _, block := range field.Blocks.ResolvedTypes() {
+				if block.Slug != blockType {
 					continue
 				}
-				normalized := normalizeInputObject(object, block.Fields)
+				normalized := normalizeInputObject(object, block.ResolvedFields())
 				normalized["blockType"] = blockType
 				if key, exists := object["_key"]; exists {
 					normalized["_key"] = key

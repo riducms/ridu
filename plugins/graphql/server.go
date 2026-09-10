@@ -99,7 +99,7 @@ func (executable *executable) serve(endpoint ridu.PluginEndpointContext) {
 		return
 	}
 	ctx := context.WithValue(request.Context(), requestStateKey{}, requestState{
-		actor: endpoint.Actor, actorCollection: endpoint.ActorCollection, token: requestToken(request),
+		rawVariables: variables, actor: endpoint.Actor, actorCollection: endpoint.ActorCollection, token: requestToken(request),
 		clientIP: endpoint.ClientIP, userAgent: request.UserAgent(), admitAuth: endpoint.AdmitAuthAttempt,
 	})
 	result := enginegraphql.Execute(enginegraphql.ExecuteParams{

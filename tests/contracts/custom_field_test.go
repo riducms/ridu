@@ -30,12 +30,12 @@ func (colorPlugin) FieldValidators() map[string]ridu.PluginFieldValidator {
 	return map[string]ridu.PluginFieldValidator{colorPluginKey: validateColor}
 }
 
-func colorField(name string, config colorConfig, options ...field.PluginOption) field.Definition {
+func colorField(name string, config colorConfig) field.PluginField {
 	encoded, err := json.Marshal(config)
 	if err != nil {
 		panic(err)
 	}
-	return field.Plugin(name, colorPluginKey, encoded, options...)
+	return field.Plugin(name, colorPluginKey, encoded)
 }
 
 func validateColor(ctx ridu.PluginFieldValidationContext) []schema.Issue {
@@ -56,12 +56,11 @@ func TestCustomFieldCarriesConfigAndUsesItsRuntimeValidator(t *testing.T) {
 		Plugins: []ridu.Plugin{colorPlugin{}},
 		Collections: []ridu.Collection{{
 			Slug: "brands",
-			Fields: []field.Definition{
+			Fields: field.Fields{
 				colorField(
 					"accent",
 					colorConfig{Palette: []string{"#663399", "#FFFFFF"}},
-					field.Required(),
-				),
+				).Required(),
 			},
 		}},
 	}, teststore.New())

@@ -12,6 +12,7 @@ export {
 } from "./live-preview.js";
 export type {
 	ClientOptions,
+	LiveValidationOptions,
 	AuthCollectionSlug,
 	AuthUser,
 	CollectionContract,

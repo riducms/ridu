@@ -1,13 +1,13 @@
 <script lang="ts">
 	import type { DateValue, Time } from "@internationalized/date";
-	import type { SchemaDatePickerAppearance } from "@riducms/protocol";
+	import type { SchemaDateFormat } from "@riducms/protocol";
 	import { DateField, TimeField } from "bits-ui";
 	import CalendarIcon from "~icons/lucide/calendar";
 
 	import { buttonVariants } from "@admin/components/ui/button";
 	import DateValueCalendar from "@admin/components/ui/date-value-control/date-value-calendar.svelte";
 	import { Popover, PopoverContent, PopoverTrigger } from "@admin/components/ui/popover";
-	import { cn } from "@riducms/ui";
+	import { cn, fieldControlARIA } from "@riducms/ui";
 	import { getAdminI18n } from "@riducms/plugin";
 	import {
 		datePickerFormValue,
@@ -20,28 +20,28 @@
 	let {
 		id,
 		name,
-		appearance = "dayOnly",
+		appearance = "date",
 		value = "",
 		disabled = false,
 		readonly = false,
 		required = false,
 		invalid = false,
+		hasDescription = false,
 		label,
-		describedBy,
 		class: className,
 		size = "field",
 		onValueChange,
 	}: {
 		id: string;
 		name?: string;
-		appearance?: SchemaDatePickerAppearance;
+		appearance?: SchemaDateFormat;
 		value?: string;
 		disabled?: boolean;
 		readonly?: boolean;
 		required?: boolean;
 		invalid?: boolean;
+		hasDescription?: boolean;
 		label?: string;
-		describedBy?: string;
 		class?: string;
 		size?: ControlSize;
 		onValueChange: (value: string) => void;
@@ -50,7 +50,7 @@
 
 	const controlClass = $derived(
 		cn(
-			"flex w-full items-center rounded-lg border border-control-border bg-control text-foreground-strong transition-[background-color,border-color,color] duration-150 hover:border-control-border-hover focus-within:border-primary/65 aria-invalid:border-destructive/65 data-[disabled]:cursor-not-allowed data-[disabled]:border-control-border-disabled data-[disabled]:bg-control-disabled data-[disabled]:opacity-45 data-[readonly]:border-control-border-disabled data-[readonly]:bg-control-disabled",
+			"flex w-full items-center rounded-lg border border-control-border bg-control text-foreground-strong transition-[background-color,border-color,color] duration-150 hover:border-control-border-hover focus-within:border-primary/65 aria-invalid:!border-destructive/65 data-[disabled]:cursor-not-allowed data-[disabled]:border-control-border-disabled data-[disabled]:bg-control-disabled data-[disabled]:opacity-45 data-[readonly]:border-control-border-disabled data-[readonly]:bg-control-disabled",
 			size === "field" && "h-10.5 px-3.25 text-[14.5px]",
 			size === "compact" && "h-9 px-3 text-[13px]",
 			size === "toolbar" && "h-[34px] px-2.5 text-[12.5px]",
@@ -58,9 +58,11 @@
 		)
 	);
 	const selectedDate = $derived(datePickerValue(value, appearance, i18n.timeZone));
+	const controlARIA = $derived(fieldControlARIA(id, hasDescription, invalid));
 	let open = $state(false);
 
 	function updateDate(next: DateValue | undefined) {
+		if (disabled || readonly) return;
 		onValueChange(datePickerFormValue(next, appearance, i18n.timeZone));
 	}
 
@@ -70,18 +72,19 @@
 	}
 
 	function updateTime(next: Time | undefined) {
+		if (disabled || readonly) return;
 		onValueChange(timeFieldFormValue(next));
 	}
 </script>
 
-{#if appearance === "timeOnly"}
+{#if appearance === "time"}
 	<TimeField.Root
 		value={timeFieldValue(value)}
 		locale={i18n.language}
 		{disabled}
 		{readonly}
 		{required}
-		errorMessageId={invalid ? describedBy : undefined}
+		errorMessageId={controlARIA["aria-errormessage"]}
 		onValueChange={updateTime}
 	>
 		<TimeField.Input
@@ -90,10 +93,8 @@
 			class={cn(controlClass, "gap-0.5 select-none")}
 			data-disabled={disabled ? "" : undefined}
 			data-readonly={readonly ? "" : undefined}
-			aria-invalid={invalid}
+			{...controlARIA}
 			aria-label={label}
-			aria-describedby={describedBy}
-			aria-errormessage={invalid ? describedBy : undefined}
 		>
 			{#snippet children({ segments })}
 				{#each segments as { part, value: segmentValue }, index (`${part}:${index}`)}
@@ -113,26 +114,25 @@
 	<DateField.Root
 		value={selectedDate}
 		locale={i18n.language}
-		granularity={appearance === "dayAndTime" ? "minute" : "day"}
+		granularity={appearance === "date-time" ? "minute" : "day"}
 		{disabled}
 		{readonly}
 		{required}
-		errorMessageId={invalid ? describedBy : undefined}
+		errorMessageId={controlARIA["aria-errormessage"]}
 		onValueChange={updateDate}
 	>
 		<div
 			class={controlClass}
 			data-disabled={disabled ? "" : undefined}
 			data-readonly={readonly ? "" : undefined}
-			aria-invalid={invalid}
+			aria-invalid={controlARIA["aria-invalid"]}
 		>
 			<DateField.Input
 				{id}
 				{name}
 				class="flex min-w-0 flex-1 items-center gap-0.5 select-none"
 				aria-label={label}
-				aria-describedby={describedBy}
-				aria-errormessage={invalid ? describedBy : undefined}
+				{...controlARIA}
 			>
 				{#snippet children({ segments })}
 					{#each segments as { part, value: segmentValue }, index (`${part}:${index}`)}

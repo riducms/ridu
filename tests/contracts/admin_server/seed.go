@@ -64,13 +64,13 @@ func seedFixture(ctx context.Context, application *ridu.App) (fixtureSeed, error
 	news, err := application.Local().Import(ctx, "categories", store.Values{
 		"name": store.String("News"), "slug": store.String("news"),
 		"seo": store.Object(store.Values{"title": store.String("Ridu news"), "description": store.String("Product and framework updates.")}),
-	}, ridu.ImportOptions{ID: "categories_4", Status: store.StatusPublished}, &editor)
+	}, ridu.ImportOptions{ID: "categories_4"}, &editor)
 	if err != nil {
 		return fixtureSeed{}, fmt.Errorf("seed category: %w", err)
 	}
 	guides, err := application.Local().Import(ctx, "categories", store.Values{
 		"name": store.String("Guides"), "slug": store.String("guides"),
-	}, ridu.ImportOptions{ID: "categories_5", Status: store.StatusPublished}, &editor)
+	}, ridu.ImportOptions{ID: "categories_5"}, &editor)
 	if err != nil {
 		return fixtureSeed{}, fmt.Errorf("seed category: %w", err)
 	}
@@ -347,7 +347,7 @@ func seedFixture(ctx context.Context, application *ridu.App) (fixtureSeed, error
 }
 
 func createUser(ctx context.Context, application *ridu.App, actor *store.Document, id string, values store.Values, password string) (store.Document, error) {
-	user, err := application.Local().Import(ctx, "users", values, ridu.ImportOptions{ID: id, Status: store.StatusPublished}, actor)
+	user, err := application.Local().Import(ctx, "users", values, ridu.ImportOptions{ID: id}, actor)
 	if err != nil {
 		return store.Document{}, fmt.Errorf("create user: %w", err)
 	}

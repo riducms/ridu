@@ -149,7 +149,7 @@ func sqliteAuthSnapshotConfig(read ridu.AccessRule) ridu.Config {
 			Slug: "users", Auth: true,
 			AuthConfig: ridu.AuthConfig{Password: ridu.PasswordPolicy{BcryptCost: bcrypt.MinCost}},
 			Access:     ridu.CollectionAccess{Read: read},
-			Fields:     []field.Definition{field.Email("email", field.Required(), field.Unique())},
+			Fields:     field.Fields{field.Email("email").Required().Unique()},
 		}},
 	}
 }

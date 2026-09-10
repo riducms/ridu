@@ -8,6 +8,7 @@ import (
 	atlaspostgres "ariga.io/atlas/sql/postgres"
 	atlasschema "ariga.io/atlas/sql/schema"
 	"github.com/jackc/pgx/v5/stdlib"
+	"github.com/riducms/ridu/internal/primitivefield"
 	ridumigration "github.com/riducms/ridu/migration"
 	"github.com/riducms/ridu/schema"
 )
@@ -90,6 +91,9 @@ type MigrationStepStatus struct {
 // Plan inspects the current PostgreSQL schema and returns only a safe
 // development synchronization plan. Production history uses BuildArtifact.
 func (backend *Store) Plan(ctx context.Context, manifest schema.Manifest) ([]Statement, error) {
+	if err := primitivefield.ValidateManifestIndexes(manifest); err != nil {
+		return nil, err
+	}
 	database := stdlib.OpenDB(*backend.pool.Config().ConnConfig)
 	defer database.Close()
 	transaction, err := database.BeginTx(ctx, nil)

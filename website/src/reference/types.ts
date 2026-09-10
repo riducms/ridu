@@ -41,6 +41,9 @@ export interface ReferenceSymbol {
 	signature: string;
 	parameters: ReferenceParameter[];
 	parametersLabel: string;
+	/** Authored explanations of the properties accepted by a configuration argument. */
+	options?: ReferenceParameter[];
+	optionsLabel?: string;
 	returns?: ReferenceReturn;
 	details: string[];
 	example: string;

@@ -1,6 +1,6 @@
 ---
 title: 'Plugin field'
-description: 'Use a compiled plugin’s storage, validation, generated type, and paired admin control.'
+description: 'Add a field type supplied by a plugin, such as rich text.'
 product: core
 eyebrow: 'Computed and plugin fields'
 order: 84
@@ -8,66 +8,81 @@ aliases: ['field.Plugin', 'custom field', 'plugin field']
 relatedSymbolIds:
   [
     'go:github.com/riducms/ridu/field#Plugin',
-    'go:github.com/riducms/ridu/field#CollectionReferenceKeys'
+    'go:github.com/riducms/ridu/field#PluginField.CollectionReferenceKeys'
   ]
 navigation:
   section: 'Model content'
   parent: fields
-  group: 'Computed & plugin'
   order: 240
   title: 'Plugin'
 ---
 
-`field.Plugin` is the low-level constructor for a compiled field extension. Most applications use
-a plugin-owned helper such as `richtext.Field`; that helper serializes valid config and prevents
-callers from mistyping the plugin key.
+Use a plugin field when you need a field type beyond the built-in options, such as rich text.
+The plugin defines how to validate, store, and edit its value. Most applications use the
+function supplied by the plugin, such as `richtext.Field`.
 
 ## In the admin {#admin-behavior}
 
 ![The official Rich text plugin field in the Ridu admin with populated portable editor content.](../../../../../docs/assets/fields/plugin.png)
 
-_The Svelte control authors the value; its paired Go plugin defines server validation and the stored shape._
+_The rich-text plugin provides both the editor and the Go code that validates its content._
 
-## Prefer the plugin helper {#example}
+## Add a field from a plugin {#example}
 
 ```go title="content/posts.go"
 import "github.com/riducms/ridu/plugins/richtext"
 
-richtext.Field("content", field.Required())
+richtext.Field("content").Required()
 ```
 
-The matching plugin must also be present in `Config.Plugins`, and its paired admin package must be
-statically registered when the field needs a custom control. Run `ridu add …` to install both sides
-and update their registration.
+Add the Go plugin to `Config.Plugins` and register its matching admin package. The `ridu add`
+command can install both packages and update their registration; see the plugin’s installation
+guide for the command to use.
 
-## Low-level constructor {#low-level}
+## Configuration {#configuration}
+
+| Constructor or method                            | What it controls                                                                                  |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
+| A plugin helper such as `richtext.Field(name)`   | Preferred application API; supplies the plugin key, config, runtime bindings, and admin pairing.  |
+| `field.Plugin(name, key, config)`                | Low-level field constructor for plugin authors; `config` must be valid JSON for the named plugin. |
+| `.EmbeddedTrees(trees...)`                       | Declares finite nested field shapes inside an otherwise opaque plugin value.                      |
+| `.CollectionReferenceKeys(keys...)`              | Declares direct collection-reference keys owned by the plugin value.                              |
+| `.Required()` / `.Localized()`                   | Requires the plugin payload or stores one payload per content locale.                             |
+| `.Validate(...)` / `.LiveValidate(...)`          | Adds application rules after the plugin's own value checks.                                       |
+| `.Access(...)`, `.Hooks(...)`, `.ReadHooks(...)` | Controls authorization and lifecycle behavior around the plugin value.                            |
+
+## Build your own plugin field {#low-level}
 
 ```go title="color/field.go"
-func Field(name string, config Config, options ...field.PluginOption) field.Definition {
+func Field(name string, config Config) field.PluginField {
 	encoded, err := json.Marshal(config)
 	if err != nil {
 		panic(err)
 	}
-	return field.Plugin(name, Key, encoded, options...)
+	return field.Plugin(name, Key, encoded)
 }
 ```
 
-Plugin config must be deterministic public JSON. Never put secrets, callbacks, or request-specific
-data in it. If config properties contain collection slugs, declare those exact property names with
-`CollectionReferenceKeys` so schema-addressed migration checks can follow renames safely.
+When writing a plugin, wrap `field.Plugin` in a function like the one above so applications can
+pass a Go config struct. The config is included in the schema sent to the admin: use JSON values
+and keep secrets, callbacks, and request-specific data out of it.
 
-Define Go/TypeScript/OpenAPI mappings, runtime validation, admin pairing, and any supported query
-type in the plugin descriptor. Without those mappings generated values fall back to
-`json.RawMessage`/`unknown`; without a server validator a pretty control is not a finished field.
-Only common safe options such as required, localized, labels, descriptions, layout, and conditions
-are accepted by `PluginOption`.
+If config properties refer to collections, list their names with `CollectionReferenceKeys` so
+Ridu can track those references when a collection is renamed.
+
+The plugin descriptor defines the generated Go and TypeScript types, OpenAPI schema, server
+validation, admin component, and supported filters. Without type definitions, generated values
+use `json.RawMessage` in Go and `unknown` in TypeScript.
+
+The returned `field.PluginField` supports methods such as `.Required()` and `.Admin(...)`, just
+like built-in fields. Follow [Build a field plugin](/guides/custom-fields/) for a complete example.
 
 ## Common mistakes {#troubleshooting}
 
 - Do not call `field.Plugin` directly when the package provides a typed helper.
-- Installing only the npm control or only the Go package creates an incomplete pair.
-- Config is schema metadata, not the stored value.
+- Install and register both the Go package and its matching admin package.
+- The config controls how the field works; the document stores the value entered by the author.
 - Test a custom field through resolution, generation, storage, Local API/REST, and the admin.
 
-See [`field.Plugin`](/reference/field/plugin/), [Plugin system](/docs/plugins/), and the complete
+See [`field.Plugin`](/reference/field/plugin/), [Plugins](/docs/plugins/), and the complete
 [custom field guide](/guides/custom-fields/).

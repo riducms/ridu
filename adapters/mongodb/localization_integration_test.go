@@ -35,42 +35,25 @@ func TestMongoDBLocalizedScalarOperationEngineParity(t *testing.T) {
 		}},
 		Collections: []ridu.Collection{
 			{
-				Slug: "posts",
-				Fields: []field.Definition{
-					field.Text("title", field.Localized()),
-					field.Text("summary", field.Localized()),
-					field.Text("kind", field.Required()),
-					field.Group("seo", field.Required(), field.Fields(
-						field.Text("headline", field.Required(), field.Localized()),
-						field.Text("slug", field.Required()),
-					)),
-				},
+				Slug:   "posts",
+				Fields: field.Fields{field.Text("title").Localized(), field.Text("summary").Localized(), field.Text("kind").Required(), field.Group("seo", field.Fields{field.Text("headline").Required().Localized(), field.Text("slug").Required()}).Required()},
 			},
 			{
-				Slug: "secured",
-				Fields: []field.Definition{
-					field.Text("gate", field.Required(), field.Localized()),
-					field.Text("label", field.Required(), field.Localized()),
-				},
+				Slug:   "secured",
+				Fields: field.Fields{field.Text("gate").Required().Localized(), field.Text("label").Required().Localized()},
 				Access: ridu.CollectionAccess{Read: publicAccess},
 			},
 			{
 				Slug:   "authors",
-				Fields: []field.Definition{field.Text("name", field.Required(), field.Localized())},
+				Fields: field.Fields{field.Text("name").Required().Localized()},
 			},
 			{
-				Slug: "articles",
-				Fields: []field.Definition{
-					field.Text("title", field.Required()),
-					field.Relationship("author", field.To("authors"), field.Required()),
-				},
+				Slug:   "articles",
+				Fields: field.Fields{field.Text("title").Required(), field.Relationship("author", "authors").Required()},
 			},
 			{
 				Slug: "history", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true},
-				Fields: []field.Definition{
-					field.Text("gate", field.Required(), field.Localized()),
-					field.Text("note", field.Required(), field.Localized()),
-				},
+				Fields: field.Fields{field.Text("gate").Required().Localized(), field.Text("note").Required().Localized()},
 				Access: ridu.CollectionAccess{ReadVersions: publicAccess},
 			},
 		},
@@ -123,10 +106,10 @@ func TestMongoDBLocalizedScalarOperationEngineParity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	titles, titleMap := all.Values["title"].ObjectValue()
-	summaries, summaryMap := all.Values["summary"].ObjectValue()
-	seo, seoMap := all.Values["seo"].ObjectValue()
-	headlines, headlineMap := seo["headline"].ObjectValue()
+	titles, titleMap := all.Values["title"].CopyObject()
+	summaries, summaryMap := all.Values["summary"].CopyObject()
+	seo, seoMap := all.Values["seo"].CopyObject()
+	headlines, headlineMap := seo["headline"].CopyObject()
 	frenchSummary, frenchSummaryIsString := summaries["fr"].StringValue()
 	if !titleMap || !summaryMap || !seoMap || !headlineMap ||
 		mongoLocalizedString(titles["en"]) != "Hello" || mongoLocalizedString(titles["fr"]) != "Bonjour" ||
@@ -167,9 +150,9 @@ func TestMongoDBLocalizedScalarOperationEngineParity(t *testing.T) {
 		mongoRollback(t, directWrite)
 		t.Fatal(err)
 	}
-	directTitles, _ := directDocument.Values["title"].ObjectValue()
-	directSEO, _ := directDocument.Values["seo"].ObjectValue()
-	directHeadlines, _ := directSEO["headline"].ObjectValue()
+	directTitles, _ := directDocument.Values["title"].CopyObject()
+	directSEO, _ := directDocument.Values["seo"].CopyObject()
+	directHeadlines, _ := directSEO["headline"].CopyObject()
 	if mongoLocalizedString(directTitles["en"]) != "Direct" || mongoLocalizedString(directTitles["fr"]) != "$Direct bonjour" ||
 		mongoLocalizedString(directHeadlines["en"]) != "Direct home" || mongoLocalizedString(directHeadlines["fr"]) != "Direct bienvenue" ||
 		mongoLocalizedString(directSEO["slug"]) != "direct-slug" {
@@ -194,7 +177,7 @@ func TestMongoDBLocalizedScalarOperationEngineParity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	populatedAuthor, populatedDocument := populated.Values["author"].DocumentValue()
+	populatedAuthor, populatedDocument := populated.Values["author"].CopyDocument()
 	if !populatedDocument || mongoLocalizedString(populatedAuthor.Values["name"]) != "Auteur" || populatedAuthor.LocalizationSources["name"] != "fr" {
 		t.Fatalf("single-locale populated localized target = %#v", populated.Values["author"])
 	}
@@ -204,8 +187,8 @@ func TestMongoDBLocalizedScalarOperationEngineParity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	allPopulatedAuthor, populatedDocument := allPopulated.Values["author"].DocumentValue()
-	allNames, canonicalNames := allPopulatedAuthor.Values["name"].ObjectValue()
+	allPopulatedAuthor, populatedDocument := allPopulated.Values["author"].CopyDocument()
+	allNames, canonicalNames := allPopulatedAuthor.Values["name"].CopyObject()
 	if !populatedDocument || !canonicalNames || mongoLocalizedString(allNames["en"]) != "Author" || mongoLocalizedString(allNames["fr"]) != "Auteur" {
 		t.Fatalf("all-locales populated localized target = %#v", allPopulated.Values["author"])
 	}
@@ -351,7 +334,7 @@ func TestMongoDBLocalizedScalarOperationEngineParity(t *testing.T) {
 		mongoRollback(t, sparseVersionRead)
 		t.Fatalf("request-less FindVersion rejected sparse locale history: %v", err)
 	}
-	storedGates, _ := storedVersion.Snapshot.Values["gate"].ObjectValue()
+	storedGates, _ := storedVersion.Snapshot.Values["gate"].CopyObject()
 	if mongoLocalizedString(storedGates["de"]) != "Öffentlich" {
 		mongoRollback(t, sparseVersionRead)
 		t.Fatalf("request-less FindVersion sparse locale = %#v", storedVersion.Snapshot.Values["gate"])
@@ -557,7 +540,7 @@ func mongoLocalizedString(value store.Value) string {
 }
 
 func mongoLocalizedNestedString(value store.Value, name string) string {
-	object, _ := value.ObjectValue()
+	object, _ := value.CopyObject()
 	return mongoLocalizedString(object[name])
 }
 

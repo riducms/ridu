@@ -1,4 +1,120 @@
-# Ridu versus Payload performance comparison
+# Framework scale and browser performance checks
+
+Run `make performance-check` without another repository gate or benchmark running. It builds the
+required runtime packages, then executes the hook, ordinary-operation and population benchmarks,
+the generated-definition scale/compilation matrix and the browser performance case sequentially.
+Browser output lives in `.ridu/playwright/performance/` and the fixture keeps isolated data and
+OS-assigned ports.
+
+The normal gates retain small exact-behavior tests and repeated-definition compiler contracts.
+Large 100/1,000/5,000-node hook workloads and the 1/10/50 definition compile matrix are explicit here.
+Go benchmarks report time and allocations; they do not by themselves fail on a performance
+regression. Generated growth tests assert structural bounds and real consumer compilation. The
+browser performance case enforces its typing/insert/reorder thresholds with one worker; ordinary
+E2E continues to prove nested editors mount lazily and retain their values.
+
+For a focused CPU profile:
+
+```sh
+mkdir -p .ridu/performance
+go test -run '^$' -bench '^BenchmarkEmbeddedHookBatch$' -benchtime=1x -benchmem \
+  -cpuprofile .ridu/performance/embedded-hooks.cpu.pprof \
+  -o .ridu/performance/core.test ./core
+go tool pprof .ridu/performance/core.test .ridu/performance/embedded-hooks.cpu.pprof
+```
+
+Field-hook execution indexes each binding's admitted occurrences once. A nonstructural replacement
+updates its own cached value and sibling view while immediately publishing its immutable root
+replacement. Exact-locale sibling views are reprojected instead, preserving null omission and
+nested localization. Row preparation still follows the first callback and every replacement that can
+contain rows; preparation and structural changes rebuild the lookup while retaining the original
+dispatch order. Read-only embedded discovery and validation share the transforming walker's
+admission logic without constructing discarded replacement containers.
+
+The original `BenchmarkEmbeddedHookBatch` workload remains unchanged. The companion
+`BenchmarkEmbeddedValueScaling` uses the same create, schema and node payload, comparing Keep and
+Replace at 1, 10, 100, 1,000 and 5,000 nodes. `BenchmarkNativeValueScaling` shares those cases
+using native blocks with the same logical fields. Both `None` matrices and their 100-node
+`ReadAll` cases run in `make performance-check`; larger callback variants run separately:
+
+- `None`: callbacks keep or replace titles without reading the document.
+- `Retain`: retain every immutable root view through the create operation.
+- `ReadRoot`: look up the root's body in every callback, without traversing its list.
+- `ReadAll`: read every title in every callback through immutable `Get` and `Elements`.
+- `Materialize`: explicitly copy the list and each containing object before reading the titles,
+  recreating the old nested-container copying as a control; root lookup uses the new cheap API.
+- `Serialize`: include JSON serialization of the returned document in the timed operation.
+
+Application construction and fixture input construction are outside the timer, as in the original
+benchmark. Create, validation, hook dispatch, row preparation, authorization, the test store and the
+returned document are inside. Retention and callback reads are timed; retained views remain live
+through operation completion. Allocated bytes are cumulative, not peak live memory.
+
+`store.Value` lists use a canonical immutable 32-way tree. Item replacement copies one leaf and
+its ancestor pointer arrays, sharing other branches with earlier callback snapshots. Small lists
+use one leaf. Tree shape depends on length, so construction, JSON decoding and editing preserve
+structural equality for equal values. `Get`, `Lookup`, `Entries` and `Elements` share immutable
+children without materializing containers. `CopyObject`, `CopyList` and `CopyDocument` explicitly
+request detached mutable output; they replace the former copying accessor names. `ListItem` and
+`WithListItem` provide immutable indexed access and replacement without exposing backing storage.
+`runtimePatch` uses them to publish each individual change immediately. Multi-item patches, such
+as batched dynamic defaults, retain one bulk rebuild to preserve linear batch work. JSON and population traverse list
+branches directly; there is no deferred patch chain, mutable cache or later full-list consolidation.
+
+For comparable local samples, build before each measurement and run without competing jobs:
+
+```sh
+mkdir -p .ridu/performance
+go test -c -o .ridu/performance/core.test ./core
+.ridu/performance/core.test -test.run '^$' \
+  -test.bench '^BenchmarkEmbeddedValueScaling$/^None$' \
+  -test.benchtime=1x -test.count=5 -test.benchmem
+.ridu/performance/core.test -test.run '^$' \
+  -test.bench '^BenchmarkEmbeddedValueScaling$/^(Retain|ReadRoot|ReadAll|Materialize|Serialize)$' \
+  -test.benchtime=1x -test.count=5 -test.benchmem
+.ridu/performance/core.test -test.run '^$' \
+  -test.bench '^BenchmarkEmbeddedValueScaling$/^None$/^(1|10)$' \
+  -test.benchtime=30x -test.count=5 -test.benchmem
+```
+
+For a profile of the actual create operation, use the compiled binary with
+`-test.bench '^BenchmarkEmbeddedValueScaling$/^None$/^5000$/^Replace$'`,
+`-test.benchtime=3x`, `-test.cpuprofile` and `-test.memprofile`. Inspect both CPU and
+`go tool pprof -alloc_space` / `-alloc_objects` output. Profile Keep and the callback variants
+separately; profiling overhead belongs outside the timing comparison.
+
+Keep the benchmark workload and host/Go/GC settings identical for before/after comparisons. Report
+all samples or their range alongside medians. Timing thresholds do not belong in correctness tests.
+Regression coverage instead asserts snapshot immutability, equality/serialization, callback order,
+identity preparation, validation and persisted results.
+
+For a fixed-depth document, replacing each of N list items now costs O(N log₃₂ N) list path work,
+instead of O(N²) copied values. Immutable list traversal is O(N) without a copied slice;
+`CopyList()` also allocates O(N) output. A callback that scans every item for each of N hooks
+still requests N² reads, and explicit copies add corresponding allocation work. Structural replacement hooks and
+changed exact-locale occurrences still require reindexing, and exact-locale root projection adds
+work per callback. Those paths are not covered by the scalar replacement scaling claim. Repeated
+whole-document engine passes also retain a substantial linear allocation cost.
+
+See [hooks and immutable values](https://riducms.com/docs/performance/hooks-and-values/) for
+the supported cost model and [measurement](https://riducms.com/docs/performance/measurement/)
+for profiling guidance and the limits of benchmark comparisons.
+
+`BenchmarkOrdinaryValueScaling` measures native and embedded documents with no field callbacks.
+Its five actions are a root scalar update, one nested title update, one localized edit, an insertion
+with reorder, and a populated read with one relationship target. The 100-row cases run in
+`make performance-check`; the complete matrix also includes 10, 1,000 and 5,000 rows. Every timed
+operation starts with a fresh, already persisted fixture, prepared outside the timer. Nested edits
+submit a complete identity list with sparse payloads. `InsertReorder` starts with N−1 rows and ends
+with N rows so the 5,000-row case stays inside the existing combined embedded traversal budget.
+
+The separate `BenchmarkPopulationTraversal` matrix runs at 100, 1,000 and 5,000 rows in the
+performance gate. It measures observation, mapping and populated-document redaction traversal on
+the same response-shaped fixture, with and without populated references. It does not measure
+database access. These benchmarks report time,
+B/op and allocs/op; their behavioral fixture tests contain no timing thresholds.
+
+## Ridu versus Payload performance comparison
 
 This benchmark compares the committed Ridu and Payload parity fixtures as production HTTP servers
 connected to the same local PostgreSQL instance. It records process-tree RSS, startup readiness,
@@ -149,3 +265,8 @@ go list -deps ./tests/performance/graphql_without | rg 'graphql-go|plugins/graph
 ```
 
 No output is the expected baseline result.
+
+The locale-view benchmarks measure bounded operation-scoped projection sharing,
+including ordinary updates, fallback/all-locales controls, callback snapshots, serialization and
+separate live-memory probes. The 100-row locale controls and serialization cases run serially in
+`make performance-check`; memory probes remain opt-in diagnostics.

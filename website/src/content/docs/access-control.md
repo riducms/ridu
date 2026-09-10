@@ -1,29 +1,61 @@
 ---
 title: 'Access control'
-description: 'Allow, deny, or filter operations with transaction-scoped Go rules.'
+description: 'Choose who can read, create, update, and delete content, and protect individual fields.'
 product: core
 eyebrow: 'Runtime'
 order: 70
-aliases: ['SiblingData', 'field sibling data', 'nested field access']
+aliases:
+  [
+    'operation.Context.Siblings',
+    'field sibling data',
+    'nested field access'
+  ]
 navigation:
   section: 'Work with data'
   order: 20
   title: 'Access control'
 ---
 
-## Access decisions {#decisions}
+Access rules decide who can use your content. Collection and global rules protect documents;
+field rules protect individual values. Ridu checks these rules for requests from the admin, REST,
+the SDK, and the local Go API.
 
-A collection rule receives the actor, operation, target ID, submitted data, locale, and local API. Return `ridu.Allow()` or `ridu.Deny()` for any rule. Return `ridu.Where(expression)` only where Ridu can attach a document predicate to an atomic document read, version-history read, update, delete, or unlock query.
+If `operation.AccessContext`, `store.Document`, or `query.Path` is unfamiliar, start with
+[Go packages](/docs/go-packages/). That guide explains the values and return types used below.
 
-Keep reusable rules in an ordinary Go file beside your content model. This example allows anyone to read, requires a session to create, and builds an ownership predicate from the authenticated document ID.
+## Access configuration {#configuration}
 
-```go title="content/access.go"
+| API                                        | Where it applies                                                         | Result                                                                                    |
+| ------------------------------------------ | ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
+| `ridu.Allow()`                             | Collection or global access rule                                         | Permits the operation, subject to field rules and normal validation.                      |
+| `ridu.Deny()`                              | Collection or global access rule                                         | Rejects the operation.                                                                    |
+| `ridu.Where(expression)`                   | Collection document operations                                           | Adds a database predicate atomically to the caller's query or target lookup.              |
+| `Collection.Access`                        | `Create`, `Read`, `Update`, `Delete`, and capability-specific operations | Configures document-level rules for each operation family.                                |
+| `Global.Access`                            | `Read`, `Update`                                                         | Configures singleton access.                                                              |
+| Field `.Access(field.Access{...})`         | `Create`, `Read`, `Update`                                               | Replaces the field's boolean rules. A denied read removes the field from output.          |
+| Field `.RestrictAccess(...)`               | Existing field access                                                    | Conjoins supplied rules with inherited or reusable rules.                                 |
+| `ctx.Actor` / `ctx.ActorCollection`        | Every access callback                                                    | Identifies the signed-in document and the auth collection that owns it.                   |
+| `ctx.Data`, `ctx.Document`, `ctx.Siblings` | Phase-specific callbacks                                                 | Exposes current candidate or saved values; see each context before assuming availability. |
+
+## Write an access rule {#decisions}
+
+A collection rule receives `ridu.AccessContext`, which includes the signed-in user (`Actor`),
+the requested operation, document ID, submitted values, and locale. Return one of these decisions:
+
+- `ridu.Allow()` permits the operation.
+- `ridu.Deny()` rejects it.
+- `ridu.Where(expression)` permits it only for documents that match a filter, such as posts
+  belonging to the signed-in author.
+
+Keep reusable rules beside your content model. These helpers allow public reads, require a
+signed-in user, or limit access to documents belonging to that user:
+
+```go title="content/access.go" focus={13-17,26-29}
 package content
 
 import (
 	"github.com/riducms/ridu"
 	"github.com/riducms/ridu/query"
-	"github.com/riducms/ridu/store"
 )
 
 func publicRead(ridu.AccessContext) (ridu.AccessDecision, error) {
@@ -31,6 +63,7 @@ func publicRead(ridu.AccessContext) (ridu.AccessDecision, error) {
 }
 
 func signedIn(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
+	// Actor is nil when no user is signed in.
 	if ctx.Actor == nil {
 		return ridu.Deny(), nil
 	}
@@ -38,38 +71,26 @@ func signedIn(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
 }
 
 func ownDocuments(path query.Path) ridu.AccessRule {
+	// Return a rule that remembers this collection's owner field.
 	return func(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
 		if ctx.Actor == nil {
 			return ridu.Deny(), nil
 		}
+		// Check ownership as part of the database operation.
 		return ridu.Where(
 			query.Equal(path, query.String(ctx.Actor.ID)),
 		), nil
 	}
 }
-
-func actorHasRole(actor *store.Document, allowed ...string) bool {
-	if actor == nil {
-		return false
-	}
-	role, ok := actor.Values["role"].StringValue()
-	if !ok {
-		return false
-	}
-	for _, candidate := range allowed {
-		if role == candidate {
-			return true
-		}
-	}
-	return false
-}
 ```
 
-## Collection rules {#collection-rules}
+## Protect a collection {#collection-rules}
 
-Attach those rules to the collection operation they protect. The path supplied to `ownDocuments` is the stored relationship field, so an author can update or delete only rows whose `author` ID matches their own document ID.
+Add the rules to `Access` on your collection. This example lets anyone read posts, lets signed-in
+users create them, and lets authors update or delete their own posts. The `author` relationship
+stores the user ID checked by `ownDocuments`. The `internalNotes` helper is defined below.
 
-```go title="content/posts.go" add={24-30}
+```go title="content/posts.go" focus={23-28}
 package content
 
 import (
@@ -79,6 +100,7 @@ import (
 )
 
 func Posts() ridu.Collection {
+	// Check this fixed query path while constructing the config.
 	authorPath, err := query.NewPath("author")
 	if err != nil {
 		panic(err)
@@ -86,10 +108,10 @@ func Posts() ridu.Collection {
 
 	return ridu.Collection{
 		Slug: "posts",
-		Fields: []field.Definition{
-			field.Text("title", field.Required()),
-			field.Relationship("author", field.To("users"), field.Required()),
-			field.Textarea("internalNotes"),
+		Fields: field.Fields{
+			field.Text("title").Required(),
+			field.Relationship("author", "users").Required(),
+			internalNotes("internalNotes"),
 		},
 		Access: ridu.CollectionAccess{
 			Create: signedIn,
@@ -97,95 +119,130 @@ func Posts() ridu.Collection {
 			Update: ownDocuments(authorPath),
 			Delete: ownDocuments(authorPath),
 		},
-		FieldAccess: postFieldAccess(),
 	}
 }
 ```
 
-This example keeps `Posts` as a function because it performs fallible path construction before it
-can return the collection. Ordinary static collection definitions should be package variables.
+Use `Posts()` in your config's `Collections` list. It is a function here so it can check the error
+from `query.NewPath` before returning the collection.
 
 <aside class="callout" data-variant="important">
-<strong>Filtered means filtered</strong>
-<p>A <code>Where</code> decision stays attached to the atomic store query. Ridu does not fetch a document first and check ownership afterwards. Creates, global rules, and admin entry accept only <code>Allow</code> or <code>Deny</code>.</p>
+<strong>When to use a filter</strong>
+<p><code>Where</code> checks the filter in the same database operation that reads or changes the document. Use it for reads, version history, updates, deletes, and unlocking. Creating a document or entering the admin requires <code>Allow</code> or <code>Deny</code>. Global rules can filter an existing global, but its first save requires <code>Allow</code> because there is no saved document to check.</p>
 </aside>
 
-## Field access {#field-access}
+## Protect an individual field {#field-access}
 
-Field rules return a boolean. A denied write is rejected; a denied read is redacted from the returned document. Presentation options such as `field.ReadOnly()` are not authorization.
+Field rules return `true` to allow access or `false` to deny it. If a write is denied, Ridu rejects
+the write. If a read is denied, Ridu leaves the field out of the response.
 
-Field-access map keys are authored field paths. `postFieldAccess()` is called by `Posts()` above, keeping the policy readable without hiding it in an anonymous collection literal.
+Their `operation.AccessContext` is a field callback context. See
+[Operations and callbacks](/docs/go-packages/operation/) for the caller, nearby values, and
+how this differs from a collection's `ridu.AccessContext`.
 
-```go title="content/field_access.go"
+This helper creates a notes field that only administrators can write and that editors and
+administrators can read. Reuse it in any collection, group, array, or block that needs the same
+protection.
+
+```go title="content/field_access.go" focus={21-26}
 package content
 
-import "github.com/riducms/ridu"
+import (
+	"github.com/riducms/ridu/field"
+	"github.com/riducms/ridu/operation"
+)
 
-func postFieldAccess() map[string]ridu.FieldAccess {
-	return map[string]ridu.FieldAccess{
-		"internalNotes": {
-			Create: func(ctx ridu.FieldAccessContext) (bool, error) {
-				return actorHasRole(ctx.Actor, "admin"), nil
-			},
-			Read: func(ctx ridu.FieldAccessContext) (bool, error) {
-				return actorHasRole(ctx.Actor, "editor", "admin"), nil
-			},
-			Update: func(ctx ridu.FieldAccessContext) (bool, error) {
-				return actorHasRole(ctx.Actor, "admin"), nil
-			},
-		},
+func internalNotes(name string) field.TextareaField {
+	allowed := func(roles ...string) field.AccessRule {
+		return func(ctx operation.AccessContext) (bool, error) {
+			// A missing role matches none of the allowed names.
+			role, _ := ctx.Actor.Data.String("role")
+			for _, candidate := range roles {
+				if role == candidate {
+					return true, nil
+				}
+			}
+			return false, nil
+		}
 	}
+	return field.Textarea(name).Access(field.Access{
+		// Protect creates as well as updates.
+		Create: allowed("admin"),
+		Read:   allowed("editor", "admin"),
+		Update: allowed("admin"),
+	})
 }
 ```
 
 Here only administrators may create or update `internalNotes`; editors may read it. Omitting the
 `Create` rule would leave that write allowed by default, even if `Update` were restricted.
 
-## Read sibling values in a field rule {#sibling-data}
+Setting `field.Admin{ReadOnly: true}` only disables editing in the admin. Use access rules when
+the API must reject changes as well.
 
-`ctx.SiblingData` contains the values beside the field currently being authorized. For a root
-field, that is the document's root value map. For a nested field, Ridu narrows it to that field's
-Group, Array row, or Block instance.
+`.Access(...)` replaces all of a field's access rules. When extending a reusable field, use
+`.RestrictAccess(...)` to add a restriction while keeping its existing rules; both rules must
+allow the operation.
 
-This collection makes a link URL visible to everyone unless the checkbox in the same row marks it
-as members-only:
+### Filtering and sorting protected fields {#protected-field-queries}
 
-```go title="content/pages.go" focus={20-24}
-package content
+Adding a `Read` rule also prevents API callers from filtering or sorting by that field. Otherwise,
+someone could infer a hidden value by trying different filters, even though the response omitted
+it. This restriction applies to every user, including users who can read the field in an individual
+document.
 
-import (
-	"github.com/riducms/ridu"
-	"github.com/riducms/ridu/field"
-)
+It covers filters used by lists, counts, distinct values, select-all operations, and index windows.
+Protecting a group, array, or block also protects its nested fields. Sorting the parent is blocked
+when a nested field has a `Read` rule. Choosing another locale does not bypass the restriction.
+These queries return HTTP `403 access_denied`; the local API and GraphQL use
+`field_access_denied`.
 
+Your own `ridu.Where(...)` access rules can still filter by a protected field. For example, Ridu
+can enforce ownership without exposing the owner field to the caller. Inverse relationships also
+continue to find their related documents, but callers cannot add filters or sorting on a protected
+backing field.
+
+Use the field paths described in [Querying data](/docs/querying/). Invalid paths, including block
+paths without a variant and paths into internal rich-text storage, return `400 bad_request`
+(`bad_query` in the local API). Queries inside an unrestricted JSON field depend on the database
+adapter's support for JSON queries.
+
+## Use another field in an access rule {#sibling-data}
+
+Read `ctx.Siblings` to check other fields in the same group, array row, or block. For a field at
+the document's top level, it contains the document's top-level fields. It also includes the field
+being checked.
+
+Here each link has a `membersOnly` checkbox. Anonymous readers receive the URL only when that
+checkbox is off; signed-in readers can see every URL. Field rules identify an anonymous reader
+with an empty `ctx.Actor.ID`.
+
+```go title="content/pages.go" focus={8-12}
 var Pages = ridu.Collection{
 	Slug: "pages",
-	Fields: []field.Definition{
-		field.Array("links", field.Fields(
-			field.Text("label", field.Required()),
-			field.Text("url", field.Required()),
-			field.Checkbox("membersOnly", field.Default(false)),
-		)),
-	},
-	FieldAccess: map[string]ridu.FieldAccess{
-		"links.url": {
-			Read: func(ctx ridu.FieldAccessContext) (bool, error) {
-				membersOnly, _ := ctx.SiblingData["membersOnly"].BooleanValue()
-				if !membersOnly {
-					return true, nil
-				}
-				return ctx.Actor != nil, nil
-			},
-		},
+	Fields: field.Fields{
+		field.Array("links", field.Fields{
+			field.Text("label").Required(),
+			field.Text("url").Required().Access(field.Access{
+				Read: func(ctx operation.AccessContext) (bool, error) {
+					// Read the checkbox in this link row.
+					membersOnly, _ := ctx.Siblings.Get(
+						"membersOnly",
+					).BooleanValue()
+					return !membersOnly || ctx.Actor.ID != "", nil
+				},
+			}),
+			field.Checkbox("membersOnly").Default(false),
+		}),
 	},
 }
 ```
 
-The map key remains the authored path `links.url`. When Ridu evaluates a particular row,
-`ctx.RuntimePath` is concrete—for example, `links.2.url`—and `SiblingData` is that row's `label`,
-`url`, and `membersOnly` values. It is a detached snapshot: changing it does not change the
-document. Use a hook when you intend to mutate submitted data.
+During a write, `ctx.Prior` contains the saved values from the same group or row before the change.
+Ridu matches array and block rows by their key, so reordering rows does not mix up their previous
+values. New rows and ordinary reads have no previous values in `Prior`.
 
-See [`ridu.FieldAccessContext`](/reference/ridu/field-access-context/) for the current value,
-document, original document, locale, and transaction-reusing Local API available alongside sibling
-data.
+Access rules can read these values but cannot change them. Use a [field hook](/docs/hooks/fields/#normalize-input)
+to change a value. See [Using other field values](/docs/fields/callback-values/) for examples of
+`Root`, `Siblings`, `Prior`, and looking up a related document, or
+[`operation.AccessContext`](/reference/operation/access-context/) for the full reference.

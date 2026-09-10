@@ -1,12 +1,10 @@
-import { ADMIN_PLUGIN_API_VERSION, defineAdminPlugin } from "@riducms/plugin";
+import { defineAdminPlugin } from "@riducms/plugin/authoring/v1";
 
 import { formBuilderMessages } from "./messages";
 
 export const formBuilderAdminPlugin = defineAdminPlugin({
-	apiVersion: ADMIN_PLUGIN_API_VERSION,
 	key: "form-builder",
 	pairingVersion: 1,
-	fields: [],
 	messages: formBuilderMessages,
 });
 

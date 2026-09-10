@@ -161,6 +161,7 @@
 }
 
 .astro-code.has-line-annotations > code > .line {
+	min-height: 1lh;
 	padding-right: var(--code-inline-padding);
 	padding-left: var(--code-inline-padding);
 }
@@ -214,6 +215,24 @@
 
 .code-tabs::-webkit-scrollbar {
 	display: none;
+}
+
+.code-file-tabs {
+	margin: 1.7rem 0;
+	min-width: 0;
+}
+
+.code-file-tabs > .code-tabs {
+	padding-inline: 0.75rem;
+	border-bottom: 1px solid var(--colors-line-strong);
+}
+
+.code-file-tabs > [hidden] {
+	display: none;
+}
+
+.code-file-tabs[data-code-file-ready] .code-block {
+	margin-top: 0.75rem;
 }
 
 .code-tabs button {

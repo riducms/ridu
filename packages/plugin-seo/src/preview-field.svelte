@@ -1,11 +1,18 @@
 <script lang="ts">
-	import type { FieldComponentProps } from "@riducms/plugin";
+	import type { PluginFieldProps } from "@riducms/plugin";
 
 	import { GenerationController } from "@plugin-seo/generation-controller.svelte";
-	import { previewConfig } from "@plugin-seo/seo-config";
+	import type { PreviewConfig } from "@plugin-seo/seo-config";
 
-	let { field, form, i18n, authoring }: FieldComponentProps = $props();
-	const config = $derived(previewConfig(field));
+	let {
+		field: binding,
+		form,
+		config,
+		i18n,
+		authoring,
+	}: PluginFieldProps<undefined, PreviewConfig, "ui"> = $props();
+	const field = $derived(binding.schema);
+
 	const title = $derived(String(form.get(config.titlePath) ?? ""));
 	const description = $derived(String(form.get(config.descriptionPath) ?? ""));
 	let href = $state("");

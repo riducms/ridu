@@ -4,6 +4,16 @@
 
 Start with the exact error and the narrowest failing command.
 
+| Symptom                         | First command or check                          | Continue with                                     |
+| ------------------------------- | ----------------------------------------------- | ------------------------------------------------- |
+| CLI or package cannot be found  | `command -v ridu` and `ridu version`            | [Installation](./installation.md)               |
+| Generated files differ          | `ridu generate --check`                         | [Generated contracts](./generated-contracts.md) |
+| Config or schema fails          | `ridu generate`                                 | [Configuration](./configuration.md)             |
+| Migration is pending/refused    | `ridu migrate status` and `ridu migrate verify` | [Migrations](./migrations.md)                   |
+| Runtime is live but not ready   | Request `/readyz` and inspect its cause         | [Production readiness](./production.md#health)  |
+| Query or population is rejected | Reduce the request to one filter/path           | [Querying data](./querying.md)                  |
+| Admin component fails to build  | `bun run check` in the generated project        | [Custom components](./custom-components.md)     |
+
 ## `ridu` or a package cannot be found {#command-not-found}
 
 **Likely cause:** the CLI installation directory is not on `PATH`, the project has not installed its
@@ -23,9 +33,12 @@ If the command is missing, install the released CLI and make sure Go's binary di
 go install github.com/riducms/ridu/cmd/ridu@latest
 ```
 
-Inside a generated project, run `ridu doctor` to compare the CLI, project, Go, Bun, and package
-requirements. Restore dependencies with the package manager and versions committed by the project;
-do not add absolute local `replace` directives or Vite aliases as a version workaround.
+Inside a generated project, run `ridu doctor` for tool availability and basic project prerequisites.
+It does not compare release versions: compare `ridu version`, `go list -m github.com/riducms/ridu`,
+and the `@riducms/*` versions in the project's package files and lockfile yourself. Restore
+dependencies with the package manager and versions committed by the project, then run
+`ridu generate --check` and `ridu check`. Do not add absolute local `replace` directives or Vite
+aliases as a version workaround.
 
 ## `ridu new` refuses the project {#new-refuses-project}
 
@@ -80,8 +93,11 @@ external I/O.
 
 ## `ridu dev` cannot start {#dev-cannot-start}
 
-Run `ridu doctor` first. It diagnoses the project, Go, Bun, database, and Docker/OrbStack
-prerequisites used by the development loop.
+Run `ridu doctor` first. It checks structural project settings, Go and the selected package
+manager, and basic database or Docker/OrbStack prerequisites. A successful result does not prove
+that Go config compiles, generated contracts are current, or the database is reachable. Use
+`ridu generate --check` and `ridu check` for config and contract validation; inspect the actual
+`ridu dev` error for connection or startup failures.
 
 Common branches are:
 

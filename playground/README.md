@@ -15,16 +15,16 @@ The tiny `go.mod` files at the playground and Payload roots are isolation bounda
 prevent root Go tooling from walking into generated applications or JavaScript dependencies; the
 Payload application does not use Go.
 
-The initial applications are generator baselines. They do not yet claim matching schemas or a
-working Payload-to-Ridu migration.
+The applications retain their generator baselines plus one deliberately matched `workshops`
+collection for comparing nested fields, rich-text blocks, validation, and admin behavior. This is
+an observable UI comparison, not a wire-compatibility or migration-completeness claim.
 
 The Ridu application enables its optional GraphQL plugin and commits `generated/ridu.graphql`.
 That file is produced by ordinary `ridu generate` and gives the playground a reviewable schema for
 future Ridu/Payload API comparisons without requiring network introspection.
 
-The Ridu baseline intentionally has no immutable migration artifact yet. `ridu generate --check`
-and `ridu build` are expected to pass; `ridu check` will report an empty migration history until the
-first shared experiment creates an initial migration.
+The Ridu playground commits an initial immutable migration containing the shared collection, so
+`ridu generate --check`, `ridu check`, and `ridu build` exercise the release-shaped lifecycle.
 
 ## Start the applications
 
@@ -35,8 +35,8 @@ make playground-ridu-dev
 ```
 
 Press Ctrl+C to stop Ridu, then use `make playground-ridu-down` to stop its PostgreSQL container.
-The wrapper uses port `54339`, keeping the playground separate from Ridu's ordinary generated
-development port.
+The wrapper and a direct `./.ridu/bin/ridu dev` invocation both use the generated-project default
+PostgreSQL port `54329` and the same stable Compose project.
 
 On a fresh database, visiting the Ridu admin redirects to `/admin/create-first-user`, matching
 Payload's initial setup shape. If this playground was started before that flow existed, run
@@ -63,10 +63,9 @@ package change.
 
 ## Intended progression
 
-1. Run both untouched applications.
-2. Add one small matching collection to each application.
-3. Add deterministic seed content.
-4. Export the Payload content into Ridu's normalized migration shape.
-5. Import it into Ridu and compare records, relationships, and files.
+1. Run both applications and compare the shared Workshops authoring flow.
+2. Add deterministic seed content.
+3. Export the Payload content into Ridu's normalized migration shape.
+4. Import it into Ridu and compare records, relationships, and files.
 
 Project-specific setup and run commands live in each generated application's README.

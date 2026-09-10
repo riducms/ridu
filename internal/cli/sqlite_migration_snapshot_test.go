@@ -60,7 +60,7 @@ func TestSQLiteCLICommandsExecuteFinalValidatedHistorySnapshot(t *testing.T) {
 
 func resolveSQLiteCLITestManifest(t *testing.T, summary bool) schema.Manifest {
 	t.Helper()
-	fields := []field.Definition{field.Text("title")}
+	fields := field.Fields{field.Text("title")}
 	if summary {
 		fields = append(fields, field.Text("summary"))
 	}

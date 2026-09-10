@@ -250,7 +250,7 @@ func main() {
 		Name: fmt.Sprintf("Ridu-%d", reflect.TypeOf(generated.Post{}).NumField()),
 		Collections: []ridu.Collection{{
 			Slug: "posts",
-			Fields: []field.Definition{field.Text("title"), field.Text("summary")},
+			Fields: field.Fields{field.Text("title"), field.Text("summary")},
 		}},
 	}
 	if err := ridu.Execute(config); err != nil { log.Fatal(err) }

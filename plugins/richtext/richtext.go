@@ -2,6 +2,7 @@
 package richtext
 
 import (
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"html"
@@ -21,12 +22,6 @@ const (
 	AdminPluginPairingVersion = 1
 )
 
-// Document is the serialized Lexical document stored by the rich-text field.
-// Node shapes remain extensible and are validated against the field's enabled
-// feature configuration at runtime.
-// Document is the exact generated Go value type for a versioned rich-text document.
-type Document map[string]any
-
 type Feature string
 
 const (
@@ -40,6 +35,11 @@ const (
 )
 
 type Config struct {
+	// Blocks is the fixed executable schema allowlist. Fields are resolved
+	// through the public embedded-fields contract, never serialized as settings.
+	Blocks []field.Block `json:"-"`
+	// BlockReferences selects Config.Blocks definitions; it is exclusive with Blocks.
+	BlockReferences         []string  `json:"-"`
 	Features                []Feature `json:"features"`
 	UploadCollections       []string  `json:"uploadCollections,omitempty"`
 	RelationshipCollections []string  `json:"relationshipCollections,omitempty"`
@@ -53,6 +53,9 @@ var defaultFeatures = []Feature{
 	FeatureUploads,
 	FeatureRelationships,
 }
+
+//go:embed document-schema.json
+var documentSchema []byte
 
 type plugin struct{}
 
@@ -70,10 +73,11 @@ func (plugin) Descriptor() ridu.PluginDescriptor {
 		Ridu:       ridu.RiduCompatibility{Minimum: ridu.FrameworkVersion},
 		Admin:      &admin,
 		FieldTypes: []ridu.PluginFieldType{{
-			Key: Key, TypeScriptPackage: "@riducms/plugin-richtext",
-			TypeScriptOutput: "RichTextDocument", TypeScriptInput: "RichTextDocument",
-			GoPackage: "github.com/riducms/ridu/plugins/richtext", GoType: "Document",
-			JSONSchema: []byte(`{"type":"object","required":["version","root"],"properties":{"version":{"const":1},"root":{"type":"object"}},"additionalProperties":false}`),
+			Key: Key, TypeScriptPackage: "@riducms/plugin-richtext/document",
+			TypeScriptOutput: "RichTextDocument", TypeScriptInput: "RichTextDocumentInput",
+			EmbeddedTypes: []string{"blocks.block"},
+			GoPackage:     "github.com/riducms/ridu/plugins/richtext", GoType: "Document",
+			JSONSchema: append([]byte(nil), documentSchema...),
 		}},
 	}
 }
@@ -81,19 +85,29 @@ func (plugin) FieldValidators() map[string]ridu.PluginFieldValidator {
 	return map[string]ridu.PluginFieldValidator{Key: validate}
 }
 
-// Field constructs a rich-text field with Ridu's recommended authoring defaults.
-func Field(name string, options ...field.PluginOption) field.Definition {
-	return FieldWithConfig(name, DefaultConfig(), options...)
-}
-
 // DefaultConfig returns a defensive copy of Ridu's recommended authoring defaults.
 func DefaultConfig() Config {
 	return Config{Features: append([]Feature(nil), defaultFeatures...)}
 }
 
-func FieldWithConfig(name string, config Config, options ...field.PluginOption) field.Definition {
+// Field constructs a rich-text field with optional configuration. With no Config,
+// it uses the recommended defaults. A supplied Config with omitted Features also
+// inherits those defaults; an explicitly empty Features slice disables them.
+// Embedded block fields retain their attached behavior and presentation.
+// Field panics if more than one Config is supplied.
+func Field(name string, configs ...Config) field.PluginField {
+	if len(configs) > 1 {
+		panic(fmt.Sprintf("richtext.Field(%q): expected at most one Config, got %d", name, len(configs)))
+	}
+	var config Config
+	if len(configs) == 1 {
+		config = configs[0]
+	}
 	if config.Features == nil {
 		config.Features = DefaultConfig().Features
+		if len(config.Blocks) > 0 || len(config.BlockReferences) > 0 {
+			config.Features = append(config.Features, FeatureBlocks)
+		}
 	}
 	config.Features = normalizedFeatures(config.Features)
 	config.UploadCollections = normalizedStrings(config.UploadCollections)
@@ -102,7 +116,12 @@ func FieldWithConfig(name string, config Config, options ...field.PluginOption) 
 	if err != nil {
 		panic(err)
 	}
-	return field.Plugin(name, Key, encoded, append([]field.PluginOption{field.CollectionReferenceKeys("relationTo")}, options...)...)
+	return field.Plugin(name, Key, encoded).
+		CollectionReferenceKeys("relationTo").
+		EmbeddedTrees(field.EmbeddedTree{
+			Key: "blocks", Root: []string{"root"}, Children: "children", Tag: "type",
+			Cases: []field.EmbeddedTreeCase{{TagValue: "block", Payload: "fields", Discriminator: "blockType", Identity: "_key", Types: config.Blocks, BlockReferences: config.BlockReferences}},
+		})
 }
 
 func normalizedFeatures(features []Feature) []Feature {
@@ -146,17 +165,25 @@ func validate(ctx ridu.PluginFieldValidationContext) []schema.Issue {
 	if ctx.Field.Plugin == nil || json.Unmarshal(ctx.Field.Plugin.Config, &config) != nil {
 		return []schema.Issue{{Code: "invalid_richtext_config", Path: path, Message: "rich-text field configuration is invalid"}}
 	}
-	document, valid := ctx.Value.ObjectValue()
-	if !valid {
+	document := ctx.Value
+	if document.Kind() != store.ValueObject {
 		return []schema.Issue{{Code: "invalid_richtext", Path: path, Message: "rich-text value must be an object"}}
 	}
-	version, valid := document["version"].NumberValue()
+	version, valid := document.Get("version").NumberValue()
 	if !valid || version != DocumentVersion {
 		return []schema.Issue{{Code: "unsupported_richtext_version", Path: path + ".version", Message: fmt.Sprintf("rich-text document version must be %d", DocumentVersion)}}
 	}
-	root, valid := document["root"].ObjectValue()
-	if !valid {
+	root := document.Get("root")
+	if root.Kind() != store.ValueObject {
 		return []schema.Issue{{Code: "invalid_richtext_root", Path: path + ".root", Message: "rich-text root must be an object"}}
+	}
+	if rootType, _ := root.Get("type").StringValue(); rootType != "root" {
+		return []schema.Issue{{Code: "invalid_richtext_root", Path: path + ".root.type", Message: "rich-text document root must have type root"}}
+	}
+	for _, key := range sortedValueKeys(document) {
+		if key != "version" && key != "root" {
+			return []schema.Issue{{Code: "invalid_richtext_property", Path: path + "." + key, Message: "unsupported document property; retain the original JSON for export or migration"}}
+		}
 	}
 	features := make(map[Feature]bool, len(config.Features))
 	for _, feature := range config.Features {
@@ -166,12 +193,12 @@ func validate(ctx ridu.PluginFieldValidationContext) []schema.Issue {
 	return validateNode(root, path+".root", config, features, 0, &count)
 }
 
-func validateNode(node store.Values, path string, config Config, features map[Feature]bool, depth int, count *int) []schema.Issue {
+func validateNode(node store.Value, path string, config Config, features map[Feature]bool, depth int, count *int) []schema.Issue {
 	*count++
 	if depth > 64 || *count > 10_000 {
 		return []schema.Issue{{Code: "richtext_too_complex", Path: path, Message: "rich-text document exceeds its complexity limit"}}
 	}
-	nodeType, valid := node["type"].StringValue()
+	nodeType, valid := node.Get("type").StringValue()
 	if !valid {
 		return []schema.Issue{{Code: "invalid_richtext_node", Path: path + ".type", Message: "rich-text node type is required"}}
 	}
@@ -184,19 +211,44 @@ func validateNode(node store.Values, path string, config Config, features map[Fe
 	if !allowed {
 		return []schema.Issue{{Code: "unsupported_richtext_node", Path: path + ".type", Message: fmt.Sprintf("rich-text node %q is not enabled", nodeType)}}
 	}
+	if nodeType == "root" && depth != 0 {
+		return []schema.Issue{{Code: "invalid_richtext_root", Path: path + ".type", Message: "root nodes cannot be nested inside a rich-text document"}}
+	}
+	if nodeType != "block" {
+		if version, exists := node.Lookup("version"); exists {
+			if number, valid := version.NumberValue(); !valid || number != DocumentVersion {
+				return []schema.Issue{{Code: "unsupported_richtext_node_version", Path: path + ".version", Message: "rich-text node version must be 1 when provided"}}
+			}
+		}
+		if issues := validateNodeProperties(node, nodeType, path); len(issues) > 0 {
+			return issues
+		}
+	}
 	if nodeType == "text" {
-		if _, valid := node["text"].StringValue(); !valid {
+		if _, valid := node.Get("text").StringValue(); !valid {
 			return []schema.Issue{{Code: "invalid_richtext_text", Path: path + ".text", Message: "text node content must be a string"}}
 		}
 		return nil
 	}
+	if nodeType == "heading" {
+		tag, _ := node.Get("tag").StringValue()
+		if !containsString([]string{"h1", "h2", "h3", "h4", "h5", "h6"}, tag) {
+			return []schema.Issue{{Code: "invalid_richtext_heading", Path: path + ".tag", Message: "heading tag must be h1 through h6"}}
+		}
+	}
+	if nodeType == "list" {
+		listType, _ := node.Get("listType").StringValue()
+		if !containsString([]string{"bullet", "number", "check"}, listType) {
+			return []schema.Issue{{Code: "invalid_richtext_list", Path: path + ".listType", Message: "list type must be bullet, number or check"}}
+		}
+	}
 	if nodeType == "link" {
-		if _, valid := node["url"].StringValue(); !valid {
+		if _, valid := node.Get("url").StringValue(); !valid {
 			return []schema.Issue{{Code: "invalid_richtext_link", Path: path + ".url", Message: "link node URL must be a string"}}
 		}
 	}
 	if nodeType == "upload" || nodeType == "relationship" {
-		relationTo, valid := node["relationTo"].StringValue()
+		relationTo, valid := node.Get("relationTo").StringValue()
 		if !valid {
 			return []schema.Issue{{Code: "invalid_richtext_reference", Path: path + ".relationTo", Message: "reference node collection is required"}}
 		}
@@ -209,34 +261,149 @@ func validateNode(node store.Values, path string, config Config, features map[Fe
 		if len(allowedCollections) > 0 && !containsString(allowedCollections, relationTo) {
 			return []schema.Issue{{Code: "invalid_richtext_reference", Path: path + ".relationTo", Message: fmt.Sprintf("%s collection %q is not enabled", kind, relationTo)}}
 		}
-		if _, valid := node["id"].StringValue(); !valid {
+		if _, valid := node.Get("id").StringValue(); !valid {
 			return []schema.Issue{{Code: "invalid_richtext_reference", Path: path + ".id", Message: "reference node ID is required"}}
 		}
-		if caption, exists := node["caption"]; nodeType == "upload" && exists {
+		if caption, exists := node.Lookup("caption"); nodeType == "upload" && exists {
 			if _, valid := caption.StringValue(); !valid {
 				return []schema.Issue{{Code: "invalid_richtext_upload_caption", Path: path + ".caption", Message: "upload caption must be a string"}}
 			}
 		}
 	}
 	if nodeType == "block" {
-		if _, valid := node["blockType"].StringValue(); !valid {
-			return []schema.Issue{{Code: "invalid_richtext_block", Path: path + ".blockType", Message: "block node type is required"}}
+		// Ordinary traversal owns payload shape, defaults, validation, access and
+		// identity. The plugin validates only its atomic editor envelope.
+		var issues []schema.Issue
+		version, ok := node.Get("version").NumberValue()
+		if !ok || version != DocumentVersion {
+			issues = append(issues, schema.Issue{Code: "unsupported_richtext_block_version", Path: path + ".version", Message: "block node version must be 1"})
 		}
+		for _, key := range sortedValueKeys(node) {
+			if key != "type" && key != "version" && key != "fields" {
+				issues = append(issues, schema.Issue{Code: "invalid_richtext_block", Path: path + "." + key, Message: "block nodes contain only type, version and fields; migrate experimental top-level payloads explicitly"})
+			}
+		}
+		return issues
 	}
-	children, valid := node["children"].Values()
-	if !valid && (nodeType == "root" || nodeType == "paragraph" || nodeType == "heading" || nodeType == "quote" || nodeType == "link" || nodeType == "list" || nodeType == "listitem" || nodeType == "code") {
+	children := node.Get("children")
+	if children.Kind() != store.ValueList && (nodeType == "root" || nodeType == "paragraph" || nodeType == "heading" || nodeType == "quote" || nodeType == "link" || nodeType == "list" || nodeType == "listitem" || nodeType == "code") {
 		return []schema.Issue{{Code: "invalid_richtext_children", Path: path + ".children", Message: "rich-text node children must be an array"}}
 	}
 	var issues []schema.Issue
-	for index, child := range children {
-		object, valid := child.ObjectValue()
-		if !valid {
-			issues = append(issues, schema.Issue{Code: "invalid_richtext_node", Path: fmt.Sprintf("%s.children.%d", path, index), Message: "rich-text child must be an object"})
+	index := 0
+	for child := range children.Elements() {
+		childPath := fmt.Sprintf("%s.children.%d", path, index)
+		index++
+		if child.Kind() != store.ValueObject {
+			issues = append(issues, schema.Issue{Code: "invalid_richtext_node", Path: childPath, Message: "rich-text child must be an object"})
 			continue
 		}
-		issues = append(issues, validateNode(object, fmt.Sprintf("%s.children.%d", path, index), config, features, depth+1, count)...)
+		issues = append(issues, validateNode(child, childPath, config, features, depth+1, count)...)
 	}
 	return issues
+}
+
+// Keep the admitted editor envelope within the portable Node JSON vocabulary.
+// Payload fields are deliberately excluded: ordinary embedded traversal owns them.
+func validateNodeProperties(node store.Value, nodeType, path string) []schema.Issue {
+	var issues []schema.Issue
+	for _, key := range sortedValueKeys(node) {
+		if !nodePropertyAllowed(nodeType, key) {
+			issues = append(issues, schema.Issue{Code: "invalid_richtext_property", Path: path + "." + key, Message: "unsupported node property; retain the original JSON for export or migration"})
+			continue
+		}
+		value := node.Get(key)
+		valid := true
+		switch key {
+		case "type", "version":
+			continue // Required type and optional version are checked by the caller.
+		case "children":
+			valid = value.Kind() == store.ValueList && isContainerNode(nodeType)
+		case "text", "style", "textStyle", "tag", "url", "listType", "language", "theme", "relationTo", "id", "caption":
+			_, valid = value.StringValue()
+		case "mode":
+			mode, ok := value.StringValue()
+			valid = ok && containsString([]string{"normal", "token", "segmented"}, mode)
+		case "direction":
+			direction, ok := value.StringValue()
+			valid = value.Kind() == store.ValueNull || ok && (direction == "ltr" || direction == "rtl")
+		case "target", "rel", "title":
+			_, valid = value.StringValue()
+			valid = valid || value.Kind() == store.ValueNull
+		case "detail", "textFormat", "indent", "start", "value":
+			number, ok := value.NumberValue()
+			valid = ok && number == float64(int64(number))
+		case "checked":
+			_, valid = value.BooleanValue()
+		case "format":
+			if nodeType == "text" {
+				number, ok := value.NumberValue()
+				valid = ok && number == float64(int64(number))
+			} else {
+				format, ok := value.StringValue()
+				valid = ok && containsString([]string{"", "left", "center", "right", "justify", "start", "end"}, format)
+			}
+		default:
+			issues = append(issues, schema.Issue{Code: "invalid_richtext_property", Path: path + "." + key, Message: "unsupported node property; retain the original JSON for export or migration"})
+			continue
+		}
+		if !valid {
+			issues = append(issues, schema.Issue{Code: "invalid_richtext_property", Path: path + "." + key, Message: "rich-text node property does not match its portable JSON contract"})
+		}
+	}
+	return issues
+}
+
+func nodePropertyAllowed(nodeType, key string) bool {
+	if key == "type" || key == "version" {
+		return true
+	}
+	if isContainerNode(nodeType) {
+		switch key {
+		case "children", "direction", "format", "indent":
+			return true
+		case "textFormat", "textStyle":
+			return nodeType != "root"
+		}
+	}
+	switch nodeType {
+	case "text":
+		return key == "text" || key == "format" || key == "detail" || key == "mode" || key == "style"
+	case "heading":
+		return key == "tag"
+	case "link":
+		return key == "url" || key == "target" || key == "rel" || key == "title"
+	case "list":
+		return key == "listType" || key == "start" || key == "tag"
+	case "listitem":
+		return key == "value" || key == "checked"
+	case "code":
+		return key == "language" || key == "theme"
+	case "upload", "relationship":
+		return key == "relationTo" || key == "id" || key == "format" || nodeType == "upload" && key == "caption"
+	case "block":
+		return key == "fields"
+	default:
+		return false
+	}
+}
+
+func isContainerNode(nodeType string) bool {
+	switch nodeType {
+	case "root", "paragraph", "heading", "quote", "link", "list", "listitem", "code":
+		return true
+	default:
+		return false
+	}
+}
+
+func sortedValueKeys(values store.Value) []string {
+	keys := make([]string, 0, values.Len())
+	for key := range values.Entries() {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 func containsString(values []string, candidate string) bool {
@@ -251,26 +418,32 @@ func containsString(values []string, candidate string) bool {
 // RenderHTML renders the portable core nodes. Custom feature nodes use a
 // caller-owned renderer, keeping application presentation outside storage.
 func RenderHTML(value store.Value, renderers map[string]func(store.Values) (string, error)) (string, error) {
-	document, valid := value.ObjectValue()
-	if !valid {
+	document := value
+	if document.Kind() != store.ValueObject {
 		return "", fmt.Errorf("rich-text value must be an object")
 	}
-	root, valid := document["root"].ObjectValue()
-	if !valid {
+	root := document.Get("root")
+	if root.Kind() != store.ValueObject {
 		return "", fmt.Errorf("rich-text root must be an object")
 	}
-	return renderNode(root, renderers)
+	count := 0
+	return renderNode(root, renderers, 0, &count)
 }
 
-func renderNode(node store.Values, renderers map[string]func(store.Values) (string, error)) (string, error) {
-	nodeType, _ := node["type"].StringValue()
+func renderNode(node store.Value, renderers map[string]func(store.Values) (string, error), depth int, count *int) (string, error) {
+	*count++
+	if depth > 64 || *count > 10_000 {
+		return "", fmt.Errorf("rich-text rendering exceeds its depth or node budget")
+	}
+	nodeType, _ := node.Get("type").StringValue()
 	if renderer := renderers[nodeType]; renderer != nil {
-		return renderer(node)
+		detached, _ := node.CopyObject()
+		return renderer(detached)
 	}
 	if nodeType == "text" {
-		text, _ := node["text"].StringValue()
+		text, _ := node.Get("text").StringValue()
 		rendered := html.EscapeString(text)
-		format, _ := node["format"].NumberValue()
+		format, _ := node.Get("format").NumberValue()
 		for _, wrapper := range []struct {
 			mask float64
 			tag  string
@@ -295,14 +468,13 @@ func renderNode(node store.Values, renderers map[string]func(store.Values) (stri
 	if nodeType == "horizontalrule" {
 		return "<hr>", nil
 	}
-	children, _ := node["children"].Values()
+	children := node.Get("children")
 	var output strings.Builder
-	for _, child := range children {
-		object, valid := child.ObjectValue()
-		if !valid {
-			continue
+	for child := range children.Elements() {
+		if child.Kind() != store.ValueObject {
+			return "", fmt.Errorf("rich-text child must be an object")
 		}
-		rendered, err := renderNode(object, renderers)
+		rendered, err := renderNode(child, renderers, depth+1, count)
 		if err != nil {
 			return "", err
 		}
@@ -314,7 +486,7 @@ func renderNode(node store.Values, renderers map[string]func(store.Values) (stri
 	case "paragraph":
 		return "<p" + renderElementAttributes(node) + ">" + output.String() + "</p>", nil
 	case "heading":
-		tag, _ := node["tag"].StringValue()
+		tag, _ := node.Get("tag").StringValue()
 		if tag != "h1" && tag != "h2" && tag != "h3" && tag != "h4" && tag != "h5" && tag != "h6" {
 			tag = "h2"
 		}
@@ -322,7 +494,7 @@ func renderNode(node store.Values, renderers map[string]func(store.Values) (stri
 	case "quote":
 		return "<blockquote" + renderElementAttributes(node) + ">" + output.String() + "</blockquote>", nil
 	case "list":
-		listType, _ := node["listType"].StringValue()
+		listType, _ := node.Get("listType").StringValue()
 		tag := "ul"
 		if listType == "number" {
 			tag = "ol"
@@ -334,14 +506,14 @@ func renderNode(node store.Values, renderers map[string]func(store.Values) (stri
 		return "<" + tag + attribute + renderElementAttributes(node) + ">" + output.String() + "</" + tag + ">", nil
 	case "listitem":
 		attribute := ""
-		if checked, valid := node["checked"].BooleanValue(); valid {
+		if checked, valid := node.Get("checked").BooleanValue(); valid {
 			attribute = fmt.Sprintf(` data-checked="%t"`, checked)
 		}
 		return "<li" + attribute + ">" + output.String() + "</li>", nil
 	case "code":
 		return "<pre><code>" + output.String() + "</code></pre>", nil
 	case "link":
-		url, _ := node["url"].StringValue()
+		url, _ := node.Get("url").StringValue()
 		if !safeLink(url) {
 			return "", fmt.Errorf("unsafe rich-text link URL")
 		}
@@ -351,15 +523,15 @@ func renderNode(node store.Values, renderers map[string]func(store.Values) (stri
 	}
 }
 
-func renderElementAttributes(node store.Values) string {
+func renderElementAttributes(node store.Value) string {
 	var attributes strings.Builder
-	if alignment, valid := node["format"].StringValue(); valid {
+	if alignment, valid := node.Get("format").StringValue(); valid {
 		switch alignment {
 		case "center", "right", "justify", "start", "end":
 			attributes.WriteString(` data-align="` + alignment + `"`)
 		}
 	}
-	if indent, valid := node["indent"].NumberValue(); valid && indent > 0 {
+	if indent, valid := node.Get("indent").NumberValue(); valid && indent > 0 {
 		if indent > 8 {
 			indent = 8
 		}

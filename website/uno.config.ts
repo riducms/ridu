@@ -52,7 +52,8 @@ export default defineConfig({
 		['max-h-page', { 'max-height': pageViewportHeight }],
 		['w-site', { width: 'min(calc(100% - 40px), 1200px)' }],
 		['w-docs-gutter', { width: 'calc(100% - 40px)' }],
-		['w-docs', { width: 'min(calc(100% - 32px), 1600px)' }],
+		// Match the standard docs columns: 288px navigation + 880px article + 240px outline.
+		['w-docs', { width: 'min(calc(100% - 32px), 1408px)' }],
 		['w-docs-wide', { width: 'min(calc(100% - 32px), 1760px)' }],
 		['w-reference', { width: 'min(100%, 1600px)' }]
 	],

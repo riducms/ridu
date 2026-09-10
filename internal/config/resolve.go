@@ -12,6 +12,7 @@ import (
 	"unicode"
 
 	"github.com/riducms/ridu/field"
+	"github.com/riducms/ridu/internal/blocktypes"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"golang.org/x/text/language"
@@ -21,11 +22,22 @@ import (
 // manifest. It has no runtime plugin setup, database, filesystem, or network
 // dependency.
 func Resolve(input Input) (schema.Manifest, error) {
+	var err error
+	input, err = bindInputBlocks(input)
+	if err != nil {
+		return schema.Manifest{}, err
+	}
+	return resolveBound(input)
+}
+
+func resolveBound(input Input) (schema.Manifest, error) {
 	resolver := &resolver{
 		input:           input,
+		blockTemplates:  make(map[string]schema.BlockType),
 		collectionSlugs: make(map[schema.CollectionSlug]collectionReference),
 		globalSlugs:     make(map[schema.CollectionSlug]string),
 		pluginKeys:      make(map[string]string),
+		pluginFieldKeys: make(map[string]string),
 		adminPluginKeys: make(map[string]struct{}),
 	}
 	return resolver.resolve()
@@ -44,11 +56,14 @@ type collectionReference struct {
 }
 
 type resolver struct {
+	blockTemplates  map[string]schema.BlockType
+	blockTypeNames  map[string]struct{ shape, path string }
 	input           Input
 	issues          []schema.Issue
 	collectionSlugs map[schema.CollectionSlug]collectionReference
 	globalSlugs     map[schema.CollectionSlug]string
 	pluginKeys      map[string]string
+	pluginFieldKeys map[string]string
 	adminPluginKeys map[string]struct{}
 	adminLanguages  map[string]struct{}
 }
@@ -79,7 +94,19 @@ func (resolver *resolver) resolve() (schema.Manifest, error) {
 	for index, global := range resolver.input.Globals {
 		globals[index] = resolver.resolveGlobal(index, global)
 	}
+	registeredBlocks := resolver.registeredBlocks()
 	resolver.validateCrossCollectionFields(collections, globals)
+	if err := schema.ValidateFieldEditors(schema.Snapshot{Collections: collections, Globals: globals}); err != nil {
+		resolver.issue("invalid_field_editor", "fields", err.Error())
+	}
+	if err := schema.ValidateEmbeddedMetadata(schema.Snapshot{Collections: collections, Globals: globals, Plugins: plugins}); err != nil {
+		resolver.issue("invalid_embedded_schema", "fields", err.Error())
+	}
+	if _, err := blocktypes.Build(schema.Snapshot{Collections: collections, Globals: globals}); err != nil {
+		if validation, ok := err.(*schema.ValidationError); ok {
+			resolver.issues = append(resolver.issues, validation.Issues...)
+		}
+	}
 
 	if len(resolver.issues) != 0 {
 		return schema.Manifest{}, schema.NewValidationError(resolver.issues)
@@ -93,6 +120,7 @@ func (resolver *resolver) resolve() (schema.Manifest, error) {
 			Admin:           admin, AdminLocalization: adminLocalization, Localization: localization,
 			Endpoints: endpoints,
 		},
+		Blocks:      registeredBlocks,
 		Collections: collections,
 		Globals:     globals,
 		Plugins:     plugins,
@@ -470,6 +498,8 @@ func (resolver *resolver) resolvePlugins() []schema.Plugin {
 		hasDescriptor := plugin.Version != "" || plugin.GoPackage != "" || plugin.APIVersion != 0 || plugin.Ridu != nil || len(plugin.FieldTypes) != 0 || len(plugin.DatabaseContributions) != 0 || plugin.Admin != nil || len(plugin.Endpoints) != 0
 		if hasDescriptor {
 			resolver.resolvePluginDescriptor(pluginPath, plugin, &resolved)
+		} else if resolver.pluginKeys[plugin.Key] == path {
+			resolver.claimPluginField(plugin.Key, pluginPath+".key")
 		}
 		if plugin.Admin != nil {
 			resolver.adminPluginKeys[plugin.Key] = struct{}{}
@@ -545,6 +575,14 @@ func (resolver *resolver) resolvePlugins() []schema.Plugin {
 	return plugins
 }
 
+func (resolver *resolver) claimPluginField(key, path string) {
+	if previous, exists := resolver.pluginFieldKeys[key]; exists {
+		resolver.issue("duplicate_plugin_field_type", path, fmt.Sprintf("plugin field type %q is already declared at %s", key, previous))
+	} else {
+		resolver.pluginFieldKeys[key] = path
+	}
+}
+
 func (resolver *resolver) resolvePluginDescriptor(path string, plugin Plugin, resolved *schema.Plugin) {
 	if !schema.IsValidSemanticVersion(plugin.Version) {
 		resolver.issue("invalid_plugin_version", path+".version", "plugin version must be a complete semantic version")
@@ -565,13 +603,14 @@ func (resolver *resolver) resolvePluginDescriptor(path string, plugin Plugin, re
 	fieldKeys := make(map[string]struct{}, len(plugin.FieldTypes))
 	for index, fieldType := range plugin.FieldTypes {
 		fieldPath := fmt.Sprintf("%s.fieldTypes[%d]", path, index)
-		if !schema.IsValidPluginKey(fieldType.Key) || fieldType.Key != plugin.Key {
+		if !schema.IsValidPluginKey(fieldType.Key) {
 			resolver.issue("invalid_plugin_field_type_key", fieldPath+".key", "plugin field type key must be lowercase kebab-case")
 		}
 		if _, exists := fieldKeys[fieldType.Key]; exists {
 			resolver.issue("duplicate_plugin_field_type", fieldPath+".key", fmt.Sprintf("plugin field type %q is already declared", fieldType.Key))
 		}
 		fieldKeys[fieldType.Key] = struct{}{}
+		resolver.claimPluginField(fieldType.Key, fieldPath+".key")
 		if !schema.IsValidAdminPluginPackage(fieldType.TypeScriptPackage) || !schema.IsValidAdminPluginExport(fieldType.TypeScriptOutput) || !schema.IsValidAdminPluginExport(fieldType.TypeScriptInput) || fieldType.TypeScriptWhere != "" && !schema.IsValidAdminPluginExport(fieldType.TypeScriptWhere) {
 			resolver.issue("invalid_plugin_typescript_type", fieldPath, "plugin TypeScript mapping requires a package and named output/input/optional where exports")
 		}
@@ -584,7 +623,7 @@ func (resolver *resolver) resolvePluginDescriptor(path string, plugin Plugin, re
 				resolver.issue("invalid_plugin_json_schema", fieldPath+".jsonSchema", "plugin JSON Schema must be valid JSON")
 			}
 		}
-		resolved.FieldTypes = append(resolved.FieldTypes, schema.PluginFieldType{Key: fieldType.Key, TypeScriptPackage: fieldType.TypeScriptPackage, TypeScriptOutput: fieldType.TypeScriptOutput, TypeScriptInput: fieldType.TypeScriptInput, TypeScriptWhere: fieldType.TypeScriptWhere, GoPackage: fieldType.GoPackage, GoType: fieldType.GoType, JSONSchema: append(json.RawMessage(nil), fieldType.JSONSchema...)})
+		resolved.FieldTypes = append(resolved.FieldTypes, schema.PluginFieldType{EmbeddedTypes: append([]string(nil), fieldType.EmbeddedTypes...), Key: fieldType.Key, TypeScriptPackage: fieldType.TypeScriptPackage, TypeScriptOutput: fieldType.TypeScriptOutput, TypeScriptInput: fieldType.TypeScriptInput, TypeScriptWhere: fieldType.TypeScriptWhere, GoPackage: fieldType.GoPackage, GoType: fieldType.GoType, JSONSchema: append(json.RawMessage(nil), fieldType.JSONSchema...)})
 	}
 	prefix := "ridu_plugin_" + strings.ReplaceAll(plugin.Key, "-", "_") + "_"
 	adapters := make(map[schema.PluginDatabaseAdapter]struct{}, len(plugin.DatabaseContributions))
@@ -646,6 +685,13 @@ func validPluginEndpoint(method, path string) bool {
 
 func (resolver *resolver) resolveCollection(index int, collection Collection) schema.Collection {
 	path := fmt.Sprintf("collections[%d]", index)
+	if collection.Upload {
+		fields, err := UploadFields(collection.Fields, path+".fields")
+		collection.Fields = fields
+		if validation, ok := err.(*schema.ValidationError); ok {
+			resolver.issues = append(resolver.issues, validation.Issues...)
+		}
+	}
 	resolver.validateDefinitionIndexes(collection.Fields, path+".fields", false)
 	labels := collection.Labels
 	if strings.TrimSpace(labels.Singular) == "" {
@@ -716,15 +762,7 @@ func (resolver *resolver) resolveCollection(index int, collection Collection) sc
 		resolver.issue("invalid_parent_field", path+".admin.parentField", "parent field must be a singular relationship to this collection")
 	}
 	if collection.Upload {
-		metadata := uploadMetadataFields()
-		for _, existing := range fields {
-			for _, frameworkField := range metadata {
-				if existing.Name == frameworkField.Name {
-					resolver.issue("reserved_upload_field", path+".fields", fmt.Sprintf("upload collection field name %q is framework-owned", existing.Name))
-				}
-			}
-		}
-		fields = append(fields, metadata...)
+		markUploadMetadata(fields)
 	}
 	indexes := resolver.resolveCollectionIndexes(fields, collection.Indexes, path+".indexes")
 	var authSettings *schema.AuthSettings
@@ -910,14 +948,6 @@ func collectionDefaultColumnExists(collection Collection, fields map[string]sche
 	case "_status", "_revision":
 		return collection.Versions
 	}
-	if !collection.Upload {
-		return false
-	}
-	for _, metadata := range uploadMetadataFields() {
-		if metadata.Name == name {
-			return true
-		}
-	}
 	return false
 }
 
@@ -1026,37 +1056,38 @@ func (resolver *resolver) validateRootEndpointNamespaces(endpoints []schema.Endp
 	}
 }
 
-func (resolver *resolver) validateDefinitionIndexes(definitions []field.Definition, fieldsPath string, repeated bool) {
-	for index, definition := range definitions {
+func (resolver *resolver) validateDefinitionIndexes(definitions field.Fields, fieldsPath string, repeated bool) {
+	for index, node := range definitions {
+		definition := field.Snapshot(node)
 		fieldPath := fmt.Sprintf("%s[%d]", fieldsPath, index)
 		if definition.Index() {
 			switch {
 			case repeated:
-				resolver.issue("unsupported_index", fieldPath+".options.index", "fields beneath arrays or blocks cannot be indexed")
+				resolver.issue("unsupported_index", fieldPath+".index", "fields beneath arrays or blocks cannot be indexed")
 			case !definitionSupportsIndex(definition):
-				resolver.issue("unsupported_index", fieldPath+".options.index", fmt.Sprintf("field type %q cannot be indexed", definition.Kind()))
+				resolver.issue("unsupported_index", fieldPath+".index", fmt.Sprintf("field type %q cannot be indexed", definition.Kind()))
 			}
 		}
 		switch definition.Kind() {
 		case field.KindGroup:
-			resolver.validateDefinitionIndexes(definition.Fields(), fieldPath+".options.fields", repeated)
+			resolver.validateDefinitionIndexes(definition.Fields(), fieldPath+".fields", repeated)
 		case field.KindArray:
-			resolver.validateDefinitionIndexes(definition.Fields(), fieldPath+".options.fields", true)
+			resolver.validateDefinitionIndexes(definition.Fields(), fieldPath+".fields", true)
 		case field.KindBlocks:
 			for blockIndex, block := range definition.Blocks() {
-				resolver.validateDefinitionIndexes(block.Fields, fmt.Sprintf("%s.options.blocks[%d].fields", fieldPath, blockIndex), true)
+				resolver.validateDefinitionIndexes(block.Fields, fmt.Sprintf("%s.blocks[%d].fields", fieldPath, blockIndex), true)
 			}
 		case field.KindRow, field.KindCollapsible:
 			resolver.validateDefinitionIndexes(definition.Fields(), fieldPath+".fields", repeated)
 		case field.KindTabs:
-			for tabIndex, tab := range definition.Tabs() {
-				resolver.validateDefinitionIndexes(tab.Fields, fmt.Sprintf("%s.tabs[%d].fields", fieldPath, tabIndex), repeated)
+			for tabIndex, tab := range definition.Fields() {
+				resolver.validateDefinitionIndexes(field.Fields{tab}, fmt.Sprintf("%s.tabs[%d]", fieldPath, tabIndex), repeated)
 			}
 		}
 	}
 }
 
-func definitionSupportsIndex(definition field.Definition) bool {
+func definitionSupportsIndex(definition field.View) bool {
 	switch definition.Kind() {
 	case field.KindText, field.KindCode, field.KindTextarea, field.KindEmail, field.KindDate,
 		field.KindNumber, field.KindCheckbox, field.KindRadio:
@@ -1130,7 +1161,7 @@ func supportsIndexField(candidate schema.Field) bool {
 	return true
 }
 
-func definitionMinLength(definition field.Definition) *int {
+func definitionMinLength(definition field.View) *int {
 	value, exists := definition.MinLength()
 	if !exists {
 		return nil
@@ -1138,7 +1169,7 @@ func definitionMinLength(definition field.Definition) *int {
 	return &value
 }
 
-func definitionMaxLength(definition field.Definition) *int {
+func definitionMaxLength(definition field.View) *int {
 	value, exists := definition.MaxLength()
 	if !exists {
 		return nil
@@ -1146,7 +1177,7 @@ func definitionMaxLength(definition field.Definition) *int {
 	return &value
 }
 
-func definitionMin(definition field.Definition) *float64 {
+func definitionMin(definition field.View) *float64 {
 	value, exists := definition.Min()
 	if !exists {
 		return nil
@@ -1154,7 +1185,7 @@ func definitionMin(definition field.Definition) *float64 {
 	return &value
 }
 
-func definitionMax(definition field.Definition) *float64 {
+func definitionMax(definition field.View) *float64 {
 	value, exists := definition.Max()
 	if !exists {
 		return nil
@@ -1162,7 +1193,7 @@ func definitionMax(definition field.Definition) *float64 {
 	return &value
 }
 
-func definitionStep(definition field.Definition) *float64 {
+func definitionStep(definition field.View) *float64 {
 	value, exists := definition.Step()
 	if !exists {
 		return nil
@@ -1254,7 +1285,7 @@ func fieldByPath(fields []schema.Field, segments []string) *schema.Field {
 			return candidate
 		}
 		if candidate.Type == schema.FieldTypeGroup && candidate.Nested != nil {
-			return fieldByPath(candidate.Nested.Fields, segments[1:])
+			return fieldByPath(candidate.Nested.ResolvedFields(), segments[1:])
 		}
 	}
 	return nil
@@ -1295,12 +1326,13 @@ func (fieldResolver *fieldResolver) validateSlugSources(fields []schema.Field) {
 					}
 				}
 			}
+			inspect(schema.EmbeddedBlocks(candidate), true)
 			if candidate.Nested != nil {
-				inspect(candidate.Nested.Fields, true)
+				inspect(candidate.Nested.ResolvedFields(), true)
 			}
 			if candidate.Blocks != nil {
-				for _, block := range candidate.Blocks.Types {
-					inspect(block.Fields, true)
+				for _, block := range candidate.Blocks.ResolvedTypes() {
+					inspect(block.ResolvedFields(), true)
 				}
 			}
 		}
@@ -1321,15 +1353,16 @@ func (fieldResolver *fieldResolver) validateFieldConditions(fields []schema.Fiel
 					*candidate.Admin.Condition,
 					fields,
 					siblings,
-					configPath+".options.condition",
+					configPath+".admin.visibleWhen",
 				)
 			}
+			inspect(schema.EmbeddedBlocks(candidate))
 			if candidate.Nested != nil {
-				inspect(candidate.Nested.Fields)
+				inspect(candidate.Nested.ResolvedFields())
 			}
 			if candidate.Blocks != nil {
-				for _, block := range candidate.Blocks.Types {
-					inspect(block.Fields)
+				for _, block := range candidate.Blocks.ResolvedTypes() {
+					inspect(block.ResolvedFields())
 				}
 			}
 		}
@@ -1356,7 +1389,7 @@ func (fieldResolver *fieldResolver) validateFieldConditionReferences(
 		if targetType == "" {
 			fieldResolver.resolver.issue(
 				"invalid_field_condition_path",
-				path+".path",
+				path+".reference.path",
 				fmt.Sprintf("%s condition path %q must name a scalar field through non-repeated groups", predicate.Scope, predicate.Path.String()),
 			)
 			return
@@ -1410,7 +1443,7 @@ func slugSourceFieldChain(fields []schema.Field, segments []string) []schema.Fie
 		if candidate.Type != schema.FieldTypeGroup || candidate.Nested == nil {
 			return nil
 		}
-		children := slugSourceFieldChain(candidate.Nested.Fields, segments[1:])
+		children := slugSourceFieldChain(candidate.Nested.ResolvedFields(), segments[1:])
 		if len(children) == 0 {
 			return nil
 		}
@@ -1426,41 +1459,6 @@ func slugSourceFieldType(candidate schema.Field) bool {
 	default:
 		return false
 	}
-}
-
-func uploadMetadataFields() []schema.Field {
-	definitions := []struct {
-		id, name, label string
-		typeName        schema.FieldType
-		required        bool
-	}{
-		{"upload-filename", "filename", "Filename", schema.FieldTypeText, true},
-		{"upload-mime-type", "mimeType", "MIME type", schema.FieldTypeText, true},
-		{"upload-filesize", "filesize", "File size", schema.FieldTypeNumber, true},
-		{"upload-url", "url", "URL", schema.FieldTypeText, true},
-		{"upload-object-key", "objectKey", "Object key", schema.FieldTypeText, true},
-		{"upload-width", "width", "Width", schema.FieldTypeNumber, false},
-		{"upload-height", "height", "Height", schema.FieldTypeNumber, false},
-		{"upload-sizes", "sizes", "Generated sizes", schema.FieldTypeJSON, false},
-		{"upload-focal-x", "focalX", "Focal X", schema.FieldTypeNumber, false},
-		{"upload-focal-y", "focalY", "Focal Y", schema.FieldTypeNumber, false},
-		{"upload-crop-x", "cropX", "Crop X", schema.FieldTypeNumber, false},
-		{"upload-crop-y", "cropY", "Crop Y", schema.FieldTypeNumber, false},
-		{"upload-crop-width", "cropWidth", "Crop width", schema.FieldTypeNumber, false},
-		{"upload-crop-height", "cropHeight", "Crop height", schema.FieldTypeNumber, false},
-	}
-	fields := make([]schema.Field, len(definitions))
-	for index, definition := range definitions {
-		path, _ := query.NewPath(definition.name)
-		fields[index] = schema.Field{ID: schema.StableID(definition.id), Name: definition.name, Path: path, Type: definition.typeName, Category: schema.FieldCategoryUpload, Required: definition.required, Admin: schema.FieldAdmin{Label: definition.label, ReadOnly: true}}
-		if definition.name == "objectKey" {
-			fields[index].Index = true
-		}
-		if definition.typeName == schema.FieldTypeText {
-			fields[index].Text = &schema.TextField{}
-		}
-	}
-	return fields
 }
 
 func singularize(slug string) string {
@@ -1480,9 +1478,10 @@ type fieldResolver struct {
 	seenPaths    map[string]string
 }
 
-func (fieldResolver *fieldResolver) resolveFields(definitions []field.Definition, configPath string, parentPath []string) []schema.Field {
+func (fieldResolver *fieldResolver) resolveFields(definitions field.Fields, configPath string, parentPath []string) []schema.Field {
 	var resolved []schema.Field
-	for index, definition := range definitions {
+	for index, node := range definitions {
+		definition := field.Snapshot(node)
 		path := fmt.Sprintf("%s[%d]", configPath, index)
 		if definition.Kind() == field.KindRow {
 			resolved = append(resolved, fieldResolver.resolveRow(definition, path, parentPath)...)
@@ -1511,52 +1510,74 @@ func (fieldResolver *fieldResolver) resolveFields(definitions []field.Definition
 	return resolved
 }
 
-func (fieldResolver *fieldResolver) resolveTabs(definition field.Definition, configPath string, parentPath []string) []schema.Field {
-	tabs := definition.Tabs()
+func (fieldResolver *fieldResolver) resolveTabs(definition field.View, configPath string, parentPath []string) []schema.Field {
+	if definition.IsUnnamedTab() {
+		fieldResolver.validateLayoutDefinition(definition, configPath)
+		if len(definition.Fields()) == 0 {
+			fieldResolver.resolver.issue("missing_tab_fields", configPath+".fields", "tab requires at least one child field")
+		}
+		children := fieldResolver.resolveFields(definition.Fields(), configPath+".fields", parentPath)
+		label := strings.TrimSpace(definition.Label())
+		if label == "" {
+			fieldResolver.resolver.issue("missing_tab_label", configPath+".label", "tab label must not be empty")
+		}
+		var group *schema.FieldTabGroup
+		if len(children) > 0 {
+			group = &schema.FieldTabGroup{ID: schema.StableID(string(children[0].ID) + "-tabs"), Extensions: fieldResolver.resolveAdminExtensions(definition)}
+		}
+		for i := range children {
+			children[i].Admin.Tab = label
+			children[i].Admin.TabTranslations = fieldResolver.resolver.resolveTranslations(definition.LabelTranslations(), configPath+".labelTranslations")
+			children[i].Admin.TabGroup = group
+		}
+		return children
+	}
+	fieldResolver.validateLayoutDefinition(definition, configPath)
+	tabs := definition.Fields()
 	if len(tabs) == 0 {
 		fieldResolver.resolver.issue("missing_tabs", configPath+".tabs", "tabs requires at least one named or unnamed tab")
 		return nil
 	}
 	var resolved []schema.Field
 	seenNames := make(map[string]bool, len(tabs))
-	for index, tab := range tabs {
+	for index, node := range tabs {
+		tab := field.Snapshot(node)
 		tabPath := fmt.Sprintf("%s.tabs[%d]", configPath, index)
-		label := strings.TrimSpace(tab.Label)
+		label := strings.TrimSpace(tab.Label())
 		if label == "" {
 			fieldResolver.resolver.issue("missing_tab_label", tabPath+".label", "tab label must not be empty")
 			label = "Tab"
 		}
-		if len(tab.Fields) == 0 {
+		if len(tab.Fields()) == 0 {
 			fieldResolver.resolver.issue("missing_tab_fields", tabPath+".fields", "tab requires at least one child field")
 			continue
 		}
-		if tab.Name == "" {
-			children := fieldResolver.resolveFields(tab.Fields, tabPath+".fields", parentPath)
+		if !tab.IsNamedTab() && !tab.IsUnnamedTab() {
+			fieldResolver.resolver.issue("invalid_tab", tabPath, "tabs children must be named or unnamed tabs")
+			continue
+		}
+		if tab.Name() == "" {
+			fieldResolver.validateLayoutDefinition(tab, tabPath)
+			children := fieldResolver.resolveFields(tab.Fields(), tabPath+".fields", parentPath)
 			for childIndex := range children {
 				children[childIndex].Admin.Tab = label
-				children[childIndex].Admin.TabTranslations = fieldResolver.resolver.resolveTranslations(tab.LabelTranslations, tabPath+".labelTranslations")
+				children[childIndex].Admin.TabTranslations = fieldResolver.resolver.resolveTranslations(tab.LabelTranslations(), tabPath+".labelTranslations")
 			}
 			resolved = append(resolved, children...)
 			continue
 		}
-		if seenNames[tab.Name] {
-			fieldResolver.resolver.issue("duplicate_named_tab", tabPath+".name", fmt.Sprintf("named tab %q is configured more than once", tab.Name))
+		if seenNames[tab.Name()] {
+			fieldResolver.resolver.issue("duplicate_named_tab", tabPath+".name", fmt.Sprintf("named tab %q is configured more than once", tab.Name()))
 		}
-		seenNames[tab.Name] = true
-		group := field.Group(
-			tab.Name,
-			field.Label(label),
-			field.LabelTranslations(tab.LabelTranslations),
-			field.Tab(label),
-			field.TabTranslations(tab.LabelTranslations),
-			field.Fields(tab.Fields...),
-		)
-		resolvedGroup := fieldResolver.resolveFieldWithNestedConfig(group, tabPath, parentPath, tabPath+".fields")
+		seenNames[tab.Name()] = true
+		resolvedGroup := fieldResolver.resolveFieldWithNestedConfig(tab, tabPath, parentPath, tabPath+".fields")
 		resolvedGroup.Admin.NamedTab = true
+		resolvedGroup.Admin.Tab = label
+		resolvedGroup.Admin.TabTranslations = fieldResolver.resolver.resolveTranslations(tab.LabelTranslations(), tabPath+".labelTranslations")
 		resolved = append(resolved, resolvedGroup)
 	}
 	if len(resolved) > 0 {
-		group := &schema.FieldTabGroup{ID: schema.StableID(string(resolved[0].ID) + "-tabs")}
+		group := &schema.FieldTabGroup{ID: schema.StableID(string(resolved[0].ID) + "-tabs"), Extensions: fieldResolver.resolveAdminExtensions(definition)}
 		for index := range resolved {
 			resolved[index].Admin.TabGroup = group
 		}
@@ -1564,7 +1585,8 @@ func (fieldResolver *fieldResolver) resolveTabs(definition field.Definition, con
 	return resolved
 }
 
-func (fieldResolver *fieldResolver) resolveCollapsible(definition field.Definition, configPath string, parentPath []string) []schema.Field {
+func (fieldResolver *fieldResolver) resolveCollapsible(definition field.View, configPath string, parentPath []string) []schema.Field {
+	fieldResolver.validateLayoutDefinition(definition, configPath)
 	children := definition.Fields()
 	if len(children) == 0 {
 		fieldResolver.resolver.issue("missing_collapsible_fields", configPath+".fields", "collapsible requires at least one child field")
@@ -1580,26 +1602,28 @@ func (fieldResolver *fieldResolver) resolveCollapsible(definition field.Definiti
 		return nil
 	}
 	groupID := schema.StableID(string(resolved[0].ID) + "-collapsible")
-	label := strings.TrimSpace(definition.Name())
+	label := strings.TrimSpace(definition.Label())
 	if label == "" {
-		label = "Details"
-	} else {
-		label = humanize(label)
+		label = strings.TrimSpace(definition.Name())
+		if label == "" {
+			label = "Details"
+		} else {
+			label = humanize(label)
+		}
 	}
 	for index := range resolved {
 		resolved[index].Admin.Collapsible = &schema.FieldCollapsible{
 			ID: groupID, Label: label,
 			LabelTranslations:  fieldResolver.resolver.resolveTranslations(definition.LabelTranslations(), configPath+".labelTranslations"),
 			InitiallyCollapsed: definition.InitiallyCollapsed(),
+			Extensions:         fieldResolver.resolveAdminExtensions(definition),
 		}
 	}
 	return resolved
 }
 
-func (fieldResolver *fieldResolver) resolveRow(definition field.Definition, configPath string, parentPath []string) []schema.Field {
-	for _, issue := range definition.Issues() {
-		fieldResolver.resolver.issue(issue.Code, joinConfigPath(configPath, issue.Path), issue.Message)
-	}
+func (fieldResolver *fieldResolver) resolveRow(definition field.View, configPath string, parentPath []string) []schema.Field {
+	fieldResolver.validateLayoutDefinition(definition, configPath)
 	children := definition.Fields()
 	if len(children) == 0 {
 		fieldResolver.resolver.issue("missing_row_fields", configPath+".fields", "row requires at least one child field")
@@ -1616,16 +1640,20 @@ func (fieldResolver *fieldResolver) resolveRow(definition field.Definition, conf
 	}
 	rowID := resolved[0].ID
 	for index := range resolved {
-		resolved[index].Admin.Row = &schema.FieldRow{ID: rowID}
+		resolved[index].Admin.Row = &schema.FieldRow{ID: rowID, Extensions: fieldResolver.resolveAdminExtensions(definition)}
 	}
 	return resolved
 }
 
-func (fieldResolver *fieldResolver) resolveField(definition field.Definition, configPath string, parentPath []string) schema.Field {
-	return fieldResolver.resolveFieldWithNestedConfig(definition, configPath, parentPath, configPath+".options.fields")
+func (fieldResolver *fieldResolver) resolveField(definition field.View, configPath string, parentPath []string) schema.Field {
+	return fieldResolver.resolveFieldWithNestedConfig(definition, configPath, parentPath, configPath+".fields")
 }
 
-func (fieldResolver *fieldResolver) resolveFieldWithNestedConfig(definition field.Definition, configPath string, parentPath []string, nestedConfigPath string) schema.Field {
+func (fieldResolver *fieldResolver) resolveFieldWithNestedConfig(definition field.View, configPath string, parentPath []string, nestedConfigPath string) schema.Field {
+	if len(parentPath) > 48 {
+		fieldResolver.resolver.issue("schema_depth_exceeded", configPath, "schema depth exceeds 48; recursive schemas are unsupported")
+		return schema.Field{}
+	}
 	for _, issue := range definition.Issues() {
 		fieldResolver.resolver.issue(issue.Code, joinConfigPath(configPath, issue.Path), issue.Message)
 	}
@@ -1633,20 +1661,20 @@ func (fieldResolver *fieldResolver) resolveFieldWithNestedConfig(definition fiel
 		fieldPath := strings.Join(append(append([]string(nil), parentPath...), definition.Name()), ".")
 		switch {
 		case len(parentPath) != 0:
-			fieldResolver.resolver.issue("unsupported_unique", configPath+".options.unique", fmt.Sprintf("nested field %q cannot be unique because Ridu stores only enforce uniqueness on resource-root fields", fieldPath))
+			fieldResolver.resolver.issue("unsupported_unique", configPath+".unique", fmt.Sprintf("nested field %q cannot be unique because Ridu stores only enforce uniqueness on resource-root fields", fieldPath))
 		case definition.Kind() == field.KindRelationship && len(definition.RelationshipTargets()) > 1:
-			fieldResolver.resolver.issue("unsupported_unique", configPath+".options.unique", fmt.Sprintf("polymorphic relationship field %q cannot be unique because Ridu stores do not enforce uniqueness for polymorphic references", fieldPath))
+			fieldResolver.resolver.issue("unsupported_unique", configPath+".unique", fmt.Sprintf("polymorphic relationship field %q cannot be unique because Ridu stores do not enforce uniqueness for polymorphic references", fieldPath))
 		case (definition.Kind() == field.KindRelationship || definition.Kind() == field.KindUpload) && definition.RelationshipHasMany():
-			fieldResolver.resolver.issue("unsupported_unique", configPath+".options.unique", fmt.Sprintf("has-many reference field %q cannot be unique because Ridu stores do not enforce uniqueness for list-valued references", fieldPath))
+			fieldResolver.resolver.issue("unsupported_unique", configPath+".unique", fmt.Sprintf("has-many reference field %q cannot be unique because Ridu stores do not enforce uniqueness for list-valued references", fieldPath))
 		case definition.Kind() == field.KindSelect && definition.SelectHasMany():
-			fieldResolver.resolver.issue("unsupported_unique", configPath+".options.unique", fmt.Sprintf("multi-select field %q cannot be unique because Ridu stores do not enforce uniqueness for list-valued selects", fieldPath))
+			fieldResolver.resolver.issue("unsupported_unique", configPath+".unique", fmt.Sprintf("multi-select field %q cannot be unique because Ridu stores do not enforce uniqueness for list-valued selects", fieldPath))
 		}
 	}
 	if definition.Localized() && fieldResolver.resolver.input.Localization == nil {
-		fieldResolver.resolver.issue("missing_localization_config", configPath+".options.localized", "localized fields require application localization configuration")
+		fieldResolver.resolver.issue("missing_localization_config", configPath+".localized", "localized fields require application localization configuration")
 	}
 	if definition.Sidebar() && len(parentPath) != 0 {
-		fieldResolver.resolver.issue("unsupported_sidebar", configPath+".options.sidebar", "sidebar placement is only supported for root fields")
+		fieldResolver.resolver.issue("unsupported_sidebar", configPath+".admin.sidebar", "sidebar placement is only supported for root fields")
 	}
 
 	pathSegments := append(append([]string(nil), parentPath...), definition.Name())
@@ -1682,49 +1710,65 @@ func (fieldResolver *fieldResolver) resolveFieldWithNestedConfig(definition fiel
 		label = humanize(definition.Name())
 	}
 	resolved := schema.Field{
-		ID:        schema.StableID(fieldID),
-		Name:      definition.Name(),
-		Path:      manifestPath,
-		Required:  definition.Required(),
-		Unique:    definition.Unique(),
-		Index:     definition.Index(),
-		Localized: definition.Localized(),
+		ID:              schema.StableID(fieldID),
+		Name:            definition.Name(),
+		Path:            manifestPath,
+		Required:        definition.Required(),
+		Unique:          definition.Unique(),
+		Index:           definition.Index(),
+		Localized:       definition.Localized(),
+		QueryRestricted: definition.AccessPolicy().Read != nil,
 		Admin: schema.FieldAdmin{
+			Extensions:              fieldResolver.resolveAdminExtensions(definition),
 			Label:                   label,
-			LabelTranslations:       fieldResolver.resolver.resolveTranslations(definition.LabelTranslations(), configPath+".options.labelTranslations"),
+			LabelTranslations:       fieldResolver.resolver.resolveTranslations(definition.LabelTranslations(), configPath+".admin.labelTranslations"),
 			Description:             strings.TrimSpace(definition.Description()),
-			DescriptionTranslations: fieldResolver.resolver.resolveTranslations(definition.DescriptionTranslations(), configPath+".options.descriptionTranslations"),
+			DescriptionTranslations: fieldResolver.resolver.resolveTranslations(definition.DescriptionTranslations(), configPath+".admin.descriptionTranslations"),
 			Placeholder:             strings.TrimSpace(definition.Placeholder()),
-			PlaceholderTranslations: fieldResolver.resolver.resolveTranslations(definition.PlaceholderTranslations(), configPath+".options.placeholderTranslations"),
+			PlaceholderTranslations: fieldResolver.resolver.resolveTranslations(definition.PlaceholderTranslations(), configPath+".admin.placeholderTranslations"),
 			ReadOnly:                definition.ReadOnly(), Hidden: definition.Hidden(), Sidebar: definition.Sidebar(),
 			Columns: definition.Columns(), Tab: strings.TrimSpace(definition.Tab()),
-			TabTranslations: fieldResolver.resolver.resolveTranslations(definition.TabTranslations(), configPath+".options.tabTranslations"),
+			TabTranslations: fieldResolver.resolver.resolveTranslations(definition.TabTranslations(), configPath+".admin.tabTranslations"),
 		},
+	}
+	if reference, config := definition.Editor(); reference != "" {
+		resolved.Admin.Editor = &schema.FieldEditor{Reference: reference, Config: config}
 	}
 	if pluginKey, component, config, exists := definition.AdminComponent(); exists {
 		if !schema.IsValidPluginKey(pluginKey) {
-			fieldResolver.resolver.issue("invalid_admin_component_plugin", configPath+".options.adminComponent.plugin", "admin component plugin must be a lowercase plugin key")
+			fieldResolver.resolver.issue("invalid_admin_component_plugin", configPath+".admin.editor.pluginKey", "admin component plugin must be a lowercase plugin key")
 		}
 		if !schema.IsValidAdminPluginExport(component) {
-			fieldResolver.resolver.issue("invalid_admin_component_name", configPath+".options.adminComponent.component", "admin component must be a JavaScript identifier")
+			fieldResolver.resolver.issue("invalid_admin_component_name", configPath+".admin.editor.key", "admin component must be a JavaScript identifier")
 		}
 		if _, paired := fieldResolver.resolver.adminPluginKeys[pluginKey]; !paired {
-			fieldResolver.resolver.issue("missing_admin_component_plugin", configPath+".options.adminComponent.plugin", fmt.Sprintf("admin component plugin %q is not registered with a paired admin package", pluginKey))
+			fieldResolver.resolver.issue("missing_admin_component_plugin", configPath+".admin.editor.pluginKey", fmt.Sprintf("admin component plugin %q is not registered with a paired admin package", pluginKey))
 		}
 		if len(config) != 0 && !isJSONObject(config) {
-			fieldResolver.resolver.issue("invalid_admin_component_config", configPath+".options.adminComponent.config", "admin component config must be a JSON object")
+			fieldResolver.resolver.issue("invalid_admin_component_config", configPath+".admin.editor.config", "admin component config must be a JSON object")
 		}
 		resolved.Admin.Component = &schema.FieldAdminComponent{Plugin: pluginKey, Component: component, Config: append(json.RawMessage(nil), config...)}
 	}
-	if condition := definition.Condition(); condition != nil {
-		resolved.Admin.Condition = fieldResolver.resolveFieldCondition(*condition, configPath+".options.condition")
+	if condition := definition.AdminPolicy().VisibleWhen; !condition.IsZero() {
+		resolved.Admin.Condition = fieldResolver.resolveFieldCondition(condition, configPath+".admin.visibleWhen")
 	}
+	resolved.Admin.NamedTab = definition.IsNamedTab()
+	resolved.DynamicDefault = definition.BehaviorSummary().DynamicDefault
+	resolved.LiveValidation = definition.BehaviorSummary().LiveValidators > 0
 	if defaultValue, exists := definition.Default(); exists {
 		value := defaultValue.String()
 		resolved.Default = &value
 	}
 
 	switch definition.Kind() {
+	case field.KindTextList:
+		resolved.Type, resolved.Category = schema.FieldTypeTextList, schema.FieldCategoryScalar
+		resolved.List = &schema.PrimitiveListField{MinRows: definition.MinRows(), MaxRows: definition.MaxRows()}
+		resolved.Text = &schema.TextField{MinLength: definitionMinLength(definition), MaxLength: definitionMaxLength(definition)}
+	case field.KindNumberList:
+		resolved.Type, resolved.Category = schema.FieldTypeNumberList, schema.FieldCategoryScalar
+		resolved.List = &schema.PrimitiveListField{MinRows: definition.MinRows(), MaxRows: definition.MaxRows()}
+		resolved.Number = &schema.NumberField{Min: definitionMin(definition), Max: definitionMax(definition)}
 	case field.KindText:
 		resolved.Type = schema.FieldTypeText
 		resolved.Category = schema.FieldCategoryScalar
@@ -1746,7 +1790,7 @@ func (fieldResolver *fieldResolver) resolveFieldWithNestedConfig(definition fiel
 		resolved.Type, resolved.Category = schema.FieldTypeEmail, schema.FieldCategoryScalar
 	case field.KindDate:
 		resolved.Type, resolved.Category = schema.FieldTypeDate, schema.FieldCategoryScalar
-		resolved.Date = &schema.DateField{PickerAppearance: schema.DatePickerAppearance(definition.DatePickerAppearance())}
+		resolved.Date = &schema.DateField{Format: schema.DateFormat(definition.DateFormat())}
 	case field.KindNumber:
 		resolved.Type, resolved.Category = schema.FieldTypeNumber, schema.FieldCategoryScalar
 		resolved.Number = &schema.NumberField{Min: definitionMin(definition), Max: definitionMax(definition), Step: definitionStep(definition)}
@@ -1804,10 +1848,10 @@ func (fieldResolver *fieldResolver) resolveFieldWithNestedConfig(definition fiel
 		resolved.Type, resolved.Category = schema.FieldTypeArray, schema.FieldCategoryNested
 		children := definition.Fields()
 		if len(children) == 0 {
-			fieldResolver.resolver.issue("missing_nested_fields", configPath+".options.fields", "array field requires at least one child field")
+			fieldResolver.resolver.issue("missing_nested_fields", configPath+".fields", "array field requires at least one child field")
 		}
 		resolved.Nested = &schema.NestedField{
-			Fields:  fieldResolver.resolveFields(children, configPath+".options.fields", pathSegments),
+			Fields:  fieldResolver.resolveFields(children, configPath+".fields", pathSegments),
 			MinRows: definition.MinRows(), MaxRows: definition.MaxRows(), RowLabel: definition.RowLabel(),
 			RowLabelComponent: fieldResolver.resolveRowLabelComponent(definition, configPath),
 		}
@@ -1822,55 +1866,28 @@ func (fieldResolver *fieldResolver) resolveFieldWithNestedConfig(definition fiel
 			}
 			resolved.Nested.RowLabels = &schema.ArrayRowLabels{
 				Singular:             singular,
-				SingularTranslations: fieldResolver.resolver.resolveTranslations(rowLabels.SingularTranslations, configPath+".options.rowLabels.singularTranslations"),
+				SingularTranslations: fieldResolver.resolver.resolveTranslations(rowLabels.SingularTranslations, configPath+".admin.rowLabels.singularTranslations"),
 				Plural:               plural,
-				PluralTranslations:   fieldResolver.resolver.resolveTranslations(rowLabels.PluralTranslations, configPath+".options.rowLabels.pluralTranslations"),
+				PluralTranslations:   fieldResolver.resolver.resolveTranslations(rowLabels.PluralTranslations, configPath+".admin.rowLabels.pluralTranslations"),
 			}
 		}
 		if rowLabel := definition.RowLabel(); rowLabel != "" {
 			found := false
 			for _, child := range children {
-				if child.Name() == rowLabel && child.Category() != field.CategoryPresentation {
+				if child.Name() == rowLabel && field.Snapshot(child).Category() != field.CategoryPresentation {
 					found = true
 					break
 				}
 			}
 			if !found {
-				fieldResolver.resolver.issue("unknown_row_label", configPath+".options.rowLabel", "row label must name a direct stored child field")
+				fieldResolver.resolver.issue("unknown_row_label", configPath+".admin.rowLabelPath", "row label must name a direct stored child field")
 			}
 		}
 	case field.KindBlocks:
 		resolved.Type, resolved.Category = schema.FieldTypeBlocks, schema.FieldCategoryNested
-		blocks := definition.Blocks()
-		if len(blocks) == 0 {
-			fieldResolver.resolver.issue("missing_block_types", configPath+".options.blocks", "blocks field requires at least one block type")
-		}
-		resolvedBlocks := make([]schema.BlockType, len(blocks))
-		seen := make(map[string]bool, len(blocks))
-		for index, block := range blocks {
-			blockPath := fmt.Sprintf("%s.options.blocks[%d]", configPath, index)
-			if !schema.IsValidPluginKey(block.Key) || seen[block.Key] {
-				fieldResolver.resolver.issue("invalid_block_key", blockPath+".key", "block key must be unique lowercase kebab-case")
-			}
-			seen[block.Key] = true
-			label := strings.TrimSpace(block.Label)
-			if label == "" {
-				label = humanize(block.Key)
-			}
-			blockFields := fieldResolver.resolveFields(block.Fields, blockPath+".fields", append(pathSegments, block.Key))
-			for _, blockField := range blockFields {
-				if blockField.Name == "blockType" {
-					fieldResolver.resolver.issue("reserved_field_name", blockPath+".fields", "direct block field name \"blockType\" is reserved for the framework block discriminator")
-					break
-				}
-			}
-			resolvedBlocks[index] = schema.BlockType{
-				Key: block.Key, Label: label,
-				LabelTranslations: fieldResolver.resolver.resolveTranslations(block.LabelTranslations, blockPath+".labelTranslations"),
-				Fields:            blockFields,
-			}
-		}
-		resolved.Blocks = &schema.BlocksField{Types: resolvedBlocks}
+		resolved.Blocks = fieldResolver.resolveBlocks(definition.Blocks(), definition.BlockReferences(), configPath, pathSegments)
+		resolved.Blocks.MinRows = definition.MinRows()
+		resolved.Blocks.MaxRows = definition.MaxRows()
 		if component := fieldResolver.resolveRowLabelComponent(definition, configPath); component != nil {
 			resolved.Nested = &schema.NestedField{Fields: []schema.Field{}, RowLabelComponent: component}
 		}
@@ -1879,7 +1896,7 @@ func (fieldResolver *fieldResolver) resolveFieldWithNestedConfig(definition fiel
 		key := definition.PluginKey()
 		if !schema.IsValidPluginKey(key) {
 			fieldResolver.resolver.issue("invalid_field_plugin", configPath+".plugin.key", "field plugin key must be lowercase kebab-case")
-		} else if _, exists := fieldResolver.resolver.pluginKeys[key]; !exists {
+		} else if _, exists := fieldResolver.resolver.pluginFieldKeys[key]; !exists {
 			fieldResolver.resolver.issue("missing_field_plugin", configPath+".plugin.key", fmt.Sprintf("field plugin %q is not registered", key))
 		}
 		config := definition.PluginConfig()
@@ -1887,7 +1904,7 @@ func (fieldResolver *fieldResolver) resolveFieldWithNestedConfig(definition fiel
 			fieldResolver.resolver.issue("invalid_field_plugin_config", configPath+".plugin.config", "field plugin config must be valid JSON")
 			config = json.RawMessage(`{}`)
 		}
-		resolved.Plugin = &schema.PluginField{Key: key, Config: config, ReferenceKeys: definition.PluginReferenceKeys()}
+		resolved.Plugin = &schema.PluginField{Key: key, Config: config, ReferenceKeys: definition.PluginReferenceKeys(), EmbeddedTrees: fieldResolver.resolveEmbeddedTrees(definition, configPath, pathSegments)}
 	default:
 		fieldResolver.resolver.issue("unknown_field_kind", configPath+".type", fmt.Sprintf("unknown field kind %q", definition.Kind()))
 	}
@@ -1897,23 +1914,44 @@ func (fieldResolver *fieldResolver) resolveFieldWithNestedConfig(definition fiel
 	return resolved
 }
 
-func (fieldResolver *fieldResolver) resolveRowLabelComponent(definition field.Definition, configPath string) *schema.FieldAdminComponent {
+func (fieldResolver *fieldResolver) resolveAdminExtensions(definition field.View) map[string]json.RawMessage {
+	declared := definition.AdminPolicy().Extensions
+	if len(declared) == 0 {
+		return nil
+	}
+	result := make(map[string]json.RawMessage, len(declared))
+	for key, value := range declared {
+		encoded, err := json.Marshal(value)
+		if err != nil {
+			// The graph validator provides the authored, deterministic diagnostic.
+			// Keep the schema boundary total for invalid component configuration.
+			continue
+		}
+		result[key] = encoded
+	}
+	return result
+}
+
+func (fieldResolver *fieldResolver) resolveRowLabelComponent(definition field.View, configPath string) *schema.FieldAdminComponent {
+	if reference, config := definition.LocalRowLabel(); reference != "" {
+		return &schema.FieldAdminComponent{Reference: reference, Config: config}
+	}
 	pluginKey, component, config, exists := definition.RowLabelComponent()
 	if !exists {
 		return nil
 	}
-	optionPath := configPath + ".options.rowLabelComponent"
+	componentPath := configPath + ".admin.rowLabel"
 	if !schema.IsValidPluginKey(pluginKey) {
-		fieldResolver.resolver.issue("invalid_row_label_component_plugin", optionPath+".plugin", "row label component plugin must be a lowercase plugin key")
+		fieldResolver.resolver.issue("invalid_row_label_component_plugin", componentPath+".pluginKey", "row label component plugin must be a lowercase plugin key")
 	}
 	if !schema.IsValidAdminPluginExport(component) {
-		fieldResolver.resolver.issue("invalid_row_label_component_name", optionPath+".component", "row label component must be a JavaScript identifier")
+		fieldResolver.resolver.issue("invalid_row_label_component_name", componentPath+".key", "row label component must be a JavaScript identifier")
 	}
 	if _, paired := fieldResolver.resolver.adminPluginKeys[pluginKey]; !paired {
-		fieldResolver.resolver.issue("missing_row_label_component_plugin", optionPath+".plugin", fmt.Sprintf("row label component plugin %q is not registered with a paired admin package", pluginKey))
+		fieldResolver.resolver.issue("missing_row_label_component_plugin", componentPath+".pluginKey", fmt.Sprintf("row label component plugin %q is not registered with a paired admin package", pluginKey))
 	}
 	if len(config) != 0 && !isJSONObject(config) {
-		fieldResolver.resolver.issue("invalid_row_label_component_config", optionPath+".config", "row label component config must be a JSON object")
+		fieldResolver.resolver.issue("invalid_row_label_component_config", componentPath+".config", "row label component config must be a JSON object")
 	}
 	return &schema.FieldAdminComponent{Plugin: pluginKey, Component: component, Config: append(json.RawMessage(nil), config...)}
 }
@@ -1930,22 +1968,31 @@ func (fieldResolver *fieldResolver) resolveFieldCondition(condition field.Condit
 	if condition.Kind() != field.ConditionKindPredicate {
 		return resolved
 	}
-	conditionPath, err := query.ParsePath(condition.Path())
-	if err != nil {
-		fieldResolver.resolver.issue("invalid_field_condition", configPath+".path", err.Error())
+	// Structural reference diagnostics come from the field declaration; avoid
+	// adding query-parser terminology for the same malformed authoring path.
+	if condition.Reference().Err() != nil {
+		return resolved
 	}
+	conditionPath, _ := query.ParsePath(condition.Reference().Path())
 	values := condition.Values()
 	resolvedValues := make([]schema.FieldConditionValue, len(values))
 	for index, value := range values {
 		resolvedValues[index] = resolvedFieldConditionValue(value)
 	}
 	resolved.Predicate = &schema.FieldConditionPredicate{
-		Scope:    schema.FieldConditionScope(condition.Scope()),
+		Scope:    conditionReferenceScope(condition.Reference()),
 		Path:     conditionPath,
 		Operator: schema.FieldConditionOperator(condition.Operator()),
 		Values:   resolvedValues,
 	}
 	return resolved
+}
+
+func conditionReferenceScope(reference field.Reference) schema.FieldConditionScope {
+	if reference.Scope() == field.RootScope {
+		return schema.FieldConditionDocument
+	}
+	return schema.FieldConditionSibling
 }
 
 func resolvedFieldConditionValue(value field.DefaultValue) schema.FieldConditionValue {
@@ -1963,19 +2010,33 @@ func resolvedFieldConditionValue(value field.DefaultValue) schema.FieldCondition
 
 func clearDescendantLocalization(field *schema.Field) {
 	if field.Nested != nil {
-		for index := range field.Nested.Fields {
-			field.Nested.Fields[index].Localized = false
-			clearDescendantLocalization(&field.Nested.Fields[index])
+		for index := range field.Nested.ResolvedFields() {
+			field.Nested.ResolvedFields()[index].Localized = false
+			clearDescendantLocalization(&field.Nested.ResolvedFields()[index])
 		}
 	}
 	if field.Blocks != nil {
-		for blockIndex := range field.Blocks.Types {
-			for fieldIndex := range field.Blocks.Types[blockIndex].Fields {
-				field.Blocks.Types[blockIndex].Fields[fieldIndex].Localized = false
-				clearDescendantLocalization(&field.Blocks.Types[blockIndex].Fields[fieldIndex])
+		for blockIndex := range field.Blocks.ResolvedTypes() {
+			for fieldIndex := range field.Blocks.ResolvedTypes()[blockIndex].ResolvedFields() {
+				field.Blocks.ResolvedTypes()[blockIndex].ResolvedFields()[fieldIndex].Localized = false
+				clearDescendantLocalization(&field.Blocks.ResolvedTypes()[blockIndex].ResolvedFields()[fieldIndex])
 			}
 		}
 	}
+	if field.Plugin != nil {
+		for i := range field.Plugin.EmbeddedTrees {
+			for j := range field.Plugin.EmbeddedTrees[i].Cases {
+				for k := range field.Plugin.EmbeddedTrees[i].Cases[j].ResolvedTypes() {
+					for n := range field.Plugin.EmbeddedTrees[i].Cases[j].ResolvedTypes()[k].ResolvedFields() {
+						child := &field.Plugin.EmbeddedTrees[i].Cases[j].ResolvedTypes()[k].ResolvedFields()[n]
+						child.Localized = false
+						clearDescendantLocalization(child)
+					}
+				}
+			}
+		}
+	}
+
 }
 
 func (fieldResolver *fieldResolver) effectiveFieldID(pathSegments []string) schema.StableID {
@@ -2016,7 +2077,7 @@ func kebabCase(value string) string {
 	return string(result)
 }
 
-func (fieldResolver *fieldResolver) resolveUpload(definition field.Definition, configPath string) *schema.UploadField {
+func (fieldResolver *fieldResolver) resolveUpload(definition field.View, configPath string) *schema.UploadField {
 	targets := definition.RelationshipTargets()
 	resolved := &schema.UploadField{
 		HasMany:  definition.RelationshipHasMany(),
@@ -2028,13 +2089,13 @@ func (fieldResolver *fieldResolver) resolveUpload(definition field.Definition, c
 		if filter.SourcePath != "" {
 			parsed, sourceError := query.ParsePath(filter.SourcePath)
 			if sourceError != nil {
-				fieldResolver.resolver.issue("invalid_relationship_filter", fmt.Sprintf("%s.options.filterOptionRules[%d]", configPath, index), "upload option filter paths must be valid field paths")
+				fieldResolver.resolver.issue("invalid_relationship_filter", fmt.Sprintf("%s.filterOptionRules[%d]", configPath, index), "upload option filter paths must be valid field paths")
 				continue
 			}
 			sourcePath = &parsed
 		}
 		if targetError != nil {
-			fieldResolver.resolver.issue("invalid_relationship_filter", fmt.Sprintf("%s.options.filterOptionRules[%d]", configPath, index), "upload option filter paths must be valid field paths")
+			fieldResolver.resolver.issue("invalid_relationship_filter", fmt.Sprintf("%s.filterOptionRules[%d]", configPath, index), "upload option filter paths must be valid field paths")
 			continue
 		}
 		resolved.OptionFilters = append(resolved.OptionFilters, schema.RelationshipFilter{
@@ -2046,73 +2107,62 @@ func (fieldResolver *fieldResolver) resolveUpload(definition field.Definition, c
 		})
 	}
 	if len(targets) != 1 {
-		fieldResolver.resolver.issue("invalid_upload_target", configPath+".options.to", "upload fields require exactly one target collection")
+		fieldResolver.resolver.issue("invalid_upload_target", configPath+".target", "upload fields require exactly one target collection")
 		return resolved
 	}
 	target := schema.CollectionSlug(targets[0])
 	collection, exists := fieldResolver.resolver.collectionSlugs[target]
 	if !exists {
-		fieldResolver.resolver.issue("missing_upload_collection", configPath+".options.to", fmt.Sprintf("upload target collection %q does not exist", target))
+		fieldResolver.resolver.issue("missing_upload_collection", configPath+".target", fmt.Sprintf("upload target collection %q does not exist", target))
 		return resolved
 	}
 	if !collection.upload {
-		fieldResolver.resolver.issue("invalid_upload_collection", configPath+".options.to", fmt.Sprintf("collection %q is not upload-enabled", target))
+		fieldResolver.resolver.issue("invalid_upload_collection", configPath+".target", fmt.Sprintf("collection %q is not upload-enabled", target))
 	}
 	resolved.CollectionID, resolved.CollectionSlug = collection.id, target
 	return resolved
 }
 
-func (fieldResolver *fieldResolver) resolveSelect(definition field.Definition, configPath string) *schema.SelectField {
-	choices := definition.Choices()
-	if len(choices) == 0 {
-		fieldResolver.resolver.issue("missing_select_choices", configPath+".options.choices", "select field requires at least one choice")
+func (fieldResolver *fieldResolver) resolveSelect(definition field.View, configPath string) *schema.SelectField {
+	options := definition.Options()
+	if len(options) == 0 {
+		fieldResolver.resolver.issue("missing_select_options", configPath+".options", "select field requires at least one option")
 	}
 
 	seenValues := make(map[string]string)
-	resolved := make([]schema.SelectChoice, len(choices))
-	for index, choice := range choices {
-		path := fmt.Sprintf("%s.options.choices[%d]", configPath, index)
-		if choice.Value == "" {
-			fieldResolver.resolver.issue("missing_select_value", path+".value", "select choice value must not be empty")
+	resolved := make([]schema.SelectOption, len(options))
+	for index, option := range options {
+		path := fmt.Sprintf("%s.options[%d]", configPath, index)
+		if option.Value == "" {
+			fieldResolver.resolver.issue("missing_select_value", path+".value", "select option value must not be empty")
 		}
-		if previousPath, exists := seenValues[choice.Value]; choice.Value != "" && exists {
-			fieldResolver.resolver.issue("duplicate_select_value", path+".value", fmt.Sprintf("select value %q is already used at %s", choice.Value, previousPath))
-		} else if choice.Value != "" {
-			seenValues[choice.Value] = path + ".value"
+		if previousPath, exists := seenValues[option.Value]; option.Value != "" && exists {
+			fieldResolver.resolver.issue("duplicate_select_value", path+".value", fmt.Sprintf("select value %q is already used at %s", option.Value, previousPath))
+		} else if option.Value != "" {
+			seenValues[option.Value] = path + ".value"
 		}
-		label := strings.TrimSpace(choice.Label)
+		label := strings.TrimSpace(option.Label)
 		if label == "" {
-			label = humanize(choice.Value)
+			label = humanize(option.Value)
 		}
-		resolved[index] = schema.SelectChoice{
-			Value: choice.Value, Label: label,
-			LabelTranslations: fieldResolver.resolver.resolveTranslations(choice.LabelTranslations, path+".labelTranslations"),
+		resolved[index] = schema.SelectOption{
+			Value: option.Value, Label: label,
+			LabelTranslations: fieldResolver.resolver.resolveTranslations(option.LabelTranslations, path+".labelTranslations"),
 		}
 	}
 
 	if defaultValue, exists := definition.Default(); exists {
 		if _, valid := seenValues[defaultValue.String()]; !valid {
-			fieldResolver.resolver.issue("invalid_select_default", configPath+".options.default", fmt.Sprintf("default value %q is not one of the configured select choices", defaultValue.String()))
+			fieldResolver.resolver.issue("invalid_select_default", configPath+".default", fmt.Sprintf("default value %q is not one of the configured select options", defaultValue.String()))
 		}
 	}
 	hasMany := definition.SelectHasMany()
 	defaults := definition.SelectDefaults()
-	if definition.Kind() == field.KindRadio && hasMany {
-		fieldResolver.resolver.issue("invalid_radio_cardinality", configPath+".options.hasMany", "radio fields cannot store multiple choices")
-		hasMany = false
-	}
-	if _, scalarDefault := definition.Default(); scalarDefault && hasMany {
-		fieldResolver.resolver.issue("invalid_select_default", configPath+".options.default", "multi-select defaults must use field.DefaultChoices")
-	}
-	if len(defaults) != 0 && !hasMany {
-		fieldResolver.resolver.issue("invalid_select_default", configPath+".options.default", "field.DefaultChoices requires field.Multiple")
-		defaults = nil
-	}
 	seenDefaults := make(map[string]bool, len(defaults))
 	for index, value := range defaults {
-		path := fmt.Sprintf("%s.options.default[%d]", configPath, index)
+		path := fmt.Sprintf("%s.default[%d]", configPath, index)
 		if _, valid := seenValues[value]; !valid {
-			fieldResolver.resolver.issue("invalid_select_default", path, fmt.Sprintf("default value %q is not one of the configured select choices", value))
+			fieldResolver.resolver.issue("invalid_select_default", path, fmt.Sprintf("default value %q is not one of the configured select options", value))
 		}
 		if seenDefaults[value] {
 			fieldResolver.resolver.issue("duplicate_select_default", path, fmt.Sprintf("default value %q was configured more than once", value))
@@ -2120,13 +2170,13 @@ func (fieldResolver *fieldResolver) resolveSelect(definition field.Definition, c
 		seenDefaults[value] = true
 	}
 	return &schema.SelectField{
-		Choices:       resolved,
+		Options:       resolved,
 		HasMany:       hasMany,
 		DefaultValues: append([]string(nil), defaults...),
 	}
 }
 
-func (fieldResolver *fieldResolver) resolveRelationship(definition field.Definition, configPath string) *schema.RelationshipField {
+func (fieldResolver *fieldResolver) resolveRelationship(definition field.View, configPath string) *schema.RelationshipField {
 	targets := definition.RelationshipTargets()
 	resolved := &schema.RelationshipField{
 		HasMany:     definition.RelationshipHasMany(),
@@ -2139,13 +2189,13 @@ func (fieldResolver *fieldResolver) resolveRelationship(definition field.Definit
 		if filter.SourcePath != "" {
 			parsed, sourceError := query.ParsePath(filter.SourcePath)
 			if sourceError != nil {
-				fieldResolver.resolver.issue("invalid_relationship_filter", fmt.Sprintf("%s.options.filterOptionRules[%d]", configPath, index), "relationship option filter paths must be valid field paths")
+				fieldResolver.resolver.issue("invalid_relationship_filter", fmt.Sprintf("%s.filterOptionRules[%d]", configPath, index), "relationship option filter paths must be valid field paths")
 				continue
 			}
 			sourcePath = &parsed
 		}
 		if targetError != nil {
-			fieldResolver.resolver.issue("invalid_relationship_filter", fmt.Sprintf("%s.options.filterOptionRules[%d]", configPath, index), "relationship option filter paths must be valid field paths")
+			fieldResolver.resolver.issue("invalid_relationship_filter", fmt.Sprintf("%s.filterOptionRules[%d]", configPath, index), "relationship option filter paths must be valid field paths")
 			continue
 		}
 		resolved.OptionFilters = append(resolved.OptionFilters, schema.RelationshipFilter{
@@ -2157,13 +2207,16 @@ func (fieldResolver *fieldResolver) resolveRelationship(definition field.Definit
 		})
 	}
 	if len(targets) == 0 {
-		fieldResolver.resolver.issue("missing_relationship_target", configPath+".options.to", "relationship field requires a target collection slug")
+		fieldResolver.resolver.issue("missing_relationship_target", configPath+".target", "relationship field requires a target collection slug")
 		return resolved
 	}
 	seen := make(map[schema.CollectionSlug]bool, len(targets))
 	for index, rawTarget := range targets {
 		target := schema.CollectionSlug(rawTarget)
-		path := fmt.Sprintf("%s.options.to[%d]", configPath, index)
+		path := configPath + ".target"
+		if len(targets) > 1 {
+			path = fmt.Sprintf("%s.targets[%d]", configPath, index)
+		}
 		if !schema.IsValidCollectionSlug(string(target)) {
 			fieldResolver.resolver.issue("invalid_relationship_target", path, "relationship target must be a lowercase kebab-case collection slug")
 			continue
@@ -2188,7 +2241,7 @@ func (fieldResolver *fieldResolver) resolveRelationship(definition field.Definit
 	return resolved
 }
 
-func (fieldResolver *fieldResolver) resolveReferenceDeleteAction(definition field.Definition, configPath string) schema.ReferenceDeleteAction {
+func (fieldResolver *fieldResolver) resolveReferenceDeleteAction(definition field.View, configPath string) schema.ReferenceDeleteAction {
 	action := schema.ReferenceDeleteAction(definition.ReferenceDeleteAction())
 	if action == "" {
 		if definition.Required() {
@@ -2199,14 +2252,14 @@ func (fieldResolver *fieldResolver) resolveReferenceDeleteAction(definition fiel
 	if action == schema.ReferenceDeleteNullify && definition.Required() {
 		fieldResolver.resolver.issue(
 			"invalid_reference_delete_action",
-			configPath+".options.onDelete",
+			configPath+".onDelete",
 			"required references cannot be nullified; use restrict or omit OnDelete to use the safe default",
 		)
 	}
 	return action
 }
 
-func (fieldResolver *fieldResolver) resolveJoin(definition field.Definition, configPath string) *schema.JoinField {
+func (fieldResolver *fieldResolver) resolveJoin(definition field.View, configPath string) *schema.JoinField {
 	target := schema.CollectionSlug(definition.JoinCollection())
 	allowCreate := definition.JoinAllowCreate()
 	join := &schema.JoinField{
@@ -2322,12 +2375,13 @@ func (resolver *resolver) validateCrossCollectionFields(collections []schema.Col
 						}
 					}
 				}
+				inspect(schema.EmbeddedBlocks(candidate), path+".plugin.embeddedTrees")
 				if candidate.Nested != nil {
-					inspect(candidate.Nested.Fields, path+".nested.fields")
+					inspect(candidate.Nested.ResolvedFields(), path+".nested.fields")
 				}
 				if candidate.Blocks != nil {
-					for blockIndex, block := range candidate.Blocks.Types {
-						inspect(block.Fields, fmt.Sprintf("%s.blocks.types[%d].fields", path, blockIndex))
+					for blockIndex, block := range candidate.Blocks.ResolvedTypes() {
+						inspect(block.ResolvedFields(), fmt.Sprintf("%s.blocks.types[%d].fields", path, blockIndex))
 					}
 				}
 			}
@@ -2506,4 +2560,62 @@ func isReservedWhereFieldName(name string) bool {
 	default:
 		return false
 	}
+}
+
+func (fieldResolver *fieldResolver) resolveBlockTypes(blocks []field.Block, configPath string, pathSegments []string) []schema.BlockType {
+	if len(blocks) == 0 {
+		fieldResolver.resolver.issue("missing_block_types", configPath+".blocks", "blocks field requires at least one block type")
+	}
+	resolvedBlocks := make([]schema.BlockType, len(blocks))
+	seen := make(map[string]bool, len(blocks))
+	for index, block := range blocks {
+		blockPath := fmt.Sprintf("%s.blocks[%d]", configPath, index)
+		if !schema.IsValidPluginKey(block.Slug) || seen[block.Slug] {
+			fieldResolver.resolver.issue("invalid_block_slug", blockPath+".slug", "block slug must be unique lowercase kebab-case")
+		}
+		seen[block.Slug] = true
+		labels := fieldResolver.resolver.resolveBlockLabels(block.Slug, block.Labels, blockPath+".labels")
+		blockFields := fieldResolver.resolveFields(block.Fields, blockPath+".fields", append(pathSegments, block.Slug))
+		for _, blockField := range blockFields {
+			if blockField.Name == "blockType" {
+				fieldResolver.resolver.issue("reserved_field_name", blockPath+".fields", "direct block field name \"blockType\" is reserved for the framework block discriminator")
+				break
+			}
+		}
+		var admin *schema.BlockAdmin
+		if rowLabel := strings.TrimSpace(block.Admin.RowLabelPath); rowLabel != "" {
+			found := false
+			for _, child := range blockFields {
+				if child.Name == rowLabel && child.Category == schema.FieldCategoryScalar && child.Type != schema.FieldTypeJSON && child.Type != schema.FieldTypePoint && child.Type != schema.FieldTypeTextList && child.Type != schema.FieldTypeNumberList && (child.Select == nil || !child.Select.HasMany) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				fieldResolver.resolver.issue("invalid_block_row_label", blockPath+".admin.rowLabelPath", "block row label must name a direct stored scalar child field")
+			}
+			admin = &schema.BlockAdmin{RowLabel: rowLabel}
+		}
+		resolvedBlocks[index] = schema.BlockType{
+			Admin: admin, TypeName: block.TypeName,
+			Slug: block.Slug, Labels: labels,
+			Fields: blockFields,
+		}
+		if block.TypeName != "" {
+			shape, err := blocktypes.Shape(resolvedBlocks[index])
+			if err == nil {
+				if fieldResolver.resolver.blockTypeNames == nil {
+					fieldResolver.resolver.blockTypeNames = make(map[string]struct{ shape, path string })
+				}
+				if prior, exists := fieldResolver.resolver.blockTypeNames[block.TypeName]; exists && prior.shape != shape {
+					fieldResolver.resolver.issue("block_type_name_conflict", blockPath+".typeName", fmt.Sprintf("block type name %q has a different resolved definition at %s", block.TypeName, prior.path))
+				} else {
+					fieldResolver.resolver.blockTypeNames[block.TypeName] = struct{ shape, path string }{shape, blockPath + ".typeName"}
+				}
+			}
+		}
+
+	}
+
+	return resolvedBlocks
 }

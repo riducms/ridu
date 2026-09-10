@@ -8,6 +8,7 @@ import (
 	"github.com/riducms/ridu"
 	"github.com/riducms/ridu/field"
 	"github.com/riducms/ridu/internal/referenceindex"
+	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
@@ -22,29 +23,19 @@ func TestMongoDBRelationshipsPopulateWithAccessAndReconcileHardDeletes(t *testin
 		Collections: []ridu.Collection{
 			{
 				Slug: "people",
-				Fields: []field.Definition{
-					field.Text("name", field.Required()), field.Checkbox("public", field.Required()), field.Text("secret"),
-				},
+				Fields: field.Fields{field.Text("name").Required(), field.Checkbox("public").Required(), field.Text("secret").Access(field.Access{Read: func(operation.AccessContext,
+
+				) (bool, error) {
+					return false, nil
+				}})},
 				Access: ridu.CollectionAccess{Read: func(ridu.AccessContext) (ridu.AccessDecision, error) {
 					return ridu.Where(query.Equal(publicPath, query.Boolean(true))), nil
 				}},
-				FieldAccess: map[string]ridu.FieldAccess{
-					"secret": {Read: func(ridu.FieldAccessContext) (bool, error) { return false, nil }},
-				},
 			},
-			{Slug: "teams", Fields: []field.Definition{field.Text("name", field.Required())}},
+			{Slug: "teams", Fields: field.Fields{field.Text("name").Required()}},
 			{
 				Slug: "posts", Trash: true,
-				Fields: []field.Definition{
-					field.Text("title", field.Required()),
-					field.Relationship("guard", field.To("people"), field.OnDelete(field.ReferenceDeleteRestrict)),
-					field.Relationship("owner", field.To("people"), field.OnDelete(field.ReferenceDeleteNullify)),
-					field.Relationship("related", field.ToMany("people"), field.OnDelete(field.ReferenceDeleteNullify)),
-					field.Relationship("subject", field.ToAny("people", "teams"), field.OnDelete(field.ReferenceDeleteNullify)),
-					field.Group("meta", field.Fields(
-						field.Relationship("reviewer", field.To("people"), field.OnDelete(field.ReferenceDeleteNullify)),
-					)),
-				},
+				Fields: field.Fields{field.Text("title").Required(), field.Relationship("guard", "people").OnDelete(field.ReferenceDeleteRestrict), field.Relationship("owner", "people").OnDelete(field.ReferenceDeleteNullify), field.Relationships("related", "people").OnDelete(field.ReferenceDeleteNullify), field.PolymorphicRelationship("subject", "people", "teams").OnDelete(field.ReferenceDeleteNullify), field.Group("meta", field.Fields{field.Relationship("reviewer", "people").OnDelete(field.ReferenceDeleteNullify)})},
 			},
 		},
 	}, backend)
@@ -104,37 +95,37 @@ func TestMongoDBRelationshipsPopulateWithAccessAndReconcileHardDeletes(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner, ok := populated.Values["owner"].DocumentValue()
+	owner, ok := populated.Values["owner"].CopyDocument()
 	if !ok || owner.ID != visible.ID {
 		t.Fatalf("populated owner = %#v", populated.Values["owner"])
 	}
 	if _, leaked := owner.Values["secret"]; leaked {
 		t.Fatal("population leaked a target field denied by read access")
 	}
-	related, ok := populated.Values["related"].Values()
+	related, ok := populated.Values["related"].CopyList()
 	if !ok || len(related) != 3 {
 		t.Fatalf("populated related = %#v", populated.Values["related"])
 	}
 	for index := range 2 {
-		if document, populated := related[index].DocumentValue(); !populated || document.ID != visible.ID {
+		if document, populated := related[index].CopyDocument(); !populated || document.ID != visible.ID {
 			t.Fatalf("populated duplicate relationship %d = %#v", index, related[index])
 		}
 	}
 	if hiddenID, valid := related[2].StringValue(); !valid || hiddenID != laterHidden.ID {
 		t.Fatalf("access-denied target was not retained as its canonical ID: %#v", related[2])
 	}
-	subject, ok := populated.Values["subject"].ObjectValue()
+	subject, ok := populated.Values["subject"].CopyObject()
 	if !ok {
 		t.Fatalf("polymorphic subject = %#v", populated.Values["subject"])
 	}
 	if relationTo, _ := subject["relationTo"].StringValue(); relationTo != "teams" {
 		t.Fatalf("polymorphic discriminator = %#v", subject)
 	}
-	if document, populated := subject["id"].DocumentValue(); !populated || document.ID != team.ID {
+	if document, populated := subject["id"].CopyDocument(); !populated || document.ID != team.ID {
 		t.Fatalf("polymorphic populated target = %#v", subject["id"])
 	}
-	meta, _ := populated.Values["meta"].ObjectValue()
-	if document, populated := meta["reviewer"].DocumentValue(); !populated || document.ID != visible.ID {
+	meta, _ := populated.Values["meta"].CopyObject()
+	if document, populated := meta["reviewer"].CopyDocument(); !populated || document.ID != visible.ID {
 		t.Fatalf("nested group population = %#v", meta["reviewer"])
 	}
 
@@ -166,14 +157,14 @@ func TestMongoDBRelationshipsPopulateWithAccessAndReconcileHardDeletes(t *testin
 	if reconciled.Values["owner"].Kind() != store.ValueNull {
 		t.Fatalf("singular reference was not nullified: %#v", reconciled.Values["owner"])
 	}
-	remaining, _ := reconciled.Values["related"].Values()
+	remaining, _ := reconciled.Values["related"].CopyList()
 	if len(remaining) != 1 {
 		t.Fatalf("has-many target occurrences were not removed: %#v", remaining)
 	}
 	if id, _ := remaining[0].StringValue(); id != laterHidden.ID {
 		t.Fatalf("has-many reconciliation removed another target: %#v", remaining)
 	}
-	meta, _ = reconciled.Values["meta"].ObjectValue()
+	meta, _ = reconciled.Values["meta"].CopyObject()
 	if meta["reviewer"].Kind() != store.ValueNull {
 		t.Fatalf("nested relationship was not nullified: %#v", meta["reviewer"])
 	}
@@ -205,8 +196,8 @@ func TestMongoDBReferenceFencePreventsConcurrentAdmissionAndDelete(t *testing.T)
 	application, err := ridu.New(ridu.Config{
 		Name: "MongoDB reference fence",
 		Collections: []ridu.Collection{
-			{Slug: "targets", Fields: []field.Definition{field.Text("name")}},
-			{Slug: "owners", Fields: []field.Definition{field.Relationship("target", field.To("targets"))}},
+			{Slug: "targets", Fields: field.Fields{field.Text("name")}},
+			{Slug: "owners", Fields: field.Fields{field.Relationship("target", "targets")}},
 		},
 	}, backend)
 	if err != nil {
@@ -289,8 +280,8 @@ func TestMongoDBPopulationBudgetCountsDuplicateOutputNodes(t *testing.T) {
 	application, err := ridu.New(ridu.Config{
 		Name: "MongoDB population budget",
 		Collections: []ridu.Collection{
-			{Slug: "targets", Fields: []field.Definition{field.Text("name")}},
-			{Slug: "owners", Fields: []field.Definition{field.Relationship("targets", field.ToMany("targets"))}},
+			{Slug: "targets", Fields: field.Fields{field.Text("name")}},
+			{Slug: "owners", Fields: field.Fields{field.Relationships("targets", "targets")}},
 		},
 	}, backend)
 	if err != nil {
@@ -331,11 +322,8 @@ func TestMongoDBRecursivePopulationChargesEachOutputNodeOnce(t *testing.T) {
 	application, err := ridu.New(ridu.Config{
 		Name: "MongoDB recursive population budget",
 		Collections: []ridu.Collection{{
-			Slug: "nodes",
-			Fields: []field.Definition{
-				field.Text("name", field.Required()),
-				field.Relationship("next", field.To("nodes")),
-			},
+			Slug:   "nodes",
+			Fields: field.Fields{field.Text("name").Required(), field.Relationship("next", "nodes")},
 		}},
 	}, backend)
 	if err != nil {
@@ -374,12 +362,12 @@ func TestMongoDBRecursivePopulationChargesEachOutputNodeOnce(t *testing.T) {
 		mongoRollback(t, exact)
 		t.Fatalf("two-node recursive population with budget 2: %v", err)
 	}
-	populatedMiddle, ok := populated.Values["next"].DocumentValue()
+	populatedMiddle, ok := populated.Values["next"].CopyDocument()
 	if !ok || populatedMiddle.ID != middle.ID {
 		mongoRollback(t, exact)
 		t.Fatalf("populated middle = %#v", populated.Values["next"])
 	}
-	populatedLeaf, ok := populatedMiddle.Values["next"].DocumentValue()
+	populatedLeaf, ok := populatedMiddle.Values["next"].CopyDocument()
 	if !ok || populatedLeaf.ID != leaves.ID {
 		mongoRollback(t, exact)
 		t.Fatalf("populated leaf = %#v", populatedMiddle.Values["next"])
@@ -397,16 +385,16 @@ func TestMongoDBRecursivePopulationChargesEachOutputNodeOnce(t *testing.T) {
 
 func TestMongoDBRecursivePopulationAllowsWideGeneratedPlans(t *testing.T) {
 	backend := mongoIntegrationStore(t)
-	hubFields := []field.Definition{field.Text("name")}
+	hubFields := field.Fields{field.Text("name")}
 	for index := 0; index < 65; index++ {
-		hubFields = append(hubFields, field.Relationship(fmt.Sprintf("reference%02d", index), field.To("leaves")))
+		hubFields = append(hubFields, field.Relationship(fmt.Sprintf("reference%02d", index), "leaves"))
 	}
 	application, err := ridu.New(ridu.Config{
 		Name: "MongoDB generated population paths",
 		Collections: []ridu.Collection{
-			{Slug: "leaves", Fields: []field.Definition{field.Text("name")}},
+			{Slug: "leaves", Fields: field.Fields{field.Text("name")}},
 			{Slug: "hubs", Fields: hubFields},
-			{Slug: "sources", Fields: []field.Definition{field.Relationship("hub", field.To("hubs"))}},
+			{Slug: "sources", Fields: field.Fields{field.Relationship("hub", "hubs")}},
 		},
 	}, backend)
 	if err != nil {
@@ -429,7 +417,7 @@ func TestMongoDBRecursivePopulationAllowsWideGeneratedPlans(t *testing.T) {
 	if err != nil {
 		t.Fatalf("wide generated population plan: %v", err)
 	}
-	populatedHub, ok := populated.Values["hub"].DocumentValue()
+	populatedHub, ok := populated.Values["hub"].CopyDocument()
 	if !ok || populatedHub.ID != hub.ID {
 		t.Fatalf("wide generated plan result = %#v", populated.Values["hub"])
 	}
@@ -440,11 +428,9 @@ func TestMongoDBDeleteDocumentStateRemovesOwnedAndTargetReferenceRows(t *testing
 	application, err := ridu.New(ridu.Config{
 		Name: "MongoDB reference state cleanup",
 		Collections: []ridu.Collection{
-			{Slug: "targets", Fields: []field.Definition{field.Text("name")}},
-			{Slug: "other-targets", Fields: []field.Definition{field.Text("name")}},
-			{Slug: "owners", Fields: []field.Definition{
-				field.Relationship("target", field.To("targets"), field.OnDelete(field.ReferenceDeleteRestrict)),
-			}},
+			{Slug: "targets", Fields: field.Fields{field.Text("name")}},
+			{Slug: "other-targets", Fields: field.Fields{field.Text("name")}},
+			{Slug: "owners", Fields: field.Fields{field.Relationship("target", "targets").OnDelete(field.ReferenceDeleteRestrict)}},
 		},
 	}, backend)
 	if err != nil {

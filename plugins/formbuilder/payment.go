@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	ridu "github.com/riducms/ridu"
+	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/store"
 )
 
@@ -33,7 +34,7 @@ type PaymentContext struct {
 type HandlePayment func(PaymentContext) (store.Value, error)
 
 func (plugin *Plugin) processPayment(context ridu.HookContext, allowedFieldTypes map[FieldType]struct{}) error {
-	if context.Operation != ridu.OperationCreate || plugin.config.HandlePayment == nil {
+	if context.Operation != operation.Create || plugin.config.HandlePayment == nil {
 		return nil
 	}
 	formID, valid := relationshipID(context.Data["form"])
@@ -150,16 +151,16 @@ func priceConditions(values store.Values) []PriceCondition {
 	rows, _ := listValue(values, "priceConditions")
 	conditions := make([]PriceCondition, 0, len(rows))
 	for _, value := range rows {
-		row, valid := value.ObjectValue()
-		if !valid {
+		row := value
+		if row.Kind() != store.ValueObject {
 			continue
 		}
-		fieldToUse, _ := stringValue(row, "fieldToUse")
-		condition, _ := stringValue(row, "condition")
-		valueForCondition, _ := stringValue(row, "valueForCondition")
-		operator, _ := stringValue(row, "operator")
-		valueType, _ := stringValue(row, "valueType")
-		valueForOperator, _ := stringValue(row, "valueForOperator")
+		fieldToUse, _ := row.Get("fieldToUse").StringValue()
+		condition, _ := row.Get("condition").StringValue()
+		valueForCondition, _ := row.Get("valueForCondition").StringValue()
+		operator, _ := row.Get("operator").StringValue()
+		valueType, _ := row.Get("valueType").StringValue()
+		valueForOperator, _ := row.Get("valueForOperator").StringValue()
 		conditions = append(conditions, PriceCondition{FieldToUse: fieldToUse, Condition: condition, ValueForCondition: valueForCondition, Operator: operator, ValueType: valueType, ValueForOperator: valueForOperator})
 	}
 	return conditions
@@ -175,8 +176,7 @@ func priceConditionMatches(value store.Value, condition PriceCondition) bool {
 			text, _ := value.StringValue()
 			return strings.TrimSpace(text) != ""
 		case store.ValueList:
-			items, _ := value.Values()
-			return len(items) != 0
+			return value.Len() != 0
 		default:
 			return true
 		}

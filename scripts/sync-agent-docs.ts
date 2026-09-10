@@ -17,11 +17,34 @@ const references: ReferenceDefinition[] = [
 	{ source: "docs/installation.md", target: "ridu-project/reference/installation.md" },
 	{ source: "docs/core-concepts.md", target: "ridu-project/reference/core-concepts.md" },
 	{ source: "docs/go-for-typescript.md", target: "ridu-project/reference/go-for-typescript.md" },
+	{ source: "docs/go-packages.md", target: "ridu-project/reference/go-packages.md" },
+	...["operation", "store", "query", "schema"].map((name) => ({
+		source: `docs/go-packages/${name}.md` as const,
+		target: `ridu-project/reference/go-packages/${name}.md` as const,
+	})),
 	{ source: "docs/configuration.md", target: "ridu-project/reference/configuration.md" },
 	{ source: "docs/collections.md", target: "ridu-project/reference/collections.md" },
 	{ source: "docs/fields.md", target: "ridu-project/reference/fields.md" },
+	{ source: "docs/fields/lists.md", target: "ridu-project/reference/fields/lists.md" },
+	{ source: "docs/fields/defaults.md", target: "ridu-project/reference/fields/defaults.md" },
+	{
+		source: "docs/fields/live-validation.md",
+		target: "ridu-project/reference/fields/live-validation.md",
+	},
+	{
+		source: "docs/fields/validation.md",
+		target: "ridu-project/reference/fields/validation.md",
+	},
+	{
+		source: "docs/fields/callback-values.md",
+		target: "ridu-project/reference/fields/callback-values.md",
+	},
 	{ source: "docs/access-control.md", target: "ridu-project/reference/access-control.md" },
 	{ source: "docs/hooks.md", target: "ridu-project/reference/hooks.md" },
+	...["collections", "globals", "fields", "context", "transactions-and-errors"].map((name) => ({
+		source: `docs/hooks/${name}.md` as const,
+		target: `ridu-project/reference/hooks/${name}.md` as const,
+	})),
 	{ source: "docs/querying.md", target: "ridu-project/reference/querying.md" },
 	{ source: "docs/local-api.md", target: "ridu-project/reference/local-api.md" },
 	{
@@ -42,6 +65,23 @@ const references: ReferenceDefinition[] = [
 	{ source: "docs/graphql.md", target: "ridu-project/reference/graphql.md" },
 	{ source: "docs/mcp.md", target: "ridu-project/reference/mcp.md" },
 	{ source: "docs/admin.md", target: "ridu-project/reference/admin.md" },
+	{ source: "docs/custom-components.md", target: "ridu-project/reference/custom-components.md" },
+	...[
+		"field-components",
+		"row-labels",
+		"list-cells",
+		"dashboard",
+		"custom-pages",
+		"document-views",
+		"document-actions",
+		"custom-views",
+		"branding-and-navigation",
+		"providers",
+	].map((name) => ({
+		source: `docs/custom-components/${name}.md` as const,
+		target: `ridu-project/reference/custom-components/${name}.md` as const,
+	})),
+	{ source: "guides/custom-fields.md", target: "ridu-project/reference/custom-fields.md" },
 	{
 		source: "docs/browsing-content.md",
 		target: "ridu-project/reference/browsing-content.md",

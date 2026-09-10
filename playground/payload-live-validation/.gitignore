@@ -1,0 +1,10 @@
+node_modules/
+.next/
+.evidence/
+.upstream/
+*.db
+*.db-*
+*.tsbuildinfo
+next-env.d.ts
+src/payload-types.ts
+payload-types.ts

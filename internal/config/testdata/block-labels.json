@@ -1,0 +1,147 @@
+[
+  {
+    "slug": "card",
+    "plural": "Cards",
+    "singular": "Card"
+  },
+  {
+    "slug": "cards",
+    "plural": "Cards",
+    "singular": "Card"
+  },
+  {
+    "slug": "hero",
+    "plural": "Heroes",
+    "singular": "Hero"
+  },
+  {
+    "slug": "heroes",
+    "plural": "Heroes",
+    "singular": "Hero"
+  },
+  {
+    "slug": "person",
+    "plural": "People",
+    "singular": "Person"
+  },
+  {
+    "slug": "people",
+    "plural": "People",
+    "singular": "Person"
+  },
+  {
+    "slug": "child",
+    "plural": "Children",
+    "singular": "Child"
+  },
+  {
+    "slug": "children",
+    "plural": "Children",
+    "singular": "Child"
+  },
+  {
+    "slug": "category",
+    "plural": "Categories",
+    "singular": "Category"
+  },
+  {
+    "slug": "categories",
+    "plural": "Categories",
+    "singular": "Category"
+  },
+  {
+    "slug": "fish",
+    "plural": "Fish",
+    "singular": "Fish"
+  },
+  {
+    "slug": "news",
+    "plural": "News",
+    "singular": "News"
+  },
+  {
+    "slug": "status",
+    "plural": "Statuses",
+    "singular": "Status"
+  },
+  {
+    "slug": "statuses",
+    "plural": "Statuses",
+    "singular": "Status"
+  },
+  {
+    "slug": "analysis",
+    "plural": "Analyses",
+    "singular": "Analysis"
+  },
+  {
+    "slug": "analyses",
+    "plural": "Analyses",
+    "singular": "Analysis"
+  },
+  {
+    "slug": "hero-banner",
+    "plural": "Hero Banners",
+    "singular": "Hero Banner"
+  },
+  {
+    "slug": "hero-banners",
+    "plural": "Hero Banners",
+    "singular": "Hero Banner"
+  },
+  {
+    "slug": "people-list",
+    "plural": "People Lists",
+    "singular": "People List"
+  },
+  {
+    "slug": "call-to-action",
+    "plural": "Call To Actions",
+    "singular": "Call To Action"
+  },
+  {
+    "slug": "cta",
+    "plural": "Ctas",
+    "singular": "Cta"
+  },
+  {
+    "slug": "media",
+    "plural": "Media",
+    "singular": "Media"
+  },
+  {
+    "slug": "staff",
+    "plural": "Staff",
+    "singular": "Staff"
+  },
+  {
+    "slug": "equipment",
+    "plural": "Equipment",
+    "singular": "Equipment"
+  },
+  {
+    "slug": "quiz",
+    "plural": "Quizzes",
+    "singular": "Quiz"
+  },
+  {
+    "slug": "quizzes",
+    "plural": "Quizzes",
+    "singular": "Quiz"
+  },
+  {
+    "slug": "leaf",
+    "plural": "Leaves",
+    "singular": "Leaf"
+  },
+  {
+    "slug": "leaves",
+    "plural": "Leaves",
+    "singular": "Leaf"
+  },
+  {
+    "slug": "series",
+    "plural": "Series",
+    "singular": "Series"
+  }
+]

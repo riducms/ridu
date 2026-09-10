@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { SchemaField } from "@riducms/protocol";
+	import { fieldControlARIA } from "@riducms/ui";
 
 	import { Input } from "@admin/components/ui/input";
 	import type { FormController } from "@admin/core/forms/form-controller.svelte";
@@ -12,10 +13,15 @@
 		Array.isArray(form.get(field.path)) ? (form.get(field.path) as number[]) : []
 	);
 	const issues = $derived(form.issuesFor(field.path));
+	const editingBlocked = $derived(field.admin.readOnly === true || form.editingBlocked);
+	const controlARIA = $derived(
+		fieldControlARIA(field.id, field.admin.description !== undefined, issues.length > 0)
+	);
 
 	$effect(() => form.register(field.path));
 
 	function setCoordinate(index: number, next: number) {
+		if (editingBlocked) return;
 		const coordinates = [Number(value[0] ?? 0), Number(value[1] ?? 0)];
 		coordinates[index] = next;
 		form.set(field.path, coordinates);
@@ -27,24 +33,28 @@
 		<label class="grid gap-1.5 text-[12px] text-foreground-muted">
 			{runtime.i18n.t("fields:longitude")}
 			<Input
+				id={field.id}
 				type="number"
 				min="-180"
 				max="180"
 				step="any"
 				value={value[0] ?? ""}
-				readonly={field.admin.readOnly}
+				readonly={editingBlocked}
+				{...controlARIA}
 				oninput={(event) => setCoordinate(0, event.currentTarget.valueAsNumber)}
 			/>
 		</label>
 		<label class="grid gap-1.5 text-[12px] text-foreground-muted">
 			{runtime.i18n.t("fields:latitude")}
 			<Input
+				id={`${field.id}-latitude`}
 				type="number"
 				min="-90"
 				max="90"
 				step="any"
 				value={value[1] ?? ""}
-				readonly={field.admin.readOnly}
+				readonly={editingBlocked}
+				{...controlARIA}
 				oninput={(event) => setCoordinate(1, event.currentTarget.valueAsNumber)}
 			/>
 		</label>

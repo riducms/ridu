@@ -22,3 +22,12 @@ The initializer runs the matching `@riducms/cli` release. Generated projects ret
 as an exact development dependency. After
 creation, install and run scripts with the same package manager. For example, npm users run
 `npm install`, `npm run dev`, and `npm run ridu -- <command>` without installing a global CLI.
+
+On the first run, the launcher shows the native CLI download status immediately, with elapsed time
+and received bytes. A percentage appears when the server supplies a usable total. CI and piped
+output receive plain progress lines every five seconds. Downloads fail with recovery instructions
+after 30 seconds without a response or further data; set `RIDU_CLI_DOWNLOAD_TIMEOUT_MS` to a larger
+millisecond value on a slow connection. A cached CLI starts without download messages.
+
+Any earlier registry download is managed by your package runner, before `create-ridu` can print.
+See the [launcher README](../cli/README.md) for download details and a local preview command.

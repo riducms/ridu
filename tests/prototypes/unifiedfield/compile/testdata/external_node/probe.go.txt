@@ -1,0 +1,14 @@
+package externalnode
+
+import "example.com/ridu-gate1/field"
+
+type customNode struct{}
+
+func (customNode) Name() string           { return "custom" }
+func (customNode) Kind() field.Kind       { return field.TextKind }
+func (customNode) Children() field.Fields { return nil }
+func (n customNode) snapshot() field.Node { return field.Text(n.Name()) }
+
+// A same-spelled unexported method in this package cannot impersonate field's
+// ownership boundary. Consumers use concrete nodes and public graph edits.
+var _ field.Node = customNode{}

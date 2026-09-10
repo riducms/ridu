@@ -7,13 +7,19 @@ import (
 	ridu "github.com/riducms/ridu/core"
 	"github.com/riducms/ridu/field"
 	"github.com/riducms/ridu/internal/teststore"
+	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/store"
 )
 
 func TestLocalCRUDPreservesExactActorCollectionInAccessFieldsAndHooks(t *testing.T) {
 	var accessCollections, hookCollections []string
 	application, err := ridu.New(ridu.Config{Name: "Exact actor collection", Collections: []ridu.Collection{{
-		Slug: "posts", Fields: []field.Definition{field.Text("title"), field.Text("private")},
+		Slug: "posts", Fields: field.Fields{field.Text("title"), field.Text("private").Access(field.Access{Read: func(ctx operation.AccessContext,
+
+		) (bool, error) {
+			return ctx.Actor.ID != "" && ctx.Actor.Collection ==
+				"staff", nil
+		}})},
 		Access: ridu.CollectionAccess{Read: func(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
 			accessCollections = append(accessCollections, string(ctx.ActorCollection))
 			if ctx.Actor == nil || ctx.ActorCollection == "" {
@@ -21,9 +27,7 @@ func TestLocalCRUDPreservesExactActorCollectionInAccessFieldsAndHooks(t *testing
 			}
 			return ridu.Allow(), nil
 		}},
-		FieldAccess: map[string]ridu.FieldAccess{"private": {Read: func(ctx ridu.FieldAccessContext) (bool, error) {
-			return ctx.Actor != nil && ctx.ActorCollection == "staff", nil
-		}}},
+
 		Hooks: ridu.CollectionHooks{AfterRead: []ridu.Hook{func(ctx ridu.HookContext) error {
 			hookCollections = append(hookCollections, string(ctx.ActorCollection))
 			return nil

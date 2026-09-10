@@ -14,6 +14,7 @@ import (
 	"github.com/riducms/ridu/internal/teststore"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func TestCustomEndpointConfigResolvesEveryScopeAndRejectsUnsafeDefinitions(t *testing.T) {
@@ -22,11 +23,11 @@ func TestCustomEndpointConfigResolvesEveryScopeAndRejectsUnsafeDefinitions(t *te
 		Name:      "Custom endpoints",
 		Endpoints: []ridu.Endpoint{{Method: " get ", Path: "/status/:name", Summary: " Status ", Handler: handler}},
 		Collections: []ridu.Collection{{
-			Slug: "posts", Fields: []field.Definition{field.Text("title")},
+			Slug: "posts", Fields: field.Fields{field.Text("title")},
 			Endpoints: []ridu.Endpoint{{Method: "POST", Path: "/:id/tracking", Handler: handler}},
 		}},
 		Globals: []ridu.Global{{
-			Slug: "site-settings", Fields: []field.Definition{field.Text("title")},
+			Slug: "site-settings", Fields: field.Fields{field.Text("title")},
 			Endpoints: []ridu.Endpoint{{Method: "PUT", Path: "/refresh", Handler: handler}},
 		}},
 	}
@@ -68,7 +69,7 @@ func TestCustomEndpointConfigResolvesEveryScopeAndRejectsUnsafeDefinitions(t *te
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := ridu.Resolve(ridu.Config{Name: "Invalid endpoint", Endpoints: test.endpoints, Collections: []ridu.Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title")}}}})
+			_, err := ridu.Resolve(ridu.Config{Name: "Invalid endpoint", Endpoints: test.endpoints, Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{field.Text("title")}}}})
 			var validation *schema.ValidationError
 			if !errors.As(err, &validation) {
 				t.Fatalf("Resolve error = %T %v", err, err)
@@ -91,9 +92,9 @@ func TestCustomEndpointsRouteByScopeWithParamsActorAndBuiltInPrecedence(t *testi
 			{Method: http.MethodGet, Path: "/schema", Handler: jsonEndpoint(map[string]string{"source": "root"})},
 		},
 		Collections: []ridu.Collection{
-			{Slug: "users", Auth: true, Fields: []field.Definition{field.Text("email", field.Required(), field.Unique())}},
+			{Slug: "users", Auth: true, AuthConfig: ridu.AuthConfig{Password: ridu.PasswordPolicy{BcryptCost: bcrypt.MinCost}}, Fields: field.Fields{field.Text("email").Required().Unique()}},
 			{
-				Slug: "posts", Fields: []field.Definition{field.Text("title", field.Required())},
+				Slug: "posts", Fields: field.Fields{field.Text("title").Required()},
 				Endpoints: []ridu.Endpoint{
 					{Method: http.MethodGet, Path: "/count", Handler: jsonEndpoint(map[string]string{"source": "collection-override"})},
 					{Method: http.MethodGet, Path: "/:id/tracking", Handler: func(ctx ridu.EndpointContext) {
@@ -104,7 +105,7 @@ func TestCustomEndpointsRouteByScopeWithParamsActorAndBuiltInPrecedence(t *testi
 			},
 		},
 		Globals: []ridu.Global{{
-			Slug: "site-settings", Fields: []field.Definition{field.Text("title")},
+			Slug: "site-settings", Fields: field.Fields{field.Text("title")},
 			Endpoints: []ridu.Endpoint{{Method: http.MethodGet, Path: "/:locale/preview", Handler: func(ctx ridu.EndpointContext) {
 				jsonResponse(ctx.Writer, map[string]string{"global": string(ctx.Global), "locale": ctx.RouteParams["locale"]})
 			}}},
@@ -157,7 +158,7 @@ func TestCustomEndpointBodiesAreBoundedAndPanicsAreRedacted(t *testing.T) {
 	var streamObservation ridu.RequestObservation
 	application, err := ridu.New(ridu.Config{
 		Name:        "Endpoint safety",
-		Collections: []ridu.Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title")}}},
+		Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{field.Text("title")}}},
 		Endpoints: []ridu.Endpoint{
 			{Method: http.MethodPost, Path: "/read", MaxBodyBytes: 4, Handler: func(ctx ridu.EndpointContext) {
 				_, readError := io.ReadAll(ctx.Request.Body)
@@ -219,7 +220,7 @@ func TestCustomEndpointRawHTTPBoundary(t *testing.T) {
 			}},
 		},
 		Collections: []ridu.Collection{{
-			Slug: "posts", Fields: []field.Definition{field.Text("title")},
+			Slug: "posts", Fields: field.Fields{field.Text("title")},
 			Endpoints: []ridu.Endpoint{{Method: http.MethodGet, Path: "/:collection", Handler: func(ctx ridu.EndpointContext) {
 				_, _ = io.WriteString(ctx.Writer, ctx.RouteParams["collection"])
 			}}},
@@ -277,7 +278,7 @@ func TestCustomEndpointSupportsEveryDeclaredMethod(t *testing.T) {
 	application, err := ridu.New(ridu.Config{
 		Name:        "Endpoint methods",
 		Endpoints:   endpoints,
-		Collections: []ridu.Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title")}}},
+		Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{field.Text("title")}}},
 	}, teststore.New())
 	if err != nil {
 		t.Fatal(err)

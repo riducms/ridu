@@ -20,7 +20,7 @@ func (*generationTestPlugin) Key() string { return "generator" }
 func (*generationTestPlugin) Descriptor() PluginDescriptor {
 	return PluginDescriptor{
 		Version: "0.1.0", GoPackage: "example.com/generator", APIVersion: PluginAPIVersion,
-		Ridu: RiduCompatibility{Minimum: FrameworkVersion, MaximumExclusive: "0.2.0"},
+		Ridu: RiduCompatibility{Minimum: FrameworkVersion, MaximumExclusive: "0.3.0"},
 	}
 }
 
@@ -41,7 +41,7 @@ func TestProjectGenerationUsesResolvedManifestAndDefensiveArtifactBytes(t *testi
 	plugin := &generationTestPlugin{artifacts: []PluginGeneratedArtifact{{Name: "contract", Content: content}}}
 	manifest, artifacts, err := resolveProjectGeneration(Config{
 		Name: "Generation fixture", Plugins: []Plugin{plugin},
-		Collections: []Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title")}}},
+		Collections: []Collection{{Slug: "posts", Fields: field.Fields{field.Text("title")}}},
 	}, []project.ArtifactRequest{{Plugin: "generator", Name: "contract"}})
 	if err != nil {
 		t.Fatal(err)
@@ -76,7 +76,7 @@ func TestProjectGenerationRejectsInvalidProviderOutput(t *testing.T) {
 			plugin := &generationTestPlugin{artifacts: test.artifacts, err: test.provider}
 			_, _, err := resolveProjectGeneration(Config{
 				Name: "Invalid generation", Plugins: []Plugin{plugin},
-				Collections: []Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title")}}},
+				Collections: []Collection{{Slug: "posts", Fields: field.Fields{field.Text("title")}}},
 			}, []project.ArtifactRequest{{Plugin: "generator", Name: "schema"}})
 			if err == nil || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("generation error = %v, want containing %q", err, test.want)
@@ -89,7 +89,7 @@ func TestProjectGenerationSkipsUnrequestedProviders(t *testing.T) {
 	plugin := &generationTestPlugin{err: errors.New("must not run")}
 	manifest, artifacts, err := resolveProjectGeneration(Config{
 		Name: "Unrequested generation", Plugins: []Plugin{plugin},
-		Collections: []Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title")}}},
+		Collections: []Collection{{Slug: "posts", Fields: field.Fields{field.Text("title")}}},
 	}, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -102,7 +102,7 @@ func TestProjectGenerationSkipsUnrequestedProviders(t *testing.T) {
 func TestGenerationProviderRequiresDescriptor(t *testing.T) {
 	_, err := Resolve(Config{
 		Name: "Undescribed generation", Plugins: []Plugin{undescribedGenerationPlugin{}},
-		Collections: []Collection{{Slug: "posts", Fields: []field.Definition{field.Text("title")}}},
+		Collections: []Collection{{Slug: "posts", Fields: field.Fields{field.Text("title")}}},
 	})
 	if err == nil || !strings.Contains(err.Error(), "generation capabilities") {
 		t.Fatalf("missing descriptor error = %v", err)

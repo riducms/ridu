@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/riducms/ridu/internal/embedded"
 	"github.com/riducms/ridu/internal/migrationartifact"
 	"github.com/riducms/ridu/internal/referenceindex"
 	ridumigration "github.com/riducms/ridu/migration"
@@ -405,7 +406,11 @@ func rewriteMongoDocumentCollection(ctx context.Context, collection *mongo.Colle
 		}
 		if beforeSlug != "" {
 			for _, fields := range fieldSchemas.all() {
-				changed = rewriteMongoCollectionReferences(fields, document.Values, beforeSlug, afterSlug) || changed
+				fieldChanged, err := rewriteMongoCollectionReferences(fields, document.Values, beforeSlug, afterSlug)
+				if err != nil {
+					return err
+				}
+				changed = fieldChanged || changed
 			}
 		}
 		if !changed {
@@ -550,14 +555,14 @@ func findMongoDBFieldRenameTraversal(fields []schema.Field, path string, parents
 		}
 		if field.Nested != nil {
 			next := appendMongoDBFieldRenameContainer(parents, mongoDBFieldRenameContainer{field: field})
-			if containers, found := findMongoDBFieldRenameTraversal(field.Nested.Fields, path, next); found {
+			if containers, found := findMongoDBFieldRenameTraversal(field.Nested.ResolvedFields(), path, next); found {
 				return containers, true
 			}
 		}
 		if field.Blocks != nil {
-			for _, block := range field.Blocks.Types {
-				next := appendMongoDBFieldRenameContainer(parents, mongoDBFieldRenameContainer{field: field, blockKey: block.Key})
-				if containers, found := findMongoDBFieldRenameTraversal(block.Fields, path, next); found {
+			for _, block := range field.Blocks.ResolvedTypes() {
+				next := appendMongoDBFieldRenameContainer(parents, mongoDBFieldRenameContainer{field: field, blockKey: block.Slug})
+				if containers, found := findMongoDBFieldRenameTraversal(block.ResolvedFields(), path, next); found {
 					return containers, true
 				}
 			}
@@ -603,7 +608,7 @@ func renameMongoStoreFieldInContainers(values store.Values, containers []mongoDB
 
 func renameMongoStoreFieldInsideContainer(value store.Value, container mongoDBFieldRenameContainer, remaining []mongoDBFieldRenameContainer, source, destination string) (store.Value, bool, error) {
 	if container.field.Localized {
-		localized, valid := value.ObjectValue()
+		localized, valid := value.CopyObject()
 		if !valid {
 			return value, false, nil
 		}
@@ -627,7 +632,7 @@ func renameMongoStoreFieldInsideContainer(value store.Value, container mongoDBFi
 
 	switch container.field.Type {
 	case schema.FieldTypeGroup:
-		object, valid := value.ObjectValue()
+		object, valid := value.CopyObject()
 		if !valid {
 			return value, false, nil
 		}
@@ -639,13 +644,13 @@ func renameMongoStoreFieldInsideContainer(value store.Value, container mongoDBFi
 			return store.Object(object), true, nil
 		}
 	case schema.FieldTypeArray:
-		items, valid := value.Values()
+		items, valid := value.CopyList()
 		if !valid {
 			return value, false, nil
 		}
 		changed := false
 		for index, item := range items {
-			object, valid := item.ObjectValue()
+			object, valid := item.CopyObject()
 			if !valid {
 				continue
 			}
@@ -662,13 +667,13 @@ func renameMongoStoreFieldInsideContainer(value store.Value, container mongoDBFi
 			return store.List(items...), true, nil
 		}
 	case schema.FieldTypeBlocks:
-		items, valid := value.Values()
+		items, valid := value.CopyList()
 		if !valid {
 			return value, false, nil
 		}
 		changed := false
 		for index, item := range items {
-			object, valid := item.ObjectValue()
+			object, valid := item.CopyObject()
 			if !valid {
 				continue
 			}
@@ -717,100 +722,133 @@ func mongoDBMigrationOwnerFieldSchemas(plan mongoDBArtifactReplayPlan, physicalO
 	return result
 }
 
-func rewriteMongoCollectionReferences(fields []schema.Field, values store.Values, before, after string) bool {
+func rewriteMongoCollectionReferences(fields []schema.Field, values store.Values, before, after string) (bool, error) {
 	changed := false
 	for _, field := range fields {
 		value, exists := values[field.Name]
 		if !exists {
 			continue
 		}
-		updated, fieldChanged := rewriteMongoCollectionReferenceField(field, value, before, after)
+		updated, fieldChanged, err := rewriteMongoCollectionReferenceField(field, value, before, after)
+		if err != nil {
+			return false, err
+		}
 		if fieldChanged {
 			values[field.Name] = updated
 			changed = true
 		}
 	}
-	return changed
+	return changed, nil
 }
 
-func rewriteMongoCollectionReferenceField(field schema.Field, value store.Value, before, after string) (store.Value, bool) {
+func rewriteMongoCollectionReferenceField(field schema.Field, value store.Value, before, after string) (store.Value, bool, error) {
 	if field.Localized {
-		localized, valid := value.ObjectValue()
+		localized, valid := value.CopyObject()
 		if !valid {
-			return value, false
+			return value, false, nil
 		}
 		field.Localized = false
 		changed := false
 		for locale, localizedValue := range localized {
-			updated, localeChanged := rewriteMongoCollectionReferenceFieldValue(field, localizedValue, before, after)
+			updated, localeChanged, err := rewriteMongoCollectionReferenceFieldValue(field, localizedValue, before, after)
+			if err != nil {
+				return value, false, err
+			}
 			if localeChanged {
 				localized[locale] = updated
 				changed = true
 			}
 		}
 		if changed {
-			return store.Object(localized), true
+			return store.Object(localized), true, nil
 		}
-		return value, false
+		return value, false, nil
 	}
 	return rewriteMongoCollectionReferenceFieldValue(field, value, before, after)
 }
 
-func rewriteMongoCollectionReferenceFieldValue(field schema.Field, value store.Value, before, after string) (store.Value, bool) {
+func rewriteMongoCollectionReferenceFieldValue(field schema.Field, value store.Value, before, after string) (store.Value, bool, error) {
+	if embedded.HasFields(field) {
+		changed := false
+		transformed, envelopeChanged, err := embedded.RewriteCollectionReferences(field, value, before, after, func(o embedded.Occurrence) (store.Values, error) {
+			payloadChanged, err := rewriteMongoCollectionReferences(o.Fields, o.Payload, before, after)
+			changed = payloadChanged || changed
+			return o.Payload, err
+		})
+		if err != nil {
+			return value, false, err
+		}
+		return transformed, changed || envelopeChanged, nil
+	}
+
 	if field.Plugin != nil && len(field.Plugin.ReferenceKeys) != 0 {
 		keys := make(map[string]struct{}, len(field.Plugin.ReferenceKeys))
 		for _, key := range field.Plugin.ReferenceKeys {
 			keys[key] = struct{}{}
 		}
-		return rewriteMongoDeclaredPluginCollectionReferences(value, keys, before, after)
+		updated, changed := rewriteMongoDeclaredPluginCollectionReferences(value, keys, before, after)
+		return updated, changed, nil
 	}
 	switch field.Type {
 	case schema.FieldTypeRelationship:
-		return rewriteMongoPolymorphicRelationshipSlugValue(field, value, before, after)
+		updated, changed := rewriteMongoPolymorphicRelationshipSlugValue(field, value, before, after)
+		return updated, changed, nil
 	case schema.FieldTypeGroup:
-		object, valid := value.ObjectValue()
+		object, valid := value.CopyObject()
 		if !valid || field.Nested == nil {
-			return value, false
+			return value, false, nil
 		}
-		if rewriteMongoCollectionReferences(field.Nested.Fields, object, before, after) {
-			return store.Object(object), true
+		fieldChanged, err := rewriteMongoCollectionReferences(field.Nested.ResolvedFields(), object, before, after)
+		if err != nil {
+			return value, false, err
+		}
+		if fieldChanged {
+			return store.Object(object), true, nil
 		}
 	case schema.FieldTypeArray:
-		items, valid := value.Values()
+		items, valid := value.CopyList()
 		if !valid || field.Nested == nil {
-			return value, false
+			return value, false, nil
 		}
 		changed := false
 		for index, item := range items {
-			object, valid := item.ObjectValue()
+			object, valid := item.CopyObject()
 			if !valid {
 				continue
 			}
-			if rewriteMongoCollectionReferences(field.Nested.Fields, object, before, after) {
+			fieldChanged, err := rewriteMongoCollectionReferences(field.Nested.ResolvedFields(), object, before, after)
+			if err != nil {
+				return value, false, err
+			}
+			if fieldChanged {
 				items[index] = store.Object(object)
 				changed = true
 			}
 		}
 		if changed {
-			return store.List(items...), true
+			return store.List(items...), true, nil
 		}
 	case schema.FieldTypeBlocks:
-		items, valid := value.Values()
+		items, valid := value.CopyList()
 		if !valid || field.Blocks == nil {
-			return value, false
+			return value, false, nil
 		}
 		changed := false
 		for index, item := range items {
-			object, valid := item.ObjectValue()
+			object, valid := item.CopyObject()
 			if !valid {
 				continue
 			}
 			blockType, _ := object["blockType"].StringValue()
-			for _, block := range field.Blocks.Types {
-				if block.Key != blockType {
+			for _, block := range field.Blocks.ResolvedTypes() {
+				if block.Slug != blockType {
 					continue
 				}
-				if rewriteMongoCollectionReferences(block.Fields, object, before, after) {
+				fieldChanged, err := rewriteMongoCollectionReferences(block.ResolvedFields(), object, before, after)
+				if err != nil {
+					return value, false, err
+				}
+				if fieldChanged {
 					items[index] = store.Object(object)
 					changed = true
 				}
@@ -818,10 +856,10 @@ func rewriteMongoCollectionReferenceFieldValue(field schema.Field, value store.V
 			}
 		}
 		if changed {
-			return store.List(items...), true
+			return store.List(items...), true, nil
 		}
 	}
-	return value, false
+	return value, false, nil
 }
 
 func rewriteMongoPolymorphicRelationshipSlugValue(field schema.Field, value store.Value, before, after string) (store.Value, bool) {
@@ -832,7 +870,7 @@ func rewriteMongoPolymorphicRelationshipSlugValue(field schema.Field, value stor
 	if !relationship.HasMany {
 		return rewriteMongoPolymorphicRelationshipSlugObject(value, before, after)
 	}
-	items, valid := value.Values()
+	items, valid := value.CopyList()
 	if !valid {
 		return value, false
 	}
@@ -851,7 +889,7 @@ func rewriteMongoPolymorphicRelationshipSlugValue(field schema.Field, value stor
 }
 
 func rewriteMongoPolymorphicRelationshipSlugObject(value store.Value, before, after string) (store.Value, bool) {
-	object, valid := value.ObjectValue()
+	object, valid := value.CopyObject()
 	if !valid {
 		return value, false
 	}
@@ -864,7 +902,7 @@ func rewriteMongoPolymorphicRelationshipSlugObject(value store.Value, before, af
 }
 
 func rewriteMongoDeclaredPluginCollectionReferences(value store.Value, keys map[string]struct{}, before, after string) (store.Value, bool) {
-	if object, valid := value.ObjectValue(); valid {
+	if object, valid := value.CopyObject(); valid {
 		changed := false
 		for key, child := range object {
 			if _, declared := keys[key]; declared {
@@ -885,7 +923,7 @@ func rewriteMongoDeclaredPluginCollectionReferences(value store.Value, keys map[
 		}
 		return value, false
 	}
-	if items, valid := value.Values(); valid {
+	if items, valid := value.CopyList(); valid {
 		changed := false
 		for index, item := range items {
 			updated, itemChanged := rewriteMongoDeclaredPluginCollectionReferences(item, keys, before, after)
@@ -1325,7 +1363,11 @@ func (backend *Store) rebuildMongoMigrationReferences(ctx context.Context, trans
 				_ = cursor.Close(sessionContext)
 				return decodeErr
 			}
-			for _, entry := range referenceindex.Collect(resource, document) {
+			entries, referenceErr := referenceindex.Collect(resource, document)
+			if referenceErr != nil {
+				return referenceErr
+			}
+			for _, entry := range entries {
 				encoded, encodeErr := encodeMongoReferenceEntry(entry)
 				if encodeErr != nil {
 					_ = cursor.Close(sessionContext)

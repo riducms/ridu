@@ -1,5 +1,6 @@
 {
-	"name": "@ridu-playground/admin",
+	"name": "@riducms-dogfood/admin",
+	"version": "0.0.0",
 	"private": true,
 	"type": "module",
 	"scripts": {
@@ -8,10 +9,12 @@
 		"build": "vite build"
 	},
 	"dependencies": {
-		"@riducms/admin": "0.0.0-dogfood.1787424314091508000",
-		"@riducms/plugin": "0.0.0-dogfood.1787424314091508000",
-		"@riducms/ui": "0.0.0-dogfood.1787424314091508000",
-		"@riducms/plugin-richtext": "0.0.0-dogfood.1787424314091508000",
+		"@riducms/admin": "0.0.0-dogfood.1788901341006834000",
+		"@riducms/plugin": "0.0.0-dogfood.1788901341006834000",
+		"@riducms/ui": "0.0.0-dogfood.1788901341006834000",
+		"@riducms/plugin-richtext": "0.0.0-dogfood.1788901341006834000",
+		"@riducms/plugin-seo": "0.0.0-dogfood.1788901341006834000",
+		"@riducms/plugin-form-builder": "0.0.0-dogfood.1788901341006834000",
 		"svelte": "^5.56.8"
 	},
 	"devDependencies": {
@@ -20,7 +23,9 @@
 		"@sveltejs/vite-plugin-svelte": "^7.2.0",
 		"@tsconfig/svelte": "^5.0.8",
 		"@types/node": "^24.13.3",
-		"@riducms/build": "0.0.0-dogfood.1787424314091508000",
+		"@riducms/build": "0.0.0-dogfood.1788901341006834000",
+		"react": "^19.2.4",
+		"react-dom": "^19.2.4",
 		"svelte-check": "^4.7.3",
 		"typescript": "~6.0.2",
 		"vite": "^8.2.0"

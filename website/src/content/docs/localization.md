@@ -1,10 +1,19 @@
 ---
 title: 'Content localization'
-description: 'Store locale-specific values, configure fallback chains, query exact or all locales, and copy translations safely.'
+description: 'Add languages to your content, choose a fallback when a translation is missing, and translate the admin interface.'
 product: core
 eyebrow: 'Content model'
 order: 68
-aliases: ['i18n', 'locale', 'translation', 'fallback locale', 'RTL', 'all locales', 'copy locale']
+aliases:
+  [
+    'i18n',
+    'locale',
+    'translation',
+    'fallback locale',
+    'RTL',
+    'all locales',
+    'copy locale'
+  ]
 availability:
   status: available
   label: 'Content and admin localization available'
@@ -15,19 +24,34 @@ navigation:
   title: 'Localization'
 ---
 
-Ridu localizes authored content, not its application code. A field opts into locale-specific stored
-values while unlocalized fields remain shared. The selected locale flows through reads, writes,
-filters, counts, sorting, relationships, access rules, hooks, drafts, versions, duplication, and
-the admin.
+Ridu can store a different value for each language in fields such as a post's title and body.
+Other fields, such as a slug or product code, can stay the same across all languages.
 
-Content locale and admin interface language are independent. Content localization controls stored
-values and request projection. `Admin.Localization` controls statically bundled interface catalogs,
-translated application labels, text direction, and the timezone used for `Intl` date/number
-formatting. An editor may author French content while using the English interface.
+A **locale** identifies a language or regional variation, such as `en`, `fr`, or `en-GB`. You
+choose which locales your application supports and which fields need translations.
 
-## Configure locales {#configure}
+Content language and admin interface language are separate settings. An editor can write French
+content while using English menus and buttons. Start with content languages below, or skip to
+[the admin interface language](#admin-language).
 
-Declare an ordered locale list and a default locale on the application config:
+## Configuration {#configuration}
+
+| Option or method                    | What it controls                                                                                       |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `Localization.Locales`              | Declares the allowed content locales and their author-facing labels.                                   |
+| `Localization.DefaultLocale`        | Selects the locale used when a request does not specify one.                                           |
+| `Localization.DisableFallback`      | Requires exact values by default instead of following each locale's fallback chain.                    |
+| `Localization.AvailableLocales`     | Dynamically reduces the locale choices shown to one admin actor; it does not weaken API authorization. |
+| `Locale.FallbackLocales`            | Lists ordered fallback locales for one selected locale.                                                |
+| `Locale.RTL`                        | Marks content in that locale as right-to-left in the admin.                                            |
+| `field.Localized()`                 | Stores a separate value or container for each configured locale.                                       |
+| Request `locale` / `fallbackLocale` | Overrides the read locale and fallback behavior for one API operation.                                 |
+| Request `locale: 'all'`             | Returns locale-keyed values and makes ordinary mutations read-only.                                    |
+
+## Add content languages {#configure}
+
+Add your languages to `Localization.Locales` and choose a default. Here French and Arabic use
+English text when a translation is missing:
 
 ```go title="content/config.go"
 func Config() ridu.Config {
@@ -37,8 +61,17 @@ func Config() ridu.Config {
 			DefaultLocale: "en",
 			Locales: []ridu.Locale{
 				{Code: "en", Label: "English"},
-				{Code: "fr", Label: "Français", FallbackLocales: []schema.LocaleCode{"en"}},
-				{Code: "ar", Label: "العربية", RTL: true, FallbackLocales: []schema.LocaleCode{"en"}},
+				{
+				Code:            "fr",
+				Label:           "Français",
+				FallbackLocales: []schema.LocaleCode{"en"},
+			},
+				{
+					Code:            "ar",
+					Label:           "العربية",
+					RTL:             true,
+					FallbackLocales: []schema.LocaleCode{"en"},
+				},
 			},
 		},
 		Collections: []ridu.Collection{Posts},
@@ -46,49 +79,51 @@ func Config() ridu.Config {
 }
 ```
 
-Locale codes are case-sensitive stable identifiers. Resolution rejects empty or duplicate codes,
-unknown defaults and fallback targets, self-fallback, cycles, and request-reserved tokens such as
-`all`, `*`, `false`, `none`, and `null`.
+Choose a unique, case-sensitive code for each locale. The default and every `FallbackLocales`
+entry must refer to a configured locale. Fallbacks cannot refer to themselves or form a loop, and
+codes such as `all`, `*`, `false`, `none`, and `null` are reserved for API requests.
 
-Fallback is enabled by default. Set `DisableFallback: true` globally when exact-locale reads should
-be the default; individual requests can still provide their own explicit chain.
+Fallback is enabled by default: a read can use another language's text when the selected language
+has no value. Set `DisableFallback: true` on `Localization` to turn this off by default.
+Individual requests can still choose their own fallback languages.
 
-## Mark fields as localized {#localized-fields}
+## Choose which fields need translations {#localized-fields}
 
-Use `field.Localized()` on scalar, relationship, upload, nested, or plugin fields that support
-stored content:
+Add `.Localized()` to each field that needs a separate value per language. This works for text,
+relationships, uploads, groups, arrays, blocks, and other fields that store content:
 
-```go title="content/posts.go" add={5,7,10}
+```go title="content/posts.go"
 var Posts = ridu.Collection{
 	Slug: "posts",
-	Fields: []field.Definition{
-		field.Text("slug", field.Required(), field.Unique()),
-		field.Text("title", field.Required(), field.Localized()),
-		field.Group("seo", field.Fields(
-			field.Text("title", field.Localized()),
+	Fields: field.Fields{
+		field.Text("slug").Required().Unique(),
+		field.Text("title").Required().Localized(),
+		field.Group("seo", field.Fields{
+			field.Text("title").Localized(),
 			field.Text("canonicalURL"),
-		)),
-		field.Relationship("editor", field.To("users"), field.Localized()),
+		}),
+		field.Relationship("editor", "users").Localized(),
 	},
 }
 ```
 
-Putting `Localized()` on a group, array, or blocks field localizes the complete parent value.
-Localized descendants under an unlocalized parent are independently localized. Ridu preserves
-array and block row identity when another locale is edited.
+Adding `.Localized()` to a group, array, or blocks field gives each language its own copy of the
+whole group or list. To translate only selected children, leave the parent shared and add
+`.Localized()` to those child fields instead.
 
-A required localized field is validated for the locale being written; one mutation does not need
-to provide every translation. Locale-scoped unique fields enforce uniqueness within each locale.
+A required translated field needs a value only for the language you are saving. You do not have
+to submit every translation at once. `.Unique()` also checks uniqueness within each language.
 
 ![A focused Ridu Article editor in the French content locale, showing inherited English title and summary values beside shared relationship and upload fields.](../../../../docs/assets/ridu-admin-localization.png)
 
 _The interface remains English while the content locale is French. “Inherited from English” shows
 the fallback source before an author writes a French value._
 
-## Read one locale {#read-one}
+## Read content in one language {#read-one}
 
-An omitted locale selects the configured default. The SDK accepts a locale and either an explicit
-fallback chain or `false` for an exact read:
+Pass `locale` to read a particular language; omit it to use your configured default. Choose
+fallback languages with `fallbackLocale`, or set it to `false` to return only values saved in the
+requested language:
 
 ```ts
 const french = await client.find('posts', 'post_123', {
@@ -105,16 +140,35 @@ const exactFrench = await client.find('posts', 'post_123', {
 REST uses `locale=fr` and `fallback-locale=en` (or the camel-case `fallbackLocale` alias). The local
 Go API uses `ridu.LocaleOptions` or the locale fields on list/find/mutation options.
 
-Fallback happens after the target document passes access filtering. It cannot expose a value from
-an unauthorized row or reintroduce a redacted field. The REST document includes
-`_localization.sources`, keyed by authored field path, so an editor or frontend can distinguish an
-exact value from an inherited fallback. An empty string remains visible in an exact read but counts
-as missing when fallback is enabled.
+Fallback still respects access rules: it cannot reveal an unreadable document or field. The REST
+response includes `_localization.sources`, which maps field paths to the language each value
+came from. An empty string is returned as-is when fallback is off; with fallback on, Ridu treats
+it as missing and tries the next language.
 
-## Read every locale {#read-all}
+## Use translations in validation, hooks, and access rules {#field-callbacks}
 
-Use `locale: 'all'`, REST `locale=all` (or `*`), or `AllLocales: true` to receive locale-keyed values
-for localized fields. Shared fields keep their ordinary shape:
+When you save French content, a localized field's validator or write hook receives the French
+value and `ctx.Locale` is `"fr"`. `ctx.Prior.String("title")` reads the previously saved French
+title. If only an English title exists, there is no previous French value: displaying English as
+fallback does not save it as a French translation.
+
+Inside an array or block, `Prior` follows the same row even if the editor reorders it.
+
+Read hooks and read access rules can receive fallback text. `ctx.Locale` still identifies the
+requested language, so do not use it to guess which language supplied that text. On an
+all-languages read, Ridu calls the rule for each translated value with its own locale and
+`AllLocales == false`. A shared field may receive language-keyed values in `ctx.Root` with
+`AllLocales == true`.
+
+A field callback's `ctx.Local.FindByID` lookup reads the same language without fallback. It also
+keeps the current user's access rules and shares the current transaction. See
+[Using other field values](/docs/fields/callback-values/) for examples.
+
+## Read every translation {#read-all}
+
+Use `locale: 'all'` in the SDK, `locale=all` (or `*`) in REST, or `AllLocales: true` in Go to
+receive every translation. Translated fields become objects keyed by language; shared fields
+keep their usual values:
 
 ```json title="All-locales response fragment"
 {
@@ -128,56 +182,61 @@ for localized fields. Shared fields keep their ordinary shape:
 }
 ```
 
-All-locale reads apply field access inside every locale and population branch. Ordinary create and
-update requests cannot target `all`; write one selected locale or use the dedicated copy operation.
+Ridu checks field access for every translation, including values in populated related documents.
+Create and update requests cannot use `all`; save one language at a time.
 
-Generated TypeScript distinguishes a literal `locale: 'all'` call from a single-locale call. When a
-runtime variable may contain either shape, the result remains the corresponding union and consumer
-code must narrow it rather than casting an all-locale result to a single-locale document.
+The generated TypeScript client infers language maps when you pass `locale: 'all'`. If your
+`locale` variable could be either `'all'` or a single language, check which response shape you
+have before reading its fields.
 
-## Write without erasing translations {#write}
+## Save one translation {#write}
 
-Writing one locale changes only that locale's localized values. Unlocalized values update normally,
-and stored values for other locales are preserved:
-
-```ts
-await client.update('posts', 'post_123', { title: 'Bonjour, Ridu' }, { locale: 'fr', revision: 7 });
-```
-
-Filters, counts, sort, relationships, uploads, versions, drafts, restore, duplicate, trash, and
-publishing all use the same selected locale contract. Historical version snapshots retain the
-localized state needed for a faithful restore.
-
-## Copy a locale {#copy-locale}
-
-Copying is an explicit mutation rather than a read-and-write performed in the browser:
+Saving French content updates the French fields and leaves other translations in place. Shared
+fields still update for every language:
 
 ```ts
-await client.copyLocale('posts', 'post_123', { from: 'en', to: 'fr' }, { revision: 7 });
+await client.update(
+	'posts',
+	'post_123',
+	{ title: 'Bonjour, Ridu' },
+	{ locale: 'fr', revision: 7 }
+);
 ```
 
-Ridu checks source read access, destination write access, validation, and optimistic concurrency in
-one transaction. The local API exposes `CopyLocale`; REST uses
+Versions keep translations too, so restoring an older version can restore its translated content.
+
+## Copy a translation to another language {#copy-locale}
+
+Use `copyLocale` to copy saved values from one language to another:
+
+```ts
+await client.copyLocale(
+	'posts',
+	'post_123',
+	{ from: 'en', to: 'fr' },
+	{ revision: 7 }
+);
+```
+
+Ridu checks that the user can read the source and write the destination, validates the copied
+values, and checks the document revision before saving. The local API exposes `CopyLocale`; REST uses
 `POST /api/collections/{collection}/{id}/copy-locale`. Globals have matching local, REST, and SDK
 operations.
 
-## Limit locales per author {#available-locales}
+## Choose which languages an author sees {#available-locales}
 
-`AvailableLocales` is an executable Go callback that can reduce the locale list shown to one
-authenticated admin user. It receives the actor, exact auth collection, context, and local API. The
-callback is never serialized into the manifest.
+Use `AvailableLocales` to shorten the admin's language list for a particular signed-in user. This
+Go callback receives the user, their auth collection, request context, and local API.
 
-This is presentation availability, not authorization. API requests still validate against the
-configured locale set, and field/collection access rules remain responsible for protecting values.
-Returning an unknown, duplicate, or empty locale list fails closed with
-`locale_availability_failed`.
+This changes the language selector only. Use field and collection access rules to restrict which
+translations someone can read or write through the API. The callback must return at least one
+configured locale, with no duplicates; otherwise Ridu returns `locale_availability_failed`.
 
-## Configure the admin interface language {#admin-language}
+## Translate the admin interface {#admin-language}
 
-Ridu publishes complete English, French, and Arabic catalogs in `@riducms/translations`. Declare
-the languages and editor timezones in Go, then statically pass matching catalogs to `mountAdmin`.
-The Go manifest carries only deterministic language/timezone metadata; translated message catalogs
-remain compiled TypeScript modules.
+Ridu includes English, French, and Arabic interface translations in `@riducms/translations`.
+Choose the available languages and timezones in your Go config, then pass the matching translation
+catalogs to `mountAdmin` in your admin entry file:
 
 ```go title="content/config.go"
 Admin: ridu.AdminConfig{
@@ -219,37 +278,43 @@ yarn --cwd admin add @riducms/translations
 ```ts title="admin/src/main.ts"
 import { mountAdmin } from '@riducms/admin';
 import { ar, en, fr } from '@riducms/translations';
-import { createClient, type RiduConfig } from '../../generated/ridu.generated';
+import {
+	createClient,
+	type RiduConfig
+} from '../../generated/ridu.generated';
 import { adminPlugins } from '@/plugins';
 
 mountAdmin<RiduConfig>({
 	target: document.getElementById('app')!,
-	clientFactory: () => createClient({ baseURL: window.location.origin }),
+	clientFactory: () =>
+		createClient({ baseURL: window.location.origin }),
 	plugins: adminPlugins,
 	languages: [en, fr, ar]
 });
 ```
 
-Configured Go language codes must have matching static catalogs, including the same RTL setting;
-the admin fails closed on a missing or conflicting catalog. `defineTranslationLanguage` and
-`extendTranslationLanguage` support complete application-owned catalogs. Admin plugins may ship
-namespaced translated messages without mutating Ridu's core catalog.
+Each language code in Go needs a matching catalog in `languages`, with the same right-to-left
+setting. The admin reports an error if a catalog is missing or these settings disagree. Use
+`defineTranslationLanguage` to supply your own catalog, or `extendTranslationLanguage` to adapt
+an existing one. Admin plugins can supply their own translated messages.
 
-Fields, choices, blocks, tabs, collection/global labels, application name, and timezone labels have
-typed `*Translations` metadata. The active interface language selects that metadata while preserving
-the canonical fallback text. Authors choose language and timezone in their account settings; Ridu
-stores the preference and uses `Intl` plural, number, relative-time, and date formatting.
+You can also translate your application's field labels, choices, block names, tabs, collection and
+global labels, app name, and timezone labels using their `*Translations` settings. Ridu uses the
+original label when no translation is provided.
 
-## Admin behavior and current boundary {#admin}
+Authors choose their interface language and timezone in account settings. Ridu remembers the
+choice and formats dates, times, numbers, and plural messages accordingly.
 
-The admin remembers an author's locale preference, shows each fallback source, preserves dirty
-state across locale switches, requires an explicit decision before saving inherited content, and
-sets right-to-left editing direction for RTL locales, including rich text.
+## What authors see in the admin {#admin}
 
-Locale-specific draft status is not a Ridu contract: a document's draft/published status applies to
-the document rather than independently to each locale. Interface language does not automatically
-translate application-authored content, and content locale does not override the editor's selected
-interface language or timezone.
+The admin remembers the selected content language and labels values inherited from a fallback
+language. It keeps unsaved edits when the author switches languages and asks before saving
+inherited content as a translation. Arabic and other RTL locales use right-to-left editing,
+including in rich text.
+
+Draft and published status apply to the whole document. You cannot publish one translation while
+keeping another in draft. Changing the interface language does not translate your content, and
+changing the content language does not change your interface language or timezone.
 
 See [Querying data](/docs/querying/) for locale-aware filters and population, [Access control](/docs/access-control/)
 for locale context in rules, and the [`core` reference](/reference/core/) for exact Go fields.

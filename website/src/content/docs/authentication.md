@@ -44,9 +44,9 @@ var Users = ridu.Collection{
 	Slug: "users",
 	Auth: true,
 	AuthConfig: ridu.AuthConfig{
-		SessionDuration: 7 * 24 * time.Hour,
+		SessionDuration:  7 * 24 * time.Hour,
 		MaxLoginAttempts: 5,
-		LockDuration:    15 * time.Minute,
+		LockDuration:     15 * time.Minute,
 		Password: ridu.PasswordPolicy{
 			MinLength:  12,
 			MaxBytes:   72,
@@ -62,12 +62,9 @@ var Users = ridu.Collection{
 		},
 		APIKeys: true,
 	},
-	Fields: []field.Definition{
-		field.Email("email", field.Required(), field.Unique()),
-		field.Select("role",
-			field.OneOf("admin", "editor", "author"),
-			field.Default("author"),
-		),
+	Fields: field.Fields{
+		field.Email("email").Required().Unique(),
+		field.Select("role", "admin", "editor", "author").Default("author"),
 	},
 }
 ```
@@ -226,8 +223,16 @@ Recovery is enabled only when `PasswordReset.Send` is non-nil. Verification is e
 stores only its digest, and gives the raw token once to the trusted callback:
 
 ```go
-func sendPasswordReset(ctx context.Context, note ridu.PasswordResetNotification) error {
-	return mailer.SendReset(ctx, note.User.ID, resetURL(note.Collection, note.Token), note.ExpiresAt)
+func sendPasswordReset(
+	ctx context.Context,
+	note ridu.PasswordResetNotification,
+) error {
+	return mailer.SendReset(
+		ctx,
+		note.User.ID,
+		resetURL(note.Collection, note.Token),
+		note.ExpiresAt,
+	)
 }
 ```
 
@@ -271,7 +276,9 @@ provider without creating a browser session:
 ```go
 Strategies: []ridu.AuthStrategy{{
 	Name: "trusted-proxy",
-	Authenticate: func(ctx ridu.AuthStrategyContext) (ridu.AuthStrategyResult, error) {
+	Authenticate: func(
+		ctx ridu.AuthStrategyContext,
+	) (ridu.AuthStrategyResult, error) {
 		values := ctx.Headers["X-Authenticated-User"]
 		if len(values) != 1 {
 			return ridu.AuthStrategyResult{Authenticated: false}, nil
@@ -280,7 +287,10 @@ Strategies: []ridu.AuthStrategy{{
 		if err != nil {
 			return ridu.AuthStrategyResult{}, err
 		}
-		return ridu.AuthStrategyResult{Authenticated: true, UserID: userID}, nil
+		return ridu.AuthStrategyResult{
+			Authenticated: true,
+			UserID:        userID,
+		}, nil
 	},
 }},
 ```

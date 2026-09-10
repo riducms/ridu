@@ -1,5 +1,25 @@
+import { documentRecoveryIssue } from "@plugin-richtext/document-validation";
+import type { RichTextConfig } from "@plugin-richtext/field/rich-text-config";
+
+export function editorRecoveryIssue(value: unknown, config: RichTextConfig) {
+	if (value === undefined || value === null) return undefined;
+	const types = new Set(["root", "paragraph", "heading", "quote", "text", "linebreak", "block"]);
+	const featureTypes = {
+		links: ["link"],
+		lists: ["list", "listitem"],
+		code: ["code"],
+		"horizontal-rule": ["horizontalrule"],
+		uploads: ["upload"],
+		relationships: ["relationship"],
+		blocks: ["block"],
+	};
+	for (const feature of config.features) for (const type of featureTypes[feature]) types.add(type);
+	return documentRecoveryIssue(value, types);
+}
+
 export function initialEditorState(value: unknown) {
-	if (!isRecord(value) || value.version !== 1 || !isRecord(value.root)) return null;
+	if (!isRecord(value) || !isRecord(value.root) || documentRecoveryIssue(value) !== undefined)
+		return null;
 	return JSON.stringify({ root: withElementDefaults(value.root) });
 }
 

@@ -231,7 +231,7 @@ func mongoPatchValueExpression(field schema.Field, storagePath string, value sto
 		return mongoLiteral(encoded), nil
 	}
 	if field.Localized {
-		localized, valid := value.ObjectValue()
+		localized, valid := value.CopyObject()
 		if !valid {
 			return nil, fmt.Errorf("localized field %q does not have a canonical locale map", field.Path.String())
 		}
@@ -255,7 +255,7 @@ func mongoPatchValueExpression(field schema.Field, storagePath string, value sto
 	if field.Type != schema.FieldTypeGroup {
 		return mongoLiteral(encoded), nil
 	}
-	object, valid := value.ObjectValue()
+	object, valid := value.CopyObject()
 	if !valid || field.Nested == nil {
 		return nil, fmt.Errorf("group field %q does not have a canonical object value", field.Path.String())
 	}
@@ -266,7 +266,7 @@ func mongoPatchValueExpression(field schema.Field, storagePath string, value sto
 	sort.Strings(keys)
 	patch := make(bson.D, 0, len(keys))
 	for _, key := range keys {
-		child, exists := mongoFieldNamed(field.Nested.Fields, key)
+		child, exists := mongoFieldNamed(field.Nested.ResolvedFields(), key)
 		if !exists || child.Category == schema.FieldCategoryPresentation {
 			return nil, fmt.Errorf("group field %q child %q is not stored", field.Path.String(), key)
 		}

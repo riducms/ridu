@@ -19,6 +19,7 @@ import (
 	ridu "github.com/riducms/ridu/core"
 	"github.com/riducms/ridu/field"
 	"github.com/riducms/ridu/internal/teststore"
+	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/protocol"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
@@ -96,7 +97,7 @@ func TestRESTSelectionIncludesTrashMetadata(t *testing.T) {
 		Collections: []ridu.Collection{{
 			Slug:   "posts",
 			Trash:  true,
-			Fields: []field.Definition{field.Text("title", field.Required())},
+			Fields: field.Fields{field.Text("title").Required()},
 		}},
 	}, teststore.New())
 	if err != nil {
@@ -138,25 +139,25 @@ func TestRESTSelectionSeparatesStoredAndComputedOutputs(t *testing.T) {
 		Collections: []ridu.Collection{
 			{
 				Slug: "categories",
-				Fields: []field.Definition{
-					field.Text("title", field.Required()),
-					field.Text("privateNote", field.Required()),
-					field.Virtual("summary", field.ValueString),
-					field.Join("posts", "posts", "category"),
-				},
-				Computed: map[string]ridu.Computed{"summary": func(ctx ridu.ComputedContext) (store.Value, error) {
+				Fields: field.Fields{field.Text("title").Required(), field.Text("privateNote").Required(), field.Virtual("summary", field.ValueString, func(ctx operation.ReadContext,
+
+				) (operation.Value[store.
+					Value],
+
+					error) {
 					computedCalls.Add(1)
-					title, _ := ctx.Document.Values["title"].StringValue()
-					privateNote, _ := ctx.Document.Values["privateNote"].StringValue()
-					return store.String(title + ": " + privateNote), nil
-				}},
+					title, _ := ctx.Root.Get("title").
+						StringValue()
+					privateNote, _ := ctx.Root.Get("privateNote").
+						StringValue()
+					return operation.Present(store.String(title + ": " + privateNote)), nil
+				}),
+
+					field.Join("posts", "posts", "category")},
 			},
 			{
-				Slug: "posts",
-				Fields: []field.Definition{
-					field.Text("title", field.Required()),
-					field.Relationship("category", field.To("categories"), field.Required()),
-				},
+				Slug:   "posts",
+				Fields: field.Fields{field.Text("title").Required(), field.Relationship("category", "categories").Required()},
 				Access: ridu.CollectionAccess{Read: func(ridu.AccessContext) (ridu.AccessDecision, error) {
 					joinReadCalls.Add(1)
 					return ridu.Allow(), nil
@@ -165,16 +166,17 @@ func TestRESTSelectionSeparatesStoredAndComputedOutputs(t *testing.T) {
 		},
 		Globals: []ridu.Global{{
 			Slug: "settings",
-			Fields: []field.Definition{
-				field.Text("privateNote", field.Default("global dependency")),
-				field.Text("otherDefault", field.Default("must not leak")),
-				field.Virtual("summary", field.ValueString),
-			},
-			Computed: map[string]ridu.Computed{"summary": func(ctx ridu.ComputedContext) (store.Value, error) {
+			Fields: field.Fields{field.Text("privateNote").Default("global dependency"), field.Text("otherDefault").Default("must not leak"), field.Virtual("summary", field.ValueString, func(ctx operation.ReadContext,
+
+			) (operation.Value[store.
+				Value],
+
+				error) {
 				globalComputedCalls.Add(1)
-				privateNote, _ := ctx.Document.Values["privateNote"].StringValue()
-				return store.String("Global: " + privateNote), nil
-			}},
+				privateNote, _ := ctx.Root.Get("privateNote").
+					StringValue()
+				return operation.Present(store.String("Global: " + privateNote)), nil
+			})},
 		}},
 	}, teststore.New())
 	if err != nil {
@@ -253,10 +255,8 @@ func TestListWindowRequiresOptionalStoreCapability(t *testing.T) {
 	application, err := ridu.New(ridu.Config{
 		Name: "Missing list-window capability",
 		Collections: []ridu.Collection{{
-			Slug: "jobs",
-			Fields: []field.Definition{
-				field.Text("queueKey", field.Unique(), field.Index()),
-			},
+			Slug:   "jobs",
+			Fields: field.Fields{field.Text("queueKey").Unique().Index()},
 		}},
 	}, baseOnlyStore{inner: teststore.New()})
 	if err != nil {
@@ -277,7 +277,7 @@ func TestListWindowRequiresOptionalStoreCapability(t *testing.T) {
 }
 
 func TestRESTEvaluatesSafeDocumentAndFieldCapabilities(t *testing.T) {
-	var adminOperation ridu.Operation
+	var adminOperation operation.Kind
 	titlePath, err := query.NewPath("title")
 	if err != nil {
 		t.Fatal(err)
@@ -287,26 +287,32 @@ func TestRESTEvaluatesSafeDocumentAndFieldCapabilities(t *testing.T) {
 		Name: "Access fixture", Admin: ridu.AdminConfig{User: "users"},
 		Collections: []ridu.Collection{{
 			Slug: "posts",
-			Fields: []field.Definition{
-				field.Text("title", field.Required()),
-				field.Textarea("secret"),
-			},
+			Fields: field.Fields{field.Text("title").Required(), field.Textarea("secret").Access(field.Access{
+				Create: func(operation.AccessContext,
+
+				) (bool, error) {
+					return false, nil
+				},
+				Read: func(operation.AccessContext,
+
+				) (bool, error) {
+					return false, nil
+				},
+				Update: func(operation.AccessContext,
+
+				) (bool, error) {
+					return false, nil
+				},
+			})},
 			Access: ridu.CollectionAccess{
 				Create: func(ridu.AccessContext) (ridu.AccessDecision, error) { return ridu.Allow(), nil },
 				Read:   func(ridu.AccessContext) (ridu.AccessDecision, error) { return ridu.Allow(), nil },
 				Update: func(ridu.AccessContext) (ridu.AccessDecision, error) { return ridu.Where(editable), nil },
 				Delete: func(ridu.AccessContext) (ridu.AccessDecision, error) { return ridu.Deny(), nil },
 			},
-			FieldAccess: map[string]ridu.FieldAccess{
-				"secret": {
-					Create: func(ridu.FieldAccessContext) (bool, error) { return false, nil },
-					Read:   func(ridu.FieldAccessContext) (bool, error) { return false, nil },
-					Update: func(ridu.FieldAccessContext) (bool, error) { return false, nil },
-				},
-			},
 		}, {
 			Slug: "users", Auth: true,
-			Fields: []field.Definition{field.Text("email", field.Required(), field.Unique())},
+			Fields: field.Fields{field.Text("email").Required().Unique()},
 			Access: ridu.CollectionAccess{
 				Admin: func(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
 					adminOperation = ctx.Operation
@@ -345,7 +351,7 @@ func TestRESTEvaluatesSafeDocumentAndFieldCapabilities(t *testing.T) {
 	if capabilities.Operations.Admin {
 		t.Fatalf("auth collection admin capability = true")
 	}
-	if adminOperation != ridu.OperationAdmin {
+	if adminOperation != operation.Admin {
 		t.Fatalf("admin access operation = %q", adminOperation)
 	}
 
@@ -361,11 +367,11 @@ func TestRESTResolvesOneBoundedFilteredSelectionWithExactCapabilities(t *testing
 	titlePath, _ := query.NewPath("title")
 	application, err := ridu.New(ridu.Config{Name: "Selection", Collections: []ridu.Collection{{
 		Slug: "posts", Trash: true,
-		Fields: []field.Definition{
-			field.Text("title", field.Required()),
-			field.Text("visibility", field.Required()),
-			field.Textarea("secret"),
-		},
+		Fields: field.Fields{field.Text("title").Required(), field.Text("visibility").Required(), field.Textarea("secret").Access(field.Access{Read: func(operation.AccessContext,
+
+		) (bool, error) {
+			return false, nil
+		}})},
 		Access: ridu.CollectionAccess{
 			Read: func(ridu.AccessContext) (ridu.AccessDecision, error) {
 				return ridu.Where(query.Equal(visibilityPath, query.String("public"))), nil
@@ -374,7 +380,6 @@ func TestRESTResolvesOneBoundedFilteredSelectionWithExactCapabilities(t *testing
 				return ridu.Where(query.Equal(titlePath, query.String("editable"))), nil
 			},
 		},
-		FieldAccess: map[string]ridu.FieldAccess{"secret": {Read: func(ridu.FieldAccessContext) (bool, error) { return false, nil }}},
 	}}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -429,7 +434,7 @@ func TestRESTResolvesOneBoundedFilteredSelectionWithExactCapabilities(t *testing
 func TestRESTRejectsSelectionOverflowBeforeCapabilityEvaluation(t *testing.T) {
 	updateChecks := 0
 	application, err := ridu.New(ridu.Config{Name: "Selection bound", Collections: []ridu.Collection{{
-		Slug: "posts", Fields: []field.Definition{field.Text("title", field.Required())},
+		Slug: "posts", Fields: field.Fields{field.Text("title").Required()},
 		Access: ridu.CollectionAccess{Update: func(ridu.AccessContext) (ridu.AccessDecision, error) {
 			updateChecks++
 			return ridu.Allow(), nil
@@ -472,7 +477,7 @@ func TestRESTRejectsSelectionOverflowBeforeCapabilityEvaluation(t *testing.T) {
 
 func TestRESTBulkTrashRestorePermanentDeleteAndEmpty(t *testing.T) {
 	application, err := ridu.New(ridu.Config{Name: "Trash REST", Collections: []ridu.Collection{{
-		Slug: "posts", Trash: true, Fields: []field.Definition{field.Text("title", field.Required())},
+		Slug: "posts", Trash: true, Fields: field.Fields{field.Text("title").Required()},
 	}}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -512,7 +517,7 @@ func TestRESTBulkTrashRestorePermanentDeleteAndEmpty(t *testing.T) {
 
 func TestRESTDocumentIDTrashCannotEmptyCollectionTrash(t *testing.T) {
 	application, err := ridu.New(ridu.Config{Name: "Trash ID REST", AllowIDOnCreate: true, Collections: []ridu.Collection{{
-		Slug: "posts", Trash: true, Fields: []field.Definition{field.Text("title", field.Required())},
+		Slug: "posts", Trash: true, Fields: field.Fields{field.Text("title").Required()},
 	}}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -549,7 +554,7 @@ func TestRESTDocumentIDTrashCannotEmptyCollectionTrash(t *testing.T) {
 
 func TestPanickingAuditCallbackCannotChangeCommittedBulkResult(t *testing.T) {
 	application, err := ridu.New(ridu.Config{Name: "Audit isolation", Collections: []ridu.Collection{{
-		Slug: "posts", Fields: []field.Definition{field.Text("title", field.Required())},
+		Slug: "posts", Fields: field.Fields{field.Text("title").Required()},
 	}}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -646,14 +651,8 @@ func TestReadinessChecksAreTimeBoundedAndPanicIsRedacted(t *testing.T) {
 
 func TestRESTMutatesInverseJoinInOneRequest(t *testing.T) {
 	application, err := ridu.New(ridu.Config{Name: "Join REST", Collections: []ridu.Collection{
-		{Slug: "categories", Fields: []field.Definition{
-			field.Text("name", field.Required()),
-			field.Join("posts", "posts", "category"),
-		}},
-		{Slug: "posts", Fields: []field.Definition{
-			field.Text("title", field.Required()),
-			field.Relationship("category", field.To("categories")),
-		}},
+		{Slug: "categories", Fields: field.Fields{field.Text("name").Required(), field.Join("posts", "posts", "category")}},
+		{Slug: "posts", Fields: field.Fields{field.Text("title").Required(), field.Relationship("category", "categories")}},
 	}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -687,17 +686,12 @@ func TestRESTMutatesInverseJoinInOneRequest(t *testing.T) {
 
 func TestRESTInverseJoinRedactsTargetFields(t *testing.T) {
 	application, err := ridu.New(ridu.Config{Name: "Redacted join REST", Collections: []ridu.Collection{
-		{Slug: "categories", Fields: []field.Definition{
-			field.Text("name", field.Required()),
-			field.Join("posts", "posts", "category"),
-		}},
-		{Slug: "posts", Fields: []field.Definition{
-			field.Text("title", field.Required()),
-			field.Text("privateNote"),
-			field.Relationship("category", field.To("categories"), field.Required()),
-		}, FieldAccess: map[string]ridu.FieldAccess{"privateNote": {Read: func(ridu.FieldAccessContext) (bool, error) {
+		{Slug: "categories", Fields: field.Fields{field.Text("name").Required(), field.Join("posts", "posts", "category")}},
+		{Slug: "posts", Fields: field.Fields{field.Text("title").Required(), field.Text("privateNote").Access(field.Access{Read: func(operation.AccessContext,
+
+		) (bool, error) {
 			return false, nil
-		}}}},
+		}}), field.Relationship("category", "categories").Required()}},
 	}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -737,7 +731,7 @@ func TestRESTVersionDetailAndScheduledPublishing(t *testing.T) {
 	application, err := ridu.New(ridu.Config{Name: "Scheduled REST", Collections: []ridu.Collection{{
 		Slug: "posts", Versions: true,
 		VersionConfig: ridu.VersionConfig{Drafts: true},
-		Fields:        []field.Definition{field.Text("title", field.Required())},
+		Fields:        field.Fields{field.Text("title").Required()},
 	}}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -825,16 +819,16 @@ func TestRESTScheduledPublishBindsExactAuthCollectionAndRechecksRequester(t *tes
 	application, err := ridu.New(ridu.Config{
 		Name: "Scheduled REST identity", Admin: ridu.AdminConfig{User: "users"},
 		Collections: []ridu.Collection{
-			{Slug: "users", Auth: true, Fields: []field.Definition{field.Text("email", field.Required(), field.Unique()), field.Text("role", field.Required())}},
+			{Slug: "users", Auth: true, Fields: field.Fields{field.Text("email").Required().Unique(), field.Text("role").Required()}},
 			{
 				Slug: "staff", Auth: true,
 				AuthConfig: ridu.AuthConfig{Strategies: []ridu.AuthStrategy{{Name: "schedule-header", Authenticate: func(ctx ridu.AuthStrategyContext) (ridu.AuthStrategyResult, error) {
 					values := ctx.Headers["X-Schedule-Auth"]
 					return ridu.AuthStrategyResult{Authenticated: len(values) == 1 && values[0] == "accepted", UserID: requesterID}, nil
 				}}}},
-				Fields: []field.Definition{field.Text("email", field.Required(), field.Unique()), field.Text("role", field.Required())},
+				Fields: field.Fields{field.Text("email").Required().Unique(), field.Text("role").Required()},
 			},
-			{Slug: "books", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true}, Access: ridu.CollectionAccess{Update: publishersOnly}, Fields: []field.Definition{field.Text("title", field.Required())}},
+			{Slug: "books", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true}, Access: ridu.CollectionAccess{Update: publishersOnly}, Fields: field.Fields{field.Text("title").Required()}},
 		},
 	}, backend)
 	if err != nil {
@@ -926,8 +920,8 @@ func TestRESTPreviewTokensAreShortLivedReadOnlyAndTargetScoped(t *testing.T) {
 		Collections: []ridu.Collection{
 			{
 				Slug: "users", Auth: true,
-				AuthConfig: ridu.AuthConfig{APIKeys: true},
-				Fields:     []field.Definition{field.Text("email", field.Required(), field.Unique()), field.Text("role")},
+				AuthConfig: ridu.AuthConfig{Password: ridu.PasswordPolicy{BcryptCost: bcrypt.MinCost}, APIKeys: true},
+				Fields:     field.Fields{field.Text("email").Required().Unique(), field.Text("role")},
 			},
 			{
 				Slug: "staff", Auth: true,
@@ -935,12 +929,12 @@ func TestRESTPreviewTokensAreShortLivedReadOnlyAndTargetScoped(t *testing.T) {
 					values := ctx.Headers["X-Preview-Auth"]
 					return ridu.AuthStrategyResult{Authenticated: len(values) == 1 && values[0] == "accepted", UserID: externalActorID}, nil
 				}}}},
-				Fields: []field.Definition{field.Text("email", field.Required(), field.Unique()), field.Text("role")},
+				Fields: field.Fields{field.Text("email").Required().Unique(), field.Text("role")},
 			},
 			{
 				Slug: "posts", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true},
 				Admin:  ridu.CollectionAdmin{LivePreview: ridu.LivePreviewConfig{URL: "https://preview.example.test/posts/{id}"}},
-				Fields: []field.Definition{field.Text("title", field.Required())},
+				Fields: field.Fields{field.Text("title").Required()},
 				Access: ridu.CollectionAccess{Read: func(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
 					if ctx.Actor != nil {
 						role, _ := ctx.Actor.Values["role"].StringValue()
@@ -954,13 +948,13 @@ func TestRESTPreviewTokensAreShortLivedReadOnlyAndTargetScoped(t *testing.T) {
 			{
 				Slug: "pages", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true},
 				Admin:  ridu.CollectionAdmin{LivePreview: ridu.LivePreviewConfig{URL: "https://preview.example.test/pages/{id}"}},
-				Fields: []field.Definition{field.Text("title", field.Required())},
+				Fields: field.Fields{field.Text("title").Required()},
 			},
 		},
 		Globals: []ridu.Global{{
 			Slug: "site-settings", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true},
 			Admin:  ridu.GlobalAdmin{LivePreview: ridu.LivePreviewConfig{URL: "https://preview.example.test/settings"}},
-			Fields: []field.Definition{field.Text("siteName", field.Required())},
+			Fields: field.Fields{field.Text("siteName").Required()},
 		}},
 	}, backend)
 	if err != nil {
@@ -1345,7 +1339,7 @@ func TestRESTReportsOneTimeAdminBootstrapAvailability(t *testing.T) {
 		Collections: []ridu.Collection{{
 			Slug: "users", Auth: true,
 			AuthConfig: ridu.AuthConfig{Password: ridu.PasswordPolicy{BcryptCost: bcrypt.MinCost}},
-			Fields:     []field.Definition{field.Email("email", field.Required(), field.Unique())},
+			Fields:     field.Fields{field.Email("email").Required().Unique()},
 		}},
 	}, teststore.New())
 	if err != nil {
@@ -1390,7 +1384,8 @@ func TestRESTExplicitCreatePolicyKeepsIntentionalPublicRegistration(t *testing.T
 		Name: "Public registration", Admin: ridu.AdminConfig{User: "users"},
 		Collections: []ridu.Collection{{
 			Slug: "users", Auth: true,
-			Fields: []field.Definition{field.Email("email", field.Required(), field.Unique())},
+			AuthConfig: ridu.AuthConfig{Password: ridu.PasswordPolicy{BcryptCost: bcrypt.MinCost}},
+			Fields:     field.Fields{field.Email("email").Required().Unique()},
 			Access: ridu.CollectionAccess{Create: func(ridu.AccessContext) (ridu.AccessDecision, error) {
 				return ridu.Allow(), nil
 			}},
@@ -1413,8 +1408,8 @@ func TestRESTAnonymousBootstrapIsLimitedToConfiguredAdminCollection(t *testing.T
 	application, err := ridu.New(ridu.Config{
 		Name: "Multi-auth bootstrap", Admin: ridu.AdminConfig{User: "users"},
 		Collections: []ridu.Collection{
-			{Slug: "users", Auth: true, AuthConfig: ridu.AuthConfig{Password: ridu.PasswordPolicy{BcryptCost: bcrypt.MinCost}}, Fields: []field.Definition{field.Email("email", field.Required(), field.Unique())}},
-			{Slug: "staff", Auth: true, AuthConfig: ridu.AuthConfig{Password: ridu.PasswordPolicy{BcryptCost: bcrypt.MinCost}}, Fields: []field.Definition{field.Email("email", field.Required(), field.Unique())}},
+			{Slug: "users", Auth: true, AuthConfig: ridu.AuthConfig{Password: ridu.PasswordPolicy{BcryptCost: bcrypt.MinCost}}, Fields: field.Fields{field.Email("email").Required().Unique()}},
+			{Slug: "staff", Auth: true, AuthConfig: ridu.AuthConfig{Password: ridu.PasswordPolicy{BcryptCost: bcrypt.MinCost}}, Fields: field.Fields{field.Email("email").Required().Unique()}},
 		},
 	}, teststore.New())
 	if err != nil {
@@ -1472,13 +1467,8 @@ func TestRESTSortSelectCountPopulateAndEmbeddedAdminFallback(t *testing.T) {
 	application, err := ridu.New(ridu.Config{
 		Name: "Query fixture",
 		Collections: []ridu.Collection{
-			{Slug: "authors", Versions: true, Fields: []field.Definition{
-				field.Text("email", field.Required()),
-			}},
-			{Slug: "articles", Fields: []field.Definition{
-				field.Text("title", field.Required()),
-				field.Relationship("author", field.To("authors"), field.Required()),
-			}},
+			{Slug: "authors", Versions: true, Fields: field.Fields{field.Text("email").Required()}},
+			{Slug: "articles", Fields: field.Fields{field.Text("title").Required(), field.Relationship("author", "authors").Required()}},
 		},
 	}, backend)
 	if err != nil {
@@ -1612,12 +1602,8 @@ func httpFixture(t *testing.T) *ridu.App {
 		Name:  "HTTP fixture",
 		Admin: ridu.AdminConfig{User: "users"},
 		Collections: []ridu.Collection{
-			{Slug: "users", Auth: true, Fields: []field.Definition{
-				field.Text("email", field.Required(), field.Unique()),
-			}},
-			{Slug: "posts", Fields: []field.Definition{
-				field.Text("title", field.Required()),
-			}},
+			{Slug: "users", Auth: true, AuthConfig: ridu.AuthConfig{Password: ridu.PasswordPolicy{BcryptCost: bcrypt.MinCost}}, Fields: field.Fields{field.Text("email").Required().Unique()}},
+			{Slug: "posts", Fields: field.Fields{field.Text("title").Required()}},
 		},
 	}, teststore.New())
 	if err != nil {

@@ -31,17 +31,20 @@ func flattenWhereFields(fields []schema.Field) []whereField {
 	var walk func([]schema.Field, []string)
 	walk = func(current []schema.Field, prefix []string) {
 		for _, field := range current {
+			if field.QueryRestricted {
+				continue
+			}
 			path := append(append([]string(nil), prefix...), field.Name)
 			switch field.Type {
 			case schema.FieldTypeGroup, schema.FieldTypeArray:
 				if field.Nested != nil {
-					walk(field.Nested.Fields, path)
+					walk(field.Nested.ResolvedFields(), path)
 				}
 				continue
 			case schema.FieldTypeBlocks:
 				if field.Blocks != nil {
-					for _, block := range field.Blocks.Types {
-						walk(block.Fields, append(path, block.Key))
+					for _, block := range field.Blocks.ResolvedTypes() {
+						walk(block.ResolvedFields(), append(path, block.Slug))
 					}
 				}
 				continue
@@ -54,7 +57,7 @@ func flattenWhereFields(fields []schema.Field) []whereField {
 					continue
 				}
 			case schema.FieldTypeText, schema.FieldTypeTextarea, schema.FieldTypeEmail, schema.FieldTypeCode, schema.FieldTypeDate,
-				schema.FieldTypeNumber, schema.FieldTypeCheckbox, schema.FieldTypeSelect, schema.FieldTypeRadio:
+				schema.FieldTypeNumber, schema.FieldTypeTextList, schema.FieldTypeNumberList, schema.FieldTypeCheckbox, schema.FieldTypeSelect, schema.FieldTypeRadio:
 			default:
 				continue
 			}

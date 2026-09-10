@@ -27,8 +27,8 @@ var Users = ridu.Collection{
 		Update: authenticatedOnly,
 		Delete: authenticatedOnly,
 	},
-	Fields: []field.Definition{
-		field.Email("email", field.Required(), field.Unique()),
+	Fields: field.Fields{
+		field.Email("email").Required().Unique(),
 	},
 }
 
@@ -41,19 +41,15 @@ var Posts = ridu.Collection{
 		Update: authenticatedOnly,
 		Delete: authenticatedOnly,
 	},
-	Fields: []field.Definition{
-		field.Text("title", field.Required()),
-		field.Textarea(
-			"summary",
-			field.MaxLength(240),
-			field.Description("A short introduction used by post cards."),
-		),
-		field.Select(
-			"status",
-			field.OneOf("draft", "published"),
-			field.Default("draft"),
-		),
-		field.Relationship("author", field.To("users")),
+	Fields: field.Fields{
+		field.Text("title").Required(),
+		field.Textarea("summary").
+			MaxLength(240).
+			Admin(field.Admin{
+				Description: "A short introduction used by post cards.",
+			}),
+		field.Select("status", "draft", "published").Default("draft"),
+		field.Relationship("author", "users"),
 		richtext.Field("content"),
 	},
 }

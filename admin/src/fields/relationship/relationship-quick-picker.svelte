@@ -7,7 +7,7 @@
 	import PencilIcon from "~icons/lucide/pencil";
 	import PlusIcon from "~icons/lucide/plus";
 	import XIcon from "~icons/lucide/x";
-	import { TooltipContent, TooltipRoot, TooltipTrigger } from "@riducms/ui";
+	import { fieldControlARIA, TooltipContent, TooltipRoot, TooltipTrigger } from "@riducms/ui";
 
 	import { Skeleton } from "@admin/components/ui/skeleton";
 	import { getAdminRuntime } from "@admin/core/runtime/admin-runtime.svelte";
@@ -27,6 +27,7 @@
 		selectedInitials,
 		placeholder,
 		readOnly = false,
+		blocked = false,
 		locale,
 		onPick,
 		onRemove,
@@ -34,7 +35,7 @@
 		onEdit,
 		upload = false,
 		invalid = false,
-		describedBy,
+		hasDescription = false,
 	}: {
 		id: string;
 		label: string;
@@ -45,6 +46,7 @@
 		selectedInitials?: string;
 		placeholder?: string;
 		readOnly?: boolean;
+		blocked?: boolean;
 		locale?: string;
 		onPick: (target: string, id: string) => void;
 		onRemove: () => void;
@@ -52,7 +54,7 @@
 		onEdit?: () => void;
 		upload?: boolean;
 		invalid?: boolean;
-		describedBy?: string;
+		hasDescription?: boolean;
 	} = $props();
 
 	const runtime = getAdminRuntime();
@@ -77,7 +79,7 @@
 	const { comboboxItems, groups, open, query, selectedValue } = $derived(controller);
 	const {
 		browseAll,
-		changeOpen,
+		changeOpen: setOpen,
 		documentLabel,
 		initials,
 		pick,
@@ -92,31 +94,52 @@
 	const searchLabel = $derived(
 		targets.length === 1 ? (selectedCollection?.labels.plural ?? label) : label
 	);
+	const controlARIA = $derived(fieldControlARIA(id, hasDescription, invalid));
+	const editingBlocked = $derived(readOnly || blocked);
 	let triggerElement = $state<HTMLButtonElement | null>(null);
 	let searchInput = $state<HTMLInputElement | null>(null);
 
+	$effect(() => {
+		if (editingBlocked) setOpen(false);
+	});
+
+	function changePickerOpen(next: boolean) {
+		if (editingBlocked && next) return;
+		setOpen(next);
+	}
+
 	async function togglePicker() {
+		if (editingBlocked) return;
 		if (!toggleOpen()) return;
 		await tick();
 		searchInput?.focus();
 	}
 
 	function beginSearch(event: Event) {
+		if (editingBlocked) return;
 		setQuery((event.currentTarget as HTMLInputElement).value);
+	}
+
+	function choose(value: string) {
+		if (editingBlocked) return;
+		pick(value);
 	}
 
 	function remove(event: MouseEvent) {
 		event.stopPropagation();
+		if (editingBlocked) return;
 		removeSelection();
 	}
 
 	function browse(event: MouseEvent, target?: string) {
 		event.stopPropagation();
+		if (blocked) return;
 		browseAll(target);
 	}
 
 	function edit(event: MouseEvent) {
 		event.stopPropagation();
+		if (blocked) return;
 		onEdit?.();
 	}
 </script>
@@ -127,13 +150,13 @@
 	inputValue={query}
 	items={comboboxItems}
 	{open}
-	onOpenChange={changeOpen}
-	onValueChange={pick}
+	onOpenChange={changePickerOpen}
+	onValueChange={choose}
 	allowDeselect={false}
 	loop
 >
 	<div
-		class="flex h-10.5 min-w-0 rounded-[3px] border border-control-border bg-control transition-[background-color,border-color] duration-150 hover:bg-background focus-within:border-primary/65 aria-invalid:border-destructive/65"
+		class="flex h-10.5 min-w-0 rounded-[3px] border border-control-border bg-control transition-[background-color,border-color] duration-150 hover:bg-background focus-within:border-primary/65 aria-invalid:!border-destructive/65"
 		aria-invalid={invalid}
 	>
 		<button
@@ -141,9 +164,9 @@
 			{id}
 			type="button"
 			class="flex min-w-0 flex-1 items-center gap-2 rounded-s-[3px] px-2.75 text-start outline-none disabled:cursor-not-allowed disabled:opacity-45"
-			disabled={readOnly}
+			disabled={editingBlocked}
 			aria-label={label}
-			aria-describedby={describedBy}
+			{...controlARIA}
 			aria-haspopup="listbox"
 			aria-expanded={open}
 			onclick={togglePicker}
@@ -181,7 +204,7 @@
 							{...props}
 							type="button"
 							class="grid w-9 shrink-0 place-items-center border-s border-control-border text-foreground-sub outline-none transition-colors hover:bg-background hover:text-foreground focus-visible:text-primary disabled:cursor-not-allowed disabled:opacity-45"
-							disabled={readOnly}
+							disabled={blocked}
 							onpointerdown={(event) => event.preventDefault()}
 							onclick={edit}
 							aria-label={runtime.i18n.t("fields:edit", { label: selectedLabel ?? "" })}
@@ -201,6 +224,7 @@
 						<button
 							{...props}
 							type="button"
+							disabled={editingBlocked}
 							class="grid w-9 shrink-0 place-items-center border-s border-control-border text-foreground-sub outline-none transition-colors hover:bg-destructive/7 hover:text-destructive focus-visible:text-destructive"
 							onpointerdown={(event) => event.preventDefault()}
 							onclick={remove}
@@ -220,6 +244,7 @@
 					<button
 						{...props}
 						type="button"
+						disabled={blocked}
 						class="grid w-9 shrink-0 place-items-center rounded-e-[3px] border-s border-control-border text-foreground-sub outline-none transition-colors hover:bg-background hover:text-foreground focus-visible:text-primary"
 						onpointerdown={(event) => event.preventDefault()}
 						onclick={(event) => browse(event, selectedCollection?.slug)}
@@ -247,6 +272,7 @@
 		>
 			<Combobox.Input
 				bind:ref={searchInput}
+				disabled={editingBlocked}
 				aria-label={runtime.i18n.t("fields:searchLabel", { label: searchLabel })}
 				placeholder={runtime.i18n.t("fields:search", {
 					label: searchLabel.toLocaleLowerCase(runtime.i18n.language),
@@ -291,6 +317,7 @@
 								<Combobox.Item
 									value={JSON.stringify([group.collection.slug, document.id])}
 									label={optionLabel}
+									disabled={editingBlocked}
 									class="flex w-full cursor-default items-center gap-[9px] rounded-[3px] px-2 py-1.5 text-start text-[12.5px] text-foreground-muted outline-none select-none data-[highlighted]:bg-control data-[selected]:text-foreground-strong"
 								>
 									{#snippet children({ selected })}
@@ -310,6 +337,7 @@
 						{/if}
 						<button
 							type="button"
+							disabled={editingBlocked}
 							class="mt-0.5 flex w-full items-center gap-1 px-2 py-1.5 text-start text-[11.5px] text-primary outline-none hover:text-primary-hover focus-visible:text-primary-hover"
 							onpointerdown={(event) => event.preventDefault()}
 							onclick={(event) => browse(event, group.collection.slug)}

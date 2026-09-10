@@ -12,15 +12,16 @@ import (
 	"github.com/riducms/ridu/internal/teststore"
 	"github.com/riducms/ridu/protocol"
 	"github.com/riducms/ridu/store"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func TestRESTPreferencesAndLocksUseExactSameIDAuthCollection(t *testing.T) {
 	application, err := ridu.New(ridu.Config{
 		Name: "Exact HTTP identity", Admin: ridu.AdminConfig{User: "users"},
 		Collections: []ridu.Collection{
-			{Slug: "users", Auth: true, Fields: []field.Definition{field.Text("email", field.Required(), field.Unique())}},
-			{Slug: "staff", Auth: true, Fields: []field.Definition{field.Text("email", field.Required(), field.Unique())}},
-			{Slug: "posts", LockDocuments: true, Fields: []field.Definition{field.Text("title")}},
+			{Slug: "users", Auth: true, AuthConfig: ridu.AuthConfig{Password: ridu.PasswordPolicy{BcryptCost: bcrypt.MinCost}}, Fields: field.Fields{field.Text("email").Required().Unique()}},
+			{Slug: "staff", Auth: true, AuthConfig: ridu.AuthConfig{Password: ridu.PasswordPolicy{BcryptCost: bcrypt.MinCost}}, Fields: field.Fields{field.Text("email").Required().Unique()}},
+			{Slug: "posts", LockDocuments: true, Fields: field.Fields{field.Text("title")}},
 		},
 	}, teststore.New())
 	if err != nil {

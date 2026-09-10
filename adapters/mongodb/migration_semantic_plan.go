@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/riducms/ridu/internal/embedded"
 	"github.com/riducms/ridu/internal/migrationartifact"
 	"github.com/riducms/ridu/internal/referenceindex"
 	"github.com/riducms/ridu/internal/schemadiff"
@@ -261,6 +262,15 @@ func compileMongoDBRenamePlan(before, after schema.Manifest, intents []ridumigra
 	candidates := schemadiff.RenameCandidatesWithCollectionMapping(before, after, plan.collectionMapping)
 	for _, intent := range intents {
 		previous, next := beforeBySlug[intent.CollectionBefore], afterBySlug[intent.CollectionAfter]
+		if intent.FieldBefore != intent.FieldAfter && (embedded.DescendantPath(previous.Fields, intent.FieldBefore) || embedded.DescendantPath(next.Fields, intent.FieldAfter)) {
+			return plan, fmt.Errorf("embedded field rename %q to %q requires an explicit data migration", intent.FieldBefore, intent.FieldAfter)
+		}
+		for _, pair := range intent.Fields {
+			if pair.Before != pair.After && (embedded.DescendantPath(previous.Fields, pair.Before) || embedded.DescendantPath(next.Fields, pair.After)) {
+				return plan, fmt.Errorf("embedded field rename %q to %q requires an explicit data migration", pair.Before, pair.After)
+			}
+		}
+
 		collectionIntent := intent.FieldBefore == "" && intent.FieldAfter == ""
 		if collectionIntent && previous.ID != next.ID {
 			candidate, found := mongoCollectionRenameCandidate(candidates, previous.ID, next.ID)
@@ -443,7 +453,7 @@ func normalizeMongoDBResourceFields(resource *schema.Collection, beforeID schema
 			}
 			if result[index].Nested != nil {
 				nested := *result[index].Nested
-				children, err := rewrite(nested.Fields)
+				children, err := rewrite(nested.ResolvedFields())
 				if err != nil {
 					return nil, err
 				}
@@ -451,16 +461,37 @@ func normalizeMongoDBResourceFields(resource *schema.Collection, beforeID schema
 			}
 			if result[index].Blocks != nil {
 				blocks := *result[index].Blocks
-				blocks.Types = append([]schema.BlockType(nil), blocks.Types...)
-				for blockIndex := range blocks.Types {
-					children, err := rewrite(blocks.Types[blockIndex].Fields)
+				blocks.Types = append([]schema.BlockType(nil), blocks.ResolvedTypes()...)
+				for blockIndex := range blocks.ResolvedTypes() {
+					children, err := rewrite(blocks.ResolvedTypes()[blockIndex].ResolvedFields())
 					if err != nil {
 						return nil, err
 					}
-					blocks.Types[blockIndex].Fields = children
+					blocks.ResolvedTypes()[blockIndex].Fields = children
 				}
 				result[index].Blocks = &blocks
 			}
+			if result[index].Plugin != nil {
+				plugin := *result[index].Plugin
+				plugin.EmbeddedTrees = append([]schema.EmbeddedTree(nil), plugin.EmbeddedTrees...)
+				for ti := range plugin.EmbeddedTrees {
+					tree := &plugin.EmbeddedTrees[ti]
+					tree.Cases = append([]schema.EmbeddedTreeCase(nil), tree.Cases...)
+					for ci := range tree.Cases {
+						c := &tree.Cases[ci]
+						c.Types = append([]schema.BlockType(nil), c.ResolvedTypes()...)
+						for vi := range c.ResolvedTypes() {
+							children, err := rewrite(c.ResolvedTypes()[vi].ResolvedFields())
+							if err != nil {
+								return nil, err
+							}
+							c.ResolvedTypes()[vi].Fields = children
+						}
+					}
+				}
+				result[index].Plugin = &plugin
+			}
+
 		}
 		return result, nil
 	}
@@ -537,13 +568,23 @@ func normalizeMongoDBReferences(snapshot *schema.Snapshot, before, after schema.
 				field.Join = &join
 			}
 			if field.Nested != nil {
-				visit(field.Nested.Fields)
+				visit(field.Nested.ResolvedFields())
 			}
 			if field.Blocks != nil {
-				for blockIndex := range field.Blocks.Types {
-					visit(field.Blocks.Types[blockIndex].Fields)
+				for blockIndex := range field.Blocks.ResolvedTypes() {
+					visit(field.Blocks.ResolvedTypes()[blockIndex].ResolvedFields())
 				}
 			}
+			if field.Plugin != nil {
+				for _, tree := range field.Plugin.EmbeddedTrees {
+					for _, c := range tree.Cases {
+						for _, variant := range c.ResolvedTypes() {
+							visit(variant.ResolvedFields())
+						}
+					}
+				}
+			}
+
 		}
 	}
 	for index := range snapshot.Collections {
@@ -606,15 +647,8 @@ func mongoFieldsContainDeclaredPluginCollectionReferences(fields []schema.Field)
 		if field.Plugin != nil && len(field.Plugin.ReferenceKeys) != 0 {
 			return true
 		}
-		if field.Nested != nil && mongoFieldsContainDeclaredPluginCollectionReferences(field.Nested.Fields) {
+		if mongoFieldsContainDeclaredPluginCollectionReferences(schema.ChildFields(field)) {
 			return true
-		}
-		if field.Blocks != nil {
-			for _, block := range field.Blocks.Types {
-				if mongoFieldsContainDeclaredPluginCollectionReferences(block.Fields) {
-					return true
-				}
-			}
 		}
 	}
 	return false

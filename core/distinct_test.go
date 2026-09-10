@@ -6,6 +6,7 @@ import (
 	ridu "github.com/riducms/ridu/core"
 	"github.com/riducms/ridu/field"
 	"github.com/riducms/ridu/internal/teststore"
+	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/store"
 )
@@ -16,15 +17,15 @@ func TestLocalDistinctComposesReadAccessAndProtectsFieldValues(t *testing.T) {
 	secret, _ := query.NewPath("secret")
 	application, err := ridu.New(ridu.Config{Name: "Distinct", Collections: []ridu.Collection{{
 		Slug: "posts",
-		Fields: []field.Definition{
-			field.Text("title"), field.Text("audience"), field.Text("secret"),
-		},
+		Fields: field.Fields{field.Text("title"), field.Text("audience"), field.Text("secret").Access(field.Access{Read: func(ctx operation.AccessContext,
+
+		) (bool, error) {
+			return ctx.Actor.ID != "" && ctx.Actor.Collection ==
+				"staff", nil
+		}})},
 		Access: ridu.CollectionAccess{Read: func(ridu.AccessContext) (ridu.AccessDecision, error) {
 			return ridu.Where(query.Equal(audience, query.String("public"))), nil
 		}},
-		FieldAccess: map[string]ridu.FieldAccess{"secret": {Read: func(ctx ridu.FieldAccessContext) (bool, error) {
-			return ctx.Actor != nil && ctx.ActorCollection == "staff", nil
-		}}},
 	}}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -71,7 +72,7 @@ func TestLocalDistinctBoundsRecursiveAccess(t *testing.T) {
 	accessCalls := 0
 	application, err := ridu.New(ridu.Config{Name: "Recursive distinct", Collections: []ridu.Collection{{
 		Slug:   "posts",
-		Fields: []field.Definition{field.Text("title")},
+		Fields: field.Fields{field.Text("title")},
 		Access: ridu.CollectionAccess{Read: func(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
 			accessCalls++
 			_, err := ctx.Local.Distinct(ctx.Context, "posts", ridu.DistinctOptions{Field: title})

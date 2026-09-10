@@ -371,7 +371,7 @@ func TestSQLiteIndexedNestedLocalizedAndReferenceQueriesStayNative(t *testing.T)
 func TestSQLiteResidualSortMaterializationIsBounded(t *testing.T) {
 	ctx := context.Background()
 	manifest, err := ridu.Resolve(ridu.Config{Name: "SQLite residual sort bound", Collections: []ridu.Collection{{
-		Slug: "posts", Fields: []field.Definition{field.Array("rows", field.Fields(field.Text("label")))},
+		Slug: "posts", Fields: field.Fields{field.Array("rows", field.Fields{field.Text("label")})},
 	}}})
 	if err != nil {
 		t.Fatal(err)
@@ -421,30 +421,14 @@ func sqliteIndexParityManifest(t *testing.T) schema.Manifest {
 			{Code: "fr", Label: "French", FallbackLocales: []schema.LocaleCode{"en"}},
 		}},
 		Collections: []ridu.Collection{
-			{Slug: "users", Fields: []field.Definition{field.Text("name")}},
+			{Slug: "users", Fields: field.Fields{field.Text("name")}},
 			{
-				Slug: "media", Upload: true, Fields: []field.Definition{field.Text("alt")},
+				Slug: "media", Upload: true, Fields: field.Fields{field.Text("alt")},
 				Indexes: []ridu.CollectionIndex{{Fields: []string{"filename", "filesize"}}},
 			},
 			{
-				Slug: "posts",
-				Fields: []field.Definition{
-					field.Text("title", field.Index()),
-					field.Textarea("summary", field.Index()),
-					field.Code("source", field.Index()),
-					field.Email("contact", field.Index()),
-					field.Date("publishedAt", field.Index()),
-					field.Select("status", field.OneOf("draft", "published"), field.Index()),
-					field.Radio("priority", field.OneOf("low", "high"), field.Index()),
-					field.Number("score", field.Index()),
-					field.Text("externalKey", field.Unique()),
-					field.Text("tenant"),
-					field.Group("seo", field.Fields(field.Text("slug", field.Index()))),
-					field.Text("localizedTitle", field.Localized(), field.Index()),
-					field.Relationship("author", field.To("users"), field.Index()),
-					field.Upload("hero", field.To("media"), field.Index()),
-					field.Checkbox("featured", field.Index()),
-				},
+				Slug:   "posts",
+				Fields: field.Fields{field.Text("title").Index(), field.Textarea("summary").Index(), field.Code("source").Index(), field.Email("contact").Index(), field.Date("publishedAt").Index(), field.Select("status", "draft", "published").Index(), field.Radio("priority", "low", "high").Index(), field.Number("score").Index(), field.Text("externalKey").Unique(), field.Text("tenant"), field.Group("seo", field.Fields{field.Text("slug").Index()}), field.Text("localizedTitle").Localized().Index(), field.Relationship("author", "users").Index(), field.Upload("hero", "media").Index(), field.Checkbox("featured").Index()},
 				Indexes: []ridu.CollectionIndex{
 					{Fields: []string{"tenant", "seo.slug"}},
 					{Fields: []string{"tenant", "localizedTitle"}, Unique: true},

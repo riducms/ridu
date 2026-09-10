@@ -6,6 +6,8 @@ if (!baseURL) {
 }
 
 export default defineConfig({
+	outputDir: ".ridu/playwright/mongodb-generated/results",
+	reporter: [["list"]],
 	testDir: "./tests/e2e",
 	testMatch: "**/admin/generated-mongodb.spec.ts",
 	fullyParallel: false,
