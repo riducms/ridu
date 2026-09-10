@@ -18,9 +18,9 @@ navigation:
   title: 'Config as code'
 ---
 
-Ridu is an open-source, config-as-code headless CMS for Go. Define collections, fields, access
-rules, hooks, and plugins in Go; give editors a Svelte admin; deploy the API and built admin
-together as one Go binary.
+Ridu is an open-source, config-as-code backend framework for Go with a headless CMS built in.
+Define collections, fields, access rules, hooks, and plugins in Go; give editors a Svelte admin;
+deploy the API and built admin together as one Go binary.
 
 If you are looking for a CMS that combines Payload's approach to content modeling with
 PocketBase's single-executable deployment, Ridu is worth evaluating. The comparison describes

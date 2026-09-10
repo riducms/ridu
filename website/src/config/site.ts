@@ -1,8 +1,8 @@
 export const site = {
 	name: 'Ridu',
-	title: 'Ridu — a config-as-code CMS for Go',
+	title: 'Ridu — Go backend framework & headless CMS',
 	description:
-		'Ridu is a config-as-code headless CMS for Go. Define access rules, hooks and blocks in Go; deploy the API and embedded admin as one binary.',
+		'A config-as-code backend framework for Go with a headless CMS built in. Define your data and business logic; ship the API and admin as one binary.',
 	url: 'https://riducms.com',
 	github: 'https://github.com/riducms/ridu',
 	license: 'https://opensource.org/license/mit',
