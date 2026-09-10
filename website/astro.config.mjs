@@ -7,10 +7,16 @@ import { riduCodeTheme } from './src/config/code-theme.ts';
 import { riduCodeLineTransformer } from './src/plugins/code-line-transformer.ts';
 import { riduHeadingPermalinks } from './src/plugins/heading-permalinks.ts';
 import { riduMarkdownCodeMetadata, riduMarkdownComponents } from './src/plugins/ridu-markdown.ts';
+import { site } from './src/config/site.ts';
 
 export default defineConfig({
-	site: process.env.SITE_URL ?? 'https://riducms.com',
-	integrations: [UnoCSS(), sitemap()],
+	site: process.env.SITE_URL ?? site.url,
+	integrations: [
+		UnoCSS(),
+		sitemap({
+			filter: (page) => new URL(page).pathname !== '/search/'
+		})
+	],
 	markdown: {
 		processor: satteri({
 			mdastPlugins: [riduMarkdownCodeMetadata],

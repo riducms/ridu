@@ -12,10 +12,12 @@ var Posts = ridu.Collection{
 	Slug: "posts",
 	Fields: field.Fields{
 		field.Text("title").Required(),
-		field.Select("status").Options(
-			field.Option{Value: "draft", Label: "draft"},
-			field.Option{Value: "published", Label: "published"},
-		),
+
+		field.Textarea("summary").MaxLength(280).Admin(field.Admin{
+		  Description: "Summary of the post",
+		}),
+
+		field.Select("status", "draft", "published"),
 	},
 }`;
 

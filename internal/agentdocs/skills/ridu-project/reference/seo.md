@@ -96,10 +96,9 @@ the generated `meta` value through the SDK.
 Before deployment, create and verify the immutable migration:
 
 ```sh title="terminal"
-npm run ridu -- migrate create --name add-seo
-npm run ridu -- migrate plan
-npm run ridu -- migrate verify
-npm run ridu -- check
+ridu migrate create --name add-seo
+ridu migrate verify
+ridu check
 ```
 
 Apply the reviewed artifact with `migrate up` during deployment, then require a clean

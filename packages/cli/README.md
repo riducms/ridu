@@ -23,10 +23,10 @@ npm install
 npm run dev
 ```
 
-Use the non-writing form separately in CI to verify committed contracts:
+Use the generated check script in CI to verify committed contracts and the rest of the project:
 
 ```sh
-npm run ridu -- generate --check
+npm run check
 ```
 
 The scaffold records npm, Bun, pnpm, or Yarn in `ridu.toml`, and the native CLI uses it for frontend
@@ -36,7 +36,7 @@ still using the ordinary npm registry.
 Go users can install the same command directly. Match the version to the project’s `@riducms/cli`:
 
 ```sh
-go install github.com/riducms/ridu/cmd/ridu@v0.2.0
+go install github.com/riducms/ridu/cmd/ridu@v0.2.1
 ```
 
 Set `RIDU_BINARY` to an already-installed binary path when downloads are managed centrally.

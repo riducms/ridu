@@ -58,7 +58,7 @@ func TestPluginConformance(t *testing.T) {
 		InvalidData: store.Values{"content": store.String("not a document")},
 		Compatibility: []plugintest.CompatibilityCase{
 			{RiduVersion: ridu.FrameworkVersion, Compatible: true},
-			{RiduVersion: "0.2.0", Compatible: true},
+			{RiduVersion: "0.2.0", Compatible: false},
 		},
 	})
 }

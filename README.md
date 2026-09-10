@@ -1,9 +1,15 @@
 # Ridu
 
-Ridu is a pre-1.0 Go content-management framework with an included Svelte 5 admin.
-Define collections, fields, access rules, hooks, and plugins in Go; Ridu derives the selected
-database schema and migrations, REST API, generated TypeScript contracts, Fetch SDK, and authoring
-interface from that one executable configuration.
+Ridu is an open-source, **config-as-code headless CMS for Go** with an included Svelte 5 admin.
+Define collections, fields, access control, hooks, and plugins in Go. That executable configuration
+is the source of truth for database migrations, the REST API, generated TypeScript contracts,
+the Fetch SDK, and the authoring interface. Deploy the application and admin as one Go binary.
+
+If you like Payload's code-first content modelling and PocketBase's single-binary deployment,
+Ridu brings those ideas together in a Go CMS. It includes field-level access control, lifecycle
+hooks, computed fields, typed content blocks, and drafts and versions.
+[Compare the configuration and deployment models](https://riducms.com/guides/config-as-code-cms/)
+and check the [current feature limits](https://riducms.com/docs/status/).
 
 > [!IMPORTANT]
 > Ridu is pre-1.0 software. Compatibility may change between minor releases, so evaluate it
@@ -13,7 +19,7 @@ interface from that one executable configuration.
 
 ## Why Ridu
 
-- **Go-defined content models.** Ridu resolves executable Go configuration into a deterministic,
+- **Config as code.** Ridu resolves executable Go configuration into a deterministic,
   versioned schema manifest.
 - **One operation engine.** Local Go calls, REST, the SDK, admin, tasks, and plugin transports share
   authorization, validation, hooks, transactions, population, and redaction.
@@ -95,6 +101,8 @@ server output remains identifiable by a `[server]` badge.
 
 ## Documentation
 
+- [Ridu website and documentation](https://riducms.com)
+- [Ridu, Payload, and PocketBase: choosing a config-as-code CMS](https://riducms.com/guides/config-as-code-cms/)
 - [Public documentation source](./website/src/content/docs/getting-started.md) and its
   [`website/`](./website/) presentation
 - [Current capability status](./website/src/content/docs/status.md)

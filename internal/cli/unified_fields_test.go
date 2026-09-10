@@ -41,7 +41,6 @@ func TestFreshUnifiedFieldStarterAndBlank(t *testing.T) {
 			run("new", "--template", template, "--database", "sqlite", "--module", "example.com/unified/"+template, "--scope", "@fixture", "--no-agent", target)
 			assertUnifiedScaffold(t, target)
 			run("generate", "--check")
-			run("migrate", "create", "--name", "initial")
 			database := filepath.Join(target, ".ridu", "content.sqlite")
 			if err := os.MkdirAll(filepath.Dir(database), 0755); err != nil {
 				t.Fatal(err)

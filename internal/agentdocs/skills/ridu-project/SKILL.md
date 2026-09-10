@@ -5,7 +5,7 @@ description: Build, change, troubleshoot, or ship a Ridu application. Use for ex
 
 # Work on a Ridu project
 
-Resolve Ridu's executable Go config with the project command or `npm run ridu -- generate`. Never
+Resolve Ridu's executable Go config with the project command or `ridu generate`. Never
 reconstruct the complete schema by parsing Go or maintaining a second TypeScript or JSON schema.
 
 Read `package_manager` from `ridu.toml` before running frontend or project-local CLI commands.
@@ -104,12 +104,12 @@ Use the separate `payload-to-ridu` skill for a Payload migration or parity asses
 1. Identify the observable behavior and the application-owned file that controls it.
 2. Read the focused reference and follow nearby public Ridu patterns.
 3. Change executable config or application code without editing generated output.
-4. Run `npm run ridu -- generate` after config changes. For production schema changes, create and review an
-   immutable artifact with `npm run ridu -- migrate create --name <lowercase-kebab-case>`. Explicitly confirm
+4. Run `ridu generate` after config changes. For production schema changes, create and review an
+   immutable artifact with `ridu migrate create --name <lowercase-kebab-case>`. Explicitly confirm
    detected renames (or use reviewed `--accept-renames` automation); bind a registered compiled
    data rewrite with `--transform <name>` instead of hiding it in startup code.
 5. Test success and denial/error paths at the smallest relevant layer.
-6. Run `npm run ridu -- generate --check`, the project tests, and `npm run ridu -- check` before handoff.
+6. Run `ridu generate --check`, the project tests, and `ridu check` before handoff.
 
 ## MongoDB production boundary
 
@@ -129,7 +129,7 @@ create command with `--allow-destructive`, preserving its transform and rename i
 completes artifact creation without connecting to the database. Commit the resulting artifact.
 Checksum-authenticated planner `1.0.0` artifacts remain the supported v1-to-v2 immutable history
 prefix; planner `2.0.0` owns new semantic rename, transform, and retirement steps. Preserve the v1
-prefix rather than rewriting it during an upgrade. `npm run ridu -- check` and `npm run ridu -- build`
+prefix rather than rewriting it during an upgrade. `ridu check` and `ridu build`
 remain offline: they compare committed history with executable config but do not inspect the applied
 ledger or indexes. Live `status` and startup/readiness own those checks.
 
@@ -137,15 +137,15 @@ Cut over in this order:
 
 1. **Drain writers.** Stop every old application process, worker, and other writer, and keep them
    drained through completion and retries.
-2. **Verify history.** Run `npm run ridu -- migrate verify` with the operator's scoped verification
+2. **Verify history.** Run `ridu migrate verify` with the operator's scoped verification
    credential. Append `--allow-maintenance` whenever the complete committed history contains
    semantic work, because the clean shadow replays every artifact. Grant it only after the drain.
 3. **Capture the recovery point.** Use the operator's controlled backup credential for a
    database-scoped `mongodump` and copy the matching upload-object snapshot while writers remain
    drained. Restore that scope with `mongorestore` and the matching uploads if recovery is required.
-4. **Apply migrations.** Run `npm run ridu -- migrate up` against the exact release history. Append
+4. **Apply migrations.** Run `ridu migrate up` against the exact release history. Append
    `--allow-maintenance` only when the pending or incomplete history suffix contains semantic work.
-5. **Confirm status and readiness.** Require `npm run ridu -- migrate status` to report the exact history
+5. **Confirm status and readiness.** Require `ridu migrate status` to report the exact history
    current and preserve the non-mutating readiness check for the same ordered artifact
    fingerprint, manifest digest, and required indexes.
 6. **Start the release.** Start the new binary only after those preconditions are true; startup

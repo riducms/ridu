@@ -1,5 +1,5 @@
-// Package scaffold renders a generated Ridu application into an atomically
-// installed target directory.
+// Package scaffold renders a generated Ridu application without overwriting
+// existing project files.
 package scaffold
 
 import (
@@ -18,10 +18,11 @@ import (
 )
 
 var (
-	projectNamePattern = regexp.MustCompile(`^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$`)
-	modulePartPattern  = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._~+-]*$`)
-	npmScopePattern    = regexp.MustCompile(`^@[a-z0-9][a-z0-9._-]*$`)
-	versionPattern     = regexp.MustCompile(`^(?:v)?(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?(?:\+[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?$`)
+	projectNamePattern          = regexp.MustCompile(`^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$`)
+	projectNameSeparatorPattern = regexp.MustCompile(`[^a-z0-9]+`)
+	modulePartPattern           = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._~+-]*$`)
+	npmScopePattern             = regexp.MustCompile(`^@[a-z0-9][a-z0-9._-]*$`)
+	versionPattern              = regexp.MustCompile(`^(?:v)?(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?(?:\+[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?$`)
 )
 
 //go:embed templates/*
@@ -29,7 +30,9 @@ var templateFiles embed.FS
 
 // Options describes one generated project.
 type Options struct {
-	Target           string
+	Target string
+	// InPlace explicitly permits installing into an existing directory.
+	InPlace          bool
 	ModulePath       string
 	NPMScope         string
 	FrameworkVersion string
@@ -178,17 +181,21 @@ var starterFiles = []templateFile{
 	{Source: "templates/content-posts.go.tmpl", Target: "content/posts.go", Mode: 0o644},
 }
 
-// Create validates, renders, and atomically installs a new project directory.
+// Create validates and renders a project before installing it. New directories
+// are installed atomically; in-place creation checks all destinations first.
 func Create(options Options) (string, error) {
 	target, data, err := validate(options)
 	if err != nil {
 		return "", err
 	}
-	if err := validateTargetAvailability(target); err != nil {
+	if err := validateTargetAvailability(target, options.InPlace); err != nil {
 		return "", err
 	}
 
 	parent := filepath.Dir(target)
+	if options.InPlace {
+		parent = target
+	}
 	if err := os.MkdirAll(parent, 0o755); err != nil {
 		return "", fmt.Errorf("create target parent %s: %w", parent, err)
 	}
@@ -226,6 +233,12 @@ func Create(options Options) (string, error) {
 	if _, err := agentdocs.InstallNewProject(staging, options.Agent, data.GoVersion); err != nil {
 		return "", fmt.Errorf("install agent documentation: %w", err)
 	}
+	if options.InPlace {
+		if err := installInPlace(staging, target); err != nil {
+			return "", err
+		}
+		return target, nil
+	}
 	if err := os.Rename(staging, target); err != nil {
 		return "", fmt.Errorf("install generated project at %s: %w", target, err)
 	}
@@ -234,7 +247,7 @@ func Create(options Options) (string, error) {
 }
 
 func validate(options Options) (string, templateData, error) {
-	target, projectName, err := resolveTarget(options.Target)
+	target, projectName, err := ResolveTarget(options.Target, options.InPlace)
 	if err != nil {
 		return "", templateData{}, err
 	}
@@ -316,15 +329,17 @@ func packageManagerDisplayLabel(manager projectfile.PackageManager) string {
 // ValidateTarget checks the path rules and availability used by project
 // creation without writing a staging directory. Interactive clients use it to
 // report mistakes before the user confirms the scaffold.
-func ValidateTarget(value string) error {
-	target, _, err := resolveTarget(value)
+func ValidateTarget(value string, inPlace bool) error {
+	target, _, err := ResolveTarget(value, inPlace)
 	if err != nil {
 		return err
 	}
-	return validateTargetAvailability(target)
+	return validateTargetAvailability(target, inPlace)
 }
 
-func resolveTarget(value string) (string, string, error) {
+// ResolveTarget returns the absolute path and package-safe project name.
+// Existing directory names are normalized only for explicit in-place creation.
+func ResolveTarget(value string, inPlace bool) (string, string, error) {
 	if strings.TrimSpace(value) == "" {
 		return "", "", fmt.Errorf("project target must not be empty")
 	}
@@ -333,13 +348,31 @@ func resolveTarget(value string) (string, string, error) {
 		return "", "", fmt.Errorf("resolve project target: %w", err)
 	}
 	projectName := filepath.Base(filepath.Clean(target))
+	if inPlace {
+		projectName = strings.Trim(projectNameSeparatorPattern.ReplaceAllString(strings.ToLower(projectName), "-"), "-")
+		if projectName == "" {
+			projectName = "ridu-project"
+		} else if projectName[0] < 'a' || projectName[0] > 'z' {
+			projectName = "ridu-" + projectName
+		}
+	}
 	if !projectNamePattern.MatchString(projectName) {
 		return "", "", fmt.Errorf("project name %q must be lowercase kebab-case", projectName)
 	}
 	return target, projectName, nil
 }
 
-func validateTargetAvailability(target string) error {
+func validateTargetAvailability(target string, inPlace bool) error {
+	if inPlace {
+		info, err := os.Stat(target)
+		if err != nil {
+			return fmt.Errorf("inspect current directory %s: %w", target, err)
+		}
+		if !info.IsDir() {
+			return fmt.Errorf("target %s must be a directory", target)
+		}
+		return nil
+	}
 	if _, err := os.Lstat(target); err == nil {
 		return fmt.Errorf("target %s already exists; choose a new directory", target)
 	} else if !os.IsNotExist(err) {

@@ -45,6 +45,9 @@ func TestFreshSQLiteProjectPresentationMigrationWorkflow(t *testing.T) {
 	if err := os.WriteFile(projectPath, []byte(projectText), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.RemoveAll(filepath.Join(target, "migrations")); err != nil {
+		t.Fatal(err)
+	}
 	config := `package content
 import (
  "github.com/riducms/ridu"

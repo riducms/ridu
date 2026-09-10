@@ -19,7 +19,7 @@ Choose package versions explicitly and test updates before deploying them.
 If a plugin includes admin components, install its Go and admin packages together:
 
 ```sh title="terminal"
-npm run ridu -- plugin add color \
+ridu plugin add color \
   --go-package example.com/acme/ridu-color \
   --go-version v1.2.0 \
   --admin-package @acme/ridu-color-admin \
@@ -176,8 +176,8 @@ the rest of the application's schema. See [Migrations](./migrations.md) for reco
 ## Remove a plugin {#remove}
 
 ```sh title="terminal"
-npm run ridu -- plugin remove color
-npm run ridu -- migrate create --name remove-color
+ridu plugin remove color
+ridu migrate create --name remove-color
 ```
 
 Removal updates the generated imports and types, removes the Go dependency, and removes the admin
@@ -192,7 +192,7 @@ keep while the plugin is still installed.
 ## Create and test a plugin {#create-and-test}
 
 ```sh title="terminal"
-npm run ridu -- plugin new ./ridu-color \
+ridu plugin new ./ridu-color \
   --key color \
   --module example.com/acme/ridu-color \
   --admin-package @acme/ridu-color-admin

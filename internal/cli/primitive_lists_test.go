@@ -101,7 +101,7 @@ export default defineAdmin({
 `)
 	run("generate")
 	run("generate", "--check")
-	run("migrate", "create", "--name", "initial")
+	run("migrate", "create", "--name", "add-products")
 	publishFrontendPackages(t, target)
 	install := exec.CommandContext(t.Context(), "bun", "install")
 	install.Dir = target

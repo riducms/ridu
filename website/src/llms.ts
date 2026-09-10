@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
 import { normalizeDocumentationMarkdown } from './documentation-markdown';
 import { referenceModules } from './reference';
+import { site } from './config/site';
 
 const websiteRoot = process.cwd();
 const repositoryRoot = resolve(websiteRoot, '..');
@@ -121,7 +122,7 @@ export async function buildLLMSIndex(): Promise<string> {
 			.join('\n');
 		return `## ${label}\n\n${links}`;
 	});
-	return `# Ridu\n\n> Go-first content management with executable configuration, generated contracts, and one embedded runtime.\n\nRelease documentation version: ${frameworkVersion}\n\n- [Documentation map](${publicOrigin}/docs/)\n- [Guides map](${publicOrigin}/guides/)\n- [Complete documentation search](${publicOrigin}/search/)\n- [Complete LLM documentation](${publicOrigin}/llms-full.txt)\n- [Versioned complete documentation](${publicOrigin}/v/${frameworkVersion}/llms-full.txt)\n\n${sections.join('\n\n')}\n\n${referenceIndex()}\n`;
+	return `# Ridu\n\n> ${site.description}\n\nRelease documentation version: ${frameworkVersion}\n\n- [Ridu website](${publicOrigin}/)\n- [Source code](${site.github})\n- [Documentation map](${publicOrigin}/docs/)\n- [Guides map](${publicOrigin}/guides/)\n- [Complete documentation search](${publicOrigin}/search/)\n- [Complete LLM documentation](${publicOrigin}/llms-full.txt)\n- [Versioned complete documentation](${publicOrigin}/v/${frameworkVersion}/llms-full.txt)\n\n${sections.join('\n\n')}\n\n${referenceIndex()}\n`;
 }
 
 export async function buildLLMSFull(): Promise<string> {

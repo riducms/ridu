@@ -19,6 +19,7 @@ interface Props {
 	wide?: boolean;
 	docsLayout?: DocumentationLayout;
 	footer?: boolean;
+	noindex?: boolean;
 }
 
 const {
@@ -27,10 +28,35 @@ const {
 	active,
 	wide = false,
 	docsLayout,
-	footer = true
+	footer = true,
+	noindex = false
 } = Astro.props;
 const fullTitle = title ? `${title} · ${site.name}` : site.title;
 const canonical = new URL(Astro.url.pathname, Astro.site ?? site.url);
+const siteURL = new URL('/', Astro.site ?? site.url);
+const structuredData = {
+	'@context': 'https://schema.org',
+	'@graph': [
+		{
+			'@type': 'WebSite',
+			'@id': new URL('#website', siteURL).href,
+			url: siteURL.href,
+			name: site.name,
+			description: site.description,
+			about: { '@id': new URL('#software', siteURL).href }
+		},
+		{
+			'@type': 'SoftwareSourceCode',
+			'@id': new URL('#software', siteURL).href,
+			name: site.name,
+			url: siteURL.href,
+			description: site.description,
+			codeRepository: site.github,
+			license: site.license,
+			programmingLanguage: site.programmingLanguage
+		}
+	]
+};
 ---
 
 <!doctype html>
@@ -41,14 +67,28 @@ const canonical = new URL(Astro.url.pathname, Astro.site ?? site.url);
 		<meta name="generator" content={Astro.generator} />
 		<title>{fullTitle}</title>
 		<meta name="description" content={description} />
+		{noindex && <meta name="robots" content="noindex" />}
 		<link rel="canonical" href={canonical} />
+		<link rel="sitemap" href={new URL('/sitemap-index.xml', siteURL)} />
 		<link rel="icon" type="image/svg+xml" href={riduArchLogo.src} />
 		<meta name="theme-color" content="#0d0a0c" />
 		<meta property="og:type" content="website" />
+		<meta property="og:site_name" content={site.name} />
 		<meta property="og:title" content={fullTitle} />
 		<meta property="og:description" content={description} />
 		<meta property="og:url" content={canonical} />
-		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:card" content="summary" />
+		<meta name="twitter:title" content={fullTitle} />
+		<meta name="twitter:description" content={description} />
+		{
+			Astro.url.pathname === '/' && (
+				<script
+					is:inline
+					type="application/ld+json"
+					set:html={JSON.stringify(structuredData).replace(/</g, '\\u003c')}
+				/>
+			)
+		}
 		<ClientRouter />
 	</head>
 	<body>

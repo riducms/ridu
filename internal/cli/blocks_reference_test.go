@@ -27,6 +27,9 @@ func TestFreshProjectBlocksReferenceWorkflow(t *testing.T) {
 		}
 	}
 	run("new", "--database", "sqlite", "--module", "example.com/blocks/reference", target)
+	if err := os.RemoveAll(filepath.Join(target, "migrations")); err != nil {
+		t.Fatal(err)
+	}
 	copySource := func(source, destination string) string {
 		t.Helper()
 		data, err := os.ReadFile(filepath.Join(frameworkRoot, "examples", "blocks", source))

@@ -371,7 +371,7 @@ func assertGeneratedMongoDBAgentGuidance(t *testing.T, root string) {
 	if !strings.Contains(skill, "reference/mongodb.md") {
 		t.Fatalf("generated Ridu project skill does not route MongoDB work to its reference:\n%s", skill)
 	}
-	if !strings.Contains(skill, "`npm run ridu -- check`") {
+	if !strings.Contains(skill, "`ridu check`") {
 		t.Fatalf("generated Ridu project skill omits the MongoDB ridu check boundary:\n%s", skill)
 	}
 	for _, bypass := range []string{"bypass `ridu check`", "do not run `ridu check`", "skip `ridu check`"} {

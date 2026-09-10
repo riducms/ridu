@@ -1,10 +1,12 @@
 export const site = {
 	name: 'Ridu',
-	title: 'Ridu — a CMS that ships like Go software',
+	title: 'Ridu — a config-as-code CMS for Go',
 	description:
-		'Define content and application behaviour in Go. Generate the contracts and embedded admin, then ship one application binary.',
+		'Ridu is a config-as-code headless CMS for Go. Define access rules, hooks and blocks in Go; deploy the API and embedded admin as one binary.',
 	url: 'https://riducms.com',
-	github: 'https://github.com/riducms/ridu'
+	github: 'https://github.com/riducms/ridu',
+	license: 'https://opensource.org/license/mit',
+	programmingLanguage: 'Go'
 } as const;
 
 export const primaryNavigation = [

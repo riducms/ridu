@@ -209,6 +209,8 @@ func TestCreateRendersProjectWithoutAbsoluteFrameworkPaths(t *testing.T) {
 		"ridu":      "ridu",
 		"check":     "ridu check",
 		"build":     "ridu build",
+		"migrate":   "ridu migrate up",
+		"start":     "./dist/acme-content",
 	} {
 		if generatedPackage.Scripts[script] != command {
 			t.Fatalf("generated workspace script %s = %q, want %q", script, generatedPackage.Scripts[script], command)
@@ -263,6 +265,8 @@ func TestCreateRendersProjectWithoutAbsoluteFrameworkPaths(t *testing.T) {
 		`SkipReadinessPreflight:     envBool("RIDU_SKIP_READINESS_PREFLIGHT")`,
 		`ShutdownTimeout:            envDuration("RIDU_SHUTDOWN_TIMEOUT")`,
 		`WorkerDrainTimeout:         envDuration("RIDU_WORKER_DRAIN_TIMEOUT")`,
+		`ridu.WithAddress(serverAddress())`,
+		`strings.TrimSpace(os.Getenv("PORT"))`,
 	} {
 		if !strings.Contains(serverText, productionBoundary) {
 			t.Errorf("generated server is missing production boundary %q:\n%s", productionBoundary, serverMain)
@@ -374,7 +378,7 @@ func TestCreateRendersEachSupportedPackageManager(t *testing.T) {
 			if packageJSON.PackageManager != "" {
 				t.Fatalf("package.json forces packageManager %q", packageJSON.PackageManager)
 			}
-			if packageJSON.Scripts["dev:admin"] != test.adminScript || packageJSON.Scripts["check"] != "ridu check" || packageJSON.Scripts["build"] != "ridu build" {
+			if packageJSON.Scripts["dev:admin"] != test.adminScript || packageJSON.Scripts["check"] != "ridu check" || packageJSON.Scripts["build"] != "ridu build" || packageJSON.Scripts["migrate"] != "ridu migrate up" || packageJSON.Scripts["start"] != "./dist/content" {
 				t.Fatalf("scripts = %#v", packageJSON.Scripts)
 			}
 			if packageJSON.Overrides["lexical"] != "0.49.0" || packageJSON.Resolutions["lexical"] != "0.49.0" {
@@ -667,12 +671,18 @@ func TestCreateMongoDBRendersQualifiedReplicaSetGuidanceForStarterAndBlank(t *te
 					"x86-64 release job",
 					"planner `1.0.0`",
 					"planner `2.0.0`",
-					"`npm run ridu -- check` and `npm run ridu -- build`",
 					"do not inspect",
 				} {
 					if !strings.Contains(rendered.text, required) {
 						t.Errorf("MongoDB generated %s is missing bounded production guidance %q", rendered.name, required)
 					}
+				}
+				commandGuidance := "`npm run ridu -- check` and `npm run ridu -- build`"
+				if rendered.name == "ridu-project/SKILL.md" {
+					commandGuidance = "`ridu check` and `ridu build`"
+				}
+				if !strings.Contains(rendered.text, commandGuidance) {
+					t.Errorf("MongoDB generated %s is missing command guidance %q", rendered.name, commandGuidance)
 				}
 				assertMongoDBCutoverGuidanceOrder(t, rendered.name, rendered.text)
 			}

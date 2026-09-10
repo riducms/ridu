@@ -317,7 +317,9 @@ defaults when an environment value is absent:
 | `RIDU_POSTGRES_UPLOAD_LOCK_CONNECTIONS` | Optional size of the separate bounded PostgreSQL pool used to coordinate object creation/adoption/deletion across processes. The default is four; these connections are additional to the document pool so uploads cannot starve their own transactions. |
 {{else if .SQLite}}| `RIDU_SQLITE_PATH` | Required absolute SQLite file path or URI. The generated runtime rejects `:memory:` because migrations and serving are separate processes. |
 {{else if .MongoDB}}| `DATABASE_URL` | Required MongoDB URL containing the database-scoped application credential, writable replica-set selection, SCRAM-SHA-256 authentication, and CA- plus hostname-verifying TLS options. |
-{{end}}| `RIDU_ALLOWED_HOSTS` | Comma-separated public hostnames, with optional ports. Set it in production because an empty list accepts every syntactically valid host for development compatibility. |
+{{end}}| `RIDU_ADDRESS` | Complete listener address. Defaults to `:8080`. |
+| `PORT` | Port-only alternative used when a hosting platform assigns the listener. `RIDU_ADDRESS` takes precedence. |
+| `RIDU_ALLOWED_HOSTS` | Comma-separated public hostnames, with optional ports. Set it in production because an empty list accepts every syntactically valid host for development compatibility. |
 | `RIDU_ALLOWED_ORIGINS` | Comma-separated browser origins allowed to make cross-origin SDK requests. Same-origin admin traffic does not need an entry. |
 | `RIDU_TRUSTED_PROXY_CIDRS` | Only the immediate reverse-proxy networks allowed to supply forwarded client/proto information. Leave empty when the Go process is directly exposed. |
 | `RIDU_STRICT_TRANSPORT_SECURITY` | HSTS value emitted by Ridu. Set it only when the TLS terminator guarantees HTTPS for the complete declared scope. |

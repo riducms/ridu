@@ -224,36 +224,19 @@ before hooks or persistence rather than escaping into another transaction.
 Production does not mutate schema at startup. Create and verify adapter-owned artifacts offline,
 then apply them as a deployment step:
 
-```bash title="terminal" package-manager="npm"
-npm run ridu -- migrate create --name initial
-npm run ridu -- migrate verify
-npm run ridu -- migrate plan --database-path /var/lib/ridu/content.sqlite
-npm run ridu -- migrate up --database-path /var/lib/ridu/content.sqlite
-npm run ridu -- migrate status --database-path /var/lib/ridu/content.sqlite
-```
+```bash title="terminal"
+# New projects already have the initial migration. Use a descriptive name
+# after changing fields or collections.
+ridu migrate create --name add-post-summary
 
-```bash title="terminal" package-manager="bun"
-bun run ridu -- migrate create --name initial
-bun run ridu -- migrate verify
-bun run ridu -- migrate plan --database-path /var/lib/ridu/content.sqlite
-bun run ridu -- migrate up --database-path /var/lib/ridu/content.sqlite
-bun run ridu -- migrate status --database-path /var/lib/ridu/content.sqlite
-```
+# This replays every migration in a temporary database; it needs no path.
+ridu migrate verify
 
-```bash title="terminal" package-manager="pnpm"
-pnpm run ridu migrate create --name initial
-pnpm run ridu migrate verify
-pnpm run ridu migrate plan --database-path /var/lib/ridu/content.sqlite
-pnpm run ridu migrate up --database-path /var/lib/ridu/content.sqlite
-pnpm run ridu migrate status --database-path /var/lib/ridu/content.sqlite
-```
-
-```bash title="terminal" package-manager="yarn"
-yarn run ridu migrate create --name initial
-yarn run ridu migrate verify
-yarn run ridu migrate plan --database-path /var/lib/ridu/content.sqlite
-yarn run ridu migrate up --database-path /var/lib/ridu/content.sqlite
-yarn run ridu migrate status --database-path /var/lib/ridu/content.sqlite
+# These commands inspect or change the selected persistent file.
+export RIDU_SQLITE_PATH='/var/lib/ridu/content.sqlite'
+ridu migrate plan
+ridu migrate up
+ridu migrate status
 ```
 
 SQLite also supports reviewed `down`, `reset`, `refresh`, and `fresh` workflows with

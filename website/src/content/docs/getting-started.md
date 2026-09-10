@@ -1,6 +1,6 @@
 ---
 title: 'Introduction'
-description: 'Learn what Ridu provides, how an application is configured, and where to start.'
+description: 'Ridu is a config-as-code headless CMS for Go. Define content, access control, hooks, and blocks in code, then deploy the API and admin as one binary.'
 product: core
 eyebrow: 'Start here'
 order: 10
@@ -21,7 +21,7 @@ navigation:
 
 ## What is Ridu? {#what-is-ridu}
 
-Ridu is a Go content-management framework with a built-in Svelte 5 admin. You define
+Ridu is an open-source, config-as-code headless CMS for Go with a built-in Svelte 5 admin. You define
 collections, fields, permissions, hooks, and plugins in Go. Ridu uses that configuration to build
 the database structure, API, TypeScript client, and admin forms.
 
@@ -101,7 +101,8 @@ you edit from files Ridu generates for you.
 
 ### I am evaluating another CMS {#evaluator-path}
 
-Use [Move from Payload](/guides/from-payload/) to compare the two frameworks and plan a migration, or
+Start with [Ridu, Payload, and PocketBase](/guides/config-as-code-cms/) to compare config-as-code
+authoring and single-binary deployment. Use [Move from Payload](/guides/from-payload/) to plan a migration, or
 [Ridu for PocketBase users](/guides/from-pocketbase/) for the code-defined and embedded-store trade-offs.
 Read [Performance](/docs/performance/) for optimization guidance and
 [Measure performance](/docs/performance/measurement/) for benchmark results and test conditions.
@@ -133,7 +134,8 @@ yarn create ridu my-app
 
 Choose **Starter** or **Blank**, a database, and optional agent guidance. Review the summary, then
 run the install and `dev` commands the initializer prints. Omit `my-app` if you prefer to name the
-directory inside the wizard.
+directory inside the wizard, or use `.` to create the project in your current directory. Ridu warns
+before creating files there and stops if any project paths already exist.
 
 Direct Go installation, organization-specific Go module/npm scope flags, non-interactive
 automation, and recovery are covered in [Installation](/docs/installation/).

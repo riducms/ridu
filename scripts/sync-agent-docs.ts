@@ -112,6 +112,14 @@ const references: ReferenceDefinition[] = [
 	{ source: "docs/testing.md", target: "ridu-project/reference/testing.md" },
 	{ source: "docs/production.md", target: "ridu-project/reference/production.md" },
 	{
+		source: "docs/production/build-and-run.md",
+		target: "ridu-project/reference/production/build-and-run.md",
+	},
+	{
+		source: "docs/production/railway.md",
+		target: "ridu-project/reference/production/railway.md",
+	},
+	{
 		source: "docs/troubleshooting.md",
 		target: "ridu-project/reference/troubleshooting.md",
 	},

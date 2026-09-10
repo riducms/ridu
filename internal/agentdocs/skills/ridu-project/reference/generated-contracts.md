@@ -170,7 +170,7 @@ remain in place.
 Use `--check` in CI to check for missing or outdated files without changing them:
 
 ```bash
-npm run ridu -- generate --check
+ridu generate --check
 ```
 
 During development, keep the development server running to regenerate files when your config
@@ -190,8 +190,8 @@ git diff -- generated admin/src/ridu.plugins.generated.ts
 If the change affects stored data, create a migration and run the project checks before deployment:
 
 ```bash
-npm run ridu -- migrate create --name describe-the-change
-npm run ridu -- check
+ridu migrate create --name describe-the-change
+ridu check
 ```
 
 Generation updates your application types and API description. A migration records how to change

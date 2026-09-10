@@ -196,7 +196,11 @@ printf '%s\n' \
 	npm install --no-audit --no-fund
 	RIDU_BINARY="$project_root/.ridu/bin/ridu" npm run ridu -- version
 	RIDU_BINARY="$project_root/.ridu/bin/ridu" npm run ridu -- generate --check
-	RIDU_BINARY="$project_root/.ridu/bin/ridu" npm run ridu -- migrate create --name initial
+	initial_migrations=(migrations/*.ridu.json)
+	if [[ ${#initial_migrations[@]} -ne 1 || ! -f "${initial_migrations[0]}" || "${initial_migrations[0]}" != *_initial.ridu.json ]]; then
+		echo "initializer must create exactly one initial migration before the first check and build" >&2
+		exit 1
+	fi
 	RIDU_BINARY="$project_root/.ridu/bin/ridu" npm run ridu -- check
 	RIDU_BINARY="$project_root/.ridu/bin/ridu" npm run ridu -- build
 )

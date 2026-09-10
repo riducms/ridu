@@ -288,47 +288,16 @@ yarn run dev
 ```
 
 `ridu dev` starts the generated replica-set service, regenerates contracts, synchronizes safe
-additive changes, and starts the API and admin. Before deployment, create and verify the immutable
-migration history:
+additive changes, and starts the API and admin. New projects already include their initial
+migration. Before deployment, verify it and inspect the selected database:
 
-```bash title="terminal" package-manager="npm"
+```bash title="terminal"
 export DATABASE_URL='mongodb://127.0.0.1:27029/ridu?directConnection=true&replicaSet=ridu-rs0'
 export RIDU_ALLOW_INSECURE_DATABASE=true
-npm run ridu -- migrate create --name initial
-npm run ridu -- migrate plan
-npm run ridu -- migrate verify
-npm run ridu -- migrate up
-npm run ridu -- migrate status
-```
-
-```bash title="terminal" package-manager="bun"
-export DATABASE_URL='mongodb://127.0.0.1:27029/ridu?directConnection=true&replicaSet=ridu-rs0'
-export RIDU_ALLOW_INSECURE_DATABASE=true
-bun run ridu -- migrate create --name initial
-bun run ridu -- migrate plan
-bun run ridu -- migrate verify
-bun run ridu -- migrate up
-bun run ridu -- migrate status
-```
-
-```bash title="terminal" package-manager="pnpm"
-export DATABASE_URL='mongodb://127.0.0.1:27029/ridu?directConnection=true&replicaSet=ridu-rs0'
-export RIDU_ALLOW_INSECURE_DATABASE=true
-pnpm run ridu migrate create --name initial
-pnpm run ridu migrate plan
-pnpm run ridu migrate verify
-pnpm run ridu migrate up
-pnpm run ridu migrate status
-```
-
-```bash title="terminal" package-manager="yarn"
-export DATABASE_URL='mongodb://127.0.0.1:27029/ridu?directConnection=true&replicaSet=ridu-rs0'
-export RIDU_ALLOW_INSECURE_DATABASE=true
-yarn run ridu migrate create --name initial
-yarn run ridu migrate plan
-yarn run ridu migrate verify
-yarn run ridu migrate up
-yarn run ridu migrate status
+ridu migrate verify
+ridu migrate plan
+ridu migrate up
+ridu migrate status
 ```
 
 For a separately managed development replica set, omit the Compose service and rerun the selected
@@ -385,24 +354,9 @@ Authenticated planner-`1.0.0` artifacts remain a supported immutable prefix: the
 and replays that committed history before applying v2 artifacts rather than rewriting or rejecting
 it. Create and inspect the plan before the cutover:
 
-```bash title="terminal" package-manager="npm"
-npm run ridu -- migrate create --name add-post-summary
-npm run ridu -- migrate plan --json
-```
-
-```bash title="terminal" package-manager="bun"
-bun run ridu -- migrate create --name add-post-summary
-bun run ridu -- migrate plan --json
-```
-
-```bash title="terminal" package-manager="pnpm"
-pnpm run ridu migrate create --name add-post-summary
-pnpm run ridu migrate plan --json
-```
-
-```bash title="terminal" package-manager="yarn"
-yarn run ridu migrate create --name add-post-summary
-yarn run ridu migrate plan --json
+```bash title="terminal"
+ridu migrate create --name add-post-summary
+ridu migrate plan --json
 ```
 
 Ridu binds each artifact to its manifest history and rejects altered or reordered migration files.

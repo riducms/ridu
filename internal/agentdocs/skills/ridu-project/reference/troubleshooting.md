@@ -82,7 +82,7 @@ The committed schema, OpenAPI, Go models, TypeScript client, and generated admin
 longer match executable config. Run:
 
 ```sh
-npm run ridu -- generate
+ridu generate
 git diff -- generated admin/src/ridu.plugins.generated.ts
 ```
 
