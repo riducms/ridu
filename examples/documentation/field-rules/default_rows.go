@@ -16,8 +16,7 @@ var NavigationFields = field.Fields{
 }
 
 func initialLinkLabel(
-	ctx operation.DefaultContext,
-) (operation.Value[string], error) {
+	ctx operation.Context) (operation.Value[string], error) {
 	// Siblings reads this group or row, not another row in the array.
 	url, present := ctx.Siblings.String("url")
 	if present && url == "/about" {

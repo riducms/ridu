@@ -28,7 +28,7 @@ func CreatePage(
 	app *ridu.App,
 	options ridu.MutationOptions,
 ) (store.Document, error) {
-	return app.Local().CreateWithOptions(ctx, "pages", store.Values{
+	return app.Local().Create(ctx, "pages", store.Values{
 		"title":   store.String("Home"),
 		"summary": store.String("Start here"),
 		"seo": store.Object(store.Values{

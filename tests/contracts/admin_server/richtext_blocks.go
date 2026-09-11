@@ -19,7 +19,7 @@ func richTextBlockDefinitions() (callout, cta, media field.Block) {
 	}}
 
 	callout = field.Block{Admin: field.BlockAdmin{RowLabelPath: "title"}, Slug: "callout", Fields: field.Fields{
-		field.Text("title").Label("Callout title").Required().Validate(func(_ operation.ValidationContext, value operation.Value[string]) ([]operation.Issue, error) {
+		field.Text("title").Label("Callout title").Required().Validate(func(_ operation.Context, value operation.Value[string]) ([]operation.Issue, error) {
 			if text, _ := value.Get(); strings.EqualFold(text, "invalid") {
 				return []operation.Issue{{Code: "callout_title", Message: "Use a descriptive callout title"}}, nil
 			}

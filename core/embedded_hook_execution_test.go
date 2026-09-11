@@ -50,22 +50,20 @@ func TestEmbeddedHookExecutionUsesCurrentValuesAndRetainsSnapshots(t *testing.T)
 			title := field.Text("title").Required()
 			if phase == "write" {
 				title = title.Hooks(field.Hooks[string]{BeforeChange: []field.Transform[string]{
-					func(ctx operation.WriteContext, input operation.Value[string]) (operation.Change[string], error) {
-						return observe(operation.Context(ctx), input, 1)
+					func(ctx operation.Context, input operation.Value[string]) (operation.Change[string], error) {
+						return observe(ctx, input, 1)
 					},
-					func(ctx operation.WriteContext, input operation.Value[string]) (operation.Change[string], error) {
-						return observe(operation.Context(ctx), input, 2)
+					func(ctx operation.Context, input operation.Value[string]) (operation.Change[string], error) {
+						return observe(ctx, input, 2)
 					},
 				}})
 			} else {
-				title = title.ReadHooks(field.ReadHooks[string]{AfterRead: []field.OutputTransform[string]{
-					func(ctx operation.ReadContext, input operation.Value[string]) (operation.Change[string], error) {
-						return observe(operation.Context(ctx), input, 1)
-					},
-					func(ctx operation.ReadContext, input operation.Value[string]) (operation.Change[string], error) {
-						return observe(operation.Context(ctx), input, 2)
-					},
-				}})
+				title = title.ReplaceAfterRead(func(ctx operation.Context, input operation.Value[string]) (operation.Change[string], error) {
+					return observe(ctx, input, 1)
+				},
+					func(ctx operation.Context, input operation.Value[string]) (operation.Change[string], error) {
+						return observe(ctx, input, 2)
+					})
 			}
 			app, err := ridu.New(embeddedConfig(title), teststore.New())
 			if err != nil {
@@ -75,12 +73,12 @@ func TestEmbeddedHookExecutionUsesCurrentValuesAndRetainsSnapshots(t *testing.T)
 				outline.Widget("card", "A", store.Values{"title": store.String("one")}),
 				outline.Widget("card", "B", store.Values{"title": store.String("two")}),
 				outline.Widget("card", "C", store.Values{"title": store.String("three")}),
-			)}, nil)
+			)}, ridu.MutationOptions{})
 			if err != nil {
 				t.Fatal(err)
 			}
 			active = true
-			updated, err := app.Local().Update(t.Context(), "pages", created.ID, store.Values{}, nil)
+			updated, err := app.Local().Update(t.Context(), "pages", created.ID, store.Values{}, ridu.MutationOptions{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -101,7 +99,7 @@ func TestEmbeddedHookExecutionUsesCurrentValuesAndRetainsSnapshots(t *testing.T)
 				}
 			}
 			active = false
-			stored, err := app.Local().Find(t.Context(), "pages", created.ID, nil)
+			stored, err := app.Local().Find(t.Context(), "pages", created.ID, ridu.FindOptions{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -123,7 +121,7 @@ func TestEmbeddedHookExecutionPreparesNewNestedIdentitiesBetweenCallbacks(t *tes
 	var freshID operation.OccurrenceID
 	retainedIDs := map[string]operation.OccurrenceID{}
 	prior := map[string]string{}
-	title := field.Text("title").Required().Hooks(field.Hooks[string]{BeforeChange: []field.Transform[string]{func(ctx operation.WriteContext, input operation.Value[string]) (operation.Change[string], error) {
+	title := field.Text("title").Required().Hooks(field.Hooks[string]{BeforeChange: []field.Transform[string]{func(ctx operation.Context, input operation.Value[string]) (operation.Change[string], error) {
 		key, _ := ctx.Siblings.String("uid")
 		if active {
 			order = append(order, "child:"+key)
@@ -144,7 +142,7 @@ func TestEmbeddedHookExecutionPreparesNewNestedIdentitiesBetweenCallbacks(t *tes
 		}
 		text, _ := input.Get()
 		return operation.Replace(operation.Present(strings.ToUpper(text))), nil
-	}}, AfterChange: []field.Observer[string]{func(ctx operation.EventContext, _ operation.Value[string]) error {
+	}}, AfterChange: []field.Observer[string]{func(ctx operation.Context, _ operation.Value[string]) error {
 		if active {
 			key, _ := ctx.Siblings.String("uid")
 			if key == parentKey && (ctx.OccurrenceID != freshID || embeddedExecutionRowKey(t, ctx.Siblings.Get("links")) != parentRowKey) {
@@ -154,7 +152,7 @@ func TestEmbeddedHookExecutionPreparesNewNestedIdentitiesBetweenCallbacks(t *tes
 		return nil
 	}}})
 	body := outline.Field("body", embeddedCard(title)).Hooks(field.Hooks[store.Value]{BeforeChange: []field.Transform[store.Value]{
-		func(_ operation.WriteContext, input operation.Value[store.Value]) (operation.Change[store.Value], error) {
+		func(_ operation.Context, input operation.Value[store.Value]) (operation.Change[store.Value], error) {
 			if !active {
 				return operation.Keep[store.Value](), nil
 			}
@@ -166,7 +164,7 @@ func TestEmbeddedHookExecutionPreparesNewNestedIdentitiesBetweenCallbacks(t *tes
 			section := store.Object(store.Values{"kind": store.String("section"), "items": store.List(fresh)})
 			return operation.Replace(operation.Present(outline.Value(nodes[2], nodes[0], section))), nil
 		},
-		func(ctx operation.WriteContext, input operation.Value[store.Value]) (operation.Change[store.Value], error) {
+		func(ctx operation.Context, input operation.Value[store.Value]) (operation.Change[store.Value], error) {
 			if !active {
 				return operation.Keep[store.Value](), nil
 			}
@@ -197,12 +195,12 @@ func TestEmbeddedHookExecutionPreparesNewNestedIdentitiesBetweenCallbacks(t *tes
 		outline.Widget("card", "A", store.Values{"title": store.String("one")}),
 		outline.Widget("card", "B", store.Values{"title": store.String("removed")}),
 		outline.Widget("card", "C", store.Values{"title": store.String("three")}),
-	)}, nil)
+	)}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	active = true
-	updated, err := app.Local().Update(t.Context(), "pages", created.ID, store.Values{}, nil)
+	updated, err := app.Local().Update(t.Context(), "pages", created.ID, store.Values{}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -212,7 +210,7 @@ func TestEmbeddedHookExecutionPreparesNewNestedIdentitiesBetweenCallbacks(t *tes
 	if want := map[string]string{"C": "THREE", "A": "ONE", parentKey: "<new>"}; !reflect.DeepEqual(prior, want) {
 		t.Fatalf("previous scopes=%v, want %v", prior, want)
 	}
-	stored, err := app.Local().Find(t.Context(), "pages", created.ID, nil)
+	stored, err := app.Local().Find(t.Context(), "pages", created.ID, ridu.FindOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -248,20 +246,20 @@ func TestEmbeddedHookExecutionRejectsInvalidReplacementBeforeFurtherCallbacks(t 
 		t.Run(test.name, func(t *testing.T) {
 			active := false
 			nextParentCalls, childCalls := 0, 0
-			title := field.Text("title").Required().Hooks(field.Hooks[string]{BeforeChange: []field.Transform[string]{func(operation.WriteContext, operation.Value[string]) (operation.Change[string], error) {
+			title := field.Text("title").Required().Hooks(field.Hooks[string]{BeforeChange: []field.Transform[string]{func(operation.Context, operation.Value[string]) (operation.Change[string], error) {
 				if active {
 					childCalls++
 				}
 				return operation.Keep[string](), nil
 			}}})
 			body := outline.Field("body", embeddedCard(title)).Hooks(field.Hooks[store.Value]{BeforeChange: []field.Transform[store.Value]{
-				func(operation.WriteContext, operation.Value[store.Value]) (operation.Change[store.Value], error) {
+				func(operation.Context, operation.Value[store.Value]) (operation.Change[store.Value], error) {
 					if active {
 						return operation.Replace(operation.Present(test.value)), nil
 					}
 					return operation.Keep[store.Value](), nil
 				},
-				func(operation.WriteContext, operation.Value[store.Value]) (operation.Change[store.Value], error) {
+				func(operation.Context, operation.Value[store.Value]) (operation.Change[store.Value], error) {
 					if active {
 						nextParentCalls++
 					}
@@ -274,12 +272,12 @@ func TestEmbeddedHookExecutionRejectsInvalidReplacementBeforeFurtherCallbacks(t 
 			if err != nil {
 				t.Fatal(err)
 			}
-			created, err := app.Local().Create(t.Context(), "pages", store.Values{"body": outline.Value(outline.Widget("card", "saved", store.Values{"title": store.String("unchanged")}))}, nil)
+			created, err := app.Local().Create(t.Context(), "pages", store.Values{"body": outline.Value(outline.Widget("card", "saved", store.Values{"title": store.String("unchanged")}))}, ridu.MutationOptions{})
 			if err != nil {
 				t.Fatal(err)
 			}
 			active = true
-			_, err = app.Local().Update(t.Context(), "pages", created.ID, store.Values{}, nil)
+			_, err = app.Local().Update(t.Context(), "pages", created.ID, store.Values{}, ridu.MutationOptions{})
 			foundIssue := false
 			for cause := err; cause != nil; cause = errors.Unwrap(cause) {
 				var failure *ridu.OperationError
@@ -295,7 +293,7 @@ func TestEmbeddedHookExecutionRejectsInvalidReplacementBeforeFurtherCallbacks(t 
 			if nextParentCalls != 0 || childCalls != 0 {
 				t.Fatalf("invalid replacement reached callbacks: next parent=%d children=%d", nextParentCalls, childCalls)
 			}
-			stored, err := app.Local().Find(t.Context(), "pages", created.ID, nil)
+			stored, err := app.Local().Find(t.Context(), "pages", created.ID, ridu.FindOptions{})
 			if err != nil {
 				t.Fatal(err)
 			}

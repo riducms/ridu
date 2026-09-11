@@ -15,21 +15,21 @@ import (
 
 func TestOpenAPIUnifiedRequestsWithoutBlocksMatchRuntime(t *testing.T) {
 	app, err := core.New(core.Config{Name: "Unified inputs", Collections: []core.Collection{{Slug: "pages", Fields: field.Fields{
-		field.Text("title").Required().MinLength(2).MaxLength(5).ReadHooks(field.ReadHooks[string]{AfterRead: []field.OutputTransform[string]{func(operation.ReadContext, operation.Value[string]) (operation.Change[string], error) {
+		field.Text("title").Required().MinLength(2).MaxLength(5).AfterRead(func(operation.Context, operation.Value[string]) (operation.Change[string], error) {
 			return operation.Replace(operation.Present("Published page title")), nil
-		}}}),
-		field.Number("score").Min(1).Max(5).ReadHooks(field.ReadHooks[float64]{AfterRead: []field.OutputTransform[float64]{func(_ operation.ReadContext, value operation.Value[float64]) (operation.Change[float64], error) {
+		}),
+		field.Number("score").Min(1).Max(5).AfterRead(func(_ operation.Context, value operation.Value[float64]) (operation.Change[float64], error) {
 			if _, present := value.Get(); present {
 				return operation.Replace(operation.Present[float64](100)), nil
 			}
 			return operation.Keep[float64](), nil
-		}}}),
+		}),
 		field.JSON("opaque"),
 		field.Text("status").Required().Default("ready"),
 		field.Text("optional"),
 		field.Group("meta", field.Fields{field.Text("required").Required()}),
 		field.Array("rows", field.Fields{field.Text("title").Required()}),
-		field.Virtual("summary", field.ValueString, func(operation.ReadContext) (operation.Value[store.Value], error) {
+		field.Virtual("summary", field.ValueString, func(operation.Context) (operation.Value[store.Value], error) {
 			return operation.Present(store.String("computed")), nil
 		}),
 	}}}, Globals: []core.Global{{Slug: "settings", Fields: field.Fields{field.Text("name").Required()}}}}, teststore.New())
@@ -235,13 +235,13 @@ func TestOpenAPIUnifiedBlockInputsPreserveManagedAndOpaqueValues(t *testing.T) {
 
 func TestOpenAPIReadTransformsDoNotReapplyCollectionBounds(t *testing.T) {
 	rows := field.Array("rows", field.Fields{field.Text("title")}).Required().MinRows(2).MaxRows(3).
-		ReadHooks(field.ReadHooks[store.Value]{AfterRead: []field.OutputTransform[store.Value]{func(operation.ReadContext, operation.Value[store.Value]) (operation.Change[store.Value], error) {
+		AfterRead(func(operation.Context, operation.Value[store.Value]) (operation.Change[store.Value], error) {
 			return operation.Replace(operation.Present(store.List())), nil
-		}}})
+		})
 	content := field.Blocks("content", field.Block{Slug: "hero", Fields: field.Fields{field.Text("title")}}).Required().MinRows(2).MaxRows(3).
-		ReadHooks(field.ReadHooks[store.Value]{AfterRead: []field.OutputTransform[store.Value]{func(operation.ReadContext, operation.Value[store.Value]) (operation.Change[store.Value], error) {
+		AfterRead(func(operation.Context, operation.Value[store.Value]) (operation.Change[store.Value], error) {
 			return operation.Replace(operation.Present(store.List())), nil
-		}}})
+		})
 	app, err := core.New(core.Config{Name: "Transformed output", Collections: []core.Collection{{Slug: "pages", Fields: field.Fields{rows, content}}}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)

@@ -244,7 +244,7 @@ func TestGeneratedProjectCompilesAndGeneratesOutsideRepository(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read generated admin plugins: %v", err)
 	}
-	if !strings.Contains(string(adminPlugins), "richTextAdminPlugin") || !strings.Contains(string(adminPlugins), "resolveAdminPluginPairs") {
+	if !strings.Contains(string(adminPlugins), "richTextAdminPlugin") || !strings.Contains(string(adminPlugins), "assertAdminPluginPairs") {
 		t.Fatalf("generated admin plugins did not follow Go config: %s", adminPlugins)
 	}
 	fixturePluginDirectory := filepath.Join(target, "plugins", "fixture")

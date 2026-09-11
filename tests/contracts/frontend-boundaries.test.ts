@@ -11,7 +11,7 @@ describe("frontend package boundaries", () => {
 		expect(
 			importSpecifiers(`import {build} from 'vite';
 export {type Plugin} from 'vite';
-const generatedEntry = \`import {validateAdminConfig} from '@riducms/plugin/admin';\`;
+const generatedEntry = \`import {resolveAdminConfig, validateAdminManifest} from '@riducms/plugin/admin';\`;
 const lazy = () => import('@riducms/admin');`)
 		).toEqual(["vite", "vite", "@riducms/admin"]);
 		expect(

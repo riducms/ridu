@@ -127,18 +127,18 @@ func TestMongoDBOperationEngineCRUDUsesMutationFences(t *testing.T) {
 
 	created, err := application.Local().Create(t.Context(), "posts", store.Values{
 		"title": store.String("source"), "rank": store.Number(1),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	updated, err := application.Local().Update(t.Context(), "posts", created.ID, store.Values{"title": store.String("updated")}, nil)
+	updated, err := application.Local().Update(t.Context(), "posts", created.ID, store.Values{"title": store.String("updated")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatalf("operation-engine update: %v", err)
 	}
 	if title, _ := updated.Values["title"].StringValue(); title != "updated" {
 		t.Fatalf("updated title = %q", title)
 	}
-	duplicate, err := application.Local().Duplicate(t.Context(), "posts", created.ID, store.Values{"title": store.String("copy")}, nil)
+	duplicate, err := application.Local().Duplicate(t.Context(), "posts", created.ID, store.Values{"title": store.String("copy")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatalf("operation-engine duplicate: %v", err)
 	}
@@ -158,18 +158,18 @@ func TestMongoDBOperationEngineCRUDUsesMutationFences(t *testing.T) {
 	if !firstOK || !secondOK || firstTitle != "copy" || secondTitle != "updated" {
 		t.Fatalf("operation-engine distinct titles = %#v", distinct.Values)
 	}
-	trashed, err := application.Local().Delete(t.Context(), "posts", created.ID, nil)
+	trashed, err := application.Local().Delete(t.Context(), "posts", created.ID, ridu.MutationOptions{})
 	if err != nil || trashed.DeletedAt == nil {
 		t.Fatalf("operation-engine trash = %#v, %v", trashed, err)
 	}
-	restored, err := application.Local().RestoreDeleted(t.Context(), "posts", created.ID, nil)
+	restored, err := application.Local().RestoreDeleted(t.Context(), "posts", created.ID, ridu.MutationOptions{})
 	if err != nil || restored.DeletedAt != nil {
 		t.Fatalf("operation-engine restore = %#v, %v", restored, err)
 	}
-	if _, err := application.Local().Delete(t.Context(), "posts", created.ID, nil); err != nil {
+	if _, err := application.Local().Delete(t.Context(), "posts", created.ID, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().DeletePermanent(t.Context(), "posts", created.ID, nil); err != nil {
+	if _, err := application.Local().DeletePermanent(t.Context(), "posts", created.ID, ridu.MutationOptions{}); err != nil {
 		t.Fatalf("operation-engine permanent delete: %v", err)
 	}
 }
@@ -197,7 +197,7 @@ func TestMongoDBOperationEngineNestedGroupsRejectArrayAncestorMatches(t *testing
 			"rank":     store.Number(1),
 			"details":  store.Object(store.Values{"summary": store.String("safe")}),
 		}),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatalf("operation-engine nested create: %v", err)
 	}
@@ -207,7 +207,7 @@ func TestMongoDBOperationEngineNestedGroupsRejectArrayAncestorMatches(t *testing
 			"rank":     store.Number(2),
 			"details":  store.Object(store.Values{"summary": store.String("safe")}),
 		}),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatalf("operation-engine nested update: %v", err)
 	}
@@ -778,16 +778,16 @@ func TestMongoDBCanonicalImportIDsRoundTripThroughTheEngine(t *testing.T) {
 	}
 	ids := []string{"00042", "Case-Sensitive/界", strings.Repeat("x", store.MaxDocumentIDBytes)}
 	for _, id := range ids {
-		created, err := application.Local().Import(t.Context(), "posts", store.Values{"title": store.String(id)}, ridu.ImportOptions{ID: id}, nil)
+		created, err := application.Local().Import(t.Context(), "posts", store.Values{"title": store.String(id)}, ridu.ImportOptions{ID: id})
 		if err != nil {
 			t.Fatalf("import ID %q: %v", id, err)
 		}
-		found, err := application.Local().Find(t.Context(), "posts", id, nil)
+		found, err := application.Local().Find(t.Context(), "posts", id, ridu.FindOptions{})
 		if err != nil || found.ID != id || created.ID != id {
 			t.Fatalf("ID %q round trip = created %q found %q, %v", id, created.ID, found.ID, err)
 		}
 	}
-	if _, err := application.Local().Import(t.Context(), "posts", store.Values{"title": store.String("duplicate")}, ridu.ImportOptions{ID: ids[0]}, nil); err == nil {
+	if _, err := application.Local().Import(t.Context(), "posts", store.Values{"title": store.String("duplicate")}, ridu.ImportOptions{ID: ids[0]}); err == nil {
 		t.Fatal("duplicate imported ID was accepted")
 	}
 }

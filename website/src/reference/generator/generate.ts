@@ -369,6 +369,7 @@ function synchronizeGoFacadeAliases(modules: ReferenceModule[]): void {
 		if (!targetName) continue;
 		const target = core.symbols.find((symbol) => symbol.name === targetName);
 		if (!target) continue;
+		alias.typeLinks[`core.${targetName}`] = `/reference/core/${target.slug}/`;
 		if (target.parameters.length > 0) {
 			alias.parameters = target.parameters.map((parameter) => ({ ...parameter }));
 		}

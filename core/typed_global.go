@@ -2,8 +2,6 @@ package core
 
 import (
 	"context"
-
-	"github.com/riducms/ridu/store"
 )
 
 // TypedGlobal is a generated singleton definition that can be bound to an
@@ -32,35 +30,35 @@ type BoundTypedGlobal[Document, Update any] struct {
 }
 
 func (global BoundTypedGlobal[Document, Update]) Find(ctx context.Context, options TypedReadOptions) (Document, error) {
-	document, err := global.local.GlobalWithOptions(ctx, global.definition.slug, options.findOptions(false))
+	document, err := global.local.Global(ctx, global.definition.slug, options.findOptions(false))
 	return decodeTypedDocument[Document](document, err)
 }
 
-func (global BoundTypedGlobal[Document, Update]) Update(ctx context.Context, input Update, expectedRevision int, actor *store.Document, localeOptions ...TypedLocaleOptions) (Document, error) {
+func (global BoundTypedGlobal[Document, Update]) Update(ctx context.Context, input Update, options TypedMutationOptions) (Document, error) {
 	values, err := typedInputValues(input)
 	if err != nil {
 		return *new(Document), err
 	}
-	document, err := global.local.UpdateGlobal(ctx, global.definition.slug, values, expectedRevision, actor, typedWriteLocales(localeOptions)...)
+	document, err := global.local.UpdateGlobal(ctx, global.definition.slug, values, options.mutationOptions())
 	return decodeTypedDocument[Document](document, err)
 }
 
-func (global BoundTypedGlobal[Document, Update]) Publish(ctx context.Context, expectedRevision int, actor *store.Document) (Document, error) {
-	document, err := global.local.PublishGlobal(ctx, global.definition.slug, expectedRevision, actor)
+func (global BoundTypedGlobal[Document, Update]) Publish(ctx context.Context, options TypedMutationOptions) (Document, error) {
+	document, err := global.local.PublishGlobal(ctx, global.definition.slug, options.mutationOptions())
 	return decodeTypedDocument[Document](document, err)
 }
 
-func (global BoundTypedGlobal[Document, Update]) Unpublish(ctx context.Context, expectedRevision int, actor *store.Document) (Document, error) {
-	document, err := global.local.UnpublishGlobal(ctx, global.definition.slug, expectedRevision, actor)
+func (global BoundTypedGlobal[Document, Update]) Unpublish(ctx context.Context, options TypedMutationOptions) (Document, error) {
+	document, err := global.local.UnpublishGlobal(ctx, global.definition.slug, options.mutationOptions())
 	return decodeTypedDocument[Document](document, err)
 }
 
-func (global BoundTypedGlobal[Document, Update]) Restore(ctx context.Context, revision, expectedRevision int, actor *store.Document) (Document, error) {
-	document, err := global.local.RestoreGlobal(ctx, global.definition.slug, revision, expectedRevision, actor)
+func (global BoundTypedGlobal[Document, Update]) Restore(ctx context.Context, revision int, options TypedMutationOptions) (Document, error) {
+	document, err := global.local.RestoreGlobal(ctx, global.definition.slug, revision, options.mutationOptions())
 	return decodeTypedDocument[Document](document, err)
 }
 
-func (global BoundTypedGlobal[Document, Update]) RestoreAsDraft(ctx context.Context, revision, expectedRevision int, actor *store.Document) (Document, error) {
-	document, err := global.local.RestoreGlobalAsDraft(ctx, global.definition.slug, revision, expectedRevision, actor)
+func (global BoundTypedGlobal[Document, Update]) RestoreAsDraft(ctx context.Context, revision int, options TypedMutationOptions) (Document, error) {
+	document, err := global.local.RestoreGlobalAsDraft(ctx, global.definition.slug, revision, options.mutationOptions())
 	return decodeTypedDocument[Document](document, err)
 }

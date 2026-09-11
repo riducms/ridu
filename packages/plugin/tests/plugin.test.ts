@@ -1,3 +1,4 @@
+import { resolveAdminConfig, validateAdminManifest } from "../src/admin";
 import { describe, expect, it } from "bun:test";
 
 import {
@@ -5,11 +6,17 @@ import {
 	defineAdminMessages,
 	defineRowLabelPlugin,
 	resolveAdminExtensions,
-	resolveAdminPluginPairs,
+	assertAdminPluginPairs,
+	type AdminPluginPair,
 } from "../src";
 import { defineAdminPlugin, definePluginField, defineFieldComponent } from "../src/authoring/v1";
-import { resolvePluginFields, validatePluginManifest } from "../src/plugin-registry";
+import { resolvePluginFields } from "../src/plugin-registry";
 import type { Component } from "svelte";
+
+function checkedConfig(pairs: readonly AdminPluginPair[]) {
+	assertAdminPluginPairs(pairs);
+	return resolveAdminConfig({ plugins: pairs.map((pair) => pair.admin) });
+}
 
 const field = definePluginField({
 	component: () => ({}),
@@ -36,29 +43,29 @@ const backend = {
 
 describe("admin plugin pairing", () => {
 	it("returns registrations only after metadata agrees", () => {
-		const resolved = resolveAdminPluginPairs([{ admin, backend }]);
+		const resolved = checkedConfig([{ admin, backend }]);
 
 		expect(resolved.plugins).toEqual([admin]);
 		expect(resolved.fields.map((item) => item.registration)).toEqual([field]);
 		expect(Object.isFrozen(resolved.plugins)).toBe(true);
 		expect(Object.isFrozen(resolved.fields)).toBe(true);
-		expect(resolved.rowLabels).toEqual([]);
-		expect(Object.isFrozen(resolved.rowLabels)).toBe(true);
-		expect(resolved.routes).toEqual([]);
-		expect(Object.isFrozen(resolved.routes)).toBe(true);
-		expect(resolved.dashboard).toEqual([]);
-		expect(resolved.login).toEqual([]);
-		expect(resolved.account).toEqual([]);
-		expect(resolved.navigation).toEqual([]);
-		expect(resolved.logoutButton).toBeUndefined();
-		expect(resolved.views).toEqual([]);
-		expect(resolved.branding).toEqual([]);
-		expect(resolved.shell).toEqual([]);
-		expect(resolved.providers).toEqual([]);
-		expect(resolved.listCells).toEqual([]);
-		expect(resolved.documentActions).toEqual([]);
-		expect(resolved.documentViews).toEqual([]);
-		expect(resolved.messages).toEqual({});
+		expect(resolved.extensions.rowLabels).toEqual([]);
+		expect(Object.isFrozen(resolved.extensions.rowLabels)).toBe(true);
+		expect(resolved.extensions.routes).toEqual([]);
+		expect(Object.isFrozen(resolved.extensions.routes)).toBe(true);
+		expect(resolved.extensions.dashboard).toEqual([]);
+		expect(resolved.extensions.login).toEqual([]);
+		expect(resolved.extensions.account).toEqual([]);
+		expect(resolved.extensions.navigation).toEqual([]);
+		expect(resolved.extensions.logoutButton).toBeUndefined();
+		expect(resolved.extensions.views).toEqual([]);
+		expect(resolved.extensions.branding).toEqual([]);
+		expect(resolved.extensions.shell).toEqual([]);
+		expect(resolved.extensions.providers).toEqual([]);
+		expect(resolved.extensions.listCells).toEqual([]);
+		expect(resolved.extensions.documentActions).toEqual([]);
+		expect(resolved.extensions.documentViews).toEqual([]);
+		expect(resolved.extensions.messages).toEqual({});
 	});
 
 	it("indexes exact row-label identities and rejects mismatches and collisions", () => {
@@ -68,14 +75,12 @@ describe("admin plugin pairing", () => {
 			componentKey: "swatchSummary",
 			component,
 		});
-		const resolved = resolveAdminPluginPairs([
-			{ admin: { ...admin, rowLabels: [rowLabel] }, backend },
-		]);
-		expect(resolved.rowLabels).toEqual([rowLabel]);
-		expect(Object.isFrozen(resolved.rowLabels)).toBe(true);
+		const resolved = checkedConfig([{ admin: { ...admin, rowLabels: [rowLabel] }, backend }]);
+		expect(resolved.extensions.rowLabels).toEqual([rowLabel]);
+		expect(Object.isFrozen(resolved.extensions.rowLabels)).toBe(true);
 
 		expect(() =>
-			resolveAdminPluginPairs([
+			checkedConfig([
 				{
 					admin: { ...admin, rowLabels: [{ ...rowLabel, key: "other" }] },
 					backend,
@@ -83,7 +88,7 @@ describe("admin plugin pairing", () => {
 			])
 		).toThrow("Admin plugin color registered row label component for plugin other");
 		expect(() =>
-			resolveAdminPluginPairs([
+			checkedConfig([
 				{
 					admin: { ...admin, rowLabels: [{ ...rowLabel, componentKey: "bad-key" }] },
 					backend,
@@ -91,9 +96,7 @@ describe("admin plugin pairing", () => {
 			])
 		).toThrow("color:bad-key has an invalid component key");
 		expect(() =>
-			resolveAdminPluginPairs([
-				{ admin: { ...admin, rowLabels: [rowLabel, { ...rowLabel }] }, backend },
-			])
+			checkedConfig([{ admin: { ...admin, rowLabels: [rowLabel, { ...rowLabel }] }, backend }])
 		).toThrow("Admin row label component color:swatchSummary is already registered");
 	});
 
@@ -108,8 +111,8 @@ describe("admin plugin pairing", () => {
 			},
 		});
 		const translatedAdmin = { ...admin, messages };
-		const resolved = resolveAdminPluginPairs([{ admin: translatedAdmin, backend }]);
-		expect(resolved.messages.color).toBe(messages);
+		const resolved = checkedConfig([{ admin: translatedAdmin, backend }]);
+		expect(resolved.extensions.messages.color).toBe(messages);
 		expect(Object.isFrozen(messages)).toBe(true);
 		expect(Object.isFrozen(messages.fallback)).toBe(true);
 		expect(Object.isFrozen(messages.translations?.fr)).toBe(true);
@@ -122,7 +125,7 @@ describe("admin plugin pairing", () => {
 		).toThrow("different placeholders");
 
 		expect(() =>
-			resolveAdminPluginPairs([
+			checkedConfig([
 				{
 					admin: {
 						...admin,
@@ -175,22 +178,22 @@ describe("admin plugin pairing", () => {
 	});
 
 	it("rejects a stale admin half", () => {
-		expect(() =>
-			resolveAdminPluginPairs([{ admin: { ...admin, pairingVersion: 1 }, backend }])
-		).toThrow("install matching plugin packages");
+		expect(() => checkedConfig([{ admin: { ...admin, pairingVersion: 1 }, backend }])).toThrow(
+			"install matching plugin packages"
+		);
 	});
 
 	it("rejects the wrong package export before field registration", () => {
-		expect(() => resolveAdminPluginPairs([{ admin: { ...admin, key: "other" }, backend }])).toThrow(
+		expect(() => checkedConfig([{ admin: { ...admin, key: "other" }, backend }])).toThrow(
 			"compiled backend expects color"
 		);
 	});
 
 	it("requires exact backend field-type declarations independently of plugin identity", () => {
 		expect(() =>
-			resolveAdminPluginPairs([{ admin: { ...admin, fields: { other: field } }, backend }])
+			checkedConfig([{ admin: { ...admin, fields: { other: field } }, backend }])
 		).toThrow("field types");
-		const result = resolveAdminPluginPairs([
+		const result = checkedConfig([
 			{
 				admin: { ...admin, fields: { other: field } },
 				backend: { ...backend, fieldTypes: ["other"] },
@@ -228,10 +231,10 @@ describe("admin plugin pairing", () => {
 		};
 
 		expect(
-			resolveAdminPluginPairs([{ admin: routedAdmin, backend: routedBackend }]).routes
+			checkedConfig([{ admin: routedAdmin, backend: routedBackend }]).extensions.routes
 		).toEqual(routedAdmin.routes);
 		expect(() =>
-			resolveAdminPluginPairs([{ admin: routedAdmin, backend: { ...routedBackend, routes: [] } }])
+			checkedConfig([{ admin: routedAdmin, backend: { ...routedBackend, routes: [] } }])
 		).toThrow("routes do not match");
 	});
 
@@ -250,7 +253,7 @@ describe("admin plugin pairing", () => {
 		};
 
 		expect(() =>
-			resolveAdminPluginPairs([
+			checkedConfig([
 				{ admin: firstAdmin, backend: firstBackend },
 				{ admin: secondAdmin, backend: secondBackend },
 			])
@@ -276,24 +279,24 @@ describe("admin plugin pairing", () => {
 			documentActions: [{ key: "review", collection: "posts", component }],
 			documentViews: [{ key: "insights", label: "Insights", collection: "posts", component }],
 		};
-		const resolved = resolveAdminPluginPairs([{ admin: extendedAdmin, backend }]);
+		const resolved = checkedConfig([{ admin: extendedAdmin, backend }]);
 
-		expect(resolved.dashboard).toEqual(extendedAdmin.dashboard);
-		expect(resolved.login).toEqual(extendedAdmin.login);
-		expect(resolved.account).toEqual(extendedAdmin.account);
-		expect(resolved.navigation).toEqual(extendedAdmin.navigation);
-		expect(resolved.logoutButton).toEqual(extendedAdmin.logoutButton);
-		expect(resolved.views).toEqual(extendedAdmin.views);
-		expect(resolved.branding).toEqual(extendedAdmin.branding);
-		expect(resolved.shell).toEqual(extendedAdmin.shell);
-		expect(resolved.providers).toEqual(extendedAdmin.providers);
-		expect(resolved.listCells).toEqual(extendedAdmin.listCells);
-		expect(resolved.documentActions).toEqual(extendedAdmin.documentActions);
-		expect(resolved.documentViews).toEqual(extendedAdmin.documentViews);
-		expect(Object.isFrozen(resolved.documentViews)).toBe(true);
+		expect(resolved.extensions.dashboard).toEqual(extendedAdmin.dashboard);
+		expect(resolved.extensions.login).toEqual(extendedAdmin.login);
+		expect(resolved.extensions.account).toEqual(extendedAdmin.account);
+		expect(resolved.extensions.navigation).toEqual(extendedAdmin.navigation);
+		expect(resolved.extensions.logoutButton).toEqual(extendedAdmin.logoutButton);
+		expect(resolved.extensions.views).toEqual(extendedAdmin.views);
+		expect(resolved.extensions.branding).toEqual(extendedAdmin.branding);
+		expect(resolved.extensions.shell).toEqual(extendedAdmin.shell);
+		expect(resolved.extensions.providers).toEqual(extendedAdmin.providers);
+		expect(resolved.extensions.listCells).toEqual(extendedAdmin.listCells);
+		expect(resolved.extensions.documentActions).toEqual(extendedAdmin.documentActions);
+		expect(resolved.extensions.documentViews).toEqual(extendedAdmin.documentViews);
+		expect(Object.isFrozen(resolved.extensions.documentViews)).toBe(true);
 
 		expect(() =>
-			resolveAdminPluginPairs([
+			checkedConfig([
 				{ admin: extendedAdmin, backend },
 				{
 					admin: {
@@ -328,7 +331,7 @@ describe("admin plugin pairing", () => {
 		};
 
 		expect(() =>
-			resolveAdminPluginPairs([
+			checkedConfig([
 				{ admin: firstAdmin, backend },
 				{
 					admin: secondAdmin,
@@ -381,28 +384,28 @@ describe("admin plugin pairing", () => {
 		};
 
 		expect(() =>
-			resolveAdminPluginPairs([
+			checkedConfig([
 				{ admin: firstAdmin, backend },
 				{ admin: secondAdmin, backend: secondBackend },
 			])
 		).toThrow("login replacements");
 
 		expect(() =>
-			resolveAdminPluginPairs([
+			checkedConfig([
 				{ admin: { ...firstAdmin, login: [] }, backend },
 				{ admin: { ...secondAdmin, login: [] }, backend: secondBackend },
 			])
 		).toThrow("profile account replacements");
 
 		expect(() =>
-			resolveAdminPluginPairs([
+			checkedConfig([
 				{ admin: { ...firstAdmin, login: [], account: [] }, backend },
 				{ admin: { ...secondAdmin, login: [], account: [] }, backend: secondBackend },
 			])
 		).toThrow("navigation replacements");
 
 		expect(() =>
-			resolveAdminPluginPairs([
+			checkedConfig([
 				{ admin: { ...firstAdmin, login: [], account: [], navigation: [] }, backend },
 				{
 					admin: { ...secondAdmin, login: [], account: [], navigation: [] },
@@ -431,9 +434,9 @@ describe("admin plugin pairing", () => {
 			],
 		};
 
-		expect(resolveAdminPluginPairs([{ admin: firstAdmin, backend }]).views).toHaveLength(2);
+		expect(checkedConfig([{ admin: firstAdmin, backend }]).extensions.views).toHaveLength(2);
 		expect(() =>
-			resolveAdminPluginPairs([
+			checkedConfig([
 				{ admin: firstAdmin, backend },
 				{
 					admin: secondAdmin,
@@ -467,11 +470,11 @@ describe("admin plugin pairing", () => {
 			branding: [{ key: "other-logo", surface: "navigationLogo" as const, component }],
 		};
 
-		expect(resolveAdminPluginPairs([{ admin: firstAdmin, backend }]).shell).toEqual(
+		expect(checkedConfig([{ admin: firstAdmin, backend }]).extensions.shell).toEqual(
 			firstAdmin.shell
 		);
 		expect(() =>
-			resolveAdminPluginPairs([
+			checkedConfig([
 				{ admin: firstAdmin, backend },
 				{
 					admin: secondAdmin,
@@ -498,11 +501,11 @@ describe("admin plugin pairing", () => {
 			providers: [{ key: "theme", component }],
 		};
 
-		expect(resolveAdminPluginPairs([{ admin: firstAdmin, backend }]).providers).toEqual(
+		expect(checkedConfig([{ admin: firstAdmin, backend }]).extensions.providers).toEqual(
 			firstAdmin.providers
 		);
 		expect(() =>
-			resolveAdminPluginPairs([
+			checkedConfig([
 				{ admin: firstAdmin, backend },
 				{
 					admin: secondAdmin,
@@ -520,9 +523,9 @@ describe("admin plugin pairing", () => {
 });
 
 it("rejects unsupported versions for embedded schema host plugins", () => {
-	expect(() =>
-		resolveAdminPluginPairs([{ backend: { ...backend, apiVersion: 99 }, admin }])
-	).toThrow("requires admin plugin API 99");
+	expect(() => checkedConfig([{ backend: { ...backend, apiVersion: 99 }, admin }])).toThrow(
+		"requires admin plugin API 99"
+	);
 });
 
 it("freezes registration ownership independently of caller objects", () => {
@@ -625,10 +628,16 @@ it("checks completeness at build time while validating selected fields in partia
 		},
 	});
 	const partial = { collections: [], globals: [], plugins: [] };
-	expect(() => validatePluginManifest([plugin], partial, false)).not.toThrow();
-	expect(() => validatePluginManifest([plugin], partial, true)).toThrow(
-		"undeclared field type color"
-	);
+	expect(() =>
+		validateAdminManifest(resolveAdminConfig({ plugins: [plugin] }), partial, {
+			completeManifest: false,
+		})
+	).not.toThrow();
+	expect(() =>
+		validateAdminManifest(resolveAdminConfig({ plugins: [plugin] }), partial, {
+			completeManifest: true,
+		})
+	).toThrow("undeclared field type color");
 	const schema = {
 		type: "plugin",
 		path: "body",
@@ -640,7 +649,11 @@ it("checks completeness at build time while validating selected fields in partia
 		fields: [schema],
 	} as import("@riducms/protocol").SchemaCollection;
 	expect(() =>
-		validatePluginManifest([plugin], { ...partial, collections: [collection] }, false)
+		validateAdminManifest(
+			resolveAdminConfig({ plugins: [plugin] }),
+			{ ...partial, collections: [collection] },
+			{ completeManifest: false }
+		)
 	).toThrow("expects plugin field type color");
 });
 

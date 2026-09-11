@@ -472,7 +472,7 @@ func TestSynchronizeDevelopmentSchemaUsesSQLiteMigrateAndReadiness(t *testing.T)
 	}
 }
 
-func TestSynchronizeDevelopmentSchemaHonorsMongoDBNoSyncAndRejectsPrivateDatabaseContributions(t *testing.T) {
+func TestSynchronizeDevelopmentSchemaHonorsMongoDBNoSync(t *testing.T) {
 	ctx := context.Background()
 	manifest := schema.NewManifest(schema.Snapshot{Version: schema.CurrentVersion})
 	var output bytes.Buffer
@@ -494,44 +494,6 @@ func TestSynchronizeDevelopmentSchemaHonorsMongoDBNoSyncAndRejectsPrivateDatabas
 		t.Fatalf("MongoDB synchronization result = %+v, output = %q", result, output.String())
 	}
 
-	privateManifest := schema.NewManifest(schema.Snapshot{
-		Version: schema.CurrentVersion,
-		Plugins: []schema.Plugin{{
-			Key: "private-sql",
-			DatabaseContributions: []schema.PluginDatabaseContribution{{
-				Adapter: schema.PluginDatabaseAdapterPostgres,
-			}},
-		}},
-	})
-	for _, test := range []struct {
-		name            string
-		syncSchema      bool
-		forceSchemaSync bool
-		schemaChanged   bool
-	}{
-		{name: "forced sync", syncSchema: true, forceSchemaSync: true},
-		{name: "no sync"},
-		{name: "unchanged schema", syncSchema: true},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			output.Reset()
-			if _, err := synchronizeDevelopmentSchema(
-				ctx,
-				projectfile.DatabaseMongoDB,
-				"mongodb://127.0.0.1:1/never-opened",
-				"",
-				test.syncSchema,
-				test.forceSchemaSync,
-				developmentPreparation{manifest: privateManifest, schemaChanged: test.schemaChanged},
-				reporter,
-			); err == nil || !strings.Contains(err.Error(), `database-contributing plugin "private-sql"`) {
-				t.Fatalf("MongoDB private database contribution error = %v", err)
-			}
-			if output.Len() != 0 {
-				t.Fatalf("MongoDB rejected synchronization wrote success output: %q", output.String())
-			}
-		})
-	}
 }
 
 func TestOpenDevelopmentMongoDBHonorsCancellation(t *testing.T) {

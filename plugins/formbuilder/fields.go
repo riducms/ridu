@@ -148,7 +148,7 @@ func (plugin *Plugin) formsCollection(blocks []field.Block, localized bool, admi
 			}).Label("Emails").Admin(field.Admin{
 				Description: "Send dynamic emails after a submission. Use {{field_name}}, {{*}}, or {{*:table}} in text.",
 				RowLabels:   field.RowLabels{Singular: "Email", Plural: "Emails"},
-			}).Access(field.Access{Read: func(context operation.AccessContext) (bool, error) {
+			}).Access(field.Access{Read: func(context operation.Context) (bool, error) {
 				return (context.Actor.ID != "" && (adminCollection == "" || context.Actor.Collection == adminCollection)) || context.Context.Value(emailConfigReadKey{}) == true, nil
 			}}),
 		},

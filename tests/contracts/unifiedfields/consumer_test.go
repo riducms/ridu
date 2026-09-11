@@ -18,7 +18,7 @@ func TestGeneratedUnifiedContractsThroughTypedLocalAPI(t *testing.T) {
 		t.Fatal(err)
 	}
 	users := g.UsersCollection.With(app.Local())
-	user, err := users.Create(t.Context(), g.UserCreate{Name: "Ada"}, nil)
+	user, err := users.Create(t.Context(), g.UserCreate{Name: "Ada"}, core.TypedMutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -28,7 +28,7 @@ func TestGeneratedUnifiedContractsThroughTypedLocalAPI(t *testing.T) {
 		t.Fatal(err)
 	}
 	input.Author = core.Set(user.ID)
-	created, err := articles.Create(t.Context(), input, nil)
+	created, err := articles.Create(t.Context(), input, core.TypedMutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,7 +45,7 @@ func TestGeneratedUnifiedContractsThroughTypedLocalAPI(t *testing.T) {
 	if err := json.Unmarshal([]byte(`{"sections":[{"_key":"A","products":[{"_key":"B","sku":"sku-new"}]}],"localizedTitle":"Français"}`), &patch); err != nil {
 		t.Fatal(err)
 	}
-	updated, err := articles.Update(t.Context(), created.ID, patch, nil, core.TypedLocaleOptions{Locale: "fr"})
+	updated, err := articles.Update(t.Context(), created.ID, patch, core.TypedMutationOptions{Locale: "fr"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +75,7 @@ func TestGeneratedUnifiedContractsThroughTypedLocalAPI(t *testing.T) {
 	if selected.Title == nil || selected.Sku != nil || selected.Sections != nil {
 		t.Fatal("typed selected output preserves omission")
 	}
-	_, err = articles.Update(t.Context(), created.ID, g.UnifiedArticleUpdate{Sku: core.Set("invalid")}, nil)
+	_, err = articles.Update(t.Context(), created.ID, g.UnifiedArticleUpdate{Sku: core.Set("invalid")}, core.TypedMutationOptions{})
 	var operationError *core.OperationError
 	if !errors.As(err, &operationError) || len(operationError.Issues) != 1 || operationError.Issues[0].Code != "sku" || operationError.Issues[0].Path != "sku" || operationError.Issues[0].Target == "" {
 		t.Fatalf("typed structured issue: %v", err)

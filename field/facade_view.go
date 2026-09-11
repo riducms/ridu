@@ -3,28 +3,10 @@ package field
 // AsText provides a checked concrete view of an immutable node.
 func AsText(node Node) (TextField, error) {
 	d := Snapshot(node)
-	if d.kind != KindText {
+	if d.kind != KindText && d.kind != KindCode && d.kind != KindTextarea {
 		return TextField{}, incompatibleEdit("TextField", d)
 	}
 	return TextField{nodeView{d}}, nil
-}
-
-// AsCode provides a checked concrete view of an immutable node.
-func AsCode(node Node) (CodeField, error) {
-	d := Snapshot(node)
-	if d.kind != KindCode {
-		return CodeField{}, incompatibleEdit("CodeField", d)
-	}
-	return CodeField{nodeView{d}}, nil
-}
-
-// AsTextarea provides a checked concrete view of an immutable node.
-func AsTextarea(node Node) (TextareaField, error) {
-	d := Snapshot(node)
-	if d.kind != KindTextarea {
-		return TextareaField{}, incompatibleEdit("TextareaField", d)
-	}
-	return TextareaField{nodeView{d}}, nil
 }
 
 // AsEmail provides a checked concrete view of an immutable node.
@@ -84,19 +66,10 @@ func AsPoint(node Node) (PointField, error) {
 // AsSelect provides a checked concrete view of an immutable node.
 func AsSelect(node Node) (SelectField, error) {
 	d := Snapshot(node)
-	if d.kind != KindSelect || d.selectMany != false {
+	if (d.kind != KindSelect && d.kind != KindRadio) || d.selectMany {
 		return SelectField{}, incompatibleEdit("SelectField", d)
 	}
 	return SelectField{nodeView{d}}, nil
-}
-
-// AsRadio provides a checked concrete view of an immutable node.
-func AsRadio(node Node) (RadioField, error) {
-	d := Snapshot(node)
-	if d.kind != KindRadio || d.selectMany != false {
-		return RadioField{}, incompatibleEdit("RadioField", d)
-	}
-	return RadioField{nodeView{d}}, nil
 }
 
 // AsMultiSelect provides a checked concrete view of an immutable node.

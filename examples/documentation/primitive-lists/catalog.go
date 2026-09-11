@@ -26,7 +26,7 @@ var Catalog = ridu.Collection{
 var UniqueTags = Tags.Validate(noRepeatedTags)
 
 func noRepeatedTags(
-	_ operation.ValidationContext,
+	_ operation.Context,
 	value operation.Value[[]string],
 ) ([]operation.Issue, error) {
 	tags, present := value.Get()

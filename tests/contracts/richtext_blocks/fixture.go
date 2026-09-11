@@ -48,12 +48,12 @@ func configuration(t *testing.T, seen *observations) ridu.Config {
 		field.Relationship("destination", "pages"),
 	}}
 	callout := field.Block{Admin: field.BlockAdmin{RowLabelPath: "title"}, Slug: "callout", Fields: field.Fields{
-		field.Text("title").Required().Validate(func(_ operation.ValidationContext, value operation.Value[string]) ([]operation.Issue, error) {
+		field.Text("title").Required().Validate(func(_ operation.Context, value operation.Value[string]) ([]operation.Issue, error) {
 			if text, _ := value.Get(); text == "invalid" {
 				return []operation.Issue{{Code: "callout_title", Message: "Use a descriptive title"}}, nil
 			}
 			return nil, nil
-		}).Hooks(field.Hooks[string]{BeforeChange: []field.Transform[string]{func(ctx operation.WriteContext, _ operation.Value[string]) (operation.Change[string], error) {
+		}).Hooks(field.Hooks[string]{BeforeChange: []field.Transform[string]{func(ctx operation.Context, _ operation.Value[string]) (operation.Change[string], error) {
 			seen.occurrences = append(seen.occurrences, ctx.OccurrenceID)
 			if seen.original != nil {
 				key, _ := ctx.Siblings.String("_key")
@@ -66,7 +66,7 @@ func configuration(t *testing.T, seen *observations) ridu.Config {
 		}}}),
 		field.Text("caption").Default("A helpful note"),
 		field.Textarea("translation").Localized(),
-		field.Text("secret").Access(field.Access{Read: func(operation.AccessContext) (bool, error) { return false, nil }}),
+		field.Text("secret").Access(field.Access{Read: func(operation.Context) (bool, error) { return false, nil }}),
 		field.Group("appearance", field.Fields{
 			field.Text("tone").Default("neutral"),
 		}),
@@ -95,7 +95,7 @@ func configuration(t *testing.T, seen *observations) ridu.Config {
 		}
 		collection.Hooks.BeforeChange = append(collection.Hooks.BeforeChange, func(ctx ridu.HookContext) error {
 			if seen.rollback {
-				_, err := ctx.Local.Create(ctx.Context, "audit-events", store.Values{"message": store.String("must roll back")}, nil)
+				_, err := ctx.Local.Create(ctx.Context, "audit-events", store.Values{"message": store.String("must roll back")}, ridu.MutationOptions{})
 				return err
 			}
 			return nil

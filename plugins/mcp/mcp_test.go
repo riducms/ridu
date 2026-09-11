@@ -62,7 +62,7 @@ func TestMCPListsExplicitToolsAndReadsThroughActorAccessAndRedaction(t *testing.
 				Fields: field.Fields{
 					field.Text("title"),
 					field.Checkbox("published"),
-					field.Text("secret").Access(field.Access{Read: func(operation.AccessContext) (bool, error) { return false, nil }}),
+					field.Text("secret").Access(field.Access{Read: func(operation.Context) (bool, error) { return false, nil }}),
 				},
 			},
 		},
@@ -70,7 +70,7 @@ func TestMCPListsExplicitToolsAndReadsThroughActorAccessAndRedaction(t *testing.
 			Slug: "settings", Access: ridu.GlobalAccess{Read: authenticatedGlobal},
 			Fields: field.Fields{
 				field.Text("siteName"),
-				field.Text("privateNote").Access(field.Access{Read: func(operation.AccessContext) (bool, error) { return false, nil }}),
+				field.Text("privateNote").Access(field.Access{Read: func(operation.Context) (bool, error) { return false, nil }}),
 			},
 		}},
 	}, teststore.New())
@@ -79,20 +79,20 @@ func TestMCPListsExplicitToolsAndReadsThroughActorAccessAndRedaction(t *testing.
 	}
 	if _, err := application.Local().Create(t.Context(), "posts", store.Values{
 		"title": store.String("Visible"), "published": store.Boolean(true), "secret": store.String("redact-me"),
-	}, nil); err != nil {
+	}, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := application.Local().Create(t.Context(), "posts", store.Values{
 		"title": store.String("Hidden"), "published": store.Boolean(false), "secret": store.String("redact-me-too"),
-	}, nil); err != nil {
+	}, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := application.Local().UpdateGlobal(t.Context(), "settings", store.Values{
 		"siteName": store.String("Ridu"), "privateNote": store.String("internal"),
-	}, 0, nil); err != nil {
+	}, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	user, err := application.Local().Create(t.Context(), "users", store.Values{"email": store.String("agent@example.test")}, nil)
+	user, err := application.Local().Create(t.Context(), "users", store.Values{"email": store.String("agent@example.test")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +107,7 @@ func TestMCPListsExplicitToolsAndReadsThroughActorAccessAndRedaction(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	deniedUser, err := application.Local().Create(t.Context(), "users", store.Values{"email": store.String("denied@example.test")}, nil)
+	deniedUser, err := application.Local().Create(t.Context(), "users", store.Values{"email": store.String("denied@example.test")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -31,7 +31,7 @@ const hooks = `ridu.CollectionHooks{
 
 const computed = `field.Virtual("displayName", field.ValueString,
 	func(
-		ctx operation.ReadContext,
+		ctx operation.Context,
 	) (operation.Value[store.Value], error) {
 		first, _ := ctx.Root.String("firstName")
 		last, _ := ctx.Root.String("lastName")

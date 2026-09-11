@@ -33,8 +33,8 @@ func graphRuntimeBindings(t *testing.T, nodes field.Fields) []operationengine.Fi
 
 func TestGraphRuntimeLoweringKeepsPlacementAndScopedSnapshots(t *testing.T) {
 	var contexts []operation.Context
-	code := field.Text("code").Hooks(field.Hooks[string]{BeforeChange: []field.Transform[string]{func(ctx operation.WriteContext, value operation.Value[string]) (operation.Change[string], error) {
-		contexts = append(contexts, operation.Context(ctx))
+	code := field.Text("code").Hooks(field.Hooks[string]{BeforeChange: []field.Transform[string]{func(ctx operation.Context, value operation.Value[string]) (operation.Change[string], error) {
+		contexts = append(contexts, ctx)
 		text, _ := value.Get()
 		return operation.Replace(operation.Present("own:" + text)), nil
 	}}})
@@ -73,14 +73,14 @@ func TestGraphRuntimeLoweringKeepsPlacementAndScopedSnapshots(t *testing.T) {
 
 func TestGraphRuntimeTypedGuardPrecedesEveryCallback(t *testing.T) {
 	calls := 0
-	text := field.Text("code").Hooks(field.Hooks[string]{BeforeChange: []field.Transform[string]{func(operation.WriteContext, operation.Value[string]) (operation.Change[string], error) {
+	text := field.Text("code").Hooks(field.Hooks[string]{BeforeChange: []field.Transform[string]{func(operation.Context, operation.Value[string]) (operation.Change[string], error) {
 		calls++
 		return operation.Keep[string](), nil
-	}}, AfterChange: []field.Observer[string]{func(operation.EventContext, operation.Value[string]) error { calls++; return nil }}}).
-				ReadHooks(field.ReadHooks[string]{AfterRead: []field.OutputTransform[string]{func(operation.ReadContext, operation.Value[string]) (operation.Change[string], error) {
+	}}, AfterChange: []field.Observer[string]{func(operation.Context, operation.Value[string]) error { calls++; return nil }}}).
+				AfterRead(func(operation.Context, operation.Value[string]) (operation.Change[string], error) {
 			calls++
 			return operation.Keep[string](), nil
-		}}}).Validate(func(operation.ValidationContext, operation.Value[string]) ([]operation.Issue, error) {
+		}).Validate(func(operation.Context, operation.Value[string]) ([]operation.Issue, error) {
 		calls++
 		return nil, nil
 	})
@@ -108,11 +108,11 @@ func TestGraphRuntimeRawPresenceAndRelativeValidationIssues(t *testing.T) {
 	var present []bool
 	failure := errors.New("validator service unavailable")
 	operational := false
-	code := field.Text("code").Hooks(field.Hooks[string]{BeforeValidate: []field.RawTransform{func(_ operation.WriteContext, value operation.Value[store.Value]) (operation.Change[store.Value], error) {
+	code := field.Text("code").Hooks(field.Hooks[string]{BeforeValidate: []field.RawTransform{func(_ operation.Context, value operation.Value[store.Value]) (operation.Change[store.Value], error) {
 		_, exists := value.Get()
 		present = append(present, exists)
 		return operation.Keep[store.Value](), nil
-	}}}).Validate(func(operation.ValidationContext, operation.Value[string]) ([]operation.Issue, error) {
+	}}}).Validate(func(operation.Context, operation.Value[string]) ([]operation.Issue, error) {
 		if operational {
 			return nil, failure
 		}
@@ -151,7 +151,7 @@ func TestGraphRuntimeContainerAndNumberTypedAdmission(t *testing.T) {
 		code string
 	}{
 		{"number", func(calls *int) field.Node {
-			return field.Number("value").Hooks(field.Hooks[float64]{BeforeChange: []field.Transform[float64]{func(operation.WriteContext, operation.Value[float64]) (operation.Change[float64], error) {
+			return field.Number("value").Hooks(field.Hooks[float64]{BeforeChange: []field.Transform[float64]{func(operation.Context, operation.Value[float64]) (operation.Change[float64], error) {
 				*calls++
 				return operation.Keep[float64](), nil
 			}}})
@@ -178,7 +178,7 @@ func TestGraphRuntimeContainerAndNumberTypedAdmission(t *testing.T) {
 }
 
 func countFiniteTransform(calls *int) field.Transform[store.Value] {
-	return func(operation.WriteContext, operation.Value[store.Value]) (operation.Change[store.Value], error) {
+	return func(operation.Context, operation.Value[store.Value]) (operation.Change[store.Value], error) {
 		*calls++
 		return operation.Keep[store.Value](), nil
 	}
@@ -204,7 +204,7 @@ func TestGraphRuntimeReaderKeepsTransactionActorAndAuthorization(t *testing.T) {
 				}},
 			}, {
 				Slug: "pages", Fields: field.Fields{field.Text("supplier")}, Hooks: CollectionHooks{BeforeChange: []Hook{func(ctx HookContext) error {
-					supplier, err := ctx.Local.Create(ctx.Context, "suppliers", store.Values{"code": store.String("uncommitted")}, ctx.Actor)
+					supplier, err := ctx.Local.Create(ctx.Context, "suppliers", store.Values{"code": store.String("uncommitted")}, MutationOptions{Actor: ctx.Actor})
 					if err != nil {
 						return err
 					}
@@ -226,7 +226,7 @@ func TestGraphRuntimeReaderKeepsTransactionActorAndAuthorization(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			_, err = app.Local().Create(t.Context(), "pages", store.Values{}, actor)
+			_, err = app.Local().Create(t.Context(), "pages", store.Values{}, MutationOptions{Actor: actor})
 			if denied != (err != nil) || reads != 1 {
 				t.Fatalf("reader access: denied=%t calls=%d error=%v", denied, reads, err)
 			}
@@ -250,14 +250,14 @@ func TestGraphRuntimeParentTransformAssignsIdentityBeforeChildDispatch(t *testin
 	var beforeKey, afterKey string
 	var beforeID, afterID operation.OccurrenceID
 	code := field.Text("code").Hooks(field.Hooks[string]{
-		BeforeChange: []field.Transform[string]{func(ctx operation.WriteContext, value operation.Value[string]) (operation.Change[string], error) {
+		BeforeChange: []field.Transform[string]{func(ctx operation.Context, value operation.Value[string]) (operation.Change[string], error) {
 			if text, _ := value.Get(); ctx.Operation == operation.Update && text == "new" {
 				beforeKey, _ = ctx.Siblings.String("_key")
 				beforeID = ctx.OccurrenceID
 			}
 			return operation.Keep[string](), nil
 		}},
-		AfterChange: []field.Observer[string]{func(ctx operation.EventContext, value operation.Value[string]) error {
+		AfterChange: []field.Observer[string]{func(ctx operation.Context, value operation.Value[string]) error {
 			if text, _ := value.Get(); ctx.Operation == operation.Update && text == "new" {
 				afterKey, _ = ctx.Siblings.String("_key")
 				afterID = ctx.OccurrenceID
@@ -265,7 +265,7 @@ func TestGraphRuntimeParentTransformAssignsIdentityBeforeChildDispatch(t *testin
 			return nil
 		}},
 	})
-	rows := field.Array("rows", field.Fields{code}).Hooks(field.Hooks[store.Value]{BeforeChange: []field.Transform[store.Value]{func(ctx operation.WriteContext, value operation.Value[store.Value]) (operation.Change[store.Value], error) {
+	rows := field.Array("rows", field.Fields{code}).Hooks(field.Hooks[store.Value]{BeforeChange: []field.Transform[store.Value]{func(ctx operation.Context, value operation.Value[store.Value]) (operation.Change[store.Value], error) {
 		if ctx.Operation != operation.Update {
 			return operation.Keep[store.Value](), nil
 		}
@@ -278,11 +278,11 @@ func TestGraphRuntimeParentTransformAssignsIdentityBeforeChildDispatch(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	created, err := app.Local().Create(t.Context(), "pages", store.Values{"rows": store.List(store.Object(store.Values{"_key": store.String("A"), "code": store.String("old")}))}, nil)
+	created, err := app.Local().Create(t.Context(), "pages", store.Values{"rows": store.List(store.Object(store.Values{"_key": store.String("A"), "code": store.String("old")}))}, MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	updated, err := app.Local().Update(t.Context(), "pages", created.ID, store.Values{"trigger": store.String("add")}, nil)
+	updated, err := app.Local().Update(t.Context(), "pages", created.ID, store.Values{"trigger": store.String("add")}, MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -312,7 +312,7 @@ func TestGraphRuntimeReaderUsesExactBoundLocaleAndCancellation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	supplier, err := app.Local().Create(t.Context(), "suppliers", store.Values{"code": store.String("English only")}, nil)
+	supplier, err := app.Local().Create(t.Context(), "suppliers", store.Values{"code": store.String("English only")}, MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

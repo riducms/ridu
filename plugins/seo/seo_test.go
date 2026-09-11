@@ -196,7 +196,7 @@ func TestGenerationEndpointRequiresActorAndUsesCurrentDraft(t *testing.T) {
 	endpoint := plugin.Endpoints()[0]
 
 	unauthorized := httptest.NewRecorder()
-	endpoint.Handler(ridu.PluginEndpointContext{Writer: unauthorized, Request: httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"collection":"posts","document":{}}`)), Local: application.Local()})
+	endpoint.Handler(ridu.EndpointContext{Writer: unauthorized, Request: httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"collection":"posts","document":{}}`)), Local: application.Local()})
 	if unauthorized.Code != http.StatusUnauthorized {
 		t.Fatalf("unauthorized status = %d", unauthorized.Code)
 	}
@@ -210,7 +210,7 @@ func TestGenerationEndpointRequiresActorAndUsesCurrentDraft(t *testing.T) {
 	}
 
 	trailing := httptest.NewRecorder()
-	endpoint.Handler(ridu.PluginEndpointContext{Writer: trailing, Request: httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"collection":"posts","document":{}} {}`)), Actor: &store.Document{ID: "editor"}, Local: application.Local()})
+	endpoint.Handler(ridu.EndpointContext{Writer: trailing, Request: httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"collection":"posts","document":{}} {}`)), Actor: &store.Document{ID: "editor"}, Local: application.Local()})
 	if trailing.Code != http.StatusBadRequest {
 		t.Fatalf("trailing JSON status = %d body=%s", trailing.Code, trailing.Body.String())
 	}
@@ -218,7 +218,7 @@ func TestGenerationEndpointRequiresActorAndUsesCurrentDraft(t *testing.T) {
 	actor := store.Document{ID: "editor", Values: store.Values{}}
 	request := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"collection":"posts","document":{"headline":"Hello"}}`))
 	response := httptest.NewRecorder()
-	endpoint.Handler(ridu.PluginEndpointContext{Writer: response, Request: request, Actor: &actor, Local: application.Local(), ReportError: func(error, string) {}})
+	endpoint.Handler(ridu.EndpointContext{Writer: response, Request: request, Actor: &actor, Local: application.Local(), ReportError: func(error, string) {}})
 	if response.Code != http.StatusOK {
 		t.Fatalf("generation status = %d body=%s", response.Code, response.Body.String())
 	}
@@ -245,7 +245,7 @@ func TestEndpointCapturesApplicationResourceDefinitions(t *testing.T) {
 		t.Fatal(err)
 	}
 	response := httptest.NewRecorder()
-	firstEndpoint.Handler(ridu.PluginEndpointContext{Writer: response, Request: httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"collection":"pages","document":{}}`)), Actor: &store.Document{ID: "editor"}, Local: first.Local()})
+	firstEndpoint.Handler(ridu.EndpointContext{Writer: response, Request: httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"collection":"pages","document":{}}`)), Actor: &store.Document{ID: "editor"}, Local: first.Local()})
 	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "First page") {
 		t.Fatalf("captured first application definition: status=%d body=%s", response.Code, response.Body.String())
 	}
@@ -264,7 +264,7 @@ func TestSEOValuesUseOrdinaryEnginePersistence(t *testing.T) {
 	created, err := application.Local().Create(t.Context(), "posts", store.Values{
 		"headline": store.String("Hello"),
 		"meta":     store.Object(store.Values{"title": store.String("Search title"), "description": store.String("Search description")}),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -129,31 +129,15 @@ func (application *App) AuthBootstrapAvailable(ctx context.Context, collection s
 	return !initialized, nil
 }
 
-// CreateAuthUser creates an auth document and its private password credential
-// atomically through the ordinary create operation pipeline.
-func (application *App) CreateAuthUser(ctx context.Context, collection string, values store.Values, password string, actor *store.Document, localeOptions ...LocaleOptions) (store.Document, error) {
-	return application.CreateAuthUserWithOptions(ctx, collection, values, password, mutationOptions(actor, 0, localeOptions))
-}
-
-// CreateAuthUserWithOptions creates an auth document and credential atomically
+// CreateAuthUser creates an auth document and credential atomically
 // while allowing a transport to populate the returned user safely.
-func (application *App) CreateAuthUserWithOptions(ctx context.Context, collection string, values store.Values, password string, options MutationOptions) (store.Document, error) {
+func (application *App) CreateAuthUser(ctx context.Context, collection string, values store.Values, password string, options MutationOptions) (store.Document, error) {
 	return application.createAuthUserWithOptions(ctx, collection, values, password, options, false)
 }
 
-// CreateAuthUserForTransport applies the safe anonymous first-user default
-// used by framework transports. When Create access is omitted, exactly one
-// anonymous caller may initialize the configured admin-user collection; other
-// auth collections remain closed. Authenticated callers and collections with
-// an explicit Create rule retain ordinary authored access behavior, including
-// intentional public registration.
-func (application *App) CreateAuthUserForTransport(ctx context.Context, collection string, values store.Values, password string, actor *store.Document, localeOptions ...LocaleOptions) (store.Document, error) {
-	return application.CreateAuthUserForTransportWithOptions(ctx, collection, values, password, mutationOptions(actor, 0, localeOptions))
-}
-
-// CreateAuthUserForTransportWithOptions is the selection-aware transport form
+// CreateAuthUserForTransport is the selection-aware transport form
 // of CreateAuthUserForTransport.
-func (application *App) CreateAuthUserForTransportWithOptions(ctx context.Context, collection string, values store.Values, password string, options MutationOptions) (store.Document, error) {
+func (application *App) CreateAuthUserForTransport(ctx context.Context, collection string, values store.Values, password string, options MutationOptions) (store.Document, error) {
 	authCollection, exists := application.authBySlug[collection]
 	if !exists {
 		return store.Document{}, unknownAuthCollection(collection)
@@ -207,10 +191,9 @@ func (application *App) createAuthUserWithOptions(ctx context.Context, collectio
 	}
 	if authCollection.Auth.VerifyEmail && !bootstrap {
 		self := &store.Document{ID: user.ID, Values: store.Values{}}
-		unredacted, findError := application.local.Find(ctx, collection, user.ID, self, LocaleOptions{
-			Locale: options.Locale, FallbackLocales: append([]schema.LocaleCode(nil), options.FallbackLocales...),
-			DisableFallback: options.DisableFallback, AllLocales: options.AllLocales,
-		})
+		unredacted, findError := application.local.Find(ctx, collection, user.ID, FindOptions{Actor: self, Locale: options.Locale, FallbackLocales: append([]schema.LocaleCode(nil), options.FallbackLocales...),
+			DisableFallback: options.DisableFallback, AllLocales: options.AllLocales},
+		)
 		if findError != nil {
 			return store.Document{}, findError
 		}
@@ -232,7 +215,7 @@ func (application *App) SetPassword(ctx context.Context, collection, userID, pas
 		return err
 	}
 	actor := &store.Document{ID: userID, Values: store.Values{}}
-	user, err := application.local.Find(ctx, string(authCollection.Slug), userID, actor)
+	user, err := application.local.Find(ctx, string(authCollection.Slug), userID, FindOptions{Actor: actor})
 	if err != nil {
 		return err
 	}
@@ -1094,7 +1077,7 @@ func (application *App) deleteOrphanedSession(ctx context.Context, tokenHash str
 
 func (application *App) authUser(ctx context.Context, collection schema.Collection, userID string) (store.Document, error) {
 	actor := &store.Document{ID: userID, Values: store.Values{}}
-	return application.local.FindWithOptions(ctx, string(collection.Slug), userID, FindOptions{Actor: actor, ActorCollection: collection.Slug})
+	return application.local.Find(ctx, string(collection.Slug), userID, FindOptions{Actor: actor, ActorCollection: collection.Slug})
 }
 
 // resolveOptionalAuthIdentity preserves anonymous access while ensuring a

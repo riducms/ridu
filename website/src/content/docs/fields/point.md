@@ -52,7 +52,7 @@ strings, `NaN`, or infinities.
 | `.Validate(callback)` / `.LiveValidate(callback)` | Adds save or live rules beyond the built-in coordinate bounds. |
 | `.Admin(...)`                                     | Sets label, description, width, and conditional visibility.    |
 | `.Access(...)` / `.RestrictAccess(...)`           | Replaces or narrows field create/read/update access.           |
-| `.Hooks(...)` / `.ReadHooks(...)`                 | Changes the stored value lifecycle or response.                |
+| `.Hooks(...)` / `.AfterRead(...)`                 | Changes the stored value lifecycle or response.                |
 
 ## Validation and location searches {#options}
 

@@ -12,12 +12,12 @@ aliases:
     'default field values',
     'server defaults',
     'initial field value',
-    'DefaultContext'
+    'Context'
   ]
 relatedSymbolIds:
   - 'go:github.com/riducms/ridu/field#DefaultFunc'
   - 'go:github.com/riducms/ridu/field#TextField.DefaultFrom'
-  - 'go:github.com/riducms/ridu/operation#DefaultContext'
+  - 'go:github.com/riducms/ridu/operation#Context'
 navigation:
   section: 'Model content'
   parent: fields
@@ -73,8 +73,7 @@ var ArticleTitle = field.Text("title").
 	DefaultFrom(initialTitle)
 
 func initialTitle(
-	ctx operation.DefaultContext,
-) (operation.Value[string], error) {
+	ctx operation.Context) (operation.Value[string], error) {
 	// Locale is the content language, not the admin interface language.
 	if ctx.Locale == "fr" {
 		// Present supplies the value; nil means the callback succeeded.
@@ -115,7 +114,7 @@ form. Dynamic defaults run when you save the parent document.
 
 ## Return a value, no default, or an error {#results}
 
-A default callback takes one `operation.DefaultContext` argument and returns two results:
+A default callback takes one `operation.Context` argument and returns two results:
 `operation.Value[T]` and `error`. `T` is the field's Go value type. It does not receive a current
 value argument because it runs only when that field needs an initial value.
 
@@ -155,7 +154,7 @@ it. Read permissions still decide whether the saved value appears in the respons
 
 ## Read the user and nearby values {#context}
 
-`operation.DefaultContext` describes the request and the values available when Ridu chooses
+`operation.Context` describes the request and the values available when Ridu chooses
 the default. The most useful properties are:
 
 | Property        | What it contains                                                                                       |
@@ -175,7 +174,7 @@ type and any assumptions you depend on. Do not rely on them containing another d
 default's result, regardless of field order.
 
 The context also has collection/global identifiers and field tracking identifiers. See the
-[`DefaultContext` reference](/reference/operation/default-context/) for every property, and
+[`operation.Context` reference](/reference/operation/context/) for every property, and
 [Using other field values](/docs/fields/callback-values/) for reading nested values.
 
 ### Use the signed-in user's name {#user-default}
@@ -194,8 +193,7 @@ import (
 var AuthorName = field.Text("authorName").DefaultFrom(initialAuthorName)
 
 func initialAuthorName(
-	ctx operation.DefaultContext,
-) (operation.Value[string], error) {
+	ctx operation.Context) (operation.Value[string], error) {
 	// Anonymous requests have no signed-in user to copy a name from.
 	if ctx.Actor.ID == "" {
 		return operation.Empty[string](), nil
@@ -244,8 +242,7 @@ var NavigationFields = field.Fields{
 }
 
 func initialLinkLabel(
-	ctx operation.DefaultContext,
-) (operation.Value[string], error) {
+	ctx operation.Context) (operation.Value[string], error) {
 	// Siblings reads this group or row, not another row in the array.
 	url, present := ctx.Siblings.String("url")
 	if present && url == "/about" {

@@ -39,13 +39,13 @@ func TestPostgresReversedRelationshipUpdatesReturnStableRetryableConflicts(t *te
 	}
 	nodeA, err := application.Local().Create(ctx, "nodes", store.Values{
 		"name": store.String("A"), "attempt": store.String("initial-a"),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	nodeB, err := application.Local().Create(ctx, "nodes", store.Values{
 		"name": store.String("B"), "attempt": store.String("initial-b"),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +68,7 @@ func TestPostgresReversedRelationshipUpdatesReturnStableRetryableConflicts(t *te
 			defer operationCancel()
 			_, specification.err = application.Local().Update(operationContext, "nodes", specification.id, store.Values{
 				"attempt": store.String(specification.value), "peer": store.String(specification.target),
-			}, nil)
+			}, ridu.MutationOptions{})
 			results <- specification
 		}()
 	}
@@ -89,7 +89,7 @@ func TestPostgresReversedRelationshipUpdatesReturnStableRetryableConflicts(t *te
 
 	var retry updateAttempt
 	for _, outcome := range outcomes {
-		document, findError := application.Local().Find(ctx, "nodes", outcome.id, nil)
+		document, findError := application.Local().Find(ctx, "nodes", outcome.id, ridu.FindOptions{})
 		if findError != nil {
 			t.Fatal(findError)
 		}
@@ -111,10 +111,10 @@ func TestPostgresReversedRelationshipUpdatesReturnStableRetryableConflicts(t *te
 	defer retryCancel()
 	if _, err := application.Local().Update(retryContext, "nodes", retry.id, store.Values{
 		"attempt": store.String(retry.value), "peer": store.String(retry.target),
-	}, nil); err != nil {
+	}, ridu.MutationOptions{}); err != nil {
 		t.Fatalf("caller retry after the relationship lock cycle failed: %v", err)
 	}
-	retried, err := application.Local().Find(ctx, "nodes", retry.id, nil)
+	retried, err := application.Local().Find(ctx, "nodes", retry.id, ridu.FindOptions{})
 	if err != nil || stringValue(retried.Values["attempt"]) != retry.value || stringValue(retried.Values["peer"]) != retry.target {
 		t.Fatalf("retried relationship update = %#v, %v", retried.Values, err)
 	}
@@ -148,13 +148,13 @@ func TestPostgresReversedExecuteBatchOperationsReturnStableRetryableConflicts(t 
 	}
 	first, err := application.Local().Create(ctx, "nodes", store.Values{
 		"name": store.String("First"), "leftMark": store.String("left-initial"), "rightMark": store.String("right-initial"),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	second, err := application.Local().Create(ctx, "nodes", store.Values{
 		"name": store.String("Second"), "leftMark": store.String("left-initial"), "rightMark": store.String("right-initial"),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -179,7 +179,7 @@ func TestPostgresReversedExecuteBatchOperationsReturnStableRetryableConflicts(t 
 			defer operationCancel()
 			_, specification.err = application.Local().BulkUpdate(operationContext, "nodes", specification.ids, store.Values{
 				specification.field: store.String(specification.value),
-			}, nil)
+			}, ridu.BulkOptions{})
 			results <- specification
 		}()
 	}
@@ -200,7 +200,7 @@ func TestPostgresReversedExecuteBatchOperationsReturnStableRetryableConflicts(t 
 
 	documents := make([]store.Document, 0, 2)
 	for _, id := range []string{first.ID, second.ID} {
-		document, findError := application.Local().Find(ctx, "nodes", id, nil)
+		document, findError := application.Local().Find(ctx, "nodes", id, ridu.FindOptions{})
 		if findError != nil {
 			t.Fatal(findError)
 		}
@@ -226,11 +226,11 @@ func TestPostgresReversedExecuteBatchOperationsReturnStableRetryableConflicts(t 
 	defer retryCancel()
 	if _, err := application.Local().BulkUpdate(retryContext, "nodes", retry.ids, store.Values{
 		retry.field: store.String(retry.value),
-	}, nil); err != nil {
+	}, ridu.BulkOptions{}); err != nil {
 		t.Fatalf("caller retry after the ExecuteBatch lock cycle failed: %v", err)
 	}
 	for _, id := range []string{first.ID, second.ID} {
-		document, findError := application.Local().Find(ctx, "nodes", id, nil)
+		document, findError := application.Local().Find(ctx, "nodes", id, ridu.FindOptions{})
 		if findError != nil || stringValue(document.Values[retry.field]) != retry.value {
 			t.Fatalf("retried ExecuteBatch value on %s = %#v, %v", id, document.Values, findError)
 		}

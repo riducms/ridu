@@ -2,15 +2,16 @@ package field
 
 import (
 	"encoding/json"
+	"slices"
+
 	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
-	"slices"
 )
 
 func newNode(kind Kind, name string) View { return View{nodeData: nodeData{kind: kind, name: name}} }
 
-// TextField configures a single-line text field.
+// TextField configures a Text, Code, or Textarea string field.
 type TextField struct{ nodeView }
 
 // Text creates a single-line text field.
@@ -94,19 +95,21 @@ func (f TextField) HookPolicy() Hooks[string] {
 	return cloneHooks(policies[string, string](f.definition).hooks)
 }
 
-// ReadHooks replaces all response-transform hooks.
-func (f TextField) ReadHooks(value ReadHooks[string]) TextField {
-	f.definition = withPolicies[string, string](f.definition, func(p *typedPolicies[string, string]) { p.readHooks = cloneReadHooks(value) })
+// ReplaceAfterRead replaces response transforms; no callbacks clears them.
+func (f TextField) ReplaceAfterRead(callbacks ...OutputTransform[string]) TextField {
+	f.definition = withPolicies[string, string](f.definition, func(p *typedPolicies[string, string]) { p.afterRead = slices.Clone(callbacks) })
 	return f
 }
 
-// AppendReadHooks appends response-transform hooks after existing callbacks.
-func (f TextField) AppendReadHooks(value ReadHooks[string]) TextField {
-	f.definition = withPolicies[string, string](f.definition, func(p *typedPolicies[string, string]) { p.readHooks = appendReadHooks(p.readHooks, value) })
+// AfterRead appends response transforms in order; no callbacks does nothing.
+func (f TextField) AfterRead(callbacks ...OutputTransform[string]) TextField {
+	f.definition = withPolicies[string, string](f.definition, func(p *typedPolicies[string, string]) { p.afterRead = append(slices.Clone(p.afterRead), callbacks...) })
 	return f
 }
-func (f TextField) ReadHookPolicy() ReadHooks[string] {
-	return cloneReadHooks(policies[string, string](f.definition).readHooks)
+
+// AfterReadHooks returns a detached response-transform slice.
+func (f TextField) AfterReadHooks() []OutputTransform[string] {
+	return slices.Clone(policies[string, string](f.definition).afterRead)
 }
 func (f TextField) Unique(values ...bool) TextField {
 	f.definition.unique = len(values) == 0 || values[len(values)-1]
@@ -123,233 +126,13 @@ func (f TextField) Default(value string) TextField {
 	return f
 }
 
-// CodeField configures a text field with a code editor.
-type CodeField struct{ nodeView }
-
 // Code creates a text field with a code editor.
-func Code(name string) CodeField                 { d := newNode(KindCode, name); return CodeField{nodeView{d}} }
-func (f CodeField) Rename(name string) CodeField { f.definition.name = name; return f }
-func (f CodeField) Label(value string) CodeField { f.definition.label = value; return f }
-func (f CodeField) LabelTranslations(values map[string]string) CodeField {
-	f.definition.admin.LabelTranslations = cloneTranslations(values)
-	return f
-}
-
-// Admin replaces the complete admin presentation policy.
-func (f CodeField) Admin(value Admin) CodeField {
-	f.definition = f.definition.setAdmin(value)
-	return f
-}
-
-// EditAdmin updates selected admin settings while preserving the rest.
-func (f CodeField) EditAdmin(edit func(*Admin)) CodeField {
-	f.definition = f.definition.setAdmin(editAdmin(f.AdminPolicy(), edit))
-	return f
-}
-func (f CodeField) Private(namespace string, value store.Value) CodeField {
-	f.definition = f.definition.setPrivate(namespace, value)
-	return f
-}
-
-// Access replaces the complete field access policy.
-func (f CodeField) Access(value Access) CodeField {
-	f.definition = f.definition.withGraph(func(g *graphPolicies) { g.access = value })
-	return f
-}
-
-// RestrictAccess combines supplied rules with existing access rules; both must allow.
-func (f CodeField) RestrictAccess(value Access) CodeField {
-	f.definition = f.definition.withGraph(func(g *graphPolicies) { g.access = restrictAccess(g.access, value) })
-	return f
-}
-func (f CodeField) Required(values ...bool) CodeField {
-	f.definition = require(f.definition, values)
-	return f
-}
-func (f CodeField) Localized(values ...bool) CodeField {
-	f.definition = localize(f.definition, values)
-	return f
-}
-
-// Validate appends one authoritative save validator.
-func (f CodeField) Validate(value Validator[string]) CodeField {
-	f.definition = withPolicies[string, string](f.definition, func(p *typedPolicies[string, string]) { p.validators = append(slices.Clone(p.validators), value) })
-	return f
-}
-
-// ReplaceValidators replaces all authoritative save validators.
-func (f CodeField) ReplaceValidators(values ...Validator[string]) CodeField {
-	f.definition = withPolicies[string, string](f.definition, func(p *typedPolicies[string, string]) { p.validators = slices.Clone(values) })
-	return f
-}
-
-// Hooks replaces the complete field lifecycle hook group.
-func (f CodeField) Hooks(value Hooks[string]) CodeField {
-	f.definition = withPolicies[string, string](f.definition, func(p *typedPolicies[string, string]) { p.hooks = cloneHooks(value) })
-	return f
-}
-
-// AppendHooks appends supplied callbacks after existing callbacks in each phase.
-func (f CodeField) AppendHooks(value Hooks[string]) CodeField {
-	f.definition = withPolicies[string, string](f.definition, func(p *typedPolicies[string, string]) { p.hooks = appendHooks(p.hooks, value) })
-	return f
-}
-
-// PrependHooks inserts supplied callbacks before existing callbacks in each phase.
-func (f CodeField) PrependHooks(value Hooks[string]) CodeField {
-	f.definition = withPolicies[string, string](f.definition, func(p *typedPolicies[string, string]) { p.hooks = prependHooks(p.hooks, value) })
-	return f
-}
-func (f CodeField) Validators() []Validator[string] {
-	return slices.Clone(policies[string, string](f.definition).validators)
-}
-func (f CodeField) HookPolicy() Hooks[string] {
-	return cloneHooks(policies[string, string](f.definition).hooks)
-}
-
-// ReadHooks replaces all response-transform hooks.
-func (f CodeField) ReadHooks(value ReadHooks[string]) CodeField {
-	f.definition = withPolicies[string, string](f.definition, func(p *typedPolicies[string, string]) { p.readHooks = cloneReadHooks(value) })
-	return f
-}
-
-// AppendReadHooks appends response-transform hooks after existing callbacks.
-func (f CodeField) AppendReadHooks(value ReadHooks[string]) CodeField {
-	f.definition = withPolicies[string, string](f.definition, func(p *typedPolicies[string, string]) { p.readHooks = appendReadHooks(p.readHooks, value) })
-	return f
-}
-func (f CodeField) ReadHookPolicy() ReadHooks[string] {
-	return cloneReadHooks(policies[string, string](f.definition).readHooks)
-}
-func (f CodeField) Unique(values ...bool) CodeField {
-	f.definition.unique = len(values) == 0 || values[len(values)-1]
-	return f
-}
-func (f CodeField) Index(values ...bool) CodeField {
-	f.definition.index = len(values) == 0 || values[len(values)-1]
-	return f
-}
-func (f CodeField) MinLength(value int) CodeField { f.definition.minLength = &value; return f }
-func (f CodeField) MaxLength(value int) CodeField { f.definition.maxLength = &value; return f }
-func (f CodeField) Default(value string) CodeField {
-	f.definition = setDefault(f.definition, value)
-	return f
-}
-
-// TextareaField configures a multi-line text field.
-type TextareaField struct{ nodeView }
+func Code(name string) TextField { d := newNode(KindCode, name); return TextField{nodeView{d}} }
 
 // Textarea creates a multi-line text field.
-func Textarea(name string) TextareaField {
+func Textarea(name string) TextField {
 	d := newNode(KindTextarea, name)
-	return TextareaField{nodeView{d}}
-}
-func (f TextareaField) Rename(name string) TextareaField { f.definition.name = name; return f }
-func (f TextareaField) Label(value string) TextareaField { f.definition.label = value; return f }
-func (f TextareaField) LabelTranslations(values map[string]string) TextareaField {
-	f.definition.admin.LabelTranslations = cloneTranslations(values)
-	return f
-}
-
-// Admin replaces the complete admin presentation policy.
-func (f TextareaField) Admin(value Admin) TextareaField {
-	f.definition = f.definition.setAdmin(value)
-	return f
-}
-
-// EditAdmin updates selected admin settings while preserving the rest.
-func (f TextareaField) EditAdmin(edit func(*Admin)) TextareaField {
-	f.definition = f.definition.setAdmin(editAdmin(f.AdminPolicy(), edit))
-	return f
-}
-func (f TextareaField) Private(namespace string, value store.Value) TextareaField {
-	f.definition = f.definition.setPrivate(namespace, value)
-	return f
-}
-
-// Access replaces the complete field access policy.
-func (f TextareaField) Access(value Access) TextareaField {
-	f.definition = f.definition.withGraph(func(g *graphPolicies) { g.access = value })
-	return f
-}
-
-// RestrictAccess combines supplied rules with existing access rules; both must allow.
-func (f TextareaField) RestrictAccess(value Access) TextareaField {
-	f.definition = f.definition.withGraph(func(g *graphPolicies) { g.access = restrictAccess(g.access, value) })
-	return f
-}
-func (f TextareaField) Required(values ...bool) TextareaField {
-	f.definition = require(f.definition, values)
-	return f
-}
-func (f TextareaField) Localized(values ...bool) TextareaField {
-	f.definition = localize(f.definition, values)
-	return f
-}
-
-// Validate appends one authoritative save validator.
-func (f TextareaField) Validate(value Validator[string]) TextareaField {
-	f.definition = withPolicies[string, string](f.definition, func(p *typedPolicies[string, string]) { p.validators = append(slices.Clone(p.validators), value) })
-	return f
-}
-
-// ReplaceValidators replaces all authoritative save validators.
-func (f TextareaField) ReplaceValidators(values ...Validator[string]) TextareaField {
-	f.definition = withPolicies[string, string](f.definition, func(p *typedPolicies[string, string]) { p.validators = slices.Clone(values) })
-	return f
-}
-
-// Hooks replaces the complete field lifecycle hook group.
-func (f TextareaField) Hooks(value Hooks[string]) TextareaField {
-	f.definition = withPolicies[string, string](f.definition, func(p *typedPolicies[string, string]) { p.hooks = cloneHooks(value) })
-	return f
-}
-
-// AppendHooks appends supplied callbacks after existing callbacks in each phase.
-func (f TextareaField) AppendHooks(value Hooks[string]) TextareaField {
-	f.definition = withPolicies[string, string](f.definition, func(p *typedPolicies[string, string]) { p.hooks = appendHooks(p.hooks, value) })
-	return f
-}
-
-// PrependHooks inserts supplied callbacks before existing callbacks in each phase.
-func (f TextareaField) PrependHooks(value Hooks[string]) TextareaField {
-	f.definition = withPolicies[string, string](f.definition, func(p *typedPolicies[string, string]) { p.hooks = prependHooks(p.hooks, value) })
-	return f
-}
-func (f TextareaField) Validators() []Validator[string] {
-	return slices.Clone(policies[string, string](f.definition).validators)
-}
-func (f TextareaField) HookPolicy() Hooks[string] {
-	return cloneHooks(policies[string, string](f.definition).hooks)
-}
-
-// ReadHooks replaces all response-transform hooks.
-func (f TextareaField) ReadHooks(value ReadHooks[string]) TextareaField {
-	f.definition = withPolicies[string, string](f.definition, func(p *typedPolicies[string, string]) { p.readHooks = cloneReadHooks(value) })
-	return f
-}
-
-// AppendReadHooks appends response-transform hooks after existing callbacks.
-func (f TextareaField) AppendReadHooks(value ReadHooks[string]) TextareaField {
-	f.definition = withPolicies[string, string](f.definition, func(p *typedPolicies[string, string]) { p.readHooks = appendReadHooks(p.readHooks, value) })
-	return f
-}
-func (f TextareaField) ReadHookPolicy() ReadHooks[string] {
-	return cloneReadHooks(policies[string, string](f.definition).readHooks)
-}
-func (f TextareaField) Unique(values ...bool) TextareaField {
-	f.definition.unique = len(values) == 0 || values[len(values)-1]
-	return f
-}
-func (f TextareaField) Index(values ...bool) TextareaField {
-	f.definition.index = len(values) == 0 || values[len(values)-1]
-	return f
-}
-func (f TextareaField) MinLength(value int) TextareaField { f.definition.minLength = &value; return f }
-func (f TextareaField) MaxLength(value int) TextareaField { f.definition.maxLength = &value; return f }
-func (f TextareaField) Default(value string) TextareaField {
-	f.definition = setDefault(f.definition, value)
-	return f
+	return TextField{nodeView{d}}
 }
 
 // EmailField configures a field that stores and validates an email address.
@@ -436,19 +219,21 @@ func (f EmailField) HookPolicy() Hooks[string] {
 	return cloneHooks(policies[string, string](f.definition).hooks)
 }
 
-// ReadHooks replaces all response-transform hooks.
-func (f EmailField) ReadHooks(value ReadHooks[string]) EmailField {
-	f.definition = withPolicies[string, string](f.definition, func(p *typedPolicies[string, string]) { p.readHooks = cloneReadHooks(value) })
+// ReplaceAfterRead replaces response transforms; no callbacks clears them.
+func (f EmailField) ReplaceAfterRead(callbacks ...OutputTransform[string]) EmailField {
+	f.definition = withPolicies[string, string](f.definition, func(p *typedPolicies[string, string]) { p.afterRead = slices.Clone(callbacks) })
 	return f
 }
 
-// AppendReadHooks appends response-transform hooks after existing callbacks.
-func (f EmailField) AppendReadHooks(value ReadHooks[string]) EmailField {
-	f.definition = withPolicies[string, string](f.definition, func(p *typedPolicies[string, string]) { p.readHooks = appendReadHooks(p.readHooks, value) })
+// AfterRead appends response transforms in order; no callbacks does nothing.
+func (f EmailField) AfterRead(callbacks ...OutputTransform[string]) EmailField {
+	f.definition = withPolicies[string, string](f.definition, func(p *typedPolicies[string, string]) { p.afterRead = append(slices.Clone(p.afterRead), callbacks...) })
 	return f
 }
-func (f EmailField) ReadHookPolicy() ReadHooks[string] {
-	return cloneReadHooks(policies[string, string](f.definition).readHooks)
+
+// AfterReadHooks returns a detached response-transform slice.
+func (f EmailField) AfterReadHooks() []OutputTransform[string] {
+	return slices.Clone(policies[string, string](f.definition).afterRead)
 }
 func (f EmailField) Unique(values ...bool) EmailField {
 	f.definition.unique = len(values) == 0 || values[len(values)-1]
@@ -555,19 +340,21 @@ func (f DateField) HookPolicy() Hooks[string] {
 	return cloneHooks(policies[string, string](f.definition).hooks)
 }
 
-// ReadHooks replaces all response-transform hooks.
-func (f DateField) ReadHooks(value ReadHooks[string]) DateField {
-	f.definition = withPolicies[string, string](f.definition, func(p *typedPolicies[string, string]) { p.readHooks = cloneReadHooks(value) })
+// ReplaceAfterRead replaces response transforms; no callbacks clears them.
+func (f DateField) ReplaceAfterRead(callbacks ...OutputTransform[string]) DateField {
+	f.definition = withPolicies[string, string](f.definition, func(p *typedPolicies[string, string]) { p.afterRead = slices.Clone(callbacks) })
 	return f
 }
 
-// AppendReadHooks appends response-transform hooks after existing callbacks.
-func (f DateField) AppendReadHooks(value ReadHooks[string]) DateField {
-	f.definition = withPolicies[string, string](f.definition, func(p *typedPolicies[string, string]) { p.readHooks = appendReadHooks(p.readHooks, value) })
+// AfterRead appends response transforms in order; no callbacks does nothing.
+func (f DateField) AfterRead(callbacks ...OutputTransform[string]) DateField {
+	f.definition = withPolicies[string, string](f.definition, func(p *typedPolicies[string, string]) { p.afterRead = append(slices.Clone(p.afterRead), callbacks...) })
 	return f
 }
-func (f DateField) ReadHookPolicy() ReadHooks[string] {
-	return cloneReadHooks(policies[string, string](f.definition).readHooks)
+
+// AfterReadHooks returns a detached response-transform slice.
+func (f DateField) AfterReadHooks() []OutputTransform[string] {
+	return slices.Clone(policies[string, string](f.definition).afterRead)
 }
 func (f DateField) Unique(values ...bool) DateField {
 	f.definition.unique = len(values) == 0 || values[len(values)-1]
@@ -666,19 +453,23 @@ func (f NumberField) HookPolicy() Hooks[float64] {
 	return cloneHooks(policies[float64, float64](f.definition).hooks)
 }
 
-// ReadHooks replaces all response-transform hooks.
-func (f NumberField) ReadHooks(value ReadHooks[float64]) NumberField {
-	f.definition = withPolicies[float64, float64](f.definition, func(p *typedPolicies[float64, float64]) { p.readHooks = cloneReadHooks(value) })
+// ReplaceAfterRead replaces response transforms; no callbacks clears them.
+func (f NumberField) ReplaceAfterRead(callbacks ...OutputTransform[float64]) NumberField {
+	f.definition = withPolicies[float64, float64](f.definition, func(p *typedPolicies[float64, float64]) { p.afterRead = slices.Clone(callbacks) })
 	return f
 }
 
-// AppendReadHooks appends response-transform hooks after existing callbacks.
-func (f NumberField) AppendReadHooks(value ReadHooks[float64]) NumberField {
-	f.definition = withPolicies[float64, float64](f.definition, func(p *typedPolicies[float64, float64]) { p.readHooks = appendReadHooks(p.readHooks, value) })
+// AfterRead appends response transforms in order; no callbacks does nothing.
+func (f NumberField) AfterRead(callbacks ...OutputTransform[float64]) NumberField {
+	f.definition = withPolicies[float64, float64](f.definition, func(p *typedPolicies[float64, float64]) {
+		p.afterRead = append(slices.Clone(p.afterRead), callbacks...)
+	})
 	return f
 }
-func (f NumberField) ReadHookPolicy() ReadHooks[float64] {
-	return cloneReadHooks(policies[float64, float64](f.definition).readHooks)
+
+// AfterReadHooks returns a detached response-transform slice.
+func (f NumberField) AfterReadHooks() []OutputTransform[float64] {
+	return slices.Clone(policies[float64, float64](f.definition).afterRead)
 }
 func (f NumberField) Unique(values ...bool) NumberField {
 	f.definition.unique = len(values) == 0 || values[len(values)-1]
@@ -783,19 +574,21 @@ func (f CheckboxField) HookPolicy() Hooks[bool] {
 	return cloneHooks(policies[bool, bool](f.definition).hooks)
 }
 
-// ReadHooks replaces all response-transform hooks.
-func (f CheckboxField) ReadHooks(value ReadHooks[bool]) CheckboxField {
-	f.definition = withPolicies[bool, bool](f.definition, func(p *typedPolicies[bool, bool]) { p.readHooks = cloneReadHooks(value) })
+// ReplaceAfterRead replaces response transforms; no callbacks clears them.
+func (f CheckboxField) ReplaceAfterRead(callbacks ...OutputTransform[bool]) CheckboxField {
+	f.definition = withPolicies[bool, bool](f.definition, func(p *typedPolicies[bool, bool]) { p.afterRead = slices.Clone(callbacks) })
 	return f
 }
 
-// AppendReadHooks appends response-transform hooks after existing callbacks.
-func (f CheckboxField) AppendReadHooks(value ReadHooks[bool]) CheckboxField {
-	f.definition = withPolicies[bool, bool](f.definition, func(p *typedPolicies[bool, bool]) { p.readHooks = appendReadHooks(p.readHooks, value) })
+// AfterRead appends response transforms in order; no callbacks does nothing.
+func (f CheckboxField) AfterRead(callbacks ...OutputTransform[bool]) CheckboxField {
+	f.definition = withPolicies[bool, bool](f.definition, func(p *typedPolicies[bool, bool]) { p.afterRead = append(slices.Clone(p.afterRead), callbacks...) })
 	return f
 }
-func (f CheckboxField) ReadHookPolicy() ReadHooks[bool] {
-	return cloneReadHooks(policies[bool, bool](f.definition).readHooks)
+
+// AfterReadHooks returns a detached response-transform slice.
+func (f CheckboxField) AfterReadHooks() []OutputTransform[bool] {
+	return slices.Clone(policies[bool, bool](f.definition).afterRead)
 }
 func (f CheckboxField) Unique(values ...bool) CheckboxField {
 	f.definition.unique = len(values) == 0 || values[len(values)-1]
@@ -896,19 +689,23 @@ func (f JSONField) HookPolicy() Hooks[store.Value] {
 	return cloneHooks(policies[store.Value, store.Value](f.definition).hooks)
 }
 
-// ReadHooks replaces all response-transform hooks.
-func (f JSONField) ReadHooks(value ReadHooks[store.Value]) JSONField {
-	f.definition = withPolicies[store.Value, store.Value](f.definition, func(p *typedPolicies[store.Value, store.Value]) { p.readHooks = cloneReadHooks(value) })
+// ReplaceAfterRead replaces response transforms; no callbacks clears them.
+func (f JSONField) ReplaceAfterRead(callbacks ...OutputTransform[store.Value]) JSONField {
+	f.definition = withPolicies[store.Value, store.Value](f.definition, func(p *typedPolicies[store.Value, store.Value]) { p.afterRead = slices.Clone(callbacks) })
 	return f
 }
 
-// AppendReadHooks appends response-transform hooks after existing callbacks.
-func (f JSONField) AppendReadHooks(value ReadHooks[store.Value]) JSONField {
-	f.definition = withPolicies[store.Value, store.Value](f.definition, func(p *typedPolicies[store.Value, store.Value]) { p.readHooks = appendReadHooks(p.readHooks, value) })
+// AfterRead appends response transforms in order; no callbacks does nothing.
+func (f JSONField) AfterRead(callbacks ...OutputTransform[store.Value]) JSONField {
+	f.definition = withPolicies[store.Value, store.Value](f.definition, func(p *typedPolicies[store.Value, store.Value]) {
+		p.afterRead = append(slices.Clone(p.afterRead), callbacks...)
+	})
 	return f
 }
-func (f JSONField) ReadHookPolicy() ReadHooks[store.Value] {
-	return cloneReadHooks(policies[store.Value, store.Value](f.definition).readHooks)
+
+// AfterReadHooks returns a detached response-transform slice.
+func (f JSONField) AfterReadHooks() []OutputTransform[store.Value] {
+	return slices.Clone(policies[store.Value, store.Value](f.definition).afterRead)
 }
 
 // PointField configures a field for a geographic point.
@@ -997,19 +794,23 @@ func (f PointField) HookPolicy() Hooks[store.Value] {
 	return cloneHooks(policies[store.Value, store.Value](f.definition).hooks)
 }
 
-// ReadHooks replaces all response-transform hooks.
-func (f PointField) ReadHooks(value ReadHooks[store.Value]) PointField {
-	f.definition = withPolicies[store.Value, store.Value](f.definition, func(p *typedPolicies[store.Value, store.Value]) { p.readHooks = cloneReadHooks(value) })
+// ReplaceAfterRead replaces response transforms; no callbacks clears them.
+func (f PointField) ReplaceAfterRead(callbacks ...OutputTransform[store.Value]) PointField {
+	f.definition = withPolicies[store.Value, store.Value](f.definition, func(p *typedPolicies[store.Value, store.Value]) { p.afterRead = slices.Clone(callbacks) })
 	return f
 }
 
-// AppendReadHooks appends response-transform hooks after existing callbacks.
-func (f PointField) AppendReadHooks(value ReadHooks[store.Value]) PointField {
-	f.definition = withPolicies[store.Value, store.Value](f.definition, func(p *typedPolicies[store.Value, store.Value]) { p.readHooks = appendReadHooks(p.readHooks, value) })
+// AfterRead appends response transforms in order; no callbacks does nothing.
+func (f PointField) AfterRead(callbacks ...OutputTransform[store.Value]) PointField {
+	f.definition = withPolicies[store.Value, store.Value](f.definition, func(p *typedPolicies[store.Value, store.Value]) {
+		p.afterRead = append(slices.Clone(p.afterRead), callbacks...)
+	})
 	return f
 }
-func (f PointField) ReadHookPolicy() ReadHooks[store.Value] {
-	return cloneReadHooks(policies[store.Value, store.Value](f.definition).readHooks)
+
+// AfterReadHooks returns a detached response-transform slice.
+func (f PointField) AfterReadHooks() []OutputTransform[store.Value] {
+	return slices.Clone(policies[store.Value, store.Value](f.definition).afterRead)
 }
 
 // SelectField configures a field for choosing one value from a fixed list.
@@ -1102,19 +903,21 @@ func (f SelectField) HookPolicy() Hooks[string] {
 	return cloneHooks(policies[string, string](f.definition).hooks)
 }
 
-// ReadHooks replaces all response-transform hooks.
-func (f SelectField) ReadHooks(value ReadHooks[string]) SelectField {
-	f.definition = withPolicies[string, string](f.definition, func(p *typedPolicies[string, string]) { p.readHooks = cloneReadHooks(value) })
+// ReplaceAfterRead replaces response transforms; no callbacks clears them.
+func (f SelectField) ReplaceAfterRead(callbacks ...OutputTransform[string]) SelectField {
+	f.definition = withPolicies[string, string](f.definition, func(p *typedPolicies[string, string]) { p.afterRead = slices.Clone(callbacks) })
 	return f
 }
 
-// AppendReadHooks appends response-transform hooks after existing callbacks.
-func (f SelectField) AppendReadHooks(value ReadHooks[string]) SelectField {
-	f.definition = withPolicies[string, string](f.definition, func(p *typedPolicies[string, string]) { p.readHooks = appendReadHooks(p.readHooks, value) })
+// AfterRead appends response transforms in order; no callbacks does nothing.
+func (f SelectField) AfterRead(callbacks ...OutputTransform[string]) SelectField {
+	f.definition = withPolicies[string, string](f.definition, func(p *typedPolicies[string, string]) { p.afterRead = append(slices.Clone(p.afterRead), callbacks...) })
 	return f
 }
-func (f SelectField) ReadHookPolicy() ReadHooks[string] {
-	return cloneReadHooks(policies[string, string](f.definition).readHooks)
+
+// AfterReadHooks returns a detached response-transform slice.
+func (f SelectField) AfterReadHooks() []OutputTransform[string] {
+	return slices.Clone(policies[string, string](f.definition).afterRead)
 }
 func (f SelectField) Unique(values ...bool) SelectField {
 	f.definition.unique = len(values) == 0 || values[len(values)-1]
@@ -1135,127 +938,13 @@ func (f SelectField) Options(values ...Option) SelectField {
 	return f
 }
 
-// RadioField configures a field for choosing one value with radio buttons.
-type RadioField struct{ nodeView }
-
 // Radio creates a field for choosing one value with radio buttons.
 // Values are stored exactly as given; display labels are generated during resolution.
 // Use Options to configure custom labels or translations.
-func Radio(name string, values ...string) RadioField {
+func Radio(name string, values ...string) SelectField {
 	d := newNode(KindRadio, name)
 	d.options = optionsFromValues(values)
-	return RadioField{nodeView{d}}
-}
-func (f RadioField) Rename(name string) RadioField { f.definition.name = name; return f }
-func (f RadioField) Label(value string) RadioField { f.definition.label = value; return f }
-func (f RadioField) LabelTranslations(values map[string]string) RadioField {
-	f.definition.admin.LabelTranslations = cloneTranslations(values)
-	return f
-}
-
-// Admin replaces the complete admin presentation policy.
-func (f RadioField) Admin(value Admin) RadioField {
-	f.definition = f.definition.setAdmin(value)
-	return f
-}
-
-// EditAdmin updates selected admin settings while preserving the rest.
-func (f RadioField) EditAdmin(edit func(*Admin)) RadioField {
-	f.definition = f.definition.setAdmin(editAdmin(f.AdminPolicy(), edit))
-	return f
-}
-func (f RadioField) Private(namespace string, value store.Value) RadioField {
-	f.definition = f.definition.setPrivate(namespace, value)
-	return f
-}
-
-// Access replaces the complete field access policy.
-func (f RadioField) Access(value Access) RadioField {
-	f.definition = f.definition.withGraph(func(g *graphPolicies) { g.access = value })
-	return f
-}
-
-// RestrictAccess combines supplied rules with existing access rules; both must allow.
-func (f RadioField) RestrictAccess(value Access) RadioField {
-	f.definition = f.definition.withGraph(func(g *graphPolicies) { g.access = restrictAccess(g.access, value) })
-	return f
-}
-func (f RadioField) Required(values ...bool) RadioField {
-	f.definition = require(f.definition, values)
-	return f
-}
-func (f RadioField) Localized(values ...bool) RadioField {
-	f.definition = localize(f.definition, values)
-	return f
-}
-
-// Validate appends one authoritative save validator.
-func (f RadioField) Validate(value Validator[string]) RadioField {
-	f.definition = withPolicies[string, string](f.definition, func(p *typedPolicies[string, string]) { p.validators = append(slices.Clone(p.validators), value) })
-	return f
-}
-
-// ReplaceValidators replaces all authoritative save validators.
-func (f RadioField) ReplaceValidators(values ...Validator[string]) RadioField {
-	f.definition = withPolicies[string, string](f.definition, func(p *typedPolicies[string, string]) { p.validators = slices.Clone(values) })
-	return f
-}
-
-// Hooks replaces the complete field lifecycle hook group.
-func (f RadioField) Hooks(value Hooks[string]) RadioField {
-	f.definition = withPolicies[string, string](f.definition, func(p *typedPolicies[string, string]) { p.hooks = cloneHooks(value) })
-	return f
-}
-
-// AppendHooks appends supplied callbacks after existing callbacks in each phase.
-func (f RadioField) AppendHooks(value Hooks[string]) RadioField {
-	f.definition = withPolicies[string, string](f.definition, func(p *typedPolicies[string, string]) { p.hooks = appendHooks(p.hooks, value) })
-	return f
-}
-
-// PrependHooks inserts supplied callbacks before existing callbacks in each phase.
-func (f RadioField) PrependHooks(value Hooks[string]) RadioField {
-	f.definition = withPolicies[string, string](f.definition, func(p *typedPolicies[string, string]) { p.hooks = prependHooks(p.hooks, value) })
-	return f
-}
-func (f RadioField) Validators() []Validator[string] {
-	return slices.Clone(policies[string, string](f.definition).validators)
-}
-func (f RadioField) HookPolicy() Hooks[string] {
-	return cloneHooks(policies[string, string](f.definition).hooks)
-}
-
-// ReadHooks replaces all response-transform hooks.
-func (f RadioField) ReadHooks(value ReadHooks[string]) RadioField {
-	f.definition = withPolicies[string, string](f.definition, func(p *typedPolicies[string, string]) { p.readHooks = cloneReadHooks(value) })
-	return f
-}
-
-// AppendReadHooks appends response-transform hooks after existing callbacks.
-func (f RadioField) AppendReadHooks(value ReadHooks[string]) RadioField {
-	f.definition = withPolicies[string, string](f.definition, func(p *typedPolicies[string, string]) { p.readHooks = appendReadHooks(p.readHooks, value) })
-	return f
-}
-func (f RadioField) ReadHookPolicy() ReadHooks[string] {
-	return cloneReadHooks(policies[string, string](f.definition).readHooks)
-}
-func (f RadioField) Unique(values ...bool) RadioField {
-	f.definition.unique = len(values) == 0 || values[len(values)-1]
-	return f
-}
-func (f RadioField) Index(values ...bool) RadioField {
-	f.definition.index = len(values) == 0 || values[len(values)-1]
-	return f
-}
-func (f RadioField) Default(value string) RadioField {
-	f.definition = setDefault(f.definition, value)
-	return f
-}
-
-// Options replaces the option list with options that can include labels and translations.
-func (f RadioField) Options(values ...Option) RadioField {
-	f.definition.options = cloneOptions(values)
-	return f
+	return SelectField{nodeView{d}}
 }
 
 // MultiSelectField configures a field for choosing several values from a fixed list.
@@ -1349,19 +1038,23 @@ func (f MultiSelectField) HookPolicy() Hooks[[]string] {
 	return cloneHooks(policies[[]string, []string](f.definition).hooks)
 }
 
-// ReadHooks replaces all response-transform hooks.
-func (f MultiSelectField) ReadHooks(value ReadHooks[[]string]) MultiSelectField {
-	f.definition = withPolicies[[]string, []string](f.definition, func(p *typedPolicies[[]string, []string]) { p.readHooks = cloneReadHooks(value) })
+// ReplaceAfterRead replaces response transforms; no callbacks clears them.
+func (f MultiSelectField) ReplaceAfterRead(callbacks ...OutputTransform[[]string]) MultiSelectField {
+	f.definition = withPolicies[[]string, []string](f.definition, func(p *typedPolicies[[]string, []string]) { p.afterRead = slices.Clone(callbacks) })
 	return f
 }
 
-// AppendReadHooks appends response-transform hooks after existing callbacks.
-func (f MultiSelectField) AppendReadHooks(value ReadHooks[[]string]) MultiSelectField {
-	f.definition = withPolicies[[]string, []string](f.definition, func(p *typedPolicies[[]string, []string]) { p.readHooks = appendReadHooks(p.readHooks, value) })
+// AfterRead appends response transforms in order; no callbacks does nothing.
+func (f MultiSelectField) AfterRead(callbacks ...OutputTransform[[]string]) MultiSelectField {
+	f.definition = withPolicies[[]string, []string](f.definition, func(p *typedPolicies[[]string, []string]) {
+		p.afterRead = append(slices.Clone(p.afterRead), callbacks...)
+	})
 	return f
 }
-func (f MultiSelectField) ReadHookPolicy() ReadHooks[[]string] {
-	return cloneReadHooks(policies[[]string, []string](f.definition).readHooks)
+
+// AfterReadHooks returns a detached response-transform slice.
+func (f MultiSelectField) AfterReadHooks() []OutputTransform[[]string] {
+	return slices.Clone(policies[[]string, []string](f.definition).afterRead)
 }
 
 // Options replaces the option list with options that can include labels and translations.
@@ -1471,21 +1164,23 @@ func (f RelationshipField) HookPolicy() Hooks[operation.ID] {
 	return cloneHooks(policies[operation.ID, operation.ReferenceOutput](f.definition).hooks)
 }
 
-// ReadHooks replaces all response-transform hooks.
-func (f RelationshipField) ReadHooks(value ReadHooks[operation.ReferenceOutput]) RelationshipField {
-	f.definition = withPolicies[operation.ID, operation.ReferenceOutput](f.definition, func(p *typedPolicies[operation.ID, operation.ReferenceOutput]) { p.readHooks = cloneReadHooks(value) })
+// ReplaceAfterRead replaces response transforms; no callbacks clears them.
+func (f RelationshipField) ReplaceAfterRead(callbacks ...OutputTransform[operation.ReferenceOutput]) RelationshipField {
+	f.definition = withPolicies[operation.ID, operation.ReferenceOutput](f.definition, func(p *typedPolicies[operation.ID, operation.ReferenceOutput]) { p.afterRead = slices.Clone(callbacks) })
 	return f
 }
 
-// AppendReadHooks appends response-transform hooks after existing callbacks.
-func (f RelationshipField) AppendReadHooks(value ReadHooks[operation.ReferenceOutput]) RelationshipField {
+// AfterRead appends response transforms in order; no callbacks does nothing.
+func (f RelationshipField) AfterRead(callbacks ...OutputTransform[operation.ReferenceOutput]) RelationshipField {
 	f.definition = withPolicies[operation.ID, operation.ReferenceOutput](f.definition, func(p *typedPolicies[operation.ID, operation.ReferenceOutput]) {
-		p.readHooks = appendReadHooks(p.readHooks, value)
+		p.afterRead = append(slices.Clone(p.afterRead), callbacks...)
 	})
 	return f
 }
-func (f RelationshipField) ReadHookPolicy() ReadHooks[operation.ReferenceOutput] {
-	return cloneReadHooks(policies[operation.ID, operation.ReferenceOutput](f.definition).readHooks)
+
+// AfterReadHooks returns a detached response-transform slice.
+func (f RelationshipField) AfterReadHooks() []OutputTransform[operation.ReferenceOutput] {
+	return slices.Clone(policies[operation.ID, operation.ReferenceOutput](f.definition).afterRead)
 }
 func (f RelationshipField) Unique(values ...bool) RelationshipField {
 	f.definition.unique = len(values) == 0 || values[len(values)-1]
@@ -1607,23 +1302,25 @@ func (f RelationshipsField) HookPolicy() Hooks[[]operation.ID] {
 	return cloneHooks(policies[[]operation.ID, []operation.ReferenceOutput](f.definition).hooks)
 }
 
-// ReadHooks replaces all response-transform hooks.
-func (f RelationshipsField) ReadHooks(value ReadHooks[[]operation.ReferenceOutput]) RelationshipsField {
+// ReplaceAfterRead replaces response transforms; no callbacks clears them.
+func (f RelationshipsField) ReplaceAfterRead(callbacks ...OutputTransform[[]operation.ReferenceOutput]) RelationshipsField {
 	f.definition = withPolicies[[]operation.ID, []operation.ReferenceOutput](f.definition, func(p *typedPolicies[[]operation.ID, []operation.ReferenceOutput]) {
-		p.readHooks = cloneReadHooks(value)
+		p.afterRead = slices.Clone(callbacks)
 	})
 	return f
 }
 
-// AppendReadHooks appends response-transform hooks after existing callbacks.
-func (f RelationshipsField) AppendReadHooks(value ReadHooks[[]operation.ReferenceOutput]) RelationshipsField {
+// AfterRead appends response transforms in order; no callbacks does nothing.
+func (f RelationshipsField) AfterRead(callbacks ...OutputTransform[[]operation.ReferenceOutput]) RelationshipsField {
 	f.definition = withPolicies[[]operation.ID, []operation.ReferenceOutput](f.definition, func(p *typedPolicies[[]operation.ID, []operation.ReferenceOutput]) {
-		p.readHooks = appendReadHooks(p.readHooks, value)
+		p.afterRead = append(slices.Clone(p.afterRead), callbacks...)
 	})
 	return f
 }
-func (f RelationshipsField) ReadHookPolicy() ReadHooks[[]operation.ReferenceOutput] {
-	return cloneReadHooks(policies[[]operation.ID, []operation.ReferenceOutput](f.definition).readHooks)
+
+// AfterReadHooks returns a detached response-transform slice.
+func (f RelationshipsField) AfterReadHooks() []OutputTransform[[]operation.ReferenceOutput] {
+	return slices.Clone(policies[[]operation.ID, []operation.ReferenceOutput](f.definition).afterRead)
 }
 func (f RelationshipsField) OnDelete(value ReferenceDeleteAction) RelationshipsField {
 	f.definition.referenceDeleteAction = value
@@ -1726,21 +1423,23 @@ func (f UploadField) HookPolicy() Hooks[operation.ID] {
 	return cloneHooks(policies[operation.ID, operation.ReferenceOutput](f.definition).hooks)
 }
 
-// ReadHooks replaces all response-transform hooks.
-func (f UploadField) ReadHooks(value ReadHooks[operation.ReferenceOutput]) UploadField {
-	f.definition = withPolicies[operation.ID, operation.ReferenceOutput](f.definition, func(p *typedPolicies[operation.ID, operation.ReferenceOutput]) { p.readHooks = cloneReadHooks(value) })
+// ReplaceAfterRead replaces response transforms; no callbacks clears them.
+func (f UploadField) ReplaceAfterRead(callbacks ...OutputTransform[operation.ReferenceOutput]) UploadField {
+	f.definition = withPolicies[operation.ID, operation.ReferenceOutput](f.definition, func(p *typedPolicies[operation.ID, operation.ReferenceOutput]) { p.afterRead = slices.Clone(callbacks) })
 	return f
 }
 
-// AppendReadHooks appends response-transform hooks after existing callbacks.
-func (f UploadField) AppendReadHooks(value ReadHooks[operation.ReferenceOutput]) UploadField {
+// AfterRead appends response transforms in order; no callbacks does nothing.
+func (f UploadField) AfterRead(callbacks ...OutputTransform[operation.ReferenceOutput]) UploadField {
 	f.definition = withPolicies[operation.ID, operation.ReferenceOutput](f.definition, func(p *typedPolicies[operation.ID, operation.ReferenceOutput]) {
-		p.readHooks = appendReadHooks(p.readHooks, value)
+		p.afterRead = append(slices.Clone(p.afterRead), callbacks...)
 	})
 	return f
 }
-func (f UploadField) ReadHookPolicy() ReadHooks[operation.ReferenceOutput] {
-	return cloneReadHooks(policies[operation.ID, operation.ReferenceOutput](f.definition).readHooks)
+
+// AfterReadHooks returns a detached response-transform slice.
+func (f UploadField) AfterReadHooks() []OutputTransform[operation.ReferenceOutput] {
+	return slices.Clone(policies[operation.ID, operation.ReferenceOutput](f.definition).afterRead)
 }
 func (f UploadField) Unique(values ...bool) UploadField {
 	f.definition.unique = len(values) == 0 || values[len(values)-1]
@@ -1856,23 +1555,25 @@ func (f UploadsField) HookPolicy() Hooks[[]operation.ID] {
 	return cloneHooks(policies[[]operation.ID, []operation.ReferenceOutput](f.definition).hooks)
 }
 
-// ReadHooks replaces all response-transform hooks.
-func (f UploadsField) ReadHooks(value ReadHooks[[]operation.ReferenceOutput]) UploadsField {
+// ReplaceAfterRead replaces response transforms; no callbacks clears them.
+func (f UploadsField) ReplaceAfterRead(callbacks ...OutputTransform[[]operation.ReferenceOutput]) UploadsField {
 	f.definition = withPolicies[[]operation.ID, []operation.ReferenceOutput](f.definition, func(p *typedPolicies[[]operation.ID, []operation.ReferenceOutput]) {
-		p.readHooks = cloneReadHooks(value)
+		p.afterRead = slices.Clone(callbacks)
 	})
 	return f
 }
 
-// AppendReadHooks appends response-transform hooks after existing callbacks.
-func (f UploadsField) AppendReadHooks(value ReadHooks[[]operation.ReferenceOutput]) UploadsField {
+// AfterRead appends response transforms in order; no callbacks does nothing.
+func (f UploadsField) AfterRead(callbacks ...OutputTransform[[]operation.ReferenceOutput]) UploadsField {
 	f.definition = withPolicies[[]operation.ID, []operation.ReferenceOutput](f.definition, func(p *typedPolicies[[]operation.ID, []operation.ReferenceOutput]) {
-		p.readHooks = appendReadHooks(p.readHooks, value)
+		p.afterRead = append(slices.Clone(p.afterRead), callbacks...)
 	})
 	return f
 }
-func (f UploadsField) ReadHookPolicy() ReadHooks[[]operation.ReferenceOutput] {
-	return cloneReadHooks(policies[[]operation.ID, []operation.ReferenceOutput](f.definition).readHooks)
+
+// AfterReadHooks returns a detached response-transform slice.
+func (f UploadsField) AfterReadHooks() []OutputTransform[[]operation.ReferenceOutput] {
+	return slices.Clone(policies[[]operation.ID, []operation.ReferenceOutput](f.definition).afterRead)
 }
 func (f UploadsField) OnDelete(value ReferenceDeleteAction) UploadsField {
 	f.definition.referenceDeleteAction = value
@@ -1989,19 +1690,23 @@ func (f PolymorphicRelationshipField) HookPolicy() Hooks[store.Value] {
 	return cloneHooks(policies[store.Value, store.Value](f.definition).hooks)
 }
 
-// ReadHooks replaces all response-transform hooks.
-func (f PolymorphicRelationshipField) ReadHooks(value ReadHooks[store.Value]) PolymorphicRelationshipField {
-	f.definition = withPolicies[store.Value, store.Value](f.definition, func(p *typedPolicies[store.Value, store.Value]) { p.readHooks = cloneReadHooks(value) })
+// ReplaceAfterRead replaces response transforms; no callbacks clears them.
+func (f PolymorphicRelationshipField) ReplaceAfterRead(callbacks ...OutputTransform[store.Value]) PolymorphicRelationshipField {
+	f.definition = withPolicies[store.Value, store.Value](f.definition, func(p *typedPolicies[store.Value, store.Value]) { p.afterRead = slices.Clone(callbacks) })
 	return f
 }
 
-// AppendReadHooks appends response-transform hooks after existing callbacks.
-func (f PolymorphicRelationshipField) AppendReadHooks(value ReadHooks[store.Value]) PolymorphicRelationshipField {
-	f.definition = withPolicies[store.Value, store.Value](f.definition, func(p *typedPolicies[store.Value, store.Value]) { p.readHooks = appendReadHooks(p.readHooks, value) })
+// AfterRead appends response transforms in order; no callbacks does nothing.
+func (f PolymorphicRelationshipField) AfterRead(callbacks ...OutputTransform[store.Value]) PolymorphicRelationshipField {
+	f.definition = withPolicies[store.Value, store.Value](f.definition, func(p *typedPolicies[store.Value, store.Value]) {
+		p.afterRead = append(slices.Clone(p.afterRead), callbacks...)
+	})
 	return f
 }
-func (f PolymorphicRelationshipField) ReadHookPolicy() ReadHooks[store.Value] {
-	return cloneReadHooks(policies[store.Value, store.Value](f.definition).readHooks)
+
+// AfterReadHooks returns a detached response-transform slice.
+func (f PolymorphicRelationshipField) AfterReadHooks() []OutputTransform[store.Value] {
+	return slices.Clone(policies[store.Value, store.Value](f.definition).afterRead)
 }
 func (f PolymorphicRelationshipField) OnDelete(value ReferenceDeleteAction) PolymorphicRelationshipField {
 	f.definition.referenceDeleteAction = value
@@ -2119,19 +1824,23 @@ func (f PolymorphicRelationshipsField) HookPolicy() Hooks[store.Value] {
 	return cloneHooks(policies[store.Value, store.Value](f.definition).hooks)
 }
 
-// ReadHooks replaces all response-transform hooks.
-func (f PolymorphicRelationshipsField) ReadHooks(value ReadHooks[store.Value]) PolymorphicRelationshipsField {
-	f.definition = withPolicies[store.Value, store.Value](f.definition, func(p *typedPolicies[store.Value, store.Value]) { p.readHooks = cloneReadHooks(value) })
+// ReplaceAfterRead replaces response transforms; no callbacks clears them.
+func (f PolymorphicRelationshipsField) ReplaceAfterRead(callbacks ...OutputTransform[store.Value]) PolymorphicRelationshipsField {
+	f.definition = withPolicies[store.Value, store.Value](f.definition, func(p *typedPolicies[store.Value, store.Value]) { p.afterRead = slices.Clone(callbacks) })
 	return f
 }
 
-// AppendReadHooks appends response-transform hooks after existing callbacks.
-func (f PolymorphicRelationshipsField) AppendReadHooks(value ReadHooks[store.Value]) PolymorphicRelationshipsField {
-	f.definition = withPolicies[store.Value, store.Value](f.definition, func(p *typedPolicies[store.Value, store.Value]) { p.readHooks = appendReadHooks(p.readHooks, value) })
+// AfterRead appends response transforms in order; no callbacks does nothing.
+func (f PolymorphicRelationshipsField) AfterRead(callbacks ...OutputTransform[store.Value]) PolymorphicRelationshipsField {
+	f.definition = withPolicies[store.Value, store.Value](f.definition, func(p *typedPolicies[store.Value, store.Value]) {
+		p.afterRead = append(slices.Clone(p.afterRead), callbacks...)
+	})
 	return f
 }
-func (f PolymorphicRelationshipsField) ReadHookPolicy() ReadHooks[store.Value] {
-	return cloneReadHooks(policies[store.Value, store.Value](f.definition).readHooks)
+
+// AfterReadHooks returns a detached response-transform slice.
+func (f PolymorphicRelationshipsField) AfterReadHooks() []OutputTransform[store.Value] {
+	return slices.Clone(policies[store.Value, store.Value](f.definition).afterRead)
 }
 func (f PolymorphicRelationshipsField) OnDelete(value ReferenceDeleteAction) PolymorphicRelationshipsField {
 	f.definition.referenceDeleteAction = value
@@ -2232,19 +1941,23 @@ func (f GroupField) HookPolicy() Hooks[store.Value] {
 	return cloneHooks(policies[store.Value, store.Value](f.definition).hooks)
 }
 
-// ReadHooks replaces all response-transform hooks.
-func (f GroupField) ReadHooks(value ReadHooks[store.Value]) GroupField {
-	f.definition = withPolicies[store.Value, store.Value](f.definition, func(p *typedPolicies[store.Value, store.Value]) { p.readHooks = cloneReadHooks(value) })
+// ReplaceAfterRead replaces response transforms; no callbacks clears them.
+func (f GroupField) ReplaceAfterRead(callbacks ...OutputTransform[store.Value]) GroupField {
+	f.definition = withPolicies[store.Value, store.Value](f.definition, func(p *typedPolicies[store.Value, store.Value]) { p.afterRead = slices.Clone(callbacks) })
 	return f
 }
 
-// AppendReadHooks appends response-transform hooks after existing callbacks.
-func (f GroupField) AppendReadHooks(value ReadHooks[store.Value]) GroupField {
-	f.definition = withPolicies[store.Value, store.Value](f.definition, func(p *typedPolicies[store.Value, store.Value]) { p.readHooks = appendReadHooks(p.readHooks, value) })
+// AfterRead appends response transforms in order; no callbacks does nothing.
+func (f GroupField) AfterRead(callbacks ...OutputTransform[store.Value]) GroupField {
+	f.definition = withPolicies[store.Value, store.Value](f.definition, func(p *typedPolicies[store.Value, store.Value]) {
+		p.afterRead = append(slices.Clone(p.afterRead), callbacks...)
+	})
 	return f
 }
-func (f GroupField) ReadHookPolicy() ReadHooks[store.Value] {
-	return cloneReadHooks(policies[store.Value, store.Value](f.definition).readHooks)
+
+// AfterReadHooks returns a detached response-transform slice.
+func (f GroupField) AfterReadHooks() []OutputTransform[store.Value] {
+	return slices.Clone(policies[store.Value, store.Value](f.definition).afterRead)
 }
 func (f GroupField) EditChildren(edit func(*ChildrenDraft) error) (GroupField, error) {
 	children, err := f.Children().Edit(edit)
@@ -2345,19 +2058,23 @@ func (f ArrayField) HookPolicy() Hooks[store.Value] {
 	return cloneHooks(policies[store.Value, store.Value](f.definition).hooks)
 }
 
-// ReadHooks replaces all response-transform hooks.
-func (f ArrayField) ReadHooks(value ReadHooks[store.Value]) ArrayField {
-	f.definition = withPolicies[store.Value, store.Value](f.definition, func(p *typedPolicies[store.Value, store.Value]) { p.readHooks = cloneReadHooks(value) })
+// ReplaceAfterRead replaces response transforms; no callbacks clears them.
+func (f ArrayField) ReplaceAfterRead(callbacks ...OutputTransform[store.Value]) ArrayField {
+	f.definition = withPolicies[store.Value, store.Value](f.definition, func(p *typedPolicies[store.Value, store.Value]) { p.afterRead = slices.Clone(callbacks) })
 	return f
 }
 
-// AppendReadHooks appends response-transform hooks after existing callbacks.
-func (f ArrayField) AppendReadHooks(value ReadHooks[store.Value]) ArrayField {
-	f.definition = withPolicies[store.Value, store.Value](f.definition, func(p *typedPolicies[store.Value, store.Value]) { p.readHooks = appendReadHooks(p.readHooks, value) })
+// AfterRead appends response transforms in order; no callbacks does nothing.
+func (f ArrayField) AfterRead(callbacks ...OutputTransform[store.Value]) ArrayField {
+	f.definition = withPolicies[store.Value, store.Value](f.definition, func(p *typedPolicies[store.Value, store.Value]) {
+		p.afterRead = append(slices.Clone(p.afterRead), callbacks...)
+	})
 	return f
 }
-func (f ArrayField) ReadHookPolicy() ReadHooks[store.Value] {
-	return cloneReadHooks(policies[store.Value, store.Value](f.definition).readHooks)
+
+// AfterReadHooks returns a detached response-transform slice.
+func (f ArrayField) AfterReadHooks() []OutputTransform[store.Value] {
+	return slices.Clone(policies[store.Value, store.Value](f.definition).afterRead)
 }
 func (f ArrayField) MinRows(value int) ArrayField { f.definition.minRows = value; return f }
 func (f ArrayField) MaxRows(value int) ArrayField { f.definition.maxRows = value; return f }
@@ -2460,19 +2177,23 @@ func (f BlocksField) HookPolicy() Hooks[store.Value] {
 	return cloneHooks(policies[store.Value, store.Value](f.definition).hooks)
 }
 
-// ReadHooks replaces all response-transform hooks.
-func (f BlocksField) ReadHooks(value ReadHooks[store.Value]) BlocksField {
-	f.definition = withPolicies[store.Value, store.Value](f.definition, func(p *typedPolicies[store.Value, store.Value]) { p.readHooks = cloneReadHooks(value) })
+// ReplaceAfterRead replaces response transforms; no callbacks clears them.
+func (f BlocksField) ReplaceAfterRead(callbacks ...OutputTransform[store.Value]) BlocksField {
+	f.definition = withPolicies[store.Value, store.Value](f.definition, func(p *typedPolicies[store.Value, store.Value]) { p.afterRead = slices.Clone(callbacks) })
 	return f
 }
 
-// AppendReadHooks appends response-transform hooks after existing callbacks.
-func (f BlocksField) AppendReadHooks(value ReadHooks[store.Value]) BlocksField {
-	f.definition = withPolicies[store.Value, store.Value](f.definition, func(p *typedPolicies[store.Value, store.Value]) { p.readHooks = appendReadHooks(p.readHooks, value) })
+// AfterRead appends response transforms in order; no callbacks does nothing.
+func (f BlocksField) AfterRead(callbacks ...OutputTransform[store.Value]) BlocksField {
+	f.definition = withPolicies[store.Value, store.Value](f.definition, func(p *typedPolicies[store.Value, store.Value]) {
+		p.afterRead = append(slices.Clone(p.afterRead), callbacks...)
+	})
 	return f
 }
-func (f BlocksField) ReadHookPolicy() ReadHooks[store.Value] {
-	return cloneReadHooks(policies[store.Value, store.Value](f.definition).readHooks)
+
+// AfterReadHooks returns a detached response-transform slice.
+func (f BlocksField) AfterReadHooks() []OutputTransform[store.Value] {
+	return slices.Clone(policies[store.Value, store.Value](f.definition).afterRead)
 }
 func (f BlocksField) MinRows(value int) BlocksField { f.definition.minRows = value; return f }
 func (f BlocksField) MaxRows(value int) BlocksField { f.definition.maxRows = value; return f }
@@ -2568,19 +2289,23 @@ func (f PluginField) HookPolicy() Hooks[store.Value] {
 	return cloneHooks(policies[store.Value, store.Value](f.definition).hooks)
 }
 
-// ReadHooks replaces all response-transform hooks.
-func (f PluginField) ReadHooks(value ReadHooks[store.Value]) PluginField {
-	f.definition = withPolicies[store.Value, store.Value](f.definition, func(p *typedPolicies[store.Value, store.Value]) { p.readHooks = cloneReadHooks(value) })
+// ReplaceAfterRead replaces response transforms; no callbacks clears them.
+func (f PluginField) ReplaceAfterRead(callbacks ...OutputTransform[store.Value]) PluginField {
+	f.definition = withPolicies[store.Value, store.Value](f.definition, func(p *typedPolicies[store.Value, store.Value]) { p.afterRead = slices.Clone(callbacks) })
 	return f
 }
 
-// AppendReadHooks appends response-transform hooks after existing callbacks.
-func (f PluginField) AppendReadHooks(value ReadHooks[store.Value]) PluginField {
-	f.definition = withPolicies[store.Value, store.Value](f.definition, func(p *typedPolicies[store.Value, store.Value]) { p.readHooks = appendReadHooks(p.readHooks, value) })
+// AfterRead appends response transforms in order; no callbacks does nothing.
+func (f PluginField) AfterRead(callbacks ...OutputTransform[store.Value]) PluginField {
+	f.definition = withPolicies[store.Value, store.Value](f.definition, func(p *typedPolicies[store.Value, store.Value]) {
+		p.afterRead = append(slices.Clone(p.afterRead), callbacks...)
+	})
 	return f
 }
-func (f PluginField) ReadHookPolicy() ReadHooks[store.Value] {
-	return cloneReadHooks(policies[store.Value, store.Value](f.definition).readHooks)
+
+// AfterReadHooks returns a detached response-transform slice.
+func (f PluginField) AfterReadHooks() []OutputTransform[store.Value] {
+	return slices.Clone(policies[store.Value, store.Value](f.definition).afterRead)
 }
 func (f PluginField) CollectionReferenceKeys(keys ...string) PluginField {
 	f.definition.pluginReferenceKeys = slices.Clone(keys)
@@ -2655,19 +2380,23 @@ func (f OutputField) RestrictAccess(value Access) OutputField {
 	return f
 }
 
-// ReadHooks replaces all response-transform hooks.
-func (f OutputField) ReadHooks(value ReadHooks[store.Value]) OutputField {
-	f.definition = withPolicies[store.Value, store.Value](f.definition, func(p *typedPolicies[store.Value, store.Value]) { p.readHooks = cloneReadHooks(value) })
+// ReplaceAfterRead replaces response transforms; no callbacks clears them.
+func (f OutputField) ReplaceAfterRead(callbacks ...OutputTransform[store.Value]) OutputField {
+	f.definition = withPolicies[store.Value, store.Value](f.definition, func(p *typedPolicies[store.Value, store.Value]) { p.afterRead = slices.Clone(callbacks) })
 	return f
 }
 
-// AppendReadHooks appends response-transform hooks after existing callbacks.
-func (f OutputField) AppendReadHooks(value ReadHooks[store.Value]) OutputField {
-	f.definition = withPolicies[store.Value, store.Value](f.definition, func(p *typedPolicies[store.Value, store.Value]) { p.readHooks = appendReadHooks(p.readHooks, value) })
+// AfterRead appends response transforms in order; no callbacks does nothing.
+func (f OutputField) AfterRead(callbacks ...OutputTransform[store.Value]) OutputField {
+	f.definition = withPolicies[store.Value, store.Value](f.definition, func(p *typedPolicies[store.Value, store.Value]) {
+		p.afterRead = append(slices.Clone(p.afterRead), callbacks...)
+	})
 	return f
 }
-func (f OutputField) ReadHookPolicy() ReadHooks[store.Value] {
-	return cloneReadHooks(policies[store.Value, store.Value](f.definition).readHooks)
+
+// AfterReadHooks returns a detached response-transform slice.
+func (f OutputField) AfterReadHooks() []OutputTransform[store.Value] {
+	return slices.Clone(policies[store.Value, store.Value](f.definition).afterRead)
 }
 func (f OutputField) Resolver() Resolver[store.Value] {
 	return policies[store.Value, store.Value](f.definition).resolver
@@ -2778,21 +2507,24 @@ func (f JoinField) RestrictAccess(value Access) JoinField {
 	return f
 }
 
-// ReadHooks replaces the authorized join output transformations.
-func (f JoinField) ReadHooks(value ReadHooks[store.Value]) JoinField {
-	f.definition = withPolicies[store.Value, store.Value](f.definition, func(p *typedPolicies[store.Value, store.Value]) { p.readHooks = cloneReadHooks(value) })
+// ReplaceAfterRead replaces response transforms; no callbacks clears them.
+func (f JoinField) ReplaceAfterRead(callbacks ...OutputTransform[store.Value]) JoinField {
+	f.definition = withPolicies[store.Value, store.Value](f.definition, func(p *typedPolicies[store.Value, store.Value]) { p.afterRead = slices.Clone(callbacks) })
 	return f
 }
 
-// AppendReadHooks appends authorized join output transformations.
-func (f JoinField) AppendReadHooks(value ReadHooks[store.Value]) JoinField {
-	f.definition = withPolicies[store.Value, store.Value](f.definition, func(p *typedPolicies[store.Value, store.Value]) { p.readHooks = appendReadHooks(p.readHooks, value) })
+// AfterRead appends response transforms in order; no callbacks does nothing.
+func (f JoinField) AfterRead(callbacks ...OutputTransform[store.Value]) JoinField {
+	f.definition = withPolicies[store.Value, store.Value](f.definition, func(p *typedPolicies[store.Value, store.Value]) {
+		p.afterRead = append(slices.Clone(p.afterRead), callbacks...)
+	})
 	return f
 }
 
-// ReadHookPolicy returns the detached join output transformation group.
-func (f JoinField) ReadHookPolicy() ReadHooks[store.Value] {
-	return cloneReadHooks(policies[store.Value, store.Value](f.definition).readHooks)
+// AfterReadHooks returns a detached response-transform slice.
+// AfterReadHooks returns a detached response-transform slice.
+func (f JoinField) AfterReadHooks() []OutputTransform[store.Value] {
+	return slices.Clone(policies[store.Value, store.Value](f.definition).afterRead)
 }
 
 // EditBlocks edits a detached block declaration slice and publishes it only

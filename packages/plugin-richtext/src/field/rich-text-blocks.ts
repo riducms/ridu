@@ -17,6 +17,9 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export function blockSummary(fields: Record<string, unknown>, type?: SchemaBlockType): string {
+	// Named cards render their guarded header instead. Never mirror an editorial name
+	// into plugin-owned text, because the configured field may be unreadable.
+	if (type?.admin?.nameField !== undefined) return "";
 	const summary = type?.admin?.rowLabel;
 	if (summary !== undefined) {
 		const value = summary

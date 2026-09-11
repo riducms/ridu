@@ -61,7 +61,7 @@ func TestBlockSiblingUpdatePreservesAbsentTranslations(t *testing.T) {
 						"links":    store.List(store.Object(store.Values{"label": store.String(name), "translation": store.String("English " + name)})),
 					})
 				}
-				created, err := app.Local().Create(ctx, "pages", store.Values{"layout": store.List(row("A"), row("B"))}, nil)
+				created, err := app.Local().Create(ctx, "pages", store.Values{"layout": store.List(row("A"), row("B"))}, ridu.MutationOptions{})
 				if err != nil {
 					t.Fatal(err)
 				}

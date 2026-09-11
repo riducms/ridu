@@ -118,7 +118,7 @@ The first admin bootstrap credential is marked verified so a broken or not-yet-c
 system cannot lock the initial operator out. Later users in a verification-enabled collection must
 consume a verification token before login.
 
-Go application code uses `app.CreateAuthUser`/`CreateAuthUserWithOptions`; HTTP adapters use
+Go application code uses `app.CreateAuthUser`; HTTP adapters use
 `CreateAuthUserForTransport` to include the one-user bootstrap behaviour. All forms create the
 document and credential atomically and run create access, validation, hooks, and version logic.
 `app.AuthInitialized` reveals only whether an active auth document

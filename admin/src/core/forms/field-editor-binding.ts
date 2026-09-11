@@ -1,4 +1,4 @@
-import { cloneSchemaField } from "@riducms/protocol";
+import { FieldBindingLifetime } from "@admin/core/forms/field-binding-lifetime";
 import type {
 	FieldBinding,
 	FieldEditorProps,
@@ -8,55 +8,32 @@ import type {
 import type { SchemaField } from "@riducms/protocol";
 import { fieldControlARIA } from "@riducms/ui";
 import type { FormController } from "@admin/core/forms/form-controller.svelte";
-import { fieldAccessPath } from "@admin/fields/nested/scoped-field";
 import { cloneFormValue } from "@admin/core/forms/form-schema";
-import { evaluateFieldCondition } from "@admin/core/forms/field-condition";
-import { captureFieldOccurrence, type FieldOccurrence } from "@admin/core/forms/field-occurrence";
 
 /** The host owns this capability until unmount or an invalidating form transition. */
 export class FieldEditorBinding<Type extends FieldEditorType> implements FieldBinding<Type> {
 	#form: FormController;
-	#schema: () => SchemaField;
-	#occurrence: FieldOccurrence;
-	#path: string;
-	#stale = false;
-	#stopPath: () => void;
-	#stopObserve: () => void;
-	#stopLifetime: () => void;
-	#epoch: number;
-	#resource: string;
-	#locale: string | undefined;
+	#lifetime: FieldBindingLifetime;
 	#type: Type;
-	#schemaID: string;
-	#schemaVersion: () => unknown;
-	#initialSchemaVersion: unknown;
+	#apply: ((value: FieldEditorValue<Type> | null) => void) | undefined;
 	readonly form: FieldEditorProps["form"];
 
 	constructor(
 		form: FormController,
 		schema: () => SchemaField,
 		type: Type,
-		schemaVersion: () => unknown = () => form.editorEpoch
+		schemaVersion: () => unknown = () => form.editorEpoch,
+		apply?: (value: FieldEditorValue<Type> | null) => void
 	) {
 		this.#form = form;
-		this.#schemaID = schema().id;
-		this.#schemaVersion = schemaVersion;
-		this.#initialSchemaVersion = schemaVersion();
-		this.#schema = schema;
+		this.#apply = apply;
 		this.#type = type;
-		this.#epoch = form.editorEpoch;
-		this.#resource = JSON.stringify(form.resource);
-		this.#locale = form.contentLocale;
-		this.#path = schema().path;
-		this.#occurrence = captureFieldOccurrence(form, this.#path);
-		this.#stopPath = form.register(this.#path);
-		this.#stopObserve = form.observe(this.#path.split(".")[0]!, () => this.#resolve());
-		this.#stopLifetime = form.registerEditorLifetime(this.destroy);
+		this.#lifetime = new FieldBindingLifetime(form, schema, schemaVersion);
 		const binding = this;
 		this.form = {
 			get contentLocale() {
 				binding.assertActive();
-				return binding.#locale;
+				return form.contentLocale;
 			},
 			get resource() {
 				binding.assertActive();
@@ -78,68 +55,39 @@ export class FieldEditorBinding<Type extends FieldEditorType> implements FieldBi
 	}
 
 	get schema(): SchemaField & { type: Type } {
-		// A revoked host can render once before its keyed subtree unmounts. Metadata
-		// remains a detached snapshot; values and writes stay revoked immediately.
-		this.#resolve();
-		return {
-			...cloneSchemaField(this.#schema()),
-			type: this.#type,
-			path: this.#path,
-		};
+		return { ...this.#lifetime.schema, type: this.#type };
 	}
 	get stale() {
-		this.#resolve();
-		return this.#stale;
+		return this.#lifetime.stale;
 	}
 	get value(): FieldEditorValue<Type> | null | undefined {
 		if (this.stale) return undefined;
-		const value = this.#form.get(this.#path);
+		const value = this.#form.get(this.#lifetime.path);
 		assertEditorValue(this.#type, value);
 		return cloneFormValue(value) as FieldEditorValue<Type> | null | undefined;
 	}
 	get issues() {
-		return this.stale ? [] : this.#form.issuesFor(this.#path).map((issue) => ({ ...issue }));
+		return this.stale
+			? []
+			: this.#form.issuesFor(this.#lifetime.path).map((issue) => ({ ...issue }));
 	}
 	get liveValidation() {
 		if (this.stale) return { status: "idle" as const, retry: () => {} };
-		const feedback = this.#form.liveValidation.forField(this.#path);
+		const feedback = this.#form.liveValidation.forField(this.#lifetime.path);
 		return {
 			status: feedback.status,
 			retry: () => {
 				this.assertActive();
-				if (!this.readOnly) this.#form.liveValidation.flush(this.#path);
+				if (!this.readOnly) this.#form.liveValidation.flush(this.#lifetime.path);
 			},
 		};
 	}
 
+	get visible() {
+		return this.#lifetime.visible;
+	}
 	get readOnly() {
-		if (this.stale) return true;
-		if (
-			this.#occurrence.ancestors.some(({ schema, resolve }) => {
-				const path = resolve();
-				return (
-					path === undefined ||
-					schema.admin.readOnly === true ||
-					schema.admin.hidden === true ||
-					!this.#form.canRead(path, fieldAccessPath(schema)) ||
-					!this.#form.canWrite(path, fieldAccessPath(schema)) ||
-					(schema.admin.condition !== undefined &&
-						!evaluateFieldCondition(schema.admin.condition, path, (other) => this.#form.get(other)))
-				);
-			})
-		)
-			return true;
-		const schema = this.#schema();
-		const accessPath = fieldAccessPath(schema);
-		return (
-			this.#form.editingBlocked ||
-			schema.admin.readOnly === true ||
-			schema.admin.hidden === true ||
-			!this.#form.canRead(this.#path, accessPath) ||
-			!this.#form.canWrite(this.#path, accessPath) ||
-			(schema.admin.condition !== undefined &&
-				!evaluateFieldCondition(schema.admin.condition, this.#path, (path) => this.#form.get(path)))
-		);
+		return this.#lifetime.readOnly;
 	}
 	get inputProps() {
 		const schema = this.schema;
@@ -167,43 +115,17 @@ export class FieldEditorBinding<Type extends FieldEditorType> implements FieldBi
 				"This field editor is stale. Use the editor mounted for the current document, locale and field occurrence."
 			);
 	};
-	destroy = () => {
-		if (this.#stale) return;
-		this.#stale = true;
-		this.#stopPath();
-		this.#stopObserve();
-		this.#stopLifetime();
-	};
+	destroy = () => this.#lifetime.destroy();
 	#write(value: unknown) {
 		this.assertActive();
-		if (this.readOnly) throw new Error(`Field ${this.#path} is read-only.`);
+		if (this.readOnly) throw new Error(`Field ${this.#lifetime.path} is read-only.`);
 		assertEditorValue(this.#type, value);
 		if (value === undefined) throw new Error("Use null to clear an editor value.");
-		this.#form.set(this.#path, cloneFormValue(value));
-	}
-	#resolve() {
-		if (this.#stale) return;
-		if (
-			this.#schema().id !== this.#schemaID ||
-			this.#schemaVersion() !== this.#initialSchemaVersion ||
-			!this.#form.editorScopeActive ||
-			this.#form.editorEpoch !== this.#epoch ||
-			this.#form.contentLocale !== this.#locale ||
-			JSON.stringify(this.#form.resource) !== this.#resource
-		) {
-			this.destroy();
-			return;
-		}
-		const path = this.#occurrence.resolve();
-		if (path === undefined) {
-			this.destroy();
-			return;
-		}
-		if (path !== this.#path) {
-			this.#stopPath();
-			this.#path = path;
-			this.#stopPath = this.#form.register(path);
-		}
+		const detached = cloneFormValue(value) as FieldEditorValue<Type> | null;
+		this.assertActive();
+		if (this.readOnly) throw new Error(`Field ${this.#lifetime.path} is read-only.`);
+		if (this.#apply !== undefined) this.#apply(detached);
+		else this.#form.set(this.#lifetime.path, detached);
 	}
 }
 

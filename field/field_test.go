@@ -206,7 +206,7 @@ func TestConcreteFacadeCategoriesAndCallbackShapes(t *testing.T) {
 		{field.UI("ui"), field.CategoryPresentation},
 		{field.Join("inverse", "posts", "author"), field.CategoryPresentation},
 		{field.Plugin("rich", "rich", nil), field.CategoryPlugin},
-		{field.Virtual("computed", field.ValueString, func(operation.ReadContext) (operation.Value[store.Value], error) {
+		{field.Virtual("computed", field.ValueString, func(operation.Context) (operation.Value[store.Value], error) {
 			return operation.Present(store.String("computed")), nil
 		}), field.CategoryPresentation},
 	}

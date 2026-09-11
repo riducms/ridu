@@ -34,32 +34,32 @@ func TestJoinMutationUsesTargetPipelineAndRollsBackEveryDelta(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	source, err := application.Local().Create(ctx, "categories", store.Values{"name": store.String("News")}, nil)
+	source, err := application.Local().Create(ctx, "categories", store.Values{"name": store.String("News")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	addition, err := application.Local().Import(ctx, "posts", store.Values{"title": store.String("Add")}, ridu.ImportOptions{ID: "post-a-add", Status: store.StatusPublished}, nil)
+	addition, err := application.Local().Import(ctx, "posts", store.Values{"title": store.String("Add")}, ridu.ImportOptions{ID: "post-a-add", Status: store.StatusPublished})
 	if err != nil {
 		t.Fatal(err)
 	}
-	removal, err := application.Local().Import(ctx, "posts", store.Values{"title": store.String("Remove"), "category": store.String(source.ID)}, ridu.ImportOptions{ID: "post-z-remove", Status: store.StatusPublished}, nil)
+	removal, err := application.Local().Import(ctx, "posts", store.Values{"title": store.String("Remove"), "category": store.String(source.ID)}, ridu.ImportOptions{ID: "post-z-remove", Status: store.StatusPublished})
 	if err != nil {
 		t.Fatal(err)
 	}
-	hidden, err := application.Local().Import(ctx, "posts", store.Values{"title": store.String("Hidden"), "category": store.String(source.ID)}, ridu.ImportOptions{ID: "post-hidden", Status: store.StatusPublished}, nil)
+	hidden, err := application.Local().Import(ctx, "posts", store.Values{"title": store.String("Hidden"), "category": store.String(source.ID)}, ridu.ImportOptions{ID: "post-hidden", Status: store.StatusPublished})
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	rejectedID = removal.ID
-	if _, err := application.Local().MutateJoin(ctx, "categories", source.ID, "posts", []string{addition.ID}, []string{removal.ID}, nil); !operationCode(err, "hook_failed") {
+	if _, err := application.Local().MutateJoin(ctx, "categories", source.ID, "posts", []string{addition.ID}, []string{removal.ID}, ridu.MutationOptions{}); !operationCode(err, "hook_failed") {
 		t.Fatalf("join mutation failure = %v, want hook_failed", err)
 	}
 	assertRelationship(t, application, addition.ID, "")
 	assertRelationship(t, application, removal.ID, source.ID)
 
 	rejectedID = ""
-	result, err := application.Local().MutateJoin(ctx, "categories", source.ID, "posts", []string{addition.ID}, []string{removal.ID}, nil)
+	result, err := application.Local().MutateJoin(ctx, "categories", source.ID, "posts", []string{addition.ID}, []string{removal.ID}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,10 +70,10 @@ func TestJoinMutationUsesTargetPipelineAndRollsBackEveryDelta(t *testing.T) {
 	assertRelationship(t, application, removal.ID, "")
 	assertRelationship(t, application, hidden.ID, source.ID)
 
-	if _, err := application.Local().MutateJoin(ctx, "categories", source.ID, "missing", []string{addition.ID}, nil, nil); !operationCode(err, "not_found") {
+	if _, err := application.Local().MutateJoin(ctx, "categories", source.ID, "missing", []string{addition.ID}, nil, ridu.MutationOptions{}); !operationCode(err, "not_found") {
 		t.Fatalf("missing join field = %v, want not_found", err)
 	}
-	if _, err := application.Local().MutateJoin(ctx, "categories", source.ID, "posts", []string{addition.ID}, []string{addition.ID}, nil); !operationCode(err, "bad_request") {
+	if _, err := application.Local().MutateJoin(ctx, "categories", source.ID, "posts", []string{addition.ID}, []string{addition.ID}, ridu.MutationOptions{}); !operationCode(err, "bad_request") {
 		t.Fatalf("duplicate join target = %v, want bad_request", err)
 	}
 }
@@ -95,7 +95,7 @@ func TestJoinMutationRejectsAReparentedTarget(t *testing.T) {
 					return nil
 				}
 				reparented = true
-				_, err := hook.Local.Update(hook.Context, "posts", targetID, store.Values{"category": store.String(competingSourceID)}, hook.Actor)
+				_, err := hook.Local.Update(hook.Context, "posts", targetID, store.Values{"category": store.String(competingSourceID)}, ridu.MutationOptions{Actor: hook.Actor})
 				return err
 			}}},
 		},
@@ -103,22 +103,22 @@ func TestJoinMutationRejectsAReparentedTarget(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	source, err := application.Local().Create(ctx, "categories", store.Values{"name": store.String("Primary")}, nil)
+	source, err := application.Local().Create(ctx, "categories", store.Values{"name": store.String("Primary")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	competing, err := application.Local().Create(ctx, "categories", store.Values{"name": store.String("Competing")}, nil)
+	competing, err := application.Local().Create(ctx, "categories", store.Values{"name": store.String("Competing")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	competingSourceID = competing.ID
-	target, err := application.Local().Create(ctx, "posts", store.Values{"title": store.String("Target")}, nil)
+	target, err := application.Local().Create(ctx, "posts", store.Values{"title": store.String("Target")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	targetID = target.ID
 
-	if _, err := application.Local().MutateJoin(ctx, "categories", source.ID, "posts", []string{target.ID}, nil, nil); !operationCode(err, "conflict") {
+	if _, err := application.Local().MutateJoin(ctx, "categories", source.ID, "posts", []string{target.ID}, nil, ridu.MutationOptions{}); !operationCode(err, "conflict") {
 		t.Fatalf("concurrent join mutation = %v, want conflict", err)
 	}
 	assertRelationship(t, application, target.ID, "")
@@ -131,9 +131,7 @@ func TestJoinMutationEnforcesSourceFieldAndTargetUpdateAccess(t *testing.T) {
 	application, err := ridu.New(ridu.Config{Name: "Authorized inverse joins", Collections: []ridu.Collection{
 		{
 			Slug: "categories",
-			Fields: field.Fields{field.Text("name").Required(), field.Join("posts", "posts", "category").Access(field.Access{Read: func(fieldContext operation.AccessContext,
-
-			) (bool, error) {
+			Fields: field.Fields{field.Text("name").Required(), field.Join("posts", "posts", "category").Access(field.Access{Read: func(fieldContext operation.Context) (bool, error) {
 				return joinReadable && fieldContext.Siblings.Get("posts").Kind() == store.ValueList, nil
 			}})},
 		},
@@ -151,27 +149,27 @@ func TestJoinMutationEnforcesSourceFieldAndTargetUpdateAccess(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	source, err := application.Local().Create(ctx, "categories", store.Values{"name": store.String("News")}, nil)
+	source, err := application.Local().Create(ctx, "categories", store.Values{"name": store.String("News")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	target, err := application.Local().Create(ctx, "posts", store.Values{"title": store.String("Target")}, nil)
+	target, err := application.Local().Create(ctx, "posts", store.Values{"title": store.String("Target")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	hiddenSource, err := application.Local().Find(ctx, "categories", source.ID, nil)
+	hiddenSource, err := application.Local().Find(ctx, "categories", source.ID, ridu.FindOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, visible := hiddenSource.Values["posts"]; visible {
 		t.Fatal("join field is visible while its value-sensitive read rule denies it")
 	}
-	if _, err := application.Local().MutateJoin(ctx, "categories", source.ID, "posts", []string{target.ID}, nil, nil); !operationCode(err, "field_access_denied") {
+	if _, err := application.Local().MutateJoin(ctx, "categories", source.ID, "posts", []string{target.ID}, nil, ridu.MutationOptions{}); !operationCode(err, "field_access_denied") {
 		t.Fatalf("hidden join field = %v, want field_access_denied", err)
 	}
 	joinReadable = true
-	visibleSource, err := application.Local().Find(ctx, "categories", source.ID, nil)
+	visibleSource, err := application.Local().Find(ctx, "categories", source.ID, ridu.FindOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -179,7 +177,7 @@ func TestJoinMutationEnforcesSourceFieldAndTargetUpdateAccess(t *testing.T) {
 		t.Fatalf("visible join value = %#v", value)
 	}
 	targetWritable = false
-	if _, err := application.Local().MutateJoin(ctx, "categories", source.ID, "posts", []string{target.ID}, nil, nil); !operationCode(err, "access_denied") {
+	if _, err := application.Local().MutateJoin(ctx, "categories", source.ID, "posts", []string{target.ID}, nil, ridu.MutationOptions{}); !operationCode(err, "access_denied") {
 		t.Fatalf("target update denial = %v, want access_denied", err)
 	}
 	assertRelationship(t, application, target.ID, "")
@@ -191,9 +189,7 @@ func TestJoinMutationGatesOnInitialResolvedFieldVisibility(t *testing.T) {
 	application, err := ridu.New(ridu.Config{Name: "Content-sensitive inverse join access", Collections: []ridu.Collection{
 		{
 			Slug: "categories",
-			Fields: field.Fields{field.Text("name").Required(), field.Join("posts", "posts", "category").Access(field.Access{Read: func(fieldContext operation.AccessContext,
-
-			) (bool, error) {
+			Fields: field.Fields{field.Text("name").Required(), field.Join("posts", "posts", "category").Access(field.Access{Read: func(fieldContext operation.Context) (bool, error) {
 				items, list := fieldContext.Siblings.Get("posts").CopyList()
 				return list && len(items) > 0, nil
 			}})},
@@ -212,24 +208,24 @@ func TestJoinMutationGatesOnInitialResolvedFieldVisibility(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	visibleSource, err := application.Local().Create(ctx, "categories", store.Values{"name": store.String("Visible")}, nil)
+	visibleSource, err := application.Local().Create(ctx, "categories", store.Values{"name": store.String("Visible")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	hiddenSource, err := application.Local().Create(ctx, "categories", store.Values{"name": store.String("Hidden")}, nil)
+	hiddenSource, err := application.Local().Create(ctx, "categories", store.Values{"name": store.String("Hidden")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	linked, err := application.Local().Create(ctx, "posts", store.Values{"title": store.String("Linked"), "category": store.String(visibleSource.ID)}, nil)
+	linked, err := application.Local().Create(ctx, "posts", store.Values{"title": store.String("Linked"), "category": store.String(visibleSource.ID)}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	candidate, err := application.Local().Create(ctx, "posts", store.Values{"title": store.String("Candidate")}, nil)
+	candidate, err := application.Local().Create(ctx, "posts", store.Values{"title": store.String("Candidate")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	removed, err := application.Local().MutateJoin(ctx, "categories", visibleSource.ID, "posts", nil, []string{linked.ID}, nil)
+	removed, err := application.Local().MutateJoin(ctx, "categories", visibleSource.ID, "posts", nil, []string{linked.ID}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -242,7 +238,7 @@ func TestJoinMutationGatesOnInitialResolvedFieldVisibility(t *testing.T) {
 	assertRelationship(t, application, linked.ID, "")
 
 	targetHooks = 0
-	if _, err := application.Local().MutateJoin(ctx, "categories", hiddenSource.ID, "posts", []string{candidate.ID}, nil, nil); !operationCode(err, "field_access_denied") {
+	if _, err := application.Local().MutateJoin(ctx, "categories", hiddenSource.ID, "posts", []string{candidate.ID}, nil, ridu.MutationOptions{}); !operationCode(err, "field_access_denied") {
 		t.Fatalf("initially hidden join mutation = %v, want field_access_denied", err)
 	}
 	if targetHooks != 0 {
@@ -258,9 +254,7 @@ func TestJoinMutationCountsFinalMembershipAfterHooks(t *testing.T) {
 	redactInverse := false
 	application, err := ridu.New(ridu.Config{Name: "Hook-adjusted inverse joins", Collections: []ridu.Collection{
 		{Slug: "categories", Fields: field.Fields{field.Text("name").Required(), field.Join("posts", "posts", "category")}},
-		{Slug: "posts", Fields: field.Fields{field.Text("title").Required(), field.Relationship("category", "categories").Access(field.Access{Read: func(operation.AccessContext,
-
-		) (bool, error) {
+		{Slug: "posts", Fields: field.Fields{field.Text("title").Required(), field.Relationship("category", "categories").Access(field.Access{Read: func(operation.Context) (bool, error) {
 			return !redactInverse, nil
 		}})},
 
@@ -282,15 +276,15 @@ func TestJoinMutationCountsFinalMembershipAfterHooks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	source, err := application.Local().Create(ctx, "categories", store.Values{"name": store.String("News")}, nil)
+	source, err := application.Local().Create(ctx, "categories", store.Values{"name": store.String("News")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	target, err := application.Local().Create(ctx, "posts", store.Values{"title": store.String("Target")}, nil)
+	target, err := application.Local().Create(ctx, "posts", store.Values{"title": store.String("Target")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := application.Local().MutateJoin(ctx, "categories", source.ID, "posts", []string{target.ID}, nil, nil)
+	result, err := application.Local().MutateJoin(ctx, "categories", source.ID, "posts", []string{target.ID}, nil, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -302,7 +296,7 @@ func TestJoinMutationCountsFinalMembershipAfterHooks(t *testing.T) {
 	rewriteBefore = false
 	rewriteResponse = true
 	redactInverse = true
-	result, err = application.Local().MutateJoin(ctx, "categories", source.ID, "posts", []string{target.ID}, nil, nil)
+	result, err = application.Local().MutateJoin(ctx, "categories", source.ID, "posts", []string{target.ID}, nil, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -317,7 +311,7 @@ func TestJoinMutationCountsFinalMembershipAfterHooks(t *testing.T) {
 
 func assertRelationship(t *testing.T, application *ridu.App, documentID, expected string) {
 	t.Helper()
-	document, err := application.Local().Find(context.Background(), "posts", documentID, nil)
+	document, err := application.Local().Find(context.Background(), "posts", documentID, ridu.FindOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

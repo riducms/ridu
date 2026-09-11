@@ -18,6 +18,10 @@ func TestSQLiteRichTextBlockReferencesAcceptance(t *testing.T) {
 	richtextblocks.RunReferences(t, sqliteRichTextBlocksFactory)
 }
 
+func TestSQLiteRichTextBlockNamesAcceptance(t *testing.T) {
+	richtextblocks.RunNames(t, sqliteRichTextBlocksFactory)
+}
+
 func TestSQLiteRichTextBlocksPerformance(t *testing.T) {
 	richtextblocks.RunPerformance(t, "sqlite", sqliteRichTextBlocksFactory)
 }

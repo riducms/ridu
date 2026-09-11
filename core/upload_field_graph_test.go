@@ -116,20 +116,20 @@ func TestUploadGraphOwnsMetadataAccessAndCallbacks(t *testing.T) {
 	var readOccurrence operation.OccurrenceID
 	var validated int
 	config := uploadGraphConfig(field.Fields{
-		field.Text("objectKey").Access(field.Access{Read: func(operation.AccessContext) (bool, error) { return false, nil }}),
-		field.JSON("sizes").Access(field.Access{Read: func(operation.AccessContext) (bool, error) { return false, nil }}),
+		field.Text("objectKey").Access(field.Access{Read: func(operation.Context) (bool, error) { return false, nil }}),
+		field.JSON("sizes").Access(field.Access{Read: func(operation.Context) (bool, error) { return false, nil }}),
 	})
 	config.Plugins = []Plugin{graphEditPlugin{key: "upload-behavior", transform: func(_ FieldGraphContext, fields field.Fields) (field.Fields, error) {
 		return fields.Edit(func(draft *field.ChildrenDraft) error {
 			return draft.EditText("filename", func(node field.TextField) field.TextField {
-				return node.Label("Original filename").Validate(func(operation.ValidationContext, operation.Value[string]) ([]operation.Issue, error) {
+				return node.Label("Original filename").Validate(func(operation.Context, operation.Value[string]) ([]operation.Issue, error) {
 					validated++
 					return nil, nil
-				}).ReadHooks(field.ReadHooks[string]{AfterRead: []field.OutputTransform[string]{func(ctx operation.ReadContext, value operation.Value[string]) (operation.Change[string], error) {
+				}).ReplaceAfterRead(func(ctx operation.Context, value operation.Value[string]) (operation.Change[string], error) {
 					readOccurrence = ctx.OccurrenceID
 					name, _ := value.Get()
 					return operation.Replace(operation.Present(strings.ToUpper(name))), nil
-				}}})
+				})
 			})
 		})
 	}}}
@@ -167,14 +167,14 @@ func TestUploadGraphOwnsMetadataAccessAndCallbacks(t *testing.T) {
 			}
 		}
 	}
-	found, err := application.Local().Find(context.Background(), "media", document.ID, nil)
+	found, err := application.Local().Find(context.Background(), "media", document.ID, FindOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if value, _ := found.Values["filename"].StringValue(); value != "EXAMPLE.TXT" {
 		t.Fatalf("local read did not run attached metadata callback: %q", value)
 	}
-	if _, err := application.Local().Update(context.Background(), "media", document.ID, store.Values{"filename": store.String("forged.txt")}, nil); err == nil {
+	if _, err := application.Local().Update(context.Background(), "media", document.ID, store.Values{"filename": store.String("forged.txt")}, MutationOptions{}); err == nil {
 		t.Fatal("field-owned behavior made managed metadata writable")
 	}
 }

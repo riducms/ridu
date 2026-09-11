@@ -40,50 +40,8 @@ func TestGeneratedClientIsCurrentAndContainsNoAny(t *testing.T) {
 	if strings.Contains(string(actual), " any") || strings.Contains(string(actual), "any[]") {
 		t.Fatal("generated public client contains any")
 	}
-	for _, expected := range []string{
-		`declare module "@riducms/sdk" {`,
-		`interface GeneratedRiduConfigRegistry {`,
-		`: RiduConfig;`,
-	} {
-		if !strings.Contains(string(actual), expected) {
-			t.Fatalf("generated client does not register its SDK default with %q", expected)
-		}
-	}
-}
-
-func TestGeneratedClientRegistryDistinguishesManifestsWithTheSameTypeShape(t *testing.T) {
-	resolve := func(name string) schema.Manifest {
-		t.Helper()
-		manifest, err := ridu.Resolve(ridu.Config{
-			Name: name,
-			Collections: []ridu.Collection{{
-				Slug:   "posts",
-				Fields: field.Fields{field.Text("title").Required()},
-			}},
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
-		return manifest
-	}
-	generate := func(manifest schema.Manifest) string {
-		t.Helper()
-		generated, err := typescript.Client(manifest)
-		if err != nil {
-			t.Fatal(err)
-		}
-		return string(generated)
-	}
-
-	first := generate(resolve("Content application"))
-	second := generate(resolve("Editorial application"))
-	firstKey := generatedRegistryKey(t, first)
-	secondKey := generatedRegistryKey(t, second)
-	if firstKey == secondKey {
-		t.Fatalf("distinct manifests registered the same SDK key %q", firstKey)
-	}
-	if strings.Replace(first, firstKey, `"manifest-key"`, 1) != strings.Replace(second, secondKey, `"manifest-key"`, 1) {
-		t.Fatal("fixture manifests must differ in identity while generating the same TypeScript contract")
+	if !strings.Contains(string(actual), "return createRuntimeClient<RiduConfig>(options)") {
+		t.Fatal("generated client does not explicitly bind its application contract")
 	}
 }
 
@@ -113,20 +71,6 @@ func TestGeneratedCreateIncludesCallerIDOnlyWhenEnabled(t *testing.T) {
 	if disabled := generate(false); strings.Contains(disabled, "export interface PostsCreate {\n\tid?: ID;\n") {
 		t.Fatalf("disabled caller-ID create contract exposes id:\n%s", disabled)
 	}
-}
-
-func generatedRegistryKey(t *testing.T, generated string) string {
-	t.Helper()
-	const prefix = `"manifest-`
-	start := strings.Index(generated, prefix)
-	if start == -1 {
-		t.Fatalf("generated client has no manifest registry key:\n%s", generated)
-	}
-	end := strings.Index(generated[start+1:], `"`)
-	if end == -1 {
-		t.Fatalf("generated client has an unterminated manifest registry key:\n%s", generated)
-	}
-	return generated[start : start+end+2]
 }
 
 func TestGeneratedClientUsesPluginOwnedExactTypes(t *testing.T) {
@@ -526,9 +470,7 @@ func clientFixtureConfig() ridu.Config {
 				Slug: "authors", Versions: true, Trash: true,
 				Fields: field.Fields{field.Text("name").Required().Localized(), field.Text("bio"), field.Virtual("displayName", field.ValueString,
 
-					func(operation.ReadContext,
-
-					) (operation.Value[store.Value],
+					func(operation.Context) (operation.Value[store.Value],
 
 						error) {
 						return operation.Present(store.String("Ada")), nil

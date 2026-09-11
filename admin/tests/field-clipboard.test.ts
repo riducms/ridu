@@ -30,7 +30,9 @@ function blocks(childType: SchemaField["type"] = "text"): SchemaField {
 				{
 					slug: "hero",
 					labels: { singular: "Hero", plural: "Heroes" },
+					admin: { nameField: "name" },
 					fields: [
+						scalar("name"),
 						scalar("heading", childType),
 						{ ...scalar("links", "array"), nested: { fields: [scalar("label")] } },
 						scalar("metadata", "json"),
@@ -41,12 +43,43 @@ function blocks(childType: SchemaField["type"] = "text"): SchemaField {
 	};
 }
 
+function richText(): SchemaField {
+	const hero = blocks().blocks!.types![0]!;
+	return {
+		...scalar("body", "plugin"),
+		category: "plugin",
+		plugin: {
+			key: "richtext",
+			config: {},
+			embeddedTrees: [
+				{
+					version: 1,
+					key: "blocks",
+					root: ["root"],
+					children: "children",
+					tag: "type",
+					cases: [
+						{
+							tagValue: "block",
+							payload: "fields",
+							discriminator: "blockType",
+							identity: "_key",
+							types: [hero],
+						},
+					],
+				},
+			],
+		},
+	};
+}
+
 describe("field clipboard", () => {
-	test("accepts only the matching field shape and clipboard kind", () => {
+	test("copies a named ordinary block with fresh owned identities", () => {
 		const field = blocks();
 		const payload = createFieldClipboardPayload(field, "row", {
 			_key: "old-row",
 			blockType: "hero",
+			name: "Homepage hero",
 			heading: "Copied hero",
 			links: [{ _key: "old-link", label: "Read more" }, { label: "Keyless" }],
 			metadata: { _key: "business-key", inner: [{ _key: "external" }] },
@@ -54,11 +87,44 @@ describe("field clipboard", () => {
 		const pasted = compatibleClipboardValue(payload, field, "row") as Record<string, unknown>;
 		expect(pasted.metadata).toEqual({ _key: "business-key", inner: [{ _key: "external" }] });
 		expect((pasted.links as Record<string, unknown>[])[1]?._key).toBeString();
+		expect(pasted.name).toBe("Homepage hero");
 		expect(pasted.heading).toBe("Copied hero");
 		expect(pasted._key).not.toBe("old-row");
 		expect((pasted.links as Record<string, unknown>[])[0]?._key).not.toBe("old-link");
 		expect(compatibleClipboardValue(payload, field, "field")).toBeUndefined();
 		expect(compatibleClipboardValue(payload, blocks("number"), "row")).toBeUndefined();
+	});
+
+	test("copies a named rich-text block with fresh block and nested identities", () => {
+		const field = richText();
+		const source = {
+			version: 1,
+			root: {
+				type: "root",
+				children: [
+					{
+						type: "block",
+						fields: {
+							blockType: "hero",
+							_key: "old-rich-block",
+							name: "Release callout",
+							heading: "Copied rich block",
+							links: [{ _key: "old-rich-link", label: "Read release" }],
+						},
+					},
+				],
+			},
+		};
+		const payload = createFieldClipboardPayload(field, "field", source);
+		const pasted = compatibleClipboardValue(payload, field, "field") as typeof source;
+		const copiedFields = pasted.root.children[0]!.fields;
+
+		expect(copiedFields.name).toBe("Release callout");
+		expect(copiedFields.heading).toBe("Copied rich block");
+		expect(copiedFields._key).not.toBe("old-rich-block");
+		expect(copiedFields.links[0]!._key).not.toBe("old-rich-link");
+		expect(source.root.children[0]!.fields._key).toBe("old-rich-block");
+		expect(source.root.children[0]!.fields.links[0]!._key).toBe("old-rich-link");
 	});
 
 	test("includes row bounds in compatibility and rejects untrusted text", () => {

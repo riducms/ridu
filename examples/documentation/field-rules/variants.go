@@ -11,7 +11,7 @@ var Variants = field.Array("variants", field.Fields{
 })
 
 func validateSKU(
-	ctx operation.ValidationContext,
+	ctx operation.Context,
 	value operation.Value[string],
 ) ([]operation.Issue, error) {
 	current, present := value.Get()

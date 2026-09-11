@@ -26,7 +26,7 @@ func primitiveListManifest(t *testing.T) schema.Manifest {
 		field.NumberList("availableSizes").Min(0).Max(30).MaxRows(3),
 		field.TextList("translated").Localized(),
 		field.NumberList("defaulted").Required().Default(0, 10),
-		field.TextList("computedDefault").Required().DefaultFrom(func(operation.DefaultContext) (operation.Value[[]string], error) {
+		field.TextList("computedDefault").Required().DefaultFrom(func(operation.Context) (operation.Value[[]string], error) {
 			t.Fatal("generation executed a dynamic default")
 			return operation.Empty[[]string](), nil
 		}),

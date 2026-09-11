@@ -70,7 +70,7 @@ a Text field's `Required()` rule.
 
 A dynamic default returns this same wrapper. `operation.Present(value)` supplies the initial
 value; `operation.Empty[T]()` supplies no default, and required validation still applies.
-The callback receives `operation.DefaultContext`, with request information and the input
+The callback receives `operation.Context`, with request information and the input
 available before validation. It has no separate current-value argument because it only runs
 for omitted fields that need an initial value. See [Set default field values](../fields/defaults.md).
 
@@ -124,7 +124,7 @@ var Subtitle = field.Text("subtitle").Hooks(field.Hooks[string]{
 })
 
 func cleanSubtitle(
-	_ operation.WriteContext,
+	_ operation.Context,
 	value operation.Value[string],
 ) (operation.Change[string], error) {
 	subtitle, present := value.Get()
@@ -153,18 +153,9 @@ but change only the returned value, leaving storage unchanged. See
 
 ## Read the user and surrounding fields {#callback-context}
 
-Field callbacks receive a context whose type describes the job the function does:
-
-| Context                       | Where you use it                                                      |
-| ----------------------------- | --------------------------------------------------------------------- |
-| `operation.WriteContext`      | A raw or typed hook that can return a field replacement               |
-| `operation.ReadContext`       | A response transform or a Virtual field's value resolver              |
-| `operation.ValidationContext` | A `.Validate(...)` callback that returns messages                     |
-| `operation.DefaultContext`    | A `.DefaultFrom(...)` callback that chooses an initial field value    |
-| `operation.AccessContext`     | A field access rule that allows or denies access                      |
-| `operation.EventContext`      | A field event hook, such as `AfterChange`, that returns only an error |
-
-These contexts expose the same named properties, with values appropriate to their phase:
+Field validators, defaults, transforms, resolvers, access rules, and observers all receive
+`operation.Context`. Registration determines when a callback runs and whether its return value
+changes stored input or only the response. The context contains snapshots for that phase:
 
 - `ctx.Operation` identifies the action, and `ctx.ID` identifies the document when it has an ID.
 - `ctx.Actor.ID` identifies the signed-in user; an empty ID means an anonymous request.
@@ -225,7 +216,7 @@ var Pricing = field.Group("pricing", field.Fields{
 }).Validate(validatePricing)
 
 func validatePricing(
-	_ operation.ValidationContext,
+	_ operation.Context,
 	value operation.Value[store.Value],
 ) ([]operation.Issue, error) {
 	group, present := value.Get()

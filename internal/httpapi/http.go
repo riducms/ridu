@@ -182,11 +182,25 @@ type PreviewToken struct {
 	ExpiresAt  time.Time
 }
 
+type EndpointContext struct {
+	Writer           http.ResponseWriter
+	Request          *http.Request
+	RequestID        string
+	ClientIP         string
+	RouteParams      map[string]string
+	Actor            *store.Document
+	ActorCollection  schema.CollectionSlug
+	AdmitAuthAttempt func(context.Context, string, string) error
+	ReportError      func(error, string)
+}
+
+type EndpointHandler func(EndpointContext)
+
 type PluginEndpoint struct {
 	Method       string
 	Path         string
 	MaxBodyBytes int64
-	Handler      func(http.ResponseWriter, *http.Request, string, *store.Document, schema.CollectionSlug, func(context.Context, string, string) error, func(error, string))
+	Handler      EndpointHandler
 }
 
 type CustomEndpointScope uint8
@@ -203,7 +217,7 @@ type CustomEndpoint struct {
 	Scope        CustomEndpointScope
 	Resource     schema.CollectionSlug
 	MaxBodyBytes int64
-	Handler      func(http.ResponseWriter, *http.Request, string, string, map[string]string, *store.Document, schema.CollectionSlug, func(context.Context, string, string) error, func(error, string))
+	Handler      EndpointHandler
 }
 
 type AuditEvent struct {
@@ -402,7 +416,7 @@ func (api *API) serveHTTP(writer http.ResponseWriter, request *http.Request) {
 	}
 	if endpoint, exists := api.pluginTransports[request.Method+" "+request.URL.Path]; exists {
 		actor, collection := api.pluginActor(request)
-		api.invokePluginEndpoint(writer, request, requestID, endpoint, actor, collection)
+		api.invokeEndpoint(writer, request, requestID, endpoint.MaxBodyBytes, endpoint.Handler, nil, actor, collection)
 		return
 	}
 	var transportMethods []string
@@ -497,25 +511,7 @@ func (api *API) invokeCustomEndpoint(writer http.ResponseWriter, request *http.R
 		}
 		identity := api.optionalIdentity(request)
 		actor, collection := identityActor(identity), identityCollection(identity)
-		limit := endpoint.MaxBodyBytes
-		if limit == 0 {
-			limit = api.config.MaxBodyBytes
-		}
-		if limit > 0 && request.Body != nil {
-			request.Body = http.MaxBytesReader(writer, request.Body, limit)
-		}
-		report := func(err error, code string) {
-			if tracked, ok := writer.(*statusWriter); ok && validErrorCode(code) {
-				tracked.errorCode = code
-			}
-			if err != nil {
-				api.reportRequestError(request, requestID, err, false, "")
-			}
-		}
-		admit := func(ctx context.Context, authScope, identity string) error {
-			return api.admitAuthAttempt(ctx, api.clientIP(request), authScope, identity)
-		}
-		endpoint.Handler(writer, request, requestID, api.clientIP(request), params, actor, collection, admit, report)
+		api.invokeEndpoint(writer, request, requestID, endpoint.MaxBodyBytes, endpoint.Handler, params, actor, collection)
 		return true
 	}
 	return false
@@ -1064,7 +1060,7 @@ func (api *API) pluginEndpoint(writer http.ResponseWriter, request *http.Request
 	identity := request.Method + " " + request.URL.Path
 	if endpoint, exists := api.pluginEndpoints[identity]; exists {
 		actor, collection := api.pluginActor(request)
-		api.invokePluginEndpoint(writer, request, requestID, endpoint, actor, collection)
+		api.invokeEndpoint(writer, request, requestID, endpoint.MaxBodyBytes, endpoint.Handler, nil, actor, collection)
 		return
 	}
 	var allowed []string
@@ -1089,8 +1085,8 @@ func (api *API) pluginActor(request *http.Request) (*store.Document, schema.Coll
 	return &actor, identity.Collection
 }
 
-func (api *API) invokePluginEndpoint(writer http.ResponseWriter, request *http.Request, requestID string, endpoint PluginEndpoint, actor *store.Document, collection schema.CollectionSlug) {
-	limit := endpoint.MaxBodyBytes
+func (api *API) invokeEndpoint(writer http.ResponseWriter, request *http.Request, requestID string, maxBodyBytes int64, handler EndpointHandler, params map[string]string, actor *store.Document, collection schema.CollectionSlug) {
+	limit := maxBodyBytes
 	if limit == 0 {
 		limit = api.config.MaxBodyBytes
 	}
@@ -1108,7 +1104,7 @@ func (api *API) invokePluginEndpoint(writer http.ResponseWriter, request *http.R
 	admitAuthAttempt := func(ctx context.Context, scope, identity string) error {
 		return api.admitAuthAttempt(ctx, api.clientIP(request), scope, identity)
 	}
-	endpoint.Handler(writer, request, api.clientIP(request), actor, collection, admitAuthAttempt, report)
+	handler(EndpointContext{Writer: writer, Request: request, RequestID: requestID, ClientIP: api.clientIP(request), RouteParams: params, Actor: actor, ActorCollection: collection, AdmitAuthAttempt: admitAuthAttempt, ReportError: report})
 }
 
 func (api *API) admitAuthAttempt(ctx context.Context, clientIP, scope, identity string) error {

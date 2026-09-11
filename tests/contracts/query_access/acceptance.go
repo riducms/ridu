@@ -51,7 +51,7 @@ func Run(t *testing.T, factory Factory, options Options) {
 			"lockedLayout": store.List(store.Object(store.Values{"blockType": store.String("hero"), "value": store.String("orchid")})),
 			"body":         richTextSecret(t),
 			"translation":  store.String("orchid"),
-		}, nil)
+		}, ridu.MutationOptions{})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -176,7 +176,7 @@ func Run(t *testing.T, factory Factory, options Options) {
 		denied(t, err, "audience")
 	})
 	t.Run("authored-auth-secrets-and-framework-credentials", func(t *testing.T) {
-		_, err := app.CreateAuthUser(t.Context(), "users", store.Values{"email": store.String("editor@example.test"), "privateToken": store.String("orchid-token")}, "Str0ng-test-password!", nil)
+		_, err := app.CreateAuthUser(t.Context(), "users", store.Values{"email": store.String("editor@example.test"), "privateToken": store.String("orchid-token")}, "Str0ng-test-password!", ridu.MutationOptions{})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -201,13 +201,13 @@ func Run(t *testing.T, factory Factory, options Options) {
 }
 
 func configuration() ridu.Config {
-	deny := field.Access{Read: func(fieldoperation.AccessContext) (bool, error) { return false, nil }}
+	deny := field.Access{Read: func(fieldoperation.Context) (bool, error) { return false, nil }}
 	return ridu.Config{Name: "Query confidentiality", Plugins: []ridu.Plugin{richtext.New()}, Admin: ridu.AdminConfig{User: "users"},
 		Localization: ridu.LocalizationConfig{DefaultLocale: "en", Locales: []ridu.Locale{{Code: "en", Label: "English"}, {Code: "fr", Label: "French", FallbackLocales: []schema.LocaleCode{"en"}}}},
 		Collections: []ridu.Collection{
 			{Slug: "employees", Fields: field.Fields{
 				field.Text("name"), field.Number("salary").Access(deny),
-				field.Text("secret").Access(field.Access{Read: func(ctx fieldoperation.AccessContext) (bool, error) {
+				field.Text("secret").Access(field.Access{Read: func(ctx fieldoperation.Context) (bool, error) {
 					return ctx.Actor.ID != "" && ctx.Actor.Collection == "users", nil
 				}}),
 				field.Text("audience").Access(deny), field.Text("translation").Localized().Access(deny),

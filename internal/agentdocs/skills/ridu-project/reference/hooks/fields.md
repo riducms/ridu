@@ -44,7 +44,7 @@ import (
 )
 
 func trimText(
-	_ operation.WriteContext,
+	_ operation.Context,
 	value operation.Value[store.Value],
 ) (operation.Change[store.Value], error) {
 	raw, present := value.Get()
@@ -106,7 +106,7 @@ import (
 )
 
 func uppercaseSKU(
-	_ operation.WriteContext,
+	_ operation.Context,
 	value operation.Value[string],
 ) (operation.Change[string], error) {
 	sku, present := value.Get()
@@ -154,10 +154,10 @@ replace it. See [`field.Hooks`](https://riducms.com/reference/field/hooks/),
 
 ## Change a returned value without changing storage {#read-hooks}
 
-Use `.ReadHooks(...)` and `AfterRead` to format a field for a response. This example displays a
+Use `.AfterRead(...)` to format a field for a response. This example displays a
 code in uppercase while leaving its stored value alone:
 
-```go title="content/display_code.go" focus={18-21,24-27}
+```go title="content/display_code.go" focus={18-21,24}
 package content
 
 import (
@@ -168,7 +168,7 @@ import (
 )
 
 func formatCode(
-	_ operation.ReadContext,
+	_ operation.Context,
 	value operation.Value[string],
 ) (operation.Change[string], error) {
 	code, present := value.Get()
@@ -181,11 +181,7 @@ func formatCode(
 	), nil
 }
 
-var DisplayCode = field.Text("displayCode").ReadHooks(
-	field.ReadHooks[string]{
-		AfterRead: []field.OutputTransform[string]{formatCode},
-	},
-)
+var DisplayCode = field.Text("displayCode").AfterRead(formatCode)
 ```
 
 Add `DisplayCode` to a collection and save `ab-12`. The response contains `AB-12`, but the database
@@ -209,7 +205,16 @@ row it is editing.
 
 `.Hooks(...)` replaces the field's existing hooks. Use `.AppendHooks(...)` to run new hooks after
 its existing ones, or `.PrependHooks(...)` to run them first. In each list, hooks run in declaration
-order. `.ReadHooks(...)` separately configures hooks that transform the response.
+order. `.AfterRead(...)` separately configures hooks that transform the response.
+
+`AfterRead(callbacks...)` appends response transforms in order. Calling it without arguments
+leaves the list unchanged. `ReplaceAfterRead(callbacks...)` replaces the list, and calling it
+without arguments clears it. `AfterReadHooks()` returns a detached slice. These builders preserve
+previously configured fields when reused. Nil callbacks produce an `afterRead[i]` diagnostic.
+
+All field callbacks use `operation.Context`; registration selects the phase. A compatible function
+can be used as a write or response transform, so choose its registration according to the intended
+effect. Relationship response transforms still receive populated output rather than stored IDs.
 
 A field hook can change only its own value. Use a
 [collection or global hook](./context.md#stored-and-returned-values) when a change needs

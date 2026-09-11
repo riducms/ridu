@@ -62,11 +62,11 @@ func TestPostgresMigrationsAndStoreConformance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	manager, err := application.Local().Create(ctx, "users", store.Values{"email": store.String("manager@example.test")}, nil)
+	manager, err := application.Local().Create(ctx, "users", store.Values{"email": store.String("manager@example.test")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	author, err := application.Local().Create(ctx, "users", store.Values{"email": store.String("ada@example.test"), "manager": store.String(manager.ID)}, nil)
+	author, err := application.Local().Create(ctx, "users", store.Values{"email": store.String("ada@example.test"), "manager": store.String(manager.ID)}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,17 +87,17 @@ func TestPostgresMigrationsAndStoreConformance(t *testing.T) {
 	if _, err := application.Session(ctx, session.Token); !hasOperationCode(err, "access_denied") {
 		t.Fatalf("logged-out PostgreSQL session error = %v", err)
 	}
-	if _, err := application.Local().Create(ctx, "users", store.Values{"email": store.String("ada@example.test")}, nil); !hasOperationCode(err, "conflict") {
+	if _, err := application.Local().Create(ctx, "users", store.Values{"email": store.String("ada@example.test")}, ridu.MutationOptions{}); !hasOperationCode(err, "conflict") {
 		t.Fatalf("duplicate unique value error = %v", err)
 	}
 	if _, err := application.Local().Create(ctx, "posts", store.Values{
 		"title": store.String("invalid relation"), "status": store.String("draft"), "author": store.String("missing"),
-	}, nil); !hasRelationshipIssue(err, "author") {
+	}, ridu.MutationOptions{}); !hasRelationshipIssue(err, "author") {
 		t.Fatalf("missing PostgreSQL relationship error = %v", err)
 	}
 	private, err := application.Local().Create(ctx, "posts", store.Values{
 		"title": store.String("private"), "status": store.String("draft"), "author": store.String(author.ID),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +112,7 @@ func TestPostgresMigrationsAndStoreConformance(t *testing.T) {
 		"content":  richTextDocument("Portable rich text"),
 		"watchers": store.List(store.String(author.ID)),
 		"related":  store.Object(store.Values{"relationTo": store.String("users"), "id": store.String(author.ID)}),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,13 +138,13 @@ func TestPostgresMigrationsAndStoreConformance(t *testing.T) {
 	} else if populatedManager, populated := relatedUser.Values["manager"].CopyDocument(); !populated || populatedManager.ID != manager.ID {
 		t.Fatalf("depth-2 PostgreSQL population = %#v", relatedUser.Values["manager"])
 	}
-	if _, err := application.Local().Find(ctx, "posts", private.ID, nil); !hasOperationCode(err, "not_found") {
+	if _, err := application.Local().Find(ctx, "posts", private.ID, ridu.FindOptions{}); !hasOperationCode(err, "not_found") {
 		t.Fatalf("access-filtered find error = %v", err)
 	}
-	if _, err := application.Local().Update(ctx, "posts", private.ID, store.Values{"title": store.String("changed")}, nil); !hasOperationCode(err, "not_found") {
+	if _, err := application.Local().Update(ctx, "posts", private.ID, store.Values{"title": store.String("changed")}, ridu.MutationOptions{}); !hasOperationCode(err, "not_found") {
 		t.Fatalf("access-filtered update error = %v", err)
 	}
-	if _, err := application.Local().Delete(ctx, "posts", private.ID, nil); !hasOperationCode(err, "not_found") {
+	if _, err := application.Local().Delete(ctx, "posts", private.ID, ridu.MutationOptions{}); !hasOperationCode(err, "not_found") {
 		t.Fatalf("access-filtered delete error = %v", err)
 	}
 }
@@ -170,11 +170,11 @@ func TestPostgresExpectedRevisionDoesNotRevealFilteredDocuments(t *testing.T) {
 	}
 	hidden, err := application.Local().Create(ctx, "posts", store.Values{
 		"title": store.String("Hidden"), "status": store.String("draft"),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().UpdateWithOptions(ctx, "posts", hidden.ID, store.Values{
+	if _, err := application.Local().Update(ctx, "posts", hidden.ID, store.Values{
 		"title": store.String("Probe"),
 	}, ridu.MutationOptions{ExpectedRevision: hidden.Revision}); !hasOperationCode(err, "not_found") {
 		t.Fatalf("filtered exact-revision mutation error = %v, want not_found", err)
@@ -182,17 +182,17 @@ func TestPostgresExpectedRevisionDoesNotRevealFilteredDocuments(t *testing.T) {
 
 	visible, err := application.Local().Create(ctx, "posts", store.Values{
 		"title": store.String("Visible"), "status": store.String("published"),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	updated, err := application.Local().UpdateWithOptions(ctx, "posts", visible.ID, store.Values{
+	updated, err := application.Local().Update(ctx, "posts", visible.ID, store.Values{
 		"title": store.String("Fresh"),
 	}, ridu.MutationOptions{ExpectedRevision: visible.Revision})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().UpdateWithOptions(ctx, "posts", visible.ID, store.Values{
+	if _, err := application.Local().Update(ctx, "posts", visible.ID, store.Values{
 		"title": store.String("Stale"),
 	}, ridu.MutationOptions{ExpectedRevision: visible.Revision}); !hasOperationCode(err, "conflict") {
 		t.Fatalf("visible stale-revision mutation error = %v, want conflict (current revision %d)", err, updated.Revision)
@@ -233,36 +233,36 @@ func TestPostgresGlobalFilteredAccessUsesRowsAndVersionSnapshots(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().UpdateGlobal(ctx, "site-settings", store.Values{"siteName": store.String("Ridu")}, 0, nil); !hasOperationCode(err, "not_found") {
+	if _, err := application.Local().UpdateGlobal(ctx, "site-settings", store.Values{"siteName": store.String("Ridu")}, ridu.MutationOptions{}); !hasOperationCode(err, "not_found") {
 		t.Fatalf("filtered PostgreSQL first update error = %v", err)
 	}
 	allowInitialization = true
-	created, err := application.Local().UpdateGlobal(ctx, "site-settings", store.Values{"siteName": store.String("Ridu")}, 0, nil)
+	created, err := application.Local().UpdateGlobal(ctx, "site-settings", store.Values{"siteName": store.String("Ridu")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	allowInitialization = false
-	if current, err := application.Local().Global(ctx, "site-settings", nil); err != nil || stringValue(current.Values["siteName"]) != "Ridu" {
+	if current, err := application.Local().Global(ctx, "site-settings", ridu.FindOptions{}); err != nil || stringValue(current.Values["siteName"]) != "Ridu" {
 		t.Fatalf("matching PostgreSQL global = %#v, %v", current, err)
 	}
-	changed, err := application.Local().PublishGlobalChanges(ctx, "site-settings", store.Values{"siteName": store.String("Hidden")}, created.Revision, nil)
+	changed, err := application.Local().PublishGlobalChanges(ctx, "site-settings", store.Values{"siteName": store.String("Hidden")}, ridu.MutationOptions{ExpectedRevision: created.Revision})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Global(ctx, "site-settings", nil); !hasOperationCode(err, "not_found") {
+	if _, err := application.Local().Global(ctx, "site-settings", ridu.FindOptions{}); !hasOperationCode(err, "not_found") {
 		t.Fatalf("non-matching PostgreSQL global read error = %v", err)
 	}
-	if _, err := application.Local().PublishGlobalChanges(ctx, "site-settings", store.Values{"siteName": store.String("Ridu")}, changed.Revision, nil); !hasOperationCode(err, "not_found") {
+	if _, err := application.Local().PublishGlobalChanges(ctx, "site-settings", store.Values{"siteName": store.String("Ridu")}, ridu.MutationOptions{ExpectedRevision: changed.Revision}); !hasOperationCode(err, "not_found") {
 		t.Fatalf("non-matching PostgreSQL global update error = %v", err)
 	}
-	versions, err := application.Local().GlobalVersions(ctx, "site-settings", nil)
+	versions, err := application.Local().GlobalVersions(ctx, "site-settings", ridu.FindOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(versions) != 1 || versions[0].Revision != 1 || stringValue(versions[0].Snapshot.Values["siteName"]) != "Ridu" {
 		t.Fatalf("filtered PostgreSQL global versions = %#v", versions)
 	}
-	if _, err := application.Local().GlobalVersion(ctx, "site-settings", 2, nil); !hasOperationCode(err, "not_found") {
+	if _, err := application.Local().GlobalVersion(ctx, "site-settings", 2, ridu.FindOptions{}); !hasOperationCode(err, "not_found") {
 		t.Fatalf("non-matching PostgreSQL global version error = %v", err)
 	}
 }
@@ -311,28 +311,28 @@ func TestPostgresGlobalAllLocalesAccessRequiresEveryLocalizedSnapshot(t *testing
 			"audiences": store.List(store.Object(store.Values{"name": store.String(audienceValue)})),
 		}
 	}
-	current, err := application.Local().UpdateGlobal(ctx, "site-settings", values("Public", "Public"), 0, nil)
+	current, err := application.Local().UpdateGlobal(ctx, "site-settings", values("Public", "Public"), ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	current, err = application.Local().PublishGlobalChanges(ctx, "site-settings", values("Public", "Public"), current.Revision, nil, ridu.LocaleOptions{Locale: "fr"})
+	current, err = application.Local().PublishGlobalChanges(ctx, "site-settings", values("Public", "Public"), ridu.MutationOptions{ExpectedRevision: current.Revision, Locale: "fr"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	publicRevision := current.Revision
-	if _, err := application.Local().PublishGlobalChanges(ctx, "site-settings", values("Private", "Private"), current.Revision, nil, ridu.LocaleOptions{Locale: "fr"}); err != nil {
+	if _, err := application.Local().PublishGlobalChanges(ctx, "site-settings", values("Private", "Private"), ridu.MutationOptions{ExpectedRevision: current.Revision, Locale: "fr"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Global(ctx, "site-settings", nil, ridu.LocaleOptions{Locale: "en"}); err != nil {
+	if _, err := application.Local().Global(ctx, "site-settings", ridu.FindOptions{Locale: "en"}); err != nil {
 		t.Fatalf("English PostgreSQL global read: %v", err)
 	}
-	if _, err := application.Local().Global(ctx, "site-settings", nil, ridu.LocaleOptions{Locale: "fr"}); !hasOperationCode(err, "not_found") {
+	if _, err := application.Local().Global(ctx, "site-settings", ridu.FindOptions{Locale: "fr"}); !hasOperationCode(err, "not_found") {
 		t.Fatalf("French PostgreSQL global read error = %v", err)
 	}
-	if _, err := application.Local().Global(ctx, "site-settings", nil, ridu.LocaleOptions{AllLocales: true}); !hasOperationCode(err, "not_found") {
+	if _, err := application.Local().Global(ctx, "site-settings", ridu.FindOptions{AllLocales: true}); !hasOperationCode(err, "not_found") {
 		t.Fatalf("all-locales PostgreSQL global read error = %v", err)
 	}
-	versions, err := application.Local().GlobalVersions(ctx, "site-settings", nil, ridu.LocaleOptions{AllLocales: true})
+	versions, err := application.Local().GlobalVersions(ctx, "site-settings", ridu.FindOptions{AllLocales: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -368,11 +368,11 @@ func TestPostgresAllLocalesPopulationRequiresTargetAccessForEveryLocale(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	person, err := application.Local().Create(ctx, "people", store.Values{"name": store.String("Public")}, nil)
+	person, err := application.Local().Create(ctx, "people", store.Values{"name": store.String("Public")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	post, err := application.Local().Create(ctx, "posts", store.Values{"title": store.String("Story"), "editor": store.String(person.ID)}, nil)
+	post, err := application.Local().Create(ctx, "posts", store.Values{"title": store.String("Story"), "editor": store.String(person.ID)}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -380,11 +380,11 @@ func TestPostgresAllLocalesPopulationRequiresTargetAccessForEveryLocale(t *testi
 	// create. Establish the valid relationship first, then make the target
 	// unreadable in French to prove later population remains fail closed as
 	// target content and access predicates evolve.
-	if _, err := application.Local().Update(ctx, "people", person.ID, store.Values{"name": store.String("Private")}, nil, ridu.LocaleOptions{Locale: "fr"}); err != nil {
+	if _, err := application.Local().Update(ctx, "people", person.ID, store.Values{"name": store.String("Private")}, ridu.MutationOptions{Locale: "fr"}); err != nil {
 		t.Fatal(err)
 	}
 	editor, _ := query.NewPath("editor")
-	english, err := application.Local().FindWithOptions(ctx, "posts", post.ID, ridu.FindOptions{
+	english, err := application.Local().Find(ctx, "posts", post.ID, ridu.FindOptions{
 		Locale: "en", Populate: []query.Population{{Path: editor}},
 	})
 	if err != nil {
@@ -393,7 +393,7 @@ func TestPostgresAllLocalesPopulationRequiresTargetAccessForEveryLocale(t *testi
 	if populated, ok := english.Values["editor"].CopyDocument(); !ok || stringValue(populated.Values["name"]) != "Public" {
 		t.Fatalf("English PostgreSQL populated target = %#v", english.Values["editor"])
 	}
-	all, err := application.Local().FindWithOptions(ctx, "posts", post.ID, ridu.FindOptions{
+	all, err := application.Local().Find(ctx, "posts", post.ID, ridu.FindOptions{
 		AllLocales: true, Populate: []query.Population{{Path: editor}},
 	})
 	if err != nil {
@@ -452,18 +452,18 @@ func TestPostgresAllLocalesStatusHooksReceiveLocaleProjectedPopulatedTargets(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	person, err := application.Local().Create(ctx, "people", store.Values{"name": store.String("Editor")}, nil)
+	person, err := application.Local().Create(ctx, "people", store.Values{"name": store.String("Editor")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := application.Local().Update(ctx, "people", person.ID, store.Values{
 		"name": store.String("Éditrice"),
-	}, nil, ridu.LocaleOptions{Locale: "fr"}); err != nil {
+	}, ridu.MutationOptions{Locale: "fr"}); err != nil {
 		t.Fatal(err)
 	}
 	post, err := application.Local().Create(ctx, "posts", store.Values{
 		"title": store.String("Story"), "editor": store.String(person.ID),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -471,7 +471,7 @@ func TestPostgresAllLocalesStatusHooksReceiveLocaleProjectedPopulatedTargets(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	published, err := application.Local().PublishWithOptions(ctx, "posts", post.ID, ridu.MutationOptions{
+	published, err := application.Local().Publish(ctx, "posts", post.ID, ridu.MutationOptions{
 		ExpectedRevision: post.Revision, AllLocales: true,
 		Populate: []query.Population{{Path: editorPath}},
 	})
@@ -549,11 +549,11 @@ func TestPostgresLocalizedIntermediateContainerPredicatesMatchProjectedDocuments
 			})),
 		})}
 	}
-	document, err := application.Local().Create(ctx, "pages", values("visible"), nil)
+	document, err := application.Local().Create(ctx, "pages", values("visible"), ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	document, err = application.Local().PublishChanges(ctx, "pages", document.ID, values("visible"), document.Revision, nil, ridu.LocaleOptions{Locale: "fr"})
+	document, err = application.Local().PublishChanges(ctx, "pages", document.ID, values("visible"), ridu.MutationOptions{ExpectedRevision: document.Revision, Locale: "fr"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -566,22 +566,22 @@ func TestPostgresLocalizedIntermediateContainerPredicatesMatchProjectedDocuments
 			t.Fatalf("French predicate %s = %#v, %v", path.String(), page, err)
 		}
 	}
-	if _, err := application.Local().Find(ctx, "pages", document.ID, nil, ridu.LocaleOptions{AllLocales: true}); err != nil {
+	if _, err := application.Local().Find(ctx, "pages", document.ID, ridu.FindOptions{AllLocales: true}); err != nil {
 		t.Fatalf("matching all-locales access: %v", err)
 	}
-	if _, err := application.Local().PublishChanges(ctx, "pages", document.ID, values("hidden"), document.Revision, nil, ridu.LocaleOptions{Locale: "fr"}); err != nil {
+	if _, err := application.Local().PublishChanges(ctx, "pages", document.ID, values("hidden"), ridu.MutationOptions{ExpectedRevision: document.Revision, Locale: "fr"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Find(ctx, "pages", document.ID, nil, ridu.LocaleOptions{Locale: "en"}); err != nil {
+	if _, err := application.Local().Find(ctx, "pages", document.ID, ridu.FindOptions{Locale: "en"}); err != nil {
 		t.Fatalf("English exact access: %v", err)
 	}
-	if _, err := application.Local().Find(ctx, "pages", document.ID, nil, ridu.LocaleOptions{Locale: "fr"}); !hasOperationCode(err, "not_found") {
+	if _, err := application.Local().Find(ctx, "pages", document.ID, ridu.FindOptions{Locale: "fr"}); !hasOperationCode(err, "not_found") {
 		t.Fatalf("French exact access error = %v", err)
 	}
-	if _, err := application.Local().Find(ctx, "pages", document.ID, nil, ridu.LocaleOptions{AllLocales: true}); !hasOperationCode(err, "not_found") {
+	if _, err := application.Local().Find(ctx, "pages", document.ID, ridu.FindOptions{AllLocales: true}); !hasOperationCode(err, "not_found") {
 		t.Fatalf("all-locales access error = %v", err)
 	}
-	versions, err := application.Local().Versions(ctx, "pages", document.ID, nil, ridu.LocaleOptions{AllLocales: true})
+	versions, err := application.Local().Versions(ctx, "pages", document.ID, ridu.FindOptions{AllLocales: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -616,15 +616,15 @@ func TestPostgresExactLocaleAccessPreservesEmptyLocalizedScalars(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	document, err := application.Local().Create(ctx, "pages", store.Values{"gate": store.String("")}, nil)
+	document, err := application.Local().Create(ctx, "pages", store.Values{"gate": store.String("")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().PublishChanges(ctx, "pages", document.ID, store.Values{"gate": store.String("")}, document.Revision, nil, ridu.LocaleOptions{Locale: "fr"}); err != nil {
+	if _, err := application.Local().PublishChanges(ctx, "pages", document.ID, store.Values{"gate": store.String("")}, ridu.MutationOptions{ExpectedRevision: document.Revision, Locale: "fr"}); err != nil {
 		t.Fatal(err)
 	}
 	for _, options := range []ridu.LocaleOptions{{Locale: "en"}, {Locale: "fr"}, {AllLocales: true}} {
-		if _, err := application.Local().Find(ctx, "pages", document.ID, nil, options); !hasOperationCode(err, "not_found") {
+		if _, err := application.Local().Find(ctx, "pages", document.ID, ridu.FindOptions{Locale: options.Locale, FallbackLocales: options.FallbackLocales, DisableFallback: options.DisableFallback, AllLocales: options.AllLocales}); !hasOperationCode(err, "not_found") {
 			t.Fatalf("empty localized value was treated as null for options %#v: %v", options, err)
 		}
 	}
@@ -632,7 +632,7 @@ func TestPostgresExactLocaleAccessPreservesEmptyLocalizedScalars(t *testing.T) {
 	if err != nil || page.Total != 0 {
 		t.Fatalf("empty localized access list = %#v, %v", page, err)
 	}
-	versions, err := application.Local().Versions(ctx, "pages", document.ID, nil, ridu.LocaleOptions{AllLocales: true})
+	versions, err := application.Local().Versions(ctx, "pages", document.ID, ridu.FindOptions{AllLocales: true})
 	if err != nil || len(versions) != 0 {
 		t.Fatalf("empty localized version access = %#v, %v", versions, err)
 	}
@@ -710,11 +710,11 @@ func TestPostgresRepeatedNullPredicatesMatchProjectedAccessSemantics(t *testing.
 	}
 	documents := make(map[string]store.Document)
 	for _, kind := range []string{"absent", "empty", "mixed", "null", "other"} {
-		document, err := application.Local().Create(ctx, "pages", values(kind), nil)
+		document, err := application.Local().Create(ctx, "pages", values(kind), ridu.MutationOptions{})
 		if err != nil {
 			t.Fatalf("create %s: %v", kind, err)
 		}
-		document, err = application.Local().PublishChanges(ctx, "pages", document.ID, values(kind), document.Revision, nil, ridu.LocaleOptions{Locale: "fr"})
+		document, err = application.Local().PublishChanges(ctx, "pages", document.ID, values(kind), ridu.MutationOptions{ExpectedRevision: document.Revision, Locale: "fr"})
 		if err != nil {
 			t.Fatalf("update %s French locale: %v", kind, err)
 		}
@@ -758,16 +758,16 @@ func TestPostgresRepeatedNullPredicatesMatchProjectedAccessSemantics(t *testing.
 
 	current = nullRows
 	for _, kind := range []string{"absent", "empty", "null"} {
-		versions, err := application.Local().Versions(ctx, "pages", documents[kind].ID, nil)
+		versions, err := application.Local().Versions(ctx, "pages", documents[kind].ID, ridu.FindOptions{})
 		if err != nil || len(versions) != 2 {
 			t.Fatalf("null-only versions for %s = %#v, %v", kind, versions, err)
 		}
 	}
-	if versions, err := application.Local().Versions(ctx, "pages", documents["mixed"].ID, nil); err != nil || len(versions) != 0 {
+	if versions, err := application.Local().Versions(ctx, "pages", documents["mixed"].ID, ridu.FindOptions{}); err != nil || len(versions) != 0 {
 		t.Fatalf("mixed missing-child versions = %#v, %v", versions, err)
 	}
 	current = notNullRows
-	if versions, err := application.Local().Versions(ctx, "pages", documents["mixed"].ID, nil); err != nil || len(versions) != 2 {
+	if versions, err := application.Local().Versions(ctx, "pages", documents["mixed"].ID, ridu.FindOptions{}); err != nil || len(versions) != 2 {
 		t.Fatalf("outer-NOT versions = %#v, %v", versions, err)
 	}
 }
@@ -804,13 +804,13 @@ func TestPostgresJSONStringPredicatesRemainTypeAwareUnderNot(t *testing.T) {
 		"null":   store.Null(),
 	}
 	documents := make(map[string]store.Document, len(inputs)+1)
-	absent, err := application.Local().Create(ctx, "pages", store.Values{"title": store.String("absent")}, nil)
+	absent, err := application.Local().Create(ctx, "pages", store.Values{"title": store.String("absent")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	documents["absent"] = absent
 	for kind, value := range inputs {
-		document, err := application.Local().Create(ctx, "pages", store.Values{"title": store.String(kind), "payload": value}, nil)
+		document, err := application.Local().Create(ctx, "pages", store.Values{"title": store.String(kind), "payload": value}, ridu.MutationOptions{})
 		if err != nil {
 			t.Fatalf("create %s JSON value: %v", kind, err)
 		}
@@ -866,11 +866,11 @@ func TestPostgresJSONStringPredicatesRemainTypeAwareUnderNot(t *testing.T) {
 	assertList("JSON outer NOT membership", notMixed, "empty", "object", "number")
 
 	current = notVisible
-	if versions, err := application.Local().Versions(ctx, "pages", documents["string"].ID, nil); err != nil || len(versions) != 0 {
+	if versions, err := application.Local().Versions(ctx, "pages", documents["string"].ID, ridu.FindOptions{}); err != nil || len(versions) != 0 {
 		t.Fatalf("matching-string NOT versions = %#v, %v", versions, err)
 	}
 	for _, kind := range []string{"absent", "object", "number", "null"} {
-		versions, err := application.Local().Versions(ctx, "pages", documents[kind].ID, nil)
+		versions, err := application.Local().Versions(ctx, "pages", documents[kind].ID, ridu.FindOptions{})
 		if err != nil || len(versions) != 1 {
 			t.Fatalf("non-string NOT versions for %s = %#v, %v", kind, versions, err)
 		}
@@ -903,7 +903,7 @@ func TestPostgresLocalizedScalarStorageQueryAndFallback(t *testing.T) {
 		"details": store.Object(store.Values{"name": store.String("English details")}),
 		"links":   store.List(store.Object(store.Values{"_key": store.String("link-1"), "label": store.String("About"), "href": store.String("/about")})),
 		"layout":  store.List(store.Object(store.Values{"_key": store.String("block-1"), "blockType": store.String("hero"), "heading": store.String("Welcome")})),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -913,14 +913,14 @@ func TestPostgresLocalizedScalarStorageQueryAndFallback(t *testing.T) {
 		"details": store.Object(store.Values{"name": store.String("Détails français")}),
 		"links":   store.List(store.Object(store.Values{"_key": store.String("link-1"), "label": store.String("À propos"), "href": store.String("/about")})),
 		"layout":  store.List(store.Object(store.Values{"_key": store.String("block-1"), "blockType": store.String("hero"), "heading": store.String("Bienvenue")})),
-	}, document.Revision, nil, ridu.LocaleOptions{Locale: "fr"}); err != nil {
+	}, ridu.MutationOptions{ExpectedRevision: document.Revision, Locale: "fr"}); err != nil {
 		t.Fatal(err)
 	}
-	english, err := application.Local().Find(ctx, "posts", document.ID, nil, ridu.LocaleOptions{Locale: "en"})
+	english, err := application.Local().Find(ctx, "posts", document.ID, ridu.FindOptions{Locale: "en"})
 	if err != nil || stringValue(english.Values["title"]) != "Hello" {
 		t.Fatalf("English document = %#v, %v", english, err)
 	}
-	french, err := application.Local().Find(ctx, "posts", document.ID, nil, ridu.LocaleOptions{Locale: "fr"})
+	french, err := application.Local().Find(ctx, "posts", document.ID, ridu.FindOptions{Locale: "fr"})
 	if err != nil || stringValue(french.Values["title"]) != "Bonjour" {
 		t.Fatalf("French document = %#v, %v", french, err)
 	}
@@ -930,14 +930,14 @@ func TestPostgresLocalizedScalarStorageQueryAndFallback(t *testing.T) {
 	if postgresNestedString(english.Values["seo"], "description") != "English description" || postgresNestedString(english.Values["details"], "name") != "English details" || postgresNestedRowString(english.Values["links"], 0, "label") != "About" || postgresNestedRowString(english.Values["layout"], 0, "heading") != "Welcome" {
 		t.Fatalf("English nested document was overwritten = %#v", english.Values)
 	}
-	arabic, err := application.Local().Find(ctx, "posts", document.ID, nil, ridu.LocaleOptions{Locale: "ar"})
+	arabic, err := application.Local().Find(ctx, "posts", document.ID, ridu.FindOptions{Locale: "ar"})
 	if err != nil || stringValue(arabic.Values["title"]) != "Hello" {
 		t.Fatalf("Arabic fallback document = %#v, %v", arabic, err)
 	}
-	if _, err := application.Local().PublishChanges(ctx, "posts", document.ID, store.Values{"summary": store.String("")}, 0, nil, ridu.LocaleOptions{Locale: "ar"}); err != nil {
+	if _, err := application.Local().PublishChanges(ctx, "posts", document.ID, store.Values{"summary": store.String("")}, ridu.MutationOptions{Locale: "ar"}); err != nil {
 		t.Fatal(err)
 	}
-	arabic, err = application.Local().Find(ctx, "posts", document.ID, nil, ridu.LocaleOptions{Locale: "ar"})
+	arabic, err = application.Local().Find(ctx, "posts", document.ID, ridu.FindOptions{Locale: "ar"})
 	if err != nil || stringValue(arabic.Values["summary"]) != "English summary" || arabic.LocalizationSources["summary"] != "en" {
 		t.Fatalf("Arabic empty-string fallback = %#v, %v", arabic, err)
 	}
@@ -966,7 +966,7 @@ func TestPostgresLocalizedScalarStorageQueryAndFallback(t *testing.T) {
 	if err != nil || page.Total != 1 || page.Documents[0].ID != document.ID {
 		t.Fatalf("French localized array query = %#v, %v", page, err)
 	}
-	all, err := application.Local().Find(ctx, "posts", document.ID, nil, ridu.LocaleOptions{AllLocales: true})
+	all, err := application.Local().Find(ctx, "posts", document.ID, ridu.FindOptions{AllLocales: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -989,7 +989,7 @@ func TestPostgresFilteredSelectionUsesOneCanonicalOverflowSentinel(t *testing.T)
 	}
 	for index := 0; index < 101; index++ {
 		id := fmt.Sprintf("post-%03d", index)
-		if _, err := application.Local().Import(ctx, "posts", store.Values{"title": store.String(id)}, ridu.ImportOptions{ID: id}, nil); err != nil {
+		if _, err := application.Local().Import(ctx, "posts", store.Values{"title": store.String(id)}, ridu.ImportOptions{ID: id}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -1043,7 +1043,7 @@ func TestPostgresAuthHardeningConformance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	user, err := application.Local().Create(ctx, "users", store.Values{"email": store.String("  Secure@Example.Test ")}, nil)
+	user, err := application.Local().Create(ctx, "users", store.Values{"email": store.String("  Secure@Example.Test ")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1124,18 +1124,18 @@ func TestArtifactRunnerPreservesNestedFieldsReferencesAndVersionHistory(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	user, err := beforeApp.CreateAuthUser(ctx, "users", store.Values{"email": store.String("ada@example.test")}, "rename-password-value", nil)
+	user, err := beforeApp.CreateAuthUser(ctx, "users", store.Values{"email": store.String("ada@example.test")}, "rename-password-value", ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	post, err := beforeApp.Local().Create(ctx, "posts", store.Values{
 		"seo":     store.Object(store.Values{"title": store.String("Preserved nested value")}),
 		"related": store.Object(store.Values{"relationTo": store.String("users"), "id": store.String(user.ID)}),
-	}, &store.Document{ID: "editor"})
+	}, ridu.MutationOptions{Actor: &store.Document{ID: "editor"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	news, err := beforeApp.Local().Create(ctx, "news", store.Values{"title": store.String("Durable rename")}, &user)
+	news, err := beforeApp.Local().Create(ctx, "news", store.Values{"title": store.String("Durable rename")}, ridu.MutationOptions{Actor: &user})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1220,7 +1220,7 @@ func TestArtifactRunnerPreservesNestedFieldsReferencesAndVersionHistory(t *testi
 	if err != nil || len(statuses) != 2 || !statuses[0].Applied || statuses[1].Applied {
 		t.Fatalf("refused content rename changed migration history: %#v, %v", statuses, err)
 	}
-	unchanged, err := beforeApp.Local().Find(ctx, "posts", post.ID, &store.Document{ID: "editor"})
+	unchanged, err := beforeApp.Local().Find(ctx, "posts", post.ID, ridu.FindOptions{Actor: &store.Document{ID: "editor"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1271,11 +1271,11 @@ func TestArtifactRunnerPreservesNestedFieldsReferencesAndVersionHistory(t *testi
 	if completed, err := afterApp.RunScheduledPublishes(ctx, 10, nil); err != nil || completed != 1 {
 		t.Fatalf("execute renamed durable publish = %d, %v", completed, err)
 	}
-	if published, err := afterApp.Local().Find(ctx, "articles", news.ID, nil); err != nil || published.Status != store.StatusPublished {
+	if published, err := afterApp.Local().Find(ctx, "articles", news.ID, ridu.FindOptions{}); err != nil || published.Status != store.StatusPublished {
 		t.Fatalf("renamed scheduled target = %#v, %v", published, err)
 	}
 	actor := &store.Document{ID: "editor"}
-	preserved, err := afterApp.Local().Find(ctx, "posts", post.ID, actor)
+	preserved, err := afterApp.Local().Find(ctx, "posts", post.ID, ridu.FindOptions{Actor: actor})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1287,7 +1287,7 @@ func TestArtifactRunnerPreservesNestedFieldsReferencesAndVersionHistory(t *testi
 	if relationTo, _ := related["relationTo"].StringValue(); relationTo != "members" {
 		t.Fatalf("relationship target = %#v", related)
 	}
-	versions, err := afterApp.Local().Versions(ctx, "posts", post.ID, actor)
+	versions, err := afterApp.Local().Versions(ctx, "posts", post.ID, ridu.FindOptions{Actor: actor})
 	if err != nil || len(versions) != 1 {
 		t.Fatalf("versions = %#v, %v", versions, err)
 	}
@@ -1299,7 +1299,7 @@ func TestArtifactRunnerPreservesNestedFieldsReferencesAndVersionHistory(t *testi
 	if relationTo, _ := versionRelated["relationTo"].StringValue(); relationTo != "members" {
 		t.Fatalf("version relationship target = %#v", versionRelated)
 	}
-	if _, err := afterApp.Local().Delete(ctx, "members", user.ID, nil); !hasOperationCode(err, "delete_restricted") {
+	if _, err := afterApp.Local().Delete(ctx, "members", user.ID, ridu.MutationOptions{}); !hasOperationCode(err, "delete_restricted") {
 		t.Fatalf("renamed derived reference did not protect target: %v", err)
 	}
 	statuses, err = backend.ArtifactStatus(ctx, directory)
@@ -1360,13 +1360,13 @@ func TestPostgresRollbackReferenceLocksAndOptimisticConcurrency(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	target, err := application.Local().Create(ctx, "targets", store.Values{"name": store.String("Locked")}, nil)
+	target, err := application.Local().Create(ctx, "targets", store.Values{"name": store.String("Locked")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := application.Local().Create(ctx, "entries", store.Values{
 		"title": store.String("Rollback"), "target": store.String(target.ID),
-	}, nil); !hasOperationCode(err, "hook_failed") {
+	}, ridu.MutationOptions{}); !hasOperationCode(err, "hook_failed") {
 		t.Fatalf("PostgreSQL after-operation rollback error = %v", err)
 	}
 	page, err := application.Local().List(ctx, "entries", ridu.ListOptions{})
@@ -1427,7 +1427,7 @@ func TestPostgresRollbackReferenceLocksAndOptimisticConcurrency(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	document, err := versionApplication.Local().Create(ctx, "documents", store.Values{"title": store.String("Initial")}, nil)
+	document, err := versionApplication.Local().Create(ctx, "documents", store.Values{"title": store.String("Initial")}, ridu.MutationOptions{})
 	if err != nil || document.Revision != 1 {
 		t.Fatalf("versioned document = %#v, %v", document, err)
 	}
@@ -1437,7 +1437,7 @@ func TestPostgresRollbackReferenceLocksAndOptimisticConcurrency(t *testing.T) {
 		title := title
 		go func() {
 			<-start
-			_, updateError := versionApplication.Local().PublishChanges(ctx, "documents", document.ID, store.Values{"title": store.String(title)}, 1, nil)
+			_, updateError := versionApplication.Local().PublishChanges(ctx, "documents", document.ID, store.Values{"title": store.String(title)}, ridu.MutationOptions{ExpectedRevision: 1})
 			results <- updateError
 		}()
 	}
@@ -1480,20 +1480,20 @@ func TestPostgresAtomicJoinMutationRollsBackMidBatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	source, err := application.Local().Create(ctx, "categories", store.Values{"name": store.String("Source")}, nil)
+	source, err := application.Local().Create(ctx, "categories", store.Values{"name": store.String("Source")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	addition, err := application.Local().Import(ctx, "posts", store.Values{"title": store.String("Addition")}, ridu.ImportOptions{ID: "join-a-addition", Status: store.StatusPublished}, nil)
+	addition, err := application.Local().Import(ctx, "posts", store.Values{"title": store.String("Addition")}, ridu.ImportOptions{ID: "join-a-addition", Status: store.StatusPublished})
 	if err != nil {
 		t.Fatal(err)
 	}
-	removal, err := application.Local().Import(ctx, "posts", store.Values{"title": store.String("Removal"), "category": store.String(source.ID)}, ridu.ImportOptions{ID: "join-z-removal", Status: store.StatusPublished}, nil)
+	removal, err := application.Local().Import(ctx, "posts", store.Values{"title": store.String("Removal"), "category": store.String(source.ID)}, ridu.ImportOptions{ID: "join-z-removal", Status: store.StatusPublished})
 	if err != nil {
 		t.Fatal(err)
 	}
 	rejectedID = removal.ID
-	if _, err := application.Local().MutateJoin(ctx, "categories", source.ID, "posts", []string{addition.ID}, []string{removal.ID}, nil); !hasOperationCode(err, "hook_failed") {
+	if _, err := application.Local().MutateJoin(ctx, "categories", source.ID, "posts", []string{addition.ID}, []string{removal.ID}, ridu.MutationOptions{}); !hasOperationCode(err, "hook_failed") {
 		t.Fatalf("mid-batch join failure = %v, want hook_failed", err)
 	}
 	assertPostgresRelationship(t, application, addition.ID, "")
@@ -1537,14 +1537,14 @@ func TestPostgresPublishLocksTheRowBeforeStatusHooks(t *testing.T) {
 	}
 	document, err := application.Local().Create(ctx, "posts", store.Values{
 		"title": store.String("Initial"), "summary": store.String("Initial summary"),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	publishResult := make(chan error, 1)
 	go func() {
-		_, publishError := application.Local().Publish(ctx, "posts", document.ID, document.Revision, nil)
+		_, publishError := application.Local().Publish(ctx, "posts", document.ID, ridu.MutationOptions{ExpectedRevision: document.Revision})
 		publishResult <- publishError
 	}()
 	select {
@@ -1557,7 +1557,7 @@ func TestPostgresPublishLocksTheRowBeforeStatusHooks(t *testing.T) {
 	go func() {
 		_, updateError := application.Local().PublishChanges(ctx, "posts", document.ID, store.Values{
 			"title": store.String("Concurrent"),
-		}, 0, nil)
+		}, ridu.MutationOptions{})
 		updateResult <- updateError
 	}()
 	select {
@@ -1581,7 +1581,7 @@ func TestPostgresPublishLocksTheRowBeforeStatusHooks(t *testing.T) {
 			t.Fatalf("%s mutation did not finish after releasing the publish hook", name)
 		}
 	}
-	final, err := application.Local().Find(ctx, "posts", document.ID, nil)
+	final, err := application.Local().Find(ctx, "posts", document.ID, ridu.FindOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1610,15 +1610,15 @@ func TestPostgresConcurrentJoinReparentUsesObservedValueConflict(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	left, err := application.Local().Create(ctx, "categories", store.Values{"name": store.String("Left")}, nil)
+	left, err := application.Local().Create(ctx, "categories", store.Values{"name": store.String("Left")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	right, err := application.Local().Create(ctx, "categories", store.Values{"name": store.String("Right")}, nil)
+	right, err := application.Local().Create(ctx, "categories", store.Values{"name": store.String("Right")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	target, err := application.Local().Create(ctx, "posts", store.Values{"title": store.String("Concurrent")}, nil)
+	target, err := application.Local().Create(ctx, "posts", store.Values{"title": store.String("Concurrent")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1626,7 +1626,7 @@ func TestPostgresConcurrentJoinReparentUsesObservedValueConflict(t *testing.T) {
 	for _, sourceID := range []string{left.ID, right.ID} {
 		sourceID := sourceID
 		go func() {
-			_, mutationError := application.Local().MutateJoin(ctx, "categories", sourceID, "posts", []string{target.ID}, nil, nil)
+			_, mutationError := application.Local().MutateJoin(ctx, "categories", sourceID, "posts", []string{target.ID}, nil, ridu.MutationOptions{})
 			results <- mutationError
 		}()
 	}
@@ -1652,7 +1652,7 @@ func TestPostgresConcurrentJoinReparentUsesObservedValueConflict(t *testing.T) {
 	if successes != 1 || conflicts != 1 {
 		t.Fatalf("concurrent join outcomes: successes=%d conflicts=%d", successes, conflicts)
 	}
-	document, err := application.Local().Find(ctx, "posts", target.ID, nil)
+	document, err := application.Local().Find(ctx, "posts", target.ID, ridu.FindOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1675,11 +1675,11 @@ func TestPostgresSelfJoinMutationsAcquireCrossedRowsWithoutDeadlock(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	left, err := application.Local().Create(ctx, "nodes", store.Values{"name": store.String("Left")}, nil)
+	left, err := application.Local().Create(ctx, "nodes", store.Values{"name": store.String("Left")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	right, err := application.Local().Create(ctx, "nodes", store.Values{"name": store.String("Right")}, nil)
+	right, err := application.Local().Create(ctx, "nodes", store.Values{"name": store.String("Right")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1687,7 +1687,7 @@ func TestPostgresSelfJoinMutationsAcquireCrossedRowsWithoutDeadlock(t *testing.T
 	for _, mutation := range []struct{ source, target string }{{left.ID, right.ID}, {right.ID, left.ID}} {
 		mutation := mutation
 		go func() {
-			_, mutationError := application.Local().MutateJoin(ctx, "nodes", mutation.source, "children", []string{mutation.target}, nil, nil)
+			_, mutationError := application.Local().MutateJoin(ctx, "nodes", mutation.source, "children", []string{mutation.target}, nil, ridu.MutationOptions{})
 			results <- mutationError
 		}()
 	}
@@ -1806,7 +1806,7 @@ func (transaction *joinBarrierTransaction) Find(ctx context.Context, request sto
 
 func assertPostgresRelationship(t *testing.T, application *ridu.App, documentID, expected string) {
 	t.Helper()
-	document, err := application.Local().Find(context.Background(), "posts", documentID, nil)
+	document, err := application.Local().Find(context.Background(), "posts", documentID, ridu.FindOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1842,7 +1842,7 @@ func TestPostgresDestructiveArtifactRequiresApprovalAndAppliesInIsolation(t *tes
 	}
 	document, err := beforeApplication.Local().Create(ctx, "posts", store.Values{
 		"title": store.String("Keep"), "summary": store.String("Remove intentionally"),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1870,7 +1870,7 @@ func TestPostgresDestructiveArtifactRequiresApprovalAndAppliesInIsolation(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	preserved, err := afterApplication.Local().Find(ctx, "posts", document.ID, nil)
+	preserved, err := afterApplication.Local().Find(ctx, "posts", document.ID, ridu.FindOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1879,98 +1879,6 @@ func TestPostgresDestructiveArtifactRequiresApprovalAndAppliesInIsolation(t *tes
 	}
 	if _, exists := preserved.Values["summary"]; exists {
 		t.Fatal("removed field remained after explicitly approved destructive migration")
-	}
-}
-
-type integrationMigrationPlugin struct{}
-
-func (integrationMigrationPlugin) Key() string { return "audit" }
-
-func (integrationMigrationPlugin) Descriptor() ridu.PluginDescriptor {
-	return ridu.PluginDescriptor{
-		Version: "1.0.0", GoPackage: "example.com/plugins/audit", APIVersion: ridu.PluginAPIVersion,
-		Ridu: ridu.RiduCompatibility{Minimum: "0.0.0-dev", MaximumExclusive: "1.0.0"},
-		DatabaseContributions: []ridu.PluginDatabaseContribution{{
-			Adapter: ridu.PluginDatabaseAdapterPostgres, Tables: []string{"ridu_plugin_audit_events"},
-			Migrations: []ridu.PluginMigration{{
-				Version: 1, Name: "create-events",
-				UpSQL:   []string{`CREATE TABLE ridu_plugin_audit_events (id text PRIMARY KEY, payload jsonb NOT NULL)`, `INSERT INTO ridu_plugin_audit_events (id, payload) VALUES ('fixture', '{"ok":true}'::jsonb)`},
-				DownSQL: []string{`DROP TABLE ridu_plugin_audit_events`},
-			}},
-		}},
-	}
-}
-
-type integrationMissingTablePlugin struct{}
-
-func (integrationMissingTablePlugin) Key() string { return "missing-table" }
-
-func (integrationMissingTablePlugin) Descriptor() ridu.PluginDescriptor {
-	return ridu.PluginDescriptor{
-		Version: "1.0.0", GoPackage: "example.com/plugins/missing-table", APIVersion: ridu.PluginAPIVersion,
-		Ridu: ridu.RiduCompatibility{Minimum: "0.0.0-dev", MaximumExclusive: "1.0.0"},
-		DatabaseContributions: []ridu.PluginDatabaseContribution{{
-			Adapter: ridu.PluginDatabaseAdapterPostgres, Tables: []string{"ridu_plugin_missing_table_state"},
-			Migrations: []ridu.PluginMigration{{Version: 1, Name: "missing-state", UpSQL: []string{"SELECT 1"}, DownSQL: []string{"SELECT 1"}}},
-		}},
-	}
-}
-
-func TestPostgresRejectsDeclaredPluginTableMissingFromMigration(t *testing.T) {
-	ctx := context.Background()
-	config := ridu.Config{
-		Name: "Missing plugin table", Plugins: []ridu.Plugin{integrationMissingTablePlugin{}},
-		Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{field.Text("title")}}},
-	}
-	backend, manifest := integrationBackend(t, ctx, config)
-	artifact, err := postgres.BuildArtifact(ctx, "missing-plugin-table", nil, manifest, nil, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	directory := t.TempDir()
-	if _, err := migrationartifact.Create(directory, "missing-plugin-table", artifact, time.Unix(1, 0)); err != nil {
-		t.Fatal(err)
-	}
-	if err := backend.ApplyArtifacts(ctx, directory); err == nil || !strings.Contains(err.Error(), "declared plugin table") {
-		t.Fatalf("missing declared plugin table error = %v", err)
-	}
-}
-
-func TestPluginMigrationsUpgradeDowngradeAndReplayAgainstPostgres(t *testing.T) {
-	ctx := context.Background()
-	withPlugin := ridu.Config{Name: "Plugin migration", Plugins: []ridu.Plugin{integrationMigrationPlugin{}}, Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{field.Text("title")}}}}
-	withoutPlugin := ridu.Config{Name: "Plugin migration", Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{field.Text("title")}}}}
-	backend, before := integrationBackend(t, ctx, withPlugin)
-	directory := t.TempDir()
-	initial, err := postgres.BuildArtifact(ctx, "initial-with-plugin", nil, before, nil, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := migrationartifact.Create(directory, "initial-with-plugin", initial, time.Unix(1, 0)); err != nil {
-		t.Fatal(err)
-	}
-	if err := backend.ApplyArtifacts(ctx, directory); err != nil {
-		t.Fatal(err)
-	}
-	after, err := ridu.Resolve(withoutPlugin)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := postgres.BuildArtifact(ctx, "remove-plugin", &before, after, nil, false); err == nil {
-		t.Fatal("plugin downgrade was planned without destructive approval")
-	}
-	removal, err := postgres.BuildArtifact(ctx, "remove-plugin", &before, after, nil, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := migrationartifact.Create(directory, "remove-plugin", removal, time.Unix(2, 0)); err != nil {
-		t.Fatal(err)
-	}
-	if err := backend.ApplyArtifacts(ctx, directory); err != nil {
-		t.Fatal(err)
-	}
-	if err := postgres.VerifyArtifactsWithOptions(ctx, os.Getenv("RIDU_POSTGRES_URL"), directory, postgres.RunnerOptions{AllowInsecureDatabase: true}); err != nil {
-		t.Fatal(err)
 	}
 }
 
@@ -2054,13 +1962,13 @@ func TestPostgresPermanentDeleteRemovesDocumentState(t *testing.T) {
 	}
 	actor, err := application.CreateAuthUser(ctx, "users", store.Values{
 		"email": store.String("deleted@example.test"), "name": store.String("First"),
-	}, "old-password-value", nil)
+	}, "old-password-value", ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	staffCollision, err := application.Local().Import(ctx, "staff", store.Values{"email": store.String("staff-collision@example.test")}, ridu.ImportOptions{
 		ID: actor.ID, Status: store.StatusPublished,
-	}, nil)
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2071,7 +1979,7 @@ func TestPostgresPermanentDeleteRemovesDocumentState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	actor, err = application.Local().Update(ctx, "users", actor.ID, store.Values{"name": store.String("Second")}, &actor)
+	actor, err = application.Local().Update(ctx, "users", actor.ID, store.Values{"name": store.String("Second")}, ridu.MutationOptions{Actor: &actor})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2090,7 +1998,7 @@ func TestPostgresPermanentDeleteRemovesDocumentState(t *testing.T) {
 	if _, err := application.SetPreference(ctx, actorIdentity, "theme", json.RawMessage(`"dark"`)); err != nil {
 		t.Fatal(err)
 	}
-	post, err := application.Local().Create(ctx, "posts", store.Values{"title": store.String("Scheduled")}, &actor)
+	post, err := application.Local().Create(ctx, "posts", store.Values{"title": store.String("Scheduled")}, ridu.MutationOptions{Actor: &actor})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2101,7 +2009,7 @@ func TestPostgresPermanentDeleteRemovesDocumentState(t *testing.T) {
 		t.Fatalf("lock = %#v, %v", state, err)
 	}
 	deletedID := actor.ID
-	if _, err := application.Local().Delete(ctx, "users", deletedID, &actor); err != nil {
+	if _, err := application.Local().Delete(ctx, "users", deletedID, ridu.MutationOptions{Actor: &actor}); err != nil {
 		t.Fatal(err)
 	}
 	collectionIDs := make(map[schema.CollectionSlug]schema.StableID)
@@ -2143,7 +2051,7 @@ func TestPostgresPermanentDeleteRemovesDocumentState(t *testing.T) {
 
 	recreated, err := application.Local().Import(ctx, "users", store.Values{
 		"email": store.String("deleted@example.test"), "name": store.String("Recreated"),
-	}, ridu.ImportOptions{ID: deletedID, Status: store.StatusDraft}, nil)
+	}, ridu.ImportOptions{ID: deletedID, Status: store.StatusDraft})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2175,10 +2083,10 @@ func TestPostgresPermanentDeleteRemovesDocumentState(t *testing.T) {
 	if state, err := application.DocumentLock(ctx, "posts", post.ID, recreatedIdentity); err != nil || state.Lock != nil {
 		t.Fatalf("lock after owner deletion = %#v, %v", state, err)
 	}
-	if versions, err := application.Local().Versions(ctx, "users", recreated.ID, &recreated); err != nil || len(versions) != 1 || versions[0].Revision != 1 {
+	if versions, err := application.Local().Versions(ctx, "users", recreated.ID, ridu.FindOptions{Actor: &recreated}); err != nil || len(versions) != 1 || versions[0].Revision != 1 {
 		t.Fatalf("versions after ID reuse = %#v, %v", versions, err)
 	}
-	targetOnly, err := application.Local().Create(ctx, "posts", store.Values{"title": store.String("Target cleanup")}, &recreated)
+	targetOnly, err := application.Local().Create(ctx, "posts", store.Values{"title": store.String("Target cleanup")}, ridu.MutationOptions{Actor: &recreated})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2189,7 +2097,7 @@ func TestPostgresPermanentDeleteRemovesDocumentState(t *testing.T) {
 	if _, _, err := backend.AcquireDocumentLock(ctx, store.DocumentLock{CollectionID: collectionIDs["posts"], DocumentID: targetOnly.ID, OwnerCollectionID: collectionIDs["users"], OwnerID: recreated.ID, OwnerLabel: "recreated", CreatedAt: time.Now(), UpdatedAt: time.Now(), ExpiresAt: time.Now().Add(time.Minute)}, time.Now(), false); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Delete(ctx, "posts", targetOnly.ID, &recreated); err != nil {
+	if _, err := application.Local().Delete(ctx, "posts", targetOnly.ID, ridu.MutationOptions{Actor: &recreated}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := backend.FindTask(ctx, targetSchedule.ID); !errors.Is(err, store.ErrNotFound) {

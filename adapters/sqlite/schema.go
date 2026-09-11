@@ -23,9 +23,6 @@ import (
 // Open never calls it and production callers should apply reviewed immutable
 // artifacts once the SQLite artifact runner is configured.
 func (backend *Store) Migrate(ctx context.Context, manifest schema.Manifest) error {
-	if err := requireSQLitePluginSchema(manifest); err != nil {
-		return err
-	}
 	digest, err := manifestDigest(manifest)
 	if err != nil {
 		return fmt.Errorf("digest SQLite manifest: %w", err)
@@ -43,31 +40,8 @@ func (backend *Store) Migrate(ctx context.Context, manifest schema.Manifest) err
 		if immutable {
 			return fmt.Errorf("SQLite development migration cannot modify a database with immutable migration history")
 		}
-		before, err := readSQLiteDevelopmentManifest(ctx, connection)
-		if err != nil {
-			return err
-		}
-		pluginSteps, pluginRisks, err := sqlitePluginMigrationSteps(before, manifest)
-		if err != nil {
-			return err
-		}
-		if err := requireSQLiteDestructiveApproval(pluginRisks, false); err != nil {
-			return fmt.Errorf("SQLite development migration cannot remove private plugin schema; create an immutable artifact with explicit destructive approval: %w", err)
-		}
 		if err := installSchema(ctx, connection); err != nil {
 			return err
-		}
-		boundary, err := newSQLitePluginSchemaBoundary(ctx, connection, before, &manifest)
-		if err != nil {
-			return fmt.Errorf("prepare SQLite development plugin boundary: %w", err)
-		}
-		if err := executeSQLitePluginOperations(ctx, connection, pluginSteps, func() error {
-			return boundary.validateIntermediate(ctx, connection)
-		}); err != nil {
-			return fmt.Errorf("apply SQLite development plugin migrations: %w", err)
-		}
-		if err := boundary.validateFinal(ctx, connection); err != nil {
-			return fmt.Errorf("verify SQLite development plugin schema: %w", err)
 		}
 		if err := contract.reconcileIndexes(ctx, connection, manifest); err != nil {
 			return err
@@ -492,26 +466,6 @@ func manifestDigest(manifest schema.Manifest) (string, error) {
 	}
 	digest := sha256.Sum256(encoded)
 	return hex.EncodeToString(digest[:]), nil
-}
-
-func requireSQLitePluginSchema(manifest schema.Manifest) error {
-	for _, plugin := range manifest.Snapshot().Plugins {
-		if !plugin.HasDatabaseContributions() {
-			continue
-		}
-		contribution, supported := plugin.DatabaseContribution(schema.PluginDatabaseAdapterSQLite)
-		if !supported {
-			return fmt.Errorf("plugin %q has private database schema but does not support sqlite; contribute ordinary collections for portable plugin data or add a sqlite database contribution", plugin.Key)
-		}
-		for _, pluginMigration := range contribution.Migrations {
-			for _, statement := range append(append([]string(nil), pluginMigration.UpSQL...), pluginMigration.DownSQL...) {
-				if !schema.IsValidPluginMigrationSQL(schema.PluginDatabaseAdapterSQLite, statement) {
-					return fmt.Errorf("plugin %q sqlite migration %d contains invalid SQL or transaction/connection control", plugin.Key, pluginMigration.Version)
-				}
-			}
-		}
-	}
-	return nil
 }
 
 func readSQLiteDevelopmentManifest(ctx context.Context, runner sqlRunner) (*schema.Manifest, error) {

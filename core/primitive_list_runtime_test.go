@@ -36,7 +36,7 @@ func TestPrimitiveListsLocalRESTNestedAndLocalized(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	created, err := app.Local().CreateWithOptions(t.Context(), "primitive-products", values, core.MutationOptions{Locale: "fr"})
+	created, err := app.Local().Create(t.Context(), "primitive-products", values, core.MutationOptions{Locale: "fr"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,19 +59,19 @@ func TestPrimitiveListsLocalRESTNestedAndLocalized(t *testing.T) {
 		}
 		primitiveRuntimeEqual(t, actual, value)
 	}
-	updated, err := app.Local().PublishChangesWithOptions(t.Context(), "primitive-products", created.ID, store.Values{"sellingPoints": store.List(store.String("Replacement")), "availableSizes": store.List(), "localizedPoints": store.List()}, core.MutationOptions{Locale: "fr", ExpectedRevision: created.Revision})
+	updated, err := app.Local().PublishChanges(t.Context(), "primitive-products", created.ID, store.Values{"sellingPoints": store.List(store.String("Replacement")), "availableSizes": store.List(), "localizedPoints": store.List()}, core.MutationOptions{Locale: "fr", ExpectedRevision: created.Revision})
 	if err != nil {
 		t.Fatal(err)
 	}
 	primitiveRuntimeEqual(t, updated.Values["sellingPoints"], store.List(store.String("Replacement")))
 	primitiveRuntimeEqual(t, updated.Values["availableSizes"], store.List())
-	duplicate, err := app.Local().DuplicateWithOptions(t.Context(), "primitive-products", created.ID, nil, core.MutationOptions{Locale: "fr"})
+	duplicate, err := app.Local().Duplicate(t.Context(), "primitive-products", created.ID, nil, core.MutationOptions{Locale: "fr"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	primitiveRuntimeEqual(t, duplicate.Values["sellingPoints"], updated.Values["sellingPoints"])
 	primitiveRuntimeEqual(t, duplicate.Values["availableSizes"], store.List())
-	restored, err := app.Local().RestoreVersionWithOptions(t.Context(), "primitive-products", created.ID, created.Revision, false, core.MutationOptions{Locale: "fr", ExpectedRevision: updated.Revision})
+	restored, err := app.Local().Restore(t.Context(), "primitive-products", created.ID, created.Revision, core.MutationOptions{Locale: "fr", ExpectedRevision: updated.Revision})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +112,7 @@ func TestPrimitiveListIssuesRemainFieldLevelAcrossTransports(t *testing.T) {
 			for key, value := range test.values {
 				values[key] = value
 			}
-			_, err = app.Local().CreateWithOptions(t.Context(), "primitive-products", values, core.MutationOptions{Locale: "fr"})
+			_, err = app.Local().Create(t.Context(), "primitive-products", values, core.MutationOptions{Locale: "fr"})
 			var failure *core.OperationError
 			if !errors.As(err, &failure) || len(failure.Issues) != 1 {
 				t.Fatalf("issues %v", err)
@@ -148,18 +148,18 @@ func TestPrimitiveListCallbacksDefaultsAccessAndCopies(t *testing.T) {
 	typed := 0
 	validated := 0
 	read := 0
-	texts := field.TextList("points").DefaultFrom(func(operation.DefaultContext) (operation.Value[[]string], error) {
+	texts := field.TextList("points").DefaultFrom(func(operation.Context) (operation.Value[[]string], error) {
 		defaults++
 		return operation.Present(source), nil
-	}).Hooks(field.Hooks[[]string]{BeforeValidate: []field.RawTransform{func(operation.WriteContext, operation.Value[store.Value]) (operation.Change[store.Value], error) {
+	}).Hooks(field.Hooks[[]string]{BeforeValidate: []field.RawTransform{func(operation.Context, operation.Value[store.Value]) (operation.Change[store.Value], error) {
 		raw++
 		return operation.Keep[store.Value](), nil
-	}}, BeforeChange: []field.Transform[[]string]{func(ctx operation.WriteContext, value operation.Value[[]string]) (operation.Change[[]string], error) {
+	}}, BeforeChange: []field.Transform[[]string]{func(ctx operation.Context, value operation.Value[[]string]) (operation.Change[[]string], error) {
 		typed++
 		items, _ := value.Get()
 		items[0] = "ignored mutation"
 		return operation.Keep[[]string](), nil
-	}}}).Validate(func(ctx operation.ValidationContext, value operation.Value[[]string]) ([]operation.Issue, error) {
+	}}}).Validate(func(ctx operation.Context, value operation.Value[[]string]) ([]operation.Issue, error) {
 		validated++
 		items, _ := value.Get()
 		if !reflect.DeepEqual(items, source) {
@@ -167,19 +167,19 @@ func TestPrimitiveListCallbacksDefaultsAccessAndCopies(t *testing.T) {
 		}
 		items[0] = "ignored validation mutation"
 		return nil, nil
-	}).ReadHooks(field.ReadHooks[[]string]{AfterRead: []field.OutputTransform[[]string]{func(operation.ReadContext, operation.Value[[]string]) (operation.Change[[]string], error) {
+	}).ReplaceAfterRead(func(operation.Context, operation.Value[[]string]) (operation.Change[[]string], error) {
 		read++
 		return operation.Keep[[]string](), nil
-	}}})
-	numbers := field.NumberList("sizes").DefaultFrom(func(operation.DefaultContext) (operation.Value[[]float64], error) {
+	})
+	numbers := field.NumberList("sizes").DefaultFrom(func(operation.Context) (operation.Value[[]float64], error) {
 		return operation.Present(numberSource), nil
 	})
-	deny := func(operation.AccessContext) (bool, error) { return false, nil }
+	deny := func(operation.Context) (bool, error) { return false, nil }
 	app, err := core.New(core.Config{Name: "Lists", Collections: []core.Collection{{Slug: "products", Fields: field.Fields{texts, numbers, field.TextList("empty").Default(), field.NumberList("literal").Default(0, 0), field.TextList("secret").Default("hidden").Access(field.Access{Read: deny}), field.NumberList("locked").Access(field.Access{Update: deny})}}}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
 	}
-	created, err := app.Local().Create(t.Context(), "products", store.Values{"locked": store.List(store.Number(1))}, nil)
+	created, err := app.Local().Create(t.Context(), "products", store.Values{"locked": store.List(store.Number(1))}, core.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -196,13 +196,13 @@ func TestPrimitiveListCallbacksDefaultsAccessAndCopies(t *testing.T) {
 	source[0] = "source changed"
 	numberSource[0] = 99
 
-	found, err := app.Local().FindWithOptions(t.Context(), "products", created.ID, core.FindOptions{})
+	found, err := app.Local().Find(t.Context(), "products", created.ID, core.FindOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	primitiveRuntimeEqual(t, found.Values["points"], store.List(store.String("oak"), store.String("oak")))
 	primitiveRuntimeEqual(t, found.Values["sizes"], store.List(store.Number(0), store.Number(8.5)))
-	_, err = app.Local().Update(t.Context(), "products", created.ID, store.Values{"locked": store.List(store.Number(2))}, nil)
+	_, err = app.Local().Update(t.Context(), "products", created.ID, store.Values{"locked": store.List(store.Number(2))}, core.MutationOptions{})
 	var failure *core.OperationError
 	if !errors.As(err, &failure) || failure.Status != 403 {
 		t.Fatalf("update access=%v", err)
@@ -221,17 +221,17 @@ func primitiveRuntimeEqual(t *testing.T, actual, want store.Value) {
 func TestPrimitiveListTypedReplacementsAndInvalidDynamicDefaults(t *testing.T) {
 	replacement := []float64{0, 2, 2}
 	app, err := core.New(core.Config{Name: "List hooks", Collections: []core.Collection{{Slug: "products", Fields: field.Fields{
-		field.TextList("points").Hooks(field.Hooks[[]string]{BeforeValidate: []field.RawTransform{func(ctx operation.WriteContext, value operation.Value[store.Value]) (operation.Change[store.Value], error) {
+		field.TextList("points").Hooks(field.Hooks[[]string]{BeforeValidate: []field.RawTransform{func(ctx operation.Context, value operation.Value[store.Value]) (operation.Change[store.Value], error) {
 			return operation.Replace(operation.Present(store.List(store.String(""), store.String("from raw hook")))), nil
 		}}}),
-		field.NumberList("sizes").Hooks(field.Hooks[[]float64]{BeforeChange: []field.Transform[[]float64]{func(ctx operation.WriteContext, value operation.Value[[]float64]) (operation.Change[[]float64], error) {
+		field.NumberList("sizes").Hooks(field.Hooks[[]float64]{BeforeChange: []field.Transform[[]float64]{func(ctx operation.Context, value operation.Value[[]float64]) (operation.Change[[]float64], error) {
 			return operation.Replace(operation.Present(replacement)), nil
 		}}}),
 	}}}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
 	}
-	created, err := app.Local().Create(t.Context(), "products", store.Values{"points": store.List(), "sizes": store.List()}, nil)
+	created, err := app.Local().Create(t.Context(), "products", store.Values{"points": store.List(), "sizes": store.List()}, core.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -240,13 +240,13 @@ func TestPrimitiveListTypedReplacementsAndInvalidDynamicDefaults(t *testing.T) {
 	replacement[0] = 99
 	primitiveRuntimeEqual(t, created.Values["sizes"], store.List(store.Number(0), store.Number(2), store.Number(2)))
 	for _, node := range []field.Node{
-		field.TextList("value").Required().DefaultFrom(func(operation.DefaultContext) (operation.Value[[]string], error) {
+		field.TextList("value").Required().DefaultFrom(func(operation.Context) (operation.Value[[]string], error) {
 			return operation.Present([]string(nil)), nil
 		}),
-		field.TextList("value").MaxLength(2).DefaultFrom(func(operation.DefaultContext) (operation.Value[[]string], error) {
+		field.TextList("value").MaxLength(2).DefaultFrom(func(operation.Context) (operation.Value[[]string], error) {
 			return operation.Present([]string{"too long"}), nil
 		}),
-		field.NumberList("value").Min(0).DefaultFrom(func(operation.DefaultContext) (operation.Value[[]float64], error) {
+		field.NumberList("value").Min(0).DefaultFrom(func(operation.Context) (operation.Value[[]float64], error) {
 			return operation.Present([]float64{-1}), nil
 		}),
 	} {
@@ -254,7 +254,7 @@ func TestPrimitiveListTypedReplacementsAndInvalidDynamicDefaults(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		_, err = bad.Local().Create(t.Context(), "products", store.Values{}, nil)
+		_, err = bad.Local().Create(t.Context(), "products", store.Values{}, core.MutationOptions{})
 		var failure *core.OperationError
 		if !errors.As(err, &failure) || failure.Status != 422 {
 			t.Fatalf("invalid dynamic list default: %v", err)
@@ -283,31 +283,31 @@ func TestPrimitiveListDynamicDefaultSliceBoundaries(t *testing.T) {
 		node             field.Node
 		present, invalid bool
 	}{
-		{"nil text slice", field.TextList("value").DefaultFrom(func(operation.DefaultContext) (operation.Value[[]string], error) {
+		{"nil text slice", field.TextList("value").DefaultFrom(func(operation.Context) (operation.Value[[]string], error) {
 			return operation.Present([]string(nil)), nil
 		}), true, false},
-		{"empty text slice", field.TextList("value").DefaultFrom(func(operation.DefaultContext) (operation.Value[[]string], error) {
+		{"empty text slice", field.TextList("value").DefaultFrom(func(operation.Context) (operation.Value[[]string], error) {
 			return operation.Present([]string{}), nil
 		}), true, false},
-		{"missing text list", field.TextList("value").DefaultFrom(func(operation.DefaultContext) (operation.Value[[]string], error) {
+		{"missing text list", field.TextList("value").DefaultFrom(func(operation.Context) (operation.Value[[]string], error) {
 			return operation.Empty[[]string](), nil
 		}), false, false},
-		{"nil number slice", field.NumberList("value").DefaultFrom(func(operation.DefaultContext) (operation.Value[[]float64], error) {
+		{"nil number slice", field.NumberList("value").DefaultFrom(func(operation.Context) (operation.Value[[]float64], error) {
 			return operation.Present([]float64(nil)), nil
 		}), true, false},
-		{"missing number list", field.NumberList("value").DefaultFrom(func(operation.DefaultContext) (operation.Value[[]float64], error) {
+		{"missing number list", field.NumberList("value").DefaultFrom(func(operation.Context) (operation.Value[[]float64], error) {
 			return operation.Empty[[]float64](), nil
 		}), false, false},
-		{"item length", field.TextList("value").MaxLength(2).DefaultFrom(func(operation.DefaultContext) (operation.Value[[]string], error) {
+		{"item length", field.TextList("value").MaxLength(2).DefaultFrom(func(operation.Context) (operation.Value[[]string], error) {
 			return operation.Present([]string{"long"}), nil
 		}), false, true},
-		{"item count", field.NumberList("value").MaxRows(1).DefaultFrom(func(operation.DefaultContext) (operation.Value[[]float64], error) {
+		{"item count", field.NumberList("value").MaxRows(1).DefaultFrom(func(operation.Context) (operation.Value[[]float64], error) {
 			return operation.Present([]float64{0, 0}), nil
 		}), false, true},
-		{"NaN", field.NumberList("value").DefaultFrom(func(operation.DefaultContext) (operation.Value[[]float64], error) {
+		{"NaN", field.NumberList("value").DefaultFrom(func(operation.Context) (operation.Value[[]float64], error) {
 			return operation.Present([]float64{math.NaN()}), nil
 		}), false, true},
-		{"infinity", field.NumberList("value").DefaultFrom(func(operation.DefaultContext) (operation.Value[[]float64], error) {
+		{"infinity", field.NumberList("value").DefaultFrom(func(operation.Context) (operation.Value[[]float64], error) {
 			return operation.Present([]float64{math.Inf(1)}), nil
 		}), false, true},
 	}
@@ -317,7 +317,7 @@ func TestPrimitiveListDynamicDefaultSliceBoundaries(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			created, err := app.Local().Create(t.Context(), "products", store.Values{}, nil)
+			created, err := app.Local().Create(t.Context(), "products", store.Values{}, core.MutationOptions{})
 			if test.invalid {
 				if err == nil {
 					t.Fatal("invalid list default persisted")
@@ -336,10 +336,10 @@ func TestPrimitiveListDynamicDefaultSliceBoundaries(t *testing.T) {
 	}
 	textCalls, numberCalls := 0, 0
 	app, err := core.New(core.Config{Name: "Defaults", Collections: []core.Collection{{Slug: "products", Fields: field.Fields{
-		field.Text("title"), field.TextList("points").DefaultFrom(func(operation.DefaultContext) (operation.Value[[]string], error) {
+		field.Text("title"), field.TextList("points").DefaultFrom(func(operation.Context) (operation.Value[[]string], error) {
 			textCalls++
 			return operation.Present([]string{"default"}), nil
-		}), field.NumberList("sizes").DefaultFrom(func(operation.DefaultContext) (operation.Value[[]float64], error) {
+		}), field.NumberList("sizes").DefaultFrom(func(operation.Context) (operation.Value[[]float64], error) {
 			numberCalls++
 			return operation.Present([]float64{0}), nil
 		}),
@@ -348,11 +348,11 @@ func TestPrimitiveListDynamicDefaultSliceBoundaries(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, value := range []store.Value{store.Null(), store.List()} {
-		created, err := app.Local().Create(t.Context(), "products", store.Values{"points": value, "sizes": value}, nil)
+		created, err := app.Local().Create(t.Context(), "products", store.Values{"points": value, "sizes": value}, core.MutationOptions{})
 		if err != nil {
 			t.Fatal(err)
 		}
-		updated, err := app.Local().Update(t.Context(), "products", created.ID, store.Values{"title": store.String("Changed")}, nil)
+		updated, err := app.Local().Update(t.Context(), "products", created.ID, store.Values{"title": store.String("Changed")}, core.MutationOptions{})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -362,11 +362,11 @@ func TestPrimitiveListDynamicDefaultSliceBoundaries(t *testing.T) {
 	if textCalls != 0 || numberCalls != 0 {
 		t.Fatalf("explicit empty values invoked defaults %d/%d", textCalls, numberCalls)
 	}
-	created, err := app.Local().Create(t.Context(), "products", store.Values{}, nil)
+	created, err := app.Local().Create(t.Context(), "products", store.Values{}, core.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := app.Local().Update(t.Context(), "products", created.ID, store.Values{"title": store.String("Changed")}, nil); err != nil {
+	if _, err := app.Local().Update(t.Context(), "products", created.ID, store.Values{"title": store.String("Changed")}, core.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if textCalls != 1 || numberCalls != 1 {
@@ -376,23 +376,23 @@ func TestPrimitiveListDynamicDefaultSliceBoundaries(t *testing.T) {
 
 func TestPrimitiveListReadHooksRespectOutputShape(t *testing.T) {
 	for _, clear := range []bool{false, true} {
-		texts := field.TextList("points").Required().MaxRows(1).MaxLength(2).ReadHooks(field.ReadHooks[[]string]{AfterRead: []field.OutputTransform[[]string]{func(operation.ReadContext, operation.Value[[]string]) (operation.Change[[]string], error) {
+		texts := field.TextList("points").Required().MaxRows(1).MaxLength(2).ReplaceAfterRead(func(operation.Context, operation.Value[[]string]) (operation.Change[[]string], error) {
 			if clear {
 				return operation.Replace(operation.Empty[[]string]()), nil
 			}
 			return operation.Replace(operation.Present([]string{"formatted longer", "extra"})), nil
-		}}})
-		numbers := field.NumberList("sizes").Required().Max(1).MaxRows(1).ReadHooks(field.ReadHooks[[]float64]{AfterRead: []field.OutputTransform[[]float64]{func(operation.ReadContext, operation.Value[[]float64]) (operation.Change[[]float64], error) {
+		})
+		numbers := field.NumberList("sizes").Required().Max(1).MaxRows(1).ReplaceAfterRead(func(operation.Context, operation.Value[[]float64]) (operation.Change[[]float64], error) {
 			if clear {
 				return operation.Replace(operation.Empty[[]float64]()), nil
 			}
 			return operation.Replace(operation.Present([]float64{9, 10})), nil
-		}}})
+		})
 		app, err := core.New(core.Config{Name: "Read lists", Collections: []core.Collection{{Slug: "products", Fields: field.Fields{texts, numbers}}}}, teststore.New())
 		if err != nil {
 			t.Fatal(err)
 		}
-		created, err := app.Local().Create(t.Context(), "products", store.Values{"points": store.List(store.String("ok")), "sizes": store.List(store.Number(0))}, nil)
+		created, err := app.Local().Create(t.Context(), "products", store.Values{"points": store.List(store.String("ok")), "sizes": store.List(store.Number(0))}, core.MutationOptions{})
 		if clear {
 			var failure *core.OperationError
 			if !errors.As(err, &failure) || failure.Code != "invalid_field_output" {
@@ -432,12 +432,12 @@ func TestPrimitiveListReadOutputRejectsMalformedValues(t *testing.T) {
 			active := false
 			collection := core.Collection{Slug: "products", Fields: field.Fields{test.node}}
 			if test.typed {
-				collection.Fields = field.Fields{field.NumberList("value").ReadHooks(field.ReadHooks[[]float64]{AfterRead: []field.OutputTransform[[]float64]{func(operation.ReadContext, operation.Value[[]float64]) (operation.Change[[]float64], error) {
+				collection.Fields = field.Fields{field.NumberList("value").ReplaceAfterRead(func(operation.Context, operation.Value[[]float64]) (operation.Change[[]float64], error) {
 					if active {
 						return operation.Replace(operation.Present([]float64{test.number})), nil
 					}
 					return operation.Keep[[]float64](), nil
-				}}})}
+				})}
 			} else {
 				collection.Hooks.AfterRead = []core.Hook{func(ctx core.HookContext) error {
 					if active {
@@ -450,12 +450,12 @@ func TestPrimitiveListReadOutputRejectsMalformedValues(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			created, err := app.Local().Create(t.Context(), "products", store.Values{"value": test.initial}, nil)
+			created, err := app.Local().Create(t.Context(), "products", store.Values{"value": test.initial}, core.MutationOptions{})
 			if err != nil {
 				t.Fatal(err)
 			}
 			active = true
-			_, err = app.Local().Find(t.Context(), "products", created.ID, nil)
+			_, err = app.Local().Find(t.Context(), "products", created.ID, core.FindOptions{})
 			var failure *core.OperationError
 			if !errors.As(err, &failure) || failure.Code != "invalid_field_output" || !strings.Contains(err.Error(), `"value"`) || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("malformed list output = %v", err)
@@ -500,7 +500,7 @@ func TestPrimitiveListReadOutputChecksNestedOccurrences(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			created, err := app.Local().CreateWithOptions(t.Context(), "primitive-products", primitivelists.Values(), core.MutationOptions{Locale: "fr"})
+			created, err := app.Local().Create(t.Context(), "primitive-products", primitivelists.Values(), core.MutationOptions{Locale: "fr"})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -509,7 +509,7 @@ func TestPrimitiveListReadOutputChecksNestedOccurrences(t *testing.T) {
 			if !test.allLocales {
 				options.Locale = "fr"
 			}
-			_, err = app.Local().FindWithOptions(t.Context(), "primitive-products", created.ID, options)
+			_, err = app.Local().Find(t.Context(), "primitive-products", created.ID, options)
 			var failure *core.OperationError
 			if !errors.As(err, &failure) || failure.Code != "invalid_field_output" || !strings.Contains(err.Error(), `"`+test.path+`"`) || !strings.Contains(err.Error(), "item 2") {
 				t.Fatalf("malformed nested output = %v", err)

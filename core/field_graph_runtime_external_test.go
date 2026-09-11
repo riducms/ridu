@@ -41,7 +41,7 @@ func graphRuntimeCode(t *testing.T, observations *[]graphRuntimeObservation) fie
 		*observations = append(*observations, graphRuntimeObservation{phase: phase, key: key, kind: kind, value: value, prior: prior, id: ctx.OccurrenceID, locale: ctx.Locale})
 	}
 	return field.Text("code").Required().Hooks(field.Hooks[string]{
-		BeforeValidate: []field.RawTransform{func(ctx operation.WriteContext, input operation.Value[store.Value]) (operation.Change[store.Value], error) {
+		BeforeValidate: []field.RawTransform{func(ctx operation.Context, input operation.Value[store.Value]) (operation.Change[store.Value], error) {
 			value, present := input.Get()
 			if !present {
 				return operation.Keep[store.Value](), nil
@@ -50,35 +50,35 @@ func graphRuntimeCode(t *testing.T, observations *[]graphRuntimeObservation) fie
 			if !ok {
 				return operation.Keep[store.Value](), nil
 			}
-			observe("raw", operation.Context(ctx), text)
+			observe("raw", ctx, text)
 			return operation.Replace(operation.Present(store.String(strings.ToLower(strings.TrimSpace(text))))), nil
 		}},
-		BeforeChange: []field.Transform[string]{func(ctx operation.WriteContext, input operation.Value[string]) (operation.Change[string], error) {
+		BeforeChange: []field.Transform[string]{func(ctx operation.Context, input operation.Value[string]) (operation.Change[string], error) {
 			value, _ := input.Get()
-			observe("write", operation.Context(ctx), value)
+			observe("write", ctx, value)
 			return operation.Replace(operation.Present("code:" + strings.TrimPrefix(value, "code:"))), nil
 		}},
-		AfterChange: []field.Observer[string]{func(ctx operation.EventContext, input operation.Value[string]) error {
+		AfterChange: []field.Observer[string]{func(ctx operation.Context, input operation.Value[string]) error {
 			value, _ := input.Get()
-			observe("changed", operation.Context(ctx), value)
+			observe("changed", ctx, value)
 			return nil
 		}},
-	}).ReadHooks(field.ReadHooks[string]{AfterRead: []field.OutputTransform[string]{func(ctx operation.ReadContext, input operation.Value[string]) (operation.Change[string], error) {
+	}).ReplaceAfterRead(func(ctx operation.Context, input operation.Value[string]) (operation.Change[string], error) {
 		value, _ := input.Get()
-		observe("read", operation.Context(ctx), value)
+		observe("read", ctx, value)
 		return operation.Keep[string](), nil
-	}}}).
-		Validate(func(ctx operation.ValidationContext, input operation.Value[string]) ([]operation.Issue, error) {
+	}).
+		Validate(func(ctx operation.Context, input operation.Value[string]) ([]operation.Issue, error) {
 			value, _ := input.Get()
-			observe("validate", operation.Context(ctx), value)
+			observe("validate", ctx, value)
 			if !strings.HasPrefix(value, "code:") {
 				return []operation.Issue{{Code: "code_prefix", Message: "Code must have its final prefix."}}, nil
 			}
 			return nil, nil
 		}).
-		Access(field.Access{Update: func(ctx operation.AccessContext) (bool, error) {
+		Access(field.Access{Update: func(ctx operation.Context) (bool, error) {
 			value, _ := ctx.Siblings.String("code")
-			observe("access", operation.Context(ctx), value)
+			observe("access", ctx, value)
 			return true, nil
 		}})
 }
@@ -120,7 +120,7 @@ func TestFieldGraphRuntimeReusedRootGroupArrayAndBlocks(t *testing.T) {
 		"meta":     store.Object(store.Values{"kind": store.String("group"), "code": store.String(" GROUP ")}),
 		"variants": store.List(graphRuntimeRow("A", "array-a", " ONE "), graphRuntimeRow("B", "array-b", " TWO ")),
 		"layout":   store.List(graphRuntimeBlock("H", "hero", "hero", " HERO "), graphRuntimeBlock("N", "note", "note", " NOTE ")),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,7 +151,7 @@ func TestFieldGraphRuntimeReusedRootGroupArrayAndBlocks(t *testing.T) {
 		"code": store.String(" ROOT "), "meta": store.Object(store.Values{"code": store.String(" GROUP ")}),
 		"variants": store.List(graphRuntimeRow("B", "array-b", " TWO "), graphRuntimeRow("A", "array-a", " ONE "), graphRuntimeRow("C", "array-c", " THREE ")),
 		"layout":   store.List(graphRuntimeBlock("N", "note", "note", " NOTE "), graphRuntimeBlock("H", "hero", "hero", " HERO ")),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -174,7 +174,7 @@ func TestFieldGraphRuntimeReusedRootGroupArrayAndBlocks(t *testing.T) {
 		t.Fatal("attached update access missed occurrences")
 	}
 	observed = nil
-	_, err = app.Local().Update(t.Context(), "pages", created.ID, store.Values{"layout": store.List(graphRuntimeBlock("H", "note", "invalid-case-reuse", "FRESH"))}, nil)
+	_, err = app.Local().Update(t.Context(), "pages", created.ID, store.Values{"layout": store.List(graphRuntimeBlock("H", "note", "invalid-case-reuse", "FRESH"))}, ridu.MutationOptions{})
 	graphRuntimeIssue(t, err, "layout.0.blockType")
 	if len(observed) != 0 {
 		t.Fatal("invalid case identity reached attached callbacks")
@@ -183,7 +183,7 @@ func TestFieldGraphRuntimeReusedRootGroupArrayAndBlocks(t *testing.T) {
 	updated, err := app.Local().Update(t.Context(), "pages", created.ID, store.Values{
 		"variants": store.List(graphRuntimeRow("B", "array-b", " TWO ")),
 		"layout":   store.List(graphRuntimeBlock("replacement", "note", "replacement", " FRESH ")),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatalf("replacement: %#v", err)
 	}
@@ -212,7 +212,7 @@ func TestFieldGraphRuntimeTypedChildGuardAfterParentOrResourceTransform(t *testi
 	for _, owner := range []string{"parent", "resource"} {
 		t.Run(owner, func(t *testing.T) {
 			calls := 0
-			child := field.Text("code").Hooks(field.Hooks[string]{BeforeChange: []field.Transform[string]{func(operation.WriteContext, operation.Value[string]) (operation.Change[string], error) {
+			child := field.Text("code").Hooks(field.Hooks[string]{BeforeChange: []field.Transform[string]{func(operation.Context, operation.Value[string]) (operation.Change[string], error) {
 				calls++
 				return operation.Keep[string](), nil
 			}}})
@@ -220,7 +220,7 @@ func TestFieldGraphRuntimeTypedChildGuardAfterParentOrResourceTransform(t *testi
 			parent := field.Group("variant", field.Fields{child})
 			var hooks ridu.CollectionHooks
 			if owner == "parent" {
-				parent = parent.Hooks(field.Hooks[store.Value]{BeforeChange: []field.Transform[store.Value]{func(operation.WriteContext, operation.Value[store.Value]) (operation.Change[store.Value], error) {
+				parent = parent.Hooks(field.Hooks[store.Value]{BeforeChange: []field.Transform[store.Value]{func(operation.Context, operation.Value[store.Value]) (operation.Change[store.Value], error) {
 					return operation.Replace(operation.Present(malformed)), nil
 				}}})
 			} else {
@@ -230,7 +230,7 @@ func TestFieldGraphRuntimeTypedChildGuardAfterParentOrResourceTransform(t *testi
 			if err != nil {
 				t.Fatal(err)
 			}
-			_, err = app.Local().Create(t.Context(), "pages", store.Values{"variant": store.Object(store.Values{"code": store.String("valid")})}, nil)
+			_, err = app.Local().Create(t.Context(), "pages", store.Values{"variant": store.Object(store.Values{"code": store.String("valid")})}, ridu.MutationOptions{})
 			graphRuntimeIssue(t, err, "variant.code")
 			if calls != 0 {
 				t.Fatalf("unsafe typed callback ran %d times", calls)
@@ -243,7 +243,7 @@ func TestFieldGraphRuntimeCustomValidationUsesFinalCandidateOnce(t *testing.T) {
 	calls := 0
 	operational := errors.New("validator lookup unavailable")
 	mode := ""
-	code := field.Text("code").Required().MaxLength(16).Validate(func(ctx operation.ValidationContext, input operation.Value[string]) ([]operation.Issue, error) {
+	code := field.Text("code").Required().MaxLength(16).Validate(func(ctx operation.Context, input operation.Value[string]) ([]operation.Issue, error) {
 		calls++
 		value, _ := input.Get()
 		source, _ := ctx.Siblings.String("source")
@@ -258,25 +258,25 @@ func TestFieldGraphRuntimeCustomValidationUsesFinalCandidateOnce(t *testing.T) {
 		}
 		return nil, nil
 	})
-	source := field.Text("source").Hooks(field.Hooks[string]{BeforeChange: []field.Transform[string]{func(operation.WriteContext, operation.Value[string]) (operation.Change[string], error) {
+	source := field.Text("source").Hooks(field.Hooks[string]{BeforeChange: []field.Transform[string]{func(operation.Context, operation.Value[string]) (operation.Change[string], error) {
 		return operation.Replace(operation.Present("FINAL")), nil
 	}}})
 	app, err := ridu.New(ridu.Config{Name: "Final application validation", Collections: []ridu.Collection{{Slug: "pages", Fields: field.Fields{code, source}}}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
 	}
-	created, err := app.Local().Create(t.Context(), "pages", store.Values{"code": store.String("sku"), "source": store.String("initial")}, nil)
+	created, err := app.Local().Create(t.Context(), "pages", store.Values{"code": store.String("sku"), "source": store.String("initial")}, ridu.MutationOptions{})
 	if err != nil || calls != 1 {
 		t.Fatalf("create count=%d: %v", calls, err)
 	}
 	calls = 0
-	_, err = app.Local().Update(t.Context(), "pages", created.ID, store.Values{"source": store.String("changed")}, nil)
+	_, err = app.Local().Update(t.Context(), "pages", created.ID, store.Values{"source": store.String("changed")}, ridu.MutationOptions{})
 	if err != nil || calls != 1 {
 		t.Fatalf("retained field count=%d: %v", calls, err)
 	}
 	for _, failure := range []string{"issue", "operational"} {
 		mode, calls = failure, 0
-		_, err = app.Local().Update(t.Context(), "pages", created.ID, store.Values{"source": store.String("changed")}, nil)
+		_, err = app.Local().Update(t.Context(), "pages", created.ID, store.Values{"source": store.String("changed")}, ridu.MutationOptions{})
 		if calls != 1 {
 			t.Fatalf("%s count=%d", mode, calls)
 		}
@@ -291,7 +291,7 @@ func TestFieldGraphRuntimeCustomValidationUsesFinalCandidateOnce(t *testing.T) {
 	mode = ""
 	for _, bad := range []store.Value{store.Null(), store.Number(5), store.String(strings.Repeat("x", 17))} {
 		calls = 0
-		_, err = app.Local().Update(t.Context(), "pages", created.ID, store.Values{"code": bad}, nil)
+		_, err = app.Local().Update(t.Context(), "pages", created.ID, store.Values{"code": bad}, ridu.MutationOptions{})
 		graphRuntimeIssue(t, err, "code")
 		if calls != 0 {
 			t.Fatalf("custom validators replaced builtins for %v", bad)
@@ -324,16 +324,16 @@ func TestFieldGraphRuntimeLocalizationExactWritesAndAllLocalesReadCounts(t *test
 			}
 			*dst = append(*dst, graphRuntimeObservation{kind: name, key: key, value: value, prior: prior, id: ctx.OccurrenceID, locale: ctx.Locale})
 		}
-		return field.Text(name).Hooks(field.Hooks[string]{BeforeChange: []field.Transform[string]{func(ctx operation.WriteContext, input operation.Value[string]) (operation.Change[string], error) {
-			record(&writes, operation.Context(ctx), input)
+		return field.Text(name).Hooks(field.Hooks[string]{BeforeChange: []field.Transform[string]{func(ctx operation.Context, input operation.Value[string]) (operation.Change[string], error) {
+			record(&writes, ctx, input)
 			return operation.Keep[string](), nil
-		}}}).Validate(func(ctx operation.ValidationContext, input operation.Value[string]) ([]operation.Issue, error) {
-			record(&validations, operation.Context(ctx), input)
+		}}}).Validate(func(ctx operation.Context, input operation.Value[string]) ([]operation.Issue, error) {
+			record(&validations, ctx, input)
 			return nil, nil
-		}).ReadHooks(field.ReadHooks[string]{AfterRead: []field.OutputTransform[string]{func(ctx operation.ReadContext, input operation.Value[string]) (operation.Change[string], error) {
-			record(&reads, operation.Context(ctx), input)
+		}).ReplaceAfterRead(func(ctx operation.Context, input operation.Value[string]) (operation.Change[string], error) {
+			record(&reads, ctx, input)
 			return operation.Keep[string](), nil
-		}}})
+		})
 	}
 	app, err := ridu.New(ridu.Config{Name: "Graph exact locales", Localization: ridu.LocalizationConfig{DefaultLocale: "en", Locales: []ridu.Locale{{Code: "en", Label: "English"}, {Code: "fr", Label: "French", FallbackLocales: []schema.LocaleCode{"en"}}}}, Collections: []ridu.Collection{{Slug: "pages", Fields: field.Fields{
 		field.Array("sections", field.Fields{makeText("key"), makeText("heading").Localized()}), field.Array("translations", field.Fields{makeText("label")}).Localized(),
@@ -344,7 +344,7 @@ func TestFieldGraphRuntimeLocalizationExactWritesAndAllLocalesReadCounts(t *test
 	row := func(key, heading string) store.Value {
 		return store.Object(store.Values{"_key": store.String(key), "key": store.String(key), "heading": store.String(heading)})
 	}
-	created, err := app.Local().Create(t.Context(), "pages", store.Values{"sections": store.List(row("A", "Hello"), row("B", "Goodbye")), "translations": store.List(store.Object(store.Values{"_key": store.String("EN"), "label": store.String("English")}))}, nil)
+	created, err := app.Local().Create(t.Context(), "pages", store.Values{"sections": store.List(row("A", "Hello"), row("B", "Goodbye")), "translations": store.List(store.Object(store.Values{"_key": store.String("EN"), "label": store.String("English")}))}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -353,7 +353,7 @@ func TestFieldGraphRuntimeLocalizationExactWritesAndAllLocalesReadCounts(t *test
 		englishIDs[call.kind+call.key] = call.id
 	}
 	writes, validations, reads = nil, nil, nil
-	_, err = app.Local().Update(t.Context(), "pages", created.ID, store.Values{"sections": store.List(row("B", "Au revoir"), row("A", "Bonjour")), "translations": store.List(store.Object(store.Values{"_key": store.String("FR"), "label": store.String("Français")}))}, nil, ridu.LocaleOptions{Locale: "fr"})
+	_, err = app.Local().Update(t.Context(), "pages", created.ID, store.Values{"sections": store.List(row("B", "Au revoir"), row("A", "Bonjour")), "translations": store.List(store.Object(store.Values{"_key": store.String("FR"), "label": store.String("Français")}))}, ridu.MutationOptions{Locale: "fr"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -374,7 +374,7 @@ func TestFieldGraphRuntimeLocalizationExactWritesAndAllLocalesReadCounts(t *test
 		}
 	}
 	reads = nil
-	all, err := app.Local().Find(t.Context(), "pages", created.ID, nil, ridu.LocaleOptions{AllLocales: true})
+	all, err := app.Local().Find(t.Context(), "pages", created.ID, ridu.FindOptions{AllLocales: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -403,7 +403,7 @@ func TestFieldGraphRuntimeLocalizationExactWritesAndAllLocalesReadCounts(t *test
 		t.Fatalf("localized container lost values: %#v", translations)
 	}
 	writes, validations = nil, nil
-	_, err = app.Local().Update(t.Context(), "pages", created.ID, store.Values{"sections": store.List(row("A", "Bonsoir"), row("B", "Salut"))}, nil, ridu.LocaleOptions{Locale: "fr"})
+	_, err = app.Local().Update(t.Context(), "pages", created.ID, store.Values{"sections": store.List(row("A", "Bonsoir"), row("B", "Salut"))}, ridu.MutationOptions{Locale: "fr"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -420,7 +420,7 @@ func TestFieldGraphRuntimeLocalizationExactWritesAndAllLocalesReadCounts(t *test
 func TestFieldGraphRuntimeRichTextEmbeddedReuse(t *testing.T) {
 	var observations []graphRuntimeObservation
 	code := graphRuntimeCode(t, &observations)
-	secret := field.Text("secret").Access(field.Access{Read: func(operation.AccessContext) (bool, error) { return false, nil }})
+	secret := field.Text("secret").Access(field.Access{Read: func(operation.Context) (bool, error) { return false, nil }})
 	block := field.Block{Slug: "card", Fields: field.Fields{field.Text("kind"), code, secret}}
 	// The official embedded host carries the same attached field nodes.
 	// Its ordinary children carry the same graph policies without owner maps.
@@ -432,7 +432,7 @@ func TestFieldGraphRuntimeRichTextEmbeddedReuse(t *testing.T) {
 	payload := func(kind, code string) store.Values {
 		return store.Values{"kind": store.String(kind), "code": store.String(code), "secret": store.String("private")}
 	}
-	created, err := app.Local().Create(t.Context(), "pages", store.Values{"tenant": store.String("tenant-one"), "kind": store.String("root"), "code": store.String(" ROOT "), "body": richtextblocks.Document(richtextblocks.Block("card", "A", payload("embedded-a", " ONE ")), richtextblocks.Block("card", "B", payload("embedded-b", " TWO ")))}, nil)
+	created, err := app.Local().Create(t.Context(), "pages", store.Values{"tenant": store.String("tenant-one"), "kind": store.String("root"), "code": store.String(" ROOT "), "body": richtextblocks.Document(richtextblocks.Block("card", "A", payload("embedded-a", " ONE ")), richtextblocks.Block("card", "B", payload("embedded-b", " TWO ")))}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -457,7 +457,7 @@ func TestFieldGraphRuntimeRichTextEmbeddedReuse(t *testing.T) {
 		}
 	}
 	observations = nil
-	_, err = app.Local().Update(t.Context(), "pages", created.ID, store.Values{"body": richtextblocks.Document(richtextblocks.Block("card", "B", payload("embedded-b", " TWO ")), richtextblocks.Block("card", "A", payload("embedded-a", " ONE ")), richtextblocks.Block("card", "C", payload("embedded-c", " THREE ")))}, nil)
+	_, err = app.Local().Update(t.Context(), "pages", created.ID, store.Values{"body": richtextblocks.Document(richtextblocks.Block("card", "B", payload("embedded-b", " TWO ")), richtextblocks.Block("card", "A", payload("embedded-a", " ONE ")), richtextblocks.Block("card", "C", payload("embedded-c", " THREE ")))}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -502,7 +502,7 @@ func TestFieldGraphRuntimeResourceLifecycleAndRollbackBoundaries(t *testing.T) {
 		return func(ridu.HookContext) error { order = append(order, "resource:"+phase); return nil }
 	}
 	observer := func(phase string) field.Observer[string] {
-		return func(operation.EventContext, operation.Value[string]) error {
+		return func(operation.Context, operation.Value[string]) error {
 			order = append(order, "field:"+phase)
 			if phase == "change" && fail {
 				return errors.New("rollback after change")
@@ -510,13 +510,13 @@ func TestFieldGraphRuntimeResourceLifecycleAndRollbackBoundaries(t *testing.T) {
 			return nil
 		}
 	}
-	code := field.Text("code").Hooks(field.Hooks[string]{BeforeValidate: []field.RawTransform{func(operation.WriteContext, operation.Value[store.Value]) (operation.Change[store.Value], error) {
+	code := field.Text("code").Hooks(field.Hooks[string]{BeforeValidate: []field.RawTransform{func(operation.Context, operation.Value[store.Value]) (operation.Change[store.Value], error) {
 		order = append(order, "field:validate")
 		return operation.Keep[store.Value](), nil
-	}}, BeforeChange: []field.Transform[string]{func(operation.WriteContext, operation.Value[string]) (operation.Change[string], error) {
+	}}, BeforeChange: []field.Transform[string]{func(operation.Context, operation.Value[string]) (operation.Change[string], error) {
 		order = append(order, "field:before-change")
 		return operation.Keep[string](), nil
-	}}, AfterChange: []field.Observer[string]{observer("change")}}).Validate(func(operation.ValidationContext, operation.Value[string]) ([]operation.Issue, error) {
+	}}, AfterChange: []field.Observer[string]{observer("change")}}).Validate(func(operation.Context, operation.Value[string]) ([]operation.Issue, error) {
 		order = append(order, "custom")
 		return nil, nil
 	})
@@ -524,7 +524,7 @@ func TestFieldGraphRuntimeResourceLifecycleAndRollbackBoundaries(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	created, err := app.Local().Create(t.Context(), "pages", store.Values{"code": store.String("one")}, nil)
+	created, err := app.Local().Create(t.Context(), "pages", store.Values{"code": store.String("one")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -533,7 +533,7 @@ func TestFieldGraphRuntimeResourceLifecycleAndRollbackBoundaries(t *testing.T) {
 		t.Fatalf("lifecycle reordered: %v; want %v", order, expected)
 	}
 	order, fail = nil, true
-	_, err = app.Local().Update(t.Context(), "pages", created.ID, store.Values{"code": store.String("changed")}, nil)
+	_, err = app.Local().Update(t.Context(), "pages", created.ID, store.Values{"code": store.String("changed")}, ridu.MutationOptions{})
 	if err == nil {
 		t.Fatal("AfterChange failure did not abort")
 	}
@@ -542,18 +542,18 @@ func TestFieldGraphRuntimeResourceLifecycleAndRollbackBoundaries(t *testing.T) {
 			t.Fatal("AfterCommit ran for rollback")
 		}
 	}
-	stored, err := app.Local().Find(t.Context(), "pages", created.ID, nil)
+	stored, err := app.Local().Find(t.Context(), "pages", created.ID, ridu.FindOptions{})
 	if err != nil || stringValue(stored.Values["code"]) != "one" {
 		t.Fatalf("AfterChange failure escaped transaction: %#v: %v", stored, err)
 	}
 }
 
 func TestFieldTransformsPreserveExpectedNormalization(t *testing.T) {
-	code := field.Text("code").Required().Hooks(field.Hooks[string]{BeforeValidate: []field.RawTransform{func(_ operation.WriteContext, input operation.Value[store.Value]) (operation.Change[store.Value], error) {
+	code := field.Text("code").Required().Hooks(field.Hooks[string]{BeforeValidate: []field.RawTransform{func(_ operation.Context, input operation.Value[store.Value]) (operation.Change[store.Value], error) {
 		value, _ := input.Get()
 		text, _ := value.StringValue()
 		return operation.Replace(operation.Present(store.String(strings.TrimSpace(text)))), nil
-	}}, BeforeChange: []field.Transform[string]{func(_ operation.WriteContext, input operation.Value[string]) (operation.Change[string], error) {
+	}}, BeforeChange: []field.Transform[string]{func(_ operation.Context, input operation.Value[string]) (operation.Change[string], error) {
 		value, _ := input.Get()
 		return operation.Replace(operation.Present(strings.ToUpper(value))), nil
 	}}})
@@ -561,7 +561,7 @@ func TestFieldTransformsPreserveExpectedNormalization(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	created, err := app.Local().Create(t.Context(), "pages", store.Values{"code": store.String(" code ")}, nil)
+	created, err := app.Local().Create(t.Context(), "pages", store.Values{"code": store.String(" code ")}, ridu.MutationOptions{})
 	if err != nil || stringValue(created.Values["code"]) != "CODE" {
 		t.Fatalf("normalization: %#v: %v", created, err)
 	}
@@ -569,7 +569,7 @@ func TestFieldTransformsPreserveExpectedNormalization(t *testing.T) {
 
 func TestFieldGraphRuntimeAttachedReadDenialAcrossEveryHost(t *testing.T) {
 	calls := 0
-	secret := field.Text("secret").Access(field.Access{Read: func(operation.AccessContext) (bool, error) { calls++; return false, nil }})
+	secret := field.Text("secret").Access(field.Access{Read: func(operation.Context) (bool, error) { calls++; return false, nil }})
 	body := richtext.Field("body", richtext.Config{Blocks: []field.Block{{Slug: "card", Fields: field.Fields{secret}}}})
 	app, err := ridu.New(ridu.Config{Name: "Graph protected outputs", Plugins: []ridu.Plugin{richtext.New()}, Localization: ridu.LocalizationConfig{DefaultLocale: "en", Locales: []ridu.Locale{{Code: "en", Label: "English"}, {Code: "fr", Label: "French"}}}, Collections: []ridu.Collection{{Slug: "pages", Fields: field.Fields{
 		secret, field.Group("group", field.Fields{secret}), field.Array("rows", field.Fields{secret}), field.Blocks("blocks", field.Block{Slug: "card", Fields: field.Fields{secret}}), field.Group("localized", field.Fields{secret.Localized()}), field.Array("localizedRows", field.Fields{secret}).Localized(), body,
@@ -578,7 +578,7 @@ func TestFieldGraphRuntimeAttachedReadDenialAcrossEveryHost(t *testing.T) {
 		t.Fatal(err)
 	}
 	values := store.Values{"secret": store.String("root private"), "group": store.Object(store.Values{"secret": store.String("group private")}), "rows": store.List(store.Object(store.Values{"_key": store.String("row"), "secret": store.String("row private")})), "blocks": store.List(store.Object(store.Values{"_key": store.String("block"), "blockType": store.String("card"), "secret": store.String("block private")})), "localized": store.Object(store.Values{"secret": store.String("localized private")}), "localizedRows": store.List(store.Object(store.Values{"_key": store.String("translated"), "secret": store.String("container private")})), "body": richtextblocks.Document(richtextblocks.Block("card", "embedded", store.Values{"secret": store.String("embedded private")}))}
-	created, err := app.Local().Create(t.Context(), "pages", values, nil)
+	created, err := app.Local().Create(t.Context(), "pages", values, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -612,7 +612,7 @@ func TestFieldGraphRuntimeAttachedReadDenialAcrossEveryHost(t *testing.T) {
 		t.Fatalf("create read denial called %d times; want seven hosts", calls)
 	}
 	calls = 0
-	read, err := app.Local().Find(t.Context(), "pages", created.ID, nil, ridu.LocaleOptions{AllLocales: true})
+	read, err := app.Local().Find(t.Context(), "pages", created.ID, ridu.FindOptions{AllLocales: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -626,7 +626,7 @@ func TestFieldGraphRuntimeContainerTransformDispatchesSurvivingOccurrences(t *te
 	var writes, after []string
 	var prior = map[string]string{}
 	change := false
-	code := field.Text("code").Hooks(field.Hooks[string]{BeforeChange: []field.Transform[string]{func(ctx operation.WriteContext, input operation.Value[string]) (operation.Change[string], error) {
+	code := field.Text("code").Hooks(field.Hooks[string]{BeforeChange: []field.Transform[string]{func(ctx operation.Context, input operation.Value[string]) (operation.Change[string], error) {
 		key, _ := ctx.Siblings.String("_key")
 		writes = append(writes, key)
 		old, ok := ctx.Prior.String("code")
@@ -636,12 +636,12 @@ func TestFieldGraphRuntimeContainerTransformDispatchesSurvivingOccurrences(t *te
 		prior[key] = old
 		value, _ := input.Get()
 		return operation.Replace(operation.Present(strings.ToUpper(value))), nil
-	}}, AfterChange: []field.Observer[string]{func(ctx operation.EventContext, _ operation.Value[string]) error {
+	}}, AfterChange: []field.Observer[string]{func(ctx operation.Context, _ operation.Value[string]) error {
 		key, _ := ctx.Siblings.String("_key")
 		after = append(after, key)
 		return nil
 	}}})
-	rows := field.Array("rows", field.Fields{field.Text("kind"), code}).Hooks(field.Hooks[store.Value]{BeforeChange: []field.Transform[store.Value]{func(_ operation.WriteContext, input operation.Value[store.Value]) (operation.Change[store.Value], error) {
+	rows := field.Array("rows", field.Fields{field.Text("kind"), code}).Hooks(field.Hooks[store.Value]{BeforeChange: []field.Transform[store.Value]{func(_ operation.Context, input operation.Value[store.Value]) (operation.Change[store.Value], error) {
 		if !change {
 			return operation.Keep[store.Value](), nil
 		}
@@ -653,12 +653,12 @@ func TestFieldGraphRuntimeContainerTransformDispatchesSurvivingOccurrences(t *te
 	if err != nil {
 		t.Fatal(err)
 	}
-	created, err := app.Local().Create(t.Context(), "pages", store.Values{"rows": store.List(graphRuntimeRow("A", "first", "one"), graphRuntimeRow("B", "removed", "two"), graphRuntimeRow("C", "third", "three"))}, nil)
+	created, err := app.Local().Create(t.Context(), "pages", store.Values{"rows": store.List(graphRuntimeRow("A", "first", "one"), graphRuntimeRow("B", "removed", "two"), graphRuntimeRow("C", "third", "three"))}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	change, writes, after, prior = true, nil, nil, map[string]string{}
-	updated, err := app.Local().Update(t.Context(), "pages", created.ID, store.Values{}, nil)
+	updated, err := app.Local().Update(t.Context(), "pages", created.ID, store.Values{}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -682,18 +682,18 @@ func TestFieldGraphRuntimeTypedContainerAssignsIdentityBeforeChildDispatch(t *te
 				key, _ := ctx.Siblings.String("_key")
 				calls = append(calls, graphRuntimeObservation{phase: phase, key: key, id: ctx.OccurrenceID})
 			}
-			code := field.Text("code").Hooks(field.Hooks[string]{BeforeChange: []field.Transform[string]{func(ctx operation.WriteContext, _ operation.Value[string]) (operation.Change[string], error) {
-				observe("write", operation.Context(ctx))
+			code := field.Text("code").Hooks(field.Hooks[string]{BeforeChange: []field.Transform[string]{func(ctx operation.Context, _ operation.Value[string]) (operation.Change[string], error) {
+				observe("write", ctx)
 				return operation.Keep[string](), nil
-			}}, AfterChange: []field.Observer[string]{func(ctx operation.EventContext, _ operation.Value[string]) error {
-				observe("changed", operation.Context(ctx))
+			}}, AfterChange: []field.Observer[string]{func(ctx operation.Context, _ operation.Value[string]) error {
+				observe("changed", ctx)
 				return nil
-			}}}).Validate(func(ctx operation.ValidationContext, _ operation.Value[string]) ([]operation.Issue, error) {
-				observe("validate", operation.Context(ctx))
+			}}}).Validate(func(ctx operation.Context, _ operation.Value[string]) ([]operation.Issue, error) {
+				observe("validate", ctx)
 				return nil, nil
 			})
 			add := false
-			hooks := field.Hooks[store.Value]{BeforeChange: []field.Transform[store.Value]{func(_ operation.WriteContext, input operation.Value[store.Value]) (operation.Change[store.Value], error) {
+			hooks := field.Hooks[store.Value]{BeforeChange: []field.Transform[store.Value]{func(_ operation.Context, input operation.Value[store.Value]) (operation.Change[store.Value], error) {
 				if !add {
 					return operation.Keep[store.Value](), nil
 				}
@@ -715,12 +715,12 @@ func TestFieldGraphRuntimeTypedContainerAssignsIdentityBeforeChildDispatch(t *te
 			if err != nil {
 				t.Fatal(err)
 			}
-			created, err := app.Local().Create(t.Context(), "pages", store.Values{"rows": store.List(store.Object(initial))}, nil)
+			created, err := app.Local().Create(t.Context(), "pages", store.Values{"rows": store.List(store.Object(initial))}, ridu.MutationOptions{})
 			if err != nil {
 				t.Fatal(err)
 			}
 			add, calls = true, nil
-			updated, err := app.Local().Update(t.Context(), "pages", created.ID, store.Values{}, nil)
+			updated, err := app.Local().Update(t.Context(), "pages", created.ID, store.Values{}, ridu.MutationOptions{})
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -61,7 +61,7 @@ func TestFrozenSQLiteTransformedPresentationHistory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Create(ctx, "notes", store.Values{"body": store.String("Existing content")}, nil); err != nil {
+	if _, err := application.Local().Create(ctx, "notes", store.Values{"body": store.String("Existing content")}, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	rows := sqlitePresentationRows(t, backend, []string{"ridu_documents"})

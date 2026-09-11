@@ -307,9 +307,8 @@ void nestedIssuePath;
 const localizedIssuePath: PostsValidationPath = "author.fr";
 void localizedIssuePath;
 
-// The generated module registers RiduConfig as @riducms/sdk's default, so raw SDK imports stay
-// application-typed without repeating a generic argument.
-const automaticClient = createRuntimeClient({ baseURL: "https://cms.example.test" });
+// Generated factories select the application contract explicitly.
+const automaticClient = createClient({ baseURL: "https://cms.example.test" });
 const automaticPost: Promise<Posts> = automaticClient.find("posts", post.id);
 void automaticPost;
 void automaticClient.create("posts", create);
@@ -325,10 +324,10 @@ void explicitClient.list("authors", { where: { name: { contains: "Ada" } } });
 const adminClient: AdminClient = client;
 void adminClient;
 
-// @ts-expect-error raw SDK defaults reject collection slugs outside the generated manifest.
+// @ts-expect-error generated clients reject collection slugs outside the generated manifest.
 void automaticClient.list("comments");
 
-// @ts-expect-error raw SDK defaults preserve generated create inputs.
+// @ts-expect-error generated clients preserve generated create inputs.
 void automaticClient.create("posts", { status: "draft" });
 
 // @ts-expect-error the generated fixture has no upload-enabled collection.
@@ -409,3 +408,8 @@ const invalidPolymorphicPopulate: PostsPopulate = {
 	subject: { authors: { name: true }, posts: { title: true } },
 };
 void invalidPolymorphicPopulate;
+
+const rawClient = createRuntimeClient({ baseURL: "https://cms.example.test" });
+void rawClient.schema();
+// @ts-expect-error raw resource calls require an explicit application contract.
+void rawClient.find("posts", post.id);

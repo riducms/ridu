@@ -30,7 +30,7 @@ var Products = core.Collection{
 		SellingPoints("sellingPoints").Label("Selling points"),
 		Sizes("availableSizes").Default(8, 10, 12),
 		SellingPoints("translatedPoints").Localized().DefaultFrom(
-			func(ctx operation.DefaultContext) (operation.Value[[]string], error) {
+			func(ctx operation.Context) (operation.Value[[]string], error) {
 				if ctx.Locale == "fr" {
 					return operation.Present([]string{"Fabriqué à la main"}), nil
 				}

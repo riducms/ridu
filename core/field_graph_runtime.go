@@ -54,116 +54,104 @@ func lowerFieldGraph(graph configresolver.Graph, resourceKind, resource string, 
 		binding := operationengine.FieldBinding{ID: occurrence.ID, Field: resolved, LocaleOwned: occurrence.LocaleOwner != ""}
 		binding.Access = lowerGraphAccess(definition.AccessPolicy(), occurrence.ID, local)
 		switch definition.Kind() {
-		case field.KindText:
+		case field.KindText, field.KindCode, field.KindTextarea:
 			facade, _ := field.AsText(definition)
-			lowerTypedPolicies(&binding, facade.HookPolicy(), facade.ReadHookPolicy(), facade.Validators(), facade.LiveValidators(), stringCodec(), stringCodec(), local)
+			lowerTypedPolicies(&binding, facade.HookPolicy(), facade.AfterReadHooks(), facade.Validators(), facade.LiveValidators(), stringCodec(), stringCodec(), local)
 			lowerDefault(&binding, facade.DefaultCallback(), stringCodec(), local)
 		case field.KindNumber:
 			facade, _ := field.AsNumber(definition)
-			lowerTypedPolicies(&binding, facade.HookPolicy(), facade.ReadHookPolicy(), facade.Validators(), facade.LiveValidators(), numberCodec(), numberCodec(), local)
+			lowerTypedPolicies(&binding, facade.HookPolicy(), facade.AfterReadHooks(), facade.Validators(), facade.LiveValidators(), numberCodec(), numberCodec(), local)
 			lowerDefault(&binding, facade.DefaultCallback(), numberCodec(), local)
 		case field.KindTextList:
 			facade, _ := field.AsTextList(definition)
 			codec := listCodec(stringCodec())
-			lowerTypedPolicies(&binding, facade.HookPolicy(), facade.ReadHookPolicy(), facade.Validators(), facade.LiveValidators(), codec, codec, local)
+			lowerTypedPolicies(&binding, facade.HookPolicy(), facade.AfterReadHooks(), facade.Validators(), facade.LiveValidators(), codec, codec, local)
 			lowerDefault(&binding, facade.DefaultCallback(), codec, local)
 		case field.KindNumberList:
 			facade, _ := field.AsNumberList(definition)
 			codec := listCodec(numberCodec())
-			lowerTypedPolicies(&binding, facade.HookPolicy(), facade.ReadHookPolicy(), facade.Validators(), facade.LiveValidators(), codec, codec, local)
+			lowerTypedPolicies(&binding, facade.HookPolicy(), facade.AfterReadHooks(), facade.Validators(), facade.LiveValidators(), codec, codec, local)
 			lowerDefault(&binding, facade.DefaultCallback(), codec, local)
-		case field.KindCode:
-			facade, _ := field.AsCode(definition)
-			lowerTypedPolicies(&binding, facade.HookPolicy(), facade.ReadHookPolicy(), facade.Validators(), facade.LiveValidators(), stringCodec(), stringCodec(), local)
-			lowerDefault(&binding, facade.DefaultCallback(), stringCodec(), local)
-		case field.KindTextarea:
-			facade, _ := field.AsTextarea(definition)
-			lowerTypedPolicies(&binding, facade.HookPolicy(), facade.ReadHookPolicy(), facade.Validators(), facade.LiveValidators(), stringCodec(), stringCodec(), local)
-			lowerDefault(&binding, facade.DefaultCallback(), stringCodec(), local)
 		case field.KindEmail:
 			facade, _ := field.AsEmail(definition)
-			lowerTypedPolicies(&binding, facade.HookPolicy(), facade.ReadHookPolicy(), facade.Validators(), facade.LiveValidators(), stringCodec(), stringCodec(), local)
+			lowerTypedPolicies(&binding, facade.HookPolicy(), facade.AfterReadHooks(), facade.Validators(), facade.LiveValidators(), stringCodec(), stringCodec(), local)
 			lowerDefault(&binding, facade.DefaultCallback(), stringCodec(), local)
 		case field.KindDate:
 			facade, _ := field.AsDate(definition)
-			lowerTypedPolicies(&binding, facade.HookPolicy(), facade.ReadHookPolicy(), facade.Validators(), facade.LiveValidators(), stringCodec(), stringCodec(), local)
-			lowerDefault(&binding, facade.DefaultCallback(), stringCodec(), local)
-		case field.KindRadio:
-			facade, _ := field.AsRadio(definition)
-			lowerTypedPolicies(&binding, facade.HookPolicy(), facade.ReadHookPolicy(), facade.Validators(), facade.LiveValidators(), stringCodec(), stringCodec(), local)
+			lowerTypedPolicies(&binding, facade.HookPolicy(), facade.AfterReadHooks(), facade.Validators(), facade.LiveValidators(), stringCodec(), stringCodec(), local)
 			lowerDefault(&binding, facade.DefaultCallback(), stringCodec(), local)
 		case field.KindCheckbox:
 			facade, _ := field.AsCheckbox(definition)
 			codec := graphCodec[bool]{decode: store.Value.BooleanValue, encode: store.Boolean, code: "invalid_type", expected: "a boolean"}
-			lowerTypedPolicies(&binding, facade.HookPolicy(), facade.ReadHookPolicy(), facade.Validators(), facade.LiveValidators(), codec, codec, local)
+			lowerTypedPolicies(&binding, facade.HookPolicy(), facade.AfterReadHooks(), facade.Validators(), facade.LiveValidators(), codec, codec, local)
 			lowerDefault(&binding, facade.DefaultCallback(), codec, local)
-		case field.KindSelect:
+		case field.KindSelect, field.KindRadio:
 			if facade, err := field.AsMultiSelect(definition); err == nil {
 				codec := listCodec(stringCodec())
-				lowerTypedPolicies(&binding, facade.HookPolicy(), facade.ReadHookPolicy(), facade.Validators(), facade.LiveValidators(), codec, codec, local)
+				lowerTypedPolicies(&binding, facade.HookPolicy(), facade.AfterReadHooks(), facade.Validators(), facade.LiveValidators(), codec, codec, local)
 				lowerDefault(&binding, facade.DefaultCallback(), codec, local)
 			} else {
 				facade, err := field.AsSelect(definition)
 				if err != nil {
 					return nil, unsupported(err.Error())
 				}
-				lowerTypedPolicies(&binding, facade.HookPolicy(), facade.ReadHookPolicy(), facade.Validators(), facade.LiveValidators(), stringCodec(), stringCodec(), local)
+				lowerTypedPolicies(&binding, facade.HookPolicy(), facade.AfterReadHooks(), facade.Validators(), facade.LiveValidators(), stringCodec(), stringCodec(), local)
 				lowerDefault(&binding, facade.DefaultCallback(), stringCodec(), local)
 			}
 		case field.KindJSON:
 			facade, _ := field.AsJSON(definition)
 			codec := finiteCodec("", "a finite JSON value")
-			lowerTypedPolicies(&binding, facade.HookPolicy(), facade.ReadHookPolicy(), facade.Validators(), facade.LiveValidators(), codec, codec, local)
+			lowerTypedPolicies(&binding, facade.HookPolicy(), facade.AfterReadHooks(), facade.Validators(), facade.LiveValidators(), codec, codec, local)
 		case field.KindPoint:
 			facade, _ := field.AsPoint(definition)
 			codec := finiteCodec(store.ValueList, "a point coordinate pair")
-			lowerTypedPolicies(&binding, facade.HookPolicy(), facade.ReadHookPolicy(), facade.Validators(), facade.LiveValidators(), codec, codec, local)
+			lowerTypedPolicies(&binding, facade.HookPolicy(), facade.AfterReadHooks(), facade.Validators(), facade.LiveValidators(), codec, codec, local)
 		case field.KindRelationship:
 			if facade, err := field.AsPolymorphicRelationships(definition); err == nil {
 				codec := finiteCodec(store.ValueList, "a relationship list")
-				lowerTypedPolicies(&binding, facade.HookPolicy(), facade.ReadHookPolicy(), facade.Validators(), facade.LiveValidators(), codec, codec, local)
+				lowerTypedPolicies(&binding, facade.HookPolicy(), facade.AfterReadHooks(), facade.Validators(), facade.LiveValidators(), codec, codec, local)
 			} else if facade, err := field.AsPolymorphicRelationship(definition); err == nil {
 				codec := finiteCodec(store.ValueObject, "a relationship envelope")
-				lowerTypedPolicies(&binding, facade.HookPolicy(), facade.ReadHookPolicy(), facade.Validators(), facade.LiveValidators(), codec, codec, local)
+				lowerTypedPolicies(&binding, facade.HookPolicy(), facade.AfterReadHooks(), facade.Validators(), facade.LiveValidators(), codec, codec, local)
 			} else if facade, err := field.AsRelationships(definition); err == nil {
-				lowerTypedPolicies(&binding, facade.HookPolicy(), facade.ReadHookPolicy(), facade.Validators(), facade.LiveValidators(), listCodec(relationshipCodec()), listCodec(referenceOutputCodec()), local)
+				lowerTypedPolicies(&binding, facade.HookPolicy(), facade.AfterReadHooks(), facade.Validators(), facade.LiveValidators(), listCodec(relationshipCodec()), listCodec(referenceOutputCodec()), local)
 			} else {
 				facade, err := field.AsRelationship(definition)
 				if err != nil {
 					return nil, unsupported(err.Error())
 				}
-				lowerTypedPolicies(&binding, facade.HookPolicy(), facade.ReadHookPolicy(), facade.Validators(), facade.LiveValidators(), relationshipCodec(), referenceOutputCodec(), local)
+				lowerTypedPolicies(&binding, facade.HookPolicy(), facade.AfterReadHooks(), facade.Validators(), facade.LiveValidators(), relationshipCodec(), referenceOutputCodec(), local)
 			}
 		case field.KindUpload:
 			if facade, err := field.AsUploads(definition); err == nil {
-				lowerTypedPolicies(&binding, facade.HookPolicy(), facade.ReadHookPolicy(), facade.Validators(), facade.LiveValidators(), listCodec(relationshipCodec()), listCodec(referenceOutputCodec()), local)
+				lowerTypedPolicies(&binding, facade.HookPolicy(), facade.AfterReadHooks(), facade.Validators(), facade.LiveValidators(), listCodec(relationshipCodec()), listCodec(referenceOutputCodec()), local)
 			} else {
 				facade, err := field.AsUpload(definition)
 				if err != nil {
 					return nil, unsupported(err.Error())
 				}
-				lowerTypedPolicies(&binding, facade.HookPolicy(), facade.ReadHookPolicy(), facade.Validators(), facade.LiveValidators(), relationshipCodec(), referenceOutputCodec(), local)
+				lowerTypedPolicies(&binding, facade.HookPolicy(), facade.AfterReadHooks(), facade.Validators(), facade.LiveValidators(), relationshipCodec(), referenceOutputCodec(), local)
 			}
 		case field.KindGroup:
 			facade, _ := field.AsGroup(definition)
 			codec := finiteCodec(store.ValueObject, "an object")
-			lowerTypedPolicies(&binding, facade.HookPolicy(), facade.ReadHookPolicy(), facade.Validators(), facade.LiveValidators(), codec, codec, local)
+			lowerTypedPolicies(&binding, facade.HookPolicy(), facade.AfterReadHooks(), facade.Validators(), facade.LiveValidators(), codec, codec, local)
 		case field.KindArray:
 			facade, _ := field.AsArray(definition)
 			codec := finiteCodec(store.ValueList, "an array")
-			lowerTypedPolicies(&binding, facade.HookPolicy(), facade.ReadHookPolicy(), facade.Validators(), facade.LiveValidators(), codec, codec, local)
+			lowerTypedPolicies(&binding, facade.HookPolicy(), facade.AfterReadHooks(), facade.Validators(), facade.LiveValidators(), codec, codec, local)
 		case field.KindBlocks:
 			facade, _ := field.AsBlocks(definition)
 			codec := finiteCodec(store.ValueList, "an array")
-			lowerTypedPolicies(&binding, facade.HookPolicy(), facade.ReadHookPolicy(), facade.Validators(), facade.LiveValidators(), codec, codec, local)
+			lowerTypedPolicies(&binding, facade.HookPolicy(), facade.AfterReadHooks(), facade.Validators(), facade.LiveValidators(), codec, codec, local)
 		case field.KindPlugin:
 			facade, _ := field.AsPlugin(definition)
 			codec := finiteCodec("", "a finite plugin value")
-			lowerTypedPolicies(&binding, facade.HookPolicy(), facade.ReadHookPolicy(), facade.Validators(), facade.LiveValidators(), codec, codec, local)
+			lowerTypedPolicies(&binding, facade.HookPolicy(), facade.AfterReadHooks(), facade.Validators(), facade.LiveValidators(), codec, codec, local)
 		case field.KindJoin:
 			facade, _ := field.AsJoin(definition)
 			codec := graphCodec[store.Value]{decode: func(value store.Value) (store.Value, bool) { return value, value.Kind() == store.ValueList }, encode: func(value store.Value) store.Value { return value }, code: "invalid_type", expected: "a joined document list"}
-			lowerTypedPolicies(&binding, field.Hooks[store.Value]{}, facade.ReadHookPolicy(), nil, nil, codec, codec, local)
+			lowerTypedPolicies(&binding, field.Hooks[store.Value]{}, facade.AfterReadHooks(), nil, nil, codec, codec, local)
 		case field.KindVirtual:
 			facade, _ := field.AsOutput(definition)
 			resolver := facade.Resolver()
@@ -172,14 +160,14 @@ func lowerFieldGraph(graph configresolver.Graph, resourceKind, resource string, 
 			}
 			binding.Computed = func(ctx operationengine.Context, document store.Document) (store.Value, error) {
 				ctx.ID, ctx.Document = document.ID, &document
-				value, err := resolver(operation.ReadContext(graphCallbackContext(ctx, occurrence.ID, local)))
+				value, err := resolver(operation.Context(graphCallbackContext(ctx, occurrence.ID, local)))
 				if result, present := value.Get(); present {
 					return result, err
 				}
 				return store.Null(), err
 			}
 			codec := finiteCodec("", "a finite output value")
-			lowerTypedPolicies(&binding, field.Hooks[store.Value]{}, facade.ReadHookPolicy(), nil, nil, codec, codec, local)
+			lowerTypedPolicies(&binding, field.Hooks[store.Value]{}, facade.AfterReadHooks(), nil, nil, codec, codec, local)
 		default:
 			return nil, unsupported("this field kind does not support attached callbacks")
 		}
@@ -255,7 +243,7 @@ func finiteCodec(kind store.ValueKind, expected string) graphCodec[store.Value] 
 	}, encode: func(value store.Value) store.Value { return value }, code: "invalid_type", expected: expected}
 }
 
-func lowerTypedPolicies[W, R any](binding *operationengine.FieldBinding, hooks field.Hooks[W], reads field.ReadHooks[R], validators []field.Validator[W], liveValidators []field.LiveValidator[W], write graphCodec[W], read graphCodec[R], local **LocalAPI) {
+func lowerTypedPolicies[W, R any](binding *operationengine.FieldBinding, hooks field.Hooks[W], reads []field.OutputTransform[R], validators []field.Validator[W], liveValidators []field.LiveValidator[W], write graphCodec[W], read graphCodec[R], local **LocalAPI) {
 	f, id := binding.Field, binding.ID
 	adaptContext := func(ctx operationengine.Context) operation.Context { return graphCallbackContext(ctx, id, local) }
 	raw := func(callbacks []field.RawTransform) []operationengine.Hook {
@@ -266,7 +254,7 @@ func lowerTypedPolicies[W, R any](binding *operationengine.FieldBinding, hooks f
 				if ctx.ValuePresent {
 					value = operation.Present(ctx.Value)
 				}
-				change, err := callback(operation.WriteContext(adaptContext(ctx)), value)
+				change, err := callback(adaptContext(ctx), value)
 				if err == nil {
 					applyGraphChange(ctx, f.Name, change, func(value store.Value) store.Value { return value })
 				}
@@ -283,7 +271,7 @@ func lowerTypedPolicies[W, R any](binding *operationengine.FieldBinding, hooks f
 				if err != nil {
 					return err
 				}
-				change, err := callback(operation.WriteContext(adaptContext(ctx)), value)
+				change, err := callback(adaptContext(ctx), value)
 				if err == nil {
 					applyGraphChange(ctx, f.Name, change, write.encode)
 				}
@@ -304,7 +292,7 @@ func lowerTypedPolicies[W, R any](binding *operationengine.FieldBinding, hooks f
 				if err != nil {
 					return err
 				}
-				return callback(operation.EventContext(adaptContext(ctx)), value)
+				return callback(adaptContext(ctx), value)
 			}
 		}
 		return result
@@ -315,13 +303,13 @@ func lowerTypedPolicies[W, R any](binding *operationengine.FieldBinding, hooks f
 		BeforeDelete: observe(hooks.BeforeDelete), AfterChange: observe(hooks.AfterChange),
 		AfterDelete: observe(hooks.AfterDelete), AfterOperation: observe(hooks.AfterOperation), AfterCommit: observe(hooks.AfterCommit),
 	}
-	for _, callback := range reads.AfterRead {
+	for _, callback := range reads {
 		binding.Hooks.AfterRead = append(binding.Hooks.AfterRead, func(ctx operationengine.Context) error {
 			value, err := read.value(ctx, f)
 			if err != nil {
 				return err
 			}
-			change, err := callback(operation.ReadContext(adaptContext(ctx)), value)
+			change, err := callback(adaptContext(ctx), value)
 			if err == nil {
 				applyGraphChange(ctx, f.Name, change, read.encode)
 			}
@@ -334,7 +322,7 @@ func lowerTypedPolicies[W, R any](binding *operationengine.FieldBinding, hooks f
 			if err != nil {
 				return nil, err
 			}
-			issues, err := callback(operation.ValidationContext(adaptContext(ctx)), value)
+			issues, err := callback(adaptContext(ctx), value)
 			if err != nil {
 				return nil, err
 			}
@@ -396,7 +384,7 @@ func lowerDefault[T any](binding *operationengine.FieldBinding, callback field.D
 	}
 	id := binding.ID
 	binding.Default = func(ctx operationengine.Context) (store.Value, bool, error) {
-		result, err := callback(operation.DefaultContext(graphCallbackContext(ctx, id, local)))
+		result, err := callback(operation.Context(graphCallbackContext(ctx, id, local)))
 		if err != nil {
 			return store.Value{}, false, err
 		}
@@ -428,7 +416,7 @@ func lowerGraphAccess(access field.Access, id string, local **LocalAPI) operatio
 			return nil
 		}
 		return func(ctx operationengine.Context) (bool, error) {
-			return rule(operation.AccessContext(graphCallbackContext(ctx, id, local)))
+			return rule(operation.Context(graphCallbackContext(ctx, id, local)))
 		}
 	}
 	return operationengine.FieldRules{Create: adapt(access.Create), Read: adapt(access.Read), Update: adapt(access.Update)}
@@ -481,7 +469,7 @@ func (reader graphReader) FindByID(caller context.Context, collection schema.Col
 	if reader.live {
 		return (*reader.local).engine.LiveRead(ctx, operationengine.CapabilitiesRequest{Collection: string(collection), ID: string(id), Actor: cloneDocument(reader.actor), ActorCollection: reader.actorCollection, Locale: string(reader.locale), DisableFallback: true})
 	}
-	return (*reader.local).FindWithOptions(ctx, string(collection), string(id), FindOptions{
+	return (*reader.local).Find(ctx, string(collection), string(id), FindOptions{
 		Actor: cloneDocument(reader.actor), ActorCollection: reader.actorCollection, Locale: reader.locale, DisableFallback: reader.locale != "",
 	})
 }

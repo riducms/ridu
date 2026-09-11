@@ -40,16 +40,16 @@ func TestPostgresHardDeleteReconcilesCurrentOwnersWithoutObservableOwnerWrites(t
 	if err != nil {
 		t.Fatal(err)
 	}
-	target, err := application.Local().Import(ctx, "users", store.Values{"name": store.String("Person")}, ridu.ImportOptions{ID: "shared", Status: store.StatusPublished}, actor)
+	target, err := application.Local().Import(ctx, "users", store.Values{"name": store.String("Person")}, ridu.ImportOptions{ID: "shared", Status: store.StatusPublished, Actor: actor})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Import(ctx, "teams", store.Values{"name": store.String("Team")}, ridu.ImportOptions{ID: target.ID, Status: store.StatusPublished}, actor); err != nil {
+	if _, err := application.Local().Import(ctx, "teams", store.Values{"name": store.String("Team")}, ridu.ImportOptions{ID: target.ID, Status: store.StatusPublished, Actor: actor}); err != nil {
 		t.Fatal(err)
 	}
 	restricted, err := application.Local().Create(ctx, "posts", store.Values{
 		"title": store.String("Restricted"), "guard": store.String(target.ID),
-	}, actor)
+	}, ridu.MutationOptions{Actor: actor})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,24 +57,24 @@ func TestPostgresHardDeleteReconcilesCurrentOwnersWithoutObservableOwnerWrites(t
 	active, err := application.Local().Create(ctx, "posts", store.Values{
 		"title": store.String("Active"), "owner": store.String(target.ID),
 		"related": store.List(store.String(target.ID), store.String(target.ID)), "subject": teamReference,
-	}, actor)
+	}, ridu.MutationOptions{Actor: actor})
 	if err != nil {
 		t.Fatal(err)
 	}
 	trash, err := application.Local().Create(ctx, "posts", store.Values{
 		"title": store.String("Trash"), "owner": store.String(target.ID),
 		"related": store.List(store.String(target.ID), store.String(target.ID)), "subject": teamReference,
-	}, actor)
+	}, ridu.MutationOptions{Actor: actor})
 	if err != nil {
 		t.Fatal(err)
 	}
 	automaticOwnerIDs[active.ID], automaticOwnerIDs[trash.ID] = true, true
-	trash, err = application.Local().Delete(ctx, "posts", trash.ID, actor)
+	trash, err = application.Local().Delete(ctx, "posts", trash.ID, ridu.MutationOptions{Actor: actor})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	_, err = application.Local().Delete(ctx, "users", target.ID, actor)
+	_, err = application.Local().Delete(ctx, "users", target.ID, ridu.MutationOptions{Actor: actor})
 	var operationError *ridu.OperationError
 	if !errors.As(err, &operationError) || operationError.Code != "delete_restricted" || operationError.Status != 409 ||
 		operationError.Message != "document deletion is restricted by current references" {
@@ -85,42 +85,42 @@ func TestPostgresHardDeleteReconcilesCurrentOwnersWithoutObservableOwnerWrites(t
 			t.Fatalf("restricted error disclosed owner ID %q: %q", secret, operationError.Message)
 		}
 	}
-	unchanged, err := application.Local().Find(ctx, "posts", active.ID, actor)
+	unchanged, err := application.Local().Find(ctx, "posts", active.ID, ridu.FindOptions{Actor: actor})
 	if err != nil || stringValue(unchanged.Values["owner"]) != target.ID {
 		t.Fatalf("restriction partially reconciled an owner: %#v, %v", unchanged.Values, err)
 	}
-	if _, err := application.Local().Find(ctx, "users", target.ID, actor); err != nil {
+	if _, err := application.Local().Find(ctx, "users", target.ID, ridu.FindOptions{Actor: actor}); err != nil {
 		t.Fatalf("restricted target disappeared: %v", err)
 	}
-	if _, err := application.Local().PublishChanges(ctx, "posts", restricted.ID, store.Values{"guard": store.Null()}, restricted.Revision, actor); err != nil {
+	if _, err := application.Local().PublishChanges(ctx, "posts", restricted.ID, store.Values{"guard": store.Null()}, ridu.MutationOptions{Actor: actor, ExpectedRevision: restricted.Revision}); err != nil {
 		t.Fatal(err)
 	}
-	activeBefore, err := application.Local().Find(ctx, "posts", active.ID, actor)
+	activeBefore, err := application.Local().Find(ctx, "posts", active.ID, ridu.FindOptions{Actor: actor})
 	if err != nil {
 		t.Fatal(err)
 	}
-	trashBefore, err := application.Local().FindWithOptions(ctx, "posts", trash.ID, ridu.FindOptions{Actor: actor, TrashOnly: true})
+	trashBefore, err := application.Local().Find(ctx, "posts", trash.ID, ridu.FindOptions{Actor: actor, TrashOnly: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	activeVersionsBefore, err := application.Local().Versions(ctx, "posts", active.ID, actor)
+	activeVersionsBefore, err := application.Local().Versions(ctx, "posts", active.ID, ridu.FindOptions{Actor: actor})
 	if err != nil {
 		t.Fatal(err)
 	}
-	trashVersionsBefore, err := application.Local().Versions(ctx, "posts", trash.ID, actor)
+	trashVersionsBefore, err := application.Local().Versions(ctx, "posts", trash.ID, ridu.FindOptions{Actor: actor})
 	if err != nil {
 		t.Fatal(err)
 	}
 	automaticOwnerUpdates = 0
 
-	if _, err := application.Local().Delete(ctx, "users", target.ID, actor); err != nil {
+	if _, err := application.Local().Delete(ctx, "users", target.ID, ridu.MutationOptions{Actor: actor}); err != nil {
 		t.Fatal(err)
 	}
-	activeAfter, err := application.Local().Find(ctx, "posts", active.ID, actor)
+	activeAfter, err := application.Local().Find(ctx, "posts", active.ID, ridu.FindOptions{Actor: actor})
 	if err != nil {
 		t.Fatal(err)
 	}
-	trashAfter, err := application.Local().FindWithOptions(ctx, "posts", trash.ID, ridu.FindOptions{Actor: actor, TrashOnly: true})
+	trashAfter, err := application.Local().Find(ctx, "posts", trash.ID, ridu.FindOptions{Actor: actor, TrashOnly: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -145,11 +145,11 @@ func TestPostgresHardDeleteReconcilesCurrentOwnersWithoutObservableOwnerWrites(t
 	if automaticOwnerUpdates != 0 {
 		t.Fatalf("automatic PostgreSQL reconciliation ran owner hooks: %d", automaticOwnerUpdates)
 	}
-	activeVersionsAfter, err := application.Local().Versions(ctx, "posts", active.ID, actor)
+	activeVersionsAfter, err := application.Local().Versions(ctx, "posts", active.ID, ridu.FindOptions{Actor: actor})
 	if err != nil {
 		t.Fatal(err)
 	}
-	trashVersionsAfter, err := application.Local().Versions(ctx, "posts", trash.ID, actor)
+	trashVersionsAfter, err := application.Local().Versions(ctx, "posts", trash.ID, ridu.FindOptions{Actor: actor})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -160,14 +160,14 @@ func TestPostgresHardDeleteReconcilesCurrentOwnersWithoutObservableOwnerWrites(t
 	if len(activeVersionsBefore) == 0 {
 		t.Fatal("versioned owner has no retained snapshot")
 	}
-	if _, err := application.Local().Restore(ctx, "posts", active.ID, activeVersionsBefore[len(activeVersionsBefore)-1].Revision, activeAfter.Revision, actor); !hasRelationshipIssue(err, "owner") {
+	if _, err := application.Local().Restore(ctx, "posts", active.ID, activeVersionsBefore[len(activeVersionsBefore)-1].Revision, ridu.MutationOptions{Actor: actor, ExpectedRevision: activeAfter.Revision}); !hasRelationshipIssue(err, "owner") {
 		t.Fatalf("restore admitted a historical dangling reference: %v", err)
 	}
-	afterRejectedRestore, err := application.Local().Find(ctx, "posts", active.ID, actor)
+	afterRejectedRestore, err := application.Local().Find(ctx, "posts", active.ID, ridu.FindOptions{Actor: actor})
 	if err != nil || afterRejectedRestore.Revision != activeAfter.Revision || afterRejectedRestore.Values["owner"].Kind() != store.ValueNull {
 		t.Fatalf("rejected restore changed current owner: %#v, %v", afterRejectedRestore, err)
 	}
-	if _, err := application.Local().Find(ctx, "users", target.ID, actor); !hasOperationCode(err, "not_found") {
+	if _, err := application.Local().Find(ctx, "users", target.ID, ridu.FindOptions{Actor: actor}); !hasOperationCode(err, "not_found") {
 		t.Fatalf("hard-deleted target remains visible: %v", err)
 	}
 }
@@ -200,7 +200,7 @@ func TestPostgresConcurrentReferenceAdmissionAndTargetDeleteCannotCommitDangling
 	if err != nil {
 		t.Fatal(err)
 	}
-	target, err := application.Local().Create(ctx, "targets", store.Values{"name": store.String("Target")}, nil)
+	target, err := application.Local().Create(ctx, "targets", store.Values{"name": store.String("Target")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -210,7 +210,7 @@ func TestPostgresConcurrentReferenceAdmissionAndTargetDeleteCannotCommitDangling
 	}
 	createResult := make(chan createOutcome, 1)
 	go func() {
-		document, createError := application.Local().Create(ctx, "entries", store.Values{"target": store.String(target.ID)}, nil)
+		document, createError := application.Local().Create(ctx, "entries", store.Values{"target": store.String(target.ID)}, ridu.MutationOptions{})
 		createResult <- createOutcome{document: document, err: createError}
 	}()
 	select {
@@ -220,7 +220,7 @@ func TestPostgresConcurrentReferenceAdmissionAndTargetDeleteCannotCommitDangling
 	}
 	deleteResult := make(chan error, 1)
 	go func() {
-		_, deleteError := application.Local().Delete(ctx, "targets", target.ID, nil)
+		_, deleteError := application.Local().Delete(ctx, "targets", target.ID, ridu.MutationOptions{})
 		deleteResult <- deleteError
 	}()
 	select {
@@ -248,14 +248,14 @@ func TestPostgresConcurrentReferenceAdmissionAndTargetDeleteCannotCommitDangling
 	case <-time.After(3 * time.Second):
 		t.Fatal("target delete did not resume after reference admission committed")
 	}
-	reconciled, err := application.Local().Find(ctx, "entries", owner.ID, nil)
+	reconciled, err := application.Local().Find(ctx, "entries", owner.ID, ridu.FindOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if reconciled.Values["target"].Kind() != store.ValueNull {
 		t.Fatalf("concurrent reference survived target deletion: %#v", reconciled.Values["target"])
 	}
-	if _, err := application.Local().Find(ctx, "targets", target.ID, nil); !hasOperationCode(err, "not_found") {
+	if _, err := application.Local().Find(ctx, "targets", target.ID, ridu.FindOptions{}); !hasOperationCode(err, "not_found") {
 		t.Fatalf("concurrent target delete did not commit: %v", err)
 	}
 }
@@ -297,19 +297,19 @@ func TestPostgresRetainedReferenceUpdateAndTargetDeleteResolveWithoutDangling(t 
 	if err != nil {
 		t.Fatal(err)
 	}
-	target, err := application.Local().Create(ctx, "targets", store.Values{"name": store.String("Target")}, nil)
+	target, err := application.Local().Create(ctx, "targets", store.Values{"name": store.String("Target")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	owner, err := application.Local().Create(ctx, "entries", store.Values{
 		"label": store.String("Initial"), "target": store.String(target.ID),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	updateResult := make(chan error, 1)
 	go func() {
-		_, updateError := application.Local().Update(ctx, "entries", owner.ID, store.Values{"label": store.String("Updated")}, nil)
+		_, updateError := application.Local().Update(ctx, "entries", owner.ID, store.Values{"label": store.String("Updated")}, ridu.MutationOptions{})
 		updateResult <- updateError
 	}()
 	select {
@@ -319,7 +319,7 @@ func TestPostgresRetainedReferenceUpdateAndTargetDeleteResolveWithoutDangling(t 
 	}
 	deleteResult := make(chan error, 1)
 	go func() {
-		_, deleteError := application.Local().Delete(ctx, "targets", target.ID, nil)
+		_, deleteError := application.Local().Delete(ctx, "targets", target.ID, ridu.MutationOptions{})
 		deleteResult <- deleteError
 	}()
 	select {
@@ -351,7 +351,7 @@ func TestPostgresRetainedReferenceUpdateAndTargetDeleteResolveWithoutDangling(t 
 		t.Fatalf("retained-reference lock cycle = update %v, delete %v; want one retryable conflict", updateError, deleteError)
 	}
 
-	currentOwner, err := application.Local().Find(ctx, "entries", owner.ID, nil)
+	currentOwner, err := application.Local().Find(ctx, "entries", owner.ID, ridu.FindOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -359,20 +359,20 @@ func TestPostgresRetainedReferenceUpdateAndTargetDeleteResolveWithoutDangling(t 
 		if retained != target.ID {
 			t.Fatalf("owner retained unexpected target %q", retained)
 		}
-		if _, err := application.Local().Find(ctx, "targets", target.ID, nil); err != nil {
+		if _, err := application.Local().Find(ctx, "targets", target.ID, ridu.FindOptions{}); err != nil {
 			t.Fatalf("lock cycle committed a dangling reference: %v", err)
 		}
 	}
 	if deleteError != nil {
-		if _, err := application.Local().Delete(ctx, "targets", target.ID, nil); err != nil {
+		if _, err := application.Local().Delete(ctx, "targets", target.ID, ridu.MutationOptions{}); err != nil {
 			t.Fatalf("caller delete retry failed: %v", err)
 		}
 	} else {
-		if _, err := application.Local().Update(ctx, "entries", owner.ID, store.Values{"label": store.String("Retried")}, nil); err != nil {
+		if _, err := application.Local().Update(ctx, "entries", owner.ID, store.Values{"label": store.String("Retried")}, ridu.MutationOptions{}); err != nil {
 			t.Fatalf("caller update retry failed: %v", err)
 		}
 	}
-	finalOwner, err := application.Local().Find(ctx, "entries", owner.ID, nil)
+	finalOwner, err := application.Local().Find(ctx, "entries", owner.ID, ridu.FindOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -431,29 +431,29 @@ func TestPostgresHardDeleteReconcilesLocalizedNestedUploadColumns(t *testing.T) 
 	}
 	post, err := application.Local().Create(ctx, "posts", store.Values{
 		"gallery": store.List(image(englishAsset.ID, englishAsset.ID)),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := application.Local().Update(ctx, "posts", post.ID, store.Values{
 		"gallery": store.List(image(frenchAsset.ID, "")),
-	}, nil, ridu.LocaleOptions{Locale: "fr"}); err != nil {
+	}, ridu.MutationOptions{Locale: "fr"}); err != nil {
 		t.Fatal(err)
 	}
 
-	if _, err := application.Local().Delete(ctx, "media", englishAsset.ID, nil); !hasOperationCode(err, "delete_restricted") {
+	if _, err := application.Local().Delete(ctx, "media", englishAsset.ID, ridu.MutationOptions{}); !hasOperationCode(err, "delete_restricted") {
 		t.Fatalf("localized nested upload restriction = %v", err)
 	}
 	if _, err := application.Local().Update(ctx, "posts", post.ID, store.Values{
 		"gallery": store.List(image(englishAsset.ID, "")),
-	}, nil, ridu.LocaleOptions{Locale: "en"}); err != nil {
+	}, ridu.MutationOptions{Locale: "en"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Delete(ctx, "media", englishAsset.ID, nil); err != nil {
+	if _, err := application.Local().Delete(ctx, "media", englishAsset.ID, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
 
-	reconciled, err := application.Local().FindWithOptions(ctx, "posts", post.ID, ridu.FindOptions{AllLocales: true})
+	reconciled, err := application.Local().Find(ctx, "posts", post.ID, ridu.FindOptions{AllLocales: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -488,26 +488,26 @@ func TestPostgresBulkHardDeleteOnlyIgnoresOwnersAlreadyDeletedInTheTransaction(t
 	}
 	createPair := func(prefix string) (store.Document, store.Document) {
 		t.Helper()
-		parent, createError := application.Local().Create(ctx, "nodes", store.Values{"name": store.String(prefix + " parent")}, nil)
+		parent, createError := application.Local().Create(ctx, "nodes", store.Values{"name": store.String(prefix + " parent")}, ridu.MutationOptions{})
 		if createError != nil {
 			t.Fatal(createError)
 		}
-		child, createError := application.Local().Create(ctx, "nodes", store.Values{"name": store.String(prefix + " child"), "parent": store.String(parent.ID)}, nil)
+		child, createError := application.Local().Create(ctx, "nodes", store.Values{"name": store.String(prefix + " child"), "parent": store.String(parent.ID)}, ridu.MutationOptions{})
 		if createError != nil {
 			t.Fatal(createError)
 		}
 		return parent, child
 	}
 	parent, child := createPair("ordered")
-	if _, err := application.Local().BulkDelete(ctx, "nodes", []string{child.ID, parent.ID}, nil); err != nil {
+	if _, err := application.Local().BulkDelete(ctx, "nodes", []string{child.ID, parent.ID}, ridu.BulkOptions{}); err != nil {
 		t.Fatalf("owner-before-target PostgreSQL batch failed: %v", err)
 	}
 	parent, child = createPair("future")
-	if _, err := application.Local().BulkDelete(ctx, "nodes", []string{parent.ID, child.ID}, nil); !hasOperationCode(err, "delete_restricted") {
+	if _, err := application.Local().BulkDelete(ctx, "nodes", []string{parent.ID, child.ID}, ridu.BulkOptions{}); !hasOperationCode(err, "delete_restricted") {
 		t.Fatalf("target-before-owner PostgreSQL batch bypassed restriction: %v", err)
 	}
 	for _, document := range []store.Document{parent, child} {
-		if _, err := application.Local().Find(ctx, "nodes", document.ID, nil); err != nil {
+		if _, err := application.Local().Find(ctx, "nodes", document.ID, ridu.FindOptions{}); err != nil {
 			t.Errorf("failed PostgreSQL batch did not roll back %q: %v", document.ID, err)
 		}
 	}

@@ -13,7 +13,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/riducms/ridu/internal/migrationartifact"
 	ridumigration "github.com/riducms/ridu/migration"
-	"github.com/riducms/ridu/schema"
 )
 
 func TestPostgresStopResumeAndInvalidConcurrentIndexRecovery(t *testing.T) {
@@ -133,7 +132,7 @@ func TestPostgresArtifactStatusReportsStoppedProgressWithoutCompletedStateVerifi
 	}
 }
 
-func TestPostgresAdvisoryTimeoutAndTransactionLedgerAtomicity(t *testing.T) {
+func TestPostgresAdvisoryTimeout(t *testing.T) {
 	t.Run("advisory timeout", func(t *testing.T) {
 		backend := migrationArtifactTestBackend(t)
 		ctx := context.Background()
@@ -160,59 +159,6 @@ func TestPostgresAdvisoryTimeoutAndTransactionLedgerAtomicity(t *testing.T) {
 		}
 	})
 
-	t.Run("transaction data and ledger rollback together", func(t *testing.T) {
-		backend := migrationArtifactTestBackend(t)
-		ctx := context.Background()
-		directory := t.TempDir()
-		before := renameBindingManifest(schema.Collection{ID: "atomic-owner", Slug: "atomic-owner", Fields: []schema.Field{}})
-		initial, err := BuildArtifact(ctx, "atomic-base", nil, before, nil, false)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err := migrationartifact.Create(directory, initial.Name, initial, time.Unix(1, 0)); err != nil {
-			t.Fatal(err)
-		}
-		if err := backend.ApplyArtifacts(ctx, directory); err != nil {
-			t.Fatal(err)
-		}
-		snapshot := before.Snapshot()
-		snapshot.Plugins = []schema.Plugin{{
-			Key: "atomic-failure", Version: "1.0.0", GoPackage: "example.com/atomic-failure", APIVersion: schema.CurrentPluginAPIVersion,
-			Ridu: &schema.PluginCompatibility{Minimum: "0.0.0-dev"},
-			DatabaseContributions: []schema.PluginDatabaseContribution{{
-				Adapter: schema.PluginDatabaseAdapterPostgres, Tables: []string{"ridu_plugin_atomic_failure_probe"},
-				Migrations: []schema.PluginMigration{{
-					Version: 1, Name: "prove-transaction-rollback",
-					UpSQL: []string{
-						`CREATE TABLE ridu_plugin_atomic_failure_probe (id integer)`,
-						`SELECT * FROM ridu_missing_relation`,
-					},
-					DownSQL: []string{`DROP TABLE ridu_plugin_atomic_failure_probe`},
-				}},
-			}},
-		}}
-		manifest := schema.NewManifest(snapshot)
-		artifact, err := BuildArtifact(ctx, "ledger-atomicity", &before, manifest, nil, false)
-		if err != nil {
-			t.Fatal(err)
-		}
-		artifactFile, err := migrationartifact.Create(directory, artifact.Name, artifact, time.Unix(2, 0))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := backend.ApplyArtifacts(ctx, directory); err == nil || !strings.Contains(err.Error(), "ridu_missing_relation") {
-			t.Fatalf("transaction failure = %v", err)
-		}
-		var probeExists bool
-		if err := backend.pool.QueryRow(ctx, `SELECT to_regclass(current_schema() || '.ridu_plugin_atomic_failure_probe') IS NOT NULL`).Scan(&probeExists); err != nil || probeExists {
-			t.Fatalf("rollback probe exists = %t, %v", probeExists, err)
-		}
-		assertArtifactNotFinal(t, ctx, backend, artifactFile.Name)
-		var steps int
-		if err := backend.pool.QueryRow(ctx, `SELECT count(*) FROM ridu_migration_steps WHERE artifact_name = $1`, artifactFile.Name).Scan(&steps); err != nil || steps != 0 {
-			t.Fatalf("rolled-back step rows = %d, %v", steps, err)
-		}
-	})
 }
 
 func TestDevelopmentPlanAndArtifactRunnerShareSchemaLock(t *testing.T) {

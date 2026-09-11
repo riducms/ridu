@@ -25,10 +25,14 @@ export function initialEditorState(value: unknown) {
 
 function withElementDefaults(node: Record<string, unknown>): Record<string, unknown> {
 	if (!Array.isArray(node.children)) return node;
+	const children =
+		node.type === "root" && node.children.length === 0
+			? [{ type: "paragraph", children: [], direction: null, format: "", indent: 0 }]
+			: node.children.map((child) => (isRecord(child) ? withElementDefaults(child) : child));
 
 	return {
 		...node,
-		children: node.children.map((child) => (isRecord(child) ? withElementDefaults(child) : child)),
+		children,
 		direction: node.direction ?? null,
 		format: node.format ?? "",
 		indent: node.indent ?? 0,

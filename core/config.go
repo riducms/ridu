@@ -788,12 +788,12 @@ func resolverImageSizes(sizes []ImageSize) []configresolver.ImageSize {
 
 type runtimePluginEndpoint struct {
 	pluginKey string
-	endpoint  PluginEndpoint
+	endpoint  Endpoint
 }
 
 type runtimePluginTransport struct {
 	pluginKey string
-	transport PluginTransport
+	transport Endpoint
 }
 
 func resolverPlugins(plugins []Plugin) ([]configresolver.Plugin, []runtimePluginEndpoint, error) {
@@ -807,9 +807,8 @@ func resolverPlugins(plugins []Plugin) ([]configresolver.Plugin, []runtimePlugin
 				descriptor := provider.Descriptor()
 				resolved[index] = configresolver.Plugin{
 					Key: plugin.Key(), Version: descriptor.Version, GoPackage: descriptor.GoPackage,
-					APIVersion:            descriptor.APIVersion,
-					FieldTypes:            resolverPluginFieldTypes(descriptor.FieldTypes),
-					DatabaseContributions: resolverPluginDatabaseContributions(descriptor.DatabaseContributions),
+					APIVersion: descriptor.APIVersion,
+					FieldTypes: resolverPluginFieldTypes(descriptor.FieldTypes),
 				}
 				if descriptor.Ridu.Minimum != "" || descriptor.Ridu.MaximumExclusive != "" {
 					resolved[index].Ridu = &configresolver.PluginCompatibility{Minimum: descriptor.Ridu.Minimum, MaximumExclusive: descriptor.Ridu.MaximumExclusive}
@@ -850,26 +849,6 @@ func resolverPluginFieldTypes(types []PluginFieldType) []configresolver.PluginFi
 			TypeScriptOutput: fieldType.TypeScriptOutput, TypeScriptInput: fieldType.TypeScriptInput,
 			TypeScriptWhere: fieldType.TypeScriptWhere, GoPackage: fieldType.GoPackage,
 			GoType: fieldType.GoType, JSONSchema: append([]byte(nil), fieldType.JSONSchema...), EmbeddedTypes: append([]string(nil), fieldType.EmbeddedTypes...),
-		}
-	}
-	return result
-}
-
-func resolverPluginMigrations(migrations []PluginMigration) []configresolver.PluginMigration {
-	result := make([]configresolver.PluginMigration, len(migrations))
-	for index, pluginMigration := range migrations {
-		result[index] = configresolver.PluginMigration{Version: pluginMigration.Version, Name: pluginMigration.Name, UpSQL: append([]string(nil), pluginMigration.UpSQL...), DownSQL: append([]string(nil), pluginMigration.DownSQL...)}
-	}
-	return result
-}
-
-func resolverPluginDatabaseContributions(contributions []PluginDatabaseContribution) []configresolver.PluginDatabaseContribution {
-	result := make([]configresolver.PluginDatabaseContribution, len(contributions))
-	for index, contribution := range contributions {
-		result[index] = configresolver.PluginDatabaseContribution{
-			Adapter:    contribution.Adapter,
-			Migrations: resolverPluginMigrations(contribution.Migrations),
-			Tables:     append([]string(nil), contribution.Tables...),
 		}
 	}
 	return result

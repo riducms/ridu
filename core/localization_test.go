@@ -46,7 +46,7 @@ func TestLocalizedUploadMetadataUsesTheRequestedLocale(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	all, err := application.Local().Find(context.Background(), "media", document.ID, nil, ridu.LocaleOptions{AllLocales: true})
+	all, err := application.Local().Find(context.Background(), "media", document.ID, ridu.FindOptions{AllLocales: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +91,7 @@ func TestLocalizedScalarCRUDQueryFallbackAndAccessContext(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	english, err := application.Local().Create(ctx, "posts", store.Values{"title": store.String("Hello"), "tagline": store.String("Welcome"), "slug": store.String("hello")}, nil)
+	english, err := application.Local().Create(ctx, "posts", store.Values{"title": store.String("Hello"), "tagline": store.String("Welcome"), "slug": store.String("hello")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,21 +99,21 @@ func TestLocalizedScalarCRUDQueryFallbackAndAccessContext(t *testing.T) {
 		t.Fatalf("default-locale create title = %q", got)
 	}
 
-	french, err := application.Local().PublishChanges(ctx, "posts", english.ID, store.Values{"title": store.String("Bonjour")}, english.Revision, nil, ridu.LocaleOptions{Locale: "fr"})
+	french, err := application.Local().PublishChanges(ctx, "posts", english.ID, store.Values{"title": store.String("Bonjour")}, ridu.MutationOptions{ExpectedRevision: english.Revision, Locale: "fr"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got, _ := french.Values["title"].StringValue(); got != "Bonjour" {
 		t.Fatalf("French update title = %q", got)
 	}
-	stillEnglish, err := application.Local().Find(ctx, "posts", english.ID, nil, ridu.LocaleOptions{Locale: "en"})
+	stillEnglish, err := application.Local().Find(ctx, "posts", english.ID, ridu.FindOptions{Locale: "en"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got, _ := stillEnglish.Values["title"].StringValue(); got != "Hello" {
 		t.Fatalf("French update erased English title: %q", got)
 	}
-	fallback, err := application.Local().Find(ctx, "posts", english.ID, nil, ridu.LocaleOptions{Locale: "ar"})
+	fallback, err := application.Local().Find(ctx, "posts", english.ID, ridu.FindOptions{Locale: "ar"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,14 +123,14 @@ func TestLocalizedScalarCRUDQueryFallbackAndAccessContext(t *testing.T) {
 	if fallback.LocalizationSources["title"] != "en" {
 		t.Fatalf("Arabic fallback source = %#v", fallback.LocalizationSources)
 	}
-	exact, err := application.Local().Find(ctx, "posts", english.ID, nil, ridu.LocaleOptions{Locale: "ar", DisableFallback: true})
+	exact, err := application.Local().Find(ctx, "posts", english.ID, ridu.FindOptions{Locale: "ar", DisableFallback: true})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, exists := exact.Values["title"]; exists {
 		t.Fatalf("exact missing locale unexpectedly returned title: %#v", exact.Values)
 	}
-	copied, err := application.Local().CopyLocale(ctx, "posts", english.ID, "en", "ar", 0, nil)
+	copied, err := application.Local().CopyLocale(ctx, "posts", english.ID, "en", "ar", ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,19 +140,19 @@ func TestLocalizedScalarCRUDQueryFallbackAndAccessContext(t *testing.T) {
 	if len(accessLocales) < 3 || accessLocales[len(accessLocales)-3] != "en" || accessLocales[len(accessLocales)-2] != "ar" || accessLocales[len(accessLocales)-1] != "ar" {
 		t.Fatalf("copy-to-locale access contexts = %#v", accessLocales)
 	}
-	if _, err := application.Local().PublishChanges(ctx, "posts", english.ID, store.Values{"tagline": store.String("")}, copied.Revision, nil, ridu.LocaleOptions{Locale: "ar"}); err != nil {
+	if _, err := application.Local().PublishChanges(ctx, "posts", english.ID, store.Values{"tagline": store.String("")}, ridu.MutationOptions{ExpectedRevision: copied.Revision, Locale: "ar"}); err != nil {
 		t.Fatal(err)
 	}
-	emptyFallback, err := application.Local().Find(ctx, "posts", english.ID, nil, ridu.LocaleOptions{Locale: "ar"})
+	emptyFallback, err := application.Local().Find(ctx, "posts", english.ID, ridu.FindOptions{Locale: "ar"})
 	if err != nil || stringValue(emptyFallback.Values["tagline"]) != "Welcome" || emptyFallback.LocalizationSources["tagline"] != "en" {
 		t.Fatalf("empty localized value fallback = %#v, %v", emptyFallback, err)
 	}
-	emptyExact, err := application.Local().Find(ctx, "posts", english.ID, nil, ridu.LocaleOptions{Locale: "ar", DisableFallback: true})
+	emptyExact, err := application.Local().Find(ctx, "posts", english.ID, ridu.FindOptions{Locale: "ar", DisableFallback: true})
 	if err != nil || stringValue(emptyExact.Values["tagline"]) != "" || emptyExact.LocalizationSources["tagline"] != "ar" {
 		t.Fatalf("exact empty localized value = %#v, %v", emptyExact, err)
 	}
 
-	all, err := application.Local().Find(ctx, "posts", english.ID, nil, ridu.LocaleOptions{AllLocales: true})
+	all, err := application.Local().Find(ctx, "posts", english.ID, ridu.FindOptions{AllLocales: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -163,11 +163,11 @@ func TestLocalizedScalarCRUDQueryFallbackAndAccessContext(t *testing.T) {
 	duplicate, err := application.Local().Duplicate(ctx, "posts", english.ID, store.Values{
 		"title": store.String("Copie"),
 		"slug":  store.String("hello-copy"),
-	}, nil, ridu.LocaleOptions{Locale: "fr"})
+	}, ridu.MutationOptions{Locale: "fr"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	duplicateAll, err := application.Local().Find(ctx, "posts", duplicate.ID, nil, ridu.LocaleOptions{AllLocales: true})
+	duplicateAll, err := application.Local().Find(ctx, "posts", duplicate.ID, ridu.FindOptions{AllLocales: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -185,13 +185,13 @@ func TestLocalizedScalarCRUDQueryFallbackAndAccessContext(t *testing.T) {
 	if len(accessLocales) == 0 || accessLocales[len(accessLocales)-1] != "fr" {
 		t.Fatalf("access locales = %#v", accessLocales)
 	}
-	if _, err := application.Local().UpdateGlobal(ctx, "settings", store.Values{"announcement": store.String("Welcome")}, 0, nil); err != nil {
+	if _, err := application.Local().UpdateGlobal(ctx, "settings", store.Values{"announcement": store.String("Welcome")}, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().UpdateGlobal(ctx, "settings", store.Values{"announcement": store.String("Bienvenue")}, 0, nil, ridu.LocaleOptions{Locale: "fr"}); err != nil {
+	if _, err := application.Local().UpdateGlobal(ctx, "settings", store.Values{"announcement": store.String("Bienvenue")}, ridu.MutationOptions{Locale: "fr"}); err != nil {
 		t.Fatal(err)
 	}
-	global, err := application.Local().Global(ctx, "settings", nil, ridu.LocaleOptions{AllLocales: true})
+	global, err := application.Local().Global(ctx, "settings", ridu.FindOptions{AllLocales: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -200,20 +200,20 @@ func TestLocalizedScalarCRUDQueryFallbackAndAccessContext(t *testing.T) {
 		t.Fatalf("localized global = %#v", global.Values["announcement"])
 	}
 
-	_, err = application.Local().Create(ctx, "posts", store.Values{"title": store.String("Autre"), "code": store.String("bonjour-code"), "slug": store.String("other")}, nil, ridu.LocaleOptions{Locale: "fr"})
+	_, err = application.Local().Create(ctx, "posts", store.Values{"title": store.String("Autre"), "code": store.String("bonjour-code"), "slug": store.String("other")}, ridu.MutationOptions{Locale: "fr"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = application.Local().Create(ctx, "posts", store.Values{"title": store.String("Encore"), "code": store.String("bonjour-code"), "slug": store.String("another")}, nil, ridu.LocaleOptions{Locale: "fr"})
+	_, err = application.Local().Create(ctx, "posts", store.Values{"title": store.String("Encore"), "code": store.String("bonjour-code"), "slug": store.String("another")}, ridu.MutationOptions{Locale: "fr"})
 	var operationError *ridu.OperationError
 	if !errors.As(err, &operationError) || operationError.Code != "conflict" {
 		t.Fatalf("per-locale unique conflict = %v", err)
 	}
-	if _, err := application.Local().Find(ctx, "posts", english.ID, nil, ridu.LocaleOptions{Locale: "missing"}); !errors.As(err, &operationError) || operationError.Code != "bad_locale" {
+	if _, err := application.Local().Find(ctx, "posts", english.ID, ridu.FindOptions{Locale: "missing"}); !errors.As(err, &operationError) || operationError.Code != "bad_locale" {
 		t.Fatalf("invalid locale error = %v", err)
 	}
 
-	versions, err := application.Local().Versions(ctx, "posts", english.ID, nil, ridu.LocaleOptions{AllLocales: true})
+	versions, err := application.Local().Versions(ctx, "posts", english.ID, ridu.FindOptions{AllLocales: true})
 	if err != nil || len(versions) < 2 {
 		t.Fatalf("localized versions = %#v, %v", versions, err)
 	}
@@ -221,13 +221,13 @@ func TestLocalizedScalarCRUDQueryFallbackAndAccessContext(t *testing.T) {
 	if !ok || stringValue(latest["en"]) != "Hello" || stringValue(latest["fr"]) != "Bonjour" {
 		t.Fatalf("version did not preserve every locale: %#v", versions[0].Snapshot.Values["title"])
 	}
-	if _, err := application.Local().PublishChanges(ctx, "posts", english.ID, store.Values{"title": store.String("Changed")}, 0, nil, ridu.LocaleOptions{Locale: "en"}); err != nil {
+	if _, err := application.Local().PublishChanges(ctx, "posts", english.ID, store.Values{"title": store.String("Changed")}, ridu.MutationOptions{Locale: "en"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Restore(ctx, "posts", english.ID, versions[0].Revision, 0, nil, ridu.LocaleOptions{Locale: "fr"}); err != nil {
+	if _, err := application.Local().Restore(ctx, "posts", english.ID, versions[0].Revision, ridu.MutationOptions{Locale: "fr"}); err != nil {
 		t.Fatal(err)
 	}
-	restoredAll, err := application.Local().Find(ctx, "posts", english.ID, nil, ridu.LocaleOptions{AllLocales: true})
+	restoredAll, err := application.Local().Find(ctx, "posts", english.ID, ridu.FindOptions{AllLocales: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -248,11 +248,11 @@ func TestAllLocalesSortUsesTheDefaultLocaleValue(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	first, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("Zulu")}, nil)
+	first, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("Zulu")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("Alpha")}, nil)
+	second, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("Alpha")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -295,14 +295,14 @@ func TestDuplicateAuthorizesEveryRetainedLocale(t *testing.T) {
 		ownerB := &store.Document{ID: "owner-b"}
 		source, err := application.Local().Create(context.Background(), "posts", store.Values{
 			"owner": store.String(ownerA.ID), "title": store.String("English"),
-		}, ownerA)
+		}, ridu.MutationOptions{Actor: ownerA})
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := application.Local().Update(context.Background(), "posts", source.ID, store.Values{"title": store.String("Français")}, ownerA, ridu.LocaleOptions{Locale: "fr"}); err != nil {
+		if _, err := application.Local().Update(context.Background(), "posts", source.ID, store.Values{"title": store.String("Français")}, ridu.MutationOptions{Actor: ownerA, Locale: "fr"}); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := application.Local().Duplicate(context.Background(), "posts", source.ID, store.Values{"owner": store.String(ownerB.ID)}, ownerB); !operationCode(err, "access_denied") {
+		if _, err := application.Local().Duplicate(context.Background(), "posts", source.ID, store.Values{"owner": store.String(ownerB.ID)}, ridu.MutationOptions{Actor: ownerB}); !operationCode(err, "access_denied") {
 			t.Fatalf("duplicate retained unreadable French locale: %v", err)
 		}
 	})
@@ -311,9 +311,7 @@ func TestDuplicateAuthorizesEveryRetainedLocale(t *testing.T) {
 		application, err := ridu.New(ridu.Config{
 			Name: "Duplicate localized field access", Localization: localization,
 			Collections: []ridu.Collection{{
-				Slug: "posts", Fields: field.Fields{field.Text("secret").Localized().Access(field.Access{Create: func(ctx operation.AccessContext,
-
-				) (bool, error) {
+				Slug: "posts", Fields: field.Fields{field.Text("secret").Localized().Access(field.Access{Create: func(ctx operation.Context) (bool, error) {
 					return ctx.Locale != "fr", nil
 				}})},
 			}},
@@ -321,14 +319,14 @@ func TestDuplicateAuthorizesEveryRetainedLocale(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		source, err := application.Local().Create(context.Background(), "posts", store.Values{"secret": store.String("English")}, nil)
+		source, err := application.Local().Create(context.Background(), "posts", store.Values{"secret": store.String("English")}, ridu.MutationOptions{})
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := application.Local().Update(context.Background(), "posts", source.ID, store.Values{"secret": store.String("French")}, nil, ridu.LocaleOptions{Locale: "fr"}); err != nil {
+		if _, err := application.Local().Update(context.Background(), "posts", source.ID, store.Values{"secret": store.String("French")}, ridu.MutationOptions{Locale: "fr"}); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := application.Local().Duplicate(context.Background(), "posts", source.ID, nil, nil); !fieldAccessIssue(err, "secret.fr") {
+		if _, err := application.Local().Duplicate(context.Background(), "posts", source.ID, nil, ridu.MutationOptions{}); !fieldAccessIssue(err, "secret.fr") {
 			t.Fatalf("duplicate skipped retained-locale field create access: %v", err)
 		}
 	})
@@ -353,19 +351,19 @@ func TestDuplicateAuthorizesEveryRetainedLocale(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		person, err := application.Local().Create(context.Background(), "people", store.Values{"name": store.String("Editor")}, nil)
+		person, err := application.Local().Create(context.Background(), "people", store.Values{"name": store.String("Editor")}, ridu.MutationOptions{})
 		if err != nil {
 			t.Fatal(err)
 		}
-		source, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("Story")}, nil)
+		source, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("Story")}, ridu.MutationOptions{})
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := application.Local().Update(context.Background(), "posts", source.ID, store.Values{"editor": store.String(person.ID)}, nil, ridu.LocaleOptions{Locale: "fr"}); err != nil {
+		if _, err := application.Local().Update(context.Background(), "posts", source.ID, store.Values{"editor": store.String(person.ID)}, ridu.MutationOptions{Locale: "fr"}); err != nil {
 			t.Fatal(err)
 		}
 		personReadable = false
-		if _, err := application.Local().Duplicate(context.Background(), "posts", source.ID, nil, nil); !relationshipIssue(err, "editor.fr") {
+		if _, err := application.Local().Duplicate(context.Background(), "posts", source.ID, nil, ridu.MutationOptions{}); !relationshipIssue(err, "editor.fr") {
 			t.Fatalf("duplicate skipped retained-locale relationship validation: %v", err)
 		}
 	})
@@ -391,20 +389,20 @@ func TestLocalizedInverseJoinUsesTheRequestedLocale(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	category, err := application.Local().Create(ctx, "categories", store.Values{"name": store.String("News")}, nil)
+	category, err := application.Local().Create(ctx, "categories", store.Values{"name": store.String("News")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	post, err := application.Local().Create(ctx, "posts", store.Values{
 		"title": store.String("English title"), "category": store.String(category.ID),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Update(ctx, "posts", post.ID, store.Values{"title": store.String("Titre français")}, nil, ridu.LocaleOptions{Locale: "fr"}); err != nil {
+	if _, err := application.Local().Update(ctx, "posts", post.ID, store.Values{"title": store.String("Titre français")}, ridu.MutationOptions{Locale: "fr"}); err != nil {
 		t.Fatal(err)
 	}
-	found, err := application.Local().Find(ctx, "categories", category.ID, nil, ridu.LocaleOptions{Locale: "fr"})
+	found, err := application.Local().Find(ctx, "categories", category.ID, ridu.FindOptions{Locale: "fr"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -419,15 +417,15 @@ func TestLocalizedInverseJoinUsesTheRequestedLocale(t *testing.T) {
 	if title, _ := joinedPost.Values["title"].StringValue(); title != "Titre français" {
 		t.Fatalf("localized joined title = %q", title)
 	}
-	unlinked, err := application.Local().Create(ctx, "posts", store.Values{"title": store.String("Second English title")}, nil)
+	unlinked, err := application.Local().Create(ctx, "posts", store.Values{"title": store.String("Second English title")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Update(ctx, "posts", unlinked.ID, store.Values{"title": store.String("Second titre français")}, nil, ridu.LocaleOptions{Locale: "fr"}); err != nil {
+	if _, err := application.Local().Update(ctx, "posts", unlinked.ID, store.Values{"title": store.String("Second titre français")}, ridu.MutationOptions{Locale: "fr"}); err != nil {
 		t.Fatal(err)
 	}
 	updateLocale = ""
-	mutated, err := application.Local().MutateJoin(ctx, "categories", category.ID, "posts", []string{unlinked.ID}, nil, nil, ridu.LocaleOptions{Locale: "fr"})
+	mutated, err := application.Local().MutateJoin(ctx, "categories", category.ID, "posts", []string{unlinked.ID}, nil, ridu.MutationOptions{Locale: "fr"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -589,7 +587,7 @@ func TestLocalizedDescendantsPreserveSharedNestedStructure(t *testing.T) {
 		"seo":    store.Object(store.Values{"title": store.String("Home"), "slug": store.String("home")}),
 		"links":  store.List(store.Object(store.Values{"_key": store.String("link-1"), "label": store.String("About"), "href": store.String("/about")})),
 		"layout": store.List(store.Object(store.Values{"_key": store.String("block-1"), "blockType": store.String("hero"), "heading": store.String("Welcome"), "theme": store.String("dark")})),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -597,15 +595,15 @@ func TestLocalizedDescendantsPreserveSharedNestedStructure(t *testing.T) {
 		"seo":    store.Object(store.Values{"title": store.String("Accueil"), "slug": store.String("home")}),
 		"links":  store.List(store.Object(store.Values{"_key": store.String("link-1"), "label": store.String("À propos"), "href": store.String("/about")})),
 		"layout": store.List(store.Object(store.Values{"_key": store.String("block-1"), "blockType": store.String("hero"), "heading": store.String("Bienvenue"), "theme": store.String("dark")})),
-	}, nil, ridu.LocaleOptions{Locale: "fr"})
+	}, ridu.MutationOptions{Locale: "fr"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	english, err := application.Local().Find(ctx, "pages", created.ID, nil, ridu.LocaleOptions{Locale: "en"})
+	english, err := application.Local().Find(ctx, "pages", created.ID, ridu.FindOptions{Locale: "en"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	french, err := application.Local().Find(ctx, "pages", created.ID, nil, ridu.LocaleOptions{Locale: "fr"})
+	french, err := application.Local().Find(ctx, "pages", created.ID, ridu.FindOptions{Locale: "fr"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -621,7 +619,7 @@ func TestLocalizedDescendantsPreserveSharedNestedStructure(t *testing.T) {
 	if french.LocalizationSources["seo.title"] != "fr" || french.LocalizationSources["links.0.label"] != "fr" || french.LocalizationSources["layout.0.heading"] != "fr" {
 		t.Fatalf("nested localization sources = %#v", french.LocalizationSources)
 	}
-	all, err := application.Local().Find(ctx, "pages", created.ID, nil, ridu.LocaleOptions{AllLocales: true})
+	all, err := application.Local().Find(ctx, "pages", created.ID, ridu.FindOptions{AllLocales: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -655,15 +653,15 @@ func TestCopyLocalePreservesGeneratedStructuredRowKeys(t *testing.T) {
 		"layout": store.List(store.Object(store.Values{
 			"blockType": store.String("hero"), "heading": store.String("Welcome"), "theme": store.String("dark"),
 		})),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = application.Local().CopyLocale(context.Background(), "pages", created.ID, "en", "fr", created.Revision, nil)
+	_, err = application.Local().CopyLocale(context.Background(), "pages", created.ID, "en", "fr", ridu.MutationOptions{ExpectedRevision: created.Revision})
 	if err != nil {
 		t.Fatal(err)
 	}
-	current, err := application.Local().Find(context.Background(), "pages", created.ID, nil, ridu.LocaleOptions{Locale: "fr", DisableFallback: true})
+	current, err := application.Local().Find(context.Background(), "pages", created.ID, ridu.FindOptions{Locale: "fr", DisableFallback: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -687,9 +685,7 @@ func TestAllLocalesFieldAccessTraversesLocalizedContainers(t *testing.T) {
 		path   string
 	}
 	var observations []observation
-	readSecret := func(ctx operation.AccessContext,
-
-	) (bool, error) {
+	readSecret := func(ctx operation.Context) (bool, error) {
 		observations = append(observations, observation{locale: ctx.Locale, path: string(ctx.OccurrenceID)})
 		return ctx.Locale == "en", nil
 	}
@@ -712,7 +708,7 @@ func TestAllLocalesFieldAccessTraversesLocalizedContainers(t *testing.T) {
 		"details": store.Object(store.Values{"secret": store.String("English secret"), "public": store.String("English public")}),
 		"rows":    store.List(store.Object(store.Values{"secret": store.String("English row secret"), "public": store.String("English row public")})),
 		"layout":  store.List(store.Object(store.Values{"blockType": store.String("hero"), "secret": store.String("English block secret"), "public": store.String("English block public")})),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -721,12 +717,12 @@ func TestAllLocalesFieldAccessTraversesLocalizedContainers(t *testing.T) {
 		"details": store.Object(store.Values{"secret": store.String("French secret"), "public": store.String("French public")}),
 		"rows":    store.List(store.Object(store.Values{"secret": store.String("French row secret"), "public": store.String("French row public")})),
 		"layout":  store.List(store.Object(store.Values{"blockType": store.String("hero"), "secret": store.String("French block secret"), "public": store.String("French block public")})),
-	}, nil, ridu.LocaleOptions{Locale: "fr"}); err != nil {
+	}, ridu.MutationOptions{Locale: "fr"}); err != nil {
 		t.Fatal(err)
 	}
 
 	observations = nil
-	all, err := application.Local().Find(ctx, "pages", created.ID, nil, ridu.LocaleOptions{AllLocales: true})
+	all, err := application.Local().Find(ctx, "pages", created.ID, ridu.FindOptions{AllLocales: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -787,16 +783,12 @@ func TestAllLocalesFieldAccessTraversesLocalizedContainers(t *testing.T) {
 }
 
 func TestAllLocalesFieldAccessProjectsSiblingDataAndDocumentPerLocale(t *testing.T) {
-	readFromDocument := func(ctx operation.AccessContext,
-
-	) (bool, error) {
+	readFromDocument := func(ctx operation.Context) (bool, error) {
 		hidden, _ := ctx.Root.Get("hidden").
 			BooleanValue()
 		return !hidden, nil
 	}
-	readFromSiblings := func(ctx operation.AccessContext,
-
-	) (bool, error) {
+	readFromSiblings := func(ctx operation.Context) (bool, error) {
 		hidden, _ := ctx.Siblings.Get("hidden").
 			BooleanValue()
 		return !hidden, nil
@@ -823,7 +815,7 @@ func TestAllLocalesFieldAccessProjectsSiblingDataAndDocumentPerLocale(t *testing
 		"layout": store.List(store.Object(store.Values{
 			"_key": store.String("block-1"), "blockType": store.String("hero"), "hidden": store.Boolean(false), "secret": store.String("English block secret"),
 		})),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -836,10 +828,10 @@ func TestAllLocalesFieldAccessProjectsSiblingDataAndDocumentPerLocale(t *testing
 		"layout": store.List(store.Object(store.Values{
 			"_key": store.String("block-1"), "blockType": store.String("hero"), "hidden": store.Boolean(true), "secret": store.String("French block secret"),
 		})),
-	}, nil, ridu.LocaleOptions{Locale: "fr"}); err != nil {
+	}, ridu.MutationOptions{Locale: "fr"}); err != nil {
 		t.Fatal(err)
 	}
-	all, err := application.Local().Find(context.Background(), "pages", created.ID, nil, ridu.LocaleOptions{AllLocales: true})
+	all, err := application.Local().Find(context.Background(), "pages", created.ID, ridu.FindOptions{AllLocales: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -887,9 +879,7 @@ func TestFieldRedactionRemovesFallbackLocalizationProvenance(t *testing.T) {
 			{Code: "en", Label: "English"}, {Code: "fr", Label: "French", FallbackLocales: []schema.LocaleCode{"en"}},
 		}},
 		Collections: []ridu.Collection{{
-			Slug: "posts", Fields: field.Fields{field.Text("title").Localized(), field.Text("secret").Localized().Access(field.Access{Read: func(operation.AccessContext,
-
-			) (bool, error) {
+			Slug: "posts", Fields: field.Fields{field.Text("title").Localized(), field.Text("secret").Localized().Access(field.Access{Read: func(operation.Context) (bool, error) {
 				return false, nil
 			}})},
 		}},
@@ -899,11 +889,11 @@ func TestFieldRedactionRemovesFallbackLocalizationProvenance(t *testing.T) {
 	}
 	created, err := application.Local().Create(context.Background(), "posts", store.Values{
 		"title": store.String("Public"), "secret": store.String("Hidden"),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	french, err := application.Local().Find(context.Background(), "posts", created.ID, nil, ridu.LocaleOptions{Locale: "fr"})
+	french, err := application.Local().Find(context.Background(), "posts", created.ID, ridu.FindOptions{Locale: "fr"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -927,9 +917,7 @@ func TestPopulationSelectionRemovesUnselectedFallbackLocalizationProvenance(t *t
 		Collections: []ridu.Collection{
 			{
 				Slug: "people",
-				Fields: field.Fields{field.Text("name").Localized(), field.Text("secret").Localized().Access(field.Access{Read: func(operation.AccessContext,
-
-				) (bool, error) {
+				Fields: field.Fields{field.Text("name").Localized(), field.Text("secret").Localized().Access(field.Access{Read: func(operation.Context) (bool, error) {
 					return false, nil
 				}})},
 			},
@@ -942,18 +930,18 @@ func TestPopulationSelectionRemovesUnselectedFallbackLocalizationProvenance(t *t
 	ctx := context.Background()
 	person, err := application.Local().Create(ctx, "people", store.Values{
 		"name": store.String("Public"), "secret": store.String("Hidden"),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	post, err := application.Local().Create(ctx, "posts", store.Values{"editor": store.String(person.ID)}, nil)
+	post, err := application.Local().Create(ctx, "posts", store.Values{"editor": store.String(person.ID)}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	editor, _ := query.NewPath("editor")
 	name, _ := query.NewPath("name")
 
-	metadataOnly, err := application.Local().FindWithOptions(ctx, "posts", post.ID, ridu.FindOptions{
+	metadataOnly, err := application.Local().Find(ctx, "posts", post.ID, ridu.FindOptions{
 		Locale: "fr", Populate: []query.Population{{Path: editor, Select: []query.Path{}}},
 	})
 	if err != nil {
@@ -964,7 +952,7 @@ func TestPopulationSelectionRemovesUnselectedFallbackLocalizationProvenance(t *t
 		t.Fatalf("metadata-only populated target = %#v", metadataTarget)
 	}
 
-	selected, err := application.Local().FindWithOptions(ctx, "posts", post.ID, ridu.FindOptions{
+	selected, err := application.Local().Find(ctx, "posts", post.ID, ridu.FindOptions{
 		Locale: "fr", Populate: []query.Population{{Path: editor, Select: []query.Path{name}}},
 	})
 	if err != nil {
@@ -1026,9 +1014,7 @@ func TestLocalizedVersionRestoreAuthorizesEveryPersistedLocale(t *testing.T) {
 		}},
 		Collections: []ridu.Collection{{
 			Slug: "posts", Versions: true,
-			Fields: field.Fields{field.Text("secret").Localized().Access(field.Access{Update: func(ctx operation.AccessContext,
-
-			) (bool, error) {
+			Fields: field.Fields{field.Text("secret").Localized().Access(field.Access{Update: func(ctx operation.Context) (bool, error) {
 				if observeOriginalLocales &&
 					true {
 					originalByLocale[ctx.Locale] = stringValue(ctx.Prior.Get("secret"))
@@ -1076,26 +1062,26 @@ func TestLocalizedVersionRestoreAuthorizesEveryPersistedLocale(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	document, err := application.Local().Create(ctx, "posts", store.Values{"secret": store.String("Old")}, nil)
+	document, err := application.Local().Create(ctx, "posts", store.Values{"secret": store.String("Old")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	document, err = application.Local().PublishChanges(ctx, "posts", document.ID, store.Values{"secret": store.String("Ancien")}, document.Revision, nil, ridu.LocaleOptions{Locale: "fr"})
+	document, err = application.Local().PublishChanges(ctx, "posts", document.ID, store.Values{"secret": store.String("Ancien")}, ridu.MutationOptions{ExpectedRevision: document.Revision, Locale: "fr"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	restoreRevision := document.Revision
-	document, err = application.Local().PublishChanges(ctx, "posts", document.ID, store.Values{"secret": store.String("New")}, document.Revision, nil, ridu.LocaleOptions{Locale: "en"})
+	document, err = application.Local().PublishChanges(ctx, "posts", document.ID, store.Values{"secret": store.String("New")}, ridu.MutationOptions{ExpectedRevision: document.Revision, Locale: "en"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	mutateBeforeValidate = true
-	if _, err := application.Local().Restore(ctx, "posts", document.ID, restoreRevision, document.Revision, nil, ridu.LocaleOptions{Locale: "en"}); !fieldAccessIssue(err, "secret.en") {
+	if _, err := application.Local().Restore(ctx, "posts", document.ID, restoreRevision, ridu.MutationOptions{ExpectedRevision: document.Revision, Locale: "en"}); !fieldAccessIssue(err, "secret.en") {
 		t.Fatalf("post-before-validate field access error = %v", err)
 	}
 	mutateBeforeValidate = false
 	denyCollection = true
-	if _, err := application.Local().Restore(ctx, "posts", document.ID, restoreRevision, document.Revision, nil, ridu.LocaleOptions{Locale: "en"}); !operationCode(err, "access_denied") {
+	if _, err := application.Local().Restore(ctx, "posts", document.ID, restoreRevision, ridu.MutationOptions{ExpectedRevision: document.Revision, Locale: "en"}); !operationCode(err, "access_denied") {
 		t.Fatalf("collection-filtered restore error = %v", err)
 	}
 	if len(collectionLocales) != 2 || collectionLocales[0] != "en" || collectionLocales[1] != "fr" {
@@ -1105,7 +1091,7 @@ func TestLocalizedVersionRestoreAuthorizesEveryPersistedLocale(t *testing.T) {
 	denyUpdate = true
 	for _, options := range []ridu.LocaleOptions{{Locale: "fr"}, {AllLocales: true}} {
 		deniedLocales = nil
-		if _, err := application.Local().Restore(ctx, "posts", document.ID, restoreRevision, document.Revision, nil, options); !fieldAccessIssue(err, "secret.fr") {
+		if _, err := application.Local().Restore(ctx, "posts", document.ID, restoreRevision, ridu.MutationOptions{ExpectedRevision: document.Revision, Locale: options.Locale, FallbackLocales: options.FallbackLocales, DisableFallback: options.DisableFallback, AllLocales: options.AllLocales}); !fieldAccessIssue(err, "secret.fr") {
 			t.Fatalf("restore with %#v error = %v", options, err)
 		}
 		if len(deniedLocales) != 2 || deniedLocales[0] != "en" || deniedLocales[1] != "fr" {
@@ -1113,7 +1099,7 @@ func TestLocalizedVersionRestoreAuthorizesEveryPersistedLocale(t *testing.T) {
 		}
 	}
 	denyUpdate = false
-	current, err := application.Local().Find(ctx, "posts", document.ID, nil, ridu.LocaleOptions{AllLocales: true})
+	current, err := application.Local().Find(ctx, "posts", document.ID, ridu.FindOptions{AllLocales: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1122,12 +1108,12 @@ func TestLocalizedVersionRestoreAuthorizesEveryPersistedLocale(t *testing.T) {
 		t.Fatalf("denied restore changed localized values: %#v", secrets)
 	}
 	mutateRestore = true
-	restored, err := application.Local().Restore(ctx, "posts", document.ID, restoreRevision, document.Revision, nil, ridu.LocaleOptions{Locale: "fr"})
+	restored, err := application.Local().Restore(ctx, "posts", document.ID, restoreRevision, ridu.MutationOptions{ExpectedRevision: document.Revision, Locale: "fr"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	mutateRestore = false
-	restoredAll, err := application.Local().Find(ctx, "posts", restored.ID, nil, ridu.LocaleOptions{AllLocales: true})
+	restoredAll, err := application.Local().Find(ctx, "posts", restored.ID, ridu.FindOptions{AllLocales: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1137,7 +1123,7 @@ func TestLocalizedVersionRestoreAuthorizesEveryPersistedLocale(t *testing.T) {
 	}
 	observeAllLocaleRestore = true
 	observeOriginalLocales = true
-	if _, err := application.Local().Restore(ctx, "posts", restored.ID, restoreRevision, restored.Revision, nil, ridu.LocaleOptions{AllLocales: true}); err != nil {
+	if _, err := application.Local().Restore(ctx, "posts", restored.ID, restoreRevision, ridu.MutationOptions{ExpectedRevision: restored.Revision, AllLocales: true}); err != nil {
 		t.Fatal(err)
 	}
 	observeOriginalLocales = false
@@ -1198,33 +1184,33 @@ func TestLocalizedVersionRestoreValidatesEveryRelationshipLocale(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	public, err := application.Local().Create(ctx, "people", store.Values{"name": store.String("Public")}, nil)
+	public, err := application.Local().Create(ctx, "people", store.Values{"name": store.String("Public")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	publicID = public.ID
-	private, err := application.Local().Create(ctx, "people", store.Values{"name": store.String("Private")}, nil)
+	private, err := application.Local().Create(ctx, "people", store.Values{"name": store.String("Private")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	post, err := application.Local().Create(ctx, "posts", store.Values{"title": store.String("Story"), "editor": store.String(public.ID)}, nil)
+	post, err := application.Local().Create(ctx, "posts", store.Values{"title": store.String("Story"), "editor": store.String(public.ID)}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	post, err = application.Local().PublishChanges(ctx, "posts", post.ID, store.Values{"editor": store.String(private.ID)}, post.Revision, nil, ridu.LocaleOptions{Locale: "fr"})
+	post, err = application.Local().PublishChanges(ctx, "posts", post.ID, store.Values{"editor": store.String(private.ID)}, ridu.MutationOptions{ExpectedRevision: post.Revision, Locale: "fr"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	restoreRevision := post.Revision
-	post, err = application.Local().PublishChanges(ctx, "posts", post.ID, store.Values{"editor": store.String(public.ID)}, post.Revision, nil, ridu.LocaleOptions{Locale: "fr"})
+	post, err = application.Local().PublishChanges(ctx, "posts", post.ID, store.Values{"editor": store.String(public.ID)}, ridu.MutationOptions{ExpectedRevision: post.Revision, Locale: "fr"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	restrictTargets = true
-	if _, err := application.Local().Restore(ctx, "posts", post.ID, restoreRevision, post.Revision, nil, ridu.LocaleOptions{Locale: "en"}); !relationshipIssue(err, "editor.fr") {
+	if _, err := application.Local().Restore(ctx, "posts", post.ID, restoreRevision, ridu.MutationOptions{ExpectedRevision: post.Revision, Locale: "en"}); !relationshipIssue(err, "editor.fr") {
 		t.Fatalf("localized relationship restore error = %v", err)
 	}
-	current, err := application.Local().Find(ctx, "posts", post.ID, nil, ridu.LocaleOptions{AllLocales: true})
+	current, err := application.Local().Find(ctx, "posts", post.ID, ridu.FindOptions{AllLocales: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1243,9 +1229,7 @@ func TestExactLocaleRestorePopulationDoesNotExposeOtherTargetLocales(t *testing.
 		Collections: []ridu.Collection{
 			{
 				Slug: "people",
-				Fields: field.Fields{field.Text("name").Localized(), field.Text("secret").Localized().Access(field.Access{Read: func(ctx operation.AccessContext,
-
-				) (bool, error) {
+				Fields: field.Fields{field.Text("name").Localized(), field.Text("secret").Localized().Access(field.Access{Read: func(ctx operation.Context) (bool, error) {
 					return ctx.Locale == "fr", nil
 				}})},
 			},
@@ -1256,24 +1240,24 @@ func TestExactLocaleRestorePopulationDoesNotExposeOtherTargetLocales(t *testing.
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	person, err := application.Local().Create(ctx, "people", store.Values{"name": store.String("English"), "secret": store.String("english-secret")}, nil)
+	person, err := application.Local().Create(ctx, "people", store.Values{"name": store.String("English"), "secret": store.String("english-secret")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Update(ctx, "people", person.ID, store.Values{"name": store.String("French"), "secret": store.String("french-secret")}, nil, ridu.LocaleOptions{Locale: "fr"}); err != nil {
+	if _, err := application.Local().Update(ctx, "people", person.ID, store.Values{"name": store.String("French"), "secret": store.String("french-secret")}, ridu.MutationOptions{Locale: "fr"}); err != nil {
 		t.Fatal(err)
 	}
-	post, err := application.Local().Create(ctx, "posts", store.Values{"title": store.String("First"), "editor": store.String(person.ID)}, nil)
+	post, err := application.Local().Create(ctx, "posts", store.Values{"title": store.String("First"), "editor": store.String(person.ID)}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	restoreRevision := post.Revision
-	post, err = application.Local().PublishChanges(ctx, "posts", post.ID, store.Values{"title": store.String("Second")}, post.Revision, nil)
+	post, err = application.Local().PublishChanges(ctx, "posts", post.ID, store.Values{"title": store.String("Second")}, ridu.MutationOptions{ExpectedRevision: post.Revision})
 	if err != nil {
 		t.Fatal(err)
 	}
 	editorPath, _ := query.NewPath("editor")
-	restored, err := application.Local().RestoreVersionWithOptions(ctx, "posts", post.ID, restoreRevision, false, ridu.MutationOptions{
+	restored, err := application.Local().Restore(ctx, "posts", post.ID, restoreRevision, ridu.MutationOptions{
 		ExpectedRevision: post.Revision, Locale: "fr", Populate: []query.Population{{Path: editorPath}},
 	})
 	if err != nil {
@@ -1302,19 +1286,19 @@ func TestLocalizedRelationshipPopulationUsesTheSameEmptyStringFallbackAsProjecti
 	if err != nil {
 		t.Fatal(err)
 	}
-	person, err := application.Local().Create(context.Background(), "people", store.Values{"name": store.String("Editor")}, nil)
+	person, err := application.Local().Create(context.Background(), "people", store.Values{"name": store.String("Editor")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	post, err := application.Local().Create(context.Background(), "posts", store.Values{"editor": store.String(person.ID)}, nil)
+	post, err := application.Local().Create(context.Background(), "posts", store.Values{"editor": store.String(person.ID)}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Update(context.Background(), "posts", post.ID, store.Values{"editor": store.String("")}, nil, ridu.LocaleOptions{Locale: "fr"}); err != nil {
+	if _, err := application.Local().Update(context.Background(), "posts", post.ID, store.Values{"editor": store.String("")}, ridu.MutationOptions{Locale: "fr"}); err != nil {
 		t.Fatal(err)
 	}
 	editor, _ := query.NewPath("editor")
-	fallback, err := application.Local().FindWithOptions(context.Background(), "posts", post.ID, ridu.FindOptions{
+	fallback, err := application.Local().Find(context.Background(), "posts", post.ID, ridu.FindOptions{
 		Locale: "fr", Populate: []query.Population{{Path: editor}},
 	})
 	if err != nil {
@@ -1324,7 +1308,7 @@ func TestLocalizedRelationshipPopulationUsesTheSameEmptyStringFallbackAsProjecti
 	if !valid || populated.ID != person.ID || stringValue(populated.Values["name"]) != "Editor" || fallback.LocalizationSources["editor"] != "en" {
 		t.Fatalf("fallback relationship population = %#v with sources %#v", fallback.Values["editor"], fallback.LocalizationSources)
 	}
-	exact, err := application.Local().FindWithOptions(context.Background(), "posts", post.ID, ridu.FindOptions{
+	exact, err := application.Local().Find(context.Background(), "posts", post.ID, ridu.FindOptions{
 		Locale: "fr", DisableFallback: true, Populate: []query.Population{{Path: editor}},
 	})
 	if err != nil {
@@ -1359,19 +1343,19 @@ func TestAllLocalesPopulationRequiresTargetAccessForEveryLocale(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	person, err := application.Local().Create(ctx, "people", store.Values{"name": store.String("Public")}, nil)
+	person, err := application.Local().Create(ctx, "people", store.Values{"name": store.String("Public")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	post, err := application.Local().Create(ctx, "posts", store.Values{"title": store.String("Story"), "editor": store.String(person.ID)}, nil)
+	post, err := application.Local().Create(ctx, "posts", store.Values{"title": store.String("Story"), "editor": store.String(person.ID)}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Update(ctx, "people", person.ID, store.Values{"name": store.String("Private")}, nil, ridu.LocaleOptions{Locale: "fr"}); err != nil {
+	if _, err := application.Local().Update(ctx, "people", person.ID, store.Values{"name": store.String("Private")}, ridu.MutationOptions{Locale: "fr"}); err != nil {
 		t.Fatal(err)
 	}
 	editor, _ := query.NewPath("editor")
-	english, err := application.Local().FindWithOptions(ctx, "posts", post.ID, ridu.FindOptions{
+	english, err := application.Local().Find(ctx, "posts", post.ID, ridu.FindOptions{
 		Locale: "en", Populate: []query.Population{{Path: editor}},
 	})
 	if err != nil {
@@ -1380,7 +1364,7 @@ func TestAllLocalesPopulationRequiresTargetAccessForEveryLocale(t *testing.T) {
 	if populated, ok := english.Values["editor"].CopyDocument(); !ok || stringValue(populated.Values["name"]) != "Public" {
 		t.Fatalf("English populated target = %#v", english.Values["editor"])
 	}
-	all, err := application.Local().FindWithOptions(ctx, "posts", post.ID, ridu.FindOptions{
+	all, err := application.Local().Find(ctx, "posts", post.ID, ridu.FindOptions{
 		AllLocales: true, Populate: []query.Population{{Path: editor}},
 	})
 	if err != nil {
@@ -1436,21 +1420,21 @@ func TestAllLocalesStatusHooksReceiveLocaleProjectedPopulatedTargets(t *testing.
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	person, err := application.Local().Create(ctx, "people", store.Values{"name": store.String("Editor")}, nil)
+	person, err := application.Local().Create(ctx, "people", store.Values{"name": store.String("Editor")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Update(ctx, "people", person.ID, store.Values{"name": store.String("Éditrice")}, nil, ridu.LocaleOptions{Locale: "fr"}); err != nil {
+	if _, err := application.Local().Update(ctx, "people", person.ID, store.Values{"name": store.String("Éditrice")}, ridu.MutationOptions{Locale: "fr"}); err != nil {
 		t.Fatal(err)
 	}
 	post, err := application.Local().Create(ctx, "posts", store.Values{
 		"title": store.String("Story"), "editor": store.String(person.ID),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	editorPath, _ := query.NewPath("editor")
-	published, err := application.Local().PublishWithOptions(ctx, "posts", post.ID, ridu.MutationOptions{
+	published, err := application.Local().Publish(ctx, "posts", post.ID, ridu.MutationOptions{
 		ExpectedRevision: post.Revision, AllLocales: true,
 		Populate: []query.Population{{Path: editorPath}},
 	})
@@ -1490,25 +1474,25 @@ func TestLocalizedRelationshipPopulationUsesTheRequestLocale(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	alice, err := application.Local().Create(ctx, "people", store.Values{"name": store.String("Alice")}, nil)
+	alice, err := application.Local().Create(ctx, "people", store.Values{"name": store.String("Alice")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Update(ctx, "people", alice.ID, store.Values{"name": store.String("Alicia")}, nil, ridu.LocaleOptions{Locale: "fr"}); err != nil {
+	if _, err := application.Local().Update(ctx, "people", alice.ID, store.Values{"name": store.String("Alicia")}, ridu.MutationOptions{Locale: "fr"}); err != nil {
 		t.Fatal(err)
 	}
-	bob, err := application.Local().Create(ctx, "people", store.Values{"name": store.String("Bob")}, nil)
+	bob, err := application.Local().Create(ctx, "people", store.Values{"name": store.String("Bob")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Update(ctx, "people", bob.ID, store.Values{"name": store.String("Robert")}, nil, ridu.LocaleOptions{Locale: "fr"}); err != nil {
+	if _, err := application.Local().Update(ctx, "people", bob.ID, store.Values{"name": store.String("Robert")}, ridu.MutationOptions{Locale: "fr"}); err != nil {
 		t.Fatal(err)
 	}
-	post, err := application.Local().Create(ctx, "posts", store.Values{"title": store.String("Story"), "editor": store.String(alice.ID)}, nil)
+	post, err := application.Local().Create(ctx, "posts", store.Values{"title": store.String("Story"), "editor": store.String(alice.ID)}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Update(ctx, "posts", post.ID, store.Values{"editor": store.String(bob.ID)}, nil, ridu.LocaleOptions{Locale: "fr"}); err != nil {
+	if _, err := application.Local().Update(ctx, "posts", post.ID, store.Values{"editor": store.String(bob.ID)}, ridu.MutationOptions{Locale: "fr"}); err != nil {
 		t.Fatal(err)
 	}
 	editor, _ := query.NewPath("editor")

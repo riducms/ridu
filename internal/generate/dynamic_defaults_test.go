@@ -17,11 +17,11 @@ import (
 func TestDynamicDefaultsGenerateWithoutExecutingCallbacks(t *testing.T) {
 	build := func() schema.Manifest {
 		manifest, err := core.Resolve(core.Config{Name: "Dynamic contract", Collections: []core.Collection{{Slug: "posts", Fields: field.Fields{
-			field.Text("title").Required().DefaultFrom(func(operation.DefaultContext) (operation.Value[string], error) {
+			field.Text("title").Required().DefaultFrom(func(operation.Context) (operation.Value[string], error) {
 				t.Fatal("configuration and generation must never execute a default callback")
 				return operation.Present("request-specific-secret"), nil
 			}),
-			field.Text("optional").DefaultFrom(func(operation.DefaultContext) (operation.Value[string], error) {
+			field.Text("optional").DefaultFrom(func(operation.Context) (operation.Value[string], error) {
 				t.Fatal("optional default callback executed during generation")
 				return operation.Empty[string](), nil
 			}),

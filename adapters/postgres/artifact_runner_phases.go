@@ -416,7 +416,7 @@ func assertArtifactPrecondition(ctx context.Context, transaction *sql.Tx, file m
 	if err != nil {
 		return err
 	}
-	if err := assertMigrationPhysicalSchemaForContract(ctx, transaction, before, postgresArtifactSourceContract(file.Artifact)); err != nil {
+	if err := assertPhysicalSchemaForContract(ctx, transaction, before, postgresArtifactSourceContract(file.Artifact)); err != nil {
 		return fmt.Errorf("migration %s precondition: %w", file.Name, err)
 	}
 	return nil
@@ -616,20 +616,6 @@ func executeTransactionStep(ctx context.Context, connection *sql.Conn, transacti
 			return err
 		}
 		return applyContentRename(ctx, transaction, file.Artifact, payload.Rename)
-	case ridumigration.StepPluginSQL:
-		var payload ridumigration.PluginPayload
-		if err := json.Unmarshal(step.Payload, &payload); err != nil {
-			return err
-		}
-		if payload.Plugin.Adapter != schema.PluginDatabaseAdapterPostgres || payload.Plugin.Checksum != ridumigration.PluginStepChecksum(payload.Plugin.Adapter, payload.Plugin.Plugin, payload.Plugin.Version, payload.Plugin.Direction, payload.Plugin.SQL) {
-			return fmt.Errorf("plugin checksum mismatch")
-		}
-		for _, statement := range payload.Plugin.SQL {
-			if _, err := transaction.ExecContext(ctx, statement); err != nil {
-				return err
-			}
-		}
-		return nil
 	case ridumigration.StepRetireResources:
 		var payload ridumigration.RetireResourcesPayload
 		if err := json.Unmarshal(step.Payload, &payload); err != nil {
@@ -665,7 +651,7 @@ func executeTransactionStep(ctx context.Context, connection *sql.Conn, transacti
 		if err != nil {
 			return err
 		}
-		return assertMigrationPhysicalSchemaForContract(ctx, transaction, after, postgresArtifactTargetContract(file.Artifact))
+		return assertPhysicalSchemaForContract(ctx, transaction, after, postgresArtifactTargetContract(file.Artifact))
 	default:
 		return fmt.Errorf("unsupported transaction executor %q", step.Kind)
 	}

@@ -60,31 +60,31 @@ func TestPostgresRemovedResourceStateCannotReattachAfterStableIDAndDocumentIDReu
 
 	keeperGlobal, err := beforeApp.Local().UpdateGlobal(ctx, "keeper-settings", store.Values{
 		"title": store.String("Keeper settings"),
-	}, 0, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	keeperGlobal, err = beforeApp.Local().PublishGlobal(ctx, "keeper-settings", keeperGlobal.Revision, nil)
+	keeperGlobal, err = beforeApp.Local().PublishGlobal(ctx, "keeper-settings", ridu.MutationOptions{ExpectedRevision: keeperGlobal.Revision})
 	if err != nil {
 		t.Fatal(err)
 	}
 	retiredGlobal, err := beforeApp.Local().UpdateGlobal(ctx, "retired-settings", store.Values{
 		"title": store.String("Old retired settings"),
-	}, 0, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	retiredGlobal, err = beforeApp.Local().UpdateGlobal(ctx, "retired-settings", store.Values{
 		"title": store.String("Old retired settings updated"),
-	}, retiredGlobal.Revision, nil)
+	}, ridu.MutationOptions{ExpectedRevision: retiredGlobal.Revision})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := beforeApp.Local().PublishGlobal(ctx, "retired-settings", retiredGlobal.Revision, nil); err != nil {
+	if _, err := beforeApp.Local().PublishGlobal(ctx, "retired-settings", ridu.MutationOptions{ExpectedRevision: retiredGlobal.Revision}); err != nil {
 		t.Fatal(err)
 	}
 
-	keeper, err := beforeApp.CreateAuthUser(ctx, "keepers", store.Values{"email": store.String("keeper@example.test")}, "keeper-password", nil)
+	keeper, err := beforeApp.CreateAuthUser(ctx, "keepers", store.Values{"email": store.String("keeper@example.test")}, "keeper-password", ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,22 +105,22 @@ func TestPostgresRemovedResourceStateCannotReattachAfterStableIDAndDocumentIDReu
 	}
 	media, err := beforeApp.Local().Import(ctx, "media", collectionRetirementUploadValues(oldObjectKey), ridu.ImportOptions{
 		ID: mediaID, Status: store.StatusPublished,
-	}, nil)
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	retiredUser, err := beforeApp.CreateAuthUser(ctx, "retired-users", store.Values{
 		"email": store.String("old@example.test"), "avatar": store.String(mediaID),
-	}, "old-password-value", nil)
+	}, "old-password-value", ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	retiredUser, err = beforeApp.Local().Update(ctx, "retired-users", retiredUser.ID, store.Values{"email": store.String("old-updated@example.test")}, nil)
+	retiredUser, err = beforeApp.Local().Update(ctx, "retired-users", retiredUser.ID, store.Values{"email": store.String("old-updated@example.test")}, ridu.MutationOptions{})
 	if err != nil || retiredUser.Revision < 2 {
 		t.Fatalf("seed retired user revision = %#v, %v", retiredUser, err)
 	}
-	retiredUser, err = beforeApp.Local().Publish(ctx, "retired-users", retiredUser.ID, retiredUser.Revision, nil)
+	retiredUser, err = beforeApp.Local().Publish(ctx, "retired-users", retiredUser.ID, ridu.MutationOptions{ExpectedRevision: retiredUser.Revision})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,7 +146,7 @@ func TestPostgresRemovedResourceStateCannotReattachAfterStableIDAndDocumentIDReu
 
 	entry, err := beforeApp.Local().Import(ctx, "entries", store.Values{
 		"title": store.String("surviving owner"), "retiredUser": store.String(retiredUser.ID),
-	}, ridu.ImportOptions{ID: "surviving-entry", Status: store.StatusPublished}, nil)
+	}, ridu.ImportOptions{ID: "surviving-entry", Status: store.StatusPublished})
 	if err != nil {
 		t.Fatalf("seed surviving references: %#v", err)
 	}
@@ -165,11 +165,11 @@ func TestPostgresRemovedResourceStateCannotReattachAfterStableIDAndDocumentIDReu
 		!hasRiskCode(hiddenReferenceSafety.Risks, "RIDU_REFERENCE_SHAPE_DECREASE_UNSAFE") {
 		t.Fatalf("multi-artifact reference hiding was not rejected: %#v, %v", hiddenReferenceSafety, hiddenReferenceError)
 	}
-	entryVersions, err := beforeApp.Local().Versions(ctx, "entries", entry.ID, nil)
+	entryVersions, err := beforeApp.Local().Versions(ctx, "entries", entry.ID, ridu.FindOptions{})
 	if err != nil || len(entryVersions) == 0 || collectionRetirementString(entryVersions[0].Snapshot.Values["retiredUser"]) != retiredUser.ID {
 		t.Fatalf("reference-bearing version before rejected transition = %#v, %v", entryVersions, err)
 	}
-	entry, err = beforeApp.Local().Restore(ctx, "entries", entry.ID, entryVersions[0].Revision, entry.Revision, nil)
+	entry, err = beforeApp.Local().Restore(ctx, "entries", entry.ID, entryVersions[0].Revision, ridu.MutationOptions{ExpectedRevision: entry.Revision})
 	if err != nil || collectionRetirementString(entry.Values["retiredUser"]) != retiredUser.ID {
 		t.Fatalf("reference-bearing version restore before retirement = %#v, %v", entry, err)
 	}
@@ -261,11 +261,11 @@ WHERE (owner_collection_id = $1 AND owner_document_id = $2 AND target_collection
 	if err != nil || !preferenceValue["kept"] {
 		t.Fatalf("unrelated preference = %#v, %v", preference, err)
 	}
-	if current, err := afterApp.Local().Global(ctx, "keeper-settings", nil); err != nil ||
+	if current, err := afterApp.Local().Global(ctx, "keeper-settings", ridu.FindOptions{}); err != nil ||
 		current.Revision != keeperGlobal.Revision || collectionRetirementString(current.Values["title"]) != "Keeper settings" {
 		t.Fatalf("unrelated global = %#v, %v", current, err)
 	}
-	if versions, err := afterApp.Local().GlobalVersions(ctx, "keeper-settings", nil); err != nil || len(versions) != 2 {
+	if versions, err := afterApp.Local().GlobalVersions(ctx, "keeper-settings", ridu.FindOptions{}); err != nil || len(versions) != 2 {
 		t.Fatalf("unrelated global versions = %#v, %v", versions, err)
 	}
 
@@ -293,31 +293,31 @@ WHERE (owner_collection_id = $1 AND owner_document_id = $2 AND target_collection
 	if err := backend.pool.QueryRow(ctx, "SELECT count(*) FROM "+quote(collectionTable(globalIDs["retired-settings"]))).Scan(&readdedGlobalRows); err != nil || readdedGlobalRows != 0 {
 		t.Fatalf("readded retired global current rows before first update = %d, %v", readdedGlobalRows, err)
 	}
-	if versions, err := readdedApp.Local().GlobalVersions(ctx, "retired-settings", nil); err != nil || len(versions) != 0 {
+	if versions, err := readdedApp.Local().GlobalVersions(ctx, "retired-settings", ridu.FindOptions{}); err != nil || len(versions) != 0 {
 		t.Fatalf("retired global versions attached after readdition = %#v, %v", versions, err)
 	}
 	newGlobal, err := readdedApp.Local().UpdateGlobal(ctx, "retired-settings", store.Values{
 		"title": store.String("New retired settings"),
-	}, 0, nil)
+	}, ridu.MutationOptions{})
 	if err != nil || newGlobal.Revision != 1 {
 		t.Fatalf("reincarnated global = %#v, %v", newGlobal, err)
 	}
-	if versions, err := readdedApp.Local().GlobalVersions(ctx, "retired-settings", nil); err != nil || len(versions) != 1 ||
+	if versions, err := readdedApp.Local().GlobalVersions(ctx, "retired-settings", ridu.FindOptions{}); err != nil || len(versions) != 1 ||
 		collectionRetirementString(versions[0].Snapshot.Values["title"]) != "New retired settings" {
 		t.Fatalf("reincarnated global versions = %#v, %v", versions, err)
 	}
-	if current, err := readdedApp.Local().Global(ctx, "keeper-settings", nil); err != nil ||
+	if current, err := readdedApp.Local().Global(ctx, "keeper-settings", ridu.FindOptions{}); err != nil ||
 		current.Revision != keeperGlobal.Revision || collectionRetirementString(current.Values["title"]) != "Keeper settings" {
 		t.Fatalf("unrelated global after readdition = %#v, %v", current, err)
 	}
-	if current, err := readdedApp.Local().Find(ctx, "entries", entry.ID, nil); err != nil {
+	if current, err := readdedApp.Local().Find(ctx, "entries", entry.ID, ridu.FindOptions{}); err != nil {
 		t.Fatalf("surviving reference owner after readdition: %v", err)
 	} else if value, exists := current.Values["retiredUser"]; exists && value.Kind() != store.ValueNull {
 		t.Fatalf("retired current relationship value reattached after field readdition: %#v", value)
 	}
 	if _, err := readdedApp.Local().Import(ctx, "retired-users", store.Values{"email": store.String("new@example.test")}, ridu.ImportOptions{
 		ID: retiredUser.ID, Status: store.StatusPublished,
-	}, nil); err != nil {
+	}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := readdedApp.Login(ctx, "retired-users", "new@example.test", "old-password-value"); err == nil {

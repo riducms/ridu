@@ -62,7 +62,7 @@ current collection; relationships to several documents or collection types are n
 | `.DefaultSort(path)`                    | Sets the initial target sort; prefix the path with `-` for descending order.        |
 | `.AllowCreate(true)`                    | Lets an author create and link a target document from the join UI.                  |
 | `.Access(...)` / `.RestrictAccess(...)` | Controls whether the computed join appears in a response.                           |
-| `.ReadHooks(...)`                       | Transforms the returned join output without adding stored data.                     |
+| `.AfterRead(...)`                       | Transforms the returned join output without adding stored data.                     |
 
 Join is computed from the target relationship. It has no default, requiredness, write hook, or
 stored column on the current document.

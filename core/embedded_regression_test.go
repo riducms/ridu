@@ -42,24 +42,24 @@ func TestEmbeddedWholeFieldLocalesHaveIndependentIdentities(t *testing.T) {
 	values := func(kind, title string) store.Values {
 		return store.Values{"body": outline.Value(outline.Widget(kind, "same-key", store.Values{"title": store.String(title)}))}
 	}
-	english, err := app.Local().Create(t.Context(), "pages", values("card", "English"), nil, ridu.LocaleOptions{Locale: "en"})
+	english, err := app.Local().Create(t.Context(), "pages", values("card", "English"), ridu.MutationOptions{Locale: "en"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	fallback, err := app.Local().Find(t.Context(), "pages", english.ID, nil, ridu.LocaleOptions{Locale: "fr"})
+	fallback, err := app.Local().Find(t.Context(), "pages", english.ID, ridu.FindOptions{Locale: "fr"})
 	if err != nil || embeddedString(embeddedPayload(t, fallback.Values["body"], 0), "schema") != "card" {
 		t.Fatalf("fallback: %v", err)
 	}
-	if _, err := app.Local().Update(t.Context(), "pages", english.ID, values("note", "French"), nil, ridu.LocaleOptions{Locale: "fr"}); err != nil {
+	if _, err := app.Local().Update(t.Context(), "pages", english.ID, values("note", "French"), ridu.MutationOptions{Locale: "fr"}); err != nil {
 		t.Fatalf("first French occurrence was correlated with English fallback: %v", err)
 	}
-	_, err = app.Local().Update(t.Context(), "pages", english.ID, values("card", "Invalid replacement"), nil, ridu.LocaleOptions{Locale: "fr"})
+	_, err = app.Local().Update(t.Context(), "pages", english.ID, values("card", "Invalid replacement"), ridu.MutationOptions{Locale: "fr"})
 	var failure *ridu.OperationError
 	if !errors.As(err, &failure) || len(failure.Issues) != 1 || failure.Issues[0].Code != "block_type_identity" || failure.Issues[0].Path != "body.outline.0.content.schema" {
 		t.Fatalf("retained French identity must reject a variant change: %#v, %v", failure, err)
 	}
 	for _, locale := range []string{"en", "fr"} {
-		doc, err := app.Local().Find(t.Context(), "pages", english.ID, nil, ridu.LocaleOptions{Locale: schema.LocaleCode(locale)})
+		doc, err := app.Local().Find(t.Context(), "pages", english.ID, ridu.FindOptions{Locale: schema.LocaleCode(locale)})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -78,7 +78,7 @@ func TestEmbeddedPayloadMetadataIsDeclaredByItsContainer(t *testing.T) {
 	for _, name := range []string{"_key", "blockType"} {
 		t.Run(name, func(t *testing.T) {
 			payload := store.Values{"title": store.String("Valid title"), name: store.Object(store.Values{"undeclared": store.String("content")})}
-			_, err := app.Local().Create(t.Context(), "pages", store.Values{"body": outline.Value(outline.Widget("card", "one", payload))}, nil)
+			_, err := app.Local().Create(t.Context(), "pages", store.Values{"body": outline.Value(outline.Widget("card", "one", payload))}, ridu.MutationOptions{})
 			var failure *ridu.OperationError
 			if !errors.As(err, &failure) || len(failure.Issues) != 1 || failure.Issues[0].Code != "unknown_field" || failure.Issues[0].Path != "body.outline.0.content."+name {
 				t.Fatalf("undeclared metadata: %#v, %v", failure, err)
@@ -86,7 +86,7 @@ func TestEmbeddedPayloadMetadataIsDeclaredByItsContainer(t *testing.T) {
 		})
 	}
 	payload := store.Values{"title": store.String("Valid"), "links": store.List(store.Object(store.Values{"_key": store.String("row"), "label": store.String("Link")})), "ordinary": store.Object(store.Values{"_key": store.String("opaque"), "blockType": store.String("opaque")})}
-	if _, err := app.Local().Create(t.Context(), "pages", store.Values{"body": outline.Value(outline.Widget("card", "one", payload))}, nil); err != nil {
+	if _, err := app.Local().Create(t.Context(), "pages", store.Values{"body": outline.Value(outline.Widget("card", "one", payload))}, ridu.MutationOptions{}); err != nil {
 		t.Fatalf("ordinary row metadata/JSON must still work: %v", err)
 	}
 }

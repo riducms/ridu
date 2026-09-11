@@ -1,8 +1,8 @@
+import { resolveAdminConfig, validateAdminManifest } from "../src/admin";
 import { expect, test } from "bun:test";
 import type { SchemaField } from "@riducms/protocol";
 import { defineFieldEditor } from "../src/editor";
 import { defineAdmin } from "../src/admin";
-import { validateAdminEditors } from "../src/editor/registry";
 
 const field: SchemaField = {
 	id: "accent",
@@ -68,17 +68,17 @@ test("spreading a registration cannot separate its decoder from its field type",
 	const text = defineFieldEditor({ type: "text", component: () => ({}) });
 	const number = defineFieldEditor({ type: "number", component: () => ({}) });
 	expect(() =>
-		defineAdmin({
+		resolveAdminConfig({
 			fields: { "app:color": { ...text, type: "number", component: number.component } },
 		})
 	).toThrow("defineFieldEditor");
-	expect(() => defineAdmin({ fields: { "app:color": text } })).not.toThrow();
+	expect(() => resolveAdminConfig({ fields: { "app:color": text } })).not.toThrow();
 });
 
 test("registration rejects malformed application editor references", () => {
 	const editor = defineFieldEditor({ type: "text", component: () => ({}) });
 	for (const reference of ["bad/name", "app:", "other:color"]) {
-		expect(() => defineAdmin({ fields: { [reference]: editor } })).toThrow(
+		expect(() => resolveAdminConfig({ fields: { [reference]: editor } })).toThrow(
 			"Invalid editor reference"
 		);
 	}
@@ -108,10 +108,10 @@ test("validation traverses nested, block, global and embedded schema and reports
 			},
 		],
 		globals: [{ slug: "settings", fields: [field] }],
-	} as unknown as Parameters<typeof validateAdminEditors>[1];
+	} as unknown as Parameters<typeof validateAdminManifest>[1];
 	let diagnostic = "";
 	try {
-		validateAdminEditors({}, manifest);
+		validateAdminManifest(resolveAdminConfig({}), manifest);
 	} catch (error) {
 		diagnostic = String(error);
 	}
@@ -124,8 +124,10 @@ test("validation traverses nested, block, global and embedded schema and reports
 		expect(diagnostic).toContain(owner);
 	expect(diagnostic).toContain("not registered");
 	expect(() =>
-		validateAdminEditors(
-			{ fields: { "app:color": defineFieldEditor({ type: "text", component: () => ({}) }) } },
+		validateAdminManifest(
+			resolveAdminConfig({
+				fields: { "app:color": defineFieldEditor({ type: "text", component: () => ({}) }) },
+			}),
 			manifest
 		)
 	).not.toThrow();
@@ -149,11 +151,13 @@ test("all configured editor failures identify the resource and unified graph fie
 	const manifest = {
 		collections: [{ slug: "articles", fields: candidates }],
 		globals: [],
-	} as unknown as Parameters<typeof validateAdminEditors>[1];
+	} as unknown as Parameters<typeof validateAdminManifest>[1];
 	let failure = "";
 	try {
-		validateAdminEditors(
-			{ fields: { "app:color": defineFieldEditor({ type: "text", component: () => ({}) }) } },
+		validateAdminManifest(
+			resolveAdminConfig({
+				fields: { "app:color": defineFieldEditor({ type: "text", component: () => ({}) }) },
+			}),
 			manifest
 		);
 	} catch (error) {

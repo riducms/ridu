@@ -17,20 +17,20 @@ func ProductFacts(name string) field.GroupField {
 	return field.Group(name, field.Fields{
 		field.TextList("sellingPoints").Label("Selling points").MinRows(1).MaxRows(8).MaxLength(120).
 			Default("Solid oak", "Five-year warranty").
-			Validate(func(_ operation.ValidationContext, value operation.Value[[]string]) ([]operation.Issue, error) {
+			Validate(func(_ operation.Context, value operation.Value[[]string]) ([]operation.Issue, error) {
 				items, _ := value.Get()
 				if slices.Contains(items, "unverified") {
 					return []operation.Issue{{Code: "unverified_claim", Message: "Check the product claims"}}, nil
 				}
 				return nil, nil
 			}).Hooks(field.Hooks[[]string]{BeforeChange: []field.Transform[[]string]{
-			func(_ operation.WriteContext, value operation.Value[[]string]) (operation.Change[[]string], error) {
+			func(_ operation.Context, value operation.Value[[]string]) (operation.Change[[]string], error) {
 				return operation.Replace(value), nil
 			},
-		}}).Access(field.Access{Update: func(ctx operation.AccessContext) (bool, error) { return ctx.Actor.ID == "editor", nil }}).
+		}}).Access(field.Access{Update: func(ctx operation.Context) (bool, error) { return ctx.Actor.ID == "editor", nil }}).
 			Private("factory", store.String("product-facts")),
 		field.NumberList("availableSizes").Min(0).MaxRows(20).DefaultFrom(
-			func(operation.DefaultContext) (operation.Value[[]float64], error) {
+			func(operation.Context) (operation.Value[[]float64], error) {
 				return operation.Present([]float64{0, 8, 10}), nil
 			}),
 	})
@@ -60,11 +60,11 @@ func TestPrimitiveListConcreteFactoryAndChildRefinement(t *testing.T) {
 	if attachment, ok := field.Snapshot(points).Private("factory"); !ok || attachment.Kind() != store.ValueString {
 		t.Fatal("private attachment lost")
 	}
-	issues, err := points.Validators()[0](operation.ValidationContext{}, operation.Present([]string{"unverified"}))
+	issues, err := points.Validators()[0](operation.Context{}, operation.Present([]string{"unverified"}))
 	if err != nil || len(issues) != 1 || issues[0].Code != "unverified_claim" {
 		t.Fatalf("typed validation: %v %v", issues, err)
 	}
-	allowed, err := points.AccessPolicy().Update(operation.AccessContext{Actor: operation.Actor{ID: "editor"}})
+	allowed, err := points.AccessPolicy().Update(operation.Context{Actor: operation.Actor{ID: "editor"}})
 	if err != nil || !allowed {
 		t.Fatal("access policy lost")
 	}
@@ -93,7 +93,7 @@ func TestPrimitiveListConcreteFactoryAndChildRefinement(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	value, err := numbers.DefaultCallback()(operation.DefaultContext{})
+	value, err := numbers.DefaultCallback()(operation.Context{})
 	if got, ok := value.Get(); err != nil || !ok || !slices.Equal(got, []float64{0, 8, 10}) {
 		t.Fatalf("number list default: %v %v", got, err)
 	}
@@ -146,7 +146,7 @@ func TestPrimitiveListDefaultsSnapshotAndReplacePolicies(t *testing.T) {
 			t.Fatalf("%T literal default = %v", test.node, value)
 		}
 	}
-	dynamic := text.DefaultFrom(func(operation.DefaultContext) (operation.Value[[]string], error) {
+	dynamic := text.DefaultFrom(func(operation.Context) (operation.Value[[]string], error) {
 		return operation.Present([]string{"initial"}), nil
 	})
 	if _, set := field.Snapshot(dynamic).Default(); set || dynamic.DefaultCallback() == nil {
@@ -161,7 +161,7 @@ func TestPrimitiveListDefaultsSnapshotAndReplacePolicies(t *testing.T) {
 	for _, node := range (field.Fields{
 		field.NumberList("n").Default(math.NaN()).Default(0),
 		field.TextList("t").DefaultFrom(nil).Default(),
-		field.NumberList("n").DefaultFrom(nil).DefaultFrom(func(operation.DefaultContext) (operation.Value[[]float64], error) {
+		field.NumberList("n").DefaultFrom(nil).DefaultFrom(func(operation.Context) (operation.Value[[]float64], error) {
 			return operation.Empty[[]float64](), nil
 		}),
 	}) {

@@ -219,13 +219,13 @@ func TestMongoDBUploadDocumentsReferencesPopulationVersionsAndTargetedLookup(t *
 		"content": store.Object(store.Values{
 			"gallery": store.List(store.String(target.ID), store.String(target.ID)),
 		}),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatalf("create upload references: %v", err)
 	}
 	heroPath, _ := query.NewPath("hero")
 	galleryPath, _ := query.NewPath("content", "gallery")
-	populated, err := application.Local().FindWithOptions(t.Context(), "posts", post.ID, ridu.FindOptions{Populate: []query.Population{
+	populated, err := application.Local().Find(t.Context(), "posts", post.ID, ridu.FindOptions{Populate: []query.Population{
 		{Path: heroPath}, {Path: galleryPath},
 	}})
 	if err != nil {
@@ -249,13 +249,13 @@ func TestMongoDBUploadDocumentsReferencesPopulationVersionsAndTargetedLookup(t *
 	if _, err := application.Local().Create(t.Context(), "posts", store.Values{
 		"visibility": store.String("private"), "hero": store.String(target.ID),
 		"content": store.Object(store.Values{"gallery": store.List(store.String(target.ID))}),
-	}, nil); err != nil {
+	}, ridu.MutationOptions{}); err != nil {
 		t.Fatalf("create access-filtered upload owner: %v", err)
 	}
 	corruptOwner, err := application.Local().Create(t.Context(), "posts", store.Values{
 		"visibility": store.String("public"), "hero": store.String(otherTarget.ID),
 		"content": store.Object(store.Values{"gallery": store.List(store.String(otherTarget.ID))}),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatalf("create corruptible upload owner: %v", err)
 	}

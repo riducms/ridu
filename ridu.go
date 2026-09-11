@@ -157,6 +157,8 @@ type (
 	LocaleOptions                = core.LocaleOptions
 	LocalAPI                     = core.LocalAPI
 	MutationOptions              = core.MutationOptions
+	BulkOptions                  = core.BulkOptions
+	TypedMutationOptions         = core.TypedMutationOptions
 	OperationCapabilities        = core.OperationCapabilities
 	OperationError               = core.OperationError
 	AccessCapabilities           = core.AccessCapabilities
@@ -164,16 +166,9 @@ type (
 	PluginDescriptor             = core.PluginDescriptor
 	PluginGenerationContext      = core.PluginGenerationContext
 	PluginGeneratedArtifact      = core.PluginGeneratedArtifact
-	PluginEndpoint               = core.PluginEndpoint
-	PluginEndpointContext        = core.PluginEndpointContext
-	PluginEndpointHandler        = core.PluginEndpointHandler
-	PluginTransport              = core.PluginTransport
 	PluginTransportContext       = core.PluginTransportContext
 	PluginFieldType              = core.PluginFieldType
 	PluginHookContribution       = core.PluginHookContribution
-	PluginDatabaseAdapter        = core.PluginDatabaseAdapter
-	PluginDatabaseContribution   = core.PluginDatabaseContribution
-	PluginMigration              = core.PluginMigration
 	HookProvider                 = core.HookProvider
 	RiduCompatibility            = core.RiduCompatibility
 	PluginFieldValidationContext = core.PluginFieldValidationContext
@@ -209,9 +204,6 @@ const (
 	PluginAPIVersion      = core.PluginAPIVersion
 
 	FrameworkVersion = core.FrameworkVersion
-
-	PluginDatabaseAdapterPostgres = core.PluginDatabaseAdapterPostgres
-	PluginDatabaseAdapterSQLite   = core.PluginDatabaseAdapterSQLite
 
 	AuthOperationLogin             = core.AuthOperationLogin
 	AuthOperationLogout            = core.AuthOperationLogout

@@ -8,7 +8,7 @@ import (
 )
 
 func uppercaseSKU(
-	_ operation.WriteContext,
+	_ operation.Context,
 	value operation.Value[string],
 ) (operation.Change[string], error) {
 	sku, present := value.Get()

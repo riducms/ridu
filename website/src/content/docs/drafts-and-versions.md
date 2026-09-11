@@ -157,16 +157,12 @@ published versioned row returns `publish_required`; Ridu never silently turns a 
 a live publication.
 
 ```go
-published, err := app.Local().Publish(
-	ctx, "posts", post.ID, post.Revision, actor,
-)
+published, err := app.Local().Publish(ctx, "posts", post.ID, ridu.MutationOptions{ExpectedRevision: post.Revision, Actor: actor})
 if err != nil {
 	return err
 }
 
-draft, err := app.Local().Unpublish(
-	ctx, "posts", post.ID, published.Revision, actor,
-)
+draft, err := app.Local().Unpublish(ctx, "posts", post.ID, ridu.MutationOptions{ExpectedRevision: published.Revision, Actor: actor})
 ```
 
 The generated TypeScript client exposes the same intent:
@@ -219,24 +215,17 @@ checks, hooks, localization, and optimistic concurrency. The restored document r
 revision and the restore itself becomes a new snapshot.
 
 ```go
-versions, err := app.Local().Versions(ctx, "posts", post.ID, actor)
+versions, err := app.Local().Versions(ctx, "posts", post.ID, ridu.FindOptions{Actor: actor})
 if err != nil {
 	return err
 }
 
-restored, err := app.Local().Restore(
-	ctx,
-	"posts",
-	post.ID,
-	versions[len(versions)-1].Revision,
-	post.Revision,
-	actor,
-)
+restored, err := app.Local().Restore(ctx, "posts", post.ID, versions[len(versions)-1].Revision, ridu.MutationOptions{ExpectedRevision: post.Revision, Actor: actor})
 ```
 
 `Restore` preserves the selected snapshot's status. `RestoreAsDraft` copies its values but forces
-draft status and therefore requires drafts to be enabled. `RestoreVersionWithOptions` exposes the
-same choice plus exact actor identity, returned population/output selection, revision fence, and
+draft status and therefore requires drafts to be enabled. Both actions take mutation options for
+exact actor identity, returned population/output selection, revision fence, and
 locale controls. Restore first requires version-read permission, then Update plus Publish or
 Unpublish according to the resulting status.
 
@@ -282,10 +271,10 @@ publish/unpublish and version restore, but not scheduled global publishing.
 Globals accept the same `Versions` and `VersionConfig` fields. A missing draft-enabled global reads
 as a schema-shaped draft with defaults; its first `UpdateGlobal` persists revision 1. Use:
 
-- `Global`/`GlobalWithOptions` and `UpdateGlobal`/`UpdateGlobalWithOptions`;
+- `Global` and `UpdateGlobal`;
 - `PublishGlobal` and `UnpublishGlobal`;
 - `GlobalVersions` and `GlobalVersion`;
-- `RestoreGlobal`, `RestoreGlobalAsDraft`, or `RestoreGlobalVersionWithOptions`.
+- `RestoreGlobal` and `RestoreGlobalAsDraft`.
 
 `GlobalAccess.ReadVersions` falls back to `Read`; `GlobalAccess.Publish` and `Unpublish` each fall
 back to `Update` when omitted. A filtered update cannot initialize a missing singleton because

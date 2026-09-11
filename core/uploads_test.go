@@ -420,7 +420,7 @@ func TestUploadValidationDeliveryAndAfterCommitCleanup(t *testing.T) {
 	if string(encoded) != "hello" {
 		t.Fatalf("upload body = %q", encoded)
 	}
-	if _, err := application.Local().Delete(context.Background(), "media", document.ID, actor); err != nil {
+	if _, err := application.Local().Delete(context.Background(), "media", document.ID, ridu.MutationOptions{Actor: actor}); err != nil {
 		t.Fatal(err)
 	}
 	if reader, _, err := backend.Open(context.Background(), key); err != nil {
@@ -436,7 +436,7 @@ func TestUploadValidationDeliveryAndAfterCommitCleanup(t *testing.T) {
 	} else {
 		reader.Close()
 	}
-	if _, err := application.Local().DeletePermanent(context.Background(), "media", document.ID, actor); err != nil {
+	if _, err := application.Local().DeletePermanent(context.Background(), "media", document.ID, ridu.MutationOptions{Actor: actor}); err != nil {
 		t.Fatal(err)
 	}
 	if _, _, err := backend.Open(context.Background(), key); err == nil {
@@ -471,7 +471,7 @@ func TestUploadSpecializedOperationsPreserveExactActorCollection(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	staff, err := application.Local().Create(ctx, "staff", store.Values{"email": store.String("editor@example.test")}, nil)
+	staff, err := application.Local().Create(ctx, "staff", store.Values{"email": store.String("editor@example.test")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -495,7 +495,7 @@ func TestUploadSpecializedOperationsPreserveExactActorCollection(t *testing.T) {
 		t.Fatal(err)
 	}
 	reader.Close()
-	duplicated, err := application.DuplicateForIdentity(ctx, "media", document.ID, store.Values{"alt": store.String("copy")}, identity)
+	duplicated, err := application.DuplicateForIdentity(ctx, "media", document.ID, store.Values{"alt": store.String("copy")}, identity, ridu.LocaleOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -575,7 +575,7 @@ func TestRenamedUploadCollectionDeliversPriorNamespacedObjectWithoutRewritingMet
 	if _, err := application.Local().Import(context.Background(), "assets", store.Values{
 		"filename": store.String("prior.txt"), "mimeType": store.String("text/plain"),
 		"filesize": store.Number(5), "objectKey": store.String(key), "url": store.String(storedURL),
-	}, ridu.ImportOptions{ID: "prior-asset", Status: store.StatusPublished}, nil); err != nil {
+	}, ridu.ImportOptions{ID: "prior-asset", Status: store.StatusPublished}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -625,7 +625,7 @@ func TestRenamedUploadURLFallsBackWhenOldSlugIsReused(t *testing.T) {
 	if _, err := application.Local().Import(context.Background(), "assets", store.Values{
 		"filename": store.String("prior.txt"), "mimeType": store.String("text/plain"),
 		"filesize": store.Number(5), "objectKey": store.String(key), "url": store.String(storedURL),
-	}, ridu.ImportOptions{ID: "prior-asset", Status: store.StatusPublished}, nil); err != nil {
+	}, ridu.ImportOptions{ID: "prior-asset", Status: store.StatusPublished}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -680,7 +680,7 @@ func TestRenamedUploadURLFallbackCannotBypassActualOwnerAccess(t *testing.T) {
 	if _, err := application.Local().Import(context.Background(), "assets", store.Values{
 		"filename": store.String("private.txt"), "mimeType": store.String("text/plain"), "filesize": store.Number(7),
 		"objectKey": store.String(key), "url": store.String("/api/uploads/media/" + key), "owner": store.String("allowed-viewer"),
-	}, ridu.ImportOptions{ID: "private-asset", Status: store.StatusPublished}, nil); err != nil {
+	}, ridu.ImportOptions{ID: "private-asset", Status: store.StatusPublished}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -808,7 +808,7 @@ func TestCommittedDuplicateAndRegenerationObjectsSurviveAfterCommitFailure(t *te
 		t.Fatal(err)
 	}
 	failingOperation = operation.Duplicate
-	if _, err := application.Duplicate(context.Background(), "media", original.ID, store.Values{"alt": store.String("Copy")}, nil); !operationCode(err, "hook_failed") {
+	if _, err := application.Duplicate(context.Background(), "media", original.ID, store.Values{"alt": store.String("Copy")}, ridu.MutationOptions{}); !operationCode(err, "hook_failed") {
 		t.Fatalf("duplicate after-commit error = %v", err)
 	}
 	failingOperation = ""
@@ -831,7 +831,7 @@ func TestCommittedDuplicateAndRegenerationObjectsSurviveAfterCommitFailure(t *te
 		t.Fatalf("regeneration after-commit error = %v", err)
 	}
 	failingOperation = ""
-	updated, err := application.Local().Find(context.Background(), "media", original.ID, nil)
+	updated, err := application.Local().Find(context.Background(), "media", original.ID, ridu.FindOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -904,7 +904,7 @@ func TestAmbiguousUploadCommitsRetainGeneratedObjects(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		_, err = application.Duplicate(context.Background(), "media", source.ID, nil, nil)
+		_, err = application.Duplicate(context.Background(), "media", source.ID, nil, ridu.MutationOptions{})
 		requireAmbiguousCommitError(t, err)
 		page, err := application.Local().List(context.Background(), "media", ridu.ListOptions{Limit: 10})
 		if err != nil || len(page.Documents) != 2 {
@@ -951,7 +951,7 @@ func TestAmbiguousUploadCommitsRetainGeneratedObjects(t *testing.T) {
 		oldKeys := imageSizeKeys(t, source.Values)
 		_, err = application.UpdateUploadImage(context.Background(), "media", source.ID, ridu.UpdateUploadImageInput{FocalX: 25, FocalY: 75, ExpectedRevision: source.Revision})
 		requireAmbiguousCommitError(t, err)
-		updated, err := application.Local().Find(context.Background(), "media", source.ID, nil)
+		updated, err := application.Local().Find(context.Background(), "media", source.ID, ridu.FindOptions{})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1009,7 +1009,7 @@ func TestUploadMetadataIsServerOwned(t *testing.T) {
 	forged := store.Values{"alt": store.String("Forged"), "objectKey": store.String("outside/victim.txt"), "filename": store.String("shared.txt"), "sizes": store.Object(store.Values{
 		"thumb": store.Object(store.Values{"objectKey": store.String("outside/victim.txt")}),
 	})}
-	if _, err := application.Local().Create(context.Background(), "media", forged, nil); !operationCode(err, "bad_operation") {
+	if _, err := application.Local().Create(context.Background(), "media", forged, ridu.MutationOptions{}); !operationCode(err, "bad_operation") {
 		t.Fatalf("local forged create error = %v", err)
 	}
 	client := handlerClient(application.Handler(ridu.HandlerOptions{}))
@@ -1026,10 +1026,10 @@ func TestUploadMetadataIsServerOwned(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Update(context.Background(), "media", document.ID, store.Values{"objectKey": store.String("media/other.txt")}, nil); !operationCode(err, "field_access_denied") {
+	if _, err := application.Local().Update(context.Background(), "media", document.ID, store.Values{"objectKey": store.String("media/other.txt")}, ridu.MutationOptions{}); !operationCode(err, "field_access_denied") {
 		t.Fatalf("forged metadata update error = %v", err)
 	}
-	current, err := application.Local().Find(context.Background(), "media", document.ID, nil)
+	current, err := application.Local().Find(context.Background(), "media", document.ID, ridu.FindOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1041,7 +1041,7 @@ func TestUploadMetadataIsServerOwned(t *testing.T) {
 	if currentKey == "outside/victim.txt" {
 		t.Fatal("upload retained the caller-supplied object key")
 	}
-	duplicate, err := application.Duplicate(context.Background(), "media", document.ID, forged, nil)
+	duplicate, err := application.Duplicate(context.Background(), "media", document.ID, forged, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1049,10 +1049,10 @@ func TestUploadMetadataIsServerOwned(t *testing.T) {
 	if duplicateKey == "outside/victim.txt" || duplicateKey == originalKey {
 		t.Fatalf("duplicate object key = %q", duplicateKey)
 	}
-	if _, err := application.Local().Delete(context.Background(), "media", document.ID, nil); err != nil {
+	if _, err := application.Local().Delete(context.Background(), "media", document.ID, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Delete(context.Background(), "media", duplicate.ID, nil); err != nil {
+	if _, err := application.Local().Delete(context.Background(), "media", duplicate.ID, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if reader, _, err := backend.Open(context.Background(), "outside/victim.txt"); err != nil {
@@ -1089,7 +1089,7 @@ func TestUploadImportRejectsVariantMetadataAboveCleanupBoundBeforeLocking(t *tes
 		"objectKey": store.String("ridu/bounded-import-variants/objects/00000000000000000000000000000001/import.txt"),
 		"sizes":     store.Object(sizes),
 	}
-	if _, err := application.Local().Import(context.Background(), "media", values, ridu.ImportOptions{ID: "oversized-import", Status: store.StatusPublished}, nil); !operationCode(err, "validation") {
+	if _, err := application.Local().Import(context.Background(), "media", values, ridu.ImportOptions{ID: "oversized-import", Status: store.StatusPublished}); !operationCode(err, "validation") {
 		t.Fatalf("oversized variant import error = %v", err)
 	}
 	select {
@@ -1127,10 +1127,10 @@ func TestDuplicateUploadCopiesObjectsAndDeletesIndependently(t *testing.T) {
 		t.Fatalf("namespaced delivery = %d: %s", delivery.StatusCode, readBody(t, delivery))
 	}
 	delivery.Body.Close()
-	if _, err := application.Local().Duplicate(context.Background(), "media", original.ID, nil, nil); err == nil {
+	if _, err := application.Local().Duplicate(context.Background(), "media", original.ID, nil, ridu.MutationOptions{}); err == nil {
 		t.Fatal("raw local duplication unexpectedly shared upload storage")
 	}
-	duplicate, err := application.Duplicate(context.Background(), "media", original.ID, store.Values{"alt": store.String("Copy of Notes")}, nil)
+	duplicate, err := application.Duplicate(context.Background(), "media", original.ID, store.Values{"alt": store.String("Copy of Notes")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1158,7 +1158,7 @@ func TestDuplicateUploadCopiesObjectsAndDeletesIndependently(t *testing.T) {
 	if envelope.Doc["objectKey"] == originalKey {
 		t.Fatalf("REST duplicate reused original key: %#v", envelope.Doc)
 	}
-	if _, err := application.Local().Delete(context.Background(), "media", original.ID, nil); err != nil {
+	if _, err := application.Local().Delete(context.Background(), "media", original.ID, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	reader, _, err = application.OpenUpload(context.Background(), "media", duplicateKey, nil)
@@ -1239,7 +1239,7 @@ func TestUpdateUploadImageCommitsFocalMetadataAndRetainsVersionedVariants(t *tes
 	if len(objectsAfterConflict) != len(objectsBeforeConflict) {
 		t.Fatalf("stale regeneration stored objects: before=%d after=%d", len(objectsBeforeConflict), len(objectsAfterConflict))
 	}
-	restored, err := application.Local().Restore(context.Background(), "media", document.ID, document.Revision, updated.Revision, nil)
+	restored, err := application.Local().Restore(context.Background(), "media", document.ID, document.Revision, ridu.MutationOptions{ExpectedRevision: updated.Revision})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1253,7 +1253,7 @@ func TestUpdateUploadImageCommitsFocalMetadataAndRetainsVersionedVariants(t *tes
 		reader.Close()
 	}
 	originalKey, _ := document.Values["objectKey"].StringValue()
-	if _, err := application.Local().Delete(context.Background(), "media", document.ID, nil); err != nil {
+	if _, err := application.Local().Delete(context.Background(), "media", document.ID, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	for _, key := range append([]string{originalKey}, oldKeys...) {
@@ -1319,10 +1319,10 @@ func TestUploadRestoreRejectsMissingHistoricalObjects(t *testing.T) {
 	if err := backend.Delete(context.Background(), oldKeys[0]); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Restore(context.Background(), "media", created.ID, created.Revision, updated.Revision, nil); !operationCode(err, "validation") {
+	if _, err := application.Local().Restore(context.Background(), "media", created.ID, created.Revision, ridu.MutationOptions{ExpectedRevision: updated.Revision}); !operationCode(err, "validation") {
 		t.Fatalf("restore with missing historical object = %v", err)
 	}
-	current, err := application.Local().Find(context.Background(), "media", created.ID, nil)
+	current, err := application.Local().Find(context.Background(), "media", created.ID, ridu.FindOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1401,7 +1401,7 @@ func TestUploadRestoreLocksAndRevalidatesKeysAfterVersionPruningCleanup(t *testi
 	}
 	restored := make(chan restoreResult, 1)
 	go func() {
-		document, restoreError := application.Local().Restore(context.Background(), "media", created.ID, created.Revision, 0, nil)
+		document, restoreError := application.Local().Restore(context.Background(), "media", created.ID, created.Revision, ridu.MutationOptions{})
 		restored <- restoreResult{document: document, err: restoreError}
 	}()
 	select {
@@ -1433,7 +1433,7 @@ func TestUploadRestoreLocksAndRevalidatesKeysAfterVersionPruningCleanup(t *testi
 	if !operationCode(result.err, "validation") {
 		t.Fatalf("restore adopted an object deleted after version pruning: document=%#v error=%v", result.document, result.err)
 	}
-	current, err := application.Local().Find(context.Background(), "media", created.ID, nil)
+	current, err := application.Local().Find(context.Background(), "media", created.ID, ridu.FindOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1491,7 +1491,7 @@ func TestHardDeleteWithoutSnapshotStoreRetainsUploadObject(t *testing.T) {
 		t.Fatal(err)
 	}
 	key, _ := document.Values["objectKey"].StringValue()
-	_, err = application.Local().Delete(context.Background(), "media", document.ID, nil)
+	_, err = application.Local().Delete(context.Background(), "media", document.ID, ridu.MutationOptions{})
 	var operationError *ridu.OperationError
 	if !errors.As(err, &operationError) || operationError.Code != "hook_failed" || !operationError.Committed || !strings.Contains(err.Error(), "after commit") {
 		t.Fatalf("hard delete without snapshot store = %#v, %v", operationError, err)
@@ -1501,7 +1501,7 @@ func TestHardDeleteWithoutSnapshotStoreRetainsUploadObject(t *testing.T) {
 		t.Fatalf("unsafe cleanup deleted object without a stable snapshot: %v", err)
 	}
 	reader.Close()
-	if _, err := application.Local().Find(context.Background(), "media", document.ID, nil); !operationCode(err, "not_found") {
+	if _, err := application.Local().Find(context.Background(), "media", document.ID, ridu.FindOptions{}); !operationCode(err, "not_found") {
 		t.Fatalf("hard-deleted row remained after committed cleanup failure: %v", err)
 	}
 }
@@ -1539,7 +1539,7 @@ func TestHardDeleteCleanupContinuesAfterPanickingAfterCommitHook(t *testing.T) {
 		t.Fatal(err)
 	}
 	key, _ := document.Values["objectKey"].StringValue()
-	_, err = application.Local().Delete(context.Background(), "media", document.ID, nil)
+	_, err = application.Local().Delete(context.Background(), "media", document.ID, ridu.MutationOptions{})
 	var operationError *ridu.OperationError
 	if !errors.As(err, &operationError) || operationError.Code != "hook_failed" || !operationError.Committed {
 		t.Fatalf("hard delete error = %#v, %v", operationError, err)
@@ -1579,7 +1579,7 @@ func TestBulkUploadHardDeleteUsesOnlyBoundedReferenceLookups(t *testing.T) {
 		ids[index] = document.ID
 	}
 	before := documents.Events()
-	if _, err := application.Local().BulkDelete(context.Background(), "media", ids, nil); err != nil {
+	if _, err := application.Local().BulkDelete(context.Background(), "media", ids, ridu.BulkOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	after := documents.Events()
@@ -1827,8 +1827,7 @@ func TestFailedUploadRollbackSurfacesStorageFailureAndReportsOrphans(t *testing.
 		context.Background(),
 		"media",
 		source.ID,
-		store.Values{"alt": store.String("")},
-		nil,
+		store.Values{"alt": store.String("")}, ridu.MutationOptions{},
 	); !operationCode(err, "storage_failed") {
 		t.Fatalf("local duplicate rollback failure = %v", err)
 	}
@@ -2028,7 +2027,7 @@ func TestUploadCleanupRechecksReferencesAdmittedAfterCandidateEnumeration(t *tes
 		"filename": store.String("imported.txt"), "mimeType": store.String("text/plain"),
 		"filesize": store.Number(8), "url": store.String("/api/uploads/" + key), "objectKey": store.String(key),
 	}
-	document, err := application.Local().Import(context.Background(), "media", values, ridu.ImportOptions{ID: "imported-media", Status: store.StatusPublished}, nil)
+	document, err := application.Local().Import(context.Background(), "media", values, ridu.ImportOptions{ID: "imported-media", Status: store.StatusPublished})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2185,7 +2184,7 @@ func TestPartialUploadPreparationKeepsImportLockedUntilRollbackDeletesObjects(t 
 	}
 	importDone := make(chan error, 1)
 	go func() {
-		_, importError := application.Local().Import(context.Background(), "media", values, ridu.ImportOptions{ID: "racing-import", Status: store.StatusPublished}, nil)
+		_, importError := application.Local().Import(context.Background(), "media", values, ridu.ImportOptions{ID: "racing-import", Status: store.StatusPublished})
 		importDone <- importError
 	}()
 	importKeys := awaitGeneratedObjectLock(t, documentStore, "concurrent import")
@@ -2218,7 +2217,7 @@ func TestPartialUploadPreparationKeepsImportLockedUntilRollbackDeletesObjects(t 
 	if err := <-importDone; !operationCode(err, "validation") {
 		t.Fatalf("import after rollback error = %v", err)
 	}
-	if _, err := application.Local().Find(context.Background(), "media", "racing-import", nil); !operationCode(err, "not_found") {
+	if _, err := application.Local().Find(context.Background(), "media", "racing-import", ridu.FindOptions{}); !operationCode(err, "not_found") {
 		t.Fatalf("failed import committed a dangling document: %v", err)
 	}
 	if _, _, err := localBackend.Open(context.Background(), originalKey); !errors.Is(err, storage.ErrNotFound) {
@@ -2255,14 +2254,14 @@ func TestNestedUploadPreparationRollsBackWithOuterTransaction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Create(context.Background(), "posts", nil, nil); !operationCode(err, "hook_failed") || !errors.Is(err, outerFailure) {
+	if _, err := application.Local().Create(context.Background(), "posts", nil, ridu.MutationOptions{}); !operationCode(err, "hook_failed") || !errors.Is(err, outerFailure) {
 		t.Fatalf("outer transaction error = %v", err)
 	}
 	keys := storageBackend.storedKeys()
 	if len(keys) != 1 || nested.ID == "" {
 		t.Fatalf("nested upload = %#v, stored keys = %v", nested, keys)
 	}
-	if _, err := application.Local().Find(context.Background(), "media", nested.ID, nil); !operationCode(err, "not_found") {
+	if _, err := application.Local().Find(context.Background(), "media", nested.ID, ridu.FindOptions{}); !operationCode(err, "not_found") {
 		t.Fatalf("nested upload document survived outer rollback: %v", err)
 	}
 	if _, _, err := localBackend.Open(context.Background(), keys[0]); !errors.Is(err, storage.ErrNotFound) {
@@ -2295,7 +2294,7 @@ func TestSwallowedNestedUploadFailurePoisonsOuterTransactionAndCleansPreparation
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Create(context.Background(), "posts", nil, nil); !operationCode(err, "validation") {
+	if _, err := application.Local().Create(context.Background(), "posts", nil, ridu.MutationOptions{}); !operationCode(err, "validation") {
 		t.Fatalf("outer transaction did not preserve swallowed nested failure: %v", err)
 	}
 	if !operationCode(nestedError, "validation") {
@@ -2346,7 +2345,7 @@ func TestGeneratedDuplicatePreparationBlocksCleanupUntilDocumentCommit(t *testin
 	}
 	duplicateDone := make(chan duplicateResult, 1)
 	go func() {
-		document, duplicateError := application.Duplicate(context.Background(), "media", source.ID, nil, nil)
+		document, duplicateError := application.Duplicate(context.Background(), "media", source.ID, nil, ridu.MutationOptions{})
 		duplicateDone <- duplicateResult{document: document, err: duplicateError}
 	}()
 	preparationLock := awaitGeneratedObjectLock(t, documentStore, "duplicate preparation")
@@ -2514,11 +2513,11 @@ func TestDeletingOneImportedUploadRetainsSharedObjectUntilLastReference(t *testi
 		"filesize": store.Number(6), "url": store.String("/api/uploads/" + key), "objectKey": store.String(key),
 	}
 	for _, id := range []string{"media-a", "media-b"} {
-		if _, err := application.Local().Import(context.Background(), "media", values, ridu.ImportOptions{ID: id, Status: store.StatusPublished}, nil); err != nil {
+		if _, err := application.Local().Import(context.Background(), "media", values, ridu.ImportOptions{ID: id, Status: store.StatusPublished}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if _, err := application.Local().Delete(context.Background(), "media", "media-a", nil); err != nil {
+	if _, err := application.Local().Delete(context.Background(), "media", "media-a", ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	reader, _, err := application.OpenUpload(context.Background(), "media", key, nil)
@@ -2526,7 +2525,7 @@ func TestDeletingOneImportedUploadRetainsSharedObjectUntilLastReference(t *testi
 		t.Fatalf("shared object was deleted with its first owner: %v", err)
 	}
 	reader.Close()
-	if _, err := application.Local().Delete(context.Background(), "media", "media-b", nil); err != nil {
+	if _, err := application.Local().Delete(context.Background(), "media", "media-b", ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if _, _, err := backend.Open(context.Background(), key); !errors.Is(err, storage.ErrNotFound) {
@@ -2572,7 +2571,7 @@ func TestUploadObjectDeletionSerializesWithConcurrentImportAdmission(t *testing.
 	}
 	importDone := make(chan error, 1)
 	go func() {
-		_, importError := application.Local().Import(context.Background(), "media", values, ridu.ImportOptions{ID: "late-import", Status: store.StatusPublished}, nil)
+		_, importError := application.Local().Import(context.Background(), "media", values, ridu.ImportOptions{ID: "late-import", Status: store.StatusPublished})
 		importDone <- importError
 	}()
 	select {
@@ -2587,7 +2586,7 @@ func TestUploadObjectDeletionSerializesWithConcurrentImportAdmission(t *testing.
 	if err := <-importDone; !operationCode(err, "validation") {
 		t.Fatalf("import adopted an object deleted ahead of it: %v", err)
 	}
-	if _, err := application.Local().Find(context.Background(), "media", "late-import", nil); !operationCode(err, "not_found") {
+	if _, err := application.Local().Find(context.Background(), "media", "late-import", ridu.FindOptions{}); !operationCode(err, "not_found") {
 		t.Fatalf("failed import committed a dangling document: %v", err)
 	}
 }
@@ -2628,11 +2627,11 @@ func TestUnversionedImageRegenerationRetainsVariantSharedByImportedDocument(t *t
 				"width": store.Number(2), "height": store.Number(2), "mimeType": store.String("image/png"), "filesize": store.Number(float64(encoded.Len())),
 			})}),
 		}
-		if _, err := application.Local().Import(context.Background(), "media", values, ridu.ImportOptions{ID: id, Status: store.StatusPublished}, nil); err != nil {
+		if _, err := application.Local().Import(context.Background(), "media", values, ridu.ImportOptions{ID: id, Status: store.StatusPublished}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	first, err := application.Local().Find(context.Background(), "media", "media-a", nil)
+	first, err := application.Local().Find(context.Background(), "media", "media-a", ridu.FindOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

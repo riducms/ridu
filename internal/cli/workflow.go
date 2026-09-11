@@ -1029,13 +1029,6 @@ func developmentSchemaWarningError(adapter projectfile.DatabaseAdapter) error {
 }
 
 func synchronizeDevelopmentSchema(ctx context.Context, adapter projectfile.DatabaseAdapter, databaseURL, databasePath string, syncSchema, forceSchemaSync bool, preparation developmentPreparation, output *cliOutput) (developmentPreparation, error) {
-	if adapter == projectfile.DatabaseMongoDB {
-		for _, plugin := range preparation.manifest.Snapshot().Plugins {
-			if plugin.HasDatabaseContributions() {
-				return developmentPreparation{}, fmt.Errorf("MongoDB development does not support database-contributing plugin %q", plugin.Key)
-			}
-		}
-	}
 	if !syncSchema || (!forceSchemaSync && !preparation.schemaChanged) {
 		return preparation, nil
 	}

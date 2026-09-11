@@ -259,6 +259,26 @@ tree, and `identity` identifies the existing item. Ridu finds its current positi
 ordinary fields. Edits immediately enter the parent form; this does not save the document.
 Removed/malformed items show recovery UI rather than another item's fields.
 
+For a Go-configured `BlockAdmin.NameField`, `schemaHeader` renders just the editorial
+name input and its feedback:
+
+```svelte
+{#if authoring.schemaHeader !== undefined}
+  {@render authoring.schemaHeader({
+    treeKey: "widgets",
+    identity: selectedIdentity,
+    onChange: ({ field, value }) => updateWidgetField(selectedIdentity, field, value),
+  })}
+{/if}
+```
+
+Here `updateWidgetField` belongs to your plugin: apply the permitted field change
+to the latest matching item through your editor's history, then serialize with
+`field.set`. The header does not directly change the parent form. Ridu resolves the
+configured child, checks its access and visibility, and disables the card header
+while a draft for that tree and identity is open. The ordinary content renderer
+omits the name field's body placement; draft drawers include it in their own header.
+
 For **Apply/Cancel**, use a temporary embedded draft:
 
 1. Call `beginSchemaDraft({ treeKey, identity })` for an existing item, or

@@ -58,7 +58,7 @@ and the minimum cannot exceed the maximum. `Admin.RowLabelPath` chooses a child 
 | `.Admin(field.Admin{RowLabelPath: ...})`         | Uses one child value as the row heading; `RowLabel` can select a custom component.    |
 | `.Validate(...)` / `.LiveValidate(...)`          | Validates the whole list; child validators still run for each row.                    |
 | `.EditChildren(...)`                             | Applies a checked immutable edit to the direct child field graph.                     |
-| `.Access(...)`, `.Hooks(...)`, `.ReadHooks(...)` | Controls container access, write lifecycle, and returned list.                        |
+| `.Access(...)`, `.Hooks(...)`, `.AfterRead(...)` | Controls container access, write lifecycle, and returned list.                        |
 
 ## Edit and label rows {#options}
 

@@ -43,48 +43,6 @@ func (f TextField) LiveValidators() []LiveValidator[string] {
 
 // LiveValidate appends an explicitly opted-in advisory server check. It does not
 // register a save validator; use Validate separately for authoritative checks.
-func (f CodeField) LiveValidate(value LiveValidator[string]) CodeField {
-	f.definition = withPolicies[string, string](f.definition, func(p *typedPolicies[string, string]) {
-		p.liveValidators = append(slices.Clone(p.liveValidators), value)
-	})
-	return f
-}
-
-// ReplaceLiveValidators replaces this field's advisory checks, preserving its
-// save validators and every unrelated policy. An empty list disables live checks.
-func (f CodeField) ReplaceLiveValidators(values ...LiveValidator[string]) CodeField {
-	f.definition = withPolicies[string, string](f.definition, func(p *typedPolicies[string, string]) { p.liveValidators = slices.Clone(values) })
-	return f
-}
-
-// LiveValidators returns a detached list of this field's advisory server checks.
-func (f CodeField) LiveValidators() []LiveValidator[string] {
-	return slices.Clone(policies[string, string](f.definition).liveValidators)
-}
-
-// LiveValidate appends an explicitly opted-in advisory server check. It does not
-// register a save validator; use Validate separately for authoritative checks.
-func (f TextareaField) LiveValidate(value LiveValidator[string]) TextareaField {
-	f.definition = withPolicies[string, string](f.definition, func(p *typedPolicies[string, string]) {
-		p.liveValidators = append(slices.Clone(p.liveValidators), value)
-	})
-	return f
-}
-
-// ReplaceLiveValidators replaces this field's advisory checks, preserving its
-// save validators and every unrelated policy. An empty list disables live checks.
-func (f TextareaField) ReplaceLiveValidators(values ...LiveValidator[string]) TextareaField {
-	f.definition = withPolicies[string, string](f.definition, func(p *typedPolicies[string, string]) { p.liveValidators = slices.Clone(values) })
-	return f
-}
-
-// LiveValidators returns a detached list of this field's advisory server checks.
-func (f TextareaField) LiveValidators() []LiveValidator[string] {
-	return slices.Clone(policies[string, string](f.definition).liveValidators)
-}
-
-// LiveValidate appends an explicitly opted-in advisory server check. It does not
-// register a save validator; use Validate separately for authoritative checks.
 func (f EmailField) LiveValidate(value LiveValidator[string]) EmailField {
 	f.definition = withPolicies[string, string](f.definition, func(p *typedPolicies[string, string]) {
 		p.liveValidators = append(slices.Clone(p.liveValidators), value)
@@ -225,27 +183,6 @@ func (f SelectField) ReplaceLiveValidators(values ...LiveValidator[string]) Sele
 
 // LiveValidators returns a detached list of this field's advisory server checks.
 func (f SelectField) LiveValidators() []LiveValidator[string] {
-	return slices.Clone(policies[string, string](f.definition).liveValidators)
-}
-
-// LiveValidate appends an explicitly opted-in advisory server check. It does not
-// register a save validator; use Validate separately for authoritative checks.
-func (f RadioField) LiveValidate(value LiveValidator[string]) RadioField {
-	f.definition = withPolicies[string, string](f.definition, func(p *typedPolicies[string, string]) {
-		p.liveValidators = append(slices.Clone(p.liveValidators), value)
-	})
-	return f
-}
-
-// ReplaceLiveValidators replaces this field's advisory checks, preserving its
-// save validators and every unrelated policy. An empty list disables live checks.
-func (f RadioField) ReplaceLiveValidators(values ...LiveValidator[string]) RadioField {
-	f.definition = withPolicies[string, string](f.definition, func(p *typedPolicies[string, string]) { p.liveValidators = slices.Clone(values) })
-	return f
-}
-
-// LiveValidators returns a detached list of this field's advisory server checks.
-func (f RadioField) LiveValidators() []LiveValidator[string] {
 	return slices.Clone(policies[string, string](f.definition).liveValidators)
 }
 

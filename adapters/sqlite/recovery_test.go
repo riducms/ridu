@@ -53,19 +53,19 @@ func TestSQLiteOnlineBackupRestoreDrillIncludesWALState(t *testing.T) {
 	}
 	user, err := application.CreateAuthUser(ctx, "users", store.Values{
 		"email": store.String("restore@example.test"),
-	}, "recovery-drill-password", nil)
+	}, "recovery-drill-password", ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	draft, err := application.Local().Create(ctx, "posts", store.Values{
 		"title": store.String("Before backup"), "author": store.String(user.ID),
-	}, &user)
+	}, ridu.MutationOptions{Actor: &user})
 	if err != nil {
 		t.Fatal(err)
 	}
 	published, err := application.Local().PublishChanges(ctx, "posts", draft.ID, store.Values{
 		"title": store.String("Survives restore"),
-	}, draft.Revision, &user)
+	}, ridu.MutationOptions{Actor: &user, ExpectedRevision: draft.Revision})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +83,7 @@ func TestSQLiteOnlineBackupRestoreDrillIncludesWALState(t *testing.T) {
 	}
 	if _, err := application.Local().PublishChanges(ctx, "posts", published.ID, store.Values{
 		"title": store.String("Changed after backup"),
-	}, published.Revision, &user); err != nil {
+	}, ridu.MutationOptions{Actor: &user, ExpectedRevision: published.Revision}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -107,14 +107,14 @@ func TestSQLiteOnlineBackupRestoreDrillIncludesWALState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("restored SQLite credentials: %v", err)
 	}
-	restoredPost, err := restoredApplication.Local().Find(ctx, "posts", published.ID, &login.User)
+	restoredPost, err := restoredApplication.Local().Find(ctx, "posts", published.ID, ridu.FindOptions{Actor: &login.User})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if title, _ := restoredPost.Values["title"].StringValue(); title != "Survives restore" || restoredPost.Revision != published.Revision {
 		t.Fatalf("restored SQLite document = %#v", restoredPost)
 	}
-	versions, err := restoredApplication.Local().Versions(ctx, "posts", published.ID, &login.User)
+	versions, err := restoredApplication.Local().Versions(ctx, "posts", published.ID, ridu.FindOptions{Actor: &login.User})
 	if err != nil {
 		t.Fatal(err)
 	}

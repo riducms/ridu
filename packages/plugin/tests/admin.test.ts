@@ -1,6 +1,7 @@
+import { resolveAdminConfig, validateAdminManifest } from "../src/admin";
 import { expect, test } from "bun:test";
 import type { SchemaField } from "@riducms/protocol";
-import { defineAdmin, defineRowLabel, validateAdminConfig, type AdminConfig } from "../src/admin";
+import { defineAdmin, defineRowLabel, type AdminConfig } from "../src/admin";
 import { defineAdminPlugin, defineFieldComponent, definePluginField } from "../src/authoring/v1";
 import { resolveAdminExtensions } from "../src/plugin";
 import { createAdminI18n } from "@riducms/translations";
@@ -47,15 +48,15 @@ test("complete registry validation checks plugin pairing, field ownership and se
 		],
 		collections: [{ slug: "posts", fields: [field] }],
 		globals: [],
-	} as unknown as Parameters<typeof validateAdminConfig>[1];
+	} as unknown as Parameters<typeof validateAdminManifest>[1];
 	const registration = defineAdminPlugin({
 		key: "shapes",
 		pairingVersion: 3,
 		fields: { color, outline: color },
 	});
 	const check = (config: AdminConfig, selected: SchemaField = field) =>
-		validateAdminConfig(
-			config,
+		validateAdminManifest(
+			resolveAdminConfig(config),
 			{ ...manifest, collections: [{ ...manifest.collections[0]!, fields: [selected] }] },
 			{ completeManifest: true }
 		);
@@ -73,7 +74,7 @@ test("complete registry validation checks plugin pairing, field ownership and se
 				defineAdminPlugin({ key: "shapes", pairingVersion: 4, fields: { color, outline: color } }),
 			],
 		})
-	).toThrow("compatibility mismatch");
+	).toThrow("pairing version 4 does not match backend version 3");
 	expect(() =>
 		check(
 			{ plugins: [registration] },
@@ -140,14 +141,14 @@ test("local contributions compose after real plugins and share exclusive slots",
 		["paired", "local"]
 	);
 	expect(() =>
-		defineAdmin({ plugins: [plugin], dashboard: [{ key: "paired", component: Component }] })
+		resolveAdminConfig({ plugins: [plugin], dashboard: [{ key: "paired", component: Component }] })
 	).toThrow("already registered");
 	const replacing = {
 		...plugin,
 		dashboard: [{ key: "paired", component: Component, position: "replace" as const }],
 	};
 	expect(() =>
-		defineAdmin({
+		resolveAdminConfig({
 			plugins: [replacing],
 			dashboard: [{ key: "local", component: Component, position: "replace" }],
 		})
@@ -171,15 +172,15 @@ test("local routes cannot shadow framework routes or normalize to another regist
 		"login",
 		"verify-email",
 	]) {
-		expect(() => defineAdmin({ routes: [{ path, component: Component }] })).toThrow(
+		expect(() => resolveAdminConfig({ routes: [{ path, component: Component }] })).toThrow(
 			"relative path"
 		);
 	}
 	expect(() =>
-		defineAdmin({ routes: [{ path: "reports/today", component: Component }] })
+		resolveAdminConfig({ routes: [{ path: "reports/today", component: Component }] })
 	).not.toThrow();
 	expect(() =>
-		defineAdmin({
+		resolveAdminConfig({
 			plugins: [{ ...plugin, routes: [{ path: "reports", component: Component }] }],
 			routes: [{ path: "reports", component: Component }],
 		})
@@ -208,7 +209,7 @@ test("application translations have an independent namespace and preserve plugin
 	expect(i18n.t("app:reports")).toBe("Reports");
 	expect(i18n.t("plugin.paired:reports")).toBe("Plugin reports");
 	expect(() =>
-		defineAdmin({
+		resolveAdminConfig({
 			routes: [
 				{
 					path: "reports",
@@ -219,7 +220,7 @@ test("application translations have an independent namespace and preserve plugin
 		})
 	).toThrow("not defined");
 	expect(() =>
-		defineAdmin({
+		resolveAdminConfig({
 			routes: [
 				{
 					path: "reports",
@@ -248,7 +249,7 @@ const row: SchemaField = {
 const manifest = {
 	collections: [{ slug: "posts", fields: [row] }],
 	globals: [],
-} as unknown as Parameters<typeof validateAdminConfig>[1];
+} as unknown as Parameters<typeof validateAdminManifest>[1];
 test("local row labels validate detached config and missing selections without mounting components", () => {
 	let decoded = 0;
 	const label = defineRowLabel({
@@ -268,17 +269,19 @@ test("local row labels validate detached config and missing selections without m
 			return { title: value.title };
 		},
 	});
-	validateAdminConfig({ rowLabels: { "app:summary": label } }, manifest);
+	validateAdminManifest(resolveAdminConfig({ rowLabels: { "app:summary": label } }), manifest);
 	expect(decoded).toBe(1);
 	expect(row.nested?.rowLabelComponent?.config).toEqual({ title: "Summary" });
-	expect(() => validateAdminConfig({}, manifest)).toThrow("not registered");
+	expect(() => validateAdminManifest(resolveAdminConfig({}), manifest)).toThrow("not registered");
 	expect(() =>
-		validateAdminConfig(
-			{ rowLabels: { "app:summary": defineRowLabel({ component: Component }) } },
+		validateAdminManifest(
+			resolveAdminConfig({
+				rowLabels: { "app:summary": defineRowLabel({ component: Component }) },
+			}),
 			manifest
 		)
 	).toThrow("no decodeConfig");
-	expect(() => defineAdmin({ rowLabels: { "app:summary": { ...label } } })).toThrow(
+	expect(() => resolveAdminConfig({ rowLabels: { "app:summary": { ...label } } })).toThrow(
 		"defineRowLabel"
 	);
 });
@@ -295,12 +298,16 @@ test("full registry checks reject absent targets while permission-filtered runti
 			},
 		],
 	});
-	validateAdminConfig(config, { collections: [], globals: [] });
+	validateAdminManifest(resolveAdminConfig(config), { collections: [], globals: [] });
 	expect(() =>
-		validateAdminConfig(config, { collections: [], globals: [] }, { completeManifest: true })
+		validateAdminManifest(
+			resolveAdminConfig(config),
+			{ collections: [], globals: [] },
+			{ completeManifest: true }
+		)
 	).toThrow("unknown field");
-	validateAdminConfig(
-		{
+	validateAdminManifest(
+		resolveAdminConfig({
 			...config,
 			rowLabels: {
 				"app:summary": defineRowLabel({
@@ -308,7 +315,7 @@ test("full registry checks reject absent targets while permission-filtered runti
 					decodeConfig: (value: unknown) => value,
 				}),
 			},
-		},
+		}),
 		manifest,
 		{ completeManifest: true }
 	);
@@ -322,12 +329,12 @@ test("malformed unchecked entries fail before mounting", () => {
 		{ views: [{ key: "x", component: Component, surface: "missing" }] },
 		{ documentActions: [{ key: "x", component: Component, requires: "superuser" }] },
 	])
-		expect(() => defineAdmin(config as unknown as AdminConfig)).toThrow();
+		expect(() => resolveAdminConfig(config as unknown as AdminConfig)).toThrow();
 });
 
 test("route collision identity follows the router's case-insensitive matching", () => {
 	expect(() =>
-		defineAdmin({
+		resolveAdminConfig({
 			routes: [
 				{ path: "reports", component: Component },
 				{ path: "Reports", component: Component },
@@ -335,7 +342,7 @@ test("route collision identity follows the router's case-insensitive matching", 
 		})
 	).toThrow("already registered");
 	expect(() =>
-		defineAdmin({
+		resolveAdminConfig({
 			plugins: [{ ...plugin, routes: [{ path: "Reports", component: Component }] }],
 			routes: [{ path: "reports", component: Component }],
 		})
@@ -368,7 +375,7 @@ test("embedded local row labels use the same registration and config checks as o
 			},
 		],
 		globals: [],
-	} as unknown as Parameters<typeof validateAdminConfig>[1];
+	} as unknown as Parameters<typeof validateAdminManifest>[1];
 	const label = defineRowLabel({
 		component: Component,
 		decodeConfig(value: unknown) {
@@ -386,13 +393,19 @@ test("embedded local row labels use the same registration and config checks as o
 			},
 		}),
 	];
-	validateAdminConfig({ plugins, rowLabels: { "app:summary": label } }, embeddedManifest);
-	expect(() => validateAdminConfig({ plugins }, embeddedManifest)).toThrow(
+	validateAdminManifest(
+		resolveAdminConfig({ plugins, rowLabels: { "app:summary": label } }),
+		embeddedManifest
+	);
+	expect(() => validateAdminManifest(resolveAdminConfig({ plugins }), embeddedManifest)).toThrow(
 		"articles.body.blocks.card.rows"
 	);
 	expect(() =>
-		validateAdminConfig(
-			{ plugins, rowLabels: { "app:summary": defineRowLabel({ component: Component }) } },
+		validateAdminManifest(
+			resolveAdminConfig({
+				plugins,
+				rowLabels: { "app:summary": defineRowLabel({ component: Component }) },
+			}),
 			embeddedManifest
 		)
 	).toThrow("articles.body.blocks.card.rows");
@@ -418,4 +431,21 @@ test("local row label settings distinguish omission, explicit empty config and m
 	expect(configured.decode(supplied({}))).toEqual({ title: "Checked" });
 	for (const value of [null, undefined, [], { nested: undefined }])
 		expect(() => configured.decode(supplied(value))).toThrow("config");
+});
+
+test("authoring is typed only and each resolution owns detached static registries", () => {
+	const plugins = [plugin];
+	const config = { plugins, dashboard: [{ key: "local", component: Component }] };
+	expect(defineAdmin(config)).toBe(config);
+	const first = resolveAdminConfig(config);
+	plugins.length = 0;
+	config.dashboard.length = 0;
+	expect(first.plugins).toEqual([plugin]);
+	expect(first.extensions.dashboard.map((item) => item.key)).toEqual(["paired", "local"]);
+	expect(Object.isFrozen(first)).toBe(true);
+	expect(Object.isFrozen(first.editors)).toBe(true);
+	expect(resolveAdminConfig(config).plugins).toEqual([]);
+	const conflict = { plugins: [plugin], dashboard: [{ key: "paired", component: Component }] };
+	expect(() => defineAdmin(conflict)).not.toThrow();
+	expect(() => resolveAdminConfig(conflict)).toThrow("already registered");
 });

@@ -67,7 +67,7 @@ func TestMongoFixtureResetReopensFreshStore(t *testing.T) {
 		closeBackend()
 		t.Fatal(err)
 	}
-	created, err := app.Local().Create(t.Context(), "pages", store.Values{"title": store.String("Reset me")}, nil)
+	created, err := app.Local().Create(t.Context(), "pages", store.Values{"title": store.String("Reset me")}, ridu.MutationOptions{})
 	if err != nil {
 		closeBackend()
 		t.Fatal(err)
@@ -85,7 +85,7 @@ func TestMongoFixtureResetReopensFreshStore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := app.Local().Find(t.Context(), "pages", created.ID, nil); err == nil {
+	if _, err := app.Local().Find(t.Context(), "pages", created.ID, ridu.FindOptions{}); err == nil {
 		t.Fatal("reset retained a document")
 	} else {
 		var failure *ridu.OperationError
@@ -93,7 +93,7 @@ func TestMongoFixtureResetReopensFreshStore(t *testing.T) {
 			t.Fatalf("fresh store read failed unexpectedly: %v", err)
 		}
 	}
-	if _, err := app.Local().Create(t.Context(), "pages", store.Values{"title": store.String("Fresh")}, nil); err != nil {
+	if _, err := app.Local().Create(t.Context(), "pages", store.Values{"title": store.String("Fresh")}, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
 }

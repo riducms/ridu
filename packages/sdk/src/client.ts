@@ -78,7 +78,6 @@ import type {
 	CollectionDraftsFor,
 	GlobalDraftsFor,
 	LocaleResult,
-	DefaultRiduConfig,
 } from "./types.js";
 
 /**
@@ -102,7 +101,7 @@ import type {
  * });
  * ```
  */
-export function createClient<Config extends RiduConfigShape = DefaultRiduConfig>(
+export function createClient<Config extends RiduConfigShape = RiduConfigShape>(
 	options: ClientOptions
 ): RiduClient<Config> {
 	return new FetchClient<Config>(options);

@@ -221,22 +221,6 @@ func (backend *Store) rollbackSQLiteArtifact(ctx context.Context, connection *sq
 	}
 
 	if index == 0 {
-		boundary, err := newSQLitePluginSchemaBoundary(ctx, connection, &current, nil)
-		if err != nil {
-			return fmt.Errorf("prepare SQLite rollback %s plugin boundary: %w", file.Name, err)
-		}
-		operations, err := inverseSQLitePluginOperations(file.Artifact)
-		if err != nil {
-			return err
-		}
-		if err := executeSQLitePluginOperations(ctx, connection, operations, func() error {
-			return boundary.validateIntermediate(ctx, connection)
-		}); err != nil {
-			return fmt.Errorf("roll back SQLite migration %s plugin schema: %w", file.Name, err)
-		}
-		if err := boundary.validateFinal(ctx, connection); err != nil {
-			return fmt.Errorf("verify SQLite rollback %s plugin schema: %w", file.Name, err)
-		}
 		objects, err := expectedSQLiteObjects(ctx, &current, true, currentContract)
 		if err != nil {
 			return err
@@ -264,22 +248,6 @@ func (backend *Store) rollbackSQLiteArtifact(ctx context.Context, connection *sq
 	targetContract, err := resolveSQLitePlannerContract(files[index-1], sqlitePlannerContractFor)
 	if err != nil {
 		return err
-	}
-	boundary, err := newSQLitePluginSchemaBoundary(ctx, connection, &current, &target)
-	if err != nil {
-		return fmt.Errorf("prepare SQLite rollback %s plugin boundary: %w", file.Name, err)
-	}
-	operations, err := inverseSQLitePluginOperations(file.Artifact)
-	if err != nil {
-		return err
-	}
-	if err := executeSQLitePluginOperations(ctx, connection, operations, func() error {
-		return boundary.validateIntermediate(ctx, connection)
-	}); err != nil {
-		return fmt.Errorf("roll back SQLite migration %s plugin schema: %w", file.Name, err)
-	}
-	if err := boundary.validateFinal(ctx, connection); err != nil {
-		return fmt.Errorf("verify SQLite rollback %s plugin schema: %w", file.Name, err)
 	}
 	if !sqlitePresentationOnlyArtifact(file.Artifact, &target, current) {
 		if err := backend.scrubSQLiteRollbackFields(ctx, connection, current, target); err != nil {
@@ -311,90 +279,6 @@ func (backend *Store) rollbackSQLiteArtifact(ctx context.Context, connection *sq
 		return err
 	}
 	return assertSQLiteExpectedArtifactDigest(ctx, connection, files[len(files)-1].Digest)
-}
-
-// inverseSQLitePluginOperations derives rollback from the immutable artifact,
-// not from a fresh manifest diff. Reversing the complete forward sequence is
-// required when one artifact changes multiple plugins or mixes up and down
-// directions across plugin keys.
-func inverseSQLitePluginOperations(artifact ridumigration.Artifact) ([]ridumigration.Operation, error) {
-	var forward []ridumigration.PluginStep
-	for _, phase := range artifact.Phases {
-		for _, step := range phase.Steps {
-			if step.Kind != ridumigration.StepPluginSQL {
-				continue
-			}
-			var payload ridumigration.PluginPayload
-			if err := json.Unmarshal(step.Payload, &payload); err != nil {
-				return nil, fmt.Errorf("decode SQLite plugin rollback step %s: %w", step.ID, err)
-			}
-			forward = append(forward, payload.Plugin)
-		}
-	}
-	operations := make([]ridumigration.Operation, 0, len(forward))
-	for index := len(forward) - 1; index >= 0; index-- {
-		step := forward[index]
-		if step.Adapter != schema.PluginDatabaseAdapterSQLite || step.Checksum != ridumigration.PluginStepChecksum(step.Adapter, step.Plugin, step.Version, step.Direction, step.SQL) {
-			return nil, fmt.Errorf("invalid SQLite plugin migration checksum for %s version %d", step.Plugin, step.Version)
-		}
-		var snapshot schema.Snapshot
-		var direction string
-		switch step.Direction {
-		case "up":
-			snapshot = artifact.After
-			direction = "down"
-		case "down":
-			if artifact.Before == nil {
-				return nil, fmt.Errorf("initial SQLite migration cannot contain plugin down step %s version %d", step.Plugin, step.Version)
-			}
-			snapshot = *artifact.Before
-			direction = "up"
-		default:
-			return nil, fmt.Errorf("SQLite plugin migration %s version %d has unsupported direction %q", step.Plugin, step.Version, step.Direction)
-		}
-		pluginMigration, found := sqlitePluginMigration(snapshot, step.Plugin, step.Version)
-		if !found {
-			return nil, fmt.Errorf("SQLite plugin migration %s version %d is absent from its artifact manifest", step.Plugin, step.Version)
-		}
-		forwardSQL := pluginMigration.UpSQL
-		inverseSQL := pluginMigration.DownSQL
-		if step.Direction == "down" {
-			forwardSQL, inverseSQL = pluginMigration.DownSQL, pluginMigration.UpSQL
-		}
-		if !sameSQLiteStatements(step.SQL, forwardSQL) {
-			return nil, fmt.Errorf("SQLite plugin migration %s version %d differs from its artifact manifest", step.Plugin, step.Version)
-		}
-		inverse := ridumigration.PluginStep{
-			Adapter: schema.PluginDatabaseAdapterSQLite, Plugin: step.Plugin, Version: step.Version,
-			Direction: direction, SQL: append([]string(nil), inverseSQL...),
-		}
-		inverse.Checksum = ridumigration.PluginStepChecksum(inverse.Adapter, inverse.Plugin, inverse.Version, inverse.Direction, inverse.SQL)
-		operations = append(operations, ridumigration.Operation{
-			Kind:   ridumigration.StepPluginSQL,
-			Name:   fmt.Sprintf("plugin %s migration %d %s %s", step.Plugin, step.Version, pluginMigration.Name, direction),
-			Plugin: &inverse,
-		})
-	}
-	return operations, nil
-}
-
-func sqlitePluginMigration(snapshot schema.Snapshot, pluginKey string, version uint32) (schema.PluginMigration, bool) {
-	for _, plugin := range snapshot.Plugins {
-		if plugin.Key != pluginKey {
-			continue
-		}
-		contribution, supported := plugin.DatabaseContribution(schema.PluginDatabaseAdapterSQLite)
-		if !supported {
-			return schema.PluginMigration{}, false
-		}
-		for _, pluginMigration := range contribution.Migrations {
-			if pluginMigration.Version == version {
-				return pluginMigration, true
-			}
-		}
-		return schema.PluginMigration{}, false
-	}
-	return schema.PluginMigration{}, false
 }
 
 func sameSQLiteStatements(left, right []string) bool {

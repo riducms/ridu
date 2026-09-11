@@ -97,7 +97,7 @@ func TestGraphQLPostgresCRUDLocalizationAndPopulation(t *testing.T) {
 	postID := objectAt(t, post, "data", "createPost")["id"].(string)
 	categoryPath, _ := query.ParsePath("category")
 	published := false
-	if _, err := application.Local().FindWithOptions(ctx, "posts", postID, ridu.FindOptions{Locale: "fr", Draft: &published, Populate: []query.Population{{Path: categoryPath, Depth: 1}}}); err != nil {
+	if _, err := application.Local().Find(ctx, "posts", postID, ridu.FindOptions{Locale: "fr", Draft: &published, Populate: []query.Population{{Path: categoryPath, Depth: 1}}}); err != nil {
 		var operationError *ridu.OperationError
 		errors.As(err, &operationError)
 		t.Fatalf("direct PostgreSQL populated find: %v (cause: %v)", err, operationError.Cause)

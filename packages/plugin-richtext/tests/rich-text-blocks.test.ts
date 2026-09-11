@@ -50,6 +50,13 @@ describe("rich-text schema block authoring", () => {
 		);
 		expect(blockSummary({}, callout)).toBe("");
 	});
+	it("never mirrors configured editorial names into plugin-owned card text", () => {
+		const hiddenName: SchemaBlockType = {
+			...callout,
+			admin: { nameField: "privateName", rowLabel: "privateName" },
+		};
+		expect(blockSummary({ privateName: "Secret editorial name" }, hiddenName)).toBe("");
+	});
 	it("clones declared clipboard payloads through the host without interpreting arbitrary nested JSON", () => {
 		const nodes = [
 			{

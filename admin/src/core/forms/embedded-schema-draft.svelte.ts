@@ -5,7 +5,7 @@ import type {
 	EmbeddedSchemaFormScope,
 	EmbeddedSchemaVariantScope,
 } from "@riducms/plugin";
-import type { SchemaField } from "@riducms/protocol";
+import type { SchemaBlockType, SchemaField } from "@riducms/protocol";
 import { FormController } from "@admin/core/forms/form-controller.svelte";
 import { embeddedOccurrences } from "@admin/core/forms/embedded-fields";
 import { cloneFormValue, initialFormValues } from "@admin/core/forms/form-schema";
@@ -19,6 +19,8 @@ export interface HostedSchemaDraft {
 	draft: EmbeddedSchemaDraft;
 	form: FormController;
 	fields: SchemaField[];
+	block: SchemaBlockType;
+	treeKey: string;
 }
 
 export function embeddedVariant(field: SchemaField, scope: EmbeddedSchemaVariantScope) {
@@ -331,5 +333,5 @@ export function createEmbeddedSchemaDraft(
 			form.disposeBindings();
 		},
 	};
-	return { draft, form, fields };
+	return { draft, form, fields, block, treeKey: scope.treeKey };
 }

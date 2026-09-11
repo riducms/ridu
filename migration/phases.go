@@ -98,11 +98,6 @@ type RenamePayload struct {
 	Rename Rename `json:"rename"`
 }
 
-// PluginPayload contains one checksum-protected plugin migration.
-type PluginPayload struct {
-	Plugin PluginStep `json:"plugin"`
-}
-
 // DataTransformPayload identifies one application-compiled callback without
 // serializing executable code into the immutable artifact.
 type DataTransformPayload struct {
@@ -239,7 +234,6 @@ func (artifact Artifact) validate() error {
 	var mongoDBResourceRenames []MongoDBRenameResourcePayload
 	retirementPhaseIndex, retirementStepIndex := -1, -1
 	mongoDBDropPhaseIndex := -1
-	var pluginSteps []PluginStep
 	lastStepKind := StepKind("")
 	previousPhysicalDigest := ""
 	for phaseIndex, phase := range artifact.Phases {
@@ -317,13 +311,6 @@ func (artifact Artifact) validate() error {
 				}
 				mongoDBResourceRenames = append(mongoDBResourceRenames, payload)
 			}
-			if step.Kind == StepPluginSQL {
-				var payload PluginPayload
-				if err := json.Unmarshal(step.Payload, &payload); err != nil {
-					return fmt.Errorf("migration %s step %s has malformed plugin payload", artifact.Name, step.ID)
-				}
-				pluginSteps = append(pluginSteps, payload.Plugin)
-			}
 			if step.Kind == StepCanonicalizeAuthIdentities {
 				canonicalAuthSteps++
 				var payload CanonicalizeAuthIdentitiesPayload
@@ -368,9 +355,6 @@ func (artifact Artifact) validate() error {
 		return fmt.Errorf("migration %s uses MongoDB physical steps with planner %q", artifact.Name, artifact.Planner.Name)
 	}
 	expectedRetiredResourceIDs := artifact.removedResourceIDs(collectionRenames)
-	if err := artifact.validatePluginSteps(pluginSteps); err != nil {
-		return fmt.Errorf("migration %s plugin migration does not match embedded manifests: %w", artifact.Name, err)
-	}
 	if retirementSteps > 1 || !sameStableIDs(retiredResourceIDs, expectedRetiredResourceIDs) {
 		return fmt.Errorf("migration %s resource retirement does not exactly match removed resources: got %v, want %v", artifact.Name, retiredResourceIDs, expectedRetiredResourceIDs)
 	}
@@ -433,138 +417,6 @@ func sameMongoDBResourceRenameBindings(actual []MongoDBRenameResourcePayload, ex
 		seenTargets[rename.AfterID] = struct{}{}
 	}
 	return true
-}
-
-func (artifact Artifact) validatePluginSteps(actual []PluginStep) error {
-	plannerAdapter, plannerOwnsPluginSQL := pluginAdapterForPlanner(artifact.Planner.Name)
-	if len(actual) == 0 {
-		if !plannerOwnsPluginSQL {
-			return nil
-		}
-		expected, err := artifact.expectedPluginSteps(plannerAdapter)
-		if err != nil {
-			return err
-		}
-		if len(expected) != 0 {
-			return fmt.Errorf("got 0 plugin steps, want %d for %s", len(expected), plannerAdapter)
-		}
-		return nil
-	}
-	adapter := actual[0].Adapter
-	if adapter != schema.PluginDatabaseAdapterPostgres && adapter != schema.PluginDatabaseAdapterSQLite {
-		return fmt.Errorf("plugin step uses unsupported database adapter %q", adapter)
-	}
-	if plannerOwnsPluginSQL && adapter != plannerAdapter {
-		return fmt.Errorf("planner %q requires %s plugin steps, got %s", artifact.Planner.Name, plannerAdapter, adapter)
-	}
-	for _, step := range actual[1:] {
-		if step.Adapter != adapter {
-			return fmt.Errorf("migration artifact mixes %s and %s plugin steps", adapter, step.Adapter)
-		}
-	}
-	expected, err := artifact.expectedPluginSteps(adapter)
-	if err != nil {
-		return err
-	}
-	if len(actual) != len(expected) {
-		return fmt.Errorf("got %d plugin steps, want %d for %s", len(actual), len(expected), adapter)
-	}
-	for index := range expected {
-		if !samePluginStep(actual[index], expected[index]) {
-			return fmt.Errorf("step %d is %s/%s/%d/%s, want %s/%s/%d/%s with exact manifest SQL", index, actual[index].Adapter, actual[index].Plugin, actual[index].Version, actual[index].Direction, expected[index].Adapter, expected[index].Plugin, expected[index].Version, expected[index].Direction)
-		}
-	}
-	return nil
-}
-
-func pluginAdapterForPlanner(planner string) (schema.PluginDatabaseAdapter, bool) {
-	switch planner {
-	case "atlas":
-		return schema.PluginDatabaseAdapterPostgres, true
-	case "ridu-sqlite":
-		return schema.PluginDatabaseAdapterSQLite, true
-	default:
-		return "", false
-	}
-}
-
-func (artifact Artifact) expectedPluginSteps(adapter schema.PluginDatabaseAdapter) ([]PluginStep, error) {
-	before := make(map[string]schema.Plugin)
-	if artifact.Before != nil {
-		for _, plugin := range artifact.Before.Plugins {
-			before[plugin.Key] = plugin
-		}
-	}
-	after := make(map[string]schema.Plugin)
-	for _, plugin := range artifact.After.Plugins {
-		after[plugin.Key] = plugin
-	}
-	keys := make([]string, 0, len(before)+len(after))
-	seen := make(map[string]bool, len(before)+len(after))
-	for key := range before {
-		seen[key] = true
-		keys = append(keys, key)
-	}
-	for key := range after {
-		if !seen[key] {
-			keys = append(keys, key)
-		}
-	}
-	sort.Strings(keys)
-	var expected []PluginStep
-	for _, key := range keys {
-		previous, hadPrevious := before[key]
-		next, hasNext := after[key]
-		var previousMigrations, nextMigrations []schema.PluginMigration
-		if hadPrevious && previous.HasDatabaseContributions() {
-			contribution, supported := previous.DatabaseContribution(adapter)
-			if !supported {
-				return nil, fmt.Errorf("plugin %q has private database schema but does not support %s", key, adapter)
-			}
-			previousMigrations = contribution.Migrations
-		}
-		if hasNext && next.HasDatabaseContributions() {
-			contribution, supported := next.DatabaseContribution(adapter)
-			if !supported {
-				return nil, fmt.Errorf("plugin %q has private database schema but does not support %s", key, adapter)
-			}
-			nextMigrations = contribution.Migrations
-		}
-		shared := len(previousMigrations)
-		if len(nextMigrations) < shared {
-			shared = len(nextMigrations)
-		}
-		for index := 0; index < shared; index++ {
-			if !samePluginMigration(previousMigrations[index], nextMigrations[index]) {
-				return nil, fmt.Errorf("plugin %s %s migration %d changed after publication", key, adapter, index+1)
-			}
-		}
-		if hasNext && len(nextMigrations) > len(previousMigrations) {
-			for index := len(previousMigrations); index < len(nextMigrations); index++ {
-				migration := nextMigrations[index]
-				step := PluginStep{Adapter: adapter, Plugin: key, Version: migration.Version, Direction: "up", SQL: append([]string(nil), migration.UpSQL...)}
-				step.Checksum = PluginStepChecksum(step.Adapter, step.Plugin, step.Version, step.Direction, step.SQL)
-				expected = append(expected, step)
-			}
-		}
-		if hadPrevious && (!hasNext || len(nextMigrations) < len(previousMigrations)) {
-			for index := len(previousMigrations) - 1; index >= len(nextMigrations); index-- {
-				migration := previousMigrations[index]
-				step := PluginStep{Adapter: adapter, Plugin: key, Version: migration.Version, Direction: "down", SQL: append([]string(nil), migration.DownSQL...)}
-				step.Checksum = PluginStepChecksum(step.Adapter, step.Plugin, step.Version, step.Direction, step.SQL)
-				expected = append(expected, step)
-			}
-		}
-	}
-	return expected, nil
-}
-
-func samePluginMigration(left, right schema.PluginMigration) bool {
-	return left.Version == right.Version && left.Name == right.Name && sameStrings(left.UpSQL, right.UpSQL) && sameStrings(left.DownSQL, right.DownSQL)
-}
-
-func samePluginStep(left, right PluginStep) bool {
-	return left.Adapter == right.Adapter && left.Plugin == right.Plugin && left.Version == right.Version && left.Direction == right.Direction && left.Checksum == right.Checksum && sameStrings(left.SQL, right.SQL)
 }
 
 func sameStrings(left, right []string) bool {
@@ -727,14 +579,6 @@ func validateStepPayload(mode PhaseMode, step Step) error {
 		var payload RenamePayload
 		if err := decodeStrictJSON(step.Payload, &payload); err != nil || validateRename(payload.Rename) != nil {
 			return fmt.Errorf("malformed content-rename payload")
-		}
-	case StepPluginSQL:
-		if mode != PhaseTransaction {
-			return fmt.Errorf("plugin SQL is allowed only in a transaction phase")
-		}
-		var payload PluginPayload
-		if err := decodeStrictJSON(step.Payload, &payload); err != nil || validatePlugin(payload.Plugin) != nil {
-			return fmt.Errorf("malformed plugin payload")
 		}
 	case StepBackfillReferences:
 		if mode != PhaseBatch {
@@ -943,25 +787,6 @@ func validateRename(rename Rename) error {
 		}
 	}
 	return nil
-}
-
-func validatePlugin(plugin PluginStep) error {
-	if plugin.Adapter != schema.PluginDatabaseAdapterPostgres && plugin.Adapter != schema.PluginDatabaseAdapterSQLite || !schemaPluginKey(plugin.Plugin) || plugin.Version == 0 || plugin.Direction != "up" && plugin.Direction != "down" || len(plugin.SQL) == 0 {
-		return fmt.Errorf("malformed plugin")
-	}
-	for _, statement := range plugin.SQL {
-		if strings.TrimSpace(statement) == "" {
-			return fmt.Errorf("empty plugin SQL")
-		}
-	}
-	if plugin.Checksum != PluginStepChecksum(plugin.Adapter, plugin.Plugin, plugin.Version, plugin.Direction, plugin.SQL) {
-		return fmt.Errorf("plugin checksum mismatch")
-	}
-	return nil
-}
-
-func schemaPluginKey(key string) bool {
-	return schema.IsValidPluginKey(key)
 }
 
 func validateConcurrentIndex(payload ConcurrentIndexPayload) error {

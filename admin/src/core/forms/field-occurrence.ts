@@ -1,7 +1,6 @@
 import { resolveBlockTypes } from "@riducms/protocol";
 import type { SchemaField } from "@riducms/protocol";
 import type { FormController } from "@admin/core/forms/form-controller.svelte";
-import { embeddedOccurrences } from "@admin/core/forms/embedded-fields";
 import { scopeRepeatedRowField } from "@admin/fields/nested/scoped-field";
 
 type ResolvePath = () => string | undefined;
@@ -58,20 +57,7 @@ export function captureFieldOccurrence(form: FormController, target: string): Fi
 				const rowPath = () => {
 					const base = path();
 					if (base === undefined) return;
-					const values = form.get(base);
-					if (!Array.isArray(values)) return;
-					const matches = values
-						.map((value: unknown, index) => ({ value, index }))
-						.filter(({ value }) => record(value) && value._key === key);
-					const match = matches[0];
-					if (
-						matches.length !== 1 ||
-						!match ||
-						!record(match.value) ||
-						match.value.blockType !== variant
-					)
-						return;
-					return `${base}.${match.index}`;
+					return form.rowPath(base, key, variant);
 				};
 				const children =
 					field.type === "array"
@@ -81,21 +67,18 @@ export function captureFieldOccurrence(form: FormController, target: string): Fi
 				if (result) return result;
 			}
 			if (field.plugin?.embeddedTrees !== undefined) {
-				const initial = embeddedOccurrences(field, form.get(current), current).occurrences.find(
-					(item) => target.startsWith(`${item.path}.`)
-				);
+				const initial = form
+					.embeddedFields({ ...field, path: current })
+					.occurrences.find((item) => target.startsWith(`${item.path}.`));
 				if (!initial || initial.identity === undefined)
 					throw new Error(`Cannot bind ${target}: embedded payloads require stable identities.`);
 				const { identity, tree, block, case: branch } = initial;
 				const payloadPath = () => {
 					const base = path();
 					if (base === undefined) return;
-					const matches = embeddedOccurrences(field, form.get(base), base).occurrences.filter(
-						(item) => item.tree.key === tree.key && item.identity === identity
-					);
-					const match = matches[0];
+					const match = form.embeddedOccurrence({ ...field, path: base }, tree.key, identity);
 					if (
-						matches.length !== 1 ||
+						match === undefined ||
 						match?.block.slug !== block.slug ||
 						match.case.tagValue !== branch.tagValue
 					)

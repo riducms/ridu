@@ -17,8 +17,24 @@ func withBlockReferenceFixture(config ridu.Config) ridu.Config {
 			config.Blocks = append(config.Blocks, fixture.Blocks...)
 		}
 		labelBlocks := []field.Block{
-			{Slug: "people", TypeName: "People", Fields: field.Fields{field.Text("name")}},
-			{Slug: "promotion", TypeName: "Promotion", Labels: field.BlockLabels{Singular: "CTA", Plural: "CTAs"}, Fields: field.Fields{field.Text("name")}},
+			{
+				Slug:     "people",
+				TypeName: "People",
+				Fields: field.Fields{
+					field.Text("name"),
+				},
+			},
+			{
+				Slug:     "promotion",
+				TypeName: "Promotion",
+				Labels: field.BlockLabels{
+					Singular: "CTA",
+					Plural:   "CTAs",
+				},
+				Fields: field.Fields{
+					field.Text("name"),
+				},
+			},
 		}
 		layout := field.Blocks("layout", labelBlocks...)
 		body := richtext.Config{Blocks: labelBlocks}
@@ -27,7 +43,13 @@ func withBlockReferenceFixture(config ridu.Config) ridu.Config {
 			layout = field.Blocks("layout").References("people", "promotion")
 			body = richtext.Config{BlockReferences: []string{"people", "promotion"}}
 		}
-		fixture.Collections = append(fixture.Collections, ridu.Collection{Slug: "block-labels", Fields: field.Fields{layout, richtext.Field("body", body)}})
+		fixture.Collections = append(fixture.Collections, ridu.Collection{
+			Slug: "block-labels",
+			Fields: field.Fields{
+				layout,
+				richtext.Field("body", body),
+			},
+		})
 		for _, collection := range fixture.Collections {
 			collection.Slug = schema.CollectionSlug(prefix + "-" + string(collection.Slug))
 			config.Collections = append(config.Collections, collection)

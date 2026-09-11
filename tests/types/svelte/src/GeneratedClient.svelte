@@ -1,6 +1,9 @@
 <script lang="ts">
-	import { createClient } from "@riducms/sdk";
-	import type { PostsCreate, PostsWhere } from "../../../../testdata/generated/ridu.generated";
+	import {
+		createClient,
+		type PostsCreate,
+		type PostsWhere,
+	} from "../../../../testdata/generated/ridu.generated";
 
 	let { baseURL }: { baseURL: string } = $props();
 	const client = $derived(createClient({ baseURL }));

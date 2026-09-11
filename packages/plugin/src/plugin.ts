@@ -1,6 +1,5 @@
 import type { FieldType } from "@riducms/protocol";
 import type { RegisteredPluginField } from "./field";
-import { resolvePluginFields, type ResolvedPluginField } from "./plugin-registry";
 import { ADMIN_PLUGIN_API_VERSION } from "@riducms/protocol";
 import type {
 	OperationCapabilities,
@@ -402,9 +401,7 @@ export interface AdminPluginPair {
 }
 
 /** Checked plugin registrations collected for Ridu's admin runtime. Normally consumed by generated code. */
-export interface ResolvedAdminPluginPairs {
-	plugins: readonly AdminPlugin[];
-	fields: readonly ResolvedPluginField[];
+export interface ResolvedAdminExtensions {
 	rowLabels: readonly RowLabelPlugin[];
 	routes: readonly AdminRoute[];
 	dashboard: readonly AdminDashboardPanel[];
@@ -423,19 +420,14 @@ export interface ResolvedAdminPluginPairs {
 	applicationMessages: PluginMessageCatalog | undefined;
 }
 
-export type ResolvedAdminExtensions = Omit<ResolvedAdminPluginPairs, "plugins" | "fields">;
-
 /**
  * Check that installed Go/admin plugin packages agree on identity, API version,
  * pairing version, routes, assets and field types. Ridu's generated file calls this;
  * authors should fix mismatched packages rather than editing generated metadata.
  * Missing imports fail during compilation; incompatible pairs throw here.
  */
-export function resolveAdminPluginPairs(
-	pairs: readonly AdminPluginPair[]
-): ResolvedAdminPluginPairs {
+export function assertAdminPluginPairs(pairs: readonly AdminPluginPair[]): void {
 	const keys = new Set<string>();
-	const plugins: AdminPlugin[] = [];
 
 	for (const { admin, backend } of pairs) {
 		const identity = `${backend.package}#${backend.export}`;
@@ -473,15 +465,7 @@ export function resolveAdminPluginPairs(
 			Object.keys(admin.fields ?? {}).sort()
 		);
 		keys.add(backend.key);
-		plugins.push(admin);
 	}
-	const extensions = resolveAdminExtensions(plugins);
-
-	return {
-		plugins: Object.freeze(plugins),
-		fields: resolvePluginFields(plugins),
-		...extensions,
-	};
 }
 
 /**

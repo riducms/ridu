@@ -216,9 +216,8 @@ helps with path and response types, but the server remains the final validator. 
 Import the generated project client, not only the framework-neutral `@riducms/sdk` package. Exact
 document, input, select, query, and population types come from the generated manifest.
 
-The SDK can infer a default config when exactly one generated Ridu config is registered in the
-TypeScript program. With zero or multiple generated configs, use the generated wrapper or provide
-the config type explicitly. This avoids silently choosing the wrong application in monorepos.
+Raw SDK factories require an explicit application contract for resource calls. Use the generated
+wrapper or `createClient<RiduConfig>(options)`, including in monorepos with several applications.
 
 With `ridu dev` running, save the schema change and wait for regeneration. Restart the TypeScript
 language service if the editor has cached the previous declarations. If the development loop is not

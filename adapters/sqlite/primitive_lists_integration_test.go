@@ -55,14 +55,14 @@ func TestPrimitiveListsSQLiteRepeatedQueryBoundary(t *testing.T) {
 	}
 	values := primitivelists.Values()
 	values["sections"] = store.List(store.Object(store.Values{"_key": store.String("section-A"), "links": store.List(store.Object(store.Values{"_key": store.String("link-A"), "labels": store.List(store.String("nested"), store.String("nested"))}))}))
-	first, err := app.Local().Create(t.Context(), "primitive-products", values, nil)
+	first, err := app.Local().Create(t.Context(), "primitive-products", values, core.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	decoy := primitivelists.Values()
 	decoy["variants"] = store.List(store.Object(store.Values{"_key": store.String("B"), "points": store.List(store.String("Pine")), "sizes": store.List(store.Number(99))}))
 	decoy["content"] = store.List(store.Object(store.Values{"_key": store.String("B"), "blockType": store.String("note"), "points": store.List(store.String("Oak")), "sizes": store.List(store.Number(0))}))
-	second, err := app.Local().Create(t.Context(), "primitive-products", decoy, nil)
+	second, err := app.Local().Create(t.Context(), "primitive-products", decoy, core.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

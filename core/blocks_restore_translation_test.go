@@ -53,14 +53,14 @@ func TestBlockRestorePreservesAbsentTranslations(t *testing.T) {
 					"settings": store.Object(store.Values{"caption": store.String("Original caption")}),
 					"links":    store.List(store.Object(store.Values{"label": store.String("Original link")})),
 				})),
-			}, nil)
+			}, ridu.MutationOptions{})
 			if err != nil {
 				t.Fatal(err)
 			}
 			draft := true
 			readAll := func() store.Document {
 				t.Helper()
-				doc, err := app.Local().FindWithOptions(ctx, "pages", created.ID, ridu.FindOptions{AllLocales: true, Draft: &draft})
+				doc, err := app.Local().Find(ctx, "pages", created.ID, ridu.FindOptions{AllLocales: true, Draft: &draft})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -69,7 +69,7 @@ func TestBlockRestorePreservesAbsentTranslations(t *testing.T) {
 			original := readAll()
 			row := blockRows(created.Values["layout"])[0]
 			row["heading"] = store.String("After")
-			updated, err := app.Local().Update(ctx, "pages", created.ID, store.Values{"layout": store.List(store.Object(row))}, nil)
+			updated, err := app.Local().Update(ctx, "pages", created.ID, store.Values{"layout": store.List(store.Object(row))}, ridu.MutationOptions{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -92,10 +92,10 @@ func TestBlockRestorePreservesAbsentTranslations(t *testing.T) {
 				t.Fatalf("restore changed snapshot locale presence or row identities: got %#v want %#v", restored.Values, original.Values)
 			}
 			row["translation"] = store.String("English updated after restore")
-			if _, err := app.Local().Update(ctx, "pages", created.ID, store.Values{"layout": store.List(store.Object(row))}, nil); err != nil {
+			if _, err := app.Local().Update(ctx, "pages", created.ID, store.Values{"layout": store.List(store.Object(row))}, ridu.MutationOptions{}); err != nil {
 				t.Fatal(err)
 			}
-			french, err := app.Local().FindWithOptions(ctx, "pages", created.ID, ridu.FindOptions{Locale: "fr", Draft: &draft})
+			french, err := app.Local().Find(ctx, "pages", created.ID, ridu.FindOptions{Locale: "fr", Draft: &draft})
 			if err != nil {
 				t.Fatal(err)
 			}

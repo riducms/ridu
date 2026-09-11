@@ -40,7 +40,7 @@ func newLiveApp(t *testing.T, config core.Config) (*core.App, *teststore.Store) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := app.Local().Import(t.Context(), "live-users", store.Values{"email": store.String("editor@example.test")}, core.ImportOptions{ID: "live-editor", Status: store.StatusPublished}, nil); err != nil {
+	if _, err := app.Local().Import(t.Context(), "live-users", store.Values{"email": store.String("editor@example.test")}, core.ImportOptions{ID: "live-editor", Status: store.StatusPublished}); err != nil {
 		t.Fatal(err)
 	}
 	return app, backend
@@ -79,12 +79,12 @@ func TestLiveValidationIsOptInAndDoesNotRunSaveLifecycle(t *testing.T) {
 		liveCalls++
 		return livevalidation.CheckSKU(ctx.Siblings, value)
 	})
-	saveOnly := field.Text("saveOnly").Validate(func(operation.ValidationContext, operation.Value[string]) ([]operation.Issue, error) {
+	saveOnly := field.Text("saveOnly").Validate(func(operation.Context, operation.Value[string]) ([]operation.Issue, error) {
 		saveCalls++
 		return nil, nil
 	})
 	config := core.Config{Name: "Live isolation", Collections: []core.Collection{{Slug: "products",
-		Fields: field.Fields{field.Text("supplier"), sku, saveOnly, field.Text("defaulted").DefaultFrom(func(operation.DefaultContext) (operation.Value[string], error) {
+		Fields: field.Fields{field.Text("supplier"), sku, saveOnly, field.Text("defaulted").DefaultFrom(func(operation.Context) (operation.Value[string], error) {
 			defaults++
 			return operation.Present("server default"), nil
 		})},
@@ -116,7 +116,7 @@ func TestLiveValidationIsOptInAndDoesNotRunSaveLifecycle(t *testing.T) {
 		t.Fatalf("valid feedback = %#v", valid)
 	}
 	// A previous successful advisory check cannot authorize a different write.
-	_, err := app.Local().Create(t.Context(), "products", store.Values{"supplier": store.String("globex"), "sku": store.String("A-123")}, nil)
+	_, err := app.Local().Create(t.Context(), "products", store.Values{"supplier": store.String("globex"), "sku": store.String("A-123")}, core.MutationOptions{})
 	var failure *core.OperationError
 	if !errors.As(err, &failure) || failure.Status != 422 || !slices.ContainsFunc(failure.Issues, func(issue schema.Issue) bool { return issue.Code == "supplier_sku" }) {
 		t.Fatalf("Local save did not validate independently: %v", err)
@@ -199,7 +199,7 @@ func TestLiveValidationContextUsesRetainedExactPriorAndInput(t *testing.T) {
 		"variants":     store.List(store.Object(store.Values{"_key": store.String("A"), "supplier": store.String("acme"), "sku": store.String("A-first")}), store.Object(store.Values{"_key": store.String("B"), "supplier": store.String("globex"), "sku": store.String("G-second")})),
 		"blocks":       store.List(store.Object(store.Values{"_key": store.String("C"), "blockType": store.String("card"), "sku": store.String("A-block")})),
 		"localizedSKU": store.String("A-English"),
-	}, nil, core.LocaleOptions{Locale: "en"})
+	}, core.MutationOptions{Locale: "en"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -351,7 +351,7 @@ func TestLiveValidationDetachedContextUsesParentRootAndPersistedPrior(t *testing
 			config := livevalidation.Config()
 			config.Collections = []core.Collection{{Slug: "products", Fields: field.Fields{field.Text("title"), owner}}}
 			app, _ := newLiveApp(t, config)
-			document, err := app.Local().Create(t.Context(), "products", store.Values{"title": store.String("Saved parent"), "body": original}, nil)
+			document, err := app.Local().Create(t.Context(), "products", store.Values{"title": store.String("Saved parent"), "body": original}, core.MutationOptions{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -453,7 +453,7 @@ func TestLiveValidationBoundReaderKeepsActorExactLocaleAndCancellation(t *testin
 	readCalls, readHooks := 0, 0
 	config := livevalidation.Config()
 	config.Collections = []core.Collection{
-		{Slug: "suppliers", Fields: field.Fields{field.Text("name").Localized(), field.Text("secret").Access(field.Access{Read: func(operation.AccessContext) (bool, error) { return false, nil }})},
+		{Slug: "suppliers", Fields: field.Fields{field.Text("name").Localized(), field.Text("secret").Access(field.Access{Read: func(operation.Context) (bool, error) { return false, nil }})},
 			Access: core.CollectionAccess{Read: func(ctx core.AccessContext) (core.AccessDecision, error) {
 				readCalls++
 				if ctx.Actor == nil || ctx.Actor.ID != "live-editor" || ctx.ActorCollection != "live-users" || ctx.Locale != "fr" {
@@ -472,7 +472,7 @@ func TestLiveValidationBoundReaderKeepsActorExactLocaleAndCancellation(t *testin
 		})}},
 	}
 	app, backend := newLiveApp(t, config)
-	supplier, err := app.Local().Create(t.Context(), "suppliers", store.Values{"name": store.String("English supplier"), "secret": store.String("private")}, nil, core.LocaleOptions{Locale: "en"})
+	supplier, err := app.Local().Create(t.Context(), "suppliers", store.Values{"name": store.String("English supplier"), "secret": store.String("private")}, core.MutationOptions{Locale: "en"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -517,7 +517,7 @@ func TestLiveValidationAccessReadsDoNotReplayLifecycle(t *testing.T) {
 			})
 			product := core.Collection{Slug: "products"}
 			if boundary == "field" {
-				sku = sku.Access(field.Access{Read: func(ctx operation.AccessContext) (bool, error) {
+				sku = sku.Access(field.Access{Read: func(ctx operation.Context) (bool, error) {
 					_, err := ctx.Local.FindByID(context.Background(), "suppliers", operation.ID(supplierID))
 					return err == nil, err
 				}})
@@ -527,7 +527,7 @@ func TestLiveValidationAccessReadsDoNotReplayLifecycle(t *testing.T) {
 						_, err := ctx.Local.List(ctx.Context, "suppliers", core.ListOptions{Limit: 1, Actor: ctx.Actor, ActorCollection: ctx.ActorCollection, DisableFallback: true})
 						return core.Allow(), err
 					}
-					_, err := ctx.Local.FindWithOptions(ctx.Context, "suppliers", supplierID, core.FindOptions{Actor: ctx.Actor, ActorCollection: ctx.ActorCollection, DisableFallback: true})
+					_, err := ctx.Local.Find(ctx.Context, "suppliers", supplierID, core.FindOptions{Actor: ctx.Actor, ActorCollection: ctx.ActorCollection, DisableFallback: true})
 					return core.Allow(), err
 				}
 			}
@@ -536,7 +536,7 @@ func TestLiveValidationAccessReadsDoNotReplayLifecycle(t *testing.T) {
 				{Slug: "suppliers", Fields: field.Fields{field.Text("name")}, Hooks: core.CollectionHooks{BeforeRead: []core.Hook{func(core.HookContext) error { hooks++; return nil }}, AfterRead: []core.Hook{func(core.HookContext) error { hooks++; return nil }}}}, product,
 			}}
 			app, _ := newLiveApp(t, config)
-			supplier, err := app.Local().Create(t.Context(), "suppliers", store.Values{"name": store.String("Acme")}, nil)
+			supplier, err := app.Local().Create(t.Context(), "suppliers", store.Values{"name": store.String("Acme")}, core.MutationOptions{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -558,11 +558,11 @@ func TestLiveValidationCannotReadDraftsHiddenFromAnonymousReaders(t *testing.T) 
 			return nil, nil
 		})},
 	}}})
-	draft, err := app.Local().Create(t.Context(), "products", store.Values{"title": store.String("Private draft")}, nil)
+	draft, err := app.Local().Create(t.Context(), "products", store.Values{"title": store.String("Private draft")}, core.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := app.Local().Find(t.Context(), "products", draft.ID, nil); err == nil {
+	if _, err := app.Local().Find(t.Context(), "products", draft.ID, core.FindOptions{}); err == nil {
 		t.Fatal("fixture draft unexpectedly readable anonymously")
 	}
 	encoded, _ := json.Marshal(map[string]any{"id": draft.ID, "data": map[string]any{}, "fields": []string{"title"}})

@@ -86,15 +86,13 @@ for (const kind of ["plugin", "local"] as const)
 				}),
 			},
 		});
-		const runtime = new AdminRuntime(
-			createAdminClient(),
-			kind === "plugin" ? [plugin] : [],
-			undefined,
-			undefined,
-			kind === "local"
-				? { "app:note": defineFieldEditor({ type: "text", component: NoteEditor }) }
-				: {}
-		);
+		const runtime = new AdminRuntime(createAdminClient(), {
+			plugins: kind === "plugin" ? [plugin] : [],
+			fields:
+				kind === "local"
+					? { "app:note": defineFieldEditor({ type: "text", component: NoteEditor }) }
+					: {},
+		});
 		const form = new FormController();
 		form.reset(
 			{
@@ -184,21 +182,23 @@ it("replacing a plugin envelope preserves nested row mounts through embedded occ
 		content: { schema: "card", uid, rows: [{ _key: "child", note }] },
 	});
 	form.setEmbedded(schema, { outline: [widget("a", "First"), widget("b", "Second")] });
-	const runtime = new AdminRuntime(createAdminClient(), [
-		defineAdminPlugin({
-			key: "notes",
-			pairingVersion: 1,
-			fields: {
-				note: definePluginField({
-					component: NoteEditor,
-					decodeValue(value: unknown) {
-						if (typeof value !== "string") throw new Error("Expected a note string");
-						return value;
-					},
-				}),
-			},
-		}),
-	]);
+	const runtime = new AdminRuntime(createAdminClient(), {
+		plugins: [
+			defineAdminPlugin({
+				key: "notes",
+				pairingVersion: 1,
+				fields: {
+					note: definePluginField({
+						component: NoteEditor,
+						decodeValue(value: unknown) {
+							if (typeof value !== "string") throw new Error("Expected a note string");
+							return value;
+						},
+					}),
+				},
+			}),
+		],
+	});
 	const screen = await render(EmbeddedHarness, { form, schema, runtime });
 	await expect.element(screen.getByRole("textbox", { name: "Note" }).nth(0)).toHaveValue("First");
 	expect(bindings).toHaveLength(2);

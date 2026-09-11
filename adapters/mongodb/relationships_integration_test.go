@@ -23,9 +23,7 @@ func TestMongoDBRelationshipsPopulateWithAccessAndReconcileHardDeletes(t *testin
 		Collections: []ridu.Collection{
 			{
 				Slug: "people",
-				Fields: field.Fields{field.Text("name").Required(), field.Checkbox("public").Required(), field.Text("secret").Access(field.Access{Read: func(operation.AccessContext,
-
-				) (bool, error) {
+				Fields: field.Fields{field.Text("name").Required(), field.Checkbox("public").Required(), field.Text("secret").Access(field.Access{Read: func(operation.Context) (bool, error) {
 					return false, nil
 				}})},
 				Access: ridu.CollectionAccess{Read: func(ridu.AccessContext) (ridu.AccessDecision, error) {
@@ -48,17 +46,17 @@ func TestMongoDBRelationshipsPopulateWithAccessAndReconcileHardDeletes(t *testin
 
 	visible, err := application.Local().Create(t.Context(), "people", store.Values{
 		"name": store.String("Visible"), "public": store.Boolean(true), "secret": store.String("must-redact"),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	laterHidden, err := application.Local().Create(t.Context(), "people", store.Values{
 		"name": store.String("Later hidden"), "public": store.Boolean(true), "secret": store.String("hidden"),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	team, err := application.Local().Create(t.Context(), "teams", store.Values{"name": store.String("Core")}, nil)
+	team, err := application.Local().Create(t.Context(), "teams", store.Values{"name": store.String("Core")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,20 +66,20 @@ func TestMongoDBRelationshipsPopulateWithAccessAndReconcileHardDeletes(t *testin
 		"related": store.List(store.String(visible.ID), store.String(visible.ID), store.String(laterHidden.ID)),
 		"subject": teamReference,
 		"meta":    store.Object(store.Values{"reviewer": store.String(visible.ID)}),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	trashed, err := application.Local().Create(t.Context(), "posts", store.Values{
 		"title": store.String("Trashed owner"), "owner": store.String(visible.ID),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Delete(t.Context(), "posts", trashed.ID, nil); err != nil {
+	if _, err := application.Local().Delete(t.Context(), "posts", trashed.ID, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Update(t.Context(), "people", laterHidden.ID, store.Values{"public": store.Boolean(false)}, nil); err != nil {
+	if _, err := application.Local().Update(t.Context(), "people", laterHidden.ID, store.Values{"public": store.Boolean(false)}, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -89,7 +87,7 @@ func TestMongoDBRelationshipsPopulateWithAccessAndReconcileHardDeletes(t *testin
 	relatedPath := mongoMustPath(t, "related")
 	subjectPath := mongoMustPath(t, "subject")
 	reviewerPath := mongoMustPath(t, "meta.reviewer")
-	populated, err := application.Local().FindWithOptions(t.Context(), "posts", post.ID, ridu.FindOptions{Populate: []query.Population{
+	populated, err := application.Local().Find(t.Context(), "posts", post.ID, ridu.FindOptions{Populate: []query.Population{
 		{Path: ownerPath}, {Path: relatedPath}, {Path: subjectPath}, {Path: reviewerPath},
 	}})
 	if err != nil {
@@ -129,28 +127,28 @@ func TestMongoDBRelationshipsPopulateWithAccessAndReconcileHardDeletes(t *testin
 		t.Fatalf("nested group population = %#v", meta["reviewer"])
 	}
 
-	if _, err := application.Local().Delete(t.Context(), "people", visible.ID, nil); !mongoOperationCode(err, "delete_restricted") {
+	if _, err := application.Local().Delete(t.Context(), "people", visible.ID, ridu.MutationOptions{}); !mongoOperationCode(err, "delete_restricted") {
 		t.Fatalf("restricted target delete = %v", err)
 	}
-	unchanged, err := application.Local().Find(t.Context(), "posts", post.ID, nil)
+	unchanged, err := application.Local().Find(t.Context(), "posts", post.ID, ridu.FindOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if id, valid := unchanged.Values["owner"].StringValue(); !valid || id != visible.ID {
 		t.Fatalf("restrict planning partially nullified owner: %#v", unchanged.Values["owner"])
 	}
-	if _, err := application.Local().Update(t.Context(), "people", laterHidden.ID, store.Values{"public": store.Boolean(true)}, nil); err != nil {
+	if _, err := application.Local().Update(t.Context(), "people", laterHidden.ID, store.Values{"public": store.Boolean(true)}, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	beforeNullify, err := application.Local().Update(t.Context(), "posts", post.ID, store.Values{"guard": store.Null()}, nil)
+	beforeNullify, err := application.Local().Update(t.Context(), "posts", post.ID, store.Values{"guard": store.Null()}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Delete(t.Context(), "people", visible.ID, nil); err != nil {
+	if _, err := application.Local().Delete(t.Context(), "people", visible.ID, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
 
-	reconciled, err := application.Local().Find(t.Context(), "posts", post.ID, nil)
+	reconciled, err := application.Local().Find(t.Context(), "posts", post.ID, ridu.FindOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -168,7 +166,7 @@ func TestMongoDBRelationshipsPopulateWithAccessAndReconcileHardDeletes(t *testin
 	if meta["reviewer"].Kind() != store.ValueNull {
 		t.Fatalf("nested relationship was not nullified: %#v", meta["reviewer"])
 	}
-	trashedAfter, err := application.Local().FindWithOptions(t.Context(), "posts", trashed.ID, ridu.FindOptions{TrashOnly: true})
+	trashedAfter, err := application.Local().Find(t.Context(), "posts", trashed.ID, ridu.FindOptions{TrashOnly: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -179,10 +177,10 @@ func TestMongoDBRelationshipsPopulateWithAccessAndReconcileHardDeletes(t *testin
 		t.Fatalf("automatic nullification changed owner UpdatedAt: %v -> %v", beforeNullify.UpdatedAt, reconciled.UpdatedAt)
 	}
 
-	if _, err := application.Local().Delete(t.Context(), "teams", team.ID, nil); err != nil {
+	if _, err := application.Local().Delete(t.Context(), "teams", team.ID, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	reconciled, err = application.Local().Find(t.Context(), "posts", post.ID, nil)
+	reconciled, err = application.Local().Find(t.Context(), "posts", post.ID, ridu.FindOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -206,7 +204,7 @@ func TestMongoDBReferenceFencePreventsConcurrentAdmissionAndDelete(t *testing.T)
 	if err := backend.SyncIndexes(t.Context(), application.Manifest()); err != nil {
 		t.Fatal(err)
 	}
-	target, err := application.Local().Create(t.Context(), "targets", store.Values{"name": store.String("Target")}, nil)
+	target, err := application.Local().Create(t.Context(), "targets", store.Values{"name": store.String("Target")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -290,13 +288,13 @@ func TestMongoDBPopulationBudgetCountsDuplicateOutputNodes(t *testing.T) {
 	if err := backend.SyncIndexes(t.Context(), application.Manifest()); err != nil {
 		t.Fatal(err)
 	}
-	target, err := application.Local().Create(t.Context(), "targets", store.Values{"name": store.String("Target")}, nil)
+	target, err := application.Local().Create(t.Context(), "targets", store.Values{"name": store.String("Target")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	owner, err := application.Local().Create(t.Context(), "owners", store.Values{
 		"targets": store.List(store.String(target.ID), store.String(target.ID)),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -332,19 +330,19 @@ func TestMongoDBRecursivePopulationChargesEachOutputNodeOnce(t *testing.T) {
 	if err := backend.SyncIndexes(t.Context(), application.Manifest()); err != nil {
 		t.Fatal(err)
 	}
-	leaves, err := application.Local().Create(t.Context(), "nodes", store.Values{"name": store.String("leaf")}, nil)
+	leaves, err := application.Local().Create(t.Context(), "nodes", store.Values{"name": store.String("leaf")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	middle, err := application.Local().Create(t.Context(), "nodes", store.Values{
 		"name": store.String("middle"), "next": store.String(leaves.ID),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	root, err := application.Local().Create(t.Context(), "nodes", store.Values{
 		"name": store.String("root"), "next": store.String(middle.ID),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -403,15 +401,15 @@ func TestMongoDBRecursivePopulationAllowsWideGeneratedPlans(t *testing.T) {
 	if err := backend.SyncIndexes(t.Context(), application.Manifest()); err != nil {
 		t.Fatal(err)
 	}
-	hub, err := application.Local().Create(t.Context(), "hubs", store.Values{"name": store.String("wide")}, nil)
+	hub, err := application.Local().Create(t.Context(), "hubs", store.Values{"name": store.String("wide")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	source, err := application.Local().Create(t.Context(), "sources", store.Values{"hub": store.String(hub.ID)}, nil)
+	source, err := application.Local().Create(t.Context(), "sources", store.Values{"hub": store.String(hub.ID)}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	populated, err := application.Local().FindWithOptions(t.Context(), "sources", source.ID, ridu.FindOptions{
+	populated, err := application.Local().Find(t.Context(), "sources", source.ID, ridu.FindOptions{
 		Populate: []query.Population{{Path: mongoMustPath(t, "hub"), Depth: 2}},
 	})
 	if err != nil {
@@ -504,10 +502,10 @@ func TestMongoDBDeleteDocumentStateRemovesOwnedAndTargetReferenceRows(t *testing
 		}
 	}
 
-	if _, err := application.Local().Import(t.Context(), "targets", store.Values{"name": store.String("recreated")}, ridu.ImportOptions{ID: reused.DocumentID}, nil); err != nil {
+	if _, err := application.Local().Import(t.Context(), "targets", store.Values{"name": store.String("recreated")}, ridu.ImportOptions{ID: reused.DocumentID}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Delete(t.Context(), "targets", reused.DocumentID, nil); err != nil {
+	if _, err := application.Local().Delete(t.Context(), "targets", reused.DocumentID, ridu.MutationOptions{}); err != nil {
 		t.Fatalf("same-ID recreation inherited stale restrict metadata: %v", err)
 	}
 }

@@ -119,8 +119,8 @@
 	font-weight: 400;
 	line-height: 1.65;
 	tab-size: 4;
-	overflow-wrap: anywhere;
-	white-space: pre-wrap;
+	overflow-wrap: normal;
+	white-space: pre;
 }
 
 .reference-signature a {

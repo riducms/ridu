@@ -71,8 +71,6 @@ const (
 	StepRenameContent StepKind = "rename_content"
 	// StepAssertSchema verifies the resulting physical schema fingerprint.
 	StepAssertSchema StepKind = "assert_schema"
-	// StepPluginSQL executes one checksum-protected plugin migration.
-	StepPluginSQL StepKind = "plugin_sql"
 	// StepBackfillReferences derives the current-document reference index after
 	// its physical table has been created. Version snapshots are not indexed.
 	StepBackfillReferences StepKind = "backfill_references"
@@ -207,8 +205,6 @@ type Operation struct {
 	SQL string `json:"sql,omitempty"`
 	// Rename is present only for StepRenameContent.
 	Rename *Rename `json:"rename,omitempty"`
-	// Plugin is present only for StepPluginSQL.
-	Plugin *PluginStep `json:"plugin,omitempty"`
 	// ResourceIDs is present only while planning a StepRetireResources step.
 	ResourceIDs []schema.StableID `json:"resourceIds,omitempty"`
 	// PurgeVersionOwnerIDs identifies surviving resources whose complete
@@ -227,30 +223,6 @@ type AuthIdentityResource struct {
 	CollectionID schema.StableID `json:"collectionId"`
 	FieldID      schema.StableID `json:"fieldId"`
 	FieldName    string          `json:"fieldName"`
-}
-
-// PluginStep is one immutable direction of a plugin-owned migration.
-type PluginStep struct {
-	Adapter   schema.PluginDatabaseAdapter `json:"adapter"`
-	Plugin    string                       `json:"plugin"`
-	Version   uint32                       `json:"version"`
-	Direction string                       `json:"direction"`
-	Checksum  string                       `json:"checksum"`
-	SQL       []string                     `json:"sql"`
-}
-
-// PluginStepChecksum returns the stable SHA-256 identity of a plugin migration
-// direction and its ordered SQL statements.
-func PluginStepChecksum(adapter schema.PluginDatabaseAdapter, plugin string, version uint32, direction string, statements []string) string {
-	encoded, _ := json.Marshal(struct {
-		Adapter   schema.PluginDatabaseAdapter `json:"adapter"`
-		Plugin    string                       `json:"plugin"`
-		Version   uint32                       `json:"version"`
-		Direction string                       `json:"direction"`
-		SQL       []string                     `json:"sql"`
-	}{adapter, plugin, version, direction, statements})
-	digest := sha256.Sum256(encoded)
-	return hex.EncodeToString(digest[:])
 }
 
 // Artifact is the immutable source of truth for one migration. It embeds both

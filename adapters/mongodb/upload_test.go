@@ -23,8 +23,8 @@ import (
 func TestMongoUploadMetadataAllowsFieldPoliciesWithinFixedStorageShape(t *testing.T) {
 	config := mongoUploadTestConfig()
 	config.Collections[0].Fields = append(config.Collections[0].Fields,
-		field.Text("objectKey").Label("Storage key").Access(field.Access{Read: func(operation.AccessContext) (bool, error) { return false, nil }}),
-		field.JSON("sizes").Admin(field.Admin{Description: "Generated image variants"}).Access(field.Access{Read: func(operation.AccessContext) (bool, error) { return false, nil }}),
+		field.Text("objectKey").Label("Storage key").Access(field.Access{Read: func(operation.Context) (bool, error) { return false, nil }}),
+		field.JSON("sizes").Admin(field.Admin{Description: "Generated image variants"}).Access(field.Access{Read: func(operation.Context) (bool, error) { return false, nil }}),
 	)
 	manifest, err := ridu.Resolve(config)
 	if err != nil {

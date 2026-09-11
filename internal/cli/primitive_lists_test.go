@@ -68,7 +68,7 @@ var Products = ridu.Collection{
         field.TextList("sellingPoints").MinRows(1).MaxRows(8).MaxLength(120).
             Default("Solid oak").Admin(field.Admin{Editor: field.Component("app:points")}),
         field.NumberList("availableSizes").Min(0).MaxRows(20).
-            DefaultFrom(func(operation.DefaultContext) (operation.Value[[]float64], error) {
+            DefaultFrom(func(operation.Context) (operation.Value[[]float64], error) {
                 return operation.Present([]float64{0, 8, 10}), nil
             }),
     },

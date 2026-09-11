@@ -250,17 +250,11 @@ func buildMongoDBArtifactWithOptions(
 	if !contract.semantic && (len(semanticOptions.Renames) != 0 || len(semanticOptions.DataTransforms) != 0) {
 		return ridumigration.Artifact{}, fmt.Errorf("MongoDB planner %s does not support semantic migration intent", contract.version)
 	}
-	if err := requireMongoDBMigrationPlugins(after); err != nil {
-		return ridumigration.Artifact{}, err
-	}
 	if before == nil {
 		if previousPlannerVersion != "" {
 			return ridumigration.Artifact{}, fmt.Errorf("initial MongoDB artifact cannot have previous planner version %q", previousPlannerVersion)
 		}
 	} else {
-		if err := requireMongoDBMigrationPlugins(*before); err != nil {
-			return ridumigration.Artifact{}, err
-		}
 		if previousPlannerVersion == "" {
 			return ridumigration.Artifact{}, fmt.Errorf("previous MongoDB planner version is required for a non-initial artifact")
 		}
@@ -322,15 +316,6 @@ func buildMongoDBArtifactWithOptions(
 		return ridumigration.Artifact{}, err
 	}
 	return artifact, nil
-}
-
-func requireMongoDBMigrationPlugins(manifest schema.Manifest) error {
-	for _, plugin := range manifest.Snapshot().Plugins {
-		if plugin.HasDatabaseContributions() {
-			return fmt.Errorf("plugin %q has private database schema; MongoDB migrations do not support plugin database contributions", plugin.Key)
-		}
-	}
-	return nil
 }
 
 func validateMongoDBMigrationPlanUnion(before, after mongoPhysicalIndexPlanSet) error {

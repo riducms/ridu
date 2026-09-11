@@ -203,15 +203,9 @@ func buildSQLiteArtifactWithValidation(ctx context.Context, name string, before 
 	if strings.TrimSpace(contract.version) == "" || len(contract.freshSchemaStatements) == 0 || contract.reconcileIndexes == nil || contract.rebuildUniqueness == nil {
 		return ridumigration.Artifact{}, fmt.Errorf("SQLite planner contract is incomplete")
 	}
-	if err := requireSQLitePluginSchema(after); err != nil {
-		return ridumigration.Artifact{}, err
-	}
 	if before != nil {
 		if previousPlannerVersion == "" {
 			return ridumigration.Artifact{}, fmt.Errorf("previous SQLite planner version is required for a non-initial artifact")
-		}
-		if err := requireSQLitePluginSchema(*before); err != nil {
-			return ridumigration.Artifact{}, err
 		}
 		fromDigest, err := ridumigration.DigestManifest(*before)
 		if err != nil {
@@ -242,16 +236,6 @@ func buildSQLiteArtifactWithValidation(ctx context.Context, name string, before 
 	}, before, after)
 	if err != nil {
 		return ridumigration.Artifact{}, err
-	}
-	pluginOperations, pluginRisks, err := sqlitePluginMigrationSteps(before, after)
-	if err != nil {
-		return ridumigration.Artifact{}, err
-	}
-	if err := validateSQLitePluginTransition(ctx, before, after, pluginOperations, contract); err != nil {
-		return ridumigration.Artifact{}, fmt.Errorf("validate SQLite plugin transition: %w", err)
-	}
-	if _, err := expectedSQLiteObjects(ctx, &after, false, contract); err != nil {
-		return ridumigration.Artifact{}, fmt.Errorf("validate SQLite plugin schema: %w", err)
 	}
 
 	var statements []string
@@ -286,16 +270,6 @@ func buildSQLiteArtifactWithValidation(ctx context.Context, name string, before 
 			Message: "irreversibly rewrite authored authentication identities to the shared lowercase-and-trimmed key after a collision preflight; coordinate the migration with application writers",
 		})
 	}
-	for _, operation := range pluginOperations {
-		payload, err := ridumigration.MarshalStepPayload(ridumigration.PluginPayload{Plugin: *operation.Plugin})
-		if err != nil {
-			return ridumigration.Artifact{}, err
-		}
-		steps = append(steps, ridumigration.Step{
-			ID: fmt.Sprintf("step-%04d", len(steps)+1), Kind: ridumigration.StepPluginSQL,
-			ExecutorVersion: 1, Name: operation.Name, Payload: payload,
-		})
-	}
 	assertion, err := ridumigration.MarshalStepPayload(ridumigration.AssertSchemaPayload{})
 	if err != nil {
 		return ridumigration.Artifact{}, err
@@ -314,7 +288,6 @@ func buildSQLiteArtifactWithValidation(ctx context.Context, name string, before 
 		PhysicalContractVersion: ridumigration.PhysicalContractVersion,
 		BeforePhysicalDigest:    physicalBefore, AfterPhysicalDigest: physicalAfter, Steps: steps,
 	}}
-	artifact.Risks = append(artifact.Risks, pluginRisks...)
 	if err := artifact.Validate(); err != nil {
 		return ridumigration.Artifact{}, err
 	}
@@ -327,206 +300,6 @@ func sqlitePlannerUpgradeSupported(previous, next string) bool {
 
 func sqliteAuthIdentityUpgradeRequired(previous, next string, before, after schema.Snapshot) bool {
 	return sqlitePlannerUpgradeSupported(previous, next) && len(ridumigration.RetainedAuthIdentityResources(before, after)) != 0
-}
-
-func sqlitePluginMigrationSteps(before *schema.Manifest, after schema.Manifest) ([]ridumigration.Operation, []ridumigration.Risk, error) {
-	beforePlugins := make(map[string]schema.Plugin)
-	if before != nil {
-		for _, plugin := range before.Snapshot().Plugins {
-			beforePlugins[plugin.Key] = plugin
-		}
-	}
-	afterPlugins := make(map[string]schema.Plugin)
-	for _, plugin := range after.Snapshot().Plugins {
-		afterPlugins[plugin.Key] = plugin
-	}
-	keys := make(map[string]struct{}, len(beforePlugins)+len(afterPlugins))
-	for key := range beforePlugins {
-		keys[key] = struct{}{}
-	}
-	for key := range afterPlugins {
-		keys[key] = struct{}{}
-	}
-	ordered := make([]string, 0, len(keys))
-	for key := range keys {
-		ordered = append(ordered, key)
-	}
-	sort.Strings(ordered)
-	var operations []ridumigration.Operation
-	var risks []ridumigration.Risk
-	for _, key := range ordered {
-		previous, hadPrevious := beforePlugins[key]
-		next, hasNext := afterPlugins[key]
-		var previousMigrations, nextMigrations []schema.PluginMigration
-		if hadPrevious && previous.HasDatabaseContributions() {
-			contribution, supported := previous.DatabaseContribution(schema.PluginDatabaseAdapterSQLite)
-			if !supported {
-				return nil, nil, fmt.Errorf("plugin %q has private database schema but does not support sqlite", key)
-			}
-			previousMigrations = contribution.Migrations
-		}
-		if hasNext && next.HasDatabaseContributions() {
-			contribution, supported := next.DatabaseContribution(schema.PluginDatabaseAdapterSQLite)
-			if !supported {
-				return nil, nil, fmt.Errorf("plugin %q has private database schema but does not support sqlite", key)
-			}
-			nextMigrations = contribution.Migrations
-		}
-		shared := len(previousMigrations)
-		if len(nextMigrations) < shared {
-			shared = len(nextMigrations)
-		}
-		for index := 0; index < shared; index++ {
-			if !reflect.DeepEqual(previousMigrations[index], nextMigrations[index]) {
-				return nil, nil, fmt.Errorf("plugin %s sqlite migration %d changed after publication", key, index+1)
-			}
-		}
-		if hasNext && len(nextMigrations) > len(previousMigrations) {
-			for index := len(previousMigrations); index < len(nextMigrations); index++ {
-				migration := nextMigrations[index]
-				step := ridumigration.PluginStep{
-					Adapter: schema.PluginDatabaseAdapterSQLite, Plugin: key, Version: migration.Version,
-					Direction: "up", SQL: append([]string(nil), migration.UpSQL...),
-				}
-				step.Checksum = ridumigration.PluginStepChecksum(step.Adapter, step.Plugin, step.Version, step.Direction, step.SQL)
-				operations = append(operations, ridumigration.Operation{
-					Kind: ridumigration.StepPluginSQL, Name: fmt.Sprintf("plugin %s migration %d %s up", key, migration.Version, migration.Name), Plugin: &step,
-				})
-			}
-		}
-		if hadPrevious && (!hasNext || len(nextMigrations) < len(previousMigrations)) {
-			for index := len(previousMigrations) - 1; index >= len(nextMigrations); index-- {
-				migration := previousMigrations[index]
-				step := ridumigration.PluginStep{
-					Adapter: schema.PluginDatabaseAdapterSQLite, Plugin: key, Version: migration.Version,
-					Direction: "down", SQL: append([]string(nil), migration.DownSQL...),
-				}
-				step.Checksum = ridumigration.PluginStepChecksum(step.Adapter, step.Plugin, step.Version, step.Direction, step.SQL)
-				operations = append(operations, ridumigration.Operation{
-					Kind: ridumigration.StepPluginSQL, Name: fmt.Sprintf("plugin %s migration %d %s down", key, migration.Version, migration.Name), Plugin: &step,
-				})
-				risks = append(risks, ridumigration.Risk{
-					Code: "RIDU_PLUGIN_MIGRATION_DOWN", Level: ridumigration.RiskDestructive,
-					Message: fmt.Sprintf("run plugin %s sqlite migration %d down; plugin-owned data may be removed", key, migration.Version),
-				})
-			}
-		}
-	}
-	return operations, risks, nil
-}
-
-func executeSQLitePluginOperations(ctx context.Context, runner sqlRunner, operations []ridumigration.Operation, afterStatement func() error) error {
-	for _, operation := range operations {
-		if operation.Kind != ridumigration.StepPluginSQL || operation.Plugin == nil {
-			return fmt.Errorf("invalid SQLite plugin migration operation %q", operation.Name)
-		}
-		step := operation.Plugin
-		if step.Adapter != schema.PluginDatabaseAdapterSQLite || step.Checksum != ridumigration.PluginStepChecksum(step.Adapter, step.Plugin, step.Version, step.Direction, step.SQL) {
-			return fmt.Errorf("invalid SQLite plugin migration checksum for %s version %d", step.Plugin, step.Version)
-		}
-		for _, statement := range step.SQL {
-			if !schema.IsValidPluginMigrationSQL(schema.PluginDatabaseAdapterSQLite, statement) {
-				return fmt.Errorf("execute %s: invalid SQLite plugin SQL or transaction/connection control", operation.Name)
-			}
-			if _, err := runner.ExecContext(ctx, statement); err != nil {
-				return fmt.Errorf("execute %s: %w", operation.Name, translateError(err))
-			}
-			if err := assertSQLitePluginConnectionScope(ctx, runner); err != nil {
-				return fmt.Errorf("execute %s: %w", operation.Name, err)
-			}
-			if afterStatement != nil {
-				if err := afterStatement(); err != nil {
-					return fmt.Errorf("execute %s: %w", operation.Name, err)
-				}
-			}
-		}
-	}
-	return nil
-}
-
-func assertSQLitePluginConnectionScope(ctx context.Context, runner sqlRunner) error {
-	rows, err := runner.QueryContext(ctx, `PRAGMA database_list`)
-	if err != nil {
-		return translateError(err)
-	}
-	for rows.Next() {
-		var sequence int
-		var name, file string
-		if err := rows.Scan(&sequence, &name, &file); err != nil {
-			rows.Close()
-			return translateError(err)
-		}
-		if name != "main" && name != "temp" {
-			rows.Close()
-			return fmt.Errorf("plugin sqlite migration attached database %q outside the adapter-owned connection", name)
-		}
-	}
-	if err := rows.Err(); err != nil {
-		rows.Close()
-		return translateError(err)
-	}
-	if err := rows.Close(); err != nil {
-		return translateError(err)
-	}
-
-	var objectType, name string
-	err = runner.QueryRowContext(ctx, `SELECT type, name FROM sqlite_temp_master
-ORDER BY type, name LIMIT 1`).Scan(&objectType, &name)
-	if err == sql.ErrNoRows {
-		return nil
-	}
-	if err != nil {
-		return translateError(err)
-	}
-	return fmt.Errorf("plugin sqlite migration created temporary schema object %s:%s", objectType, name)
-}
-
-func validateSQLitePluginTransition(ctx context.Context, before *schema.Manifest, after schema.Manifest, operations []ridumigration.Operation, contract sqlitePlannerContract) error {
-	if before == nil {
-		return nil
-	}
-	return withSQLiteMigrationShadow(ctx, func(database *sql.Conn) error {
-		for _, statement := range contract.freshSchemaStatements {
-			if _, err := database.ExecContext(ctx, statement); err != nil {
-				return err
-			}
-		}
-		initial, err := newSQLitePluginSchemaBoundary(ctx, database, nil, before)
-		if err != nil {
-			return err
-		}
-		previousOperations, _, err := sqlitePluginMigrationSteps(nil, *before)
-		if err != nil {
-			return err
-		}
-		if err := executeSQLitePluginOperations(ctx, database, previousOperations, func() error {
-			return initial.validateIntermediate(ctx, database)
-		}); err != nil {
-			return err
-		}
-		if err := initial.validateFinal(ctx, database); err != nil {
-			return err
-		}
-		if err := contract.reconcileIndexes(ctx, database, *before); err != nil {
-			return err
-		}
-		transition, err := newSQLitePluginSchemaBoundary(ctx, database, before, &after)
-		if err != nil {
-			return err
-		}
-		if err := executeSQLitePluginOperations(ctx, database, operations, func() error {
-			return transition.validateIntermediate(ctx, database)
-		}); err != nil {
-			return err
-		}
-		if err := transition.validateFinal(ctx, database); err != nil {
-			return err
-		}
-		if err := contract.reconcileIndexes(ctx, database, after); err != nil {
-			return err
-		}
-		return assertSQLitePhysicalSchema(ctx, database, after, false, contract)
-	})
 }
 
 func validateSQLiteAdditiveTransition(before, after schema.Snapshot) error {
@@ -852,7 +625,7 @@ func preflightSQLiteArtifactsWithResolver(ctx context.Context, files []migration
 				return fmt.Errorf("SQLite migration %s uses unsupported phase mode %q", file.Name, phase.Mode)
 			}
 			for _, step := range phase.Steps {
-				if step.Kind != ridumigration.StepSQL && step.Kind != ridumigration.StepPluginSQL && step.Kind != ridumigration.StepDataTransform && step.Kind != ridumigration.StepCanonicalizeAuthIdentities && step.Kind != ridumigration.StepAssertSchema {
+				if step.Kind != ridumigration.StepSQL && step.Kind != ridumigration.StepDataTransform && step.Kind != ridumigration.StepCanonicalizeAuthIdentities && step.Kind != ridumigration.StepAssertSchema {
 					return fmt.Errorf("SQLite migration %s uses unsupported step kind %q", file.Name, step.Kind)
 				}
 			}
@@ -904,18 +677,6 @@ func (backend *Store) applySQLiteArtifact(ctx context.Context, connection *sql.C
 		before = &manifest
 	}
 	presentationOnly := sqlitePresentationOnlyArtifact(file.Artifact, before, after)
-	var pluginBoundary *sqlitePluginSchemaBoundary
-	requirePluginBoundary := func() (*sqlitePluginSchemaBoundary, error) {
-		if pluginBoundary != nil {
-			return pluginBoundary, nil
-		}
-		boundary, err := newSQLitePluginSchemaBoundary(ctx, connection, before, &after)
-		if err != nil {
-			return nil, err
-		}
-		pluginBoundary = &boundary
-		return pluginBoundary, nil
-	}
 	for _, phase := range file.Artifact.Phases {
 		for _, step := range phase.Steps {
 			switch step.Kind {
@@ -926,21 +687,6 @@ func (backend *Store) applySQLiteArtifact(ctx context.Context, connection *sql.C
 				}
 				if _, err := connection.ExecContext(ctx, payload.SQL); err != nil {
 					return fmt.Errorf("apply SQLite migration %s step %s (%s): %w", file.Name, step.ID, step.Name, translateError(err))
-				}
-			case ridumigration.StepPluginSQL:
-				boundary, err := requirePluginBoundary()
-				if err != nil {
-					return fmt.Errorf("prepare SQLite migration %s plugin boundary: %w", file.Name, err)
-				}
-				var payload ridumigration.PluginPayload
-				if err := json.Unmarshal(step.Payload, &payload); err != nil {
-					return fmt.Errorf("decode SQLite migration %s step %s: %w", file.Name, step.ID, err)
-				}
-				operation := ridumigration.Operation{Kind: ridumigration.StepPluginSQL, Name: step.Name, Plugin: &payload.Plugin}
-				if err := executeSQLitePluginOperations(ctx, connection, []ridumigration.Operation{operation}, func() error {
-					return boundary.validateIntermediate(ctx, connection)
-				}); err != nil {
-					return fmt.Errorf("apply SQLite migration %s step %s (%s): %w", file.Name, step.ID, step.Name, err)
 				}
 			case ridumigration.StepDataTransform:
 				var payload ridumigration.DataTransformPayload
@@ -963,13 +709,6 @@ func (backend *Store) applySQLiteArtifact(ctx context.Context, connection *sql.C
 					return fmt.Errorf("apply SQLite migration %s step %s (%s): %w", file.Name, step.ID, step.Name, err)
 				}
 			case ridumigration.StepAssertSchema:
-				boundary, err := requirePluginBoundary()
-				if err != nil {
-					return fmt.Errorf("prepare SQLite migration %s plugin boundary: %w", file.Name, err)
-				}
-				if err := boundary.validateFinal(ctx, connection); err != nil {
-					return fmt.Errorf("apply SQLite migration %s step %s (%s): %w", file.Name, step.ID, step.Name, err)
-				}
 				if !presentationOnly {
 					if err := contract.reconcileIndexes(ctx, connection, after); err != nil {
 						return fmt.Errorf("apply SQLite migration %s step %s (%s): %w", file.Name, step.ID, step.Name, err)
@@ -1469,22 +1208,6 @@ func expectedSQLiteObjects(ctx context.Context, manifest *schema.Manifest, inclu
 			if contract.reconcileIndexes == nil {
 				return fmt.Errorf("SQLite planner contract %q has no index reconciler", contract.version)
 			}
-			boundary, err := newSQLitePluginSchemaBoundary(ctx, database, nil, manifest)
-			if err != nil {
-				return err
-			}
-			pluginOperations, _, err := sqlitePluginMigrationSteps(nil, *manifest)
-			if err != nil {
-				return err
-			}
-			if err := executeSQLitePluginOperations(ctx, database, pluginOperations, func() error {
-				return boundary.validateIntermediate(ctx, database)
-			}); err != nil {
-				return err
-			}
-			if err := boundary.validateFinal(ctx, database); err != nil {
-				return err
-			}
 			if err := contract.reconcileIndexes(ctx, database, *manifest); err != nil {
 				return err
 			}
@@ -1522,129 +1245,14 @@ WHERE sql IS NOT NULL ORDER BY type, name`)
 	return objects, translateError(rows.Err())
 }
 
-type sqlitePluginSchemaBoundary struct {
-	protected map[string]sqliteSchemaObject
-	final     map[string]string
-}
-
-func newSQLitePluginSchemaBoundary(ctx context.Context, runner sqlRunner, before, after *schema.Manifest) (sqlitePluginSchemaBoundary, error) {
-	allowed := sqlitePluginTableOwners(before)
-	for table, plugin := range sqlitePluginTableOwners(after) {
-		allowed[table] = plugin
-	}
-	actual, err := readAllSQLiteSchemaObjects(ctx, runner)
-	if err != nil {
-		return sqlitePluginSchemaBoundary{}, err
-	}
-	protected := make(map[string]sqliteSchemaObject, len(actual))
-	for key, object := range actual {
-		if _, pluginOwned := allowed[object.table]; !pluginOwned {
-			protected[key] = object
-		}
-	}
-	return sqlitePluginSchemaBoundary{
-		protected: protected,
-		final:     sqlitePluginTableOwners(after),
-	}, nil
-}
-
-func sqlitePluginTableOwners(manifest *schema.Manifest) map[string]string {
-	owners := make(map[string]string)
-	if manifest == nil {
-		return owners
-	}
-	for _, plugin := range manifest.Snapshot().Plugins {
-		contribution, supported := plugin.DatabaseContribution(schema.PluginDatabaseAdapterSQLite)
-		if !supported {
-			continue
-		}
-		for _, table := range contribution.Tables {
-			owners[table] = plugin.Key
-		}
-	}
-	return owners
-}
-
-func (boundary sqlitePluginSchemaBoundary) validateIntermediate(ctx context.Context, runner sqlRunner) error {
-	actual, err := readAllSQLiteSchemaObjects(ctx, runner)
-	if err != nil {
-		return err
-	}
-	return assertSQLiteProtectedSchemaUnchanged(actual, boundary.protected)
-}
-
-func (boundary sqlitePluginSchemaBoundary) validateFinal(ctx context.Context, runner sqlRunner) error {
-	return assertSQLitePluginSchemaOwnership(ctx, runner, boundary.final, boundary.protected)
-}
-
-func assertSQLitePluginSchemaOwnership(ctx context.Context, runner sqlRunner, declared map[string]string, protected map[string]sqliteSchemaObject) error {
-	actual, err := readAllSQLiteSchemaObjects(ctx, runner)
-	if err != nil {
-		return err
-	}
-	if err := assertSQLiteProtectedSchemaUnchanged(actual, protected); err != nil {
-		return err
-	}
-	foundTables := make(map[string]struct{}, len(declared))
-	for key, object := range actual {
-		if _, protected := protected[key]; protected {
-			continue
-		}
-		plugin, owned := declared[object.table]
-		if !owned {
-			return fmt.Errorf("plugin sqlite migration created unowned %s %q", object.objectType, object.name)
-		}
-		if object.objectType == "table" {
-			if object.name != object.table {
-				return fmt.Errorf("plugin %q sqlite migration created malformed table %q", plugin, object.name)
-			}
-			foundTables[object.name] = struct{}{}
-		}
-	}
-	var missing []string
-	for table := range declared {
-		if _, exists := foundTables[table]; !exists {
-			missing = append(missing, table)
-		}
-	}
-	if len(missing) != 0 {
-		sort.Strings(missing)
-		return fmt.Errorf("plugin sqlite migrations did not create declared tables: %s", strings.Join(missing, ", "))
-	}
-	return nil
-}
-
-func assertSQLiteProtectedSchemaUnchanged(actual, protected map[string]sqliteSchemaObject) error {
-	for key, expected := range protected {
-		current, exists := actual[key]
-		if !exists || current.statement != expected.statement || current.table != expected.table {
-			return fmt.Errorf("plugin sqlite migration modified adapter-owned schema object %s", key)
-		}
-	}
-	return nil
-}
-
 func readSQLiteObjects(ctx context.Context, runner sqlRunner, manifest *schema.Manifest) (map[string]string, error) {
 	all, err := readAllSQLiteSchemaObjects(ctx, runner)
 	if err != nil {
 		return nil, err
 	}
-	ownedTables := make(map[string]struct{})
-	if manifest != nil {
-		for _, plugin := range manifest.Snapshot().Plugins {
-			contribution, supported := plugin.DatabaseContribution(schema.PluginDatabaseAdapterSQLite)
-			if !supported {
-				continue
-			}
-			for _, table := range contribution.Tables {
-				ownedTables[table] = struct{}{}
-			}
-		}
-	}
 	objects := make(map[string]string)
 	for key, object := range all {
-		_, pluginOwned := ownedTables[object.table]
-		if !strings.HasPrefix(object.name, "ridu_") && !strings.HasPrefix(object.table, "ridu_") && !pluginOwned {
+		if !strings.HasPrefix(object.name, "ridu_") && !strings.HasPrefix(object.table, "ridu_") {
 			continue
 		}
 		objects[key] = object.statement

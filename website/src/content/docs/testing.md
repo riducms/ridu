@@ -129,7 +129,7 @@ a loopback port and calls it through the generated SDK. Cover login cookies, err
 and the methods your frontend actually uses.
 
 Custom endpoint tests should also cover the wrong method, body limits, actor propagation, and calls
-through `PluginEndpointContext.Local`.
+through `EndpointContext.Local`.
 
 ## Test authoring in a browser {#browser}
 

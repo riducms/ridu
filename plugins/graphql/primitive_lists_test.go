@@ -68,7 +68,7 @@ func TestGraphQLPrimitiveListsKeepStrictValueShapes(t *testing.T) {
 	if !reflect.DeepEqual(objectAt(t, updated, "data", "updateProduct")["sizes"], []interface{}{float64(12), float64(0)}) {
 		t.Fatal(updated)
 	}
-	read, err := app.Local().Find(context.Background(), "products", created["id"].(string), nil)
+	read, err := app.Local().Find(context.Background(), "products", created["id"].(string), ridu.FindOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +83,7 @@ func TestGraphQLPrimitiveListQueriesExposeMembershipOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, values := range []store.Values{{"points": store.List(store.String("Oak"), store.String("Oak")), "sizes": store.List(store.Number(0), store.Number(10))}, {"points": store.List(store.String("Oak veneer")), "sizes": store.List(store.Number(12))}} {
-		if _, err := app.Local().Create(context.Background(), "products", values, nil); err != nil {
+		if _, err := app.Local().Create(context.Background(), "products", values, ridu.MutationOptions{}); err != nil {
 			t.Fatal(err)
 		}
 	}

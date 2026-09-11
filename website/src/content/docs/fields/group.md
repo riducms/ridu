@@ -57,7 +57,7 @@ paths such as `seo.title` and `seo.description`.
 | `.Validate(...)` / `.LiveValidate(...)`          | Validates the complete object; child validators still run.                                         |
 | `.EditChildren(...)`                             | Applies a checked immutable edit to the group's direct child graph.                                |
 | `.Admin(...)`                                    | Sets label, description, width, visibility, and collapsed presentation.                            |
-| `.Access(...)`, `.Hooks(...)`, `.ReadHooks(...)` | Controls the group as a subtree during authorization and lifecycle phases.                         |
+| `.Access(...)`, `.Hooks(...)`, `.AfterRead(...)` | Controls the group as a subtree during authorization and lifecycle phases.                         |
 
 ## Customize a reusable group {#reusable-groups}
 

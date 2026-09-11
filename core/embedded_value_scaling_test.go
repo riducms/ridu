@@ -40,7 +40,7 @@ func benchmarkValueScaling(b *testing.B, native bool) {
 						b.Run(name, func(b *testing.B) {
 							calls, observed := 0, 0
 							var retained []operation.View
-							title := field.Text("title").Required().Hooks(field.Hooks[string]{BeforeChange: []field.Transform[string]{func(ctx operation.WriteContext, _ operation.Value[string]) (operation.Change[string], error) {
+							title := field.Text("title").Required().Hooks(field.Hooks[string]{BeforeChange: []field.Transform[string]{func(ctx operation.Context, _ operation.Value[string]) (operation.Change[string], error) {
 								calls++
 								switch view {
 								case "Retain":
@@ -101,7 +101,7 @@ func benchmarkValueScaling(b *testing.B, native bool) {
 								}
 								calls, observed, retained = 0, 0, nil
 								b.StartTimer()
-								created, err := app.Local().Create(b.Context(), "pages", values, nil)
+								created, err := app.Local().Create(b.Context(), "pages", values, ridu.MutationOptions{})
 								if err != nil || calls != size {
 									b.Fatalf("nodes=%d hooks=%d error=%v", size, calls, err)
 								}

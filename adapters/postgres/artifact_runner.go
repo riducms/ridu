@@ -311,9 +311,6 @@ func (backend *Store) applyArtifactFilesWithRegistry(ctx context.Context, files 
 			return fmt.Errorf("current migration state: %w", err)
 		}
 		if manifest != nil {
-			if err := verifyPostgresPluginMigrationState(ctx, connection, *manifest); err != nil {
-				return fmt.Errorf("current migration state: %w", err)
-			}
 		}
 	}
 	if !exists {
@@ -341,9 +338,6 @@ func (backend *Store) applyArtifactFilesWithRegistry(ctx context.Context, files 
 		last := files[len(files)-1]
 		manifest := schema.NewManifest(last.Artifact.After)
 		if err := verifyPostgresPhysicalState(ctx, connection, &manifest, postgresArtifactTargetContract(last.Artifact)); err != nil {
-			return fmt.Errorf("current migration state: %w", err)
-		}
-		if err := verifyPostgresPluginMigrationState(ctx, connection, manifest); err != nil {
 			return fmt.Errorf("current migration state: %w", err)
 		}
 	}
@@ -862,57 +856,6 @@ func assertPhysicalSchemaForContract(ctx context.Context, transaction *sql.Tx, e
 	return assertPhysicalSchemaShape(ctx, transaction, expectedManifest, atlasSchemaForContract(expectedManifest, atlasIdentityMap{}, contract))
 }
 
-func assertMigrationPhysicalSchemaForContract(ctx context.Context, transaction *sql.Tx, expectedManifest schema.Manifest, contract atlasPlannerContract) error {
-	if err := assertPhysicalSchemaForContract(ctx, transaction, expectedManifest, contract); err != nil {
-		return err
-	}
-	return assertPostgresPluginTablesPresent(ctx, transaction, expectedManifest)
-}
-
-func verifyPostgresPluginMigrationState(ctx context.Context, connection *sql.Conn, manifest schema.Manifest) error {
-	transaction, err := connection.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
-	if err != nil {
-		return err
-	}
-	if err := assertPostgresPluginTablesPresent(ctx, transaction, manifest); err != nil {
-		_ = transaction.Rollback()
-		return err
-	}
-	return transaction.Rollback()
-}
-
-func assertPostgresPluginTablesPresent(ctx context.Context, transaction *sql.Tx, manifest schema.Manifest) error {
-	pluginTables := postgresPluginTables(manifest)
-	tables := make([]string, 0, len(pluginTables))
-	for table := range pluginTables {
-		tables = append(tables, table)
-	}
-	sort.Strings(tables)
-	for _, table := range tables {
-		exists, err := transactionPluginTableExists(ctx, transaction, table)
-		if err != nil {
-			return err
-		}
-		if !exists {
-			return fmt.Errorf("physical schema drift detected: declared plugin table %s is missing or is not an ordinary or partitioned table", table)
-		}
-	}
-	return nil
-}
-
-func transactionPluginTableExists(ctx context.Context, transaction *sql.Tx, table string) (bool, error) {
-	var exists bool
-	err := transaction.QueryRowContext(ctx, `SELECT EXISTS (
-SELECT 1
-FROM pg_class relation
-JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
-WHERE namespace.nspname = current_schema()
-  AND relation.relname = $1
-  AND relation.relkind IN ('r', 'p')
-)`, table).Scan(&exists)
-	return exists, err
-}
-
 func assertEmptyPhysicalSchema(ctx context.Context, transaction *sql.Tx) error {
 	empty := schema.NewManifest(schema.Snapshot{
 		Version: schema.CurrentVersion, Application: schema.Application{Name: "Empty migration baseline"},
@@ -930,14 +873,10 @@ func assertPhysicalSchemaShape(ctx context.Context, transaction *sql.Tx, expecte
 	if err != nil {
 		return fmt.Errorf("inspect PostgreSQL schema: %w", err)
 	}
-	pluginTables := postgresPluginTables(expectedManifest)
 	for index := len(actual.Tables) - 1; index >= 0; index-- {
 		if actual.Tables[index].Name == "ridu_migrations" || actual.Tables[index].Name == "ridu_migration_steps" {
 			actual.Tables = append(actual.Tables[:index], actual.Tables[index+1:]...)
 			continue
-		}
-		if _, owned := pluginTables[actual.Tables[index].Name]; owned {
-			actual.Tables = append(actual.Tables[:index], actual.Tables[index+1:]...)
 		}
 	}
 	expected.Name = actual.Name
@@ -981,20 +920,6 @@ func assertPhysicalSchemaShape(ctx context.Context, transaction *sql.Tx, expecte
 		return fmt.Errorf("physical schema drift detected: %s", strings.Join(descriptions, "; "))
 	}
 	return nil
-}
-
-func postgresPluginTables(manifest schema.Manifest) map[string]struct{} {
-	tables := make(map[string]struct{})
-	for _, plugin := range manifest.Snapshot().Plugins {
-		contribution, supported := plugin.DatabaseContribution(schema.PluginDatabaseAdapterPostgres)
-		if !supported {
-			continue
-		}
-		for _, owned := range contribution.Tables {
-			tables[owned] = struct{}{}
-		}
-	}
-	return tables
 }
 
 func applyContentRename(ctx context.Context, transaction *sql.Tx, artifact ridumigration.Artifact, intent ridumigration.Rename) error {

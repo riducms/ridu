@@ -87,7 +87,7 @@ func TestRichTextValidatesFinalGraphAfterLaterPluginEdits(t *testing.T) {
 func TestRichTextFactoryOwnsBehaviorThroughRenameNestingAndReuse(t *testing.T) {
 	var occurrences []operation.OccurrenceID
 	title := field.Text("title").Hooks(field.Hooks[string]{BeforeChange: []field.Transform[string]{
-		func(ctx operation.WriteContext, value operation.Value[string]) (operation.Change[string], error) {
+		func(ctx operation.Context, value operation.Value[string]) (operation.Change[string], error) {
 			occurrences = append(occurrences, ctx.OccurrenceID)
 			text, _ := value.Get()
 			return operation.Replace(operation.Present(strings.ToUpper(text))), nil
@@ -114,7 +114,7 @@ func TestRichTextFactoryOwnsBehaviorThroughRenameNestingAndReuse(t *testing.T) {
 	}
 	created, err := application.Local().Create(t.Context(), "pages", store.Values{
 		"first": block("first"), "section": store.Object(store.Values{"second": block("second")}),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

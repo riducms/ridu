@@ -84,7 +84,7 @@ The admin lets authors add, edit, remove, and reorder items. Use the arrow butto
 | Requiredness          | `.Required()` requires a present, non-empty list           | `.Required()` requires a present, non-empty list            |
 | Localization          | `.Localized()` stores a list per locale                    | `.Localized()` stores a list per locale                     |
 | Validation            | `.Validate(...)` / `.LiveValidate(...)` receive `[]string` | `.Validate(...)` / `.LiveValidate(...)` receive `[]float64` |
-| Lifecycle             | `.Hooks(...)` and `.ReadHooks(...)` receive the whole list | `.Hooks(...)` and `.ReadHooks(...)` receive the whole list  |
+| Lifecycle             | `.Hooks(...)` and `.AfterRead(...)` receive the whole list | `.Hooks(...)` and `.AfterRead(...)` receive the whole list  |
 
 ## Choose the right list {#choosing-a-list}
 
@@ -164,7 +164,7 @@ Built-in lists allow duplicates. To reject repeated tags in this product, import
 var UniqueTags = Tags.Validate(noRepeatedTags)
 
 func noRepeatedTags(
-	_ operation.ValidationContext,
+	_ operation.Context,
 	value operation.Value[[]string],
 ) ([]operation.Issue, error) {
 	tags, present := value.Get()

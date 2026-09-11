@@ -207,12 +207,6 @@ func buildArtifactWithPlannerContracts(ctx context.Context, name string, before 
 		artifact.Risks = append(artifact.Risks, physicalChangeRisks(changes)...)
 		artifact.Risks = append(artifact.Risks, risks...)
 	}
-	pluginSteps, pluginRisks, err := pluginMigrationSteps(before, after)
-	if err != nil {
-		return ridumigration.Artifact{}, err
-	}
-	operations = append(operations, pluginSteps...)
-	artifact.Risks = append(artifact.Risks, pluginRisks...)
 	afterSnapshot := after.Snapshot()
 	if before != nil && referenceIndexTopologyChanged(before.Snapshot(), afterSnapshot) {
 		operations = append(operations, ridumigration.Operation{
@@ -580,11 +574,6 @@ func payloadFromOperation(step ridumigration.Operation) (json.RawMessage, error)
 			return nil, fmt.Errorf("content step %q has no rename payload", step.Name)
 		}
 		return ridumigration.MarshalStepPayload(ridumigration.RenamePayload{Rename: *step.Rename})
-	case ridumigration.StepPluginSQL:
-		if step.Plugin == nil {
-			return nil, fmt.Errorf("plugin step %q has no plugin payload", step.Name)
-		}
-		return ridumigration.MarshalStepPayload(ridumigration.PluginPayload{Plugin: *step.Plugin})
 	case ridumigration.StepBackfillReferences:
 		return ridumigration.MarshalStepPayload(ridumigration.BackfillReferencesPayload{BatchSize: 500})
 	case ridumigration.StepRetireResources:
@@ -1332,103 +1321,6 @@ func referenceTopologyFields(fields []schema.Field) []referenceIndexField {
 		}
 	}
 	return result
-}
-
-func pluginMigrationSteps(before *schema.Manifest, after schema.Manifest) ([]ridumigration.Operation, []ridumigration.Risk, error) {
-	beforePlugins := make(map[string]schema.Plugin)
-	if before != nil {
-		for _, plugin := range before.Snapshot().Plugins {
-			beforePlugins[plugin.Key] = plugin
-		}
-	}
-	afterPlugins := make(map[string]schema.Plugin)
-	for _, plugin := range after.Snapshot().Plugins {
-		afterPlugins[plugin.Key] = plugin
-	}
-	keys := make(map[string]struct{}, len(beforePlugins)+len(afterPlugins))
-	for key := range beforePlugins {
-		keys[key] = struct{}{}
-	}
-	for key := range afterPlugins {
-		keys[key] = struct{}{}
-	}
-	ordered := make([]string, 0, len(keys))
-	for key := range keys {
-		ordered = append(ordered, key)
-	}
-	sort.Strings(ordered)
-	var steps []ridumigration.Operation
-	var risks []ridumigration.Risk
-	for _, key := range ordered {
-		previous, hadPrevious := beforePlugins[key]
-		next, hasNext := afterPlugins[key]
-		var previousMigrations, nextMigrations []schema.PluginMigration
-		if hadPrevious && previous.HasDatabaseContributions() {
-			contribution, supported := previous.DatabaseContribution(schema.PluginDatabaseAdapterPostgres)
-			if !supported {
-				return nil, nil, fmt.Errorf("plugin %q has private database schema but does not support postgres; contribute ordinary collections for portable plugin data or add a postgres database contribution", key)
-			}
-			if err := validatePostgresPluginMigrationSQL(key, contribution.Migrations); err != nil {
-				return nil, nil, err
-			}
-			previousMigrations = contribution.Migrations
-		}
-		if hasNext && next.HasDatabaseContributions() {
-			contribution, supported := next.DatabaseContribution(schema.PluginDatabaseAdapterPostgres)
-			if !supported {
-				return nil, nil, fmt.Errorf("plugin %q has private database schema but does not support postgres; contribute ordinary collections for portable plugin data or add a postgres database contribution", key)
-			}
-			if err := validatePostgresPluginMigrationSQL(key, contribution.Migrations); err != nil {
-				return nil, nil, err
-			}
-			nextMigrations = contribution.Migrations
-		}
-		shared := len(previousMigrations)
-		if len(nextMigrations) < shared {
-			shared = len(nextMigrations)
-		}
-		for index := 0; index < shared; index++ {
-			if pluginMigrationChecksum(schema.PluginDatabaseAdapterPostgres, key, previousMigrations[index]) != pluginMigrationChecksum(schema.PluginDatabaseAdapterPostgres, key, nextMigrations[index]) {
-				return nil, nil, fmt.Errorf("plugin %s postgres migration %d changed after publication", key, index+1)
-			}
-		}
-		if hasNext && len(nextMigrations) > len(previousMigrations) {
-			for index := len(previousMigrations); index < len(nextMigrations); index++ {
-				migration := nextMigrations[index]
-				pluginStep := ridumigration.PluginStep{Adapter: schema.PluginDatabaseAdapterPostgres, Plugin: key, Version: migration.Version, Direction: "up", SQL: append([]string(nil), migration.UpSQL...)}
-				pluginStep.Checksum = ridumigration.PluginStepChecksum(pluginStep.Adapter, key, migration.Version, pluginStep.Direction, pluginStep.SQL)
-				steps = append(steps, ridumigration.Operation{Kind: ridumigration.StepPluginSQL, Name: fmt.Sprintf("plugin %s migration %d %s up", key, migration.Version, migration.Name), Plugin: &pluginStep})
-			}
-		}
-		if hadPrevious && (!hasNext || len(nextMigrations) < len(previousMigrations)) {
-			minimum := len(nextMigrations)
-			for index := len(previousMigrations) - 1; index >= minimum; index-- {
-				migration := previousMigrations[index]
-				pluginStep := ridumigration.PluginStep{Adapter: schema.PluginDatabaseAdapterPostgres, Plugin: key, Version: migration.Version, Direction: "down", SQL: append([]string(nil), migration.DownSQL...)}
-				pluginStep.Checksum = ridumigration.PluginStepChecksum(pluginStep.Adapter, key, migration.Version, pluginStep.Direction, pluginStep.SQL)
-				steps = append(steps, ridumigration.Operation{Kind: ridumigration.StepPluginSQL, Name: fmt.Sprintf("plugin %s migration %d %s down", key, migration.Version, migration.Name), Plugin: &pluginStep})
-				risks = append(risks, ridumigration.Risk{Code: "RIDU_PLUGIN_MIGRATION_DOWN", Level: ridumigration.RiskDestructive, Message: fmt.Sprintf("run plugin %s migration %d down; plugin-owned data may be removed", key, migration.Version)})
-			}
-		}
-	}
-	return steps, risks, nil
-}
-
-func validatePostgresPluginMigrationSQL(key string, migrations []schema.PluginMigration) error {
-	for _, pluginMigration := range migrations {
-		for _, statement := range append(append([]string(nil), pluginMigration.UpSQL...), pluginMigration.DownSQL...) {
-			if !schema.IsValidPluginMigrationSQL(schema.PluginDatabaseAdapterPostgres, statement) {
-				return fmt.Errorf("plugin %q postgres migration %d contains invalid SQL or transaction control", key, pluginMigration.Version)
-			}
-		}
-	}
-	return nil
-}
-
-func pluginMigrationChecksum(adapter schema.PluginDatabaseAdapter, key string, migration schema.PluginMigration) string {
-	up := ridumigration.PluginStepChecksum(adapter, key, migration.Version, "up", migration.UpSQL)
-	down := ridumigration.PluginStepChecksum(adapter, key, migration.Version, "down", migration.DownSQL)
-	return up + ":" + down + ":" + migration.Name
 }
 
 func physicalChangeRisks(changes []atlasschema.Change) []ridumigration.Risk {

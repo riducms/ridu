@@ -1,4 +1,4 @@
-import { resolvePluginFields, type AdminPlugin, type ResolvedPluginField } from "@riducms/plugin";
+import { type ResolvedPluginField } from "@riducms/plugin";
 import type { FieldType, SchemaField } from "@riducms/protocol";
 
 interface FieldRenderer {
@@ -33,8 +33,10 @@ export class FieldRegistry {
 		return renderer;
 	}
 }
-export function createCoreFieldRegistry(plugins: readonly AdminPlugin[] = []): FieldRegistry {
+export function createCoreFieldRegistry(
+	fields: readonly ResolvedPluginField[] = []
+): FieldRegistry {
 	const registry = new FieldRegistry();
-	for (const field of resolvePluginFields(plugins)) registry.register(field);
+	for (const field of fields) registry.register(field);
 	return registry;
 }

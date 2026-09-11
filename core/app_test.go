@@ -66,21 +66,21 @@ func TestLocalCRUDUsesValidationAccessAndOnePipeline(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := application.Local().Create(context.Background(), "posts", store.Values{}, nil); err == nil {
+	if _, err := application.Local().Create(context.Background(), "posts", store.Values{}, ridu.MutationOptions{}); err == nil {
 		t.Fatal("create without title succeeded")
 	}
 	if got := backend.Events(); !slices.Equal(got, []string{"begin", "rollback"}) {
 		t.Fatalf("validation failure transaction events = %v", got)
 	}
-	private, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("private")}, nil)
+	private, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("private")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	public, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("public")}, nil)
+	public, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("public")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Find(context.Background(), "posts", private.ID, nil); !operationCode(err, "not_found") {
+	if _, err := application.Local().Find(context.Background(), "posts", private.ID, ridu.FindOptions{}); !operationCode(err, "not_found") {
 		t.Fatalf("filtered find error = %v, want not_found", err)
 	}
 	page, err := application.Local().List(context.Background(), "posts", ridu.ListOptions{})
@@ -90,11 +90,11 @@ func TestLocalCRUDUsesValidationAccessAndOnePipeline(t *testing.T) {
 	if len(page.Documents) != 1 || page.Documents[0].ID != public.ID {
 		t.Fatalf("access-filtered page = %#v", page.Documents)
 	}
-	updated, err := application.Local().Update(context.Background(), "posts", private.ID, store.Values{"title": store.String("public")}, nil)
+	updated, err := application.Local().Update(context.Background(), "posts", private.ID, store.Values{"title": store.String("public")}, ridu.MutationOptions{})
 	if err != nil || updated.ID != private.ID {
 		t.Fatalf("update = %#v, %v", updated, err)
 	}
-	deleted, err := application.Local().Delete(context.Background(), "posts", public.ID, nil)
+	deleted, err := application.Local().Delete(context.Background(), "posts", public.ID, ridu.MutationOptions{})
 	if err != nil || deleted.ID != public.ID {
 		t.Fatalf("delete = %#v, %v", deleted, err)
 	}
@@ -115,19 +115,19 @@ func TestLocalReadPreservesMetadataOnlyRootAndPopulationSelections(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	author, err := application.Local().Create(t.Context(), "authors", store.Values{"name": store.String("Ada"), "bio": store.String("Writer")}, nil)
+	author, err := application.Local().Create(t.Context(), "authors", store.Values{"name": store.String("Ada"), "bio": store.String("Writer")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	post, err := application.Local().Create(t.Context(), "posts", store.Values{"title": store.String("Projection"), "author": store.String(author.ID)}, nil)
+	post, err := application.Local().Create(t.Context(), "posts", store.Values{"title": store.String("Projection"), "author": store.String(author.ID)}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	metadataOnly, err := application.Local().FindWithOptions(t.Context(), "posts", post.ID, ridu.FindOptions{Select: []query.Path{}})
+	metadataOnly, err := application.Local().Find(t.Context(), "posts", post.ID, ridu.FindOptions{Select: []query.Path{}})
 	if err != nil || len(metadataOnly.Values) != 0 {
 		t.Fatalf("metadata-only root = %#v, %v", metadataOnly.Values, err)
 	}
-	populated, err := application.Local().FindWithOptions(t.Context(), "posts", post.ID, ridu.FindOptions{
+	populated, err := application.Local().Find(t.Context(), "posts", post.ID, ridu.FindOptions{
 		Select:   []query.Path{authorPath},
 		Populate: []query.Population{{Path: authorPath, Depth: 1, Select: []query.Path{}}},
 	})
@@ -138,7 +138,7 @@ func TestLocalReadPreservesMetadataOnlyRootAndPopulationSelections(t *testing.T)
 	if !ok || projectedAuthor.ID != author.ID || len(projectedAuthor.Values) != 0 {
 		t.Fatalf("metadata-only populated author = %#v, %t", projectedAuthor, ok)
 	}
-	generatedMetadata, err := application.Local().FindWithOptions(t.Context(), "posts", post.ID, ridu.FindOptions{
+	generatedMetadata, err := application.Local().Find(t.Context(), "posts", post.ID, ridu.FindOptions{
 		Select: []query.Path{authorPath},
 		Populate: []query.Population{{
 			Path: authorPath, Depth: 1,
@@ -167,29 +167,29 @@ func TestTrashLifecycleHidesRestoresAndPermanentlyDeletes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	document, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("Recoverable")}, nil)
+	document, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("Recoverable")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	deleted, err := application.Local().Delete(context.Background(), "posts", document.ID, nil)
+	deleted, err := application.Local().Delete(context.Background(), "posts", document.ID, ridu.MutationOptions{})
 	if err != nil || deleted.DeletedAt == nil {
 		t.Fatalf("trash = %#v, %v", deleted, err)
 	}
-	if _, err := application.Local().Find(context.Background(), "posts", document.ID, nil); !operationCode(err, "not_found") {
+	if _, err := application.Local().Find(context.Background(), "posts", document.ID, ridu.FindOptions{}); !operationCode(err, "not_found") {
 		t.Fatalf("ordinary find after trash = %v", err)
 	}
 	trash, err := application.Local().List(context.Background(), "posts", ridu.ListOptions{TrashOnly: true})
 	if err != nil || trash.Total != 1 || trash.Documents[0].ID != document.ID {
 		t.Fatalf("trash list = %#v, %v", trash, err)
 	}
-	restored, err := application.Local().RestoreDeleted(context.Background(), "posts", document.ID, nil)
+	restored, err := application.Local().RestoreDeleted(context.Background(), "posts", document.ID, ridu.MutationOptions{})
 	if err != nil || restored.DeletedAt != nil {
 		t.Fatalf("restore = %#v, %v", restored, err)
 	}
-	if _, err := application.Local().Delete(context.Background(), "posts", document.ID, nil); err != nil {
+	if _, err := application.Local().Delete(context.Background(), "posts", document.ID, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().DeletePermanent(context.Background(), "posts", document.ID, nil); err != nil {
+	if _, err := application.Local().DeletePermanent(context.Background(), "posts", document.ID, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	trash, err = application.Local().List(context.Background(), "posts", ridu.ListOptions{TrashOnly: true})
@@ -219,11 +219,11 @@ func TestTrashCapabilitiesMatchDeleteAccessWhenReadIsDenied(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	document, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("Recoverable")}, nil)
+	document, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("Recoverable")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Delete(context.Background(), "posts", document.ID, nil); err != nil {
+	if _, err := application.Local().Delete(context.Background(), "posts", document.ID, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	denyRead = true
@@ -234,13 +234,13 @@ func TestTrashCapabilitiesMatchDeleteAccessWhenReadIsDenied(t *testing.T) {
 	if !capabilities.Operations.RestoreDeleted || !capabilities.Operations.DeletePermanent || capabilities.Operations.Read {
 		t.Fatalf("trash capabilities = %#v", capabilities.Operations)
 	}
-	if _, err := application.Local().RestoreDeleted(context.Background(), "posts", document.ID, nil); err != nil {
+	if _, err := application.Local().RestoreDeleted(context.Background(), "posts", document.ID, ridu.MutationOptions{}); err != nil {
 		t.Fatalf("restore allowed by capability failed: %v", err)
 	}
-	if _, err := application.Local().Delete(context.Background(), "posts", document.ID, nil); err != nil {
+	if _, err := application.Local().Delete(context.Background(), "posts", document.ID, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().DeletePermanent(context.Background(), "posts", document.ID, nil); err != nil {
+	if _, err := application.Local().DeletePermanent(context.Background(), "posts", document.ID, ridu.MutationOptions{}); err != nil {
 		t.Fatalf("permanent delete allowed by capability failed: %v", err)
 	}
 }
@@ -252,39 +252,39 @@ func TestBulkTrashRestoreAndPermanentDeleteAreAtomic(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	first, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("First")}, nil)
+	first, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("First")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("Second")}, nil)
+	second, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("Second")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	ids := []string{first.ID, second.ID}
-	if deleted, err := application.Local().BulkDelete(context.Background(), "posts", ids, nil); err != nil || len(deleted) != 2 {
+	if deleted, err := application.Local().BulkDelete(context.Background(), "posts", ids, ridu.BulkOptions{}); err != nil || len(deleted) != 2 {
 		t.Fatalf("bulk trash = %#v, %v", deleted, err)
 	}
-	if restored, err := application.Local().BulkRestoreDeleted(context.Background(), "posts", ids, nil); err != nil || len(restored) != 2 {
+	if restored, err := application.Local().BulkRestoreDeleted(context.Background(), "posts", ids, ridu.BulkOptions{}); err != nil || len(restored) != 2 {
 		t.Fatalf("bulk restore = %#v, %v", restored, err)
 	}
-	if _, err := application.Local().BulkDelete(context.Background(), "posts", ids, nil); err != nil {
+	if _, err := application.Local().BulkDelete(context.Background(), "posts", ids, ridu.BulkOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	if deleted, err := application.Local().BulkDeletePermanent(context.Background(), "posts", ids, nil); err != nil || len(deleted) != 2 {
+	if deleted, err := application.Local().BulkDeletePermanent(context.Background(), "posts", ids, ridu.BulkOptions{}); err != nil || len(deleted) != 2 {
 		t.Fatalf("bulk permanent delete = %#v, %v", deleted, err)
 	}
-	third, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("Third")}, nil)
+	third, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("Third")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	fourth, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("Fourth")}, nil)
+	fourth, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("Fourth")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().BulkDelete(context.Background(), "posts", []string{third.ID, fourth.ID}, nil); err != nil {
+	if _, err := application.Local().BulkDelete(context.Background(), "posts", []string{third.ID, fourth.ID}, ridu.BulkOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	if emptied, err := application.Local().EmptyTrash(context.Background(), "posts", nil); err != nil || len(emptied) != 2 {
+	if emptied, err := application.Local().EmptyTrash(context.Background(), "posts", ridu.BulkOptions{}); err != nil || len(emptied) != 2 {
 		t.Fatalf("empty trash = %#v, %v", emptied, err)
 	}
 	trash, err := application.Local().List(context.Background(), "posts", ridu.ListOptions{TrashOnly: true})
@@ -322,15 +322,15 @@ func TestDuplicateHooksAndAtomicBulkRollback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	first, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("First"), "slug": store.String("first")}, nil)
+	first, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("First"), "slug": store.String("first")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("Second"), "slug": store.String("second")}, nil)
+	second, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("Second"), "slug": store.String("second")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	duplicate, err := application.Local().Duplicate(context.Background(), "posts", first.ID, nil, nil)
+	duplicate, err := application.Local().Duplicate(context.Background(), "posts", first.ID, nil, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -341,10 +341,10 @@ func TestDuplicateHooksAndAtomicBulkRollback(t *testing.T) {
 	if _, exists := duplicate.Values["slug"]; exists {
 		t.Fatalf("duplicate retained unique slug: %#v", duplicate.Values)
 	}
-	if _, err := application.Local().BulkUpdate(context.Background(), "posts", []string{first.ID, second.ID}, store.Values{"title": store.String("Changed")}, nil); !operationCode(err, "not_found") {
+	if _, err := application.Local().BulkUpdate(context.Background(), "posts", []string{first.ID, second.ID}, store.Values{"title": store.String("Changed")}, ridu.BulkOptions{}); !operationCode(err, "not_found") {
 		t.Fatalf("bulk update error = %v, want not_found", err)
 	}
-	unchanged, err := application.Local().Find(context.Background(), "posts", first.ID, nil)
+	unchanged, err := application.Local().Find(context.Background(), "posts", first.ID, ridu.FindOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -352,7 +352,7 @@ func TestDuplicateHooksAndAtomicBulkRollback(t *testing.T) {
 	if unchangedTitle != "First" {
 		t.Fatalf("first document survived partial bulk commit with title %q", unchangedTitle)
 	}
-	if _, err := application.Local().BulkDelete(context.Background(), "posts", []string{first.ID, first.ID}, nil); !operationCode(err, "bad_request") {
+	if _, err := application.Local().BulkDelete(context.Background(), "posts", []string{first.ID, first.ID}, ridu.BulkOptions{}); !operationCode(err, "bad_request") {
 		t.Fatalf("duplicate bulk targets error = %v, want bad_request", err)
 	}
 }
@@ -360,9 +360,7 @@ func TestDuplicateHooksAndAtomicBulkRollback(t *testing.T) {
 func TestDuplicateCannotLaunderSourceHiddenFieldsThroughNewOwnership(t *testing.T) {
 	application, err := ridu.New(ridu.Config{Name: "Duplicate source field access", Collections: []ridu.Collection{{
 		Slug: "posts",
-		Fields: field.Fields{field.Text("owner").Required(), field.Text("secret").Access(field.Access{Read: func(ctx operation.AccessContext,
-
-		) (bool, error) {
+		Fields: field.Fields{field.Text("owner").Required(), field.Text("secret").Access(field.Access{Read: func(ctx operation.Context) (bool, error) {
 			owner, _ := ctx.Root.Get("owner").
 				StringValue()
 			return ctx.Actor.ID != "" &&
@@ -379,11 +377,11 @@ func TestDuplicateCannotLaunderSourceHiddenFieldsThroughNewOwnership(t *testing.
 	ownerB := &store.Document{ID: "owner-b"}
 	source, err := application.Local().Create(context.Background(), "posts", store.Values{
 		"owner": store.String(ownerA.ID), "secret": store.String("source-only"),
-	}, ownerA)
+	}, ridu.MutationOptions{Actor: ownerA})
 	if err != nil {
 		t.Fatal(err)
 	}
-	hiddenSource, err := application.Local().Find(context.Background(), "posts", source.ID, ownerB)
+	hiddenSource, err := application.Local().Find(context.Background(), "posts", source.ID, ridu.FindOptions{Actor: ownerB})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -392,14 +390,14 @@ func TestDuplicateCannotLaunderSourceHiddenFieldsThroughNewOwnership(t *testing.
 	}
 	duplicate, err := application.Local().Duplicate(context.Background(), "posts", source.ID, store.Values{
 		"owner": store.String(ownerB.ID),
-	}, ownerB)
+	}, ridu.MutationOptions{Actor: ownerB})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, copied := duplicate.Values["secret"]; copied {
 		t.Fatalf("duplicate laundered source-hidden secret: %#v", duplicate.Values)
 	}
-	persisted, err := application.Local().Find(context.Background(), "posts", duplicate.ID, ownerB)
+	persisted, err := application.Local().Find(context.Background(), "posts", duplicate.ID, ridu.FindOptions{Actor: ownerB})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -447,63 +445,63 @@ func TestFullDocumentGlobalAndErrorHookMatrix(t *testing.T) {
 		Hooks: ridu.RootHooks{AfterError: []ridu.Hook{record("rootAfterError")}},
 		Collections: []ridu.Collection{{
 			Slug: "posts", Fields: field.Fields{field.Text("title").Required().Hooks(field.Hooks[string]{
-				BeforeDuplicate: []field.RawTransform{func(ctx operation.WriteContext, _ operation.Value[store.Value]) (operation.Change[store.Value], error) {
+				BeforeDuplicate: []field.RawTransform{func(ctx operation.Context, _ operation.Value[store.Value]) (operation.Change[store.Value], error) {
 					seen["fieldBeforeDuplicate"] = append(seen["fieldBeforeDuplicate"], ctx.Operation)
 					return operation.Keep[store.Value](), nil
 				}},
-				BeforeChange: []field.Transform[string]{func(ctx operation.WriteContext, _ operation.Value[string]) (operation.Change[string], error) {
+				BeforeChange: []field.Transform[string]{func(ctx operation.Context, _ operation.Value[string]) (operation.Change[string], error) {
 					seen["fieldBeforeChange"] = append(seen["fieldBeforeChange"], ctx.Operation)
 					return operation.Keep[string](), nil
 				}},
-				AfterChange: []field.Observer[string]{func(ctx operation.EventContext, _ operation.Value[string]) error {
+				AfterChange: []field.Observer[string]{func(ctx operation.Context, _ operation.Value[string]) error {
 					seen["fieldAfterChange"] = append(seen["fieldAfterChange"], ctx.Operation)
 					return nil
 				}},
-				BeforeDelete: []field.Observer[string]{func(ctx operation.EventContext, _ operation.Value[string]) error {
+				BeforeDelete: []field.Observer[string]{func(ctx operation.Context, _ operation.Value[string]) error {
 					seen["fieldBeforeDelete"] = append(seen["fieldBeforeDelete"], ctx.Operation)
 					return nil
 				}},
-				AfterDelete: []field.Observer[string]{func(ctx operation.EventContext, _ operation.Value[string]) error {
+				AfterDelete: []field.Observer[string]{func(ctx operation.Context, _ operation.Value[string]) error {
 					seen["fieldAfterDelete"] = append(seen["fieldAfterDelete"], ctx.Operation)
 					return nil
 				}},
-			}).ReadHooks(field.ReadHooks[string]{AfterRead: []field.OutputTransform[string]{func(ctx operation.ReadContext, _ operation.Value[string]) (operation.Change[string], error) {
+			}).ReplaceAfterRead(func(ctx operation.Context, _ operation.Value[string]) (operation.Change[string], error) {
 				seen["fieldAfterRead"] = append(seen["fieldAfterRead"], ctx.Operation)
 				return operation.Keep[string](), nil
-			}}})}, Hooks: hooks,
+			})}, Hooks: hooks,
 		}},
 		Globals: []ridu.Global{{Slug: "settings", Fields: field.Fields{field.Text("title").Required()}, Hooks: globalHooks}},
 	}, backend)
 	if err != nil {
 		t.Fatal(err)
 	}
-	created, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("First")}, nil)
+	created, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("First")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Duplicate(context.Background(), "posts", created.ID, nil, nil); err != nil {
+	if _, err := application.Local().Duplicate(context.Background(), "posts", created.ID, nil, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	read, err := application.Local().Find(context.Background(), "posts", created.ID, nil)
+	read, err := application.Local().Find(context.Background(), "posts", created.ID, ridu.FindOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if marker, _ := read.Values["readMarker"].StringValue(); marker != "hooked" {
 		t.Fatalf("afterRead response marker = %q", marker)
 	}
-	if _, err := application.Local().Delete(context.Background(), "posts", created.ID, nil); err != nil {
+	if _, err := application.Local().Delete(context.Background(), "posts", created.ID, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Create(context.Background(), "posts", store.Values{}, nil); !operationCode(err, "validation") {
+	if _, err := application.Local().Create(context.Background(), "posts", store.Values{}, ridu.MutationOptions{}); !operationCode(err, "validation") {
 		t.Fatalf("invalid create error = %v", err)
 	}
-	if _, err := application.Local().UpdateGlobal(context.Background(), "settings", store.Values{"title": store.String("Site")}, 0, nil); err != nil {
+	if _, err := application.Local().UpdateGlobal(context.Background(), "settings", store.Values{"title": store.String("Site")}, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Global(context.Background(), "settings", nil); err != nil {
+	if _, err := application.Local().Global(context.Background(), "settings", ridu.FindOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Find(context.Background(), "missing", "id", nil); !operationCode(err, "unknown_collection") {
+	if _, err := application.Local().Find(context.Background(), "missing", "id", ridu.FindOptions{}); !operationCode(err, "unknown_collection") {
 		t.Fatalf("unknown collection error = %v", err)
 	}
 
@@ -535,17 +533,17 @@ func TestFullDocumentGlobalAndErrorHookMatrix(t *testing.T) {
 func TestOmittedOptionalFieldHookCanSupplyAValue(t *testing.T) {
 	afterCommit := 0
 	application, err := ridu.New(ridu.Config{Name: "Optional field hook", Collections: []ridu.Collection{{
-		Slug: "posts", Fields: field.Fields{field.Text("optional").Hooks(field.Hooks[string]{BeforeValidate: []field.RawTransform{func(_ operation.WriteContext, input operation.Value[store.Value]) (operation.Change[store.Value], error) {
+		Slug: "posts", Fields: field.Fields{field.Text("optional").Hooks(field.Hooks[string]{BeforeValidate: []field.RawTransform{func(_ operation.Context, input operation.Value[store.Value]) (operation.Change[store.Value], error) {
 			if _, supplied := input.Get(); !supplied {
 				return operation.Replace(operation.Present(store.String("hook default"))), nil
 			}
 			return operation.Keep[store.Value](), nil
-		}}, AfterCommit: []field.Observer[string]{func(operation.EventContext, operation.Value[string]) error { afterCommit++; return nil }}})},
+		}}, AfterCommit: []field.Observer[string]{func(operation.Context, operation.Value[string]) error { afterCommit++; return nil }}})},
 	}}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
 	}
-	document, err := application.Local().Create(context.Background(), "posts", store.Values{}, nil)
+	document, err := application.Local().Create(context.Background(), "posts", store.Values{}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -576,7 +574,7 @@ func TestNestedLocalOperationReusesTransactionAndDefersAfterCommit(t *testing.T)
 				Hooks: ridu.CollectionHooks{
 					AfterOperation: []ridu.Hook{func(ctx ridu.HookContext) error {
 						lifecycle = append(lifecycle, "post stored")
-						_, err := ctx.Local.Create(ctx.Context, "audits", store.Values{"message": store.String("created")}, nil)
+						_, err := ctx.Local.Create(ctx.Context, "audits", store.Values{"message": store.String("created")}, ridu.MutationOptions{})
 						return err
 					}},
 					AfterCommit: []ridu.Hook{func(ridu.HookContext) error {
@@ -590,7 +588,7 @@ func TestNestedLocalOperationReusesTransactionAndDefersAfterCommit(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("nested")}, nil); err != nil {
+	if _, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("nested")}, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if got := backend.Events(); count(got, "begin") != 1 || count(got, "commit") != 1 {
@@ -636,7 +634,7 @@ func TestHookFailureAndCancellationRollbackInOrder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("rollback")}, nil); !operationCode(err, "hook_failed") {
+	if _, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("rollback")}, ridu.MutationOptions{}); !operationCode(err, "hook_failed") {
 		t.Fatalf("hook failure = %v", err)
 	}
 	events := backend.Events()
@@ -673,7 +671,7 @@ func TestRecursiveFieldVocabularyValidatesAndRoundTrips(t *testing.T) {
 		"due": store.String("2026-08-05T09:30:00Z"), "metadata": store.Object(store.Values{"source": store.String("fixture")}),
 		"answers": store.List(store.Object(store.Values{"_key": store.String("row-1"), "copy": store.String("Yes")})),
 		"content": store.List(store.Object(store.Values{"_key": store.String("block-1"), "blockType": store.String("heading"), "text": store.String("Hello")})),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -687,7 +685,7 @@ func TestRecursiveFieldVocabularyValidatesAndRoundTrips(t *testing.T) {
 	}
 	if _, err := application.Local().Create(context.Background(), "questions", store.Values{
 		"owner": store.String("not-an-email"), "score": store.String("four"), "published": store.Boolean(true),
-	}, nil); !operationCode(err, "validation") {
+	}, ridu.MutationOptions{}); !operationCode(err, "validation") {
 		t.Fatalf("invalid recursive values error = %v", err)
 	}
 }
@@ -710,7 +708,7 @@ func TestHooksReceiveDetachedAuthenticatedActor(t *testing.T) {
 		t.Fatal(err)
 	}
 	actor := store.Document{ID: "actor-1", Values: store.Values{"role": store.String("editor")}}
-	if _, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("Hello")}, &actor); err != nil {
+	if _, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("Hello")}, ridu.MutationOptions{Actor: &actor}); err != nil {
 		t.Fatal(err)
 	}
 	if received == nil || received.ID != actor.ID {
@@ -725,9 +723,7 @@ func TestHooksReceiveDetachedAuthenticatedActor(t *testing.T) {
 func TestHasManyPolymorphicPopulationHonorsTargetAccessAndRedaction(t *testing.T) {
 	publicPath, _ := query.NewPath("public")
 	application, err := ridu.New(ridu.Config{Name: "Relationship shapes", Collections: []ridu.Collection{
-		{Slug: "people", Fields: field.Fields{field.Text("name").Required(), field.Checkbox("public").Required(), field.Text("secret").Access(field.Access{Read: func(operation.AccessContext,
-
-		) (bool, error) {
+		{Slug: "people", Fields: field.Fields{field.Text("name").Required(), field.Checkbox("public").Required(), field.Text("secret").Access(field.Access{Read: func(operation.Context) (bool, error) {
 			return false, nil
 		}})}, Access: ridu.CollectionAccess{Read: func(ridu.AccessContext) (ridu.AccessDecision, error) {
 			return ridu.Where(query.Equal(publicPath, query.Boolean(true))), nil
@@ -738,19 +734,19 @@ func TestHasManyPolymorphicPopulationHonorsTargetAccessAndRedaction(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	visible, _ := application.Local().Create(context.Background(), "people", store.Values{"name": store.String("Visible"), "public": store.Boolean(true), "secret": store.String("redact")}, nil)
-	private, _ := application.Local().Create(context.Background(), "people", store.Values{"name": store.String("Private"), "public": store.Boolean(false)}, nil)
-	team, _ := application.Local().Create(context.Background(), "teams", store.Values{"name": store.String("Core"), "owner": store.String(visible.ID)}, nil)
+	visible, _ := application.Local().Create(context.Background(), "people", store.Values{"name": store.String("Visible"), "public": store.Boolean(true), "secret": store.String("redact")}, ridu.MutationOptions{})
+	private, _ := application.Local().Create(context.Background(), "people", store.Values{"name": store.String("Private"), "public": store.Boolean(false)}, ridu.MutationOptions{})
+	team, _ := application.Local().Create(context.Background(), "teams", store.Values{"name": store.String("Core"), "owner": store.String(visible.ID)}, ridu.MutationOptions{})
 	if _, err := application.Local().Create(context.Background(), "feeds", store.Values{
 		"watchers": store.List(store.String(visible.ID), store.String(private.ID)),
 		"subject":  store.Object(store.Values{"relationTo": store.String("teams"), "id": store.String(team.ID)}),
-	}, nil); !relationshipIssue(err, "watchers.1") {
+	}, ridu.MutationOptions{}); !relationshipIssue(err, "watchers.1") {
 		t.Fatalf("inaccessible relationship error = %v", err)
 	}
 	feed, err := application.Local().Create(context.Background(), "feeds", store.Values{
 		"watchers": store.List(store.String(visible.ID)),
 		"subject":  store.Object(store.Values{"relationTo": store.String("teams"), "id": store.String(team.ID)}),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -802,24 +798,24 @@ func TestRelationshipWritesRejectMissingFilteredAndNestedTargets(t *testing.T) {
 	}
 	denied, err := application.Local().Create(context.Background(), "people", store.Values{
 		"name": store.String("Denied"), "visible": store.Boolean(true),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	deniedID = denied.ID
 	visible, err := application.Local().Create(context.Background(), "people", store.Values{
 		"name": store.String("Visible"), "visible": store.Boolean(true),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	hidden, err := application.Local().Create(context.Background(), "people", store.Values{
 		"name": store.String("Hidden"), "visible": store.Boolean(false),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	team, err := application.Local().Create(context.Background(), "teams", store.Values{"name": store.String("Core")}, nil)
+	team, err := application.Local().Create(context.Background(), "teams", store.Values{"name": store.String("Core")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -837,7 +833,7 @@ func TestRelationshipWritesRejectMissingFilteredAndNestedTargets(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if _, err := application.Local().Create(context.Background(), "entries", test.values, nil); !relationshipIssue(err, test.path) {
+			if _, err := application.Local().Create(context.Background(), "entries", test.values, ridu.MutationOptions{}); !relationshipIssue(err, test.path) {
 				t.Fatalf("relationship error = %v", err)
 			}
 		})
@@ -849,7 +845,7 @@ func TestRelationshipWritesRejectMissingFilteredAndNestedTargets(t *testing.T) {
 		"meta":     store.Object(store.Values{"reviewer": store.String(visible.ID)}),
 		"sections": store.List(store.Object(store.Values{"editor": store.String(visible.ID)})),
 		"content":  store.List(store.Object(store.Values{"blockType": store.String("quote"), "source": store.String(visible.ID)})),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil || created.ID == "" {
 		t.Fatalf("valid relationship document = %#v, %v", created, err)
 	}
@@ -862,13 +858,11 @@ func TestAccessContextsReuseTransactionAndExposeWriteState(t *testing.T) {
 	backend := teststore.New()
 	var policyID string
 	var collectionContext ridu.AccessContext
-	var fieldContext operation.AccessContext
+	var fieldContext operation.Context
 	application, err := ridu.New(ridu.Config{Name: "Access contexts", Collections: []ridu.Collection{
 		{Slug: "policies", Fields: field.Fields{field.Text("name").Required()}},
 		{
-			Slug: "notes", Fields: field.Fields{field.Text("title").Required().Access(field.Access{Update: func(ctx operation.AccessContext,
-
-			) (bool, error) {
+			Slug: "notes", Fields: field.Fields{field.Text("title").Required().Access(field.Access{Update: func(ctx operation.Context) (bool, error) {
 				fieldContext = ctx
 				_, err := ctx.Local.FindByID(ctx.Context, "policies", operation.ID(policyID))
 				return true, err
@@ -876,7 +870,7 @@ func TestAccessContextsReuseTransactionAndExposeWriteState(t *testing.T) {
 			Access: ridu.CollectionAccess{Update: func(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
 				collectionContext = ctx
 				ctx.Data["title"] = store.String("mutated access snapshot")
-				_, err := ctx.Local.Find(ctx.Context, "policies", policyID, ctx.Actor)
+				_, err := ctx.Local.Find(ctx.Context, "policies", policyID, ridu.FindOptions{Actor: ctx.Actor})
 				return ridu.Allow(), err
 			}},
 		},
@@ -884,21 +878,21 @@ func TestAccessContextsReuseTransactionAndExposeWriteState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	policy, err := application.Local().Create(context.Background(), "policies", store.Values{"name": store.String("Editors")}, nil)
+	policy, err := application.Local().Create(context.Background(), "policies", store.Values{"name": store.String("Editors")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	policyID = policy.ID
 	note, err := application.Local().Create(context.Background(), "notes", store.Values{
 		"title": store.String("Before"), "summary": store.String("Sibling"),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	beforeBegins := count(backend.Events(), "begin")
 	updated, err := application.Local().Update(context.Background(), "notes", note.ID, store.Values{
 		"title": store.String("After"), "summary": store.String("Updated sibling"),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -928,17 +922,13 @@ func TestNestedFieldAccessUsesRuntimePathsAndSiblingRows(t *testing.T) {
 	application, err := ridu.New(ridu.Config{Name: "Nested field access", Collections: []ridu.Collection{{
 		Slug: "notes",
 		Fields: field.Fields{field.Array("rows", field.Fields{field.Text("secret").Access(field.Access{
-			Read: func(ctx operation.AccessContext,
-
-			) (bool, error) {
+			Read: func(ctx operation.Context) (bool, error) {
 				readPaths = append(readPaths, string(ctx.OccurrenceID))
 				visible, _ := ctx.Siblings.Get("visible").
 					BooleanValue()
 				return visible, nil
 			},
-			Update: func(ctx operation.AccessContext,
-
-			) (bool, error) {
+			Update: func(ctx operation.Context) (bool, error) {
 				visible, _ := ctx.Siblings.Get("visible").
 					BooleanValue()
 				return visible, nil
@@ -953,7 +943,7 @@ func TestNestedFieldAccessUsesRuntimePathsAndSiblingRows(t *testing.T) {
 			store.Object(store.Values{"secret": store.String("shown"), "visible": store.Boolean(true)}),
 			store.Object(store.Values{"secret": store.String("hidden"), "visible": store.Boolean(false)}),
 		),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -974,16 +964,14 @@ func TestNestedFieldAccessUsesRuntimePathsAndSiblingRows(t *testing.T) {
 			store.Object(store.Values{"secret": store.String("allowed"), "visible": store.Boolean(true)}),
 			store.Object(store.Values{"secret": store.String("denied"), "visible": store.Boolean(false)}),
 		),
-	}, nil); !fieldAccessIssue(err, "rows.1.secret") {
+	}, ridu.MutationOptions{}); !fieldAccessIssue(err, "rows.1.secret") {
 		t.Fatalf("nested field access error = %v", err)
 	}
 }
 
 func TestNestedPatchesPreserveOmittedProtectedFields(t *testing.T) {
 	protectedUpdateCalls := 0
-	denyUpdate := func(operation.AccessContext,
-
-	) (bool, error) {
+	denyUpdate := func(operation.Context) (bool, error) {
 		protectedUpdateCalls++
 		return false, nil
 	}
@@ -1003,7 +991,7 @@ func TestNestedPatchesPreserveOmittedProtectedFields(t *testing.T) {
 			"_key": store.String("block-1"), "blockType": store.String("quote"),
 			"public": store.String("old block"), "secret": store.String("block secret"),
 		})),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1013,7 +1001,7 @@ func TestNestedPatchesPreserveOmittedProtectedFields(t *testing.T) {
 		"content": store.List(store.Object(store.Values{
 			"_key": store.String("block-1"), "blockType": store.String("quote"), "public": store.String("new block"),
 		})),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1041,7 +1029,7 @@ func TestNestedPatchesPreserveOmittedProtectedFields(t *testing.T) {
 		{name: "block removal", patch: store.Values{"content": store.List()}, denied: "content.0.secret"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			if _, err := application.Local().Update(context.Background(), "pages", created.ID, test.patch, nil); !fieldAccessIssue(err, test.denied) {
+			if _, err := application.Local().Update(context.Background(), "pages", created.ID, test.patch, ridu.MutationOptions{}); !fieldAccessIssue(err, test.denied) {
 				t.Fatalf("nested removal error = %v", err)
 			}
 		})
@@ -1049,7 +1037,7 @@ func TestNestedPatchesPreserveOmittedProtectedFields(t *testing.T) {
 	if protectedUpdateCalls != 3 {
 		t.Fatalf("protected removal access calls = %d, want 3", protectedUpdateCalls)
 	}
-	current, err := application.Local().Find(context.Background(), "pages", created.ID, nil)
+	current, err := application.Local().Find(context.Background(), "pages", created.ID, ridu.FindOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1064,9 +1052,7 @@ func TestNestedPatchesPreserveOmittedProtectedFields(t *testing.T) {
 }
 
 func TestDuplicateStructuredRowKeysCannotBypassFieldAccess(t *testing.T) {
-	denySecret := func(operation.AccessContext,
-
-	) (bool, error) {
+	denySecret := func(operation.Context) (bool, error) {
 		return false, nil
 	}
 	application, err := ridu.New(ridu.Config{Name: "Structured row identity", Collections: []ridu.Collection{{
@@ -1100,7 +1086,7 @@ func TestDuplicateStructuredRowKeysCannotBypassFieldAccess(t *testing.T) {
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := application.Local().Create(context.Background(), "pages", test.data, nil)
+			_, err := application.Local().Create(context.Background(), "pages", test.data, ridu.MutationOptions{})
 			var operationError *ridu.OperationError
 			if !errors.As(err, &operationError) {
 				t.Fatalf("create error = %v, want validation error", err)
@@ -1121,17 +1107,13 @@ func TestBlockFieldAccessUsesCanonicalTypeAndRuntimeRows(t *testing.T) {
 	application, err := ridu.New(ridu.Config{Name: "Block field access", Collections: []ridu.Collection{{
 		Slug: "pages",
 		Fields: field.Fields{field.Blocks("content", field.Block{Slug: "quote", Fields: field.Fields{field.Text("source").Access(field.Access{
-			Read: func(ctx operation.AccessContext,
-
-			) (bool, error) {
+			Read: func(ctx operation.Context) (bool, error) {
 				readPaths = append(readPaths, string(ctx.OccurrenceID))
 				visible, _ := ctx.Siblings.Get("visible").
 					BooleanValue()
 				return visible, nil
 			},
-			Update: func(ctx operation.AccessContext,
-
-			) (bool, error) {
+			Update: func(ctx operation.Context) (bool, error) {
 				visible, _ := ctx.Siblings.Get("visible").
 					BooleanValue()
 				return visible, nil
@@ -1147,7 +1129,7 @@ func TestBlockFieldAccessUsesCanonicalTypeAndRuntimeRows(t *testing.T) {
 			store.Object(store.Values{"blockType": store.String("heading"), "text": store.String("Unrelated")}),
 			store.Object(store.Values{"blockType": store.String("quote"), "source": store.String("hidden"), "visible": store.Boolean(false)}),
 		),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1169,7 +1151,7 @@ func TestBlockFieldAccessUsesCanonicalTypeAndRuntimeRows(t *testing.T) {
 			store.Object(store.Values{"blockType": store.String("heading"), "text": store.String("Unrelated")}),
 			store.Object(store.Values{"blockType": store.String("quote"), "source": store.String("denied"), "visible": store.Boolean(false)}),
 		),
-	}, nil); !fieldAccessIssue(err, "content.2.source") {
+	}, ridu.MutationOptions{}); !fieldAccessIssue(err, "content.2.source") {
 		t.Fatalf("block field access error = %v", err)
 	}
 }
@@ -1182,23 +1164,17 @@ func TestFieldAccessHookMutationOriginalDocumentAndRecursionGuard(t *testing.T) 
 		Name: "Lifecycle security",
 		Collections: []ridu.Collection{{
 			Slug: "notes",
-			Fields: field.Fields{field.Text("title").Required().Hooks(field.Hooks[string]{BeforeValidate: []field.RawTransform{func(ctx operation.WriteContext, _ operation.Value[store.Value]) (operation.Change[store.Value], error) {
+			Fields: field.Fields{field.Text("title").Required().Hooks(field.Hooks[string]{BeforeValidate: []field.RawTransform{func(ctx operation.Context, _ operation.Value[store.Value]) (operation.Change[store.Value], error) {
 				fieldHookID = ctx.OccurrenceID
 				return operation.Keep[store.Value](), nil
 			}}}), field.Text("secret").Access(field.Access{
-				Read: func(operation.AccessContext,
-
-				) (bool, error) {
+				Read: func(operation.Context) (bool, error) {
 					return false, nil
 				},
-				Update: func(operation.AccessContext,
-
-				) (bool, error) {
+				Update: func(operation.Context) (bool, error) {
 					return false, nil
 				},
-			}), field.Group("meta", field.Fields{field.Text("hidden").Access(field.Access{Read: func(operation.AccessContext,
-
-			) (bool, error) {
+			}), field.Group("meta", field.Fields{field.Text("hidden").Access(field.Access{Read: func(operation.Context) (bool, error) {
 				return false, nil
 			}})})},
 			Hooks: ridu.CollectionHooks{
@@ -1220,7 +1196,7 @@ func TestFieldAccessHookMutationOriginalDocumentAndRecursionGuard(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	created, err := application.Local().Create(context.Background(), "notes", store.Values{"secret": store.String("hidden"), "meta": store.Object(store.Values{"hidden": store.String("nested")})}, nil)
+	created, err := application.Local().Create(context.Background(), "notes", store.Values{"secret": store.String("hidden"), "meta": store.Object(store.Values{"hidden": store.String("nested")})}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1237,10 +1213,10 @@ func TestFieldAccessHookMutationOriginalDocumentAndRecursionGuard(t *testing.T) 
 	if fieldHookID == "" {
 		t.Fatalf("field hook path = %q", fieldHookID)
 	}
-	if _, err := application.Local().Update(context.Background(), "notes", created.ID, store.Values{"secret": store.String("changed")}, nil); !operationCode(err, "field_access_denied") {
+	if _, err := application.Local().Update(context.Background(), "notes", created.ID, store.Values{"secret": store.String("changed")}, ridu.MutationOptions{}); !operationCode(err, "field_access_denied") {
 		t.Fatalf("protected field update error = %v", err)
 	}
-	if _, err := application.Local().Update(context.Background(), "notes", created.ID, store.Values{"title": store.String("updated")}, nil); err != nil {
+	if _, err := application.Local().Update(context.Background(), "notes", created.ID, store.Values{"title": store.String("updated")}, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if originalTitle != "hook default" {
@@ -1251,14 +1227,14 @@ func TestFieldAccessHookMutationOriginalDocumentAndRecursionGuard(t *testing.T) 
 	recursive, err := ridu.New(ridu.Config{Name: "Recursion", Collections: []ridu.Collection{{
 		Slug: "loops", Fields: field.Fields{field.Text("title").Required()},
 		Hooks: ridu.CollectionHooks{AfterOperation: []ridu.Hook{func(ctx ridu.HookContext) error {
-			_, err := ctx.Local.Create(ctx.Context, "loops", store.Values{"title": store.String("again")}, nil)
+			_, err := ctx.Local.Create(ctx.Context, "loops", store.Values{"title": store.String("again")}, ridu.MutationOptions{})
 			return err
 		}}},
 	}}}, recursiveBackend)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := recursive.Local().Create(context.Background(), "loops", store.Values{"title": store.String("start")}, nil); err == nil {
+	if _, err := recursive.Local().Create(context.Background(), "loops", store.Values{"title": store.String("start")}, ridu.MutationOptions{}); err == nil {
 		t.Fatal("recursive hook succeeded")
 	}
 	if slices.Contains(recursiveBackend.Events(), "commit") {

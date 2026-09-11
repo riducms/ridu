@@ -96,18 +96,18 @@ func TestLivePrimitiveListPoliciesDoNotRunAuthoritativeLifecycle(t *testing.T) {
 		}
 		return nil, nil
 	}
-	points := field.TextList("points").DefaultFrom(func(operation.DefaultContext) (operation.Value[[]string], error) {
+	points := field.TextList("points").DefaultFrom(func(operation.Context) (operation.Value[[]string], error) {
 		defaults++
 		return operation.Present([]string{"default"}), nil
 	}).
-		Hooks(field.Hooks[[]string]{BeforeValidate: []field.RawTransform{func(operation.WriteContext, operation.Value[store.Value]) (operation.Change[store.Value], error) {
+		Hooks(field.Hooks[[]string]{BeforeValidate: []field.RawTransform{func(operation.Context, operation.Value[store.Value]) (operation.Change[store.Value], error) {
 			hooks++
 			return operation.Keep[store.Value](), nil
-		}}, BeforeChange: []field.Transform[[]string]{func(operation.WriteContext, operation.Value[[]string]) (operation.Change[[]string], error) {
+		}}, BeforeChange: []field.Transform[[]string]{func(operation.Context, operation.Value[[]string]) (operation.Change[[]string], error) {
 			hooks++
 			return operation.Keep[[]string](), nil
 		}}}).
-		Validate(func(_ operation.ValidationContext, value operation.Value[[]string]) ([]operation.Issue, error) {
+		Validate(func(_ operation.Context, value operation.Value[[]string]) ([]operation.Issue, error) {
 			save++
 			return rule(value)
 		}).
@@ -127,10 +127,10 @@ func TestLivePrimitiveListPoliciesDoNotRunAuthoritativeLifecycle(t *testing.T) {
 			return rule(value)
 		})
 	saveOnlyCalls := 0
-	app, backend := newLiveApp(t, core.Config{Name: "Whole list advisory lifecycle", Collections: []core.Collection{{Slug: "products", Fields: field.Fields{points, field.NumberList("sizes").DefaultFrom(func(operation.DefaultContext) (operation.Value[[]float64], error) {
+	app, backend := newLiveApp(t, core.Config{Name: "Whole list advisory lifecycle", Collections: []core.Collection{{Slug: "products", Fields: field.Fields{points, field.NumberList("sizes").DefaultFrom(func(operation.Context) (operation.Value[[]float64], error) {
 		defaults++
 		return operation.Present([]float64{0}), nil
-	}), field.TextList("saveOnly").Validate(func(operation.ValidationContext, operation.Value[[]string]) ([]operation.Issue, error) {
+	}), field.TextList("saveOnly").Validate(func(operation.Context, operation.Value[[]string]) ([]operation.Issue, error) {
 		saveOnlyCalls++
 		return nil, nil
 	})}}}})
@@ -153,7 +153,7 @@ func TestLivePrimitiveListPoliciesDoNotRunAuthoritativeLifecycle(t *testing.T) {
 	if response.Code != 400 || saveOnlyCalls != 0 {
 		t.Fatal("save-only list opted in implicitly")
 	}
-	_, err := app.Local().Create(t.Context(), "products", store.Values{"points": store.List(store.String("invalid"))}, nil)
+	_, err := app.Local().Create(t.Context(), "products", store.Values{"points": store.List(store.String("invalid"))}, core.MutationOptions{})
 	var failure *core.OperationError
 	if !errors.As(err, &failure) || failure.Status != 422 {
 		t.Fatalf("Local accepted invalid list: %v", err)
@@ -182,7 +182,7 @@ func TestLivePrimitiveListRetainedIdentityLocaleAndWholeListTargets(t *testing.T
 	row := func(key, text string) store.Value {
 		return store.Object(store.Values{"_key": store.String(key), "points": store.List(store.String(text)), "label": store.String(key)})
 	}
-	document, err := app.Local().Create(t.Context(), "products", store.Values{"title": store.String("persisted"), "points": old, "translated": old, "details": store.Object(store.Values{"points": old}), "variants": store.List(row("A", "first"), row("B", "second")), "blocks": store.List(store.Object(store.Values{"_key": store.String("C"), "blockType": store.String("card"), "points": old}))}, nil, core.LocaleOptions{Locale: "en"})
+	document, err := app.Local().Create(t.Context(), "products", store.Values{"title": store.String("persisted"), "points": old, "translated": old, "details": store.Object(store.Values{"points": old}), "variants": store.List(row("A", "first"), row("B", "second")), "blocks": store.List(store.Object(store.Values{"_key": store.String("C"), "blockType": store.String("card"), "points": old}))}, core.MutationOptions{Locale: "en"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -272,7 +272,7 @@ func TestLivePrimitiveListEmbeddedContextAndReader(t *testing.T) {
 	})
 	card := field.Block{Slug: "card", Fields: field.Fields{field.Text("label"), sizes, field.TextList("points")}}
 	config := core.Config{Name: "Embedded live lists", Plugins: []core.Plugin{richtext.New()}, Localization: core.LocalizationConfig{DefaultLocale: "en", Locales: []core.Locale{{Code: "en", Label: "English"}, {Code: "fr", Label: "French", FallbackLocales: []schema.LocaleCode{"en"}}}}, Collections: []core.Collection{
-		{Slug: "suppliers", Fields: field.Fields{field.Text("name"), field.TextList("translated").Localized(), field.TextList("secret").Access(field.Access{Read: func(operation.AccessContext) (bool, error) { return false, nil }})}, Access: core.CollectionAccess{Read: func(ctx core.AccessContext) (core.AccessDecision, error) {
+		{Slug: "suppliers", Fields: field.Fields{field.Text("name"), field.TextList("translated").Localized(), field.TextList("secret").Access(field.Access{Read: func(operation.Context) (bool, error) { return false, nil }})}, Access: core.CollectionAccess{Read: func(ctx core.AccessContext) (core.AccessDecision, error) {
 			reads++
 			if ctx.Actor == nil || ctx.Actor.ID != "live-editor" || ctx.ActorCollection != "live-users" || ctx.Locale != "fr" {
 				t.Errorf("reader lost actor/locale: %#v", ctx)
@@ -282,14 +282,14 @@ func TestLivePrimitiveListEmbeddedContextAndReader(t *testing.T) {
 		{Slug: "products", Fields: field.Fields{field.Text("title"), richtext.Field("body", richtext.Config{Blocks: []field.Block{card}}), richtext.Field("localizedBody", richtext.Config{Blocks: []field.Block{card}}).Localized()}},
 	}}
 	app, _ := newLiveApp(t, config)
-	supplier, err := app.Local().Create(t.Context(), "suppliers", store.Values{"name": store.String("Supplier"), "translated": store.List(store.String("English")), "secret": store.List(store.String("private"))}, nil, core.LocaleOptions{Locale: "en"})
+	supplier, err := app.Local().Create(t.Context(), "suppliers", store.Values{"name": store.String("Supplier"), "translated": store.List(store.String("English")), "secret": store.List(store.String("private"))}, core.MutationOptions{Locale: "en"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	supplierID = supplier.ID
 	payload := store.Values{"sizes": store.List(store.Number(0), store.Number(8), store.Number(8)), "points": store.List(store.String("oak"))}
 	body := richtextblocks.Document(richtextblocks.Block("card", "E", payload))
-	document, err := app.Local().Create(t.Context(), "products", store.Values{"title": store.String("saved"), "body": body, "localizedBody": body}, nil, core.LocaleOptions{Locale: "fr"})
+	document, err := app.Local().Create(t.Context(), "products", store.Values{"title": store.String("saved"), "body": body, "localizedBody": body}, core.MutationOptions{Locale: "fr"})
 	if err != nil {
 		t.Fatal(err)
 	}

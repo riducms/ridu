@@ -86,8 +86,7 @@ func TestCustomFieldCarriesConfigAndUsesItsRuntimeValidator(t *testing.T) {
 	document, err := application.Local().Create(
 		context.Background(),
 		"brands",
-		store.Values{"accent": store.String("#663399")},
-		nil,
+		store.Values{"accent": store.String("#663399")}, ridu.MutationOptions{},
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -99,8 +98,7 @@ func TestCustomFieldCarriesConfigAndUsesItsRuntimeValidator(t *testing.T) {
 	_, err = application.Local().Create(
 		context.Background(),
 		"brands",
-		store.Values{"accent": store.String("purple")},
-		nil,
+		store.Values{"accent": store.String("purple")}, ridu.MutationOptions{},
 	)
 	var operationError *ridu.OperationError
 	if !errors.As(err, &operationError) || len(operationError.Issues) != 1 {

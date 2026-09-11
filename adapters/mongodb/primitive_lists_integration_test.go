@@ -51,7 +51,7 @@ func TestPrimitiveListsMongoDBRepeatedQueryBoundary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := app.Local().Create(t.Context(), "primitive-products", primitivelists.Values(), nil); err != nil {
+	if _, err := app.Local().Create(t.Context(), "primitive-products", primitivelists.Values(), core.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	for _, test := range []struct {

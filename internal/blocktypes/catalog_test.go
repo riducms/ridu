@@ -21,7 +21,7 @@ func resolveBlocks(blocks ...field.Block) (schema.Manifest, error) {
 func TestReusableBlockNames(t *testing.T) {
 	hero := field.Block{TypeName: "Hero", Slug: "hero", Fields: field.Fields{field.Text("heading").Required(), field.Blocks("children", field.Block{Slug: "text", Fields: field.Fields{field.Text("body")}})}}
 	relabeled := hero.Snapshot()
-	relabeled.Admin = field.BlockAdmin{RowLabelPath: "heading"}
+	relabeled.Admin = field.BlockAdmin{NameField: "heading", RowLabelPath: "heading"}
 	relabeled.Labels = field.BlockLabels{Singular: "Banner", Plural: "Banners", SingularTranslations: map[string]string{"en": "Display banner"}, PluralTranslations: map[string]string{"en": "Display banners"}}
 	relabeled.Fields[0] = field.Text("heading").Required().Label("Headline")
 	manifest, err := resolveBlocks(hero, relabeled)

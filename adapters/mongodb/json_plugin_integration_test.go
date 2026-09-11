@@ -93,7 +93,7 @@ func TestMongoDBJSONAndOfficialRichTextLifecycle(t *testing.T) {
 	created, err := application.Local().Create(t.Context(), "pages", store.Values{
 		"metadata": firstMetadata,
 		"content":  firstContent,
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +105,7 @@ func TestMongoDBJSONAndOfficialRichTextLifecycle(t *testing.T) {
 	draft := true
 	metadataPath, _ := query.NewPath("metadata")
 	contentPath, _ := query.NewPath("content")
-	found, err := application.Local().FindWithOptions(t.Context(), "pages", created.ID, ridu.FindOptions{
+	found, err := application.Local().Find(t.Context(), "pages", created.ID, ridu.FindOptions{
 		Draft: &draft, Select: []query.Path{metadataPath, contentPath},
 	})
 	if err != nil {
@@ -121,7 +121,7 @@ func TestMongoDBJSONAndOfficialRichTextLifecycle(t *testing.T) {
 		}),
 	)
 	secondContent := mongoRichTextDocument("Second", secondPostID, secondMediaID, "Second asset")
-	updated, err := application.Local().UpdateWithOptions(t.Context(), "pages", created.ID, store.Values{
+	updated, err := application.Local().Update(t.Context(), "pages", created.ID, store.Values{
 		"metadata": secondMetadata,
 		"content":  secondContent,
 	}, ridu.MutationOptions{ExpectedRevision: created.Revision})
@@ -133,13 +133,13 @@ func TestMongoDBJSONAndOfficialRichTextLifecycle(t *testing.T) {
 	}
 	assertMongoJSONPluginValues(t, updated, secondMetadata, secondContent, "Second")
 
-	found, err = application.Local().FindWithOptions(t.Context(), "pages", created.ID, ridu.FindOptions{Draft: &draft})
+	found, err = application.Local().Find(t.Context(), "pages", created.ID, ridu.FindOptions{Draft: &draft})
 	if err != nil {
 		t.Fatal(err)
 	}
 	assertMongoJSONPluginValues(t, found, secondMetadata, secondContent, "Second")
 
-	versions, err := application.Local().Versions(t.Context(), "pages", created.ID, nil)
+	versions, err := application.Local().Versions(t.Context(), "pages", created.ID, ridu.FindOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,7 +149,7 @@ func TestMongoDBJSONAndOfficialRichTextLifecycle(t *testing.T) {
 	assertMongoJSONPluginValues(t, versions[0].Snapshot, secondMetadata, secondContent, "Second")
 	assertMongoJSONPluginValues(t, versions[1].Snapshot, firstMetadata, firstContent, "First")
 
-	restored, err := application.Local().Restore(t.Context(), "pages", created.ID, 1, updated.Revision, nil)
+	restored, err := application.Local().Restore(t.Context(), "pages", created.ID, 1, ridu.MutationOptions{ExpectedRevision: updated.Revision})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,12 +158,12 @@ func TestMongoDBJSONAndOfficialRichTextLifecycle(t *testing.T) {
 	}
 	assertMongoJSONPluginValues(t, restored, firstMetadata, firstContent, "First")
 
-	found, err = application.Local().FindWithOptions(t.Context(), "pages", created.ID, ridu.FindOptions{Draft: &draft})
+	found, err = application.Local().Find(t.Context(), "pages", created.ID, ridu.FindOptions{Draft: &draft})
 	if err != nil {
 		t.Fatal(err)
 	}
 	assertMongoJSONPluginValues(t, found, firstMetadata, firstContent, "First")
-	versions, err = application.Local().Versions(t.Context(), "pages", created.ID, nil)
+	versions, err = application.Local().Versions(t.Context(), "pages", created.ID, ridu.FindOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

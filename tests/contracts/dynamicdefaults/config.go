@@ -31,13 +31,13 @@ func Collection() core.Collection {
 	}
 }
 
-func initialTitle(ctx operation.DefaultContext) (operation.Value[string], error) {
+func initialTitle(ctx operation.Context) (operation.Value[string], error) {
 	if ctx.Locale == "fr" {
 		return operation.Present("Sans titre"), nil
 	}
 	return operation.Present("Untitled"), nil
 }
 
-func initialNote(operation.DefaultContext) (operation.Value[string], error) {
+func initialNote(operation.Context) (operation.Value[string], error) {
 	return operation.Present("Server note"), nil
 }

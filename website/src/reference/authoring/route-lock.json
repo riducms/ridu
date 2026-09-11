@@ -473,18 +473,6 @@
 			"module": "ridu",
 			"symbol": "plugin-field-type"
 		},
-		"go:github.com/riducms/ridu#PluginDatabaseAdapter": {
-			"module": "ridu",
-			"symbol": "plugin-database-adapter"
-		},
-		"go:github.com/riducms/ridu#PluginDatabaseContribution": {
-			"module": "ridu",
-			"symbol": "plugin-database-contribution"
-		},
-		"go:github.com/riducms/ridu#PluginMigration": {
-			"module": "ridu",
-			"symbol": "plugin-migration"
-		},
 		"go:github.com/riducms/ridu#PluginHookContribution": {
 			"module": "ridu",
 			"symbol": "plugin-hook-contribution"
@@ -508,22 +496,6 @@
 		"go:github.com/riducms/ridu#EndpointHandler": {
 			"module": "ridu",
 			"symbol": "endpoint-handler"
-		},
-		"go:github.com/riducms/ridu#PluginEndpoint": {
-			"module": "ridu",
-			"symbol": "plugin-endpoint"
-		},
-		"go:github.com/riducms/ridu#PluginEndpointContext": {
-			"module": "ridu",
-			"symbol": "plugin-endpoint-context"
-		},
-		"go:github.com/riducms/ridu#PluginEndpointHandler": {
-			"module": "ridu",
-			"symbol": "plugin-endpoint-handler"
-		},
-		"go:github.com/riducms/ridu#PluginTransport": {
-			"module": "ridu",
-			"symbol": "plugin-transport"
 		},
 		"go:github.com/riducms/ridu#PluginTransportContext": {
 			"module": "ridu",
@@ -564,14 +536,6 @@
 		"go:github.com/riducms/ridu#AdminPluginAPIVersion": {
 			"module": "ridu",
 			"symbol": "admin-plugin-api-version"
-		},
-		"go:github.com/riducms/ridu#PluginDatabaseAdapterPostgres": {
-			"module": "ridu",
-			"symbol": "plugin-database-adapter-postgres"
-		},
-		"go:github.com/riducms/ridu#PluginDatabaseAdapterSQLite": {
-			"module": "ridu",
-			"symbol": "plugin-database-adapter-sqlite"
 		},
 		"go:github.com/riducms/ridu#MaxTaskPayloadBytes": {
 			"module": "ridu",
@@ -749,25 +713,13 @@
 			"module": "core",
 			"symbol": "local-api-create"
 		},
-		"go:github.com/riducms/ridu/core#LocalAPI.CreateWithOptions": {
-			"module": "core",
-			"symbol": "local-api-create-with-options"
-		},
 		"go:github.com/riducms/ridu/core#LocalAPI.Duplicate": {
 			"module": "core",
 			"symbol": "local-api-duplicate"
 		},
-		"go:github.com/riducms/ridu/core#LocalAPI.DuplicateWithOptions": {
-			"module": "core",
-			"symbol": "local-api-duplicate-with-options"
-		},
 		"go:github.com/riducms/ridu/core#LocalAPI.Find": {
 			"module": "core",
 			"symbol": "local-api-find"
-		},
-		"go:github.com/riducms/ridu/core#LocalAPI.FindWithOptions": {
-			"module": "core",
-			"symbol": "local-api-find-with-options"
 		},
 		"go:github.com/riducms/ridu/core#LocalAPI.List": {
 			"module": "core",
@@ -785,17 +737,9 @@
 			"module": "core",
 			"symbol": "local-api-update"
 		},
-		"go:github.com/riducms/ridu/core#LocalAPI.UpdateWithOptions": {
-			"module": "core",
-			"symbol": "local-api-update-with-options"
-		},
 		"go:github.com/riducms/ridu/core#LocalAPI.Delete": {
 			"module": "core",
 			"symbol": "local-api-delete"
-		},
-		"go:github.com/riducms/ridu/core#LocalAPI.DeleteWithOptions": {
-			"module": "core",
-			"symbol": "local-api-delete-with-options"
 		},
 		"go:github.com/riducms/ridu/core#LocalAPI.RestoreDeleted": {
 			"module": "core",
@@ -809,25 +753,13 @@
 			"module": "core",
 			"symbol": "local-api-publish"
 		},
-		"go:github.com/riducms/ridu/core#LocalAPI.PublishWithOptions": {
-			"module": "core",
-			"symbol": "local-api-publish-with-options"
-		},
 		"go:github.com/riducms/ridu/core#LocalAPI.PublishChanges": {
 			"module": "core",
 			"symbol": "local-api-publish-changes"
 		},
-		"go:github.com/riducms/ridu/core#LocalAPI.PublishChangesWithOptions": {
-			"module": "core",
-			"symbol": "local-api-publish-changes-with-options"
-		},
 		"go:github.com/riducms/ridu/core#LocalAPI.Unpublish": {
 			"module": "core",
 			"symbol": "local-api-unpublish"
-		},
-		"go:github.com/riducms/ridu/core#LocalAPI.UnpublishWithOptions": {
-			"module": "core",
-			"symbol": "local-api-unpublish-with-options"
 		},
 		"go:github.com/riducms/ridu/core#LocalAPI.Versions": {
 			"module": "core",
@@ -845,10 +777,6 @@
 			"module": "core",
 			"symbol": "local-api-restore-as-draft"
 		},
-		"go:github.com/riducms/ridu/core#LocalAPI.RestoreVersionWithOptions": {
-			"module": "core",
-			"symbol": "local-api-restore-version-with-options"
-		},
 		"go:github.com/riducms/ridu/core#LocalAPI.Import": {
 			"module": "core",
 			"symbol": "local-api-import"
@@ -857,10 +785,6 @@
 			"module": "core",
 			"symbol": "local-api-capabilities"
 		},
-		"go:github.com/riducms/ridu/core#LocalAPI.UpdateRevision": {
-			"module": "core",
-			"symbol": "local-api-update-revision"
-		},
 		"go:github.com/riducms/ridu/core#LocalAPI.MutateJoin": {
 			"module": "core",
 			"symbol": "local-api-mutate-join"
@@ -868,30 +792,6 @@
 		"go:github.com/riducms/ridu/core#LocalAPI.CopyLocale": {
 			"module": "core",
 			"symbol": "local-api-copy-locale"
-		},
-		"go:github.com/riducms/ridu/core#LocalAPI.RestoreDeletedWithOptions": {
-			"module": "core",
-			"symbol": "local-api-restore-deleted-with-options"
-		},
-		"go:github.com/riducms/ridu/core#LocalAPI.DeletePermanentWithOptions": {
-			"module": "core",
-			"symbol": "local-api-delete-permanent-with-options"
-		},
-		"go:github.com/riducms/ridu/core#LocalAPI.MutateJoinWithOptions": {
-			"module": "core",
-			"symbol": "local-api-mutate-join-with-options"
-		},
-		"go:github.com/riducms/ridu/core#LocalAPI.CopyLocaleWithOptions": {
-			"module": "core",
-			"symbol": "local-api-copy-locale-with-options"
-		},
-		"go:github.com/riducms/ridu/core#LocalAPI.VersionsWithOptions": {
-			"module": "core",
-			"symbol": "local-api-versions-with-options"
-		},
-		"go:github.com/riducms/ridu/core#LocalAPI.VersionWithOptions": {
-			"module": "core",
-			"symbol": "local-api-version-with-options"
 		},
 		"go:github.com/riducms/ridu/core#LocalAPI.BulkUpdate": {
 			"module": "core",
@@ -929,57 +829,25 @@
 			"module": "core",
 			"symbol": "local-api-update-global"
 		},
-		"go:github.com/riducms/ridu/core#LocalAPI.GlobalWithOptions": {
-			"module": "core",
-			"symbol": "local-api-global-with-options"
-		},
-		"go:github.com/riducms/ridu/core#LocalAPI.UpdateGlobalWithOptions": {
-			"module": "core",
-			"symbol": "local-api-update-global-with-options"
-		},
 		"go:github.com/riducms/ridu/core#LocalAPI.PublishGlobal": {
 			"module": "core",
 			"symbol": "local-api-publish-global"
-		},
-		"go:github.com/riducms/ridu/core#LocalAPI.PublishGlobalWithOptions": {
-			"module": "core",
-			"symbol": "local-api-publish-global-with-options"
 		},
 		"go:github.com/riducms/ridu/core#LocalAPI.PublishGlobalChanges": {
 			"module": "core",
 			"symbol": "local-api-publish-global-changes"
 		},
-		"go:github.com/riducms/ridu/core#LocalAPI.PublishGlobalChangesWithOptions": {
-			"module": "core",
-			"symbol": "local-api-publish-global-changes-with-options"
-		},
 		"go:github.com/riducms/ridu/core#LocalAPI.UnpublishGlobal": {
 			"module": "core",
 			"symbol": "local-api-unpublish-global"
-		},
-		"go:github.com/riducms/ridu/core#LocalAPI.UnpublishGlobalWithOptions": {
-			"module": "core",
-			"symbol": "local-api-unpublish-global-with-options"
 		},
 		"go:github.com/riducms/ridu/core#LocalAPI.CopyGlobalLocale": {
 			"module": "core",
 			"symbol": "local-api-copy-global-locale"
 		},
-		"go:github.com/riducms/ridu/core#LocalAPI.CopyGlobalLocaleWithOptions": {
-			"module": "core",
-			"symbol": "local-api-copy-global-locale-with-options"
-		},
-		"go:github.com/riducms/ridu/core#LocalAPI.GlobalVersionsWithOptions": {
-			"module": "core",
-			"symbol": "local-api-global-versions-with-options"
-		},
 		"go:github.com/riducms/ridu/core#LocalAPI.GlobalVersion": {
 			"module": "core",
 			"symbol": "local-api-global-version"
-		},
-		"go:github.com/riducms/ridu/core#LocalAPI.GlobalVersionWithOptions": {
-			"module": "core",
-			"symbol": "local-api-global-version-with-options"
 		},
 		"go:github.com/riducms/ridu/core#LocalAPI.RestoreGlobal": {
 			"module": "core",
@@ -988,10 +856,6 @@
 		"go:github.com/riducms/ridu/core#LocalAPI.RestoreGlobalAsDraft": {
 			"module": "core",
 			"symbol": "local-api-restore-global-as-draft"
-		},
-		"go:github.com/riducms/ridu/core#LocalAPI.RestoreGlobalVersionWithOptions": {
-			"module": "core",
-			"symbol": "local-api-restore-global-version-with-options"
 		},
 		"go:github.com/riducms/ridu/core#LocalAPI.GlobalVersions": {
 			"module": "core",
@@ -1213,17 +1077,9 @@
 			"module": "core",
 			"symbol": "app-run-tasks"
 		},
-		"go:github.com/riducms/ridu/core#App.CreateAuthUserWithOptions": {
-			"module": "core",
-			"symbol": "app-create-auth-user-with-options"
-		},
 		"go:github.com/riducms/ridu/core#App.CreateAuthUserForTransport": {
 			"module": "core",
 			"symbol": "app-create-auth-user-for-transport"
-		},
-		"go:github.com/riducms/ridu/core#App.CreateAuthUserForTransportWithOptions": {
-			"module": "core",
-			"symbol": "app-create-auth-user-for-transport-with-options"
 		},
 		"go:github.com/riducms/ridu/core#App.SetPassword": {
 			"module": "core",
@@ -1252,10 +1108,6 @@
 		"go:github.com/riducms/ridu/core#App.DuplicateForIdentity": {
 			"module": "core",
 			"symbol": "app-duplicate-for-identity"
-		},
-		"go:github.com/riducms/ridu/core#App.DuplicateWithOptions": {
-			"module": "core",
-			"symbol": "app-duplicate-with-options"
 		},
 		"go:github.com/riducms/ridu/core#App.UploadForIdentity": {
 			"module": "core",
@@ -1400,18 +1252,6 @@
 		"go:github.com/riducms/ridu/core#PluginFieldType": {
 			"module": "core",
 			"symbol": "plugin-field-type"
-		},
-		"go:github.com/riducms/ridu/core#PluginDatabaseAdapter": {
-			"module": "core",
-			"symbol": "plugin-database-adapter"
-		},
-		"go:github.com/riducms/ridu/core#PluginDatabaseContribution": {
-			"module": "core",
-			"symbol": "plugin-database-contribution"
-		},
-		"go:github.com/riducms/ridu/core#PluginMigration": {
-			"module": "core",
-			"symbol": "plugin-migration"
 		},
 		"go:github.com/riducms/ridu/core#GenerationProvider": {
 			"module": "core",
@@ -1616,22 +1456,6 @@
 		"go:github.com/riducms/ridu/core#EndpointHandler": {
 			"module": "core",
 			"symbol": "endpoint-handler"
-		},
-		"go:github.com/riducms/ridu/core#PluginEndpoint": {
-			"module": "core",
-			"symbol": "plugin-endpoint"
-		},
-		"go:github.com/riducms/ridu/core#PluginEndpointContext": {
-			"module": "core",
-			"symbol": "plugin-endpoint-context"
-		},
-		"go:github.com/riducms/ridu/core#PluginEndpointHandler": {
-			"module": "core",
-			"symbol": "plugin-endpoint-handler"
-		},
-		"go:github.com/riducms/ridu/core#PluginTransport": {
-			"module": "core",
-			"symbol": "plugin-transport"
 		},
 		"go:github.com/riducms/ridu/core#PluginTransportContext": {
 			"module": "core",
@@ -1929,10 +1753,6 @@
 			"module": "core",
 			"symbol": "bound-typed-collection-update-method"
 		},
-		"go:github.com/riducms/ridu/core#BoundTypedCollection.UpdateRevision": {
-			"module": "core",
-			"symbol": "bound-typed-collection-update-revision-method"
-		},
 		"go:github.com/riducms/ridu/core#BoundTypedGlobal.Find": {
 			"module": "core",
 			"symbol": "bound-typed-global-find-method"
@@ -1964,14 +1784,6 @@
 		"go:github.com/riducms/ridu/core#NonNullInput.MarshalJSON": {
 			"module": "core",
 			"symbol": "non-null-input-marshal-json-method"
-		},
-		"go:github.com/riducms/ridu/core#PluginDatabaseAdapterPostgres": {
-			"module": "core",
-			"symbol": "plugin-database-adapter-postgres"
-		},
-		"go:github.com/riducms/ridu/core#PluginDatabaseAdapterSQLite": {
-			"module": "core",
-			"symbol": "plugin-database-adapter-sq-lite"
 		},
 		"go:github.com/riducms/ridu/core#TaskBackoffExponential": {
 			"module": "core",
@@ -2925,10 +2737,6 @@
 			"module": "schema",
 			"symbol": "field-condition-predicate"
 		},
-		"go:github.com/riducms/ridu/schema#FieldConditionValue": {
-			"module": "schema",
-			"symbol": "field-condition-value"
-		},
 		"go:github.com/riducms/ridu/schema#TextField": {
 			"module": "schema",
 			"symbol": "text-field"
@@ -2976,10 +2784,6 @@
 		"go:github.com/riducms/ridu/schema#RelationshipFilter": {
 			"module": "schema",
 			"symbol": "relationship-filter"
-		},
-		"go:github.com/riducms/ridu/schema#RelationshipFilterValue": {
-			"module": "schema",
-			"symbol": "relationship-filter-value"
 		},
 		"go:github.com/riducms/ridu/schema#RelationshipTarget": {
 			"module": "schema",
@@ -3045,18 +2849,6 @@
 			"module": "schema",
 			"symbol": "plugin-field-type"
 		},
-		"go:github.com/riducms/ridu/schema#PluginDatabaseAdapter": {
-			"module": "schema",
-			"symbol": "plugin-database-adapter"
-		},
-		"go:github.com/riducms/ridu/schema#PluginDatabaseContribution": {
-			"module": "schema",
-			"symbol": "plugin-database-contribution"
-		},
-		"go:github.com/riducms/ridu/schema#PluginMigration": {
-			"module": "schema",
-			"symbol": "plugin-migration"
-		},
 		"go:github.com/riducms/ridu/schema#PluginEndpoint": {
 			"module": "schema",
 			"symbol": "plugin-endpoint"
@@ -3105,10 +2897,6 @@
 			"module": "schema",
 			"symbol": "is-valid-plugin-key"
 		},
-		"go:github.com/riducms/ridu/schema#IsValidPluginMigrationSQL": {
-			"module": "schema",
-			"symbol": "is-valid-plugin-migration-sql"
-		},
 		"go:github.com/riducms/ridu/schema#IsValidAdminPluginPackage": {
 			"module": "schema",
 			"symbol": "is-valid-admin-plugin-package"
@@ -3140,10 +2928,6 @@
 		"go:github.com/riducms/ridu/schema#IsValidGoPackage": {
 			"module": "schema",
 			"symbol": "is-valid-go-package"
-		},
-		"go:github.com/riducms/ridu/schema#IsValidPluginTable": {
-			"module": "schema",
-			"symbol": "is-valid-plugin-table"
 		},
 		"go:github.com/riducms/ridu/schema#FieldCategoryNested": {
 			"module": "schema",
@@ -3308,22 +3092,6 @@
 		"go:github.com/riducms/ridu/schema#Manifest.UnmarshalJSON": {
 			"module": "schema",
 			"symbol": "manifest-unmarshal-json-method"
-		},
-		"go:github.com/riducms/ridu/schema#Plugin.DatabaseContribution": {
-			"module": "schema",
-			"symbol": "plugin-database-contribution-method"
-		},
-		"go:github.com/riducms/ridu/schema#Plugin.HasDatabaseContributions": {
-			"module": "schema",
-			"symbol": "plugin-has-database-contributions-method"
-		},
-		"go:github.com/riducms/ridu/schema#PluginDatabaseAdapterPostgres": {
-			"module": "schema",
-			"symbol": "plugin-database-adapter-postgres"
-		},
-		"go:github.com/riducms/ridu/schema#PluginDatabaseAdapterSQLite": {
-			"module": "schema",
-			"symbol": "plugin-database-adapter-sq-lite"
 		},
 		"go:github.com/riducms/ridu/schema#ReferenceDeleteNullify": {
 			"module": "schema",
@@ -4009,14 +3777,6 @@
 			"module": "migration",
 			"symbol": "auth-identity-resource"
 		},
-		"go:github.com/riducms/ridu/migration#PluginStep": {
-			"module": "migration",
-			"symbol": "plugin-step"
-		},
-		"go:github.com/riducms/ridu/migration#PluginStepChecksum": {
-			"module": "migration",
-			"symbol": "plugin-step-checksum"
-		},
 		"go:github.com/riducms/ridu/migration#DataTransformDescriptor": {
 			"module": "migration",
 			"symbol": "data-transform-descriptor"
@@ -4068,10 +3828,6 @@
 		"go:github.com/riducms/ridu/migration#RenamePayload": {
 			"module": "migration",
 			"symbol": "rename-payload"
-		},
-		"go:github.com/riducms/ridu/migration#PluginPayload": {
-			"module": "migration",
-			"symbol": "plugin-payload"
 		},
 		"go:github.com/riducms/ridu/migration#DataTransformPayload": {
 			"module": "migration",
@@ -4280,10 +4036,6 @@
 		"go:github.com/riducms/ridu/migration#StepMongoDBRenameResource": {
 			"module": "migration",
 			"symbol": "step-mongo-db-rename-resource"
-		},
-		"go:github.com/riducms/ridu/migration#StepPluginSQL": {
-			"module": "migration",
-			"symbol": "step-plugin-sql"
 		},
 		"go:github.com/riducms/ridu/migration#StepRenameContent": {
 			"module": "migration",
@@ -5977,14 +5729,6 @@
 			"module": "sdk",
 			"symbol": "ridu-config-shape"
 		},
-		"ts:@riducms/sdk#GeneratedRiduConfigRegistry": {
-			"module": "sdk",
-			"symbol": "generated-ridu-config-registry"
-		},
-		"ts:@riducms/sdk#DefaultRiduConfig": {
-			"module": "sdk",
-			"symbol": "default-ridu-config"
-		},
 		"ts:@riducms/sdk#CollectionSlug": {
 			"module": "sdk",
 			"symbol": "collection-slug"
@@ -6681,18 +6425,6 @@
 			"module": "protocol",
 			"symbol": "schema-plugin-field-type"
 		},
-		"ts:@riducms/protocol#SchemaPluginDatabaseAdapter": {
-			"module": "protocol",
-			"symbol": "schema-plugin-database-adapter"
-		},
-		"ts:@riducms/protocol#SchemaPluginDatabaseContribution": {
-			"module": "protocol",
-			"symbol": "schema-plugin-database-contribution"
-		},
-		"ts:@riducms/protocol#SchemaPluginMigration": {
-			"module": "protocol",
-			"symbol": "schema-plugin-migration"
-		},
 		"ts:@riducms/protocol#SchemaPluginEndpoint": {
 			"module": "protocol",
 			"symbol": "schema-plugin-endpoint"
@@ -6789,10 +6521,6 @@
 			"module": "protocol",
 			"symbol": "schema-field-condition-predicate"
 		},
-		"ts:@riducms/protocol#SchemaFieldConditionValue": {
-			"module": "protocol",
-			"symbol": "schema-field-condition-value"
-		},
 		"ts:@riducms/protocol#SchemaTextField": {
 			"module": "protocol",
 			"symbol": "schema-text-field"
@@ -6853,10 +6581,6 @@
 			"module": "protocol",
 			"symbol": "schema-relationship-filter"
 		},
-		"ts:@riducms/protocol#SchemaRelationshipFilterValue": {
-			"module": "protocol",
-			"symbol": "schema-relationship-filter-value"
-		},
 		"ts:@riducms/protocol#SchemaRelationshipTarget": {
 			"module": "protocol",
 			"symbol": "schema-relationship-target"
@@ -6913,10 +6637,6 @@
 			"module": "plugin",
 			"symbol": "set-admin-i18n"
 		},
-		"ts:@riducms/plugin#resolveAdminPluginPairs": {
-			"module": "plugin",
-			"symbol": "resolve-admin-plugin-pairs"
-		},
 		"ts:@riducms/plugin#resolveAdminExtensions": {
 			"module": "plugin",
 			"symbol": "resolve-admin-plugin-extensions"
@@ -6932,10 +6652,6 @@
 		"ts:@riducms/plugin#AdminPluginPair": {
 			"module": "plugin",
 			"symbol": "admin-plugin-pair"
-		},
-		"ts:@riducms/plugin#ResolvedAdminPluginPairs": {
-			"module": "plugin",
-			"symbol": "resolved-admin-plugin-pairs"
 		},
 		"ts:@riducms/plugin#ResolvedAdminExtensions": {
 			"module": "plugin",
@@ -7957,10 +7673,6 @@
 			"module": "core",
 			"symbol": "non-null-input-unmarshal-json-method"
 		},
-		"go:github.com/riducms/ridu/core#TypedLocaleOptions": {
-			"module": "core",
-			"symbol": "typed-locale-options"
-		},
 		"go:github.com/riducms/ridu/core#TypedAllLocalesCollection": {
 			"module": "core",
 			"symbol": "typed-all-locales-collection"
@@ -8269,10 +7981,6 @@
 			"module": "plugin",
 			"symbol": "registered-field-editor-decode-method"
 		},
-		"ts:@riducms/plugin/admin#validateAdminConfig": {
-			"module": "plugin",
-			"symbol": "validate-admin-editors"
-		},
 		"ts:@riducms/plugin/admin#defineRowLabel": {
 			"module": "plugin",
 			"symbol": "define-row-label"
@@ -8461,10 +8169,6 @@
 			"module": "field",
 			"symbol": "array-field-append-hooks-method"
 		},
-		"go:github.com/riducms/ridu/field#ArrayField.AppendReadHooks": {
-			"module": "field",
-			"symbol": "array-field-append-read-hooks-method"
-		},
 		"go:github.com/riducms/ridu/field#ArrayField.EditAdmin": {
 			"module": "field",
 			"symbol": "array-field-edit-admin-method"
@@ -8504,14 +8208,6 @@
 		"go:github.com/riducms/ridu/field#ArrayField.Private": {
 			"module": "field",
 			"symbol": "array-field-private-method"
-		},
-		"go:github.com/riducms/ridu/field#ArrayField.ReadHookPolicy": {
-			"module": "field",
-			"symbol": "array-field-read-hook-policy-method"
-		},
-		"go:github.com/riducms/ridu/field#ArrayField.ReadHooks": {
-			"module": "field",
-			"symbol": "array-field-read-hooks-method"
 		},
 		"go:github.com/riducms/ridu/field#ArrayField.Rename": {
 			"module": "field",
@@ -8565,10 +8261,6 @@
 			"module": "field",
 			"symbol": "blocks-field-append-hooks-method"
 		},
-		"go:github.com/riducms/ridu/field#BlocksField.AppendReadHooks": {
-			"module": "field",
-			"symbol": "blocks-field-append-read-hooks-method"
-		},
 		"go:github.com/riducms/ridu/field#BlocksField.EditAdmin": {
 			"module": "field",
 			"symbol": "blocks-field-edit-admin-method"
@@ -8604,14 +8296,6 @@
 		"go:github.com/riducms/ridu/field#BlocksField.Private": {
 			"module": "field",
 			"symbol": "blocks-field-private-method"
-		},
-		"go:github.com/riducms/ridu/field#BlocksField.ReadHookPolicy": {
-			"module": "field",
-			"symbol": "blocks-field-read-hook-policy-method"
-		},
-		"go:github.com/riducms/ridu/field#BlocksField.ReadHooks": {
-			"module": "field",
-			"symbol": "blocks-field-read-hooks-method"
 		},
 		"go:github.com/riducms/ridu/field#BlocksField.Rename": {
 			"module": "field",
@@ -8749,10 +8433,6 @@
 			"module": "field",
 			"symbol": "group-field-append-hooks-method"
 		},
-		"go:github.com/riducms/ridu/field#GroupField.AppendReadHooks": {
-			"module": "field",
-			"symbol": "group-field-append-read-hooks-method"
-		},
 		"go:github.com/riducms/ridu/field#GroupField.EditAdmin": {
 			"module": "field",
 			"symbol": "group-field-edit-admin-method"
@@ -8784,14 +8464,6 @@
 		"go:github.com/riducms/ridu/field#GroupField.Private": {
 			"module": "field",
 			"symbol": "group-field-private-method"
-		},
-		"go:github.com/riducms/ridu/field#GroupField.ReadHookPolicy": {
-			"module": "field",
-			"symbol": "group-field-read-hook-policy-method"
-		},
-		"go:github.com/riducms/ridu/field#GroupField.ReadHooks": {
-			"module": "field",
-			"symbol": "group-field-read-hooks-method"
 		},
 		"go:github.com/riducms/ridu/field#GroupField.Rename": {
 			"module": "field",
@@ -8869,10 +8541,6 @@
 			"module": "field",
 			"symbol": "number-field-append-hooks-method"
 		},
-		"go:github.com/riducms/ridu/field#NumberField.AppendReadHooks": {
-			"module": "field",
-			"symbol": "number-field-append-read-hooks-method"
-		},
 		"go:github.com/riducms/ridu/field#NumberField.Default": {
 			"module": "field",
 			"symbol": "number-field-default-method"
@@ -8916,14 +8584,6 @@
 		"go:github.com/riducms/ridu/field#NumberField.Private": {
 			"module": "field",
 			"symbol": "number-field-private-method"
-		},
-		"go:github.com/riducms/ridu/field#NumberField.ReadHookPolicy": {
-			"module": "field",
-			"symbol": "number-field-read-hook-policy-method"
-		},
-		"go:github.com/riducms/ridu/field#NumberField.ReadHooks": {
-			"module": "field",
-			"symbol": "number-field-read-hooks-method"
 		},
 		"go:github.com/riducms/ridu/field#NumberField.Rename": {
 			"module": "field",
@@ -8985,10 +8645,6 @@
 			"module": "field",
 			"symbol": "output-field-label-method"
 		},
-		"go:github.com/riducms/ridu/field#OutputField.ReadHooks": {
-			"module": "field",
-			"symbol": "output-field-read-hooks-method"
-		},
 		"go:github.com/riducms/ridu/field#OutputField.Rename": {
 			"module": "field",
 			"symbol": "output-field-rename-method"
@@ -9017,10 +8673,6 @@
 			"module": "field",
 			"symbol": "plugin-field-append-hooks-method"
 		},
-		"go:github.com/riducms/ridu/field#PluginField.AppendReadHooks": {
-			"module": "field",
-			"symbol": "plugin-field-append-read-hooks-method"
-		},
 		"go:github.com/riducms/ridu/field#PluginField.EditAdmin": {
 			"module": "field",
 			"symbol": "plugin-field-edit-admin-method"
@@ -9048,14 +8700,6 @@
 		"go:github.com/riducms/ridu/field#PluginField.Private": {
 			"module": "field",
 			"symbol": "plugin-field-private-method"
-		},
-		"go:github.com/riducms/ridu/field#PluginField.ReadHookPolicy": {
-			"module": "field",
-			"symbol": "plugin-field-read-hook-policy-method"
-		},
-		"go:github.com/riducms/ridu/field#PluginField.ReadHooks": {
-			"module": "field",
-			"symbol": "plugin-field-read-hooks-method"
 		},
 		"go:github.com/riducms/ridu/field#PluginField.Rename": {
 			"module": "field",
@@ -9092,10 +8736,6 @@
 		"go:github.com/riducms/ridu/field#RawTransform": {
 			"module": "field",
 			"symbol": "raw-transform"
-		},
-		"go:github.com/riducms/ridu/field#ReadHooks": {
-			"module": "field",
-			"symbol": "read-hooks"
 		},
 		"go:github.com/riducms/ridu/field#Reference": {
 			"module": "field",
@@ -9137,10 +8777,6 @@
 			"module": "field",
 			"symbol": "relationship-field-append-hooks-method"
 		},
-		"go:github.com/riducms/ridu/field#RelationshipField.AppendReadHooks": {
-			"module": "field",
-			"symbol": "relationship-field-append-read-hooks-method"
-		},
 		"go:github.com/riducms/ridu/field#RelationshipField.EditAdmin": {
 			"module": "field",
 			"symbol": "relationship-field-edit-admin-method"
@@ -9172,14 +8808,6 @@
 		"go:github.com/riducms/ridu/field#RelationshipField.Private": {
 			"module": "field",
 			"symbol": "relationship-field-private-method"
-		},
-		"go:github.com/riducms/ridu/field#RelationshipField.ReadHookPolicy": {
-			"module": "field",
-			"symbol": "relationship-field-read-hook-policy-method"
-		},
-		"go:github.com/riducms/ridu/field#RelationshipField.ReadHooks": {
-			"module": "field",
-			"symbol": "relationship-field-read-hooks-method"
 		},
 		"go:github.com/riducms/ridu/field#RelationshipField.Rename": {
 			"module": "field",
@@ -9261,10 +8889,6 @@
 			"module": "field",
 			"symbol": "text-field-append-hooks-method"
 		},
-		"go:github.com/riducms/ridu/field#TextField.AppendReadHooks": {
-			"module": "field",
-			"symbol": "text-field-append-read-hooks-method"
-		},
 		"go:github.com/riducms/ridu/field#TextField.Default": {
 			"module": "field",
 			"symbol": "text-field-default-method"
@@ -9309,14 +8933,6 @@
 			"module": "field",
 			"symbol": "text-field-private-method"
 		},
-		"go:github.com/riducms/ridu/field#TextField.ReadHookPolicy": {
-			"module": "field",
-			"symbol": "text-field-read-hook-policy-method"
-		},
-		"go:github.com/riducms/ridu/field#TextField.ReadHooks": {
-			"module": "field",
-			"symbol": "text-field-read-hooks-method"
-		},
 		"go:github.com/riducms/ridu/field#TextField.Rename": {
 			"module": "field",
 			"symbol": "text-field-rename-method"
@@ -9356,10 +8972,6 @@
 		"go:github.com/riducms/ridu/field#Visit": {
 			"module": "field",
 			"symbol": "visit"
-		},
-		"go:github.com/riducms/ridu/operation#AccessContext": {
-			"module": "operation",
-			"symbol": "access-context"
 		},
 		"go:github.com/riducms/ridu/operation#Actor": {
 			"module": "operation",
@@ -9401,10 +9013,6 @@
 			"module": "operation",
 			"symbol": "empty"
 		},
-		"go:github.com/riducms/ridu/operation#EventContext": {
-			"module": "operation",
-			"symbol": "event-context"
-		},
 		"go:github.com/riducms/ridu/operation#ID": {
 			"module": "operation",
 			"symbol": "id"
@@ -9440,10 +9048,6 @@
 		"go:github.com/riducms/ridu/operation#Read": {
 			"module": "operation",
 			"symbol": "read"
-		},
-		"go:github.com/riducms/ridu/operation#ReadContext": {
-			"module": "operation",
-			"symbol": "read-context"
 		},
 		"go:github.com/riducms/ridu/operation#Reader": {
 			"module": "operation",
@@ -9493,10 +9097,6 @@
 			"module": "operation",
 			"symbol": "update"
 		},
-		"go:github.com/riducms/ridu/operation#ValidationContext": {
-			"module": "operation",
-			"symbol": "validation-context"
-		},
 		"go:github.com/riducms/ridu/operation#Value": {
 			"module": "operation",
 			"symbol": "value"
@@ -9520,10 +9120,6 @@
 		"go:github.com/riducms/ridu/operation#View.String": {
 			"module": "operation",
 			"symbol": "view-string-method"
-		},
-		"go:github.com/riducms/ridu/operation#WriteContext": {
-			"module": "operation",
-			"symbol": "write-context"
 		},
 		"go:github.com/riducms/ridu/field#ComponentRef.Err": {
 			"module": "field",
@@ -9577,10 +9173,6 @@
 			"module": "field",
 			"symbol": "as-output"
 		},
-		"go:github.com/riducms/ridu/field#OutputField.ReadHookPolicy": {
-			"module": "field",
-			"symbol": "output-field-read-hook-policy-method"
-		},
 		"go:github.com/riducms/ridu/plugins/seo#Plugin.TransformFields": {
 			"module": "seo",
 			"symbol": "plugin-transform-fields-method"
@@ -9592,10 +9184,6 @@
 		"go:github.com/riducms/ridu/field#AsCheckbox": {
 			"module": "field",
 			"symbol": "as-checkbox"
-		},
-		"go:github.com/riducms/ridu/field#AsCode": {
-			"module": "field",
-			"symbol": "as-code"
 		},
 		"go:github.com/riducms/ridu/field#AsDate": {
 			"module": "field",
@@ -9629,10 +9217,6 @@
 			"module": "field",
 			"symbol": "as-polymorphic-relationships"
 		},
-		"go:github.com/riducms/ridu/field#AsRadio": {
-			"module": "field",
-			"symbol": "as-radio"
-		},
 		"go:github.com/riducms/ridu/field#AsRelationships": {
 			"module": "field",
 			"symbol": "as-relationships"
@@ -9640,10 +9224,6 @@
 		"go:github.com/riducms/ridu/field#AsSelect": {
 			"module": "field",
 			"symbol": "as-select"
-		},
-		"go:github.com/riducms/ridu/field#AsTextarea": {
-			"module": "field",
-			"symbol": "as-textarea"
 		},
 		"go:github.com/riducms/ridu/field#AsUpload": {
 			"module": "field",
@@ -9676,10 +9256,6 @@
 		"go:github.com/riducms/ridu/field#CheckboxField.AppendHooks": {
 			"module": "field",
 			"symbol": "checkbox-field-append-hooks-method"
-		},
-		"go:github.com/riducms/ridu/field#CheckboxField.AppendReadHooks": {
-			"module": "field",
-			"symbol": "checkbox-field-append-read-hooks-method"
 		},
 		"go:github.com/riducms/ridu/field#CheckboxField.Default": {
 			"module": "field",
@@ -9721,14 +9297,6 @@
 			"module": "field",
 			"symbol": "checkbox-field-private-method"
 		},
-		"go:github.com/riducms/ridu/field#CheckboxField.ReadHookPolicy": {
-			"module": "field",
-			"symbol": "checkbox-field-read-hook-policy-method"
-		},
-		"go:github.com/riducms/ridu/field#CheckboxField.ReadHooks": {
-			"module": "field",
-			"symbol": "checkbox-field-read-hooks-method"
-		},
 		"go:github.com/riducms/ridu/field#CheckboxField.Rename": {
 			"module": "field",
 			"symbol": "checkbox-field-rename-method"
@@ -9757,110 +9325,6 @@
 			"module": "field",
 			"symbol": "checkbox-field-validators-method"
 		},
-		"go:github.com/riducms/ridu/field#CodeField": {
-			"module": "field",
-			"symbol": "code-field"
-		},
-		"go:github.com/riducms/ridu/field#CodeField.Access": {
-			"module": "field",
-			"symbol": "code-field-access-method"
-		},
-		"go:github.com/riducms/ridu/field#CodeField.Admin": {
-			"module": "field",
-			"symbol": "code-field-admin-method"
-		},
-		"go:github.com/riducms/ridu/field#CodeField.AppendHooks": {
-			"module": "field",
-			"symbol": "code-field-append-hooks-method"
-		},
-		"go:github.com/riducms/ridu/field#CodeField.AppendReadHooks": {
-			"module": "field",
-			"symbol": "code-field-append-read-hooks-method"
-		},
-		"go:github.com/riducms/ridu/field#CodeField.Default": {
-			"module": "field",
-			"symbol": "code-field-default-method"
-		},
-		"go:github.com/riducms/ridu/field#CodeField.EditAdmin": {
-			"module": "field",
-			"symbol": "code-field-edit-admin-method"
-		},
-		"go:github.com/riducms/ridu/field#CodeField.HookPolicy": {
-			"module": "field",
-			"symbol": "code-field-hook-policy-method"
-		},
-		"go:github.com/riducms/ridu/field#CodeField.Hooks": {
-			"module": "field",
-			"symbol": "code-field-hooks-method"
-		},
-		"go:github.com/riducms/ridu/field#CodeField.Index": {
-			"module": "field",
-			"symbol": "code-field-index-method"
-		},
-		"go:github.com/riducms/ridu/field#CodeField.Label": {
-			"module": "field",
-			"symbol": "code-field-label-method"
-		},
-		"go:github.com/riducms/ridu/field#CodeField.LabelTranslations": {
-			"module": "field",
-			"symbol": "code-field-label-translations-method"
-		},
-		"go:github.com/riducms/ridu/field#CodeField.Localized": {
-			"module": "field",
-			"symbol": "code-field-localized-method"
-		},
-		"go:github.com/riducms/ridu/field#CodeField.MaxLength": {
-			"module": "field",
-			"symbol": "code-field-max-length-method"
-		},
-		"go:github.com/riducms/ridu/field#CodeField.MinLength": {
-			"module": "field",
-			"symbol": "code-field-min-length-method"
-		},
-		"go:github.com/riducms/ridu/field#CodeField.PrependHooks": {
-			"module": "field",
-			"symbol": "code-field-prepend-hooks-method"
-		},
-		"go:github.com/riducms/ridu/field#CodeField.Private": {
-			"module": "field",
-			"symbol": "code-field-private-method"
-		},
-		"go:github.com/riducms/ridu/field#CodeField.ReadHookPolicy": {
-			"module": "field",
-			"symbol": "code-field-read-hook-policy-method"
-		},
-		"go:github.com/riducms/ridu/field#CodeField.ReadHooks": {
-			"module": "field",
-			"symbol": "code-field-read-hooks-method"
-		},
-		"go:github.com/riducms/ridu/field#CodeField.Rename": {
-			"module": "field",
-			"symbol": "code-field-rename-method"
-		},
-		"go:github.com/riducms/ridu/field#CodeField.ReplaceValidators": {
-			"module": "field",
-			"symbol": "code-field-replace-validators-method"
-		},
-		"go:github.com/riducms/ridu/field#CodeField.Required": {
-			"module": "field",
-			"symbol": "code-field-required-method"
-		},
-		"go:github.com/riducms/ridu/field#CodeField.RestrictAccess": {
-			"module": "field",
-			"symbol": "code-field-restrict-access-method"
-		},
-		"go:github.com/riducms/ridu/field#CodeField.Unique": {
-			"module": "field",
-			"symbol": "code-field-unique-method"
-		},
-		"go:github.com/riducms/ridu/field#CodeField.Validate": {
-			"module": "field",
-			"symbol": "code-field-validate-method"
-		},
-		"go:github.com/riducms/ridu/field#CodeField.Validators": {
-			"module": "field",
-			"symbol": "code-field-validators-method"
-		},
 		"go:github.com/riducms/ridu/field#DateField": {
 			"module": "field",
 			"symbol": "date-field"
@@ -9876,10 +9340,6 @@
 		"go:github.com/riducms/ridu/field#DateField.AppendHooks": {
 			"module": "field",
 			"symbol": "date-field-append-hooks-method"
-		},
-		"go:github.com/riducms/ridu/field#DateField.AppendReadHooks": {
-			"module": "field",
-			"symbol": "date-field-append-read-hooks-method"
 		},
 		"go:github.com/riducms/ridu/field#DateField.Default": {
 			"module": "field",
@@ -9920,14 +9380,6 @@
 		"go:github.com/riducms/ridu/field#DateField.Private": {
 			"module": "field",
 			"symbol": "date-field-private-method"
-		},
-		"go:github.com/riducms/ridu/field#DateField.ReadHookPolicy": {
-			"module": "field",
-			"symbol": "date-field-read-hook-policy-method"
-		},
-		"go:github.com/riducms/ridu/field#DateField.ReadHooks": {
-			"module": "field",
-			"symbol": "date-field-read-hooks-method"
 		},
 		"go:github.com/riducms/ridu/field#DateField.Rename": {
 			"module": "field",
@@ -9973,10 +9425,6 @@
 			"module": "field",
 			"symbol": "email-field-append-hooks-method"
 		},
-		"go:github.com/riducms/ridu/field#EmailField.AppendReadHooks": {
-			"module": "field",
-			"symbol": "email-field-append-read-hooks-method"
-		},
 		"go:github.com/riducms/ridu/field#EmailField.Default": {
 			"module": "field",
 			"symbol": "email-field-default-method"
@@ -10016,14 +9464,6 @@
 		"go:github.com/riducms/ridu/field#EmailField.Private": {
 			"module": "field",
 			"symbol": "email-field-private-method"
-		},
-		"go:github.com/riducms/ridu/field#EmailField.ReadHookPolicy": {
-			"module": "field",
-			"symbol": "email-field-read-hook-policy-method"
-		},
-		"go:github.com/riducms/ridu/field#EmailField.ReadHooks": {
-			"module": "field",
-			"symbol": "email-field-read-hooks-method"
 		},
 		"go:github.com/riducms/ridu/field#EmailField.Rename": {
 			"module": "field",
@@ -10073,10 +9513,6 @@
 			"module": "field",
 			"symbol": "join-field-allow-create-method"
 		},
-		"go:github.com/riducms/ridu/field#JoinField.AppendReadHooks": {
-			"module": "field",
-			"symbol": "join-field-append-read-hooks-method"
-		},
 		"go:github.com/riducms/ridu/field#JoinField.DefaultColumns": {
 			"module": "field",
 			"symbol": "join-field-default-columns-method"
@@ -10105,14 +9541,6 @@
 			"module": "field",
 			"symbol": "join-field-private-method"
 		},
-		"go:github.com/riducms/ridu/field#JoinField.ReadHookPolicy": {
-			"module": "field",
-			"symbol": "join-field-read-hook-policy-method"
-		},
-		"go:github.com/riducms/ridu/field#JoinField.ReadHooks": {
-			"module": "field",
-			"symbol": "join-field-read-hooks-method"
-		},
 		"go:github.com/riducms/ridu/field#JoinField.Rename": {
 			"module": "field",
 			"symbol": "join-field-rename-method"
@@ -10136,10 +9564,6 @@
 		"go:github.com/riducms/ridu/field#JSONField.AppendHooks": {
 			"module": "field",
 			"symbol": "json-field-append-hooks-method"
-		},
-		"go:github.com/riducms/ridu/field#JSONField.AppendReadHooks": {
-			"module": "field",
-			"symbol": "json-field-append-read-hooks-method"
 		},
 		"go:github.com/riducms/ridu/field#JSONField.EditAdmin": {
 			"module": "field",
@@ -10172,14 +9596,6 @@
 		"go:github.com/riducms/ridu/field#JSONField.Private": {
 			"module": "field",
 			"symbol": "json-field-private-method"
-		},
-		"go:github.com/riducms/ridu/field#JSONField.ReadHookPolicy": {
-			"module": "field",
-			"symbol": "json-field-read-hook-policy-method"
-		},
-		"go:github.com/riducms/ridu/field#JSONField.ReadHooks": {
-			"module": "field",
-			"symbol": "json-field-read-hooks-method"
 		},
 		"go:github.com/riducms/ridu/field#JSONField.Rename": {
 			"module": "field",
@@ -10233,10 +9649,6 @@
 			"module": "field",
 			"symbol": "multi-select-field-append-hooks-method"
 		},
-		"go:github.com/riducms/ridu/field#MultiSelectField.AppendReadHooks": {
-			"module": "field",
-			"symbol": "multi-select-field-append-read-hooks-method"
-		},
 		"go:github.com/riducms/ridu/field#MultiSelectField.Options": {
 			"module": "field",
 			"symbol": "multi-select-field-options-method"
@@ -10277,14 +9689,6 @@
 			"module": "field",
 			"symbol": "multi-select-field-private-method"
 		},
-		"go:github.com/riducms/ridu/field#MultiSelectField.ReadHookPolicy": {
-			"module": "field",
-			"symbol": "multi-select-field-read-hook-policy-method"
-		},
-		"go:github.com/riducms/ridu/field#MultiSelectField.ReadHooks": {
-			"module": "field",
-			"symbol": "multi-select-field-read-hooks-method"
-		},
 		"go:github.com/riducms/ridu/field#MultiSelectField.Rename": {
 			"module": "field",
 			"symbol": "multi-select-field-rename-method"
@@ -10312,10 +9716,6 @@
 		"go:github.com/riducms/ridu/field#NumberField.LabelTranslations": {
 			"module": "field",
 			"symbol": "number-field-label-translations-method"
-		},
-		"go:github.com/riducms/ridu/field#OutputField.AppendReadHooks": {
-			"module": "field",
-			"symbol": "output-field-append-read-hooks-method"
 		},
 		"go:github.com/riducms/ridu/field#OutputField.LabelTranslations": {
 			"module": "field",
@@ -10357,10 +9757,6 @@
 			"module": "field",
 			"symbol": "point-field-append-hooks-method"
 		},
-		"go:github.com/riducms/ridu/field#PointField.AppendReadHooks": {
-			"module": "field",
-			"symbol": "point-field-append-read-hooks-method"
-		},
 		"go:github.com/riducms/ridu/field#PointField.EditAdmin": {
 			"module": "field",
 			"symbol": "point-field-edit-admin-method"
@@ -10392,14 +9788,6 @@
 		"go:github.com/riducms/ridu/field#PointField.Private": {
 			"module": "field",
 			"symbol": "point-field-private-method"
-		},
-		"go:github.com/riducms/ridu/field#PointField.ReadHookPolicy": {
-			"module": "field",
-			"symbol": "point-field-read-hook-policy-method"
-		},
-		"go:github.com/riducms/ridu/field#PointField.ReadHooks": {
-			"module": "field",
-			"symbol": "point-field-read-hooks-method"
 		},
 		"go:github.com/riducms/ridu/field#PointField.Rename": {
 			"module": "field",
@@ -10445,10 +9833,6 @@
 			"module": "field",
 			"symbol": "polymorphic-relationship-field-append-hooks-method"
 		},
-		"go:github.com/riducms/ridu/field#PolymorphicRelationshipField.AppendReadHooks": {
-			"module": "field",
-			"symbol": "polymorphic-relationship-field-append-read-hooks-method"
-		},
 		"go:github.com/riducms/ridu/field#PolymorphicRelationshipField.EditAdmin": {
 			"module": "field",
 			"symbol": "polymorphic-relationship-field-edit-admin-method"
@@ -10488,14 +9872,6 @@
 		"go:github.com/riducms/ridu/field#PolymorphicRelationshipField.Private": {
 			"module": "field",
 			"symbol": "polymorphic-relationship-field-private-method"
-		},
-		"go:github.com/riducms/ridu/field#PolymorphicRelationshipField.ReadHookPolicy": {
-			"module": "field",
-			"symbol": "polymorphic-relationship-field-read-hook-policy-method"
-		},
-		"go:github.com/riducms/ridu/field#PolymorphicRelationshipField.ReadHooks": {
-			"module": "field",
-			"symbol": "polymorphic-relationship-field-read-hooks-method"
 		},
 		"go:github.com/riducms/ridu/field#PolymorphicRelationshipField.Rename": {
 			"module": "field",
@@ -10541,10 +9917,6 @@
 			"module": "field",
 			"symbol": "polymorphic-relationships-field-append-hooks-method"
 		},
-		"go:github.com/riducms/ridu/field#PolymorphicRelationshipsField.AppendReadHooks": {
-			"module": "field",
-			"symbol": "polymorphic-relationships-field-append-read-hooks-method"
-		},
 		"go:github.com/riducms/ridu/field#PolymorphicRelationshipsField.EditAdmin": {
 			"module": "field",
 			"symbol": "polymorphic-relationships-field-edit-admin-method"
@@ -10585,14 +9957,6 @@
 			"module": "field",
 			"symbol": "polymorphic-relationships-field-private-method"
 		},
-		"go:github.com/riducms/ridu/field#PolymorphicRelationshipsField.ReadHookPolicy": {
-			"module": "field",
-			"symbol": "polymorphic-relationships-field-read-hook-policy-method"
-		},
-		"go:github.com/riducms/ridu/field#PolymorphicRelationshipsField.ReadHooks": {
-			"module": "field",
-			"symbol": "polymorphic-relationships-field-read-hooks-method"
-		},
 		"go:github.com/riducms/ridu/field#PolymorphicRelationshipsField.Rename": {
 			"module": "field",
 			"symbol": "polymorphic-relationships-field-rename-method"
@@ -10616,106 +9980,6 @@
 		"go:github.com/riducms/ridu/field#PolymorphicRelationshipsField.Validators": {
 			"module": "field",
 			"symbol": "polymorphic-relationships-field-validators-method"
-		},
-		"go:github.com/riducms/ridu/field#RadioField": {
-			"module": "field",
-			"symbol": "radio-field"
-		},
-		"go:github.com/riducms/ridu/field#RadioField.Access": {
-			"module": "field",
-			"symbol": "radio-field-access-method"
-		},
-		"go:github.com/riducms/ridu/field#RadioField.Admin": {
-			"module": "field",
-			"symbol": "radio-field-admin-method"
-		},
-		"go:github.com/riducms/ridu/field#RadioField.AppendHooks": {
-			"module": "field",
-			"symbol": "radio-field-append-hooks-method"
-		},
-		"go:github.com/riducms/ridu/field#RadioField.AppendReadHooks": {
-			"module": "field",
-			"symbol": "radio-field-append-read-hooks-method"
-		},
-		"go:github.com/riducms/ridu/field#RadioField.Options": {
-			"module": "field",
-			"symbol": "radio-field-options-method"
-		},
-		"go:github.com/riducms/ridu/field#RadioField.Default": {
-			"module": "field",
-			"symbol": "radio-field-default-method"
-		},
-		"go:github.com/riducms/ridu/field#RadioField.EditAdmin": {
-			"module": "field",
-			"symbol": "radio-field-edit-admin-method"
-		},
-		"go:github.com/riducms/ridu/field#RadioField.HookPolicy": {
-			"module": "field",
-			"symbol": "radio-field-hook-policy-method"
-		},
-		"go:github.com/riducms/ridu/field#RadioField.Hooks": {
-			"module": "field",
-			"symbol": "radio-field-hooks-method"
-		},
-		"go:github.com/riducms/ridu/field#RadioField.Index": {
-			"module": "field",
-			"symbol": "radio-field-index-method"
-		},
-		"go:github.com/riducms/ridu/field#RadioField.Label": {
-			"module": "field",
-			"symbol": "radio-field-label-method"
-		},
-		"go:github.com/riducms/ridu/field#RadioField.LabelTranslations": {
-			"module": "field",
-			"symbol": "radio-field-label-translations-method"
-		},
-		"go:github.com/riducms/ridu/field#RadioField.Localized": {
-			"module": "field",
-			"symbol": "radio-field-localized-method"
-		},
-		"go:github.com/riducms/ridu/field#RadioField.PrependHooks": {
-			"module": "field",
-			"symbol": "radio-field-prepend-hooks-method"
-		},
-		"go:github.com/riducms/ridu/field#RadioField.Private": {
-			"module": "field",
-			"symbol": "radio-field-private-method"
-		},
-		"go:github.com/riducms/ridu/field#RadioField.ReadHookPolicy": {
-			"module": "field",
-			"symbol": "radio-field-read-hook-policy-method"
-		},
-		"go:github.com/riducms/ridu/field#RadioField.ReadHooks": {
-			"module": "field",
-			"symbol": "radio-field-read-hooks-method"
-		},
-		"go:github.com/riducms/ridu/field#RadioField.Rename": {
-			"module": "field",
-			"symbol": "radio-field-rename-method"
-		},
-		"go:github.com/riducms/ridu/field#RadioField.ReplaceValidators": {
-			"module": "field",
-			"symbol": "radio-field-replace-validators-method"
-		},
-		"go:github.com/riducms/ridu/field#RadioField.Required": {
-			"module": "field",
-			"symbol": "radio-field-required-method"
-		},
-		"go:github.com/riducms/ridu/field#RadioField.RestrictAccess": {
-			"module": "field",
-			"symbol": "radio-field-restrict-access-method"
-		},
-		"go:github.com/riducms/ridu/field#RadioField.Unique": {
-			"module": "field",
-			"symbol": "radio-field-unique-method"
-		},
-		"go:github.com/riducms/ridu/field#RadioField.Validate": {
-			"module": "field",
-			"symbol": "radio-field-validate-method"
-		},
-		"go:github.com/riducms/ridu/field#RadioField.Validators": {
-			"module": "field",
-			"symbol": "radio-field-validators-method"
 		},
 		"go:github.com/riducms/ridu/field#RelationshipField.FilterOptionRules": {
 			"module": "field",
@@ -10748,10 +10012,6 @@
 		"go:github.com/riducms/ridu/field#RelationshipsField.AppendHooks": {
 			"module": "field",
 			"symbol": "relationships-field-append-hooks-method"
-		},
-		"go:github.com/riducms/ridu/field#RelationshipsField.AppendReadHooks": {
-			"module": "field",
-			"symbol": "relationships-field-append-read-hooks-method"
 		},
 		"go:github.com/riducms/ridu/field#RelationshipsField.EditAdmin": {
 			"module": "field",
@@ -10793,14 +10053,6 @@
 			"module": "field",
 			"symbol": "relationships-field-private-method"
 		},
-		"go:github.com/riducms/ridu/field#RelationshipsField.ReadHookPolicy": {
-			"module": "field",
-			"symbol": "relationships-field-read-hook-policy-method"
-		},
-		"go:github.com/riducms/ridu/field#RelationshipsField.ReadHooks": {
-			"module": "field",
-			"symbol": "relationships-field-read-hooks-method"
-		},
 		"go:github.com/riducms/ridu/field#RelationshipsField.Rename": {
 			"module": "field",
 			"symbol": "relationships-field-rename-method"
@@ -10840,10 +10092,6 @@
 		"go:github.com/riducms/ridu/field#SelectField.AppendHooks": {
 			"module": "field",
 			"symbol": "select-field-append-hooks-method"
-		},
-		"go:github.com/riducms/ridu/field#SelectField.AppendReadHooks": {
-			"module": "field",
-			"symbol": "select-field-append-read-hooks-method"
 		},
 		"go:github.com/riducms/ridu/field#SelectField.Options": {
 			"module": "field",
@@ -10889,14 +10137,6 @@
 			"module": "field",
 			"symbol": "select-field-private-method"
 		},
-		"go:github.com/riducms/ridu/field#SelectField.ReadHookPolicy": {
-			"module": "field",
-			"symbol": "select-field-read-hook-policy-method"
-		},
-		"go:github.com/riducms/ridu/field#SelectField.ReadHooks": {
-			"module": "field",
-			"symbol": "select-field-read-hooks-method"
-		},
 		"go:github.com/riducms/ridu/field#SelectField.Rename": {
 			"module": "field",
 			"symbol": "select-field-rename-method"
@@ -10925,110 +10165,6 @@
 			"module": "field",
 			"symbol": "select-field-validators-method"
 		},
-		"go:github.com/riducms/ridu/field#TextareaField": {
-			"module": "field",
-			"symbol": "textarea-field"
-		},
-		"go:github.com/riducms/ridu/field#TextareaField.Access": {
-			"module": "field",
-			"symbol": "textarea-field-access-method"
-		},
-		"go:github.com/riducms/ridu/field#TextareaField.Admin": {
-			"module": "field",
-			"symbol": "textarea-field-admin-method"
-		},
-		"go:github.com/riducms/ridu/field#TextareaField.AppendHooks": {
-			"module": "field",
-			"symbol": "textarea-field-append-hooks-method"
-		},
-		"go:github.com/riducms/ridu/field#TextareaField.AppendReadHooks": {
-			"module": "field",
-			"symbol": "textarea-field-append-read-hooks-method"
-		},
-		"go:github.com/riducms/ridu/field#TextareaField.Default": {
-			"module": "field",
-			"symbol": "textarea-field-default-method"
-		},
-		"go:github.com/riducms/ridu/field#TextareaField.EditAdmin": {
-			"module": "field",
-			"symbol": "textarea-field-edit-admin-method"
-		},
-		"go:github.com/riducms/ridu/field#TextareaField.HookPolicy": {
-			"module": "field",
-			"symbol": "textarea-field-hook-policy-method"
-		},
-		"go:github.com/riducms/ridu/field#TextareaField.Hooks": {
-			"module": "field",
-			"symbol": "textarea-field-hooks-method"
-		},
-		"go:github.com/riducms/ridu/field#TextareaField.Index": {
-			"module": "field",
-			"symbol": "textarea-field-index-method"
-		},
-		"go:github.com/riducms/ridu/field#TextareaField.Label": {
-			"module": "field",
-			"symbol": "textarea-field-label-method"
-		},
-		"go:github.com/riducms/ridu/field#TextareaField.LabelTranslations": {
-			"module": "field",
-			"symbol": "textarea-field-label-translations-method"
-		},
-		"go:github.com/riducms/ridu/field#TextareaField.Localized": {
-			"module": "field",
-			"symbol": "textarea-field-localized-method"
-		},
-		"go:github.com/riducms/ridu/field#TextareaField.MaxLength": {
-			"module": "field",
-			"symbol": "textarea-field-max-length-method"
-		},
-		"go:github.com/riducms/ridu/field#TextareaField.MinLength": {
-			"module": "field",
-			"symbol": "textarea-field-min-length-method"
-		},
-		"go:github.com/riducms/ridu/field#TextareaField.PrependHooks": {
-			"module": "field",
-			"symbol": "textarea-field-prepend-hooks-method"
-		},
-		"go:github.com/riducms/ridu/field#TextareaField.Private": {
-			"module": "field",
-			"symbol": "textarea-field-private-method"
-		},
-		"go:github.com/riducms/ridu/field#TextareaField.ReadHookPolicy": {
-			"module": "field",
-			"symbol": "textarea-field-read-hook-policy-method"
-		},
-		"go:github.com/riducms/ridu/field#TextareaField.ReadHooks": {
-			"module": "field",
-			"symbol": "textarea-field-read-hooks-method"
-		},
-		"go:github.com/riducms/ridu/field#TextareaField.Rename": {
-			"module": "field",
-			"symbol": "textarea-field-rename-method"
-		},
-		"go:github.com/riducms/ridu/field#TextareaField.ReplaceValidators": {
-			"module": "field",
-			"symbol": "textarea-field-replace-validators-method"
-		},
-		"go:github.com/riducms/ridu/field#TextareaField.Required": {
-			"module": "field",
-			"symbol": "textarea-field-required-method"
-		},
-		"go:github.com/riducms/ridu/field#TextareaField.RestrictAccess": {
-			"module": "field",
-			"symbol": "textarea-field-restrict-access-method"
-		},
-		"go:github.com/riducms/ridu/field#TextareaField.Unique": {
-			"module": "field",
-			"symbol": "textarea-field-unique-method"
-		},
-		"go:github.com/riducms/ridu/field#TextareaField.Validate": {
-			"module": "field",
-			"symbol": "textarea-field-validate-method"
-		},
-		"go:github.com/riducms/ridu/field#TextareaField.Validators": {
-			"module": "field",
-			"symbol": "textarea-field-validators-method"
-		},
 		"go:github.com/riducms/ridu/field#TextField.LabelTranslations": {
 			"module": "field",
 			"symbol": "text-field-label-translations-method"
@@ -11048,10 +10184,6 @@
 		"go:github.com/riducms/ridu/field#UploadField.AppendHooks": {
 			"module": "field",
 			"symbol": "upload-field-append-hooks-method"
-		},
-		"go:github.com/riducms/ridu/field#UploadField.AppendReadHooks": {
-			"module": "field",
-			"symbol": "upload-field-append-read-hooks-method"
 		},
 		"go:github.com/riducms/ridu/field#UploadField.EditAdmin": {
 			"module": "field",
@@ -11096,14 +10228,6 @@
 		"go:github.com/riducms/ridu/field#UploadField.Private": {
 			"module": "field",
 			"symbol": "upload-field-private-method"
-		},
-		"go:github.com/riducms/ridu/field#UploadField.ReadHookPolicy": {
-			"module": "field",
-			"symbol": "upload-field-read-hook-policy-method"
-		},
-		"go:github.com/riducms/ridu/field#UploadField.ReadHooks": {
-			"module": "field",
-			"symbol": "upload-field-read-hooks-method"
 		},
 		"go:github.com/riducms/ridu/field#UploadField.Rename": {
 			"module": "field",
@@ -11153,10 +10277,6 @@
 			"module": "field",
 			"symbol": "uploads-field-append-hooks-method"
 		},
-		"go:github.com/riducms/ridu/field#UploadsField.AppendReadHooks": {
-			"module": "field",
-			"symbol": "uploads-field-append-read-hooks-method"
-		},
 		"go:github.com/riducms/ridu/field#UploadsField.EditAdmin": {
 			"module": "field",
 			"symbol": "uploads-field-edit-admin-method"
@@ -11196,14 +10316,6 @@
 		"go:github.com/riducms/ridu/field#UploadsField.Private": {
 			"module": "field",
 			"symbol": "uploads-field-private-method"
-		},
-		"go:github.com/riducms/ridu/field#UploadsField.ReadHookPolicy": {
-			"module": "field",
-			"symbol": "uploads-field-read-hook-policy-method"
-		},
-		"go:github.com/riducms/ridu/field#UploadsField.ReadHooks": {
-			"module": "field",
-			"symbol": "uploads-field-read-hooks-method"
 		},
 		"go:github.com/riducms/ridu/field#UploadsField.Rename": {
 			"module": "field",
@@ -11657,14 +10769,6 @@
 			"module": "field",
 			"symbol": "checkbox-field-default-from-method"
 		},
-		"go:github.com/riducms/ridu/field#CodeField.DefaultCallback": {
-			"module": "field",
-			"symbol": "code-field-default-callback-method"
-		},
-		"go:github.com/riducms/ridu/field#CodeField.DefaultFrom": {
-			"module": "field",
-			"symbol": "code-field-default-from-method"
-		},
 		"go:github.com/riducms/ridu/field#DateField.DefaultCallback": {
 			"module": "field",
 			"symbol": "date-field-default-callback-method"
@@ -11701,14 +10805,6 @@
 			"module": "field",
 			"symbol": "number-field-default-from-method"
 		},
-		"go:github.com/riducms/ridu/field#RadioField.DefaultCallback": {
-			"module": "field",
-			"symbol": "radio-field-default-callback-method"
-		},
-		"go:github.com/riducms/ridu/field#RadioField.DefaultFrom": {
-			"module": "field",
-			"symbol": "radio-field-default-from-method"
-		},
 		"go:github.com/riducms/ridu/field#SelectField.DefaultCallback": {
 			"module": "field",
 			"symbol": "select-field-default-callback-method"
@@ -11717,14 +10813,6 @@
 			"module": "field",
 			"symbol": "select-field-default-from-method"
 		},
-		"go:github.com/riducms/ridu/field#TextareaField.DefaultCallback": {
-			"module": "field",
-			"symbol": "textarea-field-default-callback-method"
-		},
-		"go:github.com/riducms/ridu/field#TextareaField.DefaultFrom": {
-			"module": "field",
-			"symbol": "textarea-field-default-from-method"
-		},
 		"go:github.com/riducms/ridu/field#TextField.DefaultCallback": {
 			"module": "field",
 			"symbol": "text-field-default-callback-method"
@@ -11732,10 +10820,6 @@
 		"go:github.com/riducms/ridu/field#TextField.DefaultFrom": {
 			"module": "field",
 			"symbol": "text-field-default-from-method"
-		},
-		"go:github.com/riducms/ridu/operation#DefaultContext": {
-			"module": "operation",
-			"symbol": "default-context"
 		},
 		"go:github.com/riducms/ridu/field#ArrayField.LiveValidate": {
 			"module": "field",
@@ -11772,18 +10856,6 @@
 		"go:github.com/riducms/ridu/field#CheckboxField.ReplaceLiveValidators": {
 			"module": "field",
 			"symbol": "checkbox-field-replace-live-validators-method"
-		},
-		"go:github.com/riducms/ridu/field#CodeField.LiveValidate": {
-			"module": "field",
-			"symbol": "code-field-live-validate-method"
-		},
-		"go:github.com/riducms/ridu/field#CodeField.LiveValidators": {
-			"module": "field",
-			"symbol": "code-field-live-validators-method"
-		},
-		"go:github.com/riducms/ridu/field#CodeField.ReplaceLiveValidators": {
-			"module": "field",
-			"symbol": "code-field-replace-live-validators-method"
 		},
 		"go:github.com/riducms/ridu/field#DateField.LiveValidate": {
 			"module": "field",
@@ -11909,18 +10981,6 @@
 			"module": "field",
 			"symbol": "polymorphic-relationships-field-replace-live-validators-method"
 		},
-		"go:github.com/riducms/ridu/field#RadioField.LiveValidate": {
-			"module": "field",
-			"symbol": "radio-field-live-validate-method"
-		},
-		"go:github.com/riducms/ridu/field#RadioField.LiveValidators": {
-			"module": "field",
-			"symbol": "radio-field-live-validators-method"
-		},
-		"go:github.com/riducms/ridu/field#RadioField.ReplaceLiveValidators": {
-			"module": "field",
-			"symbol": "radio-field-replace-live-validators-method"
-		},
 		"go:github.com/riducms/ridu/field#RelationshipField.LiveValidate": {
 			"module": "field",
 			"symbol": "relationship-field-live-validate-method"
@@ -11956,18 +11016,6 @@
 		"go:github.com/riducms/ridu/field#SelectField.ReplaceLiveValidators": {
 			"module": "field",
 			"symbol": "select-field-replace-live-validators-method"
-		},
-		"go:github.com/riducms/ridu/field#TextareaField.LiveValidate": {
-			"module": "field",
-			"symbol": "textarea-field-live-validate-method"
-		},
-		"go:github.com/riducms/ridu/field#TextareaField.LiveValidators": {
-			"module": "field",
-			"symbol": "textarea-field-live-validators-method"
-		},
-		"go:github.com/riducms/ridu/field#TextareaField.ReplaceLiveValidators": {
-			"module": "field",
-			"symbol": "textarea-field-replace-live-validators-method"
 		},
 		"go:github.com/riducms/ridu/field#TextField.LiveValidate": {
 			"module": "field",
@@ -12109,10 +11157,6 @@
 			"module": "field",
 			"symbol": "number-list-field-append-hooks-method"
 		},
-		"go:github.com/riducms/ridu/field#NumberListField.AppendReadHooks": {
-			"module": "field",
-			"symbol": "number-list-field-append-read-hooks-method"
-		},
 		"go:github.com/riducms/ridu/field#NumberListField.Default": {
 			"module": "field",
 			"symbol": "number-list-field-default-method"
@@ -12173,14 +11217,6 @@
 			"module": "field",
 			"symbol": "number-list-field-private-method"
 		},
-		"go:github.com/riducms/ridu/field#NumberListField.ReadHookPolicy": {
-			"module": "field",
-			"symbol": "number-list-field-read-hook-policy-method"
-		},
-		"go:github.com/riducms/ridu/field#NumberListField.ReadHooks": {
-			"module": "field",
-			"symbol": "number-list-field-read-hooks-method"
-		},
 		"go:github.com/riducms/ridu/field#NumberListField.Rename": {
 			"module": "field",
 			"symbol": "number-list-field-rename-method"
@@ -12224,10 +11260,6 @@
 		"go:github.com/riducms/ridu/field#TextListField.AppendHooks": {
 			"module": "field",
 			"symbol": "text-list-field-append-hooks-method"
-		},
-		"go:github.com/riducms/ridu/field#TextListField.AppendReadHooks": {
-			"module": "field",
-			"symbol": "text-list-field-append-read-hooks-method"
 		},
 		"go:github.com/riducms/ridu/field#TextListField.Default": {
 			"module": "field",
@@ -12288,14 +11320,6 @@
 		"go:github.com/riducms/ridu/field#TextListField.Private": {
 			"module": "field",
 			"symbol": "text-list-field-private-method"
-		},
-		"go:github.com/riducms/ridu/field#TextListField.ReadHookPolicy": {
-			"module": "field",
-			"symbol": "text-list-field-read-hook-policy-method"
-		},
-		"go:github.com/riducms/ridu/field#TextListField.ReadHooks": {
-			"module": "field",
-			"symbol": "text-list-field-read-hooks-method"
 		},
 		"go:github.com/riducms/ridu/field#TextListField.Rename": {
 			"module": "field",
@@ -12520,6 +11544,338 @@
 		"ts:@riducms/protocol#SchemaBlockLabels": {
 			"module": "protocol",
 			"symbol": "schema-block-labels"
+		},
+		"ts:@riducms/plugin#EmbeddedSchemaHeaderProps": {
+			"module": "plugin",
+			"symbol": "embedded-schema-header-props"
+		},
+		"ts:@riducms/plugin#EmbeddedSchemaHeaderProps.onChange": {
+			"module": "plugin",
+			"symbol": "embedded-schema-header-props-on-change-method"
+		},
+		"ts:@riducms/plugin#FieldAuthoringHost.schemaHeader": {
+			"module": "plugin",
+			"symbol": "field-authoring-host-schema-header-method"
+		},
+		"go:github.com/riducms/ridu#BulkOptions": {
+			"module": "ridu",
+			"symbol": "bulk-options"
+		},
+		"go:github.com/riducms/ridu#TypedMutationOptions": {
+			"module": "ridu",
+			"symbol": "typed-mutation-options"
+		},
+		"go:github.com/riducms/ridu/core#BulkOptions": {
+			"module": "core",
+			"symbol": "bulk-options"
+		},
+		"go:github.com/riducms/ridu/core#TypedMutationOptions": {
+			"module": "core",
+			"symbol": "typed-mutation-options"
+		},
+		"go:github.com/riducms/ridu/field#ArrayField.AfterRead": {
+			"module": "field",
+			"symbol": "array-field-after-read-method"
+		},
+		"go:github.com/riducms/ridu/field#ArrayField.AfterReadHooks": {
+			"module": "field",
+			"symbol": "array-field-after-read-hooks-method"
+		},
+		"go:github.com/riducms/ridu/field#ArrayField.ReplaceAfterRead": {
+			"module": "field",
+			"symbol": "array-field-replace-after-read-method"
+		},
+		"go:github.com/riducms/ridu/field#BlocksField.AfterRead": {
+			"module": "field",
+			"symbol": "blocks-field-after-read-method"
+		},
+		"go:github.com/riducms/ridu/field#BlocksField.AfterReadHooks": {
+			"module": "field",
+			"symbol": "blocks-field-after-read-hooks-method"
+		},
+		"go:github.com/riducms/ridu/field#BlocksField.ReplaceAfterRead": {
+			"module": "field",
+			"symbol": "blocks-field-replace-after-read-method"
+		},
+		"go:github.com/riducms/ridu/field#CheckboxField.AfterRead": {
+			"module": "field",
+			"symbol": "checkbox-field-after-read-method"
+		},
+		"go:github.com/riducms/ridu/field#CheckboxField.AfterReadHooks": {
+			"module": "field",
+			"symbol": "checkbox-field-after-read-hooks-method"
+		},
+		"go:github.com/riducms/ridu/field#CheckboxField.ReplaceAfterRead": {
+			"module": "field",
+			"symbol": "checkbox-field-replace-after-read-method"
+		},
+		"go:github.com/riducms/ridu/field#DateField.AfterRead": {
+			"module": "field",
+			"symbol": "date-field-after-read-method"
+		},
+		"go:github.com/riducms/ridu/field#DateField.AfterReadHooks": {
+			"module": "field",
+			"symbol": "date-field-after-read-hooks-method"
+		},
+		"go:github.com/riducms/ridu/field#DateField.ReplaceAfterRead": {
+			"module": "field",
+			"symbol": "date-field-replace-after-read-method"
+		},
+		"go:github.com/riducms/ridu/field#EmailField.AfterRead": {
+			"module": "field",
+			"symbol": "email-field-after-read-method"
+		},
+		"go:github.com/riducms/ridu/field#EmailField.AfterReadHooks": {
+			"module": "field",
+			"symbol": "email-field-after-read-hooks-method"
+		},
+		"go:github.com/riducms/ridu/field#EmailField.ReplaceAfterRead": {
+			"module": "field",
+			"symbol": "email-field-replace-after-read-method"
+		},
+		"go:github.com/riducms/ridu/field#GroupField.AfterRead": {
+			"module": "field",
+			"symbol": "group-field-after-read-method"
+		},
+		"go:github.com/riducms/ridu/field#GroupField.AfterReadHooks": {
+			"module": "field",
+			"symbol": "group-field-after-read-hooks-method"
+		},
+		"go:github.com/riducms/ridu/field#GroupField.ReplaceAfterRead": {
+			"module": "field",
+			"symbol": "group-field-replace-after-read-method"
+		},
+		"go:github.com/riducms/ridu/field#JoinField.AfterRead": {
+			"module": "field",
+			"symbol": "join-field-after-read-method"
+		},
+		"go:github.com/riducms/ridu/field#JoinField.AfterReadHooks": {
+			"module": "field",
+			"symbol": "join-field-after-read-hooks-method"
+		},
+		"go:github.com/riducms/ridu/field#JoinField.ReplaceAfterRead": {
+			"module": "field",
+			"symbol": "join-field-replace-after-read-method"
+		},
+		"go:github.com/riducms/ridu/field#JSONField.AfterRead": {
+			"module": "field",
+			"symbol": "json-field-after-read-method"
+		},
+		"go:github.com/riducms/ridu/field#JSONField.AfterReadHooks": {
+			"module": "field",
+			"symbol": "json-field-after-read-hooks-method"
+		},
+		"go:github.com/riducms/ridu/field#JSONField.ReplaceAfterRead": {
+			"module": "field",
+			"symbol": "json-field-replace-after-read-method"
+		},
+		"go:github.com/riducms/ridu/field#MultiSelectField.AfterRead": {
+			"module": "field",
+			"symbol": "multi-select-field-after-read-method"
+		},
+		"go:github.com/riducms/ridu/field#MultiSelectField.AfterReadHooks": {
+			"module": "field",
+			"symbol": "multi-select-field-after-read-hooks-method"
+		},
+		"go:github.com/riducms/ridu/field#MultiSelectField.ReplaceAfterRead": {
+			"module": "field",
+			"symbol": "multi-select-field-replace-after-read-method"
+		},
+		"go:github.com/riducms/ridu/field#NumberField.AfterRead": {
+			"module": "field",
+			"symbol": "number-field-after-read-method"
+		},
+		"go:github.com/riducms/ridu/field#NumberField.AfterReadHooks": {
+			"module": "field",
+			"symbol": "number-field-after-read-hooks-method"
+		},
+		"go:github.com/riducms/ridu/field#NumberField.ReplaceAfterRead": {
+			"module": "field",
+			"symbol": "number-field-replace-after-read-method"
+		},
+		"go:github.com/riducms/ridu/field#NumberListField.AfterRead": {
+			"module": "field",
+			"symbol": "number-list-field-after-read-method"
+		},
+		"go:github.com/riducms/ridu/field#NumberListField.AfterReadHooks": {
+			"module": "field",
+			"symbol": "number-list-field-after-read-hooks-method"
+		},
+		"go:github.com/riducms/ridu/field#NumberListField.ReplaceAfterRead": {
+			"module": "field",
+			"symbol": "number-list-field-replace-after-read-method"
+		},
+		"go:github.com/riducms/ridu/field#OutputField.AfterRead": {
+			"module": "field",
+			"symbol": "output-field-after-read-method"
+		},
+		"go:github.com/riducms/ridu/field#OutputField.AfterReadHooks": {
+			"module": "field",
+			"symbol": "output-field-after-read-hooks-method"
+		},
+		"go:github.com/riducms/ridu/field#OutputField.ReplaceAfterRead": {
+			"module": "field",
+			"symbol": "output-field-replace-after-read-method"
+		},
+		"go:github.com/riducms/ridu/field#PluginField.AfterRead": {
+			"module": "field",
+			"symbol": "plugin-field-after-read-method"
+		},
+		"go:github.com/riducms/ridu/field#PluginField.AfterReadHooks": {
+			"module": "field",
+			"symbol": "plugin-field-after-read-hooks-method"
+		},
+		"go:github.com/riducms/ridu/field#PluginField.ReplaceAfterRead": {
+			"module": "field",
+			"symbol": "plugin-field-replace-after-read-method"
+		},
+		"go:github.com/riducms/ridu/field#PointField.AfterRead": {
+			"module": "field",
+			"symbol": "point-field-after-read-method"
+		},
+		"go:github.com/riducms/ridu/field#PointField.AfterReadHooks": {
+			"module": "field",
+			"symbol": "point-field-after-read-hooks-method"
+		},
+		"go:github.com/riducms/ridu/field#PointField.ReplaceAfterRead": {
+			"module": "field",
+			"symbol": "point-field-replace-after-read-method"
+		},
+		"go:github.com/riducms/ridu/field#PolymorphicRelationshipField.AfterRead": {
+			"module": "field",
+			"symbol": "polymorphic-relationship-field-after-read-method"
+		},
+		"go:github.com/riducms/ridu/field#PolymorphicRelationshipField.AfterReadHooks": {
+			"module": "field",
+			"symbol": "polymorphic-relationship-field-after-read-hooks-method"
+		},
+		"go:github.com/riducms/ridu/field#PolymorphicRelationshipField.ReplaceAfterRead": {
+			"module": "field",
+			"symbol": "polymorphic-relationship-field-replace-after-read-method"
+		},
+		"go:github.com/riducms/ridu/field#PolymorphicRelationshipsField.AfterRead": {
+			"module": "field",
+			"symbol": "polymorphic-relationships-field-after-read-method"
+		},
+		"go:github.com/riducms/ridu/field#PolymorphicRelationshipsField.AfterReadHooks": {
+			"module": "field",
+			"symbol": "polymorphic-relationships-field-after-read-hooks-method"
+		},
+		"go:github.com/riducms/ridu/field#PolymorphicRelationshipsField.ReplaceAfterRead": {
+			"module": "field",
+			"symbol": "polymorphic-relationships-field-replace-after-read-method"
+		},
+		"go:github.com/riducms/ridu/field#RelationshipField.AfterRead": {
+			"module": "field",
+			"symbol": "relationship-field-after-read-method"
+		},
+		"go:github.com/riducms/ridu/field#RelationshipField.AfterReadHooks": {
+			"module": "field",
+			"symbol": "relationship-field-after-read-hooks-method"
+		},
+		"go:github.com/riducms/ridu/field#RelationshipField.ReplaceAfterRead": {
+			"module": "field",
+			"symbol": "relationship-field-replace-after-read-method"
+		},
+		"go:github.com/riducms/ridu/field#RelationshipsField.AfterRead": {
+			"module": "field",
+			"symbol": "relationships-field-after-read-method"
+		},
+		"go:github.com/riducms/ridu/field#RelationshipsField.AfterReadHooks": {
+			"module": "field",
+			"symbol": "relationships-field-after-read-hooks-method"
+		},
+		"go:github.com/riducms/ridu/field#RelationshipsField.ReplaceAfterRead": {
+			"module": "field",
+			"symbol": "relationships-field-replace-after-read-method"
+		},
+		"go:github.com/riducms/ridu/field#SelectField.AfterRead": {
+			"module": "field",
+			"symbol": "select-field-after-read-method"
+		},
+		"go:github.com/riducms/ridu/field#SelectField.AfterReadHooks": {
+			"module": "field",
+			"symbol": "select-field-after-read-hooks-method"
+		},
+		"go:github.com/riducms/ridu/field#SelectField.ReplaceAfterRead": {
+			"module": "field",
+			"symbol": "select-field-replace-after-read-method"
+		},
+		"go:github.com/riducms/ridu/field#TextField.AfterRead": {
+			"module": "field",
+			"symbol": "text-field-after-read-method"
+		},
+		"go:github.com/riducms/ridu/field#TextField.AfterReadHooks": {
+			"module": "field",
+			"symbol": "text-field-after-read-hooks-method"
+		},
+		"go:github.com/riducms/ridu/field#TextField.ReplaceAfterRead": {
+			"module": "field",
+			"symbol": "text-field-replace-after-read-method"
+		},
+		"go:github.com/riducms/ridu/field#TextListField.AfterRead": {
+			"module": "field",
+			"symbol": "text-list-field-after-read-method"
+		},
+		"go:github.com/riducms/ridu/field#TextListField.AfterReadHooks": {
+			"module": "field",
+			"symbol": "text-list-field-after-read-hooks-method"
+		},
+		"go:github.com/riducms/ridu/field#TextListField.ReplaceAfterRead": {
+			"module": "field",
+			"symbol": "text-list-field-replace-after-read-method"
+		},
+		"go:github.com/riducms/ridu/field#UploadField.AfterRead": {
+			"module": "field",
+			"symbol": "upload-field-after-read-method"
+		},
+		"go:github.com/riducms/ridu/field#UploadField.AfterReadHooks": {
+			"module": "field",
+			"symbol": "upload-field-after-read-hooks-method"
+		},
+		"go:github.com/riducms/ridu/field#UploadField.ReplaceAfterRead": {
+			"module": "field",
+			"symbol": "upload-field-replace-after-read-method"
+		},
+		"go:github.com/riducms/ridu/field#UploadsField.AfterRead": {
+			"module": "field",
+			"symbol": "uploads-field-after-read-method"
+		},
+		"go:github.com/riducms/ridu/field#UploadsField.AfterReadHooks": {
+			"module": "field",
+			"symbol": "uploads-field-after-read-hooks-method"
+		},
+		"go:github.com/riducms/ridu/field#UploadsField.ReplaceAfterRead": {
+			"module": "field",
+			"symbol": "uploads-field-replace-after-read-method"
+		},
+		"go:github.com/riducms/ridu/schema#ScalarLiteral": {
+			"module": "schema",
+			"symbol": "scalar-literal"
+		},
+		"go:github.com/riducms/ridu/schema#ScalarLiteral.Decode": {
+			"module": "schema",
+			"symbol": "scalar-literal-decode-method"
+		},
+		"ts:@riducms/protocol#SchemaScalarLiteral": {
+			"module": "protocol",
+			"symbol": "schema-scalar-literal"
+		},
+		"ts:@riducms/plugin/admin#resolveAdminConfig": {
+			"module": "plugin",
+			"symbol": "resolve-admin-config"
+		},
+		"ts:@riducms/plugin/admin#ResolvedAdminConfig": {
+			"module": "plugin",
+			"symbol": "resolved-admin-config"
+		},
+		"ts:@riducms/plugin/admin#validateAdminManifest": {
+			"module": "plugin",
+			"symbol": "validate-admin-manifest"
+		},
+		"ts:@riducms/plugin#assertAdminPluginPairs": {
+			"module": "plugin",
+			"symbol": "assert-admin-plugin-pairs"
 		}
 	}
 }

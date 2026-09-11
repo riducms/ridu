@@ -102,52 +102,6 @@ type Context struct {
 	Local Reader
 }
 
-// ValidationContext supplies the completed candidate to a field validator.
-// The separate Value argument is this field's typed current value; Root and
-// Siblings include retained update values and earlier write transformations.
-// Prior remains the persisted enclosing object or row from before the operation.
-// Opt-in advisory checks instead receive LiveValidationContext, whose input has
-// not passed through defaults or save transformations.
-type ValidationContext Context
-
-// DefaultContext supplies the values available when an eligible omitted field
-// is initialized. Root and Siblings are snapshots at that checkpoint, not a
-// promise of complete, validated values or results from other dynamic defaults.
-// Do not use one dynamic default as a dependency of another.
-//
-// Prior is the previously persisted enclosing object or row, matched by stable
-// row identity. It is empty for a new nested scope. A duplicate root can retain
-// the source document as Prior; copied rows with new keys have no prior row.
-// Locale identifies the exact content locale being initialized; locale fallback is not persisted input. Operation
-// can be Update when a new object, repeated row, or translation is initialized.
-// ID can be empty before a new document receives its identifier.
-//
-// Context, Actor, resource identities and Local follow the shared Context
-// contract. Local preserves authorization, exact-locale reads, the active
-// transaction and cancellation; it does not grant nested write capabilities.
-// Defaults run during eligible initialization, not on every field change.
-type DefaultContext Context
-
-// WriteContext supplies snapshots to raw and typed field transforms. Raw hooks
-// see input at their phase and may receive omitted or malformed values. Typed
-// write hooks see a completed candidate and their field's logical value.
-type WriteContext Context
-
-// ReadContext supplies the current response view. References may be populated,
-// so the callback's logical read type can differ from its write type. Ordinary
-// read views may contain locale fallback values; Context has no fallback-source
-// map. Final field redaction still applies after response transforms.
-type ReadContext Context
-
-// EventContext is the view for field lifecycle observations. Observation
-// callbacks do not return mutations to field or ambient document values.
-type EventContext Context
-
-// AccessContext supplies surrounding values to a field's boolean access rule.
-// Write admission uses the candidate at its authorization checkpoint; read rules
-// inspect the current response and decide whether this field may remain visible.
-type AccessContext Context
-
 // Reader looks up a known document for a field rule, validator, default or hook. Reads
 // enforce the callback's actor and ordinary authorization, use its exact locale
 // without fallback, and reuse its active transaction. Passing another context

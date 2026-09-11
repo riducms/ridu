@@ -1,3 +1,4 @@
+import { resolveAdminConfig } from "@riducms/plugin/admin";
 import { describe, expect, it } from "bun:test";
 import {
 	defineAdminPlugin,
@@ -85,9 +86,10 @@ describe("core field registry", () => {
 			plugin: { key: "color", config: { palette: ["#663399"] } },
 		};
 
-		expect(createCoreFieldRegistry([plugin]).resolve(field).extension?.registration.component).toBe(
-			component
-		);
+		expect(
+			createCoreFieldRegistry(resolveAdminConfig({ plugins: [plugin] }).fields).resolve(field)
+				.extension?.registration.component
+		).toBe(component);
 		expect(() => createCoreFieldRegistry().resolve(field)).toThrow(
 			"No admin field renderer can render accent (plugin:color)"
 		);
@@ -100,24 +102,28 @@ describe("core field registry", () => {
 		const preview = (() => undefined) as unknown as Component<
 			import("@riducms/plugin").PluginFieldProps<undefined, undefined, "ui">
 		>;
-		const registry = createCoreFieldRegistry([
-			defineAdminPlugin({
-				key: "seo",
-				pairingVersion: 1,
-				components: {
-					overview: defineFieldComponent({
-						type: "ui",
-						component: overview,
-						decodeValue: (): undefined => undefined,
+		const registry = createCoreFieldRegistry(
+			resolveAdminConfig({
+				plugins: [
+					defineAdminPlugin({
+						key: "seo",
+						pairingVersion: 1,
+						components: {
+							overview: defineFieldComponent({
+								type: "ui",
+								component: overview,
+								decodeValue: (): undefined => undefined,
+							}),
+							preview: defineFieldComponent({
+								type: "ui",
+								component: preview,
+								decodeValue: (): undefined => undefined,
+							}),
+						},
 					}),
-					preview: defineFieldComponent({
-						type: "ui",
-						component: preview,
-						decodeValue: (): undefined => undefined,
-					}),
-				},
-			}),
-		]);
+				],
+			}).fields
+		);
 		const base: SchemaField = {
 			id: "posts-meta-overview",
 			name: "overview",

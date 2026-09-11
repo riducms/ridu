@@ -16,9 +16,7 @@ func TestPostgresRecursivePopulationTraversesNestedShapesWithAccessAndRedaction(
 	publicPath, _ := query.NewPath("public")
 	config := ridu.Config{Name: "PostgreSQL recursive population", Collections: []ridu.Collection{
 		{
-			Slug: "people", Fields: field.Fields{field.Text("name").Required(), field.Checkbox("public").Required(), field.Text("secret").Access(field.Access{Read: func(operation.AccessContext,
-
-			) (bool, error) {
+			Slug: "people", Fields: field.Fields{field.Text("name").Required(), field.Checkbox("public").Required(), field.Text("secret").Access(field.Access{Read: func(operation.Context) (bool, error) {
 				return false, nil
 			}})},
 			Access: ridu.CollectionAccess{Read: func(ridu.AccessContext) (ridu.AccessDecision, error) {
@@ -36,17 +34,17 @@ func TestPostgresRecursivePopulationTraversesNestedShapesWithAccessAndRedaction(
 	}
 	visible, err := application.Local().Create(ctx, "people", store.Values{
 		"name": store.String("Visible"), "public": store.Boolean(true), "secret": store.String("nested-secret"),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	laterHidden, err := application.Local().Create(ctx, "people", store.Values{
 		"name": store.String("Later hidden"), "public": store.Boolean(true), "secret": store.String("hidden-secret"),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	team, err := application.Local().Create(ctx, "teams", store.Values{"name": store.String("Core"), "owner": store.String(visible.ID)}, nil)
+	team, err := application.Local().Create(ctx, "teams", store.Values{"name": store.String("Core"), "owner": store.String(visible.ID)}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,18 +57,18 @@ func TestPostgresRecursivePopulationTraversesNestedShapesWithAccessAndRedaction(
 		"layout": store.List(store.Object(store.Values{
 			"_key": store.String("quote-one"), "blockType": store.String("quote"), "source": store.String(team.ID),
 		})),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Update(ctx, "people", laterHidden.ID, store.Values{"public": store.Boolean(false)}, nil); err != nil {
+	if _, err := application.Local().Update(ctx, "people", laterHidden.ID, store.Values{"public": store.Boolean(false)}, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
 
 	metaReviewer, _ := query.NewPath("meta", "reviewer")
 	sectionReviewer, _ := query.NewPath("sections", "reviewer")
 	blockSource, _ := query.NewPath("layout", "quote", "source")
-	result, err := application.Local().FindWithOptions(ctx, "entries", entry.ID, ridu.FindOptions{Populate: []query.Population{
+	result, err := application.Local().Find(ctx, "entries", entry.ID, ridu.FindOptions{Populate: []query.Population{
 		{Path: metaReviewer}, {Path: sectionReviewer}, {Path: blockSource, Depth: 2},
 	}})
 	if err != nil {

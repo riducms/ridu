@@ -87,7 +87,7 @@ func Run(t *testing.T, fixture Fixture) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, err := application.Local().Create(t.Context(), "fixtures", fixture.ValidData, nil); err != nil {
+			if _, err := application.Local().Create(t.Context(), "fixtures", fixture.ValidData, ridu.MutationOptions{}); err != nil {
 				t.Fatalf("local API rejected valid plugin data: %v", err)
 			}
 			body, err := json.Marshal(fixture.ValidData)
@@ -102,7 +102,7 @@ func Run(t *testing.T, fixture Fixture) {
 				t.Fatalf("REST API rejected valid plugin data with %d: %s", response.Code, response.Body.String())
 			}
 			if fixture.InvalidData != nil {
-				_, err := application.Local().Create(t.Context(), "fixtures", fixture.InvalidData, nil)
+				_, err := application.Local().Create(t.Context(), "fixtures", fixture.InvalidData, ridu.MutationOptions{})
 				var operationError *ridu.OperationError
 				if !errors.As(err, &operationError) || operationError.Code != "validation" {
 					t.Fatalf("local API invalid plugin data error = %#v, want validation", err)

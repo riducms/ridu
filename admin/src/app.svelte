@@ -25,16 +25,7 @@
 	let { clientFactory, adminBasePath = "/admin", adminConfig = {} }: Props = $props();
 	// The runtime owns the client and plugin registry selected when this admin instance is mounted.
 	// svelte-ignore state_referenced_locally
-	const runtime = setAdminRuntime(
-		new AdminRuntime(
-			clientFactory(),
-			adminConfig.plugins,
-			adminConfig.languages,
-			undefined,
-			adminConfig.fields,
-			adminConfig
-		)
-	);
+	const runtime = setAdminRuntime(new AdminRuntime(clientFactory(), adminConfig));
 	setAdminI18n(runtime.i18n);
 	const notifications = setNotificationCenter(new NotificationCenter());
 	const development = import.meta.hot !== undefined;

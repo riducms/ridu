@@ -33,7 +33,7 @@ func RecentPosts(
 	post, err := app.Local().Create(ctx, "posts", store.Values{
 		"title":   store.String("Hello, Ridu"),
 		"summary": store.String("An in-process write."),
-	}, actor)
+	}, ridu.MutationOptions{Actor: actor})
 	if err != nil {
 		return store.Page{}, err
 	}
@@ -65,7 +65,7 @@ when that path is explicitly populated, it becomes a `store.Populated` document 
 
 ## Pass the caller, not a bypass flag {#actors}
 
-The final `actor` argument, or `Actor` in an options struct, is the authenticated document supplied
+`Actor` in the final options argument is the authenticated document supplied
 to access rules and hooks. `nil` means anonymous. It never means superuser, and the local API has no
 access-override option.
 
@@ -78,7 +78,7 @@ if err != nil {
 	return err
 }
 
-post, err := app.Local().FindWithOptions(
+post, err := app.Local().Find(
 	ctx,
 	"posts",
 	postID,
@@ -91,22 +91,23 @@ post, err := app.Local().FindWithOptions(
 
 All option-bearing reads, mutations, and capability checks accept `ActorCollection`. Transport
 code should preserve the exact `ridu.AuthIdentity` established by authentication and copy both
-`Actor` and `Collection` into local options. Concise actor-only methods remain convenient for an
-application's trusted internal work. Identity-sensitive application services such as scheduling,
+`Actor` and `Collection` into local options. Identity-sensitive application services such as scheduling,
 preferences, previews, account unlocks, and document locks accept `AuthIdentity` directly.
 
 ## Read and write options {#options}
 
-The short methods accept an actor and optional `LocaleOptions`. Use the `WithOptions` forms when a
-request needs more control:
+Each semantic action has one signature: context, resource identifiers and required values are
+positional; optional controls go in one final named options value. History revisions remain positional.
 
-| Type                | Controls                                                                                                                                        |
-| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `FindOptions`       | `Select`, relationship `Populate`, computed/join `OutputFields`, draft visibility, exact actor identity, trash-only mode, and locale projection |
-| `ListOptions`       | All find controls plus `Where`, one-based `Page`, `Limit`, and ordered `Sort`                                                                   |
-| `MutationOptions`   | Exact actor identity, optimistic `ExpectedRevision`, returned population/output fields, draft status, and write locale                          |
-| `CapabilityOptions` | Candidate `Data`, exact actor identity, trash mode, and locale for a side-effect-free permission summary                                        |
-| `LocaleOptions`     | Locale, replacement fallback chain, fallback disablement, or all-locales reads for concise methods                                              |
+| Type                   | Controls                                                                                                                                        |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `FindOptions`          | `Select`, relationship `Populate`, computed/join `OutputFields`, draft visibility, exact actor identity, trash-only mode, and locale projection |
+| `ListOptions`          | All find controls plus `Where`, one-based `Page`, `Limit`, and ordered `Sort`                                                                   |
+| `MutationOptions`      | Exact actor identity, optimistic `ExpectedRevision`, returned population/output fields, draft status, and write locale                          |
+| `CapabilityOptions`    | Candidate `Data`, exact actor identity, trash mode, and locale for a side-effect-free permission summary                                        |
+| `BulkOptions`          | Exact actor identity and locale controls for bulk actions and empty-trash                                                                       |
+| `ImportOptions`        | Exact actor identity and source metadata for import                                                                                             |
+| `TypedMutationOptions` | Mutation controls without `AllLocales`; typed writes remain single-locale                                                                       |
 
 Caller `Where`, `Sort`, `Distinct` and `ListWindow` paths follow the
 [field query-access contract](./access-control.md#field-access). A configured Read rule on
@@ -132,13 +133,13 @@ published status. Updates do not accept status intent: edit drafts with `Update`
 
 | Task                   | Local API methods                                                                                                                                        |
 | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Create or copy         | `Create`, `CreateWithOptions`, `Duplicate`, `DuplicateWithOptions`                                                                                       |
-| Read                   | `Find`, `FindWithOptions`, `List`                                                                                                                        |
+| Create or copy         | `Create`, `Duplicate`                                                                                                                                    |
+| Read                   | `Find`, `List`                                                                                                                                           |
 | Inspect permission     | `Capabilities` returns operation and field booleans without exposing rule code or filtered predicates                                                    |
-| Update                 | `Update`, `UpdateWithOptions`, `UpdateRevision`                                                                                                          |
-| Maintain inverse joins | `MutateJoin`, `MutateJoinWithOptions` atomically add/remove source IDs                                                                                   |
-| Publish state          | `Publish`, `Unpublish` and their option-bearing forms                                                                                                    |
-| Localization           | `CopyLocale`, `CopyLocaleWithOptions`                                                                                                                    |
+| Update                 | `Update`                                                                                                                                                 |
+| Maintain inverse joins | `MutateJoin` atomically add/remove source IDs                                                                                                            |
+| Publish state          | `Publish`, `PublishChanges`, `Unpublish`                                                                                                                 |
+| Localization           | `CopyLocale`                                                                                                                                             |
 | Version history        | `Versions`, `Version`, restore/preserve-status, and restore-as-draft forms                                                                               |
 | Delete                 | `Delete`; trash-enabled resources also have restore, permanent delete, and `EmptyTrash`                                                                  |
 | Bulk                   | Bounded update, publish, unpublish, delete, restore-deleted, and permanent-delete methods                                                                |
@@ -149,20 +150,20 @@ authorization token; run the requested operation and handle its result. Import i
 migration code, not ordinary end-user creation. Upload collections use the storage-aware methods
 on `App` rather than dynamic `Create` for file-bearing documents.
 
-Bulk operations accept 1–100 explicit IDs and commit every item or none. The current Go bulk,
-`EmptyTrash`, and `Import` signatures are actor-only: they do not accept `ActorCollection` or an
-`AuthIdentity`. In a multi-auth application, use the REST/SDK bulk transport—which preserves the
-transport's exact identity—or reserve these local methods for application-owned callers whose
-identity cannot be ambiguous. Individual option-bearing local methods are the exact-identity path.
+Bulk operations accept 1–100 explicit IDs and commit every item or none. `BulkOptions` forwards
+both `Actor` and `ActorCollection`, plus locale controls. `ImportOptions` carries the same identity.
+Special operations consume their documented controls: history reads use identity and locale;
+copy-locale uses identity and expected revision; inverse-join mutations use identity and locale.
+Accepting an options value does not enable unrelated selection or publication settings.
 
 ## Globals use singleton methods {#globals}
 
-Globals do not pretend to be one-row collections. Use `Global`/`GlobalWithOptions` to read and
-`UpdateGlobal`/`UpdateGlobalWithOptions` to create-or-update the singleton. Version-enabled globals
+Globals do not pretend to be one-row collections. Use `Global` to read and
+`UpdateGlobal` to create-or-update the singleton. Version-enabled globals
 also expose publish, unpublish, copy-locale, version reads, and restore methods.
 
 ```go
-settings, err := app.Local().UpdateGlobalWithOptions(
+settings, err := app.Local().UpdateGlobal(
 	ctx,
 	"site-settings",
 	store.Values{"siteName": store.String("Acme")},
@@ -188,7 +189,7 @@ posts := generated.PostsCollection.With(app.Local())
 post, err := posts.Create(ctx, generated.PostCreate{
 	Title:   "Hello, Ridu",
 	Summary: "Checked by Go's compiler",
-}, actor)
+}, ridu.TypedMutationOptions{Actor: actor})
 if err != nil {
 	return err
 }
@@ -198,7 +199,7 @@ page, err := posts.List(ctx, core.TypedListOptions{
 })
 ```
 
-Typed collection handles currently cover create, import, find, list, update, revision-aware update,
+Typed collection handles currently cover create, import, find, list, update,
 and delete. Typed global handles cover find, update, publish, unpublish, restore, and
 restore-as-draft. Use the dynamic local API for advanced operations that are not on a generated
 handle. The typed layer JSON-encodes generated input and decodes the result; it changes compile-time
@@ -219,19 +220,17 @@ draft intent and locale selection. Global `Find` uses the same read options. Gen
 values expose an `ID` and an optional typed `Document`, so population does not require switching
 handles. Localized projects generate separate `AllLocales` read bindings with locale-map models.
 
-Typed writes take an actor document and optional locale settings. For writes that also require
-`ActorCollection`, returned population or other advanced options, use the dynamic `WithOptions`
-method with the exact identity and request semantics.
+Typed writes accept `TypedMutationOptions`, forwarding actor collection, expected revision,
+returned population and locale controls. They remain single-locale and omit `AllLocales`.
 
 ## Optimistic revisions {#optimistic-writes}
 
 Versioned documents and globals expose `_revision`. Pass the revision you last observed through
-`ExpectedRevision`, `UpdateRevision`, or the expected-revision argument on publish, unpublish, and
-restore. Zero means no revision fence; a stale positive revision returns a `conflict` operation
+`ExpectedRevision` in the final mutation options on update, publish, unpublish, and restore. Zero means no revision fence; a stale positive revision returns a `conflict` operation
 error instead of replacing a newer edit.
 
 ```go
-updated, err := app.Local().UpdateWithOptions(
+updated, err := app.Local().Update(
 	ctx,
 	"posts",
 	post.ID,
@@ -273,7 +272,7 @@ and validation `Issues`; do not parse `Message`.
 ```go
 import "errors"
 
-post, err := app.Local().UpdateRevision(ctx, "posts", id, patch, revision, actor)
+post, err := app.Local().Update(ctx, "posts", id, patch, ridu.MutationOptions{Actor: actor, ExpectedRevision: revision})
 if err != nil {
 	var operationErr *ridu.OperationError
 	if errors.As(err, &operationErr) {

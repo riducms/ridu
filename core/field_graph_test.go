@@ -16,13 +16,13 @@ import (
 	"github.com/riducms/ridu/store"
 )
 
-func graphRule(operation.ValidationContext, operation.Value[string]) ([]operation.Issue, error) {
+func graphRule(operation.Context, operation.Value[string]) ([]operation.Issue, error) {
 	return nil, nil
 }
-func graphHook(operation.WriteContext, operation.Value[string]) (operation.Change[string], error) {
+func graphHook(operation.Context, operation.Value[string]) (operation.Change[string], error) {
 	return operation.Keep[string](), nil
 }
-func graphAllow(operation.AccessContext) (bool, error) { return true, nil }
+func graphAllow(operation.Context) (bool, error) { return true, nil }
 
 func graphFixture() Config {
 	code := field.Text("code").Required().Localized().Validate(graphRule).
@@ -159,7 +159,7 @@ func TestFieldGraphPluginsComposeOnceWithoutAliasingOrLoss(t *testing.T) {
 			return f.Edit(func(d *field.ChildrenDraft) error {
 				escaped = d
 				return d.EditText("code", func(x field.TextField) field.TextField {
-					return x.MaxLength(120).EditAdmin(func(a *field.Admin) { a.Description = "edited" }).Validate(graphRule).AppendHooks(field.Hooks[string]{BeforeChange: []field.Transform[string]{graphHook}}).RestrictAccess(field.Access{Update: func(operation.AccessContext) (bool, error) { return false, nil }})
+					return x.MaxLength(120).EditAdmin(func(a *field.Admin) { a.Description = "edited" }).Validate(graphRule).AppendHooks(field.Hooks[string]{BeforeChange: []field.Transform[string]{graphHook}}).RestrictAccess(field.Access{Update: func(operation.Context) (bool, error) { return false, nil }})
 				})
 			})
 		}},
@@ -188,7 +188,7 @@ func TestFieldGraphPluginsComposeOnceWithoutAliasingOrLoss(t *testing.T) {
 	if len(x.Validators()) != 2 || len(x.HookPolicy().BeforeChange) != 2 || x.AccessPolicy().Read == nil || x.AdminPolicy().Editor.Key != "app:text" || x.AdminPolicy().Description != "edited" {
 		t.Fatalf("plugin edit lost or duplicated policies: %#v", d.BehaviorSummary())
 	}
-	if allowed, _ := x.AccessPolicy().Update(operation.AccessContext{}); allowed {
+	if allowed, _ := x.AccessPolicy().Update(operation.Context{}); allowed {
 		t.Fatal("access restriction was lost")
 	}
 	if _, ok := d.Private("private"); !ok {
@@ -254,7 +254,7 @@ func TestFieldGraphResolutionRejectsConflictsAndInvalidReferences(t *testing.T) 
 func TestFieldGraphFunctionsDoNotChangeSchemaIdentityOrExecute(t *testing.T) {
 	calls := 0
 	build := func(label string) Config {
-		return Config{Name: "Private", Collections: []Collection{{Slug: "pages", Fields: field.Fields{field.Text("code").Validate(func(operation.ValidationContext, operation.Value[string]) ([]operation.Issue, error) {
+		return Config{Name: "Private", Collections: []Collection{{Slug: "pages", Fields: field.Fields{field.Text("code").Validate(func(operation.Context, operation.Value[string]) ([]operation.Issue, error) {
 			calls++
 			return nil, errors.New(label)
 		}).Private("secret", store.String(label))}}}}
@@ -289,7 +289,7 @@ func TestFieldGraphFunctionsDoNotChangeSchemaIdentityOrExecute(t *testing.T) {
 
 func TestFieldGraphComputedOwnershipAndUnsupportedPolicies(t *testing.T) {
 	calls := 0
-	computed := field.Virtual("summary", field.ValueString, func(operation.ReadContext) (operation.Value[store.Value], error) {
+	computed := field.Virtual("summary", field.ValueString, func(operation.Context) (operation.Value[store.Value], error) {
 		calls++
 		return operation.Present(store.String("computed")), nil
 	}).Access(field.Access{Read: graphAllow})
@@ -315,7 +315,7 @@ func TestFieldGraphComputedOwnershipAndUnsupportedPolicies(t *testing.T) {
 	}{
 		"output write access":  {config: Config{Name: "Bad", Collections: []Collection{{Slug: "pages", Fields: field.Fields{computed.Access(field.Access{Update: graphAllow})}}}}, code: "incompatible_field_policy", path: "collections[0].fields[0].access.update"},
 		"global create access": {config: Config{Name: "Bad", Collections: []Collection{{Slug: "pages", Fields: field.Fields{field.Text("title")}}}, Globals: []Global{{Slug: "settings", Fields: field.Fields{field.Text("name").Access(field.Access{Create: graphAllow})}}}}, code: "incompatible_field_policy", path: "globals[0].fields[0].access.create"},
-		"global delete hook":   {config: Config{Name: "Bad", Collections: []Collection{{Slug: "pages", Fields: field.Fields{field.Text("title")}}}, Globals: []Global{{Slug: "settings", Fields: field.Fields{field.Text("name").Hooks(field.Hooks[string]{BeforeDelete: []field.Observer[string]{func(operation.EventContext, operation.Value[string]) error { return nil }}})}}}}, code: "incompatible_field_policy", path: "globals[0].fields[0].hooks.beforeDelete"},
+		"global delete hook":   {config: Config{Name: "Bad", Collections: []Collection{{Slug: "pages", Fields: field.Fields{field.Text("title")}}}, Globals: []Global{{Slug: "settings", Fields: field.Fields{field.Text("name").Hooks(field.Hooks[string]{BeforeDelete: []field.Observer[string]{func(operation.Context, operation.Value[string]) error { return nil }}})}}}}, code: "incompatible_field_policy", path: "globals[0].fields[0].hooks.beforeDelete"},
 		"empty operand set":    {config: Config{Name: "Bad", Collections: []Collection{{Slug: "pages", Fields: field.Fields{field.Text("title").Admin(field.Admin{VisibleWhen: field.OneOf[string](field.Sibling("title"))})}}}}, code: "invalid_condition_values", path: "collections[0].fields[0].admin.visibleWhen.values"},
 	} {
 		t.Run(name, func(t *testing.T) {

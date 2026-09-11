@@ -1,4 +1,4 @@
-import { cloneSchemaField } from "@riducms/protocol";
+import { FieldBindingLifetime } from "@admin/core/forms/field-binding-lifetime";
 import type {
 	PluginFieldBinding as Binding,
 	PluginForm,
@@ -9,46 +9,20 @@ import type { FormController } from "@admin/core/forms/form-controller.svelte";
 import { captureFieldOccurrence } from "@admin/core/forms/field-occurrence";
 import { writePluginField } from "@admin/core/forms/plugin-field-write";
 import { cloneFormValue } from "@admin/core/forms/form-schema";
-import { fieldAccessPath } from "@admin/fields/nested/scoped-field";
-import { evaluateFieldCondition } from "@admin/core/forms/field-condition";
 
 /** The form owns values. This lease owns registration, occurrence tracking and child capabilities. */
 export class PluginFieldBinding implements Binding<unknown> {
-	#stale = false;
-	#path: string;
-	#resolvePath: () => string | undefined;
-	#ancestors: ReturnType<typeof captureFieldOccurrence>["ancestors"];
-	#epoch: number;
-	#version: unknown;
-	#schemaID: string;
-	#resource: string;
-	#locale: string | undefined;
-	#stopPath: () => void;
-	#stopObserve: () => void;
-	#stopLifetime: () => void;
-	#cleanup = new Set<() => void>();
+	#lifetime: FieldBindingLifetime;
 	readonly form: PluginForm;
 	constructor(
 		private controller: FormController,
-		private getSchema: () => SchemaField,
+		getSchema: () => SchemaField,
 		private registration: Pick<RegisteredPluginField, "decodeValue"> &
 			Partial<Pick<RegisteredPluginField, "decodeInput" | "decodeFormValue">>,
-		private schemaVersion: () => unknown = () => controller.editorEpoch,
+		schemaVersion: () => unknown = () => controller.editorEpoch,
 		private owner?: PluginFieldBinding
 	) {
-		const schema = getSchema();
-		this.#path = schema.path;
-		const occurrence = captureFieldOccurrence(controller, schema.path);
-		this.#resolvePath = occurrence.resolve;
-		this.#ancestors = occurrence.ancestors;
-		this.#epoch = controller.editorEpoch;
-		this.#schemaID = schema.id;
-		this.#version = schemaVersion();
-		this.#resource = JSON.stringify(controller.resource);
-		this.#locale = controller.contentLocale;
-		this.#stopPath = controller.register(this.#path);
-		this.#stopObserve = controller.observe(this.#path.split(".")[0]!, () => this.#resolve());
-		this.#stopLifetime = controller.registerEditorLifetime(this.destroy);
+		this.#lifetime = new FieldBindingLifetime(controller, getSchema, schemaVersion);
 		const binding = this;
 		this.form = {
 			get contentLocale() {
@@ -87,21 +61,20 @@ export class PluginFieldBinding implements Binding<unknown> {
 		};
 	}
 	get stale() {
-		this.#resolve();
-		return this.#stale;
+		return this.#lifetime.stale;
 	}
 	get schema() {
 		this.assertActive();
-		const schema = cloneSchemaField(this.getSchema());
+		const schema = this.#lifetime.schema;
 		return {
 			...schema,
-			path: this.#path,
+			path: this.#lifetime.path,
 			admin: { ...schema.admin, readOnly: this.#isReadOnly() },
 		};
 	}
 	get rawValue() {
 		this.assertActive();
-		return cloneFormValue(this.controller.get(this.#path));
+		return cloneFormValue(this.controller.get(this.#lifetime.path));
 	}
 	get value() {
 		const raw = this.rawValue;
@@ -114,16 +87,16 @@ export class PluginFieldBinding implements Binding<unknown> {
 	}
 	get issues() {
 		this.assertActive();
-		return this.controller.issuesFor(this.#path).map((issue) => ({ ...issue }));
+		return this.controller.issuesFor(this.#lifetime.path).map((issue) => ({ ...issue }));
 	}
 	get liveValidation() {
 		if (this.stale) return { status: "idle" as const, retry: () => {} };
-		const feedback = this.controller.liveValidation.forField(this.#path);
+		const feedback = this.controller.liveValidation.forField(this.#lifetime.path);
 		return {
 			status: feedback.status,
 			retry: () => {
 				this.assertActive();
-				if (!this.readOnly) this.controller.liveValidation.flush(this.#path);
+				if (!this.readOnly) this.controller.liveValidation.flush(this.#lifetime.path);
 			},
 		};
 	}
@@ -131,36 +104,8 @@ export class PluginFieldBinding implements Binding<unknown> {
 	get readOnly() {
 		return this.controller.editingBlocked || this.#isReadOnly();
 	}
-	#isReadOnly() {
-		if (this.stale || (this.owner !== undefined && this.owner.#isReadOnly())) return true;
-		if (
-			this.#ancestors.some(({ schema, resolve }) => {
-				const path = resolve();
-				return (
-					path === undefined ||
-					schema.admin.readOnly === true ||
-					schema.admin.hidden === true ||
-					!this.controller.canRead(path, fieldAccessPath(schema)) ||
-					!this.controller.canWrite(path, fieldAccessPath(schema)) ||
-					(schema.admin.condition !== undefined &&
-						!evaluateFieldCondition(schema.admin.condition, path, (other) =>
-							this.controller.get(other)
-						))
-				);
-			})
-		)
-			return true;
-		const field = this.getSchema();
-		return (
-			field.admin.readOnly === true ||
-			field.admin.hidden === true ||
-			!this.controller.canRead(this.#path, fieldAccessPath(field)) ||
-			!this.controller.canWrite(this.#path, fieldAccessPath(field)) ||
-			(field.admin.condition !== undefined &&
-				!evaluateFieldCondition(field.admin.condition, this.#path, (path) =>
-					this.controller.get(path)
-				))
-		);
+	#isReadOnly(): boolean {
+		return this.#lifetime.schemaReadOnly || (this.owner !== undefined && this.owner.#isReadOnly());
 	}
 	set = (value: unknown) => {
 		this.assertEditable();
@@ -173,7 +118,7 @@ export class PluginFieldBinding implements Binding<unknown> {
 		// Decoders and getters are application code and may revoke the binding synchronously.
 		const detached = copyValue(decoded);
 		this.assertEditable();
-		const schema = { ...this.getSchema(), path: this.#path };
+		const schema = this.#lifetime.schema;
 		writePluginField(this.controller, schema, detached);
 	};
 	assertActive = () => {
@@ -188,44 +133,9 @@ export class PluginFieldBinding implements Binding<unknown> {
 	};
 	onDestroy = (cleanup: () => void) => {
 		this.assertActive();
-		this.#cleanup.add(cleanup);
-		return () => {
-			this.#cleanup.delete(cleanup);
-		};
+		return this.#lifetime.onDestroy(cleanup);
 	};
-	destroy = () => {
-		if (this.#stale) return;
-		this.#stale = true;
-		this.#stopPath();
-		this.#stopObserve();
-		this.#stopLifetime();
-		for (const cleanup of [...this.#cleanup]) cleanup();
-		this.#cleanup.clear();
-	};
-	#resolve() {
-		if (this.#stale) return;
-		if (
-			!this.controller.editorScopeActive ||
-			this.controller.editorEpoch !== this.#epoch ||
-			this.schemaVersion() !== this.#version ||
-			this.getSchema().id !== this.#schemaID ||
-			this.controller.contentLocale !== this.#locale ||
-			JSON.stringify(this.controller.resource) !== this.#resource
-		) {
-			this.destroy();
-			return;
-		}
-		const path = this.#resolvePath();
-		if (path === undefined) {
-			this.destroy();
-			return;
-		}
-		if (path !== this.#path) {
-			this.#stopPath();
-			this.#path = path;
-			this.#stopPath = this.controller.register(path);
-		}
-	}
+	destroy = () => this.#lifetime.destroy();
 }
 
 /** Reject non-JSON mutable objects before they can enter the form (including decoder outputs). */

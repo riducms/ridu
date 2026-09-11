@@ -12,19 +12,19 @@ import (
 func TestPolicyHooksOwnEverySupportedPhaseAndComposeInOrder(t *testing.T) {
 	var trace []string
 	raw := func(label string) RawTransform {
-		return func(operation.WriteContext, operation.Value[store.Value]) (operation.Change[store.Value], error) {
+		return func(operation.Context, operation.Value[store.Value]) (operation.Change[store.Value], error) {
 			trace = append(trace, label)
 			return operation.Keep[store.Value](), nil
 		}
 	}
 	write := func(label string) Transform[string] {
-		return func(operation.WriteContext, operation.Value[string]) (operation.Change[string], error) {
+		return func(operation.Context, operation.Value[string]) (operation.Change[string], error) {
 			trace = append(trace, label)
 			return operation.Keep[string](), nil
 		}
 	}
 	event := func(label string) Observer[string] {
-		return func(operation.EventContext, operation.Value[string]) error {
+		return func(operation.Context, operation.Value[string]) error {
 			trace = append(trace, label)
 			return nil
 		}
@@ -57,7 +57,7 @@ func TestPolicyHooksOwnEverySupportedPhaseAndComposeInOrder(t *testing.T) {
 	}
 	for _, phase := range [][]RawTransform{composed.BeforeDuplicate, composed.BeforeValidate} {
 		for _, callback := range phase {
-			if _, err := callback(operation.WriteContext{}, operation.Empty[store.Value]()); err != nil {
+			if _, err := callback(operation.Context{}, operation.Empty[store.Value]()); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -65,7 +65,7 @@ func TestPolicyHooksOwnEverySupportedPhaseAndComposeInOrder(t *testing.T) {
 	}
 	for _, phase := range [][]Transform[string]{composed.BeforeChange, composed.BeforeOperation} {
 		for _, callback := range phase {
-			if _, err := callback(operation.WriteContext{}, operation.Empty[string]()); err != nil {
+			if _, err := callback(operation.Context{}, operation.Empty[string]()); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -73,7 +73,7 @@ func TestPolicyHooksOwnEverySupportedPhaseAndComposeInOrder(t *testing.T) {
 	}
 	for _, phase := range [][]Observer[string]{composed.BeforeDelete, composed.AfterChange, composed.AfterDelete, composed.AfterOperation, composed.AfterCommit} {
 		for _, callback := range phase {
-			if err := callback(operation.EventContext{}, operation.Empty[string]()); err != nil {
+			if err := callback(operation.Context{}, operation.Empty[string]()); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -121,26 +121,26 @@ func TestAdminPolicyOwnsBorrowedAndEscapedDraftMaps(t *testing.T) {
 func TestAccessRestrictionPreservesOtherOperationsAndShortCircuits(t *testing.T) {
 	failure := errors.New("lookup failed")
 	called := 0
-	allow := AccessRule(func(operation.AccessContext) (bool, error) { return true, nil })
-	deny := AccessRule(func(operation.AccessContext) (bool, error) { return false, nil })
-	extra := AccessRule(func(operation.AccessContext) (bool, error) { called++; return true, nil })
+	allow := AccessRule(func(operation.Context) (bool, error) { return true, nil })
+	deny := AccessRule(func(operation.Context) (bool, error) { return false, nil })
+	extra := AccessRule(func(operation.Context) (bool, error) { called++; return true, nil })
 	base := Access{Create: allow, Read: allow, Update: deny}
 	restricted := restrictAccess(base, Access{Update: extra})
-	if allowed, err := restricted.Create(operation.AccessContext{}); !allowed || err != nil {
+	if allowed, err := restricted.Create(operation.Context{}); !allowed || err != nil {
 		t.Fatal("update restriction changed create")
 	}
-	if allowed, err := restricted.Read(operation.AccessContext{}); !allowed || err != nil {
+	if allowed, err := restricted.Read(operation.Context{}); !allowed || err != nil {
 		t.Fatal("update restriction changed read")
 	}
-	if allowed, err := restricted.Update(operation.AccessContext{}); allowed || err != nil || called != 0 {
+	if allowed, err := restricted.Update(operation.Context{}); allowed || err != nil || called != 0 {
 		t.Fatal("denial did not short circuit")
 	}
-	restricted = restrictAccess(Access{Update: func(operation.AccessContext) (bool, error) { return false, failure }}, Access{Update: extra})
-	if _, err := restricted.Update(operation.AccessContext{}); !errors.Is(err, failure) || called != 0 {
+	restricted = restrictAccess(Access{Update: func(operation.Context) (bool, error) { return false, failure }}, Access{Update: extra})
+	if _, err := restricted.Update(operation.Context{}); !errors.Is(err, failure) || called != 0 {
 		t.Fatal("operational error did not short circuit")
 	}
 	restricted = restrictAccess(Access{}, Access{Update: extra})
-	if allowed, err := restricted.Update(operation.AccessContext{}); !allowed || err != nil || called != 1 {
+	if allowed, err := restricted.Update(operation.Context{}); !allowed || err != nil || called != 1 {
 		t.Fatal("restriction without previous policy was discarded")
 	}
 }

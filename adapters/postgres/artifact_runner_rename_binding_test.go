@@ -83,33 +83,6 @@ func TestCollectionRenameArtifactsBindManifestIdentityAndPhysicalTopology(t *tes
 			t.Fatalf("target-table replacement preflight = %v", err)
 		}
 
-		afterWithPluginSnapshot := after.Snapshot()
-		afterWithPluginSnapshot.Plugins = []schema.Plugin{{
-			Key: "guard", Version: "1.0.0", GoPackage: "example.com/guard", APIVersion: schema.CurrentPluginAPIVersion,
-			Ridu: &schema.PluginCompatibility{Minimum: "0.0.0-dev"},
-			DatabaseContributions: []schema.PluginDatabaseContribution{{
-				Adapter: schema.PluginDatabaseAdapterPostgres, Tables: []string{"ridu_plugin_guard_state"},
-				Migrations: []schema.PluginMigration{{
-					Version: 1, Name: "create-guard",
-					UpSQL:   []string{"CREATE TABLE ridu_plugin_guard_state (id text PRIMARY KEY)"},
-					DownSQL: []string{"DROP TABLE ridu_plugin_guard_state"},
-				}},
-			}},
-		}}
-		afterWithPlugin := schema.NewManifest(afterWithPluginSnapshot)
-		pluginArtifact, err := BuildArtifact(context.Background(), "rename-with-plugin", &before, afterWithPlugin, []Rename{{
-			Kind: RenameCollection, BeforeCollection: beforeCollection, AfterCollection: afterCollection,
-		}}, false)
-		if err != nil {
-			t.Fatal(err)
-		}
-		tamperPluginSQL(t, &pluginArtifact, []string{
-			"WITH gone AS (DELETE FROM " + quote(collectionTable(afterCollection.ID)) + " RETURNING 1) SELECT count(*) FROM gone",
-		})
-		recomputeTestPhysicalDigests(t, &pluginArtifact)
-		if err := pluginArtifact.Validate(); err == nil || !strings.Contains(err.Error(), "does not match embedded manifests") {
-			t.Fatalf("manifest-unbound plugin SQL validation = %v", err)
-		}
 	})
 }
 
@@ -543,27 +516,6 @@ func insertSQLBeforeCollectionRename(t *testing.T, artifact *ridumigration.Artif
 		}
 	}
 	t.Fatal("collection content rename not found")
-}
-
-func tamperPluginSQL(t *testing.T, artifact *ridumigration.Artifact, statements []string) {
-	t.Helper()
-	for phaseIndex := range artifact.Phases {
-		for stepIndex := range artifact.Phases[phaseIndex].Steps {
-			step := &artifact.Phases[phaseIndex].Steps[stepIndex]
-			if step.Kind != ridumigration.StepPluginSQL {
-				continue
-			}
-			var payload ridumigration.PluginPayload
-			if err := json.Unmarshal(step.Payload, &payload); err != nil {
-				t.Fatal(err)
-			}
-			payload.Plugin.SQL = append([]string(nil), statements...)
-			payload.Plugin.Checksum = ridumigration.PluginStepChecksum(payload.Plugin.Adapter, payload.Plugin.Plugin, payload.Plugin.Version, payload.Plugin.Direction, payload.Plugin.SQL)
-			step.Payload, _ = ridumigration.MarshalStepPayload(payload)
-			return
-		}
-	}
-	t.Fatal("plugin SQL step not found")
 }
 
 func removeRetirementStep(t *testing.T, artifact *ridumigration.Artifact) {

@@ -8,7 +8,7 @@ import (
 )
 
 func formatCode(
-	_ operation.ReadContext,
+	_ operation.Context,
 	value operation.Value[string],
 ) (operation.Change[string], error) {
 	code, present := value.Get()
@@ -21,8 +21,4 @@ func formatCode(
 	), nil
 }
 
-var DisplayCode = field.Text("displayCode").ReadHooks(
-	field.ReadHooks[string]{
-		AfterRead: []field.OutputTransform[string]{formatCode},
-	},
-)
+var DisplayCode = field.Text("displayCode").AfterRead(formatCode)

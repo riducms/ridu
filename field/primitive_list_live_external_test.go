@@ -19,23 +19,23 @@ func TestPrimitiveListLiveFactoryRefinementsPreserveBehavior(t *testing.T) {
 		calls++
 		return nil, nil
 	}
-	text := field.TextList("points").DefaultFrom(func(operation.DefaultContext) (operation.Value[[]string], error) {
+	text := field.TextList("points").DefaultFrom(func(operation.Context) (operation.Value[[]string], error) {
 		return operation.Present([]string{"Oak"}), nil
 	}).
-		Validate(func(operation.ValidationContext, operation.Value[[]string]) ([]operation.Issue, error) {
+		Validate(func(operation.Context, operation.Value[[]string]) ([]operation.Issue, error) {
 			return nil, nil
 		}).
-		Hooks(field.Hooks[[]string]{BeforeChange: []field.Transform[[]string]{func(operation.WriteContext, operation.Value[[]string]) (operation.Change[[]string], error) {
+		Hooks(field.Hooks[[]string]{BeforeChange: []field.Transform[[]string]{func(operation.Context, operation.Value[[]string]) (operation.Change[[]string], error) {
 			return operation.Keep[[]string](), nil
 		}}}).
-		Access(field.Access{Read: func(operation.AccessContext) (bool, error) { return true, nil }}).Private("catalog", store.String("text factory")).LiveValidate(textLive)
-	numbers := field.NumberList("sizes").Default(0, 8, 8).Validate(func(operation.ValidationContext, operation.Value[[]float64]) ([]operation.Issue, error) {
+		Access(field.Access{Read: func(operation.Context) (bool, error) { return true, nil }}).Private("catalog", store.String("text factory")).LiveValidate(textLive)
+	numbers := field.NumberList("sizes").Default(0, 8, 8).Validate(func(operation.Context, operation.Value[[]float64]) ([]operation.Issue, error) {
 		return nil, nil
 	}).
-		Hooks(field.Hooks[[]float64]{BeforeChange: []field.Transform[[]float64]{func(operation.WriteContext, operation.Value[[]float64]) (operation.Change[[]float64], error) {
+		Hooks(field.Hooks[[]float64]{BeforeChange: []field.Transform[[]float64]{func(operation.Context, operation.Value[[]float64]) (operation.Change[[]float64], error) {
 			return operation.Keep[[]float64](), nil
 		}}}).
-		Access(field.Access{Update: func(operation.AccessContext) (bool, error) { return true, nil }}).Private("catalog", store.String("number factory")).LiveValidate(numberLive)
+		Access(field.Access{Update: func(operation.Context) (bool, error) { return true, nil }}).Private("catalog", store.String("number factory")).LiveValidate(numberLive)
 	factory := field.Group("options", field.Fields{text, numbers})
 	refined, err := field.EditChild(factory, "points", field.AsTextList, func(f field.TextListField) field.TextListField { return f.MaxLength(32).LiveValidate(textLive) })
 	if err != nil {

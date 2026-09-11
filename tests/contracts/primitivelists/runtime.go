@@ -36,29 +36,29 @@ func Values() store.Values {
 func Exercise(t *testing.T, app *core.App) {
 	t.Helper()
 	values := Values()
-	created, err := app.Local().CreateWithOptions(t.Context(), "primitive-products", values, core.MutationOptions{Locale: "fr"})
+	created, err := app.Local().Create(t.Context(), "primitive-products", values, core.MutationOptions{Locale: "fr"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	found, err := app.Local().FindWithOptions(t.Context(), "primitive-products", created.ID, core.FindOptions{Locale: "fr", DisableFallback: true})
+	found, err := app.Local().Find(t.Context(), "primitive-products", created.ID, core.FindOptions{Locale: "fr", DisableFallback: true})
 	if err != nil {
 		t.Fatal(err)
 	}
 	for key, value := range values {
 		equalValue(t, found.Values[key], value)
 	}
-	updated, err := app.Local().PublishChangesWithOptions(t.Context(), "primitive-products", created.ID, store.Values{"sellingPoints": store.List(store.String("Replacement")), "availableSizes": store.List()}, core.MutationOptions{Locale: "fr", ExpectedRevision: created.Revision})
+	updated, err := app.Local().PublishChanges(t.Context(), "primitive-products", created.ID, store.Values{"sellingPoints": store.List(store.String("Replacement")), "availableSizes": store.List()}, core.MutationOptions{Locale: "fr", ExpectedRevision: created.Revision})
 	if err != nil {
 		t.Fatal(err)
 	}
 	equalValue(t, updated.Values["availableSizes"], store.List())
-	copied, err := app.Local().DuplicateWithOptions(t.Context(), "primitive-products", created.ID, nil, core.MutationOptions{Locale: "fr"})
+	copied, err := app.Local().Duplicate(t.Context(), "primitive-products", created.ID, nil, core.MutationOptions{Locale: "fr"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	equalValue(t, copied.Values["sellingPoints"], updated.Values["sellingPoints"])
 	equalValue(t, copied.Values["availableSizes"], store.List())
-	restored, err := app.Local().RestoreVersionWithOptions(t.Context(), "primitive-products", created.ID, created.Revision, false, core.MutationOptions{Locale: "fr", ExpectedRevision: updated.Revision})
+	restored, err := app.Local().Restore(t.Context(), "primitive-products", created.ID, created.Revision, core.MutationOptions{Locale: "fr", ExpectedRevision: updated.Revision})
 	if err != nil {
 		t.Fatal(err)
 	}

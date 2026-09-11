@@ -8,7 +8,7 @@ aliases:
   [
     'field.Virtual',
     'computed field',
-    'operation.ReadContext',
+    'operation.Context',
     'ValueString',
     'ctx.Root',
     'sibling values'
@@ -54,7 +54,7 @@ var People = ridu.Collection{
 		field.Text("lastName").Required(),
 		field.Virtual("displayName", field.ValueString,
 			func(
-				ctx operation.ReadContext,
+				ctx operation.Context,
 			) (operation.Value[store.Value], error) {
 				first, _ := ctx.Root.String("firstName")
 				last, _ := ctx.Root.String("lastName")
@@ -92,7 +92,7 @@ that Local API for additional reads.
 | `field.Virtual(name, valueType, resolver)`                                | Declares the response key, finite output type, and Go callback that calculates it.        |
 | `field.ValueString`, `ValueNumber`, `ValueBoolean`, and other value types | Tell generation and runtime validation which `store.Value` kind the resolver must return. |
 | `.Access(...)` / `.RestrictAccess(...)`                                   | Controls whether the computed output is visible to the caller.                            |
-| `.ReadHooks(...)`                                                         | Transforms the resolved response value before final redaction.                            |
+| `.AfterRead(...)`                                                         | Transforms the resolved response value before final redaction.                            |
 | `.Admin(...)`                                                             | Sets label, description, position, width, and read-only presentation.                     |
 
 Virtual has no default, requiredness, write validator, write hook, localization setting, or stored

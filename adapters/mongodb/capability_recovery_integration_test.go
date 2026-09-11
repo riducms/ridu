@@ -58,12 +58,12 @@ func TestMongoCapabilityReadsPreserveSchemaRecovery(t *testing.T) {
 				if err := backend.SyncIndexes(t.Context(), app.Manifest()); err != nil {
 					t.Fatal(err)
 				}
-				created, err := app.Local().Create(t.Context(), "pages", store.Values{"body": value}, nil)
+				created, err := app.Local().Create(t.Context(), "pages", store.Values{"body": value}, ridu.MutationOptions{})
 				if err != nil {
 					t.Fatal(err)
 				}
 				if historical {
-					if _, err := app.Local().Update(t.Context(), "pages", created.ID, store.Values{"body": empty}, nil); err != nil {
+					if _, err := app.Local().Update(t.Context(), "pages", created.ID, store.Values{"body": empty}, ridu.MutationOptions{}); err != nil {
 						t.Fatal(err)
 					}
 				}

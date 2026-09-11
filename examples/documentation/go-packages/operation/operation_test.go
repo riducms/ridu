@@ -24,7 +24,7 @@ func TestSubtitleReturnsKeepReplaceAndClear(t *testing.T) {
 		{name: "text is trimmed", input: operation.Present("  Hello  "), wantReplace: true, wantPresent: true, wantValue: "Hello"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			change, err := cleanSubtitle(operation.WriteContext{}, test.input)
+			change, err := cleanSubtitle(operation.Context{}, test.input)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -68,7 +68,7 @@ func TestExamplesSaveClearAndTargetValidationMessages(t *testing.T) {
 		"pricing": store.Object(store.Values{
 			"price": store.Number(10), "salePrice": store.Number(0),
 		}),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +80,7 @@ func TestExamplesSaveClearAndTargetValidationMessages(t *testing.T) {
 		t.Fatal("a zero sale price must not become missing")
 	}
 
-	unchanged, err := app.Local().Update(t.Context(), "products", created.ID, store.Values{}, nil)
+	unchanged, err := app.Local().Update(t.Context(), "products", created.ID, store.Values{}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +89,7 @@ func TestExamplesSaveClearAndTargetValidationMessages(t *testing.T) {
 	}
 	cleared, err := app.Local().Update(t.Context(), "products", created.ID, store.Values{
 		"subtitle": store.String("  "),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +101,7 @@ func TestExamplesSaveClearAndTargetValidationMessages(t *testing.T) {
 		"pricing": store.Object(store.Values{
 			"price": store.Number(10), "salePrice": store.Number(12),
 		}),
-	}, nil)
+	}, ridu.MutationOptions{})
 	var failure *ridu.OperationError
 	if !errors.As(err, &failure) || len(failure.Issues) != 1 {
 		t.Fatalf("expected one validation issue: %v", err)
@@ -110,7 +110,7 @@ func TestExamplesSaveClearAndTargetValidationMessages(t *testing.T) {
 	if issue.Code != "sale_price_too_high" || issue.Path != "pricing.salePrice" {
 		t.Fatalf("wrong issue target: %+v", issue)
 	}
-	stored, err := app.Local().Find(t.Context(), "products", created.ID, nil)
+	stored, err := app.Local().Find(t.Context(), "products", created.ID, ridu.FindOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +127,7 @@ func TestRawHookDistinguishesOmittedAndNull(t *testing.T) {
 		Collections: []ridu.Collection{{
 			Slug: "products",
 			Fields: field.Fields{field.Number("score").Hooks(field.Hooks[float64]{
-				BeforeValidate: []field.RawTransform{func(_ operation.WriteContext, value operation.Value[store.Value]) (operation.Change[store.Value], error) {
+				BeforeValidate: []field.RawTransform{func(_ operation.Context, value operation.Value[store.Value]) (operation.Change[store.Value], error) {
 					inputs = append(inputs, value)
 					return operation.Keep[store.Value](), nil
 				}},
@@ -137,11 +137,11 @@ func TestRawHookDistinguishesOmittedAndNull(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	created, err := app.Local().Create(t.Context(), "products", store.Values{}, nil)
+	created, err := app.Local().Create(t.Context(), "products", store.Values{}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := app.Local().Update(t.Context(), "products", created.ID, store.Values{"score": store.Null()}, nil); err != nil {
+	if _, err := app.Local().Update(t.Context(), "products", created.ID, store.Values{"score": store.Null()}, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if len(inputs) != 2 {

@@ -98,29 +98,8 @@ const ErrorBoundary = svelte`
 	</svelte:boundary>
 `;
 function runtime() {
-	return new AdminRuntime(
-		createAdminClient(),
-		[],
-		undefined,
-		undefined,
-		{
-			"app:plain": defineFieldEditor({ type: "text", component: PlainEditor }),
-			"app:accent": defineFieldEditor({
-				type: "text",
-				component: Editor,
-				decodeConfig(value: unknown) {
-					if (
-						typeof value !== "object" ||
-						value === null ||
-						!("prefix" in value) ||
-						typeof value.prefix !== "string"
-					)
-						throw new Error("prefix required");
-					return { prefix: value.prefix };
-				},
-			}),
-		},
-		{
+	return new AdminRuntime(createAdminClient(), {
+		...{
 			rowLabels: {
 				"app:plainRow": defineRowLabel({ component: PlainLabel }),
 				"app:row": defineRowLabel({
@@ -137,8 +116,26 @@ function runtime() {
 					},
 				}),
 			},
-		}
-	);
+		},
+		plugins: [],
+		fields: {
+			"app:plain": defineFieldEditor({ type: "text", component: PlainEditor }),
+			"app:accent": defineFieldEditor({
+				type: "text",
+				component: Editor,
+				decodeConfig(value: unknown) {
+					if (
+						typeof value !== "object" ||
+						value === null ||
+						!("prefix" in value) ||
+						typeof value.prefix !== "string"
+					)
+						throw new Error("prefix required");
+					return { prefix: value.prefix };
+				},
+			}),
+		},
+	});
 }
 function accent(path: string, label = "Accent"): SchemaField {
 	return {

@@ -123,13 +123,13 @@ Plugin endpoints declare an exact HTTP method and a relative path. Ridu mounts t
 `/api/plugins/<key>/`; a known path with the wrong method returns `405`.
 
 The handler receives the HTTP request, response writer, and information about the signed-in user.
-Use `PluginEndpointContext.Local` to read or change content with Ridu's normal permissions,
+Use `EndpointContext.Local` to read or change content with Ridu's normal permissions,
 validation, and hooks.
 
 Set `MaxBodyBytes` to limit request size, or leave it at zero to use the application's limit.
 A negative value disables that limit; a streaming handler must then enforce its own limits.
 If your endpoint handles authentication, call `AdmitAuthAttempt` before checking credentials or
-performing other expensive work. See the [endpoint context reference](/reference/core/plugin-endpoint-context/).
+performing other expensive work. See the [endpoint context reference](/reference/core/endpoint-context/).
 
 Use `TransportProvider` for an API with a fixed top-level path, such as GraphQL. Set it up once
 when the application starts. The [GraphQL plugin](/docs/graphql/) shows this approach.
@@ -156,30 +156,9 @@ from the built-in admin.
 
 ## Store plugin data {#migrations}
 
-Store plugin data in ordinary collections and fields when possible. Add them through
-`ConfigTransformer` to get Ridu's usual permissions, validation, API, generated types, and admin.
-
-If a feature needs its own SQL tables, use `DatabaseContributions`. Write a separate set of
-migrations for PostgreSQL (`PluginDatabaseAdapterPostgres`) and SQLite
-(`PluginDatabaseAdapterSQLite`). Ridu runs only the set for the selected adapter; it cannot
-translate one database's SQL for another.
-
-Number each adapter's migrations from 1 without gaps. Give each a name such as `add-audit-log`,
-SQL statements to apply it in `UpSQL`, and SQL statements to undo it in `DownSQL`. Each array entry
-must contain one statement. Ridu manages the connection and transaction; SQLite also rejects
-`ATTACH`, `DETACH`, and `PRAGMA` statements.
-
-Start table names with `ridu_plugin_<key>_`, replacing hyphens in the plugin key with underscores.
-For example, a plugin named `audit-log` could create `ridu_plugin_audit_log_entries`. This lets
-Ridu check which tables the plugin owns. The prefix does not restrict what the plugin's SQL can do.
-
-Ridu includes the plugin's SQL in the application's generated migration and checks that it has not
-changed before running it. Once published, do not edit a migration's version, name, or SQL. Add a
-new migration to make further changes, even after removing and reinstalling a plugin.
-
-Removing a plugin version runs its undo steps in reverse order and requires approval for the
-destructive migration. This applies to the plugin's tables; it does not add automatic rollback for
-the rest of the application's schema. See [Migrations](/docs/migrations/) for recovery options.
+Store plugin data in ordinary collections and fields. Add them through `ConfigTransformer` to get
+Ridu's permissions, validation, transactions, API, generated types, and admin. The active adapter
+plans their migrations together with application collections. See [Migrations](/docs/migrations/).
 
 ## Remove a plugin {#remove}
 

@@ -81,37 +81,31 @@ const (
 	committedUploadCleanupWorkers  = 4
 )
 
-// Duplicate creates an access-checked document copy. Upload collections also
-// receive fresh storage keys for the original object and every derived image
-// size so either document can later be deleted independently.
-func (application *App) Duplicate(ctx context.Context, collection, id string, overrides store.Values, actor *store.Document, localeOptions ...LocaleOptions) (store.Document, error) {
-	return application.DuplicateWithOptions(ctx, collection, id, overrides, mutationOptions(actor, 0, localeOptions))
-}
-
 // DuplicateForIdentity duplicates through one exact authenticated collection
 // identity. A nil identity remains anonymous.
-func (application *App) DuplicateForIdentity(ctx context.Context, collection, id string, overrides store.Values, identity *AuthIdentity, localeOptions ...LocaleOptions) (store.Document, error) {
+func (application *App) DuplicateForIdentity(ctx context.Context, collection, id string, overrides store.Values, identity *AuthIdentity, localeOptions LocaleOptions) (store.Document, error) {
 	actor, actorCollection, err := application.resolveOptionalAuthIdentity(ctx, identity)
 	if err != nil {
 		return store.Document{}, err
 	}
-	options := mutationOptions(actor, 0, localeOptions)
+	options := MutationOptions{Actor: actor, Locale: localeOptions.Locale, FallbackLocales: localeOptions.FallbackLocales, DisableFallback: localeOptions.DisableFallback, AllLocales: localeOptions.AllLocales}
 	options.ActorCollection = actorCollection
-	return application.DuplicateWithOptions(ctx, collection, id, overrides, options)
+	return application.Duplicate(ctx, collection, id, overrides, options)
 }
 
-// DuplicateWithOptions preserves exact actor identity and response selection
+// Duplicate prepares fresh storage keys for uploads and cleans up staged objects on failure.
+// It preserves exact actor identity and response selection
 // while duplicating ordinary or upload documents.
-func (application *App) DuplicateWithOptions(ctx context.Context, collection, id string, overrides store.Values, options MutationOptions) (store.Document, error) {
+func (application *App) Duplicate(ctx context.Context, collection, id string, overrides store.Values, options MutationOptions) (store.Document, error) {
 	resolved, exists := application.bySlug[collection]
 	if !exists {
 		return store.Document{}, &operationengine.Error{Code: "unknown_collection", Status: 404, Message: fmt.Sprintf("collection %q was not found", collection)}
 	}
 	if resolved.Upload == nil {
-		return application.local.DuplicateWithOptions(ctx, collection, id, overrides, options)
+		return application.local.Duplicate(ctx, collection, id, overrides, options)
 	}
 	overrides = uploads.ApplicationValues(overrides)
-	source, err := application.local.FindWithOptions(ctx, collection, id, FindOptions{
+	source, err := application.local.Find(ctx, collection, id, FindOptions{
 		Actor: options.Actor, ActorCollection: options.ActorCollection,
 		Locale: options.Locale, FallbackLocales: append([]schema.LocaleCode(nil), options.FallbackLocales...),
 		DisableFallback: options.DisableFallback, AllLocales: options.AllLocales,
@@ -139,7 +133,7 @@ func (application *App) DuplicateWithOptions(ctx context.Context, collection, id
 		values[name] = value
 	}
 	resource := application.uploadTransactionResource(prepared)
-	document, err := application.local.duplicateStoragePreparedWithOptions(ctx, collection, id, values, options, resource)
+	document, err := application.local.duplicateStoragePrepared(ctx, collection, id, values, options, resource)
 	if err != nil {
 		if resource.Claimed() {
 			return store.Document{}, err
@@ -193,7 +187,7 @@ func (application *App) upload(ctx context.Context, collection string, input Upl
 		return store.Document{}, uploadPreparationError(err, "upload could not be stored")
 	}
 	resource := application.uploadTransactionResource(prepared)
-	document, err := application.local.createStoragePreparedWithOptions(ctx, collection, prepared.Values, MutationOptions{
+	document, err := application.local.createStoragePrepared(ctx, collection, prepared.Values, MutationOptions{
 		Actor: input.Actor, ActorCollection: input.ActorCollection,
 		Locale: input.Locale.Locale, FallbackLocales: append([]schema.LocaleCode(nil), input.Locale.FallbackLocales...),
 		DisableFallback: input.Locale.DisableFallback, AllLocales: input.Locale.AllLocales,
@@ -268,7 +262,7 @@ func (application *App) UpdateUploadImage(ctx context.Context, collection, id st
 	if !capabilities.Operations.Update {
 		return store.Document{}, &operationengine.Error{Code: "access_denied", Status: 403, Message: "operation is not permitted"}
 	}
-	current, err := application.local.FindWithOptions(ctx, collection, id, FindOptions{Actor: input.Actor, ActorCollection: input.ActorCollection})
+	current, err := application.local.Find(ctx, collection, id, FindOptions{Actor: input.Actor, ActorCollection: input.ActorCollection})
 	if err != nil {
 		return store.Document{}, err
 	}
@@ -295,9 +289,9 @@ func (application *App) UpdateUploadImage(ctx context.Context, collection, id st
 	mutationOptions := MutationOptions{Actor: input.Actor, ActorCollection: input.ActorCollection, ExpectedRevision: expectedRevision}
 	var updated store.Document
 	if publishedVersioned {
-		updated, err = application.local.publishStoragePreparedWithOptions(ctx, collection, id, prepared.Values, mutationOptions, resource)
+		updated, err = application.local.publishStoragePrepared(ctx, collection, id, prepared.Values, mutationOptions, resource)
 	} else {
-		updated, err = application.local.updateStoragePreparedWithOptions(ctx, collection, id, prepared.Values, mutationOptions, resource)
+		updated, err = application.local.updateStoragePrepared(ctx, collection, id, prepared.Values, mutationOptions, resource)
 	}
 	if err != nil {
 		if resource.Claimed() {

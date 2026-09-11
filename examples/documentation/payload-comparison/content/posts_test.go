@@ -32,11 +32,11 @@ func TestComparedPostAccess(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			author, err := app.CreateAuthUser(t.Context(), "users", store.Values{"email": store.String("author@example.test")}, "documentation-password", nil)
+			author, err := app.CreateAuthUser(t.Context(), "users", store.Values{"email": store.String("author@example.test")}, "documentation-password", ridu.MutationOptions{})
 			if err != nil {
 				t.Fatal(err)
 			}
-			other, err := app.CreateAuthUser(t.Context(), "users", store.Values{"email": store.String("other@example.test")}, "documentation-password", nil)
+			other, err := app.CreateAuthUser(t.Context(), "users", store.Values{"email": store.String("other@example.test")}, "documentation-password", ridu.MutationOptions{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -45,27 +45,27 @@ func TestComparedPostAccess(t *testing.T) {
 				"slug":   store.String("hello-ridu"),
 				"author": store.String(author.ID),
 			}
-			if _, err := app.Local().Create(t.Context(), "posts", values, nil); err == nil {
+			if _, err := app.Local().Create(t.Context(), "posts", values, ridu.MutationOptions{}); err == nil {
 				t.Fatal("anonymous create succeeded")
 			}
-			created, err := app.Local().Create(t.Context(), "posts", values, &author)
+			created, err := app.Local().Create(t.Context(), "posts", values, ridu.MutationOptions{Actor: &author})
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, err := app.Local().Find(t.Context(), "posts", created.ID, nil); err != nil {
+			if _, err := app.Local().Find(t.Context(), "posts", created.ID, ridu.FindOptions{}); err != nil {
 				t.Fatalf("public read: %v", err)
 			}
-			if _, err := app.Local().Update(t.Context(), "posts", created.ID, store.Values{"summary": store.String("Other user's edit")}, &other); (err != nil) != ownOnly {
+			if _, err := app.Local().Update(t.Context(), "posts", created.ID, store.Values{"summary": store.String("Other user's edit")}, ridu.MutationOptions{Actor: &other}); (err != nil) != ownOnly {
 				t.Fatalf("other user's update: %v, owner-only=%v", err, ownOnly)
 			}
-			if _, err := app.Local().Update(t.Context(), "posts", created.ID, store.Values{"summary": store.String("Author's edit")}, &author); err != nil {
+			if _, err := app.Local().Update(t.Context(), "posts", created.ID, store.Values{"summary": store.String("Author's edit")}, ridu.MutationOptions{Actor: &author}); err != nil {
 				t.Fatalf("author update: %v", err)
 			}
-			if _, err := app.Local().Delete(t.Context(), "posts", created.ID, &other); (err != nil) != ownOnly {
+			if _, err := app.Local().Delete(t.Context(), "posts", created.ID, ridu.MutationOptions{Actor: &other}); (err != nil) != ownOnly {
 				t.Fatalf("other user's delete: %v, owner-only=%v", err, ownOnly)
 			}
 			if ownOnly {
-				if _, err := app.Local().Delete(t.Context(), "posts", created.ID, &author); err != nil {
+				if _, err := app.Local().Delete(t.Context(), "posts", created.ID, ridu.MutationOptions{Actor: &author}); err != nil {
 					t.Fatalf("author delete: %v", err)
 				}
 			}

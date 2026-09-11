@@ -53,11 +53,11 @@ If this code runs in a browser on another origin, configure the API before testi
 [CORS guide](/docs/cors/) covers exact origins, credentialed cookies, custom headers, proxy trust,
 and preflight failures. Server-side SDK use does not need CORS.
 
-You can also import `createClient` from `@riducms/sdk`. A generated config augments the SDK’s
-`GeneratedRiduConfigRegistry`; when exactly one generated application is visible, inference selects
-it automatically. Tooling that loads no generated config—or several applications—should bind the
-config explicitly or import each application’s generated wrapper. This avoids silently choosing the
-wrong schema.
+Tooling can import `createClient` from `@riducms/sdk` with an explicit application contract.
+Each client keeps its own types when several applications are used together. An unbound raw
+client can call non-resource methods such as `schema()`, but resource methods require known slugs.
+Collection and global contracts declare `drafts` explicitly; version history alone does not
+permit draft publication.
 
 ```ts title="tooling.ts"
 import { createClient } from '@riducms/sdk';

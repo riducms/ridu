@@ -39,8 +39,8 @@ func TestFieldGraphSubmittedInputAdmission(t *testing.T) {
 			app, err := ridu.New(ridu.Config{Name: "Graph admission", Collections: []ridu.Collection{{
 				Slug: "pages", Fields: field.Fields{
 					field.Text("public"),
-					field.Text("protected").Access(field.Access{Update: func(operation.AccessContext) (bool, error) { calls++; return false, nil }}).
-						Hooks(field.Hooks[string]{BeforeValidate: []field.RawTransform{func(_ operation.WriteContext, raw operation.Value[store.Value]) (operation.Change[store.Value], error) {
+					field.Text("protected").Access(field.Access{Update: func(operation.Context) (bool, error) { calls++; return false, nil }}).
+						Hooks(field.Hooks[string]{BeforeValidate: []field.RawTransform{func(_ operation.Context, raw operation.Value[store.Value]) (operation.Change[store.Value], error) {
 							if value, present := raw.Get(); present {
 								if text, ok := value.StringValue(); ok {
 									return operation.Replace(operation.Present(store.String(strings.TrimSpace(text)))), nil
@@ -53,7 +53,7 @@ func TestFieldGraphSubmittedInputAdmission(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			created, err := app.Local().Create(t.Context(), "pages", store.Values{"public": store.String("initial"), "protected": store.String("existing")}, nil)
+			created, err := app.Local().Create(t.Context(), "pages", store.Values{"public": store.String("initial"), "protected": store.String("existing")}, ridu.MutationOptions{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -70,7 +70,7 @@ func TestFieldGraphSubmittedInputAdmission(t *testing.T) {
 			} {
 				t.Run(test.name, func(t *testing.T) {
 					erase = test.erase
-					_, err := app.Local().Update(t.Context(), "pages", created.ID, store.Values{"protected": test.value}, nil)
+					_, err := app.Local().Update(t.Context(), "pages", created.ID, store.Values{"protected": test.value}, ridu.MutationOptions{})
 					if !fieldAccessIssue(err, "protected") {
 						t.Fatalf("explicit submission admitted: %v", err)
 					}
@@ -78,12 +78,12 @@ func TestFieldGraphSubmittedInputAdmission(t *testing.T) {
 			}
 			erase = false
 			calls = 0
-			updated, err := app.Local().Update(t.Context(), "pages", created.ID, store.Values{"public": store.String("omission")}, nil)
+			updated, err := app.Local().Update(t.Context(), "pages", created.ID, store.Values{"public": store.String("omission")}, ridu.MutationOptions{})
 			if err != nil || stringValue(updated.Values["protected"]) != "existing" || calls != 0 {
 				t.Fatalf("omitted value: document=%#v calls=%d error=%v", updated.Values, calls, err)
 			}
 			derive = true
-			updated, err = app.Local().Update(t.Context(), "pages", created.ID, store.Values{"public": store.String("derive")}, nil)
+			updated, err = app.Local().Update(t.Context(), "pages", created.ID, store.Values{"public": store.String("derive")}, ridu.MutationOptions{})
 			if err != nil || stringValue(updated.Values["protected"]) != "server derived" || calls != 0 {
 				t.Fatalf("trusted derivation treated as caller input: document=%#v calls=%d error=%v", updated.Values, calls, err)
 			}
@@ -94,7 +94,7 @@ func TestFieldGraphSubmittedInputAdmission(t *testing.T) {
 func TestFieldGraphFinalCandidateAdmission(t *testing.T) {
 	var observed []string
 	app, err := ridu.New(ridu.Config{Name: "Final graph admission", Collections: []ridu.Collection{{
-		Slug: "pages", Fields: field.Fields{field.Text("mode"), field.Text("protected").Access(field.Access{Update: func(ctx operation.AccessContext) (bool, error) {
+		Slug: "pages", Fields: field.Fields{field.Text("mode"), field.Text("protected").Access(field.Access{Update: func(ctx operation.Context) (bool, error) {
 			mode, _ := ctx.Root.String("mode")
 			observed = append(observed, mode)
 			return mode != "locked", nil
@@ -108,18 +108,18 @@ func TestFieldGraphFinalCandidateAdmission(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	created, err := app.Local().Create(t.Context(), "pages", store.Values{"mode": store.String("open"), "protected": store.String("one")}, nil)
+	created, err := app.Local().Create(t.Context(), "pages", store.Values{"mode": store.String("open"), "protected": store.String("one")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = app.Local().Update(t.Context(), "pages", created.ID, store.Values{"mode": store.String("open"), "protected": store.String("two")}, nil)
+	_, err = app.Local().Update(t.Context(), "pages", created.ID, store.Values{"mode": store.String("open"), "protected": store.String("two")}, ridu.MutationOptions{})
 	if !fieldAccessIssue(err, "protected") {
 		t.Fatalf("final candidate access was bypassed: %v, observed=%v", err, observed)
 	}
 	if len(observed) != 2 || observed[0] != "open" || observed[1] != "locked" {
 		t.Fatalf("admission checkpoints=%v", observed)
 	}
-	current, err := app.Local().Find(t.Context(), "pages", created.ID, nil)
+	current, err := app.Local().Find(t.Context(), "pages", created.ID, ridu.FindOptions{})
 	if err != nil || stringValue(current.Values["protected"]) != "one" || stringValue(current.Values["mode"]) != "open" {
 		t.Fatalf("denied final candidate reached storage: %#v %v", current.Values, err)
 	}
@@ -128,7 +128,7 @@ func TestFieldGraphFinalCandidateAdmission(t *testing.T) {
 func TestFieldGraphCreateDefaultIsTrustedButExplicitDefaultRequiresAccess(t *testing.T) {
 	calls := 0
 	app, err := ridu.New(ridu.Config{Name: "Create graph provenance", Collections: []ridu.Collection{{Slug: "pages", Fields: field.Fields{
-		field.Text("public"), field.Text("protected").Default("server default").Access(field.Access{Create: func(operation.AccessContext) (bool, error) {
+		field.Text("public"), field.Text("protected").Default("server default").Access(field.Access{Create: func(operation.Context) (bool, error) {
 			calls++
 			return false, nil
 		}}),
@@ -136,12 +136,12 @@ func TestFieldGraphCreateDefaultIsTrustedButExplicitDefaultRequiresAccess(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	created, err := app.Local().Create(t.Context(), "pages", store.Values{"public": store.String("only submitted input")}, nil)
+	created, err := app.Local().Create(t.Context(), "pages", store.Values{"public": store.String("only submitted input")}, ridu.MutationOptions{})
 	if err != nil || stringValue(created.Values["protected"]) != "server default" || calls != 0 {
 		t.Fatalf("default provenance: values=%#v calls=%d error=%v", created.Values, calls, err)
 	}
 	for _, value := range []store.Value{store.String("server default"), store.Null()} {
-		if _, err := app.Local().Create(t.Context(), "pages", store.Values{"protected": value}, nil); !fieldAccessIssue(err, "protected") {
+		if _, err := app.Local().Create(t.Context(), "pages", store.Values{"protected": value}, ridu.MutationOptions{}); !fieldAccessIssue(err, "protected") {
 			t.Fatalf("explicit protected default/null admitted: %v", err)
 		}
 	}
@@ -150,8 +150,8 @@ func TestFieldGraphCreateDefaultIsTrustedButExplicitDefaultRequiresAccess(t *tes
 func TestFieldGraphStructuredAdmissionUsesCallerMembership(t *testing.T) {
 	allow := true
 	secret := field.Text("secret").Access(field.Access{
-		Create: func(operation.AccessContext) (bool, error) { return allow, nil },
-		Update: func(operation.AccessContext) (bool, error) { return allow, nil },
+		Create: func(operation.Context) (bool, error) { return allow, nil },
+		Update: func(operation.Context) (bool, error) { return allow, nil },
 	})
 	children := field.Fields{secret, field.Text("public")}
 	app, err := ridu.New(ridu.Config{Name: "Structured graph admission", Collections: []ridu.Collection{{Slug: "pages", Fields: field.Fields{
@@ -177,7 +177,7 @@ func TestFieldGraphStructuredAdmissionUsesCallerMembership(t *testing.T) {
 		"rows":    store.List(row("A", true), row("B", true)),
 		"content": store.List(block("A", true), block("B", true)),
 	}
-	created, err := app.Local().Create(t.Context(), "pages", initial, nil)
+	created, err := app.Local().Create(t.Context(), "pages", initial, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -194,7 +194,7 @@ func TestFieldGraphStructuredAdmissionUsesCallerMembership(t *testing.T) {
 		{"block removal", "content.0.secret", store.Values{"content": store.List(block("B", false))}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			if _, err := app.Local().Update(t.Context(), "pages", created.ID, test.patch, nil); !fieldAccessIssue(err, test.path) {
+			if _, err := app.Local().Update(t.Context(), "pages", created.ID, test.patch, ridu.MutationOptions{}); !fieldAccessIssue(err, test.path) {
 				t.Fatalf("protected occurrence admitted: %v", err)
 			}
 		})
@@ -203,7 +203,7 @@ func TestFieldGraphStructuredAdmissionUsesCallerMembership(t *testing.T) {
 		"meta":    store.Object(store.Values{"public": store.String("updated")}),
 		"rows":    store.List(row("B", false), row("A", false)),
 		"content": store.List(block("B", false), block("A", false)),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatalf("reordered omitted secrets denied: %v", err)
 	}
@@ -218,7 +218,7 @@ func TestFieldGraphStructuredAdmissionUsesCallerMembership(t *testing.T) {
 	}
 	for name, value := range initial {
 		t.Run("create "+name, func(t *testing.T) {
-			if _, err := app.Local().Create(t.Context(), "pages", store.Values{name: value}, nil); !operationCode(err, "field_access_denied") {
+			if _, err := app.Local().Create(t.Context(), "pages", store.Values{name: value}, ridu.MutationOptions{}); !operationCode(err, "field_access_denied") {
 				t.Fatalf("protected create admitted: %v", err)
 			}
 		})
@@ -228,8 +228,8 @@ func TestFieldGraphStructuredAdmissionUsesCallerMembership(t *testing.T) {
 func TestFieldGraphRichTextSubmittedAccess(t *testing.T) {
 	allow := true
 	secret := field.Text("secret").Access(field.Access{
-		Create: func(operation.AccessContext) (bool, error) { return allow, nil },
-		Update: func(operation.AccessContext) (bool, error) { return allow, nil },
+		Create: func(operation.Context) (bool, error) { return allow, nil },
+		Update: func(operation.Context) (bool, error) { return allow, nil },
 	})
 	body := richtext.Field("body", richtext.Config{Blocks: []field.Block{{Slug: "card", Fields: field.Fields{secret, field.Text("public")}}}})
 	app, err := ridu.New(ridu.Config{Name: "Embedded graph admission", Plugins: []ridu.Plugin{richtext.New()}, Collections: []ridu.Collection{{Slug: "pages", Fields: field.Fields{body}}}}, teststore.New())
@@ -244,12 +244,12 @@ func TestFieldGraphRichTextSubmittedAccess(t *testing.T) {
 		return value
 	}
 	initial := document(`{"type":"block","version":1,"fields":{"blockType":"card","_key":"A","secret":"protected","public":"initial"}}`)
-	created, err := app.Local().Create(t.Context(), "pages", store.Values{"body": initial}, nil)
+	created, err := app.Local().Create(t.Context(), "pages", store.Values{"body": initial}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	allow = false
-	if _, err := app.Local().Create(t.Context(), "pages", store.Values{"body": initial}, nil); !fieldAccessIssue(err, "body.root.children.0.fields.secret") {
+	if _, err := app.Local().Create(t.Context(), "pages", store.Values{"body": initial}, ridu.MutationOptions{}); !fieldAccessIssue(err, "body.root.children.0.fields.secret") {
 		t.Fatalf("embedded create admitted: %v", err)
 	}
 	for _, test := range []struct{ name, nodes string }{
@@ -258,12 +258,12 @@ func TestFieldGraphRichTextSubmittedAccess(t *testing.T) {
 		{"removed", ``},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			if _, err := app.Local().Update(t.Context(), "pages", created.ID, store.Values{"body": document(test.nodes)}, nil); !fieldAccessIssue(err, "body.root.children.0.fields.secret") {
+			if _, err := app.Local().Update(t.Context(), "pages", created.ID, store.Values{"body": document(test.nodes)}, ridu.MutationOptions{}); !fieldAccessIssue(err, "body.root.children.0.fields.secret") {
 				t.Fatalf("embedded update admitted: %v", err)
 			}
 		})
 	}
-	if _, err := app.Local().Update(t.Context(), "pages", created.ID, store.Values{"body": document(`{"type":"block","version":1,"fields":{"blockType":"card","_key":"A","public":"updated"}}`)}, nil); err != nil {
+	if _, err := app.Local().Update(t.Context(), "pages", created.ID, store.Values{"body": document(`{"type":"block","version":1,"fields":{"blockType":"card","_key":"A","public":"updated"}}`)}, ridu.MutationOptions{}); err != nil {
 		t.Fatalf("embedded omission denied: %v", err)
 	}
 }
@@ -271,7 +271,7 @@ func TestFieldGraphRichTextSubmittedAccess(t *testing.T) {
 func TestFieldGraphLocalizedAdmissionRetainsExactProvenance(t *testing.T) {
 	denyFrench := false
 	var locales []string
-	access := func(ctx operation.AccessContext) (bool, error) {
+	access := func(ctx operation.Context) (bool, error) {
 		locales = append(locales, string(ctx.Locale))
 		return !denyFrench || ctx.Locale != "fr", nil
 	}
@@ -296,37 +296,37 @@ func TestFieldGraphLocalizedAdmissionRetainsExactProvenance(t *testing.T) {
 		"protected":  store.String("English"),
 		"rows":       store.List(row("A", "English A"), row("B", "English B")),
 		"translated": store.List(row("English", "English")),
-	}, nil, ridu.LocaleOptions{Locale: "en"})
+	}, ridu.MutationOptions{Locale: "en"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	_, err = app.Local().Update(t.Context(), "pages", created.ID, store.Values{
 		"rows":       store.List(row("A", "French A"), row("B", "French B")),
 		"translated": store.List(row("French", "French")),
-	}, nil, ridu.LocaleOptions{Locale: "fr"})
+	}, ridu.MutationOptions{Locale: "fr"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	denyFrench, locales = true, nil
-	if _, err := app.Local().Update(t.Context(), "pages", created.ID, store.Values{"public": store.String("omitted")}, nil, ridu.LocaleOptions{Locale: "fr"}); err != nil || len(locales) != 0 {
+	if _, err := app.Local().Update(t.Context(), "pages", created.ID, store.Values{"public": store.String("omitted")}, ridu.MutationOptions{Locale: "fr"}); err != nil || len(locales) != 0 {
 		t.Fatalf("fallback became caller input: locales=%v error=%v", locales, err)
 	}
 	for _, value := range []store.Value{store.String("English"), store.Null()} {
-		if _, err := app.Local().Update(t.Context(), "pages", created.ID, store.Values{"protected": value}, nil, ridu.LocaleOptions{Locale: "fr"}); !operationCode(err, "field_access_denied") {
+		if _, err := app.Local().Update(t.Context(), "pages", created.ID, store.Values{"protected": value}, ridu.MutationOptions{Locale: "fr"}); !operationCode(err, "field_access_denied") {
 			t.Fatalf("exact French submission admitted: %v", err)
 		}
 	}
 	// Shared row membership belongs to every retained translation. Removing A
 	// in English also removes its French secret and must admit that occurrence.
-	if _, err := app.Local().Update(t.Context(), "pages", created.ID, store.Values{"rows": store.List(row("B", ""))}, nil, ridu.LocaleOptions{Locale: "en"}); !fieldAccessIssue(err, "rows.0.secret.fr") {
+	if _, err := app.Local().Update(t.Context(), "pages", created.ID, store.Values{"rows": store.List(row("B", ""))}, ridu.MutationOptions{Locale: "en"}); !fieldAccessIssue(err, "rows.0.secret.fr") {
 		t.Fatalf("shared removal bypassed protected French descendant: %v", err)
 	}
 	// A localized container's membership is exact-locale input. Changing its
 	// English structure does not submit or remove the unrelated French rows.
-	if _, err := app.Local().Update(t.Context(), "pages", created.ID, store.Values{"translated": store.List()}, nil, ridu.LocaleOptions{Locale: "en"}); err != nil {
+	if _, err := app.Local().Update(t.Context(), "pages", created.ID, store.Values{"translated": store.List()}, ridu.MutationOptions{Locale: "en"}); err != nil {
 		t.Fatalf("English localized membership treated as French write: %v", err)
 	}
-	current, err := app.Local().Find(t.Context(), "pages", created.ID, nil, ridu.LocaleOptions{AllLocales: true})
+	current, err := app.Local().Find(t.Context(), "pages", created.ID, ridu.FindOptions{AllLocales: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -346,10 +346,10 @@ func TestFieldGraphLocalizedAccessAndHookShareOccurrenceIdentity(t *testing.T) {
 		t.Run(map[bool]string{false: "localized child", true: "localized container"}[containerLocalized], func(t *testing.T) {
 			var accessIDs []operation.OccurrenceID
 			var hookID operation.OccurrenceID
-			secret := field.Text("secret").Access(field.Access{Update: func(ctx operation.AccessContext) (bool, error) {
+			secret := field.Text("secret").Access(field.Access{Update: func(ctx operation.Context) (bool, error) {
 				accessIDs = append(accessIDs, ctx.OccurrenceID)
 				return true, nil
-			}}).Hooks(field.Hooks[string]{BeforeChange: []field.Transform[string]{func(ctx operation.WriteContext, _ operation.Value[string]) (operation.Change[string], error) {
+			}}).Hooks(field.Hooks[string]{BeforeChange: []field.Transform[string]{func(ctx operation.Context, _ operation.Value[string]) (operation.Change[string], error) {
 				if ctx.Operation == operation.Update {
 					hookID = ctx.OccurrenceID
 				}
@@ -369,11 +369,11 @@ func TestFieldGraphLocalizedAccessAndHookShareOccurrenceIdentity(t *testing.T) {
 			data := func(value string) store.Values {
 				return store.Values{"rows": store.List(store.Object(store.Values{"_key": store.String("A"), "secret": store.String(value)}))}
 			}
-			created, err := app.Local().Create(t.Context(), "pages", data("English"), nil, ridu.LocaleOptions{Locale: "en"})
+			created, err := app.Local().Create(t.Context(), "pages", data("English"), ridu.MutationOptions{Locale: "en"})
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, err := app.Local().Update(t.Context(), "pages", created.ID, data("French"), nil, ridu.LocaleOptions{Locale: "fr"}); err != nil {
+			if _, err := app.Local().Update(t.Context(), "pages", created.ID, data("French"), ridu.MutationOptions{Locale: "fr"}); err != nil {
 				t.Fatal(err)
 			}
 			if len(accessIDs) != 2 || hookID == "" || accessIDs[0] != hookID || accessIDs[1] != hookID {

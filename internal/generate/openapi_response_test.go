@@ -18,16 +18,14 @@ import (
 )
 
 func TestOpenAPIValidatesRedactedAndProjectedHTTPResponses(t *testing.T) {
-	deny := field.Access{Read: func(operation.AccessContext,
-
-	) (bool, error) {
+	deny := field.Access{Read: func(operation.Context) (bool, error) {
 		return false, nil
 	}}
 	app, err := core.New(core.Config{Name: "Output contracts", Collections: []core.Collection{{Slug: "pages", Fields: field.Fields{field.Text("title").Required(), field.Text("secret").Required().Access(deny), field.Blocks("layout", field.Block{Slug: "hero", Fields: field.Fields{field.Text("heading").Required(), field.Text("secret").Required().Access(deny), field.Group("settings", field.Fields{field.Text("secret").Required().Access(deny)}), field.Array("links", field.Fields{field.Text("secret").Required().Access(deny)})}}).Required()}}}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
 	}
-	doc, err := app.Local().Create(context.Background(), "pages", store.Values{"title": store.String("Page"), "secret": store.String("top secret"), "layout": store.List(store.Object(store.Values{"blockType": store.String("hero"), "heading": store.String("Visible"), "secret": store.String("block secret"), "settings": store.Object(store.Values{"secret": store.String("group secret")}), "links": store.List(store.Object(store.Values{"_key": store.String("link"), "secret": store.String("array secret")}))}))}, nil)
+	doc, err := app.Local().Create(context.Background(), "pages", store.Values{"title": store.String("Page"), "secret": store.String("top secret"), "layout": store.List(store.Object(store.Values{"blockType": store.String("hero"), "heading": store.String("Visible"), "secret": store.String("block secret"), "settings": store.Object(store.Values{"secret": store.String("group secret")}), "links": store.List(store.Object(store.Values{"_key": store.String("link"), "secret": store.String("array secret")}))}))}, core.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +119,7 @@ func TestOpenAPIDatesMatchAcceptedHTTPValues(t *testing.T) {
 			}
 			validator := resolvedOutputSchema(t, property)
 			for _, value := range test.values {
-				doc, err := app.Local().Create(context.Background(), "events", store.Values{"when": store.String(value)}, nil)
+				doc, err := app.Local().Create(context.Background(), "events", store.Values{"when": store.String(value)}, core.MutationOptions{})
 				if err != nil {
 					t.Fatalf("runtime rejected %q: %v", value, err)
 				}

@@ -418,10 +418,10 @@ func TestCredentialHashFenceSurvivesHardDeleteAndSameIDRecreation(t *testing.T) 
 			result <- err
 		}()
 		<-entered
-		if _, err := base.Local().Delete(context.Background(), "users", user.ID, nil); err != nil {
+		if _, err := base.Local().Delete(context.Background(), "users", user.ID, ridu.MutationOptions{}); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := base.Local().Import(context.Background(), "users", store.Values{"email": store.String("recreated-login@example.test")}, ridu.ImportOptions{ID: user.ID}, nil); err != nil {
+		if _, err := base.Local().Import(context.Background(), "users", store.Values{"email": store.String("recreated-login@example.test")}, ridu.ImportOptions{ID: user.ID}); err != nil {
 			t.Fatal(err)
 		}
 		if err := base.SetPassword(context.Background(), "users", user.ID, "correct-horse"); err != nil {
@@ -476,10 +476,10 @@ func TestCredentialHashFenceSurvivesHardDeleteAndSameIDRecreation(t *testing.T) 
 			result <- application.ChangePassword(context.Background(), session.Token, "correct-horse", "changed-horse")
 		}()
 		<-entered
-		if _, err := application.Local().Delete(context.Background(), "users", user.ID, nil); err != nil {
+		if _, err := application.Local().Delete(context.Background(), "users", user.ID, ridu.MutationOptions{}); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := application.Local().Import(context.Background(), "users", store.Values{"email": store.String("recreated-change@example.test")}, ridu.ImportOptions{ID: user.ID}, nil); err != nil {
+		if _, err := application.Local().Import(context.Background(), "users", store.Values{"email": store.String("recreated-change@example.test")}, ridu.ImportOptions{ID: user.ID}); err != nil {
 			t.Fatal(err)
 		}
 		if err := application.SetPassword(context.Background(), "users", user.ID, "correct-horse"); err != nil {
@@ -508,8 +508,7 @@ func TestCreateAuthUserStoresCredentialInsideCreateTransaction(t *testing.T) {
 		context.Background(),
 		"users",
 		store.Values{"email": store.String("created@example.test")},
-		"correct-horse",
-		nil,
+		"correct-horse", ridu.MutationOptions{},
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -525,7 +524,7 @@ func TestCreateAuthUserStoresCredentialInsideCreateTransaction(t *testing.T) {
 	}
 
 	if _, err := application.CreateAuthUser(
-		context.Background(), "users", store.Values{"email": store.String("weak@example.test")}, "short", nil,
+		context.Background(), "users", store.Values{"email": store.String("weak@example.test")}, "short", ridu.MutationOptions{},
 	); !operationCode(err, "validation") {
 		t.Fatalf("weak password create = %v", err)
 	}
@@ -568,7 +567,7 @@ func TestAnonymousFirstAuthUserBootstrapIsAtomic(t *testing.T) {
 	for _, email := range []string{"first@example.test", "second@example.test"} {
 		email := email
 		go func() {
-			document, err := application.CreateAuthUserForTransport(context.Background(), "users", store.Values{"email": store.String(email)}, "correct-horse", nil)
+			document, err := application.CreateAuthUserForTransport(context.Background(), "users", store.Values{"email": store.String(email)}, "correct-horse", ridu.MutationOptions{})
 			results <- result{document: document, err: err}
 		}()
 	}
@@ -625,7 +624,7 @@ func TestAuthBootstrapAvailableIsLimitedToUninitializedAdminCollectionWithOmitte
 	if available, err := application.AuthBootstrapAvailable(context.Background(), "staff"); err != nil || available {
 		t.Fatalf("secondary auth bootstrap = %v, %v", available, err)
 	}
-	if _, err := application.Local().Create(context.Background(), "users", store.Values{"email": store.String("admin@example.test")}, nil); err != nil {
+	if _, err := application.Local().Create(context.Background(), "users", store.Values{"email": store.String("admin@example.test")}, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if available, err := application.AuthBootstrapAvailable(context.Background(), "users"); err != nil || available {
@@ -659,9 +658,7 @@ func TestAnonymousFirstAdminBootstrapCanSetFieldsProtectedFromAnonymousCreation(
 		Collections: []ridu.Collection{{
 			Slug: "users", Auth: true,
 			AuthConfig: ridu.AuthConfig{Password: ridu.PasswordPolicy{BcryptCost: bcrypt.MinCost}},
-			Fields: field.Fields{field.Email("email").Required().Unique(), field.Text("role").Required().Access(field.Access{Create: func(ctx operation.AccessContext,
-
-			) (bool, error) {
+			Fields: field.Fields{field.Email("email").Required().Unique(), field.Text("role").Required().Access(field.Access{Create: func(ctx operation.Context) (bool, error) {
 				return ctx.Actor.ID != "",
 
 					nil
@@ -674,7 +671,7 @@ func TestAnonymousFirstAdminBootstrapCanSetFieldsProtectedFromAnonymousCreation(
 	user, err := application.CreateAuthUserForTransport(context.Background(), "users", store.Values{
 		"email": store.String("admin@example.test"),
 		"role":  store.String("administrator"),
-	}, "correct-horse", nil)
+	}, "correct-horse", ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -684,7 +681,7 @@ func TestAnonymousFirstAdminBootstrapCanSetFieldsProtectedFromAnonymousCreation(
 	if _, err := application.Local().Create(context.Background(), "users", store.Values{
 		"email": store.String("ordinary@example.test"),
 		"role":  store.String("administrator"),
-	}, nil); !operationCode(err, "field_access_denied") {
+	}, ridu.MutationOptions{}); !operationCode(err, "field_access_denied") {
 		t.Fatalf("ordinary anonymous field access = %v", err)
 	}
 }
@@ -701,7 +698,7 @@ func TestAnonymousFirstAdminBootstrapDoesNotDependOnEmailVerification(t *testing
 	})
 	if _, err := application.CreateAuthUserForTransport(context.Background(), "users", store.Values{
 		"email": store.String("bootstrap-verified@example.test"),
-	}, "correct-horse", nil); err != nil {
+	}, "correct-horse", ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if deliveries != 0 {
@@ -920,7 +917,7 @@ func TestVerificationAndPasswordResetTokensAreSingleUse(t *testing.T) {
 	if err := application.VerifyEmail(context.Background(), "users", verificationToken); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Update(context.Background(), "users", user.ID, store.Values{"email": store.String("changed@example.test")}, &user); !operationCode(err, "validation") {
+	if _, err := application.Local().Update(context.Background(), "users", user.ID, store.Values{"email": store.String("changed@example.test")}, ridu.MutationOptions{Actor: &user}); !operationCode(err, "validation") {
 		t.Fatalf("verified identity update = %v", err)
 	}
 	if err := application.VerifyEmail(context.Background(), "users", verificationToken); !operationCode(err, "invalid_auth_token") {
@@ -1362,10 +1359,10 @@ func TestAuthIdentityIsValidatedCanonicalizedAndExactlyUnique(t *testing.T) {
 	if identity != "ada@example.test" {
 		t.Fatalf("normalized identity = %q", identity)
 	}
-	if _, err := application.Local().Create(context.Background(), "users", store.Values{"email": store.String("ADA@example.test")}, nil); !operationCode(err, "conflict") {
+	if _, err := application.Local().Create(context.Background(), "users", store.Values{"email": store.String("ADA@example.test")}, ridu.MutationOptions{}); !operationCode(err, "conflict") {
 		t.Fatalf("canonical duplicate = %v", err)
 	}
-	if _, err := application.Local().Create(context.Background(), "users", store.Values{"email": store.String("not-an-email")}, nil); !operationCode(err, "validation") {
+	if _, err := application.Local().Create(context.Background(), "users", store.Values{"email": store.String("not-an-email")}, ridu.MutationOptions{}); !operationCode(err, "validation") {
 		t.Fatalf("invalid email = %v", err)
 	}
 }
@@ -1393,7 +1390,7 @@ func authReadFixture(t *testing.T, backend store.Store, auth ridu.AuthConfig, re
 
 func createAuthUser(t *testing.T, application *ridu.App, email string) store.Document {
 	t.Helper()
-	user, err := application.Local().Create(context.Background(), "users", store.Values{"email": store.String(email)}, nil)
+	user, err := application.Local().Create(context.Background(), "users", store.Values{"email": store.String(email)}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -28,11 +28,11 @@ func TestPreferencesArePersistentAndScopedToAdminUsers(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	firstDocument, err := application.CreateAuthUser(ctx, "users", store.Values{"email": store.String("first@example.test")}, "first-password-value", nil)
+	firstDocument, err := application.CreateAuthUser(ctx, "users", store.Values{"email": store.String("first@example.test")}, "first-password-value", ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	secondDocument, err := application.CreateAuthUser(ctx, "users", store.Values{"email": store.String("second@example.test")}, "second-password-value", nil)
+	secondDocument, err := application.CreateAuthUser(ctx, "users", store.Values{"email": store.String("second@example.test")}, "second-password-value", ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,11 +107,11 @@ func TestPreferencesUseExactAuthCollectionForSameIDActors(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	user, err := application.Local().Import(ctx, "users", store.Values{"email": store.String("user@example.test")}, ridu.ImportOptions{ID: "shared-actor", Status: store.StatusPublished}, nil)
+	user, err := application.Local().Import(ctx, "users", store.Values{"email": store.String("user@example.test")}, ridu.ImportOptions{ID: "shared-actor", Status: store.StatusPublished})
 	if err != nil {
 		t.Fatal(err)
 	}
-	staff, err := application.Local().Import(ctx, "staff", store.Values{"email": store.String("staff@example.test")}, ridu.ImportOptions{ID: user.ID, Status: store.StatusPublished}, nil)
+	staff, err := application.Local().Import(ctx, "staff", store.Values{"email": store.String("staff@example.test")}, ridu.ImportOptions{ID: user.ID, Status: store.StatusPublished})
 	if err != nil {
 		t.Fatal(err)
 	}

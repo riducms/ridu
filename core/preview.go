@@ -102,7 +102,7 @@ func (application *App) FindCollectionPreview(ctx context.Context, token, collec
 	if !exists {
 		return store.Document{}, invalidPreviewToken()
 	}
-	document, err := application.local.FindWithOptions(ctx, collection, documentID, FindOptions{Actor: actor, ActorCollection: actorCollection.Slug})
+	document, err := application.local.Find(ctx, collection, documentID, FindOptions{Actor: actor, ActorCollection: actorCollection.Slug})
 	if err != nil {
 		return store.Document{}, err
 	}
@@ -126,7 +126,7 @@ func (application *App) FindGlobalPreview(ctx context.Context, token, slug strin
 	if !exists {
 		return store.Document{}, invalidPreviewToken()
 	}
-	document, err := application.local.FindWithOptions(ctx, "global:"+slug, slug, FindOptions{Actor: actor, ActorCollection: actorCollection.Slug})
+	document, err := application.local.Find(ctx, "global:"+slug, slug, FindOptions{Actor: actor, ActorCollection: actorCollection.Slug})
 	if err != nil {
 		return store.Document{}, err
 	}
@@ -156,7 +156,7 @@ func (application *App) createPreviewToken(ctx context.Context, resource, slug, 
 		if err != nil {
 			return PreviewToken{}, err
 		}
-		target, err := application.local.FindWithOptions(ctx, collectionKey, engineID, FindOptions{Actor: &actor, ActorCollection: actorCollection.Slug})
+		target, err := application.local.Find(ctx, collectionKey, engineID, FindOptions{Actor: &actor, ActorCollection: actorCollection.Slug})
 		if err != nil {
 			return PreviewToken{}, err
 		}

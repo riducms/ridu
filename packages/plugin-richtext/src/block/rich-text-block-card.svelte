@@ -4,7 +4,7 @@
 		useLexicalEditable,
 		useLexicalNodeSelection,
 	} from "@hvniel/lexical-svelte";
-	import { $getNodeByKey, type NodeKey } from "lexical";
+	import { $getNodeByKey, REDO_COMMAND, UNDO_COMMAND, type NodeKey } from "lexical";
 	import { getAdminI18n } from "@riducms/plugin";
 	import { Button } from "@riducms/ui";
 	import {
@@ -12,11 +12,13 @@
 		getRichTextAuthoringHost,
 	} from "@plugin-richtext/field/rich-text-context.svelte";
 	import { blockSummary, richTextBlockTypes } from "@plugin-richtext/field/rich-text-blocks";
+	import { BlockNameHistorySession } from "@plugin-richtext/block/rich-text-block-name";
 	import {
 		OPEN_BLOCK_EDITOR_COMMAND,
 		DUPLICATE_BLOCK_COMMAND,
 		REMOVE_BLOCK_COMMAND,
 		MOVE_BLOCK_COMMAND,
+		UPDATE_BLOCK_NAME_COMMAND,
 	} from "@plugin-richtext/menu/rich-text-commands";
 
 	let {
@@ -29,6 +31,7 @@
 	const editable = useLexicalEditable();
 	const context = getRichTextField();
 	const authoring = getRichTextAuthoringHost();
+	const nameHistory = new BlockNameHistorySession();
 	// The decorator instance owns this fixed Lexical node key.
 	// svelte-ignore state_referenced_locally
 	const [selected, setSelected, clearSelected] = useLexicalNodeSelection(nodeKey);
@@ -41,6 +44,7 @@
 	const type = $derived(
 		richTextBlockTypes(context.field).find((candidate) => candidate.slug === blockType)
 	);
+	const nameField = $derived(type?.admin?.nameField);
 	const issues = $derived(authoring?.schemaIssues?.({ treeKey: "blocks", identity }) ?? []);
 	const recovery = $derived(type === undefined || !validEnvelope);
 	const summary = $derived(blockSummary(fields, type) || i18n.t("plugin.richtext:block.noSummary"));
@@ -48,6 +52,34 @@
 		event.stopPropagation();
 		if (!event.shiftKey) clearSelected();
 		setSelected(true);
+	}
+	function changeName(change: { field: string; value: string }) {
+		if (nameField === undefined || recovery || !editable()) return;
+		editor.dispatchCommand(UPDATE_BLOCK_NAME_COMMAND, {
+			nodeKey,
+			identity,
+			nameField,
+			change,
+			historyTag: nameHistory.nextTag(),
+		});
+	}
+	function nameKeydown(event: KeyboardEvent) {
+		if (!(event.target instanceof HTMLInputElement)) return;
+		event.stopPropagation();
+		if (event.isComposing) return;
+		if (event.key === "Enter") {
+			event.preventDefault();
+			return;
+		}
+		if (event.target.readOnly || event.target.disabled) return;
+		const key = event.key.toLowerCase();
+		const modifier = event.metaKey || event.ctrlKey;
+		const undo = modifier && key === "z" && !event.shiftKey;
+		const redo = modifier && ((key === "z" && event.shiftKey) || (key === "y" && !event.metaKey));
+		if (!undo && !redo) return;
+		event.preventDefault();
+		nameHistory.reset();
+		editor.dispatchCommand(undo ? UNDO_COMMAND : REDO_COMMAND, undefined);
 	}
 	function edit() {
 		editor.dispatchCommand(OPEN_BLOCK_EDITOR_COMMAND, { nodeKey });
@@ -102,6 +134,7 @@
 <article
 	class={[
 		"ridu-richtext-embedded-card my-5 rounded-md border border-control-border bg-control p-4 outline-none focus-visible:ring-2 focus-visible:ring-ring",
+		nameField !== undefined && "whitespace-normal",
 		selected() && "border-primary",
 		issues.length > 0 && "border-destructive",
 	]}
@@ -111,11 +144,26 @@
 	data-invalid={issues.length > 0}
 	role="group"
 >
-	<div class="flex items-center justify-between gap-3">
+	{#if nameField !== undefined && authoring?.schemaHeader !== undefined}
+		<div
+			class="mb-2"
+			onfocuscapture={nameHistory.reset.bind(nameHistory)}
+			onblurcapture={nameHistory.reset.bind(nameHistory)}
+			onkeydowncapture={nameKeydown}
+		>
+			{@render authoring.schemaHeader({
+				treeKey: "blocks",
+				identity,
+				readOnly: !editable() || recovery,
+				onChange: changeName,
+			})}
+		</div>
+	{/if}
+	<div class="flex flex-wrap items-center justify-between gap-3">
 		<button
 			type="button"
 			data-block-select
-			class="min-w-0 flex-1 text-start rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+			class="min-w-24 flex-1 text-start rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
 			aria-label={i18n.t("plugin.richtext:block.select", {
 				label: type?.labels.singular ?? blockType,
 			})}
@@ -126,7 +174,9 @@
 			<span class="block text-xs font-medium text-foreground-muted">
 				{type?.labels.singular ?? blockType}
 			</span>
-			<span class="block mt-1 truncate text-sm text-foreground">{summary}</span>
+			{#if nameField === undefined}<span class="block mt-1 truncate text-sm text-foreground">
+					{summary}
+				</span>{/if}
 		</button>
 		{#if editable()}
 			<div class="flex shrink-0 gap-1">

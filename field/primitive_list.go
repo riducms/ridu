@@ -94,19 +94,23 @@ func (f TextListField) HookPolicy() Hooks[[]string] {
 	return cloneHooks(policies[[]string, []string](f.definition).hooks)
 }
 
-// ReadHooks replaces all response-transform hooks.
-func (f TextListField) ReadHooks(value ReadHooks[[]string]) TextListField {
-	f.definition = withPolicies[[]string, []string](f.definition, func(p *typedPolicies[[]string, []string]) { p.readHooks = cloneReadHooks(value) })
+// ReplaceAfterRead replaces response transforms; no callbacks clears them.
+func (f TextListField) ReplaceAfterRead(callbacks ...OutputTransform[[]string]) TextListField {
+	f.definition = withPolicies[[]string, []string](f.definition, func(p *typedPolicies[[]string, []string]) { p.afterRead = slices.Clone(callbacks) })
 	return f
 }
 
-// AppendReadHooks appends response-transform hooks after existing callbacks.
-func (f TextListField) AppendReadHooks(value ReadHooks[[]string]) TextListField {
-	f.definition = withPolicies[[]string, []string](f.definition, func(p *typedPolicies[[]string, []string]) { p.readHooks = appendReadHooks(p.readHooks, value) })
+// AfterRead appends response transforms in order; no callbacks does nothing.
+func (f TextListField) AfterRead(callbacks ...OutputTransform[[]string]) TextListField {
+	f.definition = withPolicies[[]string, []string](f.definition, func(p *typedPolicies[[]string, []string]) {
+		p.afterRead = append(slices.Clone(p.afterRead), callbacks...)
+	})
 	return f
 }
-func (f TextListField) ReadHookPolicy() ReadHooks[[]string] {
-	return cloneReadHooks(policies[[]string, []string](f.definition).readHooks)
+
+// AfterReadHooks returns a detached response-transform slice.
+func (f TextListField) AfterReadHooks() []OutputTransform[[]string] {
+	return slices.Clone(policies[[]string, []string](f.definition).afterRead)
 }
 
 // MinRows requires at least value items, including when the list is empty or null.
@@ -228,19 +232,23 @@ func (f NumberListField) HookPolicy() Hooks[[]float64] {
 	return cloneHooks(policies[[]float64, []float64](f.definition).hooks)
 }
 
-// ReadHooks replaces all response-transform hooks.
-func (f NumberListField) ReadHooks(value ReadHooks[[]float64]) NumberListField {
-	f.definition = withPolicies[[]float64, []float64](f.definition, func(p *typedPolicies[[]float64, []float64]) { p.readHooks = cloneReadHooks(value) })
+// ReplaceAfterRead replaces response transforms; no callbacks clears them.
+func (f NumberListField) ReplaceAfterRead(callbacks ...OutputTransform[[]float64]) NumberListField {
+	f.definition = withPolicies[[]float64, []float64](f.definition, func(p *typedPolicies[[]float64, []float64]) { p.afterRead = slices.Clone(callbacks) })
 	return f
 }
 
-// AppendReadHooks appends response-transform hooks after existing callbacks.
-func (f NumberListField) AppendReadHooks(value ReadHooks[[]float64]) NumberListField {
-	f.definition = withPolicies[[]float64, []float64](f.definition, func(p *typedPolicies[[]float64, []float64]) { p.readHooks = appendReadHooks(p.readHooks, value) })
+// AfterRead appends response transforms in order; no callbacks does nothing.
+func (f NumberListField) AfterRead(callbacks ...OutputTransform[[]float64]) NumberListField {
+	f.definition = withPolicies[[]float64, []float64](f.definition, func(p *typedPolicies[[]float64, []float64]) {
+		p.afterRead = append(slices.Clone(p.afterRead), callbacks...)
+	})
 	return f
 }
-func (f NumberListField) ReadHookPolicy() ReadHooks[[]float64] {
-	return cloneReadHooks(policies[[]float64, []float64](f.definition).readHooks)
+
+// AfterReadHooks returns a detached response-transform slice.
+func (f NumberListField) AfterReadHooks() []OutputTransform[[]float64] {
+	return slices.Clone(policies[[]float64, []float64](f.definition).afterRead)
 }
 
 // MinRows requires at least value items, including when the list is empty or null.

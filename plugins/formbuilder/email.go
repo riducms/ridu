@@ -58,7 +58,7 @@ func (plugin *Plugin) sendSubmissionEmails(context ridu.HookContext) error {
 		return nil
 	}
 	readContext := stdcontext.WithValue(context.Context, emailConfigReadKey{}, true)
-	form, err := context.Local.FindWithOptions(readContext, string(plugin.config.FormsSlug), formID, ridu.FindOptions{Actor: context.Actor, ActorCollection: context.ActorCollection, Locale: context.Locale})
+	form, err := context.Local.Find(readContext, string(plugin.config.FormsSlug), formID, ridu.FindOptions{Actor: context.Actor, ActorCollection: context.ActorCollection, Locale: context.Locale})
 	if err != nil {
 		plugin.report(err, "form_builder_email_form_read_failed")
 		return nil

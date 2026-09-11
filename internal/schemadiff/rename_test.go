@@ -25,6 +25,26 @@ func TestCollectionRenameCandidatePairsDerivedFieldIdentities(t *testing.T) {
 	}
 }
 
+func TestBlockNameFieldIsPresentationOnlyForRenameMatching(t *testing.T) {
+	blockField := func(owner schema.StableID, admin *schema.BlockAdmin) schema.Field {
+		path, _ := query.NewPath("layout")
+		childPath, _ := query.NewPath("layout", "card", "title")
+		return schema.Field{
+			ID: owner + "-layout", Name: "layout", Path: path, Type: schema.FieldTypeBlocks, Category: schema.FieldCategoryNested,
+			Blocks: &schema.BlocksField{Types: []schema.BlockType{{
+				Slug: "card", Admin: admin, Labels: schema.BlockLabels{Singular: "Card", Plural: "Cards"},
+				Fields: []schema.Field{{ID: owner + "-layout-card-title", Name: "title", Path: childPath, Type: schema.FieldTypeText, Category: schema.FieldCategoryScalar, Text: &schema.TextField{}}},
+			}}},
+		}
+	}
+	before := manifest(collection("posts", "posts", blockField("posts", nil)))
+	after := manifest(collection("articles", "articles", blockField("articles", &schema.BlockAdmin{NameField: "title"})))
+	candidates := schemadiff.RenameCandidates(before, after)
+	if len(candidates) != 1 || candidates[0].Kind != schemadiff.RenameCollection {
+		t.Fatalf("presentation-only block name field changed migration matching: %#v", candidates)
+	}
+}
+
 func TestFieldRenameCandidateRequiresAUniqueShapeMatch(t *testing.T) {
 	before := manifest(collection("posts", "posts", textField("posts-title", "title")))
 	after := manifest(collection("posts", "posts", textField("posts-headline", "headline")))

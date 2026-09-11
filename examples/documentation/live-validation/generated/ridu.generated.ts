@@ -108,12 +108,6 @@ export interface RiduConfig {
 	};
 }
 
-declare module "@riducms/sdk" {
-	interface GeneratedRiduConfigRegistry {
-		"manifest-de3ea1d39b9f0801bd385dd5fb2bf7dc06722deb963a350a99dcf383d21e5255": RiduConfig;
-	}
-}
-
 export type CollectionSlug = keyof RiduConfig["collections"];
 
 export function createClient(options: ClientOptions): RiduClient<RiduConfig> {

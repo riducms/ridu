@@ -149,12 +149,6 @@ func sqliteArtifactAllowsTransformedSchema(artifact ridumigration.Artifact) bool
 }
 
 func buildSQLiteDataOnlyArtifact(name string, before, after schema.Manifest, contract sqlitePlannerContract) (ridumigration.Artifact, error) {
-	if err := requireSQLitePluginSchema(before); err != nil {
-		return ridumigration.Artifact{}, err
-	}
-	if err := requireSQLitePluginSchema(after); err != nil {
-		return ridumigration.Artifact{}, err
-	}
 	artifact, err := ridumigration.NewArtifact(name, ridumigration.Planner{Name: sqlitePlannerName, Version: contract.version}, &before, after)
 	if err != nil {
 		return ridumigration.Artifact{}, err

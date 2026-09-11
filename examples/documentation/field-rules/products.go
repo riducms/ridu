@@ -24,7 +24,7 @@ func Catalog() []ridu.Collection {
 }
 
 func validateSalePrice(
-	ctx operation.ValidationContext,
+	ctx operation.Context,
 	value operation.Value[float64],
 ) ([]operation.Issue, error) {
 	return salePriceIssues(ctx.Siblings, value), nil

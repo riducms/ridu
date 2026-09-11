@@ -4,6 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
+	"testing"
+
 	"github.com/riducms/ridu"
 	"github.com/riducms/ridu/adapters/sqlite"
 	"github.com/riducms/ridu/core"
@@ -14,9 +18,6 @@ import (
 	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/plugins/richtext"
 	"github.com/riducms/ridu/query"
-	"os"
-	"path/filepath"
-	"testing"
 )
 
 // This same test is copied, without generated-file edits, into a fresh ridu new
@@ -50,7 +51,7 @@ func TestReferenceWorkflow(t *testing.T) {
 	}
 	pages := generated.PagesCollection.With(app.Local())
 	assets := generated.AssetsCollection.With(app.Local())
-	asset, err := assets.Create(ctx, generated.AssetCreate{Title: "Mountains", URL: "/mountains.svg"}, nil)
+	asset, err := assets.Create(ctx, generated.AssetCreate{Title: "Mountains", URL: "/mountains.svg"}, ridu.TypedMutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,7 +65,7 @@ func TestReferenceWorkflow(t *testing.T) {
 		&generated.MediaInput{Asset: asset.ID, Caption: core.Set("Mountains")},
 		&generated.CTAInput{Label: "Read more"},
 	})}
-	page, err := pages.Create(ctx, input, nil)
+	page, err := pages.Create(ctx, input, ridu.TypedMutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +108,7 @@ func TestReferenceWorkflow(t *testing.T) {
 			&generated.HeroInput{Heading: "Campaign <reader>"},
 			&generated.CTAInput{Label: "Join & share"},
 		}),
-	}, nil)
+	}, ridu.TypedMutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -171,7 +172,7 @@ func TestReferenceWorkflow(t *testing.T) {
 	}
 	// Media is deliberately untouched and still retained, with all its fields.
 
-	_, err = pages.UpdateRevision(ctx, page.ID, generated.PageUpdate{Layout: core.SetNonNull(translated)}, page.Revision, nil, core.TypedLocaleOptions{Locale: "fr"})
+	_, err = pages.Update(ctx, page.ID, generated.PageUpdate{Layout: core.SetNonNull(translated)}, ridu.TypedMutationOptions{ExpectedRevision: page.Revision, Locale: "fr"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -252,7 +253,7 @@ func TestReferenceWorkflow(t *testing.T) {
 		return root.EditBlock("layout", "content", func(block *field.ChildrenDraft) error {
 			return block.EditChildren("links", func(links *field.ChildrenDraft) error {
 				return links.EditText("label", func(label field.TextField) field.TextField {
-					return label.Access(field.Access{Read: func(operation.AccessContext) (bool, error) { return false, nil }})
+					return label.Access(field.Access{Read: func(operation.Context) (bool, error) { return false, nil }})
 				})
 			})
 		})
@@ -299,10 +300,10 @@ func TestReferenceWorkflow(t *testing.T) {
 	if !edited {
 		t.Fatal("nested link was not edited")
 	}
-	if _, err := restrictedPages.UpdateRevision(ctx, page.ID, generated.PageUpdate{Layout: core.SetNonNull(patch)}, before.Revision, nil); err != nil {
+	if _, err := restrictedPages.Update(ctx, page.ID, generated.PageUpdate{Layout: core.SetNonNull(patch)}, ridu.TypedMutationOptions{ExpectedRevision: before.Revision}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := restrictedPages.UpdateRevision(ctx, page.ID, generated.PageUpdate{Layout: core.SetNonNull(patch)}, before.Revision, nil); err == nil {
+	if _, err := restrictedPages.Update(ctx, page.ID, generated.PageUpdate{Layout: core.SetNonNull(patch)}, ridu.TypedMutationOptions{ExpectedRevision: before.Revision}); err == nil {
 		t.Fatal("stale nested update accepted")
 	}
 	after, err := pages.Find(ctx, page.ID, core.TypedReadOptions{Draft: &draft, Populate: []query.Population{{Path: assetPath, Depth: 1}}})

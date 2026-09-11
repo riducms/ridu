@@ -21,15 +21,15 @@ import {
 
 const expectedCatalog = {
 	moduleSymbols: {
-		ridu: 171,
-		core: 363,
-		field: 1023,
-		operation: 53,
+		ridu: 164,
+		core: 326,
+		field: 927,
+		operation: 47,
 		query: 65,
-		schema: 179,
+		schema: 170,
 		store: 156,
 		storage: 8,
-		migration: 87,
+		migration: 83,
 		'migration-payload': 13,
 		'go-protocol': 56,
 		plugintest: 3,
@@ -44,9 +44,9 @@ const expectedCatalog = {
 		'storage-local': 7,
 		'storage-s3': 9,
 		'store-conformance': 2,
-		sdk: 140,
-		protocol: 123,
-		plugin: 168,
+		sdk: 138,
+		protocol: 119,
+		plugin: 172,
 		build: 9,
 		ui: 40,
 		'plugin-richtext': 25,
@@ -220,6 +220,25 @@ const goPackageDirectories: Readonly<Record<string, string>> = {
 };
 
 describe('reference data', () => {
+	test('documents editorial block naming in config, wire metadata and the plugin host', () => {
+		const admin = findReferenceSymbol('field', 'block-admin');
+		expect(admin?.parameters.map((parameter) => parameter.name)).toEqual([
+			'NameField',
+			'RowLabelPath'
+		]);
+		expect(admin?.signature).toContain('NameField string');
+		expect(admin?.example).toContain('NameField:    "blockName"');
+		expect(admin?.example).toContain('field.Text("blockName")');
+		expect(admin?.relatedDocs).toContain('/docs/fields/blocks/#give-each-block-an-editorial-name');
+		expect(findReferenceSymbol('schema', 'block-admin')?.signature).toContain(
+			'json:"nameField,omitempty"'
+		);
+		expect(findReferenceSymbol('plugin', 'embedded-schema-header-props')).toBeDefined();
+		expect(
+			findReferenceSymbol('plugin', 'field-authoring-host-schema-header-method')
+		).toBeDefined();
+	});
+
 	test('matches the reviewed integrated catalog snapshot', () => {
 		const moduleSymbols = Object.fromEntries(
 			referenceModules.map((module) => [module.slug, module.symbols.length])
@@ -828,7 +847,6 @@ describe('reference data', () => {
 		const contracts = [
 			['schema', 'field-type', 'FieldType', ['schema/manifest.go']],
 			['schema', 'value-type', 'ValueType', ['schema/manifest.go']],
-			['schema', 'plugin-database-adapter', 'PluginDatabaseAdapter', ['schema/manifest.go']],
 			['query', 'expression-kind', 'ExpressionKind', ['query/expression.go']],
 			['query', 'operator', 'Operator', ['query/expression.go']],
 			['query', 'value-kind', 'ValueKind', ['query/value.go']],
@@ -1014,9 +1032,8 @@ describe('reference data', () => {
 			['core/local.go', 'JoinMutationResult'],
 			['core/plugin.go', 'PluginHookContribution'],
 			['core/plugin.go', 'PluginFieldValidationContext'],
-			['core/plugin.go', 'PluginEndpoint'],
-			['core/plugin.go', 'PluginEndpointContext'],
-			['core/plugin.go', 'PluginTransport'],
+			['core/endpoint.go', 'Endpoint'],
+			['core/endpoint.go', 'EndpointContext'],
 			['core/plugin.go', 'PluginTransportContext'],
 			['core/task.go', 'TaskContext'],
 			['core/task.go', 'TaskEnqueueOptions'],

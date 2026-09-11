@@ -14,16 +14,12 @@ import (
 
 func TestListJoinPreservesSourceReadRulesAndPrivateMembership(t *testing.T) {
 	app, err := ridu.New(ridu.Config{Name: "Authorized join reads", Collections: []ridu.Collection{
-		{Slug: "categories", Fields: field.Fields{field.Text("name"), field.Checkbox("confidential"), field.Join("posts", "posts", "category").Access(field.Access{Read: func(ctx operation.AccessContext,
-
-		) (bool, error) {
+		{Slug: "categories", Fields: field.Fields{field.Text("name"), field.Checkbox("confidential"), field.Join("posts", "posts", "category").Access(field.Access{Read: func(ctx operation.Context) (bool, error) {
 			confidential, _ := ctx.Siblings.Get("confidential").
 				BooleanValue()
 			return !confidential, nil
 		}})}},
-		{Slug: "posts", Fields: field.Fields{field.Text("title"), field.Relationship("category", "categories").Access(field.Access{Read: func(operation.AccessContext,
-
-		) (bool, error) {
+		{Slug: "posts", Fields: field.Fields{field.Text("title"), field.Relationship("category", "categories").Access(field.Access{Read: func(operation.Context) (bool, error) {
 			return false, nil
 		}})}},
 	}}, teststore.New())
@@ -31,11 +27,11 @@ func TestListJoinPreservesSourceReadRulesAndPrivateMembership(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, confidential := range []bool{false, true} {
-		category, err := app.Local().Create(t.Context(), "categories", store.Values{"name": store.String("Category"), "confidential": store.Boolean(confidential)}, nil)
+		category, err := app.Local().Create(t.Context(), "categories", store.Values{"name": store.String("Category"), "confidential": store.Boolean(confidential)}, ridu.MutationOptions{})
 		if err != nil {
 			t.Fatal(err)
 		}
-		_, err = app.Local().Create(t.Context(), "posts", store.Values{"title": store.String("Story"), "category": store.String(category.ID)}, nil)
+		_, err = app.Local().Create(t.Context(), "posts", store.Values{"title": store.String("Story"), "category": store.String(category.ID)}, ridu.MutationOptions{})
 		if err != nil {
 			t.Fatal(err)
 		}

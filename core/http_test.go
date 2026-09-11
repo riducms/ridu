@@ -42,7 +42,7 @@ func (backend baseOnlyStore) Begin(ctx context.Context) (store.Transaction, erro
 func TestRESTMatchesLocalCRUDAndDecodesQueries(t *testing.T) {
 	application := httpFixture(t)
 	client := handlerClient(application.Handler(ridu.HandlerOptions{}))
-	local, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("local")}, nil)
+	local, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("local")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,11 +103,11 @@ func TestRESTSelectionIncludesTrashMetadata(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	document, err := application.Local().Create(t.Context(), "posts", store.Values{"title": store.String("not-selected")}, nil)
+	document, err := application.Local().Create(t.Context(), "posts", store.Values{"title": store.String("not-selected")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Delete(t.Context(), "posts", document.ID, nil); err != nil {
+	if _, err := application.Local().Delete(t.Context(), "posts", document.ID, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -139,9 +139,7 @@ func TestRESTSelectionSeparatesStoredAndComputedOutputs(t *testing.T) {
 		Collections: []ridu.Collection{
 			{
 				Slug: "categories",
-				Fields: field.Fields{field.Text("title").Required(), field.Text("privateNote").Required(), field.Virtual("summary", field.ValueString, func(ctx operation.ReadContext,
-
-				) (operation.Value[store.
+				Fields: field.Fields{field.Text("title").Required(), field.Text("privateNote").Required(), field.Virtual("summary", field.ValueString, func(ctx operation.Context) (operation.Value[store.
 					Value],
 
 					error) {
@@ -166,9 +164,7 @@ func TestRESTSelectionSeparatesStoredAndComputedOutputs(t *testing.T) {
 		},
 		Globals: []ridu.Global{{
 			Slug: "settings",
-			Fields: field.Fields{field.Text("privateNote").Default("global dependency"), field.Text("otherDefault").Default("must not leak"), field.Virtual("summary", field.ValueString, func(ctx operation.ReadContext,
-
-			) (operation.Value[store.
+			Fields: field.Fields{field.Text("privateNote").Default("global dependency"), field.Text("otherDefault").Default("must not leak"), field.Virtual("summary", field.ValueString, func(ctx operation.Context) (operation.Value[store.
 				Value],
 
 				error) {
@@ -184,13 +180,13 @@ func TestRESTSelectionSeparatesStoredAndComputedOutputs(t *testing.T) {
 	}
 	category, err := application.Local().Create(t.Context(), "categories", store.Values{
 		"title": store.String("News"), "privateNote": store.String("resolver dependency"),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := application.Local().Create(t.Context(), "posts", store.Values{
 		"title": store.String("Launch"), "category": store.String(category.ID),
-	}, nil); err != nil {
+	}, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	computedCalls.Store(0)
@@ -288,19 +284,13 @@ func TestRESTEvaluatesSafeDocumentAndFieldCapabilities(t *testing.T) {
 		Collections: []ridu.Collection{{
 			Slug: "posts",
 			Fields: field.Fields{field.Text("title").Required(), field.Textarea("secret").Access(field.Access{
-				Create: func(operation.AccessContext,
-
-				) (bool, error) {
+				Create: func(operation.Context) (bool, error) {
 					return false, nil
 				},
-				Read: func(operation.AccessContext,
-
-				) (bool, error) {
+				Read: func(operation.Context) (bool, error) {
 					return false, nil
 				},
-				Update: func(operation.AccessContext,
-
-				) (bool, error) {
+				Update: func(operation.Context) (bool, error) {
 					return false, nil
 				},
 			})},
@@ -324,11 +314,11 @@ func TestRESTEvaluatesSafeDocumentAndFieldCapabilities(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	allowed, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("editable")}, nil)
+	allowed, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("editable")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	denied, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("locked")}, nil)
+	denied, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("locked")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -367,9 +357,7 @@ func TestRESTResolvesOneBoundedFilteredSelectionWithExactCapabilities(t *testing
 	titlePath, _ := query.NewPath("title")
 	application, err := ridu.New(ridu.Config{Name: "Selection", Collections: []ridu.Collection{{
 		Slug: "posts", Trash: true,
-		Fields: field.Fields{field.Text("title").Required(), field.Text("visibility").Required(), field.Textarea("secret").Access(field.Access{Read: func(operation.AccessContext,
-
-		) (bool, error) {
+		Fields: field.Fields{field.Text("title").Required(), field.Text("visibility").Required(), field.Textarea("secret").Access(field.Access{Read: func(operation.Context) (bool, error) {
 			return false, nil
 		}})},
 		Access: ridu.CollectionAccess{
@@ -389,7 +377,7 @@ func TestRESTResolvesOneBoundedFilteredSelectionWithExactCapabilities(t *testing
 		{"title": store.String("editable"), "visibility": store.String("public"), "secret": store.String("hidden")},
 		{"title": store.String("editable"), "visibility": store.String("private"), "secret": store.String("hidden")},
 	} {
-		if _, err := application.Local().Create(context.Background(), "posts", values, nil); err != nil {
+		if _, err := application.Local().Create(context.Background(), "posts", values, ridu.MutationOptions{}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -446,7 +434,7 @@ func TestRESTRejectsSelectionOverflowBeforeCapabilityEvaluation(t *testing.T) {
 	ids := make([]string, 101)
 	for index := range ids {
 		ids[index] = fmt.Sprintf("post-%03d", index)
-		if _, err := application.Local().Import(context.Background(), "posts", store.Values{"title": store.String(ids[index])}, ridu.ImportOptions{ID: ids[index]}, nil); err != nil {
+		if _, err := application.Local().Import(context.Background(), "posts", store.Values{"title": store.String(ids[index])}, ridu.ImportOptions{ID: ids[index]}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -464,7 +452,7 @@ func TestRESTRejectsSelectionOverflowBeforeCapabilityEvaluation(t *testing.T) {
 	if updateChecks != 0 {
 		t.Fatalf("overflow evaluated %d document capabilities", updateChecks)
 	}
-	if _, err := application.Local().Delete(context.Background(), "posts", ids[len(ids)-1], nil); err != nil {
+	if _, err := application.Local().Delete(context.Background(), "posts", ids[len(ids)-1], ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	response = requestJSON(t, client, http.MethodPost, endpoint, strings.NewReader(`{}`), "")
@@ -482,15 +470,15 @@ func TestRESTBulkTrashRestorePermanentDeleteAndEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	first, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("First")}, nil)
+	first, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("First")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("Second")}, nil)
+	second, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("Second")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().BulkDelete(context.Background(), "posts", []string{first.ID, second.ID}, nil); err != nil {
+	if _, err := application.Local().BulkDelete(context.Background(), "posts", []string{first.ID, second.ID}, ridu.BulkOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	client := handlerClient(application.Handler(ridu.HandlerOptions{}))
@@ -501,7 +489,7 @@ func TestRESTBulkTrashRestorePermanentDeleteAndEmpty(t *testing.T) {
 		t.Fatalf("bulk restore = %d: %s", restored.StatusCode, readBody(t, restored))
 	}
 	restored.Body.Close()
-	if _, err := application.Local().BulkDelete(context.Background(), "posts", []string{first.ID, second.ID}, nil); err != nil {
+	if _, err := application.Local().BulkDelete(context.Background(), "posts", []string{first.ID, second.ID}, ridu.BulkOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	emptied := requestJSON(t, client, http.MethodDelete, base+"?trash=true", nil, "")
@@ -522,15 +510,15 @@ func TestRESTDocumentIDTrashCannotEmptyCollectionTrash(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	target, err := application.Local().CreateWithOptions(context.Background(), "posts", store.Values{"title": store.String("Target")}, ridu.MutationOptions{ID: "trash"})
+	target, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("Target")}, ridu.MutationOptions{ID: "trash"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	other, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("Other")}, nil)
+	other, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("Other")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Delete(context.Background(), "posts", other.ID, nil); err != nil {
+	if _, err := application.Local().Delete(context.Background(), "posts", other.ID, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	client := handlerClient(application.Handler(ridu.HandlerOptions{}))
@@ -559,11 +547,11 @@ func TestPanickingAuditCallbackCannotChangeCommittedBulkResult(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	first, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("First")}, nil)
+	first, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("First")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("Second")}, nil)
+	second, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("Second")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -584,7 +572,7 @@ func TestPanickingAuditCallbackCannotChangeCommittedBulkResult(t *testing.T) {
 		t.Fatalf("audit diagnostics = %#v", diagnostics)
 	}
 	for _, id := range []string{first.ID, second.ID} {
-		document, err := application.Local().Find(context.Background(), "posts", id, nil)
+		document, err := application.Local().Find(context.Background(), "posts", id, ridu.FindOptions{})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -657,15 +645,15 @@ func TestRESTMutatesInverseJoinInOneRequest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	source, err := application.Local().Create(context.Background(), "categories", store.Values{"name": store.String("News")}, nil)
+	source, err := application.Local().Create(context.Background(), "categories", store.Values{"name": store.String("News")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	addition, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("Add")}, nil)
+	addition, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("Add")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	removal, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("Remove"), "category": store.String(source.ID)}, nil)
+	removal, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("Remove"), "category": store.String(source.ID)}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -687,23 +675,21 @@ func TestRESTMutatesInverseJoinInOneRequest(t *testing.T) {
 func TestRESTInverseJoinRedactsTargetFields(t *testing.T) {
 	application, err := ridu.New(ridu.Config{Name: "Redacted join REST", Collections: []ridu.Collection{
 		{Slug: "categories", Fields: field.Fields{field.Text("name").Required(), field.Join("posts", "posts", "category")}},
-		{Slug: "posts", Fields: field.Fields{field.Text("title").Required(), field.Text("privateNote").Access(field.Access{Read: func(operation.AccessContext,
-
-		) (bool, error) {
+		{Slug: "posts", Fields: field.Fields{field.Text("title").Required(), field.Text("privateNote").Access(field.Access{Read: func(operation.Context) (bool, error) {
 			return false, nil
 		}}), field.Relationship("category", "categories").Required()}},
 	}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
 	}
-	category, err := application.Local().Create(context.Background(), "categories", store.Values{"name": store.String("News")}, nil)
+	category, err := application.Local().Create(context.Background(), "categories", store.Values{"name": store.String("News")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := application.Local().Create(context.Background(), "posts", store.Values{
 		"title": store.String("Public title"), "privateNote": store.String("must not cross the join"),
 		"category": store.String(category.ID),
-	}, nil); err != nil {
+	}, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -736,11 +722,11 @@ func TestRESTVersionDetailAndScheduledPublishing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	document, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("Queued")}, nil)
+	document, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("Queued")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	document, err = application.Local().Publish(context.Background(), "posts", document.ID, document.Revision, nil)
+	document, err = application.Local().Publish(context.Background(), "posts", document.ID, ridu.MutationOptions{ExpectedRevision: document.Revision})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -860,7 +846,7 @@ func TestRESTScheduledPublishBindsExactAuthCollectionAndRechecksRequester(t *tes
 	if err := transaction.Commit(ctx); err != nil {
 		t.Fatal(err)
 	}
-	document, err := application.Local().Create(ctx, "books", store.Values{"title": store.String("Exact requester")}, &staffActor)
+	document, err := application.Local().Create(ctx, "books", store.Values{"title": store.String("Exact requester")}, ridu.MutationOptions{Actor: &staffActor})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -890,7 +876,7 @@ func TestRESTScheduledPublishBindsExactAuthCollectionAndRechecksRequester(t *tes
 		t.Fatalf("queued requester = %#v, want staff/%s", queued.RequestedBy, requesterID)
 	}
 
-	staffActor, err = application.Local().Update(ctx, "staff", staffActor.ID, store.Values{"role": store.String("revoked")}, &staffActor)
+	staffActor, err = application.Local().Update(ctx, "staff", staffActor.ID, store.Values{"role": store.String("revoked")}, ridu.MutationOptions{Actor: &staffActor})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -906,7 +892,7 @@ func TestRESTScheduledPublishBindsExactAuthCollectionAndRechecksRequester(t *tes
 		t.Fatalf("scheduled task after staff revocation = %#v", failed)
 	}
 	draft := true
-	stored, err := application.Local().FindWithOptions(ctx, "books", document.ID, ridu.FindOptions{Actor: &usersActor, Draft: &draft})
+	stored, err := application.Local().Find(ctx, "books", document.ID, ridu.FindOptions{Actor: &usersActor, Draft: &draft})
 	if err != nil || stored.Status != store.StatusDraft {
 		t.Fatalf("document after denied scheduled publish = %#v, %v", stored, err)
 	}
@@ -988,24 +974,23 @@ func TestRESTPreviewTokensAreShortLivedReadOnlyAndTargetScoped(t *testing.T) {
 	}
 	actor, err := application.CreateAuthUser(context.Background(), "users", store.Values{
 		"email": store.String("preview@example.test"), "role": store.String("staff"),
-	}, "correct-horse-battery", nil)
+	}, "correct-horse-battery", ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	first, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("Draft preview")}, &actor)
+	first, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("Draft preview")}, ridu.MutationOptions{Actor: &actor})
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("Other draft")}, &actor)
+	second, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("Other draft")}, ridu.MutationOptions{Actor: &actor})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := application.Local().Import(context.Background(), "pages", store.Values{"title": store.String("Same ID, different collection")}, ridu.ImportOptions{
-		ID: first.ID, Status: store.StatusDraft,
-	}, &actor); err != nil {
+		ID: first.ID, Status: store.StatusDraft, Actor: &actor}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().UpdateGlobal(context.Background(), "site-settings", store.Values{"siteName": store.String("Ridu")}, 0, &actor); err != nil {
+	if _, err := application.Local().UpdateGlobal(context.Background(), "site-settings", store.Values{"siteName": store.String("Ridu")}, ridu.MutationOptions{Actor: &actor}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1232,7 +1217,7 @@ func TestRESTRejectsAmbiguousAndStructurallyPathologicalJSON(t *testing.T) {
 
 func TestRESTLoginCurrentSessionAndLogout(t *testing.T) {
 	application := httpFixture(t)
-	user, err := application.Local().Create(context.Background(), "users", store.Values{"email": store.String("ada@example.test")}, nil)
+	user, err := application.Local().Create(context.Background(), "users", store.Values{"email": store.String("ada@example.test")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1474,14 +1459,14 @@ func TestRESTSortSelectCountPopulateAndEmbeddedAdminFallback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	author, err := application.Local().Create(context.Background(), "authors", store.Values{"email": store.String("ada@example.test")}, nil)
+	author, err := application.Local().Create(context.Background(), "authors", store.Values{"email": store.String("ada@example.test")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, title := range []string{"Zulu", "Alpha"} {
 		if _, err := application.Local().Create(context.Background(), "articles", store.Values{
 			"title": store.String(title), "author": store.String(author.ID),
-		}, nil); err != nil {
+		}, ridu.MutationOptions{}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -1520,7 +1505,7 @@ func TestRESTSortSelectCountPopulateAndEmbeddedAdminFallback(t *testing.T) {
 
 func TestHTTPSecurityRateLimitSessionRotationTrustedProxyAndAudit(t *testing.T) {
 	application := httpFixture(t)
-	user, err := application.Local().Create(context.Background(), "users", store.Values{"email": store.String("security@example.test")}, nil)
+	user, err := application.Local().Create(context.Background(), "users", store.Values{"email": store.String("security@example.test")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -70,11 +70,11 @@ func TestMongoDBLocalizedScalarOperationEngineParity(t *testing.T) {
 	primary, err := application.Local().Import(t.Context(), "posts", store.Values{
 		"title": store.String("Hello"), "summary": store.String("English summary"), "kind": store.String("primary"),
 		"seo": store.Object(store.Values{"headline": store.String("Home"), "slug": store.String("home")}),
-	}, ridu.ImportOptions{ID: "primary"}, nil)
+	}, ridu.ImportOptions{ID: "primary"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	fallback, err := application.Local().Find(t.Context(), "posts", primary.ID, nil, ridu.LocaleOptions{Locale: "fr"})
+	fallback, err := application.Local().Find(t.Context(), "posts", primary.ID, ridu.FindOptions{Locale: "fr"})
 	if err != nil || mongoLocalizedString(fallback.Values["title"]) != "Hello" || fallback.LocalizationSources["title"] != "en" {
 		t.Fatalf("French fallback = %#v, %v", fallback, err)
 	}
@@ -84,23 +84,23 @@ func TestMongoDBLocalizedScalarOperationEngineParity(t *testing.T) {
 	updated, err := application.Local().Update(t.Context(), "posts", primary.ID, store.Values{
 		"title": store.String("Bonjour"), "summary": store.String(""),
 		"seo": store.Object(store.Values{"headline": store.String("Accueil"), "slug": store.String("home")}),
-	}, nil, ridu.LocaleOptions{Locale: "fr"})
+	}, ridu.MutationOptions{Locale: "fr"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if mongoLocalizedString(updated.Values["title"]) != "Bonjour" || mongoLocalizedNestedString(updated.Values["seo"], "headline") != "Accueil" {
 		t.Fatalf("French update = %#v", updated.Values)
 	}
-	fallback, err = application.Local().Find(t.Context(), "posts", primary.ID, nil, ridu.LocaleOptions{Locale: "fr"})
+	fallback, err = application.Local().Find(t.Context(), "posts", primary.ID, ridu.FindOptions{Locale: "fr"})
 	if err != nil || mongoLocalizedString(fallback.Values["summary"]) != "English summary" || fallback.LocalizationSources["summary"] != "en" {
 		t.Fatalf("non-final empty fallback = %#v, %v", fallback, err)
 	}
-	exact, err := application.Local().Find(t.Context(), "posts", primary.ID, nil, ridu.LocaleOptions{Locale: "fr", DisableFallback: true})
+	exact, err := application.Local().Find(t.Context(), "posts", primary.ID, ridu.FindOptions{Locale: "fr", DisableFallback: true})
 	exactSummary, exactSummaryIsString := exact.Values["summary"].StringValue()
 	if err != nil || !exactSummaryIsString || exactSummary != "" || exact.LocalizationSources["summary"] != "fr" {
 		t.Fatalf("final empty value = %#v, %v", exact, err)
 	}
-	all, err := application.Local().FindWithOptions(t.Context(), "posts", primary.ID, ridu.FindOptions{
+	all, err := application.Local().Find(t.Context(), "posts", primary.ID, ridu.FindOptions{
 		Select: []query.Path{titlePath, summaryPath, mongoMustPath(t, "seo")}, AllLocales: true,
 	})
 	if err != nil {
@@ -162,16 +162,16 @@ func TestMongoDBLocalizedScalarOperationEngineParity(t *testing.T) {
 	mongoCommit(t, directWrite)
 
 	author := mongoLocalizedImport(t, application, "authors", "localized-author", store.Values{"name": store.String("Author")})
-	if _, err := application.Local().Update(t.Context(), "authors", author.ID, store.Values{"name": store.String("Auteur")}, nil, ridu.LocaleOptions{Locale: "fr"}); err != nil {
+	if _, err := application.Local().Update(t.Context(), "authors", author.ID, store.Values{"name": store.String("Auteur")}, ridu.MutationOptions{Locale: "fr"}); err != nil {
 		t.Fatal(err)
 	}
 	article, err := application.Local().Create(t.Context(), "articles", store.Values{
 		"title": store.String("Population"), "author": store.String(author.ID),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	populated, err := application.Local().FindWithOptions(t.Context(), "articles", article.ID, ridu.FindOptions{
+	populated, err := application.Local().Find(t.Context(), "articles", article.ID, ridu.FindOptions{
 		Locale: "fr", Populate: []query.Population{{Path: authorPath}},
 	})
 	if err != nil {
@@ -181,7 +181,7 @@ func TestMongoDBLocalizedScalarOperationEngineParity(t *testing.T) {
 	if !populatedDocument || mongoLocalizedString(populatedAuthor.Values["name"]) != "Auteur" || populatedAuthor.LocalizationSources["name"] != "fr" {
 		t.Fatalf("single-locale populated localized target = %#v", populated.Values["author"])
 	}
-	allPopulated, err := application.Local().FindWithOptions(t.Context(), "articles", article.ID, ridu.FindOptions{
+	allPopulated, err := application.Local().Find(t.Context(), "articles", article.ID, ridu.FindOptions{
 		AllLocales: true, Populate: []query.Population{{Path: authorPath}},
 	})
 	if err != nil {
@@ -221,12 +221,12 @@ func TestMongoDBLocalizedScalarOperationEngineParity(t *testing.T) {
 		document, err := application.Local().Import(t.Context(), "posts", store.Values{
 			"title": store.String(fixture.english), "kind": store.String("sort"),
 			"seo": store.Object(store.Values{"headline": store.String(fixture.english), "slug": store.String(fixture.id)}),
-		}, ridu.ImportOptions{ID: fixture.id}, nil)
+		}, ridu.ImportOptions{ID: fixture.id})
 		if err != nil {
 			t.Fatal(err)
 		}
 		if fixture.french != nil {
-			if _, err := application.Local().Update(t.Context(), "posts", document.ID, store.Values{"title": store.String(*fixture.french)}, nil, ridu.LocaleOptions{Locale: "fr"}); err != nil {
+			if _, err := application.Local().Update(t.Context(), "posts", document.ID, store.Values{"title": store.String(*fixture.french)}, ridu.MutationOptions{Locale: "fr"}); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -267,7 +267,7 @@ func TestMongoDBLocalizedScalarOperationEngineParity(t *testing.T) {
 	})
 	if _, err := application.Local().Update(t.Context(), "secured", allowed.ID, store.Values{
 		"gate": store.String("Public"), "label": store.String("Correspond"),
-	}, nil, ridu.LocaleOptions{Locale: "fr"}); err != nil {
+	}, ridu.MutationOptions{Locale: "fr"}); err != nil {
 		t.Fatal(err)
 	}
 	mixed := mongoLocalizedImport(t, application, "secured", "mixed", store.Values{
@@ -275,19 +275,19 @@ func TestMongoDBLocalizedScalarOperationEngineParity(t *testing.T) {
 	})
 	if _, err := application.Local().Update(t.Context(), "secured", mixed.ID, store.Values{
 		"gate": store.String("Private"), "label": store.String("Correspond"),
-	}, nil, ridu.LocaleOptions{Locale: "fr"}); err != nil {
+	}, ridu.MutationOptions{Locale: "fr"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Find(t.Context(), "secured", mixed.ID, nil, ridu.LocaleOptions{Locale: "en"}); err != nil {
+	if _, err := application.Local().Find(t.Context(), "secured", mixed.ID, ridu.FindOptions{Locale: "en"}); err != nil {
 		t.Fatalf("English localized access: %v", err)
 	}
-	if _, err := application.Local().Find(t.Context(), "secured", mixed.ID, nil, ridu.LocaleOptions{Locale: "fr"}); !mongoOperationCode(err, "not_found") {
+	if _, err := application.Local().Find(t.Context(), "secured", mixed.ID, ridu.FindOptions{Locale: "fr"}); !mongoOperationCode(err, "not_found") {
 		t.Fatalf("French localized access error = %v", err)
 	}
-	if _, err := application.Local().Find(t.Context(), "secured", mixed.ID, nil, ridu.LocaleOptions{AllLocales: true}); !mongoOperationCode(err, "not_found") {
+	if _, err := application.Local().Find(t.Context(), "secured", mixed.ID, ridu.FindOptions{AllLocales: true}); !mongoOperationCode(err, "not_found") {
 		t.Fatalf("all-locales access error = %v", err)
 	}
-	if _, err := application.Local().Find(t.Context(), "secured", allowed.ID, nil, ridu.LocaleOptions{AllLocales: true}); err != nil {
+	if _, err := application.Local().Find(t.Context(), "secured", allowed.ID, ridu.FindOptions{AllLocales: true}); err != nil {
 		t.Fatalf("all-locales public access: %v", err)
 	}
 	securedPage, err := application.Local().List(t.Context(), "secured", ridu.ListOptions{
@@ -302,22 +302,22 @@ func TestMongoDBLocalizedScalarOperationEngineParity(t *testing.T) {
 	})
 	if _, err := application.Local().Update(t.Context(), "history", history.ID, store.Values{
 		"gate": store.String("Private"), "note": store.String("Second"),
-	}, nil, ridu.LocaleOptions{Locale: "fr"}); err != nil {
+	}, ridu.MutationOptions{Locale: "fr"}); err != nil {
 		t.Fatal(err)
 	}
-	englishVersions, err := application.Local().Versions(t.Context(), "history", history.ID, nil, ridu.LocaleOptions{Locale: "en"})
+	englishVersions, err := application.Local().Versions(t.Context(), "history", history.ID, ridu.FindOptions{Locale: "en"})
 	if err != nil || len(englishVersions) != 2 {
 		t.Fatalf("English localized versions = %#v, %v", englishVersions, err)
 	}
-	frenchVersions, err := application.Local().Versions(t.Context(), "history", history.ID, nil, ridu.LocaleOptions{Locale: "fr"})
+	frenchVersions, err := application.Local().Versions(t.Context(), "history", history.ID, ridu.FindOptions{Locale: "fr"})
 	if err != nil || len(frenchVersions) != 1 || frenchVersions[0].Revision != 1 || mongoLocalizedString(frenchVersions[0].Snapshot.Values["gate"]) != "Public" {
 		t.Fatalf("French fallback version access = %#v, %v", frenchVersions, err)
 	}
-	exactFrenchVersions, err := application.Local().Versions(t.Context(), "history", history.ID, nil, ridu.LocaleOptions{Locale: "fr", DisableFallback: true})
+	exactFrenchVersions, err := application.Local().Versions(t.Context(), "history", history.ID, ridu.FindOptions{Locale: "fr", DisableFallback: true})
 	if err != nil || len(exactFrenchVersions) != 0 {
 		t.Fatalf("exact French version access = %#v, %v", exactFrenchVersions, err)
 	}
-	allVersions, err := application.Local().Versions(t.Context(), "history", history.ID, nil, ridu.LocaleOptions{AllLocales: true})
+	allVersions, err := application.Local().Versions(t.Context(), "history", history.ID, ridu.FindOptions{AllLocales: true})
 	if err != nil || len(allVersions) != 0 {
 		t.Fatalf("all-locales version access = %#v, %v", allVersions, err)
 	}
@@ -350,7 +350,7 @@ func TestMongoDBLocalizedScalarOperationEngineParity(t *testing.T) {
 		t.Fatalf("request-aware ListVersions locale membership error = %v", err)
 	}
 	mongoCommit(t, strictVersionRead)
-	if _, err := application.Local().Versions(t.Context(), "history", history.ID, nil, ridu.LocaleOptions{Locale: "en"}); err == nil {
+	if _, err := application.Local().Versions(t.Context(), "history", history.ID, ridu.FindOptions{Locale: "en"}); err == nil {
 		t.Fatal("operation-engine ListVersions exposed an unconfigured stored locale")
 	}
 
@@ -389,7 +389,7 @@ func TestMongoDBLocalizedScalarOperationEngineParity(t *testing.T) {
 		}
 	}
 	mongoCommit(t, strictRead)
-	if _, err := application.Local().Find(t.Context(), "posts", unconfigured.ID, nil, ridu.LocaleOptions{AllLocales: true}); err == nil {
+	if _, err := application.Local().Find(t.Context(), "posts", unconfigured.ID, ridu.FindOptions{AllLocales: true}); err == nil {
 		t.Fatal("operation-engine Find exposed an unconfigured stored locale")
 	}
 	closedPage, err := application.Local().List(t.Context(), "posts", ridu.ListOptions{
@@ -428,7 +428,7 @@ func TestMongoDBLocalizedScalarOperationEngineParity(t *testing.T) {
 	if err != nil || closed.Total != 0 || len(closed.Documents) != 0 {
 		t.Fatalf("malformed localized scalar satisfied a typed filter: %#v, %v", closed, err)
 	}
-	if _, err := application.Local().Find(t.Context(), "posts", corrupt.ID, nil); err == nil {
+	if _, err := application.Local().Find(t.Context(), "posts", corrupt.ID, ridu.FindOptions{}); err == nil {
 		t.Fatal("operation-engine Find exposed malformed localized BSON")
 	}
 }
@@ -527,7 +527,7 @@ func TestMongoDBDecoderFreeSparseLocaleEnvelopeRejectsNonCanonicalKeys(t *testin
 
 func mongoLocalizedImport(t *testing.T, application *ridu.App, collection, id string, values store.Values) store.Document {
 	t.Helper()
-	document, err := application.Local().Import(t.Context(), collection, values, ridu.ImportOptions{ID: id}, nil)
+	document, err := application.Local().Import(t.Context(), collection, values, ridu.ImportOptions{ID: id})
 	if err != nil {
 		t.Fatal(err)
 	}

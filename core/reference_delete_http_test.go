@@ -24,13 +24,13 @@ func TestRESTHardDeleteRestrictionUsesStableNonOracleEnvelope(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	target, err := application.Local().Create(ctx, "users", store.Values{"name": store.String("Ada")}, nil)
+	target, err := application.Local().Create(ctx, "users", store.Values{"name": store.String("Ada")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	owner, err := application.Local().Create(ctx, "posts", store.Values{
 		"title": store.String("Restricted"), "protectedOwner": store.String(target.ID),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

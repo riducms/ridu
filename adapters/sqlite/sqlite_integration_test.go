@@ -72,7 +72,7 @@ func TestSQLiteStoreRunsThePayloadDocumentAndAuthVertical(t *testing.T) {
 	user, err := application.CreateAuthUser(ctx, "users", store.Values{
 		"email": store.String("ada@example.test"),
 		"name":  store.String("Ada"),
-	}, "correct-horse-battery", nil)
+	}, "correct-horse-battery", ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,19 +85,19 @@ func TestSQLiteStoreRunsThePayloadDocumentAndAuthVertical(t *testing.T) {
 	}
 	if _, err := application.Local().Create(ctx, "users", store.Values{
 		"email": store.String("ada@example.test"),
-	}, nil); !sqliteOperationCode(err, "conflict") {
+	}, ridu.MutationOptions{}); !sqliteOperationCode(err, "conflict") {
 		t.Fatalf("duplicate unique email error = %v", err)
 	}
 	if _, err := application.Local().Create(ctx, "posts", store.Values{
 		"title": store.String("Missing relation"), "status": store.String("published"),
 		"author": store.String("missing"),
-	}, nil); err == nil {
+	}, ridu.MutationOptions{}); err == nil {
 		t.Fatal("missing relationship target was accepted")
 	}
 
 	private, err := application.Local().Create(ctx, "posts", store.Values{
 		"title": store.String("Private"), "status": store.String("draft"), "author": store.String(user.ID),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +105,7 @@ func TestSQLiteStoreRunsThePayloadDocumentAndAuthVertical(t *testing.T) {
 		"title": store.String("Public"), "status": store.String("published"), "author": store.String(user.ID),
 		"watchers": store.List(store.String(user.ID)),
 		"metadata": store.Object(store.Values{"source": store.String("sqlite")}),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,10 +119,10 @@ func TestSQLiteStoreRunsThePayloadDocumentAndAuthVertical(t *testing.T) {
 	if populated, ok := page.Documents[0].Values["author"].CopyDocument(); !ok || populated.ID != user.ID {
 		t.Fatalf("populated author = %#v", page.Documents[0].Values["author"])
 	}
-	if _, err := application.Local().Find(ctx, "posts", private.ID, nil); !sqliteOperationCode(err, "not_found") {
+	if _, err := application.Local().Find(ctx, "posts", private.ID, ridu.FindOptions{}); !sqliteOperationCode(err, "not_found") {
 		t.Fatalf("filtered find error = %v", err)
 	}
-	updated, err := application.Local().UpdateWithOptions(ctx, "posts", public.ID, store.Values{
+	updated, err := application.Local().Update(ctx, "posts", public.ID, store.Values{
 		"title": store.String("Public updated"),
 	}, ridu.MutationOptions{})
 	if err != nil {
@@ -154,7 +154,7 @@ func TestSQLiteStoreRunsThePayloadDocumentAndAuthVertical(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	stored, err := reopenedApplication.Local().Find(ctx, "posts", public.ID, nil)
+	stored, err := reopenedApplication.Local().Find(ctx, "posts", public.ID, ridu.FindOptions{})
 	if err != nil || stored.ID != public.ID {
 		t.Fatalf("reopened document = %#v, %v", stored, err)
 	}
@@ -184,43 +184,43 @@ func TestSQLiteVersionAndTrashLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	draft, err := application.Local().Create(ctx, "posts", store.Values{"title": store.String("Draft")}, nil)
+	draft, err := application.Local().Create(ctx, "posts", store.Values{"title": store.String("Draft")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	published, err := application.Local().PublishChanges(ctx, "posts", draft.ID, store.Values{
 		"title": store.String("Published"),
-	}, draft.Revision, nil)
+	}, ridu.MutationOptions{ExpectedRevision: draft.Revision})
 	if err != nil || published.Status != store.StatusPublished {
 		t.Fatalf("publish = %#v, %v", published, err)
 	}
 	if _, err := application.Local().PublishChanges(ctx, "posts", draft.ID, store.Values{
 		"title": store.String("Stale"),
-	}, draft.Revision, nil); !sqliteOperationCode(err, "conflict") {
+	}, ridu.MutationOptions{ExpectedRevision: draft.Revision}); !sqliteOperationCode(err, "conflict") {
 		t.Fatalf("stale revision error = %v (published revision %d)", err, published.Revision)
 	}
-	versions, err := application.Local().Versions(ctx, "posts", draft.ID, nil)
+	versions, err := application.Local().Versions(ctx, "posts", draft.ID, ridu.FindOptions{})
 	if err != nil || len(versions) != 2 {
 		t.Fatalf("versions = %#v, %v", versions, err)
 	}
-	trashed, err := application.Local().Delete(ctx, "posts", draft.ID, nil)
+	trashed, err := application.Local().Delete(ctx, "posts", draft.ID, ridu.MutationOptions{})
 	if err != nil || trashed.DeletedAt == nil {
 		t.Fatalf("trash = %#v, %v", trashed, err)
 	}
-	if _, err := application.Local().Find(ctx, "posts", draft.ID, nil); !sqliteOperationCode(err, "not_found") {
+	if _, err := application.Local().Find(ctx, "posts", draft.ID, ridu.FindOptions{}); !sqliteOperationCode(err, "not_found") {
 		t.Fatalf("active find after trash = %v", err)
 	}
-	restored, err := application.Local().RestoreDeleted(ctx, "posts", draft.ID, nil)
+	restored, err := application.Local().RestoreDeleted(ctx, "posts", draft.ID, ridu.MutationOptions{})
 	if err != nil || restored.DeletedAt != nil {
 		t.Fatalf("restore deleted = %#v, %v", restored, err)
 	}
-	if _, err := application.Local().Delete(ctx, "posts", draft.ID, nil); err != nil {
+	if _, err := application.Local().Delete(ctx, "posts", draft.ID, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().DeletePermanent(ctx, "posts", draft.ID, nil); err != nil {
+	if _, err := application.Local().DeletePermanent(ctx, "posts", draft.ID, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().RestoreDeleted(ctx, "posts", draft.ID, nil); !sqliteOperationCode(err, "not_found") {
+	if _, err := application.Local().RestoreDeleted(ctx, "posts", draft.ID, ridu.MutationOptions{}); !sqliteOperationCode(err, "not_found") {
 		t.Fatalf("restore after permanent delete = %v", err)
 	}
 }
@@ -246,11 +246,11 @@ func TestSQLiteNestedJoinAndRestoreShareTheOuterHookTransaction(t *testing.T) {
 				action, _ := hook.Data["action"].StringValue()
 				switch action {
 				case "join":
-					if _, err := hook.Local.MutateJoin(hook.Context, "categories", categoryID, "posts", []string{postID}, nil, nil); err != nil {
+					if _, err := hook.Local.MutateJoin(hook.Context, "categories", categoryID, "posts", []string{postID}, nil, ridu.MutationOptions{}); err != nil {
 						return err
 					}
 				case "restore":
-					if _, err := hook.Local.Restore(hook.Context, "posts", postID, restoreRevision, postRevision, nil); err != nil {
+					if _, err := hook.Local.Restore(hook.Context, "posts", postID, restoreRevision, ridu.MutationOptions{ExpectedRevision: postRevision}); err != nil {
 						return err
 					}
 				default:
@@ -276,36 +276,36 @@ func TestSQLiteNestedJoinAndRestoreShareTheOuterHookTransaction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	category, err := application.Local().Create(ctx, "categories", store.Values{"name": store.String("News")}, nil)
+	category, err := application.Local().Create(ctx, "categories", store.Values{"name": store.String("News")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	categoryID = category.ID
-	post, err := application.Local().Create(ctx, "posts", store.Values{"title": store.String("Old")}, nil)
+	post, err := application.Local().Create(ctx, "posts", store.Values{"title": store.String("Old")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	restoreRevision = post.Revision
-	post, err = application.Local().PublishChanges(ctx, "posts", post.ID, store.Values{"title": store.String("Current")}, post.Revision, nil)
+	post, err = application.Local().PublishChanges(ctx, "posts", post.ID, store.Values{"title": store.String("Current")}, ridu.MutationOptions{ExpectedRevision: post.Revision})
 	if err != nil {
 		t.Fatal(err)
 	}
 	postID, postRevision = post.ID, post.Revision
-	trigger, err := application.Local().Create(ctx, "triggers", store.Values{"action": store.String("idle")}, nil)
+	trigger, err := application.Local().Create(ctx, "triggers", store.Values{"action": store.String("idle")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	for _, action := range []string{"join", "restore"} {
 		operationContext, cancel := context.WithTimeout(ctx, 2*time.Second)
-		_, mutationError := application.Local().Update(operationContext, "triggers", trigger.ID, store.Values{"action": store.String(action)}, nil)
+		_, mutationError := application.Local().Update(operationContext, "triggers", trigger.ID, store.Values{"action": store.String(action)}, ridu.MutationOptions{})
 		cancel()
 		if !sqliteOperationCode(mutationError, "hook_failed") {
 			t.Fatalf("nested %s failure = %v, want hook_failed before the deadline", action, mutationError)
 		}
 	}
 
-	storedPost, err := application.Local().Find(ctx, "posts", postID, nil)
+	storedPost, err := application.Local().Find(ctx, "posts", postID, ridu.FindOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

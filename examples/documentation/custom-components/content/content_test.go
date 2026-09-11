@@ -15,7 +15,7 @@ func TestCustomComponentCollections(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	post, err := app.Local().Create(ctx, "posts", store.Values{"title": store.String("An article"), "readingMinutes": store.Number(5)}, nil)
+	post, err := app.Local().Create(ctx, "posts", store.Values{"title": store.String("An article"), "readingMinutes": store.Number(5)}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -25,7 +25,7 @@ func TestCustomComponentCollections(t *testing.T) {
 	if _, err := app.Local().Create(ctx, "pages", store.Values{
 		"title": store.String("About"),
 		"links": store.List(store.Object(store.Values{"label": store.String("About"), "url": store.String("/about")})),
-	}, nil); err != nil {
+	}, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
 }

@@ -62,7 +62,7 @@ func TestCommittedUploadCleanupTimeoutAndAdmissionBoundHungBackends(t *testing.T
 
 	firstDone := make(chan error, 1)
 	go func() {
-		_, deleteError := application.Local().Delete(context.Background(), "media", first.ID, nil)
+		_, deleteError := application.Local().Delete(context.Background(), "media", first.ID, MutationOptions{})
 		firstDone <- deleteError
 	}()
 	select {
@@ -71,7 +71,7 @@ func TestCommittedUploadCleanupTimeoutAndAdmissionBoundHungBackends(t *testing.T
 		t.Fatal("first cleanup did not reach the blocking backend")
 	}
 	start := time.Now()
-	_, secondError := application.Local().Delete(context.Background(), "media", second.ID, nil)
+	_, secondError := application.Local().Delete(context.Background(), "media", second.ID, MutationOptions{})
 	if elapsed := time.Since(start); elapsed > time.Second {
 		t.Fatalf("admission timeout took %s", elapsed)
 	}

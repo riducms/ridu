@@ -1,3 +1,4 @@
+import { scalarLiteralValue } from "@admin/core/forms/scalar-literal";
 import type { FieldReferenceFilter } from "@riducms/plugin";
 import type { SchemaField } from "@riducms/protocol";
 
@@ -49,7 +50,7 @@ export function relationshipOptionFilters(
 					: typeof values === "function"
 						? values(candidate.sourcePath)
 						: readPath(values, candidate.sourcePath)
-				: relationshipFilterLiteral(candidate.value);
+				: scalarLiteralValue(candidate.value);
 		if (typeof value !== "string" && typeof value !== "number" && typeof value !== "boolean") {
 			return [];
 		}
@@ -62,22 +63,6 @@ export function relationshipOptionFilters(
 		];
 	});
 	return filters.length === 0 ? undefined : filters;
-}
-
-function relationshipFilterLiteral(value: {
-	type: "string" | "number" | "boolean";
-	value: string;
-}) {
-	switch (value.type) {
-		case "string":
-			return value.value;
-		case "number": {
-			const parsed = Number(value.value);
-			return Number.isFinite(parsed) ? parsed : undefined;
-		}
-		case "boolean":
-			return value.value === "true" ? true : value.value === "false" ? false : undefined;
-	}
 }
 
 function readPath(values: Record<string, unknown>, path: string) {

@@ -1,9 +1,11 @@
 <script lang="ts">
 	import { onDestroy, type Component } from "svelte";
+	import { SvelteMap } from "svelte/reactivity";
 	import type {
 		EmbeddedSchemaDraft,
 		EmbeddedSchemaDraftEditorProps,
 		EmbeddedSchemaFormScope,
+		EmbeddedSchemaHeaderProps,
 		FieldAuthoringHost,
 		PluginFieldProps,
 		ResolvedPluginField,
@@ -14,7 +16,6 @@
 	import { guardPluginAuthoring } from "@admin/core/forms/plugin-field-authoring";
 	import { getAdminRuntime } from "@admin/core/runtime/admin-runtime.svelte";
 	import { localizeSchemaCollection } from "@admin/core/i18n/localized-schema";
-	import { embeddedOccurrences } from "@admin/core/forms/embedded-fields";
 	import {
 		createEmbeddedSchemaDraft,
 		copyEmbeddedSchemaPayload,
@@ -22,6 +23,7 @@
 	} from "@admin/core/forms/embedded-schema-draft.svelte";
 	import EmbeddedSchemaFields from "@admin/fields/embedded-schema-fields.svelte";
 	import EmbeddedSchemaDraftEditor from "@admin/fields/embedded-schema-draft-editor.svelte";
+	import BlockHeader from "@admin/fields/nested/block-header.svelte";
 	import ReferenceBrowser from "@admin/features/reference-browser/reference-browser-loader.svelte";
 	let {
 		schema,
@@ -45,13 +47,14 @@
 		Omit<PluginFieldProps<unknown, unknown, FieldType>, "config"> & { config?: unknown }
 	>;
 	onDestroy(field.destroy);
-	const drafts = new Map<EmbeddedSchemaDraft, HostedSchemaDraft>();
+	const drafts = new SvelteMap<EmbeddedSchemaDraft, HostedSchemaDraft>();
 	const draftAliases = new WeakMap<EmbeddedSchemaDraft, EmbeddedSchemaDraft>();
 	onDestroy(() => {
 		for (const draft of drafts.keys()) draft.discard();
 	});
 	const authoring: FieldAuthoringHost = {
 		schemaForm,
+		schemaHeader,
 		schemaDraftEditor,
 		beginSchemaDraft: (scope) => {
 			const session = createEmbeddedSchemaDraft(
@@ -98,7 +101,7 @@
 			return runtime.client.requestPlugin<Result>(owner, path, body, { signal });
 		},
 	};
-	const embedded = $derived(embeddedOccurrences(field.schema, field.rawValue, field.schema.path));
+	const embedded = $derived(form.embeddedFields(schema));
 	const embeddedIndex = $derived(
 		new Map(
 			embedded.occurrences.map((occurrence) => [
@@ -111,6 +114,15 @@
 	const guardedAuthoring = guardPluginAuthoring(authoring, field, (draft, raw) => {
 		draftAliases.set(draft, raw);
 	});
+	function headerDraftOpen(options: EmbeddedSchemaHeaderProps) {
+		return [...drafts.values()].some(
+			({ draft, treeKey }) =>
+				treeKey === options.treeKey && draft.identity === options.identity && !draft.stale
+		);
+	}
+	function headerLocked(options: EmbeddedSchemaHeaderProps) {
+		return field.readOnly || options.readOnly === true || headerDraftOpen(options);
+	}
 	function draftOptions(options: EmbeddedSchemaDraftEditorProps) {
 		field.assertActive();
 		const session = drafts.get(draftAliases.get(options.draft) ?? options.draft);
@@ -133,6 +145,30 @@
 		};
 	}
 </script>
+
+{#snippet schemaHeader(options: EmbeddedSchemaHeaderProps)}
+	{const occurrence = $derived(
+		embeddedIndex.get(JSON.stringify([options.treeKey, options.identity]))
+	)}
+	{const locked = $derived(headerLocked(options))}
+	{#if !field.stale && embedded.issues.length === 0 && occurrence !== undefined}
+		{#key form.rowMountKey(occurrence.payload)}
+			<BlockHeader
+				block={occurrence.block}
+				path={occurrence.path}
+				instance={`${schema.id}-${options.treeKey}-${options.identity}`}
+				{form}
+				readOnly={locked}
+				disabled={headerDraftOpen(options)}
+				onChange={(change) => {
+					field.assertEditable();
+					if (headerLocked(options)) throw new Error("This embedded header is read-only.");
+					options.onChange(change);
+				}}
+			/>
+		{/key}
+	{/if}
+{/snippet}
 
 {#snippet schemaForm(scope: EmbeddedSchemaFormScope)}
 	<EmbeddedSchemaFields

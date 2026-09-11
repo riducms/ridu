@@ -23,6 +23,7 @@ const tokens = tokenizeReferenceSignature(formattedSignature, {
 });
 const tokenClasses: Partial<Record<SignatureTokenKind, string>> = {
 	keyword: 'text-[#ff7eb6]',
+	comment: 'text-ink-soft',
 	symbol: 'text-blue font-600',
 	reference: 'text-blue font-600',
 	parameter: 'text-[#ffb977] italic',

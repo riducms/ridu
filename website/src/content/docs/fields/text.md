@@ -42,7 +42,7 @@ The document property is `title`. Authors see a label derived from that name unl
 | `.Unique()` / `.Index()`                                        | Adds uniqueness or a query index through adapter-owned migrations.                      |
 | `.Localized()`                                                  | Stores a separate value for each configured content locale.                             |
 | `.Validate(callback)` / `.LiveValidate(callback)`               | Adds save validation or optional feedback while editing.                                |
-| `.Admin(...)`, `.Access(...)`, `.Hooks(...)`, `.ReadHooks(...)` | Configures presentation, authorization, saved-value lifecycle, and response transforms. |
+| `.Admin(...)`, `.Access(...)`, `.Hooks(...)`, `.AfterRead(...)` | Configures presentation, authorization, saved-value lifecycle, and response transforms. |
 
 ## Limit length and require unique values {#options}
 

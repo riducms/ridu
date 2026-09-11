@@ -77,16 +77,16 @@ func TestPostgresUploadReferenceAdmissionAndLockBoundary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Create(ctx, "entries", store.Values{"assets": store.List(store.String("missing"))}, nil); !hasUploadReferenceIssue(err, "assets.0") {
+	if _, err := application.Local().Create(ctx, "entries", store.Values{"assets": store.List(store.String("missing"))}, ridu.MutationOptions{}); !hasUploadReferenceIssue(err, "assets.0") {
 		t.Fatalf("missing PostgreSQL upload reference error = %v", err)
 	}
-	if _, err := application.Local().Create(ctx, "entries", store.Values{"assets": store.List(store.String(hidden.ID))}, nil); !hasUploadReferenceIssue(err, "assets.0") {
+	if _, err := application.Local().Create(ctx, "entries", store.Values{"assets": store.List(store.String(hidden.ID))}, ridu.MutationOptions{}); !hasUploadReferenceIssue(err, "assets.0") {
 		t.Fatalf("filtered PostgreSQL upload reference error = %v", err)
 	}
 
 	createResult := make(chan error, 1)
 	go func() {
-		_, createError := application.Local().Create(ctx, "entries", store.Values{"assets": store.List(store.String(visible.ID))}, nil)
+		_, createError := application.Local().Create(ctx, "entries", store.Values{"assets": store.List(store.String(visible.ID))}, ridu.MutationOptions{})
 		createResult <- createError
 	}()
 	select {
@@ -180,11 +180,11 @@ func TestPostgresHasManyUploadRoundTripsThroughPublishValidation(t *testing.T) {
 	draft, err := application.Local().Create(ctx, "posts", store.Values{
 		"title":   store.String("Has-many upload round trip"),
 		"gallery": store.List(store.String(asset.ID)),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	published, err := application.Local().Publish(ctx, "posts", draft.ID, draft.Revision, nil)
+	published, err := application.Local().Publish(ctx, "posts", draft.ID, ridu.MutationOptions{ExpectedRevision: draft.Revision})
 	if err != nil {
 		t.Fatalf("publish PostgreSQL document after reading has-many upload: %v", err)
 	}

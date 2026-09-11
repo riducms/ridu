@@ -27,7 +27,7 @@ func TestAffordableProductsCombineCallerAndAccessFilters(t *testing.T) {
 		_, err := app.Local().Create(t.Context(), "products", store.Values{
 			"title": store.String(item.title), "price": store.Number(item.price),
 			"inStock": store.Boolean(item.inStock), "visible": store.Boolean(item.visible),
-		}, nil)
+		}, ridu.MutationOptions{})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -94,7 +94,7 @@ func TestRepeatedPathsMatchRowsIndependentlyAndKeepBlockTypes(t *testing.T) {
 		"layout": store.List(store.Object(store.Values{
 			"blockType": store.String("quote"), "heading": store.String("Sale"),
 		})),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

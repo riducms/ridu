@@ -18,7 +18,7 @@ func TestSEOTransformsUnifiedGraphWithoutLosingFieldPolicies(t *testing.T) {
 	for _, tabbed := range []bool{false, true} {
 		t.Run(map[bool]string{false: "group", true: "tabs"}[tabbed], func(t *testing.T) {
 			calls := 0
-			title := field.Text("title").Required().Validate(func(operation.ValidationContext, operation.Value[string]) ([]operation.Issue, error) {
+			title := field.Text("title").Required().Validate(func(operation.Context, operation.Value[string]) ([]operation.Issue, error) {
 				calls++
 				return nil, nil
 			}).Private("application", store.String("never-serialize"))
@@ -27,7 +27,7 @@ func TestSEOTransformsUnifiedGraphWithoutLosingFieldPolicies(t *testing.T) {
 				Fields: func(defaults field.Fields) (field.Fields, error) {
 					return defaults.Edit(func(draft *field.ChildrenDraft) error {
 						return draft.EditText("title", func(title field.TextField) field.TextField {
-							return title.MaxLength(70).Hooks(field.Hooks[string]{BeforeChange: []field.Transform[string]{func(_ operation.WriteContext, value operation.Value[string]) (operation.Change[string], error) {
+							return title.MaxLength(70).Hooks(field.Hooks[string]{BeforeChange: []field.Transform[string]{func(_ operation.Context, value operation.Value[string]) (operation.Change[string], error) {
 								text, _ := value.Get()
 								return operation.Replace(operation.Present("SEO: " + text)), nil
 							}}})
@@ -56,7 +56,7 @@ func TestSEOTransformsUnifiedGraphWithoutLosingFieldPolicies(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			document, err := app.Local().Create(context.Background(), "posts", store.Values{"title": store.String("Post"), "meta": store.Object(store.Values{"title": store.String("Metadata")})}, nil)
+			document, err := app.Local().Create(context.Background(), "posts", store.Values{"title": store.String("Post"), "meta": store.Object(store.Values{"title": store.String("Metadata")})}, ridu.MutationOptions{})
 			if err != nil {
 				t.Fatal(err)
 			}

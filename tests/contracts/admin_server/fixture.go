@@ -113,6 +113,7 @@ func fixtureConfig(uploadStorage storage.Backend) ridu.Config {
 			outlineCollection,
 			richTextBlocksCollection(),
 			richTextBlockPagesCollection(),
+			blockNamesCollection(),
 			eventsCollection,
 			editorialNotesCollection,
 			redirectsCollection,
@@ -210,7 +211,7 @@ func bootstrapFixtureConfig() ridu.Config {
 						Admin(field.Admin{Description: "The identity used to sign in."}),
 					field.Text("role").
 						Access(field.Access{
-							Create: func(ctx operation.AccessContext) (bool, error) {
+							Create: func(ctx operation.Context) (bool, error) {
 								return ctx.Actor.ID != "", nil
 							},
 						}).
@@ -366,8 +367,7 @@ var categoriesCollection = ridu.Collection{
 			Description: "Generated from the category name until an author supplies a manual route slug.",
 		}),
 		field.Virtual("displayLabel", field.ValueString, func(
-			ctx operation.ReadContext,
-		) (operation.Value[store.Value], error) {
+			ctx operation.Context) (operation.Value[store.Value], error) {
 			name, _ := ctx.Root.Get("name").StringValue()
 			return operation.Present(store.String("Category · " + name)), nil
 		}).
@@ -649,7 +649,7 @@ var pagesCollection = ridu.Collection{
 			field.Block{Admin: field.BlockAdmin{RowLabelPath: "heading"}, Slug: "hero",
 				Fields: field.Fields{
 					field.Text("heading").
-						Access(field.Access{Update: func(ctx operation.AccessContext) (bool, error) {
+						Access(field.Access{Update: func(ctx operation.Context) (bool, error) {
 							locked, _ := ctx.Siblings.Get("headingLocked").BooleanValue()
 							return !locked, nil
 						}}).
@@ -819,8 +819,7 @@ var payloadOnlyCapabilitiesCollection = ridu.Collection{
 				Default("reviewer"),
 		}).MinRows(1).MaxRows(3).Admin(field.Admin{RowLabelPath: "displayName"}),
 		field.Virtual("fieldSummary", field.ValueString, func(
-			ctx operation.ReadContext,
-		) (operation.Value[store.Value], error) {
+			ctx operation.Context) (operation.Value[store.Value], error) {
 			title, _ := ctx.Root.Get("title").StringValue()
 			priority, _ := ctx.Root.Get("priority").StringValue()
 			return operation.Present(store.String(title + " · " + priority)), nil
@@ -954,12 +953,12 @@ func postReadAccess(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
 }
 
 func allowFieldRoles(roles ...string) field.AccessRule {
-	return func(ctx operation.AccessContext) (bool, error) {
+	return func(ctx operation.Context) (bool, error) {
 		return fieldActorHasRole(ctx.Actor, roles...), nil
 	}
 }
 
-func allowDraftEditorialStatus(ctx operation.AccessContext) (bool, error) {
+func allowDraftEditorialStatus(ctx operation.Context) (bool, error) {
 	if fieldActorHasRole(ctx.Actor, roleAdministrator, roleEditor) {
 		return true, nil
 	}
@@ -967,7 +966,7 @@ func allowDraftEditorialStatus(ctx operation.AccessContext) (bool, error) {
 	return valid && status == "draft", nil
 }
 
-func allowUserRoleCreate(ctx operation.AccessContext) (bool, error) {
+func allowUserRoleCreate(ctx operation.Context) (bool, error) {
 	if fieldActorHasRole(ctx.Actor, roleAdministrator) {
 		return true, nil
 	}
@@ -975,7 +974,7 @@ func allowUserRoleCreate(ctx operation.AccessContext) (bool, error) {
 	return fieldActorHasRole(ctx.Actor, roleEditor) && valid && role == roleContributor, nil
 }
 
-func allowUserRoleUpdate(ctx operation.AccessContext) (bool, error) {
+func allowUserRoleUpdate(ctx operation.Context) (bool, error) {
 	if fieldActorHasRole(ctx.Actor, roleAdministrator) {
 		return true, nil
 	}
@@ -1020,7 +1019,7 @@ func actorHasRole(actor *store.Document, roles ...string) bool {
 	return false
 }
 
-func trimString(_ operation.WriteContext, value operation.Value[store.Value]) (operation.Change[store.Value], error) {
+func trimString(_ operation.Context, value operation.Value[store.Value]) (operation.Change[store.Value], error) {
 	if raw, present := value.Get(); present {
 		if text, valid := raw.StringValue(); valid {
 			return operation.Replace(operation.Present(store.String(strings.TrimSpace(text)))), nil
@@ -1052,7 +1051,7 @@ var outlineCollection = ridu.Collection{
 		field.Text("title").Required(),
 		field.Checkbox("bodyLocked").Access(field.Access{Update: allowFieldRoles(roleAdministrator)}),
 		embeddedplugin.Field("body", field.Block{Slug: "card", Fields: field.Fields{
-			field.Text("title").Access(field.Access{Update: func(ctx operation.AccessContext) (bool, error) {
+			field.Text("title").Access(field.Access{Update: func(ctx operation.Context) (bool, error) {
 				locked, _ := ctx.Siblings.Get("locked").BooleanValue()
 				return !locked, nil
 			}}).Required().Localized(),
@@ -1060,7 +1059,7 @@ var outlineCollection = ridu.Collection{
 			field.Group("settings", field.Fields{
 				field.Text("caption").Default("Default caption"),
 			}),
-		}}).Access(field.Access{Update: func(ctx operation.AccessContext) (bool, error) {
+		}}).Access(field.Access{Update: func(ctx operation.Context) (bool, error) {
 			locked, _ := ctx.Siblings.Get("bodyLocked").BooleanValue()
 			return !locked, nil
 		}}),
@@ -1076,7 +1075,7 @@ var outlineCollection = ridu.Collection{
 func primitiveListCollection() ridu.Collection {
 	collection := primitivelists.Collection()
 	collection.VersionConfig = ridu.VersionConfig{Drafts: true, MaxPerDocument: 20}
-	deny := func(operation.AccessContext) (bool, error) { return false, nil }
+	deny := func(operation.Context) (bool, error) { return false, nil }
 	collection.Fields = append(collection.Fields,
 		field.TextList("readOnlyPoints").
 			Default("Fixed", "Fixed").
@@ -1095,7 +1094,7 @@ func primitiveListCollection() ridu.Collection {
 			MaxLength(20).
 			Hooks(field.Hooks[[]string]{
 				BeforeChange: []field.Transform[[]string]{
-					func(_ operation.WriteContext, value operation.Value[[]string]) (operation.Change[[]string], error) {
+					func(_ operation.Context, value operation.Value[[]string]) (operation.Change[[]string], error) {
 						if items, present := value.Get(); present && len(items) > 0 && items[0] == "expand" {
 							return operation.Replace(operation.Present([]string{strings.Repeat("x", 21)})), nil
 						}

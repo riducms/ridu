@@ -38,7 +38,7 @@ const (
 // the current unsaved admin form snapshot. Collection and Global are detached
 // authoring definitions; exactly one is non-nil.
 type GenerateContext struct {
-	Context    ridu.PluginEndpointContext
+	Context    ridu.EndpointContext
 	Document   map[string]any
 	ID         string
 	Locale     schema.LocaleCode
@@ -292,9 +292,9 @@ func (plugin *Plugin) validateTargets(config ridu.Config) []schema.Issue {
 
 // Endpoints contributes generation calls below /api/plugins/seo/. All are
 // declared for a stable OpenAPI surface; absent callbacks return an empty value.
-func (plugin *Plugin) Endpoints() []ridu.PluginEndpoint {
+func (plugin *Plugin) Endpoints() []ridu.Endpoint {
 	collections, globals := plugin.resourceSnapshot()
-	return []ridu.PluginEndpoint{
+	return []ridu.Endpoint{
 		plugin.endpoint("generate-title", "Generate SEO title", plugin.config.GenerateTitle, true, collections, globals),
 		plugin.endpoint("generate-description", "Generate SEO description", plugin.config.GenerateDescription, true, collections, globals),
 		plugin.endpoint("generate-image", "Generate SEO image", func(ctx GenerateContext) (string, error) {
@@ -329,8 +329,8 @@ type generationRequest struct {
 	Document   map[string]any    `json:"document"`
 }
 
-func (plugin *Plugin) endpoint(path, summary string, generator GenerateText, requireWrite bool, collections map[schema.CollectionSlug]ridu.Collection, globals map[schema.CollectionSlug]ridu.Global) ridu.PluginEndpoint {
-	return ridu.PluginEndpoint{Method: http.MethodPost, Path: path, Summary: summary, MaxBodyBytes: 1 << 20, Handler: func(endpoint ridu.PluginEndpointContext) {
+func (plugin *Plugin) endpoint(path, summary string, generator GenerateText, requireWrite bool, collections map[schema.CollectionSlug]ridu.Collection, globals map[schema.CollectionSlug]ridu.Global) ridu.Endpoint {
+	return ridu.Endpoint{Method: http.MethodPost, Path: path, Summary: summary, MaxBodyBytes: 1 << 20, Handler: func(endpoint ridu.EndpointContext) {
 		if endpoint.Actor == nil {
 			writeError(endpoint.Writer, http.StatusUnauthorized, protocol.ErrorAccess, "authentication is required")
 			return
@@ -367,7 +367,7 @@ func (plugin *Plugin) endpoint(path, summary string, generator GenerateText, req
 	}}
 }
 
-func (plugin *Plugin) generationContext(endpoint ridu.PluginEndpointContext, request generationRequest, requireWrite bool, collections map[schema.CollectionSlug]ridu.Collection, globals map[schema.CollectionSlug]ridu.Global) (GenerateContext, int, error) {
+func (plugin *Plugin) generationContext(endpoint ridu.EndpointContext, request generationRequest, requireWrite bool, collections map[schema.CollectionSlug]ridu.Collection, globals map[schema.CollectionSlug]ridu.Global) (GenerateContext, int, error) {
 	if (request.Collection == "") == (request.Global == "") {
 		return GenerateContext{}, http.StatusBadRequest, errors.New("exactly one collection or global is required")
 	}
@@ -430,7 +430,7 @@ func operationStatus(err error) int {
 	return http.StatusInternalServerError
 }
 
-func (plugin *Plugin) writeContextError(endpoint ridu.PluginEndpointContext, status int, err error) {
+func (plugin *Plugin) writeContextError(endpoint ridu.EndpointContext, status int, err error) {
 	var operationError *ridu.OperationError
 	if errors.As(err, &operationError) && operationError.Status >= 400 && operationError.Status < 500 {
 		writeError(endpoint.Writer, operationError.Status, errorCode(operationError.Status), operationError.Message)
@@ -530,7 +530,7 @@ func MetaTitle(hasGenerator bool) field.TextField {
 }
 
 // MetaDescription returns the localized built-in textarea field with the SEO renderer.
-func MetaDescription(hasGenerator bool) field.TextareaField {
+func MetaDescription(hasGenerator bool) field.TextField {
 	return field.Textarea("description").Localized().Admin(field.Admin{Editor: adminComponent("description", lengthConfig{Generate: hasGenerator, MinLength: defaultDescriptionMin, MaxLength: defaultDescriptionMax})})
 }
 

@@ -22,12 +22,12 @@ func TestCallerSuppliedDocumentIDsAreOptInAndUseTheCreatePipeline(t *testing.T) 
 	}
 	if _, err := disabled.Local().Create(context.Background(), "posts", store.Values{
 		"id": store.String("payload-42"), "title": store.String("Disabled"),
-	}, nil); !operationIssue(err, "invalid_document_id", "id") {
+	}, ridu.MutationOptions{}); !operationIssue(err, "invalid_document_id", "id") {
 		t.Fatalf("disabled caller ID error = %v", err)
 	}
 	imported, err := disabled.Local().Import(context.Background(), "posts", store.Values{
 		"title": store.String("Imported numeric ID"),
-	}, ridu.ImportOptions{ID: "9007199254740993", Status: store.StatusPublished}, nil)
+	}, ridu.ImportOptions{ID: "9007199254740993", Status: store.StatusPublished})
 	if err != nil || imported.ID != "9007199254740993" {
 		t.Fatalf("migration import = %#v, %v", imported, err)
 	}
@@ -42,7 +42,7 @@ func TestCallerSuppliedDocumentIDsAreOptInAndUseTheCreatePipeline(t *testing.T) 
 	}
 	created, err := enabled.Local().Create(context.Background(), "posts", store.Values{
 		"id": store.String("payload-custom/key"), "title": store.String("Caller owned"),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,7 +50,7 @@ func TestCallerSuppliedDocumentIDsAreOptInAndUseTheCreatePipeline(t *testing.T) 
 		t.Fatalf("created = %#v, hook saw id field = %t", created, hookSawMetadata)
 	}
 
-	createdWithOptions, err := enabled.Local().CreateWithOptions(context.Background(), "posts", store.Values{
+	createdWithOptions, err := enabled.Local().Create(context.Background(), "posts", store.Values{
 		"title": store.String("Options ID"),
 	}, ridu.MutationOptions{ID: "payload-options-id"})
 	if err != nil || createdWithOptions.ID != "payload-options-id" {
@@ -58,34 +58,34 @@ func TestCallerSuppliedDocumentIDsAreOptInAndUseTheCreatePipeline(t *testing.T) 
 	}
 	if _, err := enabled.Local().Create(context.Background(), "posts", store.Values{
 		"id": store.String(created.ID), "title": store.String("Collision"),
-	}, nil); !operationCode(err, "conflict") {
+	}, ridu.MutationOptions{}); !operationCode(err, "conflict") {
 		t.Fatalf("duplicate caller ID error = %v", err)
 	}
-	if _, err := enabled.Local().CreateWithOptions(context.Background(), "posts", store.Values{
+	if _, err := enabled.Local().Create(context.Background(), "posts", store.Values{
 		"title": store.String("Unsafe"),
 	}, ridu.MutationOptions{ID: "bad\x00id"}); !operationIssue(err, "invalid_document_id", "id") {
 		t.Fatalf("unsafe caller ID error = %v", err)
 	}
 	if _, err := enabled.Local().Create(context.Background(), "posts", store.Values{
 		"id": store.String(""), "title": store.String("Empty"),
-	}, nil); !operationIssue(err, "invalid_document_id", "id") {
+	}, ridu.MutationOptions{}); !operationIssue(err, "invalid_document_id", "id") {
 		t.Fatalf("empty caller ID error = %v", err)
 	}
 	maximumID := strings.Repeat("x", store.MaxDocumentIDBytes)
 	if document, err := enabled.Local().Create(context.Background(), "posts", store.Values{
 		"id": store.String(maximumID), "title": store.String("Maximum"),
-	}, nil); err != nil || document.ID != maximumID {
+	}, ridu.MutationOptions{}); err != nil || document.ID != maximumID {
 		t.Fatalf("maximum caller ID = %#v, %v", document, err)
 	}
 	tooLongID := maximumID + "x"
 	if _, err := enabled.Local().Create(context.Background(), "posts", store.Values{
 		"id": store.String(tooLongID), "title": store.String("Too long"),
-	}, nil); !operationIssue(err, "invalid_document_id", "id") {
+	}, ridu.MutationOptions{}); !operationIssue(err, "invalid_document_id", "id") {
 		t.Fatalf("oversized caller ID error = %v", err)
 	}
 	if _, err := disabled.Local().Import(context.Background(), "posts", store.Values{
 		"title": store.String("Oversized import"),
-	}, ridu.ImportOptions{ID: tooLongID, Status: store.StatusPublished}, nil); !operationIssue(err, "invalid_document_id", "id") {
+	}, ridu.ImportOptions{ID: tooLongID, Status: store.StatusPublished}); !operationIssue(err, "invalid_document_id", "id") {
 		t.Fatalf("oversized import ID error = %v", err)
 	}
 }
@@ -98,7 +98,7 @@ func TestRESTCreateAcceptsOnlyConfiguredStringDocumentIDs(t *testing.T) {
 	client := handlerClient(application.Handler(ridu.HandlerOptions{}))
 	source, err := application.Local().Create(context.Background(), "posts", store.Values{
 		"id": store.String("payload-rest-source"), "title": store.String("Source"),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -179,14 +179,14 @@ func TestMaximumCallerIDRemainsReachableByScheduledPublishing(t *testing.T) {
 		t.Fatal(err)
 	}
 	id := strings.Repeat("p", store.MaxDocumentIDBytes)
-	publisher, err := application.Local().Create(ctx, "users", store.Values{"email": store.String("publisher@example.test")}, nil)
+	publisher, err := application.Local().Create(ctx, "users", store.Values{"email": store.String("publisher@example.test")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	identity := &ridu.AuthIdentity{Collection: "users", Actor: publisher}
 	document, err := application.Local().Create(ctx, "posts", store.Values{
 		"id": store.String(id), "title": store.String("Scheduled"),
-	}, &publisher)
+	}, ridu.MutationOptions{Actor: &publisher})
 	if err != nil || document.ID != id {
 		t.Fatalf("maximum-ID draft = %#v, %v", document, err)
 	}
@@ -210,7 +210,7 @@ func TestMigrationImportRequiresAnExplicitDocumentID(t *testing.T) {
 	}
 	if _, err := application.Local().Import(context.Background(), "posts", store.Values{
 		"title": store.String("Missing identity"),
-	}, ridu.ImportOptions{}, nil); !operationIssue(err, "invalid_document_id", "id") {
+	}, ridu.ImportOptions{}); !operationIssue(err, "invalid_document_id", "id") {
 		t.Fatalf("empty import ID error = %v", err)
 	}
 	page, err := application.Local().List(context.Background(), "posts", ridu.ListOptions{})

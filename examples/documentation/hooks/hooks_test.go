@@ -27,7 +27,7 @@ func TestFieldHookExamplesChangeTheIntendedValues(t *testing.T) {
 		"title":       store.String("  Hello, Ridu  "),
 		"sku":         store.String("ab-12"),
 		"displayCode": store.String("xy-34"),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,7 +44,7 @@ func TestFieldHookExamplesChangeTheIntendedValues(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	stored, err := plain.Local().Find(t.Context(), "posts", created.ID, nil)
+	stored, err := plain.Local().Find(t.Context(), "posts", created.ID, ridu.FindOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +93,7 @@ func TestAuditAndNotificationExamplesRespectCommit(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			_, err = app.Local().Create(t.Context(), "posts", store.Values{"title": store.String("A post")}, nil)
+			_, err = app.Local().Create(t.Context(), "posts", store.Values{"title": store.String("A post")}, ridu.MutationOptions{})
 			if (err != nil) != (test.rejectAudit || test.wantCommittedError) {
 				t.Fatalf("create error = %v", err)
 			}

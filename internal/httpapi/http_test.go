@@ -439,14 +439,18 @@ func TestPluginBodiesAreBoundedAndPanicsAreRedacted(t *testing.T) {
 		MaxBodyBytes: 8,
 		RequestError: func(event RequestErrorEvent) { diagnostic = event },
 		PluginEndpoints: []PluginEndpoint{
-			{Method: http.MethodPost, Path: "/api/plugins/test/read", Handler: func(writer http.ResponseWriter, request *http.Request, _ string, _ *store.Document, _ schema.CollectionSlug, _ func(context.Context, string, string) error, _ func(error, string)) {
+			{Method: http.MethodPost, Path: "/api/plugins/test/read", Handler: func(ctx EndpointContext) {
+				writer, request := ctx.Writer, ctx.Request
+				if ctx.RequestID == "" || ctx.ClientIP == "" || ctx.AdmitAuthAttempt == nil || ctx.ReportError == nil {
+					t.Fatal("endpoint metadata is incomplete")
+				}
 				_, err := io.ReadAll(request.Body)
 				var maximum *http.MaxBytesError
 				if errors.As(err, &maximum) {
 					writer.WriteHeader(http.StatusRequestEntityTooLarge)
 				}
 			}},
-			{Method: http.MethodGet, Path: "/api/plugins/test/panic", Handler: func(http.ResponseWriter, *http.Request, string, *store.Document, schema.CollectionSlug, func(context.Context, string, string) error, func(error, string)) {
+			{Method: http.MethodGet, Path: "/api/plugins/test/panic", Handler: func(EndpointContext) {
 				panic("super-secret-panic-value")
 			}},
 		},
@@ -495,7 +499,7 @@ func TestInternalErrorsUseDefaultLoggingAndRecoverPanickingCallbacks(t *testing.
 	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
 	t.Cleanup(func() { slog.SetDefault(previous) })
 
-	panicEndpoint := PluginEndpoint{Method: http.MethodGet, Path: "/api/plugins/test/panic", Handler: func(http.ResponseWriter, *http.Request, string, *store.Document, schema.CollectionSlug, func(context.Context, string, string) error, func(error, string)) {
+	panicEndpoint := PluginEndpoint{Method: http.MethodGet, Path: "/api/plugins/test/panic", Handler: func(EndpointContext) {
 		panic("untrusted-secret")
 	}}
 	response := httptest.NewRecorder()

@@ -111,16 +111,16 @@ Chain methods to configure a field: `field.Number("priority").Label("Priority").
 adds a label and rejects negative numbers. Each method returns an updated copy, so reusing a
 field does not change its original definition. Put your fields in a `field.Fields` list.
 
-| Configuration                                                        | Purpose                                                       |
-| -------------------------------------------------------------------- | ------------------------------------------------------------- |
-| `.Label(...)`, `.LabelTranslations(...)`                             | Labels and translations shown in the admin                    |
-| `.Required()`, `.Unique()`, `.Index()`                               | Required values, uniqueness, and indexes                      |
-| `.Default(...)`, `.DefaultFrom(...)`                                 | [Fixed or calculated initial values](/docs/fields/defaults/)  |
-| `.Localized()`                                                       | A separate value for each content language                    |
-| `.Access(field.Access{...})`                                         | Who can create, read, or change the field                     |
-| `.Hooks(field.Hooks[T]{...})`, `.ReadHooks(field.ReadHooks[T]{...})` | Change a value or run code when a document is read or changed |
-| `.Validate(rule)`                                                    | Check a value before saving                                   |
-| `.Admin(field.Admin{...})`                                           | Input components, row labels, visibility, and layout          |
+| Configuration                                             | Purpose                                                       |
+| --------------------------------------------------------- | ------------------------------------------------------------- |
+| `.Label(...)`, `.LabelTranslations(...)`                  | Labels and translations shown in the admin                    |
+| `.Required()`, `.Unique()`, `.Index()`                    | Required values, uniqueness, and indexes                      |
+| `.Default(...)`, `.DefaultFrom(...)`                      | [Fixed or calculated initial values](/docs/fields/defaults/)  |
+| `.Localized()`                                            | A separate value for each content language                    |
+| `.Access(field.Access{...})`                              | Who can create, read, or change the field                     |
+| `.Hooks(field.Hooks[T]{...})`, `.AfterRead(callbacks...)` | Change a value or run code when a document is read or changed |
+| `.Validate(rule)`                                         | Check a value before saving                                   |
+| `.Admin(field.Admin{...})`                                | Input components, row labels, visibility, and layout          |
 
 Calling `.Admin(...)`, `.Hooks(...)`, or `.Access(...)` replaces that group of settings. To
 adjust a reusable field without losing its existing settings, use `.EditAdmin(...)`,
@@ -311,7 +311,7 @@ func Link(name string) field.GroupField {
 	return field.Group(name, field.Fields{
 		field.Text("label").Required(),
 		field.Text("url").Required().Access(field.Access{
-			Update: func(ctx operation.AccessContext) (bool, error) {
+			Update: func(ctx operation.Context) (bool, error) {
 				return ctx.Actor.ID != "", nil
 			},
 		}),
@@ -332,6 +332,12 @@ func CompactLink(name string) (field.GroupField, error) {
 		})
 }
 ```
+
+`Text`, `Code`, and `Textarea` share `field.TextField` and `field.AsText`. `Select` and `Radio`
+share `field.SelectField` and `field.AsSelect`. Each constructor retains its schema kind, control,
+and validation. A child editor can deliberately replace presentation within its family, such as
+returning `field.Code(label.Name())`; it must preserve the name and pass final schema validation.
+Date, Email, lists, and references have separate builders.
 
 `field.EditChild` keeps the child's existing settings while applying your change.
 `field.ReplaceChild` replaces the child entirely; `field.AppendChild` adds a child. These helpers

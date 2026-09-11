@@ -17,9 +17,7 @@ func TestLocalDistinctComposesReadAccessAndProtectsFieldValues(t *testing.T) {
 	secret, _ := query.NewPath("secret")
 	application, err := ridu.New(ridu.Config{Name: "Distinct", Collections: []ridu.Collection{{
 		Slug: "posts",
-		Fields: field.Fields{field.Text("title"), field.Text("audience"), field.Text("secret").Access(field.Access{Read: func(ctx operation.AccessContext,
-
-		) (bool, error) {
+		Fields: field.Fields{field.Text("title"), field.Text("audience"), field.Text("secret").Access(field.Access{Read: func(ctx operation.Context) (bool, error) {
 			return ctx.Actor.ID != "" && ctx.Actor.Collection ==
 				"staff", nil
 		}})},
@@ -37,7 +35,7 @@ func TestLocalDistinctComposesReadAccessAndProtectsFieldValues(t *testing.T) {
 		{"title": store.String("excluded"), "audience": store.String("public"), "secret": store.String("three")},
 		{"title": store.String("private"), "audience": store.String("private"), "secret": store.String("hidden")},
 	} {
-		if _, err := application.Local().Create(t.Context(), "posts", values, nil); err != nil {
+		if _, err := application.Local().Create(t.Context(), "posts", values, ridu.MutationOptions{}); err != nil {
 			t.Fatal(err)
 		}
 	}

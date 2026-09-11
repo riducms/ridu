@@ -12,11 +12,11 @@ import (
 	"github.com/riducms/ridu/store"
 )
 
-func graphRule(operation.ValidationContext, operation.Value[string]) ([]operation.Issue, error) {
+func graphRule(operation.Context, operation.Value[string]) ([]operation.Issue, error) {
 	return []operation.Issue{{Code: "retained_rule", Message: "Retained field-local rule."}}, nil
 }
 
-func graphNormalize(_ operation.WriteContext, value operation.Value[string]) (operation.Change[string], error) {
+func graphNormalize(_ operation.Context, value operation.Value[string]) (operation.Change[string], error) {
 	text, present := value.Get()
 	if !present {
 		return operation.Keep[string](), nil
@@ -24,8 +24,8 @@ func graphNormalize(_ operation.WriteContext, value operation.Value[string]) (op
 	return operation.Replace(operation.Present(text + "-normalized")), nil
 }
 
-func graphAllow(operation.AccessContext) (bool, error) { return true, nil }
-func graphDeny(operation.AccessContext) (bool, error)  { return false, nil }
+func graphAllow(operation.Context) (bool, error) { return true, nil }
+func graphDeny(operation.Context) (bool, error)  { return false, nil }
 
 func assertGraphTextBehavior(t *testing.T, node field.Node, validators, hooks int) field.TextField {
 	t.Helper()
@@ -36,10 +36,10 @@ func assertGraphTextBehavior(t *testing.T, node field.Node, validators, hooks in
 	if len(text.Validators()) != validators || len(text.HookPolicy().BeforeChange) != hooks {
 		t.Fatalf("field %s lost policy lists: %#v", text.Name(), field.Snapshot(text).BehaviorSummary())
 	}
-	if got, err := text.Validators()[0](operation.ValidationContext{Context: context.Background()}, operation.Present("code")); err != nil || len(got) != 1 || got[0].Code != "retained_rule" {
+	if got, err := text.Validators()[0](operation.Context{Context: context.Background()}, operation.Present("code")); err != nil || len(got) != 1 || got[0].Code != "retained_rule" {
 		t.Fatalf("field %s lost validator callback: %v, %v", text.Name(), got, err)
 	}
-	change, err := text.HookPolicy().BeforeChange[0](operation.WriteContext{}, operation.Present("code"))
+	change, err := text.HookPolicy().BeforeChange[0](operation.Context{}, operation.Present("code"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -226,13 +226,13 @@ func TestProductionGraphExplicitEditsPreserveBehaviorAndRejectIncompatibleKinds(
 		t.Fatal("targeted edit lost unmentioned presentation attachments")
 	}
 	access := definition.AccessPolicy()
-	if allowed, err := access.Create(operation.AccessContext{}); !allowed || err != nil {
+	if allowed, err := access.Create(operation.Context{}); !allowed || err != nil {
 		t.Fatal("update restriction replaced create access")
 	}
-	if allowed, err := access.Read(operation.AccessContext{}); !allowed || err != nil {
+	if allowed, err := access.Read(operation.Context{}); !allowed || err != nil {
 		t.Fatal("update restriction replaced read access")
 	}
-	if allowed, err := access.Update(operation.AccessContext{}); allowed || err != nil {
+	if allowed, err := access.Update(operation.Context{}); allowed || err != nil {
 		t.Fatal("update restriction failed")
 	}
 	assertGraphTextBehavior(t, field.Snapshot(graph[0]).Fields()[0], 1, 1)
@@ -342,33 +342,36 @@ func TestProductionGraphTraversalAndExplicitSymbolicRenames(t *testing.T) {
 }
 
 func TestProductionGraphReplacementInputsAndReadHookViewsAreDetached(t *testing.T) {
-	output := field.OutputTransform[string](func(_ operation.ReadContext, value operation.Value[string]) (operation.Change[string], error) {
+	output := field.OutputTransform[string](func(_ operation.Context, value operation.Value[string]) (operation.Change[string], error) {
 		return operation.Replace(value), nil
 	})
 	validators := []field.Validator[string]{graphRule}
-	reads := field.ReadHooks[string]{AfterRead: []field.OutputTransform[string]{output}}
+	reads := []field.OutputTransform[string]{output}
 	base := field.Text("code").Validate(graphRule)
-	replaced := base.ReplaceValidators(validators...).ReadHooks(reads)
-	appended := replaced.AppendReadHooks(field.ReadHooks[string]{AfterRead: []field.OutputTransform[string]{output}})
+	replaced := base.ReplaceValidators(validators...).ReplaceAfterRead(reads...)
+	appended := replaced.AfterRead(output)
+	if len(appended.AfterRead().AfterReadHooks()) != 2 || len(appended.ReplaceAfterRead().AfterReadHooks()) != 0 {
+		t.Fatal("empty append or clear changed the read-hook contract")
+	}
 	validators[0] = nil
-	reads.AfterRead[0] = nil
-	if len(base.Validators()) != 1 || len(base.ReadHookPolicy().AfterRead) != 0 {
+	reads[0] = nil
+	if len(base.Validators()) != 1 || len(base.AfterReadHooks()) != 0 {
 		t.Fatal("policy replacement changed the base field")
 	}
-	if len(replaced.ReadHookPolicy().AfterRead) != 1 || len(appended.ReadHookPolicy().AfterRead) != 2 {
+	if len(replaced.AfterReadHooks()) != 1 || len(appended.AfterReadHooks()) != 2 {
 		t.Fatal("read hook append mutated an earlier field")
 	}
-	if _, err := replaced.Validators()[0](operation.ValidationContext{}, operation.Empty[string]()); err != nil {
+	if _, err := replaced.Validators()[0](operation.Context{}, operation.Empty[string]()); err != nil {
 		t.Fatal(err)
 	}
-	view := appended.ReadHookPolicy()
-	view.AfterRead[0] = nil
-	view.AfterRead[1] = nil
-	for _, callback := range appended.ReadHookPolicy().AfterRead {
+	view := appended.AfterReadHooks()
+	view[0] = nil
+	view[1] = nil
+	for _, callback := range appended.AfterReadHooks() {
 		if callback == nil {
 			t.Fatal("read hook input or returned slice aliases the field")
 		}
-		if _, err := callback(operation.ReadContext{}, operation.Present("value")); err != nil {
+		if _, err := callback(operation.Context{}, operation.Present("value")); err != nil {
 			t.Fatal(err)
 		}
 	}

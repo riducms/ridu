@@ -94,7 +94,7 @@ posts := generated.PostsCollection.With(app.Local())
 
 created, err := posts.Create(ctx, generated.PostCreate{
 	Title: core.Set("Hello, Ridu"),
-}, actor)
+}, core.TypedMutationOptions{Actor: actor})
 if err != nil {
 	return err
 }
@@ -225,7 +225,7 @@ deploying a schema change; you do not need to create a migration for every local
 | Handshake version mismatch          | The CLI and application use incompatible versions                                                                    | Use the CLI release pinned to the project                       |
 | Manifest validation fails           | Duplicate slug/name, invalid option combination, unknown relationship target, localization cycle, or plugin conflict | Fix the field or setting named in the error                     |
 | `--check` reports drift             | The generated files no longer match your config or framework version                                                 | Run generation locally and review the changed files             |
-| Raw SDK types fall back to defaults | No generated config, or multiple generated configs, are in the TypeScript program                                    | Import/use the generated wrapper explicitly                     |
+| Raw SDK types fall back to defaults | The raw SDK factory has no explicit application contract                                                             | Import/use the generated wrapper explicitly                     |
 | Generated plugin import fails       | A generated import does not match your installed plugin packages                                                     | Use `ridu plugin` commands; do not patch the generated registry |
 
 See [Troubleshooting](/docs/troubleshooting/) for more help, the

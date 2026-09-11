@@ -45,7 +45,7 @@ REST, the SDK, or the Local API.
 | `.Validate(callback)` / `.LiveValidate(callback)` | Adds application shape or business rules at save time or while editing. |
 | `.Admin(...)`                                     | Sets label, description, width, visibility, and editor metadata.        |
 | `.Access(...)` / `.RestrictAccess(...)`           | Replaces or narrows field create/read/update access.                    |
-| `.Hooks(...)` / `.ReadHooks(...)`                 | Transforms the opaque stored value or response.                         |
+| `.Hooks(...)` / `.AfterRead(...)`                 | Transforms the opaque stored value or response.                         |
 
 ## Choose JSON or structured fields {#model-the-shape}
 

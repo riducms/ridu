@@ -13,6 +13,7 @@ type AdminCollection = CollectionContract & {
 	auth: true;
 	upload: true;
 	versions: true;
+	drafts: true;
 	output: AdminDocument;
 	create: Record<string, unknown>;
 	update: Record<string, unknown>;
@@ -24,6 +25,7 @@ type AdminCollection = CollectionContract & {
 
 type AdminGlobal = {
 	versions: true;
+	drafts: true;
 	output: AdminDocument;
 	update: Record<string, unknown>;
 	select: Record<string, boolean>;

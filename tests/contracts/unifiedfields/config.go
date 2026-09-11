@@ -53,10 +53,10 @@ func Collection() core.Collection {
 			accent.Rename("localizedAccent").Label("Localized accent").Localized(),
 			field.Text("localizedTitle").Localized(),
 			field.Group("localizedMeta", field.Fields{field.Text("description").Localized()}),
-			field.Text("privateNote").Access(field.Access{Read: func(operation.AccessContext) (bool, error) { return false, nil }}),
+			field.Text("privateNote").Access(field.Access{Read: func(operation.Context) (bool, error) { return false, nil }}),
 			field.Text("presentationHidden").Admin(field.Admin{Hidden: true}),
 			embedded,
-			field.Virtual("summary", field.ValueString, func(ctx operation.ReadContext) (operation.Value[store.Value], error) {
+			field.Virtual("summary", field.ValueString, func(ctx operation.Context) (operation.Value[store.Value], error) {
 				title, _ := ctx.Root.Get("title").StringValue()
 				return operation.Present(store.String("Article: " + title)), nil
 			}),
@@ -64,19 +64,19 @@ func Collection() core.Collection {
 	}
 }
 
-func writableSKU(ctx operation.AccessContext) (bool, error) {
+func writableSKU(ctx operation.Context) (bool, error) {
 	value, _ := ctx.Root.Get("title").StringValue()
 	return value != "Locked", nil
 }
 
-func normalizeSKU(_ operation.WriteContext, value operation.Value[string]) (operation.Change[string], error) {
+func normalizeSKU(_ operation.Context, value operation.Value[string]) (operation.Change[string], error) {
 	if text, present := value.Get(); present {
 		return operation.Replace(operation.Present(strings.ToUpper(strings.TrimSpace(text)))), nil
 	}
 	return operation.Keep[string](), nil
 }
 
-func validateSKU(_ operation.ValidationContext, value operation.Value[string]) ([]operation.Issue, error) {
+func validateSKU(_ operation.Context, value operation.Value[string]) ([]operation.Issue, error) {
 	if text, present := value.Get(); present && !strings.HasPrefix(text, "SKU-") {
 		return []operation.Issue{{Code: "sku", Message: "SKU must start with SKU-"}}, nil
 	}
