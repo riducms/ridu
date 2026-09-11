@@ -32,14 +32,14 @@ func TestRichTextContentCanBeLocalized(t *testing.T) {
 	}
 	english := document(store.Object(store.Values{"type": store.String("paragraph"), "children": store.List(store.Object(store.Values{"type": store.String("text"), "text": store.String("Hello")}))}))
 	french := document(store.Object(store.Values{"type": store.String("paragraph"), "children": store.List(store.Object(store.Values{"type": store.String("text"), "text": store.String("Bonjour")}))}))
-	created, err := application.Local().Create(context.Background(), "pages", store.Values{"content": english}, nil)
+	created, err := application.Local().Create(context.Background(), "pages", store.Values{"content": english}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Update(context.Background(), "pages", created.ID, store.Values{"content": french}, nil, ridu.LocaleOptions{Locale: "fr"}); err != nil {
+	if _, err := application.Local().Update(context.Background(), "pages", created.ID, store.Values{"content": french}, ridu.MutationOptions{Locale: "fr"}); err != nil {
 		t.Fatal(err)
 	}
-	all, err := application.Local().Find(context.Background(), "pages", created.ID, nil, ridu.LocaleOptions{AllLocales: true})
+	all, err := application.Local().Find(context.Background(), "pages", created.ID, ridu.FindOptions{AllLocales: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +152,7 @@ func TestVersionedDocumentValidationAndRendering(t *testing.T) {
 			)}),
 		),
 	}))
-	created, err := application.Local().Create(context.Background(), "pages", store.Values{"content": value}, nil)
+	created, err := application.Local().Create(context.Background(), "pages", store.Values{"content": value}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -161,7 +161,7 @@ func TestVersionedDocumentValidationAndRendering(t *testing.T) {
 		t.Fatalf("rendered = %q, %v", rendered, err)
 	}
 	invalid := store.Object(store.Values{"version": store.Number(2), "root": store.Object(store.Values{"type": store.String("root"), "children": store.List()})})
-	if _, err := application.Local().Create(context.Background(), "pages", store.Values{"content": invalid}, nil); err == nil || !strings.Contains(err.Error(), "validation") {
+	if _, err := application.Local().Create(context.Background(), "pages", store.Values{"content": invalid}, ridu.MutationOptions{}); err == nil || !strings.Contains(err.Error(), "validation") {
 		t.Fatalf("unsupported document version error = %v", err)
 	}
 	manifestField := application.Manifest().Snapshot().Collections[0].Fields[0]
@@ -266,7 +266,7 @@ func TestDefaultFieldValidatesAndRendersPortableAuthoringNodes(t *testing.T) {
 		)}),
 		store.Object(store.Values{"type": store.String("horizontalrule")}),
 	)
-	created, err := application.Local().Create(context.Background(), "pages", store.Values{"content": value}, nil)
+	created, err := application.Local().Create(context.Background(), "pages", store.Values{"content": value}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -303,7 +303,7 @@ func TestDefaultFieldEnablesUploads(t *testing.T) {
 	value := document(store.Object(store.Values{
 		"type": store.String("upload"), "relationTo": store.String("media"), "id": store.String("asset-1"),
 	}))
-	if _, err := application.Local().Create(context.Background(), "pages", store.Values{"content": value}, nil); err != nil {
+	if _, err := application.Local().Create(context.Background(), "pages", store.Values{"content": value}, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -329,10 +329,10 @@ func TestRelationshipNodesRespectConfiguredCollections(t *testing.T) {
 			"type": store.String("relationship"), "relationTo": store.String(collection), "id": store.String("document-1"),
 		}))
 	}
-	if _, err := application.Local().Create(context.Background(), "pages", store.Values{"content": reference("posts")}, nil); err != nil {
+	if _, err := application.Local().Create(context.Background(), "pages", store.Values{"content": reference("posts")}, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Create(context.Background(), "pages", store.Values{"content": reference("users")}, nil); err == nil || !strings.Contains(err.Error(), "validation") {
+	if _, err := application.Local().Create(context.Background(), "pages", store.Values{"content": reference("users")}, ridu.MutationOptions{}); err == nil || !strings.Contains(err.Error(), "validation") {
 		t.Fatalf("disabled relationship collection error = %v", err)
 	}
 }
@@ -379,13 +379,13 @@ func TestUploadNodesRespectConfiguredCollections(t *testing.T) {
 		}
 		return document(store.Object(node))
 	}
-	if _, err := application.Local().Create(context.Background(), "pages", store.Values{"content": upload("media", store.String("A per-placement caption"))}, nil); err != nil {
+	if _, err := application.Local().Create(context.Background(), "pages", store.Values{"content": upload("media", store.String("A per-placement caption"))}, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Create(context.Background(), "pages", store.Values{"content": upload("private-media")}, nil); err == nil || !strings.Contains(err.Error(), "validation") {
+	if _, err := application.Local().Create(context.Background(), "pages", store.Values{"content": upload("private-media")}, ridu.MutationOptions{}); err == nil || !strings.Contains(err.Error(), "validation") {
 		t.Fatalf("disabled upload collection error = %v", err)
 	}
-	if _, err := application.Local().Create(context.Background(), "pages", store.Values{"content": upload("media", store.Number(42))}, nil); err == nil || !strings.Contains(err.Error(), "validation") {
+	if _, err := application.Local().Create(context.Background(), "pages", store.Values{"content": upload("media", store.Number(42))}, ridu.MutationOptions{}); err == nil || !strings.Contains(err.Error(), "validation") {
 		t.Fatalf("invalid upload caption error = %v", err)
 	}
 }

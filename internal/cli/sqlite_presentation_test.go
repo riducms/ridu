@@ -211,12 +211,12 @@ func TestContent(t *testing.T) {
  if err := os.MkdirAll(filepath.Dir(baseline), 0700); err != nil { t.Fatal(err) }
  before, err := os.ReadFile(baseline)
  if os.IsNotExist(err) {
-  doc, err := app.Local().Create(ctx, "posts", store.Values{"title": store.String("Draft"), "tone": store.String("light"), "layout": store.String("compact")}, nil); if err != nil { t.Fatal(err) }
-  _, err = app.Local().PublishChanges(ctx, "posts", doc.ID, store.Values{"title": store.String("Published")}, doc.Revision, nil); if err != nil { t.Fatal(err) }
+  doc, err := app.Local().Create(ctx, "posts", store.Values{"title": store.String("Draft"), "tone": store.String("light"), "layout": store.String("compact")}, ridu.MutationOptions{}); if err != nil { t.Fatal(err) }
+  _, err = app.Local().PublishChanges(ctx, "posts", doc.ID, store.Values{"title": store.String("Published")}, ridu.MutationOptions{ExpectedRevision: doc.Revision}); if err != nil { t.Fatal(err) }
  } else if err != nil { t.Fatal(err) }
  page, err := app.Local().List(ctx, "posts", ridu.ListOptions{}); if err != nil { t.Fatal(err) }
  if len(page.Documents) != 1 { t.Fatalf("documents: %#v", page) }
- versions, err := app.Local().Versions(ctx, "posts", page.Documents[0].ID, nil); if err != nil || len(versions) != 2 { t.Fatalf("versions: %#v, %v", versions, err) }
+ versions, err := app.Local().Versions(ctx, "posts", page.Documents[0].ID, ridu.FindOptions{}); if err != nil || len(versions) != 2 { t.Fatalf("versions: %#v, %v", versions, err) }
  after, err := json.Marshal([]any{page.Documents, versions}); if err != nil { t.Fatal(err) }
  if before == nil { if err := os.WriteFile(baseline, after, 0600); err != nil { t.Fatal(err) } } else if string(before) != string(after) { t.Fatalf("content/revisions changed: %s -> %s", before, after) }
 }

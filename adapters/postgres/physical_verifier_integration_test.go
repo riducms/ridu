@@ -278,54 +278,6 @@ EXISTS (SELECT 1 FROM ridu_migration_steps WHERE artifact_name = $3)`, table, fi
 	assertPendingArtifactUntouched("after rejected preflight")
 }
 
-func TestPostgresReadinessAndStatusLeavePluginTablePresenceToMigrations(t *testing.T) {
-	ctx := context.Background()
-	backend := migrationArtifactTestBackend(t)
-	manifest := atlasTestManifest(atlasTextField("posts-title", "title"))
-	snapshot := manifest.Snapshot()
-	snapshot.Plugins = []schema.Plugin{{
-		Key: "verifier-ownership", Version: "1.0.0", GoPackage: "example.com/verifier-ownership", APIVersion: schema.CurrentPluginAPIVersion,
-		Ridu: &schema.PluginCompatibility{Minimum: "0.0.0-dev"},
-		DatabaseContributions: []schema.PluginDatabaseContribution{{
-			Adapter: schema.PluginDatabaseAdapterPostgres, Tables: []string{"ridu_plugin_verifier_ownership_state"},
-			Migrations: []schema.PluginMigration{{
-				Version: 1, Name: "create-verifier-ownership",
-				UpSQL:   []string{`CREATE TABLE ridu_plugin_verifier_ownership_state (id text PRIMARY KEY)`},
-				DownSQL: []string{`DROP TABLE ridu_plugin_verifier_ownership_state`},
-			}},
-		}},
-	}}
-	manifest = schema.NewManifest(snapshot)
-	directory := t.TempDir()
-	artifact, err := BuildArtifact(ctx, "plugin-table-ownership", nil, manifest, nil, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := migrationartifact.Create(directory, "plugin-table-ownership", artifact, time.Unix(1, 0)); err != nil {
-		t.Fatal(err)
-	}
-	if err := backend.ApplyArtifacts(ctx, directory); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := backend.pool.Exec(ctx, `DROP TABLE ridu_plugin_verifier_ownership_state`); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := backend.pool.Exec(ctx, `CREATE VIEW ridu_plugin_verifier_ownership_state AS SELECT 'view'::text AS id`); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := backend.Ready(ctx, manifest); err != nil {
-		t.Fatalf("Ready enforced plugin-owned table presence: %v", err)
-	}
-	statuses, err := backend.ArtifactStatus(ctx, directory)
-	if err != nil || len(statuses) != 1 || !statuses[0].Applied {
-		t.Fatalf("ArtifactStatus enforced plugin-owned table presence: %#v, %v", statuses, err)
-	}
-	if err := backend.ApplyArtifacts(ctx, directory); err == nil || !strings.Contains(err.Error(), "declared plugin table ridu_plugin_verifier_ownership_state is missing or is not an ordinary or partitioned table") {
-		t.Fatalf("migration validation accepted a view in place of the declared plugin table: %v", err)
-	}
-}
-
 func postgresPhysicalVerifierFixture(t *testing.T, ctx context.Context) (*Store, schema.Manifest, string, string, string, string) {
 	t.Helper()
 	backend := migrationArtifactTestBackend(t)

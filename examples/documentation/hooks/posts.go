@@ -10,7 +10,7 @@ import (
 )
 
 func trimText(
-	_ operation.WriteContext,
+	_ operation.Context,
 	value operation.Value[store.Value],
 ) (operation.Change[store.Value], error) {
 	raw, present := value.Get()

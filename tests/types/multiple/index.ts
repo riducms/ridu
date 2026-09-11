@@ -4,6 +4,7 @@ interface Contract<Output, Create> {
 	auth: false;
 	upload: false;
 	versions: false;
+	drafts: false;
 	trash: false;
 	output: Output;
 	create: Create;
@@ -19,15 +20,7 @@ interface ContentConfig {
 	};
 }
 
-declare module "@riducms/sdk" {
-	interface GeneratedRiduConfigRegistry {
-		"manifest-content-primary": ContentConfig;
-		"manifest-content-secondary": ContentConfig;
-	}
-}
-
-// More than one generated manifest is intentionally not selected as the raw SDK default, even
-// when two manifests happen to generate the same TypeScript config shape.
+// Raw SDK clients require an explicit application contract.
 const unbound = createClient({ baseURL: "https://cms.example.test" });
 // @ts-expect-error choose a generated wrapper or pass an explicit config when manifests coexist.
 void unbound.list("posts");
@@ -37,3 +30,11 @@ void content.create("posts", { title: "Explicit content config" });
 
 // @ts-expect-error explicit configs retain their exact collection set.
 void content.list("comments");
+
+interface EditorialConfig {
+	collections: { articles: Contract<{ id: string; headline: string }, { headline: string }> };
+}
+const editorial = createClient<EditorialConfig>({ baseURL: "https://editorial.example.test" });
+void editorial.create("articles", { headline: "Another application" });
+// @ts-expect-error one client cannot use another application's resource contract.
+void editorial.create("posts", { title: "Wrong application" });

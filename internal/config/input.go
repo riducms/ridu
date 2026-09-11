@@ -3,9 +3,10 @@
 package config
 
 import (
+	"time"
+
 	"github.com/riducms/ridu/field"
 	"github.com/riducms/ridu/schema"
-	"time"
 )
 
 type Input struct {
@@ -156,15 +157,14 @@ type VersionConfig struct {
 }
 
 type Plugin struct {
-	Key                   string
-	Version               string
-	GoPackage             string
-	APIVersion            uint32
-	Ridu                  *PluginCompatibility
-	Admin                 *PluginAdmin
-	FieldTypes            []PluginFieldType
-	DatabaseContributions []PluginDatabaseContribution
-	Endpoints             []PluginEndpoint
+	Key        string
+	Version    string
+	GoPackage  string
+	APIVersion uint32
+	Ridu       *PluginCompatibility
+	Admin      *PluginAdmin
+	FieldTypes []PluginFieldType
+	Endpoints  []PluginEndpoint
 }
 
 type PluginCompatibility struct {
@@ -192,19 +192,6 @@ type PluginFieldType struct {
 	GoPackage         string
 	GoType            string
 	JSONSchema        []byte
-}
-
-type PluginMigration struct {
-	Version uint32
-	Name    string
-	UpSQL   []string
-	DownSQL []string
-}
-
-type PluginDatabaseContribution struct {
-	Adapter    schema.PluginDatabaseAdapter
-	Migrations []PluginMigration
-	Tables     []string
 }
 
 type PluginEndpoint struct {

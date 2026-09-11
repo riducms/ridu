@@ -65,7 +65,7 @@ func TestMongoDBGlobalUsesResourceStorePathAndSnapshotPredicates(t *testing.T) {
 	if physicalCollectionName(global.ID) == physicalCollectionName(snapshot.Collections[0].ID) {
 		t.Fatal("MongoDB global shared a physical collection with an ordinary collection")
 	}
-	initial, err := application.Local().Global(t.Context(), "site-settings", nil)
+	initial, err := application.Local().Global(t.Context(), "site-settings", ridu.FindOptions{})
 	initialAnnouncement, _ := initial.Values["announcement"].StringValue()
 	if err != nil || initial.ID != "site-settings" || initial.Revision != 0 || initialAnnouncement != "Welcome" {
 		t.Fatalf("missing MongoDB global defaults = %#v, %v", initial, err)
@@ -76,37 +76,37 @@ func TestMongoDBGlobalUsesResourceStorePathAndSnapshotPredicates(t *testing.T) {
 	allowMissingRead = false
 
 	if _, err := application.Local().UpdateGlobal(
-		t.Context(), "site-settings", store.Values{"siteName": store.String("Ridu")}, 0, nil,
+		t.Context(), "site-settings", store.Values{"siteName": store.String("Ridu")}, ridu.MutationOptions{},
 	); !mongoOperationCode(err, "not_found") {
 		t.Fatalf("filtered first MongoDB global update = %v, want not_found", err)
 	}
 	allowInitialization = true
 	created, err := application.Local().UpdateGlobal(
-		t.Context(), "site-settings", store.Values{"siteName": store.String("Ridu")}, 0, nil,
+		t.Context(), "site-settings", store.Values{"siteName": store.String("Ridu")}, ridu.MutationOptions{},
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
 	allowInitialization = false
-	current, err := application.Local().Global(t.Context(), "site-settings", nil)
+	current, err := application.Local().Global(t.Context(), "site-settings", ridu.FindOptions{})
 	if currentName, _ := current.Values["siteName"].StringValue(); err != nil || currentName != "Ridu" || current.ID != "site-settings" {
 		t.Fatalf("matching MongoDB global = %#v, %v", current, err)
 	}
 	changed, err := application.Local().PublishGlobalChanges(
-		t.Context(), "site-settings", store.Values{"siteName": store.String("Hidden")}, created.Revision, nil,
+		t.Context(), "site-settings", store.Values{"siteName": store.String("Hidden")}, ridu.MutationOptions{ExpectedRevision: created.Revision},
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Global(t.Context(), "site-settings", nil); !mongoOperationCode(err, "not_found") {
+	if _, err := application.Local().Global(t.Context(), "site-settings", ridu.FindOptions{}); !mongoOperationCode(err, "not_found") {
 		t.Fatalf("non-matching MongoDB global read = %v, want not_found", err)
 	}
 	if _, err := application.Local().PublishGlobalChanges(
-		t.Context(), "site-settings", store.Values{"siteName": store.String("Ridu")}, changed.Revision, nil,
+		t.Context(), "site-settings", store.Values{"siteName": store.String("Ridu")}, ridu.MutationOptions{ExpectedRevision: changed.Revision},
 	); !mongoOperationCode(err, "not_found") {
 		t.Fatalf("non-matching MongoDB global update = %v, want not_found", err)
 	}
-	versions, err := application.Local().GlobalVersions(t.Context(), "site-settings", nil)
+	versions, err := application.Local().GlobalVersions(t.Context(), "site-settings", ridu.FindOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,7 +117,7 @@ func TestMongoDBGlobalUsesResourceStorePathAndSnapshotPredicates(t *testing.T) {
 	if versions[0].Revision != 1 || versionName != "Ridu" {
 		t.Fatalf("filtered MongoDB global versions = %#v", versions)
 	}
-	if _, err := application.Local().GlobalVersion(t.Context(), "site-settings", 2, nil); !mongoOperationCode(err, "not_found") {
+	if _, err := application.Local().GlobalVersion(t.Context(), "site-settings", 2, ridu.FindOptions{}); !mongoOperationCode(err, "not_found") {
 		t.Fatalf("non-matching MongoDB global version = %v, want not_found", err)
 	}
 

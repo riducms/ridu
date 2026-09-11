@@ -113,10 +113,10 @@ export function riduAdminCheckPlugins(): Plugin[] {
 				if (id === entry)
 					// Match the generated mount entry, including application Vite aliases.
 					return `import config from '@/admin.config';
-import {validateAdminConfig} from '@riducms/plugin/admin';
+import {resolveAdminConfig, validateAdminManifest} from '@riducms/plugin/admin';
 export default function check(schema) {
   if (typeof config !== 'object' || config === null) throw new Error('admin/src/admin.config.ts must default-export defineAdmin({...}).');
-  validateAdminConfig(config, schema, {completeManifest: true});
+  validateAdminManifest(resolveAdminConfig(config), schema, {completeManifest: true});
 }`;
 				if (id.startsWith("\0ridu-checked-component:"))
 					return "export default function RiduCheckedComponent() {}";

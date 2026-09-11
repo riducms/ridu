@@ -39,7 +39,7 @@ func Collection() core.Collection {
 }
 
 func validateRows(blocks bool) field.Validator[store.Value] {
-	return func(_ operation.ValidationContext, input operation.Value[store.Value]) ([]operation.Issue, error) {
+	return func(_ operation.Context, input operation.Value[store.Value]) ([]operation.Issue, error) {
 		value, _ := input.Get()
 		rows, _ := value.CopyList()
 		var issues []operation.Issue
@@ -61,7 +61,7 @@ func validateRows(blocks bool) field.Validator[store.Value] {
 	}
 }
 
-func validateLinks(_ operation.ValidationContext, input operation.Value[store.Value]) ([]operation.Issue, error) {
+func validateLinks(_ operation.Context, input operation.Value[store.Value]) ([]operation.Issue, error) {
 	value, _ := input.Get()
 	links, _ := value.CopyList()
 	return linkIssues(operation.At(), links), nil

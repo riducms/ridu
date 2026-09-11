@@ -12,6 +12,13 @@ relationships to asset records. Assets here are metadata records with URLs; file
 upload setup is outside this example. Rich text remains the existing versioned
 plugin document with configured schema-backed block payloads in articles.
 
+CTA and Callout also configure `BlockAdmin.NameField: "blockName"`. This optional,
+ordinary text field is edited in the block header; it is separate from the public
+CTA label or Callout title. A blank name shows the content summary as a placeholder
+without storing it. The same control appears on rich-text cards and in their
+Apply/Cancel drawers. Names are returned by the API, but these frontend renderers
+render the content fields and never turn an editorial name into an anchor.
+
 ## Run the reference checks
 
 From the repository root:
@@ -55,7 +62,7 @@ page, err := generated.PagesCollection.With(app.Local()).Create(ctx,
             &generated.HeroInput{Heading: "Welcome"},
             &generated.CTAInput{Label: "Read more"},
         }),
-    }, nil)
+    }, core.TypedMutationOptions{})
 ```
 
 Optional mutation values use `core.Set(value)` or `core.Null[T]()`, and nil
@@ -122,9 +129,7 @@ for _, value := range patch {
         hero.Heading = &heading
     }
 }
-_, err = pages.UpdateRevision(ctx, pageID,
-    generated.PageUpdate{Layout: core.SetNonNull(patch)}, revision, nil,
-    core.TypedLocaleOptions{Locale: "fr"})
+_, err = pages.Update(ctx, pageID, generated.PageUpdate{Layout: core.SetNonNull(patch)}, core.TypedMutationOptions{ExpectedRevision: revision, Locale: "fr"})
 ```
 
 `Retain()` preserves every occurrence and its order using fresh key-only updates.

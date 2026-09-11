@@ -3,13 +3,14 @@ package core_test
 import (
 	"encoding/json"
 	"errors"
+	"strings"
+	"testing"
+
 	"github.com/riducms/ridu/core"
 	"github.com/riducms/ridu/field"
 	"github.com/riducms/ridu/internal/teststore"
 	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/query"
-	"strings"
-	"testing"
 )
 
 func TestTypedReadsOwnTheirLocaleShape(t *testing.T) {
@@ -28,11 +29,11 @@ func TestTypedReadsOwnTheirLocaleShape(t *testing.T) {
 		Title map[string]string `json:"title"`
 	}
 	pages := core.NewTypedCollection[document, input, input]("pages").With(app.Local())
-	created, err := pages.Create(t.Context(), input{Title: "Hello"}, nil)
+	created, err := pages.Create(t.Context(), input{Title: "Hello"}, core.TypedMutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pages.Update(t.Context(), created.ID, input{Title: "Bonjour"}, nil, core.TypedLocaleOptions{Locale: "fr"}); err != nil {
+	if _, err := pages.Update(t.Context(), created.ID, input{Title: "Bonjour"}, core.TypedMutationOptions{Locale: "fr"}); err != nil {
 		t.Fatal(err)
 	}
 	read, err := core.NewTypedCollection[document, input, input]("pages").With(app.Local()).Find(t.Context(), created.ID, core.TypedReadOptions{Locale: "fr"})
@@ -66,10 +67,10 @@ func TestTypedReadsOwnTheirLocaleShape(t *testing.T) {
 		t.Fatalf("projection: %#v %v", projected, err)
 	}
 	site := core.NewTypedGlobal[document, input]("site").With(app.Local())
-	if _, err := site.Update(t.Context(), input{Title: "Hello"}, 0, nil); err != nil {
+	if _, err := site.Update(t.Context(), input{Title: "Hello"}, core.TypedMutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := site.Update(t.Context(), input{Title: "Bonjour"}, 0, nil, core.TypedLocaleOptions{Locale: "fr"}); err != nil {
+	if _, err := site.Update(t.Context(), input{Title: "Bonjour"}, core.TypedMutationOptions{Locale: "fr"}); err != nil {
 		t.Fatal(err)
 	}
 	global, err := core.NewTypedAllLocalesGlobal[allDocument]("site").With(app.Local()).Find(t.Context(), core.TypedReadOptions{})
@@ -88,9 +89,7 @@ func TestTypedReadListPreservesEngineFiltering(t *testing.T) {
 		t.Fatal(err)
 	}
 	denied := false
-	app, err := core.New(core.Config{Name: "Typed list access", Collections: []core.Collection{{Slug: "pages", Fields: field.Fields{field.Text("title").Required(), field.Text("secret").Access(field.Access{Read: func(operation.AccessContext,
-
-	) (bool, error) {
+	app, err := core.New(core.Config{Name: "Typed list access", Collections: []core.Collection{{Slug: "pages", Fields: field.Fields{field.Text("title").Required(), field.Text("secret").Access(field.Access{Read: func(operation.Context) (bool, error) {
 		return false, nil
 	}})}, Access: core.CollectionAccess{Read: func(core.AccessContext) (core.AccessDecision, error) {
 		if denied {
@@ -111,7 +110,7 @@ func TestTypedReadListPreservesEngineFiltering(t *testing.T) {
 	}
 	writes := core.NewTypedCollection[document, input, input]("pages").With(app.Local())
 	for _, title := range []string{"b", "hidden", "a"} {
-		if _, err := writes.Create(t.Context(), input{Title: title, Secret: "private"}, nil); err != nil {
+		if _, err := writes.Create(t.Context(), input{Title: title, Secret: "private"}, core.TypedMutationOptions{}); err != nil {
 			t.Fatal(err)
 		}
 	}

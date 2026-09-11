@@ -18,7 +18,7 @@ func TestOpenAPINamedBlockInputsValidateHTTPCreate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	hero := field.Block{TypeName: "Hero", Slug: "hero", Fields: field.Fields{field.Text("heading").Required().Access(field.Access{Read: func(operation.AccessContext) (bool, error) { return false, nil }}).Localized(), field.Text("summary"), field.Text("tone").Required().Default("neutral"), field.Relationship("author", "authors"), field.Upload("image", "assets"), field.Blocks("children", field.Block{Slug: "note", Fields: field.Fields{field.Text("body").Required()}})}}
+	hero := field.Block{TypeName: "Hero", Slug: "hero", Fields: field.Fields{field.Text("heading").Required().Access(field.Access{Read: func(operation.Context) (bool, error) { return false, nil }}).Localized(), field.Text("summary"), field.Text("tone").Required().Default("neutral"), field.Relationship("author", "authors"), field.Upload("image", "assets"), field.Blocks("children", field.Block{Slug: "note", Fields: field.Fields{field.Text("body").Required()}})}}
 	app, err := core.New(core.Config{Name: "Block inputs", Storage: storageBackend, StorageNamespace: "blocks-input-contracts", Localization: core.LocalizationConfig{DefaultLocale: "en", Locales: []core.Locale{{Code: "en", Label: "English"}, {Code: "fr", Label: "French"}}}, Collections: []core.Collection{
 		{Slug: "authors", Fields: field.Fields{field.Text("name")}},
 		{Slug: "assets", Upload: true, Fields: field.Fields{field.Text("alt")}},

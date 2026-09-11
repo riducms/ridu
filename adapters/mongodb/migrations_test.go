@@ -184,21 +184,8 @@ func TestMongoDBArtifactRejectsNonAdditiveTransitions(t *testing.T) {
 	}
 }
 
-func TestMongoDBArtifactRejectsDatabaseContributingPluginsAndPlannerLineage(t *testing.T) {
+func TestMongoDBArtifactRejectsInvalidPlannerLineage(t *testing.T) {
 	manifest := mongoDBMigrationTestManifest(t, false, false)
-	snapshot := manifest.Snapshot()
-	snapshot.Plugins = []schema.Plugin{{
-		Key: "search", Version: "1.0.0", GoPackage: "example.com/search", APIVersion: schema.CurrentPluginAPIVersion,
-		Ridu: &schema.PluginCompatibility{Minimum: "0.0.0-dev"},
-		DatabaseContributions: []schema.PluginDatabaseContribution{{
-			Adapter: schema.PluginDatabaseAdapterPostgres, Tables: []string{"ridu_plugin_search"},
-			Migrations: []schema.PluginMigration{{Version: 1, Name: "initial", UpSQL: []string{"CREATE TABLE ridu_plugin_search (id text PRIMARY KEY)"}, DownSQL: []string{"DROP TABLE ridu_plugin_search"}}},
-		}},
-	}}
-	withPlugin := schema.NewManifest(snapshot)
-	if _, err := buildMongoDBArtifact(context.Background(), "plugin", nil, withPlugin, "", currentMongoDBPlannerContract()); err == nil || !strings.Contains(err.Error(), "plugin database contributions") {
-		t.Fatalf("database-contributing plugin error = %v", err)
-	}
 	if _, err := buildMongoDBArtifact(context.Background(), "bad-initial", nil, manifest, mongoDBPlannerVersion, currentMongoDBPlannerContract()); err == nil {
 		t.Fatal("initial artifact accepted previous planner lineage")
 	}

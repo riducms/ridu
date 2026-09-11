@@ -6,7 +6,7 @@ Access rules decide who can use your content. Collection and global rules protec
 field rules protect individual values. Ridu checks these rules for requests from the admin, REST,
 the SDK, and the local Go API.
 
-If `operation.AccessContext`, `store.Document`, or `query.Path` is unfamiliar, start with
+If `operation.Context`, `store.Document`, or `query.Path` is unfamiliar, start with
 [Go packages](./go-packages.md). That guide explains the values and return types used below.
 
 ## Access configuration {#configuration}
@@ -122,7 +122,7 @@ from `query.NewPath` before returning the collection.
 Field rules return `true` to allow access or `false` to deny it. If a write is denied, Ridu rejects
 the write. If a read is denied, Ridu leaves the field out of the response.
 
-Their `operation.AccessContext` is a field callback context. See
+Their `operation.Context` is a field callback context. See
 [Operations and callbacks](./go-packages/operation.md) for the caller, nearby values, and
 how this differs from a collection's `ridu.AccessContext`.
 
@@ -138,9 +138,9 @@ import (
 	"github.com/riducms/ridu/operation"
 )
 
-func internalNotes(name string) field.TextareaField {
+func internalNotes(name string) field.TextField {
 	allowed := func(roles ...string) field.AccessRule {
-		return func(ctx operation.AccessContext) (bool, error) {
+		return func(ctx operation.Context) (bool, error) {
 			// A missing role matches none of the allowed names.
 			role, _ := ctx.Actor.Data.String("role")
 			for _, candidate := range roles {
@@ -210,7 +210,7 @@ var Pages = ridu.Collection{
 		field.Array("links", field.Fields{
 			field.Text("label").Required(),
 			field.Text("url").Required().Access(field.Access{
-				Read: func(ctx operation.AccessContext) (bool, error) {
+				Read: func(ctx operation.Context) (bool, error) {
 					// Read the checkbox in this link row.
 					membersOnly, _ := ctx.Siblings.Get(
 						"membersOnly",
@@ -231,4 +231,4 @@ values. New rows and ordinary reads have no previous values in `Prior`.
 Access rules can read these values but cannot change them. Use a [field hook](./hooks/fields.md#normalize-input)
 to change a value. See [Using other field values](./fields/callback-values.md) for examples of
 `Root`, `Siblings`, `Prior`, and looking up a related document, or
-[`operation.AccessContext`](https://riducms.com/reference/operation/access-context/) for the full reference.
+[`operation.Context`](https://riducms.com/reference/operation/context/) for the full reference.

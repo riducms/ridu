@@ -36,7 +36,7 @@ func TestRedactedBlockUpdatesPreserveStoredChildren(t *testing.T) {
 				}
 				calls := 0
 				secret := func() field.TextField {
-					f := field.Text("secret").Access(field.Access{Read: func(operation.AccessContext) (bool, error) { return false, nil }, Update: func(operation.AccessContext) (bool, error) { calls++; return false, nil }})
+					f := field.Text("secret").Access(field.Access{Read: func(operation.Context) (bool, error) { return false, nil }, Update: func(operation.Context) (bool, error) { calls++; return false, nil }})
 					if required {
 						return f.Required()
 					}
@@ -72,7 +72,7 @@ func TestRedactedBlockUpdatesPreserveStoredChildren(t *testing.T) {
 						"links":    store.List(store.Object(store.Values{"label": store.String("Link"), "secret": store.String(value)})),
 					})
 				}
-				created, err := app.Local().Create(ctx, "pages", store.Values{"layout": store.List(row("A", "stored A"), row("B", "stored B"))}, nil)
+				created, err := app.Local().Create(ctx, "pages", store.Values{"layout": store.List(row("A", "stored A"), row("B", "stored B"))}, ridu.MutationOptions{})
 				if err != nil {
 					t.Fatal(err)
 				}

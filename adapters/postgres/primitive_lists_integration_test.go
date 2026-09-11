@@ -51,14 +51,14 @@ func TestPrimitiveListsPostgresRepeatedQueryBoundary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	first, err := app.Local().Create(t.Context(), "primitive-products", primitivelists.Values(), nil)
+	first, err := app.Local().Create(t.Context(), "primitive-products", primitivelists.Values(), core.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	decoy := primitivelists.Values()
 	decoy["variants"] = store.List(store.Object(store.Values{"_key": store.String("B"), "points": store.List(store.String("Pine")), "sizes": store.List(store.Number(99))}))
 	decoy["content"] = store.List(store.Object(store.Values{"_key": store.String("B"), "blockType": store.String("note"), "points": store.List(store.String("Oak")), "sizes": store.List(store.Number(0))}))
-	second, err := app.Local().Create(t.Context(), "primitive-products", decoy, nil)
+	second, err := app.Local().Create(t.Context(), "primitive-products", decoy, core.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,7 +120,7 @@ func TestPrimitiveListsPostgresDefaultColumns(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	created, err := app.Local().Create(t.Context(), "products", store.Values{}, nil)
+	created, err := app.Local().Create(t.Context(), "products", store.Values{}, core.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

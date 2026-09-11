@@ -75,7 +75,7 @@ func TestPayloadExportRejectsRepeatedCollectionBlocksBeforeWriting(t *testing.T)
 
 type recordingTarget struct{ calls int }
 
-func (target *recordingTarget) Import(context.Context, string, store.Values, ridu.ImportOptions, *store.Document) (store.Document, error) {
+func (target *recordingTarget) Import(context.Context, string, store.Values, ridu.ImportOptions) (store.Document, error) {
 	target.calls++
 	return store.Document{}, nil
 }
@@ -101,7 +101,7 @@ func TestImportPreservesIDsTimestampsAndChosenVersion(t *testing.T) {
 	if result.Imported != 1 {
 		t.Fatalf("imported = %d", result.Imported)
 	}
-	document, err := application.Local().Find(context.Background(), "posts", "payload-id", &store.Document{ID: "migrator"})
+	document, err := application.Local().Find(context.Background(), "posts", "payload-id", ridu.FindOptions{Actor: &store.Document{ID: "migrator"}})
 	if err != nil {
 		t.Fatal(err)
 	}

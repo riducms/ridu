@@ -23,7 +23,7 @@ func uploadLookup(t *testing.T, factory Factory) {
 		t.Fatal(err)
 	}
 	allow := true
-	privateMetadata := field.Access{Read: func(ctx fieldoperation.AccessContext) (bool, error) {
+	privateMetadata := field.Access{Read: func(ctx fieldoperation.Context) (bool, error) {
 		return ctx.Actor.ID != "" && ctx.Actor.ID == "writer", nil
 	}}
 	_, app := factory(t, ridu.Config{
@@ -56,7 +56,7 @@ func uploadLookup(t *testing.T, factory Factory) {
 	if original == "" || thumbnail == "" || original == thumbnail {
 		t.Fatalf("writer did not receive distinct original and thumbnail keys: %q, %q", original, thumbnail)
 	}
-	public, err := app.Local().Find(t.Context(), "media", document.ID, nil)
+	public, err := app.Local().Find(t.Context(), "media", document.ID, ridu.FindOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

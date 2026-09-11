@@ -219,8 +219,8 @@ func TestFixtureResolvesEveryImplementedAdminFieldFamily(t *testing.T) {
 		t.Fatal(err)
 	}
 	snapshot := manifest.Snapshot()
-	if len(snapshot.Collections) != 26 {
-		t.Fatalf("collections = %d, want 26", len(snapshot.Collections))
+	if len(snapshot.Collections) != 27 {
+		t.Fatalf("collections = %d, want 27", len(snapshot.Collections))
 	}
 	if len(snapshot.Globals) != 2 || snapshot.Globals[0].Slug != "site-settings" || !snapshot.Globals[0].Capabilities.Global || !snapshot.Globals[0].Capabilities.Versions || snapshot.Globals[1].Slug != "validation-settings" {
 		t.Fatalf("globals = %#v", snapshot.Globals)
@@ -237,6 +237,7 @@ func TestFixtureResolvesEveryImplementedAdminFieldFamily(t *testing.T) {
 		"payload-only-capabilities": false, "forms": false, "form-submissions": false, "outlines": false,
 		"block-articles": false,
 		"block-pages":    false,
+		"block-names":    false,
 		"inline-pages":   false, "inline-articles": false,
 		"reference-pages": false, "reference-articles": false,
 		"inline-block-labels": false, "reference-block-labels": false,
@@ -430,15 +431,15 @@ func TestFixtureSeedsPayloadStyleAccessHooksAndVersions(t *testing.T) {
 
 	_, err = application.Local().Update(ctx, "posts", seed.DraftPost.ID, store.Values{
 		"status": store.String("published"),
-	}, &seed.Contributor)
+	}, ridu.MutationOptions{Actor: &seed.Contributor})
 	assertOperationCode(t, err, "field_access_denied")
 	_, err = application.Local().Update(ctx, "users", seed.Contributor.ID, store.Values{
 		"role": store.String(roleAdministrator),
-	}, &seed.Contributor)
+	}, ridu.MutationOptions{Actor: &seed.Contributor})
 	assertOperationCode(t, err, "field_access_denied")
 	if _, err := application.Local().Update(ctx, "users", seed.Contributor.ID, store.Values{
 		"name": store.String("Demo Author Updated"), "role": store.String(roleContributor),
-	}, &seed.Editor); err != nil {
+	}, ridu.MutationOptions{Actor: &seed.Editor}); err != nil {
 		t.Fatalf("editor resubmitting an unchanged protected role: %v", err)
 	}
 }

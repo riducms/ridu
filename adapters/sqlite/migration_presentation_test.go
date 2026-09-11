@@ -60,23 +60,23 @@ func TestSQLitePresentationMigrationPreservesVersionedData(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	author, err := application.Local().Create(ctx, "authors", store.Values{"name": store.String("Ada")}, nil)
+	author, err := application.Local().Create(ctx, "authors", store.Values{"name": store.String("Ada")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	document, err := application.Local().Create(ctx, "posts", store.Values{"title": store.String("Draft"), "author": store.String(string(author.ID)), "tone": store.String("light"), "layout": store.String("compact")}, nil)
+	document, err := application.Local().Create(ctx, "posts", store.Values{"title": store.String("Draft"), "author": store.String(string(author.ID)), "tone": store.String("light"), "layout": store.String("compact")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	document, err = application.Local().PublishChanges(ctx, "posts", document.ID, store.Values{"title": store.String("Published")}, document.Revision, nil)
+	document, err = application.Local().PublishChanges(ctx, "posts", document.ID, store.Values{"title": store.String("Published")}, ridu.MutationOptions{ExpectedRevision: document.Revision})
 	if err != nil {
 		t.Fatal(err)
 	}
-	originalDocument, err := application.Local().Find(ctx, "posts", document.ID, nil)
+	originalDocument, err := application.Local().Find(ctx, "posts", document.ID, ridu.FindOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	originalVersions, err := application.Local().Versions(ctx, "posts", document.ID, nil)
+	originalVersions, err := application.Local().Versions(ctx, "posts", document.ID, ridu.FindOptions{})
 	if err != nil || len(originalVersions) < 2 {
 		t.Fatalf("retained revisions = %#v, %v", originalVersions, err)
 	}
@@ -204,11 +204,11 @@ func TestSQLitePresentationMigrationPreservesVersionedData(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		gotDocument, err := application.Local().Find(ctx, "posts", document.ID, nil)
+		gotDocument, err := application.Local().Find(ctx, "posts", document.ID, ridu.FindOptions{})
 		if err != nil || !reflect.DeepEqual(originalDocument, gotDocument) {
 			t.Fatalf("document changed: %#v, %v", gotDocument, err)
 		}
-		gotVersions, err := application.Local().Versions(ctx, "posts", document.ID, nil)
+		gotVersions, err := application.Local().Versions(ctx, "posts", document.ID, ridu.FindOptions{})
 		if err != nil || !reflect.DeepEqual(originalVersions, gotVersions) {
 			t.Fatalf("revisions changed: %#v, %v", gotVersions, err)
 		}
@@ -263,7 +263,7 @@ func TestSQLitePresentationMigrationPreservesVersionedData(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	updated, err := application.Local().PublishChanges(ctx, "posts", document.ID, store.Values{"summary": store.String("New field works")}, document.Revision, nil)
+	updated, err := application.Local().PublishChanges(ctx, "posts", document.ID, store.Values{"summary": store.String("New field works")}, ridu.MutationOptions{ExpectedRevision: document.Revision})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -271,7 +271,7 @@ func TestSQLitePresentationMigrationPreservesVersionedData(t *testing.T) {
 	if err := backend.db.QueryRowContext(ctx, `SELECT count(*) FROM sqlite_master WHERE name = ?`, documentFieldIndexName("posts", "summary", nil)).Scan(&indexed); err != nil || indexed != 1 {
 		t.Fatalf("additive index = %d, %v", indexed, err)
 	}
-	restored, err := application.Local().RestoreAsDraft(ctx, "posts", document.ID, 1, updated.Revision, nil)
+	restored, err := application.Local().RestoreAsDraft(ctx, "posts", document.ID, 1, ridu.MutationOptions{ExpectedRevision: updated.Revision})
 	if err != nil {
 		t.Fatalf("restore revision retained before presentation changes: %v", err)
 	}
@@ -421,7 +421,7 @@ func TestSQLitePresentationFastPathExcludesExecutableSteps(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, kind := range []migration.StepKind{migration.StepDataTransform, migration.StepPluginSQL, migration.StepCanonicalizeAuthIdentities, migration.StepSQL} {
+	for _, kind := range []migration.StepKind{migration.StepDataTransform, migration.StepCanonicalizeAuthIdentities, migration.StepSQL} {
 		changed := artifact
 		changed.Phases = append([]migration.Phase(nil), artifact.Phases...)
 		changed.Phases[0].Steps = append([]migration.Step(nil), artifact.Phases[0].Steps...)
@@ -626,14 +626,14 @@ func TestSQLitePresentationWithUnversionedBackfill(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			post, err := app.Local().Create(ctx, "posts", store.Values{"title": store.String("Original")}, nil)
+			post, err := app.Local().Create(ctx, "posts", store.Values{"title": store.String("Original")}, ridu.MutationOptions{})
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, err := app.Local().PublishChanges(ctx, "posts", post.ID, store.Values{"title": store.String("Edited")}, post.Revision, nil); err != nil {
+			if _, err := app.Local().PublishChanges(ctx, "posts", post.ID, store.Values{"title": store.String("Edited")}, ridu.MutationOptions{ExpectedRevision: post.Revision}); err != nil {
 				t.Fatal(err)
 			}
-			note, err := app.Local().Create(ctx, "notes", store.Values{}, nil)
+			note, err := app.Local().Create(ctx, "notes", store.Values{}, ridu.MutationOptions{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -702,14 +702,14 @@ func TestSQLitePresentationWithUnversionedBackfill(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			stored, err := updatedApp.Local().Find(ctx, "notes", note.ID, nil)
+			stored, err := updatedApp.Local().Find(ctx, "notes", note.ID, ridu.FindOptions{})
 			if err != nil {
 				t.Fatal(err)
 			}
 			if body, _ := stored.Values["body"].StringValue(); body != "Backfilled" {
 				t.Fatalf("backfill body = %q", body)
 			}
-			stored, err = updatedApp.Local().Find(ctx, "posts", post.ID, nil)
+			stored, err = updatedApp.Local().Find(ctx, "posts", post.ID, ridu.FindOptions{})
 			if err != nil {
 				t.Fatal(err)
 			}

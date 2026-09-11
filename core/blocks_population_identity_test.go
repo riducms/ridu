@@ -24,29 +24,29 @@ func TestBlockIdentityMatchesDirectAndRecursivePopulatedReads(t *testing.T) {
 	}
 	rows := store.List(store.Object(store.Values{"blockType": store.String("hero"), "heading": store.String("Created through API"), "children": store.List(store.Object(store.Values{"blockType": store.String("text"), "body": store.String("Child")}))}))
 	section := store.Object(store.Values{"cards": store.List(store.Object(store.Values{"blockType": store.String("card"), "title": store.String("Card")}))})
-	second, err := app.Local().Create(ctx, "pages", store.Values{"section": section, "layout": rows}, nil)
+	second, err := app.Local().Create(ctx, "pages", store.Values{"section": section, "layout": rows}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	first, err := app.Local().Create(ctx, "pages", store.Values{"section": section, "layout": rows, "related": store.String(second.ID)}, nil)
+	first, err := app.Local().Create(ctx, "pages", store.Values{"section": section, "layout": rows, "related": store.String(second.ID)}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = app.Local().Update(ctx, "pages", first.ID, store.Values{"layout": rows}, nil, ridu.LocaleOptions{Locale: "fr"}); err != nil {
+	if _, err = app.Local().Update(ctx, "pages", first.ID, store.Values{"layout": rows}, ridu.MutationOptions{Locale: "fr"}); err != nil {
 		t.Fatal(err)
 	}
-	link, err := app.Local().Create(ctx, "links", store.Values{"page": store.String(first.ID)}, nil)
+	link, err := app.Local().Create(ctx, "links", store.Values{"page": store.String(first.ID)}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	path, _ := query.NewPath("page")
 	for _, options := range []ridu.FindOptions{{Locale: "en"}, {Locale: "fr"}, {AllLocales: true}} {
 		t.Run(string(options.Locale)+map[bool]string{true: "all"}[options.AllLocales], func(t *testing.T) {
-			direct, err := app.Local().FindWithOptions(ctx, "pages", first.ID, options)
+			direct, err := app.Local().Find(ctx, "pages", first.ID, options)
 			if err != nil {
 				t.Fatal(err)
 			}
-			nestedDirect, err := app.Local().FindWithOptions(ctx, "pages", second.ID, options)
+			nestedDirect, err := app.Local().Find(ctx, "pages", second.ID, options)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -59,7 +59,7 @@ func TestBlockIdentityMatchesDirectAndRecursivePopulatedReads(t *testing.T) {
 				t.Fatal("inverse join identities differ from direct read")
 			}
 			options.Populate = []query.Population{{Path: path, Depth: 2}}
-			populated, err := app.Local().FindWithOptions(ctx, "links", link.ID, options)
+			populated, err := app.Local().Find(ctx, "links", link.ID, options)
 			if err != nil {
 				t.Fatal(err)
 			}

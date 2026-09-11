@@ -372,7 +372,6 @@ export interface SchemaPlugin {
 	ridu?: SchemaPluginCompatibility;
 	admin?: SchemaPluginAdmin;
 	fieldTypes?: SchemaPluginFieldType[];
-	databaseContributions?: SchemaPluginDatabaseContribution[];
 	endpoints?: SchemaPluginEndpoint[];
 }
 
@@ -400,21 +399,6 @@ export interface SchemaPluginFieldType {
 	goPackage?: string;
 	goType?: string;
 	jsonSchema?: unknown;
-}
-
-export interface SchemaPluginMigration {
-	version: number;
-	name: string;
-	upSQL: string[];
-	downSQL: string[];
-}
-
-export type SchemaPluginDatabaseAdapter = 'postgres' | 'sqlite';
-
-export interface SchemaPluginDatabaseContribution {
-	adapter: SchemaPluginDatabaseAdapter;
-	migrations?: SchemaPluginMigration[];
-	tables?: string[];
 }
 
 export interface SchemaPluginEndpoint {
@@ -620,10 +604,10 @@ export interface SchemaFieldConditionPredicate {
 	scope: "document" | "sibling";
 	path: string;
 	operator: "equals" | "notEquals" | "oneOf";
-	values: SchemaFieldConditionValue[];
+	values: SchemaScalarLiteral[];
 }
 
-export type SchemaFieldConditionValue =
+export type SchemaScalarLiteral =
 	| { type: "string"; value: string }
 	| { type: "number"; value: string }
 	| { type: "boolean"; value: "true" | "false" };
@@ -709,12 +693,7 @@ export interface SchemaRelationshipFilter {
 	targetPath: string;
 	operator?: "equals" | "notEquals" | "like" | "contains" | "greaterThan" | "greaterThanEqual" | "lessThan" | "lessThanEqual";
 	sourcePath?: string;
-	value?: SchemaRelationshipFilterValue;
-}
-
-export interface SchemaRelationshipFilterValue {
-	type: "string" | "number" | "boolean";
-	value: string;
+	value?: SchemaScalarLiteral;
 }
 
 export interface SchemaRelationshipTarget {
@@ -762,7 +741,7 @@ export interface SchemaBlockLabels {
 
 export interface SchemaBlockType {
 	typeName?: string;
-	admin?: { rowLabel?: string };
+	admin?: { nameField?: string; rowLabel?: string };
 	slug: string;
 	labels: SchemaBlockLabels;
 	fields: SchemaField[];

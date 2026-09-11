@@ -2,13 +2,14 @@ package core_test
 
 import (
 	"encoding/json"
+	"strings"
+	"testing"
+
 	ridu "github.com/riducms/ridu/core"
 	"github.com/riducms/ridu/field"
 	"github.com/riducms/ridu/internal/teststore"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
-	"strings"
-	"testing"
 )
 
 type multiFieldPlugin struct {
@@ -47,10 +48,10 @@ func TestPluginOwnsMultipleDistinctFieldTypes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := app.Local().Create(t.Context(), "posts", store.Values{"color": store.String("red"), "outline": store.String("small")}, nil); err != nil {
+	if _, err := app.Local().Create(t.Context(), "posts", store.Values{"color": store.String("red"), "outline": store.String("small")}, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := app.Local().Create(t.Context(), "posts", store.Values{"color": store.Number(42)}, nil); err == nil {
+	if _, err := app.Local().Create(t.Context(), "posts", store.Values{"color": store.Number(42)}, ridu.MutationOptions{}); err == nil {
 		t.Fatal("field-type validator was not used")
 	}
 	encoded, err := json.Marshal(app.Manifest())

@@ -47,13 +47,13 @@ func TestInitializedAnonymousAuthCreationRejectsBeforePasswordWork(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.CreateAuthUserForTransport(context.Background(), "users", store.Values{"email": store.String("first@example.test")}, "correct-horse", nil); err != nil {
+	if _, err := application.CreateAuthUserForTransport(context.Background(), "users", store.Values{"email": store.String("first@example.test")}, "correct-horse", MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	limiter := newPasswordWorkLimiter(1)
 	limiter.slots <- struct{}{}
 	application.passwordWork = limiter
-	_, err = application.CreateAuthUserForTransport(context.Background(), "users", store.Values{"email": store.String("second@example.test")}, "correct-horse", nil)
+	_, err = application.CreateAuthUserForTransport(context.Background(), "users", store.Values{"email": store.String("second@example.test")}, "correct-horse", MutationOptions{})
 	var operationError *operationengine.Error
 	if !errors.As(err, &operationError) || operationError.Code != "access_denied" || operationError.Status != 403 {
 		t.Fatalf("initialized auth create error = %#v, %v", operationError, err)

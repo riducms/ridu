@@ -54,7 +54,7 @@ import (
 )
 
 func trimTitle(
-	_ operation.WriteContext,
+	_ operation.Context,
 	value operation.Value[string],
 ) (operation.Change[string], error) {
 	title, present := value.Get()

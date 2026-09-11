@@ -23,7 +23,7 @@ func (p runtimeResolutionProbe) TransformFields(_ ridu.FieldGraphContext, fields
 	*p.calls++
 	return fields.Edit(func(d *field.ChildrenDraft) error {
 		return d.EditText("code", func(f field.TextField) field.TextField {
-			return f.Validate(func(c operation.ValidationContext, v operation.Value[string]) ([]operation.Issue, error) {
+			return f.Validate(func(c operation.Context, v operation.Value[string]) ([]operation.Issue, error) {
 				return nil, nil
 			})
 		})
@@ -38,7 +38,7 @@ func TestFieldGraphCRUDConsumesResolvedBindings(t *testing.T) {
 	retired := false
 	factory := func() field.TextField {
 		constructions++
-		return field.Text("code").Admin(field.Admin{VisibleWhen: field.Equal(field.Sibling("kind"), "active")}).Validate(func(c operation.ValidationContext, v operation.Value[string]) ([]operation.Issue, error) {
+		return field.Text("code").Admin(field.Admin{VisibleWhen: field.Equal(field.Sibling("kind"), "active")}).Validate(func(c operation.Context, v operation.Value[string]) ([]operation.Issue, error) {
 			checks++
 			if c.SchemaOccurrenceID == "" || c.OccurrenceID == "" {
 				t.Fatal("unbound runtime identity")
@@ -55,17 +55,17 @@ func TestFieldGraphCRUDConsumesResolvedBindings(t *testing.T) {
 	}
 	retired = true
 	for range 3 {
-		doc, err := app.Local().Create(t.Context(), "pages", store.Values{"kind": store.String("active"), "code": store.String("one")}, nil)
+		doc, err := app.Local().Create(t.Context(), "pages", store.Values{"kind": store.String("active"), "code": store.String("one")}, ridu.MutationOptions{})
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err = app.Local().Update(t.Context(), "pages", doc.ID, store.Values{"code": store.String("two")}, nil); err != nil {
+		if _, err = app.Local().Update(t.Context(), "pages", doc.ID, store.Values{"code": store.String("two")}, ridu.MutationOptions{}); err != nil {
 			t.Fatal(err)
 		}
-		if _, err = app.Local().Find(t.Context(), "pages", doc.ID, nil); err != nil {
+		if _, err = app.Local().Find(t.Context(), "pages", doc.ID, ridu.FindOptions{}); err != nil {
 			t.Fatal(err)
 		}
-		if _, err = app.Local().Delete(t.Context(), "pages", doc.ID, nil); err != nil {
+		if _, err = app.Local().Delete(t.Context(), "pages", doc.ID, ridu.MutationOptions{}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -76,7 +76,7 @@ func TestFieldGraphCRUDConsumesResolvedBindings(t *testing.T) {
 
 func TestFieldGraphScalarViewsNormalizeEmptyWithinRetainedScopes(t *testing.T) {
 	rawMissing, rawNull, validated := 0, 0, 0
-	code := field.Text("code").Hooks(field.Hooks[string]{BeforeValidate: []field.RawTransform{func(c operation.WriteContext, v operation.Value[store.Value]) (operation.Change[store.Value], error) {
+	code := field.Text("code").Hooks(field.Hooks[string]{BeforeValidate: []field.RawTransform{func(c operation.Context, v operation.Value[store.Value]) (operation.Change[store.Value], error) {
 		if c.Operation != operation.Create && c.Operation != operation.Update {
 			return operation.Keep[store.Value](), nil
 		}
@@ -87,7 +87,7 @@ func TestFieldGraphScalarViewsNormalizeEmptyWithinRetainedScopes(t *testing.T) {
 			rawNull++
 		}
 		return operation.Keep[store.Value](), nil
-	}}}).Validate(func(c operation.ValidationContext, v operation.Value[string]) ([]operation.Issue, error) {
+	}}}).Validate(func(c operation.Context, v operation.Value[string]) ([]operation.Issue, error) {
 		validated++
 		if _, present := v.Get(); present {
 			t.Fatal("empty scalar became a logical value")
@@ -105,11 +105,11 @@ func TestFieldGraphScalarViewsNormalizeEmptyWithinRetainedScopes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	doc, err := app.Local().Create(t.Context(), "pages", store.Values{"group": store.Object(store.Values{})}, nil)
+	doc, err := app.Local().Create(t.Context(), "pages", store.Values{"group": store.Object(store.Values{})}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = app.Local().Update(t.Context(), "pages", doc.ID, store.Values{"code": store.Null(), "other": store.String("changed")}, nil)
+	_, err = app.Local().Update(t.Context(), "pages", doc.ID, store.Values{"code": store.Null(), "other": store.String("changed")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

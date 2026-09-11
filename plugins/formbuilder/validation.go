@@ -173,7 +173,7 @@ func (plugin *Plugin) validateSubmission(context ridu.HookContext, allowedFieldT
 	if !valid || formID == "" {
 		return schema.NewValidationError([]schema.Issue{{Code: "required", Path: "form", Message: "a valid form is required"}})
 	}
-	form, err := context.Local.FindWithOptions(context.Context, string(plugin.config.FormsSlug), formID, ridu.FindOptions{
+	form, err := context.Local.Find(context.Context, string(plugin.config.FormsSlug), formID, ridu.FindOptions{
 		Actor: context.Actor, ActorCollection: context.ActorCollection, Locale: context.Locale,
 	})
 	if err != nil {
@@ -338,7 +338,7 @@ func (plugin *Plugin) validateSubmittedUpload(context ridu.HookContext, definiti
 			issues = append(issues, schema.Issue{Code: "invalid_upload_collection", Path: referencePath, Message: fmt.Sprintf("upload field %q stores files in %q", definition.Name, wantCollection)})
 			continue
 		}
-		document, err := context.Local.FindWithOptions(context.Context, string(reference.Collection), reference.ID, ridu.FindOptions{Actor: context.Actor, ActorCollection: context.ActorCollection})
+		document, err := context.Local.Find(context.Context, string(reference.Collection), reference.ID, ridu.FindOptions{Actor: context.Actor, ActorCollection: context.ActorCollection})
 		if err != nil {
 			issues = append(issues, schema.Issue{Code: "invalid_upload", Path: referencePath, Message: "uploaded document does not exist or is not readable"})
 			continue

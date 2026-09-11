@@ -76,7 +76,7 @@ func TestPostgresBackupRestoreDrill(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	user, err := application.Local().Create(ctx, "users", store.Values{"email": store.String("restore@example.test")}, nil)
+	user, err := application.Local().Create(ctx, "users", store.Values{"email": store.String("restore@example.test")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +85,7 @@ func TestPostgresBackupRestoreDrill(t *testing.T) {
 	}
 	post, err := application.Local().Create(ctx, "posts", store.Values{
 		"title": store.String("Survives restore"), "author": store.String(user.ID),
-	}, &user)
+	}, ridu.MutationOptions{Actor: &user})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +104,7 @@ func TestPostgresBackupRestoreDrill(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	restoredPost, err := restoredApplication.Local().Find(ctx, "posts", post.ID, &user)
+	restoredPost, err := restoredApplication.Local().Find(ctx, "posts", post.ID, ridu.FindOptions{Actor: &user})
 	if err != nil {
 		t.Fatal(err)
 	}

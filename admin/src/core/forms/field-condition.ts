@@ -1,7 +1,8 @@
+import { scalarLiteralValue } from "@admin/core/forms/scalar-literal";
 import type {
 	SchemaFieldCondition,
 	SchemaFieldConditionPredicate,
-	SchemaFieldConditionValue,
+	SchemaScalarLiteral,
 } from "@riducms/protocol";
 
 export type FieldConditionValueReader = (path: string) => unknown;
@@ -40,7 +41,7 @@ function evaluatePredicate(
 	read: FieldConditionValueReader
 ) {
 	const actual = read(fieldConditionValuePath(predicate.scope, predicate.path, fieldPath));
-	const matches = (expected: SchemaFieldConditionValue) => scalarMatches(actual, expected);
+	const matches = (expected: SchemaScalarLiteral) => scalarMatches(actual, expected);
 	switch (predicate.operator) {
 		case "equals":
 			return predicate.values[0] !== undefined && matches(predicate.values[0]);
@@ -51,13 +52,7 @@ function evaluatePredicate(
 	}
 }
 
-function scalarMatches(actual: unknown, expected: SchemaFieldConditionValue) {
-	switch (expected.type) {
-		case "string":
-			return typeof actual === "string" && actual === expected.value;
-		case "number":
-			return typeof actual === "number" && actual === Number(expected.value);
-		case "boolean":
-			return typeof actual === "boolean" && actual === (expected.value === "true");
-	}
+function scalarMatches(actual: unknown, expected: SchemaScalarLiteral) {
+	const value = scalarLiteralValue(expected);
+	return value !== undefined && actual === value;
 }

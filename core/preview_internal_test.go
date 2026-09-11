@@ -224,7 +224,7 @@ func TestPreviewTokenBindsExactAuthCollectionAndReloadsActor(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	post, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("Scoped draft")}, &staffActor)
+	post, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("Scoped draft")}, MutationOptions{Actor: &staffActor})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -253,7 +253,7 @@ func TestPreviewTokenBindsExactAuthCollectionAndReloadsActor(t *testing.T) {
 	if !retained {
 		t.Fatal("transient actor reload failure removed the preview grant")
 	}
-	reusedTarget, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("Original target")}, &staffActor)
+	reusedTarget, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("Original target")}, MutationOptions{Actor: &staffActor})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -263,23 +263,22 @@ func TestPreviewTokenBindsExactAuthCollectionAndReloadsActor(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Delete(context.Background(), "posts", reusedTarget.ID, &staffActor); err != nil {
+	if _, err := application.Local().Delete(context.Background(), "posts", reusedTarget.ID, MutationOptions{Actor: &staffActor}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := application.Local().Import(context.Background(), "posts", store.Values{"title": store.String("Recreated target")}, ImportOptions{
-		ID: reusedTarget.ID, Status: store.StatusDraft, CreatedAt: reusedTarget.CreatedAt,
-	}, &staffActor); err != nil {
+		ID: reusedTarget.ID, Status: store.StatusDraft, CreatedAt: reusedTarget.CreatedAt, Actor: &staffActor}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := application.FindCollectionPreview(context.Background(), reusedToken.Token, "posts", reusedTarget.ID); err == nil {
 		t.Fatal("preview token survived permanent deletion and target ID reuse")
 	}
 
-	usersActor, err = application.Local().Update(context.Background(), "users", usersActor.ID, store.Values{"role": store.String("staff")}, &usersActor)
+	usersActor, err = application.Local().Update(context.Background(), "users", usersActor.ID, store.Values{"role": store.String("staff")}, MutationOptions{Actor: &usersActor})
 	if err != nil {
 		t.Fatal(err)
 	}
-	staffActor, err = application.Local().Update(context.Background(), "staff", staffActor.ID, store.Values{"role": store.String("revoked")}, &staffActor)
+	staffActor, err = application.Local().Update(context.Background(), "staff", staffActor.ID, store.Values{"role": store.String("revoked")}, MutationOptions{Actor: &staffActor})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -287,7 +286,7 @@ func TestPreviewTokenBindsExactAuthCollectionAndReloadsActor(t *testing.T) {
 		t.Fatal("preview token used a same-ID actor from another collection or stale actor values")
 	}
 
-	_, err = application.Local().Delete(context.Background(), "staff", staffActor.ID, &staffActor)
+	_, err = application.Local().Delete(context.Background(), "staff", staffActor.ID, MutationOptions{Actor: &staffActor})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -302,7 +301,7 @@ func TestPreviewTokenBindsExactAuthCollectionAndReloadsActor(t *testing.T) {
 	}
 	if _, err := application.Local().Import(context.Background(), "staff", store.Values{
 		"email": store.String("replacement@example.test"), "role": store.String("staff"),
-	}, ImportOptions{ID: staffActor.ID, CreatedAt: staffActor.CreatedAt}, &usersActor); err != nil {
+	}, ImportOptions{ID: staffActor.ID, CreatedAt: staffActor.CreatedAt, Actor: &usersActor}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := application.FindCollectionPreview(context.Background(), token.Token, "posts", post.ID); err == nil {
@@ -326,15 +325,15 @@ func TestPreviewTokenActorQuotaAndExplicitRevocation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	first, err := application.Local().Create(context.Background(), "users", store.Values{"email": store.String("first@example.test")}, nil)
+	first, err := application.Local().Create(context.Background(), "users", store.Values{"email": store.String("first@example.test")}, MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := application.Local().Create(context.Background(), "users", store.Values{"email": store.String("second@example.test")}, nil)
+	second, err := application.Local().Create(context.Background(), "users", store.Values{"email": store.String("second@example.test")}, MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	target, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("Draft")}, &first)
+	target, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("Draft")}, MutationOptions{Actor: &first})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -398,21 +397,20 @@ func TestPreviewMintFailsClosedAcrossPermanentDeleteAndSameShapedImport(t *testi
 			}
 
 			if subject == "target" {
-				if _, err := application.Local().Delete(context.Background(), "posts", target.ID, &actor); err != nil {
+				if _, err := application.Local().Delete(context.Background(), "posts", target.ID, MutationOptions{Actor: &actor}); err != nil {
 					t.Fatal(err)
 				}
 				if _, err := application.Local().Import(context.Background(), "posts", store.CloneValues(target.Values), ImportOptions{
-					ID: target.ID, Status: target.Status, CreatedAt: target.CreatedAt,
-				}, &actor); err != nil {
+					ID: target.ID, Status: target.Status, CreatedAt: target.CreatedAt, Actor: &actor}); err != nil {
 					t.Fatal(err)
 				}
 			} else {
-				if _, err := application.Local().Delete(context.Background(), "users", actor.ID, nil); err != nil {
+				if _, err := application.Local().Delete(context.Background(), "users", actor.ID, MutationOptions{}); err != nil {
 					t.Fatal(err)
 				}
 				if _, err := application.Local().Import(context.Background(), "users", store.CloneValues(actor.Values), ImportOptions{
 					ID: actor.ID, Status: actor.Status, CreatedAt: actor.CreatedAt,
-				}, nil); err != nil {
+				}); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -439,13 +437,13 @@ func TestPreviewGrantIsRevokedWhenPermanentDeleteCommitOutcomeIsUnknown(t *testi
 		t.Fatal(err)
 	}
 	backend.failNextCommit()
-	if _, err := application.Local().Delete(context.Background(), "posts", target.ID, &actor); err == nil {
+	if _, err := application.Local().Delete(context.Background(), "posts", target.ID, MutationOptions{Actor: &actor}); err == nil {
 		t.Fatal("permanent delete with a lost commit response succeeded")
 	}
 	if _, err := application.FindCollectionPreview(context.Background(), token.Token, "posts", target.ID); previewErrorCode(err) != "invalid_preview_token" {
 		t.Fatalf("preview after uncertain delete commit = %v", err)
 	}
-	if _, err := application.Local().Find(context.Background(), "posts", target.ID, &actor); !errors.Is(err, store.ErrNotFound) {
+	if _, err := application.Local().Find(context.Background(), "posts", target.ID, FindOptions{Actor: &actor}); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("document after applied commit = %v, want not found", err)
 	}
 }
@@ -456,12 +454,12 @@ func TestPreviewMintRejectsIdentityAuthenticatedBeforeActorReplacement(t *testin
 		Collection: "users", Actor: actor,
 		PreviewEpoch: application.previewIdentityEpoch(),
 	}
-	if _, err := application.Local().Delete(context.Background(), "users", actor.ID, nil); err != nil {
+	if _, err := application.Local().Delete(context.Background(), "users", actor.ID, MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := application.Local().Import(context.Background(), "users", store.CloneValues(actor.Values), ImportOptions{
 		ID: actor.ID, Status: actor.Status, CreatedAt: actor.CreatedAt,
-	}, nil); err != nil {
+	}); err != nil {
 		t.Fatal(err)
 	}
 	token, err := application.CreateCollectionPreviewToken(context.Background(), "posts", target.ID, identity)
@@ -486,11 +484,11 @@ func newPreviewRaceApplication(t *testing.T, backend store.Store) (*App, store.D
 	if err != nil {
 		t.Fatal(err)
 	}
-	actor, err := application.Local().Create(context.Background(), "users", store.Values{"email": store.String("author@example.test")}, nil)
+	actor, err := application.Local().Create(context.Background(), "users", store.Values{"email": store.String("author@example.test")}, MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	target, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("Draft")}, &actor)
+	target, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("Draft")}, MutationOptions{Actor: &actor})
 	if err != nil {
 		t.Fatal(err)
 	}

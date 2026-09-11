@@ -100,12 +100,12 @@ func (plugin *plugin) GeneratedArtifacts(ctx ridu.PluginGenerationContext) ([]ri
 	return []ridu.PluginGeneratedArtifact{{Name: schemaArtifactName, Content: []byte(sdl)}}, nil
 }
 
-func (plugin *plugin) BindTransports(ctx ridu.PluginTransportContext) ([]ridu.PluginTransport, error) {
+func (plugin *plugin) BindTransports(ctx ridu.PluginTransportContext) ([]ridu.Endpoint, error) {
 	executable, err := buildExecutable(ctx.Manifest.Snapshot(), ctx.Local, ctx.App, plugin.options)
 	if err != nil {
 		return nil, err
 	}
-	return []ridu.PluginTransport{{
+	return []ridu.Endpoint{{
 		Method: http.MethodPost, Path: plugin.options.Path, Summary: "Execute a GraphQL operation",
 		MaxBodyBytes: plugin.options.MaxBodyBytes,
 		Handler:      executable.serve,

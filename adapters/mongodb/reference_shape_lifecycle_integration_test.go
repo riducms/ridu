@@ -43,9 +43,7 @@ func TestMongoDBReferenceShapeLifecycle(t *testing.T) {
 			},
 			{
 				Slug: "people",
-				Fields: field.Fields{field.Text("name").Required().Localized(), field.Checkbox("public").Required(), field.Text("secret").Access(field.Access{Read: func(operation.AccessContext,
-
-				) (bool, error) {
+				Fields: field.Fields{field.Text("name").Required().Localized(), field.Checkbox("public").Required(), field.Text("secret").Access(field.Access{Read: func(operation.Context) (bool, error) {
 					return false, nil
 				}})},
 				Access: ridu.CollectionAccess{Read: func(ridu.AccessContext) (ridu.AccessDecision, error) {
@@ -106,7 +104,7 @@ func TestMongoDBReferenceShapeLifecycle(t *testing.T) {
 	personA := mongoReferenceLifecyclePerson(t, application, "Ada", "Adèle", true, "redact-a")
 	personB := mongoReferenceLifecyclePerson(t, application, "Bea", "Béatrice", true, "redact-b")
 	personC := mongoReferenceLifecyclePerson(t, application, "Cyd", "Cécile", true, "redact-c")
-	team, err := application.Local().Create(t.Context(), "teams", store.Values{"name": store.String("Core")}, nil)
+	team, err := application.Local().Create(t.Context(), "teams", store.Values{"name": store.String("Core")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +112,7 @@ func TestMongoDBReferenceShapeLifecycle(t *testing.T) {
 	mediaB := mongoReferenceLifecycleUpload(t, application, "b.txt", "Asset B")
 
 	base := mongoReferenceLifecycleEnglishValues(personA.ID, personC.ID, team.ID, mediaA.ID, mediaB.ID)
-	primary, err := application.Local().Create(t.Context(), "records", base, nil)
+	primary, err := application.Local().Create(t.Context(), "records", base, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,7 +120,7 @@ func TestMongoDBReferenceShapeLifecycle(t *testing.T) {
 	if firstRevision != 1 {
 		t.Fatalf("create revision = %d, want 1", firstRevision)
 	}
-	pointProjection, err := application.Local().FindWithOptions(t.Context(), "records", primary.ID, ridu.FindOptions{Select: []query.Path{
+	pointProjection, err := application.Local().Find(t.Context(), "records", primary.ID, ridu.FindOptions{Select: []query.Path{
 		mongoMustPath(t, "location"), mongoMustPath(t, "localLocation"), mongoMustPath(t, "sections"),
 	}})
 	if err != nil {
@@ -137,26 +135,24 @@ func TestMongoDBReferenceShapeLifecycle(t *testing.T) {
 	// Import uses the same admission and derived-state path as ordinary create.
 	imported, err := application.Local().Import(t.Context(), "records", base, ridu.ImportOptions{
 		ID: "mongo-shape-import", Status: store.StatusPublished,
-	}, nil)
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Delete(t.Context(), "records", imported.ID, nil); err != nil {
+	if _, err := application.Local().Delete(t.Context(), "records", imported.ID, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().DeletePermanent(t.Context(), "records", imported.ID, nil); err != nil {
+	if _, err := application.Local().DeletePermanent(t.Context(), "records", imported.ID, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	mongoReferenceLifecycleAssertOwnerStateClean(t, backend, application, imported.ID)
 
 	primary, err = application.Local().PublishChanges(t.Context(), "records", primary.ID,
-		mongoReferenceLifecycleFrenchValues(personA.ID, personB.ID, personC.ID, team.ID, mediaB.ID), primary.Revision, nil,
-		ridu.LocaleOptions{Locale: "fr"})
+		mongoReferenceLifecycleFrenchValues(personA.ID, personB.ID, personC.ID, team.ID, mediaB.ID), ridu.MutationOptions{ExpectedRevision: primary.Revision, Locale: "fr"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if primary, err = application.Local().Restore(t.Context(), "records", primary.ID, firstRevision, primary.Revision, nil,
-		ridu.LocaleOptions{Locale: "en"}); err != nil {
+	if primary, err = application.Local().Restore(t.Context(), "records", primary.ID, firstRevision, ridu.MutationOptions{ExpectedRevision: primary.Revision, Locale: "en"}); err != nil {
 		t.Fatal(err)
 	}
 	if restored := mongoReferenceLifecycleString(primary.Values["editor"]); restored != personA.ID {
@@ -168,8 +164,7 @@ func TestMongoDBReferenceShapeLifecycle(t *testing.T) {
 	restoredSection := mongoReferenceLifecycleObject(t, restoredSections[0], "restored point section")
 	mongoReferenceLifecycleAssertPoint(t, restoredSection["waypoint"], -0.3, 51.7, "restored nested point")
 	primary, err = application.Local().PublishChanges(t.Context(), "records", primary.ID,
-		mongoReferenceLifecycleFrenchValues(personA.ID, personB.ID, personC.ID, team.ID, mediaB.ID), primary.Revision, nil,
-		ridu.LocaleOptions{Locale: "fr"})
+		mongoReferenceLifecycleFrenchValues(personA.ID, personB.ID, personC.ID, team.ID, mediaB.ID), ridu.MutationOptions{ExpectedRevision: primary.Revision, Locale: "fr"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -181,11 +176,11 @@ func TestMongoDBReferenceShapeLifecycle(t *testing.T) {
 		"localizedLayout": store.List(store.Object(store.Values{
 			"_key": store.String("localized-quote-fr"), "blockType": store.String("quote"),
 		})),
-	}, primary.Revision, nil, ridu.LocaleOptions{Locale: "fr"})
+	}, ridu.MutationOptions{ExpectedRevision: primary.Revision, Locale: "fr"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	updatedPoints, err := application.Local().FindWithOptions(t.Context(), "records", primary.ID, ridu.FindOptions{
+	updatedPoints, err := application.Local().Find(t.Context(), "records", primary.ID, ridu.FindOptions{
 		Locale: "fr", Select: []query.Path{
 			mongoMustPath(t, "location"), mongoMustPath(t, "localLocation"), mongoMustPath(t, "localizedMeta"),
 			mongoMustPath(t, "sections"), mongoMustPath(t, "localizedSections"), mongoMustPath(t, "localizedLayout"),
@@ -216,11 +211,11 @@ func TestMongoDBReferenceShapeLifecycle(t *testing.T) {
 	}
 
 	duplicate, err := application.Local().Duplicate(t.Context(), "records", primary.ID,
-		store.Values{"title": store.String("Duplicate")}, nil, ridu.LocaleOptions{Locale: "fr"})
+		store.Values{"title": store.String("Duplicate")}, ridu.MutationOptions{Locale: "fr"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	duplicateAll, err := application.Local().Find(t.Context(), "records", duplicate.ID, nil, ridu.LocaleOptions{AllLocales: true})
+	duplicateAll, err := application.Local().Find(t.Context(), "records", duplicate.ID, ridu.FindOptions{AllLocales: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -235,28 +230,28 @@ func TestMongoDBReferenceShapeLifecycle(t *testing.T) {
 	badRelationship["sections"] = store.List(store.Object(store.Values{
 		"_key": store.String("bad-section"), "reviewers": store.List(store.String("missing-person")),
 	}))
-	if _, err := application.Local().Create(t.Context(), "records", badRelationship, nil); !mongoReferenceLifecycleIssue(err, "invalid_relationship", "sections.0.reviewers.0") {
+	if _, err := application.Local().Create(t.Context(), "records", badRelationship, ridu.MutationOptions{}); !mongoReferenceLifecycleIssue(err, "invalid_relationship", "sections.0.reviewers.0") {
 		t.Fatalf("nested relationship admission error = %v", err)
 	}
 	badUpload := store.CloneValues(base)
 	badUpload["layout"] = store.List(store.Object(store.Values{
 		"_key": store.String("bad-block"), "blockType": store.String("quote"), "asset": store.String("missing-upload"),
 	}))
-	if _, err := application.Local().Create(t.Context(), "records", badUpload, nil); !mongoReferenceLifecycleIssue(err, "invalid_upload", "layout.0.asset.en") {
+	if _, err := application.Local().Create(t.Context(), "records", badUpload, ridu.MutationOptions{}); !mongoReferenceLifecycleIssue(err, "invalid_upload", "layout.0.asset.en") {
 		t.Fatalf("nested upload admission error = %v; issues = %#v", err, mongoReferenceLifecycleIssues(err))
 	}
 
-	if _, err := application.Local().Update(t.Context(), "people", personC.ID, store.Values{"public": store.Boolean(false)}, nil); err != nil {
+	if _, err := application.Local().Update(t.Context(), "people", personC.ID, store.Values{"public": store.Boolean(false)}, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	populated, err := application.Local().FindWithOptions(t.Context(), "records", primary.ID, ridu.FindOptions{
+	populated, err := application.Local().Find(t.Context(), "records", primary.ID, ridu.FindOptions{
 		Locale: "fr", Populate: mongoReferenceLifecyclePopulations(t),
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	mongoReferenceLifecycleAssertPopulation(t, populated, personA.ID, personB.ID, personC.ID, team.ID, mediaA.ID, mediaB.ID)
-	allPopulated, err := application.Local().FindWithOptions(t.Context(), "records", primary.ID, ridu.FindOptions{
+	allPopulated, err := application.Local().Find(t.Context(), "records", primary.ID, ridu.FindOptions{
 		AllLocales: true, Populate: []query.Population{{Path: mongoMustPath(t, "editor")}},
 	})
 	if err != nil {
@@ -268,13 +263,13 @@ func TestMongoDBReferenceShapeLifecycle(t *testing.T) {
 
 	// Restrict is planned before any nullification, so a blocked target delete
 	// cannot partially rewrite either active owner.
-	if _, err := application.Local().Delete(t.Context(), "people", personA.ID, nil); !mongoOperationCode(err, "delete_restricted") {
+	if _, err := application.Local().Delete(t.Context(), "people", personA.ID, ridu.MutationOptions{}); !mongoOperationCode(err, "delete_restricted") {
 		t.Fatalf("relationship restrict delete = %v", err)
 	}
-	if _, err := application.Local().Delete(t.Context(), "media", mediaA.ID, nil); !mongoOperationCode(err, "delete_restricted") {
+	if _, err := application.Local().Delete(t.Context(), "media", mediaA.ID, ridu.MutationOptions{}); !mongoOperationCode(err, "delete_restricted") {
 		t.Fatalf("upload restrict delete = %v", err)
 	}
-	unchanged, err := application.Local().Find(t.Context(), "records", primary.ID, nil, ridu.LocaleOptions{Locale: "en"})
+	unchanged, err := application.Local().Find(t.Context(), "records", primary.ID, ridu.FindOptions{Locale: "en"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -282,12 +277,12 @@ func TestMongoDBReferenceShapeLifecycle(t *testing.T) {
 		t.Fatalf("restrict planning partially nullified current data: %#v", unchanged.Values)
 	}
 
-	if _, err := application.Local().Update(t.Context(), "people", personC.ID, store.Values{"public": store.Boolean(true)}, nil); err != nil {
+	if _, err := application.Local().Update(t.Context(), "people", personC.ID, store.Values{"public": store.Boolean(true)}, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	for ownerID, revision := range map[string]int{primary.ID: primary.Revision, duplicate.ID: duplicate.Revision} {
 		updatedOwner, err := application.Local().PublishChanges(t.Context(), "records", ownerID,
-			store.Values{"guard": store.Null(), "assetGuard": store.Null()}, revision, nil, ridu.LocaleOptions{Locale: "en"})
+			store.Values{"guard": store.Null(), "assetGuard": store.Null()}, ridu.MutationOptions{ExpectedRevision: revision, Locale: "en"})
 		if err != nil {
 			t.Fatalf("clear restrict fields for %s: %v", ownerID, err)
 		}
@@ -297,29 +292,29 @@ func TestMongoDBReferenceShapeLifecycle(t *testing.T) {
 			duplicate = updatedOwner
 		}
 	}
-	if _, err := application.Local().Delete(t.Context(), "records", duplicate.ID, nil); err != nil {
+	if _, err := application.Local().Delete(t.Context(), "records", duplicate.ID, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	primaryVersionsBefore, err := application.Local().Versions(t.Context(), "records", primary.ID, nil, ridu.LocaleOptions{AllLocales: true})
+	primaryVersionsBefore, err := application.Local().Versions(t.Context(), "records", primary.ID, ridu.FindOptions{AllLocales: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	duplicateVersionsBefore, err := application.Local().Versions(t.Context(), "records", duplicate.ID, nil, ridu.LocaleOptions{AllLocales: true})
+	duplicateVersionsBefore, err := application.Local().Versions(t.Context(), "records", duplicate.ID, ridu.FindOptions{AllLocales: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Delete(t.Context(), "people", personA.ID, nil); err != nil {
+	if _, err := application.Local().Delete(t.Context(), "people", personA.ID, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Delete(t.Context(), "media", mediaA.ID, nil); err != nil {
+	if _, err := application.Local().Delete(t.Context(), "media", mediaA.ID, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
 
-	activeAfter, err := application.Local().Find(t.Context(), "records", primary.ID, nil, ridu.LocaleOptions{AllLocales: true})
+	activeAfter, err := application.Local().Find(t.Context(), "records", primary.ID, ridu.FindOptions{AllLocales: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	trashAfter, err := application.Local().FindWithOptions(t.Context(), "records", duplicate.ID, ridu.FindOptions{TrashOnly: true, AllLocales: true})
+	trashAfter, err := application.Local().Find(t.Context(), "records", duplicate.ID, ridu.FindOptions{TrashOnly: true, AllLocales: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -333,11 +328,11 @@ func TestMongoDBReferenceShapeLifecycle(t *testing.T) {
 		}
 		mongoReferenceLifecycleAssertNestedPolymorphicNullification(t, document, personB.ID, team.ID)
 	}
-	primaryVersionsAfter, err := application.Local().Versions(t.Context(), "records", primary.ID, nil, ridu.LocaleOptions{AllLocales: true})
+	primaryVersionsAfter, err := application.Local().Versions(t.Context(), "records", primary.ID, ridu.FindOptions{AllLocales: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	duplicateVersionsAfter, err := application.Local().Versions(t.Context(), "records", duplicate.ID, nil, ridu.LocaleOptions{AllLocales: true})
+	duplicateVersionsAfter, err := application.Local().Versions(t.Context(), "records", duplicate.ID, ridu.FindOptions{AllLocales: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -359,11 +354,10 @@ func TestMongoDBReferenceShapeLifecycle(t *testing.T) {
 	mongoReferenceLifecycleAssertPoint(t, versionSection["waypoint"], -0.3, 51.7, "versioned nested point")
 
 	currentRevision := activeAfter.Revision
-	if _, err := application.Local().Restore(t.Context(), "records", primary.ID, firstRevision, currentRevision, nil,
-		ridu.LocaleOptions{Locale: "en"}); !mongoReferenceLifecycleAnyIssue(err, "invalid_relationship", "invalid_upload") {
+	if _, err := application.Local().Restore(t.Context(), "records", primary.ID, firstRevision, ridu.MutationOptions{ExpectedRevision: currentRevision, Locale: "en"}); !mongoReferenceLifecycleAnyIssue(err, "invalid_relationship", "invalid_upload") {
 		t.Fatalf("restore with deleted historical targets = %v", err)
 	}
-	stillCurrent, err := application.Local().Find(t.Context(), "records", primary.ID, nil, ridu.LocaleOptions{AllLocales: true})
+	stillCurrent, err := application.Local().Find(t.Context(), "records", primary.ID, ridu.FindOptions{AllLocales: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -373,22 +367,22 @@ func TestMongoDBReferenceShapeLifecycle(t *testing.T) {
 
 	// Nullified trash state remains restorable. Permanent deletion removes both
 	// derived references and versions, permitting a clean import with the ID.
-	restoredTrash, err := application.Local().RestoreDeleted(t.Context(), "records", duplicate.ID, nil, ridu.LocaleOptions{AllLocales: true})
+	restoredTrash, err := application.Local().RestoreDeleted(t.Context(), "records", duplicate.ID, ridu.MutationOptions{AllLocales: true})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if mongoReferenceLifecycleContainsString(restoredTrash.Values, personA.ID) || mongoReferenceLifecycleContainsString(restoredTrash.Values, mediaA.ID) {
 		t.Fatalf("trash restore resurrected deleted targets: %#v", restoredTrash.Values)
 	}
-	if _, err := application.Local().Delete(t.Context(), "records", duplicate.ID, nil); err != nil {
+	if _, err := application.Local().Delete(t.Context(), "records", duplicate.ID, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().DeletePermanent(t.Context(), "records", duplicate.ID, nil); err != nil {
+	if _, err := application.Local().DeletePermanent(t.Context(), "records", duplicate.ID, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	mongoReferenceLifecycleAssertOwnerStateClean(t, backend, application, duplicate.ID)
 	reimported, err := application.Local().Import(t.Context(), "records", store.Values{"title": store.String("Reimported")},
-		ridu.ImportOptions{ID: duplicate.ID, Status: store.StatusPublished}, nil)
+		ridu.ImportOptions{ID: duplicate.ID, Status: store.StatusPublished})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -401,12 +395,11 @@ func mongoReferenceLifecyclePerson(t *testing.T, application *ridu.App, english,
 	t.Helper()
 	person, err := application.Local().Create(t.Context(), "people", store.Values{
 		"name": store.String(english), "public": store.Boolean(public), "secret": store.String(secret),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	person, err = application.Local().Update(t.Context(), "people", person.ID, store.Values{"name": store.String(french)}, nil,
-		ridu.LocaleOptions{Locale: "fr"})
+	person, err = application.Local().Update(t.Context(), "people", person.ID, store.Values{"name": store.String(french)}, ridu.MutationOptions{Locale: "fr"})
 	if err != nil {
 		t.Fatal(err)
 	}

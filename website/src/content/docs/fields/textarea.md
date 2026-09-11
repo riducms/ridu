@@ -42,7 +42,7 @@ same plain string through REST, the Local API, and the generated SDK.
 | `.Default(value)` / `.DefaultFrom(callback)`                    | Supplies fixed or request-aware initial text.                          |
 | `.Localized()`                                                  | Stores separate text for each configured content locale.               |
 | `.Validate(callback)` / `.LiveValidate(callback)`               | Adds save validation or optional feedback while editing.               |
-| `.Admin(...)`, `.Access(...)`, `.Hooks(...)`, `.ReadHooks(...)` | Configures the editor, authorization, saved value, and returned value. |
+| `.Admin(...)`, `.Access(...)`, `.Hooks(...)`, `.AfterRead(...)` | Configures the editor, authorization, saved value, and returned value. |
 
 ## Set length limits and a placeholder {#options}
 

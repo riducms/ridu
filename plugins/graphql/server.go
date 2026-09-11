@@ -27,7 +27,7 @@ type requestEnvelope struct {
 	Variables     json.RawMessage `json:"variables"`
 }
 
-func (executable *executable) serve(endpoint ridu.PluginEndpointContext) {
+func (executable *executable) serve(endpoint ridu.EndpointContext) {
 	writer := endpoint.Writer
 	request := endpoint.Request
 	responseType := "application/json; charset=utf-8"
@@ -110,7 +110,7 @@ func (executable *executable) serve(endpoint ridu.PluginEndpointContext) {
 	writeGraphQLResult(endpoint, http.StatusOK, result)
 }
 
-func sanitizeExecutionErrors(endpoint ridu.PluginEndpointContext, failures []gqlerrors.FormattedError) {
+func sanitizeExecutionErrors(endpoint ridu.EndpointContext, failures []gqlerrors.FormattedError) {
 	for index := range failures {
 		failure := &failures[index]
 		cause, public := graphQLExecutionError(failure.OriginalError())
@@ -179,7 +179,7 @@ func graphQLErrorCode(failure gqlerrors.FormattedError, fallback string) string 
 	return fallback
 }
 
-func writeGraphQLResult(endpoint ridu.PluginEndpointContext, status int, result *enginegraphql.Result) {
+func writeGraphQLResult(endpoint ridu.EndpointContext, status int, result *enginegraphql.Result) {
 	encoded, err := json.Marshal(result)
 	if err != nil {
 		if endpoint.ReportError != nil {

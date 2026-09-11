@@ -18,7 +18,7 @@ func TestGeneratedFormGraphOwnsProtectedEmailConfiguration(t *testing.T) {
 		}
 		graph, err := collection.Fields.Edit(func(draft *field.ChildrenDraft) error {
 			return draft.EditText("title", func(title field.TextField) field.TextField {
-				return title.Validate(func(_ operation.ValidationContext, value operation.Value[string]) ([]operation.Issue, error) {
+				return title.Validate(func(_ operation.Context, value operation.Value[string]) ([]operation.Issue, error) {
 					if text, _ := value.Get(); text == "Reserved" {
 						return []operation.Issue{{Code: "reserved_form_title", Message: "Choose another title"}}, nil
 					}
@@ -45,7 +45,7 @@ func TestGeneratedFormGraphOwnsProtectedEmailConfiguration(t *testing.T) {
 	if !protected {
 		t.Fatal("attached email read policy missing from canonical query capabilities")
 	}
-	_, err := app.Local().Create(t.Context(), "forms", store.Values{"title": store.String("Reserved"), "confirmationMessage": store.String("Thanks")}, formManager())
+	_, err := app.Local().Create(t.Context(), "forms", store.Values{"title": store.String("Reserved"), "confirmationMessage": store.String("Thanks")}, ridu.MutationOptions{Actor: formManager()})
 	var validation *ridu.OperationError
 	if !errors.As(err, &validation) || !hasIssueCode(validation.Issues, "reserved_form_title") {
 		t.Fatalf("form override lost graph validator: %v", err)

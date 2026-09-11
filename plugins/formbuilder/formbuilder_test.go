@@ -112,7 +112,7 @@ func TestFieldsOverrideCanAddAProjectOwnedFormBlock(t *testing.T) {
 	if _, err := application.Local().Create(t.Context(), "form-submissions", store.Values{
 		"form":           store.String(form.ID),
 		"submissionData": store.List(submissionValue("rating", store.Number(5))),
-	}, nil); err != nil {
+	}, ridu.MutationOptions{}); err != nil {
 		t.Fatalf("custom form block submission: %v", err)
 	}
 }
@@ -140,7 +140,7 @@ func TestSubmissionValidationUsesSelectedForm(t *testing.T) {
 			submissionValue("email", store.String("ada@example.test")),
 			submissionValue("topic", store.String("sales")),
 		),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -155,7 +155,7 @@ func TestSubmissionValidationUsesSelectedForm(t *testing.T) {
 			submissionValue("topic", store.String("support")),
 			submissionValue("unknown", store.String("value")),
 		),
-	}, nil)
+	}, ridu.MutationOptions{})
 	var operationError *ridu.OperationError
 	if !errors.As(err, &operationError) || operationError.Code != "validation" || operationError.Status != 422 {
 		t.Fatalf("invalid submission error = %#v / %v", operationError, err)
@@ -166,7 +166,7 @@ func TestSubmissionValidationUsesSelectedForm(t *testing.T) {
 			t.Errorf("issues %#v do not contain %q", operationError.Issues, code)
 		}
 	}
-	if _, err := application.Local().Find(t.Context(), "form-submissions", created.ID, nil); err == nil {
+	if _, err := application.Local().Find(t.Context(), "form-submissions", created.ID, ridu.FindOptions{}); err == nil {
 		t.Fatal("anonymous submission read unexpectedly succeeded")
 	}
 }
@@ -180,10 +180,10 @@ func TestFormDefinitionValidationUsesCompleteCandidateOnPatchUpdate(t *testing.T
 		"fields":              store.List(formField("name", formbuilder.FieldText, true)),
 	})
 
-	if _, err := application.Local().Update(t.Context(), "forms", form.ID, store.Values{"title": store.String("Contact us")}, formManager()); err != nil {
+	if _, err := application.Local().Update(t.Context(), "forms", form.ID, store.Values{"title": store.String("Contact us")}, ridu.MutationOptions{Actor: formManager()}); err != nil {
 		t.Fatalf("partial update rejected existing confirmation and fields: %v", err)
 	}
-	_, err := application.Local().Update(t.Context(), "forms", form.ID, store.Values{"confirmationMessage": store.String("")}, formManager())
+	_, err := application.Local().Update(t.Context(), "forms", form.ID, store.Values{"confirmationMessage": store.String("")}, ridu.MutationOptions{Actor: formManager()})
 	var operationError *ridu.OperationError
 	if !errors.As(err, &operationError) || operationError.Code != "validation" || !hasIssueCode(operationError.Issues, "required") {
 		t.Fatalf("invalid partial update error = %#v / %v", operationError, err)
@@ -208,7 +208,7 @@ func TestEmailsRunAfterCommitWithEscapedPlaceholders(t *testing.T) {
 			"replyTo": store.String("{{email}}"), "subject": store.String("New lead: {{name}}"), "message": store.String("<p>{{name}}</p>{{*:table}}"),
 		})),
 	})
-	publicForm, err := application.Local().Find(t.Context(), "forms", form.ID, nil)
+	publicForm, err := application.Local().Find(t.Context(), "forms", form.ID, ridu.FindOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -218,7 +218,7 @@ func TestEmailsRunAfterCommitWithEscapedPlaceholders(t *testing.T) {
 	created, err := application.Local().Create(t.Context(), "form-submissions", store.Values{
 		"form":           store.String(form.ID),
 		"submissionData": store.List(submissionValue("name", store.String("<Ada>")), submissionValue("email", store.String("ada@example.test"))),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -252,7 +252,7 @@ func TestPaymentTotalAndCallbackArePersisted(t *testing.T) {
 	created, err := application.Local().Create(t.Context(), "form-submissions", store.Values{
 		"form":           store.String(form.ID),
 		"submissionData": store.List(submissionValue("quantity", store.Number(3)), submissionValue("amount", store.Number(30))),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -289,7 +289,7 @@ func TestCollectionOverridesCanTightenSubmissionCreation(t *testing.T) {
 	form := createForm(t, application, store.Values{
 		"title": store.String("Private"), "confirmationType": store.String("message"), "confirmationMessage": store.String("Thanks"),
 	})
-	_, err := application.Local().Create(t.Context(), "form-submissions", store.Values{"form": store.String(form.ID)}, nil)
+	_, err := application.Local().Create(t.Context(), "form-submissions", store.Values{"form": store.String(form.ID)}, ridu.MutationOptions{})
 	var operationError *ridu.OperationError
 	if !errors.As(err, &operationError) || operationError.Code != "access_denied" {
 		t.Fatalf("submission create override error = %#v / %v", operationError, err)
@@ -300,7 +300,7 @@ func TestFormManagementRequiresAuthenticationByDefault(t *testing.T) {
 	application := newApplication(t, formbuilder.Config{})
 	_, err := application.Local().Create(t.Context(), "forms", store.Values{
 		"title": store.String("Anonymous"), "confirmationType": store.String("message"), "confirmationMessage": store.String("Thanks"),
-	}, nil)
+	}, ridu.MutationOptions{})
 	var operationError *ridu.OperationError
 	if !errors.As(err, &operationError) || operationError.Code != "access_denied" {
 		t.Fatalf("anonymous form create error = %#v / %v", operationError, err)
@@ -320,10 +320,10 @@ func TestFormManagementRequiresExactAdminCollection(t *testing.T) {
 	}
 	values := store.Values{"title": store.String("Private"), "confirmationType": store.String("message"), "confirmationMessage": store.String("Thanks")}
 	actor := formManager()
-	if _, err := application.Local().Create(t.Context(), "forms", values, actor); err == nil {
+	if _, err := application.Local().Create(t.Context(), "forms", values, ridu.MutationOptions{Actor: actor}); err == nil {
 		t.Fatal("actor without an auth collection unexpectedly managed forms")
 	}
-	if _, err := application.Local().CreateWithOptions(t.Context(), "forms", values, ridu.MutationOptions{Actor: actor, ActorCollection: "users"}); err != nil {
+	if _, err := application.Local().Create(t.Context(), "forms", values, ridu.MutationOptions{Actor: actor, ActorCollection: "users"}); err != nil {
 		t.Fatalf("configured admin actor create: %v", err)
 	}
 }
@@ -378,7 +378,7 @@ func TestUploadSubmissionsUseGeneratedRelationshipShapes(t *testing.T) {
 				"submissionUploads": store.List(store.Object(store.Values{
 					"_key": store.String("receipt"), "field": store.String("receipt"), "value": store.List(reference),
 				})),
-			}, nil); err != nil {
+			}, ridu.MutationOptions{}); err != nil {
 				t.Fatalf("create submission: %v", err)
 			}
 		})
@@ -398,7 +398,7 @@ func TestOptionalPaymentIsNotProcessedAndMultiplePaymentsAreRejected(t *testing.
 	form := createForm(t, application, store.Values{
 		"title": store.String("Donation"), "confirmationType": store.String("message"), "confirmationMessage": store.String("Thanks"), "fields": store.List(optional),
 	})
-	if _, err := application.Local().Create(t.Context(), "form-submissions", store.Values{"form": store.String(form.ID)}, nil); err != nil {
+	if _, err := application.Local().Create(t.Context(), "form-submissions", store.Values{"form": store.String(form.ID)}, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if called != 0 {
@@ -407,7 +407,7 @@ func TestOptionalPaymentIsNotProcessedAndMultiplePaymentsAreRejected(t *testing.
 	_, err := application.Local().Update(t.Context(), "forms", form.ID, store.Values{"fields": store.List(optional, store.Object(store.Values{
 		"_key": store.String("second"), "blockType": store.String("payment"), "name": store.String("second"),
 		"basePrice": store.Number(5), "paymentProcessor": store.String("test"),
-	}))}, formManager())
+	}))}, ridu.MutationOptions{Actor: formManager()})
 	var operationError *ridu.OperationError
 	if !errors.As(err, &operationError) || !hasIssueCode(operationError.Issues, "multiple_payment_fields") {
 		t.Fatalf("multiple payment error = %#v / %v", operationError, err)
@@ -434,7 +434,7 @@ func newApplication(t *testing.T, config formbuilder.Config) *ridu.App {
 
 func createForm(t *testing.T, application *ridu.App, values store.Values) store.Document {
 	t.Helper()
-	created, err := application.Local().Create(t.Context(), "forms", values, formManager())
+	created, err := application.Local().Create(t.Context(), "forms", values, ridu.MutationOptions{Actor: formManager()})
 	if err != nil {
 		t.Fatal(err)
 	}

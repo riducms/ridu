@@ -80,7 +80,7 @@ func newOrdinaryValueFixture(tb testing.TB, ctx context.Context, shape, action s
 	if err != nil {
 		tb.Fatal(err)
 	}
-	target, err := app.Local().Create(ctx, "targets", store.Values{"name": store.String("A target")}, nil)
+	target, err := app.Local().Create(ctx, "targets", store.Values{"name": store.String("A target")}, ridu.MutationOptions{})
 	if err != nil {
 		tb.Fatal(err)
 	}
@@ -98,7 +98,7 @@ func newOrdinaryValueFixture(tb testing.TB, ctx context.Context, shape, action s
 		nodes[i] = fixture.row(fmt.Sprintf("row-%d", i), payload)
 	}
 	fixture.input = store.Values{"headline": store.String("Original"), "body": fixture.body(nodes)}
-	fixture.initial, err = app.Local().Create(ctx, "pages", fixture.input, nil, ridu.LocaleOptions{Locale: "en"})
+	fixture.initial, err = app.Local().Create(ctx, "pages", fixture.input, ridu.MutationOptions{Locale: "en"})
 	if err != nil {
 		tb.Fatal(err)
 	}
@@ -150,13 +150,13 @@ func (fixture ordinaryValueFixture) body(nodes []store.Value) store.Value {
 
 func (fixture ordinaryValueFixture) run(ctx context.Context) (store.Document, error) {
 	if fixture.action == "PopulatedRead" {
-		return fixture.app.Local().FindWithOptions(ctx, "pages", fixture.initial.ID, ridu.FindOptions{Locale: "en", Populate: []query.Population{{Path: fixture.population}}})
+		return fixture.app.Local().Find(ctx, "pages", fixture.initial.ID, ridu.FindOptions{Locale: "en", Populate: []query.Population{{Path: fixture.population}}})
 	}
 	options := ridu.LocaleOptions{Locale: "en"}
 	if fixture.action == "LocalizedEdit" {
 		options.Locale = "fr"
 	}
-	return fixture.app.Local().Update(ctx, "pages", fixture.initial.ID, fixture.patch, nil, options)
+	return fixture.app.Local().Update(ctx, "pages", fixture.initial.ID, fixture.patch, ridu.MutationOptions{Locale: options.Locale, FallbackLocales: options.FallbackLocales, DisableFallback: options.DisableFallback, AllLocales: options.AllLocales})
 }
 
 func (fixture ordinaryValueFixture) checkResult(tb testing.TB, result store.Document) {
@@ -225,7 +225,7 @@ func TestOrdinaryValueScalingFixtures(t *testing.T) {
 					t.Fatal(err)
 				}
 				fixture.checkResult(t, result)
-				stored, err := fixture.app.Local().FindWithOptions(t.Context(), "pages", fixture.initial.ID, ridu.FindOptions{AllLocales: true})
+				stored, err := fixture.app.Local().Find(t.Context(), "pages", fixture.initial.ID, ridu.FindOptions{AllLocales: true})
 				if err != nil {
 					t.Fatal(err)
 				}

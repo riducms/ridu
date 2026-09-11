@@ -267,13 +267,13 @@ func TestSQLiteRollbackDoesNotResurrectAddedRelationshipValues(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	author, err := application.Local().Create(ctx, "authors", store.Values{"name": store.String("Author")}, nil)
+	author, err := application.Local().Create(ctx, "authors", store.Values{"name": store.String("Author")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	post, err := application.Local().Create(ctx, "posts", store.Values{
 		"title": store.String("Post"), "author": store.String(author.ID),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -284,13 +284,13 @@ func TestSQLiteRollbackDoesNotResurrectAddedRelationshipValues(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := baseApplication.Local().Delete(ctx, "authors", author.ID, nil); err != nil {
+	if _, err := baseApplication.Local().Delete(ctx, "authors", author.ID, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if err := backend.ApplyArtifacts(ctx, directory); err != nil {
 		t.Fatalf("reapply after deleting former relationship target: %v", err)
 	}
-	reapplied, err := application.Local().Find(ctx, "posts", post.ID, nil)
+	reapplied, err := application.Local().Find(ctx, "posts", post.ID, ridu.FindOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -471,112 +471,6 @@ VALUES ('task-1', 'test', 'default', '{}', 'queued', 1, 0, 1,
 		if documents != 0 {
 			t.Fatalf("reapply resurrected %d documents for %s", documents, resource.ID)
 		}
-	}
-}
-
-func TestSQLiteMigrationRollbackReversesCompletePluginOrder(t *testing.T) {
-	ctx := context.Background()
-	directory := t.TempDir()
-	base := sqliteMigrationManifest(t, false)
-	snapshot := base.Snapshot()
-	snapshot.Plugins = []schema.Plugin{
-		sqliteLifecyclePlugin("a", "ridu_plugin_a_state",
-			[]string{`CREATE TABLE ridu_plugin_a_state (id TEXT PRIMARY KEY) STRICT`},
-			[]string{`DROP TABLE ridu_plugin_a_state`}),
-		sqliteLifecyclePlugin("b", "ridu_plugin_b_state",
-			[]string{`CREATE TABLE ridu_plugin_b_state (id TEXT PRIMARY KEY) STRICT`},
-			[]string{`INSERT INTO ridu_plugin_a_state (id) VALUES ('b-down')`, `DROP TABLE ridu_plugin_b_state`}),
-	}
-	manifest := schema.NewManifest(snapshot)
-	artifact, err := planArtifact(ctx, "initial", nil, manifest, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := migrationartifact.Create(directory, "initial", artifact, time.Unix(1, 0)); err != nil {
-		t.Fatal(err)
-	}
-	backend := newSQLiteMigrationStore(t)
-	if err := backend.ApplyArtifacts(ctx, directory); err != nil {
-		t.Fatal(err)
-	}
-	if err := backend.DownArtifacts(ctx, directory); err != nil {
-		t.Fatalf("plugin rollback did not run B down before A down: %v", err)
-	}
-}
-
-func TestSQLitePluginRollbackInvertsMixedDirections(t *testing.T) {
-	ctx := context.Background()
-	base := sqliteMigrationManifest(t, false)
-	beforeSnapshot := base.Snapshot()
-	beforeSnapshot.Plugins = []schema.Plugin{sqliteLifecyclePlugin("b", "ridu_plugin_b_state",
-		[]string{`CREATE TABLE ridu_plugin_b_state (id TEXT PRIMARY KEY) STRICT`},
-		[]string{`DROP TABLE ridu_plugin_b_state`})}
-	before := schema.NewManifest(beforeSnapshot)
-	afterSnapshot := base.Snapshot()
-	afterSnapshot.Plugins = []schema.Plugin{sqliteLifecyclePlugin("a", "ridu_plugin_a_state",
-		[]string{`CREATE TABLE ridu_plugin_a_state (id TEXT PRIMARY KEY) STRICT`},
-		[]string{`DROP TABLE ridu_plugin_a_state`})}
-	after := schema.NewManifest(afterSnapshot)
-	artifact, err := planArtifact(ctx, "swap-plugins", &before, after, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	operations, err := inverseSQLitePluginOperations(artifact)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(operations) != 2 || operations[0].Plugin.Plugin != "b" || operations[0].Plugin.Direction != "up" || operations[1].Plugin.Plugin != "a" || operations[1].Plugin.Direction != "down" {
-		t.Fatalf("mixed plugin inverse = %#v", operations)
-	}
-}
-
-func TestSQLiteMigrationDownFailureRollsBackSchemaAndLedger(t *testing.T) {
-	ctx := context.Background()
-	directory := t.TempDir()
-	base := sqliteMigrationManifest(t, false)
-	snapshot := base.Snapshot()
-	snapshot.Plugins = []schema.Plugin{{
-		Key: "audit", Version: "1.0.0", GoPackage: "example.com/plugins/audit", APIVersion: schema.CurrentPluginAPIVersion,
-		Ridu: &schema.PluginCompatibility{Minimum: "0.0.0-dev"}, DatabaseContributions: []schema.PluginDatabaseContribution{{
-			Adapter: schema.PluginDatabaseAdapterSQLite,
-			Tables:  []string{"ridu_plugin_audit_entries"},
-			Migrations: []schema.PluginMigration{{
-				Version: 1, Name: "initial",
-				UpSQL:   []string{`CREATE TABLE ridu_plugin_audit_entries (id TEXT PRIMARY KEY) STRICT`},
-				DownSQL: []string{`DROP TABLE ridu_plugin_missing_entries`},
-			}},
-		}},
-	}}
-	manifest := schema.NewManifest(snapshot)
-	artifact, err := planArtifact(ctx, "initial", nil, manifest, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := migrationartifact.Create(directory, "initial", artifact, time.Unix(1, 0)); err != nil {
-		t.Fatal(err)
-	}
-	backend := newSQLiteMigrationStore(t)
-	if err := backend.ApplyArtifacts(ctx, directory); err != nil {
-		t.Fatal(err)
-	}
-
-	err = backend.DownArtifacts(ctx, directory)
-	if err == nil || !strings.Contains(err.Error(), "missing_entries") {
-		t.Fatalf("down error = %v, want failing plugin down SQL", err)
-	}
-	statuses, statusErr := backend.ArtifactStatus(ctx, directory, manifest)
-	if statusErr != nil {
-		t.Fatal(statusErr)
-	}
-	if len(statuses) != 1 || !statuses[0].Applied {
-		t.Fatalf("failed down changed ledger: %#v", statuses)
-	}
-	var table int
-	if err := backend.db.QueryRowContext(ctx, `SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'ridu_plugin_audit_entries'`).Scan(&table); err != nil {
-		t.Fatal(err)
-	}
-	if table != 1 {
-		t.Fatal("failed down did not restore plugin schema")
 	}
 }
 
@@ -1178,7 +1072,7 @@ func TestSQLiteDataTransformCannotDivergeVersionHistory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	document, err := application.Local().Create(ctx, "posts", store.Values{"title": store.String("Original")}, nil)
+	document, err := application.Local().Create(ctx, "posts", store.Values{"title": store.String("Original")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1205,14 +1099,14 @@ func TestSQLiteDataTransformCannotDivergeVersionHistory(t *testing.T) {
 	if err := backend.ApplyArtifacts(ctx, directory, transform); err == nil || !strings.Contains(err.Error(), "retained snapshots") {
 		t.Fatalf("versioned transform apply error = %v", err)
 	}
-	stored, err := application.Local().Find(ctx, "posts", document.ID, nil)
+	stored, err := application.Local().Find(ctx, "posts", document.ID, ridu.FindOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if title, _ := stored.Values["title"].StringValue(); title != "Original" || stored.Revision != document.Revision {
 		t.Fatalf("rejected transform changed current document: %#v", stored)
 	}
-	versions, err := application.Local().Versions(ctx, "posts", document.ID, nil)
+	versions, err := application.Local().Versions(ctx, "posts", document.ID, ridu.FindOptions{})
 	if err != nil || len(versions) != 1 || versions[0].Revision != document.Revision {
 		t.Fatalf("rejected transform changed history: %#v, %v", versions, err)
 	}
@@ -1317,16 +1211,5 @@ func assertSQLiteLifecycleCount(t *testing.T, backend *Store, query string, argu
 	}
 	if count != 0 {
 		t.Fatalf("retired framework state count = %d for %s", count, query)
-	}
-}
-
-func sqliteLifecyclePlugin(key, table string, upSQL, downSQL []string) schema.Plugin {
-	return schema.Plugin{
-		Key: key, Version: "1.0.0", GoPackage: "example.com/plugins/" + key,
-		APIVersion: schema.CurrentPluginAPIVersion, Ridu: &schema.PluginCompatibility{Minimum: "0.0.0-dev"},
-		DatabaseContributions: []schema.PluginDatabaseContribution{{
-			Adapter: schema.PluginDatabaseAdapterSQLite, Tables: []string{table},
-			Migrations: []schema.PluginMigration{{Version: 1, Name: "initial", UpSQL: upSQL, DownSQL: downSQL}},
-		}},
 	}
 }

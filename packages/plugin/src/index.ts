@@ -1,5 +1,6 @@
 export type {
 	EmbeddedSchemaFormScope,
+	EmbeddedSchemaHeaderProps,
 	EmbeddedSchemaVariantScope,
 	EmbeddedSchemaDraft,
 	EmbeddedSchemaDraftEditorProps,
@@ -36,7 +37,7 @@ export {
 export {
 	ADMIN_PLUGIN_API_VERSION,
 	resolveAdminExtensions,
-	resolveAdminPluginPairs,
+	assertAdminPluginPairs,
 	type AdminPlugin,
 	type AdminContributions,
 	type AdminDashboardPanel,
@@ -79,7 +80,6 @@ export {
 	type AdminRoute,
 	type BackendAdminPlugin,
 	type ResolvedAdminExtensions,
-	type ResolvedAdminPluginPairs,
 } from "./plugin";
 
 export { resolvePluginFields, type ResolvedPluginField } from "./plugin-registry";

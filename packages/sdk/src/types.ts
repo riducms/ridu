@@ -33,7 +33,7 @@ export interface CollectionContract {
 	auth: boolean;
 	upload: boolean;
 	versions: boolean;
-	drafts?: boolean;
+	drafts: boolean;
 	trash: boolean;
 	output: unknown;
 	allOutput?: unknown;
@@ -55,7 +55,7 @@ export interface CollectionContract {
  */
 export interface GlobalContract {
 	versions: boolean;
-	drafts?: boolean;
+	drafts: boolean;
 	output: unknown;
 	allOutput?: unknown;
 	update: unknown;
@@ -75,35 +75,6 @@ export interface RiduConfigShape {
 	/** Generated global contracts keyed by global slug. */
 	globals?: object;
 }
-
-/**
- * Application generators add one manifest-digest-keyed entry through module augmentation. Keeping a
- * registry rather than extending one config directly lets explicit clients coexist in tooling and
- * multi-application TypeScript programs without declaration-merging conflicts.
- */
-export interface GeneratedRiduConfigRegistry {}
-
-type GeneratedRiduConfigKey = keyof GeneratedRiduConfigRegistry;
-
-type IsUnion<Value, Whole = Value> = Value extends unknown
-	? [Whole] extends [Value]
-		? false
-		: true
-	: never;
-
-type RegisteredRiduConfig = GeneratedRiduConfigRegistry[GeneratedRiduConfigKey];
-
-/**
- * The one generated config visible to the current TypeScript program. With none or more than one,
- * callers use an explicit config (normally through a generated client package).
- */
-export type DefaultRiduConfig = [GeneratedRiduConfigKey] extends [never]
-	? RiduConfigShape
-	: true extends IsUnion<GeneratedRiduConfigKey>
-		? RiduConfigShape
-		: RegisteredRiduConfig extends RiduConfigShape
-			? RegisteredRiduConfig
-			: RiduConfigShape;
 
 /** Collection slugs available in a generated application contract. */
 export type CollectionSlug<Config extends RiduConfigShape> = keyof Config["collections"] & string;
@@ -189,13 +160,9 @@ export type VersionGlobalSlug<Config extends RiduConfigShape> = {
 
 /** Global slugs that support draft state. */
 export type DraftGlobalSlug<Config extends RiduConfigShape> = {
-	[Slug in GlobalSlug<Config>]: GlobalContractFor<Config, Slug> extends { drafts: true }
+	[Slug in GlobalSlug<Config>]: GlobalContractFor<Config, Slug>["drafts"] extends true
 		? Slug
-		: GlobalContractFor<Config, Slug> extends { drafts: false }
-			? never
-			: GlobalContractFor<Config, Slug>["versions"] extends true
-				? Slug
-				: never;
+		: never;
 }[GlobalSlug<Config>];
 
 /** Generated contract for one collection slug. */
@@ -298,13 +265,7 @@ export type VersionCollectionSlug<Config extends RiduConfigShape> = {
 
 /** Collection slugs that support draft state. */
 export type DraftCollectionSlug<Config extends RiduConfigShape> = {
-	[Slug in CollectionSlug<Config>]: ContractFor<Config, Slug> extends { drafts: true }
-		? Slug
-		: ContractFor<Config, Slug> extends { drafts: false }
-			? never
-			: ContractFor<Config, Slug>["versions"] extends true
-				? Slug
-				: never;
+	[Slug in CollectionSlug<Config>]: ContractFor<Config, Slug>["drafts"] extends true ? Slug : never;
 }[CollectionSlug<Config>];
 
 /** Whether one generated collection enables versions. */
@@ -317,16 +278,13 @@ export type CollectionVersionsFor<
 export type CollectionDraftsFor<
 	Config extends RiduConfigShape,
 	Slug extends CollectionSlug<Config>,
-> =
-	ContractFor<Config, Slug> extends { drafts: infer Drafts extends boolean }
-		? Drafts
-		: CollectionVersionsFor<Config, Slug>;
+> = ContractFor<Config, Slug>["drafts"];
 
 /** Whether one generated global supports drafts. */
-export type GlobalDraftsFor<Config extends RiduConfigShape, Slug extends GlobalSlug<Config>> =
-	GlobalContractFor<Config, Slug> extends { drafts: infer Drafts extends boolean }
-		? Drafts
-		: GlobalContractFor<Config, Slug>["versions"];
+export type GlobalDraftsFor<
+	Config extends RiduConfigShape,
+	Slug extends GlobalSlug<Config>,
+> = GlobalContractFor<Config, Slug>["drafts"];
 
 /** Collection slugs that support soft deletion and trash operations. */
 export type TrashCollectionSlug<Config extends RiduConfigShape> = {
@@ -775,7 +733,7 @@ export type Middleware = (request: Request, next: MiddlewareNext) => Promise<Res
  * literal locale, selection, and population options. Methods return ordinary promises and reject
  * server failures with `RiduError`, except `request`, which preserves raw Fetch semantics.
  */
-export interface RiduClient<Config extends RiduConfigShape = DefaultRiduConfig> {
+export interface RiduClient<Config extends RiduConfigShape = RiduConfigShape> {
 	/** Fetch and bind the schema manifest visible to the current client. */
 	schema(options?: RequestOptions): Promise<SchemaManifest>;
 	/**

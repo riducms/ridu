@@ -8,6 +8,7 @@ interface TestConfig extends RiduConfigShape {
 			auth: true;
 			upload: false;
 			versions: true;
+			drafts: true;
 			trash: true;
 			output: { id: string; title: string; _status?: "draft" | "published" };
 			create: { title: string };
@@ -20,6 +21,7 @@ interface TestConfig extends RiduConfigShape {
 			auth: false;
 			upload: true;
 			versions: false;
+			drafts: false;
 			trash: false;
 			output: { id: string; alt: string; filename: string; focalX?: number; focalY?: number };
 			create: { alt: string };
@@ -32,6 +34,7 @@ interface TestConfig extends RiduConfigShape {
 	globals: {
 		"site-settings": {
 			versions: true;
+			drafts: true;
 			output: { id: string; siteName: string; _revision: number };
 			update: { siteName?: string };
 			select: { siteName?: boolean };

@@ -136,6 +136,7 @@ export class FormController {
 		};
 	}
 	#invalidateEditors() {
+		this.#invalidateValueIndexes();
 		this.liveValidation.reset();
 		this.#listEdits.clear();
 		this.editorEpoch += 1;
@@ -164,6 +165,15 @@ export class FormController {
 	localizationSources = $state.raw<Readonly<Record<string, string>>>({});
 	#registered = new Map<string, Set<symbol>>();
 	#rowMountKeys = new WeakMap<object, symbol>();
+	#valueEpoch = $state(0);
+	#rowIndexes = new Map<string, Map<string, { index: number; variant: unknown }>>();
+	#embeddedIndexes = new Map<
+		string,
+		{
+			result: ReturnType<typeof embeddedOccurrences>;
+			identities: Map<string, EmbeddedOccurrence | undefined>;
+		}
+	>();
 	#pathObservers = new Map<string, Set<(value: unknown) => void>>();
 	#derivedTextBindings = new Map<string, DerivedTextBindingState>();
 	#revision = 0;
@@ -295,6 +305,60 @@ export class FormController {
 		return readPath(this.values, path);
 	}
 
+	/** Shared identity lookups: a mounted header never scans every sibling on its own. */
+	rowPath(path: string, identity: string, variant: unknown) {
+		this.#valueEpoch;
+		let index = this.#rowIndexes.get(path);
+		if (index === undefined) {
+			index = new Map();
+			const rows = this.get(path);
+			if (Array.isArray(rows))
+				for (const [position, row] of rows.entries()) {
+					if (!isRecord(row) || typeof row._key !== "string") continue;
+					index.set(row._key, {
+						index: index.has(row._key) ? -1 : position,
+						variant: row.blockType,
+					});
+				}
+			this.#rowIndexes.set(path, index);
+		}
+		const match = index.get(identity);
+		return match !== undefined && match.index >= 0 && match.variant === variant
+			? `${path}.${match.index}`
+			: undefined;
+	}
+
+	/** Cache only structural traversal, never access decisions or detached field values. */
+	embeddedFields(field: SchemaField) {
+		this.#valueEpoch;
+		const key = field.path;
+		let entry = this.#embeddedIndexes.get(key);
+		if (entry === undefined) {
+			const result = embeddedOccurrences(field, this.get(field.path), field.path);
+			const identities = new Map<string, EmbeddedOccurrence | undefined>();
+			for (const occurrence of result.occurrences) {
+				const identity = JSON.stringify([occurrence.tree.key, occurrence.identity]);
+				identities.set(identity, identities.has(identity) ? undefined : occurrence);
+			}
+			entry = { result, identities };
+			this.#embeddedIndexes.set(key, entry);
+		}
+		return entry.result;
+	}
+
+	embeddedOccurrence(field: SchemaField, treeKey: string, identity: string) {
+		this.embeddedFields(field);
+		return this.#embeddedIndexes
+			.get(field.path)
+			?.identities.get(JSON.stringify([treeKey, identity]));
+	}
+
+	#invalidateValueIndexes() {
+		this.#rowIndexes.clear();
+		this.#embeddedIndexes.clear();
+		this.#valueEpoch++;
+	}
+
 	/** DOM identity survives retained-row replacements, but not removal and key reuse. */
 	rowMountKey(row: Record<string, unknown>) {
 		const key = this.#rowMountKeys.get(row) ?? Symbol();
@@ -333,6 +397,7 @@ export class FormController {
 				if (key) mounts.set(token, { row, key });
 			}
 		writePath(this.values, path, value);
+		this.#invalidateValueIndexes();
 		if (root) {
 			const retained = new Set<string>();
 			for (const { token, schema, path: fieldPath, value: current } of indexFieldValues(
@@ -540,6 +605,7 @@ export class FormController {
 		this.#invalidateEditors();
 		this.#clearDerivedTextBindings();
 		this.values = cloneFormValues(values);
+		this.#invalidateValueIndexes();
 		this.original = cloneFormValues(values);
 		this.localizationSources = {};
 		this.issues = [];
@@ -558,6 +624,7 @@ export class FormController {
 		this.#fields = nextFields;
 		const result = reconcileFormSchema(this, previousFields, nextFields, { initializeDefaults });
 		this.values = result.values;
+		this.#invalidateValueIndexes();
 		this.original = result.original;
 		this.issues = [];
 		this.#submittingIssues = [];
@@ -575,6 +642,7 @@ export class FormController {
 		this.#fields = nextFields;
 		const result = recoverFormDraft(this, draft, previousFields, nextFields);
 		this.values = result.values;
+		this.#invalidateValueIndexes();
 		this.original = result.original;
 		this.issues = [];
 		this.#submittingIssues = [];

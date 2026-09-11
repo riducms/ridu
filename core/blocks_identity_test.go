@@ -44,7 +44,7 @@ func TestBlocksIdentityLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	values := store.Values{"layout": store.List(store.Object(store.Values{"blockType": store.String("hero"), "heading": store.String("First"), "children": store.List(store.Object(store.Values{"blockType": store.String("text"), "body": store.String("Nested")}))}), store.Object(store.Values{"blockType": store.String("hero"), "heading": store.String("Second")}))}
-	created, err := app.Local().Create(ctx, "pages", values, nil)
+	created, err := app.Local().Create(ctx, "pages", values, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,11 +59,11 @@ func TestBlocksIdentityLifecycle(t *testing.T) {
 	}
 	rows[0]["heading"] = store.String("Premier")
 	rows[1]["heading"] = store.String("Deuxième")
-	updated, err := app.Local().Update(ctx, "pages", created.ID, store.Values{"layout": store.List(store.Object(rows[1]), store.Object(rows[0]))}, nil, ridu.LocaleOptions{Locale: "fr"})
+	updated, err := app.Local().Update(ctx, "pages", created.ID, store.Values{"layout": store.List(store.Object(rows[1]), store.Object(rows[0]))}, ridu.MutationOptions{Locale: "fr"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	english, err := app.Local().Find(ctx, "pages", created.ID, nil)
+	english, err := app.Local().Find(ctx, "pages", created.ID, ridu.FindOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +72,7 @@ func TestBlocksIdentityLifecycle(t *testing.T) {
 	if blockKey(englishRows[0]) != second || blockKey(englishRows[1]) != first || heading != "Second" {
 		t.Fatalf("reorder lost locale identity %#v", englishRows)
 	}
-	duplicate, err := app.Local().Duplicate(ctx, "pages", created.ID, nil, nil)
+	duplicate, err := app.Local().Duplicate(ctx, "pages", created.ID, nil, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +91,7 @@ func TestBlocksIdentityLifecycle(t *testing.T) {
 			bad := blockRows(updated.Values["layout"])
 			bad[0]["_key"] = test.key
 			bad[1]["_key"] = store.String(second)
-			_, err := app.Local().Update(ctx, "pages", created.ID, store.Values{"layout": store.List(store.Object(bad[0]), store.Object(bad[1]))}, nil)
+			_, err := app.Local().Update(ctx, "pages", created.ID, store.Values{"layout": store.List(store.Object(bad[0]), store.Object(bad[1]))}, ridu.MutationOptions{})
 			var issue *ridu.OperationError
 			if !errors.As(err, &issue) || len(issue.Issues) == 0 || issue.Issues[0].Code != test.code || issue.Issues[0].Path != test.path {
 				t.Fatalf("error %v", err)
@@ -99,13 +99,13 @@ func TestBlocksIdentityLifecycle(t *testing.T) {
 		})
 	}
 	replacement := store.Values{"_key": store.String(second), "blockType": store.String("quote"), "quote": store.String("Converted")}
-	_, err = app.Local().Update(ctx, "pages", created.ID, store.Values{"layout": store.List(store.Object(replacement))}, nil)
+	_, err = app.Local().Update(ctx, "pages", created.ID, store.Values{"layout": store.List(store.Object(replacement))}, ridu.MutationOptions{})
 	var issue *ridu.OperationError
 	if !errors.As(err, &issue) || issue.Issues[0].Code != "block_type_identity" {
 		t.Fatalf("same-key type replacement = %v", err)
 	}
 	delete(replacement, "_key")
-	if _, err = app.Local().Update(ctx, "pages", created.ID, store.Values{"layout": store.List(store.Object(replacement))}, nil); err != nil {
+	if _, err = app.Local().Update(ctx, "pages", created.ID, store.Values{"layout": store.List(store.Object(replacement))}, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -122,17 +122,17 @@ func TestBlockRevisionRestorePreservesCreatedIdentities(t *testing.T) {
 	created, err := app.Local().Create(ctx, "pages", store.Values{"layout": store.List(
 		store.Object(store.Values{"blockType": store.String("hero"), "heading": store.String("First")}),
 		store.Object(store.Values{"blockType": store.String("hero"), "heading": store.String("Second")}),
-	)}, nil)
+	)}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	rows := blockRows(created.Values["layout"])
 	rows[0]["heading"] = store.String("Edited")
-	updated, err := app.Local().Update(ctx, "pages", created.ID, store.Values{"layout": store.List(store.Object(rows[1]), store.Object(rows[0]))}, nil)
+	updated, err := app.Local().Update(ctx, "pages", created.ID, store.Values{"layout": store.List(store.Object(rows[1]), store.Object(rows[0]))}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	restored, err := app.Local().RestoreAsDraft(ctx, "pages", created.ID, created.Revision, updated.Revision, nil)
+	restored, err := app.Local().RestoreAsDraft(ctx, "pages", created.ID, created.Revision, ridu.MutationOptions{ExpectedRevision: updated.Revision})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -148,9 +148,7 @@ func TestBlockIdentityReorderAndProtectedRemoval(t *testing.T) {
 		Name: "Protected blocks",
 		Collections: []ridu.Collection{{
 			Slug: "pages",
-			Fields: field.Fields{field.Blocks("layout", field.Block{Slug: "hero", Fields: field.Fields{field.Text("secret").Required().Access(field.Access{Update: func(c operation.AccessContext,
-
-			) (bool, error) {
+			Fields: field.Fields{field.Blocks("layout", field.Block{Slug: "hero", Fields: field.Fields{field.Text("secret").Required().Access(field.Access{Update: func(c operation.Context) (bool, error) {
 				runtimePaths = append(runtimePaths, string(c.OccurrenceID))
 				return false, nil
 			}})}}, field.Block{Slug: "quote", Fields: field.Fields{field.Text("quote")}})},
@@ -160,7 +158,7 @@ func TestBlockIdentityReorderAndProtectedRemoval(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	created, err := app.Local().Create(ctx, "pages", store.Values{"layout": store.List(store.Object(store.Values{"blockType": store.String("hero"), "secret": store.String("One")}), store.Object(store.Values{"blockType": store.String("hero"), "secret": store.String("Two")}))}, nil)
+	created, err := app.Local().Create(ctx, "pages", store.Values{"layout": store.List(store.Object(store.Values{"blockType": store.String("hero"), "secret": store.String("One")}), store.Object(store.Values{"blockType": store.String("hero"), "secret": store.String("Two")}))}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,7 +168,7 @@ func TestBlockIdentityReorderAndProtectedRemoval(t *testing.T) {
 		delete(row, "secret")
 	}
 
-	_, err = app.Local().Update(ctx, "pages", created.ID, store.Values{"layout": store.List(store.Object(rows[1]), store.Object(rows[0]))}, nil)
+	_, err = app.Local().Update(ctx, "pages", created.ID, store.Values{"layout": store.List(store.Object(rows[1]), store.Object(rows[0]))}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -178,7 +176,7 @@ func TestBlockIdentityReorderAndProtectedRemoval(t *testing.T) {
 		t.Fatalf("reorder treated unchanged values as edits %v", runtimePaths)
 	}
 	for _, values := range []store.Values{{"layout": store.List(store.Object(rows[1]))}, {"layout": store.List(store.Object(store.Values{"blockType": store.String("quote"), "quote": store.String("Replacement")}))}} {
-		_, err = app.Local().Update(ctx, "pages", created.ID, values, nil)
+		_, err = app.Local().Update(ctx, "pages", created.ID, values, ridu.MutationOptions{})
 		var issue *ridu.OperationError
 		if !errors.As(err, &issue) || issue.Code != "field_access_denied" {
 			t.Fatalf("protected removal allowed: %v", err)
@@ -195,11 +193,11 @@ func TestCopyLocalePreservesExactDistinctBlockKeys(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	created, err := app.Local().Create(ctx, "pages", store.Values{"layout": store.List(store.Object(store.Values{"_key": store.String("x"), "blockType": store.String("hero"), "heading": store.String("One")}), store.Object(store.Values{"_key": store.String(" x "), "blockType": store.String("hero"), "heading": store.String("Two")}))}, nil)
+	created, err := app.Local().Create(ctx, "pages", store.Values{"layout": store.List(store.Object(store.Values{"_key": store.String("x"), "blockType": store.String("hero"), "heading": store.String("One")}), store.Object(store.Values{"_key": store.String(" x "), "blockType": store.String("hero"), "heading": store.String("Two")}))}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = app.Local().CopyLocale(ctx, "pages", created.ID, "en", "fr", created.Revision, nil); err != nil {
+	if _, err = app.Local().CopyLocale(ctx, "pages", created.ID, "en", "fr", ridu.MutationOptions{ExpectedRevision: created.Revision}); err != nil {
 		t.Fatal(err)
 	}
 }

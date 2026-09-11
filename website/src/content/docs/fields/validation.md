@@ -47,7 +47,7 @@ var Link = field.Text("url").Required().Validate(validateHTTPS)
 
 func validateHTTPS(
 	// This rule only needs the value, so Go's _ ignores the context.
-	_ operation.ValidationContext,
+	_ operation.Context,
 	value operation.Value[string],
 ) ([]operation.Issue, error) {
 	url, present := value.Get()

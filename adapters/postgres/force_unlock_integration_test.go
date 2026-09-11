@@ -62,19 +62,19 @@ func TestPostgresForceUnlockAuthorizationAndCredentialResetAreAtomic(t *testing.
 	}
 	target, err := application.Local().Create(ctx, "users", store.Values{
 		"email": store.String("target@example.test"), "mayUnlock": store.Boolean(true),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	administrator, err := application.Local().Create(ctx, "users", store.Values{
 		"email": store.String("administrator@example.test"), "mayUnlock": store.Boolean(false),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	revoker, err := application.Local().Create(ctx, "users", store.Values{
 		"email": store.String("revoker@example.test"), "mayUnlock": store.Boolean(false),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +93,7 @@ func TestPostgresForceUnlockAuthorizationAndCredentialResetAreAtomic(t *testing.
 	case <-time.After(5 * time.Second):
 		t.Fatal("force unlock did not reach its filtered update authorization")
 	}
-	if _, err := application.Local().Update(ctx, "users", target.ID, store.Values{"mayUnlock": store.Boolean(false)}, &revoker); err != nil {
+	if _, err := application.Local().Update(ctx, "users", target.ID, store.Values{"mayUnlock": store.Boolean(false)}, ridu.MutationOptions{Actor: &revoker}); err != nil {
 		t.Fatal(err)
 	}
 	close(release)
@@ -109,7 +109,7 @@ func TestPostgresForceUnlockAuthorizationAndCredentialResetAreAtomic(t *testing.
 		t.Fatalf("denied force unlock cleared private credential state: %v", err)
 	}
 
-	if _, err := application.Local().Update(ctx, "users", target.ID, store.Values{"mayUnlock": store.Boolean(true)}, &revoker); err != nil {
+	if _, err := application.Local().Update(ctx, "users", target.ID, store.Values{"mayUnlock": store.Boolean(true)}, ridu.MutationOptions{Actor: &revoker}); err != nil {
 		t.Fatal(err)
 	}
 	if err := application.ForceUnlock(ctx, "users", target.ID, &ridu.AuthIdentity{Collection: "users", Actor: administrator}); err != nil {

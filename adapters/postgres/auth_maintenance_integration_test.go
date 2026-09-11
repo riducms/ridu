@@ -35,7 +35,7 @@ func TestPostgresExpiredAuthMaintenanceIsBoundedAndConcurrent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	user, err := application.CreateAuthUser(ctx, "users", store.Values{"email": store.String("retention@example.test")}, "correct-horse", nil)
+	user, err := application.CreateAuthUser(ctx, "users", store.Values{"email": store.String("retention@example.test")}, "correct-horse", ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

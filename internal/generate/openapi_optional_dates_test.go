@@ -66,7 +66,7 @@ func TestOpenAPIOptionalDatesValidateHTTPEmptyValues(t *testing.T) {
 						row["when"] = test.value
 					}
 					values["layout"] = store.List(store.Object(row))
-					doc, err := app.Local().Create(context.Background(), "events", values, nil)
+					doc, err := app.Local().Create(context.Background(), "events", values, core.MutationOptions{})
 					if err != nil {
 						t.Fatal(err)
 					}
@@ -118,7 +118,7 @@ func TestOpenAPIOptionalDatesValidateHTTPEmptyValues(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, err := requiredApp.Local().Create(context.Background(), "events", store.Values{"when": store.String("")}, nil); err == nil {
+			if _, err := requiredApp.Local().Create(context.Background(), "events", store.Values{"when": store.String("")}, core.MutationOptions{}); err == nil {
 				t.Fatal("runtime accepted required empty date")
 			}
 		})
@@ -156,10 +156,10 @@ func TestDateAdminReplacementPreservesRuntimeAndGeneratedValueFormat(t *testing.
 			if err := validateFormattedOutput(t, property, test.invalid); err == nil {
 				t.Fatalf("generated contract accepted incompatible date %q", test.invalid)
 			}
-			if _, err := app.Local().Create(context.Background(), "events", store.Values{"when": store.String(test.valid)}, nil); err != nil {
+			if _, err := app.Local().Create(context.Background(), "events", store.Values{"when": store.String(test.valid)}, core.MutationOptions{}); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := app.Local().Create(context.Background(), "events", store.Values{"when": store.String(test.invalid)}, nil); err == nil {
+			if _, err := app.Local().Create(context.Background(), "events", store.Values{"when": store.String(test.invalid)}, core.MutationOptions{}); err == nil {
 				t.Fatalf("runtime accepted incompatible date %q", test.invalid)
 			}
 		})

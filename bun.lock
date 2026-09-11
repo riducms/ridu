@@ -32,7 +32,7 @@
     },
     "admin": {
       "name": "@riducms/admin",
-      "version": "0.2.1",
+      "version": "0.2.2",
       "dependencies": {
         "@dnd-kit-svelte/svelte": "^0.1.6",
         "@fontsource-variable/geist": "^5.3.0",
@@ -61,7 +61,7 @@
     },
     "packages/build": {
       "name": "@riducms/build",
-      "version": "0.2.1",
+      "version": "0.2.2",
       "dependencies": {
         "@sveltejs/vite-plugin-svelte": "^7.2.0",
         "@unocss/preset-wind4": "^66.7.5",
@@ -77,14 +77,14 @@
     },
     "packages/cli": {
       "name": "@riducms/cli",
-      "version": "0.2.1",
+      "version": "0.2.2",
       "bin": {
         "ridu": "./src/cli.js",
       },
     },
     "packages/create-ridu": {
       "name": "create-ridu",
-      "version": "0.2.1",
+      "version": "0.2.2",
       "bin": {
         "create-ridu": "./src/cli.js",
       },
@@ -94,7 +94,7 @@
     },
     "packages/plugin": {
       "name": "@riducms/plugin",
-      "version": "0.2.1",
+      "version": "0.2.2",
       "dependencies": {
         "@riducms/protocol": "workspace:*",
         "@riducms/translations": "workspace:*",
@@ -106,7 +106,7 @@
     },
     "packages/plugin-form-builder": {
       "name": "@riducms/plugin-form-builder",
-      "version": "0.2.1",
+      "version": "0.2.2",
       "devDependencies": {
         "@riducms/plugin": "workspace:*",
         "typescript": "~6.0.2",
@@ -120,7 +120,7 @@
     },
     "packages/plugin-richtext": {
       "name": "@riducms/plugin-richtext",
-      "version": "0.2.1",
+      "version": "0.2.2",
       "dependencies": {
         "@hvniel/lexical-svelte": "^0.1.1",
         "@lexical/clipboard": "0.49.0",
@@ -145,7 +145,7 @@
     },
     "packages/plugin-seo": {
       "name": "@riducms/plugin-seo",
-      "version": "0.2.1",
+      "version": "0.2.2",
       "dependencies": {
         "@riducms/plugin": "workspace:*",
         "@riducms/protocol": "workspace:*",
@@ -158,22 +158,22 @@
     },
     "packages/protocol": {
       "name": "@riducms/protocol",
-      "version": "0.2.1",
+      "version": "0.2.2",
     },
     "packages/sdk": {
       "name": "@riducms/sdk",
-      "version": "0.2.1",
+      "version": "0.2.2",
       "dependencies": {
         "@riducms/protocol": "workspace:*",
       },
     },
     "packages/translations": {
       "name": "@riducms/translations",
-      "version": "0.2.1",
+      "version": "0.2.2",
     },
     "packages/ui": {
       "name": "@riducms/ui",
-      "version": "0.2.1",
+      "version": "0.2.2",
       "dependencies": {
         "bits-ui": "^2.18.1",
         "tailwind-variants": "^3.3.1",

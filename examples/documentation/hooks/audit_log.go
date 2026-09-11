@@ -19,7 +19,7 @@ func writeAuditEntry(ctx ridu.HookContext) error {
 		return nil
 	}
 	// Reuse the transaction so the post and audit entry save together.
-	_, err := ctx.Local.CreateWithOptions(
+	_, err := ctx.Local.Create(
 		ctx.Context,
 		"audit-log",
 		store.Values{

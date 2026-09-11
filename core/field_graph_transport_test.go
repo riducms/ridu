@@ -27,7 +27,7 @@ func TestUnifiedFieldsRESTLocalAgreement(t *testing.T) {
 		t.Fatal(err)
 	}
 	client := handlerClient(app.Handler(ridu.HandlerOptions{}))
-	user, err := app.Local().Create(t.Context(), "users", store.Values{"name": store.String("Author")}, nil)
+	user, err := app.Local().Create(t.Context(), "users", store.Values{"name": store.String("Author")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,7 +43,7 @@ func TestUnifiedFieldsRESTLocalAgreement(t *testing.T) {
 		"privateNote": store.String("must be redacted"), "presentationHidden": store.String("still readable"),
 		"body": richtextblocks.Document(richtextblocks.Block("card", "embedded-1", store.Values{"sku": store.String("sku-embedded"), "accent": store.String("orange")})),
 	}
-	local, err := app.Local().Create(t.Context(), "unified-articles", input, nil)
+	local, err := app.Local().Create(t.Context(), "unified-articles", input, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func TestUnifiedFieldsRESTLocalAgreement(t *testing.T) {
 	}
 	restID := created.Doc["id"].(string)
 	patch := store.Values{"sections": store.List(row("C", "sku-c"), store.Object(store.Values{"_key": store.String("A")})), "localizedTitle": store.String("Français")}
-	local, err = app.Local().UpdateWithOptions(t.Context(), "unified-articles", local.ID, patch, ridu.MutationOptions{Locale: "fr"})
+	local, err = app.Local().Update(t.Context(), "unified-articles", local.ID, patch, ridu.MutationOptions{Locale: "fr"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +71,7 @@ func TestUnifiedFieldsRESTLocalAgreement(t *testing.T) {
 	}
 	decodeResponse(t, response, &created)
 	assertUnifiedWireValues(t, local.Values, created.Doc)
-	all, err := app.Local().FindWithOptions(t.Context(), "unified-articles", restID, ridu.FindOptions{AllLocales: true})
+	all, err := app.Local().Find(t.Context(), "unified-articles", restID, ridu.FindOptions{AllLocales: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +79,7 @@ func TestUnifiedFieldsRESTLocalAgreement(t *testing.T) {
 	decodeResponse(t, response, &created)
 	assertUnifiedWireValues(t, all.Values, created.Doc)
 	authorPath, _ := query.NewPath("author")
-	populated, err := app.Local().FindWithOptions(t.Context(), "unified-articles", restID, ridu.FindOptions{Populate: []query.Population{{Path: authorPath}}})
+	populated, err := app.Local().Find(t.Context(), "unified-articles", restID, ridu.FindOptions{Populate: []query.Population{{Path: authorPath}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +107,7 @@ func TestUnifiedFieldsRESTLocalAgreement(t *testing.T) {
 	response.Body.Close()
 	// Same-value input still needs admission; Local and REST use the same binding.
 	denied := store.Values{"title": store.String("Locked"), "sku": store.String("SKU-ROOT")}
-	_, err = app.Local().Update(t.Context(), "unified-articles", local.ID, denied, nil)
+	_, err = app.Local().Update(t.Context(), "unified-articles", local.ID, denied, ridu.MutationOptions{})
 	if !errors.As(err, &failure) || failure.Code != "field_access_denied" {
 		t.Fatalf("local admission: %v", err)
 	}
@@ -153,7 +153,7 @@ func TestUnifiedSaveIssuesFollowServerReorderAndEmbeddedIdentity(t *testing.T) {
 		store.Object(store.Values{"_key": store.String("C")})),
 		"body": richtextblocks.Document(richtextblocks.Block("card", "embedded-A", store.Values{"sku": store.String("invalid")})),
 	}
-	_, err = app.Local().Create(t.Context(), "unified-articles", input, nil)
+	_, err = app.Local().Create(t.Context(), "unified-articles", input, ridu.MutationOptions{})
 	var local *ridu.OperationError
 	if !errors.As(err, &local) || len(local.Issues) != 2 {
 		t.Fatalf("local issues: %v", err)
@@ -183,21 +183,21 @@ func TestUnifiedSaveIssuesFollowServerReorderAndEmbeddedIdentity(t *testing.T) {
 }
 
 func TestUnifiedComputedOutputUsesBoundContextSelectionAndRedaction(t *testing.T) {
-	var contexts []operation.ReadContext
-	output := field.Virtual("summary", field.ValueString, func(ctx operation.ReadContext) (operation.Value[store.Value], error) {
+	var contexts []operation.Context
+	output := field.Virtual("summary", field.ValueString, func(ctx operation.Context) (operation.Value[store.Value], error) {
 		contexts = append(contexts, ctx)
 		value, _ := ctx.Root.String("title")
 		return operation.Present(store.String(value)), nil
-	}).ReadHooks(field.ReadHooks[store.Value]{AfterRead: []field.OutputTransform[store.Value]{func(_ operation.ReadContext, v operation.Value[store.Value]) (operation.Change[store.Value], error) {
+	}).ReplaceAfterRead(func(_ operation.Context, v operation.Value[store.Value]) (operation.Change[store.Value], error) {
 		value, _ := v.Get()
 		text, _ := value.StringValue()
 		return operation.Replace(operation.Present(store.String(text + "!"))), nil
-	}}})
-	app, err := ridu.New(ridu.Config{Name: "Bound output", Collections: []ridu.Collection{{Slug: "pages", Fields: field.Fields{field.Text("title"), output, output.Rename("secret").Access(field.Access{Read: func(operation.AccessContext) (bool, error) { return false, nil }})}}}, Globals: []ridu.Global{{Slug: "settings", Fields: field.Fields{field.Text("title"), output}}}}, teststore.New())
+	})
+	app, err := ridu.New(ridu.Config{Name: "Bound output", Collections: []ridu.Collection{{Slug: "pages", Fields: field.Fields{field.Text("title"), output, output.Rename("secret").Access(field.Access{Read: func(operation.Context) (bool, error) { return false, nil }})}}}, Globals: []ridu.Global{{Slug: "settings", Fields: field.Fields{field.Text("title"), output}}}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
 	}
-	doc, err := app.Local().Create(t.Context(), "pages", store.Values{"title": store.String("Hello")}, nil)
+	doc, err := app.Local().Create(t.Context(), "pages", store.Values{"title": store.String("Hello")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -211,14 +211,14 @@ func TestUnifiedComputedOutputUsesBoundContextSelectionAndRedaction(t *testing.T
 		t.Fatalf("computed context=%#v", contexts)
 	}
 	count := len(contexts)
-	_, err = app.Local().FindWithOptions(t.Context(), "pages", doc.ID, ridu.FindOptions{OutputFields: []query.Path{}})
+	_, err = app.Local().Find(t.Context(), "pages", doc.ID, ridu.FindOptions{OutputFields: []query.Path{}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(contexts) != count {
 		t.Fatal("unselected resolver executed")
 	}
-	global, err := app.Local().UpdateGlobal(t.Context(), "settings", store.Values{"title": store.String("Global")}, 0, nil)
+	global, err := app.Local().UpdateGlobal(t.Context(), "settings", store.Values{"title": store.String("Global")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -231,21 +231,21 @@ func TestUnifiedComputedOutputUsesBoundContextSelectionAndRedaction(t *testing.T
 }
 
 func TestUnifiedComputedOutputRejectsMissingAndInvalidResolvers(t *testing.T) {
-	allow := field.Access{Read: func(operation.AccessContext) (bool, error) { return true, nil }}
+	allow := field.Access{Read: func(operation.Context) (bool, error) { return true, nil }}
 	_, err := ridu.Resolve(ridu.Config{Name: "Missing output resolver", Collections: []ridu.Collection{{Slug: "pages", Fields: field.Fields{field.Virtual("summary", field.ValueString, nil).Access(allow)}}}})
 	if err == nil {
 		t.Fatal("missing output resolver accepted")
 	}
 	for _, owner := range []string{"field", "resource"} {
 		t.Run(owner, func(t *testing.T) {
-			output := field.Virtual("summary", field.ValueString, func(operation.ReadContext) (operation.Value[store.Value], error) {
+			output := field.Virtual("summary", field.ValueString, func(operation.Context) (operation.Value[store.Value], error) {
 				return operation.Present(store.String("valid")), nil
 			})
 			collection := ridu.Collection{Slug: "pages"}
 			if owner == "field" {
-				output = output.ReadHooks(field.ReadHooks[store.Value]{AfterRead: []field.OutputTransform[store.Value]{func(operation.ReadContext, operation.Value[store.Value]) (operation.Change[store.Value], error) {
+				output = output.ReplaceAfterRead(func(operation.Context, operation.Value[store.Value]) (operation.Change[store.Value], error) {
 					return operation.Replace(operation.Present(store.Number(42))), nil
-				}}})
+				})
 			} else {
 				collection.Hooks.AfterRead = []ridu.Hook{func(ctx ridu.HookContext) error { ctx.Document.Values["summary"] = store.Number(42); return nil }}
 			}
@@ -254,7 +254,7 @@ func TestUnifiedComputedOutputRejectsMissingAndInvalidResolvers(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			_, err = app.Local().Create(t.Context(), "pages", store.Values{"title": store.String("Test")}, nil)
+			_, err = app.Local().Create(t.Context(), "pages", store.Values{"title": store.String("Test")}, ridu.MutationOptions{})
 			var failure *ridu.OperationError
 			if !errors.As(err, &failure) || failure.Code != "invalid_computed_value" {
 				t.Fatalf("invalid output exposed: %v", err)
@@ -294,8 +294,8 @@ func TestUnifiedCapabilitiesUseAttachedRulesForEmptyAndRepeatedFields(t *testing
 }
 
 func TestUnifiedCapabilitiesConjoinAttachedRestrictions(t *testing.T) {
-	allow := func(operation.AccessContext) (bool, error) { return true, nil }
-	deny := func(operation.AccessContext) (bool, error) { return false, nil }
+	allow := func(operation.Context) (bool, error) { return true, nil }
+	deny := func(operation.Context) (bool, error) { return false, nil }
 	text := field.Text("title").Access(field.Access{Update: allow}).RestrictAccess(field.Access{Update: deny})
 	app, err := ridu.New(ridu.Config{Name: "Attached access", Collections: []ridu.Collection{{Slug: "pages", Fields: field.Fields{text, field.Array("rows", field.Fields{text})}}}}, teststore.New())
 	if err != nil {
@@ -315,14 +315,14 @@ func TestUnifiedCapabilitiesConjoinAttachedRestrictions(t *testing.T) {
 
 func TestUnifiedComputedAllLocalesContextDescribesItsView(t *testing.T) {
 	localizedCalls := 0
-	title := field.Text("title").Localized().ReadHooks(field.ReadHooks[string]{AfterRead: []field.OutputTransform[string]{func(ctx operation.ReadContext, value operation.Value[string]) (operation.Change[string], error) {
+	title := field.Text("title").Localized().ReplaceAfterRead(func(ctx operation.Context, value operation.Value[string]) (operation.Change[string], error) {
 		localizedCalls++
 		if ctx.AllLocales || ctx.Locale == "" {
 			t.Errorf("localized callback did not receive an exact view: %#v", ctx)
 		}
 		return operation.Keep[string](), nil
-	}}})
-	output := field.Virtual("canonical", field.ValueBoolean, func(ctx operation.ReadContext) (operation.Value[store.Value], error) {
+	})
+	output := field.Virtual("canonical", field.ValueBoolean, func(ctx operation.Context) (operation.Value[store.Value], error) {
 		_, object := ctx.Root.Get("title").CopyObject()
 		if object != ctx.AllLocales {
 			t.Errorf("all-locales flag disagrees with root view")
@@ -334,14 +334,14 @@ func TestUnifiedComputedAllLocalesContextDescribesItsView(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	doc, err := app.Local().Create(t.Context(), "pages", store.Values{"title": store.String("English")}, nil)
+	doc, err := app.Local().Create(t.Context(), "pages", store.Values{"title": store.String("English")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if value, _ := doc.Values["canonical"].BooleanValue(); value {
 		t.Fatal("exact output marked canonical")
 	}
-	doc, err = app.Local().FindWithOptions(t.Context(), "pages", doc.ID, ridu.FindOptions{AllLocales: true})
+	doc, err = app.Local().Find(t.Context(), "pages", doc.ID, ridu.FindOptions{AllLocales: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -356,9 +356,9 @@ func TestUnifiedComputedAllLocalesContextDescribesItsView(t *testing.T) {
 func TestUnifiedRequiredReadOutputCannotBecomeNull(t *testing.T) {
 	for _, nested := range []bool{false, true} {
 		t.Run(map[bool]string{false: "root", true: "row"}[nested], func(t *testing.T) {
-			text := field.Text("title").Required().ReadHooks(field.ReadHooks[string]{AfterRead: []field.OutputTransform[string]{func(operation.ReadContext, operation.Value[string]) (operation.Change[string], error) {
+			text := field.Text("title").Required().ReplaceAfterRead(func(operation.Context, operation.Value[string]) (operation.Change[string], error) {
 				return operation.Replace(operation.Empty[string]()), nil
-			}}})
+			})
 			fields := field.Fields{text}
 			values := store.Values{"title": store.String("Valid input")}
 			if nested {
@@ -369,7 +369,7 @@ func TestUnifiedRequiredReadOutputCannotBecomeNull(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			_, err = app.Local().Create(t.Context(), "pages", values, nil)
+			_, err = app.Local().Create(t.Context(), "pages", values, ridu.MutationOptions{})
 			var failure *ridu.OperationError
 			if !errors.As(err, &failure) || failure.Code != "invalid_field_output" {
 				t.Fatalf("invalid null output: %v", err)

@@ -46,8 +46,6 @@ export type {
 	MutationLocaleOptions,
 	RestoreOptions,
 	CopyLocaleInput,
-	DefaultRiduConfig,
-	GeneratedRiduConfigRegistry,
 	UploadCollectionSlug,
 	UploadOptions,
 	UploadImageInput,

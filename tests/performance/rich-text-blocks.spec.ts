@@ -8,6 +8,73 @@ import {
 	block,
 } from "../e2e/admin/rich-text-block-fixture";
 
+test("100 named cards keep nested editors lazy and header typing below 100 ms p95", async ({
+	page,
+}, testInfo) => {
+	await loginAsEditor(page);
+	const children = Array.from({ length: 100 }, (_, index) =>
+		block(index < 20 ? "callout" : "cta", {
+			heading: `Content ${index}`,
+			...(index < 20
+				? {
+						detail: richDocument([
+							{
+								type: "paragraph",
+								version: 1,
+								children: [{ type: "text", version: 1, text: "Lazy nested content" }],
+							},
+						]),
+					}
+				: {}),
+		})
+	);
+	const created = await page.request.post("/api/collections/block-names", {
+		data: { title: "Named card performance", body: richDocument(children) },
+	});
+	expect(created.ok(), await created.text()).toBe(true);
+	const original = (await created.json()).doc;
+	await page.goto(`/admin/collections/block-names/${original.id}`);
+	const names = bodyCards(page).getByRole("textbox", { name: "Block name", exact: true });
+	await expect(names).toHaveCount(100);
+	await expect(page.locator('.ridu-richtext-content[contenteditable="true"]')).toHaveCount(1);
+	const input = names.first();
+	await input.evaluate((element) => {
+		const samples: number[] = [];
+		Object.assign(window, { riduNameTypingSamples: samples });
+		element.addEventListener("input", () => {
+			const start = performance.now();
+			requestAnimationFrame(() =>
+				requestAnimationFrame(() => samples.push(performance.now() - start))
+			);
+		});
+	});
+	for (const character of "Footer newsletter signup") {
+		await input.press(character === " " ? "Space" : character);
+		await page.evaluate(
+			() =>
+				new Promise<void>((resolve) =>
+					requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+				)
+		);
+	}
+	await expect(input).toHaveValue("Footer newsletter signup");
+	await expect(input).toBeFocused();
+	const samples = await page.evaluate(
+		() => (window as Window & { riduNameTypingSamples: number[] }).riduNameTypingSamples
+	);
+	const p95 = [...samples].sort((a, b) => a - b)[Math.ceil(samples.length * 0.95) - 1]!;
+	await testInfo.attach("block-name-performance.json", {
+		body: JSON.stringify({ cards: 100, nestedBodies: 20, samples, typingP95MS: p95 }),
+		contentType: "application/json",
+	});
+	console.log(
+		`BLOCK_NAME_BROWSER_PERFORMANCE ${JSON.stringify({ cards: 100, nestedBodies: 20, typingP95MS: p95 })}`
+	);
+	expect(samples).toHaveLength("Footer newsletter signup".length);
+	expect(p95).toBeLessThan(100);
+	await expect(page.locator('.ridu-richtext-content[contenteditable="true"]')).toHaveCount(1);
+});
+
 test("100 mixed cards keep nested editors lazy and measure typing and block actions", async ({
 	page,
 }, testInfo) => {

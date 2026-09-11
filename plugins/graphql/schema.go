@@ -441,7 +441,7 @@ func (builder *schemaBuilder) addCollection(current resource, queries, mutations
 		Type: object, Args: mergeArgs(enginegraphql.FieldConfigArgument{"id": &enginegraphql.ArgumentConfig{Type: enginegraphql.NewNonNull(enginegraphql.ID)}}, builder.readLocaleArgs()),
 		Resolve: func(params enginegraphql.ResolveParams) (interface{}, error) {
 			request := requestFromContext(params)
-			document, err := builder.local.FindWithOptions(params.Context, string(current.Slug), fmt.Sprint(params.Args["id"]), ridu.FindOptions{
+			document, err := builder.local.Find(params.Context, string(current.Slug), fmt.Sprint(params.Args["id"]), ridu.FindOptions{
 				Actor: request.actor, ActorCollection: request.actorCollection, Populate: builder.populationsFor(current.Fields, params.Info),
 				OutputFields: builder.outputFieldsFor(current.Fields, params.Info),
 				Draft:        boolPointerArg(params.Args, "draft"),
@@ -521,9 +521,9 @@ func (builder *schemaBuilder) addCollection(current resource, queries, mutations
 			var document store.Document
 			var err error
 			if current.Auth != nil {
-				document, err = builder.app.CreateAuthUserForTransportWithOptions(params.Context, string(current.Slug), valuesArg(params.Args, "data", current.Fields), dataStringArg(params.Args, "data", "password"), builder.mutationOptions(current, params, request, 0))
+				document, err = builder.app.CreateAuthUserForTransport(params.Context, string(current.Slug), valuesArg(params.Args, "data", current.Fields), dataStringArg(params.Args, "data", "password"), builder.mutationOptions(current, params, request, 0))
 			} else {
-				document, err = builder.local.CreateWithOptions(params.Context, string(current.Slug), valuesArg(params.Args, "data", current.Fields), builder.mutationOptions(current, params, request, 0))
+				document, err = builder.local.Create(params.Context, string(current.Slug), valuesArg(params.Args, "data", current.Fields), builder.mutationOptions(current, params, request, 0))
 			}
 			if err != nil {
 				return nil, transportError(err)
@@ -543,7 +543,7 @@ func (builder *schemaBuilder) addCollection(current resource, queries, mutations
 			return nil, clientError(err)
 		}
 		request := requestFromContext(params)
-		document, err := builder.local.UpdateWithOptions(params.Context, string(current.Slug), fmt.Sprint(params.Args["id"]), valuesArg(params.Args, "data", current.Fields), builder.mutationOptions(current, params, request, intArg(params.Args, "expectedRevision", 0)))
+		document, err := builder.local.Update(params.Context, string(current.Slug), fmt.Sprint(params.Args["id"]), valuesArg(params.Args, "data", current.Fields), builder.mutationOptions(current, params, request, intArg(params.Args, "expectedRevision", 0)))
 		if err != nil {
 			return nil, transportError(err)
 		}
@@ -553,7 +553,7 @@ func (builder *schemaBuilder) addCollection(current resource, queries, mutations
 	}
 	if err := addRootField(mutations, "delete"+current.name, &enginegraphql.Field{Type: object, Args: identityArgs, Resolve: func(params enginegraphql.ResolveParams) (interface{}, error) {
 		request := requestFromContext(params)
-		document, err := builder.local.DeleteWithOptions(params.Context, string(current.Slug), fmt.Sprint(params.Args["id"]), builder.mutationOptions(current, params, request, 0))
+		document, err := builder.local.Delete(params.Context, string(current.Slug), fmt.Sprint(params.Args["id"]), builder.mutationOptions(current, params, request, 0))
 		if err != nil {
 			return nil, transportError(err)
 		}
@@ -577,9 +577,9 @@ func (builder *schemaBuilder) addCollection(current resource, queries, mutations
 			if builder.app == nil {
 				return nil, fmt.Errorf("GraphQL upload duplication requires a bound application")
 			}
-			document, err = builder.app.DuplicateWithOptions(params.Context, string(current.Slug), fmt.Sprint(params.Args["id"]), valuesArg(params.Args, "data", current.Fields), options)
+			document, err = builder.app.Duplicate(params.Context, string(current.Slug), fmt.Sprint(params.Args["id"]), valuesArg(params.Args, "data", current.Fields), options)
 		} else {
-			document, err = builder.local.DuplicateWithOptions(params.Context, string(current.Slug), fmt.Sprint(params.Args["id"]), valuesArg(params.Args, "data", current.Fields), options)
+			document, err = builder.local.Duplicate(params.Context, string(current.Slug), fmt.Sprint(params.Args["id"]), valuesArg(params.Args, "data", current.Fields), options)
 		}
 		if err != nil {
 			return nil, transportError(err)
@@ -624,7 +624,7 @@ func versionFindOptions(params enginegraphql.ResolveParams, request requestState
 func (builder *schemaBuilder) addTrashMutations(current resource, object *enginegraphql.Object, identityArgs enginegraphql.FieldConfigArgument, mutations enginegraphql.Fields) error {
 	if err := addRootField(mutations, "restoreDeleted"+current.name, &enginegraphql.Field{Type: object, Args: identityArgs, Resolve: func(params enginegraphql.ResolveParams) (interface{}, error) {
 		request := requestFromContext(params)
-		document, err := builder.local.RestoreDeletedWithOptions(params.Context, string(current.Slug), fmt.Sprint(params.Args["id"]), builder.mutationOptions(current, params, request, 0))
+		document, err := builder.local.RestoreDeleted(params.Context, string(current.Slug), fmt.Sprint(params.Args["id"]), builder.mutationOptions(current, params, request, 0))
 		if err != nil {
 			return nil, transportError(err)
 		}
@@ -634,7 +634,7 @@ func (builder *schemaBuilder) addTrashMutations(current resource, object *engine
 	}
 	return addRootField(mutations, "deletePermanent"+current.name, &enginegraphql.Field{Type: object, Args: identityArgs, Resolve: func(params enginegraphql.ResolveParams) (interface{}, error) {
 		request := requestFromContext(params)
-		document, err := builder.local.DeletePermanentWithOptions(params.Context, string(current.Slug), fmt.Sprint(params.Args["id"]), builder.mutationOptions(current, params, request, 0))
+		document, err := builder.local.DeletePermanent(params.Context, string(current.Slug), fmt.Sprint(params.Args["id"]), builder.mutationOptions(current, params, request, 0))
 		if err != nil {
 			return nil, transportError(err)
 		}
@@ -649,7 +649,7 @@ func (builder *schemaBuilder) addCollectionVersions(current resource, object *en
 	}, builder.readLocaleArgs())
 	if err := addRootField(queries, "version"+current.name, &enginegraphql.Field{Type: version, Args: readArgs, Resolve: func(params enginegraphql.ResolveParams) (interface{}, error) {
 		request := requestFromContext(params)
-		result, err := builder.local.VersionWithOptions(params.Context, string(current.Slug), fmt.Sprint(params.Args["id"]), intArg(params.Args, "revision", 0), versionFindOptions(params, request))
+		result, err := builder.local.Version(params.Context, string(current.Slug), fmt.Sprint(params.Args["id"]), intArg(params.Args, "revision", 0), versionFindOptions(params, request))
 		if err != nil {
 			return nil, transportError(err)
 		}
@@ -662,7 +662,7 @@ func (builder *schemaBuilder) addCollectionVersions(current resource, object *en
 	}, builder.readLocaleArgs())
 	if err := addRootField(queries, "versions"+current.plural, &enginegraphql.Field{Type: enginegraphql.NewNonNull(page), Args: listArgs, Resolve: func(params enginegraphql.ResolveParams) (interface{}, error) {
 		request := requestFromContext(params)
-		versions, err := builder.local.VersionsWithOptions(params.Context, string(current.Slug), fmt.Sprint(params.Args["id"]), versionFindOptions(params, request))
+		versions, err := builder.local.Versions(params.Context, string(current.Slug), fmt.Sprint(params.Args["id"]), versionFindOptions(params, request))
 		if err != nil {
 			return nil, transportError(err)
 		}
@@ -676,7 +676,11 @@ func (builder *schemaBuilder) addCollectionVersions(current resource, object *en
 	}, builder.writeLocaleArgs())
 	if err := addRootField(mutations, "restoreVersion"+current.name, &enginegraphql.Field{Type: object, Args: restoreArgs, Resolve: func(params enginegraphql.ResolveParams) (interface{}, error) {
 		request := requestFromContext(params)
-		document, err := builder.local.RestoreVersionWithOptions(params.Context, string(current.Slug), fmt.Sprint(params.Args["id"]), intArg(params.Args, "revision", 0), boolArg(params.Args, "draft"), builder.mutationOptions(current, params, request, intArg(params.Args, "expectedRevision", 0)))
+		restore := builder.local.Restore
+		if boolArg(params.Args, "draft") {
+			restore = builder.local.RestoreAsDraft
+		}
+		document, err := restore(params.Context, string(current.Slug), fmt.Sprint(params.Args["id"]), intArg(params.Args, "revision", 0), builder.mutationOptions(current, params, request, intArg(params.Args, "expectedRevision", 0)))
 		if err != nil {
 			return nil, transportError(err)
 		}
@@ -690,10 +694,10 @@ func (builder *schemaBuilder) addCollectionVersions(current resource, object *en
 			run  func(params enginegraphql.ResolveParams, request requestState) (store.Document, error)
 		}{
 			{name: "publish", run: func(params enginegraphql.ResolveParams, request requestState) (store.Document, error) {
-				return builder.local.PublishWithOptions(params.Context, string(current.Slug), fmt.Sprint(params.Args["id"]), builder.mutationOptions(current, params, request, intArg(params.Args, "expectedRevision", 0)))
+				return builder.local.Publish(params.Context, string(current.Slug), fmt.Sprint(params.Args["id"]), builder.mutationOptions(current, params, request, intArg(params.Args, "expectedRevision", 0)))
 			}},
 			{name: "unpublish", run: func(params enginegraphql.ResolveParams, request requestState) (store.Document, error) {
-				return builder.local.UnpublishWithOptions(params.Context, string(current.Slug), fmt.Sprint(params.Args["id"]), builder.mutationOptions(current, params, request, intArg(params.Args, "expectedRevision", 0)))
+				return builder.local.Unpublish(params.Context, string(current.Slug), fmt.Sprint(params.Args["id"]), builder.mutationOptions(current, params, request, intArg(params.Args, "expectedRevision", 0)))
 			}},
 		} {
 			action := action
@@ -891,7 +895,7 @@ func (builder *schemaBuilder) addGlobal(current resource, queries, mutations eng
 	object := builder.objects[current.ID]
 	if err := addRootField(queries, current.name, &enginegraphql.Field{Type: object, Args: builder.readLocaleArgs(), Resolve: func(params enginegraphql.ResolveParams) (interface{}, error) {
 		request := requestFromContext(params)
-		document, err := builder.local.GlobalWithOptions(params.Context, string(current.Slug), ridu.FindOptions{
+		document, err := builder.local.Global(params.Context, string(current.Slug), ridu.FindOptions{
 			Actor: request.actor, ActorCollection: request.actorCollection, Populate: builder.populationsFor(current.Fields, params.Info), Locale: localeArg(params.Args),
 			OutputFields:    builder.outputFieldsFor(current.Fields, params.Info),
 			Draft:           boolPointerArg(params.Args, "draft"),
@@ -919,7 +923,7 @@ func (builder *schemaBuilder) addGlobal(current resource, queries, mutations eng
 			return nil, clientError(err)
 		}
 		request := requestFromContext(params)
-		document, err := builder.local.UpdateGlobalWithOptions(params.Context, string(current.Slug), valuesArg(params.Args, "data", current.Fields), builder.mutationOptions(current, params, request, intArg(params.Args, "expectedRevision", 0)))
+		document, err := builder.local.UpdateGlobal(params.Context, string(current.Slug), valuesArg(params.Args, "data", current.Fields), builder.mutationOptions(current, params, request, intArg(params.Args, "expectedRevision", 0)))
 		if err != nil {
 			return nil, transportError(err)
 		}
@@ -937,7 +941,7 @@ func (builder *schemaBuilder) addGlobalVersions(current resource, object *engine
 	version, page := builder.versionTypes(current, object)
 	if err := addRootField(queries, "version"+current.name, &enginegraphql.Field{Type: version, Args: mergeArgs(enginegraphql.FieldConfigArgument{"revision": &enginegraphql.ArgumentConfig{Type: enginegraphql.NewNonNull(enginegraphql.Int)}}, builder.readLocaleArgs()), Resolve: func(params enginegraphql.ResolveParams) (interface{}, error) {
 		request := requestFromContext(params)
-		result, err := builder.local.GlobalVersionWithOptions(params.Context, string(current.Slug), intArg(params.Args, "revision", 0), versionFindOptions(params, request))
+		result, err := builder.local.GlobalVersion(params.Context, string(current.Slug), intArg(params.Args, "revision", 0), versionFindOptions(params, request))
 		if err != nil {
 			return nil, transportError(err)
 		}
@@ -947,7 +951,7 @@ func (builder *schemaBuilder) addGlobalVersions(current resource, object *engine
 	}
 	if err := addRootField(queries, "versions"+current.plural, &enginegraphql.Field{Type: enginegraphql.NewNonNull(page), Args: mergeArgs(enginegraphql.FieldConfigArgument{"page": &enginegraphql.ArgumentConfig{Type: enginegraphql.Int}, "limit": &enginegraphql.ArgumentConfig{Type: enginegraphql.Int}}, builder.readLocaleArgs()), Resolve: func(params enginegraphql.ResolveParams) (interface{}, error) {
 		request := requestFromContext(params)
-		versions, err := builder.local.GlobalVersionsWithOptions(params.Context, string(current.Slug), versionFindOptions(params, request))
+		versions, err := builder.local.GlobalVersions(params.Context, string(current.Slug), versionFindOptions(params, request))
 		if err != nil {
 			return nil, transportError(err)
 		}
@@ -958,7 +962,11 @@ func (builder *schemaBuilder) addGlobalVersions(current resource, object *engine
 	restoreArgs := mergeArgs(enginegraphql.FieldConfigArgument{"revision": &enginegraphql.ArgumentConfig{Type: enginegraphql.NewNonNull(enginegraphql.Int)}, "expectedRevision": &enginegraphql.ArgumentConfig{Type: enginegraphql.Int}, "draft": &enginegraphql.ArgumentConfig{Type: enginegraphql.Boolean}}, builder.writeLocaleArgs())
 	if err := addRootField(mutations, "restoreVersion"+current.name, &enginegraphql.Field{Type: object, Args: restoreArgs, Resolve: func(params enginegraphql.ResolveParams) (interface{}, error) {
 		request := requestFromContext(params)
-		document, err := builder.local.RestoreGlobalVersionWithOptions(params.Context, string(current.Slug), intArg(params.Args, "revision", 0), boolArg(params.Args, "draft"), builder.mutationOptions(current, params, request, intArg(params.Args, "expectedRevision", 0)))
+		restore := builder.local.RestoreGlobal
+		if boolArg(params.Args, "draft") {
+			restore = builder.local.RestoreGlobalAsDraft
+		}
+		document, err := restore(params.Context, string(current.Slug), intArg(params.Args, "revision", 0), builder.mutationOptions(current, params, request, intArg(params.Args, "expectedRevision", 0)))
 		if err != nil {
 			return nil, transportError(err)
 		}
@@ -972,10 +980,10 @@ func (builder *schemaBuilder) addGlobalVersions(current resource, object *engine
 			run  func(enginegraphql.ResolveParams, requestState) (store.Document, error)
 		}{
 			{name: "publish", run: func(params enginegraphql.ResolveParams, request requestState) (store.Document, error) {
-				return builder.local.PublishGlobalWithOptions(params.Context, string(current.Slug), builder.mutationOptions(current, params, request, intArg(params.Args, "expectedRevision", 0)))
+				return builder.local.PublishGlobal(params.Context, string(current.Slug), builder.mutationOptions(current, params, request, intArg(params.Args, "expectedRevision", 0)))
 			}},
 			{name: "unpublish", run: func(params enginegraphql.ResolveParams, request requestState) (store.Document, error) {
-				return builder.local.UnpublishGlobalWithOptions(params.Context, string(current.Slug), builder.mutationOptions(current, params, request, intArg(params.Args, "expectedRevision", 0)))
+				return builder.local.UnpublishGlobal(params.Context, string(current.Slug), builder.mutationOptions(current, params, request, intArg(params.Args, "expectedRevision", 0)))
 			}},
 		} {
 			action := action

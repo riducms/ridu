@@ -17,7 +17,7 @@ import (
 // A permissive data-shape fallback can reinterpret the public hero path as the
 // quote variant's private group, after admission correctly approves the path.
 func variantIsolation(t *testing.T, factory Factory, options Options) {
-	deny := field.Access{Read: func(fieldoperation.AccessContext) (bool, error) { return false, nil }}
+	deny := field.Access{Read: func(fieldoperation.Context) (bool, error) { return false, nil }}
 	_, app := factory(t, ridu.Config{Name: "Variant query confidentiality", Collections: []ridu.Collection{{
 		Slug: "pages", Fields: field.Fields{
 			field.JSON("metadata"), field.Blocks("layout", field.Block{Slug: "hero", Fields: field.Fields{field.Text("secret"), field.JSON("metadata")}}, field.Block{Slug: "quote", Fields: field.Fields{field.Group("hero", field.Fields{field.Text("secret").Access(deny), field.JSON("metadata").Access(deny)})}}),
@@ -30,7 +30,7 @@ func variantIsolation(t *testing.T, factory Factory, options Options) {
 				"secret": store.String("hidden-token"), "metadata": store.Object(store.Values{"tag": store.String("hidden-json-token")}),
 			}),
 		})),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,7 +39,7 @@ func variantIsolation(t *testing.T, factory Factory, options Options) {
 			"blockType": store.String("hero"), "secret": store.String("public-token"),
 			"metadata": store.Object(store.Values{"tag": store.String("public-json-token")}),
 		})),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

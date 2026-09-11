@@ -24,7 +24,7 @@ func TestSlugLifecycleIsServerAuthoritative(t *testing.T) {
 	ctx := context.Background()
 	created, err := application.Local().Create(ctx, "posts", store.Values{
 		"seo": store.Object(store.Values{"title": store.String("Hello, Ridu!")}),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -32,7 +32,7 @@ func TestSlugLifecycleIsServerAuthoritative(t *testing.T) {
 
 	generated, err := application.Local().Update(ctx, "posts", created.ID, store.Values{
 		"seo": store.Object(store.Values{"title": store.String("A New Title")}),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +40,7 @@ func TestSlugLifecycleIsServerAuthoritative(t *testing.T) {
 
 	manual, err := application.Local().Update(ctx, "posts", created.ID, store.Values{
 		"slug": store.String("  Hand Authored / URL  "),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,7 +48,7 @@ func TestSlugLifecycleIsServerAuthoritative(t *testing.T) {
 
 	preserved, err := application.Local().Update(ctx, "posts", created.ID, store.Values{
 		"seo": store.Object(store.Values{"title": store.String("Manual Slug Stays")}),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +56,7 @@ func TestSlugLifecycleIsServerAuthoritative(t *testing.T) {
 
 	regenerated, err := application.Local().Update(ctx, "posts", created.ID, store.Values{
 		"slug": store.String("Manual Slug Stays"),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,7 +64,7 @@ func TestSlugLifecycleIsServerAuthoritative(t *testing.T) {
 
 	followed, err := application.Local().Update(ctx, "posts", created.ID, store.Values{
 		"seo": store.Object(store.Values{"title": store.String("Generated Again")}),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +72,7 @@ func TestSlugLifecycleIsServerAuthoritative(t *testing.T) {
 
 	_, err = application.Local().Create(ctx, "posts", store.Values{
 		"seo": store.Object(store.Values{"title": store.String("Generated Again")}),
-	}, nil)
+	}, ridu.MutationOptions{})
 	var operationError *ridu.OperationError
 	if !errors.As(err, &operationError) || operationError.Code != "validation" {
 		t.Fatalf("duplicate slug error = %v, want validation", err)
@@ -93,7 +93,7 @@ func TestSlugCreateNormalizesManualValues(t *testing.T) {
 	created, err := application.Local().Create(context.Background(), "posts", store.Values{
 		"title": store.String("Ignored Source"),
 		"slug":  store.String("  A Custom / URL  "),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +121,7 @@ func TestSlugNormalizesFinalHookMutations(t *testing.T) {
 
 	rewritten, err := application.Local().Create(context.Background(), "posts", store.Values{
 		"title": store.String("Rewrite source"),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,7 +129,7 @@ func TestSlugNormalizesFinalHookMutations(t *testing.T) {
 
 	manual, err := application.Local().Create(context.Background(), "posts", store.Values{
 		"title": store.String("Manual hook"),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -65,7 +65,7 @@ func TestPrimitiveListDefaultsAndEditorsResolveWithoutExecutingCallbacks(t *test
 	calls := 0
 	config := core.Config{Name: "Product defaults", Collections: []core.Collection{{Slug: "products", Fields: field.Fields{
 		field.TextList("sellingPoints").Default("", "Oak", "Oak").Admin(field.Admin{Editor: field.Component("app:points")}),
-		field.NumberList("sizes").DefaultFrom(func(operation.DefaultContext) (operation.Value[[]float64], error) {
+		field.NumberList("sizes").DefaultFrom(func(operation.Context) (operation.Value[[]float64], error) {
 			calls++
 			return operation.Present([]float64{0, 8}), nil
 		}).Admin(field.Admin{Editor: field.Component("app:sizes")}),

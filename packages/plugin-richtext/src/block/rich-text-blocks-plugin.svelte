@@ -33,13 +33,18 @@
 		type BaseSelection,
 		type NodeKey,
 	} from "lexical";
-	import { createBlockNode, isBlockNode } from "@plugin-richtext/block/rich-text-block-node";
+	import {
+		createBlockNode,
+		isBlockNode,
+		updateBlockName,
+	} from "@plugin-richtext/block/rich-text-block-node";
 	import { richTextBlockTypes } from "@plugin-richtext/field/rich-text-blocks";
 	import {
 		OPEN_BLOCK_EDITOR_COMMAND,
 		DUPLICATE_BLOCK_COMMAND,
 		REMOVE_BLOCK_COMMAND,
 		MOVE_BLOCK_COMMAND,
+		UPDATE_BLOCK_NAME_COMMAND,
 	} from "@plugin-richtext/menu/rich-text-commands";
 
 	let { authoring, field }: { authoring: FieldAuthoringHost | undefined; field: SchemaField } =
@@ -280,6 +285,15 @@
 							?.querySelector<HTMLElement>("[data-block-select]")
 							?.focus()
 					);
+					return true;
+				},
+				COMMAND_PRIORITY_EDITOR
+			),
+			editor.registerCommand(
+				UPDATE_BLOCK_NAME_COMMAND,
+				(update) => {
+					if (!editor.isEditable() || !updateBlockName(update)) return false;
+					$addUpdateTag(update.historyTag);
 					return true;
 				},
 				COMMAND_PRIORITY_EDITOR

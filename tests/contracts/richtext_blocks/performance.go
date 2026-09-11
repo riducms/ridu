@@ -60,14 +60,14 @@ func RunPerformance(t *testing.T, adapter string, factory Factory) {
 				var document store.Document
 				create := measured(t, func() error {
 					var err error
-					document, err = app.Local().Create(t.Context(), "articles", values, nil)
+					document, err = app.Local().Create(t.Context(), "articles", values, ridu.MutationOptions{})
 					return err
 				})
 				draft := true
 				var reads, writes []sample
 				for i := range 6 {
 					reads = append(reads, measured(t, func() error {
-						_, err := app.Local().FindWithOptions(t.Context(), "articles", document.ID, ridu.FindOptions{Draft: &draft})
+						_, err := app.Local().Find(t.Context(), "articles", document.ID, ridu.FindOptions{Draft: &draft})
 						return err
 					}))
 					// A small edit still persists the ordinary aggregate, plus a full
@@ -75,11 +75,11 @@ func RunPerformance(t *testing.T, adapter string, factory Factory) {
 					values["title"] = store.String(fmt.Sprintf("Measured aggregate %d", i))
 					writes = append(writes, measured(t, func() error {
 						var err error
-						document, err = app.Local().UpdateRevision(t.Context(), "articles", document.ID, values, document.Revision, nil)
+						document, err = app.Local().Update(t.Context(), "articles", document.ID, values, ridu.MutationOptions{ExpectedRevision: document.Revision})
 						return err
 					}))
 				}
-				versions, err := app.Local().Versions(t.Context(), "articles", document.ID, nil)
+				versions, err := app.Local().Versions(t.Context(), "articles", document.ID, ridu.FindOptions{})
 				if err != nil {
 					t.Fatal(err)
 				}

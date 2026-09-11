@@ -81,14 +81,14 @@ type typedPolicies[W, R any] struct {
 	validators     []Validator[W]
 	liveValidators []LiveValidator[W]
 	hooks          Hooks[W]
-	readHooks      ReadHooks[R]
+	afterRead      []OutputTransform[R]
 	resolver       Resolver[R]
 	defaultFrom    DefaultFunc[W]
 }
 
 func (p typedPolicies[W, R]) summary() PolicySummary {
 	h := p.hooks
-	counts := map[string]int{"beforeDuplicate": len(h.BeforeDuplicate), "beforeValidate": len(h.BeforeValidate), "beforeChange": len(h.BeforeChange), "beforeOperation": len(h.BeforeOperation), "beforeDelete": len(h.BeforeDelete), "afterChange": len(h.AfterChange), "afterDelete": len(h.AfterDelete), "afterOperation": len(h.AfterOperation), "afterCommit": len(h.AfterCommit), "afterRead": len(p.readHooks.AfterRead)}
+	counts := map[string]int{"beforeDuplicate": len(h.BeforeDuplicate), "beforeValidate": len(h.BeforeValidate), "beforeChange": len(h.BeforeChange), "beforeOperation": len(h.BeforeOperation), "beforeDelete": len(h.BeforeDelete), "afterChange": len(h.AfterChange), "afterDelete": len(h.AfterDelete), "afterOperation": len(h.AfterOperation), "afterCommit": len(h.AfterCommit), "afterRead": len(p.afterRead)}
 	for key, n := range counts {
 		if n == 0 {
 			delete(counts, key)
@@ -255,7 +255,7 @@ func (p typedPolicies[W, R]) issues() []Issue {
 	for i := 0; i < h.NumField(); i++ {
 		check("hooks."+ht.Field(i).Name, h.Field(i).Interface())
 	}
-	check("readHooks.AfterRead", p.readHooks.AfterRead)
+	check("afterRead", p.afterRead)
 	return issues
 }
 

@@ -56,7 +56,7 @@ func TestArrayIdentityLifecycle(t *testing.T) {
 			store.Object(store.Values{"_key": store.String("supplied"), "heading": store.String("Second")}),
 		)}),
 		"translations": store.List(store.Object(store.Values{"label": store.String("English")})),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,11 +73,11 @@ func TestArrayIdentityLifecycle(t *testing.T) {
 	_, err = app.Local().Update(ctx, "pages", created.ID, store.Values{
 		"content":      store.Object(store.Values{"items": store.List(store.Object(rows[1]), store.Object(rows[0]), store.Object(store.Values{"heading": store.String("Nouveau")}))}),
 		"translations": store.List(store.Object(store.Values{"label": store.String("Français")})),
-	}, nil, ridu.LocaleOptions{Locale: "fr"})
+	}, ridu.MutationOptions{Locale: "fr"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	english, err := app.Local().Find(ctx, "pages", created.ID, nil)
+	english, err := app.Local().Find(ctx, "pages", created.ID, ridu.FindOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +91,7 @@ func TestArrayIdentityLifecycle(t *testing.T) {
 	if !reflect.DeepEqual(keys(rows[1]["links"]), nestedKeys) || !reflect.DeepEqual(keys(english.Values["translations"]), englishKeys) {
 		t.Fatal("update replaced unchanged nested or localized identities")
 	}
-	duplicate, err := app.Local().Duplicate(ctx, "pages", created.ID, nil, nil)
+	duplicate, err := app.Local().Duplicate(ctx, "pages", created.ID, nil, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,11 +104,11 @@ func TestArrayIdentityLifecycle(t *testing.T) {
 	if keys(blockRows(content["items"])[1]["links"])[0] == nestedKeys[0] || keys(duplicate.Values["translations"])[0] == englishKeys[0] {
 		t.Fatal("duplicate reused nested or localized array identity")
 	}
-	french, err := app.Local().Find(ctx, "pages", created.ID, nil, ridu.LocaleOptions{Locale: "fr"})
+	french, err := app.Local().Find(ctx, "pages", created.ID, ridu.FindOptions{Locale: "fr"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	frenchCopy, err := app.Local().Find(ctx, "pages", duplicate.ID, nil, ridu.LocaleOptions{Locale: "fr"})
+	frenchCopy, err := app.Local().Find(ctx, "pages", duplicate.ID, ridu.FindOptions{Locale: "fr"})
 	if err != nil {
 		t.Fatal(err)
 	}

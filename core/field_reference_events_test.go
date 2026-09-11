@@ -16,12 +16,12 @@ func TestReferenceObserversRetainWriteCarriersAfterPopulation(t *testing.T) {
 	var singular []operation.ID
 	var repeated [][]operation.ID
 	fields := field.Fields{
-		field.Relationship("owner", "people").Hooks(field.Hooks[operation.ID]{AfterOperation: []field.Observer[operation.ID]{func(_ operation.EventContext, input operation.Value[operation.ID]) error {
+		field.Relationship("owner", "people").Hooks(field.Hooks[operation.ID]{AfterOperation: []field.Observer[operation.ID]{func(_ operation.Context, input operation.Value[operation.ID]) error {
 			value, _ := input.Get()
 			singular = append(singular, value)
 			return nil
 		}}}),
-		field.Relationships("reviewers", "people").Hooks(field.Hooks[[]operation.ID]{AfterOperation: []field.Observer[[]operation.ID]{func(_ operation.EventContext, input operation.Value[[]operation.ID]) error {
+		field.Relationships("reviewers", "people").Hooks(field.Hooks[[]operation.ID]{AfterOperation: []field.Observer[[]operation.ID]{func(_ operation.Context, input operation.Value[[]operation.ID]) error {
 			value, _ := input.Get()
 			repeated = append(repeated, value)
 			return nil
@@ -31,18 +31,18 @@ func TestReferenceObserversRetainWriteCarriersAfterPopulation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	person, err := app.Local().Create(t.Context(), "people", store.Values{"name": store.String("Editor")}, nil)
+	person, err := app.Local().Create(t.Context(), "people", store.Values{"name": store.String("Editor")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	post, err := app.Local().Create(t.Context(), "posts", store.Values{"owner": store.String(person.ID), "reviewers": store.List(store.String(person.ID))}, nil)
+	post, err := app.Local().Create(t.Context(), "posts", store.Values{"owner": store.String(person.ID), "reviewers": store.List(store.String(person.ID))}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	singular, repeated = nil, nil
 	owner, _ := query.NewPath("owner")
 	reviewers, _ := query.NewPath("reviewers")
-	found, err := app.Local().FindWithOptions(t.Context(), "posts", post.ID, ridu.FindOptions{Populate: []query.Population{{Path: owner}, {Path: reviewers}}})
+	found, err := app.Local().Find(t.Context(), "posts", post.ID, ridu.FindOptions{Populate: []query.Population{{Path: owner}, {Path: reviewers}}})
 	if err != nil {
 		t.Fatal(err)
 	}

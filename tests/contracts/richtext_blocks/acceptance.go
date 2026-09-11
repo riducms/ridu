@@ -40,18 +40,18 @@ func ordinarySemantics(t *testing.T, factory Factory) {
 		{"nested-validation", Block("callout", "", store.Values{"title": store.String("Title"), "detail": Document(Block("cta", "", store.Values{}))}), "body.root.children.0.fields.detail.root.children.0.fields.label"},
 	} {
 		t.Run(fixture.name, func(t *testing.T) {
-			_, err := app.Local().Create(ctx, "articles", store.Values{"title": store.String("Article"), "body": Document(fixture.node)}, nil)
+			_, err := app.Local().Create(ctx, "articles", store.Values{"title": store.String("Article"), "body": Document(fixture.node)}, ridu.MutationOptions{})
 			issue(t, err, fixture.path)
 		})
 	}
-	_, err := app.Local().Create(ctx, "articles", store.Values{"title": store.String("Article"), "body": Document(Block("callout", "same", store.Values{"title": store.String("First")}), Block("callout", "same", store.Values{"title": store.String("Second")}))}, nil)
+	_, err := app.Local().Create(ctx, "articles", store.Values{"title": store.String("Article"), "body": Document(Block("callout", "same", store.Values{"title": store.String("First")}), Block("callout", "same", store.Values{"title": store.String("Second")}))}, ridu.MutationOptions{})
 	issue(t, err, "body.root.children.1.fields._key")
 	seen.occurrences = nil
 	created, err := app.Local().Create(ctx, "articles", store.Values{"title": store.String("Article"), "body": Document(
 		paragraph("Before"),
 		Block("callout", "", store.Values{"title": store.String("First"), "secret": store.String("never disclose"), "links": store.List(store.Object(store.Values{"label": store.String("Read"), "href": store.String("/read")})), "detail": Document(Block("cta", "shared-inner", store.Values{"label": store.String("Inner one")})), "aside": Document(Block("cta", "shared-inner", store.Values{"label": store.String("Inner two")}))}),
 		Block("callout", "", store.Values{"title": store.String("Second")}), paragraph("After"),
-	)}, nil)
+	)}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +79,7 @@ func ordinarySemantics(t *testing.T, factory Factory) {
 		t.Fatal("ordinary array default identity missing")
 	}
 	seen.occurrences, seen.original = nil, map[string]string{}
-	updated, err := app.Local().UpdateRevision(ctx, "articles", created.ID, store.Values{"body": Document(Block("callout", keys[1], store.Values{"title": store.String("Second edited")}), Block("callout", keys[0], store.Values{"title": store.String("First edited")}))}, created.Revision, nil)
+	updated, err := app.Local().Update(ctx, "articles", created.ID, store.Values{"body": Document(Block("callout", keys[1], store.Values{"title": store.String("Second edited")}), Block("callout", keys[0], store.Values{"title": store.String("First edited")}))}, ridu.MutationOptions{ExpectedRevision: created.Revision})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,15 +92,15 @@ func ordinarySemantics(t *testing.T, factory Factory) {
 	if stringValue(payload(t, payload(t, updated.Values["body"], 1)["aside"], 0)["label"]) != "Inner two" {
 		t.Fatal("scoped patch lost inner editor")
 	}
-	_, err = app.Local().UpdateRevision(ctx, "articles", created.ID, store.Values{"title": store.String("Stale")}, created.Revision, nil)
+	_, err = app.Local().Update(ctx, "articles", created.ID, store.Values{"title": store.String("Stale")}, ridu.MutationOptions{ExpectedRevision: created.Revision})
 	code(t, err, "conflict")
 	seen.rollback = true
-	_, err = app.Local().UpdateRevision(ctx, "articles", created.ID, store.Values{"body": Document(Block("callout", keys[0], store.Values{"title": store.String("Failed update")}))}, updated.Revision, nil)
+	_, err = app.Local().Update(ctx, "articles", created.ID, store.Values{"body": Document(Block("callout", keys[0], store.Values{"title": store.String("Failed update")}))}, ridu.MutationOptions{ExpectedRevision: updated.Revision})
 	if err == nil {
 		t.Fatal("hook failure accepted")
 	}
 	draft := true
-	after, err := app.Local().FindWithOptions(ctx, "articles", created.ID, ridu.FindOptions{Draft: &draft})
+	after, err := app.Local().Find(ctx, "articles", created.ID, ridu.FindOptions{Draft: &draft})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +111,7 @@ func ordinarySemantics(t *testing.T, factory Factory) {
 	if err != nil || audit.Total != 0 {
 		t.Fatalf("nested side effect escaped rollback: %v", err)
 	}
-	versions, err := app.Local().Versions(ctx, "articles", created.ID, nil)
+	versions, err := app.Local().Versions(ctx, "articles", created.ID, ridu.FindOptions{})
 	if err != nil || len(versions) != 2 {
 		t.Fatalf("rollback changed versions: %d %v", len(versions), err)
 	}
@@ -122,7 +122,7 @@ func localesAndReferences(t *testing.T, factory Factory) {
 	config := configuration(t, seen)
 	backend, app := factory(t, config)
 	ctx := t.Context()
-	asset, err := app.Local().Create(ctx, "assets", store.Values{"title": store.String("Asset"), "url": store.String("/asset")}, nil)
+	asset, err := app.Local().Create(ctx, "assets", store.Values{"title": store.String("Asset"), "url": store.String("/asset")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,22 +131,22 @@ func localesAndReferences(t *testing.T, factory Factory) {
 		t.Fatal(err)
 	}
 	for _, name := range []string{"asset", "target"} {
-		_, err := app.Local().Create(ctx, "articles", store.Values{"title": store.String("Invalid reference"), "body": Document(Block("callout", "", store.Values{"title": store.String("Title"), name: store.String("missing")}))}, nil)
+		_, err := app.Local().Create(ctx, "articles", store.Values{"title": store.String("Invalid reference"), "body": Document(Block("callout", "", store.Values{"title": store.String("Title"), name: store.String("missing")}))}, ridu.MutationOptions{})
 		issue(t, err, "body.root.children.0.fields."+name)
 	}
 	created, err := app.Local().Create(ctx, "articles", store.Values{"title": store.String("Localized"), "body": Document(
 		Block("callout", "one", store.Values{"title": store.String("First"), "translation": store.String("Hello"), "target": store.String(asset.ID), "locked": store.String(asset.ID), "asset": store.String(file.ID), "lockedAsset": store.String(file.ID)}),
 		Block("callout", "two", store.Values{"title": store.String("Second"), "translation": store.String("Goodbye"), "target": store.String(asset.ID)}),
-	), "localizedBody": Document(Block("callout", "independent", store.Values{"title": store.String("English document")}))}, nil, ridu.LocaleOptions{Locale: "en"})
+	), "localizedBody": Document(Block("callout", "independent", store.Values{"title": store.String("English document")}))}, ridu.MutationOptions{Locale: "en"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = app.Local().Update(ctx, "articles", created.ID, store.Values{"body": Document(Block("callout", "two", store.Values{"translation": store.String("Au revoir")}), Block("callout", "one", store.Values{"translation": store.String("Bonjour")})), "localizedBody": Document(Block("cta", "independent", store.Values{"label": store.String("French document")}))}, nil, ridu.LocaleOptions{Locale: "fr"})
+	_, err = app.Local().Update(ctx, "articles", created.ID, store.Values{"body": Document(Block("callout", "two", store.Values{"translation": store.String("Au revoir")}), Block("callout", "one", store.Values{"translation": store.String("Bonjour")})), "localizedBody": Document(Block("cta", "independent", store.Values{"label": store.String("French document")}))}, ridu.MutationOptions{Locale: "fr"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	draft := true
-	all, err := app.Local().FindWithOptions(ctx, "articles", created.ID, ridu.FindOptions{Draft: &draft, AllLocales: true})
+	all, err := app.Local().Find(ctx, "articles", created.ID, ridu.FindOptions{Draft: &draft, AllLocales: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -159,7 +159,7 @@ func localesAndReferences(t *testing.T, factory Factory) {
 		t.Fatal("whole-field locales were correlated together")
 	}
 	for _, locale := range []schema.LocaleCode{"en", "fr"} {
-		found, err := app.Local().FindWithOptions(ctx, "articles", created.ID, ridu.FindOptions{Draft: &draft, Locale: locale})
+		found, err := app.Local().Find(ctx, "articles", created.ID, ridu.FindOptions{Draft: &draft, Locale: locale})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -172,7 +172,7 @@ func localesAndReferences(t *testing.T, factory Factory) {
 		path, _ := query.ParsePath("body.blocks.block.callout." + name)
 		paths = append(paths, query.Population{Path: path, Depth: 1})
 	}
-	populated, err := app.Local().FindWithOptions(ctx, "articles", created.ID, ridu.FindOptions{Draft: &draft, Populate: paths})
+	populated, err := app.Local().Find(ctx, "articles", created.ID, ridu.FindOptions{Draft: &draft, Populate: paths})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -192,7 +192,7 @@ func localesAndReferences(t *testing.T, factory Factory) {
 			var err error
 			collection.Fields, err = collection.Fields.Edit(func(draft *field.ChildrenDraft) error {
 				return draft.EditText("title", func(title field.TextField) field.TextField {
-					return title.Access(field.Access{Read: func(operation.AccessContext) (bool, error) { return false, nil }})
+					return title.Access(field.Access{Read: func(operation.Context) (bool, error) { return false, nil }})
 				})
 			})
 			if err != nil {
@@ -205,7 +205,7 @@ func localesAndReferences(t *testing.T, factory Factory) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	redacted, err := restricted.Local().FindWithOptions(ctx, "articles", created.ID, ridu.FindOptions{Draft: &draft, Populate: paths})
+	redacted, err := restricted.Local().Find(ctx, "articles", created.ID, ridu.FindOptions{Draft: &draft, Populate: paths})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -220,9 +220,9 @@ func localesAndReferences(t *testing.T, factory Factory) {
 	}
 	// Output documents are not input references. A mistaken populated write is
 	// rejected; ordinary scoped edits retain canonical IDs in aggregate storage.
-	_, err = app.Local().Update(ctx, "articles", created.ID, store.Values{"body": populated.Values["body"]}, nil)
+	_, err = app.Local().Update(ctx, "articles", created.ID, store.Values{"body": populated.Values["body"]}, ridu.MutationOptions{})
 	issue(t, err, "body.root.children.0.fields.target")
-	_, err = app.Local().Update(ctx, "articles", created.ID, store.Values{"body": Document(Block("callout", "two", store.Values{"title": store.String("Edited title")}), Block("callout", "one", store.Values{}))}, nil)
+	_, err = app.Local().Update(ctx, "articles", created.ID, store.Values{"body": Document(Block("callout", "two", store.Values{"title": store.String("Edited title")}), Block("callout", "one", store.Values{}))}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -246,30 +246,30 @@ func localesAndReferences(t *testing.T, factory Factory) {
 	if value := payload(t, raw.Values["body"], 1)["target"]; value.Kind() != store.ValueString || stringValue(value) != asset.ID {
 		t.Fatal("populated document persisted instead of ID")
 	}
-	if _, err = app.Local().Delete(ctx, "assets", asset.ID, nil); err == nil {
+	if _, err = app.Local().Delete(ctx, "assets", asset.ID, ridu.MutationOptions{}); err == nil {
 		t.Fatal("relationship restriction bypassed")
 	}
-	if _, err = app.Local().Delete(ctx, "files", file.ID, nil); err == nil {
+	if _, err = app.Local().Delete(ctx, "files", file.ID, ridu.MutationOptions{}); err == nil {
 		t.Fatal("upload restriction bypassed")
 	}
-	_, err = app.Local().Update(ctx, "articles", created.ID, store.Values{"body": Document(Block("callout", "two", store.Values{}), Block("callout", "one", store.Values{"locked": store.Null(), "lockedAsset": store.Null()}))}, nil)
+	_, err = app.Local().Update(ctx, "articles", created.ID, store.Values{"body": Document(Block("callout", "two", store.Values{}), Block("callout", "one", store.Values{"locked": store.Null(), "lockedAsset": store.Null()}))}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = app.Local().Delete(ctx, "assets", asset.ID, nil); err != nil {
+	if _, err = app.Local().Delete(ctx, "assets", asset.ID, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = app.Local().Delete(ctx, "files", file.ID, nil); err != nil {
+	if _, err = app.Local().Delete(ctx, "files", file.ID, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	after, err := app.Local().FindWithOptions(ctx, "articles", created.ID, ridu.FindOptions{Draft: &draft})
+	after, err := app.Local().Find(ctx, "articles", created.ID, ridu.FindOptions{Draft: &draft})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if payload(t, after.Values["body"], 0)["target"].Kind() != store.ValueNull || payload(t, after.Values["body"], 1)["target"].Kind() != store.ValueNull || payload(t, after.Values["body"], 1)["asset"].Kind() != store.ValueNull {
 		t.Fatal("reference index did not nullify every occurrence")
 	}
-	all, err = app.Local().FindWithOptions(ctx, "articles", created.ID, ridu.FindOptions{Draft: &draft, AllLocales: true})
+	all, err = app.Local().Find(ctx, "articles", created.ID, ridu.FindOptions{Draft: &draft, AllLocales: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -277,7 +277,7 @@ func localesAndReferences(t *testing.T, factory Factory) {
 	if stringValue(translations["fr"]) != "Bonjour" {
 		t.Fatal("nullification destroyed another locale")
 	}
-	copied, err := app.Local().CopyLocale(ctx, "articles", created.ID, "en", "fr", all.Revision, &store.Document{ID: "editor"})
+	copied, err := app.Local().CopyLocale(ctx, "articles", created.ID, "en", "fr", ridu.MutationOptions{Actor: &store.Document{ID: "editor"}, ExpectedRevision: all.Revision})
 	if err != nil {
 		t.Fatalf("locale copy: %#v", err)
 	}
@@ -293,7 +293,7 @@ func retiredSchema(t *testing.T, factory Factory) {
 	config := configuration(t, &observations{})
 	backend, app := factory(t, config)
 	ctx := t.Context()
-	created, err := app.Local().Create(ctx, "articles", store.Values{"title": store.String("Historical"), "body": Document(Block("cta", "historical", store.Values{"label": store.String("never disclose")}))}, nil)
+	created, err := app.Local().Create(ctx, "articles", store.Values{"title": store.String("Historical"), "body": Document(Block("cta", "historical", store.Values{"label": store.String("never disclose")}))}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -325,15 +325,15 @@ func retiredSchema(t *testing.T, factory Factory) {
 		t.Fatal(err)
 	}
 	draft := true
-	_, readErr := current.Local().FindWithOptions(ctx, "articles", created.ID, ridu.FindOptions{Draft: &draft})
-	_, writeErr := current.Local().Update(ctx, "articles", created.ID, store.Values{"title": store.String("Sibling update")}, nil)
-	_, replaceErr := current.Local().Update(ctx, "articles", created.ID, store.Values{"body": Document()}, nil)
+	_, readErr := current.Local().Find(ctx, "articles", created.ID, ridu.FindOptions{Draft: &draft})
+	_, writeErr := current.Local().Update(ctx, "articles", created.ID, store.Values{"title": store.String("Sibling update")}, ridu.MutationOptions{})
+	_, replaceErr := current.Local().Update(ctx, "articles", created.ID, store.Values{"body": Document()}, ridu.MutationOptions{})
 	for _, err := range []error{readErr, writeErr, replaceErr} {
 		code(t, err, "block_recovery_required")
 		noPrivateContent(t, err)
 	}
 	// Reinstalling the declared schema is enough to recover every stored byte.
-	recovered, err := app.Local().FindWithOptions(ctx, "articles", created.ID, ridu.FindOptions{Draft: &draft})
+	recovered, err := app.Local().Find(ctx, "articles", created.ID, ridu.FindOptions{Draft: &draft})
 	if err != nil {
 		t.Fatal(err)
 	}

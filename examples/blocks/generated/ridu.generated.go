@@ -5502,6 +5502,8 @@ const CTABlockType = "cta"
 type CTA struct {
 	// Key is the required identity of this existing occurrence.
 	Key string `json:"_key"`
+	// BlockName: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
+	BlockName *BlockOptional[string] `json:"blockName,omitempty"`
 	// Label may be omitted by access rules or projection.
 	Label *string `json:"label,omitempty"`
 	// Destination: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
@@ -5514,11 +5516,19 @@ func (value CTA) MarshalJSON() ([]byte, error) {
 	var encoded struct {
 		BlockType   string          `json:"blockType"`
 		Key         string          `json:"_key"`
+		BlockName   json.RawMessage `json:"blockName,omitempty"`
 		Label       json.RawMessage `json:"label,omitempty"`
 		Destination json.RawMessage `json:"destination,omitempty"`
 	}
 	encoded.BlockType = "cta"
 	encoded.Key = value.Key
+	if value.BlockName != nil {
+		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.BlockName.Value)
+		if err != nil {
+			return nil, newContractError(ContractError{Operation: "encode", Container: "CTA", Path: "blockName", Reason: "invalid value", Err: err})
+		}
+		encoded.BlockName = data
+	}
 	if value.Label != nil {
 		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.Label)
 		if err != nil {
@@ -5571,6 +5581,19 @@ func (value *CTA) UnmarshalJSON(data []byte) error {
 			return blockFieldError("_key", "invalid identity", err)
 		}
 	}
+	if raw, ok := fields["blockName"]; ok {
+		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+			if err := json.Unmarshal(raw, &decoded.BlockName); err != nil {
+				return blockFieldError("blockName", "invalid value", err)
+			}
+		} else {
+			child, err := decodeBlockValue[string](raw)
+			if err != nil {
+				return blockFieldError("blockName", "invalid value", err)
+			}
+			decoded.BlockName = &BlockOptional[string]{Value: &child}
+		}
+	}
 	if raw, ok := fields["label"]; ok {
 		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 			if err := json.Unmarshal(raw, &decoded.Label); err != nil {
@@ -5602,6 +5625,9 @@ func (value *CTA) UnmarshalJSON(data []byte) error {
 			return blockFieldError("label", "null is not allowed", nil)
 		}
 	}
+	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		decoded.BlockName = &BlockOptional[string]{}
+	}
 	if raw, ok := fields["destination"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		decoded.Destination = &BlockOptional[Reference[Page]]{}
 	}
@@ -5615,6 +5641,8 @@ func (value *CTA) UnmarshalJSON(data []byte) error {
 type CTAInput struct {
 	// Key identifies this occurrence; omit it for a new server-assigned identity.
 	Key string `json:"_key,omitempty"`
+	// BlockName: nil omits the field; core.Set sends a value; core.Null sends explicit null.
+	BlockName *core.Input[string] `json:"blockName,omitempty"`
 	// Label is required when creating this value.
 	Label string `json:"label"`
 	// Destination: nil omits the field; core.Set sends a value; core.Null sends explicit null.
@@ -5627,11 +5655,24 @@ func (value CTAInput) MarshalJSON() ([]byte, error) {
 	var encoded struct {
 		BlockType   string          `json:"blockType"`
 		Key         string          `json:"_key,omitempty"`
+		BlockName   json.RawMessage `json:"blockName,omitempty"`
 		Label       json.RawMessage `json:"label"`
 		Destination json.RawMessage `json:"destination,omitempty"`
 	}
 	encoded.BlockType = "cta"
 	encoded.Key = value.Key
+	if value.BlockName != nil {
+		child, present := value.BlockName.Get()
+		data := []byte("null")
+		var err error
+		if present {
+			data, err = encodeBlockValue[string](child)
+		}
+		if err != nil {
+			return nil, newContractError(ContractError{Operation: "encode", Container: "CTAInput", Path: "blockName", Reason: "invalid value", Err: err})
+		}
+		encoded.BlockName = data
+	}
 	{
 		data, err := encodeBlockValue[string](value.Label)
 		if err != nil {
@@ -5692,6 +5733,17 @@ func (value *CTAInput) UnmarshalJSON(data []byte) error {
 			return blockFieldError("_key", "invalid identity", err)
 		}
 	}
+	if raw, ok := fields["blockName"]; ok {
+		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+			decoded.BlockName = core.Null[string]()
+		} else {
+			child, err := decodeBlockValue[string](raw)
+			if err != nil {
+				return blockFieldError("blockName", "invalid value", err)
+			}
+			decoded.BlockName = core.Set(child)
+		}
+	}
 	if raw, ok := fields["label"]; ok {
 		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 			return blockFieldError("label", "null is not allowed", nil)
@@ -5714,6 +5766,9 @@ func (value *CTAInput) UnmarshalJSON(data []byte) error {
 			decoded.Destination = core.Set(child)
 		}
 	}
+	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		decoded.BlockName = core.Null[string]()
+	}
 	if raw, ok := fields["label"]; !ok || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		return blockFieldError("label", "required field is absent or null", nil)
 	}
@@ -5722,7 +5777,7 @@ func (value *CTAInput) UnmarshalJSON(data []byte) error {
 	}
 	for name := range fields {
 		switch name {
-		case "_key", "blockType", "label", "destination":
+		case "_key", "blockType", "blockName", "label", "destination":
 		default:
 			return blockFieldError(name, "unknown input field", nil)
 		}
@@ -5738,6 +5793,8 @@ func (value *CTAInput) UnmarshalJSON(data []byte) error {
 type CTAUpdate struct {
 	// Key is the required identity of this existing occurrence.
 	Key string `json:"_key"`
+	// BlockName: nil omits the field; core.Set sends a value; core.Null sends explicit null.
+	BlockName *core.Input[string] `json:"blockName,omitempty"`
 	// Label: nil omits the field; a pointer sends a value. Null is not allowed.
 	Label *string `json:"label,omitempty"`
 	// Destination: nil omits the field; core.Set sends a value; core.Null sends explicit null.
@@ -5753,11 +5810,24 @@ func (value CTAUpdate) MarshalJSON() ([]byte, error) {
 	var encoded struct {
 		BlockType   string          `json:"blockType"`
 		Key         string          `json:"_key"`
+		BlockName   json.RawMessage `json:"blockName,omitempty"`
 		Label       json.RawMessage `json:"label,omitempty"`
 		Destination json.RawMessage `json:"destination,omitempty"`
 	}
 	encoded.BlockType = "cta"
 	encoded.Key = value.Key
+	if value.BlockName != nil {
+		child, present := value.BlockName.Get()
+		data := []byte("null")
+		var err error
+		if present {
+			data, err = encodeBlockValue[string](child)
+		}
+		if err != nil {
+			return nil, newContractError(ContractError{Operation: "encode", Container: "CTAUpdate", Path: "blockName", Reason: "invalid value", Err: err})
+		}
+		encoded.BlockName = data
+	}
 	if value.Label != nil {
 		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.Label)
 		if err != nil {
@@ -5813,6 +5883,17 @@ func (value *CTAUpdate) UnmarshalJSON(data []byte) error {
 			return blockFieldError("_key", "invalid identity", err)
 		}
 	}
+	if raw, ok := fields["blockName"]; ok {
+		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+			decoded.BlockName = core.Null[string]()
+		} else {
+			child, err := decodeBlockValue[string](raw)
+			if err != nil {
+				return blockFieldError("blockName", "invalid value", err)
+			}
+			decoded.BlockName = core.Set(child)
+		}
+	}
 	if raw, ok := fields["label"]; ok {
 		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 			return blockFieldError("label", "null is not allowed", nil)
@@ -5835,6 +5916,9 @@ func (value *CTAUpdate) UnmarshalJSON(data []byte) error {
 			decoded.Destination = core.Set(child)
 		}
 	}
+	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		decoded.BlockName = core.Null[string]()
+	}
 	if raw, ok := fields["label"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		return blockFieldError("label", "required field is absent or null", nil)
 	}
@@ -5843,7 +5927,7 @@ func (value *CTAUpdate) UnmarshalJSON(data []byte) error {
 	}
 	for name := range fields {
 		switch name {
-		case "_key", "blockType", "label", "destination":
+		case "_key", "blockType", "blockName", "label", "destination":
 		default:
 			return blockFieldError(name, "unknown input field", nil)
 		}
@@ -5857,6 +5941,8 @@ func (value *CTAUpdate) UnmarshalJSON(data []byte) error {
 type CTAAllLocales struct {
 	// Key is the required identity of this existing occurrence.
 	Key string `json:"_key"`
+	// BlockName: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
+	BlockName *BlockOptional[string] `json:"blockName,omitempty"`
 	// Label may be omitted by access rules or projection.
 	// Locale-code map; missing locales are absent translations.
 	Label *map[string]string `json:"label,omitempty"`
@@ -5870,11 +5956,19 @@ func (value CTAAllLocales) MarshalJSON() ([]byte, error) {
 	var encoded struct {
 		BlockType   string          `json:"blockType"`
 		Key         string          `json:"_key"`
+		BlockName   json.RawMessage `json:"blockName,omitempty"`
 		Label       json.RawMessage `json:"label,omitempty"`
 		Destination json.RawMessage `json:"destination,omitempty"`
 	}
 	encoded.BlockType = "cta"
 	encoded.Key = value.Key
+	if value.BlockName != nil {
+		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.BlockName.Value)
+		if err != nil {
+			return nil, newContractError(ContractError{Operation: "encode", Container: "CTAAllLocales", Path: "blockName", Reason: "invalid value", Err: err})
+		}
+		encoded.BlockName = data
+	}
 	if value.Label != nil {
 		data, err := (func(value *map[string]string) ([]byte, error) {
 			return encodeBlockPointer(value, (func(value map[string]string) ([]byte, error) {
@@ -5931,6 +6025,19 @@ func (value *CTAAllLocales) UnmarshalJSON(data []byte) error {
 			return blockFieldError("_key", "invalid identity", err)
 		}
 	}
+	if raw, ok := fields["blockName"]; ok {
+		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+			if err := json.Unmarshal(raw, &decoded.BlockName); err != nil {
+				return blockFieldError("blockName", "invalid value", err)
+			}
+		} else {
+			child, err := decodeBlockValue[string](raw)
+			if err != nil {
+				return blockFieldError("blockName", "invalid value", err)
+			}
+			decoded.BlockName = &BlockOptional[string]{Value: &child}
+		}
+	}
 	if raw, ok := fields["label"]; ok {
 		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 			if err := json.Unmarshal(raw, &decoded.Label); err != nil {
@@ -5973,6 +6080,9 @@ func (value *CTAAllLocales) UnmarshalJSON(data []byte) error {
 			}
 		}
 	}
+	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		decoded.BlockName = &BlockOptional[string]{}
+	}
 	if raw, ok := fields["destination"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		decoded.Destination = &BlockOptional[Reference[PageAllLocales]]{}
 	}
@@ -5985,6 +6095,8 @@ func (value *CTAAllLocales) UnmarshalJSON(data []byte) error {
 type CTAAllLocalesValue struct {
 	// Key is the required identity of this existing occurrence.
 	Key string `json:"_key"`
+	// BlockName: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
+	BlockName *BlockOptional[string] `json:"blockName,omitempty"`
 	// Label may be omitted by access rules or projection.
 	Label *string `json:"label,omitempty"`
 	// Destination: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
@@ -5997,11 +6109,19 @@ func (value CTAAllLocalesValue) MarshalJSON() ([]byte, error) {
 	var encoded struct {
 		BlockType   string          `json:"blockType"`
 		Key         string          `json:"_key"`
+		BlockName   json.RawMessage `json:"blockName,omitempty"`
 		Label       json.RawMessage `json:"label,omitempty"`
 		Destination json.RawMessage `json:"destination,omitempty"`
 	}
 	encoded.BlockType = "cta"
 	encoded.Key = value.Key
+	if value.BlockName != nil {
+		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.BlockName.Value)
+		if err != nil {
+			return nil, newContractError(ContractError{Operation: "encode", Container: "CTAAllLocalesValue", Path: "blockName", Reason: "invalid value", Err: err})
+		}
+		encoded.BlockName = data
+	}
 	if value.Label != nil {
 		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.Label)
 		if err != nil {
@@ -6054,6 +6174,19 @@ func (value *CTAAllLocalesValue) UnmarshalJSON(data []byte) error {
 			return blockFieldError("_key", "invalid identity", err)
 		}
 	}
+	if raw, ok := fields["blockName"]; ok {
+		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+			if err := json.Unmarshal(raw, &decoded.BlockName); err != nil {
+				return blockFieldError("blockName", "invalid value", err)
+			}
+		} else {
+			child, err := decodeBlockValue[string](raw)
+			if err != nil {
+				return blockFieldError("blockName", "invalid value", err)
+			}
+			decoded.BlockName = &BlockOptional[string]{Value: &child}
+		}
+	}
 	if raw, ok := fields["label"]; ok {
 		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 			if err := json.Unmarshal(raw, &decoded.Label); err != nil {
@@ -6085,6 +6218,9 @@ func (value *CTAAllLocalesValue) UnmarshalJSON(data []byte) error {
 			return blockFieldError("label", "null is not allowed", nil)
 		}
 	}
+	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		decoded.BlockName = &BlockOptional[string]{}
+	}
 	if raw, ok := fields["destination"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		decoded.Destination = &BlockOptional[Reference[PageAllLocales]]{}
 	}
@@ -6101,6 +6237,8 @@ const CalloutBlockType = "callout"
 type Callout struct {
 	// Key is the required identity of this existing occurrence.
 	Key string `json:"_key"`
+	// BlockName: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
+	BlockName *BlockOptional[string] `json:"blockName,omitempty"`
 	// Title may be omitted by access rules or projection.
 	Title *string `json:"title,omitempty"`
 	// Message: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
@@ -6117,6 +6255,7 @@ func (value Callout) MarshalJSON() ([]byte, error) {
 	var encoded struct {
 		BlockType string          `json:"blockType"`
 		Key       string          `json:"_key"`
+		BlockName json.RawMessage `json:"blockName,omitempty"`
 		Title     json.RawMessage `json:"title,omitempty"`
 		Message   json.RawMessage `json:"message,omitempty"`
 		Detail    json.RawMessage `json:"detail,omitempty"`
@@ -6124,6 +6263,13 @@ func (value Callout) MarshalJSON() ([]byte, error) {
 	}
 	encoded.BlockType = "callout"
 	encoded.Key = value.Key
+	if value.BlockName != nil {
+		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.BlockName.Value)
+		if err != nil {
+			return nil, newContractError(ContractError{Operation: "encode", Container: "Callout", Path: "blockName", Reason: "invalid value", Err: err})
+		}
+		encoded.BlockName = data
+	}
 	if value.Title != nil {
 		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.Title)
 		if err != nil {
@@ -6192,6 +6338,19 @@ func (value *Callout) UnmarshalJSON(data []byte) error {
 			return blockFieldError("_key", "invalid identity", err)
 		}
 	}
+	if raw, ok := fields["blockName"]; ok {
+		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+			if err := json.Unmarshal(raw, &decoded.BlockName); err != nil {
+				return blockFieldError("blockName", "invalid value", err)
+			}
+		} else {
+			child, err := decodeBlockValue[string](raw)
+			if err != nil {
+				return blockFieldError("blockName", "invalid value", err)
+			}
+			decoded.BlockName = &BlockOptional[string]{Value: &child}
+		}
+	}
 	if raw, ok := fields["title"]; ok {
 		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 			if err := json.Unmarshal(raw, &decoded.Title); err != nil {
@@ -6249,6 +6408,9 @@ func (value *Callout) UnmarshalJSON(data []byte) error {
 			return blockFieldError("title", "null is not allowed", nil)
 		}
 	}
+	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		decoded.BlockName = &BlockOptional[string]{}
+	}
 	if raw, ok := fields["message"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		decoded.Message = &BlockOptional[string]{}
 	}
@@ -6268,6 +6430,8 @@ func (value *Callout) UnmarshalJSON(data []byte) error {
 type CalloutInput struct {
 	// Key identifies this occurrence; omit it for a new server-assigned identity.
 	Key string `json:"_key,omitempty"`
+	// BlockName: nil omits the field; core.Set sends a value; core.Null sends explicit null.
+	BlockName *core.Input[string] `json:"blockName,omitempty"`
 	// Title is required when creating this value.
 	Title string `json:"title"`
 	// Message: nil omits the field; core.Set sends a value; core.Null sends explicit null.
@@ -6284,6 +6448,7 @@ func (value CalloutInput) MarshalJSON() ([]byte, error) {
 	var encoded struct {
 		BlockType string          `json:"blockType"`
 		Key       string          `json:"_key,omitempty"`
+		BlockName json.RawMessage `json:"blockName,omitempty"`
 		Title     json.RawMessage `json:"title"`
 		Message   json.RawMessage `json:"message,omitempty"`
 		Detail    json.RawMessage `json:"detail,omitempty"`
@@ -6291,6 +6456,18 @@ func (value CalloutInput) MarshalJSON() ([]byte, error) {
 	}
 	encoded.BlockType = "callout"
 	encoded.Key = value.Key
+	if value.BlockName != nil {
+		child, present := value.BlockName.Get()
+		data := []byte("null")
+		var err error
+		if present {
+			data, err = encodeBlockValue[string](child)
+		}
+		if err != nil {
+			return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutInput", Path: "blockName", Reason: "invalid value", Err: err})
+		}
+		encoded.BlockName = data
+	}
 	{
 		data, err := encodeBlockValue[string](value.Title)
 		if err != nil {
@@ -6375,6 +6552,17 @@ func (value *CalloutInput) UnmarshalJSON(data []byte) error {
 			return blockFieldError("_key", "invalid identity", err)
 		}
 	}
+	if raw, ok := fields["blockName"]; ok {
+		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+			decoded.BlockName = core.Null[string]()
+		} else {
+			child, err := decodeBlockValue[string](raw)
+			if err != nil {
+				return blockFieldError("blockName", "invalid value", err)
+			}
+			decoded.BlockName = core.Set(child)
+		}
+	}
 	if raw, ok := fields["title"]; ok {
 		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 			return blockFieldError("title", "null is not allowed", nil)
@@ -6419,6 +6607,9 @@ func (value *CalloutInput) UnmarshalJSON(data []byte) error {
 			decoded.Aside = core.Set(child)
 		}
 	}
+	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		decoded.BlockName = core.Null[string]()
+	}
 	if raw, ok := fields["title"]; !ok || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		return blockFieldError("title", "required field is absent or null", nil)
 	}
@@ -6433,7 +6624,7 @@ func (value *CalloutInput) UnmarshalJSON(data []byte) error {
 	}
 	for name := range fields {
 		switch name {
-		case "_key", "blockType", "title", "message", "detail", "aside":
+		case "_key", "blockType", "blockName", "title", "message", "detail", "aside":
 		default:
 			return blockFieldError(name, "unknown input field", nil)
 		}
@@ -6449,6 +6640,8 @@ func (value *CalloutInput) UnmarshalJSON(data []byte) error {
 type CalloutUpdate struct {
 	// Key is the required identity of this existing occurrence.
 	Key string `json:"_key"`
+	// BlockName: nil omits the field; core.Set sends a value; core.Null sends explicit null.
+	BlockName *core.Input[string] `json:"blockName,omitempty"`
 	// Title: nil omits the field; a pointer sends a value. Null is not allowed.
 	Title *string `json:"title,omitempty"`
 	// Message: nil omits the field; core.Set sends a value; core.Null sends explicit null.
@@ -6468,6 +6661,7 @@ func (value CalloutUpdate) MarshalJSON() ([]byte, error) {
 	var encoded struct {
 		BlockType string          `json:"blockType"`
 		Key       string          `json:"_key"`
+		BlockName json.RawMessage `json:"blockName,omitempty"`
 		Title     json.RawMessage `json:"title,omitempty"`
 		Message   json.RawMessage `json:"message,omitempty"`
 		Detail    json.RawMessage `json:"detail,omitempty"`
@@ -6475,6 +6669,18 @@ func (value CalloutUpdate) MarshalJSON() ([]byte, error) {
 	}
 	encoded.BlockType = "callout"
 	encoded.Key = value.Key
+	if value.BlockName != nil {
+		child, present := value.BlockName.Get()
+		data := []byte("null")
+		var err error
+		if present {
+			data, err = encodeBlockValue[string](child)
+		}
+		if err != nil {
+			return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutUpdate", Path: "blockName", Reason: "invalid value", Err: err})
+		}
+		encoded.BlockName = data
+	}
 	if value.Title != nil {
 		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.Title)
 		if err != nil {
@@ -6554,6 +6760,17 @@ func (value *CalloutUpdate) UnmarshalJSON(data []byte) error {
 			return blockFieldError("_key", "invalid identity", err)
 		}
 	}
+	if raw, ok := fields["blockName"]; ok {
+		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+			decoded.BlockName = core.Null[string]()
+		} else {
+			child, err := decodeBlockValue[string](raw)
+			if err != nil {
+				return blockFieldError("blockName", "invalid value", err)
+			}
+			decoded.BlockName = core.Set(child)
+		}
+	}
 	if raw, ok := fields["title"]; ok {
 		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 			return blockFieldError("title", "null is not allowed", nil)
@@ -6598,6 +6815,9 @@ func (value *CalloutUpdate) UnmarshalJSON(data []byte) error {
 			decoded.Aside = core.Set(child)
 		}
 	}
+	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		decoded.BlockName = core.Null[string]()
+	}
 	if raw, ok := fields["title"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		return blockFieldError("title", "required field is absent or null", nil)
 	}
@@ -6612,7 +6832,7 @@ func (value *CalloutUpdate) UnmarshalJSON(data []byte) error {
 	}
 	for name := range fields {
 		switch name {
-		case "_key", "blockType", "title", "message", "detail", "aside":
+		case "_key", "blockType", "blockName", "title", "message", "detail", "aside":
 		default:
 			return blockFieldError(name, "unknown input field", nil)
 		}
@@ -6626,6 +6846,8 @@ func (value *CalloutUpdate) UnmarshalJSON(data []byte) error {
 type CalloutAllLocales struct {
 	// Key is the required identity of this existing occurrence.
 	Key string `json:"_key"`
+	// BlockName: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
+	BlockName *BlockOptional[string] `json:"blockName,omitempty"`
 	// Title may be omitted by access rules or projection.
 	Title *string `json:"title,omitempty"`
 	// Message: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
@@ -6643,6 +6865,7 @@ func (value CalloutAllLocales) MarshalJSON() ([]byte, error) {
 	var encoded struct {
 		BlockType string          `json:"blockType"`
 		Key       string          `json:"_key"`
+		BlockName json.RawMessage `json:"blockName,omitempty"`
 		Title     json.RawMessage `json:"title,omitempty"`
 		Message   json.RawMessage `json:"message,omitempty"`
 		Detail    json.RawMessage `json:"detail,omitempty"`
@@ -6650,6 +6873,13 @@ func (value CalloutAllLocales) MarshalJSON() ([]byte, error) {
 	}
 	encoded.BlockType = "callout"
 	encoded.Key = value.Key
+	if value.BlockName != nil {
+		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.BlockName.Value)
+		if err != nil {
+			return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutAllLocales", Path: "blockName", Reason: "invalid value", Err: err})
+		}
+		encoded.BlockName = data
+	}
 	if value.Title != nil {
 		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.Title)
 		if err != nil {
@@ -6722,6 +6952,19 @@ func (value *CalloutAllLocales) UnmarshalJSON(data []byte) error {
 			return blockFieldError("_key", "invalid identity", err)
 		}
 	}
+	if raw, ok := fields["blockName"]; ok {
+		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+			if err := json.Unmarshal(raw, &decoded.BlockName); err != nil {
+				return blockFieldError("blockName", "invalid value", err)
+			}
+		} else {
+			child, err := decodeBlockValue[string](raw)
+			if err != nil {
+				return blockFieldError("blockName", "invalid value", err)
+			}
+			decoded.BlockName = &BlockOptional[string]{Value: &child}
+		}
+	}
 	if raw, ok := fields["title"]; ok {
 		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 			if err := json.Unmarshal(raw, &decoded.Title); err != nil {
@@ -6781,6 +7024,9 @@ func (value *CalloutAllLocales) UnmarshalJSON(data []byte) error {
 			return blockFieldError("title", "null is not allowed", nil)
 		}
 	}
+	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		decoded.BlockName = &BlockOptional[string]{}
+	}
 	if raw, ok := fields["message"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		decoded.Message = &BlockOptional[map[string]*string]{}
 	}
@@ -6799,6 +7045,8 @@ func (value *CalloutAllLocales) UnmarshalJSON(data []byte) error {
 type CalloutAllLocalesValue struct {
 	// Key is the required identity of this existing occurrence.
 	Key string `json:"_key"`
+	// BlockName: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
+	BlockName *BlockOptional[string] `json:"blockName,omitempty"`
 	// Title may be omitted by access rules or projection.
 	Title *string `json:"title,omitempty"`
 	// Message: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
@@ -6815,6 +7063,7 @@ func (value CalloutAllLocalesValue) MarshalJSON() ([]byte, error) {
 	var encoded struct {
 		BlockType string          `json:"blockType"`
 		Key       string          `json:"_key"`
+		BlockName json.RawMessage `json:"blockName,omitempty"`
 		Title     json.RawMessage `json:"title,omitempty"`
 		Message   json.RawMessage `json:"message,omitempty"`
 		Detail    json.RawMessage `json:"detail,omitempty"`
@@ -6822,6 +7071,13 @@ func (value CalloutAllLocalesValue) MarshalJSON() ([]byte, error) {
 	}
 	encoded.BlockType = "callout"
 	encoded.Key = value.Key
+	if value.BlockName != nil {
+		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.BlockName.Value)
+		if err != nil {
+			return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutAllLocalesValue", Path: "blockName", Reason: "invalid value", Err: err})
+		}
+		encoded.BlockName = data
+	}
 	if value.Title != nil {
 		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.Title)
 		if err != nil {
@@ -6890,6 +7146,19 @@ func (value *CalloutAllLocalesValue) UnmarshalJSON(data []byte) error {
 			return blockFieldError("_key", "invalid identity", err)
 		}
 	}
+	if raw, ok := fields["blockName"]; ok {
+		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+			if err := json.Unmarshal(raw, &decoded.BlockName); err != nil {
+				return blockFieldError("blockName", "invalid value", err)
+			}
+		} else {
+			child, err := decodeBlockValue[string](raw)
+			if err != nil {
+				return blockFieldError("blockName", "invalid value", err)
+			}
+			decoded.BlockName = &BlockOptional[string]{Value: &child}
+		}
+	}
 	if raw, ok := fields["title"]; ok {
 		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 			if err := json.Unmarshal(raw, &decoded.Title); err != nil {
@@ -6946,6 +7215,9 @@ func (value *CalloutAllLocalesValue) UnmarshalJSON(data []byte) error {
 		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 			return blockFieldError("title", "null is not allowed", nil)
 		}
+	}
+	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		decoded.BlockName = &BlockOptional[string]{}
 	}
 	if raw, ok := fields["message"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		decoded.Message = &BlockOptional[string]{}

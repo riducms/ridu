@@ -64,7 +64,7 @@ var Variants = field.Array("variants", field.Fields{
 })
 
 func validateSKU(
-	ctx operation.ValidationContext,
+	ctx operation.Context,
 	value operation.Value[string],
 ) ([]operation.Issue, error) {
 	current, present := value.Get()
@@ -136,7 +136,7 @@ Other callbacks run earlier or later, so their values differ:
 “Typed” means Ridu has converted the input to the field's Go type, such as `string`. A raw hook
 instead receives `operation.Value[store.Value]`, so it can handle input before that conversion.
 
-A default callback receives `operation.DefaultContext` without a separate current-value argument:
+A default callback receives `operation.Context` without a separate current-value argument:
 it chooses an initial value only when the field is omitted. `Prior` describes the previously
 saved parent object or row, just as it does in other field callbacks. Defaults can also run during
 `operation.Update` when the update adds a new object or row; checking only for `operation.Create`

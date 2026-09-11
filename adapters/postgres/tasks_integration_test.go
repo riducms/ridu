@@ -280,11 +280,11 @@ func TestPostgresDurableTaskReferencesRaceSafelyWithHardDelete(t *testing.T) {
 	}
 	collectionID := application.Manifest().Snapshot().Collections[0].ID
 
-	target, err := application.Local().Create(ctx, "posts", store.Values{"title": store.String("target")}, nil)
+	target, err := application.Local().Create(ctx, "posts", store.Values{"title": store.String("target")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	requester, err := application.Local().Create(ctx, "posts", store.Values{"title": store.String("requester")}, nil)
+	requester, err := application.Local().Create(ctx, "posts", store.Values{"title": store.String("requester")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -294,7 +294,7 @@ func TestPostgresDurableTaskReferencesRaceSafelyWithHardDelete(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Delete(ctx, "posts", requester.ID, nil); err != nil {
+	if _, err := application.Local().Delete(ctx, "posts", requester.ID, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := task.Result(ctx, application, receipt.ID); !hasTaskCode(err, ridu.TaskErrorNotFound) {
@@ -302,7 +302,7 @@ func TestPostgresDurableTaskReferencesRaceSafelyWithHardDelete(t *testing.T) {
 	}
 
 	for iteration := 0; iteration < 12; iteration++ {
-		document, err := application.Local().Create(ctx, "posts", store.Values{"title": store.String(fmt.Sprintf("race-%d", iteration))}, nil)
+		document, err := application.Local().Create(ctx, "posts", store.Values{"title": store.String(fmt.Sprintf("race-%d", iteration))}, ridu.MutationOptions{})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -321,7 +321,7 @@ func TestPostgresDurableTaskReferencesRaceSafelyWithHardDelete(t *testing.T) {
 		}()
 		go func() {
 			<-start
-			_, err := application.Local().Delete(ctx, "posts", document.ID, nil)
+			_, err := application.Local().Delete(ctx, "posts", document.ID, ridu.MutationOptions{})
 			deleted <- err
 		}()
 		close(start)
@@ -396,7 +396,7 @@ func TestPostgresDurableTaskRejectsUnboundedRawCallsAndDismissesTerminalTargets(
 		t.Fatal(err)
 	}
 
-	document, err := application.Local().Create(ctx, "posts", store.Values{"title": store.String("target")}, nil)
+	document, err := application.Local().Create(ctx, "posts", store.Values{"title": store.String("target")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

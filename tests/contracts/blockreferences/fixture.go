@@ -9,14 +9,14 @@ import (
 )
 
 func Config(references bool) ridu.Config {
-	access := func(c operation.AccessContext) (bool, error) {
+	access := func(c operation.Context) (bool, error) {
 		tenant, _ := c.Root.String("tenant")
 		visible, _ := c.Siblings.String("visibility")
 		return tenant == "open" && visible == "visible", nil
 	}
 	card := field.Block{Slug: "card", TypeName: "Card", Fields: field.Fields{field.Text("visibility"), field.Text("secret").Access(field.Access{Read: access, Update: access}), field.Group("details", field.Fields{field.Text("caption")}), field.Blocks("children", field.Block{Slug: "note", TypeName: "Note", Fields: field.Fields{field.Text("text")}})}}
 	card.Fields = append(card.Fields, field.Text("controlled").Access(field.Access{Update: access}).Validate(
-		func(_ operation.ValidationContext, value operation.Value[string]) ([]operation.Issue, error) {
+		func(_ operation.Context, value operation.Value[string]) ([]operation.Issue, error) {
 			if text, _ := value.Get(); text == "invalid" {
 				return []operation.Issue{{Code: "controlled_value", Message: "Choose a valid controlled value"}}, nil
 			}

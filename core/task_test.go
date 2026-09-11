@@ -367,11 +367,11 @@ func TestScheduledPublishConcurrencyKeyIsBoundedForImportedDocumentIDs(t *testin
 func TestTaskDocumentReferencesAreAdmittedAndCleanedUpWithHardDelete(t *testing.T) {
 	task := NewTask("document-task", func(_ TaskContext, _ struct{}) (struct{}, error) { return struct{}{}, nil })
 	application, _ := newTaskTestApp(t, task)
-	target, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("target")}, nil)
+	target, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("target")}, MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	requester, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("requester")}, nil)
+	requester, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("requester")}, MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -381,7 +381,7 @@ func TestTaskDocumentReferencesAreAdmittedAndCleanedUpWithHardDelete(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Delete(context.Background(), "posts", requester.ID, nil); err != nil {
+	if _, err := application.Local().Delete(context.Background(), "posts", requester.ID, MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	_, err = task.Result(context.Background(), application, receipt.ID)

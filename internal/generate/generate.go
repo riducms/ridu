@@ -273,7 +273,7 @@ func adminPluginRegistry(manifest schema.Manifest) []byte {
 		return []byte(output.String())
 	}
 
-	output.WriteString("import { resolveAdminPluginPairs, type PluginFieldRegistration } from \"@riducms/plugin\";\n")
+	output.WriteString("import { assertAdminPluginPairs, type PluginFieldRegistration } from \"@riducms/plugin\";\n")
 	output.WriteString("type RiduNamedFieldComponent = import(\"@riducms/plugin\").RegisteredPluginField & { readonly type: Exclude<import(\"@riducms/plugin\").RegisteredPluginField[\"type\"], \"plugin\"> }")
 	for _, plugin := range plugins {
 		for _, fieldType := range plugin.FieldTypes {
@@ -303,7 +303,7 @@ func adminPluginRegistry(manifest schema.Manifest) []byte {
 			fmt.Fprintf(&output, "import %s;\n", strconv.Quote(strings.TrimSuffix(plugin.Admin.Package, "/")+"/"+asset))
 		}
 	}
-	output.WriteString("\nconst resolvedAdminPluginPairs = resolveAdminPluginPairs([\n")
+	output.WriteString("\nassertAdminPluginPairs([\n")
 	adminIndex = 0
 	for _, plugin := range plugins {
 		if plugin.Admin == nil {
@@ -313,7 +313,14 @@ func adminPluginRegistry(manifest schema.Manifest) []byte {
 			strconv.Quote(plugin.Key), strconv.Quote(plugin.Admin.Package), strconv.Quote(plugin.Admin.Export), plugin.Admin.APIVersion, plugin.Admin.PairingVersion, typescriptStringArray(plugin.Admin.Routes), typescriptStringArray(plugin.Admin.Assets), typescriptStringArray(pluginFieldTypeKeys(plugin.FieldTypes)), adminIndex)
 		adminIndex++
 	}
-	output.WriteString("]);\n\nexport const generatedAdminPlugins = resolvedAdminPluginPairs.plugins;\n")
+	output.WriteString("]);\n\nexport const generatedAdminPlugins = [")
+	for index := 0; index < adminIndex; index++ {
+		if index > 0 {
+			output.WriteString(", ")
+		}
+		fmt.Fprintf(&output, "riduAdminPlugin%d", index)
+	}
+	output.WriteString("] as const;\n")
 	return []byte(output.String())
 }
 

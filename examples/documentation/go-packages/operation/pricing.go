@@ -12,7 +12,7 @@ var Pricing = field.Group("pricing", field.Fields{
 }).Validate(validatePricing)
 
 func validatePricing(
-	_ operation.ValidationContext,
+	_ operation.Context,
 	value operation.Value[store.Value],
 ) ([]operation.Issue, error) {
 	group, present := value.Get()

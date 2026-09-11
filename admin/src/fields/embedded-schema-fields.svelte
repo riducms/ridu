@@ -5,6 +5,7 @@
 	import type { EmbeddedOccurrence } from "@admin/core/forms/embedded-fields";
 	import { fieldAccessPath, scopeRepeatedRowField } from "@admin/fields/nested/scoped-field";
 	import FieldLayout from "@admin/fields/field-layout.svelte";
+	import BlockHeader from "@admin/fields/nested/block-header.svelte";
 
 	let {
 		field,
@@ -40,5 +41,17 @@
 		The embedded field occurrence is no longer available. Close this editor and reopen it.
 	</p>
 {:else}
-	<FieldLayout fields={children} {form} />
+	<BlockHeader
+		block={occurrence.block}
+		path={occurrence.path}
+		instance={`${field.id}-${scope.treeKey}-${scope.identity}`}
+		{form}
+		readOnly={scope.readOnly === true ||
+			field.admin.readOnly === true ||
+			!form.canWrite(field.path, fieldAccessPath(field))}
+	/>
+	<FieldLayout
+		fields={children.filter((child) => child.name !== occurrence.block.admin?.nameField)}
+		{form}
+	/>
 {/if}

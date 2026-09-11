@@ -26,8 +26,8 @@ func (runtimePlugin) Hooks() []ridu.PluginHookContribution {
 	}}}}}
 }
 
-func (runtimePlugin) Endpoints() []ridu.PluginEndpoint {
-	return []ridu.PluginEndpoint{{Method: http.MethodGet, Path: "status", Summary: "Plugin status", Handler: func(ctx ridu.PluginEndpointContext) {
+func (runtimePlugin) Endpoints() []ridu.Endpoint {
+	return []ridu.Endpoint{{Method: http.MethodGet, Path: "status", Summary: "Plugin status", Handler: func(ctx ridu.EndpointContext) {
 		ctx.Writer.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(ctx.Writer).Encode(map[string]bool{"ok": ctx.Local != nil})
 	}}}
@@ -41,7 +41,7 @@ func TestPluginHooksAndNamespacedEndpointsUsePublicRuntimeContracts(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	created, err := application.Local().Create(t.Context(), "posts", store.Values{}, nil)
+	created, err := application.Local().Create(t.Context(), "posts", store.Values{}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,9 +85,9 @@ func (plugin *transportPlugin) Descriptor() ridu.PluginDescriptor {
 	return ridu.PluginDescriptor{Version: "1.0.0", GoPackage: "example.com/plugins/transport", APIVersion: ridu.PluginAPIVersion, Ridu: ridu.RiduCompatibility{Minimum: ridu.FrameworkVersion, MaximumExclusive: "0.3.0"}}
 }
 
-func (plugin *transportPlugin) BindTransports(ctx ridu.PluginTransportContext) ([]ridu.PluginTransport, error) {
+func (plugin *transportPlugin) BindTransports(ctx ridu.PluginTransportContext) ([]ridu.Endpoint, error) {
 	plugin.boundManifestName = ctx.Manifest.Snapshot().Application.Name
-	return []ridu.PluginTransport{{Method: http.MethodPost, Path: "/api/example-protocol", Summary: "Example protocol", Handler: func(endpoint ridu.PluginEndpointContext) {
+	return []ridu.Endpoint{{Method: http.MethodPost, Path: "/api/example-protocol", Summary: "Example protocol", Handler: func(endpoint ridu.EndpointContext) {
 		endpoint.Writer.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(endpoint.Writer).Encode(map[string]bool{"ok": endpoint.Local == ctx.Local})
 	}}}, nil

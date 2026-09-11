@@ -43,10 +43,15 @@
 	} from "@admin/fields/field-clipboard";
 	import { scopeRepeatedRowField } from "@admin/fields/nested/scoped-field";
 	import SortableRow from "@admin/fields/nested/sortable-row.svelte";
+	import BlockHeader from "@admin/fields/nested/block-header.svelte";
+	import { blockHeaderValue, visibleBlockChild } from "@admin/fields/nested/block-header";
 
 	let { field, form }: { field: SchemaField; form: FormController } = $props();
 	const runtime = getAdminRuntime();
 	const customRowLabel = $derived(runtime.rowLabels.resolve(field));
+	const blockTypes = $derived(
+		new Map(resolveBlockTypes(field.blocks).map((block) => [block.slug, block]))
+	);
 	const rows = $derived((form.get(field.path) as Record<string, unknown>[] | undefined) ?? []);
 	const issues = $derived(form.issuesFor(field.path).filter((issue) => issue.path === field.path));
 	const controlARIA = $derived(
@@ -226,6 +231,15 @@
 	}
 
 	function rowLabel(row: Record<string, unknown>, index: number) {
+		const block = blockTypes.get(String(row.blockType));
+		if (field.type === "blocks" && block?.admin?.nameField !== undefined) {
+			const path = `${field.path}.${index}`;
+			return (
+				blockHeaderValue(form, block, path, block.admin.nameField) ||
+				blockHeaderValue(form, block, path, block.admin.rowLabel) ||
+				runtime.i18n.t("fields:untitled", { label: block.labels.singular })
+			);
+		}
 		const key =
 			field.type === "blocks"
 				? resolveBlockTypes(field.blocks).find((block) => block.slug === row.blockType)?.admin
@@ -297,7 +311,22 @@
 
 	function fieldsForRow(row: Record<string, unknown>, index: number) {
 		const rowKey = String(row._key);
-		return fieldsFor(row).map((child) => rowField(child, index, rowKey));
+		const nameField = blockTypes.get(String(row.blockType))?.admin?.nameField;
+		return fieldsFor(row)
+			.filter((child) => child.name !== nameField)
+			.map((child) => rowField(child, index, rowKey));
+	}
+
+	function rowLabelSnapshot(row: Record<string, unknown>, index: number) {
+		const block = blockTypes.get(String(row.blockType));
+		if (block?.admin?.nameField === undefined) return immutableRowLabelSnapshot(row);
+		const visible = { ...row };
+		for (const name of [block.admin.nameField, block.admin.rowLabel]) {
+			const child = block.fields.find((field) => field.name === name);
+			if (child !== undefined && !visibleBlockChild(form, rowField(child, index, String(row._key))))
+				delete visible[child.name];
+		}
+		return immutableRowLabelSnapshot(visible);
 	}
 
 	function reorder(event: Parameters<DragDropEvents["dragend"]>[0]) {
@@ -416,7 +445,8 @@
 					{const rowKey = String(row._key)}
 					{const rowCollapsed = $derived(collapsed.has(rowKey))}
 					{const rowIssues = $derived(form.issuesFor(`${field.path}.${index}`))}
-					{const rowSnapshot = $derived(immutableRowLabelSnapshot(row))}
+					{const rowSnapshot = $derived(rowLabelSnapshot(row, index))}
+					{const block = $derived(blockTypes.get(String(row.blockType)))}
 					<SortableRow id={String(row._key)} {index} disabled={editingBlocked}>
 						{#snippet children(sortable)}
 							<div class="flex min-h-10 items-center justify-between gap-2 bg-control px-3 py-2">
@@ -447,10 +477,19 @@
 										>
 											{blockLabel(row)}
 										</span>{/if}
-									<div class="min-w-0 flex-1 truncate">
-										{#if customRowLabel === undefined}
+									<div class="min-w-0 flex-1">
+										{#if block?.admin?.nameField !== undefined}
+											<BlockHeader
+												{block}
+												path={`${field.path}.${index}`}
+												instance={rowKey}
+												{form}
+												readOnly={editingBlocked}
+											/>
+										{:else if customRowLabel === undefined}
 											{visibleRowLabel(row, index)}
-										{:else}
+										{/if}
+										{#if customRowLabel !== undefined}
 											<customRowLabel.component
 												{field}
 												row={rowSnapshot}

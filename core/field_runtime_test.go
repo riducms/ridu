@@ -17,28 +17,28 @@ import (
 func TestOutputFieldAfterReadHookReceivesResolvedValue(t *testing.T) {
 	observed := make(map[operation.Kind]string)
 	var occurrence operation.OccurrenceID
-	output := field.Virtual("summary", field.ValueString, func(ctx operation.ReadContext) (operation.Value[store.Value], error) {
+	output := field.Virtual("summary", field.ValueString, func(ctx operation.Context) (operation.Value[store.Value], error) {
 		title, _ := ctx.Root.String("title")
 		return operation.Present(store.String(title + " summary")), nil
-	}).ReadHooks(field.ReadHooks[store.Value]{AfterRead: []field.OutputTransform[store.Value]{func(ctx operation.ReadContext, input operation.Value[store.Value]) (operation.Change[store.Value], error) {
+	}).ReplaceAfterRead(func(ctx operation.Context, input operation.Value[store.Value]) (operation.Change[store.Value], error) {
 		occurrence = ctx.OccurrenceID
 		value, _ := input.Get()
 		observed[ctx.Operation], _ = value.StringValue()
 		return operation.Keep[store.Value](), nil
-	}}})
+	})
 	application, err := ridu.New(ridu.Config{Name: "Output field hook", Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{field.Text("title").Required(), output}}}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
 	}
-	created, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("Ridu")}, nil)
+	created, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("Ridu")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	updated, err := application.Local().Update(context.Background(), "posts", created.ID, store.Values{"title": store.String("Updated")}, nil)
+	updated, err := application.Local().Update(context.Background(), "posts", created.ID, store.Values{"title": store.String("Updated")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Find(context.Background(), "posts", updated.ID, nil); err != nil {
+	if _, err := application.Local().Find(context.Background(), "posts", updated.ID, ridu.FindOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if occurrence == "" || observed[operation.Create] != "Ridu summary" || observed[operation.Update] != "Updated summary" || observed[operation.Read] != "Updated summary" {

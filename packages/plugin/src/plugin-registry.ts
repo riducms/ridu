@@ -1,8 +1,6 @@
-import { bindSchemaManifest } from "@riducms/protocol";
-import { resolveBlockTypes } from "@riducms/protocol";
 import { ADMIN_PLUGIN_API_VERSION, type SchemaField, type SchemaManifest } from "@riducms/protocol";
 import { assertPluginFieldRegistration, type RegisteredPluginField } from "./field";
-import type { AdminPlugin } from "./plugin";
+import { assertAdminPluginPairs, type AdminPlugin } from "./plugin";
 
 /** A registered field editor with the names Ridu uses to select it. Returned by registry resolution. */
 export interface ResolvedPluginField {
@@ -13,10 +11,6 @@ export interface ResolvedPluginField {
 	/** Present only for editors registered in `components` and selected by Go `AdminComponent`. */
 	readonly componentKey?: string;
 	readonly registration: RegisteredPluginField;
-}
-
-export function validatePluginRegistrations(plugins: readonly AdminPlugin[]): void {
-	resolvePluginFields(plugins);
 }
 
 /**
@@ -87,13 +81,13 @@ export function resolvePluginFields(
 }
 
 /** Canonical manifest, actual executable registrations, and the same decoders as the host. */
-export function validatePluginManifest(
+export function validateManifestPluginPairs(
 	plugins: readonly AdminPlugin[],
+	registrations: readonly ResolvedPluginField[],
 	manifest: Pick<SchemaManifest, "collections" | "globals" | "blocks"> &
 		Partial<Pick<SchemaManifest, "plugins">>,
 	complete: boolean
 ): void {
-	const registrations = resolvePluginFields(plugins);
 	// Startup may receive only public or access-filtered schemas. Build/check own
 	// completeness; selected fields below still validate their exact renderer.
 	if (complete && manifest.plugins !== undefined)
@@ -108,38 +102,22 @@ export function validatePluginManifest(
 					`Named renderer ${item.owner}:${item.key} selects undeclared field type ${item.registration.fieldType}.`
 				);
 		}
-	const fields = new Map(
-		registrations.filter((item) => item.componentKey === undefined).map((item) => [item.key, item])
-	);
-	const components = new Map(
-		registrations
-			.filter((item) => item.componentKey !== undefined)
-			.map((item) => [`${item.owner}:${item.key}`, item])
-	);
 	if (manifest.plugins !== undefined) {
 		for (const backend of manifest.plugins) {
 			if (backend.admin === undefined) continue;
 			const plugin = plugins.find((candidate) => candidate.key === backend.key);
 			if (plugin === undefined)
 				throw new Error(`Missing admin registration for backend plugin ${backend.key}.`);
-			if (
-				plugin.apiVersion !== backend.admin.apiVersion ||
-				plugin.pairingVersion !== backend.admin.pairingVersion
-			)
-				throw new Error(`Backend/admin compatibility mismatch for plugin ${backend.key}.`);
-			if (
-				JSON.stringify(backend.admin.routes ?? []) !==
-					JSON.stringify((plugin.routes ?? []).map((route) => route.path)) ||
-				JSON.stringify(backend.admin.assets ?? []) !== JSON.stringify(plugin.assets ?? [])
-			)
-				throw new Error(
-					`Plugin ${backend.key} routes/assets do not match the canonical Go descriptor.`
-				);
-			const expected = (backend.fieldTypes ?? []).map((field) => field.key).sort();
-			if (JSON.stringify(expected) !== JSON.stringify(Object.keys(plugin.fields ?? {}).sort()))
-				throw new Error(
-					`Plugin ${backend.key} field types do not match the canonical Go descriptor (${expected.join(", ")}).`
-				);
+			assertAdminPluginPairs([
+				{
+					admin: plugin,
+					backend: {
+						...backend.admin,
+						key: backend.key,
+						fieldTypes: (backend.fieldTypes ?? []).map((field) => field.key),
+					},
+				},
+			]);
 		}
 		if (complete)
 			for (const plugin of plugins) {
@@ -151,38 +129,32 @@ export function validatePluginManifest(
 					throw new Error(`Admin plugin ${plugin.key} has no paired Go admin descriptor.`);
 			}
 	}
-	const failures: string[] = [];
-	bindSchemaManifest(manifest);
-	const inspect = (items: readonly SchemaField[], owner: string) => {
-		for (const field of items) {
-			try {
-				const selection = field.admin.component;
-				const selected =
-					selection !== undefined
-						? components.get(`${selection.plugin}:${selection.component}`)
-						: field.type === "plugin"
-							? fields.get(field.plugin?.key ?? "")
-							: undefined;
-				if (selection !== undefined || field.type === "plugin") {
-					if (selected === undefined)
-						throw new Error(
-							`Missing renderer for ${selection !== undefined ? `${selection.plugin}:${selection.component}` : field.plugin?.key}.`
-						);
-					selected.registration.decodeConfig(field);
-				}
-			} catch (error) {
-				failures.push(
-					`${owner}.${field.path}: ${error instanceof Error ? error.message : String(error)}`
+}
+
+/** Resolve a selection against static registrations; the caller owns schema traversal. */
+export function createPluginFieldValidator(registrations: readonly ResolvedPluginField[]) {
+	const fields = new Map(
+		registrations.filter((item) => item.componentKey === undefined).map((item) => [item.key, item])
+	);
+	const components = new Map(
+		registrations
+			.filter((item) => item.componentKey !== undefined)
+			.map((item) => [`${item.owner}:${item.key}`, item])
+	);
+	return (field: SchemaField): void => {
+		const selection = field.admin.component;
+		const selected =
+			selection !== undefined
+				? components.get(`${selection.plugin}:${selection.component}`)
+				: field.type === "plugin"
+					? fields.get(field.plugin?.key ?? "")
+					: undefined;
+		if (selection !== undefined || field.type === "plugin") {
+			if (selected === undefined)
+				throw new Error(
+					`Missing renderer for ${selection !== undefined ? `${selection.plugin}:${selection.component}` : field.plugin?.key}.`
 				);
-			}
-			if (field.nested !== undefined) inspect(field.nested.fields, owner);
-			for (const block of resolveBlockTypes(field.blocks) ?? []) inspect(block.fields, owner);
-			for (const tree of field.plugin?.embeddedTrees ?? [])
-				for (const branch of tree.cases)
-					for (const block of resolveBlockTypes(branch)) inspect(block.fields, owner);
+			selected.registration.decodeConfig(field);
 		}
 	};
-	for (const collection of manifest.collections) inspect(collection.fields, collection.slug);
-	for (const global of manifest.globals ?? []) inspect(global.fields, global.slug);
-	if (failures.length) throw new Error(failures.join("\n"));
 }

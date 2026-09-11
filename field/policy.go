@@ -12,60 +12,68 @@ import (
 )
 
 // DefaultFunc supplies a server-side initial value for an eligible omitted field.
+// Root and Siblings are snapshots at initialization; Prior is the persisted
+// enclosing object or stable row (empty for new rows). ID may be empty. Locale
+// is exact and Local retains authorization, cancellation and the active transaction.
 // Present supplies a value, including zero values; Empty leaves it without a
 // default. An error stops the operation. Returned values still pass validation.
 // Defaults do not prefill an unsaved admin form and do not run on ordinary edits
 // to an existing scope. Callbacks must not depend on other dynamic defaults or
 // perform irreversible side effects: separate requests or retries can run again.
-type DefaultFunc[T any] func(operation.DefaultContext) (operation.Value[T], error)
+type DefaultFunc[T any] func(operation.Context) (operation.Value[T], error)
 
 // Validator checks a field before saving, after built-in checks and write hooks.
+// Root and Siblings include retained values and earlier write transformations;
+// Prior remains the persisted enclosing object or row. LiveValidationContext
+// instead describes sparse input before defaults and save transformations.
 // Return issues for values the author needs to fix, or an error if the check
 // could not run. An issue belongs to this field unless its Target names a child.
-type Validator[T any] func(operation.ValidationContext, operation.Value[T]) ([]operation.Issue, error)
+type Validator[T any] func(operation.Context, operation.Value[T]) ([]operation.Issue, error)
 
 // RawTransform checks or changes one field before input is converted to its Go
 // type. The context supplies surrounding values; the separate value is this
 // field's raw input and may be invalid. Empty means omitted; Present(store.Null())
 // means explicit null. Return Keep to leave it unchanged, Replace to change this field,
 // or an error to stop. Changing a context snapshot does not change the document.
-type RawTransform func(operation.WriteContext, operation.Value[store.Value]) (operation.Change[store.Value], error)
+type RawTransform func(operation.Context, operation.Value[store.Value]) (operation.Change[store.Value], error)
 
 // Transform checks or changes one field's typed value before saving. The context
 // includes unchanged values from an update and changes made by earlier hooks.
 // Return Keep to leave this field unchanged, Replace(Present(value)) to set it,
 // or Replace(Empty[T]()) to clear it. An error stops the operation. Returned
 // values still pass through validation and field access checks.
-type Transform[T any] func(operation.WriteContext, operation.Value[T]) (operation.Change[T], error)
+type Transform[T any] func(operation.Context, operation.Value[T]) (operation.Change[T], error)
 
 // OutputTransform changes one field in the response without changing storage.
 // Its context supplies response values, which may include related documents and
 // locale fallback. Return Keep or Replace, as for a write transform. Field read
 // access still runs afterward; visible context data is not permission to expose it.
+// AfterRead runs after resource response hooks on reads and mutation responses,
+// before final field redaction. Registration determines the callback phase.
 // An error stops the response and can roll back an uncommitted mutation.
-type OutputTransform[T any] func(operation.ReadContext, operation.Value[T]) (operation.Change[T], error)
+type OutputTransform[T any] func(operation.Context, operation.Value[T]) (operation.Change[T], error)
 
 // Observer runs code at a field lifecycle event. It receives the context and the
 // field's value, but cannot return a replacement or mutate the context snapshots.
 // Return nil to continue or an error to stop. Before commit, errors roll back the
 // operation; an AfterCommit error reports failure after data has already saved.
-type Observer[T any] func(operation.EventContext, operation.Value[T]) error
+type Observer[T any] func(operation.Context, operation.Value[T]) error
 
 // Resolver calculates a root Virtual field for the response. Read other values
 // from its context and return Present(value), Empty[T](), or an error. The value
 // must match the declared Virtual type and remains subject to field read access.
-type Resolver[T any] func(operation.ReadContext) (operation.Value[T], error)
+type Resolver[T any] func(operation.Context) (operation.Value[T], error)
 
 // AccessRule decides whether one field value may be created, read, or updated.
 // Return false during a write to reject the operation, or during a read to omit
 // the field from the response. Returning an error stops the operation. Field
 // rules cannot return the query predicates supported by collection access rules.
-type AccessRule func(operation.AccessContext) (bool, error)
+type AccessRule func(operation.Context) (bool, error)
 
 // Hooks registers transforms and event callbacks for one field. Each list runs
 // in declaration order for each field occurrence, including nested array rows.
 // Collection or global hooks run first in the same phase, except AfterCommit,
-// where field callbacks run first. Use ReadHooks for response transformations.
+// where field callbacks run first. Use AfterRead for response transformations.
 type Hooks[T any] struct {
 	// BeforeDuplicate receives raw copied input before validation. It runs only
 	// when duplicating a collection document, after the resource hook.
@@ -97,15 +105,6 @@ type Hooks[T any] struct {
 	AfterCommit []Observer[T]
 }
 
-// ReadHooks registers response transformations using the field's output type,
-// which can differ from its write type when a relationship is populated.
-type ReadHooks[T any] struct {
-	// AfterRead transforms each returned field value after resource AfterRead
-	// hooks and before final field redaction. It runs for reads and mutation
-	// responses, without changing the stored value.
-	AfterRead []OutputTransform[T]
-}
-
 func cloneHooks[T any](h Hooks[T]) Hooks[T] {
 	h.BeforeDuplicate = slices.Clone(h.BeforeDuplicate)
 	h.BeforeValidate = slices.Clone(h.BeforeValidate)
@@ -135,17 +134,6 @@ func appendHooks[T any](base, extra Hooks[T]) Hooks[T] {
 
 func prependHooks[T any](base, extra Hooks[T]) Hooks[T] { return appendHooks(extra, base) }
 
-func cloneReadHooks[T any](h ReadHooks[T]) ReadHooks[T] {
-	h.AfterRead = slices.Clone(h.AfterRead)
-	return h
-}
-
-func appendReadHooks[T any](base, extra ReadHooks[T]) ReadHooks[T] {
-	base = cloneReadHooks(base)
-	base.AfterRead = append(base.AfterRead, extra.AfterRead...)
-	return base
-}
-
 // Access configures who may create, read, or update a field value. Assign it
 // with a concrete field's Access method; an omitted rule leaves that operation
 // unrestricted. Access replaces the field's complete policy group, while
@@ -155,7 +143,7 @@ func appendReadHooks[T any](base, extra ReadHooks[T]) ReadHooks[T] {
 // For example, this field is omitted from anonymous read responses:
 //
 //	field.Text("internalNotes").Access(field.Access{
-//		Read: func(ctx operation.AccessContext) (bool, error) {
+//		Read: func(ctx operation.Context) (bool, error) {
 //			return ctx.Actor != nil, nil
 //		},
 //	})
@@ -183,7 +171,7 @@ func andAccess(base, extra AccessRule) AccessRule {
 	if base == nil {
 		return extra
 	}
-	return func(c operation.AccessContext) (bool, error) {
+	return func(c operation.Context) (bool, error) {
 		allowed, err := base(c)
 		if err != nil || !allowed {
 			return allowed, err

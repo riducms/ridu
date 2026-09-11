@@ -6,6 +6,7 @@ export type SignatureTokenKind =
 	| 'symbol'
 	| 'reference'
 	| 'keyword'
+	| 'comment'
 	| 'string'
 	| 'number'
 	| 'type'
@@ -450,12 +451,16 @@ export function tokenizeReferenceSignature(
 	const symbolNames = new Set([name, name.split('.').at(-1) ?? name]);
 	const rawTokens =
 		signature.match(
-			/(?:(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`)|\.\.\.|=>|:=|[A-Za-z_$@][\w$@]*(?:\.[A-Za-z_$][\w$]*)*|\d+(?:\.\d+)?|\s+|.)/gs
+			/(?:(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`)|\/\/[^\r\n]*|\/\*[\s\S]*?\*\/|\.\.\.|=>|:=|[A-Za-z_$@][\w$@]*(?:\.[A-Za-z_$][\w$]*)*|\d+(?:\.\d+)?|\s+|.)/gs
 		) ?? [];
 
 	let startsDeclarationLine = false;
 	return rawTokens.map((text): SignatureToken => {
 		const clean = text.replace(/^\.\.\./, '');
+		if (text.startsWith('//') || text.startsWith('/*')) {
+			startsDeclarationLine = false;
+			return { text, kind: 'comment' };
+		}
 		if (/^\s+$/.test(text)) {
 			if (text.includes('\n')) startsDeclarationLine = true;
 			return { text, kind: 'space' };

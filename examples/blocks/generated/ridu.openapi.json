@@ -3163,6 +3163,16 @@
             "pattern": "\\S",
             "type": "string"
           },
+          "blockName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "blockType": {
             "const": "cta",
             "type": "string"
@@ -3200,6 +3210,16 @@
             "minLength": 1,
             "pattern": "\\S",
             "type": "string"
+          },
+          "blockName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "blockType": {
             "const": "cta",
@@ -3243,6 +3263,16 @@
             "pattern": "\\S",
             "type": "string"
           },
+          "blockName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "blockType": {
             "const": "cta",
             "type": "string"
@@ -3275,6 +3305,16 @@
             "minLength": 1,
             "pattern": "\\S",
             "type": "string"
+          },
+          "blockName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "blockType": {
             "const": "cta",
@@ -3973,6 +4013,16 @@
               }
             ]
           },
+          "blockName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "blockType": {
             "const": "callout",
             "type": "string"
@@ -4634,6 +4684,7 @@
                           {
                             "typeName": "CTA",
                             "admin": {
+                              "nameField": "blockName",
                               "rowLabel": "label"
                             },
                             "slug": "cta",
@@ -4642,6 +4693,19 @@
                               "plural": "Ctas"
                             },
                             "fields": [
+                              {
+                                "id": "articles-body-blocks-block-callout-detail-blocks-block-cta-block-name",
+                                "name": "blockName",
+                                "path": "body.blocks.block.callout.detail.blocks.block.cta.blockName",
+                                "type": "text",
+                                "category": "scalar",
+                                "required": false,
+                                "unique": false,
+                                "admin": {
+                                  "label": "Block name"
+                                },
+                                "text": {}
+                              },
                               {
                                 "id": "articles-body-blocks-block-callout-detail-blocks-block-cta-label",
                                 "name": "label",
@@ -5376,6 +5440,16 @@
               }
             ]
           },
+          "blockName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "blockType": {
             "const": "callout",
             "type": "string"
@@ -6037,6 +6111,7 @@
                           {
                             "typeName": "CTA",
                             "admin": {
+                              "nameField": "blockName",
                               "rowLabel": "label"
                             },
                             "slug": "cta",
@@ -6045,6 +6120,19 @@
                               "plural": "Ctas"
                             },
                             "fields": [
+                              {
+                                "id": "articles-body-blocks-block-callout-detail-blocks-block-cta-block-name",
+                                "name": "blockName",
+                                "path": "body.blocks.block.callout.detail.blocks.block.cta.blockName",
+                                "type": "text",
+                                "category": "scalar",
+                                "required": false,
+                                "unique": false,
+                                "admin": {
+                                  "label": "Block name"
+                                },
+                                "text": {}
+                              },
                               {
                                 "id": "articles-body-blocks-block-callout-detail-blocks-block-cta-label",
                                 "name": "label",
@@ -6783,6 +6871,16 @@
               }
             ]
           },
+          "blockName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "blockType": {
             "const": "callout",
             "type": "string"
@@ -7444,6 +7542,7 @@
                           {
                             "typeName": "CTA",
                             "admin": {
+                              "nameField": "blockName",
                               "rowLabel": "label"
                             },
                             "slug": "cta",
@@ -7452,6 +7551,19 @@
                               "plural": "Ctas"
                             },
                             "fields": [
+                              {
+                                "id": "articles-body-blocks-block-callout-detail-blocks-block-cta-block-name",
+                                "name": "blockName",
+                                "path": "body.blocks.block.callout.detail.blocks.block.cta.blockName",
+                                "type": "text",
+                                "category": "scalar",
+                                "required": false,
+                                "unique": false,
+                                "admin": {
+                                  "label": "Block name"
+                                },
+                                "text": {}
+                              },
                               {
                                 "id": "articles-body-blocks-block-callout-detail-blocks-block-cta-label",
                                 "name": "label",
@@ -8188,6 +8300,16 @@
               }
             ]
           },
+          "blockName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "blockType": {
             "const": "callout",
             "type": "string"
@@ -8849,6 +8971,7 @@
                           {
                             "typeName": "CTA",
                             "admin": {
+                              "nameField": "blockName",
                               "rowLabel": "label"
                             },
                             "slug": "cta",
@@ -8857,6 +8980,19 @@
                               "plural": "Ctas"
                             },
                             "fields": [
+                              {
+                                "id": "articles-body-blocks-block-callout-detail-blocks-block-cta-block-name",
+                                "name": "blockName",
+                                "path": "body.blocks.block.callout.detail.blocks.block.cta.blockName",
+                                "type": "text",
+                                "category": "scalar",
+                                "required": false,
+                                "unique": false,
+                                "admin": {
+                                  "label": "Block name"
+                                },
+                                "text": {}
+                              },
                               {
                                 "id": "articles-body-blocks-block-callout-detail-blocks-block-cta-label",
                                 "name": "label",
@@ -12089,6 +12225,16 @@
                           "pattern": "\\S",
                           "type": "string"
                         },
+                        "blockName": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
                         "blockType": {
                           "const": "cta",
                           "type": "string"
@@ -12167,6 +12313,16 @@
                           "minLength": 1,
                           "pattern": "\\S",
                           "type": "string"
+                        },
+                        "blockName": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
                         },
                         "blockType": {
                           "const": "cta",
@@ -12252,6 +12408,16 @@
                           "minLength": 1,
                           "pattern": "\\S",
                           "type": "string"
+                        },
+                        "blockName": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
                         },
                         "blockType": {
                           "const": "cta",
@@ -12346,6 +12512,16 @@
                               "pattern": "\\S",
                               "type": "string"
                             },
+                            "blockName": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
                             "blockType": {
                               "const": "cta",
                               "type": "string"
@@ -12378,6 +12554,16 @@
                               "minLength": 1,
                               "pattern": "\\S",
                               "type": "string"
+                            },
+                            "blockName": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
                             },
                             "blockType": {
                               "const": "cta",
@@ -13124,6 +13310,16 @@
                             }
                           ]
                         },
+                        "blockName": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
                         "blockType": {
                           "const": "callout",
                           "type": "string"
@@ -13785,6 +13981,7 @@
                                         {
                                           "typeName": "CTA",
                                           "admin": {
+                                            "nameField": "blockName",
                                             "rowLabel": "label"
                                           },
                                           "slug": "cta",
@@ -13793,6 +13990,19 @@
                                             "plural": "Ctas"
                                           },
                                           "fields": [
+                                            {
+                                              "id": "articles-body-blocks-block-callout-detail-blocks-block-cta-block-name",
+                                              "name": "blockName",
+                                              "path": "body.blocks.block.callout.detail.blocks.block.cta.blockName",
+                                              "type": "text",
+                                              "category": "scalar",
+                                              "required": false,
+                                              "unique": false,
+                                              "admin": {
+                                                "label": "Block name"
+                                              },
+                                              "text": {}
+                                            },
                                             {
                                               "id": "articles-body-blocks-block-callout-detail-blocks-block-cta-label",
                                               "name": "label",
@@ -13897,6 +14107,16 @@
                           "minLength": 1,
                           "pattern": "\\S",
                           "type": "string"
+                        },
+                        "blockName": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
                         },
                         "blockType": {
                           "const": "cta",
@@ -14640,6 +14860,16 @@
                             }
                           ]
                         },
+                        "blockName": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
                         "blockType": {
                           "const": "callout",
                           "type": "string"
@@ -15301,6 +15531,7 @@
                                         {
                                           "typeName": "CTA",
                                           "admin": {
+                                            "nameField": "blockName",
                                             "rowLabel": "label"
                                           },
                                           "slug": "cta",
@@ -15309,6 +15540,19 @@
                                             "plural": "Ctas"
                                           },
                                           "fields": [
+                                            {
+                                              "id": "articles-body-blocks-block-callout-detail-blocks-block-cta-block-name",
+                                              "name": "blockName",
+                                              "path": "body.blocks.block.callout.detail.blocks.block.cta.blockName",
+                                              "type": "text",
+                                              "category": "scalar",
+                                              "required": false,
+                                              "unique": false,
+                                              "admin": {
+                                                "label": "Block name"
+                                              },
+                                              "text": {}
+                                            },
                                             {
                                               "id": "articles-body-blocks-block-callout-detail-blocks-block-cta-label",
                                               "name": "label",
@@ -15417,6 +15661,16 @@
                           "minLength": 1,
                           "pattern": "\\S",
                           "type": "string"
+                        },
+                        "blockName": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
                         },
                         "blockType": {
                           "const": "cta",
@@ -16166,6 +16420,16 @@
                             }
                           ]
                         },
+                        "blockName": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
                         "blockType": {
                           "const": "callout",
                           "type": "string"
@@ -16827,6 +17091,7 @@
                                         {
                                           "typeName": "CTA",
                                           "admin": {
+                                            "nameField": "blockName",
                                             "rowLabel": "label"
                                           },
                                           "slug": "cta",
@@ -16835,6 +17100,19 @@
                                             "plural": "Ctas"
                                           },
                                           "fields": [
+                                            {
+                                              "id": "articles-body-blocks-block-callout-detail-blocks-block-cta-block-name",
+                                              "name": "blockName",
+                                              "path": "body.blocks.block.callout.detail.blocks.block.cta.blockName",
+                                              "type": "text",
+                                              "category": "scalar",
+                                              "required": false,
+                                              "unique": false,
+                                              "admin": {
+                                                "label": "Block name"
+                                              },
+                                              "text": {}
+                                            },
                                             {
                                               "id": "articles-body-blocks-block-callout-detail-blocks-block-cta-label",
                                               "name": "label",
@@ -16951,6 +17229,16 @@
                           "minLength": 1,
                           "pattern": "\\S",
                           "type": "string"
+                        },
+                        "blockName": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
                         },
                         "blockType": {
                           "const": "cta",
@@ -17708,6 +17996,16 @@
                                 }
                               ]
                             },
+                            "blockName": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
                             "blockType": {
                               "const": "callout",
                               "type": "string"
@@ -18369,6 +18667,7 @@
                                             {
                                               "typeName": "CTA",
                                               "admin": {
+                                                "nameField": "blockName",
                                                 "rowLabel": "label"
                                               },
                                               "slug": "cta",
@@ -18377,6 +18676,19 @@
                                                 "plural": "Ctas"
                                               },
                                               "fields": [
+                                                {
+                                                  "id": "articles-body-blocks-block-callout-detail-blocks-block-cta-block-name",
+                                                  "name": "blockName",
+                                                  "path": "body.blocks.block.callout.detail.blocks.block.cta.blockName",
+                                                  "type": "text",
+                                                  "category": "scalar",
+                                                  "required": false,
+                                                  "unique": false,
+                                                  "admin": {
+                                                    "label": "Block name"
+                                                  },
+                                                  "text": {}
+                                                },
                                                 {
                                                   "id": "articles-body-blocks-block-callout-detail-blocks-block-cta-label",
                                                   "name": "label",
@@ -19113,6 +19425,16 @@
                                 }
                               ]
                             },
+                            "blockName": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
                             "blockType": {
                               "const": "callout",
                               "type": "string"
@@ -19774,6 +20096,7 @@
                                             {
                                               "typeName": "CTA",
                                               "admin": {
+                                                "nameField": "blockName",
                                                 "rowLabel": "label"
                                               },
                                               "slug": "cta",
@@ -19782,6 +20105,19 @@
                                                 "plural": "Ctas"
                                               },
                                               "fields": [
+                                                {
+                                                  "id": "articles-body-blocks-block-callout-detail-blocks-block-cta-block-name",
+                                                  "name": "blockName",
+                                                  "path": "body.blocks.block.callout.detail.blocks.block.cta.blockName",
+                                                  "type": "text",
+                                                  "category": "scalar",
+                                                  "required": false,
+                                                  "unique": false,
+                                                  "admin": {
+                                                    "label": "Block name"
+                                                  },
+                                                  "text": {}
+                                                },
                                                 {
                                                   "id": "articles-body-blocks-block-callout-detail-blocks-block-cta-label",
                                                   "name": "label",
@@ -19927,6 +20263,16 @@
                               "pattern": "\\S",
                               "type": "string"
                             },
+                            "blockName": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
                             "blockType": {
                               "const": "cta",
                               "type": "string"
@@ -19959,6 +20305,16 @@
                               "minLength": 1,
                               "pattern": "\\S",
                               "type": "string"
+                            },
+                            "blockName": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
                             },
                             "blockType": {
                               "const": "cta",
@@ -20215,6 +20571,16 @@
                           "pattern": "\\S",
                           "type": "string"
                         },
+                        "blockName": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
                         "blockType": {
                           "const": "cta",
                           "type": "string"
@@ -20293,6 +20659,16 @@
                           "minLength": 1,
                           "pattern": "\\S",
                           "type": "string"
+                        },
+                        "blockName": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
                         },
                         "blockType": {
                           "const": "cta",
@@ -20378,6 +20754,16 @@
                           "minLength": 1,
                           "pattern": "\\S",
                           "type": "string"
+                        },
+                        "blockName": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
                         },
                         "blockType": {
                           "const": "cta",
@@ -20468,6 +20854,16 @@
                               "pattern": "\\S",
                               "type": "string"
                             },
+                            "blockName": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
                             "blockType": {
                               "const": "cta",
                               "type": "string"
@@ -20500,6 +20896,16 @@
                               "minLength": 1,
                               "pattern": "\\S",
                               "type": "string"
+                            },
+                            "blockName": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
                             },
                             "blockType": {
                               "const": "cta",
@@ -21246,6 +21652,16 @@
                             }
                           ]
                         },
+                        "blockName": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
                         "blockType": {
                           "const": "callout",
                           "type": "string"
@@ -21907,6 +22323,7 @@
                                         {
                                           "typeName": "CTA",
                                           "admin": {
+                                            "nameField": "blockName",
                                             "rowLabel": "label"
                                           },
                                           "slug": "cta",
@@ -21915,6 +22332,19 @@
                                             "plural": "Ctas"
                                           },
                                           "fields": [
+                                            {
+                                              "id": "articles-localized-body-blocks-block-callout-detail-blocks-block-cta-block-name",
+                                              "name": "blockName",
+                                              "path": "localizedBody.blocks.block.callout.detail.blocks.block.cta.blockName",
+                                              "type": "text",
+                                              "category": "scalar",
+                                              "required": false,
+                                              "unique": false,
+                                              "admin": {
+                                                "label": "Block name"
+                                              },
+                                              "text": {}
+                                            },
                                             {
                                               "id": "articles-localized-body-blocks-block-callout-detail-blocks-block-cta-label",
                                               "name": "label",
@@ -22018,6 +22448,16 @@
                           "minLength": 1,
                           "pattern": "\\S",
                           "type": "string"
+                        },
+                        "blockName": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
                         },
                         "blockType": {
                           "const": "cta",
@@ -22761,6 +23201,16 @@
                             }
                           ]
                         },
+                        "blockName": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
                         "blockType": {
                           "const": "callout",
                           "type": "string"
@@ -23422,6 +23872,7 @@
                                         {
                                           "typeName": "CTA",
                                           "admin": {
+                                            "nameField": "blockName",
                                             "rowLabel": "label"
                                           },
                                           "slug": "cta",
@@ -23430,6 +23881,19 @@
                                             "plural": "Ctas"
                                           },
                                           "fields": [
+                                            {
+                                              "id": "articles-localized-body-blocks-block-callout-detail-blocks-block-cta-block-name",
+                                              "name": "blockName",
+                                              "path": "localizedBody.blocks.block.callout.detail.blocks.block.cta.blockName",
+                                              "type": "text",
+                                              "category": "scalar",
+                                              "required": false,
+                                              "unique": false,
+                                              "admin": {
+                                                "label": "Block name"
+                                              },
+                                              "text": {}
+                                            },
                                             {
                                               "id": "articles-localized-body-blocks-block-callout-detail-blocks-block-cta-label",
                                               "name": "label",
@@ -23537,6 +24001,16 @@
                           "minLength": 1,
                           "pattern": "\\S",
                           "type": "string"
+                        },
+                        "blockName": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
                         },
                         "blockType": {
                           "const": "cta",
@@ -24286,6 +24760,16 @@
                             }
                           ]
                         },
+                        "blockName": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
                         "blockType": {
                           "const": "callout",
                           "type": "string"
@@ -24947,6 +25431,7 @@
                                         {
                                           "typeName": "CTA",
                                           "admin": {
+                                            "nameField": "blockName",
                                             "rowLabel": "label"
                                           },
                                           "slug": "cta",
@@ -24955,6 +25440,19 @@
                                             "plural": "Ctas"
                                           },
                                           "fields": [
+                                            {
+                                              "id": "articles-localized-body-blocks-block-callout-detail-blocks-block-cta-block-name",
+                                              "name": "blockName",
+                                              "path": "localizedBody.blocks.block.callout.detail.blocks.block.cta.blockName",
+                                              "type": "text",
+                                              "category": "scalar",
+                                              "required": false,
+                                              "unique": false,
+                                              "admin": {
+                                                "label": "Block name"
+                                              },
+                                              "text": {}
+                                            },
                                             {
                                               "id": "articles-localized-body-blocks-block-callout-detail-blocks-block-cta-label",
                                               "name": "label",
@@ -25062,6 +25560,16 @@
                           "minLength": 1,
                           "pattern": "\\S",
                           "type": "string"
+                        },
+                        "blockName": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
                         },
                         "blockType": {
                           "const": "cta",
@@ -25815,6 +26323,16 @@
                                 }
                               ]
                             },
+                            "blockName": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
                             "blockType": {
                               "const": "callout",
                               "type": "string"
@@ -26476,6 +26994,7 @@
                                             {
                                               "typeName": "CTA",
                                               "admin": {
+                                                "nameField": "blockName",
                                                 "rowLabel": "label"
                                               },
                                               "slug": "cta",
@@ -26484,6 +27003,19 @@
                                                 "plural": "Ctas"
                                               },
                                               "fields": [
+                                                {
+                                                  "id": "articles-localized-body-blocks-block-callout-detail-blocks-block-cta-block-name",
+                                                  "name": "blockName",
+                                                  "path": "localizedBody.blocks.block.callout.detail.blocks.block.cta.blockName",
+                                                  "type": "text",
+                                                  "category": "scalar",
+                                                  "required": false,
+                                                  "unique": false,
+                                                  "admin": {
+                                                    "label": "Block name"
+                                                  },
+                                                  "text": {}
+                                                },
                                                 {
                                                   "id": "articles-localized-body-blocks-block-callout-detail-blocks-block-cta-label",
                                                   "name": "label",
@@ -27219,6 +27751,16 @@
                                 }
                               ]
                             },
+                            "blockName": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
                             "blockType": {
                               "const": "callout",
                               "type": "string"
@@ -27880,6 +28422,7 @@
                                             {
                                               "typeName": "CTA",
                                               "admin": {
+                                                "nameField": "blockName",
                                                 "rowLabel": "label"
                                               },
                                               "slug": "cta",
@@ -27888,6 +28431,19 @@
                                                 "plural": "Ctas"
                                               },
                                               "fields": [
+                                                {
+                                                  "id": "articles-localized-body-blocks-block-callout-detail-blocks-block-cta-block-name",
+                                                  "name": "blockName",
+                                                  "path": "localizedBody.blocks.block.callout.detail.blocks.block.cta.blockName",
+                                                  "type": "text",
+                                                  "category": "scalar",
+                                                  "required": false,
+                                                  "unique": false,
+                                                  "admin": {
+                                                    "label": "Block name"
+                                                  },
+                                                  "text": {}
+                                                },
                                                 {
                                                   "id": "articles-localized-body-blocks-block-callout-detail-blocks-block-cta-label",
                                                   "name": "label",
@@ -28032,6 +28588,16 @@
                               "pattern": "\\S",
                               "type": "string"
                             },
+                            "blockName": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
                             "blockType": {
                               "const": "cta",
                               "type": "string"
@@ -28064,6 +28630,16 @@
                               "minLength": 1,
                               "pattern": "\\S",
                               "type": "string"
+                            },
+                            "blockName": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
                             },
                             "blockType": {
                               "const": "cta",
@@ -29624,6 +30200,7 @@
                               {
                                 "typeName": "Callout",
                                 "admin": {
+                                  "nameField": "blockName",
                                   "rowLabel": "title"
                                 },
                                 "slug": "callout",
@@ -29632,6 +30209,19 @@
                                   "plural": "Callouts"
                                 },
                                 "fields": [
+                                  {
+                                    "id": "articles-body-blocks-block-callout-block-name",
+                                    "name": "blockName",
+                                    "path": "body.blocks.block.callout.blockName",
+                                    "type": "text",
+                                    "category": "scalar",
+                                    "required": false,
+                                    "unique": false,
+                                    "admin": {
+                                      "label": "Block name"
+                                    },
+                                    "text": {}
+                                  },
                                   {
                                     "id": "articles-body-blocks-block-callout-title",
                                     "name": "title",
@@ -29690,6 +30280,7 @@
                                                 {
                                                   "typeName": "CTA",
                                                   "admin": {
+                                                    "nameField": "blockName",
                                                     "rowLabel": "label"
                                                   },
                                                   "slug": "cta",
@@ -29698,6 +30289,19 @@
                                                     "plural": "Ctas"
                                                   },
                                                   "fields": [
+                                                    {
+                                                      "id": "articles-body-blocks-block-callout-detail-blocks-block-cta-block-name",
+                                                      "name": "blockName",
+                                                      "path": "body.blocks.block.callout.detail.blocks.block.cta.blockName",
+                                                      "type": "text",
+                                                      "category": "scalar",
+                                                      "required": false,
+                                                      "unique": false,
+                                                      "admin": {
+                                                        "label": "Block name"
+                                                      },
+                                                      "text": {}
+                                                    },
                                                     {
                                                       "id": "articles-body-blocks-block-callout-detail-blocks-block-cta-label",
                                                       "name": "label",
@@ -29849,6 +30453,7 @@
                               {
                                 "typeName": "CTA",
                                 "admin": {
+                                  "nameField": "blockName",
                                   "rowLabel": "label"
                                 },
                                 "slug": "cta",
@@ -29857,6 +30462,19 @@
                                   "plural": "Ctas"
                                 },
                                 "fields": [
+                                  {
+                                    "id": "articles-body-blocks-block-cta-block-name",
+                                    "name": "blockName",
+                                    "path": "body.blocks.block.cta.blockName",
+                                    "type": "text",
+                                    "category": "scalar",
+                                    "required": false,
+                                    "unique": false,
+                                    "admin": {
+                                      "label": "Block name"
+                                    },
+                                    "text": {}
+                                  },
                                   {
                                     "id": "articles-body-blocks-block-cta-label",
                                     "name": "label",
@@ -30558,6 +31176,7 @@
                               {
                                 "typeName": "Callout",
                                 "admin": {
+                                  "nameField": "blockName",
                                   "rowLabel": "title"
                                 },
                                 "slug": "callout",
@@ -30566,6 +31185,19 @@
                                   "plural": "Callouts"
                                 },
                                 "fields": [
+                                  {
+                                    "id": "articles-body-blocks-block-callout-block-name",
+                                    "name": "blockName",
+                                    "path": "body.blocks.block.callout.blockName",
+                                    "type": "text",
+                                    "category": "scalar",
+                                    "required": false,
+                                    "unique": false,
+                                    "admin": {
+                                      "label": "Block name"
+                                    },
+                                    "text": {}
+                                  },
                                   {
                                     "id": "articles-body-blocks-block-callout-title",
                                     "name": "title",
@@ -30624,6 +31256,7 @@
                                                 {
                                                   "typeName": "CTA",
                                                   "admin": {
+                                                    "nameField": "blockName",
                                                     "rowLabel": "label"
                                                   },
                                                   "slug": "cta",
@@ -30632,6 +31265,19 @@
                                                     "plural": "Ctas"
                                                   },
                                                   "fields": [
+                                                    {
+                                                      "id": "articles-body-blocks-block-callout-detail-blocks-block-cta-block-name",
+                                                      "name": "blockName",
+                                                      "path": "body.blocks.block.callout.detail.blocks.block.cta.blockName",
+                                                      "type": "text",
+                                                      "category": "scalar",
+                                                      "required": false,
+                                                      "unique": false,
+                                                      "admin": {
+                                                        "label": "Block name"
+                                                      },
+                                                      "text": {}
+                                                    },
                                                     {
                                                       "id": "articles-body-blocks-block-callout-detail-blocks-block-cta-label",
                                                       "name": "label",
@@ -30783,6 +31429,7 @@
                               {
                                 "typeName": "CTA",
                                 "admin": {
+                                  "nameField": "blockName",
                                   "rowLabel": "label"
                                 },
                                 "slug": "cta",
@@ -30791,6 +31438,19 @@
                                   "plural": "Ctas"
                                 },
                                 "fields": [
+                                  {
+                                    "id": "articles-body-blocks-block-cta-block-name",
+                                    "name": "blockName",
+                                    "path": "body.blocks.block.cta.blockName",
+                                    "type": "text",
+                                    "category": "scalar",
+                                    "required": false,
+                                    "unique": false,
+                                    "admin": {
+                                      "label": "Block name"
+                                    },
+                                    "text": {}
+                                  },
                                   {
                                     "id": "articles-body-blocks-block-cta-label",
                                     "name": "label",
@@ -31503,6 +32163,7 @@
                               {
                                 "typeName": "Callout",
                                 "admin": {
+                                  "nameField": "blockName",
                                   "rowLabel": "title"
                                 },
                                 "slug": "callout",
@@ -31511,6 +32172,19 @@
                                   "plural": "Callouts"
                                 },
                                 "fields": [
+                                  {
+                                    "id": "articles-localized-body-blocks-block-callout-block-name",
+                                    "name": "blockName",
+                                    "path": "localizedBody.blocks.block.callout.blockName",
+                                    "type": "text",
+                                    "category": "scalar",
+                                    "required": false,
+                                    "unique": false,
+                                    "admin": {
+                                      "label": "Block name"
+                                    },
+                                    "text": {}
+                                  },
                                   {
                                     "id": "articles-localized-body-blocks-block-callout-title",
                                     "name": "title",
@@ -31568,6 +32242,7 @@
                                                 {
                                                   "typeName": "CTA",
                                                   "admin": {
+                                                    "nameField": "blockName",
                                                     "rowLabel": "label"
                                                   },
                                                   "slug": "cta",
@@ -31576,6 +32251,19 @@
                                                     "plural": "Ctas"
                                                   },
                                                   "fields": [
+                                                    {
+                                                      "id": "articles-localized-body-blocks-block-callout-detail-blocks-block-cta-block-name",
+                                                      "name": "blockName",
+                                                      "path": "localizedBody.blocks.block.callout.detail.blocks.block.cta.blockName",
+                                                      "type": "text",
+                                                      "category": "scalar",
+                                                      "required": false,
+                                                      "unique": false,
+                                                      "admin": {
+                                                        "label": "Block name"
+                                                      },
+                                                      "text": {}
+                                                    },
                                                     {
                                                       "id": "articles-localized-body-blocks-block-callout-detail-blocks-block-cta-label",
                                                       "name": "label",
@@ -31725,6 +32413,7 @@
                               {
                                 "typeName": "CTA",
                                 "admin": {
+                                  "nameField": "blockName",
                                   "rowLabel": "label"
                                 },
                                 "slug": "cta",
@@ -31733,6 +32422,19 @@
                                   "plural": "Ctas"
                                 },
                                 "fields": [
+                                  {
+                                    "id": "articles-localized-body-blocks-block-cta-block-name",
+                                    "name": "blockName",
+                                    "path": "localizedBody.blocks.block.cta.blockName",
+                                    "type": "text",
+                                    "category": "scalar",
+                                    "required": false,
+                                    "unique": false,
+                                    "admin": {
+                                      "label": "Block name"
+                                    },
+                                    "text": {}
+                                  },
                                   {
                                     "id": "articles-localized-body-blocks-block-cta-label",
                                     "name": "label",
@@ -32434,6 +33136,7 @@
                                 {
                                   "typeName": "Callout",
                                   "admin": {
+                                    "nameField": "blockName",
                                     "rowLabel": "title"
                                   },
                                   "slug": "callout",
@@ -32442,6 +33145,19 @@
                                     "plural": "Callouts"
                                   },
                                   "fields": [
+                                    {
+                                      "id": "articles-localized-body-blocks-block-callout-block-name",
+                                      "name": "blockName",
+                                      "path": "localizedBody.blocks.block.callout.blockName",
+                                      "type": "text",
+                                      "category": "scalar",
+                                      "required": false,
+                                      "unique": false,
+                                      "admin": {
+                                        "label": "Block name"
+                                      },
+                                      "text": {}
+                                    },
                                     {
                                       "id": "articles-localized-body-blocks-block-callout-title",
                                       "name": "title",
@@ -32499,6 +33215,7 @@
                                                   {
                                                     "typeName": "CTA",
                                                     "admin": {
+                                                      "nameField": "blockName",
                                                       "rowLabel": "label"
                                                     },
                                                     "slug": "cta",
@@ -32507,6 +33224,19 @@
                                                       "plural": "Ctas"
                                                     },
                                                     "fields": [
+                                                      {
+                                                        "id": "articles-localized-body-blocks-block-callout-detail-blocks-block-cta-block-name",
+                                                        "name": "blockName",
+                                                        "path": "localizedBody.blocks.block.callout.detail.blocks.block.cta.blockName",
+                                                        "type": "text",
+                                                        "category": "scalar",
+                                                        "required": false,
+                                                        "unique": false,
+                                                        "admin": {
+                                                          "label": "Block name"
+                                                        },
+                                                        "text": {}
+                                                      },
                                                       {
                                                         "id": "articles-localized-body-blocks-block-callout-detail-blocks-block-cta-label",
                                                         "name": "label",
@@ -32656,6 +33386,7 @@
                                 {
                                   "typeName": "CTA",
                                   "admin": {
+                                    "nameField": "blockName",
                                     "rowLabel": "label"
                                   },
                                   "slug": "cta",
@@ -32664,6 +33395,19 @@
                                     "plural": "Ctas"
                                   },
                                   "fields": [
+                                    {
+                                      "id": "articles-localized-body-blocks-block-cta-block-name",
+                                      "name": "blockName",
+                                      "path": "localizedBody.blocks.block.cta.blockName",
+                                      "type": "text",
+                                      "category": "scalar",
+                                      "required": false,
+                                      "unique": false,
+                                      "admin": {
+                                        "label": "Block name"
+                                      },
+                                      "text": {}
+                                    },
                                     {
                                       "id": "articles-localized-body-blocks-block-cta-label",
                                       "name": "label",
@@ -33386,6 +34130,7 @@
                           {
                             "typeName": "Callout",
                             "admin": {
+                              "nameField": "blockName",
                               "rowLabel": "title"
                             },
                             "slug": "callout",
@@ -33394,6 +34139,19 @@
                               "plural": "Callouts"
                             },
                             "fields": [
+                              {
+                                "id": "articles-body-blocks-block-callout-block-name",
+                                "name": "blockName",
+                                "path": "body.blocks.block.callout.blockName",
+                                "type": "text",
+                                "category": "scalar",
+                                "required": false,
+                                "unique": false,
+                                "admin": {
+                                  "label": "Block name"
+                                },
+                                "text": {}
+                              },
                               {
                                 "id": "articles-body-blocks-block-callout-title",
                                 "name": "title",
@@ -33452,6 +34210,7 @@
                                             {
                                               "typeName": "CTA",
                                               "admin": {
+                                                "nameField": "blockName",
                                                 "rowLabel": "label"
                                               },
                                               "slug": "cta",
@@ -33460,6 +34219,19 @@
                                                 "plural": "Ctas"
                                               },
                                               "fields": [
+                                                {
+                                                  "id": "articles-body-blocks-block-callout-detail-blocks-block-cta-block-name",
+                                                  "name": "blockName",
+                                                  "path": "body.blocks.block.callout.detail.blocks.block.cta.blockName",
+                                                  "type": "text",
+                                                  "category": "scalar",
+                                                  "required": false,
+                                                  "unique": false,
+                                                  "admin": {
+                                                    "label": "Block name"
+                                                  },
+                                                  "text": {}
+                                                },
                                                 {
                                                   "id": "articles-body-blocks-block-callout-detail-blocks-block-cta-label",
                                                   "name": "label",
@@ -33611,6 +34383,7 @@
                           {
                             "typeName": "CTA",
                             "admin": {
+                              "nameField": "blockName",
                               "rowLabel": "label"
                             },
                             "slug": "cta",
@@ -33619,6 +34392,19 @@
                               "plural": "Ctas"
                             },
                             "fields": [
+                              {
+                                "id": "articles-body-blocks-block-cta-block-name",
+                                "name": "blockName",
+                                "path": "body.blocks.block.cta.blockName",
+                                "type": "text",
+                                "category": "scalar",
+                                "required": false,
+                                "unique": false,
+                                "admin": {
+                                  "label": "Block name"
+                                },
+                                "text": {}
+                              },
                               {
                                 "id": "articles-body-blocks-block-cta-label",
                                 "name": "label",
@@ -34320,6 +35106,7 @@
                           {
                             "typeName": "Callout",
                             "admin": {
+                              "nameField": "blockName",
                               "rowLabel": "title"
                             },
                             "slug": "callout",
@@ -34328,6 +35115,19 @@
                               "plural": "Callouts"
                             },
                             "fields": [
+                              {
+                                "id": "articles-localized-body-blocks-block-callout-block-name",
+                                "name": "blockName",
+                                "path": "localizedBody.blocks.block.callout.blockName",
+                                "type": "text",
+                                "category": "scalar",
+                                "required": false,
+                                "unique": false,
+                                "admin": {
+                                  "label": "Block name"
+                                },
+                                "text": {}
+                              },
                               {
                                 "id": "articles-localized-body-blocks-block-callout-title",
                                 "name": "title",
@@ -34385,6 +35185,7 @@
                                             {
                                               "typeName": "CTA",
                                               "admin": {
+                                                "nameField": "blockName",
                                                 "rowLabel": "label"
                                               },
                                               "slug": "cta",
@@ -34393,6 +35194,19 @@
                                                 "plural": "Ctas"
                                               },
                                               "fields": [
+                                                {
+                                                  "id": "articles-localized-body-blocks-block-callout-detail-blocks-block-cta-block-name",
+                                                  "name": "blockName",
+                                                  "path": "localizedBody.blocks.block.callout.detail.blocks.block.cta.blockName",
+                                                  "type": "text",
+                                                  "category": "scalar",
+                                                  "required": false,
+                                                  "unique": false,
+                                                  "admin": {
+                                                    "label": "Block name"
+                                                  },
+                                                  "text": {}
+                                                },
                                                 {
                                                   "id": "articles-localized-body-blocks-block-callout-detail-blocks-block-cta-label",
                                                   "name": "label",
@@ -34542,6 +35356,7 @@
                           {
                             "typeName": "CTA",
                             "admin": {
+                              "nameField": "blockName",
                               "rowLabel": "label"
                             },
                             "slug": "cta",
@@ -34550,6 +35365,19 @@
                               "plural": "Ctas"
                             },
                             "fields": [
+                              {
+                                "id": "articles-localized-body-blocks-block-cta-block-name",
+                                "name": "blockName",
+                                "path": "localizedBody.blocks.block.cta.blockName",
+                                "type": "text",
+                                "category": "scalar",
+                                "required": false,
+                                "unique": false,
+                                "admin": {
+                                  "label": "Block name"
+                                },
+                                "text": {}
+                              },
                               {
                                 "id": "articles-localized-body-blocks-block-cta-label",
                                 "name": "label",
@@ -35263,6 +36091,7 @@
                           {
                             "typeName": "Callout",
                             "admin": {
+                              "nameField": "blockName",
                               "rowLabel": "title"
                             },
                             "slug": "callout",
@@ -35271,6 +36100,19 @@
                               "plural": "Callouts"
                             },
                             "fields": [
+                              {
+                                "id": "articles-body-blocks-block-callout-block-name",
+                                "name": "blockName",
+                                "path": "body.blocks.block.callout.blockName",
+                                "type": "text",
+                                "category": "scalar",
+                                "required": false,
+                                "unique": false,
+                                "admin": {
+                                  "label": "Block name"
+                                },
+                                "text": {}
+                              },
                               {
                                 "id": "articles-body-blocks-block-callout-title",
                                 "name": "title",
@@ -35329,6 +36171,7 @@
                                             {
                                               "typeName": "CTA",
                                               "admin": {
+                                                "nameField": "blockName",
                                                 "rowLabel": "label"
                                               },
                                               "slug": "cta",
@@ -35337,6 +36180,19 @@
                                                 "plural": "Ctas"
                                               },
                                               "fields": [
+                                                {
+                                                  "id": "articles-body-blocks-block-callout-detail-blocks-block-cta-block-name",
+                                                  "name": "blockName",
+                                                  "path": "body.blocks.block.callout.detail.blocks.block.cta.blockName",
+                                                  "type": "text",
+                                                  "category": "scalar",
+                                                  "required": false,
+                                                  "unique": false,
+                                                  "admin": {
+                                                    "label": "Block name"
+                                                  },
+                                                  "text": {}
+                                                },
                                                 {
                                                   "id": "articles-body-blocks-block-callout-detail-blocks-block-cta-label",
                                                   "name": "label",
@@ -35488,6 +36344,7 @@
                           {
                             "typeName": "CTA",
                             "admin": {
+                              "nameField": "blockName",
                               "rowLabel": "label"
                             },
                             "slug": "cta",
@@ -35496,6 +36353,19 @@
                               "plural": "Ctas"
                             },
                             "fields": [
+                              {
+                                "id": "articles-body-blocks-block-cta-block-name",
+                                "name": "blockName",
+                                "path": "body.blocks.block.cta.blockName",
+                                "type": "text",
+                                "category": "scalar",
+                                "required": false,
+                                "unique": false,
+                                "admin": {
+                                  "label": "Block name"
+                                },
+                                "text": {}
+                              },
                               {
                                 "id": "articles-body-blocks-block-cta-label",
                                 "name": "label",
@@ -36197,6 +37067,7 @@
                           {
                             "typeName": "Callout",
                             "admin": {
+                              "nameField": "blockName",
                               "rowLabel": "title"
                             },
                             "slug": "callout",
@@ -36205,6 +37076,19 @@
                               "plural": "Callouts"
                             },
                             "fields": [
+                              {
+                                "id": "articles-localized-body-blocks-block-callout-block-name",
+                                "name": "blockName",
+                                "path": "localizedBody.blocks.block.callout.blockName",
+                                "type": "text",
+                                "category": "scalar",
+                                "required": false,
+                                "unique": false,
+                                "admin": {
+                                  "label": "Block name"
+                                },
+                                "text": {}
+                              },
                               {
                                 "id": "articles-localized-body-blocks-block-callout-title",
                                 "name": "title",
@@ -36262,6 +37146,7 @@
                                             {
                                               "typeName": "CTA",
                                               "admin": {
+                                                "nameField": "blockName",
                                                 "rowLabel": "label"
                                               },
                                               "slug": "cta",
@@ -36270,6 +37155,19 @@
                                                 "plural": "Ctas"
                                               },
                                               "fields": [
+                                                {
+                                                  "id": "articles-localized-body-blocks-block-callout-detail-blocks-block-cta-block-name",
+                                                  "name": "blockName",
+                                                  "path": "localizedBody.blocks.block.callout.detail.blocks.block.cta.blockName",
+                                                  "type": "text",
+                                                  "category": "scalar",
+                                                  "required": false,
+                                                  "unique": false,
+                                                  "admin": {
+                                                    "label": "Block name"
+                                                  },
+                                                  "text": {}
+                                                },
                                                 {
                                                   "id": "articles-localized-body-blocks-block-callout-detail-blocks-block-cta-label",
                                                   "name": "label",
@@ -36419,6 +37317,7 @@
                           {
                             "typeName": "CTA",
                             "admin": {
+                              "nameField": "blockName",
                               "rowLabel": "label"
                             },
                             "slug": "cta",
@@ -36427,6 +37326,19 @@
                               "plural": "Ctas"
                             },
                             "fields": [
+                              {
+                                "id": "articles-localized-body-blocks-block-cta-block-name",
+                                "name": "blockName",
+                                "path": "localizedBody.blocks.block.cta.blockName",
+                                "type": "text",
+                                "category": "scalar",
+                                "required": false,
+                                "unique": false,
+                                "admin": {
+                                  "label": "Block name"
+                                },
+                                "text": {}
+                              },
                               {
                                 "id": "articles-localized-body-blocks-block-cta-label",
                                 "name": "label",

@@ -150,3 +150,18 @@ describe("relationship queries", () => {
 		).toEqual({ category: { equals: "" } });
 	});
 });
+
+test("relationship filters reject malformed boolean and numeric wire literals", () => {
+	for (const value of [
+		{ type: "boolean", value: "yes" },
+		{ type: "boolean", value: "FALSE" },
+		{ type: "number", value: "NaN" },
+		{ type: "number", value: "Infinity" },
+		{ type: "number", value: "" },
+	]) {
+		const field = {
+			relationship: { optionFilters: [{ targetPath: "published", value }] },
+		} as Parameters<typeof relationshipOptionFilters>[0];
+		expect(relationshipOptionFilters(field, {}, "posts")).toBeUndefined();
+	}
+});

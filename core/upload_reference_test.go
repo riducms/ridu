@@ -69,18 +69,18 @@ func TestUploadReferencesRequireReadableTargetsAcrossShapesAndMutations(t *testi
 		name    string
 		path    string
 		values  store.Values
-		options []ridu.LocaleOptions
+		options ridu.MutationOptions
 	}{
 		{name: "missing singular", path: "hero", values: store.Values{"hero": store.String("missing")}},
 		{name: "filtered has many", path: "gallery.1", values: store.Values{"gallery": store.List(store.String(visible.ID), store.String(hidden.ID))}},
 		{name: "nested group", path: "meta.asset", values: store.Values{"meta": store.Object(store.Values{"asset": store.String(hidden.ID)})}},
 		{name: "nested array", path: "sections.0.asset", values: store.Values{"sections": store.List(store.Object(store.Values{"asset": store.String(hidden.ID)}))}},
 		{name: "nested block", path: "content.0.asset", values: store.Values{"content": store.List(store.Object(store.Values{"blockType": store.String("image"), "asset": store.String(hidden.ID)}))}},
-		{name: "localized", path: "localizedHero.fr", values: store.Values{"localizedHero": store.String(hidden.ID)}, options: []ridu.LocaleOptions{{Locale: "fr"}}},
+		{name: "localized", path: "localizedHero.fr", values: store.Values{"localizedHero": store.String(hidden.ID)}, options: ridu.MutationOptions{Locale: "fr"}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if _, err := application.Local().Create(ctx, "entries", test.values, nil, test.options...); !uploadReferenceIssue(err, test.path) {
+			if _, err := application.Local().Create(ctx, "entries", test.values, test.options); !uploadReferenceIssue(err, test.path) {
 				t.Fatalf("upload reference error = %v", err)
 			}
 		})
@@ -93,72 +93,72 @@ func TestUploadReferencesRequireReadableTargetsAcrossShapesAndMutations(t *testi
 		"sections":      store.List(store.Object(store.Values{"asset": store.String(visible.ID)})),
 		"content":       store.List(store.Object(store.Values{"blockType": store.String("image"), "asset": store.String(visible.ID)})),
 		"localizedHero": store.String(visible.ID),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().PublishChanges(ctx, "entries", accepted.ID, store.Values{"hero": store.String(hidden.ID)}, accepted.Revision, nil); !uploadReferenceIssue(err, "hero") {
+	if _, err := application.Local().PublishChanges(ctx, "entries", accepted.ID, store.Values{"hero": store.String(hidden.ID)}, ridu.MutationOptions{ExpectedRevision: accepted.Revision}); !uploadReferenceIssue(err, "hero") {
 		t.Fatalf("filtered upload update error = %v", err)
 	}
-	if _, err := application.Local().PublishChanges(ctx, "entries", accepted.ID, store.Values{"localizedHero": store.String(hidden.ID)}, accepted.Revision, nil, ridu.LocaleOptions{Locale: "fr"}); !uploadReferenceIssue(err, "localizedHero.fr") {
+	if _, err := application.Local().PublishChanges(ctx, "entries", accepted.ID, store.Values{"localizedHero": store.String(hidden.ID)}, ridu.MutationOptions{ExpectedRevision: accepted.Revision, Locale: "fr"}); !uploadReferenceIssue(err, "localizedHero.fr") {
 		t.Fatalf("localized upload update error = %v", err)
 	}
 
 	// Duplicate carries every persisted locale, so a source that became
 	// unreadable after authoring must fail at its concrete locale path.
 	restrictUploads = false
-	source, err := application.Local().Create(ctx, "entries", store.Values{"localizedHero": store.String(visible.ID)}, nil)
+	source, err := application.Local().Create(ctx, "entries", store.Values{"localizedHero": store.String(visible.ID)}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	source, err = application.Local().PublishChanges(ctx, "entries", source.ID, store.Values{"localizedHero": store.String(hidden.ID)}, source.Revision, nil, ridu.LocaleOptions{Locale: "fr"})
+	source, err = application.Local().PublishChanges(ctx, "entries", source.ID, store.Values{"localizedHero": store.String(hidden.ID)}, ridu.MutationOptions{ExpectedRevision: source.Revision, Locale: "fr"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	restrictUploads = true
-	if _, err := application.Local().Duplicate(ctx, "entries", source.ID, nil, nil); !uploadReferenceIssue(err, "localizedHero.fr") {
+	if _, err := application.Local().Duplicate(ctx, "entries", source.ID, nil, ridu.MutationOptions{}); !uploadReferenceIssue(err, "localizedHero.fr") {
 		t.Fatalf("localized upload duplicate error = %v", err)
 	}
 
 	// Publish and unpublish validate the canonical document rather than only
 	// the locale projected into status hooks.
 	restrictUploads = false
-	statusDocument, err := application.Local().Create(ctx, "entries", store.Values{"localizedHero": store.String(visible.ID)}, nil)
+	statusDocument, err := application.Local().Create(ctx, "entries", store.Values{"localizedHero": store.String(visible.ID)}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	statusDocument, err = application.Local().PublishChanges(ctx, "entries", statusDocument.ID, store.Values{"localizedHero": store.String(hidden.ID)}, statusDocument.Revision, nil, ridu.LocaleOptions{Locale: "fr"})
+	statusDocument, err = application.Local().PublishChanges(ctx, "entries", statusDocument.ID, store.Values{"localizedHero": store.String(hidden.ID)}, ridu.MutationOptions{ExpectedRevision: statusDocument.Revision, Locale: "fr"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	restrictUploads = true
-	if _, err := application.Local().Publish(ctx, "entries", statusDocument.ID, statusDocument.Revision, nil); !uploadReferenceIssue(err, "localizedHero.fr") {
+	if _, err := application.Local().Publish(ctx, "entries", statusDocument.ID, ridu.MutationOptions{ExpectedRevision: statusDocument.Revision}); !uploadReferenceIssue(err, "localizedHero.fr") {
 		t.Fatalf("localized upload publish error = %v", err)
 	}
 	restrictUploads = false
-	statusDocument, err = application.Local().Publish(ctx, "entries", statusDocument.ID, statusDocument.Revision, nil)
+	statusDocument, err = application.Local().Publish(ctx, "entries", statusDocument.ID, ridu.MutationOptions{ExpectedRevision: statusDocument.Revision})
 	if err != nil {
 		t.Fatal(err)
 	}
 	restrictUploads = true
-	if _, err := application.Local().Unpublish(ctx, "entries", statusDocument.ID, statusDocument.Revision, nil); !uploadReferenceIssue(err, "localizedHero.fr") {
+	if _, err := application.Local().Unpublish(ctx, "entries", statusDocument.ID, ridu.MutationOptions{ExpectedRevision: statusDocument.Revision}); !uploadReferenceIssue(err, "localizedHero.fr") {
 		t.Fatalf("localized upload unpublish error = %v", err)
 	}
 
 	// Version restore routes its canonical snapshot through the same admission
 	// boundary before replacing the current document.
 	restrictUploads = false
-	restoreDocument, err := application.Local().Create(ctx, "entries", store.Values{"hero": store.String(hidden.ID)}, nil)
+	restoreDocument, err := application.Local().Create(ctx, "entries", store.Values{"hero": store.String(hidden.ID)}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	restoreRevision := restoreDocument.Revision
-	restoreDocument, err = application.Local().PublishChanges(ctx, "entries", restoreDocument.ID, store.Values{"hero": store.String(visible.ID)}, restoreDocument.Revision, nil)
+	restoreDocument, err = application.Local().PublishChanges(ctx, "entries", restoreDocument.ID, store.Values{"hero": store.String(visible.ID)}, ridu.MutationOptions{ExpectedRevision: restoreDocument.Revision})
 	if err != nil {
 		t.Fatal(err)
 	}
 	restrictUploads = true
-	if _, err := application.Local().Restore(ctx, "entries", restoreDocument.ID, restoreRevision, restoreDocument.Revision, nil); !uploadReferenceIssue(err, "hero") {
+	if _, err := application.Local().Restore(ctx, "entries", restoreDocument.ID, restoreRevision, ridu.MutationOptions{ExpectedRevision: restoreDocument.Revision}); !uploadReferenceIssue(err, "hero") {
 		t.Fatalf("upload restore error = %v", err)
 	}
 }
@@ -185,7 +185,7 @@ func TestAcceptedUploadReferencesRequestReferenceLocks(t *testing.T) {
 		t.Fatal(err)
 	}
 	backend.reset()
-	if _, err := application.Local().Create(ctx, "entries", store.Values{"hero": store.String(media.ID)}, nil); err != nil {
+	if _, err := application.Local().Create(ctx, "entries", store.Values{"hero": store.String(media.ID)}, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	requests := backend.requests()

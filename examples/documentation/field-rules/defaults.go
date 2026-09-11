@@ -11,8 +11,7 @@ var ArticleTitle = field.Text("title").
 	DefaultFrom(initialTitle)
 
 func initialTitle(
-	ctx operation.DefaultContext,
-) (operation.Value[string], error) {
+	ctx operation.Context) (operation.Value[string], error) {
 	// Locale is the content language, not the admin interface language.
 	if ctx.Locale == "fr" {
 		// Present supplies the value; nil means the callback succeeded.

@@ -292,25 +292,22 @@ func referenceOptionPredicate(reference documentReference, source store.Values) 
 	return &node, identity.String(), nil
 }
 
-func referenceLiteralQueryValue(value *schema.RelationshipFilterValue) (query.Value, string, bool) {
+func referenceLiteralQueryValue(value *schema.ScalarLiteral) (query.Value, string, bool) {
 	if value == nil {
 		return query.Value{}, "missing", false
 	}
+	decoded, err := value.Decode()
+	if err != nil {
+		return query.Value{}, "invalid-" + string(value.Type) + ":" + strconv.Quote(value.Value), false
+	}
 	switch value.Type {
 	case schema.ValueTypeString:
-		return query.String(value.Value), "string:" + strconv.Quote(value.Value), true
+		return decoded, "string:" + strconv.Quote(value.Value), true
 	case schema.ValueTypeNumber:
-		number, err := strconv.ParseFloat(value.Value, 64)
-		if err != nil {
-			return query.Value{}, "invalid-number:" + strconv.Quote(value.Value), false
-		}
-		return query.Number(number), "number:" + strconv.FormatFloat(number, 'g', -1, 64), true
+		number, _ := decoded.NumberValue()
+		return decoded, "number:" + strconv.FormatFloat(number, 'g', -1, 64), true
 	case schema.ValueTypeBoolean:
-		boolean, err := strconv.ParseBool(value.Value)
-		if err != nil {
-			return query.Value{}, "invalid-boolean:" + strconv.Quote(value.Value), false
-		}
-		return query.Boolean(boolean), "boolean:" + strconv.FormatBool(boolean), true
+		return decoded, "boolean:" + value.Value, true
 	default:
 		return query.Value{}, "invalid-type:" + string(value.Type), false
 	}

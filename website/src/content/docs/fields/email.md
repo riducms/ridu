@@ -40,7 +40,7 @@ The same validation runs when you save through the admin, REST, the SDK, or the 
 | `.Default(value)` / `.DefaultFrom(callback)`                    | Supplies an initial address for an omitted new field.                       |
 | `.Localized()`                                                  | Stores a separate address for each content locale when that is intentional. |
 | `.Validate(callback)` / `.LiveValidate(callback)`               | Adds application-specific save or live checks after format validation.      |
-| `.Admin(...)`, `.Access(...)`, `.Hooks(...)`, `.ReadHooks(...)` | Configures presentation, authorization, write hooks, and response hooks.    |
+| `.Admin(...)`, `.Access(...)`, `.Hooks(...)`, `.AfterRead(...)` | Configures presentation, authorization, write hooks, and response hooks.    |
 
 ## Require a unique address {#options}
 

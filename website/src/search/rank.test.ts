@@ -29,7 +29,7 @@ test('ranks exact qualified API symbols first', () => {
 		'RiduClient.list',
 		'TextField.EditAdmin',
 		'ChildrenDraft.EditBranchAt',
-		'operation.WriteContext'
+		'operation.Context'
 	]) {
 		const results = rankSearchCatalog(catalog, query);
 		expect(results.length, query).toBeGreaterThan(0);

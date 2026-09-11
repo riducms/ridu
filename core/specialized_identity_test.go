@@ -39,27 +39,27 @@ func TestVersionLocaleAndJoinHelpersPreserveExactActorCollection(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	category, err := application.Local().Create(ctx, "categories", store.Values{"name": store.String("News")}, nil)
+	category, err := application.Local().Create(ctx, "categories", store.Values{"name": store.String("News")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	post, err := application.Local().Create(ctx, "posts", store.Values{"title": store.String("English")}, nil)
+	post, err := application.Local().Create(ctx, "posts", store.Values{"title": store.String("English")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	actor := &store.Document{ID: "shared-actor"}
 	readOptions := ridu.FindOptions{Actor: actor, ActorCollection: "staff", Locale: "en"}
-	versions, err := application.Local().VersionsWithOptions(ctx, "posts", post.ID, readOptions)
+	versions, err := application.Local().Versions(ctx, "posts", post.ID, readOptions)
 	if err != nil || len(versions) != 1 {
 		t.Fatalf("versions = %#v, %v", versions, err)
 	}
-	if _, err := application.Local().Versions(ctx, "posts", post.ID, actor); !operationCode(err, "access_denied") {
+	if _, err := application.Local().Versions(ctx, "posts", post.ID, ridu.FindOptions{Actor: actor}); !operationCode(err, "access_denied") {
 		t.Fatalf("actor-only versions = %v, want blank collection denied", err)
 	}
-	if _, err := application.Local().VersionWithOptions(ctx, "posts", post.ID, 1, readOptions); err != nil {
+	if _, err := application.Local().Version(ctx, "posts", post.ID, 1, readOptions); err != nil {
 		t.Fatal(err)
 	}
-	copied, err := application.Local().CopyLocaleWithOptions(ctx, "posts", post.ID, "en", "fr", ridu.MutationOptions{
+	copied, err := application.Local().CopyLocale(ctx, "posts", post.ID, "en", "fr", ridu.MutationOptions{
 		Actor: actor, ActorCollection: "staff", ExpectedRevision: post.Revision,
 	})
 	if err != nil {
@@ -68,13 +68,13 @@ func TestVersionLocaleAndJoinHelpersPreserveExactActorCollection(t *testing.T) {
 	if title, _ := copied.Values["title"].StringValue(); title != "English" {
 		t.Fatalf("copied title = %q", title)
 	}
-	restored, err := application.Local().RestoreVersionWithOptions(ctx, "posts", post.ID, 1, false, ridu.MutationOptions{
+	restored, err := application.Local().Restore(ctx, "posts", post.ID, 1, ridu.MutationOptions{
 		Actor: actor, ActorCollection: "staff", ExpectedRevision: copied.Revision,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	joined, err := application.Local().MutateJoinWithOptions(ctx, "categories", category.ID, "posts", []string{post.ID}, nil, ridu.MutationOptions{
+	joined, err := application.Local().MutateJoin(ctx, "categories", category.ID, "posts", []string{post.ID}, nil, ridu.MutationOptions{
 		Actor: actor, ActorCollection: "staff", Locale: schema.LocaleCode("en"),
 	})
 	if err != nil {

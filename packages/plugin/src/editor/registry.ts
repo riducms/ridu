@@ -1,7 +1,5 @@
-import { bindSchemaManifest } from "@riducms/protocol";
-import { resolveBlockTypes } from "@riducms/protocol";
 import type { Component } from "svelte";
-import type { SchemaField, SchemaManifest } from "@riducms/protocol";
+import type { SchemaField } from "@riducms/protocol";
 
 import type { FieldEditorProps, FieldEditorType } from "./types";
 import { decodeComponentConfig } from "../component-config";
@@ -134,41 +132,19 @@ export function validateFieldEditorRegistrations(config: FieldEditorConfig): voi
 	}
 }
 
-/** Uses the same executable registrations and decoders in the browser and build checks. */
-export function validateAdminEditors(
-	config: FieldEditorConfig,
-	manifest: Pick<SchemaManifest, "collections" | "globals" | "blocks">
+/** Check one local selection using the same decoder as the mounted editor. */
+export function validateFieldEditorSelection(
+	editors: NonNullable<FieldEditorConfig["fields"]>,
+	field: SchemaField
 ): void {
-	validateFieldEditorRegistrations(config);
-	const failures: string[] = [];
-	bindSchemaManifest(manifest);
-	const inspect = (fields: readonly SchemaField[], owner: string) => {
-		for (const field of fields) {
-			const reference = field.admin.editor?.reference;
-			if (reference !== undefined) {
-				const editor = config.fields?.[reference as `app:${string}`];
-				try {
-					if (!localEditorReference.test(reference))
-						throw new Error(`Malformed editor reference ${reference}; expected app:name.`);
-					if (editor === undefined)
-						throw new Error(
-							`Editor ${reference} is not registered. Register it in admin/src/admin.config.ts or change the field component in Go.`
-						);
-					editor.decode(field);
-				} catch (error) {
-					failures.push(
-						`${owner}.${field.path}: ${error instanceof Error ? error.message : String(error)}`
-					);
-				}
-			}
-			for (const tree of field.plugin?.embeddedTrees ?? [])
-				for (const item of tree.cases)
-					for (const variant of resolveBlockTypes(item)) inspect(variant.fields, owner);
-			if (field.nested !== undefined) inspect(field.nested.fields, owner);
-			for (const block of resolveBlockTypes(field.blocks) ?? []) inspect(block.fields, owner);
-		}
-	};
-	for (const collection of manifest.collections) inspect(collection.fields, collection.slug);
-	for (const global of manifest.globals ?? []) inspect(global.fields, global.slug);
-	if (failures.length !== 0) throw new Error(failures.join("\n"));
+	const reference = field.admin.editor?.reference;
+	if (reference === undefined) return;
+	if (!localEditorReference.test(reference))
+		throw new Error(`Malformed editor reference ${reference}; expected app:name.`);
+	const editor = editors[reference as `app:${string}`];
+	if (editor === undefined)
+		throw new Error(
+			`Editor ${reference} is not registered. Register it in admin/src/admin.config.ts or change the field component in Go.`
+		);
+	editor.decode(field);
 }

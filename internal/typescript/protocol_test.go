@@ -33,6 +33,7 @@ func TestProtocolTypeScriptIsCurrent(t *testing.T) {
 		"tabTranslations?: Record<string, string>",
 		"rowLabels?: SchemaArrayRowLabels",
 		"rowLabelComponent?: SchemaFieldAdminComponent",
+		"admin?: { nameField?: string; rowLabel?: string }",
 		"slug?: SchemaSlugField",
 		"sourcePath: string",
 	} {

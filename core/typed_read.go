@@ -96,7 +96,7 @@ type TypedListOptions struct {
 
 // Find reads with the locale shape chosen by the generated definition.
 func (collection BoundTypedAllLocalesCollection[Document]) Find(ctx context.Context, id string, options TypedReadOptions) (Document, error) {
-	document, err := collection.local.FindWithOptions(ctx, collection.definition.slug, id, options.findOptions(true))
+	document, err := collection.local.Find(ctx, collection.definition.slug, id, options.findOptions(true))
 	return decodeTypedDocument[Document](document, err)
 }
 
@@ -149,7 +149,7 @@ type BoundTypedAllLocalesGlobal[Document any] struct {
 
 // Find reads the global with all translations and optional population/projection.
 func (global BoundTypedAllLocalesGlobal[Document]) Find(ctx context.Context, options TypedReadOptions) (Document, error) {
-	document, err := global.local.GlobalWithOptions(ctx, global.definition.slug, options.findOptions(true))
+	document, err := global.local.Global(ctx, global.definition.slug, options.findOptions(true))
 	return decodeTypedDocument[Document](document, err)
 }
 

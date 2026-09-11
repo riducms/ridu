@@ -2,6 +2,7 @@ import type { Decorator } from "@hvniel/lexical-svelte";
 import {
 	$applyNodeReplacement,
 	$getDocument,
+	$getNodeByKey,
 	DecoratorNode,
 	type LexicalNode,
 	type NodeKey,
@@ -81,4 +82,24 @@ export function createBlockNode(fields: Record<string, unknown>): BlockNode {
 }
 export function isBlockNode(node: LexicalNode | null | undefined): node is BlockNode {
 	return node instanceof BlockNode;
+}
+
+export interface BlockNameUpdate {
+	nodeKey: NodeKey;
+	identity: string;
+	nameField: string;
+	change: { field: string; value: string };
+}
+
+// @lexical-scope
+export function updateBlockName(update: BlockNameUpdate): boolean {
+	const node = $getNodeByKey(update.nodeKey);
+	if (
+		!isBlockNode(node) ||
+		node.getFields()._key !== update.identity ||
+		update.change.field !== update.nameField
+	)
+		return false;
+	node.setFields({ ...node.getFields(), [update.nameField]: update.change.value });
+	return true;
 }

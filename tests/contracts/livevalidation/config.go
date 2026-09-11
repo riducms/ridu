@@ -72,7 +72,7 @@ func Collection() core.Collection {
 		SupplierCodes("supplierCodes"),
 		PackSizes("packSizes"),
 	}).
-		Validate(func(_ operation.ValidationContext, value operation.Value[store.Value]) ([]operation.Issue, error) {
+		Validate(func(_ operation.Context, value operation.Value[store.Value]) ([]operation.Issue, error) {
 			return linkIssues(operation.At(), value), nil
 		}).
 		LiveValidate(func(_ operation.LiveValidationContext, value operation.Value[store.Value]) ([]operation.Issue, error) {
@@ -104,14 +104,14 @@ func Collection() core.Collection {
 		},
 	}
 	sections := field.Array("sections", children).
-		Validate(func(_ operation.ValidationContext, value operation.Value[store.Value]) ([]operation.Issue, error) {
+		Validate(func(_ operation.Context, value operation.Value[store.Value]) ([]operation.Issue, error) {
 			return rowIssues(value, false), nil
 		}).
 		LiveValidate(func(_ operation.LiveValidationContext, value operation.Value[store.Value]) ([]operation.Issue, error) {
 			return rowIssues(value, false), nil
 		})
 	content := field.Blocks("content", card, note).
-		Validate(func(_ operation.ValidationContext, value operation.Value[store.Value]) ([]operation.Issue, error) {
+		Validate(func(_ operation.Context, value operation.Value[store.Value]) ([]operation.Issue, error) {
 			return rowIssues(value, true), nil
 		}).
 		LiveValidate(func(_ operation.LiveValidationContext, value operation.Value[store.Value]) ([]operation.Issue, error) {
@@ -169,7 +169,7 @@ func Confirmation(name string) field.CheckboxField {
 	}
 	return field.Checkbox(name).Label("Confirmed").Default(true).
 		Admin(field.Admin{Description: "Confirms that this document is ready for review."}).
-		Validate(func(_ operation.ValidationContext, value operation.Value[bool]) ([]operation.Issue, error) {
+		Validate(func(_ operation.Context, value operation.Value[bool]) ([]operation.Issue, error) {
 			return validate(value), nil
 		}).
 		LiveValidate(func(_ operation.LiveValidationContext, value operation.Value[bool]) ([]operation.Issue, error) {
@@ -180,7 +180,7 @@ func Confirmation(name string) field.CheckboxField {
 // SKU keeps the read-only business rule independent from either callback phase.
 func SKU(name string) field.TextField {
 	return field.Text(name).Label("SKU").
-		Validate(func(ctx operation.ValidationContext, value operation.Value[string]) ([]operation.Issue, error) {
+		Validate(func(ctx operation.Context, value operation.Value[string]) ([]operation.Issue, error) {
 			return CheckSKU(ctx.Siblings, value)
 		}).
 		LiveValidate(func(ctx operation.LiveValidationContext, value operation.Value[string]) ([]operation.Issue, error) {
@@ -213,7 +213,7 @@ func CheckSKU(siblings operation.View, value operation.Value[string]) ([]operati
 // Positional messages describe the current snapshot; no primitive item has an ID.
 func SupplierCodes(name string) field.TextListField {
 	return field.TextList(name).Label("Supplier codes").
-		Validate(func(ctx operation.ValidationContext, value operation.Value[[]string]) ([]operation.Issue, error) {
+		Validate(func(ctx operation.Context, value operation.Value[[]string]) ([]operation.Issue, error) {
 			return checkSupplierCodes(ctx.Siblings, value), nil
 		}).
 		LiveValidate(func(ctx operation.LiveValidationContext, value operation.Value[[]string]) ([]operation.Issue, error) {
@@ -242,7 +242,7 @@ func checkSupplierCodes(siblings operation.View, value operation.Value[[]string]
 // PackSizes demonstrates typed numbers and a sibling-dependent server rule.
 func PackSizes(name string) field.NumberListField {
 	return field.NumberList(name).Label("Pack sizes").
-		Validate(func(ctx operation.ValidationContext, value operation.Value[[]float64]) ([]operation.Issue, error) {
+		Validate(func(ctx operation.Context, value operation.Value[[]float64]) ([]operation.Issue, error) {
 			return checkPackSizes(ctx.Siblings, value), nil
 		}).
 		LiveValidate(func(ctx operation.LiveValidationContext, value operation.Value[[]float64]) ([]operation.Issue, error) {

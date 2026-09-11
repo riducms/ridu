@@ -66,7 +66,7 @@ func TestPostgresCredentialHashFencesLoginUpgradeAndAPIKeyCreation(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	user, err := application.Local().Create(ctx, "users", store.Values{"email": store.String("fence@example.test")}, nil)
+	user, err := application.Local().Create(ctx, "users", store.Values{"email": store.String("fence@example.test")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -160,7 +160,7 @@ func TestPostgresCredentialHashFenceSurvivesHardDeleteAndSameIDRecreation(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	user, err := base.Local().Create(ctx, "users", store.Values{"email": store.String("recreated@example.test")}, nil)
+	user, err := base.Local().Create(ctx, "users", store.Values{"email": store.String("recreated@example.test")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -207,10 +207,10 @@ func TestPostgresCredentialHashFenceSurvivesHardDeleteAndSameIDRecreation(t *tes
 	case <-time.After(5 * time.Second):
 		t.Fatal("PostgreSQL stale login did not reach the verified-password barrier")
 	}
-	if _, err := base.Local().Delete(ctx, "users", user.ID, nil); err != nil {
+	if _, err := base.Local().Delete(ctx, "users", user.ID, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := base.Local().Import(ctx, "users", store.Values{"email": store.String("recreated@example.test")}, riducore.ImportOptions{ID: user.ID}, nil); err != nil {
+	if _, err := base.Local().Import(ctx, "users", store.Values{"email": store.String("recreated@example.test")}, riducore.ImportOptions{ID: user.ID}); err != nil {
 		t.Fatal(err)
 	}
 	if err := base.SetPassword(ctx, "users", user.ID, "correct-horse"); err != nil {
@@ -247,10 +247,10 @@ func TestPostgresCredentialHashFenceSurvivesHardDeleteAndSameIDRecreation(t *tes
 	case <-time.After(5 * time.Second):
 		t.Fatal("PostgreSQL stale password change did not reach the verified-password barrier")
 	}
-	if _, err := base.Local().Delete(ctx, "users", user.ID, nil); err != nil {
+	if _, err := base.Local().Delete(ctx, "users", user.ID, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := base.Local().Import(ctx, "users", store.Values{"email": store.String("recreated@example.test")}, riducore.ImportOptions{ID: user.ID}, nil); err != nil {
+	if _, err := base.Local().Import(ctx, "users", store.Values{"email": store.String("recreated@example.test")}, riducore.ImportOptions{ID: user.ID}); err != nil {
 		t.Fatal(err)
 	}
 	if err := base.SetPassword(ctx, "users", user.ID, "correct-horse"); err != nil {
@@ -302,7 +302,7 @@ func TestPostgresAnonymousFirstAuthUserBootstrapHasOneWinner(t *testing.T) {
 	for _, email := range []string{"first@example.test", "second@example.test"} {
 		email := email
 		go func() {
-			document, err := application.CreateAuthUserForTransport(ctx, "users", store.Values{"email": store.String(email)}, "correct-horse", nil)
+			document, err := application.CreateAuthUserForTransport(ctx, "users", store.Values{"email": store.String(email)}, "correct-horse", ridu.MutationOptions{})
 			results <- result{document: document, err: err}
 		}()
 	}

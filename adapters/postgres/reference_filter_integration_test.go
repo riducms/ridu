@@ -39,19 +39,19 @@ func TestPostgresReferenceOptionFiltersAreAtomicWithTargetReadAccess(t *testing.
 	const matchingLabel = "Ångström Alpha_100% Café 東京"
 	matching, err := application.Local().Create(ctx, "people", store.Values{
 		"label": store.String(matchingLabel), "score": store.Number(10), "visible": store.Boolean(true),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	wildcardTrap, err := application.Local().Create(ctx, "people", store.Values{
 		"label": store.String("Ångström AlphaX100Z Café 東京"), "score": store.Number(10), "visible": store.Boolean(true),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	hidden, err := application.Local().Create(ctx, "people", store.Values{
 		"label": store.String(matchingLabel), "score": store.Number(10), "visible": store.Boolean(false),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +66,7 @@ func TestPostgresReferenceOptionFiltersAreAtomicWithTargetReadAccess(t *testing.
 		"lessThanRef": store.String(matching.ID), "lessThanEqualRef": store.String(matching.ID),
 		"orderedTextRef": store.String(matching.ID),
 	}
-	entry, err := application.Local().Create(ctx, "entries", base, nil)
+	entry, err := application.Local().Create(ctx, "entries", base, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatalf("valid PostgreSQL option-filter operators: %v", err)
 	}
@@ -88,7 +88,7 @@ func TestPostgresReferenceOptionFiltersAreAtomicWithTargetReadAccess(t *testing.
 		{name: "ordered Unicode text", field: "lexicalThreshold", value: store.String("🧭"), refPath: "orderedTextRef"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			if _, err := application.Local().Update(ctx, "entries", entry.ID, store.Values{test.field: test.value}, nil); !hasRelationshipIssue(err, test.refPath) {
+			if _, err := application.Local().Update(ctx, "entries", entry.ID, store.Values{test.field: test.value}, ridu.MutationOptions{}); !hasRelationshipIssue(err, test.refPath) {
 				t.Fatalf("PostgreSQL %s-filtered source-only update error = %v", test.name, err)
 			}
 		})
@@ -99,7 +99,7 @@ func TestPostgresReferenceOptionFiltersAreAtomicWithTargetReadAccess(t *testing.
 	// trap must stay unavailable even though the rest of the text is similar.
 	if _, err := application.Local().Create(ctx, "entries", store.Values{
 		"likeNeedle": store.String("ALPHA_100% 東京"), "likeRef": store.String(wildcardTrap.ID),
-	}, nil); !hasRelationshipIssue(err, "likeRef") {
+	}, ridu.MutationOptions{}); !hasRelationshipIssue(err, "likeRef") {
 		t.Fatalf("PostgreSQL like wildcard escaping error = %v", err)
 	}
 
@@ -107,7 +107,7 @@ func TestPostgresReferenceOptionFiltersAreAtomicWithTargetReadAccess(t *testing.
 	// indistinguishable from a target rejected by an option filter.
 	if _, err := application.Local().Create(ctx, "entries", store.Values{
 		"exactLabel": store.String(matchingLabel), "equalsRef": store.String(hidden.ID),
-	}, nil); !hasRelationshipIssue(err, "equalsRef") {
+	}, ridu.MutationOptions{}); !hasRelationshipIssue(err, "equalsRef") {
 		t.Fatalf("PostgreSQL read-filtered relationship error = %v", err)
 	}
 }

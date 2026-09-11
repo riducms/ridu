@@ -141,7 +141,7 @@ func Assess(manifest schema.Manifest, source Export) Assessment {
 }
 
 type Target interface {
-	Import(context.Context, string, store.Values, ridu.ImportOptions, *store.Document) (store.Document, error)
+	Import(context.Context, string, store.Values, ridu.ImportOptions) (store.Document, error)
 }
 
 type Result struct {
@@ -181,7 +181,7 @@ func Import(ctx context.Context, target Target, source Export, actor *store.Docu
 				return result, fmt.Errorf("decode %s/%s: %w", collection.Slug, record.ID, err)
 			}
 			canonicalID := record.ID.String()
-			document, err := target.Import(ctx, collection.Slug, values, ridu.ImportOptions{ID: canonicalID, Status: chosen.Status, CreatedAt: chosen.CreatedAt, UpdatedAt: chosen.UpdatedAt}, actor)
+			document, err := target.Import(ctx, collection.Slug, values, ridu.ImportOptions{ID: canonicalID, Status: chosen.Status, CreatedAt: chosen.CreatedAt, UpdatedAt: chosen.UpdatedAt, Actor: actor})
 			if err != nil {
 				return result, fmt.Errorf("import %s/%s: %w", collection.Slug, record.ID, err)
 			}

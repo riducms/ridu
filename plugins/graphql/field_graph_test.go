@@ -23,13 +23,13 @@ func TestUnifiedGraphQLContractsAndOccurrenceRuntime(t *testing.T) {
 }
 
 func testUnifiedGraphQLContractsAndOccurrenceRuntime(t *testing.T, references bool) {
-	deny := func(operation.AccessContext) (bool, error) { return false, nil }
+	deny := func(operation.Context) (bool, error) { return false, nil }
 	sku := field.Text("sku").Required().Hooks(field.Hooks[string]{BeforeChange: []field.Transform[string]{
-		func(_ operation.WriteContext, value operation.Value[string]) (operation.Change[string], error) {
+		func(_ operation.Context, value operation.Value[string]) (operation.Change[string], error) {
 			text, _ := value.Get()
 			return operation.Replace(operation.Present(strings.ToUpper(text))), nil
 		},
-	}}).Validate(func(_ operation.ValidationContext, value operation.Value[string]) ([]operation.Issue, error) {
+	}}).Validate(func(_ operation.Context, value operation.Value[string]) ([]operation.Issue, error) {
 		if text, _ := value.Get(); text == "INVALID" {
 			return []operation.Issue{{Code: "invalid_sku", Message: "SKU is unavailable"}}, nil
 		}
@@ -94,7 +94,7 @@ func testUnifiedGraphQLContractsAndOccurrenceRuntime(t *testing.T, references bo
 	}
 	server := httptest.NewServer(application.Handler(ridu.HandlerOptions{}))
 	defer server.Close()
-	user, err := application.Local().Create(context.Background(), "users", store.Values{"name": store.String("Ada"), "privateNote": store.String("private")}, nil)
+	user, err := application.Local().Create(context.Background(), "users", store.Values{"name": store.String("Ada"), "privateNote": store.String("private")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,7 +113,7 @@ func testUnifiedGraphQLContractsAndOccurrenceRuntime(t *testing.T, references bo
 	if row := rows[0].(map[string]interface{}); row["_key"] != "B" || row["sku"] != "SECOND" || row["note"] != "retained B" {
 		t.Fatalf("GraphQL reorder lost identity or attached hook: %#v", rows)
 	}
-	local, err := application.Local().Find(context.Background(), "posts", id, nil)
+	local, err := application.Local().Find(context.Background(), "posts", id, ridu.FindOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

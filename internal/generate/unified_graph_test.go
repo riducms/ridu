@@ -37,7 +37,7 @@ func TestUnifiedGraphGenerationExpectedContractAndDeterminism(t *testing.T) {
 			field.Array("sections", field.Fields{field.Text("label").Required(), field.Text("translation").Localized()}),
 			field.Blocks("content", field.Block{Slug: "hero", TypeName: "Hero", Fields: field.Fields{field.Text("heading").Required()}}),
 			field.Relationship("author", "users"), field.Relationships("reviewers", "users"), field.Upload("image", "media"), field.Text("localized").Localized(),
-			field.Virtual("summary", field.ValueString, func(operation.ReadContext) (operation.Value[store.Value], error) {
+			field.Virtual("summary", field.ValueString, func(operation.Context) (operation.Value[store.Value], error) {
 				return operation.Present(store.String("summary")), nil
 			}),
 		}
@@ -123,9 +123,9 @@ func TestUnifiedGraphGenerationExpectedContractAndDeterminism(t *testing.T) {
 
 func TestUnifiedGraphManifestAndQueryProjectionExcludePrivateRuntimeIdentity(t *testing.T) {
 	resolve := func(secret string) schema.Manifest {
-		read := func(operation.AccessContext) (bool, error) { panic(secret) }
+		read := func(operation.Context) (bool, error) { panic(secret) }
 		node := field.Text("sku").Required().Admin(field.Admin{Extensions: map[string]store.Value{"catalog": store.Object(store.Values{"public": store.Boolean(true)})}}).Private("application.secret", store.String(secret)).
-			Access(field.Access{Read: read}).Validate(func(operation.ValidationContext, operation.Value[string]) ([]operation.Issue, error) { panic(secret) })
+			Access(field.Access{Read: read}).Validate(func(operation.Context, operation.Value[string]) ([]operation.Issue, error) { panic(secret) })
 		result, err := core.Resolve(core.Config{Name: "Private graph", Collections: []core.Collection{{Slug: "pages", Fields: field.Fields{
 			node, field.Group("meta", field.Fields{node}),
 			field.Array("sections", field.Fields{node, field.Text("visible")}),

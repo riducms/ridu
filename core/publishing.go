@@ -41,7 +41,7 @@ func (application *App) SchedulePublish(ctx context.Context, collection, documen
 	if !capabilities.Operations.Publish {
 		return store.ScheduledPublish{}, &operationengine.Error{Code: "access_denied", Status: 403, Message: "operation is not permitted"}
 	}
-	document, err := application.local.FindWithOptions(ctx, collection, documentID, FindOptions{Actor: actor, ActorCollection: actorCollection})
+	document, err := application.local.Find(ctx, collection, documentID, FindOptions{Actor: actor, ActorCollection: actorCollection})
 	if err != nil {
 		return store.ScheduledPublish{}, err
 	}
@@ -73,7 +73,7 @@ func (application *App) scheduledPublishes(ctx context.Context, collection, docu
 	if application.tasks == nil {
 		return nil, &operationengine.Error{Code: "store_failed", Status: 500, Message: "store does not support scheduled publishing"}
 	}
-	if _, err := application.local.FindWithOptions(ctx, collection, documentID, FindOptions{Actor: actor, ActorCollection: actorCollection}); err != nil {
+	if _, err := application.local.Find(ctx, collection, documentID, FindOptions{Actor: actor, ActorCollection: actorCollection}); err != nil {
 		return nil, err
 	}
 	target := store.DocumentReference{CollectionID: resolved.ID, DocumentID: documentID}
@@ -177,7 +177,7 @@ func scheduledPublishTaskRuntime(application *App) taskRuntime {
 			actor = &resolvedActor
 			actorCollection = authCollection.Slug
 		}
-		if _, err := application.local.PublishWithOptions(task.Context, string(collection.Slug), input.DocumentID, MutationOptions{Actor: actor, ActorCollection: actorCollection, ExpectedRevision: input.ExpectedRevision}); err != nil {
+		if _, err := application.local.Publish(task.Context, string(collection.Slug), input.DocumentID, MutationOptions{Actor: actor, ActorCollection: actorCollection, ExpectedRevision: input.ExpectedRevision}); err != nil {
 			var operationError *operationengine.Error
 			if errors.As(err, &operationError) && operationError.Status < 500 {
 				return struct{}{}, AbortTask("scheduled_publish_rejected", err)

@@ -93,3 +93,10 @@ func TestInitialArtifactRoundTripsWithoutPredecessor(t *testing.T) {
 		t.Fatalf("initial artifact digest changed through codec: %s != %s", got, want)
 	}
 }
+
+func TestRetiredPluginSQLStepCannotEnterExecution(t *testing.T) {
+	err := validateStepPayload(PhaseTransaction, Step{Kind: "plugin_sql", ExecutorVersion: 1, Payload: json.RawMessage(`{"sql":["DROP TABLE posts"]}`)})
+	if err == nil || !strings.Contains(err.Error(), `unknown kind "plugin_sql"`) {
+		t.Fatalf("retired SQL step accepted: %v", err)
+	}
+}

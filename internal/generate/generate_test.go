@@ -779,7 +779,7 @@ func TestAdminPluginRegistryUsesValidatedManifestMetadata(t *testing.T) {
 	})
 	registry := string(adminPluginRegistry(manifest))
 	for _, expected := range []string{
-		`import { resolveAdminPluginPairs, type PluginFieldRegistration } from "@riducms/plugin";`,
+		`import { assertAdminPluginPairs, type PluginFieldRegistration } from "@riducms/plugin";`,
 		`import { colorAdminPlugin as riduAdminPlugin0 } from "@example/color-admin";`,
 		`key: "color"`,
 		`apiVersion: 1`,
@@ -787,7 +787,7 @@ func TestAdminPluginRegistryUsesValidatedManifestMetadata(t *testing.T) {
 		`fieldTypes: ["swatch"]`,
 		`pairingVersion: 7`,
 		`import "@example/color-admin/styles.css";`,
-		`generatedAdminPlugins = resolvedAdminPluginPairs.plugins`,
+		`generatedAdminPlugins = [riduAdminPlugin0] as const`,
 	} {
 		if !strings.Contains(registry, expected) {
 			t.Fatalf("generated registry missing %q:\n%s", expected, registry)

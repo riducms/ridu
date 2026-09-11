@@ -21,9 +21,7 @@ func TestRecursivePopulationTraversesNestedShapesWithAccessDepthAndRedaction(t *
 	publicPath, _ := query.NewPath("public")
 	application, err := ridu.New(ridu.Config{Name: "Recursive population", Collections: []ridu.Collection{
 		{
-			Slug: "people", Fields: field.Fields{field.Text("name").Required(), field.Checkbox("public").Required(), field.Text("secret").Access(field.Access{Read: func(operation.AccessContext,
-
-			) (bool, error) {
+			Slug: "people", Fields: field.Fields{field.Text("name").Required(), field.Checkbox("public").Required(), field.Text("secret").Access(field.Access{Read: func(operation.Context) (bool, error) {
 				return false, nil
 			}})},
 			Access: ridu.CollectionAccess{Read: func(ridu.AccessContext) (ridu.AccessDecision, error) {
@@ -39,19 +37,19 @@ func TestRecursivePopulationTraversesNestedShapesWithAccessDepthAndRedaction(t *
 
 	visible, err := application.Local().Create(ctx, "people", store.Values{
 		"name": store.String("Visible"), "public": store.Boolean(true), "secret": store.String("nested-secret"),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	laterHidden, err := application.Local().Create(ctx, "people", store.Values{
 		"name": store.String("Later hidden"), "public": store.Boolean(true), "secret": store.String("hidden-secret"),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	team, err := application.Local().Create(ctx, "teams", store.Values{
 		"name": store.String("Core"), "owner": store.String(visible.ID),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,18 +62,18 @@ func TestRecursivePopulationTraversesNestedShapesWithAccessDepthAndRedaction(t *
 		"layout": store.List(store.Object(store.Values{
 			"_key": store.String("quote-one"), "blockType": store.String("quote"), "source": store.String(team.ID),
 		})),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Update(ctx, "people", laterHidden.ID, store.Values{"public": store.Boolean(false)}, nil); err != nil {
+	if _, err := application.Local().Update(ctx, "people", laterHidden.ID, store.Values{"public": store.Boolean(false)}, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
 
 	metaReviewer, _ := query.NewPath("meta", "reviewer")
 	sectionReviewer, _ := query.NewPath("sections", "reviewer")
 	blockSource, _ := query.NewPath("layout", "quote", "source")
-	result, err := application.Local().FindWithOptions(ctx, "entries", entry.ID, ridu.FindOptions{Populate: []query.Population{
+	result, err := application.Local().Find(ctx, "entries", entry.ID, ridu.FindOptions{Populate: []query.Population{
 		{Path: metaReviewer}, {Path: sectionReviewer}, {Path: blockSource, Depth: 2},
 	}})
 	if err != nil {
@@ -146,17 +144,17 @@ func TestAnonymousPopulationDoesNotExposeDraftTargetsFromPublicSources(t *testin
 	}
 	staff := store.Document{ID: "staff-1"}
 	draftMode := true
-	draft, err := application.Local().CreateWithOptions(ctx, "lessons", store.Values{"title": store.String("Draft lesson")}, ridu.MutationOptions{Actor: &staff, Draft: &draftMode})
+	draft, err := application.Local().Create(ctx, "lessons", store.Values{"title": store.String("Draft lesson")}, ridu.MutationOptions{Actor: &staff, Draft: &draftMode})
 	if err != nil {
 		t.Fatal(err)
 	}
-	link, err := application.Local().Create(ctx, "links", store.Values{"lesson": store.String(draft.ID)}, &staff)
+	link, err := application.Local().Create(ctx, "links", store.Values{"lesson": store.String(draft.ID)}, ridu.MutationOptions{Actor: &staff})
 	if err != nil {
 		t.Fatal(err)
 	}
 	lessonPath, _ := query.NewPath("lesson")
 
-	anonymous, err := application.Local().FindWithOptions(ctx, "links", link.ID, ridu.FindOptions{Populate: []query.Population{{Path: lessonPath}}})
+	anonymous, err := application.Local().Find(ctx, "links", link.ID, ridu.FindOptions{Populate: []query.Population{{Path: lessonPath}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -167,7 +165,7 @@ func TestAnonymousPopulationDoesNotExposeDraftTargetsFromPublicSources(t *testin
 		t.Fatalf("anonymous population changed unresolved relationship = %q, want %q", lessonID, draft.ID)
 	}
 	anonymousDraftMode := true
-	anonymousDraft, err := application.Local().FindWithOptions(ctx, "links", link.ID, ridu.FindOptions{
+	anonymousDraft, err := application.Local().Find(ctx, "links", link.ID, ridu.FindOptions{
 		Draft: &anonymousDraftMode, Populate: []query.Population{{Path: lessonPath}},
 	})
 	if err != nil {
@@ -177,7 +175,7 @@ func TestAnonymousPopulationDoesNotExposeDraftTargetsFromPublicSources(t *testin
 		t.Fatalf("anonymous draft override exposed draft target: %#v", anonymousDraft.Values["lesson"])
 	}
 
-	staffView, err := application.Local().FindWithOptions(ctx, "links", link.ID, ridu.FindOptions{Actor: &staff, Populate: []query.Population{{Path: lessonPath}}})
+	staffView, err := application.Local().Find(ctx, "links", link.ID, ridu.FindOptions{Actor: &staff, Populate: []query.Population{{Path: lessonPath}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -195,25 +193,25 @@ func TestTrashMutationsPopulateTheirReturnedDocuments(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	person, err := application.Local().Create(ctx, "people", store.Values{"name": store.String("Ada")}, nil)
+	person, err := application.Local().Create(ctx, "people", store.Values{"name": store.String("Ada")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	entry, err := application.Local().Create(ctx, "entries", store.Values{"author": store.String(person.ID)}, nil)
+	entry, err := application.Local().Create(ctx, "entries", store.Values{"author": store.String(person.ID)}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	authorPath, _ := query.NewPath("author")
 	options := ridu.MutationOptions{Populate: []query.Population{{Path: authorPath}}}
 
-	deleted, err := application.Local().DeleteWithOptions(ctx, "entries", entry.ID, options)
+	deleted, err := application.Local().Delete(ctx, "entries", entry.ID, options)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if author, populated := deleted.Values["author"].CopyDocument(); !populated || author.ID != person.ID {
 		t.Fatalf("soft-delete population = %#v", deleted.Values["author"])
 	}
-	restored, err := application.Local().RestoreDeletedWithOptions(ctx, "entries", entry.ID, options)
+	restored, err := application.Local().RestoreDeleted(ctx, "entries", entry.ID, options)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -230,11 +228,11 @@ func TestPopulationRejectsUnknownDuplicateAndUnboundedRequests(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	person, err := application.Local().Create(context.Background(), "people", store.Values{"name": store.String("Ada")}, nil)
+	person, err := application.Local().Create(context.Background(), "people", store.Values{"name": store.String("Ada")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	post, err := application.Local().Create(context.Background(), "posts", store.Values{"author": store.String(person.ID)}, nil)
+	post, err := application.Local().Create(context.Background(), "posts", store.Values{"author": store.String(person.ID)}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -245,7 +243,7 @@ func TestPopulationRejectsUnknownDuplicateAndUnboundedRequests(t *testing.T) {
 		"duplicate": {{Path: author}, {Path: author}},
 		"depth":     {{Path: author, Depth: population.MaxDepth + 1}},
 	} {
-		if _, err := application.Local().FindWithOptions(context.Background(), "posts", post.ID, ridu.FindOptions{Populate: populations}); !operationCode(err, "bad_query") {
+		if _, err := application.Local().Find(context.Background(), "posts", post.ID, ridu.FindOptions{Populate: populations}); !operationCode(err, "bad_query") {
 			t.Fatalf("%s population error = %v", name, err)
 		}
 	}
@@ -253,7 +251,7 @@ func TestPopulationRejectsUnknownDuplicateAndUnboundedRequests(t *testing.T) {
 	for index := range wide {
 		wide[index] = query.Population{Path: author}
 	}
-	if _, err := application.Local().FindWithOptions(context.Background(), "posts", post.ID, ridu.FindOptions{Populate: wide}); !operationCode(err, "bad_query") {
+	if _, err := application.Local().Find(context.Background(), "posts", post.ID, ridu.FindOptions{Populate: wide}); !operationCode(err, "bad_query") {
 		t.Fatalf("wide population error = %v", err)
 	}
 }
@@ -269,7 +267,7 @@ func TestPopulationMaterializationBudgetRejectsDenseRecursiveGraphs(t *testing.T
 	const nodeCount = 10
 	nodes := make([]store.Document, nodeCount)
 	for index := range nodes {
-		nodes[index], err = application.Local().Create(ctx, "nodes", store.Values{"name": store.String("node")}, nil)
+		nodes[index], err = application.Local().Create(ctx, "nodes", store.Values{"name": store.String("node")}, ridu.MutationOptions{})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -279,7 +277,7 @@ func TestPopulationMaterializationBudgetRejectsDenseRecursiveGraphs(t *testing.T
 		links[index] = store.String(node.ID)
 	}
 	for _, node := range nodes {
-		if _, err := application.Local().Update(ctx, "nodes", node.ID, store.Values{"links": store.List(links...)}, nil); err != nil {
+		if _, err := application.Local().Update(ctx, "nodes", node.ID, store.Values{"links": store.List(links...)}, ridu.MutationOptions{}); err != nil {
 			t.Fatal(err)
 		}
 	}

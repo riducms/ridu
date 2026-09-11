@@ -87,17 +87,17 @@ func TestEmbeddedValueSnapshotsAcrossNestedListUpdatesAndReads(t *testing.T) {
 		expected[index].title = phase + ":" + value
 		return operation.Replace(operation.Present(expected[index].title)), nil
 	}
-	title := field.Text("title").Required().Hooks(field.Hooks[string]{BeforeChange: []field.Transform[string]{func(ctx operation.WriteContext, input operation.Value[string]) (operation.Change[string], error) {
+	title := field.Text("title").Required().Hooks(field.Hooks[string]{BeforeChange: []field.Transform[string]{func(ctx operation.Context, input operation.Value[string]) (operation.Change[string], error) {
 		if phase == "read" {
 			return operation.Keep[string](), nil
 		}
-		return observe(operation.Context(ctx), input)
-	}}}).ReadHooks(field.ReadHooks[string]{AfterRead: []field.OutputTransform[string]{func(ctx operation.ReadContext, input operation.Value[string]) (operation.Change[string], error) {
+		return observe(ctx, input)
+	}}}).ReplaceAfterRead(func(ctx operation.Context, input operation.Value[string]) (operation.Change[string], error) {
 		if phase != "read" {
 			return operation.Keep[string](), nil
 		}
-		return observe(operation.Context(ctx), input)
-	}}})
+		return observe(ctx, input)
+	})
 	config := embeddedConfig()
 	config.Collections[1].Fields = field.Fields{field.Array("sections", field.Fields{outline.Field("body", embeddedCard(title))})}
 	app, err := ridu.New(config, teststore.New())
@@ -120,7 +120,7 @@ func TestEmbeddedValueSnapshotsAcrossNestedListUpdatesAndReads(t *testing.T) {
 	}
 	long, short := makeNodes("long", 65), makeNodes("short", 3)
 	input := store.List(section("long-row", long), section("short-row", short))
-	created, err := app.Local().Create(t.Context(), "pages", store.Values{"sections": input}, nil)
+	created, err := app.Local().Create(t.Context(), "pages", store.Values{"sections": input}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -139,7 +139,7 @@ func TestEmbeddedValueSnapshotsAcrossNestedListUpdatesAndReads(t *testing.T) {
 	reordered := store.List(section("short-row", reverse(short)), section("long-row", long))
 	expected = embeddedValueSnapshotEntries(t, reordered)
 	phase = "write"
-	updated, err := app.Local().Update(t.Context(), "pages", created.ID, store.Values{"sections": reordered}, nil)
+	updated, err := app.Local().Update(t.Context(), "pages", created.ID, store.Values{"sections": reordered}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,7 +151,7 @@ func TestEmbeddedValueSnapshotsAcrossNestedListUpdatesAndReads(t *testing.T) {
 	}
 	persisted := append([]embeddedValueSnapshotEntry(nil), expected...)
 	phase, observed = "read", nil
-	read, err := app.Local().Find(t.Context(), "pages", created.ID, nil)
+	read, err := app.Local().Find(t.Context(), "pages", created.ID, ridu.FindOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -174,7 +174,7 @@ func TestEmbeddedValueSnapshotsAcrossNestedListUpdatesAndReads(t *testing.T) {
 		}
 	}
 	phase = ""
-	stored, err := app.Local().Find(t.Context(), "pages", created.ID, nil)
+	stored, err := app.Local().Find(t.Context(), "pages", created.ID, ridu.FindOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

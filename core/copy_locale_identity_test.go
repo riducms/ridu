@@ -24,7 +24,7 @@ func TestCopyLocaleReplacesIndependentVariantsWithoutBypassingTargetAccess(t *te
 				name += "-target-denied"
 			}
 			t.Run(name, func(t *testing.T) {
-				variants := []field.Block{field.Block{Slug: "card", Fields: field.Fields{field.Text("title")}}, field.Block{Slug: "note", Fields: field.Fields{field.Text("title").Access(field.Access{Update: func(operation.AccessContext) (bool, error) { return !denied, nil }})}}}
+				variants := []field.Block{field.Block{Slug: "card", Fields: field.Fields{field.Text("title")}}, field.Block{Slug: "note", Fields: field.Fields{field.Text("title").Access(field.Access{Update: func(operation.Context) (bool, error) { return !denied, nil }})}}}
 				var definition field.Node = field.Blocks("body", variants...).Localized()
 				value := func(kind, title string) store.Value {
 					return store.List(store.Object(store.Values{"_key": store.String("same"), "blockType": store.String(kind), "title": store.String(title)}))
@@ -54,26 +54,26 @@ func TestCopyLocaleReplacesIndependentVariantsWithoutBypassingTargetAccess(t *te
 				if err != nil {
 					t.Fatal(err)
 				}
-				created, err := app.Local().Create(t.Context(), "pages", store.Values{"body": value("card", "English")}, nil, ridu.LocaleOptions{Locale: "en"})
+				created, err := app.Local().Create(t.Context(), "pages", store.Values{"body": value("card", "English")}, ridu.MutationOptions{Locale: "en"})
 				if err != nil {
 					t.Fatal(err)
 				}
 				// Populate the independent target while its update access is allowed.
 				savedDenied := denied
 				denied = false
-				target, err := app.Local().Update(t.Context(), "pages", created.ID, store.Values{"body": value("note", "French")}, nil, ridu.LocaleOptions{Locale: "fr"})
+				target, err := app.Local().Update(t.Context(), "pages", created.ID, store.Values{"body": value("note", "French")}, ridu.MutationOptions{Locale: "fr"})
 				denied = savedDenied
 				if err != nil {
 					t.Fatal(err)
 				}
 				copying = true
-				copied, err := app.Local().CopyLocale(t.Context(), "pages", created.ID, "en", "fr", target.Revision, nil)
+				copied, err := app.Local().CopyLocale(t.Context(), "pages", created.ID, "en", "fr", ridu.MutationOptions{ExpectedRevision: target.Revision})
 				if denied {
 					var failure *ridu.OperationError
 					if !errors.As(err, &failure) || failure.Code != "field_access_denied" {
 						t.Fatalf("target removal access: %#v, %v", failure, err)
 					}
-					actual, findErr := app.Local().Find(t.Context(), "pages", created.ID, nil, ridu.LocaleOptions{Locale: "fr"})
+					actual, findErr := app.Local().Find(t.Context(), "pages", created.ID, ridu.FindOptions{Locale: "fr"})
 					if findErr != nil {
 						t.Fatal(findErr)
 					}

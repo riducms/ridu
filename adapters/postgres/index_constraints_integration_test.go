@@ -45,34 +45,34 @@ func TestPostgresCompoundIndexesUseExactLocaleNullAndTrashSemantics(t *testing.T
 		return result
 	}
 
-	first, err := application.Local().Create(ctx, "posts", values("acme", "welcome", "A"), nil)
+	first, err := application.Local().Create(ctx, "posts", values("acme", "welcome", "A"), ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Create(ctx, "posts", values("acme", "welcome", "B"), nil); !hasOperationCode(err, "conflict") {
+	if _, err := application.Local().Create(ctx, "posts", values("acme", "welcome", "B"), ridu.MutationOptions{}); !hasOperationCode(err, "conflict") {
 		t.Fatalf("nested tuple duplicate = %v, want conflict", err)
 	}
-	if _, err := application.Local().Create(ctx, "posts", values("acme", "different", "A"), nil); !hasOperationCode(err, "conflict") {
+	if _, err := application.Local().Create(ctx, "posts", values("acme", "different", "A"), ridu.MutationOptions{}); !hasOperationCode(err, "conflict") {
 		t.Fatalf("localized tuple duplicate = %v, want conflict", err)
 	}
 	for index := 0; index < 2; index++ {
-		if _, err := application.Local().Create(ctx, "posts", values("nullable", "", ""), nil); err != nil {
+		if _, err := application.Local().Create(ctx, "posts", values("nullable", "", ""), ridu.MutationOptions{}); err != nil {
 			t.Fatalf("NULLS DISTINCT create %d: %v", index, err)
 		}
 	}
-	if _, err := application.Local().Create(ctx, "posts", values("locale", "bonjour", "same"), nil, ridu.LocaleOptions{Locale: "fr"}); err != nil {
+	if _, err := application.Local().Create(ctx, "posts", values("locale", "bonjour", "same"), ridu.MutationOptions{Locale: "fr"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Create(ctx, "posts", values("locale", "hello", "same"), nil); err != nil {
+	if _, err := application.Local().Create(ctx, "posts", values("locale", "hello", "same"), ridu.MutationOptions{}); err != nil {
 		t.Fatalf("different exact locale conflicted: %v", err)
 	}
-	if _, err := application.Local().Delete(ctx, "posts", first.ID, nil); err != nil {
+	if _, err := application.Local().Delete(ctx, "posts", first.ID, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Create(ctx, "posts", values("acme", "welcome", "A"), nil); err != nil {
+	if _, err := application.Local().Create(ctx, "posts", values("acme", "welcome", "A"), ridu.MutationOptions{}); err != nil {
 		t.Fatalf("trashed tuple remained active: %v", err)
 	}
-	if _, err := application.Local().RestoreDeleted(ctx, "posts", first.ID, nil); !hasOperationCode(err, "conflict") {
+	if _, err := application.Local().RestoreDeleted(ctx, "posts", first.ID, ridu.MutationOptions{}); !hasOperationCode(err, "conflict") {
 		t.Fatalf("restore occupied tuple = %v, want conflict", err)
 	}
 }

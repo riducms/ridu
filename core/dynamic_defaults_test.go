@@ -32,7 +32,7 @@ func dynamicDefaultsApp(t *testing.T, fields field.Fields) *ridu.App {
 func TestDynamicDefaultsSupportedLogicalValuesAndOmission(t *testing.T) {
 	calls := map[string]int{}
 	text := func(name, value string) field.DefaultFunc[string] {
-		return func(operation.DefaultContext) (operation.Value[string], error) {
+		return func(operation.Context) (operation.Value[string], error) {
 			calls[name]++
 			return operation.Present(value), nil
 		}
@@ -46,24 +46,24 @@ func TestDynamicDefaultsSupportedLogicalValuesAndOmission(t *testing.T) {
 		field.Date("date").Format(field.DateTime).DefaultFrom(text("date", "2026-09-08T10:00:00Z")),
 		field.Select("choice", values...).DefaultFrom(text("choice", "one")),
 		field.Radio("radio", values...).DefaultFrom(text("radio", "two")),
-		field.Number("count").DefaultFrom(func(operation.DefaultContext) (operation.Value[float64], error) {
+		field.Number("count").DefaultFrom(func(operation.Context) (operation.Value[float64], error) {
 			calls["count"]++
 			return operation.Present(float64(0)), nil
 		}),
-		field.Checkbox("enabled").DefaultFrom(func(operation.DefaultContext) (operation.Value[bool], error) {
+		field.Checkbox("enabled").DefaultFrom(func(operation.Context) (operation.Value[bool], error) {
 			calls["enabled"]++
 			return operation.Present(false), nil
 		}),
-		field.MultiSelect("roles", values...).DefaultFrom(func(operation.DefaultContext) (operation.Value[[]string], error) {
+		field.MultiSelect("roles", values...).DefaultFrom(func(operation.Context) (operation.Value[[]string], error) {
 			calls["roles"]++
 			return operation.Present([]string{}), nil
 		}),
-		field.Text("empty").DefaultFrom(func(operation.DefaultContext) (operation.Value[string], error) {
+		field.Text("empty").DefaultFrom(func(operation.Context) (operation.Value[string], error) {
 			calls["empty"]++
 			return operation.Empty[string](), nil
 		}),
 	})
-	created, err := app.Local().Create(t.Context(), "pages", store.Values{}, nil)
+	created, err := app.Local().Create(t.Context(), "pages", store.Values{}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +97,7 @@ func TestDynamicDefaultsSupportedLogicalValuesAndOmission(t *testing.T) {
 		"title": store.Null(), "description": store.String(""), "source": store.String(""), "email": store.String(""), "date": store.Null(),
 		"choice": store.Null(), "radio": store.Null(), "count": store.Number(0), "enabled": store.Boolean(false), "roles": store.List(), "empty": store.Null(),
 	}
-	document, err := app.Local().Create(t.Context(), "pages", explicit, nil)
+	document, err := app.Local().Create(t.Context(), "pages", explicit, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,30 +123,30 @@ func TestDynamicDefaultsStillValidateAndAbortOnFailure(t *testing.T) {
 		node field.Node
 		code string
 	}{
-		{"empty required", field.Text("value").Required().DefaultFrom(func(operation.DefaultContext) (operation.Value[string], error) { return operation.Empty[string](), nil }), "required"},
-		{"empty required string", field.Text("value").Required().DefaultFrom(func(operation.DefaultContext) (operation.Value[string], error) { return operation.Present(""), nil }), "required"},
-		{"constraint", field.Text("value").MaxLength(3).DefaultFrom(func(operation.DefaultContext) (operation.Value[string], error) {
+		{"empty required", field.Text("value").Required().DefaultFrom(func(operation.Context) (operation.Value[string], error) { return operation.Empty[string](), nil }), "required"},
+		{"empty required string", field.Text("value").Required().DefaultFrom(func(operation.Context) (operation.Value[string], error) { return operation.Present(""), nil }), "required"},
+		{"constraint", field.Text("value").MaxLength(3).DefaultFrom(func(operation.Context) (operation.Value[string], error) {
 			return operation.Present("too long"), nil
 		}), "max_length"},
-		{"email", field.Email("value").DefaultFrom(func(operation.DefaultContext) (operation.Value[string], error) {
+		{"email", field.Email("value").DefaultFrom(func(operation.Context) (operation.Value[string], error) {
 			return operation.Present("not an email"), nil
 		}), "invalid_email"},
-		{"date", field.Date("value").DefaultFrom(func(operation.DefaultContext) (operation.Value[string], error) {
+		{"date", field.Date("value").DefaultFrom(func(operation.Context) (operation.Value[string], error) {
 			return operation.Present("2026-99-99"), nil
 		}), "invalid_date"},
-		{"choice", field.Select("value", "one").DefaultFrom(func(operation.DefaultContext) (operation.Value[string], error) {
+		{"choice", field.Select("value", "one").DefaultFrom(func(operation.Context) (operation.Value[string], error) {
 			return operation.Present("unknown"), nil
 		}), "invalid_option"},
-		{"nonfinite number", field.Number("value").DefaultFrom(func(operation.DefaultContext) (operation.Value[float64], error) {
+		{"nonfinite number", field.Number("value").DefaultFrom(func(operation.Context) (operation.Value[float64], error) {
 			return operation.Present(math.NaN()), nil
 		}), ""},
-		{"callback error", field.Text("value").DefaultFrom(func(operation.DefaultContext) (operation.Value[string], error) {
+		{"callback error", field.Text("value").DefaultFrom(func(operation.Context) (operation.Value[string], error) {
 			return operation.Present("discard"), failure
 		}), ""},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			app := dynamicDefaultsApp(t, field.Fields{test.node})
-			_, err := app.Local().Create(t.Context(), "pages", store.Values{}, nil)
+			_, err := app.Local().Create(t.Context(), "pages", store.Values{}, ridu.MutationOptions{})
 			if err == nil {
 				t.Fatal("invalid default reached storage")
 			}
@@ -168,15 +168,15 @@ func TestDynamicDefaultsStillValidateAndAbortOnFailure(t *testing.T) {
 }
 
 func TestDynamicDefaultsInitializeOnlyNewScopes(t *testing.T) {
-	var seen []operation.DefaultContext
-	initial := func(ctx operation.DefaultContext) (operation.Value[string], error) {
+	var seen []operation.Context
+	initial := func(ctx operation.Context) (operation.Value[string], error) {
 		seen = append(seen, ctx)
 		label, _ := ctx.Siblings.String("label")
 		return operation.Present("default:" + label), nil
 	}
 	children := field.Fields{field.Text("label"), field.Text("value").DefaultFrom(initial)}
 	app := dynamicDefaultsApp(t, field.Fields{field.Text("title").DefaultFrom(initial), field.Group("meta", children), field.Array("rows", children), field.Blocks("content", field.Block{Slug: "card", Fields: children})})
-	created, err := app.Local().Create(t.Context(), "pages", store.Values{}, nil)
+	created, err := app.Local().Create(t.Context(), "pages", store.Values{}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -196,7 +196,7 @@ func TestDynamicDefaultsInitializeOnlyNewScopes(t *testing.T) {
 	block := func(key, label string) store.Value {
 		return store.Object(store.Values{"_key": store.String(key), "blockType": store.String("card"), "label": store.String(label)})
 	}
-	updated, err := app.Local().Update(t.Context(), "pages", created.ID, store.Values{"meta": store.Object(store.Values{"label": store.String("group")}), "rows": store.List(row("A", "row")), "content": store.List(block("C", "block"))}, nil)
+	updated, err := app.Local().Update(t.Context(), "pages", created.ID, store.Values{"meta": store.Object(store.Values{"label": store.String("group")}), "rows": store.List(row("A", "row")), "content": store.List(block("C", "block"))}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -225,7 +225,7 @@ func TestDynamicDefaultsInitializeOnlyNewScopes(t *testing.T) {
 		}
 	}
 	seen = nil
-	updated, err = app.Local().Update(t.Context(), "pages", created.ID, store.Values{"meta": store.Object(store.Values{"label": store.String("edited")}), "rows": store.List(row("B", "new"), row("A", "edited")), "content": store.List(block("C", "edited"), block("D", "new"))}, nil)
+	updated, err = app.Local().Update(t.Context(), "pages", created.ID, store.Values{"meta": store.Object(store.Values{"label": store.String("edited")}), "rows": store.List(row("B", "new"), row("A", "edited")), "content": store.List(block("C", "edited"), block("D", "new"))}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -238,7 +238,7 @@ func TestDynamicDefaultsInitializeOnlyNewScopes(t *testing.T) {
 		t.Fatalf("reordered row lost retained default: %#v", first)
 	}
 	seen = nil
-	if _, err := app.Local().Find(t.Context(), "pages", created.ID, nil); err != nil || len(seen) != 0 {
+	if _, err := app.Local().Find(t.Context(), "pages", created.ID, ridu.FindOptions{}); err != nil || len(seen) != 0 {
 		t.Fatalf("read ran defaults: calls=%d error=%v", len(seen), err)
 	}
 }
@@ -250,12 +250,12 @@ func TestDynamicDefaultsRetainExistingPortableEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	created, err := old.Local().Create(t.Context(), "pages", store.Values{"rows": store.List(store.Object(store.Values{"_key": store.String("A"), "label": store.String("old")}))}, nil)
+	created, err := old.Local().Create(t.Context(), "pages", store.Values{"rows": store.List(store.Object(store.Values{"_key": store.String("A"), "label": store.String("old")}))}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	calls := 0
-	initial := func(operation.DefaultContext) (operation.Value[string], error) {
+	initial := func(operation.Context) (operation.Value[string], error) {
 		calls++
 		return operation.Present("new default"), nil
 	}
@@ -264,7 +264,7 @@ func TestDynamicDefaultsRetainExistingPortableEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	updated, err := app.Local().Update(t.Context(), "pages", created.ID, store.Values{"rows": store.List(store.Object(store.Values{"_key": store.String("A"), "label": store.String("edited")}))}, nil)
+	updated, err := app.Local().Update(t.Context(), "pages", created.ID, store.Values{"rows": store.List(store.Object(store.Values{"_key": store.String("A"), "label": store.String("edited")}))}, ridu.MutationOptions{})
 	if err != nil || calls != 0 {
 		t.Fatalf("schema addition backfilled retained values: calls=%d err=%v", calls, err)
 	}
@@ -278,8 +278,8 @@ func TestDynamicDefaultsRetainExistingPortableEmpty(t *testing.T) {
 }
 
 func TestDynamicDefaultsRespectExactLocaleInitialization(t *testing.T) {
-	var seen []operation.DefaultContext
-	initial := func(ctx operation.DefaultContext) (operation.Value[string], error) {
+	var seen []operation.Context
+	initial := func(ctx operation.Context) (operation.Value[string], error) {
 		seen = append(seen, ctx)
 		return operation.Present("initial:" + string(ctx.Locale)), nil
 	}
@@ -291,7 +291,7 @@ func TestDynamicDefaultsRespectExactLocaleInitialization(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	created, err := app.Local().Create(t.Context(), "pages", store.Values{"seo": store.Object(store.Values{"label": store.String("English")}), "rows": store.List(store.Object(store.Values{"_key": store.String("A"), "label": store.String("English")}))}, nil)
+	created, err := app.Local().Create(t.Context(), "pages", store.Values{"seo": store.Object(store.Values{"label": store.String("English")}), "rows": store.List(store.Object(store.Values{"_key": store.String("A"), "label": store.String("English")}))}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -299,7 +299,7 @@ func TestDynamicDefaultsRespectExactLocaleInitialization(t *testing.T) {
 		t.Fatalf("initial calls=%d", len(seen))
 	}
 	seen = nil
-	updated, err := app.Local().Update(t.Context(), "pages", created.ID, store.Values{"seo": store.Object(store.Values{"label": store.String("French")}), "rows": store.List(store.Object(store.Values{"_key": store.String("A"), "label": store.String("edited")}), store.Object(store.Values{"_key": store.String("B"), "label": store.String("new")}))}, nil, ridu.LocaleOptions{Locale: "fr"})
+	updated, err := app.Local().Update(t.Context(), "pages", created.ID, store.Values{"seo": store.Object(store.Values{"label": store.String("French")}), "rows": store.List(store.Object(store.Values{"_key": store.String("A"), "label": store.String("edited")}), store.Object(store.Values{"_key": store.String("B"), "label": store.String("new")}))}, ridu.MutationOptions{Locale: "fr"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -315,7 +315,7 @@ func TestDynamicDefaultsRespectExactLocaleInitialization(t *testing.T) {
 		}
 	}
 	_ = updated
-	all, err := app.Local().Find(t.Context(), "pages", created.ID, nil, ridu.LocaleOptions{AllLocales: true})
+	all, err := app.Local().Find(t.Context(), "pages", created.ID, ridu.FindOptions{AllLocales: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -340,7 +340,7 @@ func TestDynamicDefaultsRespectExactLocaleInitialization(t *testing.T) {
 		t.Fatalf("new row lost exact default: %#v", translations)
 	}
 	seen = nil
-	if _, err := app.Local().Find(t.Context(), "pages", created.ID, nil, ridu.LocaleOptions{Locale: "fr"}); err != nil || len(seen) != 0 {
+	if _, err := app.Local().Find(t.Context(), "pages", created.ID, ridu.FindOptions{Locale: "fr"}); err != nil || len(seen) != 0 {
 		t.Fatalf("fallback read ran default: %v %d", err, len(seen))
 	}
 }
@@ -349,29 +349,29 @@ func TestDynamicDefaultsHookCheckpointAndProvenance(t *testing.T) {
 	calls, admissions := 0, 0
 	var events []string
 	useRaw := false
-	node := field.Text("protected").DefaultFrom(func(operation.DefaultContext) (operation.Value[string], error) {
+	node := field.Text("protected").DefaultFrom(func(operation.Context) (operation.Value[string], error) {
 		calls++
 		events = append(events, "default")
 		return operation.Present("default"), nil
 	}).Access(field.Access{
-		Create: func(operation.AccessContext) (bool, error) { admissions++; return false, nil },
-		Read:   func(ctx operation.AccessContext) (bool, error) { return ctx.Actor.ID == "reader", nil },
+		Create: func(operation.Context) (bool, error) { admissions++; return false, nil },
+		Read:   func(ctx operation.Context) (bool, error) { return ctx.Actor.ID == "reader", nil },
 	}).Hooks(field.Hooks[string]{
-		BeforeValidate: []field.RawTransform{func(_ operation.WriteContext, value operation.Value[store.Value]) (operation.Change[store.Value], error) {
+		BeforeValidate: []field.RawTransform{func(_ operation.Context, value operation.Value[store.Value]) (operation.Change[store.Value], error) {
 			events = append(events, "raw")
 			if useRaw {
 				return operation.Replace(operation.Present(store.String("raw value"))), nil
 			}
 			return operation.Keep[store.Value](), nil
 		}},
-		BeforeChange: []field.Transform[string]{func(_ operation.WriteContext, value operation.Value[string]) (operation.Change[string], error) {
+		BeforeChange: []field.Transform[string]{func(_ operation.Context, value operation.Value[string]) (operation.Change[string], error) {
 			text, _ := value.Get()
 			events = append(events, "typed:"+text)
 			return operation.Keep[string](), nil
 		}},
 	})
 	app := dynamicDefaultsApp(t, field.Fields{node})
-	created, err := app.Local().Create(t.Context(), "pages", store.Values{}, nil)
+	created, err := app.Local().Create(t.Context(), "pages", store.Values{}, ridu.MutationOptions{})
 	if err != nil || calls != 1 || admissions != 0 {
 		t.Fatalf("default provenance calls=%d access=%d error=%v", calls, admissions, err)
 	}
@@ -381,19 +381,19 @@ func TestDynamicDefaultsHookCheckpointAndProvenance(t *testing.T) {
 	if _, exists := created.Values["protected"]; exists {
 		t.Fatal("server default bypassed final read redaction")
 	}
-	read, err := app.Local().Find(t.Context(), "pages", created.ID, &store.Document{ID: "reader"})
+	read, err := app.Local().Find(t.Context(), "pages", created.ID, ridu.FindOptions{Actor: &store.Document{ID: "reader"}})
 	if err != nil || stringValue(read.Values["protected"]) != "default" {
 		t.Fatalf("default was not persisted: %#v %v", read.Values, err)
 	}
 	for _, submitted := range []store.Value{store.String("default"), store.Null(), store.String("")} {
-		if _, err := app.Local().Create(t.Context(), "pages", store.Values{"protected": submitted}, nil); !fieldAccessIssue(err, "protected") {
+		if _, err := app.Local().Create(t.Context(), "pages", store.Values{"protected": submitted}, ridu.MutationOptions{}); !fieldAccessIssue(err, "protected") {
 			t.Fatalf("explicit input bypassed access: %v", err)
 		}
 	}
 	calls = 0
 	events = nil
 	useRaw = true
-	_, err = app.Local().Create(t.Context(), "pages", store.Values{}, nil)
+	_, err = app.Local().Create(t.Context(), "pages", store.Values{}, ridu.MutationOptions{})
 	if err != nil || calls != 0 || !reflect.DeepEqual(events, []string{"raw", "typed:raw value"}) {
 		t.Fatalf("raw-supplied value defaulted: calls=%d events=%v error=%v", calls, events, err)
 	}
@@ -402,7 +402,7 @@ func TestDynamicDefaultsHookCheckpointAndProvenance(t *testing.T) {
 func TestDynamicDefaultsDuplicateAndRestoreKeepExistingValues(t *testing.T) {
 	backend := teststore.New()
 	calls := 0
-	initial := func(operation.DefaultContext) (operation.Value[string], error) {
+	initial := func(operation.Context) (operation.Value[string], error) {
 		calls++
 		return operation.Present(fmt.Sprintf("generated-%d", calls)), nil
 	}
@@ -415,14 +415,14 @@ func TestDynamicDefaultsDuplicateAndRestoreKeepExistingValues(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	created, err := app.Local().Create(t.Context(), "pages", store.Values{}, nil)
+	created, err := app.Local().Create(t.Context(), "pages", store.Values{}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if calls != 2 {
 		t.Fatalf("create defaults=%d", calls)
 	}
-	duplicated, err := app.Local().Duplicate(t.Context(), "pages", created.ID, nil, nil)
+	duplicated, err := app.Local().Duplicate(t.Context(), "pages", created.ID, nil, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -434,11 +434,11 @@ func TestDynamicDefaultsDuplicateAndRestoreKeepExistingValues(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	updated, err := expanded.Local().PublishChanges(t.Context(), "pages", created.ID, store.Values{"title": store.String("changed"), "newField": store.String("current")}, created.Revision, nil)
+	updated, err := expanded.Local().PublishChanges(t.Context(), "pages", created.ID, store.Values{"title": store.String("changed"), "newField": store.String("current")}, ridu.MutationOptions{ExpectedRevision: created.Revision})
 	if err != nil {
 		t.Fatal(err)
 	}
-	restored, err := expanded.Local().Restore(t.Context(), "pages", created.ID, created.Revision, updated.Revision, nil)
+	restored, err := expanded.Local().Restore(t.Context(), "pages", created.ID, created.Revision, ridu.MutationOptions{ExpectedRevision: updated.Revision})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -453,10 +453,10 @@ func TestDynamicDefaultsDuplicateAndRestoreKeepExistingValues(t *testing.T) {
 func TestDynamicDefaultsBoundReaderAuthorizationLocaleAndCancellation(t *testing.T) {
 	backend := teststore.New()
 	var targetID string
-	var seen operation.DefaultContext
+	var seen operation.Context
 	var readActors []string
 	var cancel context.CancelFunc
-	initial := func(ctx operation.DefaultContext) (operation.Value[string], error) {
+	initial := func(ctx operation.Context) (operation.Value[string], error) {
 		seen = ctx
 		if cancel != nil {
 			cancel()
@@ -488,13 +488,13 @@ func TestDynamicDefaultsBoundReaderAuthorizationLocaleAndCancellation(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	target, err := app.Local().Create(t.Context(), "policies", store.Values{"name": store.String("English policy")}, &store.Document{ID: "allowed"})
+	target, err := app.Local().Create(t.Context(), "policies", store.Values{"name": store.String("English policy")}, ridu.MutationOptions{Actor: &store.Document{ID: "allowed"}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	targetID = target.ID
 	before := count(backend.Events(), "begin")
-	created, err := app.Local().Create(t.Context(), "pages", store.Values{}, &store.Document{ID: "allowed"}, ridu.LocaleOptions{Locale: "fr"})
+	created, err := app.Local().Create(t.Context(), "pages", store.Values{}, ridu.MutationOptions{Actor: &store.Document{ID: "allowed"}, Locale: "fr"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -504,7 +504,7 @@ func TestDynamicDefaultsBoundReaderAuthorizationLocaleAndCancellation(t *testing
 	if count(backend.Events(), "begin") != before+1 {
 		t.Fatalf("bound reader opened nested transaction: %v", backend.Events())
 	}
-	if _, err := app.Local().Create(t.Context(), "pages", store.Values{}, &store.Document{ID: "denied"}); err == nil {
+	if _, err := app.Local().Create(t.Context(), "pages", store.Values{}, ridu.MutationOptions{Actor: &store.Document{ID: "denied"}}); err == nil {
 		t.Fatal("bound reader bypassed actor access")
 	}
 	if len(readActors) == 0 || readActors[len(readActors)-1] != "denied" {
@@ -513,14 +513,14 @@ func TestDynamicDefaultsBoundReaderAuthorizationLocaleAndCancellation(t *testing
 	ctx, stop := context.WithCancel(t.Context())
 	defer stop()
 	cancel = stop
-	if _, err := app.Local().Create(ctx, "pages", store.Values{}, &store.Document{ID: "allowed"}); !errors.Is(err, context.Canceled) {
+	if _, err := app.Local().Create(ctx, "pages", store.Values{}, ridu.MutationOptions{Actor: &store.Document{ID: "allowed"}}); !errors.Is(err, context.Canceled) {
 		t.Fatalf("bound reader escaped original cancellation: %v", err)
 	}
 }
 
 func TestDynamicDefaultsRESTAndEmbeddedLifecycle(t *testing.T) {
 	calls := 0
-	initial := func(operation.DefaultContext) (operation.Value[string], error) {
+	initial := func(operation.Context) (operation.Value[string], error) {
 		calls++
 		return operation.Present("Server title"), nil
 	}
@@ -530,7 +530,7 @@ func TestDynamicDefaultsRESTAndEmbeddedLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	values := store.Values{"body": outline.Value(outline.Widget("card", "A", store.Values{}))}
-	created, err := app.Local().Create(t.Context(), "pages", values, nil)
+	created, err := app.Local().Create(t.Context(), "pages", values, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -551,7 +551,7 @@ func TestDynamicDefaultsRESTAndEmbeddedLifecycle(t *testing.T) {
 	if calls != 2 || embeddedString(embeddedPayload(t, body, 0), "title") != "Server title" {
 		t.Fatalf("REST embedded default=%#v calls=%d", body, calls)
 	}
-	updated, err := app.Local().Update(t.Context(), "pages", created.ID, store.Values{"body": outline.Value(outline.Widget("card", "A", store.Values{"caption": store.String("edited")}), outline.Widget("card", "B", store.Values{}))}, nil)
+	updated, err := app.Local().Update(t.Context(), "pages", created.ID, store.Values{"body": outline.Value(outline.Widget("card", "A", store.Values{"caption": store.String("edited")}), outline.Widget("card", "B", store.Values{}))}, ridu.MutationOptions{})
 	if err != nil || calls != 3 {
 		t.Fatalf("embedded retained/new default calls=%d err=%v", calls, err)
 	}
@@ -565,7 +565,7 @@ func TestDynamicDefaultsCacheResultsAcrossLaterHookDeletion(t *testing.T) {
 		t.Run(fmt.Sprintf("empty=%t", empty), func(t *testing.T) {
 			calls := 0
 			app, err := ridu.New(ridu.Config{Name: "Stable defaults", Collections: []ridu.Collection{{
-				Slug: "pages", Fields: field.Fields{field.Text("value").DefaultFrom(func(operation.DefaultContext) (operation.Value[string], error) {
+				Slug: "pages", Fields: field.Fields{field.Text("value").DefaultFrom(func(operation.Context) (operation.Value[string], error) {
 					calls++
 					if empty {
 						return operation.Empty[string](), nil
@@ -577,7 +577,7 @@ func TestDynamicDefaultsCacheResultsAcrossLaterHookDeletion(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			created, err := app.Local().Create(t.Context(), "pages", store.Values{}, nil)
+			created, err := app.Local().Create(t.Context(), "pages", store.Values{}, ridu.MutationOptions{})
 			if err != nil || calls != 1 {
 				t.Fatalf("later validation reevaluated default: calls=%d error=%v", calls, err)
 			}
@@ -597,10 +597,10 @@ func TestDynamicDefaultsDetachReturnedListsBeforeLaterCallbacks(t *testing.T) {
 	validated := false
 	app, err := ridu.New(ridu.Config{Name: "Detached default values", Collections: []ridu.Collection{{
 		Slug: "pages", Fields: field.Fields{field.MultiSelect("roles", "one", "two").
-			DefaultFrom(func(operation.DefaultContext) (operation.Value[[]string], error) {
+			DefaultFrom(func(operation.Context) (operation.Value[[]string], error) {
 				return operation.Present(selected), nil
 			}).
-			Validate(func(_ operation.ValidationContext, input operation.Value[[]string]) ([]operation.Issue, error) {
+			Validate(func(_ operation.Context, input operation.Value[[]string]) ([]operation.Issue, error) {
 				values, present := input.Get()
 				if !present || !reflect.DeepEqual(values, []string{"one"}) {
 					return nil, fmt.Errorf("default result mutated before validation: %v", values)
@@ -614,7 +614,7 @@ func TestDynamicDefaultsDetachReturnedListsBeforeLaterCallbacks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	created, err := app.Local().Create(t.Context(), "pages", store.Values{}, nil)
+	created, err := app.Local().Create(t.Context(), "pages", store.Values{}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -626,9 +626,9 @@ func TestDynamicDefaultsDetachReturnedListsBeforeLaterCallbacks(t *testing.T) {
 
 func TestDynamicDefaultsGlobalInitializesOnFirstWriteOnly(t *testing.T) {
 	calls := 0
-	var seen operation.DefaultContext
+	var seen operation.Context
 	app, err := ridu.New(ridu.Config{Name: "Global defaults", Collections: []ridu.Collection{{Slug: "pages", Fields: field.Fields{field.Text("title")}}}, Globals: []ridu.Global{{
-		Slug: "site", Fields: field.Fields{field.Text("name").DefaultFrom(func(ctx operation.DefaultContext) (operation.Value[string], error) {
+		Slug: "site", Fields: field.Fields{field.Text("name").DefaultFrom(func(ctx operation.Context) (operation.Value[string], error) {
 			calls++
 			seen = ctx
 			return operation.Present("Ridu"), nil
@@ -637,17 +637,17 @@ func TestDynamicDefaultsGlobalInitializesOnFirstWriteOnly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := app.Local().Global(t.Context(), "site", nil); err != nil || calls != 0 {
+	if _, err := app.Local().Global(t.Context(), "site", ridu.FindOptions{}); err != nil || calls != 0 {
 		t.Fatalf("missing-global read ran executable defaults: calls=%d error=%v", calls, err)
 	}
-	created, err := app.Local().UpdateGlobal(t.Context(), "site", store.Values{}, 0, nil)
+	created, err := app.Local().UpdateGlobal(t.Context(), "site", store.Values{}, ridu.MutationOptions{})
 	if err != nil || calls != 1 || stringValue(created.Values["name"]) != "Ridu" {
 		t.Fatalf("first global write: values=%#v calls=%d error=%v", created.Values, calls, err)
 	}
 	if seen.Operation != operation.Update || seen.GlobalID != "global-site" || seen.CollectionID != "" || seen.ID != "site" {
 		t.Fatalf("global callback identity=%#v", seen)
 	}
-	if _, err := app.Local().UpdateGlobal(t.Context(), "site", store.Values{}, created.Revision, nil); err != nil || calls != 1 {
+	if _, err := app.Local().UpdateGlobal(t.Context(), "site", store.Values{}, ridu.MutationOptions{ExpectedRevision: created.Revision}); err != nil || calls != 1 {
 		t.Fatalf("retained-global write defaulted: calls=%d error=%v", calls, err)
 	}
 }
@@ -656,7 +656,7 @@ func TestDynamicDefaultsCacheFollowsStableRowsAfterHookReorder(t *testing.T) {
 	calls := 0
 	app, err := ridu.New(ridu.Config{Name: "Reordered initialization", Collections: []ridu.Collection{{
 		Slug: "pages", Fields: field.Fields{field.Array("rows", field.Fields{
-			field.Text("label"), field.Text("value").DefaultFrom(func(ctx operation.DefaultContext) (operation.Value[string], error) {
+			field.Text("label"), field.Text("value").DefaultFrom(func(ctx operation.Context) (operation.Value[string], error) {
 				calls++
 				label, _ := ctx.Siblings.String("label")
 				return operation.Present(label), nil
@@ -681,7 +681,7 @@ func TestDynamicDefaultsCacheFollowsStableRowsAfterHookReorder(t *testing.T) {
 	created, err := app.Local().Create(t.Context(), "pages", store.Values{"rows": store.List(
 		store.Object(store.Values{"_key": store.String("A"), "label": store.String("first")}),
 		store.Object(store.Values{"_key": store.String("B"), "label": store.String("second")}),
-	)}, nil)
+	)}, ridu.MutationOptions{})
 	if err != nil || calls != 2 {
 		t.Fatalf("reordered defaults calls=%d error=%v", calls, err)
 	}
@@ -696,7 +696,7 @@ func TestDynamicDefaultsCacheFollowsStableRowsAfterHookReorder(t *testing.T) {
 
 func TestDynamicDefaultsRespectLiteralCreatedAndAbsentOptionalGroups(t *testing.T) {
 	calls := 0
-	initial := func(operation.DefaultContext) (operation.Value[string], error) {
+	initial := func(operation.Context) (operation.Value[string], error) {
 		calls++
 		return operation.Present("server"), nil
 	}
@@ -714,7 +714,7 @@ func TestDynamicDefaultsRespectLiteralCreatedAndAbsentOptionalGroups(t *testing.
 	created, err := app.Local().Create(t.Context(), "pages", store.Values{
 		"rows":    store.List(store.Object(store.Values{"_key": store.String("A")})),
 		"content": store.List(store.Object(store.Values{"_key": store.String("B"), "blockType": store.String("card")})),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil || calls != 3 {
 		t.Fatalf("literal-created group initialization: calls=%d error=%v", calls, err)
 	}
@@ -739,7 +739,7 @@ func TestDynamicDefaultsRespectLiteralCreatedAndAbsentOptionalGroups(t *testing.
 		"settings": store.Null(), "dynamicOnly": store.Null(),
 		"rows":    store.List(store.Object(store.Values{"_key": store.String("A"), "settings": store.Null()})),
 		"content": store.List(store.Object(store.Values{"_key": store.String("B"), "blockType": store.String("card"), "settings": store.Null()})),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil || calls != 0 {
 		t.Fatalf("explicit null parents ran child defaults: calls=%d error=%v", calls, err)
 	}
@@ -748,9 +748,9 @@ func TestDynamicDefaultsRespectLiteralCreatedAndAbsentOptionalGroups(t *testing.
 func TestDynamicDefaultsShareFrozenCheckpointViews(t *testing.T) {
 	for _, reversed := range []bool{false, true} {
 		t.Run(fmt.Sprintf("reversed=%t", reversed), func(t *testing.T) {
-			seen := map[string]operation.DefaultContext{}
+			seen := map[string]operation.Context{}
 			initial := func(name, other string) field.DefaultFunc[string] {
-				return func(ctx operation.DefaultContext) (operation.Value[string], error) {
+				return func(ctx operation.Context) (operation.Value[string], error) {
 					seen[name] = ctx
 					if _, present := ctx.Siblings.String(other); present {
 						return operation.Empty[string](), fmt.Errorf("%s observed sibling default %s during the same checkpoint", name, other)
@@ -773,7 +773,7 @@ func TestDynamicDefaultsShareFrozenCheckpointViews(t *testing.T) {
 				fields[1], fields[2] = fields[2], fields[1]
 			}
 			app := dynamicDefaultsApp(t, fields)
-			created, err := app.Local().Create(t.Context(), "pages", store.Values{"seed": store.String("submitted")}, nil)
+			created, err := app.Local().Create(t.Context(), "pages", store.Values{"seed": store.String("submitted")}, ridu.MutationOptions{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -792,15 +792,15 @@ func TestDynamicDefaultsShareFrozenCheckpointViews(t *testing.T) {
 }
 
 func TestDynamicDefaultsDuplicatePriorMatchesPersistedEnclosingScope(t *testing.T) {
-	var rootPrior, rowPrior operation.DefaultContext
+	var rootPrior, rowPrior operation.Context
 	app, err := ridu.New(ridu.Config{Name: "Duplicate default context", Collections: []ridu.Collection{{
 		Slug: "pages", Fields: field.Fields{
 			field.Text("title"),
-			field.Text("value").DefaultFrom(func(ctx operation.DefaultContext) (operation.Value[string], error) {
+			field.Text("value").DefaultFrom(func(ctx operation.Context) (operation.Value[string], error) {
 				rootPrior = ctx
 				return operation.Present("new root"), nil
 			}),
-			field.Array("rows", field.Fields{field.Text("label"), field.Text("value").DefaultFrom(func(ctx operation.DefaultContext) (operation.Value[string], error) {
+			field.Array("rows", field.Fields{field.Text("label"), field.Text("value").DefaultFrom(func(ctx operation.Context) (operation.Value[string], error) {
 				rowPrior = ctx
 				return operation.Present("new row"), nil
 			})}),
@@ -823,11 +823,11 @@ func TestDynamicDefaultsDuplicatePriorMatchesPersistedEnclosingScope(t *testing.
 	created, err := app.Local().Create(t.Context(), "pages", store.Values{
 		"title": store.String("source title"), "value": store.String("source root"),
 		"rows": store.List(store.Object(store.Values{"_key": store.String("A"), "label": store.String("source row"), "value": store.String("source child")})),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	duplicated, err := app.Local().Duplicate(t.Context(), "pages", created.ID, nil, nil)
+	duplicated, err := app.Local().Duplicate(t.Context(), "pages", created.ID, nil, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

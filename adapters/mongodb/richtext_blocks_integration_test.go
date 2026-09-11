@@ -19,6 +19,10 @@ func TestMongoDBRichTextBlockReferencesAcceptance(t *testing.T) {
 	richtextblocks.RunReferences(t, mongoRichTextBlocksFactory)
 }
 
+func TestMongoDBRichTextBlockNamesAcceptance(t *testing.T) {
+	richtextblocks.RunNames(t, mongoRichTextBlocksFactory)
+}
+
 func TestMongoDBRichTextBlocksPerformance(t *testing.T) {
 	richtextblocks.RunPerformance(t, "mongodb", mongoRichTextBlocksFactory)
 }

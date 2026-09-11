@@ -35,7 +35,7 @@ func TestGraphQLCollectionCRUDFilteringPaginationAndGlobals(t *testing.T) {
 				field.Text("title").Required(),
 				field.Number("score"),
 				field.Checkbox("featured"),
-				field.Text("secret").Access(field.Access{Read: func(operation.AccessContext) (bool, error) { return false, nil }}),
+				field.Text("secret").Access(field.Access{Read: func(operation.Context) (bool, error) { return false, nil }}),
 			},
 		}},
 		Globals: []ridu.Global{{Slug: "settings", Fields: field.Fields{
@@ -154,13 +154,13 @@ func TestGraphQLDeleteRestrictionUsesStableNonOracleError(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	target, err := application.Local().Create(context.Background(), "users", store.Values{"name": store.String("Ada")}, nil)
+	target, err := application.Local().Create(context.Background(), "users", store.Values{"name": store.String("Ada")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	owner, err := application.Local().Create(context.Background(), "posts", store.Values{
 		"title": store.String("Restricted"), "protectedOwner": store.String(target.ID),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -211,11 +211,11 @@ func TestGraphQLGlobalAccessFiltersCurrentAndVersionSnapshots(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	first, err := application.Local().UpdateGlobal(context.Background(), "settings", store.Values{"siteName": store.String("Ridu")}, 0, nil)
+	first, err := application.Local().UpdateGlobal(context.Background(), "settings", store.Values{"siteName": store.String("Ridu")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().PublishGlobalChanges(context.Background(), "settings", store.Values{"siteName": store.String("Hidden")}, first.Revision, nil); err != nil {
+	if _, err := application.Local().PublishGlobalChanges(context.Background(), "settings", store.Values{"siteName": store.String("Hidden")}, ridu.MutationOptions{ExpectedRevision: first.Revision}); err != nil {
 		t.Fatal(err)
 	}
 	server := httptest.NewServer(application.Handler(ridu.HandlerOptions{}))
@@ -245,7 +245,7 @@ func TestGraphQLSelectionPopulatesRelationshipsThroughTheEngine(t *testing.T) {
 		Collections: []ridu.Collection{
 			{Slug: "categories", Fields: field.Fields{
 				field.Text("name").Required(),
-				field.Text("privateNote").Access(field.Access{Read: func(operation.AccessContext) (bool, error) { return false, nil }}),
+				field.Text("privateNote").Access(field.Access{Read: func(operation.Context) (bool, error) { return false, nil }}),
 				field.Relationship("parent", "categories"),
 			}},
 			{Slug: "posts", Fields: field.Fields{
@@ -370,7 +370,7 @@ func TestGraphQLSelectionPopulatesRelationshipsInsideGroupsArraysAndBlocks(t *te
 		Collections: []ridu.Collection{
 			{Slug: "people", Fields: field.Fields{
 				field.Text("name").Required(),
-				field.Text("secret").Access(field.Access{Read: func(operation.AccessContext) (bool, error) { return false, nil }}),
+				field.Text("secret").Access(field.Access{Read: func(operation.Context) (bool, error) { return false, nil }}),
 			}},
 			{Slug: "teams", Fields: field.Fields{
 				field.Text("name").Required(),
@@ -393,11 +393,11 @@ func TestGraphQLSelectionPopulatesRelationshipsInsideGroupsArraysAndBlocks(t *te
 	if err != nil {
 		t.Fatal(err)
 	}
-	person, err := application.Local().Create(context.Background(), "people", store.Values{"name": store.String("Ada"), "secret": store.String("redact")}, nil)
+	person, err := application.Local().Create(context.Background(), "people", store.Values{"name": store.String("Ada"), "secret": store.String("redact")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	team, err := application.Local().Create(context.Background(), "teams", store.Values{"name": store.String("Core"), "owner": store.String(person.ID)}, nil)
+	team, err := application.Local().Create(context.Background(), "teams", store.Values{"name": store.String("Core"), "owner": store.String(person.ID)}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -410,7 +410,7 @@ func TestGraphQLSelectionPopulatesRelationshipsInsideGroupsArraysAndBlocks(t *te
 		"layout": store.List(store.Object(store.Values{
 			"_key": store.String("quote-one"), "blockType": store.String("quote"), "source": store.String(team.ID),
 		})),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -500,8 +500,8 @@ func TestGraphQLJoinsExposeRedactedTargetDocuments(t *testing.T) {
 			}},
 			{Slug: "posts", Fields: field.Fields{
 				field.Text("title").Required(),
-				field.Text("privateNote").Access(field.Access{Read: func(operation.AccessContext) (bool, error) { return false, nil }}),
-				field.Relationship("category", "categories").Access(field.Access{Read: func(operation.AccessContext) (bool, error) { return false, nil }}),
+				field.Text("privateNote").Access(field.Access{Read: func(operation.Context) (bool, error) { return false, nil }}),
+				field.Relationship("category", "categories").Access(field.Access{Read: func(operation.Context) (bool, error) { return false, nil }}),
 			}},
 		},
 	}, teststore.New())
@@ -541,8 +541,8 @@ func TestGraphQLRejectsPrivateFieldQueryOracles(t *testing.T) {
 	application, err := ridu.New(ridu.Config{Name: "Private GraphQL queries", Plugins: []ridu.Plugin{graphqlplugin.New()}, Collections: []ridu.Collection{{
 		Slug: "employees", Fields: field.Fields{
 			field.Text("name"),
-			field.Number("salary").Access(field.Access{Read: func(operation.AccessContext) (bool, error) { return false, nil }}),
-			field.Text("secret").Access(field.Access{Read: func(operation.AccessContext) (bool, error) { return false, nil }}),
+			field.Number("salary").Access(field.Access{Read: func(operation.Context) (bool, error) { return false, nil }}),
+			field.Text("secret").Access(field.Access{Read: func(operation.Context) (bool, error) { return false, nil }}),
 		},
 	}}}, teststore.New())
 	if err != nil {
@@ -582,7 +582,7 @@ func TestGraphQLSelectionSkipsUnrequestedComputedOutput(t *testing.T) {
 		Collections: []ridu.Collection{{
 			Slug: "posts", Fields: field.Fields{
 				field.Text("title"),
-				field.Virtual("label", field.ValueString, func(ctx operation.ReadContext) (operation.Value[store.Value], error) {
+				field.Virtual("label", field.ValueString, func(ctx operation.Context) (operation.Value[store.Value], error) {
 					computedCalls++
 					titleValue := ctx.Root.Get("title")
 					title, _ := titleValue.StringValue()
@@ -738,11 +738,11 @@ func TestGraphQLPreferencesPreserveExactAdminIdentityWithCollidingAuthIDs(t *tes
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	user, err := application.Local().Import(ctx, "users", store.Values{"email": store.String("user@example.test")}, ridu.ImportOptions{ID: "shared-auth-id", Status: store.StatusPublished}, nil)
+	user, err := application.Local().Import(ctx, "users", store.Values{"email": store.String("user@example.test")}, ridu.ImportOptions{ID: "shared-auth-id", Status: store.StatusPublished})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Import(ctx, "staff", store.Values{"email": store.String("staff@example.test")}, ridu.ImportOptions{ID: user.ID, Status: store.StatusPublished}, nil); err != nil {
+	if _, err := application.Local().Import(ctx, "staff", store.Values{"email": store.String("staff@example.test")}, ridu.ImportOptions{ID: user.ID, Status: store.StatusPublished}); err != nil {
 		t.Fatal(err)
 	}
 	if err := application.SetPassword(ctx, "users", user.ID, "users-password-value"); err != nil {
@@ -807,7 +807,7 @@ func TestGraphQLAndRESTLoginRecordTrustedTransportMetadata(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	user, err := application.Local().Import(ctx, "users", store.Values{"email": store.String("metadata@example.test")}, ridu.ImportOptions{ID: "metadata-user", Status: store.StatusPublished}, nil)
+	user, err := application.Local().Import(ctx, "users", store.Values{"email": store.String("metadata@example.test")}, ridu.ImportOptions{ID: "metadata-user", Status: store.StatusPublished})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1616,7 +1616,7 @@ func TestGraphQLCompiledExtensionsReceiveOnlySafeRuntimeFacades(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.CreateAuthUser(context.Background(), "users", store.Values{"email": store.String("extension@example.test")}, "extension-password", nil); err != nil {
+	if _, err := application.CreateAuthUser(context.Background(), "users", store.Values{"email": store.String("extension@example.test")}, "extension-password", ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	session, err := application.Login(context.Background(), "users", "extension@example.test", "extension-password")

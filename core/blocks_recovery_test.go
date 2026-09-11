@@ -25,7 +25,7 @@ func TestRemovedBlockSchemaRequiresRecoveryAtOperationBoundary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	created, err := original.Local().Create(ctx, "pages", store.Values{"title": store.String("Before"), "layout": store.List(store.Object(store.Values{"blockType": store.String("retired"), "private": store.String("never disclose undeclared payload")}))}, nil)
+	created, err := original.Local().Create(ctx, "pages", store.Values{"title": store.String("Before"), "layout": store.List(store.Object(store.Values{"blockType": store.String("retired"), "private": store.String("never disclose undeclared payload")}))}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,7 +49,7 @@ func TestRemovedBlockSchemaRequiresRecoveryAtOperationBoundary(t *testing.T) {
 		run  func() error
 	}{
 		{"read", func() error {
-			doc, err := current.Local().FindWithOptions(ctx, "pages", created.ID, ridu.FindOptions{Draft: &draft})
+			doc, err := current.Local().Find(ctx, "pages", created.ID, ridu.FindOptions{Draft: &draft})
 			if len(doc.Values) > 0 {
 				t.Fatal("failed read returned payload")
 			}
@@ -63,44 +63,47 @@ func TestRemovedBlockSchemaRequiresRecoveryAtOperationBoundary(t *testing.T) {
 			return err
 		}},
 		{"delete rows", func() error {
-			_, err := current.Local().Update(ctx, "pages", created.ID, store.Values{"layout": store.List()}, nil)
+			_, err := current.Local().Update(ctx, "pages", created.ID, store.Values{"layout": store.List()}, ridu.MutationOptions{})
 			return err
 		}},
 		{"unrelated localized edit", func() error {
-			_, err := current.Local().Update(ctx, "pages", created.ID, store.Values{"title": store.String("Après")}, nil, ridu.LocaleOptions{Locale: "fr"})
+			_, err := current.Local().Update(ctx, "pages", created.ID, store.Values{"title": store.String("Après")}, ridu.MutationOptions{Locale: "fr"})
 			return err
 		}},
 		{"replace rows", func() error {
-			_, err := current.Local().Update(ctx, "pages", created.ID, store.Values{"layout": store.List(store.Object(store.Values{"blockType": store.String("hero"), "heading": store.String("Replacement")}))}, nil)
+			_, err := current.Local().Update(ctx, "pages", created.ID, store.Values{"layout": store.List(store.Object(store.Values{"blockType": store.String("hero"), "heading": store.String("Replacement")}))}, ridu.MutationOptions{})
 			return err
 		}},
-		{"duplicate", func() error { _, err := current.Local().Duplicate(ctx, "pages", created.ID, nil, nil); return err }},
+		{"duplicate", func() error {
+			_, err := current.Local().Duplicate(ctx, "pages", created.ID, nil, ridu.MutationOptions{})
+			return err
+		}},
 		{"publish", func() error {
-			_, err := current.Local().Publish(ctx, "pages", created.ID, created.Revision, nil)
+			_, err := current.Local().Publish(ctx, "pages", created.ID, ridu.MutationOptions{ExpectedRevision: created.Revision})
 			return err
 		}},
 		{"versions", func() error {
-			versions, err := current.Local().Versions(ctx, "pages", created.ID, nil)
+			versions, err := current.Local().Versions(ctx, "pages", created.ID, ridu.FindOptions{})
 			if len(versions) > 0 {
 				t.Fatal("failed versions read returned payload")
 			}
 			return err
 		}},
 		{"restore", func() error {
-			_, err := current.Local().RestoreAsDraft(ctx, "pages", created.ID, created.Revision, created.Revision, nil)
+			_, err := current.Local().RestoreAsDraft(ctx, "pages", created.ID, created.Revision, ridu.MutationOptions{ExpectedRevision: created.Revision})
 			return err
 		}},
 	}
 	for _, check := range checks {
 		t.Run(check.name, func(t *testing.T) { assertRecovery(t, check.run()) })
 	}
-	metadata, err := current.Local().FindWithOptions(ctx, "pages", created.ID, ridu.FindOptions{Draft: &draft, Select: []query.Path{}})
+	metadata, err := current.Local().Find(ctx, "pages", created.ID, ridu.FindOptions{Draft: &draft, Select: []query.Path{}})
 	if err != nil || metadata.ID != created.ID || len(metadata.Values) != 0 {
 		t.Fatalf("metadata-only projection must not require payload recovery: %#v %v", metadata, err)
 	}
 	// Restoring the schema must reveal exactly the original persisted values and
 	// revision: denied mutations may not change content or create revisions.
-	restored, err := original.Local().FindWithOptions(ctx, "pages", created.ID, ridu.FindOptions{Draft: &draft})
+	restored, err := original.Local().Find(ctx, "pages", created.ID, ridu.FindOptions{Draft: &draft})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,11 +121,11 @@ func TestRemovedBlockSchemaHistoricalSnapshotRequiresRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	retired, err := original.Local().Create(ctx, "pages", store.Values{"layout": store.List(store.Object(store.Values{"blockType": store.String("retired"), "private": store.String("historical secret")}))}, nil)
+	retired, err := original.Local().Create(ctx, "pages", store.Values{"layout": store.List(store.Object(store.Values{"blockType": store.String("retired"), "private": store.String("historical secret")}))}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	healthy, err := original.Local().Update(ctx, "pages", retired.ID, store.Values{"layout": store.List()}, nil)
+	healthy, err := original.Local().Update(ctx, "pages", retired.ID, store.Values{"layout": store.List()}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,7 +134,7 @@ func TestRemovedBlockSchemaHistoricalSnapshotRequiresRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = current.Local().FindWithOptions(ctx, "pages", healthy.ID, ridu.FindOptions{Draft: &draft}); err != nil {
+	if _, err = current.Local().Find(ctx, "pages", healthy.ID, ridu.FindOptions{Draft: &draft}); err != nil {
 		t.Fatalf("healthy current document must remain usable: %v", err)
 	}
 	for _, test := range []struct {
@@ -139,14 +142,14 @@ func TestRemovedBlockSchemaHistoricalSnapshotRequiresRecovery(t *testing.T) {
 		run  func() error
 	}{
 		{"historical read", func() error {
-			version, err := current.Local().Version(ctx, "pages", healthy.ID, retired.Revision, nil)
+			version, err := current.Local().Version(ctx, "pages", healthy.ID, retired.Revision, ridu.FindOptions{})
 			if len(version.Snapshot.Values) > 0 {
 				t.Fatal("failed historical read disclosed payload")
 			}
 			return err
 		}},
 		{"historical restore", func() error {
-			_, err := current.Local().RestoreAsDraft(ctx, "pages", healthy.ID, retired.Revision, healthy.Revision, nil)
+			_, err := current.Local().RestoreAsDraft(ctx, "pages", healthy.ID, retired.Revision, ridu.MutationOptions{ExpectedRevision: healthy.Revision})
 			return err
 		}},
 	} {
@@ -158,7 +161,7 @@ func TestRemovedBlockSchemaHistoricalSnapshotRequiresRecovery(t *testing.T) {
 			}
 		})
 	}
-	stored, err := current.Local().FindWithOptions(ctx, "pages", healthy.ID, ridu.FindOptions{Draft: &draft})
+	stored, err := current.Local().Find(ctx, "pages", healthy.ID, ridu.FindOptions{Draft: &draft})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -175,11 +178,11 @@ func TestRemovedBlockSchemaInAnotherLocalePreventsMutation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	created, err := original.Local().Create(ctx, "pages", store.Values{"layout": store.List(store.Object(store.Values{"blockType": store.String("hero"), "heading": store.String("English")}))}, nil)
+	created, err := original.Local().Create(ctx, "pages", store.Values{"layout": store.List(store.Object(store.Values{"blockType": store.String("hero"), "heading": store.String("English")}))}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = original.Local().Update(ctx, "pages", created.ID, store.Values{"layout": store.List(store.Object(store.Values{"blockType": store.String("retired"), "private": store.String("French secret")}))}, nil, ridu.LocaleOptions{Locale: "fr"})
+	_, err = original.Local().Update(ctx, "pages", created.ID, store.Values{"layout": store.List(store.Object(store.Values{"blockType": store.String("retired"), "private": store.String("French secret")}))}, ridu.MutationOptions{Locale: "fr"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -188,12 +191,12 @@ func TestRemovedBlockSchemaInAnotherLocalePreventsMutation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = current.Local().Update(ctx, "pages", created.ID, store.Values{"layout": store.List()}, nil, ridu.LocaleOptions{Locale: "en"})
+	_, err = current.Local().Update(ctx, "pages", created.ID, store.Values{"layout": store.List()}, ridu.MutationOptions{Locale: "en"})
 	var issue *ridu.OperationError
 	if !errors.As(err, &issue) || issue.Code != "block_recovery_required" || len(issue.Issues) != 1 || issue.Issues[0].Path != "layout.fr.0.blockType" {
 		t.Fatalf("mutation must inspect every stored locale: %v", err)
 	}
-	french, err := original.Local().Find(ctx, "pages", created.ID, nil, ridu.LocaleOptions{Locale: "fr"})
+	french, err := original.Local().Find(ctx, "pages", created.ID, ridu.FindOptions{Locale: "fr"})
 	if err != nil {
 		t.Fatal(err)
 	}

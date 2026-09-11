@@ -27,15 +27,15 @@ func TestDocumentLocksAcquireRefreshTakeOverAndRelease(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	document, err := application.Local().Create(ctx, "posts", store.Values{"title": store.String("Locked")}, nil)
+	document, err := application.Local().Create(ctx, "posts", store.Values{"title": store.String("Locked")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	firstDocument, err := application.CreateAuthUser(ctx, "users", store.Values{"email": store.String("one@example.test")}, "first-password-value", nil)
+	firstDocument, err := application.CreateAuthUser(ctx, "users", store.Values{"email": store.String("one@example.test")}, "first-password-value", ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	secondDocument, err := application.CreateAuthUser(ctx, "users", store.Values{"email": store.String("two@example.test")}, "second-password-value", nil)
+	secondDocument, err := application.CreateAuthUser(ctx, "users", store.Values{"email": store.String("two@example.test")}, "second-password-value", ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +61,7 @@ func TestDocumentLocksAcquireRefreshTakeOverAndRelease(t *testing.T) {
 	if err != nil || !current.Owned || current.Lock == nil || current.Lock.OwnerID != second.Actor.ID {
 		t.Fatalf("lock after stale release = %#v, %v", current, err)
 	}
-	if _, err := application.Local().Delete(ctx, "posts", document.ID, &second.Actor); err != nil {
+	if _, err := application.Local().Delete(ctx, "posts", document.ID, ridu.MutationOptions{Actor: &second.Actor}); err != nil {
 		t.Fatal(err)
 	}
 	if err := application.ReleaseDocumentLock(ctx, "posts", document.ID, second); err != nil {
@@ -106,16 +106,16 @@ func TestDocumentLockTakeoverUsesUnlockAccess(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	document, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("Restricted")}, nil)
+	document, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("Restricted")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	ownerDocument, err := application.CreateAuthUser(context.Background(), "users", store.Values{"email": store.String("admin@example.test")}, "admin-password-value", nil)
+	ownerDocument, err := application.CreateAuthUser(context.Background(), "users", store.Values{"email": store.String("admin@example.test")}, "admin-password-value", ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	lockAdminID = ownerDocument.ID
-	editorDocument, err := application.CreateAuthUser(context.Background(), "users", store.Values{"email": store.String("editor@example.test")}, "editor-password-value", nil)
+	editorDocument, err := application.CreateAuthUser(context.Background(), "users", store.Values{"email": store.String("editor@example.test")}, "editor-password-value", ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,19 +153,19 @@ func TestDocumentLocksUseExactAuthCollectionForSameIDActors(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	post, err := application.Local().Create(ctx, "posts", store.Values{"title": store.String("Locked")}, nil)
+	post, err := application.Local().Create(ctx, "posts", store.Values{"title": store.String("Locked")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	user, err := application.Local().Import(ctx, "users", store.Values{
 		"email": store.String("user@example.test"), "displayName": store.String("User label"),
-	}, ridu.ImportOptions{ID: "shared-actor", Status: store.StatusPublished}, nil)
+	}, ridu.ImportOptions{ID: "shared-actor", Status: store.StatusPublished})
 	if err != nil {
 		t.Fatal(err)
 	}
 	staff, err := application.Local().Import(ctx, "staff", store.Values{
 		"email": store.String("staff@example.test"), "handle": store.String("Staff label"),
-	}, ridu.ImportOptions{ID: user.ID, Status: store.StatusPublished}, nil)
+	}, ridu.ImportOptions{ID: user.ID, Status: store.StatusPublished})
 	if err != nil {
 		t.Fatal(err)
 	}

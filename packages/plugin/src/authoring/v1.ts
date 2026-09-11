@@ -1,5 +1,5 @@
 import type { AdminPlugin } from "../plugin";
-import { validatePluginRegistrations } from "../plugin-registry";
+import { resolvePluginFields } from "../plugin-registry";
 
 export { definePluginField, defineFieldComponent } from "../field";
 export type {
@@ -66,6 +66,6 @@ export function defineAdminPlugin<const Plugin extends Omit<AdminPlugin, "apiVer
 		apiVersion: authoringAPIVersion,
 	});
 	const definition: Omit<AdminPlugin, "apiVersion"> = plugin;
-	validatePluginRegistrations([{ ...definition, apiVersion: authoringAPIVersion }]);
+	resolvePluginFields([{ ...definition, apiVersion: authoringAPIVersion }]);
 	return result;
 }

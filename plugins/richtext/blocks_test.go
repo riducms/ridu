@@ -90,7 +90,7 @@ func TestBlockEnvelopeValidationHasExactPaths(t *testing.T) {
 			if err := json.Unmarshal([]byte(test.node), &node); err != nil {
 				t.Fatal(err)
 			}
-			_, err := app.Local().Create(context.Background(), "pages", store.Values{"body": document(node)}, nil)
+			_, err := app.Local().Create(context.Background(), "pages", store.Values{"body": document(node)}, ridu.MutationOptions{})
 			if err == nil {
 				t.Fatal("malformed node accepted")
 			}
@@ -118,7 +118,7 @@ func TestPlainRichTextRejectsBlocksAndRetainsRecoveryBoundary(t *testing.T) {
 	}
 	var node store.Value
 	json.Unmarshal([]byte(`{"type":"block","version":1,"fields":{"blockType":"undeclared","_key":"historical","secret":"do not leak"}}`), &node)
-	if _, err := app.Local().Create(context.Background(), "pages", store.Values{"body": document(node)}, nil); err == nil {
+	if _, err := app.Local().Create(context.Background(), "pages", store.Values{"body": document(node)}, ridu.MutationOptions{}); err == nil {
 		t.Fatal("plain field accepted undeclared payload")
 	}
 }

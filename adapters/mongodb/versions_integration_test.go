@@ -284,7 +284,7 @@ func TestMongoDBOperationEngineVersionsRestoreAccessAndSameIDRecreation(t *testi
 	ownerB := &store.Document{ID: "owner-b"}
 	created, err := application.Local().Create(t.Context(), "posts", store.Values{
 		"title": store.String("first"), "owner": store.String(ownerA.ID),
-	}, ownerA)
+	}, ridu.MutationOptions{Actor: ownerA})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -293,11 +293,11 @@ func TestMongoDBOperationEngineVersionsRestoreAccessAndSameIDRecreation(t *testi
 	}
 	published, err := application.Local().PublishChanges(t.Context(), "posts", created.ID, store.Values{
 		"title": store.String("second"), "owner": store.String(ownerB.ID),
-	}, created.Revision, ownerA)
+	}, ridu.MutationOptions{Actor: ownerA, ExpectedRevision: created.Revision})
 	if err != nil {
 		t.Fatal(err)
 	}
-	unpublished, err := application.Local().Unpublish(t.Context(), "posts", created.ID, published.Revision, ownerB)
+	unpublished, err := application.Local().Unpublish(t.Context(), "posts", created.ID, ridu.MutationOptions{Actor: ownerB, ExpectedRevision: published.Revision})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -305,25 +305,25 @@ func TestMongoDBOperationEngineVersionsRestoreAccessAndSameIDRecreation(t *testi
 		t.Fatalf("unpublished metadata = %s/%d", unpublished.Status, unpublished.Revision)
 	}
 
-	ownerAVersions, err := application.Local().Versions(t.Context(), "posts", created.ID, ownerA)
+	ownerAVersions, err := application.Local().Versions(t.Context(), "posts", created.ID, ridu.FindOptions{Actor: ownerA})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(ownerAVersions) != 1 || ownerAVersions[0].Revision != 1 {
 		t.Fatalf("original-owner versions = %#v", ownerAVersions)
 	}
-	ownerBVersions, err := application.Local().Versions(t.Context(), "posts", created.ID, ownerB)
+	ownerBVersions, err := application.Local().Versions(t.Context(), "posts", created.ID, ridu.FindOptions{Actor: ownerB})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(ownerBVersions) != 2 || ownerBVersions[0].Revision != 3 || ownerBVersions[1].Revision != 2 {
 		t.Fatalf("new-owner versions = %#v", ownerBVersions)
 	}
-	if _, err := application.Local().Version(t.Context(), "posts", created.ID, 2, ownerA); err == nil {
+	if _, err := application.Local().Version(t.Context(), "posts", created.ID, 2, ridu.FindOptions{Actor: ownerA}); err == nil {
 		t.Fatal("snapshot access allowed the former owner to read the transferred revision")
 	}
 
-	restored, err := application.Local().Restore(t.Context(), "posts", created.ID, 2, unpublished.Revision, ownerB)
+	restored, err := application.Local().Restore(t.Context(), "posts", created.ID, 2, ridu.MutationOptions{Actor: ownerB, ExpectedRevision: unpublished.Revision})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -333,10 +333,10 @@ func TestMongoDBOperationEngineVersionsRestoreAccessAndSameIDRecreation(t *testi
 	if title, _ := restored.Values["title"].StringValue(); title != "second" {
 		t.Fatalf("restored title = %q", title)
 	}
-	if _, err := application.Local().Publish(t.Context(), "posts", created.ID, unpublished.Revision, ownerB); err == nil {
+	if _, err := application.Local().Publish(t.Context(), "posts", created.ID, ridu.MutationOptions{Actor: ownerB, ExpectedRevision: unpublished.Revision}); err == nil {
 		t.Fatal("stale publish revision was accepted")
 	}
-	ownerBVersions, err = application.Local().Versions(t.Context(), "posts", created.ID, ownerB)
+	ownerBVersions, err = application.Local().Versions(t.Context(), "posts", created.ID, ridu.FindOptions{Actor: ownerB})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -344,23 +344,23 @@ func TestMongoDBOperationEngineVersionsRestoreAccessAndSameIDRecreation(t *testi
 		t.Fatalf("retained operation-engine versions = %#v", ownerBVersions)
 	}
 
-	if _, err := application.Local().Delete(t.Context(), "posts", created.ID, ownerB); err != nil {
+	if _, err := application.Local().Delete(t.Context(), "posts", created.ID, ridu.MutationOptions{Actor: ownerB}); err != nil {
 		t.Fatal(err)
 	}
-	afterDelete, err := application.Local().Versions(t.Context(), "posts", created.ID, ownerB)
+	afterDelete, err := application.Local().Versions(t.Context(), "posts", created.ID, ridu.FindOptions{Actor: ownerB})
 	if err != nil || len(afterDelete) != 0 {
 		t.Fatalf("versions after hard delete = %#v, %v", afterDelete, err)
 	}
 	recreated, err := application.Local().Import(t.Context(), "posts", store.Values{
 		"title": store.String("recreated"), "owner": store.String(ownerA.ID),
-	}, ridu.ImportOptions{ID: created.ID}, ownerA)
+	}, ridu.ImportOptions{ID: created.ID, Actor: ownerA})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if recreated.Revision != 1 {
 		t.Fatalf("recreated revision = %d, want 1", recreated.Revision)
 	}
-	recreatedVersions, err := application.Local().Versions(t.Context(), "posts", recreated.ID, ownerA)
+	recreatedVersions, err := application.Local().Versions(t.Context(), "posts", recreated.ID, ridu.FindOptions{Actor: ownerA})
 	if err != nil || len(recreatedVersions) != 1 || recreatedVersions[0].Revision != 1 {
 		t.Fatalf("same-ID recreated versions = %#v, %v", recreatedVersions, err)
 	}

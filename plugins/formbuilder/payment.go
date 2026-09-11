@@ -41,7 +41,7 @@ func (plugin *Plugin) processPayment(context ridu.HookContext, allowedFieldTypes
 	if !valid {
 		return nil
 	}
-	form, err := context.Local.FindWithOptions(context.Context, string(plugin.config.FormsSlug), formID, ridu.FindOptions{Actor: context.Actor, ActorCollection: context.ActorCollection, Locale: context.Locale})
+	form, err := context.Local.Find(context.Context, string(plugin.config.FormsSlug), formID, ridu.FindOptions{Actor: context.Actor, ActorCollection: context.ActorCollection, Locale: context.Locale})
 	if err != nil {
 		return err
 	}

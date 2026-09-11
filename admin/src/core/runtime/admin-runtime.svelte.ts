@@ -1,6 +1,10 @@
-import { validateAdminConfig, type AdminConfig } from "@riducms/plugin/admin";
 import {
-	resolveAdminExtensions,
+	resolveAdminConfig,
+	validateAdminManifest,
+	type AdminConfig,
+	type ResolvedAdminConfig,
+} from "@riducms/plugin/admin";
+import {
 	type AdminDashboardPanel,
 	type AdminLoginComponent,
 	type AdminAccountComponent,
@@ -13,12 +17,10 @@ import {
 	type AdminDocumentAction,
 	type AdminDocumentView,
 	type AdminListCell,
-	type AdminPlugin,
 	type AdminRoute,
 } from "@riducms/plugin";
 import type { AuthSession, OperationCapabilities, SchemaManifest } from "@riducms/protocol";
 import { RiduError } from "@riducms/sdk";
-import type { TranslationLanguage } from "@riducms/translations";
 import { createContext } from "svelte";
 
 import type { AdminClient, AdminDocument } from "@admin/core/api/admin-client";
@@ -166,15 +168,18 @@ export class AdminRuntime {
 	readonly rowLabels: RowLabelRegistry;
 	readonly i18n: AdminI18nController;
 
+	readonly config: ResolvedAdminConfig;
+	readonly fields: FieldRegistry;
+	readonly editors: ResolvedAdminConfig["editors"];
+
 	constructor(
 		readonly client: AdminClient,
-		readonly plugins: readonly AdminPlugin[] = [],
-		languages?: readonly TranslationLanguage[],
-		readonly fields: FieldRegistry = createCoreFieldRegistry(plugins),
-		readonly editors: NonNullable<AdminConfig["fields"]> = {},
-		readonly application: AdminConfig = {}
+		config: AdminConfig = {}
 	) {
-		const extensions = resolveAdminExtensions(plugins, application);
+		this.config = resolveAdminConfig(config);
+		this.fields = createCoreFieldRegistry(this.config.fields);
+		this.editors = this.config.editors;
+		const extensions = this.config.extensions;
 		this.pluginRoutes = extensions.routes;
 		this.dashboardPanels = extensions.dashboard;
 		this.loginComponents = extensions.login;
@@ -188,11 +193,11 @@ export class AdminRuntime {
 		this.listCells = extensions.listCells;
 		this.documentActions = extensions.documentActions;
 		this.documentViews = extensions.documentViews;
-		this.rowLabels = createRowLabelRegistry(extensions.rowLabels, application.rowLabels);
+		this.rowLabels = createRowLabelRegistry(extensions.rowLabels, this.config.rowLabels);
 		this.i18n = new AdminI18nController(
 			client,
 			() => this.session,
-			languages,
+			this.config.languages,
 			extensions.messages,
 			extensions.applicationMessages
 		);
@@ -439,10 +444,7 @@ export class AdminRuntime {
 		try {
 			const manifest = await this.client.schema();
 			if (request !== this.#manifestRequest) return;
-			validateAdminConfig(
-				{ ...this.application, plugins: this.plugins, fields: this.editors },
-				manifest
-			);
+			validateAdminManifest(this.config, manifest);
 			this.manifest = manifest;
 			this.manifestRevision += 1;
 			this.#configureContentLocale();
@@ -495,10 +497,7 @@ export class AdminRuntime {
 		try {
 			const manifest = await this.client.schema();
 			if (request !== this.#manifestRequest) return;
-			validateAdminConfig(
-				{ ...this.application, plugins: this.plugins, fields: this.editors },
-				manifest
-			);
+			validateAdminManifest(this.config, manifest);
 			this.manifest = manifest;
 			this.manifestRevision += 1;
 			this.#configureContentLocale();

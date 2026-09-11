@@ -63,29 +63,29 @@ func TestReferenceOptionFiltersAreServerEnforcedAcrossRelationshipsUploadsAndNes
 
 	matching, err := application.Local().Create(ctx, "people", store.Values{
 		"category": store.String("article"), "region": store.String("eu"), "visible": store.Boolean(true),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	wrongRegion, err := application.Local().Create(ctx, "people", store.Values{
 		"category": store.String("article"), "region": store.String("us"), "visible": store.Boolean(true),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	hidden, err := application.Local().Create(ctx, "people", store.Values{
 		"category": store.String("article"), "region": store.String("eu"), "visible": store.Boolean(false),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	emptyCategory, err := application.Local().Create(ctx, "people", store.Values{
 		"category": store.String(""), "visible": store.Boolean(true),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	wrongTeam, err := application.Local().Create(ctx, "teams", store.Values{"category": store.String("video")}, nil)
+	wrongTeam, err := application.Local().Create(ctx, "teams", store.Values{"category": store.String("video")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,50 +113,50 @@ func TestReferenceOptionFiltersAreServerEnforcedAcrossRelationshipsUploadsAndNes
 
 	if _, err := application.Local().Create(ctx, "entries", store.Values{
 		"category": store.String("article"), "region": store.String("eu"), "author": store.String(wrongRegion.ID),
-	}, nil); !relationshipIssue(err, "author") {
+	}, ridu.MutationOptions{}); !relationshipIssue(err, "author") {
 		t.Fatalf("AND-filtered relationship error = %v", err)
 	}
 	if _, err := application.Local().Create(ctx, "entries", store.Values{
 		"category": store.String("article"), "region": store.String("eu"), "author": store.String(hidden.ID),
-	}, nil); !relationshipIssue(err, "author") {
+	}, ridu.MutationOptions{}); !relationshipIssue(err, "author") {
 		t.Fatalf("read-filtered relationship error = %v", err)
 	}
 	if _, err := application.Local().Create(ctx, "entries", store.Values{
 		"category": store.String(""), "author": store.String(matching.ID),
-	}, nil); !relationshipIssue(err, "author") {
+	}, ridu.MutationOptions{}); !relationshipIssue(err, "author") {
 		t.Fatalf("empty-string option predicate was omitted: %v", err)
 	}
 	if _, err := application.Local().Create(ctx, "entries", store.Values{
 		"category": store.String(""), "author": store.String(emptyCategory.ID),
-	}, nil); err != nil {
+	}, ridu.MutationOptions{}); err != nil {
 		t.Fatalf("matching empty-string option predicate = %v", err)
 	}
 	if _, err := application.Local().Create(ctx, "entries", store.Values{
 		"category": store.String("article"), "region": store.String("eu"),
 		"subject": store.Object(store.Values{"relationTo": store.String("teams"), "id": store.String(wrongTeam.ID)}),
-	}, nil); !relationshipIssue(err, "subject") {
+	}, ridu.MutationOptions{}); !relationshipIssue(err, "subject") {
 		t.Fatalf("polymorphic relationship filter error = %v", err)
 	}
 	if _, err := application.Local().Create(ctx, "entries", store.Values{
 		"region":  store.String("eu"),
 		"subject": store.Object(store.Values{"relationTo": store.String("people"), "id": store.String(wrongRegion.ID)}),
-	}, nil); !relationshipIssue(err, "subject") {
+	}, ridu.MutationOptions{}); !relationshipIssue(err, "subject") {
 		t.Fatalf("target-scoped polymorphic relationship filter error = %v", err)
 	}
 	if _, err := application.Local().Create(ctx, "entries", store.Values{
 		"category": store.String("does-not-apply"), "region": store.String("eu"),
 		"subject": store.Object(store.Values{"relationTo": store.String("people"), "id": store.String(matching.ID)}),
-	}, nil); err != nil {
+	}, ridu.MutationOptions{}); err != nil {
 		t.Fatalf("other polymorphic target's option filter leaked across scopes: %v", err)
 	}
 	if _, err := application.Local().Create(ctx, "entries", store.Values{
 		"category": store.String("article"), "hero": store.String(wrongUpload.ID),
-	}, nil); !uploadReferenceIssue(err, "hero") {
+	}, ridu.MutationOptions{}); !uploadReferenceIssue(err, "hero") {
 		t.Fatalf("option-filtered upload error = %v", err)
 	}
 	if _, err := application.Local().Create(ctx, "entries", store.Values{
 		"category": store.String("article"), "hero": store.String(hiddenUpload.ID),
-	}, nil); !uploadReferenceIssue(err, "hero") {
+	}, ridu.MutationOptions{}); !uploadReferenceIssue(err, "hero") {
 		t.Fatalf("read-filtered upload error = %v", err)
 	}
 
@@ -178,7 +178,7 @@ func TestReferenceOptionFiltersAreServerEnforcedAcrossRelationshipsUploadsAndNes
 		}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			if _, err := application.Local().Create(ctx, "entries", test.values, nil); !relationshipIssue(err, test.path) {
+			if _, err := application.Local().Create(ctx, "entries", test.values, ridu.MutationOptions{}); !relationshipIssue(err, test.path) {
 				t.Fatalf("nested reference filter error = %v", err)
 			}
 		})
@@ -186,25 +186,25 @@ func TestReferenceOptionFiltersAreServerEnforcedAcrossRelationshipsUploadsAndNes
 
 	// A missing optional source produces no option predicate, but target Read is
 	// still mandatory and cannot be widened by the picker configuration.
-	if _, err := application.Local().Create(ctx, "entries", store.Values{"author": store.String(wrongRegion.ID)}, nil); err != nil {
+	if _, err := application.Local().Create(ctx, "entries", store.Values{"author": store.String(wrongRegion.ID)}, ridu.MutationOptions{}); err != nil {
 		t.Fatalf("missing optional source should omit its predicates: %v", err)
 	}
-	if _, err := application.Local().Create(ctx, "entries", store.Values{"author": store.String(hidden.ID)}, nil); !relationshipIssue(err, "author") {
+	if _, err := application.Local().Create(ctx, "entries", store.Values{"author": store.String(hidden.ID)}, ridu.MutationOptions{}); !relationshipIssue(err, "author") {
 		t.Fatalf("missing source widened target Read access: %v", err)
 	}
 
 	accepted, err := application.Local().Create(ctx, "entries", store.Values{
 		"category": store.String("article"), "region": store.String("eu"),
 		"author": store.String(matching.ID), "hero": store.String(matchingUpload.ID),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Update(ctx, "entries", accepted.ID, store.Values{"category": store.String("other")}, nil); !relationshipIssue(err, "author") || !uploadReferenceIssue(err, "hero") {
+	if _, err := application.Local().Update(ctx, "entries", accepted.ID, store.Values{"category": store.String("other")}, ridu.MutationOptions{}); !relationshipIssue(err, "author") || !uploadReferenceIssue(err, "hero") {
 		t.Fatalf("source-only update did not revalidate unchanged references: %v", err)
 	}
 	hookCategory = "other"
-	if _, err := application.Local().Update(ctx, "entries", accepted.ID, store.Values{"region": store.String("eu")}, nil); !relationshipIssue(err, "author") || !uploadReferenceIssue(err, "hero") {
+	if _, err := application.Local().Update(ctx, "entries", accepted.ID, store.Values{"region": store.String("eu")}, ridu.MutationOptions{}); !relationshipIssue(err, "author") || !uploadReferenceIssue(err, "hero") {
 		t.Fatalf("post-hook candidate did not revalidate unchanged references: %v", err)
 	}
 }
@@ -222,31 +222,31 @@ func TestLiteralPublishedReferenceFilterIsServerEnforced(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	draft, err := application.Local().Create(ctx, "lessons", store.Values{"title": store.String("Draft")}, nil)
+	draft, err := application.Local().Create(ctx, "lessons", store.Values{"title": store.String("Draft")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := application.Local().Create(ctx, "islands", store.Values{
 		"title": store.String("Rejected"), "lesson": store.String(draft.ID),
-	}, nil); !relationshipIssue(err, "lesson") {
+	}, ridu.MutationOptions{}); !relationshipIssue(err, "lesson") {
 		t.Fatalf("draft relationship error = %v", err)
 	}
 
-	published, err := application.Local().Publish(ctx, "lessons", draft.ID, draft.Revision, nil)
+	published, err := application.Local().Publish(ctx, "lessons", draft.ID, ridu.MutationOptions{ExpectedRevision: draft.Revision})
 	if err != nil {
 		t.Fatal(err)
 	}
 	island, err := application.Local().Create(ctx, "islands", store.Values{
 		"title": store.String("Accepted"), "lesson": store.String(published.ID),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	unpublished, err := application.Local().Unpublish(ctx, "lessons", published.ID, published.Revision, nil)
+	unpublished, err := application.Local().Unpublish(ctx, "lessons", published.ID, ridu.MutationOptions{ExpectedRevision: published.Revision})
 	if err != nil || unpublished.Status != store.StatusDraft {
 		t.Fatalf("unpublish = %#v, %v", unpublished, err)
 	}
-	if _, err := application.Local().Update(ctx, "islands", island.ID, store.Values{"title": store.String("Still checked")}, nil); !relationshipIssue(err, "lesson") {
+	if _, err := application.Local().Update(ctx, "islands", island.ID, store.Values{"title": store.String("Still checked")}, ridu.MutationOptions{}); !relationshipIssue(err, "lesson") {
 		t.Fatalf("retained draft relationship error = %v", err)
 	}
 }
@@ -266,21 +266,21 @@ func TestReferenceOptionFiltersRevalidateEveryRetainedLocale(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	person, err := application.Local().Create(ctx, "people", store.Values{"category": store.String("article")}, nil)
+	person, err := application.Local().Create(ctx, "people", store.Values{"category": store.String("article")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	entry, err := application.Local().Create(ctx, "entries", store.Values{
 		"category": store.String("article"), "editor": store.String(person.ID),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	entry, err = application.Local().Update(ctx, "entries", entry.ID, store.Values{"editor": store.String(person.ID)}, nil, ridu.LocaleOptions{Locale: "fr"})
+	entry, err = application.Local().Update(ctx, "entries", entry.ID, store.Values{"editor": store.String(person.ID)}, ridu.MutationOptions{Locale: "fr"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = application.Local().Update(ctx, "entries", entry.ID, store.Values{"category": store.String("video")}, nil, ridu.LocaleOptions{Locale: "en"})
+	_, err = application.Local().Update(ctx, "entries", entry.ID, store.Values{"category": store.String("video")}, ridu.MutationOptions{Locale: "en"})
 	var operationError *ridu.OperationError
 	if !errors.As(err, &operationError) {
 		t.Fatalf("shared source update error = %v", err)
@@ -326,55 +326,55 @@ func TestReferenceAdmissionChecksFallbackSourcedLocales(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	person, err := application.Local().Create(ctx, "people", store.Values{"name": store.String("Editor")}, nil)
+	person, err := application.Local().Create(ctx, "people", store.Values{"name": store.String("Editor")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	matching, err := application.Local().Create(ctx, "categories", store.Values{"category": store.String("article")}, nil)
+	matching, err := application.Local().Create(ctx, "categories", store.Values{"category": store.String("article")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	matching, err = application.Local().Update(ctx, "categories", matching.ID, store.Values{"category": store.String("article")}, nil, ridu.LocaleOptions{Locale: "fr"})
+	matching, err = application.Local().Update(ctx, "categories", matching.ID, store.Values{"category": store.String("article")}, ridu.MutationOptions{Locale: "fr"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	entry, err := application.Local().Create(ctx, "entries", store.Values{
 		"category": store.String("article"), "marker": store.String("initial"),
 		"accessEditor": store.String(person.ID), "filteredEditor": store.String(matching.ID),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatalf("valid fallback-sourced references: %v", err)
 	}
 
 	denyFrenchAccess = true
-	_, err = application.Local().Update(ctx, "entries", entry.ID, store.Values{"marker": store.String("changed")}, nil)
+	_, err = application.Local().Update(ctx, "entries", entry.ID, store.Values{"marker": store.String("changed")}, ridu.MutationOptions{})
 	assertLocalizedReferenceIssue(t, err, "accessEditor.fr", "accessEditor.en")
 	denyFrenchAccess = false
 
-	if _, err := application.Local().Update(ctx, "categories", matching.ID, store.Values{"category": store.String("news")}, nil); err != nil {
+	if _, err := application.Local().Update(ctx, "categories", matching.ID, store.Values{"category": store.String("news")}, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Update(ctx, "categories", matching.ID, store.Values{"category": store.String("video")}, nil, ridu.LocaleOptions{Locale: "fr"}); err != nil {
+	if _, err := application.Local().Update(ctx, "categories", matching.ID, store.Values{"category": store.String("video")}, ridu.MutationOptions{Locale: "fr"}); err != nil {
 		t.Fatal(err)
 	}
-	_, err = application.Local().Update(ctx, "entries", entry.ID, store.Values{"category": store.String("news")}, nil)
+	_, err = application.Local().Update(ctx, "entries", entry.ID, store.Values{"category": store.String("news")}, ridu.MutationOptions{})
 	assertLocalizedReferenceIssue(t, err, "filteredEditor.fr", "filteredEditor.en")
 
 	denyFrenchAccess = true
-	_, err = application.Local().Create(ctx, "entries", store.Values{"accessEditor": store.String(person.ID)}, nil)
+	_, err = application.Local().Create(ctx, "entries", store.Values{"accessEditor": store.String(person.ID)}, ridu.MutationOptions{})
 	assertLocalizedReferenceIssue(t, err, "accessEditor.fr", "accessEditor.en")
 	denyFrenchAccess = false
 
-	mismatching, err := application.Local().Create(ctx, "categories", store.Values{"category": store.String("article")}, nil)
+	mismatching, err := application.Local().Create(ctx, "categories", store.Values{"category": store.String("article")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Update(ctx, "categories", mismatching.ID, store.Values{"category": store.String("video")}, nil, ridu.LocaleOptions{Locale: "fr"}); err != nil {
+	if _, err := application.Local().Update(ctx, "categories", mismatching.ID, store.Values{"category": store.String("video")}, ridu.MutationOptions{Locale: "fr"}); err != nil {
 		t.Fatal(err)
 	}
 	_, err = application.Local().Create(ctx, "entries", store.Values{
 		"category": store.String("article"), "filteredEditor": store.String(mismatching.ID),
-	}, nil)
+	}, ridu.MutationOptions{})
 	assertLocalizedReferenceIssue(t, err, "filteredEditor.fr", "filteredEditor.en")
 }
 
@@ -415,7 +415,7 @@ func TestReferenceOptionFilterOperatorsAndCacheIdentity(t *testing.T) {
 	}
 	target, err := application.Local().Create(ctx, "targets", store.Values{
 		"label": store.String("Ångström Alpha Beta"), "score": store.Number(10),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -427,7 +427,7 @@ func TestReferenceOptionFilterOperatorsAndCacheIdentity(t *testing.T) {
 		"lessThanRef": store.String(target.ID), "lessThanEqualRef": store.String(target.ID),
 		"orderedTextRef": store.String(target.ID),
 	}
-	entry, err := application.Local().Create(ctx, "entries", base, nil)
+	entry, err := application.Local().Create(ctx, "entries", base, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatalf("valid option-filter operators: %v", err)
 	}
@@ -447,7 +447,7 @@ func TestReferenceOptionFilterOperatorsAndCacheIdentity(t *testing.T) {
 		{name: "ordered Unicode text", field: "lexicalThreshold", value: store.String("🧭"), refPath: "orderedTextRef"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			if _, err := application.Local().Update(ctx, "entries", entry.ID, store.Values{test.field: test.value}, nil); !relationshipIssue(err, test.refPath) {
+			if _, err := application.Local().Update(ctx, "entries", entry.ID, store.Values{test.field: test.value}, ridu.MutationOptions{}); !relationshipIssue(err, test.refPath) {
 				t.Fatalf("operator-filtered update error = %v", err)
 			}
 		})
@@ -456,7 +456,7 @@ func TestReferenceOptionFilterOperatorsAndCacheIdentity(t *testing.T) {
 	_, err = application.Local().Create(ctx, "entries", store.Values{
 		"allowedLabel": store.String("Ångström Alpha Beta"), "deniedLabel": store.String("Other"),
 		"allowedRef": store.String(target.ID), "deniedRef": store.String(target.ID),
-	}, nil)
+	}, ridu.MutationOptions{})
 	var operationError *ridu.OperationError
 	if !errors.As(err, &operationError) || !relationshipIssue(err, "deniedRef") {
 		t.Fatalf("field-specific filter cache error = %v", err)
@@ -483,47 +483,47 @@ func TestReferenceOptionFiltersGuardDuplicateStatusVersionAndTrashRestore(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	person, err := application.Local().Create(ctx, "people", store.Values{"category": store.String("article")}, nil)
+	person, err := application.Local().Create(ctx, "people", store.Values{"category": store.String("article")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	entry, err := application.Local().Create(ctx, "entries", store.Values{
 		"category": store.String("article"), "author": store.String(person.ID),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	articleRevision := entry.Revision
-	if _, err := application.Local().Update(ctx, "people", person.ID, store.Values{"category": store.String("news")}, nil); err != nil {
+	if _, err := application.Local().Update(ctx, "people", person.ID, store.Values{"category": store.String("news")}, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Duplicate(ctx, "entries", entry.ID, nil, nil); !relationshipIssue(err, "author") {
+	if _, err := application.Local().Duplicate(ctx, "entries", entry.ID, nil, ridu.MutationOptions{}); !relationshipIssue(err, "author") {
 		t.Fatalf("duplicate option-filter error = %v", err)
 	}
-	if _, err := application.Local().Publish(ctx, "entries", entry.ID, entry.Revision, nil); !relationshipIssue(err, "author") {
+	if _, err := application.Local().Publish(ctx, "entries", entry.ID, ridu.MutationOptions{ExpectedRevision: entry.Revision}); !relationshipIssue(err, "author") {
 		t.Fatalf("publish option-filter error = %v", err)
 	}
-	entry, err = application.Local().PublishChanges(ctx, "entries", entry.ID, store.Values{"category": store.String("news")}, entry.Revision, nil)
+	entry, err = application.Local().PublishChanges(ctx, "entries", entry.ID, store.Values{"category": store.String("news")}, ridu.MutationOptions{ExpectedRevision: entry.Revision})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Restore(ctx, "entries", entry.ID, articleRevision, entry.Revision, nil); !relationshipIssue(err, "author") {
+	if _, err := application.Local().Restore(ctx, "entries", entry.ID, articleRevision, ridu.MutationOptions{ExpectedRevision: entry.Revision}); !relationshipIssue(err, "author") {
 		t.Fatalf("version restore option-filter error = %v", err)
 	}
-	entry, err = application.Local().Publish(ctx, "entries", entry.ID, entry.Revision, nil)
+	entry, err = application.Local().Publish(ctx, "entries", entry.ID, ridu.MutationOptions{ExpectedRevision: entry.Revision})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Update(ctx, "people", person.ID, store.Values{"category": store.String("article")}, nil); err != nil {
+	if _, err := application.Local().Update(ctx, "people", person.ID, store.Values{"category": store.String("article")}, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Unpublish(ctx, "entries", entry.ID, entry.Revision, nil); !relationshipIssue(err, "author") {
+	if _, err := application.Local().Unpublish(ctx, "entries", entry.ID, ridu.MutationOptions{ExpectedRevision: entry.Revision}); !relationshipIssue(err, "author") {
 		t.Fatalf("unpublish option-filter error = %v", err)
 	}
-	if _, err := application.Local().Delete(ctx, "entries", entry.ID, nil); err != nil {
+	if _, err := application.Local().Delete(ctx, "entries", entry.ID, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().RestoreDeleted(ctx, "entries", entry.ID, nil); !relationshipIssue(err, "author") {
+	if _, err := application.Local().RestoreDeleted(ctx, "entries", entry.ID, ridu.MutationOptions{}); !relationshipIssue(err, "author") {
 		t.Fatalf("trash restore option-filter error = %v", err)
 	}
 }

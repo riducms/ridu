@@ -13,7 +13,7 @@ import (
 	"github.com/riducms/ridu/store"
 )
 
-func initialLabel(ctx operation.DefaultContext) (operation.Value[string], error) {
+func initialLabel(ctx operation.Context) (operation.Value[string], error) {
 	if ctx.Locale == "fr" {
 		return operation.Present("Lire la suite"), nil
 	}
@@ -22,27 +22,27 @@ func initialLabel(ctx operation.DefaultContext) (operation.Value[string], error)
 
 func TestDynamicDefaultSupportedConcreteTypes(t *testing.T) {
 	stringDefault := field.DefaultFunc[string](initialLabel)
-	numberDefault := field.DefaultFunc[float64](func(operation.DefaultContext) (operation.Value[float64], error) {
+	numberDefault := field.DefaultFunc[float64](func(operation.Context) (operation.Value[float64], error) {
 		return operation.Present(0.0), nil
 	})
-	boolDefault := field.DefaultFunc[bool](func(operation.DefaultContext) (operation.Value[bool], error) {
+	boolDefault := field.DefaultFunc[bool](func(operation.Context) (operation.Value[bool], error) {
 		return operation.Present(false), nil
 	})
-	listDefault := field.DefaultFunc[[]string](func(operation.DefaultContext) (operation.Value[[]string], error) {
+	listDefault := field.DefaultFunc[[]string](func(operation.Context) (operation.Value[[]string], error) {
 		return operation.Present([]string{"news"}), nil
 	})
 
 	// These concrete assignments are an external-consumer compile check for
 	// useful chaining and the same logical type as each kind's literal Default.
 	var text field.TextField = field.Text("text").DefaultFrom(stringDefault).MaxLength(120)
-	var code field.CodeField = field.Code("code").DefaultFrom(stringDefault)
-	var textarea field.TextareaField = field.Textarea("textarea").DefaultFrom(stringDefault)
+	var code field.TextField = field.Code("code").DefaultFrom(stringDefault)
+	var textarea field.TextField = field.Textarea("textarea").DefaultFrom(stringDefault)
 	var email field.EmailField = field.Email("email").DefaultFrom(stringDefault)
 	var date field.DateField = field.Date("date").DefaultFrom(stringDefault).Format(field.DateTime)
 	var number field.NumberField = field.Number("number").DefaultFrom(numberDefault).Min(0)
 	var checkbox field.CheckboxField = field.Checkbox("checkbox").DefaultFrom(boolDefault)
 	var selectField field.SelectField = field.Select("select", "news").DefaultFrom(stringDefault)
-	var radio field.RadioField = field.Radio("radio", "news").DefaultFrom(stringDefault)
+	var radio field.SelectField = field.Radio("radio", "news").DefaultFrom(stringDefault)
 	var multi field.MultiSelectField = field.MultiSelect("multi", "news").DefaultFrom(listDefault)
 
 	for _, node := range (field.Fields{text, code, textarea, email, date, number, checkbox, selectField, radio, multi}) {
@@ -58,22 +58,22 @@ func TestDynamicDefaultSupportedConcreteTypes(t *testing.T) {
 		}
 	}
 	for _, callback := range []field.DefaultFunc[string]{text.DefaultCallback(), code.DefaultCallback(), textarea.DefaultCallback(), email.DefaultCallback(), date.DefaultCallback(), selectField.DefaultCallback(), radio.DefaultCallback()} {
-		value, err := callback(operation.DefaultContext{Locale: "fr"})
+		value, err := callback(operation.Context{Locale: "fr"})
 		if got, present := value.Get(); err != nil || !present || got != "Lire la suite" {
 			t.Fatalf("string default callback = %v, %v", value, err)
 		}
 	}
-	if value, err := number.DefaultCallback()(operation.DefaultContext{}); err != nil {
+	if value, err := number.DefaultCallback()(operation.Context{}); err != nil {
 		t.Fatal(err)
 	} else if got, present := value.Get(); !present || got != 0 {
 		t.Fatal("numeric zero lost its presence")
 	}
-	if value, err := checkbox.DefaultCallback()(operation.DefaultContext{}); err != nil {
+	if value, err := checkbox.DefaultCallback()(operation.Context{}); err != nil {
 		t.Fatal(err)
 	} else if got, present := value.Get(); !present || got {
 		t.Fatal("false lost its presence")
 	}
-	if value, err := multi.DefaultCallback()(operation.DefaultContext{}); err != nil {
+	if value, err := multi.DefaultCallback()(operation.Context{}); err != nil {
 		t.Fatal(err)
 	} else if got, present := value.Get(); !present || !slices.Equal(got, []string{"news"}) {
 		t.Fatal("multi-select callback lost its logical list type")
@@ -118,7 +118,7 @@ func TestDynamicDefaultSettersReplaceRatherThanCompose(t *testing.T) {
 	}
 	for _, node := range (field.Fields{base, dynamic, fixed}) {
 		text := assertGraphTextBehavior(t, node, 1, 1)
-		allowed, err := text.AccessPolicy().Create(operation.AccessContext{})
+		allowed, err := text.AccessPolicy().Create(operation.Context{})
 		if err != nil || !allowed {
 			t.Fatal("default replacement lost access")
 		}
@@ -128,7 +128,7 @@ func TestDynamicDefaultSettersReplaceRatherThanCompose(t *testing.T) {
 	}
 
 	listBase := field.MultiSelect("tags", "news", "updates").Default("news")
-	listDynamic := listBase.DefaultFrom(func(operation.DefaultContext) (operation.Value[[]string], error) {
+	listDynamic := listBase.DefaultFrom(func(operation.Context) (operation.Value[[]string], error) {
 		return operation.Present([]string{"updates"}), nil
 	})
 	listFixed := listDynamic.Default("updates")
@@ -145,10 +145,10 @@ func TestDynamicDefaultDiagnosticsFollowTheFinalPolicy(t *testing.T) {
 	if len(issues) != 1 || issues[0].Code != "nil_field_callback" || issues[0].Path != "defaultFrom" || !strings.Contains(issues[0].Message, "non-nil") {
 		t.Fatalf("nil callback diagnostic = %#v", issues)
 	}
-	validNumber := func(operation.DefaultContext) (operation.Value[float64], error) {
+	validNumber := func(operation.Context) (operation.Value[float64], error) {
 		return operation.Present(3.0), nil
 	}
-	validList := func(operation.DefaultContext) (operation.Value[[]string], error) {
+	validList := func(operation.Context) (operation.Value[[]string], error) {
 		return operation.Empty[[]string](), nil
 	}
 	for _, node := range (field.Fields{
@@ -177,7 +177,7 @@ func TestDynamicDefaultDiagnosticsFollowTheFinalPolicy(t *testing.T) {
 
 func TestDynamicDefaultFactoriesAndGraphEditsPreserveBehaviorWithoutEvaluation(t *testing.T) {
 	calls := 0
-	initial := func(ctx operation.DefaultContext) (operation.Value[string], error) {
+	initial := func(ctx operation.Context) (operation.Value[string], error) {
 		calls++
 		return initialLabel(ctx)
 	}
@@ -222,7 +222,7 @@ func TestDynamicDefaultFactoriesAndGraphEditsPreserveBehaviorWithoutEvaluation(t
 		t.Fatal("authoring, inspection, or graph edits executed a dynamic default")
 	}
 	text, _ := field.AsText(field.Snapshot(edited[0]).Fields()[0])
-	value, err := text.DefaultCallback()(operation.DefaultContext{Locale: "fr"})
+	value, err := text.DefaultCallback()(operation.Context{Locale: "fr"})
 	if got, present := value.Get(); err != nil || !present || got != "Lire la suite" || calls != 1 {
 		t.Fatal("graph-edited factory lost its default callback")
 	}
@@ -233,14 +233,14 @@ func TestDynamicDefaultFactoriesAndGraphEditsPreserveBehaviorWithoutEvaluation(t
 
 func TestDynamicMultiSelectDefaultResultsAreOwned(t *testing.T) {
 	borrowed := []string{"news", "updates"}
-	f := field.MultiSelect("tags").DefaultFrom(func(operation.DefaultContext) (operation.Value[[]string], error) {
+	f := field.MultiSelect("tags").DefaultFrom(func(operation.Context) (operation.Value[[]string], error) {
 		return operation.Present(borrowed), nil
 	})
-	first, err := f.DefaultCallback()(operation.DefaultContext{})
+	first, err := f.DefaultCallback()(operation.Context{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, _ := f.DefaultCallback()(operation.DefaultContext{})
+	second, _ := f.DefaultCallback()(operation.Context{})
 	values, _ := first.Get()
 	values[0] = "changed returned value"
 	if borrowed[0] != "news" {

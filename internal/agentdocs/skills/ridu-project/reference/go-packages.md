@@ -65,14 +65,14 @@ three in every function.
 
 `ctx` is a variable name, not one particular Ridu type. Check the function argument:
 
-| Argument type                                                                                    | What you have                                                                                |
-| ------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
-| `context.Context`                                                                                | Go request cancellation and deadlines; pass it to work started for the request               |
-| `ridu.AccessContext`                                                                             | A collection or global access check, including the caller and requested operation            |
-| `ridu.HookContext`                                                                               | A document hook, including editable input, the original document, and the local API          |
-| `operation.DefaultContext`                                                                       | A field default, including the caller, content locale, and input available before validation |
-| `operation.LiveValidationContext`                                                                | A check while editing, including unsaved input, saved values, and the caller                 |
-| `operation.ValidationContext`, `WriteContext`, `ReadContext`, `AccessContext`, or `EventContext` | A field callback, including nearby values, previous values, and the caller                   |
+| Argument type                     | What you have                                                                                |
+| --------------------------------- | -------------------------------------------------------------------------------------------- |
+| `context.Context`                 | Go request cancellation and deadlines; pass it to work started for the request               |
+| `ridu.AccessContext`              | A collection or global access check, including the caller and requested operation            |
+| `ridu.HookContext`                | A document hook, including editable input, the original document, and the local API          |
+| `operation.Context`               | A field default, including the caller, content locale, and input available before validation |
+| `operation.LiveValidationContext` | A check while editing, including unsaved input, saved values, and the caller                 |
+| `operation.Context`               | A field callback, including nearby values, previous values, and the caller                   |
 
 The distinction matters. A document hook's `ctx.Actor` can be `nil`; a field callback's
 `ctx.Actor.ID` is empty for an anonymous caller. A document hook can change entries in `ctx.Data`

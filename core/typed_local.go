@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
 )
@@ -44,27 +45,27 @@ type TypedPage[Document any] struct {
 	Total     int
 }
 
-func (collection BoundTypedCollection[Document, Create, Update]) Create(ctx context.Context, input Create, actor *store.Document, localeOptions ...TypedLocaleOptions) (Document, error) {
+func (collection BoundTypedCollection[Document, Create, Update]) Create(ctx context.Context, input Create, options TypedMutationOptions) (Document, error) {
 	values, err := typedInputValues(input)
 	if err != nil {
 		return *new(Document), err
 	}
-	document, err := collection.local.Create(ctx, collection.definition.slug, values, actor, typedWriteLocales(localeOptions)...)
+	document, err := collection.local.Create(ctx, collection.definition.slug, values, options.mutationOptions())
 	return decodeTypedDocument[Document](document, err)
 }
 
-func (collection BoundTypedCollection[Document, Create, Update]) Import(ctx context.Context, input Create, options ImportOptions, actor *store.Document) (Document, error) {
+func (collection BoundTypedCollection[Document, Create, Update]) Import(ctx context.Context, input Create, options ImportOptions) (Document, error) {
 	values, err := typedInputValues(input)
 	if err != nil {
 		return *new(Document), err
 	}
-	document, err := collection.local.Import(ctx, collection.definition.slug, values, options, actor)
+	document, err := collection.local.Import(ctx, collection.definition.slug, values, options)
 	return decodeTypedDocument[Document](document, err)
 }
 
 // Find reads one locale with optional population and projection.
 func (collection BoundTypedCollection[Document, Create, Update]) Find(ctx context.Context, id string, options TypedReadOptions) (Document, error) {
-	document, err := collection.local.FindWithOptions(ctx, collection.definition.slug, id, options.findOptions(false))
+	document, err := collection.local.Find(ctx, collection.definition.slug, id, options.findOptions(false))
 	return decodeTypedDocument[Document](document, err)
 }
 
@@ -74,26 +75,17 @@ func (collection BoundTypedCollection[Document, Create, Update]) List(ctx contex
 	return listTypedDocuments[Document](ctx, collection.local, collection.definition.slug, options, false)
 }
 
-func (collection BoundTypedCollection[Document, Create, Update]) Update(ctx context.Context, id string, input Update, actor *store.Document, localeOptions ...TypedLocaleOptions) (Document, error) {
+func (collection BoundTypedCollection[Document, Create, Update]) Update(ctx context.Context, id string, input Update, options TypedMutationOptions) (Document, error) {
 	values, err := typedInputValues(input)
 	if err != nil {
 		return *new(Document), err
 	}
-	document, err := collection.local.Update(ctx, collection.definition.slug, id, values, actor, typedWriteLocales(localeOptions)...)
+	document, err := collection.local.Update(ctx, collection.definition.slug, id, values, options.mutationOptions())
 	return decodeTypedDocument[Document](document, err)
 }
 
-func (collection BoundTypedCollection[Document, Create, Update]) UpdateRevision(ctx context.Context, id string, input Update, expectedRevision int, actor *store.Document, localeOptions ...TypedLocaleOptions) (Document, error) {
-	values, err := typedInputValues(input)
-	if err != nil {
-		return *new(Document), err
-	}
-	document, err := collection.local.UpdateRevision(ctx, collection.definition.slug, id, values, expectedRevision, actor, typedWriteLocales(localeOptions)...)
-	return decodeTypedDocument[Document](document, err)
-}
-
-func (collection BoundTypedCollection[Document, Create, Update]) Delete(ctx context.Context, id string, actor *store.Document) (Document, error) {
-	document, err := collection.local.Delete(ctx, collection.definition.slug, id, actor)
+func (collection BoundTypedCollection[Document, Create, Update]) Delete(ctx context.Context, id string, options TypedMutationOptions) (Document, error) {
+	document, err := collection.local.Delete(ctx, collection.definition.slug, id, options.mutationOptions())
 	return decodeTypedDocument[Document](document, err)
 }
 
@@ -143,18 +135,24 @@ func decodeStoredDocument[Document any](stored store.Document) (Document, error)
 	return document, nil
 }
 
-// TypedLocaleOptions selects one authoring locale without changing the generated
-// write response into an all-locales document.
-type TypedLocaleOptions struct {
-	Locale          schema.LocaleCode
-	FallbackLocales []schema.LocaleCode
-	DisableFallback bool
+// TypedMutationOptions controls a generated mutation whose response is always single-locale.
+// The semantic action consumes the same settings as its LocalAPI equivalent.
+type TypedMutationOptions struct {
+	ID               string
+	Actor            *store.Document
+	ActorCollection  schema.CollectionSlug
+	ExpectedRevision int
+	Populate         []query.Population
+	OutputFields     []query.Path
+	Draft            *bool
+	Locale           schema.LocaleCode
+	FallbackLocales  []schema.LocaleCode
+	DisableFallback  bool
 }
 
-func typedWriteLocales(options []TypedLocaleOptions) []LocaleOptions {
-	result := make([]LocaleOptions, len(options))
-	for i, option := range options {
-		result[i] = LocaleOptions{Locale: option.Locale, FallbackLocales: option.FallbackLocales, DisableFallback: option.DisableFallback}
-	}
-	return result
+func (options TypedMutationOptions) mutationOptions() MutationOptions {
+	return MutationOptions{ID: options.ID, Actor: options.Actor, ActorCollection: options.ActorCollection,
+		ExpectedRevision: options.ExpectedRevision, Populate: options.Populate, OutputFields: options.OutputFields,
+		Draft: options.Draft, Locale: options.Locale, FallbackLocales: options.FallbackLocales,
+		DisableFallback: options.DisableFallback}
 }

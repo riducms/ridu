@@ -43,7 +43,7 @@ func TestOpenAPIOptionalEmailMatchesHTTPOutput(t *testing.T) {
 				row["contact"], values["contact"] = test.value, test.value
 			}
 			values["layout"] = store.List(store.Object(row))
-			doc, err := app.Local().Create(context.Background(), "pages", values, nil)
+			doc, err := app.Local().Create(context.Background(), "pages", values, core.MutationOptions{})
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -8,6 +8,7 @@ interface Config extends RiduConfigShape {
 			auth: false;
 			upload: false;
 			versions: false;
+			drafts: false;
 			trash: false;
 			output: { id: string; sku: string };
 			create: { sku: string };
@@ -20,6 +21,7 @@ interface Config extends RiduConfigShape {
 	globals: {
 		settings: {
 			versions: false;
+			drafts: false;
 			output: { id: string };
 			update: Record<never, never>;
 			select: Record<never, never>;

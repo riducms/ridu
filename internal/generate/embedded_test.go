@@ -57,11 +57,11 @@ func TestEmbeddedGeneratedContractsAndHTTP(t *testing.T) {
 		t.Fatal(err)
 	}
 	validator := resolvedResourceSchema(t, contract, "pages")
-	target, err := app.Local().Create(t.Context(), "targets", store.Values{"name": store.String("Target")}, nil)
+	target, err := app.Local().Create(t.Context(), "targets", store.Values{"name": store.String("Target")}, core.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	doc, err := app.Local().Create(t.Context(), "pages", store.Values{"body": outline.Value(outline.Widget("card", "", store.Values{"title": store.String("Hello"), "translation": store.String("English"), "target": store.String(target.ID)}))}, nil)
+	doc, err := app.Local().Create(t.Context(), "pages", store.Values{"body": outline.Value(outline.Widget("card", "", store.Values{"title": store.String("Hello"), "translation": store.String("English"), "target": store.String(target.ID)}))}, core.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -192,7 +192,7 @@ void input;void output;void invalid;`,
 
 func TestEmbeddedOpenAPIUpdateAcceptsKeylessInsertion(t *testing.T) {
 	app := embeddedContractApp(t)
-	created, err := app.Local().Create(t.Context(), "pages", store.Values{}, nil)
+	created, err := app.Local().Create(t.Context(), "pages", store.Values{}, core.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

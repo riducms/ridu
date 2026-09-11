@@ -40,52 +40,52 @@ func TestCompoundUniqueIndexesMatchNullLocaleAndTrashSemantics(t *testing.T) {
 		return result
 	}
 
-	first, err := application.Local().Create(ctx, "posts", values("acme", "welcome", "A"), nil)
+	first, err := application.Local().Create(ctx, "posts", values("acme", "welcome", "A"), ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Create(ctx, "posts", values("acme", "welcome", "B"), nil); !operationCode(err, "conflict") {
+	if _, err := application.Local().Create(ctx, "posts", values("acme", "welcome", "B"), ridu.MutationOptions{}); !operationCode(err, "conflict") {
 		t.Fatalf("nested compound duplicate error = %v, want conflict", err)
 	}
-	if _, err := application.Local().Create(ctx, "posts", values("acme", "different", "A"), nil); !operationCode(err, "conflict") {
+	if _, err := application.Local().Create(ctx, "posts", values("acme", "different", "A"), ridu.MutationOptions{}); !operationCode(err, "conflict") {
 		t.Fatalf("localized compound duplicate error = %v, want conflict", err)
 	}
 
 	// PostgreSQL's default NULLS DISTINCT contract allows multiple tuples with
 	// a missing/null component.
 	for index := 0; index < 2; index++ {
-		if _, err := application.Local().Create(ctx, "posts", values("nullable", "", ""), nil); err != nil {
+		if _, err := application.Local().Create(ctx, "posts", values("nullable", "", ""), ridu.MutationOptions{}); err != nil {
 			t.Fatalf("nullable tuple %d: %v", index, err)
 		}
 	}
 
 	// The same text in a different exact locale does not conflict. Fallback is
 	// irrelevant to uniqueness.
-	french, err := application.Local().Create(ctx, "posts", values("fr-only", "bonjour", "LOCAL"), nil, ridu.LocaleOptions{Locale: "fr"})
+	french, err := application.Local().Create(ctx, "posts", values("fr-only", "bonjour", "LOCAL"), ridu.MutationOptions{Locale: "fr"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Create(ctx, "posts", values("fr-only", "hello", "LOCAL"), nil); err != nil {
+	if _, err := application.Local().Create(ctx, "posts", values("fr-only", "hello", "LOCAL"), ridu.MutationOptions{}); err != nil {
 		t.Fatalf("different exact locale conflicted: %v", err)
 	}
-	if _, err := application.Local().Update(ctx, "posts", french.ID, store.Values{"localizedCode": store.String("LOCAL")}, nil, ridu.LocaleOptions{Locale: "en"}); !operationCode(err, "conflict") {
+	if _, err := application.Local().Update(ctx, "posts", french.ID, store.Values{"localizedCode": store.String("LOCAL")}, ridu.MutationOptions{Locale: "en"}); !operationCode(err, "conflict") {
 		t.Fatalf("same exact locale update error = %v, want conflict", err)
 	}
 
-	if _, err := application.Local().Delete(ctx, "posts", first.ID, nil); err != nil {
+	if _, err := application.Local().Delete(ctx, "posts", first.ID, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	replacement, err := application.Local().Create(ctx, "posts", values("acme", "welcome", "A"), nil)
+	replacement, err := application.Local().Create(ctx, "posts", values("acme", "welcome", "A"), ridu.MutationOptions{})
 	if err != nil {
 		t.Fatalf("trashed tuple remained unique-active: %v", err)
 	}
-	if _, err := application.Local().RestoreDeleted(ctx, "posts", first.ID, nil); !operationCode(err, "conflict") {
+	if _, err := application.Local().RestoreDeleted(ctx, "posts", first.ID, ridu.MutationOptions{}); !operationCode(err, "conflict") {
 		t.Fatalf("restore into occupied tuple error = %v, want conflict", err)
 	}
-	if _, err := application.Local().Delete(ctx, "posts", replacement.ID, nil); err != nil {
+	if _, err := application.Local().Delete(ctx, "posts", replacement.ID, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().RestoreDeleted(ctx, "posts", first.ID, nil); err != nil {
+	if _, err := application.Local().RestoreDeleted(ctx, "posts", first.ID, ridu.MutationOptions{}); err != nil {
 		t.Fatalf("restore after freeing tuple: %v", err)
 	}
 }

@@ -23,9 +23,7 @@ func TestVirtualFieldsAndInverseJoinsResolveOnRead(t *testing.T) {
 	application, err := ridu.New(ridu.Config{Name: "Computed output", Collections: []ridu.Collection{
 		{
 			Slug: "categories",
-			Fields: field.Fields{field.Text("name").Required(), field.Virtual("displayName", field.ValueString, func(ctx operation.ReadContext,
-
-			) (operation.Value[store.
+			Fields: field.Fields{field.Text("name").Required(), field.Virtual("displayName", field.ValueString, func(ctx operation.Context) (operation.Value[store.
 				Value],
 
 				error) {
@@ -38,9 +36,7 @@ func TestVirtualFieldsAndInverseJoinsResolveOnRead(t *testing.T) {
 		},
 		{
 			Slug: "posts",
-			Fields: field.Fields{field.Text("title").Required(), field.Relationship("category", "categories").Required(), field.Checkbox("visible").Required(), field.Text("secret").Access(field.Access{Read: func(operation.AccessContext,
-
-			) (bool, error) {
+			Fields: field.Fields{field.Text("title").Required(), field.Relationship("category", "categories").Required(), field.Checkbox("visible").Required(), field.Text("secret").Access(field.Access{Read: func(operation.Context) (bool, error) {
 				return false, nil
 			}})},
 			Access: ridu.CollectionAccess{Read: func(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
@@ -63,7 +59,7 @@ func TestVirtualFieldsAndInverseJoinsResolveOnRead(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	category, err := application.Local().Create(context.Background(), "categories", store.Values{"name": store.String("News")}, nil)
+	category, err := application.Local().Create(context.Background(), "categories", store.Values{"name": store.String("News")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,12 +67,12 @@ func TestVirtualFieldsAndInverseJoinsResolveOnRead(t *testing.T) {
 		if _, err := application.Local().Create(context.Background(), "posts", store.Values{
 			"title": store.String(title), "category": store.String(category.ID),
 			"visible": store.Boolean(index < 2), "secret": store.String("private:" + title),
-		}, nil); err != nil {
+		}, ridu.MutationOptions{}); err != nil {
 			t.Fatal(err)
 		}
 	}
 	actor := &store.Document{ID: "editor"}
-	found, err := application.Local().Find(context.Background(), "categories", category.ID, actor)
+	found, err := application.Local().Find(context.Background(), "categories", category.ID, ridu.FindOptions{Actor: actor})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +98,7 @@ func TestVirtualFieldsAndInverseJoinsResolveOnRead(t *testing.T) {
 	if joinedReadHooks != 2 {
 		t.Fatalf("joined target after-read hooks = %d, want 2", joinedReadHooks)
 	}
-	anonymous, err := application.Local().Find(context.Background(), "categories", category.ID, nil)
+	anonymous, err := application.Local().Find(context.Background(), "categories", category.ID, ridu.FindOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,9 +115,7 @@ func TestComputedRuntimeRequiresResolversAndExactValues(t *testing.T) {
 	}
 
 	application, err := ridu.New(ridu.Config{Name: "Bad resolver", Collections: []ridu.Collection{{
-		Slug: "posts", Fields: field.Fields{field.Text("title"), field.Virtual("label", field.ValueString, func(operation.ReadContext,
-
-		) (operation.Value[store.
+		Slug: "posts", Fields: field.Fields{field.Text("title"), field.Virtual("label", field.ValueString, func(operation.Context) (operation.Value[store.
 			Value],
 
 			error) {
@@ -131,7 +125,7 @@ func TestComputedRuntimeRequiresResolversAndExactValues(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("Hello")}, nil)
+	_, err = application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("Hello")}, ridu.MutationOptions{})
 	var operationError *ridu.OperationError
 	if !errors.As(err, &operationError) || operationError.Code != "invalid_computed_value" || !strings.Contains(operationError.Message, `"label"`) {
 		t.Fatalf("computed error = %#v", err)

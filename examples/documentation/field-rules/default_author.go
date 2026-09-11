@@ -8,8 +8,7 @@ import (
 var AuthorName = field.Text("authorName").DefaultFrom(initialAuthorName)
 
 func initialAuthorName(
-	ctx operation.DefaultContext,
-) (operation.Value[string], error) {
+	ctx operation.Context) (operation.Value[string], error) {
 	// Anonymous requests have no signed-in user to copy a name from.
 	if ctx.Actor.ID == "" {
 		return operation.Empty[string](), nil

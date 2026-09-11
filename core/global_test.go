@@ -65,14 +65,14 @@ func TestGlobalSingletonAccessHooksDraftsAndVersions(t *testing.T) {
 		t.Fatalf("global admin = %#v", snapshot.Globals[0].Admin)
 	}
 	actor := &store.Document{ID: "admin"}
-	initial, err := application.Local().Global(context.Background(), "site-settings", actor)
+	initial, err := application.Local().Global(context.Background(), "site-settings", ridu.FindOptions{Actor: actor})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if initial.ID != "site-settings" || stringValue(initial.Values["announcement"]) != "Welcome" {
 		t.Fatalf("initial global = %#v", initial)
 	}
-	if _, err := application.Local().UpdateGlobal(context.Background(), "site-settings", store.Values{"siteName": store.String("Denied")}, 0, nil); err == nil {
+	if _, err := application.Local().UpdateGlobal(context.Background(), "site-settings", store.Values{"siteName": store.String("Denied")}, ridu.MutationOptions{}); err == nil {
 		t.Fatal("anonymous global update succeeded")
 	} else {
 		var operationError *ridu.OperationError
@@ -81,39 +81,39 @@ func TestGlobalSingletonAccessHooksDraftsAndVersions(t *testing.T) {
 		}
 	}
 
-	created, err := application.Local().UpdateGlobal(context.Background(), "site-settings", store.Values{"siteName": store.String("Ridu")}, 0, actor)
+	created, err := application.Local().UpdateGlobal(context.Background(), "site-settings", store.Values{"siteName": store.String("Ridu")}, ridu.MutationOptions{Actor: actor})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if created.ID != "site-settings" || created.Revision != 1 || created.Status != store.StatusDraft || stringValue(created.Values["announcement"]) != "Welcome" {
 		t.Fatalf("created global = %#v", created)
 	}
-	updated, err := application.Local().UpdateGlobal(context.Background(), "site-settings", store.Values{"announcement": store.String("Hello")}, created.Revision, actor)
+	updated, err := application.Local().UpdateGlobal(context.Background(), "site-settings", store.Values{"announcement": store.String("Hello")}, ridu.MutationOptions{Actor: actor, ExpectedRevision: created.Revision})
 	if err != nil {
 		t.Fatal(err)
 	}
-	published, err := application.Local().PublishGlobal(context.Background(), "site-settings", updated.Revision, actor)
+	published, err := application.Local().PublishGlobal(context.Background(), "site-settings", ridu.MutationOptions{Actor: actor, ExpectedRevision: updated.Revision})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if published.Status != store.StatusPublished || published.Revision != 3 {
 		t.Fatalf("published global = %#v", published)
 	}
-	versions, err := application.Local().GlobalVersions(context.Background(), "site-settings", actor)
+	versions, err := application.Local().GlobalVersions(context.Background(), "site-settings", ridu.FindOptions{Actor: actor})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(versions) != 3 {
 		t.Fatalf("versions = %d, want 3", len(versions))
 	}
-	restored, err := application.Local().RestoreGlobal(context.Background(), "site-settings", 1, published.Revision, actor)
+	restored, err := application.Local().RestoreGlobal(context.Background(), "site-settings", 1, ridu.MutationOptions{Actor: actor, ExpectedRevision: published.Revision})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if stringValue(restored.Values["siteName"]) != "Ridu" || stringValue(restored.Values["announcement"]) != "Welcome" {
 		t.Fatalf("restored global = %#v", restored)
 	}
-	restoredDraft, err := application.Local().RestoreGlobalAsDraft(context.Background(), "site-settings", 3, restored.Revision, actor)
+	restoredDraft, err := application.Local().RestoreGlobalAsDraft(context.Background(), "site-settings", 3, ridu.MutationOptions{Actor: actor, ExpectedRevision: restored.Revision})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -204,24 +204,24 @@ func TestGlobalVersionHistoryAppliesFilteredAccessToSnapshots(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			first, err := application.Local().UpdateGlobal(context.Background(), "site-settings", store.Values{"siteName": store.String("Ridu")}, 0, nil)
+			first, err := application.Local().UpdateGlobal(context.Background(), "site-settings", store.Values{"siteName": store.String("Ridu")}, ridu.MutationOptions{})
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, err := application.Local().PublishGlobalChanges(context.Background(), "site-settings", store.Values{"siteName": store.String("Hidden")}, first.Revision, nil); err != nil {
+			if _, err := application.Local().PublishGlobalChanges(context.Background(), "site-settings", store.Values{"siteName": store.String("Hidden")}, ridu.MutationOptions{ExpectedRevision: first.Revision}); err != nil {
 				t.Fatal(err)
 			}
-			versions, err := application.Local().GlobalVersions(context.Background(), "site-settings", nil)
+			versions, err := application.Local().GlobalVersions(context.Background(), "site-settings", ridu.FindOptions{})
 			if err != nil {
 				t.Fatal(err)
 			}
 			if len(versions) != 1 || versions[0].Revision != 1 || stringValue(versions[0].Snapshot.Values["siteName"]) != "Ridu" {
 				t.Fatalf("filtered global versions = %#v", versions)
 			}
-			if version, err := application.Local().GlobalVersion(context.Background(), "site-settings", 1, nil); err != nil || version.Revision != 1 {
+			if version, err := application.Local().GlobalVersion(context.Background(), "site-settings", 1, ridu.FindOptions{}); err != nil || version.Revision != 1 {
 				t.Fatalf("matching global version = %#v, %v", version, err)
 			}
-			if _, err := application.Local().GlobalVersion(context.Background(), "site-settings", 2, nil); !operationCode(err, "not_found") {
+			if _, err := application.Local().GlobalVersion(context.Background(), "site-settings", 2, ridu.FindOptions{}); !operationCode(err, "not_found") {
 				t.Fatalf("non-matching global version error = %v", err)
 			}
 			client := handlerClient(application.Handler(ridu.HandlerOptions{}))
@@ -283,30 +283,30 @@ func TestGlobalFilteredAccessUsesPersistedSingletonAndCannotCreateIt(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().UpdateGlobal(context.Background(), "site-settings", store.Values{"siteName": store.String("Ridu")}, 0, nil); !operationCode(err, "not_found") {
+	if _, err := application.Local().UpdateGlobal(context.Background(), "site-settings", store.Values{"siteName": store.String("Ridu")}, ridu.MutationOptions{}); !operationCode(err, "not_found") {
 		t.Fatalf("filtered first update error = %v", err)
 	}
 	if afterChange != 0 || afterCommit != 0 {
 		t.Fatalf("filtered first update ran hooks: afterChange=%d afterCommit=%d", afterChange, afterCommit)
 	}
 	allowInitialization = true
-	created, err := application.Local().UpdateGlobal(context.Background(), "site-settings", store.Values{"siteName": store.String("Ridu")}, 0, nil)
+	created, err := application.Local().UpdateGlobal(context.Background(), "site-settings", store.Values{"siteName": store.String("Ridu")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	allowInitialization = false
-	if current, err := application.Local().Global(context.Background(), "site-settings", nil); err != nil || stringValue(current.Values["siteName"]) != "Ridu" {
+	if current, err := application.Local().Global(context.Background(), "site-settings", ridu.FindOptions{}); err != nil || stringValue(current.Values["siteName"]) != "Ridu" {
 		t.Fatalf("matching current global = %#v, %v", current, err)
 	}
-	changed, err := application.Local().UpdateGlobal(context.Background(), "site-settings", store.Values{"siteName": store.String("Hidden")}, created.Revision, nil)
+	changed, err := application.Local().UpdateGlobal(context.Background(), "site-settings", store.Values{"siteName": store.String("Hidden")}, ridu.MutationOptions{ExpectedRevision: created.Revision})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Global(context.Background(), "site-settings", nil); !operationCode(err, "not_found") {
+	if _, err := application.Local().Global(context.Background(), "site-settings", ridu.FindOptions{}); !operationCode(err, "not_found") {
 		t.Fatalf("non-matching current read error = %v", err)
 	}
 	beforeDeniedUpdate := afterCommit
-	if _, err := application.Local().UpdateGlobal(context.Background(), "site-settings", store.Values{"siteName": store.String("Ridu")}, changed.Revision, nil); !operationCode(err, "not_found") {
+	if _, err := application.Local().UpdateGlobal(context.Background(), "site-settings", store.Values{"siteName": store.String("Ridu")}, ridu.MutationOptions{ExpectedRevision: changed.Revision}); !operationCode(err, "not_found") {
 		t.Fatalf("non-matching current update error = %v", err)
 	}
 	if afterChange != 2 || afterCommit != beforeDeniedUpdate {
@@ -363,25 +363,25 @@ func TestGlobalCapabilitiesMatchFilteredSingletonAndVersionState(t *testing.T) {
 	assertOperations("missing filtered singleton", capabilities().Operations, false, false, false, false, false)
 	allowInitialization = true
 	assertOperations("initializable singleton", capabilities().Operations, false, false, true, false, false)
-	created, err := application.Local().UpdateGlobal(context.Background(), "site-settings", store.Values{"siteName": store.String("Ridu")}, 0, nil)
+	created, err := application.Local().UpdateGlobal(context.Background(), "site-settings", store.Values{"siteName": store.String("Ridu")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	allowInitialization = false
 	assertOperations("matching singleton", capabilities().Operations, true, true, true, true, true)
-	published, err := application.Local().PublishGlobal(context.Background(), "site-settings", created.Revision, nil)
+	published, err := application.Local().PublishGlobal(context.Background(), "site-settings", ridu.MutationOptions{ExpectedRevision: created.Revision})
 	if err != nil {
 		t.Fatal(err)
 	}
-	hidden, err := application.Local().PublishGlobalChanges(context.Background(), "site-settings", store.Values{"siteName": store.String("Hidden")}, published.Revision, nil)
+	hidden, err := application.Local().PublishGlobalChanges(context.Background(), "site-settings", store.Values{"siteName": store.String("Hidden")}, ridu.MutationOptions{ExpectedRevision: published.Revision})
 	if err != nil {
 		t.Fatal(err)
 	}
 	assertOperations("hidden current with readable history", capabilities().Operations, false, true, false, false, false)
-	if _, err := application.Local().UnpublishGlobal(context.Background(), "site-settings", hidden.Revision, nil); !operationCode(err, "not_found") {
+	if _, err := application.Local().UnpublishGlobal(context.Background(), "site-settings", ridu.MutationOptions{ExpectedRevision: hidden.Revision}); !operationCode(err, "not_found") {
 		t.Fatalf("filtered unpublish error = %v", err)
 	}
-	if _, err := application.Local().RestoreGlobal(context.Background(), "site-settings", 1, hidden.Revision, nil); !operationCode(err, "not_found") {
+	if _, err := application.Local().RestoreGlobal(context.Background(), "site-settings", 1, ridu.MutationOptions{ExpectedRevision: hidden.Revision}); !operationCode(err, "not_found") {
 		t.Fatalf("filtered restore error = %v", err)
 	}
 }
@@ -411,7 +411,7 @@ func TestMissingGlobalReadCapabilitiesMatchSyntheticReadPolicy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	allowed, err := application.Local().Global(context.Background(), "allowed", nil)
+	allowed, err := application.Local().Global(context.Background(), "allowed", ridu.FindOptions{})
 	if err != nil || stringValue(allowed.Values["title"]) != "Default" {
 		t.Fatalf("synthetic allowed global = %#v, %v", allowed, err)
 	}
@@ -431,10 +431,10 @@ func TestMissingGlobalReadCapabilitiesMatchSyntheticReadPolicy(t *testing.T) {
 			t.Errorf("%s missing global Read capability = %t, want %t", test.slug, capabilities.Operations.Read, test.read)
 		}
 	}
-	if _, err := application.Local().Global(context.Background(), "filtered", nil); !operationCode(err, "not_found") {
+	if _, err := application.Local().Global(context.Background(), "filtered", ridu.FindOptions{}); !operationCode(err, "not_found") {
 		t.Fatalf("filtered missing global error = %v", err)
 	}
-	if _, err := application.Local().Global(context.Background(), "denied", nil); !operationCode(err, "access_denied") {
+	if _, err := application.Local().Global(context.Background(), "denied", ridu.FindOptions{}); !operationCode(err, "access_denied") {
 		t.Fatalf("denied missing global error = %v", err)
 	}
 }
@@ -453,7 +453,7 @@ func TestGlobalStatusCapabilitiesDoNotDependOnReadAccess(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	current, err := application.Local().UpdateGlobal(context.Background(), "persisted", store.Values{"title": store.String("Site")}, 0, nil)
+	current, err := application.Local().UpdateGlobal(context.Background(), "persisted", store.Values{"title": store.String("Site")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -464,11 +464,11 @@ func TestGlobalStatusCapabilitiesDoNotDependOnReadAccess(t *testing.T) {
 	if capabilities.Operations.Read || !capabilities.Operations.Update || !capabilities.Operations.Publish || !capabilities.Operations.Unpublish {
 		t.Fatalf("persisted unreadable global capabilities = %#v", capabilities.Operations)
 	}
-	current, err = application.Local().UnpublishGlobal(context.Background(), "persisted", current.Revision, nil)
+	current, err = application.Local().UnpublishGlobal(context.Background(), "persisted", ridu.MutationOptions{ExpectedRevision: current.Revision})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().PublishGlobal(context.Background(), "persisted", current.Revision, nil); err != nil {
+	if _, err := application.Local().PublishGlobal(context.Background(), "persisted", ridu.MutationOptions{ExpectedRevision: current.Revision}); err != nil {
 		t.Fatal(err)
 	}
 	missing, err := application.Local().Capabilities(context.Background(), "global:missing", "missing", ridu.CapabilityOptions{})
@@ -504,29 +504,29 @@ func TestGlobalAllLocalesFilteredAccessRequiresEveryLocale(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	current, err := application.Local().UpdateGlobal(ctx, "site-settings", store.Values{"title": store.String("Public")}, 0, nil)
+	current, err := application.Local().UpdateGlobal(ctx, "site-settings", store.Values{"title": store.String("Public")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	current, err = application.Local().PublishGlobalChanges(ctx, "site-settings", store.Values{"title": store.String("Public")}, current.Revision, nil, ridu.LocaleOptions{Locale: "fr"})
+	current, err = application.Local().PublishGlobalChanges(ctx, "site-settings", store.Values{"title": store.String("Public")}, ridu.MutationOptions{ExpectedRevision: current.Revision, Locale: "fr"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	publicRevision := current.Revision
-	current, err = application.Local().PublishGlobalChanges(ctx, "site-settings", store.Values{"title": store.String("Private")}, current.Revision, nil, ridu.LocaleOptions{Locale: "fr"})
+	current, err = application.Local().PublishGlobalChanges(ctx, "site-settings", store.Values{"title": store.String("Private")}, ridu.MutationOptions{ExpectedRevision: current.Revision, Locale: "fr"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Global(ctx, "site-settings", nil, ridu.LocaleOptions{Locale: "en"}); err != nil {
+	if _, err := application.Local().Global(ctx, "site-settings", ridu.FindOptions{Locale: "en"}); err != nil {
 		t.Fatalf("English global read: %v", err)
 	}
-	if _, err := application.Local().Global(ctx, "site-settings", nil, ridu.LocaleOptions{Locale: "fr"}); !operationCode(err, "not_found") {
+	if _, err := application.Local().Global(ctx, "site-settings", ridu.FindOptions{Locale: "fr"}); !operationCode(err, "not_found") {
 		t.Fatalf("French global read error = %v", err)
 	}
-	if _, err := application.Local().Global(ctx, "site-settings", nil, ridu.LocaleOptions{AllLocales: true}); !operationCode(err, "not_found") {
+	if _, err := application.Local().Global(ctx, "site-settings", ridu.FindOptions{AllLocales: true}); !operationCode(err, "not_found") {
 		t.Fatalf("all-locales global read error = %v", err)
 	}
-	versions, err := application.Local().GlobalVersions(ctx, "site-settings", nil, ridu.LocaleOptions{AllLocales: true})
+	versions, err := application.Local().GlobalVersions(ctx, "site-settings", ridu.FindOptions{AllLocales: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -551,10 +551,10 @@ func TestGlobalSlugsHaveAnIndependentNamespace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Create(context.Background(), "settings", store.Values{"title": store.String("Collection")}, nil); err != nil {
+	if _, err := application.Local().Create(context.Background(), "settings", store.Values{"title": store.String("Collection")}, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	global, err := application.Local().UpdateGlobal(context.Background(), "settings", store.Values{"name": store.String("Global")}, 0, nil)
+	global, err := application.Local().UpdateGlobal(context.Background(), "settings", store.Values{"name": store.String("Global")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -67,7 +67,7 @@ func (*Plugin) Descriptor() ridu.PluginDescriptor {
 	}
 }
 
-func (plugin *Plugin) BindTransports(binding ridu.PluginTransportContext) ([]ridu.PluginTransport, error) {
+func (plugin *Plugin) BindTransports(binding ridu.PluginTransportContext) ([]ridu.Endpoint, error) {
 	if binding.Local == nil {
 		return nil, fmt.Errorf("MCP requires a local API")
 	}
@@ -83,10 +83,10 @@ func (plugin *Plugin) BindTransports(binding ridu.PluginTransportContext) ([]rid
 		PropagateRequestCancellation: true,
 	})
 
-	return []ridu.PluginTransport{{
+	return []ridu.Endpoint{{
 		Method: http.MethodPost, Path: plugin.config.Path, Summary: "Execute an authenticated Ridu MCP request",
 		MaxBodyBytes: plugin.config.MaxBodyBytes,
-		Handler: func(endpoint ridu.PluginEndpointContext) {
+		Handler: func(endpoint ridu.EndpointContext) {
 			if endpoint.Actor == nil {
 				endpoint.Writer.Header().Set("WWW-Authenticate", `Bearer realm="ridu-mcp"`)
 				http.Error(endpoint.Writer, "MCP authentication required", http.StatusUnauthorized)
@@ -290,7 +290,7 @@ func (plugin *Plugin) addGlobalTool(server *mcpsdk.Server, name string, global s
 		if err != nil {
 			return nil, globalOutput{}, err
 		}
-		document, err := state.local.GlobalWithOptions(ctx, string(global.Slug), ridu.FindOptions{
+		document, err := state.local.Global(ctx, string(global.Slug), ridu.FindOptions{
 			Select: selectPaths, Draft: input.Draft, Actor: &state.actor, ActorCollection: state.actorCollection,
 			Locale: schema.LocaleCode(input.Locale), DisableFallback: input.DisableFallback, AllLocales: input.AllLocales,
 		})

@@ -92,7 +92,7 @@ type localeViewHooks struct {
 	retained []operation.View
 }
 
-func (hooks *localeViewHooks) change(ctx operation.WriteContext, input operation.Value[string]) (operation.Change[string], error) {
+func (hooks *localeViewHooks) change(ctx operation.Context, input operation.Value[string]) (operation.Change[string], error) {
 	if !hooks.active {
 		return operation.Keep[string](), nil
 	}
@@ -162,7 +162,7 @@ func newLocaleViewFixture(tb testing.TB, ctx context.Context, shape, mode string
 		tb.Fatal(err)
 	}
 	fixture := localeViewFixture{ordinaryValueFixture: ordinaryValueFixture{app: app, shape: shape, size: size}, mode: mode, hooks: hooks}
-	target, err := app.Local().Create(ctx, "targets", store.Values{"name": store.String("A target")}, nil)
+	target, err := app.Local().Create(ctx, "targets", store.Values{"name": store.String("A target")}, ridu.MutationOptions{})
 	if err != nil {
 		tb.Fatal(err)
 	}
@@ -176,7 +176,7 @@ func newLocaleViewFixture(tb testing.TB, ctx context.Context, shape, mode string
 		nodes[index] = fixture.row(fmt.Sprintf("row-%d", index), payload)
 	}
 	fixture.input = store.Values{"headline": store.String("Original"), "body": fixture.body(nodes)}
-	fixture.initial, err = app.Local().Create(ctx, "pages", fixture.input, nil, ridu.LocaleOptions{Locale: "en"})
+	fixture.initial, err = app.Local().Create(ctx, "pages", fixture.input, ridu.MutationOptions{Locale: "en"})
 	if err != nil {
 		tb.Fatal(err)
 	}
@@ -192,7 +192,7 @@ func newLocaleViewFixture(tb testing.TB, ctx context.Context, shape, mode string
 		}
 		nodes[index] = fixture.row(fmt.Sprintf("row-%d", index), payload)
 	}
-	_, err = app.Local().Update(ctx, "pages", fixture.initial.ID, store.Values{"body": fixture.body(nodes)}, nil, ridu.LocaleOptions{Locale: "fr"})
+	_, err = app.Local().Update(ctx, "pages", fixture.initial.ID, store.Values{"body": fixture.body(nodes)}, ridu.MutationOptions{Locale: "fr"})
 	if err != nil {
 		tb.Fatal(err)
 	}
@@ -211,7 +211,7 @@ func newLocaleViewFixture(tb testing.TB, ctx context.Context, shape, mode string
 
 func (fixture localeViewFixture) run(ctx context.Context) (store.Document, error) {
 	if fixture.mode == "HookChanges" || fixture.mode == "RetainHookChanges" {
-		return fixture.app.Local().Update(ctx, "pages", fixture.initial.ID, fixture.patch, nil, ridu.LocaleOptions{Locale: "en"})
+		return fixture.app.Local().Update(ctx, "pages", fixture.initial.ID, fixture.patch, ridu.MutationOptions{Locale: "en"})
 	}
 	options := ridu.FindOptions{Locale: "de", Populate: []query.Population{{Path: fixture.population}}}
 	switch fixture.mode {
@@ -225,7 +225,7 @@ func (fixture localeViewFixture) run(ctx context.Context) (store.Document, error
 	default:
 		return store.Document{}, fmt.Errorf("unknown locale control %q", fixture.mode)
 	}
-	return fixture.app.Local().FindWithOptions(ctx, "pages", fixture.initial.ID, options)
+	return fixture.app.Local().Find(ctx, "pages", fixture.initial.ID, options)
 }
 
 func (fixture localeViewFixture) check(tb testing.TB, result store.Document) {

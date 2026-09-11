@@ -15,21 +15,21 @@ import (
 func Link(name string) field.GroupField {
 	label := field.Text("label").Required().
 		Admin(field.Admin{Placeholder: "Read more", LabelTranslations: map[string]string{"fr": "Libellé"}}).
-		Validate(func(_ operation.ValidationContext, value operation.Value[string]) ([]operation.Issue, error) {
+		Validate(func(_ operation.Context, value operation.Value[string]) ([]operation.Issue, error) {
 			if text, present := value.Get(); present && strings.TrimSpace(text) == "" {
 				return []operation.Issue{{Code: "blank_link_label", Message: "Enter a link label"}}, nil
 			}
 			return nil, nil
 		}).
 		Hooks(field.Hooks[string]{BeforeChange: []field.Transform[string]{
-			func(_ operation.WriteContext, value operation.Value[string]) (operation.Change[string], error) {
+			func(_ operation.Context, value operation.Value[string]) (operation.Change[string], error) {
 				if text, present := value.Get(); present {
 					return operation.Replace(operation.Present(strings.TrimSpace(text))), nil
 				}
 				return operation.Keep[string](), nil
 			},
 		}}).
-		Access(field.Access{Update: func(ctx operation.AccessContext) (bool, error) { return ctx.Actor.ID == "editor", nil }}).
+		Access(field.Access{Update: func(ctx operation.Context) (bool, error) { return ctx.Actor.ID == "editor", nil }}).
 		Private("factory", store.String("link-label"))
 	return field.Group(name, field.Fields{label, field.Text("href").Required()}).
 		Private("factory", store.String("link-group"))
@@ -73,16 +73,16 @@ func TestChildConveniencesRefineRealFactoriesWithoutLosingPolicies(t *testing.T)
 	if !reflect.DeepEqual(view.BehaviorSummary(), field.Snapshot(base.Children()[0]).BehaviorSummary()) {
 		t.Fatal("refinement changed unrelated executable policies")
 	}
-	issues, err := label.Validators()[0](operation.ValidationContext{}, operation.Present(" "))
+	issues, err := label.Validators()[0](operation.Context{}, operation.Present(" "))
 	if err != nil || len(issues) != 1 || issues[0].Code != "blank_link_label" {
 		t.Fatalf("factory validation was lost: %#v, %v", issues, err)
 	}
-	change, err := label.HookPolicy().BeforeChange[0](operation.WriteContext{}, operation.Present(" Read more "))
+	change, err := label.HookPolicy().BeforeChange[0](operation.Context{}, operation.Present(" Read more "))
 	value, replace := change.Replacement()
 	if text, _ := value.Get(); err != nil || !replace || text != "Read more" {
 		t.Fatalf("factory hook was lost: %#v, %v", change, err)
 	}
-	allowed, err := label.AccessPolicy().Update(operation.AccessContext{Actor: operation.Actor{ID: "editor"}})
+	allowed, err := label.AccessPolicy().Update(operation.Context{Actor: operation.Actor{ID: "editor"}})
 	if err != nil || !allowed {
 		t.Fatal("factory access rule was lost")
 	}

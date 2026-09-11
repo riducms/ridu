@@ -45,7 +45,7 @@ func TestLivePrimitiveListRejectsNonFiniteEngineValues(t *testing.T) {
 			if len(result.Evaluations) != 1 || result.Evaluations[0].Status != "skipped" || calls != 0 {
 				t.Fatalf("malformed values reached callback: result=%#v calls=%d", result, calls)
 			}
-			_, err = app.Local().Create(t.Context(), "products", data, nil)
+			_, err = app.Local().Create(t.Context(), "products", data, MutationOptions{})
 			var failure *OperationError
 			if !errors.As(err, &failure) || failure.Status != 422 {
 				t.Fatalf("authoritative write accepted nonfinite list: %v", err)

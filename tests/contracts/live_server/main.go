@@ -55,9 +55,7 @@ func main() {
 			{
 				Slug: "posts",
 
-				Fields: field.Fields{field.Text("title").Required(), field.Select("status", "draft", "published").Default("draft"), field.Relationship("author", "authors"), field.Group("seo", field.Fields{field.Text("description").Access(field.Access{Read: func(operation.AccessContext,
-
-				) (bool, error) {
+				Fields: field.Fields{field.Text("title").Required(), field.Select("status", "draft", "published").Default("draft"), field.Relationship("author", "authors"), field.Group("seo", field.Fields{field.Text("description").Access(field.Access{Read: func(operation.Context) (bool, error) {
 					return false, nil
 				}})}),
 				},
@@ -97,7 +95,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	user, err := application.Local().Create(ctx, "users", store.Values{"email": store.String("live@riducms.test")}, nil)
+	user, err := application.Local().Create(ctx, "users", store.Values{"email": store.String("live@riducms.test")}, ridu.MutationOptions{})
 	if err != nil {
 		log.Fatal(err)
 	}

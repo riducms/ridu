@@ -84,6 +84,16 @@ export interface EmbeddedSchemaFormScope {
 	readOnly?: boolean;
 }
 
+/** A configured editorial-name control for one existing embedded item. */
+export interface EmbeddedSchemaHeaderProps extends EmbeddedSchemaFormScope {
+	/**
+	 * Receives a permitted change to the Go-configured name field. Apply it to the
+	 * latest matching item through your editor's own history/serialization path.
+	 * The host does not write the parent form or save the document itself.
+	 */
+	onChange: (change: { field: string; value: string }) => void;
+}
+
 /** Select a Go-declared embedded variant when creating or copying an item's field data. */
 export interface EmbeddedSchemaVariantScope {
 	/** The embedded tree key declared by the Go field. */
@@ -159,6 +169,12 @@ export interface FieldAuthoringHost {
 	 * if the user needs Apply/Cancel. Neither approach saves the document itself.
 	 */
 	schemaForm?: Snippet<[EmbeddedSchemaFormScope]>;
+	/**
+	 * Render the configured name input and field feedback, without the card chrome.
+	 * Uses the item's schema, access, visibility and stable identity. An open draft
+	 * locks the card input; an item without a name field renders no control.
+	 */
+	schemaHeader?: Snippet<[EmbeddedSchemaHeaderProps]>;
 	/**
 	 * Start a temporary Apply/Cancel form. Pass `{ treeKey, identity }` to edit an
 	 * existing item, or `{ treeKey, caseTag, variantSlug }` to prepare a new one using

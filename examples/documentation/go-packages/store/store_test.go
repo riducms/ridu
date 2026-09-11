@@ -67,7 +67,7 @@ func TestLocalExamplesPreserveValuesAndRowIdentity(t *testing.T) {
 
 	// A map edit only changes this response. It is not a database write.
 	updated.Values["title"] = store.String("Unsaved")
-	found, err := app.Local().Find(t.Context(), "pages", page.ID, nil)
+	found, err := app.Local().Find(t.Context(), "pages", page.ID, ridu.FindOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +77,7 @@ func TestLocalExamplesPreserveValuesAndRowIdentity(t *testing.T) {
 	cleared, err := app.Local().Update(t.Context(), "pages", page.ID, store.Values{
 		"summary": store.Null(),
 		"links":   store.List(),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

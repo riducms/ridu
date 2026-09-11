@@ -36,32 +36,38 @@ export interface ExistsWhere {
 }
 
 export type CTAInput = {
+	"blockName"?: string | null;
 	"label": string;
 	"destination"?: ID | null;
 } & { blockType: "cta"; _key?: string };
 
 /** Patch a retained row by _key. New identities must satisfy the input contract at runtime. */
 export type CTAUpdate = {
+	"blockName"?: string | null;
 	"label"?: string;
 	"destination"?: ID | null;
 } & { blockType: "cta"; _key: string };
 
 export type CTA = {
+	"blockName"?: string | null;
 	"label"?: string;
 	"destination"?: ID | Pages | null;
 } & { blockType: "cta"; _key: string };
 
 export type CTAAllLocales = {
+	"blockName"?: string | null;
 	"label"?: RiduLocalizedValues<string>;
 	"destination"?: ID | PagesAllLocales | null;
 } & { blockType: "cta"; _key: string };
 
 export type CTAAllLocalesValue = {
+	"blockName"?: string | null;
 	"label"?: string;
 	"destination"?: ID | PagesAllLocales | null;
 } & { blockType: "cta"; _key: string };
 
 export type CalloutInput = {
+	"blockName"?: string | null;
 	"title": string;
 	"message"?: string | null;
 	"detail"?: import("@riducms/plugin-richtext/document").RichTextDocumentInput<CalloutDetailBlocksBlockInput[number]> | null;
@@ -70,6 +76,7 @@ export type CalloutInput = {
 
 /** Patch a retained row by _key. New identities must satisfy the input contract at runtime. */
 export type CalloutUpdate = {
+	"blockName"?: string | null;
 	"title"?: string;
 	"message"?: string | null;
 	"detail"?: import("@riducms/plugin-richtext/document").RichTextDocumentInput<CalloutDetailBlocksBlockUpdate[number]> | null;
@@ -77,6 +84,7 @@ export type CalloutUpdate = {
 } & { blockType: "callout"; _key: string };
 
 export type Callout = {
+	"blockName"?: string | null;
 	"title"?: string;
 	"message"?: string | null;
 	"detail"?: import("@riducms/plugin-richtext/document").RichTextDocument<CalloutDetailBlocksBlock[number]> | null;
@@ -84,6 +92,7 @@ export type Callout = {
 } & { blockType: "callout"; _key: string };
 
 export type CalloutAllLocales = {
+	"blockName"?: string | null;
 	"title"?: string;
 	"message"?: RiduLocalizedValues<string | null>;
 	"detail"?: import("@riducms/plugin-richtext/document").RichTextDocument<CalloutDetailBlocksBlockAllLocales[number]> | null;
@@ -91,6 +100,7 @@ export type CalloutAllLocales = {
 } & { blockType: "callout"; _key: string };
 
 export type CalloutAllLocalesValue = {
+	"blockName"?: string | null;
 	"title"?: string;
 	"message"?: string | null;
 	"detail"?: import("@riducms/plugin-richtext/document").RichTextDocument<CalloutDetailBlocksBlockAllLocalesValue[number]> | null;
@@ -432,6 +442,7 @@ export interface PagesWhere {
 	"layout.content.links.href"?: ScalarWhere<string>;
 	"layout.media.asset"?: ScalarWhere<ID>;
 	"layout.media.caption"?: ScalarWhere<string>;
+	"layout.cta.blockName"?: ScalarWhere<string>;
 	"layout.cta.label"?: ScalarWhere<string>;
 	"layout.cta.destination"?: ScalarWhere<ID>;
 }
@@ -471,7 +482,7 @@ export interface PagesAllLocalesPopulateOutput {
 	"layout.cta.destination": ID | PagesAllLocales | null;
 }
 
-export type PagesValidationPath = "title" | "layout" | `layout.${number}` | `layout.${number}._key` | `layout.${number}.blockType` | `layout.${number}.heading` | `layout.${number}.heading.${Locale}` | `layout.${number}.appearance` | `layout.${number}.appearance.tone` | `layout.${number}.title` | `layout.${number}.title.${Locale}` | `layout.${number}.body` | `layout.${number}.body.${string}` | `layout.${number}.links` | `layout.${number}.links.${number}` | `layout.${number}.links.${number}._key` | `layout.${number}.links.${number}.label` | `layout.${number}.links.${number}.href` | `layout.${number}.asset` | `layout.${number}.caption` | `layout.${number}.caption.${Locale}` | `layout.${number}.label` | `layout.${number}.label.${Locale}` | `layout.${number}.destination`;
+export type PagesValidationPath = "title" | "layout" | `layout.${number}` | `layout.${number}._key` | `layout.${number}.blockType` | `layout.${number}.heading` | `layout.${number}.heading.${Locale}` | `layout.${number}.appearance` | `layout.${number}.appearance.tone` | `layout.${number}.title` | `layout.${number}.title.${Locale}` | `layout.${number}.body` | `layout.${number}.body.${string}` | `layout.${number}.links` | `layout.${number}.links.${number}` | `layout.${number}.links.${number}._key` | `layout.${number}.links.${number}.label` | `layout.${number}.links.${number}.href` | `layout.${number}.asset` | `layout.${number}.caption` | `layout.${number}.caption.${Locale}` | `layout.${number}.blockName` | `layout.${number}.label` | `layout.${number}.label.${Locale}` | `layout.${number}.destination`;
 
 export interface Campaigns {
 	id: ID;
@@ -512,6 +523,7 @@ export interface CampaignsWhere {
 	"layout.hero.heading"?: ScalarWhere<string>;
 	"layout.hero.appearance"?: ExistsWhere;
 	"layout.hero.appearance.tone"?: ScalarWhere<"light" | "dark">;
+	"layout.cta.blockName"?: ScalarWhere<string>;
 	"layout.cta.label"?: ScalarWhere<string>;
 	"layout.cta.destination"?: ScalarWhere<ID>;
 }
@@ -544,7 +556,7 @@ export interface CampaignsAllLocalesPopulateOutput {
 	"layout.cta.destination": ID | PagesAllLocales | null;
 }
 
-export type CampaignsValidationPath = "title" | "layout" | `layout.${number}` | `layout.${number}._key` | `layout.${number}.blockType` | `layout.${number}.heading` | `layout.${number}.heading.${Locale}` | `layout.${number}.appearance` | `layout.${number}.appearance.tone` | `layout.${number}.label` | `layout.${number}.label.${Locale}` | `layout.${number}.destination`;
+export type CampaignsValidationPath = "title" | "layout" | `layout.${number}` | `layout.${number}._key` | `layout.${number}.blockType` | `layout.${number}.heading` | `layout.${number}.heading.${Locale}` | `layout.${number}.appearance` | `layout.${number}.appearance.tone` | `layout.${number}.blockName` | `layout.${number}.label` | `layout.${number}.label.${Locale}` | `layout.${number}.destination`;
 
 export interface Articles {
 	id: ID;
@@ -721,12 +733,6 @@ export interface RiduConfig {
 			validationPath: ArticlesValidationPath;
 		};
 	};
-}
-
-declare module "@riducms/sdk" {
-	interface GeneratedRiduConfigRegistry {
-		"manifest-77061c06a13e98565ff0b3053aa03994c4b613a2276868c700de157e19349265": RiduConfig;
-	}
 }
 
 export type CollectionSlug = keyof RiduConfig["collections"];

@@ -20,7 +20,7 @@ func TestOpenAPILocalizedGroupValidatesItsBlockDescendants(t *testing.T) {
 	doc, err := app.Local().Create(context.Background(), "pages", store.Values{"section": store.Object(store.Values{
 		"layout":   store.List(store.Object(store.Values{"blockType": store.String("hero"), "heading": store.String("Hello")})),
 		"metadata": store.Object(store.Values{"arbitrary": store.String("retained")}),
-	})}, nil)
+	})}, core.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,14 +87,14 @@ func TestOpenAPIValidatesLocalizedBlocksHTTPResponses(t *testing.T) {
 			doc, err := app.Local().Create(context.Background(), "pages", store.Values{"layout": store.List(store.Object(store.Values{
 				"blockType": store.String("hero"), "heading": store.String("Hello"), "when": store.String(""),
 				"settings": store.Object(store.Values{"links": store.List(store.Object(store.Values{"_key": store.String("link"), "content": store.List(store.Object(store.Values{"blockType": store.String("text"), "body": store.String("Nested")}))}))}),
-			}))}, nil)
+			}))}, core.MutationOptions{})
 			if err != nil {
 				t.Fatal(err)
 			}
 			rows, _ := doc.Values["layout"].CopyList()
 			frenchRow, _ := rows[0].CopyObject()
 			frenchRow["heading"] = store.String("Bonjour")
-			if _, err := app.Local().Update(context.Background(), "pages", doc.ID, store.Values{"layout": store.List(store.Object(frenchRow))}, nil, core.LocaleOptions{Locale: "fr"}); err != nil {
+			if _, err := app.Local().Update(context.Background(), "pages", doc.ID, store.Values{"layout": store.List(store.Object(frenchRow))}, core.MutationOptions{Locale: "fr"}); err != nil {
 				t.Fatal(err)
 			}
 			generated, err := openAPI(app.Manifest())

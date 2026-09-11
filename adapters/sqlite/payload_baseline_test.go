@@ -54,11 +54,11 @@ func TestSQLitePayloadBaselineWorkflow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	author, err := application.Local().Create(ctx, "authors", store.Values{"name": store.String("Ada Lovelace")}, nil)
+	author, err := application.Local().Create(ctx, "authors", store.Values{"name": store.String("Ada Lovelace")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	category, err := application.Local().Create(ctx, "categories", store.Values{"name": store.String("Release notes")}, nil)
+	category, err := application.Local().Create(ctx, "categories", store.Values{"name": store.String("Release notes")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +67,7 @@ func TestSQLitePayloadBaselineWorkflow(t *testing.T) {
 		"summary":  store.String("Initial SQLite baseline"),
 		"author":   store.String(author.ID),
 		"category": store.String(category.ID),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,15 +76,15 @@ func TestSQLitePayloadBaselineWorkflow(t *testing.T) {
 		"summary":  store.String("Nonmatching SQLite baseline"),
 		"author":   store.String(author.ID),
 		"category": store.String(category.ID),
-	}, nil); err != nil {
+	}, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	includeDrafts := true
-	read, err := application.Local().FindWithOptions(ctx, "posts", post.ID, ridu.FindOptions{Draft: &includeDrafts})
+	read, err := application.Local().Find(ctx, "posts", post.ID, ridu.FindOptions{Draft: &includeDrafts})
 	if err != nil || read.ID != post.ID {
 		t.Fatalf("created post read = %#v, %v", read, err)
 	}
-	updated, err := application.Local().Update(ctx, "posts", post.ID, store.Values{"summary": store.String("Updated SQLite baseline")}, nil)
+	updated, err := application.Local().Update(ctx, "posts", post.ID, store.Values{"summary": store.String("Updated SQLite baseline")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +127,7 @@ func TestSQLitePayloadBaselineWorkflow(t *testing.T) {
 	if name, _ := populatedCategory.Values["name"].StringValue(); name != "Release notes" {
 		t.Fatalf("populated category name = %q", name)
 	}
-	versions, err := application.Local().Versions(ctx, "posts", post.ID, nil)
+	versions, err := application.Local().Versions(ctx, "posts", post.ID, ridu.FindOptions{})
 	if err != nil || len(versions) != 2 {
 		t.Fatalf("post versions = %#v, %v", versions, err)
 	}
@@ -148,10 +148,10 @@ func TestSQLitePayloadBaselineWorkflow(t *testing.T) {
 	if !foundUpdatedVersion {
 		t.Fatalf("updated post version was not retained: %#v", versions)
 	}
-	if _, err := application.Local().Delete(ctx, "posts", post.ID, nil); err != nil {
+	if _, err := application.Local().Delete(ctx, "posts", post.ID, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().FindWithOptions(ctx, "posts", post.ID, ridu.FindOptions{Draft: &includeDrafts}); !hasOperationCode(err, "not_found") {
+	if _, err := application.Local().Find(ctx, "posts", post.ID, ridu.FindOptions{Draft: &includeDrafts}); !hasOperationCode(err, "not_found") {
 		t.Fatalf("find deleted post error = %v", err)
 	}
 	if err := backend.DownArtifacts(ctx, migrations); err != nil {

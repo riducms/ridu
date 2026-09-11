@@ -28,11 +28,11 @@ func TestRESTPreferencesAndLocksUseExactSameIDAuthCollection(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	user, err := application.Local().Import(ctx, "users", store.Values{"email": store.String("user@example.test")}, ridu.ImportOptions{ID: "shared-actor", Status: store.StatusPublished}, nil)
+	user, err := application.Local().Import(ctx, "users", store.Values{"email": store.String("user@example.test")}, ridu.ImportOptions{ID: "shared-actor", Status: store.StatusPublished})
 	if err != nil {
 		t.Fatal(err)
 	}
-	staff, err := application.Local().Import(ctx, "staff", store.Values{"email": store.String("staff@example.test")}, ridu.ImportOptions{ID: user.ID, Status: store.StatusPublished}, nil)
+	staff, err := application.Local().Import(ctx, "staff", store.Values{"email": store.String("staff@example.test")}, ridu.ImportOptions{ID: user.ID, Status: store.StatusPublished})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,7 +50,7 @@ func TestRESTPreferencesAndLocksUseExactSameIDAuthCollection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	post, err := application.Local().Create(ctx, "posts", store.Values{"title": store.String("Locked")}, &user)
+	post, err := application.Local().Create(ctx, "posts", store.Values{"title": store.String("Locked")}, ridu.MutationOptions{Actor: &user})
 	if err != nil {
 		t.Fatal(err)
 	}

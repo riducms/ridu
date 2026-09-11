@@ -29,11 +29,11 @@ func TestHardDeleteRechecksReferencesAfterBeforeDeleteHooks(t *testing.T) {
 						if !cleanupEnabled {
 							return nil
 						}
-						current, findError := hook.Local.Find(hook.Context, "posts", cleanupOwnerID, hook.Actor)
+						current, findError := hook.Local.Find(hook.Context, "posts", cleanupOwnerID, ridu.FindOptions{Actor: hook.Actor})
 						if findError != nil {
 							return findError
 						}
-						_, updateError := hook.Local.PublishChanges(hook.Context, "posts", cleanupOwnerID, store.Values{"protectedOwner": store.Null()}, current.Revision, hook.Actor)
+						_, updateError := hook.Local.PublishChanges(hook.Context, "posts", cleanupOwnerID, store.Values{"protectedOwner": store.Null()}, ridu.MutationOptions{Actor: hook.Actor, ExpectedRevision: current.Revision})
 						return updateError
 					}},
 					AfterDelete: []ridu.Hook{func(ridu.HookContext) error {
@@ -57,7 +57,7 @@ func TestHardDeleteRechecksReferencesAfterBeforeDeleteHooks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	target, err := application.Local().Create(ctx, "users", store.Values{"name": store.String("Ada")}, nil)
+	target, err := application.Local().Create(ctx, "users", store.Values{"name": store.String("Ada")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +65,7 @@ func TestHardDeleteRechecksReferencesAfterBeforeDeleteHooks(t *testing.T) {
 		"title":          store.String("Hook cleanup"),
 		"protectedOwner": store.String(target.ID),
 		"owner":          store.String(target.ID),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,22 +74,22 @@ func TestHardDeleteRechecksReferencesAfterBeforeDeleteHooks(t *testing.T) {
 		"title":   store.String("Automatic reconciliation"),
 		"owner":   store.String(target.ID),
 		"related": store.List(store.String(target.ID), store.String(target.ID)),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	automaticOwnerID = automaticOwner.ID
-	automaticOwner, err = application.Local().Delete(ctx, "posts", automaticOwner.ID, nil)
+	automaticOwner, err = application.Local().Delete(ctx, "posts", automaticOwner.ID, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	metadataUpdatedAt, metadataRevision := automaticOwner.UpdatedAt, automaticOwner.Revision
-	versionsBefore, err := application.Local().Versions(ctx, "posts", automaticOwner.ID, nil)
+	versionsBefore, err := application.Local().Versions(ctx, "posts", automaticOwner.ID, ridu.FindOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	_, err = application.Local().Delete(ctx, "users", target.ID, nil)
+	_, err = application.Local().Delete(ctx, "users", target.ID, ridu.MutationOptions{})
 	var operationError *ridu.OperationError
 	if !errors.As(err, &operationError) || operationError.Code != "delete_restricted" || operationError.Status != 409 {
 		t.Fatalf("restricted delete error = %#v, %v", operationError, err)
@@ -100,25 +100,25 @@ func TestHardDeleteRechecksReferencesAfterBeforeDeleteHooks(t *testing.T) {
 	if targetAfterDeletes != 0 {
 		t.Fatalf("after-delete hooks ran for a rejected delete: %d", targetAfterDeletes)
 	}
-	if _, err := application.Local().Find(ctx, "users", target.ID, nil); err != nil {
+	if _, err := application.Local().Find(ctx, "users", target.ID, ridu.FindOptions{}); err != nil {
 		t.Fatalf("restricted target was deleted: %v", err)
 	}
 
 	cleanupEnabled = true
-	if _, err := application.Local().Delete(ctx, "users", target.ID, nil); err != nil {
+	if _, err := application.Local().Delete(ctx, "users", target.ID, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if targetAfterDeletes != 1 {
 		t.Fatalf("successful target after-delete hooks = %d, want 1", targetAfterDeletes)
 	}
-	cleaned, err := application.Local().Find(ctx, "posts", cleanupOwner.ID, nil)
+	cleaned, err := application.Local().Find(ctx, "posts", cleanupOwner.ID, ridu.FindOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if cleaned.Values["protectedOwner"].Kind() != store.ValueNull || cleaned.Values["owner"].Kind() != store.ValueNull {
 		t.Fatalf("hook and automatic cleanup values = %#v", cleaned.Values)
 	}
-	reconciled, err := application.Local().FindWithOptions(ctx, "posts", automaticOwner.ID, ridu.FindOptions{TrashOnly: true})
+	reconciled, err := application.Local().Find(ctx, "posts", automaticOwner.ID, ridu.FindOptions{TrashOnly: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +134,7 @@ func TestHardDeleteRechecksReferencesAfterBeforeDeleteHooks(t *testing.T) {
 	if automaticOwnerUpdates != 0 {
 		t.Fatalf("automatic cleanup ran owner update hooks: %d", automaticOwnerUpdates)
 	}
-	versionsAfter, err := application.Local().Versions(ctx, "posts", automaticOwner.ID, nil)
+	versionsAfter, err := application.Local().Versions(ctx, "posts", automaticOwner.ID, ridu.FindOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,31 +158,31 @@ func TestBulkHardDeleteIgnoresOnlyOwnersDeletedInTheSameBatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	parent, err := application.Local().Create(ctx, "nodes", store.Values{"name": store.String("Parent")}, nil)
+	parent, err := application.Local().Create(ctx, "nodes", store.Values{"name": store.String("Parent")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	child, err := application.Local().Create(ctx, "nodes", store.Values{"name": store.String("Child"), "parent": store.String(parent.ID)}, nil)
+	child, err := application.Local().Create(ctx, "nodes", store.Values{"name": store.String("Child"), "parent": store.String(parent.ID)}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().BulkDelete(ctx, "nodes", []string{child.ID, parent.ID}, nil); err != nil {
+	if _, err := application.Local().BulkDelete(ctx, "nodes", []string{child.ID, parent.ID}, ridu.BulkOptions{}); err != nil {
 		t.Fatalf("owner-before-target batch delete was restricted: %v", err)
 	}
 
-	parent, err = application.Local().Create(ctx, "nodes", store.Values{"name": store.String("Retained parent")}, nil)
+	parent, err = application.Local().Create(ctx, "nodes", store.Values{"name": store.String("Retained parent")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	child, err = application.Local().Create(ctx, "nodes", store.Values{"name": store.String("Batch child"), "parent": store.String(parent.ID)}, nil)
+	child, err = application.Local().Create(ctx, "nodes", store.Values{"name": store.String("Batch child"), "parent": store.String(parent.ID)}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().BulkDelete(ctx, "nodes", []string{parent.ID, child.ID}, nil); !operationCode(err, "delete_restricted") {
+	if _, err := application.Local().BulkDelete(ctx, "nodes", []string{parent.ID, child.ID}, ridu.BulkOptions{}); !operationCode(err, "delete_restricted") {
 		t.Fatalf("target-before-owner batch treated a future deletion as complete: %v", err)
 	}
 	for _, document := range []store.Document{parent, child} {
-		if _, err := application.Local().Find(ctx, "nodes", document.ID, nil); err != nil {
+		if _, err := application.Local().Find(ctx, "nodes", document.ID, ridu.FindOptions{}); err != nil {
 			t.Errorf("failed batch did not roll back %q: %v", document.ID, err)
 		}
 	}

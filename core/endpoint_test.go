@@ -114,7 +114,7 @@ func TestCustomEndpointsRouteByScopeWithParamsActorAndBuiltInPrecedence(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	user, err := application.Local().Create(context.Background(), "users", store.Values{"email": store.String("endpoint@example.test")}, nil)
+	user, err := application.Local().Create(context.Background(), "users", store.Values{"email": store.String("endpoint@example.test")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

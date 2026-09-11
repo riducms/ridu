@@ -2,7 +2,6 @@ package typescript
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"fmt"
 	"sort"
 	"strconv"
@@ -17,12 +16,6 @@ type clientGenerator struct{ blocks *blocktypes.Catalog }
 
 // Client generates one application's exact document and SDK binding types.
 func Client(manifest schema.Manifest) ([]byte, error) {
-	manifestBytes, err := manifest.Bytes()
-	if err != nil {
-		return nil, fmt.Errorf("encode manifest for generated client registry: %w", err)
-	}
-	manifestDigest := sha256.Sum256(manifestBytes)
-
 	snapshot := manifest.Snapshot()
 	catalog, err := blocktypes.Build(snapshot)
 	if err != nil {
@@ -140,10 +133,6 @@ func Client(manifest schema.Manifest) ([]byte, error) {
 		output.WriteString("\t};\n")
 	}
 	output.WriteString("}\n\n")
-	output.WriteString("declare module \"@riducms/sdk\" {\n")
-	output.WriteString("\tinterface GeneratedRiduConfigRegistry {\n")
-	fmt.Fprintf(&output, "\t\t%s: RiduConfig;\n", property(fmt.Sprintf("manifest-%x", manifestDigest)))
-	output.WriteString("\t}\n}\n\n")
 	output.WriteString("export type CollectionSlug = keyof RiduConfig[\"collections\"];\n\n")
 	if len(snapshot.Globals) != 0 {
 		output.WriteString("export type GlobalSlug = keyof RiduConfig[\"globals\"];\n\n")

@@ -390,7 +390,7 @@ func (b *graphBuilder) validatePolicies(d field.View, authored, path, boundary s
 		}
 		for _, phase := range phases {
 			if phase != "afterRead" {
-				issue("hooks."+phase, "computed and join fields support afterRead hooks only; configure ReadHooks.AfterRead")
+				issue("hooks."+phase, "computed and join fields support afterRead hooks only; configure AfterRead")
 			}
 		}
 	}
@@ -415,7 +415,7 @@ func (b *graphBuilder) validatePolicies(d field.View, authored, path, boundary s
 		for _, phase := range phases {
 			policy := "hooks." + phase
 			if phase == "afterRead" {
-				policy = "readHooks.afterRead"
+				policy = "afterRead"
 			}
 			issue(policy, message)
 		}

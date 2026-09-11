@@ -1554,72 +1554,6 @@ func TestAtlasArtifactRecordsManifestOnlyTransitions(t *testing.T) {
 	}
 }
 
-func TestPluginMigrationsAreOrderedChecksummedAndReversible(t *testing.T) {
-	base := atlasTestManifest(atlasTextField("posts-value", "value"))
-	withPluginSnapshot := base.Snapshot()
-	withPluginSnapshot.Plugins = []schema.Plugin{{
-		Key: "search", Version: "1.0.0", GoPackage: "example.com/plugins/search", APIVersion: schema.CurrentPluginAPIVersion,
-		Ridu: &schema.PluginCompatibility{Minimum: "0.0.0-dev"},
-		DatabaseContributions: []schema.PluginDatabaseContribution{{
-			Adapter: schema.PluginDatabaseAdapterPostgres, Tables: []string{"ridu_plugin_search_index"},
-			Migrations: []schema.PluginMigration{{Version: 1, Name: "create-index", UpSQL: []string{"CREATE TABLE ridu_plugin_search_index (id text PRIMARY KEY)"}, DownSQL: []string{"DROP TABLE ridu_plugin_search_index"}}},
-		}},
-	}}
-	withPlugin := schema.NewManifest(withPluginSnapshot)
-	up, err := BuildArtifact(context.Background(), "add-search", &base, withPlugin, nil, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	pluginStep := findPluginStep(t, up)
-	if pluginStep == nil || pluginStep.Adapter != schema.PluginDatabaseAdapterPostgres || pluginStep.Direction != "up" || pluginStep.Checksum != ridumigration.PluginStepChecksum(schema.PluginDatabaseAdapterPostgres, "search", 1, "up", pluginStep.SQL) {
-		t.Fatalf("plugin up step = %#v", pluginStep)
-	}
-	if _, err := BuildArtifact(context.Background(), "remove-search", &withPlugin, base, nil, false); err == nil {
-		t.Fatal("plugin removal succeeded without destructive approval")
-	}
-	down, err := BuildArtifact(context.Background(), "remove-search", &withPlugin, base, nil, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	pluginStep = findPluginStep(t, down)
-	if pluginStep == nil || pluginStep.Direction != "down" || !hasRiskCode(down.Risks, "RIDU_PLUGIN_MIGRATION_DOWN") {
-		t.Fatalf("plugin down artifact = %#v", down)
-	}
-
-	changedSnapshot := withPlugin.Snapshot()
-	changedSnapshot.Plugins[0].DatabaseContributions[0].Migrations[0].UpSQL[0] += " CASCADE"
-	changed := schema.NewManifest(changedSnapshot)
-	if _, err := BuildArtifact(context.Background(), "mutate-search", &withPlugin, changed, nil, false); err == nil || !strings.Contains(err.Error(), "changed after publication") {
-		t.Fatalf("changed plugin migration error = %v", err)
-	}
-}
-
-func TestPostgresRejectsPluginPrivateSchemaWithoutPostgresContribution(t *testing.T) {
-	manifest := atlasTestManifest(atlasTextField("posts-value", "value"))
-	snapshot := manifest.Snapshot()
-	snapshot.Plugins = []schema.Plugin{{
-		Key: "search", Version: "1.0.0", GoPackage: "example.com/plugins/search", APIVersion: schema.CurrentPluginAPIVersion,
-		Ridu: &schema.PluginCompatibility{Minimum: "0.0.0-dev"},
-		DatabaseContributions: []schema.PluginDatabaseContribution{{
-			Adapter:    schema.PluginDatabaseAdapterSQLite,
-			Migrations: []schema.PluginMigration{{Version: 1, Name: "create-index", UpSQL: []string{"SELECT 1"}, DownSQL: []string{"SELECT 1"}}},
-		}},
-	}}
-	if _, err := BuildArtifact(context.Background(), "sqlite-only-plugin", nil, schema.NewManifest(snapshot), nil, false); err == nil || !strings.Contains(err.Error(), "does not support postgres") {
-		t.Fatalf("PostgreSQL unsupported plugin error = %v", err)
-	}
-}
-
-func findPluginStep(t *testing.T, artifact ridumigration.Artifact) *ridumigration.PluginStep {
-	t.Helper()
-	for _, step := range artifactTestSteps(t, artifact) {
-		if step.Plugin != nil {
-			return step.Plugin
-		}
-	}
-	return nil
-}
-
 func atlasTestManifest(fields ...schema.Field) schema.Manifest {
 	return schema.NewManifest(schema.Snapshot{
 		Version: schema.CurrentVersion, Application: schema.Application{Name: "Atlas test"}, Plugins: []schema.Plugin{},
@@ -1714,12 +1648,6 @@ func artifactTestSteps(t *testing.T, artifact ridumigration.Artifact) []ridumigr
 					t.Fatalf("decode %s payload: %v", planned.Kind, err)
 				}
 				step.Rename = &payload.Rename
-			case ridumigration.StepPluginSQL:
-				var payload ridumigration.PluginPayload
-				if err := json.Unmarshal(planned.Payload, &payload); err != nil {
-					t.Fatalf("decode %s payload: %v", planned.Kind, err)
-				}
-				step.Plugin = &payload.Plugin
 			case ridumigration.StepConcurrentIndex:
 				var payload ridumigration.ConcurrentIndexPayload
 				if err := json.Unmarshal(planned.Payload, &payload); err != nil {

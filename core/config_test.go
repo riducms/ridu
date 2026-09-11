@@ -72,7 +72,7 @@ func TestTypedFieldConditionsResolveWithDocumentAndSiblingScopes(t *testing.T) {
 		t.Fatalf("resolved sibling predicate = %#v", sibling)
 	}
 	negated := condition.Conditions[1]
-	if negated.Kind != schema.FieldConditionKindNot || len(negated.Conditions) != 1 || negated.Conditions[0].Predicate == nil || negated.Conditions[0].Predicate.Scope != schema.FieldConditionDocument || negated.Conditions[0].Predicate.Values[0] != (schema.FieldConditionValue{Type: schema.ValueTypeBoolean, Value: "true"}) {
+	if negated.Kind != schema.FieldConditionKindNot || len(negated.Conditions) != 1 || negated.Conditions[0].Predicate == nil || negated.Conditions[0].Predicate.Scope != schema.FieldConditionDocument || negated.Conditions[0].Predicate.Values[0] != (schema.ScalarLiteral{Type: schema.ValueTypeBoolean, Value: "true"}) {
 		t.Fatalf("resolved negated predicate = %#v", negated)
 	}
 }
@@ -868,7 +868,7 @@ func TestInvalidAdminPluginMetadataReportsActionablePaths(t *testing.T) {
 	}
 }
 
-func TestPluginDescriptorCompatibilityAndMigrationsAreValidated(t *testing.T) {
+func TestPluginDescriptorCompatibilityIsValidated(t *testing.T) {
 	tests := []struct {
 		name       string
 		descriptor ridu.PluginDescriptor
@@ -877,30 +877,9 @@ func TestPluginDescriptorCompatibilityAndMigrationsAreValidated(t *testing.T) {
 		{name: "release range", descriptor: validDescriptor("audit", ridu.RiduCompatibility{Minimum: "1.0.0"}), code: "incompatible_ridu_plugin"},
 		{name: "plugin API", descriptor: func() ridu.PluginDescriptor {
 			value := validDescriptor("audit", ridu.RiduCompatibility{Minimum: "0.0.0-dev"})
-			value.APIVersion = 99
+			value.APIVersion = 2
 			return value
 		}(), code: "incompatible_plugin_api"},
-		{name: "contiguous migrations", descriptor: func() ridu.PluginDescriptor {
-			value := validDescriptor("audit", ridu.RiduCompatibility{Minimum: "0.0.0-dev"})
-			value.DatabaseContributions = []ridu.PluginDatabaseContribution{{Adapter: ridu.PluginDatabaseAdapterPostgres, Migrations: []ridu.PluginMigration{{Version: 2, Name: "create-events", UpSQL: []string{"SELECT 1"}, DownSQL: []string{"SELECT 1"}}}}}
-			return value
-		}(), code: "non_contiguous_plugin_migration"},
-		{name: "table ownership", descriptor: func() ridu.PluginDescriptor {
-			value := validDescriptor("audit", ridu.RiduCompatibility{Minimum: "0.0.0-dev"})
-			value.DatabaseContributions = []ridu.PluginDatabaseContribution{{Adapter: ridu.PluginDatabaseAdapterPostgres, Tables: []string{"users"}, Migrations: []ridu.PluginMigration{{Version: 1, Name: "create-users", UpSQL: []string{"SELECT 1"}, DownSQL: []string{"SELECT 1"}}}}}
-			return value
-		}(), code: "invalid_plugin_database_table"},
-		{name: "database adapter", descriptor: func() ridu.PluginDescriptor {
-			value := validDescriptor("audit", ridu.RiduCompatibility{Minimum: "0.0.0-dev"})
-			value.DatabaseContributions = []ridu.PluginDatabaseContribution{{Adapter: ridu.PluginDatabaseAdapter("mysql"), Migrations: []ridu.PluginMigration{{Version: 1, Name: "create-events", UpSQL: []string{"SELECT 1"}, DownSQL: []string{"SELECT 1"}}}}}
-			return value
-		}(), code: "invalid_plugin_database_adapter"},
-		{name: "duplicate database adapter", descriptor: func() ridu.PluginDescriptor {
-			value := validDescriptor("audit", ridu.RiduCompatibility{Minimum: "0.0.0-dev"})
-			contribution := ridu.PluginDatabaseContribution{Adapter: ridu.PluginDatabaseAdapterSQLite, Migrations: []ridu.PluginMigration{{Version: 1, Name: "create-events", UpSQL: []string{"SELECT 1"}, DownSQL: []string{"SELECT 1"}}}}
-			value.DatabaseContributions = []ridu.PluginDatabaseContribution{contribution, contribution}
-			return value
-		}(), code: "duplicate_plugin_database_contribution"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -1350,5 +1329,18 @@ func assertGolden(t *testing.T, name string, actual []byte) {
 	}
 	if !bytes.Equal(actual, expected) {
 		t.Fatalf("golden %s differs\nexpected:\n%s\nactual:\n%s", path, expected, actual)
+	}
+}
+
+func TestBackendAPI1PairsWithAdminAPI1(t *testing.T) {
+	descriptor := validDescriptor("audit", ridu.RiduCompatibility{Minimum: "0.0.0-dev"})
+	descriptor.APIVersion = 1
+	descriptor.Admin = &ridu.AdminPluginMetadata{Package: "@example/audit", Export: "audit", APIVersion: 1, PairingVersion: 1}
+	_, err := ridu.Resolve(ridu.Config{Name: "API pairing", Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{field.Text("title")}}}, Plugins: []ridu.Plugin{descriptorPlugin{key: "audit", descriptor: descriptor}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ridu.PluginAPIVersion != 1 || ridu.AdminPluginAPIVersion != 1 {
+		t.Fatal("incorrect independent API markers")
 	}
 }

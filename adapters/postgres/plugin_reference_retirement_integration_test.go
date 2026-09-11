@@ -52,35 +52,35 @@ func TestPostgresPluginReferenceRetirementPreventsCurrentAndVersionResurrectionA
 	ownerID := "surviving-entry-id"
 	if _, err := beforeApp.Local().Import(ctx, "people", store.Values{"name": store.String("Old person")}, ridu.ImportOptions{
 		ID: targetID, Status: store.StatusPublished,
-	}, nil); err != nil {
+	}); err != nil {
 		t.Fatal(err)
 	}
 	legacy := livePluginReferenceDocument(targetID, "legacy-plugin-reference")
 	entry, err := beforeApp.Local().Import(ctx, "entries", store.Values{
 		"title": store.String("Surviving entry"), "content": legacy,
-	}, ridu.ImportOptions{ID: ownerID, Status: store.StatusPublished}, nil)
+	}, ridu.ImportOptions{ID: ownerID, Status: store.StatusPublished})
 	if err != nil {
 		t.Fatal(err)
 	}
-	entry, err = beforeApp.Local().PublishChanges(ctx, "entries", entry.ID, store.Values{"content": legacy}, entry.Revision, nil)
+	entry, err = beforeApp.Local().PublishChanges(ctx, "entries", entry.ID, store.Values{"content": legacy}, ridu.MutationOptions{ExpectedRevision: entry.Revision})
 	if err != nil {
 		t.Fatal(err)
 	}
 	global, err := beforeApp.Local().UpdateGlobal(ctx, "site", store.Values{
 		"title": store.String("Site"), "content": legacy,
-	}, 0, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	global, err = beforeApp.Local().PublishGlobalChanges(ctx, "site", store.Values{"content": legacy}, global.Revision, nil)
+	global, err = beforeApp.Local().PublishGlobalChanges(ctx, "site", store.Values{"content": legacy}, ridu.MutationOptions{ExpectedRevision: global.Revision})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if versions, err := beforeApp.Local().Versions(ctx, "entries", entry.ID, nil); err != nil || len(versions) < 2 ||
+	if versions, err := beforeApp.Local().Versions(ctx, "entries", entry.ID, ridu.FindOptions{}); err != nil || len(versions) < 2 ||
 		!pluginReferenceVersionsContain(versions, "legacy-plugin-reference") {
 		t.Fatalf("seeded collection plugin versions = %#v, %v", versions, err)
 	}
-	if versions, err := beforeApp.Local().GlobalVersions(ctx, "site", nil); err != nil || len(versions) < 2 ||
+	if versions, err := beforeApp.Local().GlobalVersions(ctx, "site", ridu.FindOptions{}); err != nil || len(versions) < 2 ||
 		!pluginReferenceVersionsContain(versions, "legacy-plugin-reference") {
 		t.Fatalf("seeded global plugin versions = %#v, %v", versions, err)
 	}
@@ -124,49 +124,49 @@ func TestPostgresPluginReferenceRetirementPreventsCurrentAndVersionResurrectionA
 		t.Fatal(err)
 	}
 
-	currentEntry, err := readdedApp.Local().Find(ctx, "entries", ownerID, nil)
+	currentEntry, err := readdedApp.Local().Find(ctx, "entries", ownerID, ridu.FindOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if value, exists := currentEntry.Values["content"]; exists && value.Kind() != store.ValueNull {
 		t.Fatalf("retired current collection plugin value reattached: %#v", value)
 	}
-	currentGlobal, err := readdedApp.Local().Global(ctx, "site", nil)
+	currentGlobal, err := readdedApp.Local().Global(ctx, "site", ridu.FindOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if value, exists := currentGlobal.Values["content"]; exists && value.Kind() != store.ValueNull {
 		t.Fatalf("retired current global plugin value reattached: %#v", value)
 	}
-	if versions, err := readdedApp.Local().Versions(ctx, "entries", ownerID, nil); err != nil || len(versions) != 0 {
+	if versions, err := readdedApp.Local().Versions(ctx, "entries", ownerID, ridu.FindOptions{}); err != nil || len(versions) != 0 {
 		t.Fatalf("retired collection plugin versions reattached = %#v, %v", versions, err)
 	}
-	if versions, err := readdedApp.Local().GlobalVersions(ctx, "site", nil); err != nil || len(versions) != 0 {
+	if versions, err := readdedApp.Local().GlobalVersions(ctx, "site", ridu.FindOptions{}); err != nil || len(versions) != 0 {
 		t.Fatalf("retired global plugin versions reattached = %#v, %v", versions, err)
 	}
 
 	if _, err := readdedApp.Local().Import(ctx, "people", store.Values{"name": store.String("New person")}, ridu.ImportOptions{
 		ID: targetID, Status: store.StatusPublished,
-	}, nil); err != nil {
+	}); err != nil {
 		t.Fatal(err)
 	}
 	fresh := livePluginReferenceDocument(targetID, "fresh-plugin-reference")
-	currentEntry, err = readdedApp.Local().Find(ctx, "entries", ownerID, nil)
+	currentEntry, err = readdedApp.Local().Find(ctx, "entries", ownerID, ridu.FindOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := readdedApp.Local().PublishChanges(ctx, "entries", ownerID, store.Values{"content": fresh}, currentEntry.Revision, nil); err != nil {
+	if _, err := readdedApp.Local().PublishChanges(ctx, "entries", ownerID, store.Values{"content": fresh}, ridu.MutationOptions{ExpectedRevision: currentEntry.Revision}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := readdedApp.Local().PublishGlobalChanges(ctx, "site", store.Values{"content": fresh}, currentGlobal.Revision, nil); err != nil {
+	if _, err := readdedApp.Local().PublishGlobalChanges(ctx, "site", store.Values{"content": fresh}, ridu.MutationOptions{ExpectedRevision: currentGlobal.Revision}); err != nil {
 		t.Fatal(err)
 	}
-	entryVersions, err := readdedApp.Local().Versions(ctx, "entries", ownerID, nil)
+	entryVersions, err := readdedApp.Local().Versions(ctx, "entries", ownerID, ridu.FindOptions{})
 	if err != nil || len(entryVersions) != 1 || !pluginReferenceVersionsContain(entryVersions, "fresh-plugin-reference") ||
 		pluginReferenceVersionsContain(entryVersions, "legacy-plugin-reference") {
 		t.Fatalf("reincarnated collection plugin versions = %#v, %v", entryVersions, err)
 	}
-	globalVersions, err := readdedApp.Local().GlobalVersions(ctx, "site", nil)
+	globalVersions, err := readdedApp.Local().GlobalVersions(ctx, "site", ridu.FindOptions{})
 	if err != nil || len(globalVersions) != 1 || !pluginReferenceVersionsContain(globalVersions, "fresh-plugin-reference") ||
 		pluginReferenceVersionsContain(globalVersions, "legacy-plugin-reference") {
 		t.Fatalf("reincarnated global plugin versions = %#v, %v", globalVersions, err)

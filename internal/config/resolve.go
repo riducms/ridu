@@ -495,7 +495,7 @@ func (resolver *resolver) resolvePlugins() []schema.Plugin {
 			resolver.pluginKeys[plugin.Key] = path
 		}
 		resolved := schema.Plugin{Key: plugin.Key}
-		hasDescriptor := plugin.Version != "" || plugin.GoPackage != "" || plugin.APIVersion != 0 || plugin.Ridu != nil || len(plugin.FieldTypes) != 0 || len(plugin.DatabaseContributions) != 0 || plugin.Admin != nil || len(plugin.Endpoints) != 0
+		hasDescriptor := plugin.Version != "" || plugin.GoPackage != "" || plugin.APIVersion != 0 || plugin.Ridu != nil || len(plugin.FieldTypes) != 0 || plugin.Admin != nil || len(plugin.Endpoints) != 0
 		if hasDescriptor {
 			resolver.resolvePluginDescriptor(pluginPath, plugin, &resolved)
 		} else if resolver.pluginKeys[plugin.Key] == path {
@@ -625,53 +625,7 @@ func (resolver *resolver) resolvePluginDescriptor(path string, plugin Plugin, re
 		}
 		resolved.FieldTypes = append(resolved.FieldTypes, schema.PluginFieldType{EmbeddedTypes: append([]string(nil), fieldType.EmbeddedTypes...), Key: fieldType.Key, TypeScriptPackage: fieldType.TypeScriptPackage, TypeScriptOutput: fieldType.TypeScriptOutput, TypeScriptInput: fieldType.TypeScriptInput, TypeScriptWhere: fieldType.TypeScriptWhere, GoPackage: fieldType.GoPackage, GoType: fieldType.GoType, JSONSchema: append(json.RawMessage(nil), fieldType.JSONSchema...)})
 	}
-	prefix := "ridu_plugin_" + strings.ReplaceAll(plugin.Key, "-", "_") + "_"
-	adapters := make(map[schema.PluginDatabaseAdapter]struct{}, len(plugin.DatabaseContributions))
-	for contributionIndex, contribution := range plugin.DatabaseContributions {
-		contributionPath := fmt.Sprintf("%s.databaseContributions[%d]", path, contributionIndex)
-		if contribution.Adapter != schema.PluginDatabaseAdapterPostgres && contribution.Adapter != schema.PluginDatabaseAdapterSQLite {
-			resolver.issue("invalid_plugin_database_adapter", contributionPath+".adapter", "plugin database adapter must be postgres or sqlite")
-		}
-		if _, exists := adapters[contribution.Adapter]; exists {
-			resolver.issue("duplicate_plugin_database_contribution", contributionPath+".adapter", fmt.Sprintf("plugin database adapter %q is already declared", contribution.Adapter))
-		}
-		adapters[contribution.Adapter] = struct{}{}
-		if len(contribution.Migrations) == 0 && len(contribution.Tables) == 0 {
-			resolver.issue("empty_plugin_database_contribution", contributionPath, "plugin database contribution must declare migrations or owned tables")
-		}
-		if len(contribution.Tables) != 0 && len(contribution.Migrations) == 0 {
-			resolver.issue("missing_plugin_database_migration", contributionPath+".migrations", "plugin-owned tables require a migration history that creates them")
-		}
-		resolvedContribution := schema.PluginDatabaseContribution{Adapter: contribution.Adapter}
-		for migrationIndex, pluginMigration := range contribution.Migrations {
-			migrationPath := fmt.Sprintf("%s.migrations[%d]", contributionPath, migrationIndex)
-			if pluginMigration.Version != uint32(migrationIndex+1) {
-				resolver.issue("non_contiguous_plugin_migration", migrationPath+".version", fmt.Sprintf("plugin migration version must be %d", migrationIndex+1))
-			}
-			if !schema.IsValidPluginKey(pluginMigration.Name) || len(pluginMigration.UpSQL) == 0 || len(pluginMigration.DownSQL) == 0 {
-				resolver.issue("invalid_plugin_migration", migrationPath, "plugin migrations require a lowercase kebab-case name and non-empty reversible SQL statements")
-			}
-			for statementIndex, statement := range append(append([]string(nil), pluginMigration.UpSQL...), pluginMigration.DownSQL...) {
-				if !schema.IsValidPluginMigrationSQL(contribution.Adapter, statement) {
-					resolver.issue("invalid_plugin_migration_sql", fmt.Sprintf("%s.sql[%d]", migrationPath, statementIndex), "plugin migration SQL statements must be non-empty, contain no NUL bytes, and leave transaction control to the adapter")
-				}
-			}
-			resolvedContribution.Migrations = append(resolvedContribution.Migrations, schema.PluginMigration{Version: pluginMigration.Version, Name: pluginMigration.Name, UpSQL: append([]string(nil), pluginMigration.UpSQL...), DownSQL: append([]string(nil), pluginMigration.DownSQL...)})
-		}
-		tables := make(map[string]struct{}, len(contribution.Tables))
-		for tableIndex, table := range contribution.Tables {
-			tablePath := fmt.Sprintf("%s.tables[%d]", contributionPath, tableIndex)
-			if !schema.IsValidPluginTable(table) || !strings.HasPrefix(table, prefix) {
-				resolver.issue("invalid_plugin_database_table", tablePath, fmt.Sprintf("plugin database tables must use the %q prefix", prefix))
-			}
-			if _, exists := tables[table]; exists {
-				resolver.issue("duplicate_plugin_database_table", tablePath, fmt.Sprintf("plugin database table %q is already declared", table))
-			}
-			tables[table] = struct{}{}
-			resolvedContribution.Tables = append(resolvedContribution.Tables, table)
-		}
-		resolved.DatabaseContributions = append(resolved.DatabaseContributions, resolvedContribution)
-	}
+
 }
 
 func validPluginEndpoint(method, path string) bool {
@@ -1975,9 +1929,9 @@ func (fieldResolver *fieldResolver) resolveFieldCondition(condition field.Condit
 	}
 	conditionPath, _ := query.ParsePath(condition.Reference().Path())
 	values := condition.Values()
-	resolvedValues := make([]schema.FieldConditionValue, len(values))
+	resolvedValues := make([]schema.ScalarLiteral, len(values))
 	for index, value := range values {
-		resolvedValues[index] = resolvedFieldConditionValue(value)
+		resolvedValues[index] = resolvedScalarLiteral(value)
 	}
 	resolved.Predicate = &schema.FieldConditionPredicate{
 		Scope:    conditionReferenceScope(condition.Reference()),
@@ -1995,8 +1949,8 @@ func conditionReferenceScope(reference field.Reference) schema.FieldConditionSco
 	return schema.FieldConditionSibling
 }
 
-func resolvedFieldConditionValue(value field.DefaultValue) schema.FieldConditionValue {
-	resolved := schema.FieldConditionValue{Value: value.String()}
+func resolvedScalarLiteral(value field.DefaultValue) schema.ScalarLiteral {
+	resolved := schema.ScalarLiteral{Value: value.String()}
 	switch value.Kind() {
 	case field.DefaultString:
 		resolved.Type = schema.ValueTypeString
@@ -2447,7 +2401,7 @@ func referenceFilterKindsCompatible(sourceKind, targetKind referenceFilterValueK
 	}
 }
 
-func referenceFilterLiteralKind(value *schema.RelationshipFilterValue) referenceFilterValueKind {
+func referenceFilterLiteralKind(value *schema.ScalarLiteral) referenceFilterValueKind {
 	if value == nil {
 		return referenceFilterInvalid
 	}
@@ -2463,20 +2417,12 @@ func referenceFilterLiteralKind(value *schema.RelationshipFilterValue) reference
 	}
 }
 
-func resolvedRelationshipFilterValue(value *field.DefaultValue) *schema.RelationshipFilterValue {
+func resolvedRelationshipFilterValue(value *field.DefaultValue) *schema.ScalarLiteral {
 	if value == nil {
 		return nil
 	}
-	resolved := &schema.RelationshipFilterValue{Value: value.String()}
-	switch value.Kind() {
-	case field.DefaultString:
-		resolved.Type = schema.ValueTypeString
-	case field.DefaultNumber:
-		resolved.Type = schema.ValueTypeNumber
-	case field.DefaultBoolean:
-		resolved.Type = schema.ValueTypeBoolean
-	}
-	return resolved
+	resolved := resolvedScalarLiteral(*value)
+	return &resolved
 }
 
 func referenceFilterFieldKind(candidate *schema.Field) referenceFilterValueKind {
@@ -2583,6 +2529,15 @@ func (fieldResolver *fieldResolver) resolveBlockTypes(blocks []field.Block, conf
 			}
 		}
 		var admin *schema.BlockAdmin
+		if nameField := strings.TrimSpace(block.Admin.NameField); nameField != "" {
+			child, found := resolvedDirectField(blockFields, nameField)
+			if !found {
+				fieldResolver.resolver.issue("invalid_block_name_field", blockPath+".admin.nameField", "block name field must name an existing direct stored text child")
+			} else if reason := invalidBlockNameFieldReason(child); reason != "" {
+				fieldResolver.resolver.issue("invalid_block_name_field", blockPath+".admin.nameField", reason)
+			}
+			admin = &schema.BlockAdmin{NameField: nameField}
+		}
 		if rowLabel := strings.TrimSpace(block.Admin.RowLabelPath); rowLabel != "" {
 			found := false
 			for _, child := range blockFields {
@@ -2594,7 +2549,10 @@ func (fieldResolver *fieldResolver) resolveBlockTypes(blocks []field.Block, conf
 			if !found {
 				fieldResolver.resolver.issue("invalid_block_row_label", blockPath+".admin.rowLabelPath", "block row label must name a direct stored scalar child field")
 			}
-			admin = &schema.BlockAdmin{RowLabel: rowLabel}
+			if admin == nil {
+				admin = &schema.BlockAdmin{}
+			}
+			admin.RowLabel = rowLabel
 		}
 		resolvedBlocks[index] = schema.BlockType{
 			Admin: admin, TypeName: block.TypeName,
@@ -2618,4 +2576,26 @@ func (fieldResolver *fieldResolver) resolveBlockTypes(blocks []field.Block, conf
 	}
 
 	return resolvedBlocks
+}
+
+func resolvedDirectField(fields []schema.Field, name string) (schema.Field, bool) {
+	for _, candidate := range fields {
+		if candidate.Name == name {
+			return candidate, true
+		}
+	}
+	return schema.Field{}, false
+}
+
+func invalidBlockNameFieldReason(candidate schema.Field) string {
+	if candidate.Category != schema.FieldCategoryScalar || candidate.Type != schema.FieldTypeText {
+		return fmt.Sprintf("field %q must be a direct stored text child", candidate.Name)
+	}
+	if candidate.Text != nil && candidate.Text.Slug != nil {
+		return fmt.Sprintf("field %q is a slug field; select ordinary text", candidate.Name)
+	}
+	if candidate.Admin.Editor != nil || candidate.Admin.Component != nil {
+		return fmt.Sprintf("field %q uses a custom editor; select text using the built-in editor", candidate.Name)
+	}
+	return ""
 }

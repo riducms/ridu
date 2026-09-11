@@ -83,11 +83,11 @@ func TestBlockRegistryInlineAccessEquivalence(t *testing.T) {
 				if collection == "pages" {
 					input["body"] = richtextblocks.Document(richtextblocks.Block("card", "embedded", store.Values{"visibility": store.String("visible"), "secret": store.String("embedded-secret")}))
 				}
-				doc, err := app.Local().Create(t.Context(), collection, input, nil)
+				doc, err := app.Local().Create(t.Context(), collection, input, ridu.MutationOptions{})
 				if err != nil {
 					t.Fatal(err)
 				}
-				got, err := app.Local().Find(t.Context(), collection, doc.ID, nil)
+				got, err := app.Local().Find(t.Context(), collection, doc.ID, ridu.FindOptions{})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -100,7 +100,7 @@ func TestBlockRegistryInlineAccessEquivalence(t *testing.T) {
 				data, _ = json.Marshal(capabilities)
 				results = append(results, data)
 				patch := store.Values{"layout": store.List(store.Object(store.Values{"_key": store.String("b"), "blockType": store.String("card"), "secret": store.String("changed")}), store.Object(store.Values{"_key": store.String("a"), "blockType": store.String("card")}))}
-				_, err = app.Local().Update(t.Context(), collection, doc.ID, patch, nil)
+				_, err = app.Local().Update(t.Context(), collection, doc.ID, patch, ridu.MutationOptions{})
 				if err == nil {
 					t.Fatal("document-dependent write denial was skipped")
 				}
@@ -239,7 +239,7 @@ func TestBlockRegistryAccessContextMatrix(t *testing.T) {
 	var expectedResults, expectedCalls []string
 	for _, refs := range []bool{false, true} {
 		calls := []string{}
-		rule := func(c operation.AccessContext) (bool, error) {
+		rule := func(c operation.Context) (bool, error) {
 			tenant, _ := c.Root.String("tenant")
 			visibility, _ := c.Siblings.String("visibility")
 			prior, _ := c.Prior.String("visibility")
@@ -252,7 +252,7 @@ func TestBlockRegistryAccessContextMatrix(t *testing.T) {
 			if refs {
 				b = field.Blocks("layout").References("context-card")
 			}
-			return field.Fields{field.Text("tenant"), b.Access(field.Access{Read: func(c operation.AccessContext) (bool, error) { return c.Actor.ID != "parent-denied", nil }, Update: func(c operation.AccessContext) (bool, error) { return c.Actor.ID != "parent-denied", nil }})}
+			return field.Fields{field.Text("tenant"), b.Access(field.Access{Read: func(c operation.Context) (bool, error) { return c.Actor.ID != "parent-denied", nil }, Update: func(c operation.Context) (bool, error) { return c.Actor.ID != "parent-denied", nil }})}
 		}
 		cfg := ridu.Config{Name: "Context matrix", Localization: ridu.LocalizationConfig{DefaultLocale: "en", Locales: []ridu.Locale{{Code: "en", Label: "English"}, {Code: "fr", Label: "French"}}}, Collections: []ridu.Collection{{Slug: "pages", Fields: makeFields()}, {Slug: "articles", Fields: makeFields()}}, Globals: []ridu.Global{{Slug: "settings", Fields: makeFields()}}}
 		if refs {
@@ -276,14 +276,14 @@ func TestBlockRegistryAccessContextMatrix(t *testing.T) {
 		}
 		for _, resource := range []string{"pages", "articles"} {
 			for _, tenant := range []string{"open", "closed"} {
-				doc, err := app.Local().Create(t.Context(), resource, store.Values{"tenant": store.String(tenant), "layout": rows()}, nil)
+				doc, err := app.Local().Create(t.Context(), resource, store.Values{"tenant": store.String(tenant), "layout": rows()}, ridu.MutationOptions{})
 				if err != nil {
 					t.Fatal(err)
 				}
 				for _, actorID := range []string{"allowed", "blocked", "parent-denied"} {
 					actor := &store.Document{ID: actorID}
 					for _, locale := range []schema.LocaleCode{"en", "fr"} {
-						got, err := app.Local().Find(t.Context(), resource, doc.ID, actor, ridu.LocaleOptions{Locale: locale})
+						got, err := app.Local().Find(t.Context(), resource, doc.ID, ridu.FindOptions{Actor: actor, Locale: locale})
 						record(got.Values, err)
 						cap, err := app.Local().Capabilities(t.Context(), resource, doc.ID, ridu.CapabilityOptions{Actor: actor, Locale: locale})
 						record(cap, err)
@@ -293,7 +293,7 @@ func TestBlockRegistryAccessContextMatrix(t *testing.T) {
 						patch := store.Values{"layout": store.List(store.Object(store.Values{"_key": store.String("b"), "blockType": store.String("context-card"), "visibility": store.String("visible"), "secret": store.String("changed")}), store.Object(store.Values{"_key": store.String("a"), "blockType": store.String("context-card")}))}
 						cap, err = app.Local().Capabilities(t.Context(), resource, doc.ID, ridu.CapabilityOptions{Actor: actor, Locale: locale, Data: patch})
 						record(cap, err)
-						_, err = app.Local().Update(t.Context(), resource, doc.ID, patch, actor, ridu.LocaleOptions{Locale: locale})
+						_, err = app.Local().Update(t.Context(), resource, doc.ID, patch, ridu.MutationOptions{Actor: actor, Locale: locale})
 						if err == nil {
 							t.Fatal("protected retained row accepted")
 						}
@@ -302,12 +302,12 @@ func TestBlockRegistryAccessContextMatrix(t *testing.T) {
 				}
 			}
 		}
-		_, err = app.Local().UpdateGlobal(t.Context(), "settings", store.Values{"tenant": store.String("open"), "layout": store.List(store.Object(store.Values{"_key": store.String("g"), "blockType": store.String("context-card"), "visibility": store.String("visible"), "secret": store.String("global")}))}, 0, nil)
+		_, err = app.Local().UpdateGlobal(t.Context(), "settings", store.Values{"tenant": store.String("open"), "layout": store.List(store.Object(store.Values{"_key": store.String("g"), "blockType": store.String("context-card"), "visibility": store.String("visible"), "secret": store.String("global")}))}, ridu.MutationOptions{})
 		if err != nil {
 			t.Fatal(err)
 		}
 		for _, id := range []string{"allowed", "blocked"} {
-			doc, err := app.Local().Global(t.Context(), "settings", &store.Document{ID: id})
+			doc, err := app.Local().Global(t.Context(), "settings", ridu.FindOptions{Actor: &store.Document{ID: id}})
 			record(doc.Values, err)
 		}
 		slices.Sort(calls)
@@ -342,7 +342,7 @@ func TestBlockRegistrySymbolicReferencesValidateEachPlacement(t *testing.T) {
 func TestBlockRegistryCreateAccess(t *testing.T) {
 	var expected []string
 	for _, refs := range []bool{false, true} {
-		card := field.Block{Slug: "card", Fields: field.Fields{field.Text("visibility"), field.Text("secret").Access(field.Access{Create: func(c operation.AccessContext) (bool, error) {
+		card := field.Block{Slug: "card", Fields: field.Fields{field.Text("visibility"), field.Text("secret").Access(field.Access{Create: func(c operation.Context) (bool, error) {
 			tenant, _ := c.Root.String("tenant")
 			visibility, _ := c.Siblings.String("visibility")
 			return tenant == "open" && visibility == "visible" && c.Actor.ID != "blocked", nil
@@ -370,7 +370,7 @@ func TestBlockRegistryCreateAccess(t *testing.T) {
 					}
 					data, _ := json.Marshal(cap)
 					results = append(results, string(data))
-					doc, err := app.Local().Create(t.Context(), "pages", values, actor)
+					doc, err := app.Local().Create(t.Context(), "pages", values, ridu.MutationOptions{Actor: actor})
 					allowed := actor == nil && tenant == "open" && visibility == "visible"
 					if (err == nil) != allowed {
 						t.Fatalf("create decision: %v", err)

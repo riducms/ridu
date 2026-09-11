@@ -169,7 +169,7 @@ func TestGraphQLUploadMutationsMatchExecutableStorageContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	staff, err := application.Local().Import(ctx, "staff", store.Values{"email": store.String("editor@example.test")}, ridu.ImportOptions{ID: "graphql-upload-editor", Status: store.StatusPublished}, nil)
+	staff, err := application.Local().Import(ctx, "staff", store.Values{"email": store.String("editor@example.test")}, ridu.ImportOptions{ID: "graphql-upload-editor", Status: store.StatusPublished})
 	if err != nil {
 		t.Fatal(err)
 	}

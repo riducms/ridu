@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { createEditor } from "lexical";
 
 import { initialEditorState } from "../src/field/rich-text-document";
 import { documentRecoveryIssue } from "../src/document-validation";
@@ -51,10 +52,21 @@ describe("rich-text document hydration", () => {
 		});
 
 		expect(JSON.parse(state ?? "null").root).toMatchObject({
+			children: [
+				{
+					type: "paragraph",
+					children: [],
+					direction: null,
+					format: "",
+					indent: 0,
+				},
+			],
 			direction: "rtl",
 			format: "center",
 			indent: 2,
 		});
+		const editor = createEditor({ namespace: "empty-rich-text-hydration" });
+		expect(() => editor.setEditorState(editor.parseEditorState(state!))).not.toThrow();
 		expect(initialEditorState({ version: 2, root: {} })).toBeNull();
 		expect(initialEditorState(null)).toBeNull();
 	});

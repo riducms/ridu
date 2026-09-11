@@ -125,3 +125,24 @@ function read(values: Record<string, unknown>) {
 		return current;
 	};
 }
+
+test("malformed wire literals cannot match presentation values", () => {
+	for (const [type, value, actual] of [
+		["boolean", "yes", false],
+		["boolean", "FALSE", false],
+		["number", "NaN", Number.NaN],
+		["number", "Infinity", Infinity],
+		["number", "", 0],
+	] as const) {
+		const condition = {
+			kind: "predicate",
+			predicate: {
+				scope: "document",
+				path: "value",
+				operator: "equals",
+				values: [{ type, value }],
+			},
+		} as SchemaFieldCondition;
+		expect(evaluateFieldCondition(condition, "visible", () => actual)).toBe(false);
+	}
+});

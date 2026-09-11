@@ -49,7 +49,7 @@ guide for the command to use.
 | `.CollectionReferenceKeys(keys...)`              | Declares direct collection-reference keys owned by the plugin value.                              |
 | `.Required()` / `.Localized()`                   | Requires the plugin payload or stores one payload per content locale.                             |
 | `.Validate(...)` / `.LiveValidate(...)`          | Adds application rules after the plugin's own value checks.                                       |
-| `.Access(...)`, `.Hooks(...)`, `.ReadHooks(...)` | Controls authorization and lifecycle behavior around the plugin value.                            |
+| `.Access(...)`, `.Hooks(...)`, `.AfterRead(...)` | Controls authorization and lifecycle behavior around the plugin value.                            |
 
 ## Build your own plugin field {#low-level}
 

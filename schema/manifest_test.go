@@ -622,7 +622,7 @@ func TestManifestConditionSnapshotIsImmutable(t *testing.T) {
 			Kind: schema.FieldConditionKindPredicate,
 			Predicate: &schema.FieldConditionPredicate{
 				Scope: schema.FieldConditionDocument, Path: path, Operator: schema.FieldConditionOneOf,
-				Values: []schema.FieldConditionValue{{Type: schema.ValueTypeString, Value: "draft"}, {Type: schema.ValueTypeString, Value: "published"}},
+				Values: []schema.ScalarLiteral{{Type: schema.ValueTypeString, Value: "draft"}, {Type: schema.ValueTypeString, Value: "published"}},
 			},
 		}},
 	}
@@ -661,7 +661,7 @@ func TestManifestParseRejectsMalformedFieldConditions(t *testing.T) {
 				Kind: schema.FieldConditionKindPredicate,
 				Predicate: &schema.FieldConditionPredicate{
 					Scope: schema.FieldConditionDocument, Path: statusPath, Operator: schema.FieldConditionEquals,
-					Values: []schema.FieldConditionValue{{Type: schema.ValueTypeString, Value: "published"}},
+					Values: []schema.ScalarLiteral{{Type: schema.ValueTypeString, Value: "published"}},
 				},
 			}}, Text: &schema.TextField{},
 		}, {
@@ -681,19 +681,19 @@ func TestManifestParseRejectsMalformedFieldConditions(t *testing.T) {
 			condition.Predicate.Scope = "nearest"
 		}, "invalid field condition scope"},
 		{"wrong value count", func(condition *schema.FieldCondition) {
-			condition.Predicate.Values = append(condition.Predicate.Values, schema.FieldConditionValue{Type: schema.ValueTypeString, Value: "draft"})
+			condition.Predicate.Values = append(condition.Predicate.Values, schema.ScalarLiteral{Type: schema.ValueTypeString, Value: "draft"})
 		}, "requires exactly one value"},
 		{"invalid boolean", func(condition *schema.FieldCondition) {
-			condition.Predicate.Values[0] = schema.FieldConditionValue{Type: schema.ValueTypeBoolean, Value: "yes"}
+			condition.Predicate.Values[0] = schema.ScalarLiteral{Type: schema.ValueTypeBoolean, Value: "yes"}
 		}, "invalid boolean field condition value"},
 		{"json operand", func(condition *schema.FieldCondition) {
-			condition.Predicate.Values[0] = schema.FieldConditionValue{Type: schema.ValueTypeJSON, Value: "{}"}
+			condition.Predicate.Values[0] = schema.ScalarLiteral{Type: schema.ValueTypeJSON, Value: "{}"}
 		}, "invalid field condition value type"},
 		{"unknown field path", func(condition *schema.FieldCondition) {
 			condition.Predicate.Path, _ = query.ParsePath("missing")
 		}, "invalid field condition path"},
 		{"mismatched operand", func(condition *schema.FieldCondition) {
-			condition.Predicate.Values[0] = schema.FieldConditionValue{Type: schema.ValueTypeNumber, Value: "1"}
+			condition.Predicate.Values[0] = schema.ScalarLiteral{Type: schema.ValueTypeNumber, Value: "1"}
 		}, "invalid field condition operand"},
 	}
 	for _, test := range tests {
@@ -708,62 +708,6 @@ func TestManifestParseRejectsMalformedFieldConditions(t *testing.T) {
 				t.Fatalf("Parse error = %v, want %q", err, test.expected)
 			}
 		})
-	}
-}
-
-func TestPluginDatabaseContributionsRoundTripAndRemainImmutable(t *testing.T) {
-	input := schema.Snapshot{
-		Version: schema.CurrentVersion, Application: schema.Application{Name: "Plugin database"},
-		Plugins: []schema.Plugin{{
-			Key: "audit", Version: "1.0.0", GoPackage: "example.com/plugins/audit", APIVersion: schema.CurrentPluginAPIVersion,
-			Ridu: &schema.PluginCompatibility{Minimum: "0.1.0"},
-			DatabaseContributions: []schema.PluginDatabaseContribution{{
-				Adapter: schema.PluginDatabaseAdapterSQLite, Tables: []string{"ridu_plugin_audit_events"},
-				Migrations: []schema.PluginMigration{{
-					Version: 1, Name: "create-events", UpSQL: []string{"CREATE TABLE ridu_plugin_audit_events (id TEXT)"}, DownSQL: []string{"DROP TABLE ridu_plugin_audit_events"},
-				}},
-			}},
-		}},
-	}
-	manifest := schema.NewManifest(input)
-	before, err := manifest.Bytes()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := schema.Parse(before); err != nil {
-		t.Fatalf("Parse valid plugin database contribution: %v", err)
-	}
-	input.Plugins[0].DatabaseContributions[0].Tables[0] = "changed"
-	input.Plugins[0].DatabaseContributions[0].Migrations[0].UpSQL[0] = "changed"
-	returned := manifest.Snapshot()
-	returned.Plugins[0].DatabaseContributions[0].Tables[0] = "returned"
-	returned.Plugins[0].DatabaseContributions[0].Migrations[0].DownSQL[0] = "returned"
-	after, err := manifest.Bytes()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(before, after) {
-		t.Fatalf("plugin database manifest changed after mutation:\nbefore:\n%s\nafter:\n%s", before, after)
-	}
-
-	invalid := manifest.Snapshot()
-	invalid.Plugins[0].DatabaseContributions = append(invalid.Plugins[0].DatabaseContributions, invalid.Plugins[0].DatabaseContributions[0])
-	encoded, err := json.Marshal(invalid)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := schema.Parse(encoded); err == nil || !strings.Contains(err.Error(), "duplicate plugin database adapter") {
-		t.Fatalf("duplicate adapter Parse error = %v", err)
-	}
-
-	invalid = manifest.Snapshot()
-	invalid.Plugins[0].DatabaseContributions[0].Migrations[0].UpSQL[0] = "-- plugin\nCOMMIT"
-	encoded, err = json.Marshal(invalid)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := schema.Parse(encoded); err == nil || !strings.Contains(err.Error(), "invalid plugin migration SQL") {
-		t.Fatalf("transaction-control Parse error = %v", err)
 	}
 }
 
@@ -957,5 +901,12 @@ func TestSemanticVersionRangesFollowPrereleaseOrdering(t *testing.T) {
 	}
 	if schema.IsValidSemanticVersionRange("1.0.0", "1.0.0-beta.1") {
 		t.Fatal("empty reverse release range was accepted")
+	}
+}
+
+func TestRetiredPluginSQLMetadataIsRejected(t *testing.T) {
+	_, err := schema.Parse([]byte(`{"version":1,"application":{"name":"Retired"},"collections":[],"plugins":[{"key":"audit","databaseContributions":[]}]}`))
+	if err == nil || !strings.Contains(err.Error(), "databaseContributions") {
+		t.Fatalf("retired SQL metadata accepted: %v", err)
 	}
 }

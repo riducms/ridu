@@ -111,7 +111,7 @@ options so collection/global access, validation, hooks, transactions, and field 
 authoritative:
 
 ```go title="content/order-endpoint.go"
-order, err := ctx.Local.FindWithOptions(
+order, err := ctx.Local.Find(
 	ctx.Request.Context(),
 	"orders",
 	ctx.RouteParams["id"],

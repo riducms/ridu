@@ -93,6 +93,7 @@ export function guardPluginAuthoring(
 					},
 				}),
 		...(host.schemaForm === undefined ? {} : { schemaForm: host.schemaForm }),
+		...(host.schemaHeader === undefined ? {} : { schemaHeader: host.schemaHeader }),
 		...(host.schemaIssues === undefined
 			? {}
 			: {

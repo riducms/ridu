@@ -12,7 +12,7 @@ var Subtitle = field.Text("subtitle").Hooks(field.Hooks[string]{
 })
 
 func cleanSubtitle(
-	_ operation.WriteContext,
+	_ operation.Context,
 	value operation.Value[string],
 ) (operation.Change[string], error) {
 	subtitle, present := value.Get()

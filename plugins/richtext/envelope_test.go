@@ -37,7 +37,7 @@ func TestPortableEnvelopeAdmissionHasExactPaths(t *testing.T) {
 			if err := json.Unmarshal([]byte(test.raw), &value); err != nil {
 				t.Fatal(err)
 			}
-			_, err := app.Local().Create(context.Background(), "pages", store.Values{"body": value}, nil)
+			_, err := app.Local().Create(context.Background(), "pages", store.Values{"body": value}, ridu.MutationOptions{})
 			encoded, _ := json.Marshal(err)
 			if err == nil || !strings.Contains(string(encoded), test.path) {
 				t.Fatalf("expected exact path %s: %v %s", test.path, err, encoded)
@@ -56,7 +56,7 @@ func TestPortableLexicalPropertiesSurviveAdmissionAndTypedCodec(t *testing.T) {
 	if err := json.Unmarshal([]byte(raw), &value); err != nil {
 		t.Fatal(err)
 	}
-	created, err := app.Local().Create(context.Background(), "pages", store.Values{"body": value}, nil)
+	created, err := app.Local().Create(context.Background(), "pages", store.Values{"body": value}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

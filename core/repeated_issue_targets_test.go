@@ -45,7 +45,7 @@ func TestAggregateIssueTargetsAgreeAcrossLocalAndREST(t *testing.T) {
 				t.Fatal(err)
 			}
 			values := store.Values{"title": store.String("Targets"), test.field: test.value}
-			_, err = app.Local().CreateWithOptions(t.Context(), "issue-targets", values, core.MutationOptions{Locale: schema.LocaleCode(test.locale)})
+			_, err = app.Local().Create(t.Context(), "issue-targets", values, core.MutationOptions{Locale: schema.LocaleCode(test.locale)})
 			var failure *core.OperationError
 			if !errors.As(err, &failure) || len(failure.Issues) != len(test.paths) {
 				t.Fatalf("local validation = %v", err)
@@ -95,7 +95,7 @@ func TestAggregateIssueUsesKeysAfterCandidateReorder(t *testing.T) {
 	_, err = app.Local().Create(t.Context(), "issue-targets", store.Values{"title": store.String("Reordered"), "sections": store.List(
 		store.Object(store.Values{"_key": store.String("a"), "heading": store.String("invalid")}),
 		store.Object(store.Values{"_key": store.String("b"), "heading": store.String("ok")}),
-	)}, nil)
+	)}, core.MutationOptions{})
 	var failure *core.OperationError
 	if !errors.As(err, &failure) || len(failure.Issues) != 1 || failure.Issues[0].Path != "sections.1.heading" {
 		t.Fatalf("reordered issue = %v", err)
@@ -109,14 +109,14 @@ func TestAggregateIssueUsesKeysAfterCandidateReorder(t *testing.T) {
 
 func TestSimpleIssueTargetAndInvalidDescendants(t *testing.T) {
 	for _, target := range []operation.IssueTarget{operation.At("seo.title"), operation.At("missing"), operation.At("seo").Row("a"), operation.At("seo.title").Field("impossible")} {
-		group := field.Group("details", field.Fields{field.Group("seo", field.Fields{field.Text("title")})}).Validate(func(operation.ValidationContext, operation.Value[store.Value]) ([]operation.Issue, error) {
+		group := field.Group("details", field.Fields{field.Group("seo", field.Fields{field.Text("title")})}).Validate(func(operation.Context, operation.Value[store.Value]) ([]operation.Issue, error) {
 			return []operation.Issue{{Code: "title", Message: "Invalid title", Target: target}}, nil
 		})
 		app, err := core.New(core.Config{Name: "Targets", Collections: []core.Collection{{Slug: "pages", Fields: field.Fields{group}}}}, teststore.New())
 		if err != nil {
 			t.Fatal(err)
 		}
-		_, err = app.Local().Create(t.Context(), "pages", store.Values{"details": store.Object(store.Values{"seo": store.Object(store.Values{"title": store.String("invalid")})})}, nil)
+		_, err = app.Local().Create(t.Context(), "pages", store.Values{"details": store.Object(store.Values{"seo": store.Object(store.Values{"title": store.String("invalid")})})}, core.MutationOptions{})
 		var failure *core.OperationError
 		if !errors.As(err, &failure) {
 			t.Fatalf("expected operation error: %v", err)
@@ -144,7 +144,7 @@ func TestAggregateIssueCannotLoseIdentityInsideAnAbsentGroup(t *testing.T) {
 		{"missing scalar in existing group", operation.At().Row("a").Field("details.url"), store.Values{"details": store.Object(store.Values{})}, true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			rows := field.Array("rows", field.Fields{field.Group("details", field.Fields{field.Text("url")})}).Validate(func(operation.ValidationContext, operation.Value[store.Value]) ([]operation.Issue, error) {
+			rows := field.Array("rows", field.Fields{field.Group("details", field.Fields{field.Text("url")})}).Validate(func(operation.Context, operation.Value[store.Value]) ([]operation.Issue, error) {
 				return []operation.Issue{{Code: "link", Message: "Supply a link", Target: test.target}}, nil
 			})
 			config := core.Config{Name: "Targets", Collections: []core.Collection{{Slug: "pages", Fields: field.Fields{rows}}}}
@@ -162,7 +162,7 @@ func TestAggregateIssueCannotLoseIdentityInsideAnAbsentGroup(t *testing.T) {
 			for key, value := range test.data {
 				row[key] = value
 			}
-			_, err = app.Local().Create(t.Context(), "pages", store.Values{"rows": store.List(store.Object(row), store.Object(store.Values{"_key": store.String("b")}))}, nil)
+			_, err = app.Local().Create(t.Context(), "pages", store.Values{"rows": store.List(store.Object(row), store.Object(store.Values{"_key": store.String("b")}))}, core.MutationOptions{})
 			var failure *core.OperationError
 			if !errors.As(err, &failure) {
 				t.Fatalf("expected validation result: %v", err)

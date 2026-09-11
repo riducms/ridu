@@ -106,7 +106,7 @@ func TestRelativeIssueUsesImmutableTarget(t *testing.T) {
 func TestPhaseContextsRetainDirectCancellationField(t *testing.T) {
 	// Defining each named context over Context's struct avoids the selector
 	// collision that embedding a field also named Context would introduce.
-	ctx := operation.ValidationContext{Context: context.Background()}
+	ctx := operation.Context{Context: context.Background()}
 	var cancellation context.Context = ctx.Context
 	if cancellation == nil {
 		t.Fatal("cancellation context missing")

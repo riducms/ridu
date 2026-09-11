@@ -8,10 +8,11 @@ import (
 	"github.com/riducms/ridu/store"
 )
 
-// Endpoint is one application-authored, method-specific HTTP endpoint. Root
+// Endpoint is one compiled, method-specific HTTP endpoint. Registration owns placement. Root
 // endpoints are mounted below /api; collection and global endpoints are
 // mounted below their resource route. Path uses Payload-familiar named
-// segments such as /:id/tracking.
+// segments such as /:id/tracking. Plugin providers use exact relative paths below
+// /api/plugins/<key>/; transport providers use their restricted absolute protocol paths.
 //
 // Custom endpoints are not authorized automatically. Handler must enforce any
 // endpoint-specific policy before performing work. Local remains
@@ -21,7 +22,9 @@ type Endpoint struct {
 	// Method is one supported HTTP method. Matching is case-insensitive during
 	// config resolution and the manifest stores its uppercase form.
 	Method string
-	// Path begins with / and may contain named :parameter segments.
+	// Path follows the registering provider: application/resource paths begin with /
+	// and support :parameters, plugin paths are exact and relative, and transport
+	// paths are exact allowed absolute protocol routes.
 	Path string
 	// Summary appears in the generated OpenAPI operation. When empty, Ridu
 	// supplies a deterministic generic summary.

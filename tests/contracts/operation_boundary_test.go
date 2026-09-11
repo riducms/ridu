@@ -22,7 +22,7 @@ func TestOperationVocabularyCrossesEveryCallbackBoundary(t *testing.T) {
 	allowUpdate := func(kind operation.Kind) bool { return kind == operation.Update }
 	resource := ridu.AccessContext{Operation: operation.Update}
 	hook := core.HookContext{Operation: resource.Operation}
-	field := operation.AccessContext{Operation: hook.Operation}
+	field := operation.Context{Operation: hook.Operation}
 	effect := core.AfterCommitEffect{Operation: field.Operation}
 	request := operationengine.Request{Operation: effect.Operation}
 	for _, kind := range []operation.Kind{resource.Operation, hook.Operation, field.Operation, effect.Operation, request.Operation} {

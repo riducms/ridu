@@ -87,10 +87,6 @@ func Create(directory, name string, artifact migration.Artifact, now time.Time) 
 	if err != nil {
 		return File{}, err
 	}
-	candidate := File{Name: base, Digest: digest, Artifact: artifact}
-	if err := validatePluginMigrationHistory(append(append([]File(nil), existing...), candidate)); err != nil {
-		return File{}, err
-	}
 	encoded = append(encoded, '\n')
 	if err := publishArtifact(directory, path, encoded); err != nil {
 		if os.IsExist(err) {
@@ -226,47 +222,7 @@ func ReadAll(directory string) ([]File, error) {
 			return nil, fmt.Errorf("migration history is discontinuous between %s and %s", files[index-1].Name, files[index].Name)
 		}
 	}
-	if err := validatePluginMigrationHistory(files); err != nil {
-		return nil, err
-	}
 	return files, nil
-}
-
-func validatePluginMigrationHistory(files []File) error {
-	seen := make(map[string]string)
-	for _, file := range files {
-		adapter, supported := pluginAdapterForPlanner(file.Artifact.Planner.Name)
-		if !supported {
-			continue
-		}
-		for _, plugin := range file.Artifact.After.Plugins {
-			contribution, exists := plugin.DatabaseContribution(adapter)
-			if !exists {
-				continue
-			}
-			for _, pluginMigration := range contribution.Migrations {
-				identity := string(adapter) + ":" + plugin.Key + ":" + fmt.Sprint(pluginMigration.Version)
-				checksum := migration.PluginStepChecksum(adapter, plugin.Key, pluginMigration.Version, "up", pluginMigration.UpSQL) + ":" +
-					migration.PluginStepChecksum(adapter, plugin.Key, pluginMigration.Version, "down", pluginMigration.DownSQL) + ":" + pluginMigration.Name
-				if previous, exists := seen[identity]; exists && previous != checksum {
-					return fmt.Errorf("plugin %s %s migration %d changed after publication in %s", plugin.Key, adapter, pluginMigration.Version, file.Name)
-				}
-				seen[identity] = checksum
-			}
-		}
-	}
-	return nil
-}
-
-func pluginAdapterForPlanner(planner string) (schema.PluginDatabaseAdapter, bool) {
-	switch planner {
-	case "atlas":
-		return schema.PluginDatabaseAdapterPostgres, true
-	case "ridu-sqlite":
-		return schema.PluginDatabaseAdapterSQLite, true
-	default:
-		return "", false
-	}
 }
 
 // LatestManifest returns the desired schema committed by the newest artifact.

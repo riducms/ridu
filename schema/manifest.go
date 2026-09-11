@@ -172,48 +172,14 @@ type AdminSettings struct {
 
 // Plugin records one compiled plugin that participated in config resolution.
 type Plugin struct {
-	Key                   string                       `json:"key"`
-	Version               string                       `json:"version,omitempty"`
-	GoPackage             string                       `json:"goPackage,omitempty"`
-	APIVersion            uint32                       `json:"apiVersion,omitempty"`
-	Ridu                  *PluginCompatibility         `json:"ridu,omitempty"`
-	Admin                 *PluginAdmin                 `json:"admin,omitempty"`
-	FieldTypes            []PluginFieldType            `json:"fieldTypes,omitempty"`
-	DatabaseContributions []PluginDatabaseContribution `json:"databaseContributions,omitempty"`
-	Endpoints             []PluginEndpoint             `json:"endpoints,omitempty"`
-}
-
-// PluginDatabaseAdapter is a closed database dialect identity for exceptional
-// plugin-owned schema. Raw SQL is meaningful only to the named adapter.
-type PluginDatabaseAdapter string
-
-const (
-	PluginDatabaseAdapterPostgres PluginDatabaseAdapter = "postgres"
-	PluginDatabaseAdapterSQLite   PluginDatabaseAdapter = "sqlite"
-)
-
-// PluginDatabaseContribution is one adapter-specific migration history and
-// its plugin-owned physical tables.
-type PluginDatabaseContribution struct {
-	Adapter    PluginDatabaseAdapter `json:"adapter"`
-	Migrations []PluginMigration     `json:"migrations,omitempty"`
-	Tables     []string              `json:"tables,omitempty"`
-}
-
-// DatabaseContribution returns the private-schema bundle for adapter.
-func (plugin Plugin) DatabaseContribution(adapter PluginDatabaseAdapter) (PluginDatabaseContribution, bool) {
-	for _, contribution := range plugin.DatabaseContributions {
-		if contribution.Adapter == adapter {
-			return contribution, true
-		}
-	}
-	return PluginDatabaseContribution{}, false
-}
-
-// HasDatabaseContributions reports whether a plugin requires private physical
-// schema outside ordinary Ridu collections and fields.
-func (plugin Plugin) HasDatabaseContributions() bool {
-	return len(plugin.DatabaseContributions) != 0
+	Key        string               `json:"key"`
+	Version    string               `json:"version,omitempty"`
+	GoPackage  string               `json:"goPackage,omitempty"`
+	APIVersion uint32               `json:"apiVersion,omitempty"`
+	Ridu       *PluginCompatibility `json:"ridu,omitempty"`
+	Admin      *PluginAdmin         `json:"admin,omitempty"`
+	FieldTypes []PluginFieldType    `json:"fieldTypes,omitempty"`
+	Endpoints  []PluginEndpoint     `json:"endpoints,omitempty"`
 }
 
 // PluginCompatibility is a half-open semantic-version interval.
@@ -246,14 +212,6 @@ type PluginFieldType struct {
 	GoPackage         string          `json:"goPackage,omitempty"`
 	GoType            string          `json:"goType,omitempty"`
 	JSONSchema        json.RawMessage `json:"jsonSchema,omitempty"`
-}
-
-// PluginMigration is a declarative, contiguous adapter-specific transition.
-type PluginMigration struct {
-	Version uint32   `json:"version"`
-	Name    string   `json:"name"`
-	UpSQL   []string `json:"upSQL"`
-	DownSQL []string `json:"downSQL"`
 }
 
 // PluginEndpoint is the public manifest contract for one compiled endpoint.
@@ -522,13 +480,7 @@ type FieldConditionPredicate struct {
 	Scope    FieldConditionScope    `json:"scope"`
 	Path     query.Path             `json:"path"`
 	Operator FieldConditionOperator `json:"operator"`
-	Values   []FieldConditionValue  `json:"values"`
-}
-
-// FieldConditionValue stores one canonical scalar operand.
-type FieldConditionValue struct {
-	Type  ValueType `json:"type"`
-	Value string    `json:"value"`
+	Values   []ScalarLiteral        `json:"values"`
 }
 
 // TextField contains inclusive Unicode code-point length constraints and
@@ -633,17 +585,11 @@ type RelationshipField struct {
 
 // RelationshipFilter derives an admin option predicate from document data.
 type RelationshipFilter struct {
-	CollectionSlug CollectionSlug           `json:"collectionSlug,omitempty"`
-	TargetPath     query.Path               `json:"targetPath"`
-	Operator       string                   `json:"operator,omitempty"`
-	SourcePath     *query.Path              `json:"sourcePath,omitempty"`
-	Value          *RelationshipFilterValue `json:"value,omitempty"`
-}
-
-// RelationshipFilterValue is one typed static scalar operand.
-type RelationshipFilterValue struct {
-	Type  ValueType `json:"type"`
-	Value string    `json:"value"`
+	CollectionSlug CollectionSlug `json:"collectionSlug,omitempty"`
+	TargetPath     query.Path     `json:"targetPath"`
+	Operator       string         `json:"operator,omitempty"`
+	SourcePath     *query.Path    `json:"sourcePath,omitempty"`
+	Value          *ScalarLiteral `json:"value,omitempty"`
 }
 
 type RelationshipTarget struct {
@@ -696,9 +642,10 @@ type BlocksField struct {
 	Types           []BlockType `json:"types,omitempty"`
 }
 
-// BlockAdmin contains the narrow content-derived block heading contract.
+// BlockAdmin contains presentation metadata derived from direct block children.
 type BlockAdmin struct {
-	RowLabel string `json:"rowLabel,omitempty"`
+	NameField string `json:"nameField,omitempty"`
+	RowLabel  string `json:"rowLabel,omitempty"`
 }
 
 // BlockLabels contains resolved author-facing names and admin language overrides.
@@ -753,6 +700,9 @@ func Parse(encoded []byte) (Manifest, error) {
 		return Manifest{}, fmt.Errorf("unsupported schema manifest version %d; this Ridu build supports version %d", snapshot.Version, CurrentVersion)
 	}
 	if err := BindBlockReferences(&snapshot); err != nil {
+		return Manifest{}, err
+	}
+	if err := validateBlockNameMetadata(snapshot); err != nil {
 		return Manifest{}, err
 	}
 	if err := ValidateEmbeddedMetadata(snapshot); err != nil {
@@ -1144,6 +1094,94 @@ func validateConstraintAndIndexMetadata(snapshot Snapshot) error {
 	return nil
 }
 
+func validateBlockNameMetadata(snapshot Snapshot) error {
+	var inspectFields func([]Field, string) error
+	var inspectBlock func(BlockType, string) error
+	inspectBlock = func(block BlockType, path string) error {
+		if block.Admin != nil && block.Admin.NameField != "" {
+			child, found := directField(block.Fields, block.Admin.NameField)
+			if !found {
+				return fmt.Errorf("invalid block name field at %s.admin.nameField: must name an existing direct stored text child", path)
+			}
+			if reason := invalidBlockNameFieldReason(child); reason != "" {
+				return fmt.Errorf("invalid block name field at %s.admin.nameField: %s", path, reason)
+			}
+		}
+		return inspectFields(block.Fields, path+".fields")
+	}
+	inspectFields = func(fields []Field, path string) error {
+		for fieldIndex, candidate := range fields {
+			fieldPath := fmt.Sprintf("%s[%d]", path, fieldIndex)
+			if candidate.Nested != nil {
+				if err := inspectFields(candidate.Nested.ResolvedFields(), fieldPath+".nested.fields"); err != nil {
+					return err
+				}
+			}
+			if candidate.Blocks != nil {
+				// Registered definitions are checked once through snapshot.Blocks.
+				// Reference placements cannot override their admin metadata, so
+				// expanding a lazy view here would repeat the shared subtree.
+				for blockIndex, block := range candidate.Blocks.Types {
+					if err := inspectBlock(block, fmt.Sprintf("%s.blocks.types[%d]", fieldPath, blockIndex)); err != nil {
+						return err
+					}
+				}
+			}
+			if candidate.Plugin != nil {
+				for treeIndex, tree := range candidate.Plugin.EmbeddedTrees {
+					for caseIndex, branch := range tree.Cases {
+						for blockIndex, block := range branch.Types {
+							blockPath := fmt.Sprintf("%s.plugin.embeddedTrees[%d].cases[%d].types[%d]", fieldPath, treeIndex, caseIndex, blockIndex)
+							if err := inspectBlock(block, blockPath); err != nil {
+								return err
+							}
+						}
+					}
+				}
+			}
+		}
+		return nil
+	}
+	for blockIndex, block := range snapshot.Blocks {
+		if err := inspectBlock(block, fmt.Sprintf("blocks[%d]", blockIndex)); err != nil {
+			return err
+		}
+	}
+	for collectionIndex, collection := range snapshot.Collections {
+		if err := inspectFields(collection.Fields, fmt.Sprintf("collections[%d].fields", collectionIndex)); err != nil {
+			return err
+		}
+	}
+	for globalIndex, global := range snapshot.Globals {
+		if err := inspectFields(global.Fields, fmt.Sprintf("globals[%d].fields", globalIndex)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func directField(fields []Field, name string) (Field, bool) {
+	for _, candidate := range fields {
+		if candidate.Name == name {
+			return candidate, true
+		}
+	}
+	return Field{}, false
+}
+
+func invalidBlockNameFieldReason(candidate Field) string {
+	if candidate.Category != FieldCategoryScalar || candidate.Type != FieldTypeText {
+		return fmt.Sprintf("field %q must be a direct stored text child", candidate.Name)
+	}
+	if candidate.Text != nil && candidate.Text.Slug != nil {
+		return fmt.Sprintf("field %q is a slug field; select ordinary text", candidate.Name)
+	}
+	if candidate.Admin.Editor != nil || candidate.Admin.Component != nil {
+		return fmt.Sprintf("field %q uses a custom editor; select text using the built-in editor", candidate.Name)
+	}
+	return ""
+}
+
 func validateSlugMetadata(snapshot Snapshot) error {
 	validateResource := func(fields []Field, fieldsPath string) error {
 		var inspect func([]Field, string, bool) error
@@ -1496,19 +1534,20 @@ func manifestReferenceFilterKindsCompatible(sourceKind, targetKind manifestRefer
 	}
 }
 
-func manifestReferenceFilterLiteralKind(value *RelationshipFilterValue) (manifestReferenceFilterValueKind, bool) {
+func manifestReferenceFilterLiteralKind(value *ScalarLiteral) (manifestReferenceFilterValueKind, bool) {
 	if value == nil {
+		return manifestReferenceFilterInvalid, false
+	}
+	if _, err := value.Decode(); err != nil {
 		return manifestReferenceFilterInvalid, false
 	}
 	switch value.Type {
 	case ValueTypeString:
 		return manifestReferenceFilterString, true
 	case ValueTypeNumber:
-		number, err := strconv.ParseFloat(value.Value, 64)
-		return manifestReferenceFilterNumber, err == nil && !math.IsNaN(number) && !math.IsInf(number, 0)
+		return manifestReferenceFilterNumber, true
 	case ValueTypeBoolean:
-		_, err := strconv.ParseBool(value.Value)
-		return manifestReferenceFilterBoolean, err == nil
+		return manifestReferenceFilterBoolean, true
 	default:
 		return manifestReferenceFilterInvalid, false
 	}
@@ -1999,7 +2038,7 @@ func validatePluginBuildMetadata(plugins []Plugin) error {
 			return fmt.Errorf("duplicate schema plugin key %q", plugin.Key)
 		}
 		keys[plugin.Key] = struct{}{}
-		hasDescriptor := plugin.Version != "" || plugin.GoPackage != "" || plugin.APIVersion != 0 || plugin.Ridu != nil || len(plugin.FieldTypes) != 0 || len(plugin.DatabaseContributions) != 0 || plugin.Admin != nil || len(plugin.Endpoints) != 0
+		hasDescriptor := plugin.Version != "" || plugin.GoPackage != "" || plugin.APIVersion != 0 || plugin.Ridu != nil || len(plugin.FieldTypes) != 0 || plugin.Admin != nil || len(plugin.Endpoints) != 0
 		if !hasDescriptor {
 			if owner, exists := fieldOwners[plugin.Key]; exists {
 				return fmt.Errorf("plugin field type %q is already owned by %s", plugin.Key, owner)
@@ -2023,43 +2062,6 @@ func validatePluginBuildMetadata(plugins []Plugin) error {
 					return fmt.Errorf("plugin field type %q is already owned by %s", fieldType.Key, owner)
 				}
 				fieldOwners[fieldType.Key] = plugin.Key
-			}
-			prefix := "ridu_plugin_" + strings.ReplaceAll(plugin.Key, "-", "_") + "_"
-			adapters := make(map[PluginDatabaseAdapter]struct{}, len(plugin.DatabaseContributions))
-			for contributionIndex, contribution := range plugin.DatabaseContributions {
-				if contribution.Adapter != PluginDatabaseAdapterPostgres && contribution.Adapter != PluginDatabaseAdapterSQLite {
-					return fmt.Errorf("invalid plugin database adapter at plugins[%d].databaseContributions[%d].adapter", index, contributionIndex)
-				}
-				if _, duplicate := adapters[contribution.Adapter]; duplicate {
-					return fmt.Errorf("duplicate plugin database adapter %q", contribution.Adapter)
-				}
-				adapters[contribution.Adapter] = struct{}{}
-				if len(contribution.Migrations) == 0 && len(contribution.Tables) == 0 {
-					return fmt.Errorf("empty plugin database contribution at plugins[%d].databaseContributions[%d]", index, contributionIndex)
-				}
-				if len(contribution.Tables) != 0 && len(contribution.Migrations) == 0 {
-					return fmt.Errorf("plugin database tables require migrations at plugins[%d].databaseContributions[%d]", index, contributionIndex)
-				}
-				for migrationIndex, pluginMigration := range contribution.Migrations {
-					if pluginMigration.Version != uint32(migrationIndex+1) || !IsValidPluginKey(pluginMigration.Name) || len(pluginMigration.UpSQL) == 0 || len(pluginMigration.DownSQL) == 0 {
-						return fmt.Errorf("invalid plugin migration at plugins[%d].databaseContributions[%d].migrations[%d]", index, contributionIndex, migrationIndex)
-					}
-					for _, statement := range append(append([]string(nil), pluginMigration.UpSQL...), pluginMigration.DownSQL...) {
-						if !IsValidPluginMigrationSQL(contribution.Adapter, statement) {
-							return fmt.Errorf("invalid plugin migration SQL at plugins[%d].databaseContributions[%d].migrations[%d]", index, contributionIndex, migrationIndex)
-						}
-					}
-				}
-				tables := make(map[string]struct{}, len(contribution.Tables))
-				for tableIndex, table := range contribution.Tables {
-					if !IsValidPluginTable(table) || !strings.HasPrefix(table, prefix) {
-						return fmt.Errorf("invalid plugin database table at plugins[%d].databaseContributions[%d].tables[%d]", index, contributionIndex, tableIndex)
-					}
-					if _, duplicate := tables[table]; duplicate {
-						return fmt.Errorf("duplicate plugin database table %q", table)
-					}
-					tables[table] = struct{}{}
-				}
 			}
 		}
 		if plugin.Admin == nil {
@@ -2370,19 +2372,13 @@ func validateFieldConditionPredicate(predicate FieldConditionPredicate, path str
 		if index > 0 && value.Type != predicate.Values[0].Type {
 			return fmt.Errorf("mixed field condition value types at %s.type", valuePath)
 		}
-		switch value.Type {
-		case ValueTypeString:
-		case ValueTypeNumber:
-			number, err := strconv.ParseFloat(value.Value, 64)
-			if err != nil || math.IsNaN(number) || math.IsInf(number, 0) {
-				return fmt.Errorf("invalid number field condition value at %s.value", valuePath)
+		if _, err := value.Decode(); err != nil {
+			switch value.Type {
+			case ValueTypeNumber, ValueTypeBoolean:
+				return fmt.Errorf("invalid %s field condition value at %s.value", value.Type, valuePath)
+			default:
+				return fmt.Errorf("invalid field condition value type %q at %s.type", value.Type, valuePath)
 			}
-		case ValueTypeBoolean:
-			if value.Value != "true" && value.Value != "false" {
-				return fmt.Errorf("invalid boolean field condition value at %s.value", valuePath)
-			}
-		default:
-			return fmt.Errorf("invalid field condition value type %q at %s.type", value.Type, valuePath)
 		}
 		key := string(value.Type) + "\x00" + value.Value
 		if _, duplicate := seen[key]; duplicate {
@@ -2531,17 +2527,6 @@ func cloneSnapshot(snapshot Snapshot) Snapshot {
 			cloned.Plugins[index].FieldTypes[fieldIndex] = fieldType
 			cloned.Plugins[index].FieldTypes[fieldIndex].EmbeddedTypes = append([]string(nil), fieldType.EmbeddedTypes...)
 			cloned.Plugins[index].FieldTypes[fieldIndex].JSONSchema = append(json.RawMessage(nil), fieldType.JSONSchema...)
-		}
-		cloned.Plugins[index].DatabaseContributions = make([]PluginDatabaseContribution, len(plugin.DatabaseContributions))
-		for contributionIndex, contribution := range plugin.DatabaseContributions {
-			cloned.Plugins[index].DatabaseContributions[contributionIndex] = contribution
-			cloned.Plugins[index].DatabaseContributions[contributionIndex].Tables = append([]string(nil), contribution.Tables...)
-			cloned.Plugins[index].DatabaseContributions[contributionIndex].Migrations = make([]PluginMigration, len(contribution.Migrations))
-			for migrationIndex, pluginMigration := range contribution.Migrations {
-				cloned.Plugins[index].DatabaseContributions[contributionIndex].Migrations[migrationIndex] = pluginMigration
-				cloned.Plugins[index].DatabaseContributions[contributionIndex].Migrations[migrationIndex].UpSQL = append([]string(nil), pluginMigration.UpSQL...)
-				cloned.Plugins[index].DatabaseContributions[contributionIndex].Migrations[migrationIndex].DownSQL = append([]string(nil), pluginMigration.DownSQL...)
-			}
 		}
 		cloned.Plugins[index].Endpoints = append([]PluginEndpoint(nil), plugin.Endpoints...)
 	}
@@ -2768,7 +2753,7 @@ func cloneFieldCondition(condition *FieldCondition) *FieldCondition {
 	}
 	if condition.Predicate != nil {
 		predicate := *condition.Predicate
-		predicate.Values = append([]FieldConditionValue(nil), condition.Predicate.Values...)
+		predicate.Values = append([]ScalarLiteral(nil), condition.Predicate.Values...)
 		cloned.Predicate = &predicate
 	}
 	return &cloned

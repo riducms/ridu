@@ -19,6 +19,10 @@ func TestPostgresRichTextBlockReferencesAcceptance(t *testing.T) {
 	richtextblocks.RunReferences(t, postgresRichTextBlocksFactory)
 }
 
+func TestPostgresRichTextBlockNamesAcceptance(t *testing.T) {
+	richtextblocks.RunNames(t, postgresRichTextBlocksFactory)
+}
+
 func TestPostgresRichTextBlocksPerformance(t *testing.T) {
 	richtextblocks.RunPerformance(t, "postgres", postgresRichTextBlocksFactory)
 }

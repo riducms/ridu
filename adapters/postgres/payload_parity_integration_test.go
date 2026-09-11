@@ -31,7 +31,7 @@ func TestPostgresMultiSelectAndPublishedOnlyRelationshipParity(t *testing.T) {
 	user, err := application.Local().Create(ctx, "users", store.Values{
 		"email": store.String("editor@example.test"),
 		"roles": store.List(store.String("editor"), store.String("admin")),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		var operationError *ridu.OperationError
 		if errors.As(err, &operationError) {
@@ -53,30 +53,30 @@ func TestPostgresMultiSelectAndPublishedOnlyRelationshipParity(t *testing.T) {
 		t.Fatalf("PostgreSQL multi-select membership = %#v, %v", admins, err)
 	}
 
-	draft, err := application.Local().Create(ctx, "lessons", store.Values{"title": store.String("Draft lesson")}, nil)
+	draft, err := application.Local().Create(ctx, "lessons", store.Values{"title": store.String("Draft lesson")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := application.Local().Create(ctx, "islands", store.Values{
 		"title": store.String("Rejected island"), "lesson": store.String(draft.ID),
-	}, nil); !hasRelationshipIssue(err, "lesson") {
+	}, ridu.MutationOptions{}); !hasRelationshipIssue(err, "lesson") {
 		t.Fatalf("PostgreSQL accepted draft target through a published-only rule: %v", err)
 	}
-	published, err := application.Local().Publish(ctx, "lessons", draft.ID, draft.Revision, nil)
+	published, err := application.Local().Publish(ctx, "lessons", draft.ID, ridu.MutationOptions{ExpectedRevision: draft.Revision})
 	if err != nil {
 		t.Fatal(err)
 	}
 	island, err := application.Local().Create(ctx, "islands", store.Values{
 		"title": store.String("Published island"), "lesson": store.String(published.ID),
-	}, nil)
+	}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	unpublished, err := application.Local().Unpublish(ctx, "lessons", published.ID, published.Revision, nil)
+	unpublished, err := application.Local().Unpublish(ctx, "lessons", published.ID, ridu.MutationOptions{ExpectedRevision: published.Revision})
 	if err != nil || unpublished.Status != store.StatusDraft {
 		t.Fatalf("PostgreSQL unpublish = %#v, %v", unpublished, err)
 	}
-	if _, err := application.Local().Update(ctx, "islands", island.ID, store.Values{"title": store.String("Revalidated island")}, nil); !hasRelationshipIssue(err, "lesson") {
+	if _, err := application.Local().Update(ctx, "islands", island.ID, store.Values{"title": store.String("Revalidated island")}, ridu.MutationOptions{}); !hasRelationshipIssue(err, "lesson") {
 		t.Fatalf("PostgreSQL retained a now-draft target through update: %v", err)
 	}
 }
@@ -95,17 +95,17 @@ func TestPostgresAnonymousPopulationDoesNotExposeDraftVersionedTargets(t *testin
 	}
 	staff := store.Document{ID: "staff-1"}
 	draftMode := true
-	draft, err := application.Local().CreateWithOptions(ctx, "lessons", store.Values{"title": store.String("Draft lesson")}, ridu.MutationOptions{Actor: &staff, Draft: &draftMode})
+	draft, err := application.Local().Create(ctx, "lessons", store.Values{"title": store.String("Draft lesson")}, ridu.MutationOptions{Actor: &staff, Draft: &draftMode})
 	if err != nil {
 		t.Fatal(err)
 	}
-	link, err := application.Local().Create(ctx, "links", store.Values{"lesson": store.String(draft.ID)}, &staff)
+	link, err := application.Local().Create(ctx, "links", store.Values{"lesson": store.String(draft.ID)}, ridu.MutationOptions{Actor: &staff})
 	if err != nil {
 		t.Fatal(err)
 	}
 	lessonPath, _ := query.NewPath("lesson")
 
-	anonymous, err := application.Local().FindWithOptions(ctx, "links", link.ID, ridu.FindOptions{Populate: []query.Population{{Path: lessonPath}}})
+	anonymous, err := application.Local().Find(ctx, "links", link.ID, ridu.FindOptions{Populate: []query.Population{{Path: lessonPath}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,7 +116,7 @@ func TestPostgresAnonymousPopulationDoesNotExposeDraftVersionedTargets(t *testin
 		t.Fatalf("PostgreSQL anonymous unresolved relationship = %q, want %q", lessonID, draft.ID)
 	}
 	anonymousDraftMode := true
-	anonymousDraft, err := application.Local().FindWithOptions(ctx, "links", link.ID, ridu.FindOptions{
+	anonymousDraft, err := application.Local().Find(ctx, "links", link.ID, ridu.FindOptions{
 		Draft: &anonymousDraftMode, Populate: []query.Population{{Path: lessonPath}},
 	})
 	if err != nil {
@@ -126,7 +126,7 @@ func TestPostgresAnonymousPopulationDoesNotExposeDraftVersionedTargets(t *testin
 		t.Fatalf("PostgreSQL anonymous draft override exposed draft target: %#v", anonymousDraft.Values["lesson"])
 	}
 
-	staffView, err := application.Local().FindWithOptions(ctx, "links", link.ID, ridu.FindOptions{Actor: &staff, Populate: []query.Population{{Path: lessonPath}}})
+	staffView, err := application.Local().Find(ctx, "links", link.ID, ridu.FindOptions{Actor: &staff, Populate: []query.Population{{Path: lessonPath}}})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -71,7 +71,7 @@ Add these functions below `Catalog()` in the same `content/products.go` file:
 // ... imports, price fields, and Catalog() shown above
 
 func validateSalePrice(
-	ctx operation.ValidationContext,
+	ctx operation.Context,
 	value operation.Value[float64],
 ) ([]operation.Issue, error) {
 	return salePriceIssues(ctx.Siblings, value), nil

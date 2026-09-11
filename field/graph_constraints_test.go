@@ -1,8 +1,9 @@
 package field_test
 
 import (
-	"github.com/riducms/ridu/field"
 	"testing"
+
+	"github.com/riducms/ridu/field"
 )
 
 func TestFluentConstraintReplacementRevalidatesFinalSettings(t *testing.T) {
@@ -45,17 +46,20 @@ func TestFluentConstraintReplacementRevalidatesFinalSettings(t *testing.T) {
 }
 
 func TestNilCallbacksAreAuthoringDiagnostics(t *testing.T) {
-	node := field.Text("code").Validate(nil).Hooks(field.Hooks[string]{BeforeChange: []field.Transform[string]{nil}}).ReadHooks(field.ReadHooks[string]{AfterRead: []field.OutputTransform[string]{nil}})
+	node := field.Text("code").Validate(nil).Hooks(field.Hooks[string]{BeforeChange: []field.Transform[string]{nil}}).ReplaceAfterRead(nil)
 	issues := field.Snapshot(node).Issues()
 	if len(issues) != 3 {
 		t.Fatalf("want three nil callback diagnostics, got %v", issues)
+	}
+	if issues[2].Path != "afterRead[0]" {
+		t.Fatalf("read-hook diagnostic path: %v", issues)
 	}
 	for _, issue := range issues {
 		if issue.Code != "nil_field_callback" || issue.Path == "" {
 			t.Fatalf("unstructured issue: %+v", issue)
 		}
 	}
-	if issues := field.Snapshot(node.ReplaceValidators().Hooks(field.Hooks[string]{}).ReadHooks(field.ReadHooks[string]{})).Issues(); len(issues) != 0 {
+	if issues := field.Snapshot(node.ReplaceValidators().Hooks(field.Hooks[string]{}).ReplaceAfterRead()).Issues(); len(issues) != 0 {
 		t.Fatalf("replaced callback groups retained diagnostics: %v", issues)
 	}
 }

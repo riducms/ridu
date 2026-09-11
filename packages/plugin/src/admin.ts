@@ -1,15 +1,25 @@
 import { bindSchemaManifest } from "@riducms/protocol";
 import { resolveBlockTypes } from "@riducms/protocol";
-import { validatePluginManifest, validatePluginRegistrations } from "./plugin-registry";
+import {
+	resolvePluginFields,
+	validateManifestPluginPairs,
+	createPluginFieldValidator,
+	type ResolvedPluginField,
+} from "./plugin-registry";
 import { isRegisteredRowLabel, type RegisteredRowLabel } from "./local-row-label";
 import { localEditorReference } from "./editor/registry";
 import type { SchemaField } from "@riducms/protocol";
 import type { SchemaManifest } from "@riducms/protocol";
-import type { TranslationLanguage } from "@riducms/translations";
+import { en, type TranslationLanguage } from "@riducms/translations";
 import type { PluginMessageCatalog } from "./i18n";
-import { resolveAdminExtensions, type AdminContributions, type AdminPlugin } from "./plugin";
 import {
-	validateAdminEditors,
+	resolveAdminExtensions,
+	type AdminContributions,
+	type AdminPlugin,
+	type ResolvedAdminExtensions,
+} from "./plugin";
+import {
+	validateFieldEditorSelection,
 	validateFieldEditorRegistrations,
 	type FieldEditorConfig,
 } from "./editor/registry";
@@ -50,9 +60,8 @@ export interface AdminConfig extends AdminContributions, FieldEditorConfig {
  * These checks also run when building and starting the admin.
  *
  * @param config The installed plugins, custom components, and interface translations.
- * @returns The same configuration object after registration checks. The admin
+ * @returns The same typed configuration object. The admin
  * reads it when starting; calling this function does not mount any components.
- * @throws If registrations, keys, or replacement locations conflict.
  * @example
  * ```ts
  * import { defineAdmin } from '@riducms/plugin/admin';
@@ -66,18 +75,39 @@ export interface AdminConfig extends AdminContributions, FieldEditorConfig {
  * ```
  */
 export function defineAdmin(config: AdminConfig): AdminConfig {
+	return config;
+}
+
+/** Static configuration owned by one mounted admin. Changes require remount/HMR. */
+export interface ResolvedAdminConfig {
+	readonly plugins: readonly AdminPlugin[];
+	readonly fields: readonly ResolvedPluginField[];
+	readonly editors: NonNullable<AdminConfig["fields"]>;
+	readonly rowLabels: NonNullable<AdminConfig["rowLabels"]>;
+	readonly languages: readonly TranslationLanguage[];
+	readonly extensions: Readonly<ResolvedAdminExtensions>;
+}
+
+/** Normalize and validate static registrations once, independently of schema refresh. */
+export function resolveAdminConfig(config: AdminConfig = {}): ResolvedAdminConfig {
 	if ("fieldPlugins" in config)
 		throw new Error(
 			"Application fieldPlugins are not supported; use a field-owned Editor component or a paired advanced field plugin."
 		);
-	validatePluginRegistrations(config.plugins ?? []);
 	validateFieldEditorRegistrations(config);
 	for (const [reference, label] of Object.entries(config.rowLabels ?? {})) {
 		if (!localEditorReference.test(reference) || !isRegisteredRowLabel(label))
 			throw new Error(`Row label ${reference} must use an app:name reference and defineRowLabel.`);
 	}
-	resolveAdminExtensions(config.plugins ?? [], config);
-	return config;
+	const plugins = Object.freeze([...(config.plugins ?? [])]);
+	return Object.freeze({
+		plugins,
+		fields: resolvePluginFields(plugins),
+		editors: Object.freeze({ ...config.fields }),
+		rowLabels: Object.freeze({ ...config.rowLabels }),
+		languages: Object.freeze(config.languages?.length ? [...config.languages] : [en]),
+		extensions: Object.freeze(resolveAdminExtensions(plugins, config)),
+	});
 }
 
 /**
@@ -87,40 +117,47 @@ export function defineAdmin(config: AdminConfig): AdminConfig {
  * resources the current user cannot access, so absence there does not prove a typo.
  * Throws with the affected registration or field when a selection/config is invalid.
  */
-export function validateAdminConfig(
-	config: AdminConfig,
+export function validateAdminManifest(
+	config: ResolvedAdminConfig,
 	manifest: Pick<SchemaManifest, "collections" | "globals" | "blocks"> &
 		Partial<Pick<SchemaManifest, "plugins">>,
 	options: { completeManifest?: boolean } = {}
 ): void {
-	defineAdmin(config);
-	validateAdminEditors(config, manifest);
-	validatePluginManifest(config.plugins ?? [], manifest, options.completeManifest === true);
+	validateManifestPluginPairs(
+		config.plugins,
+		config.fields,
+		manifest,
+		options.completeManifest === true
+	);
+	const validatePluginField = createPluginFieldValidator(config.fields);
+	const failures: string[] = [];
 	bindSchemaManifest(manifest);
 	const inspect = (fields: readonly SchemaField[], owner: string) => {
 		for (const field of fields) {
-			const selection = field.nested?.rowLabelComponent;
-			if (selection?.reference !== undefined) {
-				const reference = selection.reference;
-				if (
-					!localEditorReference.test(reference) ||
-					selection.plugin !== undefined ||
-					selection.component !== undefined ||
-					(field.type !== "array" && field.type !== "blocks")
-				)
-					throw new Error(`${owner}.${field.path}: invalid local row label selection.`);
-				const label = config.rowLabels?.[reference as `app:${string}`];
-				if (label === undefined)
-					throw new Error(
-						`${owner}.${field.path}: row label ${reference} is not registered in admin/src/admin.config.ts.`
-					);
-				try {
+			try {
+				validateFieldEditorSelection(config.editors, field);
+				validatePluginField(field);
+				const selection = field.nested?.rowLabelComponent;
+				if (selection?.reference !== undefined) {
+					const reference = selection.reference;
+					if (
+						!localEditorReference.test(reference) ||
+						selection.plugin !== undefined ||
+						selection.component !== undefined ||
+						(field.type !== "array" && field.type !== "blocks")
+					)
+						throw new Error("invalid local row label selection.");
+					const label = config.rowLabels?.[reference as `app:${string}`];
+					if (label === undefined)
+						throw new Error(
+							`row label ${reference} is not registered in admin/src/admin.config.ts.`
+						);
 					label.decode(field);
-				} catch (error) {
-					throw new Error(
-						`${owner}.${field.path}: ${error instanceof Error ? error.message : String(error)}`
-					);
 				}
+			} catch (error) {
+				failures.push(
+					`${owner}.${field.path}: ${error instanceof Error ? error.message : String(error)}`
+				);
 			}
 			for (const tree of field.plugin?.embeddedTrees ?? [])
 				for (const item of tree.cases)
@@ -131,11 +168,12 @@ export function validateAdminConfig(
 	};
 	for (const collection of manifest.collections) inspect(collection.fields, collection.slug);
 	for (const global of manifest.globals ?? []) inspect(global.fields, global.slug);
+	if (failures.length) throw new Error(failures.join("\n"));
 	// Runtime manifests are permission-filtered; only build checks can prove target absence.
 	if (!options.completeManifest) return;
 	const collections = new Map(manifest.collections.map((item) => [item.slug, item]));
 	const globals = new Set((manifest.globals ?? []).map((item) => item.slug));
-	const extensions = resolveAdminExtensions(config.plugins ?? [], config);
+	const extensions = config.extensions;
 	for (const cell of extensions.listCells) {
 		const collection = collections.get(cell.collection);
 		if (!collection?.fields.some((field) => field.name === cell.field || field.path === cell.field))

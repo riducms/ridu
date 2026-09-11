@@ -20,7 +20,7 @@ func RenamePageLink(
 	}
 
 	// Send the updated list. Omitted top-level fields stay unchanged.
-	return app.Local().UpdateWithOptions(ctx, "pages", page.ID,
+	return app.Local().Update(ctx, "pages", page.ID,
 		store.Values{"links": links}, options,
 	)
 }

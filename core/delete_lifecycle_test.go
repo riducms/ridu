@@ -25,28 +25,28 @@ func TestHardDeletesCleanStateWhileTrashRetainsIt(t *testing.T) {
 	}
 
 	before := countEvent(backend.Events(), "delete-document-state")
-	post, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("hard")}, nil)
+	post, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("hard")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Delete(context.Background(), "posts", post.ID, nil); err != nil {
+	if _, err := application.Local().Delete(context.Background(), "posts", post.ID, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if got := countEvent(backend.Events(), "delete-document-state"); got != before+1 {
 		t.Fatalf("non-trash cleanup events = %d, want %d", got, before+1)
 	}
 
-	archived, err := application.Local().Create(context.Background(), "archived-posts", store.Values{"title": store.String("soft")}, nil)
+	archived, err := application.Local().Create(context.Background(), "archived-posts", store.Values{"title": store.String("soft")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Delete(context.Background(), "archived-posts", archived.ID, nil); err != nil {
+	if _, err := application.Local().Delete(context.Background(), "archived-posts", archived.ID, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if got := countEvent(backend.Events(), "delete-document-state"); got != before+1 {
 		t.Fatalf("soft-delete cleanup events = %d, want %d", got, before+1)
 	}
-	if _, err := application.Local().DeletePermanent(context.Background(), "archived-posts", archived.ID, nil); err != nil {
+	if _, err := application.Local().DeletePermanent(context.Background(), "archived-posts", archived.ID, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if got := countEvent(backend.Events(), "delete-document-state"); got != before+2 {
@@ -69,7 +69,7 @@ func TestAfterCommitCleanupContinuesAfterFailure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("committed")}, nil); !operationCode(err, "hook_failed") {
+	if _, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("committed")}, ridu.MutationOptions{}); !operationCode(err, "hook_failed") {
 		t.Fatalf("after-commit error = %v", err)
 	}
 	if !secondRan {
@@ -94,23 +94,23 @@ func TestBulkDeleteCleanupRollsBackWithLaterHookFailure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	first, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("first")}, nil)
+	first, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("first")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("second")}, nil)
+	second, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("second")}, ridu.MutationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	failingID = second.ID
-	if _, err := application.Local().BulkDelete(context.Background(), "posts", []string{first.ID, second.ID}, nil); !operationCode(err, "hook_failed") {
+	if _, err := application.Local().BulkDelete(context.Background(), "posts", []string{first.ID, second.ID}, ridu.BulkOptions{}); !operationCode(err, "hook_failed") {
 		t.Fatalf("bulk delete error = %v", err)
 	}
 	for _, document := range []store.Document{first, second} {
-		if _, err := application.Local().Find(context.Background(), "posts", document.ID, nil); err != nil {
+		if _, err := application.Local().Find(context.Background(), "posts", document.ID, ridu.FindOptions{}); err != nil {
 			t.Errorf("document %q did not roll back: %v", document.ID, err)
 		}
-		if versions, err := application.Local().Versions(context.Background(), "posts", document.ID, nil); err != nil || len(versions) != 1 {
+		if versions, err := application.Local().Versions(context.Background(), "posts", document.ID, ridu.FindOptions{}); err != nil || len(versions) != 1 {
 			t.Errorf("versions for %q after rollback = %#v, %v", document.ID, versions, err)
 		}
 	}

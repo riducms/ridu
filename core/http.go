@@ -167,9 +167,7 @@ func (application *App) Handler(options HandlerOptions) http.Handler {
 		pluginEndpoints = append(pluginEndpoints, httpapi.PluginEndpoint{
 			Method: strings.ToUpper(strings.TrimSpace(current.Method)), Path: "/api/plugins/" + binding.pluginKey + "/" + current.Path,
 			MaxBodyBytes: current.MaxBodyBytes,
-			Handler: func(writer http.ResponseWriter, request *http.Request, clientIP string, actor *store.Document, actorCollection schema.CollectionSlug, admit func(context.Context, string, string) error, report func(error, string)) {
-				current.Handler(PluginEndpointContext{Writer: writer, Request: request, ClientIP: clientIP, Actor: cloneDocument(actor), ActorCollection: actorCollection, Local: application.local, AdmitAuthAttempt: admit, ReportError: report})
-			},
+			Handler:      application.endpointHandler(current.Handler, endpointScopeRoot, ""),
 		})
 	}
 	customEndpoints := make([]httpapi.CustomEndpoint, 0, len(application.customEndpoints))
@@ -192,20 +190,7 @@ func (application *App) Handler(options HandlerOptions) http.Handler {
 		customEndpoints = append(customEndpoints, httpapi.CustomEndpoint{
 			Method: strings.ToUpper(strings.TrimSpace(current.Method)), Pattern: pattern,
 			Scope: scope, Resource: binding.resource, MaxBodyBytes: current.MaxBodyBytes,
-			Handler: func(writer http.ResponseWriter, request *http.Request, requestID, clientIP string, params map[string]string, actor *store.Document, actorCollection schema.CollectionSlug, admit func(context.Context, string, string) error, report func(error, string)) {
-				endpoint := EndpointContext{
-					Writer: writer, Request: request, RequestID: requestID, ClientIP: clientIP,
-					RouteParams: params, Actor: cloneDocument(actor), ActorCollection: actorCollection,
-					Local: application.local, AdmitAuthAttempt: admit, ReportError: report,
-				}
-				switch binding.scope {
-				case endpointScopeCollection:
-					endpoint.Collection = binding.resource
-				case endpointScopeGlobal:
-					endpoint.Global = binding.resource
-				}
-				current.Handler(endpoint)
-			},
+			Handler: application.endpointHandler(current.Handler, binding.scope, binding.resource),
 		})
 	}
 	pluginTransports := make([]httpapi.PluginEndpoint, 0, len(application.pluginTransports))
@@ -213,9 +198,7 @@ func (application *App) Handler(options HandlerOptions) http.Handler {
 		current := binding.transport
 		pluginTransports = append(pluginTransports, httpapi.PluginEndpoint{
 			Method: current.Method, Path: current.Path, MaxBodyBytes: current.MaxBodyBytes,
-			Handler: func(writer http.ResponseWriter, request *http.Request, clientIP string, actor *store.Document, actorCollection schema.CollectionSlug, admit func(context.Context, string, string) error, report func(error, string)) {
-				current.Handler(PluginEndpointContext{Writer: writer, Request: request, ClientIP: clientIP, Actor: cloneDocument(actor), ActorCollection: actorCollection, Local: application.local, AdmitAuthAttempt: admit, ReportError: report})
-			},
+			Handler: application.endpointHandler(current.Handler, endpointScopeRoot, ""),
 		})
 	}
 	var requestError func(httpapi.RequestErrorEvent)
@@ -262,10 +245,10 @@ func (application *App) Handler(options HandlerOptions) http.Handler {
 		ChangePassword:         application.ChangePassword,
 		AuthBootstrapAvailable: application.AuthBootstrapAvailable,
 		CreateAuthUser: func(ctx context.Context, collection string, values store.Values, password string, identity *httpapi.AuthIdentity) (store.Document, error) {
-			return application.CreateAuthUserForTransportWithOptions(ctx, collection, values, password, MutationOptions{Actor: httpIdentityActor(identity), ActorCollection: httpIdentityCollection(identity)})
+			return application.CreateAuthUserForTransport(ctx, collection, values, password, MutationOptions{Actor: httpIdentityActor(identity), ActorCollection: httpIdentityCollection(identity)})
 		},
 		CreateAuthUserLocalized: func(ctx context.Context, collection string, values store.Values, password string, identity *httpapi.AuthIdentity, options httpapi.LocaleOptions) (store.Document, error) {
-			return application.CreateAuthUserForTransportWithOptions(ctx, collection, values, password, MutationOptions{
+			return application.CreateAuthUserForTransport(ctx, collection, values, password, MutationOptions{
 				Actor: httpIdentityActor(identity), ActorCollection: httpIdentityCollection(identity),
 				Locale: schema.LocaleCode(options.Locale), FallbackLocales: options.FallbackLocales,
 				DisableFallback: options.DisableFallback, AllLocales: options.AllLocales,
@@ -545,4 +528,20 @@ func documentLockEnvelope(state DocumentLockState) protocol.DocumentLockEnvelope
 		}
 	}
 	return result
+}
+
+func (application *App) endpointHandler(handler EndpointHandler, scope endpointScope, resource schema.CollectionSlug) httpapi.EndpointHandler {
+	return func(ctx httpapi.EndpointContext) {
+		endpoint := EndpointContext{Writer: ctx.Writer, Request: ctx.Request, RequestID: ctx.RequestID,
+			ClientIP: ctx.ClientIP, RouteParams: ctx.RouteParams, Actor: cloneDocument(ctx.Actor),
+			ActorCollection: ctx.ActorCollection, Local: application.local,
+			AdmitAuthAttempt: ctx.AdmitAuthAttempt, ReportError: ctx.ReportError}
+		switch scope {
+		case endpointScopeCollection:
+			endpoint.Collection = resource
+		case endpointScopeGlobal:
+			endpoint.Global = resource
+		}
+		handler(endpoint)
+	}
 }

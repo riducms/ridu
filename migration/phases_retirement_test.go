@@ -44,26 +44,3 @@ func TestRetireResourcesPayloadRequiresCanonicalStableIDsAndTransaction(t *testi
 		t.Fatalf("canonical resource retirement payload = %s", payload)
 	}
 }
-
-func TestPluginStepsAreBoundToTheArtifactPlannerAdapter(t *testing.T) {
-	migration := schema.PluginMigration{
-		Version: 1, Name: "create-state", UpSQL: []string{"CREATE TABLE ridu_plugin_search_state (id TEXT)"}, DownSQL: []string{"DROP TABLE ridu_plugin_search_state"},
-	}
-	artifact := Artifact{
-		Planner: Planner{Name: "atlas", Version: "1.0.0"},
-		After: schema.Snapshot{Plugins: []schema.Plugin{{
-			Key: "search",
-			DatabaseContributions: []schema.PluginDatabaseContribution{
-				{Adapter: schema.PluginDatabaseAdapterPostgres, Migrations: []schema.PluginMigration{migration}},
-				{Adapter: schema.PluginDatabaseAdapterSQLite, Migrations: []schema.PluginMigration{migration}},
-			},
-		}}},
-	}
-	step := PluginStep{
-		Adapter: schema.PluginDatabaseAdapterSQLite, Plugin: "search", Version: 1, Direction: "up", SQL: append([]string(nil), migration.UpSQL...),
-	}
-	step.Checksum = PluginStepChecksum(step.Adapter, step.Plugin, step.Version, step.Direction, step.SQL)
-	if err := artifact.validatePluginSteps([]PluginStep{step}); err == nil {
-		t.Fatal("PostgreSQL planner accepted SQLite plugin SQL")
-	}
-}

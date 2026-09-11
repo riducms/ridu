@@ -1,9 +1,6 @@
 package core
 
 import (
-	"context"
-	"net/http"
-
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
 )
@@ -37,30 +34,6 @@ type PluginDescriptor struct {
 	Admin *AdminPluginMetadata
 	// FieldTypes maps every reusable plugin field to generated public types.
 	FieldTypes []PluginFieldType
-	// DatabaseContributions contains exceptional, adapter-specific private
-	// database state. Ordinary plugin data should be added as collections or
-	// fields through ConfigTransformer instead.
-	DatabaseContributions []PluginDatabaseContribution
-}
-
-// PluginDatabaseAdapter identifies one database dialect supported by a
-// plugin's exceptional private-schema contribution.
-type PluginDatabaseAdapter = schema.PluginDatabaseAdapter
-
-const (
-	// PluginDatabaseAdapterPostgres selects PostgreSQL-specific SQL.
-	PluginDatabaseAdapterPostgres = schema.PluginDatabaseAdapterPostgres
-	// PluginDatabaseAdapterSQLite selects SQLite-specific SQL.
-	PluginDatabaseAdapterSQLite = schema.PluginDatabaseAdapterSQLite
-)
-
-// PluginDatabaseContribution is one explicitly adapter-scoped private-schema
-// bundle. It is an escape hatch for database features that cannot be modeled
-// as ordinary Ridu collections or fields; its SQL is never treated as portable.
-type PluginDatabaseContribution struct {
-	Adapter    PluginDatabaseAdapter
-	Migrations []PluginMigration
-	Tables     []string
 }
 
 // RiduCompatibility declares the supported framework-version interval.
@@ -95,20 +68,6 @@ type PluginFieldType struct {
 	GoType string
 	// JSONSchema is the deterministic OpenAPI 3.1 schema for one field value.
 	JSONSchema []byte
-}
-
-// PluginMigration is one contiguous, reversible adapter-specific transition.
-// Version migrates from Version-1 to Version. Statements are copied into the
-// immutable migration artifact and checksum-verified before execution.
-type PluginMigration struct {
-	// Version starts at 1 and increments without gaps.
-	Version uint32
-	// Name is a stable lowercase kebab-case review label.
-	Name string
-	// UpSQL executes in order when entering Version.
-	UpSQL []string
-	// DownSQL executes in order when leaving Version.
-	DownSQL []string
 }
 
 // DescriptorProvider opts a plugin into versioned generation, migration, and
@@ -185,59 +144,11 @@ type HookProvider interface {
 	Hooks() []PluginHookContribution
 }
 
-// PluginEndpoint is one exact, method-specific HTTP endpoint. Path is relative
-// to /api/plugins/<plugin-key>/ and must not contain traversal segments.
-type PluginEndpoint struct {
-	// Method is an exact supported HTTP method such as GET or POST.
-	Method string
-	// Path is relative to the plugin's namespaced API prefix.
-	Path string
-	// Summary appears in generated OpenAPI.
-	Summary string
-	// MaxBodyBytes bounds the raw request body before Handler receives it. Zero
-	// inherits HandlerOptions.MaxBodyBytes; a negative value explicitly opts a
-	// trusted streaming endpoint out of that byte bound.
-	MaxBodyBytes int64
-	// Handler is trusted compiled endpoint code.
-	Handler PluginEndpointHandler
-}
-
-// PluginEndpointContext exposes the authenticated actor and access-controlled
-// local API while retaining ordinary net/http request and response contracts.
-type PluginEndpointContext struct {
-	// Writer receives the endpoint response.
-	Writer http.ResponseWriter
-	// Request is the original namespaced HTTP request.
-	Request *http.Request
-	// ClientIP is the direct or trusted-forwarded client address resolved by
-	// the framework HTTP boundary. Authentication transports should use this
-	// value instead of interpreting forwarding headers independently.
-	ClientIP string
-	// Actor is the authenticated user, or nil for an anonymous request.
-	Actor *store.Document
-	// ActorCollection identifies the auth collection that owns Actor.
-	ActorCollection schema.CollectionSlug
-	// Local enters the same access-controlled operation engine as other APIs.
-	Local *LocalAPI
-	// AdmitAuthAttempt applies the application's distributed IP and identity
-	// admission policy. Authentication transports must call it before work that
-	// can be amplified by aliases or repeated requests.
-	AdmitAuthAttempt func(context.Context, string, string) error
-	// ReportError records a stable transport error code and sends trusted error
-	// detail to HandlerOptions.RequestError without exposing it to the client.
-	// Plugins that implement their own error envelopes should call this for
-	// internal failures. Passing nil records only Code in request observations.
-	ReportError func(error, string)
-}
-
-// PluginEndpointHandler handles one trusted compiled plugin endpoint.
-type PluginEndpointHandler func(PluginEndpointContext)
-
 // EndpointProvider contributes exact REST endpoints under the provider's
 // namespaced /api/plugins/<key>/ prefix.
 type EndpointProvider interface {
 	Plugin
-	Endpoints() []PluginEndpoint
+	Endpoints() []Endpoint
 }
 
 // PluginTransportContext binds one protocol transport to the fully resolved
@@ -251,24 +162,12 @@ type PluginTransportContext struct {
 	App *App
 }
 
-// PluginTransport is one exact application-level HTTP transport. Unlike
-// PluginEndpoint, Path is absolute and is not placed below a plugin namespace.
-// It exists for established protocol locations such as /api/graphql, not for
-// ordinary plugin REST endpoints.
-type PluginTransport struct {
-	Method       string
-	Path         string
-	Summary      string
-	MaxBodyBytes int64
-	Handler      PluginEndpointHandler
-}
-
 // TransportProvider binds an optional compiled protocol after the manifest and
 // operation engine are ready. Binding happens once during New; transports must
 // not lazily rebuild schema state per request.
 type TransportProvider interface {
 	Plugin
-	BindTransports(PluginTransportContext) ([]PluginTransport, error)
+	BindTransports(PluginTransportContext) ([]Endpoint, error)
 }
 
 // ConfigTransformer is the Phase 1 plugin capability for contributing or

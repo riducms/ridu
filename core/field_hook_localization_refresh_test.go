@@ -73,16 +73,16 @@ func TestLocalizedFieldHooksRefreshCurrentViewsAfterClear(t *testing.T) {
 					return operation.Keep[store.Value](), nil
 				}
 				var writes field.Hooks[store.Value]
-				var reads field.ReadHooks[store.Value]
+				var reads []field.OutputTransform[store.Value]
 				// Clear after an initial Keep, then observe within the same phase.
 				for step := range 3 {
 					if phase == "write" {
-						writes.BeforeChange = append(writes.BeforeChange, func(ctx operation.WriteContext, input operation.Value[store.Value]) (operation.Change[store.Value], error) {
-							return observe(operation.Context(ctx), input, step)
+						writes.BeforeChange = append(writes.BeforeChange, func(ctx operation.Context, input operation.Value[store.Value]) (operation.Change[store.Value], error) {
+							return observe(ctx, input, step)
 						})
 					} else {
-						reads.AfterRead = append(reads.AfterRead, func(ctx operation.ReadContext, input operation.Value[store.Value]) (operation.Change[store.Value], error) {
-							return observe(operation.Context(ctx), input, step)
+						reads = append(reads, func(ctx operation.Context, input operation.Value[store.Value]) (operation.Change[store.Value], error) {
+							return observe(ctx, input, step)
 						})
 					}
 				}
@@ -90,12 +90,12 @@ func TestLocalizedFieldHooksRefreshCurrentViewsAfterClear(t *testing.T) {
 				var plugins []ridu.Plugin
 				switch kind {
 				case "json":
-					definition = field.JSON("value").Localized().Hooks(writes).ReadHooks(reads)
+					definition = field.JSON("value").Localized().Hooks(writes).ReplaceAfterRead(reads...)
 				case "plugin":
-					definition = field.Plugin("value", "color", json.RawMessage(`{}`)).Localized().Hooks(writes).ReadHooks(reads)
+					definition = field.Plugin("value", "color", json.RawMessage(`{}`)).Localized().Hooks(writes).ReplaceAfterRead(reads...)
 					plugins = []ridu.Plugin{multiFieldPlugin{key: "shapes", fields: []string{"color"}}}
 				case "group":
-					definition = field.Group("value", field.Fields{field.Text("child")}).Localized().Hooks(writes).ReadHooks(reads)
+					definition = field.Group("value", field.Fields{field.Text("child")}).Localized().Hooks(writes).ReplaceAfterRead(reads...)
 				}
 				app, err := ridu.New(ridu.Config{
 					Name: "Localized hook views", Plugins: plugins,
@@ -107,22 +107,22 @@ func TestLocalizedFieldHooksRefreshCurrentViewsAfterClear(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				created, err := app.Local().Create(t.Context(), "pages", store.Values{"value": initial("en"), "marker": store.String("marker-en")}, nil)
+				created, err := app.Local().Create(t.Context(), "pages", store.Values{"value": initial("en"), "marker": store.String("marker-en")}, ridu.MutationOptions{})
 				if err != nil {
 					t.Fatal(err)
 				}
-				if _, err := app.Local().Update(t.Context(), "pages", created.ID, store.Values{"value": initial("fr"), "marker": store.String("marker-fr")}, nil, ridu.LocaleOptions{Locale: "fr"}); err != nil {
+				if _, err := app.Local().Update(t.Context(), "pages", created.ID, store.Values{"value": initial("fr"), "marker": store.String("marker-fr")}, ridu.MutationOptions{Locale: "fr"}); err != nil {
 					t.Fatal(err)
 				}
 				active = true
 				if phase == "write" {
 					// Public writes select one locale; all-locales updates are rejected.
 					for _, locale := range []schema.LocaleCode{"en", "fr"} {
-						if _, err := app.Local().Update(t.Context(), "pages", created.ID, store.Values{}, nil, ridu.LocaleOptions{Locale: locale}); err != nil {
+						if _, err := app.Local().Update(t.Context(), "pages", created.ID, store.Values{}, ridu.MutationOptions{Locale: locale}); err != nil {
 							t.Fatal(err)
 						}
 					}
-				} else if _, err := app.Local().Find(t.Context(), "pages", created.ID, nil, ridu.LocaleOptions{AllLocales: true}); err != nil {
+				} else if _, err := app.Local().Find(t.Context(), "pages", created.ID, ridu.FindOptions{AllLocales: true}); err != nil {
 					t.Fatal(err)
 				}
 				if want := []string{"en0", "en1", "en2", "fr0", "fr1", "fr2"}; !reflect.DeepEqual(order, want) {
@@ -132,7 +132,7 @@ func TestLocalizedFieldHooksRefreshCurrentViewsAfterClear(t *testing.T) {
 					assertViews(snapshot.context, snapshot.step)
 				}
 				active = false
-				stored, err := app.Local().Find(t.Context(), "pages", created.ID, nil, ridu.LocaleOptions{AllLocales: true})
+				stored, err := app.Local().Find(t.Context(), "pages", created.ID, ridu.FindOptions{AllLocales: true})
 				if err != nil {
 					t.Fatal(err)
 				}
