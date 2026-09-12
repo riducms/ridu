@@ -1,7 +1,7 @@
 {
 	"name": "@riducms/plugin-richtext",
 	"description": "Svelte and Lexical admin integration for Ridu's official rich-text plugin.",
-	"version": "0.2.2",
+	"version": "0.2.3",
 	"license": "MIT",
 	"repository": {
 		"type": "git",

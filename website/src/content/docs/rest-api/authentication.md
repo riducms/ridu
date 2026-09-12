@@ -16,12 +16,11 @@ password recovery, email verification, account unlocking, and API-key routes are
 
 ## Authenticate a client {#credentials}
 
-| Client situation                                         | Credential to send                                                                      |
-| -------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| Browser signed in through Ridu                           | The HttpOnly `ridu_session` cookie; use `credentials: 'include'` when crossing origins. |
-| Server or non-browser client with a session token        | `Authorization: Session <token>`.                                                       |
-| Client with an API key                                   | `Authorization: Bearer <key>`.                                                          |
-| Compatibility client with an existing Ridu session token | `Authorization: JWT <token>` remains accepted.                                          |
+| Client situation                                  | Credential to send                                                                      |
+| ------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Browser signed in through Ridu                    | The HttpOnly `ridu_session` cookie; use `credentials: 'include'` when crossing origins. |
+| Server or non-browser client with a session token | `Authorization: Session <token>`.                                                       |
+| Client with an API key                            | `Authorization: Bearer <key>`.                                                          |
 
 Login establishes a SameSite=Lax cookie. API-key creation specifically requires cookie
 authentication, and the returned secret is shown once; a later list call only returns metadata.
