@@ -674,6 +674,15 @@ func TestGraphQLAuthenticationUsesRiduSessionsAndActorCollection(t *testing.T) {
 	if token == "" || session["collection"] != "users" {
 		t.Fatalf("login session = %#v", session)
 	}
+	for _, scheme := range []string{"JWT", "jWt"} {
+		headers := http.Header{"Authorization": {scheme + " " + token}}
+		me := graphQLWithHeaders(t, server.URL, `{ meUser { user { id } } }`, headers)
+		if objectAt(t, me, "data", "meUser")["user"] != nil {
+			t.Fatalf("unsupported %s header authenticated a session: %#v", scheme, me)
+		}
+		refresh := graphQLWithHeaders(t, server.URL, `mutation { refreshUser { token } }`, headers)
+		assertErrorCode(t, refresh, "access_denied")
+	}
 	authenticatedCreate := graphQLWithToken(t, server.URL, token, `mutation { createUser(data: {email: "second@example.com", name: "Grace", password: "correct horse battery staple"}) { id email } }`)
 	if objectAt(t, authenticatedCreate, "data", "createUser")["email"] != "second@example.com" {
 		t.Fatalf("authenticated auth create = %#v", authenticatedCreate)

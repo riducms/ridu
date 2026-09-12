@@ -195,7 +195,7 @@ func writeGraphQLResult(endpoint ridu.EndpointContext, status int, result *engin
 func requestToken(request *http.Request) string {
 	authorization := strings.Fields(request.Header.Get("Authorization"))
 	if len(authorization) == 2 {
-		for _, scheme := range []string{"Bearer", "JWT", "Session"} {
+		for _, scheme := range []string{"Bearer", "Session"} {
 			if strings.EqualFold(authorization[0], scheme) {
 				return authorization[1]
 			}

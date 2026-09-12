@@ -265,6 +265,56 @@ func TestScheduledPublishTransportCarriesExactAuthIdentity(t *testing.T) {
 	}
 }
 
+func TestNativeHTTPAuthenticationCredentials(t *testing.T) {
+	api := &API{config: Config{
+		Session: func(_ context.Context, token string) (AuthSession, error) {
+			if token != "session-token" && token != "cookie-token" {
+				return AuthSession{}, errors.New("invalid session")
+			}
+			return AuthSession{Collection: "staff", User: store.Document{ID: token}}, nil
+		},
+		AuthenticateAPIKey: func(_ context.Context, token string) (AuthIdentity, error) {
+			if token != "api-key" {
+				return AuthIdentity{}, errors.New("invalid API key")
+			}
+			return AuthIdentity{Collection: "staff", Actor: store.Document{ID: token}}, nil
+		},
+	}}
+	for _, test := range []struct {
+		name, authorization, cookie, actorID string
+	}{
+		{name: "cookie", cookie: "cookie-token", actorID: "cookie-token"},
+		{name: "session header", authorization: "Session session-token", actorID: "session-token"},
+		{name: "case insensitive session header", authorization: "sEsSiOn session-token", actorID: "session-token"},
+		{name: "API key", authorization: "Bearer api-key", actorID: "api-key"},
+		{name: "case insensitive API key", authorization: "bEaReR api-key", actorID: "api-key"},
+		{name: "JWT session header", authorization: "JWT session-token"},
+		{name: "mixed case JWT session header", authorization: "jWt session-token"},
+		{name: "session cannot be an API key", authorization: "Bearer session-token"},
+		{name: "API key cannot be a session", authorization: "Session api-key"},
+		{name: "cookie precedes header", authorization: "Session session-token", cookie: "cookie-token", actorID: "cookie-token"},
+		{name: "cookie with unsupported header", authorization: "JWT session-token", cookie: "cookie-token", actorID: "cookie-token"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodGet, "/api/preferences/theme", nil)
+			request.Header.Set("Authorization", test.authorization)
+			if test.cookie != "" {
+				request.AddCookie(&http.Cookie{Name: sessionCookie, Value: test.cookie})
+			}
+			identity := api.optionalIdentity(request)
+			if test.actorID == "" {
+				if identity != nil {
+					t.Fatalf("unsupported credential authenticated: %#v", identity)
+				}
+				return
+			}
+			if identity == nil || identity.Collection != "staff" || identity.Actor.ID != test.actorID {
+				t.Fatalf("identity = %#v, want staff/%s", identity, test.actorID)
+			}
+		})
+	}
+}
+
 func TestAuditDisambiguatesSameActorIDByAuthCollection(t *testing.T) {
 	manifest := schema.NewManifest(schema.Snapshot{Version: schema.CurrentVersion, Application: schema.Application{Name: "audit identity"}, Collections: []schema.Collection{}, Plugins: []schema.Plugin{}})
 	var events []AuditEvent

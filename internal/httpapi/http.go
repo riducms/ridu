@@ -2689,7 +2689,7 @@ func (api *API) optionalIdentity(request *http.Request) *AuthIdentity {
 	}
 	if api.config.Session != nil {
 		scheme, credential, found := strings.Cut(request.Header.Get("Authorization"), " ")
-		if found && (strings.EqualFold(scheme, "Session") || strings.EqualFold(scheme, "JWT")) {
+		if found && strings.EqualFold(scheme, "Session") {
 			session, sessionError := api.config.Session(request.Context(), strings.TrimSpace(credential))
 			if sessionError == nil {
 				return &AuthIdentity{Collection: session.Collection, Actor: session.User}

@@ -332,7 +332,7 @@ login-attempt-lock features add `requestPasswordReset`, `resetPassword`, `reques
 `changePassword`, `sessions`, and `revokeSession`.
 
 For a service client, supply an API key as a Bearer credential. For a raw session token, use the
-`Session` scheme (`JWT` remains accepted for compatibility). Creating an API key requires a cookie
+`Session` scheme. Creating an API key requires a cookie
 session, and its secret is returned only by `createAPIKey`; later listings expose metadata only.
 
 ```ts title="service-client.ts"

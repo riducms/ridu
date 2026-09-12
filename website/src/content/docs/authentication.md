@@ -182,8 +182,8 @@ extend the original absolute expiry. `logout` is idempotent and revokes the curr
 `logoutAll` revokes every session for the identity. Session listings expose only safe metadata—ID,
 created/last-seen/expiry times, IP address, user agent, and whether it is current.
 
-For non-cookie clients, send a raw session as `Authorization: Session <token>`. `JWT` remains an
-accepted compatibility scheme, but the token is opaque and is not a JWT. Application code can use
+For non-cookie clients, send the opaque session token as `Authorization: Session <token>`.
+Application code can use
 `LoginWithOptions` to record a normalized client IP and user agent, and `Session`, `RotateSession`,
 `Sessions`, `RevokeSession`, `Logout`, and `LogoutAll` to manage the same lifecycle.
 

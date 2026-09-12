@@ -1328,11 +1328,11 @@
   "plugins": [
     {
       "key": "richtext",
-      "version": "0.2.2",
+      "version": "0.2.3",
       "goPackage": "github.com/riducms/ridu/plugins/richtext",
       "apiVersion": 1,
       "ridu": {
-        "minimum": "0.2.2"
+        "minimum": "0.2.3"
       },
       "admin": {
         "package": "@riducms/plugin-richtext",
