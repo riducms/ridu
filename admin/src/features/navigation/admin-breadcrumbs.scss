@@ -1,0 +1,56 @@
+@use "@riducms/ui/styles.scss" as ui;
+
+@layer ridu.components {
+	.ridu-breadcrumbs {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		min-width: 0;
+	}
+	.ridu-breadcrumbs__home {
+		display: grid;
+		place-items: center;
+		flex-shrink: 0;
+		width: 18px;
+		height: 18px;
+	}
+	.ridu-breadcrumbs__logo {
+		width: 18px;
+		height: 18px;
+	}
+	.ridu-breadcrumbs__separator {
+		flex-shrink: 0;
+	}
+	.ridu-breadcrumbs__link,
+	.ridu-breadcrumbs__current {
+		min-width: 0;
+		max-width: 160px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.ridu-breadcrumbs__link {
+		font-weight: 600;
+		text-decoration: none;
+
+		&:hover {
+			text-decoration: underline;
+		}
+	}
+	.ridu-breadcrumbs a:focus-visible {
+		@include ui.focus-outline;
+	}
+	@media (max-width: ui.$medium) {
+		.ridu-breadcrumbs__home,
+		.ridu-breadcrumbs__logo {
+			width: 16px;
+			height: 16px;
+		}
+	}
+	@media (max-width: ui.$small) {
+		.ridu-breadcrumbs {
+			gap: 8px;
+			flex: 1;
+		}
+	}
+}

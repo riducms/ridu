@@ -27,6 +27,7 @@
 	import PrimitiveListField from "@admin/fields/primitive-list/primitive-list-field.svelte";
 	import TextField from "@admin/fields/text/text-field.svelte";
 	import LiveValidationFeedback from "@admin/fields/live-validation-feedback.svelte";
+	import "@admin/fields/field-layout.scss";
 
 	interface Props {
 		field: SchemaField;
@@ -49,6 +50,7 @@
 		get locale() {
 			return form.contentLocale;
 		},
+		canCreateDocument: (collection) => runtime.collectionOperations[collection]?.create === true,
 		referenceBrowser: ReferenceBrowser,
 		findDocument: (collection, id, signal) =>
 			runtime.client.find(collection, id, { signal, locale: form.contentLocale }),
@@ -56,7 +58,7 @@
 	const editor = $derived(
 		field.admin.editor === undefined
 			? undefined
-			: runtime.editors[field.admin.editor.reference as `app:${string}`]
+			: runtime.config.fieldEditors[field.admin.editor.reference as `app:${string}`]
 	);
 	const plugin = $derived(editor === undefined ? runtime.fields.resolve(field) : undefined);
 	const accessPath = $derived(fieldAccessPath(field));
@@ -67,7 +69,7 @@
 				evaluateFieldCondition(field.admin.condition, field.path, (path) => form.get(path)))
 	);
 	const renderedField = $derived(
-		field.admin.readOnly || form.canWrite(field.path, accessPath)
+		field.admin.readOnly || field.type === "join" || form.canWrite(field.path, accessPath)
 			? field
 			: { ...field, admin: { ...field.admin, readOnly: true } }
 	);
@@ -76,22 +78,7 @@
 		contentLocaleLabel(runtime.contentLocales, form.contentLocale)
 	);
 	const presentedField = $derived(withContentLocaleLabel(localizedField, activeContentLocaleLabel));
-	const columnClasses: Record<number, string> = {
-		1: "col-span-1 sm:col-span-1",
-		2: "col-span-1 sm:col-span-2",
-		3: "col-span-1 sm:col-span-3",
-		4: "col-span-1 sm:col-span-4",
-		5: "col-span-1 sm:col-span-5",
-		6: "col-span-1 sm:col-span-6",
-		7: "col-span-1 sm:col-span-7",
-		8: "col-span-1 sm:col-span-8",
-		9: "col-span-1 sm:col-span-9",
-		10: "col-span-1 sm:col-span-10",
-		11: "col-span-1 sm:col-span-11",
-		12: "col-span-1 sm:col-span-12",
-	};
 	const columns = $derived(Math.min(12, Math.max(1, field.admin.columns ?? 12)));
-	const columnClass = $derived(columnClasses[columns] ?? columnClasses[12]);
 	const inheritedFrom = $derived(
 		form.isInherited(field.path) ? form.localizationSource(field.path) : undefined
 	);
@@ -134,8 +121,10 @@
 	}
 </script>
 
-{#if visible}<div
-		class={columnClass}
+{#if visible}
+	<div
+		class="ridu-field-layout-item"
+		data-field-columns={columns}
 		data-live-validation-field={field.path}
 		onfocusout={(event) => {
 			if (
@@ -173,19 +162,18 @@
 			i18n={runtime.i18n}
 			path={field.path}
 		/>
-		{#if inheritedFrom !== undefined}<p
-				class="mt-1 font-mono text-[10px] text-foreground-faint"
-				data-localization-source={inheritedFrom}
-			>
+		{#if inheritedFrom !== undefined}
+			<p class="ridu-field-localization-note" data-localization-source={inheritedFrom}>
 				{runtime.i18n.t("documents:inheritedFrom", {
 					locale: inheritedFromLabel ?? inheritedFrom,
 				})}
-			</p>{:else if missingLocale}<p
-				class="mt-1 font-mono text-[10px] text-foreground-faint"
-				data-localization-missing={form.contentLocale}
-			>
+			</p>
+		{:else if missingLocale}
+			<p class="ridu-field-localization-note" data-localization-missing={form.contentLocale}>
 				{runtime.i18n.t("documents:missingTranslation", {
 					locale: activeContentLocaleLabel ?? form.contentLocale ?? "",
 				})}
-			</p>{/if}
-	</div>{/if}
+			</p>
+		{/if}
+	</div>
+{/if}

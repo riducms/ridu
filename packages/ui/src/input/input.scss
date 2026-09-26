@@ -1,0 +1,64 @@
+@use "../styles" as ui;
+
+@layer ridu.components {
+	.ridu-input {
+		box-sizing: border-box;
+		display: block;
+		width: 100%;
+		min-width: 0;
+		height: var(--control-height);
+		padding: 8px var(--control-padding-inline);
+		@include ui.control-surface;
+		color: var(--ink-strong);
+		appearance: none;
+		font-family: var(--font-sans);
+		font-size: var(--font-size-body);
+		line-height: var(--line-height-body);
+		transition:
+			border-color 100ms,
+			box-shadow 100ms,
+			background-color 500ms;
+		transition-timing-function: cubic-bezier(0, 0.2, 0.2, 1);
+
+		&::placeholder {
+			color: var(--ink-placeholder);
+			opacity: 1;
+		}
+		&:hover {
+			box-shadow: var(--control-hover-shadow);
+			border-color: var(--control-border-hover);
+		}
+		&:focus,
+		&:focus-within,
+		&:active {
+			border-color: var(--ring);
+			outline: 0;
+		}
+		&:disabled,
+		&[readonly] {
+			background: var(--control-surface-disabled);
+			color: var(--control-disabled-foreground);
+			border-color: var(--control-border-disabled);
+			box-shadow: none;
+		}
+		&:disabled {
+			cursor: not-allowed;
+		}
+		&[aria-invalid="true"] {
+			border-color: var(--control-invalid-border);
+			background: var(--control-invalid-surface);
+
+			&:hover {
+				border-color: var(--control-invalid-border-hover);
+			}
+		}
+		&::file-selector-button {
+			border: 0;
+			border-radius: var(--control-radius);
+			background: var(--control-surface-hover);
+			color: inherit;
+			font: inherit;
+			margin-inline-end: 12px;
+		}
+	}
+}

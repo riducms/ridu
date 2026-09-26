@@ -1,24 +1,19 @@
 <script lang="ts">
-	import { useLocation } from "@hvniel/svelte-router";
-	import { onMount, tick } from "svelte";
+	import { useNavigation } from "@hvniel/svelte-router";
+	import { tick, untrack } from "svelte";
 
 	import { getAdminRuntime } from "@admin/core/runtime/admin-runtime.svelte";
 
 	const revealDelayMilliseconds = 160;
 	const minimumVisibleMilliseconds = 180;
 	const completionMilliseconds = 150;
-	const fallbackIntentMilliseconds = 140;
 	const runtime = getAdminRuntime();
-	const routeLocation = $derived(useLocation());
-	const routeKey = $derived(
-		`${routeLocation.pathname}${routeLocation.search}${routeLocation.hash}`
-	);
+	const navigation = useNavigation();
 
 	type ProgressPhase = "idle" | "pending" | "running" | "finishing";
 
 	let phase = $state<ProgressPhase>("idle");
 	let progress = $state(0);
-	let observedRouteKey = "";
 	let startedAt = 0;
 	let generation = 0;
 	let revealTimer: number | undefined;
@@ -26,7 +21,6 @@
 	let finishTimer: number | undefined;
 	let hideTimer: number | undefined;
 	let resetTimer: number | undefined;
-	let intentTimer: number | undefined;
 
 	function clearTimer(timer: number | undefined) {
 		if (timer !== undefined) window.clearTimeout(timer);
@@ -52,16 +46,12 @@
 
 	function start() {
 		clearCompletionTimers();
-		clearTimer(intentTimer);
-		intentTimer = undefined;
-
-		if (phase === "pending") return;
-		if (phase === "running") {
-			generation += 1;
+		generation += 1;
+		// Progress phase is an output of this navigation synchronization, not one of its inputs.
+		if (untrack(() => phase) === "running") {
 			return;
 		}
 
-		generation += 1;
 		const activeGeneration = generation;
 		phase = "pending";
 		progress = 0;
@@ -77,6 +67,8 @@
 	}
 
 	function afterDestinationPaint() {
+		// The destination DOM flushes at tick; two frames keep the progress bar visible until that
+		// DOM has reached a browser paint rather than finishing over the retained outgoing page.
 		return new Promise<void>((resolve) => {
 			requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
 		});
@@ -112,74 +104,16 @@
 		}, remaining);
 	}
 
-	function startIntent() {
-		const routeBeforeIntent = routeKey;
-		start();
-		intentTimer = window.setTimeout(() => {
-			intentTimer = undefined;
-			if (routeKey === routeBeforeIntent) void finish();
-		}, fallbackIntentMilliseconds);
-	}
-
-	function handleLinkIntent(event: MouseEvent) {
-		if (
-			event.defaultPrevented ||
-			event.button !== 0 ||
-			event.metaKey ||
-			event.ctrlKey ||
-			event.shiftKey ||
-			event.altKey ||
-			!(event.target instanceof Element)
-		) {
-			return;
-		}
-
-		const anchor = event.target.closest<HTMLAnchorElement>("a[href]");
-		if (
-			anchor === null ||
-			anchor.hasAttribute("download") ||
-			(anchor.target !== "" && anchor.target !== "_self")
-		) {
-			return;
-		}
-
-		const destination = new URL(anchor.href, window.location.href);
-		if (
-			destination.origin !== window.location.origin ||
-			`${destination.pathname}${destination.search}${destination.hash}` ===
-				`${window.location.pathname}${window.location.search}${window.location.hash}`
-		) {
-			return;
-		}
-
-		startIntent();
-	}
-
 	$effect(() => {
-		const nextRouteKey = routeKey;
-		if (observedRouteKey === "") {
-			observedRouteKey = nextRouteKey;
-			return;
-		}
-		if (nextRouteKey === observedRouteKey) return;
-
-		observedRouteKey = nextRouteKey;
-		start();
-		void finish();
+		if (navigation.current.state === "idle") void finish();
+		else start();
 	});
 
-	onMount(() => {
-		const handleHistoryIntent = () => startIntent();
-		document.addEventListener("click", handleLinkIntent, true);
-		window.addEventListener("popstate", handleHistoryIntent);
-
+	$effect(() => {
 		return () => {
 			generation += 1;
-			document.removeEventListener("click", handleLinkIntent, true);
-			window.removeEventListener("popstate", handleHistoryIntent);
 			clearTimer(revealTimer);
 			clearTimer(trickleTimer);
-			clearTimer(intentTimer);
 			clearCompletionTimers();
 		};
 	});

@@ -146,6 +146,9 @@ type Request struct {
 	Sort            []query.Sort
 	Select          []query.Path
 	Populate        []query.Population
+	// IncludeAccess enriches an ordinary collection list with collection and
+	// per-document capabilities evaluated in the list's read transaction.
+	IncludeAccess bool
 	// OutputFields limits computed and inverse-join resolution. Nil preserves
 	// the local API's historical behavior of resolving every output field; a
 	// non-nil empty slice resolves none. This is deliberately separate from
@@ -169,6 +172,10 @@ type Request struct {
 	// replaceValues is reserved for restoring one canonical version snapshot.
 	// Ordinary updates and publication transitions remain patches.
 	replaceValues bool
+	// allowDraftUnpublish lets version restoration write an explicitly draft
+	// snapshot when the current document is already a draft. Ordinary unpublish
+	// calls still require a published source document.
+	allowDraftUnpublish bool
 	// copyLocaleSource preserves source occurrence identities for an explicit
 	// locale copy. Independent whole-field translations may reuse the same key
 	// for different variants; that is not an in-place schema change.
@@ -208,7 +215,13 @@ func (resource *TransactionResource) Claimed() bool {
 type Result struct {
 	Document      *store.Document
 	Page          *store.Page
+	PageAccess    *CollectionPageAccess
 	WindowHasMore bool
+}
+
+type CollectionPageAccess struct {
+	Collection AccessCapabilities
+	Documents  map[string]AccessCapabilities
 }
 
 type Error struct {
@@ -389,6 +402,12 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 	if request.TrashOnly && (request.Operation != operation.Read || !collection.Schema.Capabilities.Trash) {
 		return Result{}, &Error{Code: "bad_operation", Status: 400, Message: "trash queries require a trash-enabled collection read"}
 	}
+	if request.IncludeAccess && (request.Operation != operation.Read || request.ID != "" || request.IndexWindow != nil) {
+		return Result{}, &Error{Code: "bad_operation", Status: 400, Message: "access enrichment requires an ordinary collection list read"}
+	}
+	if request.Operation == operation.Unpublish && collection.Schema.Versions != nil && !collection.Schema.Versions.Drafts {
+		return Result{}, &Error{Code: "bad_operation", Status: 400, Message: "collection does not support drafts"}
+	}
 	if request.Draft != nil && request.Operation != operation.Read && request.Operation != operation.Create {
 		return Result{}, &Error{Code: "bad_operation", Status: 400, Message: "draft mode supports only reads and creates; use publish or unpublish to change status"}
 	}
@@ -550,6 +569,12 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 				return Result{}, translateStoreError(findError)
 			}
 		} else {
+			if request.Operation == operation.Duplicate && request.ExpectedRevision != 0 && original.Revision != request.ExpectedRevision {
+				return Result{}, translateStoreError(store.ErrConflict)
+			}
+			if request.Operation == operation.Unpublish && original.Status != store.StatusPublished && !request.allowDraftUnpublish {
+				return Result{}, &Error{Code: "validation", Status: 422, Message: "only a published document can be unpublished"}
+			}
 			canonicalDocument := store.CloneDocument(original)
 			if recoveryError := unknownBlockRecoveryError(collection.Schema.Fields, canonicalDocument.Values, true); recoveryError != nil {
 				return Result{}, recoveryError
@@ -1231,6 +1256,22 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 	if err != nil {
 		return Result{}, err
 	}
+	if request.IncludeAccess {
+		result.PageAccess, err = engine.collectionPageAccess(
+			state.transaction,
+			collection,
+			operationContext,
+			*result.Page,
+			decision,
+			storeRequest.Deletion,
+			request.TrashOnly,
+			storeRequest.PublishedOnly,
+			selection,
+		)
+		if err != nil {
+			return Result{}, err
+		}
+	}
 	// Version snapshots own canonical stored values, never a transport-specific
 	// population shape. Save the raw write result before mutation responses are
 	// re-read with populated relationship documents.
@@ -1516,12 +1557,15 @@ func includesUploadMetadata(fields []schema.Field, values store.Values) bool {
 
 func importedUploadObjectKeys(values store.Values) ([]string, error) {
 	unique := make(map[string]struct{})
+	if key, valid := values["source"].Get("objectKey").StringValue(); valid && key != "" {
+		unique[key] = struct{}{}
+	}
 	if key, valid := values["objectKey"].StringValue(); valid && key != "" {
 		unique[key] = struct{}{}
 	}
 	if sizes := values["sizes"]; sizes.Kind() == store.ValueObject {
-		if sizes.Len() > store.MaxUploadReferenceCandidates-1 {
-			return nil, fmt.Errorf("upload metadata contains more than %d image variants", store.MaxUploadReferenceCandidates-1)
+		if sizes.Len() > store.MaxUploadReferenceCandidates-2 {
+			return nil, fmt.Errorf("upload metadata contains more than %d image variants", store.MaxUploadReferenceCandidates-2)
 		}
 		for _, metadata := range sizes.Entries() {
 			if metadata.Kind() != store.ValueObject {
@@ -1895,8 +1939,8 @@ func (engine *Engine) RestorePopulated(ctx context.Context, collectionName, docu
 		Populate:        append([]query.Population(nil), populations...),
 		OutputFields:    appendOptionalPaths(outputFields),
 		StoragePrepared: collection.Schema.Capabilities.Upload, ValidateUploadObjects: collection.Schema.Capabilities.Upload, LocalizationPrepared: true,
-		replaceValues: true,
-		Locale:        options.Locale, FallbackLocales: options.FallbackLocales,
+		replaceValues: true, allowDraftUnpublish: operationKind == operation.Unpublish,
+		Locale: options.Locale, FallbackLocales: options.FallbackLocales,
 		DisableFallback: options.DisableFallback, AllLocales: options.AllLocales,
 	})
 	if err != nil {

@@ -1,0 +1,1 @@
+import{a as e}from"./chevron-DapMm7pN.js";function t(t){let n=new Set,r=t=>!n.has(t)&&(n.add(t),t.localized===!0||t.nested?.fields.some(r)===!0||e(t.blocks).some(e=>e.fields.some(r)));return t.some(r)}export{t};

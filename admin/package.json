@@ -1,7 +1,7 @@
 {
 	"name": "@riducms/admin",
 	"description": "Framework-owned Svelte 5 authoring application embedded by Ridu servers.",
-	"version": "0.2.3",
+	"version": "0.3.0",
 	"license": "MIT",
 	"repository": {
 		"type": "git",
@@ -18,7 +18,8 @@
 	},
 	"type": "module",
 	"exports": {
-		".": "./src/index.ts"
+		".": "./src/index.ts",
+		"./routing": "./src/routing.ts"
 	},
 	"files": [
 		"src",
@@ -35,28 +36,39 @@
 		"test:components": "vitest run --config vitest.config.ts"
 	},
 	"dependencies": {
+		"@codemirror/autocomplete": "^6.20.3",
+		"@codemirror/commands": "^6.11.1",
+		"@codemirror/lang-css": "^6.3.1",
+		"@codemirror/lang-html": "^6.4.12",
+		"@codemirror/lang-javascript": "^6.2.5",
+		"@codemirror/lang-json": "^6.0.2",
+		"@codemirror/language": "^6.12.4",
+		"@codemirror/state": "^6.7.5",
+		"@codemirror/view": "^6.43.12",
+		"@cropper/element-canvas": "2.2.0",
+		"@cropper/element-handle": "2.2.0",
+		"@cropper/element-selection": "2.2.0",
 		"@dnd-kit-svelte/svelte": "^0.1.6",
-		"@fontsource-variable/geist": "^5.3.0",
-		"@fontsource-variable/spline-sans-mono": "^5.3.0",
-		"@hvniel/svelte-router": "^0.0.6",
+		"@fontsource-variable/martian-mono": "5.3.0",
+		"@hvniel/svelte-router": "^0.1.0",
 		"@iconify/json": "^2.2.509",
 		"@internationalized/date": "^3.12.3",
+		"@lezer/highlight": "^1.2.3",
 		"@riducms/plugin": "workspace:*",
-		"@riducms/ui": "workspace:*",
 		"@riducms/protocol": "workspace:*",
 		"@riducms/sdk": "workspace:*",
 		"@riducms/translations": "workspace:*",
-		"@types/prismjs": "^1.26.5",
+		"@riducms/ui": "workspace:*",
 		"bits-ui": "^2.18.1",
-		"prismjs": "^1.30.0",
+		"shiki": "4.4.3",
 		"svelte-sonner": "^1.1.1"
 	},
 	"devDependencies": {
 		"@hvniel/lexical-svelte": "^0.1.1",
 		"@riducms/build": "workspace:*",
-		"svelte": "^5.56.8"
+		"svelte": "^5.57.0"
 	},
 	"peerDependencies": {
-		"svelte": "^5.56.8"
+		"svelte": "^5.57.0"
 	}
 }

@@ -1,0 +1,13 @@
+@import "@riducms/ui/layers.css";
+
+/* Opt-in consumer theme used by the browser contract; the fixture normally uses Ridu defaults. */
+@layer app {
+	.auth-theme-fixture .ridu-auth {
+		--control-height: 48px;
+		--control-radius: 9px;
+		--font-size-body: 15px;
+	}
+	.auth-theme-fixture .ridu-input {
+		border-inline-start-width: 4px;
+	}
+}

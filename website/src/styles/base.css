@@ -4,6 +4,7 @@
 
 html {
 	scroll-padding-top: calc(var(--page-header-height) + 1.5rem);
+	scrollbar-gutter: stable;
 }
 
 body {
@@ -64,24 +65,6 @@ a {
 
 .site-scrollbar::-webkit-scrollbar-thumb:hover {
 	background-color: var(--colors-ink-faint);
-}
-
-.skip-link {
-	position: fixed;
-	top: 0.75rem;
-	left: 0.75rem;
-	z-index: 300;
-	padding: 0.55rem 0.75rem;
-	background: var(--colors-ink);
-	color: var(--colors-canvas);
-	font-size: 0.8rem;
-	font-weight: 700;
-	text-decoration: none;
-	transform: translateY(-180%);
-}
-
-.skip-link:focus-visible {
-	transform: translateY(0);
 }
 
 h1,

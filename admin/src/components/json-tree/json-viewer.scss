@@ -1,0 +1,153 @@
+@layer ridu.components {
+	.ridu-json-viewer {
+		min-width: 0;
+		background: var(--background-surface);
+	}
+
+	.ridu-json-viewer__toolbar {
+		position: sticky;
+		top: 0;
+		z-index: 1;
+	}
+
+	.ridu-json-viewer__actions {
+		position: absolute;
+		top: 10px;
+		right: 10px;
+		display: flex;
+		gap: 4px;
+
+		button {
+			display: grid;
+			place-items: center;
+			width: 30px;
+			height: 30px;
+			padding: 5px;
+			border: 0;
+			border-radius: 3px;
+			background: var(--background);
+			color: var(--control-border-hover);
+			cursor: pointer;
+
+			&:hover {
+				color: var(--foreground-muted);
+			}
+			&:focus-visible {
+				outline: var(--focus-outline);
+				outline-offset: var(--focus-outline-offset);
+			}
+		}
+		svg {
+			width: 20px;
+			height: 20px;
+		}
+	}
+
+	.ridu-json-viewer__copy {
+		opacity: 0;
+		.ridu-json-viewer:hover &,
+		&:focus-visible {
+			opacity: 1;
+		}
+	}
+
+	.ridu-json-viewer__data {
+		padding: 10px 0 10px 10px;
+		overflow: auto;
+		font: var(--font-size-body) / var(--line-height-body) var(--font-mono);
+		color: var(--foreground);
+		ul {
+			list-style: none;
+			margin: 0;
+		}
+	}
+
+	.ridu-json-viewer__tree {
+		padding: 0;
+	}
+
+	.ridu-json-node {
+		padding-left: 8px;
+		white-space: nowrap;
+	}
+
+	.ridu-json-node__toggle {
+		display: flex;
+		align-items: center;
+		gap: 14px;
+		width: calc(100% + 3px);
+		margin-left: -34px;
+		padding: 0;
+		border: 0;
+		border-radius: 3px 0 0 3px;
+		background: var(--background-surface);
+		color: inherit;
+		font: inherit;
+		text-align: left;
+		cursor: pointer;
+
+		&:hover {
+			background: var(--background-layer);
+		}
+		&:focus-visible {
+			outline: var(--focus-outline);
+			outline-offset: -2px;
+		}
+		&[aria-expanded="false"] > svg {
+			transform: rotate(-90deg);
+		}
+	}
+
+	.ridu-json-node__chevron {
+		flex-shrink: 0;
+		color: var(--control-disabled-foreground);
+	}
+
+	.ridu-json-node__children {
+		position: relative;
+		padding-left: 24px;
+
+		&:before {
+			content: "";
+			position: absolute;
+			inset-block: 0;
+			border-left: 1px dashed var(--control-border);
+		}
+	}
+
+	.ridu-json-node__line {
+		display: flex;
+		> span:first-child {
+			white-space: pre;
+		}
+	}
+
+	.ridu-json-node__closing {
+		padding-left: 2px;
+	}
+	.ridu-json-node__string {
+		color: var(--json-string);
+	}
+	.ridu-json-node__number {
+		color: var(--json-number);
+	}
+
+	.ridu-json-node--root {
+		position: relative;
+		left: -3px;
+		padding-left: 0;
+		> .ridu-json-node__toggle {
+			margin-left: 0;
+			gap: 6px;
+		}
+		> .ridu-json-node__toggle > svg {
+			margin-left: -4px;
+		}
+		> .ridu-json-node__children {
+			padding-left: 20px;
+		}
+		> .ridu-json-node__closing {
+			padding-left: 18px;
+		}
+	}
+}

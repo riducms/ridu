@@ -300,6 +300,7 @@ describe("host-owned scalar editor lifetime", () => {
 		let host: FieldAuthoringHost = {
 			collections: [],
 			documentRevision: 0,
+			canCreateDocument: (collection) => collection === "posts",
 			referenceBrowser(anchor, props) {
 				expect(anchor).toBe(internals);
 				expect(props).toBe(browserProps);
@@ -315,8 +316,11 @@ describe("host-owned scalar editor lifetime", () => {
 		const authoring = guardEditorAuthoring(() => host, binding.assertActive);
 		const browser = authoring.referenceBrowser;
 		const find = authoring.findDocument;
+		const canCreateDocument = authoring.canCreateDocument;
 		expect(authoring.locale).toBeUndefined();
 		expect(authoring.documentRevision).toBe(0);
+		expect(canCreateDocument("posts")).toBe(true);
+		expect(canCreateDocument("media")).toBe(false);
 		host = { ...host, collections: [browserProps.collection], documentRevision: 1, locale: "fr" };
 		expect(authoring.collections).toEqual(host.collections);
 		const retainedCollections = authoring.collections;
@@ -326,6 +330,7 @@ describe("host-owned scalar editor lifetime", () => {
 		expect(authoring.locale).toBe("fr");
 		expect(authoring.referenceBrowser).toBe(browser);
 		expect(authoring.findDocument).toBe(find);
+		expect(authoring.canCreateDocument).toBe(canCreateDocument);
 		expect(browser(internals, browserProps)).toBe(rendered);
 		await expect(find("posts", "one", signal)).resolves.toEqual({ id: "one" });
 		binding.destroy();
@@ -333,6 +338,8 @@ describe("host-owned scalar editor lifetime", () => {
 		expect(() => authoring.collections).toThrow("stale");
 		expect(() => authoring.documentRevision).toThrow("stale");
 		expect(() => authoring.locale).toThrow("stale");
+		expect(() => canCreateDocument("posts")).toThrow("stale");
+		expect(() => authoring.canCreateDocument).toThrow("stale");
 		expect(() => authoring.referenceBrowser).toThrow("stale");
 		expect(() => authoring.findDocument).toThrow("stale");
 	});
@@ -344,6 +351,7 @@ describe("host-owned scalar editor lifetime", () => {
 		const host: FieldAuthoringHost = {
 			collections: [],
 			documentRevision: 0,
+			canCreateDocument: () => false,
 			referenceBrowser: () => ({}),
 			findDocument: () => {
 				requests += 1;

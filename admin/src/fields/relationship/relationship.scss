@@ -1,0 +1,182 @@
+@use "@riducms/ui/styles.scss" as ui;
+@layer ridu.components {
+	.ridu-relationship-selection {
+		position: relative;
+		display: grid;
+		min-width: 0;
+		max-width: 100%;
+		&[data-dragging="true"] {
+			z-index: 1;
+		}
+		&[data-dnd-placeholder] {
+			opacity: 0.5;
+		}
+	}
+
+	.ridu-relationship-chip {
+		display: flex;
+		align-items: center;
+		gap: 2px;
+		padding: 2px 3px 2px 6px;
+		margin-block: 4px;
+		max-width: 100%;
+		background: var(--background-layer);
+		border-radius: 2px;
+	}
+	.ridu-relationship-label {
+		flex: 1;
+		min-width: 0;
+	}
+	.ridu-relationship-title {
+		display: block;
+		padding: 0;
+		border: 0;
+		background: transparent;
+		font: inherit;
+		color: inherit;
+		text-align: start;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		max-width: 100%;
+		cursor: pointer;
+		&:disabled {
+			color: var(--control-disabled-foreground);
+			cursor: not-allowed;
+		}
+		&:focus-visible {
+			@include ui.focus-outline;
+		}
+	}
+	.ridu-relationship-grip {
+		display: grid;
+		place-items: center;
+		flex-shrink: 0;
+		border: 0;
+		padding: 0;
+		width: 16px;
+		height: 26px;
+		color: var(--ink-faint);
+		background: transparent;
+		cursor: grab;
+		&:active:not(:disabled) {
+			cursor: grabbing;
+		}
+		&:disabled {
+			color: var(--control-disabled-foreground);
+			cursor: not-allowed;
+		}
+		svg {
+			width: 12px;
+			height: 12px;
+		}
+		&:focus-visible {
+			@include ui.focus-outline;
+		}
+	}
+	.ridu-upload-reference {
+		@include ui.control-surface;
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		padding: 10px;
+		min-height: 64px;
+		color: var(--foreground);
+		.ridu-relationship-title {
+			text-decoration: underline;
+		}
+		.ridu-relationship-grip {
+			margin-inline-end: 3px;
+		}
+	}
+	.ridu-upload-reference__thumbnail {
+		display: grid;
+		place-items: center;
+		width: 40px;
+		height: 40px;
+		flex-shrink: 0;
+		img {
+			width: 100%;
+			height: 100%;
+			object-fit: contain;
+		}
+		svg {
+			width: 24px;
+			height: 24px;
+		}
+	}
+	.ridu-upload-reference__metadata {
+		display: block;
+		max-width: 100%;
+		color: var(--foreground-muted);
+		margin-top: 4px;
+		font-size: 12px;
+		line-height: 16px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.ridu-relationship-action {
+		display: grid;
+		place-items: center;
+		flex-shrink: 0;
+		width: 26px;
+		height: 26px;
+		border: 0;
+		border-radius: var(--control-radius);
+		padding: 0;
+		background: transparent;
+		color: var(--foreground-muted);
+		cursor: pointer;
+		&:hover:not(:disabled) {
+			background: var(--control-surface-hover);
+			color: var(--foreground);
+		}
+		&:focus-visible {
+			@include ui.focus-outline;
+		}
+		&:disabled {
+			color: var(--control-disabled-foreground);
+			cursor: not-allowed;
+		}
+		svg {
+			width: 14px;
+			height: 14px;
+		}
+	}
+	.ridu-upload-references {
+		display: grid;
+		gap: 10px;
+	}
+	.ridu-upload-intake {
+		display: flex;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: 10px;
+		min-height: 60px;
+		border: 1px dashed var(--control-border);
+		border-radius: var(--control-radius);
+		padding: 15px;
+		color: var(--foreground-muted);
+		&[data-dragging="true"] {
+			border-color: var(--foreground);
+			background: var(--control-surface);
+		}
+	}
+	.ridu-upload-reference--compact {
+		min-height: 40px;
+		padding: 5px 10px;
+		.ridu-upload-reference__thumbnail {
+			width: 24px;
+			height: 24px;
+		}
+	}
+	.ridu-upload-intake__drop-label {
+		margin-inline-start: auto;
+	}
+	@media (max-width: 30rem) {
+		.ridu-upload-intake__drop-label {
+			display: none;
+		}
+	}
+}

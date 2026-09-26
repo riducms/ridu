@@ -1146,7 +1146,7 @@ func TestArtifactRunnerPreservesNestedFieldsReferencesAndVersionHistory(t *testi
 	if _, err := backend.SetPreference(ctx, store.Preference{CollectionID: beforeIDs["users"], UserID: user.ID, Key: "rename-proof", Value: json.RawMessage(`{"kept":true}`)}); err != nil {
 		t.Fatal(err)
 	}
-	scheduled, err := beforeApp.SchedulePublish(ctx, "news", news.ID, time.Now().Add(-time.Second), news.Revision, &ridu.AuthIdentity{Collection: "users", Actor: user})
+	scheduled, err := beforeApp.SchedulePublish(ctx, "news", news.ID, time.Now().Add(-time.Second), ridu.PublicationScheduleOptions{ExpectedRevision: news.Revision}, &ridu.AuthIdentity{Collection: "users", Actor: user})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1264,11 +1264,11 @@ func TestArtifactRunnerPreservesNestedFieldsReferencesAndVersionHistory(t *testi
 	if err != nil || lock.OwnerCollectionID != afterIDs["members"] {
 		t.Fatalf("renamed document lock = %#v, %v", lock, err)
 	}
-	jobs, err := afterApp.ScheduledPublishes(ctx, "articles", news.ID, &ridu.AuthIdentity{Collection: "members", Actor: user})
+	jobs, err := afterApp.ScheduledPublications(ctx, "articles", news.ID, &ridu.AuthIdentity{Collection: "members", Actor: user})
 	if err != nil || len(jobs) != 1 || jobs[0].ID != scheduled.ID || jobs[0].CollectionID != afterIDs["articles"] || jobs[0].RequestedByCollectionID != afterIDs["members"] {
 		t.Fatalf("renamed durable publish = %#v, %v", jobs, err)
 	}
-	if completed, err := afterApp.RunScheduledPublishes(ctx, 10, nil); err != nil || completed != 1 {
+	if completed, err := afterApp.RunScheduledPublications(ctx, 10, nil); err != nil || completed != 1 {
 		t.Fatalf("execute renamed durable publish = %d, %v", completed, err)
 	}
 	if published, err := afterApp.Local().Find(ctx, "articles", news.ID, ridu.FindOptions{}); err != nil || published.Status != store.StatusPublished {
@@ -2002,7 +2002,7 @@ func TestPostgresPermanentDeleteRemovesDocumentState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.SchedulePublish(ctx, "posts", post.ID, time.Now().Add(time.Hour), post.Revision, actorIdentity); err != nil {
+	if _, err := application.SchedulePublish(ctx, "posts", post.ID, time.Now().Add(time.Hour), ridu.PublicationScheduleOptions{ExpectedRevision: post.Revision}, actorIdentity); err != nil {
 		t.Fatal(err)
 	}
 	if state, err := application.AcquireDocumentLock(ctx, "posts", post.ID, false, actorIdentity); err != nil || !state.Acquired {
@@ -2077,7 +2077,7 @@ func TestPostgresPermanentDeleteRemovesDocumentState(t *testing.T) {
 	if value, err := application.Preference(ctx, recreatedIdentity, "theme"); err != nil || string(value) != "null" {
 		t.Fatalf("recreated preference = %s, %v", value, err)
 	}
-	if jobs, err := application.ScheduledPublishes(ctx, "posts", post.ID, recreatedIdentity); err != nil || len(jobs) != 0 {
+	if jobs, err := application.ScheduledPublications(ctx, "posts", post.ID, recreatedIdentity); err != nil || len(jobs) != 0 {
 		t.Fatalf("scheduled jobs after requester deletion = %#v, %v", jobs, err)
 	}
 	if state, err := application.DocumentLock(ctx, "posts", post.ID, recreatedIdentity); err != nil || state.Lock != nil {
@@ -2090,7 +2090,7 @@ func TestPostgresPermanentDeleteRemovesDocumentState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	targetSchedule, err := application.SchedulePublish(ctx, "posts", targetOnly.ID, time.Now().Add(time.Hour), targetOnly.Revision, recreatedIdentity)
+	targetSchedule, err := application.SchedulePublish(ctx, "posts", targetOnly.ID, time.Now().Add(time.Hour), ridu.PublicationScheduleOptions{ExpectedRevision: targetOnly.Revision}, recreatedIdentity)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2137,11 +2137,11 @@ func applyInitialArtifact(t *testing.T, ctx context.Context, backend *postgres.S
 	return directory
 }
 
-func integrationBackend(t *testing.T, ctx context.Context, config ridu.Config) (*postgres.Store, schema.Manifest) {
+func integrationBackend(t testing.TB, ctx context.Context, config ridu.Config) (*postgres.Store, schema.Manifest) {
 	return integrationBackendWithPoolConfig(t, ctx, config, postgres.PoolConfig{})
 }
 
-func integrationBackendWithPoolConfig(t *testing.T, ctx context.Context, config ridu.Config, poolConfig postgres.PoolConfig) (*postgres.Store, schema.Manifest) {
+func integrationBackendWithPoolConfig(t testing.TB, ctx context.Context, config ridu.Config, poolConfig postgres.PoolConfig) (*postgres.Store, schema.Manifest) {
 	t.Helper()
 	databaseURL := os.Getenv("RIDU_POSTGRES_URL")
 	if databaseURL == "" {

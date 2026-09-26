@@ -188,8 +188,10 @@ func collectionAtlasTable(collection schema.Collection, id schema.StableID, mapp
 		}
 		table.AddColumns(
 			atlasschema.NewStringColumn("_status", atlaspostgres.TypeText).SetDefault(&atlasschema.Literal{V: status}),
-			atlasschema.NewIntColumn("_revision", atlaspostgres.TypeInteger).SetDefault(&atlasschema.Literal{V: "1"}),
 		)
+	}
+	if collection.Versions != nil || collection.Upload != nil {
+		table.AddColumns(atlasschema.NewIntColumn("_revision", atlaspostgres.TypeInteger).SetDefault(&atlasschema.Literal{V: "1"}))
 	}
 	for _, field := range collection.Fields {
 		if field.Category == schema.FieldCategoryPresentation {

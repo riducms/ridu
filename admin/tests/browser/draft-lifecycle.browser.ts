@@ -121,6 +121,7 @@ it("a rendered derived read can revoke nested drafts without unsafe reactive cle
 		{
 			collections: [],
 			documentRevision: 0,
+			canCreateDocument: () => false,
 			referenceBrowser: () => ({}),
 			findDocument: async () => ({ id: "one" }),
 			beginSchemaDraft: (scope) =>

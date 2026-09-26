@@ -1,0 +1,217 @@
+@use "@riducms/ui/styles.scss" as ui;
+
+@layer ridu.components {
+	.ridu-reference-overlay {
+		position: fixed;
+		inset: 0;
+		z-index: 50;
+		background: var(--media-overlay);
+		backdrop-filter: blur(4px);
+	}
+
+	.ridu-reference-drawer {
+		--reference-slide: 60px;
+		position: fixed;
+		inset-block: 0;
+		inset-inline-end: 0;
+		inset-inline-start: min(calc(var(--reference-depth) * var(--admin-gutter)), 40vw);
+		z-index: 50;
+		overflow: auto;
+		background: var(--background);
+		color: var(--foreground);
+		font-size: var(--font-size-body);
+		line-height: var(--line-height-body);
+		outline: none;
+		animation: ridu-reference-in 200ms linear;
+
+		&[dir="rtl"] {
+			--reference-slide: -60px;
+		}
+
+		&[data-state="closed"] {
+			animation: ridu-reference-out 200ms linear;
+		}
+	}
+
+	.ridu-reference-header {
+		padding: 40px var(--admin-gutter) 20px;
+	}
+
+	.ridu-reference-heading {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		min-height: 40px;
+	}
+
+	.ridu-reference-collection {
+		display: grid;
+		gap: 8px;
+		margin-block-start: 20px;
+	}
+
+	.ridu-reference-title {
+		margin: 0;
+		min-width: 0;
+		font-size: 26px;
+		font-weight: 500;
+		line-height: 32px;
+		overflow-wrap: anywhere;
+	}
+
+	.ridu-reference-icon,
+	.ridu-reference-close {
+		display: grid;
+		place-items: center;
+		flex-shrink: 0;
+		border: 0;
+		padding: 0;
+		background: none;
+		color: inherit;
+		cursor: pointer;
+		width: 40px;
+		height: 40px;
+
+		&:focus-visible {
+			@include ui.focus-outline;
+		}
+		&:disabled {
+			opacity: 0.5;
+			cursor: not-allowed;
+		}
+		svg {
+			width: 24px;
+			height: 24px;
+			stroke-width: 1px;
+		}
+	}
+
+	.ridu-reference-close {
+		margin-inline-start: auto;
+	}
+
+	.ridu-reference-id {
+		display: inline-flex;
+		gap: 4px;
+		margin-top: 10px;
+		padding: 5px 8px;
+		border-radius: 3px;
+		background: var(--background-layer);
+		color: var(--foreground-muted);
+
+		a {
+			color: inherit;
+			text-decoration: underline;
+			text-underline-offset: 2px;
+		}
+	}
+
+	.ridu-reference-editor {
+		margin: 0;
+	}
+
+	.ridu-reference-bar {
+		position: sticky;
+		top: 0;
+		z-index: 10;
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		gap: 20px;
+		min-height: 56px;
+		padding: 10px var(--admin-gutter);
+		border-block: 1px solid var(--control-border);
+		background: var(--background);
+	}
+
+	.ridu-reference-metadata {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px 20px;
+		font-size: var(--font-size-body);
+		color: var(--foreground-muted);
+		strong {
+			color: var(--foreground);
+			font-weight: 500;
+		}
+	}
+
+	.ridu-reference-actions {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+	}
+	.ridu-reference-fields {
+		padding: 30px var(--admin-gutter) 60px;
+	}
+	.ridu-reference-form {
+		display: grid;
+		gap: 24px;
+		border: 0;
+		padding: 0;
+		margin: 0;
+		min-width: 0;
+	}
+	.ridu-reference-loading {
+		display: grid;
+		gap: 24px;
+	}
+	.ridu-reference-loading__input {
+		block-size: var(--control-height);
+	}
+	.ridu-reference-loading__textarea {
+		block-size: 112px;
+	}
+	.ridu-reference-credentials {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 24px 16px;
+		label {
+			display: grid;
+			gap: 8px;
+		}
+	}
+
+	@keyframes ridu-reference-in {
+		from {
+			opacity: 0;
+			transform: translateX(var(--reference-slide));
+		}
+		to {
+			opacity: 1;
+			transform: translateX(0);
+		}
+	}
+	@keyframes ridu-reference-out {
+		to {
+			opacity: 0;
+			transform: translateX(var(--reference-slide));
+		}
+	}
+
+	@media (max-width: ui.$small) {
+		.ridu-reference-drawer {
+			--reference-slide: 60px;
+			inset-inline-start: min(calc(var(--reference-depth) * 10px), 40px);
+		}
+		.ridu-reference-header {
+			padding-block-start: 24px;
+		}
+		.ridu-reference-bar {
+			flex-wrap: wrap;
+			gap: 10px;
+		}
+		.ridu-reference-actions {
+			margin-inline-start: auto;
+		}
+		.ridu-reference-credentials {
+			grid-template-columns: minmax(0, 1fr);
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.ridu-reference-drawer {
+			--reference-slide: 60px;
+			animation-duration: 1ms;
+		}
+	}
+}

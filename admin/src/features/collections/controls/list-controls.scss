@@ -1,0 +1,196 @@
+@use "@riducms/ui/styles.scss" as ui;
+
+@layer ridu.components {
+	.ridu-list-controls__context {
+		margin-bottom: 10px;
+	}
+	.ridu-list-controls {
+		margin-bottom: 20px;
+	}
+	.ridu-list-search {
+		display: flex;
+		min-height: 46px;
+		border-radius: 4px;
+		background: var(--background-surface);
+	}
+	.ridu-list-search__input {
+		position: relative;
+		display: flex;
+		align-items: center;
+		flex: 1;
+		min-width: 0;
+
+		& > svg {
+			position: absolute;
+			inset-inline-start: 10px;
+			pointer-events: none;
+		}
+
+		input {
+			width: 100%;
+			min-width: 0;
+			border: 0;
+			border-radius: 4px;
+			background: var(--background-surface);
+			box-shadow: none;
+			padding: 13px 35px 13px 40px;
+			color: var(--foreground);
+			font: inherit;
+			outline: none;
+			line-height: 20px;
+		}
+	}
+	[dir="rtl"] .ridu-list-search__input input {
+		padding-inline: 40px 35px;
+	}
+
+	.ridu-list-search__input input::-webkit-search-cancel-button {
+		display: none;
+	}
+	.ridu-list-search__input input::placeholder {
+		color: var(--foreground-muted);
+	}
+	.ridu-list-search__clear {
+		position: absolute;
+		inset-inline-end: 10px;
+		display: grid;
+		place-items: center;
+		border: 0;
+		padding: 0;
+		background: none;
+		color: var(--foreground-muted);
+		cursor: pointer;
+	}
+	.ridu-list-search__actions {
+		display: flex;
+		align-items: center;
+		gap: 5px;
+		padding: 10px;
+	}
+	.ridu-list__more {
+		min-width: 24px;
+		font-weight: bold;
+		padding-inline: 5px;
+	}
+	.ridu-list__options {
+		width: 260px;
+		gap: 15px;
+		padding: 15px;
+	}
+	.ridu-list-columns {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 10px;
+		padding: 20px;
+		margin-top: 10px;
+		background: var(--background-surface);
+		border-radius: 3px;
+	}
+	.ridu-list-columns__pill {
+		display: flex;
+		align-items: center;
+		border: 1px solid var(--control-border);
+		border-radius: 3px;
+		min-height: 30px;
+
+		&[data-selected="true"] {
+			background: var(--background);
+		}
+
+		&:hover {
+			border-color: var(--control-border-hover);
+		}
+	}
+	.ridu-list-columns__pill--dragging {
+		opacity: 0.4;
+	}
+	.ridu-list-columns__toggle {
+		display: flex;
+		align-items: center;
+		gap: 5px;
+		padding: 4px 0 4px 8px;
+		border: 0;
+		background: none;
+		color: inherit;
+		font: inherit;
+		cursor: pointer;
+	}
+	.ridu-list-columns__handle {
+		display: grid;
+		place-items: center;
+		align-self: stretch;
+		border: 0;
+		background: none;
+		color: var(--foreground-muted);
+		padding: 0 4px;
+		cursor: grab;
+		touch-action: none;
+	}
+	.ridu-list-columns__toggle:focus-visible,
+	.ridu-list-columns__handle:focus-visible {
+		@include ui.focus-outline(2px);
+	}
+	.ridu-list-filter {
+		display: flex;
+		flex-direction: column;
+		gap: 10px;
+		background: var(--background-surface);
+		padding: 20px;
+		margin-top: 10px;
+		border-radius: 3px;
+
+		p {
+			margin: 0;
+		}
+	}
+	.ridu-list-filter__row {
+		display: flex;
+		align-items: flex-start;
+		gap: 20px;
+	}
+	.ridu-list-filter__inputs {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: 20px;
+		flex: 1;
+		min-width: 0;
+
+		.ridu-select__trigger {
+			width: 100%;
+		}
+	}
+	.ridu-list-filter__actions {
+		display: flex;
+		gap: 10px;
+		padding-block: 10px;
+	}
+	.ridu-list-filter__join {
+		color: var(--foreground-muted);
+	}
+	@media (max-width: ui.$medium) {
+		.ridu-list-filter__inputs {
+			grid-template-columns: minmax(0, 1fr);
+			gap: 10px;
+		}
+		.ridu-list-filter__actions {
+			flex-direction: column;
+		}
+	}
+	@media (max-width: ui.$small) {
+		.ridu-list-search {
+			flex-direction: column;
+			background: none;
+			gap: 10px;
+		}
+		.ridu-list-search__actions {
+			padding: 0;
+		}
+		.ridu-list-search__actions > .ridu-list__pill:not(.ridu-list__more) {
+			flex: 1;
+		}
+		.ridu-list-columns,
+		.ridu-list-filter {
+			padding: 15px;
+		}
+	}
+}

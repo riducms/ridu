@@ -6,11 +6,13 @@
 		id,
 		index,
 		disabled = false,
+		invalid = false,
 		children,
 	}: {
 		id: string;
 		index: number;
 		disabled?: boolean;
+		invalid?: boolean;
 		children: Snippet<[ReturnType<typeof useSortable>]>;
 	} = $props();
 	const sortable = useSortable({
@@ -21,12 +23,12 @@
 	});
 </script>
 
-<section
-	class={[
-		"grid overflow-hidden rounded-[4px] border border-control-border bg-background transition-colors hover:border-control-border-hover",
-		sortable.isDragging.current && "opacity-50",
-	]}
+<div
+	class="ridu-repeated-row-sortable"
+	data-dragging={sortable.isDragging.current}
 	{@attach sortable.ref}
 >
-	{@render children(sortable)}
-</section>
+	<section class="ridu-repeated-row" data-invalid={invalid}>
+		{@render children(sortable)}
+	</section>
+</div>

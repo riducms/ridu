@@ -7,6 +7,9 @@ It is not itself a generated project and the website never imports it at runtime
 `playground/.ridu/docs-capture/` directory. The matrix covers SQLite and PostgreSQL; captures use
 the SQLite projects so database-neutral images remain quick and reproducible. The field content
 and seed command in this directory are copied only into the generated blank SQLite application.
+SQLite captures build the generated production binary, create fresh migration history for the
+overlaid field gallery, and apply it to disposable databases. PostgreSQL variants continue through
+the generated development smoke flow.
 
 The checked `capture-manifest.json` owns every field slug, document route, stable selector, desired
 state, output path, and documentation page. Playwright crops the real admin element. ImageMagick

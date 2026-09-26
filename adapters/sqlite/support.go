@@ -438,6 +438,7 @@ const sqliteUploadReferenceQuery = `WITH candidate_keys(object_key) AS (
     WHERE document.collection_id IN (SELECT value FROM json_each(?))
       AND (
         json_extract(document.values_json, '$.objectKey') = candidate.object_key
+        OR json_extract(document.values_json, '$.source.objectKey') = candidate.object_key
         OR EXISTS (
           SELECT 1
           FROM json_each(document.values_json, '$.sizes') AS image_size
@@ -454,6 +455,7 @@ const sqliteUploadReferenceQuery = `WITH candidate_keys(object_key) AS (
     WHERE version.collection_id IN (SELECT value FROM json_each(?))
       AND (
         json_extract(version.snapshot_json, '$.Values.objectKey') = candidate.object_key
+        OR json_extract(version.snapshot_json, '$.Values.source.objectKey') = candidate.object_key
         OR EXISTS (
           SELECT 1
           FROM json_each(version.snapshot_json, '$.Values.sizes') AS image_size

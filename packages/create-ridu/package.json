@@ -1,7 +1,7 @@
 {
 	"name": "create-ridu",
 	"description": "Create a Ridu project with the matching native Ridu CLI.",
-	"version": "0.2.3",
+	"version": "0.3.0",
 	"license": "MIT",
 	"repository": {
 		"type": "git",
@@ -25,7 +25,6 @@
 		"src/cli.js"
 	],
 	"scripts": {
-		"check": "bun test",
 		"test": "bun test"
 	},
 	"dependencies": {

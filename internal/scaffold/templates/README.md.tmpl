@@ -70,8 +70,8 @@ identity is separate from one controlled operational identity used for both shad
 and backup/restore. Deployment operators should split those duties into separately scoped
 verification and backup credentials where their MongoDB role model permits; that further split is
 an operator responsibility, not release-gate evidence. Never supply operational credentials to the
-application process. Local ARM runs are preflight only; the production support evidence is the
-GitHub Linux x86-64 release job.
+application process. Local ARM runs are preflight only; production support requires the recorded
+Linux x86-64 qualification run before publication. The GitHub workflow publishes the qualified release.
 
 For every release with a new migration artifact, create and review that immutable artifact—even
 when a data-only transform leaves the manifest unchanged. Confirm each detected rename during

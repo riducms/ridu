@@ -212,11 +212,15 @@ func TestPasswordPolicyHashUpgradeAndSessionRevocation(t *testing.T) {
 		},
 	})
 	user := createAuthUser(t, application, "policy@example.test")
-	if err := application.SetPassword(context.Background(), "users", user.ID, "short"); !operationCode(err, "validation") {
-		t.Fatalf("short password error = %v", err)
-	}
-	if err := application.SetPassword(context.Background(), "users", user.ID, "password-safe-value"); !operationCode(err, "validation") {
-		t.Fatalf("custom password error = %v", err)
+	for _, password := range []string{"short", strings.Repeat("🌿", 20), "password-safe-value"} {
+		err := application.SetPassword(context.Background(), "users", user.ID, password)
+		var policyError *ridu.OperationError
+		if !errors.As(err, &policyError) || policyError.Code != "validation" {
+			t.Fatalf("password policy error = %v", err)
+		}
+		if len(policyError.Issues) != 1 || policyError.Issues[0].Path != "password" || policyError.Issues[0].Code != "password_policy" || policyError.Issues[0].Message != policyError.Message {
+			t.Fatalf("password policy lost its field issue: %#v", policyError.Issues)
+		}
 	}
 	if err := application.SetPassword(context.Background(), "users", user.ID, "correct-horse"); err != nil {
 		t.Fatal(err)

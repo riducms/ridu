@@ -22,6 +22,10 @@ export function guardEditorAuthoring(
 				return document;
 			});
 	};
+	const canCreateDocument: EditorAuthoring["canCreateDocument"] = (collection) => {
+		assertActive();
+		return authoring().canCreateDocument(collection);
+	};
 	return {
 		get collections() {
 			assertActive();
@@ -34,6 +38,10 @@ export function guardEditorAuthoring(
 		get locale() {
 			assertActive();
 			return authoring().locale;
+		},
+		get canCreateDocument() {
+			assertActive();
+			return canCreateDocument;
 		},
 		get referenceBrowser() {
 			assertActive();

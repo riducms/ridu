@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { useNavigate } from "@hvniel/svelte-router";
+	import { documentLabel } from "@admin/features/documents/document-title";
 	import type { SchemaCollection } from "@riducms/protocol";
 	import SearchIcon from "~icons/lucide/search";
 
@@ -14,19 +15,18 @@
 		CommandRoot,
 		CommandSeparator,
 		CommandViewport,
-	} from "@riducms/ui";
-	import {
 		Dialog,
 		DialogContent,
 		DialogDescription,
 		DialogTitle,
-	} from "@admin/components/ui/dialog";
+	} from "@riducms/ui";
 	import { Kbd } from "@admin/components/ui/kbd";
 	import type { AdminDocument } from "@admin/core/api/admin-client";
 	import {
 		collectionPath,
 		createDocumentPath,
 		documentPath,
+		withContentLocale,
 	} from "@admin/core/routing/admin-paths";
 	import { getAdminRuntime } from "@admin/core/runtime/admin-runtime.svelte";
 
@@ -42,21 +42,35 @@
 	}
 
 	let { open = $bindable(false), collections }: Props = $props();
+
 	const runtime = getAdminRuntime();
 	const navigate = useNavigate();
+
+	const contentLocale = $derived(
+		runtime.contentLocales.length === 0 ? undefined : runtime.contentLocale
+	);
+
 	let query = $state("");
 	let documents = $state.raw<CommandDocument[]>([]);
 	let documentsLoading = $state(false);
 
 	$effect(() => {
-		if (!open || collections.length === 0) return;
+		if (!open) return;
+		documents = [];
+		if (collections.length === 0) {
+			documentsLoading = false;
+			return;
+		}
+
 		const request = new AbortController();
 		loadDocuments(collections, request.signal);
+
 		return () => request.abort();
 	});
 
 	function handleKeydown(event: KeyboardEvent) {
 		if (event.key.toLocaleLowerCase() !== "k" || (!event.metaKey && !event.ctrlKey)) return;
+
 		event.preventDefault();
 		open = !open;
 	}
@@ -80,19 +94,20 @@
 		signal: AbortSignal
 	) {
 		documentsLoading = true;
+
 		try {
 			const pages = await Promise.all(
 				availableCollections.map(async (collection) => {
-					const titleField =
-						collection.fields.find((field) => field.type === "text") ??
-						collection.fields.find((field) => field.type === "select");
-					const page = await runtime.client.list(collection.slug, { limit: 6, signal });
+					const page = await runtime.client.list(collection.slug, {
+						limit: 6,
+						locale: contentLocale,
+						signal,
+					});
+
 					return page.docs.map((document) => ({
 						collection,
 						document,
-						title: String(
-							(titleField === undefined ? undefined : document[titleField.name]) ?? document.id
-						),
+						title: documentLabel(collection, document),
 					}));
 				})
 			);
@@ -110,7 +125,6 @@
 <Dialog bind:open>
 	<DialogContent
 		class="ridu-command-dialog top-[16vh] w-[min(calc(100vw-32px),560px)] max-w-none -translate-y-0 gap-0 overflow-hidden p-0 sm:max-w-none"
-		showCloseButton={false}
 	>
 		<DialogTitle class="sr-only">{runtime.i18n.t("navigation:navigateRidu")}</DialogTitle>
 		<DialogDescription class="sr-only">
@@ -151,7 +165,13 @@
 										value="{result.title} {pluralLabel(result.collection)} {runtime.i18n.t(
 											'navigation:document'
 										)}"
-										onSelect={() => go(documentPath(result.collection.slug, result.document.id))}
+										onSelect={() =>
+											go(
+												withContentLocale(
+													documentPath(result.collection.slug, result.document.id),
+													contentLocale
+												)
+											)}
 									>
 										<span
 											class="font-mono w-9 shrink-0 rounded-[4px] border border-control-border py-0.5 text-center text-[8.5px] tracking-[0.08em] text-foreground-tag"
@@ -170,6 +190,7 @@
 					{:else if documentsLoading}
 						<p
 							class="font-mono px-2.5 py-3 text-[9px] tracking-[0.12em] text-foreground-faint uppercase"
+							data-ridu-loading-surface="command-search"
 						>
 							{runtime.i18n.t("navigation:loadingDocuments")}
 						</p>
@@ -188,7 +209,8 @@
 									value="{pluralLabel(collection)} {collection.slug} {runtime.i18n.t(
 										'navigation:collection'
 									)}"
-									onSelect={() => go(collectionPath(collection.slug))}
+									onSelect={() =>
+										go(withContentLocale(collectionPath(collection.slug), contentLocale))}
 								>
 									<span
 										class="font-mono w-10 shrink-0 rounded-[4px] border border-control-border py-0.5 text-center text-[9.5px] tracking-[0.08em] text-foreground-tag"
@@ -219,7 +241,8 @@
 									value="{runtime.i18n.t('navigation:newBadge')} {runtime.i18n.t(
 										'general:create'
 									)} {singularLabel(collection)} {collection.slug}"
-									onSelect={() => go(createDocumentPath(collection.slug))}
+									onSelect={() =>
+										go(withContentLocale(createDocumentPath(collection.slug), contentLocale))}
 								>
 									<span
 										class="font-mono w-10 shrink-0 rounded-[4px] border border-primary/25 py-0.5 text-center text-[9.5px] tracking-[0.08em] text-primary"

@@ -11,22 +11,22 @@ This example displays a `readingMinutes` number as `5 min read` in the Posts tab
 
 ## Configuration {#configuration}
 
-| Option                   | Required | What it does                                                                 |
-| ------------------------ | -------- | ---------------------------------------------------------------------------- |
-| `listCells[].key`        | Yes      | Gives the registration a unique name.                                        |
-| `listCells[].collection` | Yes      | Selects one collection slug.                                                 |
-| `listCells[].field`      | Yes      | Selects one top-level field name/path in that collection.                    |
-| `listCells[].label`      | Yes      | Provides the fallback column heading.                                        |
-| `listCells[].labelKey`   | No       | Uses a registered translated message for the heading.                        |
-| `listCells[].component`  | Yes      | Displays the saved `value` and document; it is not an editable form binding. |
+| Option                           | Required | What it does                                                                 |
+| -------------------------------- | -------- | ---------------------------------------------------------------------------- |
+| `listCellRenderers[].key`        | Yes      | Gives the registration a unique name.                                        |
+| `listCellRenderers[].collection` | Yes      | Selects one collection slug.                                                 |
+| `listCellRenderers[].field`      | Yes      | Selects one top-level field name/path in that collection.                    |
+| `listCellRenderers[].label`      | Yes      | Provides the fallback column heading.                                        |
+| `listCellRenderers[].labelKey`   | No       | Uses a registered translated message for the heading.                        |
+| `listCellRenderers[].component`  | Yes      | Displays the saved `value` and document; it is not an editable form binding. |
 
 ## 1. Create the cell {#component}
 
 ```svelte title="admin/src/components/reading-time-cell.svelte"
 <script lang="ts">
-	import type { AdminListCellProps } from '@riducms/plugin';
+	import type { AdminListCellRendererProps } from '@riducms/plugin';
 
-	let { value }: AdminListCellProps = $props();
+	let { value }: AdminListCellRendererProps = $props();
 </script>
 
 <span>
@@ -47,7 +47,7 @@ import ReadingTimeCell from './components/reading-time-cell.svelte';
 
 export default defineAdmin({
 	plugins: generatedAdminPlugins,
-	listCells: [
+	listCellRenderers: [
 		{
 			key: 'reading-time',
 			collection: 'posts',

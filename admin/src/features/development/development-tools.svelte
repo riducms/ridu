@@ -2,14 +2,12 @@
 	import BookOpenIcon from "~icons/lucide/book-open";
 	import ExternalLinkIcon from "~icons/lucide/external-link";
 	import LoaderCircleIcon from "~icons/lucide/loader-circle";
-	import { onDestroy } from "svelte";
 
 	import RiduLogo from "@admin/components/brand/ridu-logo.svelte";
-	import { Button } from "@admin/components/ui/button";
+	import { Button } from "@riducms/ui";
 	import { Popover, PopoverContent, PopoverTrigger } from "@admin/components/ui/popover";
 	import { StatusIndicator } from "@admin/components/ui/status-indicator";
 	import { getAdminRuntime } from "@admin/core/runtime/admin-runtime.svelte";
-	import { cn } from "@riducms/ui";
 
 	type SchemaUpdateNotice = {
 		tone: "success" | "error";
@@ -22,7 +20,6 @@
 	let popoverOpen = $state(false);
 	let recoveryAvailable = $state(runtime.manifestRefreshError !== undefined);
 	let refreshObserved = false;
-	let noticeTimer: number | undefined;
 	const status = $derived(
 		runtime.refreshingManifest
 			? {
@@ -45,23 +42,13 @@
 						}
 	);
 
-	function hideNotice() {
-		if (noticeTimer !== undefined) window.clearTimeout(noticeTimer);
-		notice = undefined;
-		noticeTimer = undefined;
-	}
-
-	function showNotice(next: SchemaUpdateNotice, duration: number) {
-		hideNotice();
-		notice = next;
-		noticeTimer = window.setTimeout(() => {
-			notice = undefined;
-			noticeTimer = undefined;
-		}, duration);
-	}
-
-	onDestroy(() => {
-		if (noticeTimer !== undefined) window.clearTimeout(noticeTimer);
+	$effect(() => {
+		if (notice === undefined) return;
+		const timer = window.setTimeout(
+			() => (notice = undefined),
+			notice.tone === "error" ? 7_000 : 4_500
+		);
+		return () => window.clearTimeout(timer);
 	});
 
 	function retrySchema() {
@@ -74,7 +61,7 @@
 		const error = runtime.manifestRefreshError;
 		if (refreshing) {
 			refreshObserved = true;
-			hideNotice();
+			notice = undefined;
 			updateApplied = false;
 			return;
 		}
@@ -83,12 +70,9 @@
 
 		if (error !== undefined) {
 			recoveryAvailable = true;
-			showNotice({ tone: "error", label: runtime.i18n.t("development:schemaUpdateFailed") }, 7_000);
+			notice = { tone: "error", label: runtime.i18n.t("development:schemaUpdateFailed") };
 		} else {
-			showNotice(
-				{ tone: "success", label: runtime.i18n.t("development:schemaUpdateApplied") },
-				4_500
-			);
+			notice = { tone: "success", label: runtime.i18n.t("development:schemaUpdateApplied") };
 			updateApplied = true;
 			if (recoveryAvailable) popoverOpen = false;
 			recoveryAvailable = false;
@@ -99,12 +83,12 @@
 <div class="fixed end-3 bottom-3 z-30" data-ridu-development-tools>
 	{#if notice !== undefined}
 		<div
-			class={cn(
+			class={[
 				"ridu-popover-enter pointer-events-none absolute end-full bottom-0 me-2 flex h-9 max-w-[calc(100vw-4.5rem)] items-center gap-2 whitespace-nowrap rounded-[8px] border bg-popover px-3 text-[12.5px] font-medium shadow-[var(--shadow-popover)]",
 				notice.tone === "error"
 					? "border-destructive/30 text-destructive"
-					: "border-success/30 text-success"
-			)}
+					: "border-success/30 text-success",
+			]}
 			role={notice.tone === "error" ? "alert" : "status"}
 			data-ridu-development-toast
 			data-tone={notice.tone}
@@ -116,14 +100,14 @@
 
 	<Popover bind:open={popoverOpen}>
 		<PopoverTrigger
-			class={cn(
+			class={[
 				"relative inline-grid size-9 cursor-pointer place-items-center rounded-full border bg-popover text-popover-foreground shadow-[var(--shadow-popover)] transition-[background-color,border-color,color] duration-150 outline-none hover:bg-control-hover focus-visible:outline-2 focus-visible:outline-ring/70 focus-visible:outline-offset-2",
 				runtime.manifestRefreshError !== undefined
 					? "border-destructive/55"
 					: updateApplied
 						? "border-success/55"
-						: "border-control-border"
-			)}
+						: "border-control-border",
+			]}
 			aria-label={runtime.i18n.t("development:toolsStatus", { status: status.label })}
 			title={runtime.i18n.t("development:tools")}
 			data-ridu-development-trigger
@@ -137,14 +121,14 @@
 				<RiduLogo variant="arch" class="h-4 text-foreground" />
 			{/if}
 			<span
-				class={cn(
+				class={[
 					"absolute top-0 end-0 size-2.5 rounded-full border-2 border-popover",
 					runtime.manifestRefreshError !== undefined
 						? "bg-destructive"
 						: updateApplied
 							? "bg-success"
-							: "bg-primary"
-				)}
+							: "bg-primary",
+				]}
 				aria-hidden="true"
 			></span>
 		</PopoverTrigger>

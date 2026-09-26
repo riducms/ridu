@@ -86,6 +86,7 @@ type Snapshot struct {
 
 // Application contains framework-level application metadata.
 type Application struct {
+	AdminLoaders []AdminLoader `json:"adminLoaders,omitempty"`
 	// Name is the resolved author-facing application name.
 	Name string `json:"name"`
 	// NameTranslations overrides Name for configured admin interface languages.
@@ -754,6 +755,9 @@ func Parse(encoded []byte) (Manifest, error) {
 		return Manifest{}, err
 	}
 	if err := validateEndpointMetadata(snapshot); err != nil {
+		return Manifest{}, err
+	}
+	if err := ValidateAdminLoaders(snapshot.Application.AdminLoaders); err != nil {
 		return Manifest{}, err
 	}
 	return NewManifest(snapshot), nil
@@ -1730,7 +1734,7 @@ func validateAdminLocalizationMetadata(snapshot Snapshot) error {
 	}
 	timeZones := make(map[string]struct{}, len(settings.TimeZones))
 	for index, timeZone := range settings.TimeZones {
-		if !validAdminTimeZoneID(timeZone.ID) {
+		if !IsValidTimeZoneID(timeZone.ID) {
 			return fmt.Errorf("invalid admin timezone at application.adminLocalization.timeZones[%d].id", index)
 		}
 		if strings.TrimSpace(timeZone.Label) == "" {
@@ -1891,7 +1895,9 @@ func validateAdminDisplayTranslations(snapshot Snapshot) error {
 	return nil
 }
 
-func validAdminTimeZoneID(value string) bool {
+// IsValidTimeZoneID reports whether value is UTC, a ±HH:mm offset, or a safe
+// slash-delimited IANA timezone such as Europe/London.
+func IsValidTimeZoneID(value string) bool {
 	if value == "" || value != strings.TrimSpace(value) || len(value) > 128 {
 		return false
 	}
@@ -2437,6 +2443,10 @@ func cloneSnapshot(snapshot Snapshot) Snapshot {
 	cloned.Blocks = cloneBlockTypes(snapshot.Blocks)
 	cloned.Application.NameTranslations = cloneStringMap(snapshot.Application.NameTranslations)
 	cloned.Application.Endpoints = append([]Endpoint(nil), snapshot.Application.Endpoints...)
+	cloned.Application.AdminLoaders = make([]AdminLoader, len(snapshot.Application.AdminLoaders))
+	for index, loader := range snapshot.Application.AdminLoaders {
+		cloned.Application.AdminLoaders[index] = AdminLoader{Key: loader.Key, Input: cloneAdminDataType(loader.Input), Output: cloneAdminDataType(loader.Output)}
+	}
 	if snapshot.Application.Admin != nil {
 		admin := *snapshot.Application.Admin
 		cloned.Application.Admin = &admin

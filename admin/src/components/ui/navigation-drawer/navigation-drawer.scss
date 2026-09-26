@@ -1,0 +1,40 @@
+@use "@riducms/ui/styles.scss" as ui;
+
+@layer ridu.components {
+	.ridu-navigation-drawer {
+		position: fixed;
+		inset: 0;
+		z-index: 50;
+		display: flex;
+		flex-direction: column;
+		background: var(--background);
+		color: var(--foreground);
+		font-size: 12px;
+		line-height: var(--line-height-body);
+		outline: none;
+		animation: ridu-navigation-enter 150ms linear;
+	}
+	.ridu-navigation-drawer__header {
+		display: flex;
+		align-items: flex-start;
+		flex-shrink: 0;
+		height: var(--admin-header-height);
+		padding: 16px var(--admin-gutter) 0;
+	}
+	.ridu-navigation-drawer__label {
+		@include ui.visually-hidden;
+	}
+	@keyframes ridu-navigation-enter {
+		from {
+			opacity: 0;
+		}
+		to {
+			opacity: 1;
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.ridu-navigation-drawer {
+			animation: none;
+		}
+	}
+}

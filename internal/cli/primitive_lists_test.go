@@ -81,7 +81,7 @@ import Points from "@/fields/text-editor.svelte";
 
 export default defineAdmin({
     plugins: generatedAdminPlugins,
-    fields: { "app:points": defineFieldEditor({ type: "text-list", component: Points }) },
+    fieldEditors: { "app:points": defineFieldEditor({ type: "text-list", component: Points }) },
 });
 `)
 	write("admin/src/fields/text-editor.svelte", `<script lang="ts">

@@ -977,9 +977,9 @@
 			"module": "core",
 			"symbol": "app-open-upload-with-options"
 		},
-		"go:github.com/riducms/ridu/core#App.UpdateUploadImage": {
+		"go:github.com/riducms/ridu/core#App.UpdateUpload": {
 			"module": "core",
-			"symbol": "app-update-upload-image"
+			"symbol": "app-update-upload"
 		},
 		"go:github.com/riducms/ridu/core#App.ReconcileUploads": {
 			"module": "core",
@@ -989,17 +989,17 @@
 			"module": "core",
 			"symbol": "app-schedule-publish"
 		},
-		"go:github.com/riducms/ridu/core#App.ScheduledPublishes": {
+		"go:github.com/riducms/ridu/core#App.ScheduledPublications": {
 			"module": "core",
-			"symbol": "app-scheduled-publishes"
+			"symbol": "app-scheduled-publications"
 		},
-		"go:github.com/riducms/ridu/core#App.CancelScheduledPublish": {
+		"go:github.com/riducms/ridu/core#App.CancelScheduledPublication": {
 			"module": "core",
-			"symbol": "app-cancel-scheduled-publish"
+			"symbol": "app-cancel-scheduled-publication"
 		},
-		"go:github.com/riducms/ridu/core#App.RunScheduledPublishes": {
+		"go:github.com/riducms/ridu/core#App.RunScheduledPublications": {
 			"module": "core",
-			"symbol": "app-run-scheduled-publishes"
+			"symbol": "app-run-scheduled-publications"
 		},
 		"go:github.com/riducms/ridu/core#DocumentLockState": {
 			"module": "core",
@@ -1117,9 +1117,9 @@
 			"module": "core",
 			"symbol": "app-upload-from-url-for-identity"
 		},
-		"go:github.com/riducms/ridu/core#App.UpdateUploadImageForIdentity": {
+		"go:github.com/riducms/ridu/core#App.UpdateUploadForIdentity": {
 			"module": "core",
-			"symbol": "app-update-upload-image-for-identity"
+			"symbol": "app-update-upload-for-identity"
 		},
 		"go:github.com/riducms/ridu/core#App.OpenUpload": {
 			"module": "core",
@@ -1565,9 +1565,9 @@
 			"module": "core",
 			"symbol": "typed-task"
 		},
-		"go:github.com/riducms/ridu/core#UpdateUploadImageInput": {
+		"go:github.com/riducms/ridu/core#UpdateUploadInput": {
 			"module": "core",
-			"symbol": "update-upload-image-input"
+			"symbol": "update-upload-input"
 		},
 		"go:github.com/riducms/ridu/core#HandlerOptions": {
 			"module": "core",
@@ -3349,9 +3349,9 @@
 			"module": "store",
 			"symbol": "auth-prune-result"
 		},
-		"go:github.com/riducms/ridu/store#ScheduledPublish": {
+		"go:github.com/riducms/ridu/store#ScheduledPublication": {
 			"module": "store",
-			"symbol": "scheduled-publish"
+			"symbol": "scheduled-publication"
 		},
 		"go:github.com/riducms/ridu/store#TaskBackoff": {
 			"module": "store",
@@ -4189,17 +4189,17 @@
 			"module": "go-protocol",
 			"symbol": "delete-envelope"
 		},
-		"go:github.com/riducms/ridu/protocol#ScheduledPublish": {
+		"go:github.com/riducms/ridu/protocol#ScheduledPublication": {
 			"module": "go-protocol",
-			"symbol": "scheduled-publish"
+			"symbol": "scheduled-publication"
 		},
-		"go:github.com/riducms/ridu/protocol#ScheduledPublishEnvelope": {
+		"go:github.com/riducms/ridu/protocol#ScheduledPublicationEnvelope": {
 			"module": "go-protocol",
-			"symbol": "scheduled-publish-envelope"
+			"symbol": "scheduled-publication-envelope"
 		},
-		"go:github.com/riducms/ridu/protocol#ScheduledPublishesEnvelope": {
+		"go:github.com/riducms/ridu/protocol#ScheduledPublicationsEnvelope": {
 			"module": "go-protocol",
-			"symbol": "scheduled-publishes-envelope"
+			"symbol": "scheduled-publications-envelope"
 		},
 		"go:github.com/riducms/ridu/protocol#AuthSession": {
 			"module": "go-protocol",
@@ -5709,9 +5709,13 @@
 			"module": "sdk",
 			"symbol": "upload-options"
 		},
-		"ts:@riducms/sdk#UploadImageInput": {
+		"ts:@riducms/sdk#UpdateUploadInput": {
 			"module": "sdk",
-			"symbol": "upload-image-input"
+			"symbol": "update-upload-input"
+		},
+		"ts:@riducms/sdk#UploadFile": {
+			"module": "sdk",
+			"symbol": "upload-file"
 		},
 		"ts:@riducms/sdk#Version": {
 			"module": "sdk",
@@ -5825,9 +5829,9 @@
 			"module": "sdk",
 			"symbol": "join-mutation-input"
 		},
-		"ts:@riducms/sdk#ScheduledPublish": {
+		"ts:@riducms/sdk#ScheduledPublication": {
 			"module": "sdk",
-			"symbol": "scheduled-publish"
+			"symbol": "scheduled-publication"
 		},
 		"ts:@riducms/sdk#CopyLocaleInput": {
 			"module": "sdk",
@@ -6053,9 +6057,17 @@
 			"module": "sdk",
 			"symbol": "ridu-client-upload-from-u-r-l"
 		},
-		"ts:@riducms/sdk#RiduClient.updateUploadImage": {
+		"ts:@riducms/sdk#RiduClient.updateUpload": {
 			"module": "sdk",
-			"symbol": "ridu-client-update-upload-image"
+			"symbol": "ridu-client-update-upload"
+		},
+		"ts:@riducms/sdk#RiduClient.readUploadSource": {
+			"module": "sdk",
+			"symbol": "ridu-client-read-upload-source"
+		},
+		"ts:@riducms/sdk#RiduClient.previewUploadFromURL": {
+			"module": "sdk",
+			"symbol": "ridu-client-preview-upload-from-url"
 		},
 		"ts:@riducms/sdk#RiduClient.versions": {
 			"module": "sdk",
@@ -6069,13 +6081,13 @@
 			"module": "sdk",
 			"symbol": "ridu-client-schedule-publish"
 		},
-		"ts:@riducms/sdk#RiduClient.scheduledPublishes": {
+		"ts:@riducms/sdk#RiduClient.scheduledPublications": {
 			"module": "sdk",
-			"symbol": "ridu-client-scheduled-publishes"
+			"symbol": "ridu-client-scheduled-publications"
 		},
-		"ts:@riducms/sdk#RiduClient.cancelScheduledPublish": {
+		"ts:@riducms/sdk#RiduClient.cancelScheduledPublication": {
 			"module": "sdk",
-			"symbol": "ridu-client-cancel-scheduled-publish"
+			"symbol": "ridu-client-cancel-scheduled-publication"
 		},
 		"ts:@riducms/sdk#RiduClient.publish": {
 			"module": "sdk",
@@ -6349,17 +6361,17 @@
 			"module": "protocol",
 			"symbol": "preview-token"
 		},
-		"ts:@riducms/protocol#ScheduledPublish": {
+		"ts:@riducms/protocol#ScheduledPublication": {
 			"module": "protocol",
-			"symbol": "scheduled-publish"
+			"symbol": "scheduled-publication"
 		},
-		"ts:@riducms/protocol#ScheduledPublishEnvelope": {
+		"ts:@riducms/protocol#ScheduledPublicationEnvelope": {
 			"module": "protocol",
-			"symbol": "scheduled-publish-envelope"
+			"symbol": "scheduled-publication-envelope"
 		},
-		"ts:@riducms/protocol#ScheduledPublishesEnvelope": {
+		"ts:@riducms/protocol#ScheduledPublicationsEnvelope": {
 			"module": "protocol",
-			"symbol": "scheduled-publishes-envelope"
+			"symbol": "scheduled-publications-envelope"
 		},
 		"ts:@riducms/protocol#PreviewTokenEnvelope": {
 			"module": "protocol",
@@ -6805,18 +6817,6 @@
 			"module": "plugin",
 			"symbol": "admin-brand-component-props"
 		},
-		"ts:@riducms/plugin#AdminShellPosition": {
-			"module": "plugin",
-			"symbol": "admin-shell-position"
-		},
-		"ts:@riducms/plugin#AdminShellComponent": {
-			"module": "plugin",
-			"symbol": "admin-shell-component"
-		},
-		"ts:@riducms/plugin#AdminShellComponentProps": {
-			"module": "plugin",
-			"symbol": "admin-shell-component-props"
-		},
 		"ts:@riducms/plugin#AdminProvider": {
 			"module": "plugin",
 			"symbol": "admin-provider"
@@ -6824,14 +6824,6 @@
 		"ts:@riducms/plugin#AdminProviderProps": {
 			"module": "plugin",
 			"symbol": "admin-provider-props"
-		},
-		"ts:@riducms/plugin#AdminListCell": {
-			"module": "plugin",
-			"symbol": "admin-list-cell"
-		},
-		"ts:@riducms/plugin#AdminListCellProps": {
-			"module": "plugin",
-			"symbol": "admin-list-cell-props"
 		},
 		"ts:@riducms/plugin#AdminDocumentAction": {
 			"module": "plugin",
@@ -6899,7 +6891,8 @@
 		},
 		"ts:@riducms/plugin#AdminDashboardPanel.component": {
 			"module": "plugin",
-			"symbol": "admin-dashboard-panel-component-method"
+			"symbol": "admin-dashboard-panel-component-method",
+			"redirect": "/reference/plugin/admin-dashboard-panel/"
 		},
 		"ts:@riducms/plugin#AdminDocumentAction.component": {
 			"module": "plugin",
@@ -6941,10 +6934,6 @@
 			"module": "plugin",
 			"symbol": "admin-i18n-text-method"
 		},
-		"ts:@riducms/plugin#AdminListCell.component": {
-			"module": "plugin",
-			"symbol": "admin-list-cell-component-method"
-		},
 		"ts:@riducms/plugin#AdminLoginComponent.component": {
 			"module": "plugin",
 			"symbol": "admin-login-component-component-method"
@@ -6979,7 +6968,8 @@
 		},
 		"ts:@riducms/plugin#AdminRoute.component": {
 			"module": "plugin",
-			"symbol": "admin-plugin-route-component-method"
+			"symbol": "admin-plugin-route-component-method",
+			"redirect": "/reference/plugin/admin-plugin-route/"
 		},
 		"ts:@riducms/plugin#AdminProvider.component": {
 			"module": "plugin",
@@ -6988,10 +6978,6 @@
 		"ts:@riducms/plugin#AdminProviderProps.defaultView": {
 			"module": "plugin",
 			"symbol": "admin-provider-props-default-view-method"
-		},
-		"ts:@riducms/plugin#AdminShellComponent.component": {
-			"module": "plugin",
-			"symbol": "admin-shell-component-component-method"
 		},
 		"ts:@riducms/plugin#FieldAuthoringHost.findDocument": {
 			"module": "plugin",
@@ -7161,14 +7147,6 @@
 			"module": "ui",
 			"symbol": "toolbar-button"
 		},
-		"ts:@riducms/ui#cn": {
-			"module": "ui",
-			"symbol": "cn"
-		},
-		"ts:@riducms/ui#tv": {
-			"module": "ui",
-			"symbol": "tv"
-		},
 		"ts:@riducms/ui#WithoutChild": {
 			"module": "ui",
 			"symbol": "without-child"
@@ -7184,10 +7162,6 @@
 		"ts:@riducms/ui#WithElementRef": {
 			"module": "ui",
 			"symbol": "with-element-ref"
-		},
-		"ts:@riducms/ui#ClassValue": {
-			"module": "ui",
-			"symbol": "class-value"
 		},
 		"ts:@riducms/ui#VariantProps": {
 			"module": "ui",
@@ -11876,6 +11850,610 @@
 		"ts:@riducms/plugin#assertAdminPluginPairs": {
 			"module": "plugin",
 			"symbol": "assert-admin-plugin-pairs"
+		},
+		"go:github.com/riducms/ridu#AdminLoadContext": {
+			"module": "ridu",
+			"symbol": "admin-load-context"
+		},
+		"go:github.com/riducms/ridu#AdminLoaderDefinition": {
+			"module": "ridu",
+			"symbol": "admin-loader-definition"
+		},
+		"go:github.com/riducms/ridu#NewAdminLoader": {
+			"module": "ridu",
+			"symbol": "new-admin-loader"
+		},
+		"go:github.com/riducms/ridu/core#AdminLoadContext": {
+			"module": "core",
+			"symbol": "admin-load-context"
+		},
+		"go:github.com/riducms/ridu/core#AdminLoadContext.Actor": {
+			"module": "core",
+			"symbol": "admin-load-context-actor-method"
+		},
+		"go:github.com/riducms/ridu/core#AdminLoadContext.ActorCollection": {
+			"module": "core",
+			"symbol": "admin-load-context-actor-collection-method"
+		},
+		"go:github.com/riducms/ridu/core#AdminLoadContext.Find": {
+			"module": "core",
+			"symbol": "admin-load-context-find-method"
+		},
+		"go:github.com/riducms/ridu/core#AdminLoadContext.Global": {
+			"module": "core",
+			"symbol": "admin-load-context-global-method"
+		},
+		"go:github.com/riducms/ridu/core#AdminLoadContext.List": {
+			"module": "core",
+			"symbol": "admin-load-context-list-method"
+		},
+		"go:github.com/riducms/ridu/core#AdminLoadContext.Locale": {
+			"module": "core",
+			"symbol": "admin-load-context-locale-method"
+		},
+		"go:github.com/riducms/ridu/core#AdminLoaderDefinition": {
+			"module": "core",
+			"symbol": "admin-loader-definition"
+		},
+		"go:github.com/riducms/ridu/core#NewAdminLoader": {
+			"module": "core",
+			"symbol": "new-admin-loader"
+		},
+		"go:github.com/riducms/ridu/schema#AdminDataType": {
+			"module": "schema",
+			"symbol": "admin-data-type"
+		},
+		"go:github.com/riducms/ridu/schema#AdminLoader": {
+			"module": "schema",
+			"symbol": "admin-loader"
+		},
+		"go:github.com/riducms/ridu/schema#ValidateAdminLoaders": {
+			"module": "schema",
+			"symbol": "validate-admin-loaders"
+		},
+		"go:github.com/riducms/ridu/protocol#AdminCollectionListCountV1": {
+			"module": "go-protocol",
+			"symbol": "admin-collection-list-count-v1"
+		},
+		"go:github.com/riducms/ridu/protocol#AdminCollectionListDataV1": {
+			"module": "go-protocol",
+			"symbol": "admin-collection-list-data-v1"
+		},
+		"go:github.com/riducms/ridu/protocol#AdminCollectionListPageV1": {
+			"module": "go-protocol",
+			"symbol": "admin-collection-list-page-v1"
+		},
+		"go:github.com/riducms/ridu/protocol#AdminCollectionListPreferencesV1": {
+			"module": "go-protocol",
+			"symbol": "admin-collection-list-preferences-v1"
+		},
+		"go:github.com/riducms/ridu/protocol#AdminCollectionListPreferenceV1": {
+			"module": "go-protocol",
+			"symbol": "admin-collection-list-preference-v1"
+		},
+		"go:github.com/riducms/ridu/protocol#AdminCollectionListQueryV1": {
+			"module": "go-protocol",
+			"symbol": "admin-collection-list-query-v1"
+		},
+		"go:github.com/riducms/ridu/protocol#AdminCreateDataV1": {
+			"module": "go-protocol",
+			"symbol": "admin-create-data-v1"
+		},
+		"go:github.com/riducms/ridu/protocol#AdminDocumentDataV1": {
+			"module": "go-protocol",
+			"symbol": "admin-document-data-v1"
+		},
+		"go:github.com/riducms/ridu/protocol#AdminPreparedNavigationV1": {
+			"module": "go-protocol",
+			"symbol": "admin-prepared-navigation-v1"
+		},
+		"go:github.com/riducms/ridu/protocol#AdminPreparedRouteAccount": {
+			"module": "go-protocol",
+			"symbol": "admin-prepared-route-account"
+		},
+		"go:github.com/riducms/ridu/protocol#AdminPreparedRouteCollectionAPI": {
+			"module": "go-protocol",
+			"symbol": "admin-prepared-route-collection-api"
+		},
+		"go:github.com/riducms/ridu/protocol#AdminPreparedRouteCollectionCreate": {
+			"module": "go-protocol",
+			"symbol": "admin-prepared-route-collection-create"
+		},
+		"go:github.com/riducms/ridu/protocol#AdminPreparedRouteCollectionDocument": {
+			"module": "go-protocol",
+			"symbol": "admin-prepared-route-collection-document"
+		},
+		"go:github.com/riducms/ridu/protocol#AdminPreparedRouteCollectionList": {
+			"module": "go-protocol",
+			"symbol": "admin-prepared-route-collection-list"
+		},
+		"go:github.com/riducms/ridu/protocol#AdminPreparedRouteCollectionTrash": {
+			"module": "go-protocol",
+			"symbol": "admin-prepared-route-collection-trash"
+		},
+		"go:github.com/riducms/ridu/protocol#AdminPreparedRouteCollectionVersions": {
+			"module": "go-protocol",
+			"symbol": "admin-prepared-route-collection-versions"
+		},
+		"go:github.com/riducms/ridu/protocol#AdminPreparedRouteCustom": {
+			"module": "go-protocol",
+			"symbol": "admin-prepared-route-custom"
+		},
+		"go:github.com/riducms/ridu/protocol#AdminPreparedRouteDashboard": {
+			"module": "go-protocol",
+			"symbol": "admin-prepared-route-dashboard"
+		},
+		"go:github.com/riducms/ridu/protocol#AdminPreparedRouteDataV1": {
+			"module": "go-protocol",
+			"symbol": "admin-prepared-route-data-v1"
+		},
+		"go:github.com/riducms/ridu/protocol#AdminPreparedRouteDiagnosticV1": {
+			"module": "go-protocol",
+			"symbol": "admin-prepared-route-diagnostic-v1"
+		},
+		"go:github.com/riducms/ridu/protocol#AdminPreparedRouteError": {
+			"module": "go-protocol",
+			"symbol": "admin-prepared-route-error"
+		},
+		"go:github.com/riducms/ridu/protocol#AdminPreparedRouteFallback": {
+			"module": "go-protocol",
+			"symbol": "admin-prepared-route-fallback"
+		},
+		"go:github.com/riducms/ridu/protocol#AdminPreparedRouteGlobalAPI": {
+			"module": "go-protocol",
+			"symbol": "admin-prepared-route-global-api"
+		},
+		"go:github.com/riducms/ridu/protocol#AdminPreparedRouteGlobalDocument": {
+			"module": "go-protocol",
+			"symbol": "admin-prepared-route-global-document"
+		},
+		"go:github.com/riducms/ridu/protocol#AdminPreparedRouteGlobalVersions": {
+			"module": "go-protocol",
+			"symbol": "admin-prepared-route-global-versions"
+		},
+		"go:github.com/riducms/ridu/protocol#AdminPreparedRouteKindV1": {
+			"module": "go-protocol",
+			"symbol": "admin-prepared-route-kind-v1"
+		},
+		"go:github.com/riducms/ridu/protocol#AdminPreparedRouteLogin": {
+			"module": "go-protocol",
+			"symbol": "admin-prepared-route-login"
+		},
+		"go:github.com/riducms/ridu/protocol#AdminPreparedRouteNotFound": {
+			"module": "go-protocol",
+			"symbol": "admin-prepared-route-not-found"
+		},
+		"go:github.com/riducms/ridu/protocol#AdminPreparedRouteOutcomeV1": {
+			"module": "go-protocol",
+			"symbol": "admin-prepared-route-outcome-v1"
+		},
+		"go:github.com/riducms/ridu/protocol#AdminPreparedRoutePrepared": {
+			"module": "go-protocol",
+			"symbol": "admin-prepared-route-prepared"
+		},
+		"go:github.com/riducms/ridu/protocol#AdminPreparedRouteRedirect": {
+			"module": "go-protocol",
+			"symbol": "admin-prepared-route-redirect"
+		},
+		"go:github.com/riducms/ridu/protocol#AdminPreparedRouteReload": {
+			"module": "go-protocol",
+			"symbol": "admin-prepared-route-reload"
+		},
+		"go:github.com/riducms/ridu/protocol#AdminPreparedRouteSecurity": {
+			"module": "go-protocol",
+			"symbol": "admin-prepared-route-security"
+		},
+		"go:github.com/riducms/ridu/protocol#AdminPreparedRouteSetup": {
+			"module": "go-protocol",
+			"symbol": "admin-prepared-route-setup"
+		},
+		"go:github.com/riducms/ridu/protocol#AdminPreparedRouteStateMediaType": {
+			"module": "go-protocol",
+			"symbol": "admin-prepared-route-state-media-type"
+		},
+		"go:github.com/riducms/ridu/protocol#AdminPreparedRouteStateV1": {
+			"module": "go-protocol",
+			"symbol": "admin-prepared-route-state-v1"
+		},
+		"go:github.com/riducms/ridu/protocol#AdminPreparedRouteStateVersion": {
+			"module": "go-protocol",
+			"symbol": "admin-prepared-route-state-version"
+		},
+		"go:github.com/riducms/ridu/protocol#AdminPreparedRouteUpload": {
+			"module": "go-protocol",
+			"symbol": "admin-prepared-route-upload"
+		},
+		"go:github.com/riducms/ridu/protocol#AdminPreparedRuntimeV1": {
+			"module": "go-protocol",
+			"symbol": "admin-prepared-runtime-v1"
+		},
+		"go:github.com/riducms/ridu/protocol#AdminReadResultV1": {
+			"module": "go-protocol",
+			"symbol": "admin-read-result-v1"
+		},
+		"go:github.com/riducms/ridu/protocol#AdminSecurityDataV1": {
+			"module": "go-protocol",
+			"symbol": "admin-security-data-v1"
+		},
+		"go:github.com/riducms/ridu/protocol#AdminVersionsDataV1": {
+			"module": "go-protocol",
+			"symbol": "admin-versions-data-v1"
+		},
+		"go:github.com/riducms/ridu/protocol#CollectionPageAccess": {
+			"module": "go-protocol",
+			"symbol": "collection-page-access"
+		},
+		"go:github.com/riducms/ridu/protocol#CollectionPageEnvelope": {
+			"module": "go-protocol",
+			"symbol": "collection-page-envelope"
+		},
+		"go:github.com/riducms/ridu/protocol#DocumentVersion": {
+			"module": "go-protocol",
+			"symbol": "document-version"
+		},
+		"ts:@riducms/sdk#AdminLoader": {
+			"module": "sdk",
+			"symbol": "admin-loader"
+		},
+		"ts:@riducms/sdk#AdminLoader.decode": {
+			"module": "sdk",
+			"symbol": "admin-loader-decode-method"
+		},
+		"ts:@riducms/sdk#AdminLoader.query": {
+			"module": "sdk",
+			"symbol": "admin-loader-query-method"
+		},
+		"ts:@riducms/sdk#createAdminLoader": {
+			"module": "sdk",
+			"symbol": "create-admin-loader"
+		},
+		"ts:@riducms/sdk#RiduClient.adminCollectionList": {
+			"module": "sdk",
+			"symbol": "ridu-client-admin-collection-list-method"
+		},
+		"ts:@riducms/sdk#RiduClient.adminLoad": {
+			"module": "sdk",
+			"symbol": "ridu-client-admin-load-method"
+		},
+		"ts:@riducms/protocol#ADMIN_PREPARED_ROUTE_STATE_MEDIA_TYPE": {
+			"module": "protocol",
+			"symbol": "admin-prepared-route-state-media-type"
+		},
+		"ts:@riducms/protocol#ADMIN_PREPARED_ROUTE_STATE_VERSION": {
+			"module": "protocol",
+			"symbol": "admin-prepared-route-state-version"
+		},
+		"ts:@riducms/protocol#AdminCollectionListCountV1": {
+			"module": "protocol",
+			"symbol": "admin-collection-list-count-v1"
+		},
+		"ts:@riducms/protocol#AdminCollectionListDataV1": {
+			"module": "protocol",
+			"symbol": "admin-collection-list-data-v1"
+		},
+		"ts:@riducms/protocol#AdminCollectionListPageV1": {
+			"module": "protocol",
+			"symbol": "admin-collection-list-page-v1"
+		},
+		"ts:@riducms/protocol#AdminCollectionListPreferencesV1": {
+			"module": "protocol",
+			"symbol": "admin-collection-list-preferences-v1"
+		},
+		"ts:@riducms/protocol#AdminCollectionListPreferenceV1": {
+			"module": "protocol",
+			"symbol": "admin-collection-list-preference-v1"
+		},
+		"ts:@riducms/protocol#AdminCreateDataV1": {
+			"module": "protocol",
+			"symbol": "admin-create-data-v1"
+		},
+		"ts:@riducms/protocol#AdminDataType": {
+			"module": "protocol",
+			"symbol": "admin-data-type"
+		},
+		"ts:@riducms/protocol#AdminDocumentDataV1": {
+			"module": "protocol",
+			"symbol": "admin-document-data-v1"
+		},
+		"ts:@riducms/protocol#AdminDocumentV1": {
+			"module": "protocol",
+			"symbol": "admin-document-v1"
+		},
+		"ts:@riducms/protocol#AdminPreparedNavigationV1": {
+			"module": "protocol",
+			"symbol": "admin-prepared-navigation-v1"
+		},
+		"ts:@riducms/protocol#AdminPreparedRouteDataV1": {
+			"module": "protocol",
+			"symbol": "admin-prepared-route-data-v1"
+		},
+		"ts:@riducms/protocol#AdminPreparedRouteDiagnosticV1": {
+			"module": "protocol",
+			"symbol": "admin-prepared-route-diagnostic-v1"
+		},
+		"ts:@riducms/protocol#AdminPreparedRouteKindV1": {
+			"module": "protocol",
+			"symbol": "admin-prepared-route-kind-v1"
+		},
+		"ts:@riducms/protocol#AdminPreparedRouteOutcomeV1": {
+			"module": "protocol",
+			"symbol": "admin-prepared-route-outcome-v1"
+		},
+		"ts:@riducms/protocol#AdminPreparedRouteStateV1": {
+			"module": "protocol",
+			"symbol": "admin-prepared-route-state-v1"
+		},
+		"ts:@riducms/protocol#AdminPreparedRuntimeV1": {
+			"module": "protocol",
+			"symbol": "admin-prepared-runtime-v1"
+		},
+		"ts:@riducms/protocol#AdminReadResultV1": {
+			"module": "protocol",
+			"symbol": "admin-read-result-v1"
+		},
+		"ts:@riducms/protocol#AdminSecurityDataV1": {
+			"module": "protocol",
+			"symbol": "admin-security-data-v1"
+		},
+		"ts:@riducms/protocol#AdminVersionsDataV1": {
+			"module": "protocol",
+			"symbol": "admin-versions-data-v1"
+		},
+		"ts:@riducms/protocol#CollectionPageAccess": {
+			"module": "protocol",
+			"symbol": "collection-page-access"
+		},
+		"ts:@riducms/protocol#CollectionPageEnvelope": {
+			"module": "protocol",
+			"symbol": "collection-page-envelope"
+		},
+		"ts:@riducms/protocol#DocumentVersion": {
+			"module": "protocol",
+			"symbol": "document-version"
+		},
+		"ts:@riducms/protocol#isAccessCapabilities": {
+			"module": "protocol",
+			"symbol": "is-access-capabilities"
+		},
+		"ts:@riducms/protocol#isAdminCollectionListData": {
+			"module": "protocol",
+			"symbol": "is-admin-collection-list-data"
+		},
+		"ts:@riducms/protocol#isAdminLoaderResults": {
+			"module": "protocol",
+			"symbol": "is-admin-loader-results"
+		},
+		"ts:@riducms/protocol#isAdminPreparedRouteData": {
+			"module": "protocol",
+			"symbol": "is-admin-prepared-route-data"
+		},
+		"ts:@riducms/protocol#SchemaAdminLoader": {
+			"module": "protocol",
+			"symbol": "schema-admin-loader"
+		},
+		"ts:@riducms/plugin#AdminCollectionList": {
+			"module": "plugin",
+			"symbol": "admin-collection-list"
+		},
+		"ts:@riducms/plugin#AdminCollectionList.documentHref": {
+			"module": "plugin",
+			"symbol": "admin-collection-list-document-href-method"
+		},
+		"ts:@riducms/plugin#AdminCollectionList.title": {
+			"module": "plugin",
+			"symbol": "admin-collection-list-title-method"
+		},
+		"ts:@riducms/plugin#AdminCollectionList.toggleDocument": {
+			"module": "plugin",
+			"symbol": "admin-collection-list-toggle-document-method"
+		},
+		"ts:@riducms/plugin#AdminCollectionList.togglePage": {
+			"module": "plugin",
+			"symbol": "admin-collection-list-toggle-page-method"
+		},
+		"ts:@riducms/plugin#AdminLoaderProps": {
+			"module": "plugin",
+			"symbol": "admin-loader-props"
+		},
+		"ts:@riducms/plugin#AdminLoaderProps.refresh": {
+			"module": "plugin",
+			"symbol": "admin-loader-props-refresh-method"
+		},
+		"ts:@riducms/plugin#AdminViewComponent": {
+			"module": "plugin",
+			"symbol": "admin-view-component"
+		},
+		"ts:@riducms/plugin#withAdminLoader": {
+			"module": "plugin",
+			"symbol": "with-admin-loader"
+		},
+		"ts:@riducms/admin/routing#Link": {
+			"module": "admin",
+			"symbol": "link"
+		},
+		"ts:@riducms/admin/routing#LinkProps": {
+			"module": "admin",
+			"symbol": "link-props"
+		},
+		"ts:@riducms/protocol#isRecord": {
+			"module": "protocol",
+			"symbol": "is-record"
+		},
+		"ts:@riducms/plugin#AdminShellSlotPosition": {
+			"module": "plugin",
+			"symbol": "admin-shell-slot-position"
+		},
+		"ts:@riducms/plugin#AdminShellSlot": {
+			"module": "plugin",
+			"symbol": "admin-shell-slot"
+		},
+		"ts:@riducms/plugin#AdminShellSlotProps": {
+			"module": "plugin",
+			"symbol": "admin-shell-slot-props"
+		},
+		"ts:@riducms/plugin#AdminListCellRenderer": {
+			"module": "plugin",
+			"symbol": "admin-list-cell-renderer"
+		},
+		"ts:@riducms/plugin#AdminListCellRendererProps": {
+			"module": "plugin",
+			"symbol": "admin-list-cell-renderer-props"
+		},
+		"ts:@riducms/plugin#AdminListCellRenderer.component": {
+			"module": "plugin",
+			"symbol": "admin-list-cell-renderer-component-method"
+		},
+		"ts:@riducms/plugin#AdminShellSlot.component": {
+			"module": "plugin",
+			"symbol": "admin-shell-slot-component-method"
+		},
+		"ts:@riducms/plugin#AdminListResultsRenderer": {
+			"module": "plugin",
+			"symbol": "admin-list-results-renderer"
+		},
+		"ts:@riducms/plugin#AdminListResultsRenderer.component": {
+			"module": "plugin",
+			"symbol": "admin-list-results-renderer-component-method"
+		},
+		"ts:@riducms/plugin#AdminListResultsRendererProps": {
+			"module": "plugin",
+			"symbol": "admin-list-results-renderer-props"
+		},
+		"ts:@riducms/ui#cv": {
+			"module": "ui",
+			"symbol": "cv"
+		},
+		"ts:@riducms/ui#PasswordInput": {
+			"module": "ui",
+			"symbol": "password-input"
+		},
+		"go:github.com/riducms/ridu#RemoteUploadInput": {
+			"module": "ridu",
+			"symbol": "remote-upload-input"
+		},
+		"go:github.com/riducms/ridu#UpdateUploadInput": {
+			"module": "ridu",
+			"symbol": "update-upload-input"
+		},
+		"go:github.com/riducms/ridu#UploadImageEdit": {
+			"module": "ridu",
+			"symbol": "upload-image-edit"
+		},
+		"go:github.com/riducms/ridu/core#App.OpenUploadSourceForIdentity": {
+			"module": "core",
+			"symbol": "app-open-upload-source-for-identity-method"
+		},
+		"go:github.com/riducms/ridu/core#App.PreviewUploadForIdentity": {
+			"module": "core",
+			"symbol": "app-preview-upload-for-identity-method"
+		},
+		"go:github.com/riducms/ridu/core#UploadImageEdit": {
+			"module": "core",
+			"symbol": "upload-image-edit"
+		},
+		"go:github.com/riducms/ridu/protocol#UploadImageEdit": {
+			"module": "go-protocol",
+			"symbol": "upload-image-edit"
+		},
+		"ts:@riducms/sdk#UploadImageEdit": {
+			"module": "sdk",
+			"symbol": "upload-image-edit"
+		},
+		"ts:@riducms/protocol#UploadImageEdit": {
+			"module": "protocol",
+			"symbol": "upload-image-edit"
+		},
+		"ts:@riducms/ui/code-theme#riduCodeTheme": {
+			"module": "ui",
+			"symbol": "ridu-code-theme"
+		},
+		"ts:@riducms/ui#MenuContent": {
+			"module": "ui",
+			"symbol": "menu-content"
+		},
+		"ts:@riducms/ui#MenuItem": {
+			"module": "ui",
+			"symbol": "menu-item"
+		},
+		"ts:@riducms/ui#MenuRoot": {
+			"module": "ui",
+			"symbol": "menu-root"
+		},
+		"ts:@riducms/ui#MenuTrigger": {
+			"module": "ui",
+			"symbol": "menu-trigger"
+		},
+		"go:github.com/riducms/ridu/core#App.ScheduleUnpublish": {
+			"module": "core",
+			"symbol": "app-schedule-unpublish-method"
+		},
+		"go:github.com/riducms/ridu/store#PublicationAction": {
+			"module": "store",
+			"symbol": "publication-action"
+		},
+		"go:github.com/riducms/ridu/store#PublicationActionPublish": {
+			"module": "store",
+			"symbol": "publication-action-publish"
+		},
+		"go:github.com/riducms/ridu/store#PublicationActionUnpublish": {
+			"module": "store",
+			"symbol": "publication-action-unpublish"
+		},
+		"ts:@riducms/sdk#RiduClient.scheduleUnpublish": {
+			"module": "sdk",
+			"symbol": "ridu-client-schedule-unpublish-method"
+		},
+		"go:github.com/riducms/ridu#PublicationScheduleOptions": {
+			"module": "ridu",
+			"symbol": "publication-schedule-options"
+		},
+		"go:github.com/riducms/ridu/core#PublicationScheduleOptions": {
+			"module": "core",
+			"symbol": "publication-schedule-options"
+		},
+		"go:github.com/riducms/ridu/schema#IsValidTimeZoneID": {
+			"module": "schema",
+			"symbol": "is-valid-time-zone-id"
+		},
+		"ts:@riducms/sdk#PublicationScheduleOptions": {
+			"module": "sdk",
+			"symbol": "publication-schedule-options"
+		},
+		"ts:@riducms/plugin#FieldAuthoringHost.canCreateDocument": {
+			"module": "plugin",
+			"symbol": "field-authoring-host-can-create-document-method"
+		},
+		"ts:@riducms/ui#Checkbox": {
+			"module": "ui",
+			"symbol": "checkbox"
+		},
+		"ts:@riducms/ui#Dialog": {
+			"module": "ui",
+			"symbol": "dialog"
+		},
+		"ts:@riducms/ui#DialogClose": {
+			"module": "ui",
+			"symbol": "dialog-close"
+		},
+		"ts:@riducms/ui#DialogContent": {
+			"module": "ui",
+			"symbol": "dialog-content"
+		},
+		"ts:@riducms/ui#DialogDescription": {
+			"module": "ui",
+			"symbol": "dialog-description"
+		},
+		"ts:@riducms/ui#DialogFooter": {
+			"module": "ui",
+			"symbol": "dialog-footer"
+		},
+		"ts:@riducms/ui#DialogHeader": {
+			"module": "ui",
+			"symbol": "dialog-header"
+		},
+		"ts:@riducms/ui#DialogTitle": {
+			"module": "ui",
+			"symbol": "dialog-title"
 		}
 	}
 }

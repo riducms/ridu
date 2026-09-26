@@ -36,7 +36,7 @@ var (
 	MCPNew         = mcp.New
 )
 
-// Fields exercises every built-in field constructor with its smallest valid public shape.
+// Fields exercises the field constructors represented by the public adoption guide.
 func Fields() field.Fields {
 	return field.Fields{field.Text("title"), field.Textarea("summary"),
 		field.Email("email"),

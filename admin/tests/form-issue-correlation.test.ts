@@ -135,3 +135,22 @@ test("malformed occurrence targets never fall back to a matching display path", 
 		).toEqual([]);
 	}
 });
+
+test("unkeyed indexes retain issues only while their containing value is unchanged", () => {
+	const field = { ...sku, id: "content", name: "content", path: "content", type: "json" } as const;
+	const submitted = { content: { nodes: [{ title: "First" }, { title: "Second" }] } };
+	const issue = { code: "invalid", message: "Invalid title", path: "content.nodes.0.title" };
+	expect(correlateFormIssues([field], submitted, structuredClone(submitted), [issue])).toEqual([
+		issue,
+	]);
+	expect(
+		correlateFormIssues(
+			[field],
+			submitted,
+			{
+				content: { nodes: [...submitted.content.nodes].reverse() },
+			},
+			[issue]
+		)
+	).toEqual([]);
+});

@@ -42,7 +42,7 @@ func TestUploadReferencesRequireReadableTargetsAcrossShapesAndMutations(t *testi
 				}},
 			},
 			{
-				Slug: "entries", Versions: true,
+				Slug: "entries", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true},
 				Fields: field.Fields{field.Upload("hero", "media"), field.Uploads("gallery", "media"), field.Upload("localizedHero", "media").Localized(), field.Group("meta", field.Fields{field.Upload("asset", "media")}), field.Array("sections", field.Fields{field.Upload("asset", "media")}), field.Blocks("content", field.Block{Slug: "image", Fields: field.Fields{field.Upload("asset", "media")}})},
 			},
 		},

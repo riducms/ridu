@@ -3,10 +3,11 @@
 
 	import RiduLogo from "@admin/components/brand/ridu-logo.svelte";
 	import { Banner } from "@admin/components/ui/banner";
-	import { Button } from "@admin/components/ui/button";
+	import { Button } from "@riducms/ui";
 	import { getAdminRuntime } from "@admin/core/runtime/admin-runtime.svelte";
 
 	let { children }: { children: Snippet } = $props();
+
 	const runtime = getAdminRuntime();
 	const development = import.meta.hot !== undefined;
 </script>
@@ -14,6 +15,7 @@
 {#if runtime.loading}
 	<main
 		class="ridu-surface-grid grid min-h-screen place-items-center"
+		data-ridu-loading-surface="runtime"
 		aria-label={runtime.i18n.t("general:loadingSchema")}
 	>
 		<div class="grid justify-items-center gap-4 text-[13px] text-foreground-muted">

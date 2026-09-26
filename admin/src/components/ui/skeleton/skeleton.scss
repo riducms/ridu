@@ -1,0 +1,20 @@
+@layer ridu.components {
+	.ridu-skeleton {
+		border-radius: 3px;
+		background: var(--muted);
+		opacity: 0;
+		animation: ridu-skeleton-reveal 150ms ease-out 180ms forwards;
+	}
+
+	@keyframes ridu-skeleton-reveal {
+		to {
+			opacity: 1;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.ridu-skeleton {
+			animation-duration: 0s;
+		}
+	}
+}

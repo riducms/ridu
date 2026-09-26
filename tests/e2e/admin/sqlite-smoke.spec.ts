@@ -1,6 +1,6 @@
 import { expect, test } from "./fixture";
 
-import { documentSaveButton, loginAsEditor } from "./helpers";
+import { documentSaveButton, loginAsEditor, submitDocumentForm } from "./helpers";
 
 test("SQLite backs the ordinary admin create and edit flow", async ({ page }) => {
 	await loginAsEditor(page);
@@ -24,7 +24,7 @@ test("SQLite backs the ordinary admin create and edit flow", async ({ page }) =>
 	expect((await response.json()).doc.title).toBe("SQLite smoke post");
 
 	await page.locator('input[name="title"]').fill("SQLite smoke post updated");
-	await documentSaveButton(page).click();
+	await submitDocumentForm(page);
 	await page.reload();
 	await expect(page.locator('input[name="title"]')).toHaveValue("SQLite smoke post updated");
 	response = await page.request.get(`/api/collections/posts/${documentID}`);

@@ -4,6 +4,7 @@
 
 	import { GenerationController } from "@plugin-seo/generation-controller.svelte";
 	import LengthIndicator from "@plugin-seo/length-indicator.svelte";
+	import "@plugin-seo/seo.scss";
 	import type { LengthConfig } from "@plugin-seo/seo-config";
 
 	let {
@@ -34,6 +35,19 @@
 </script>
 
 <div data-field-path={field.path}>
+	{#snippet headingAction()}
+		<span class="ridu-seo-heading-separator" aria-hidden="true">—</span>
+		<Button
+			variant="link"
+			size="xs"
+			class="ridu-seo-generate"
+			disabled={editingBlocked || generation.status === "pending"}
+			aria-busy={generation.status === "pending"}
+			onclick={generate}
+		>
+			{i18n.t("plugin.seo:autoGenerate")}
+		</Button>
+	{/snippet}
 	<FieldFrame
 		controlID={field.id}
 		label={field.admin.label}
@@ -41,31 +55,21 @@
 		readOnly={field.admin.readOnly}
 		description={field.admin.description}
 		errors={issues.map((issue) => issue.message)}
+		class="ridu-seo-field"
+		headingAction={config.generate ? headingAction : undefined}
 	>
-		<div class="-mt-1 flex flex-wrap items-center gap-x-1 text-[11.5px] text-foreground-muted">
+		<p class="ridu-seo-guidance">
 			<span>{i18n.t("plugin.seo:lengthTipTitle", { minLength, maxLength })}</span>
 			<a
-				class="text-primary underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-ring/70"
+				class="ridu-seo-guidance-link"
 				href="https://developers.google.com/search/docs/appearance/title-link#page-titles"
 				target="_blank"
 				rel="noopener noreferrer"
 			>
 				{i18n.t("plugin.seo:bestPractices")}
 			</a>
-			{#if config.generate}
-				<span aria-hidden="true">·</span>
-				<Button
-					variant="link"
-					size="xs"
-					class="h-auto px-0"
-					disabled={editingBlocked || generation.status === "pending"}
-					aria-busy={generation.status === "pending"}
-					onclick={generate}
-				>
-					{i18n.t("plugin.seo:autoGenerate")}
-				</Button>
-			{/if}
-		</div>
+			<span>.</span>
+		</p>
 		<Input
 			id={field.id}
 			name={field.path}
@@ -80,8 +84,10 @@
 			oninput={(event) => binding.set(event.currentTarget.value)}
 		/>
 		<LengthIndicator text={value} {minLength} {maxLength} {i18n} />
-		{#if generation.status === "error"}<p class="text-[12px] text-destructive" role="alert">
+		{#if generation.status === "error"}
+			<p class="ridu-seo-error" role="alert">
 				{i18n.t("plugin.seo:generationFailed")}
-			</p>{/if}
+			</p>
+		{/if}
 	</FieldFrame>
 </div>

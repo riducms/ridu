@@ -27,7 +27,7 @@ func (api *API) liveValidation(writer http.ResponseWriter, request *http.Request
 		}
 		input.ID = id
 	}
-	locale, err := decodeLocaleQuery(request)
+	locale, err := decodeLocaleQuery(request.URL.Query())
 	if err != nil {
 		api.writeError(writer, requestID, err)
 		return

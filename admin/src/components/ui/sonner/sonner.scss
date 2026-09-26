@@ -1,0 +1,121 @@
+@use "@riducms/ui/styles.scss" as ui;
+
+@layer ridu.components {
+	.ridu-toast {
+		--toast-surface: var(--control-surface);
+		--toast-color: var(--ink-strong);
+		--toast-border: var(--control-border);
+		position: relative;
+		display: flex;
+		align-items: center;
+		gap: 13px;
+		width: 100%;
+		padding: 16px;
+		border: 1px solid var(--toast-border);
+		border-radius: 4px;
+		background: var(--toast-surface);
+		color: var(--toast-color);
+		font-family: var(--font-sans);
+		font-size: var(--font-size-body);
+		line-height: 20px;
+		box-shadow:
+			0 10px 4px -8px rgb(0 2 4 / 2%),
+			0 2px 3px rgb(0 2 4 / 5%);
+
+		&[data-type="error"] {
+			--toast-surface: var(--status-error-surface);
+			--toast-color: var(--status-error-foreground);
+			--toast-border: var(--status-error-border);
+		}
+		&[data-type="success"] {
+			--toast-surface: var(--status-success-surface);
+			--toast-color: var(--status-success-foreground);
+			--toast-border: var(--status-success-border);
+		}
+		&[data-type="warning"] {
+			--toast-surface: var(--status-warning-surface);
+			--toast-color: var(--status-warning-foreground);
+			--toast-border: var(--status-warning-border);
+		}
+		&[data-type="info"] {
+			--toast-surface: var(--background-layer);
+			--toast-border: var(--control-border-hover);
+		}
+	}
+	.ridu-toast__content {
+		min-width: 0;
+		width: 100%;
+		overflow-wrap: anywhere;
+	}
+	.ridu-toast__title {
+		font-weight: 600;
+		line-height: 20px;
+	}
+	.ridu-validation-toast__fields {
+		list-style: circle outside;
+		margin: 0;
+		padding-inline-start: 20px;
+		li {
+			display: list-item;
+			padding-inline-start: 0;
+		}
+	}
+
+	.ridu-toast__description {
+		margin-top: 2px;
+		font-weight: 400;
+	}
+	.ridu-toast__icon {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		flex-shrink: 0;
+		width: 16px;
+		height: 16px;
+		margin: 0;
+	}
+	.ridu-toast__loader {
+		width: 14px;
+		height: 14px;
+		animation: ridu-toast-spin 1s linear infinite;
+	}
+	.ridu-toast__close {
+		--normal-bg: var(--toast-close-surface);
+		--normal-bg-hover: var(--toast-close-surface);
+		--normal-border-hover: var(--toast-close-border);
+		--normal-text: var(--toast-close-color);
+		--normal-border: var(--toast-close-border);
+		position: absolute;
+		top: -7px;
+		inset-inline-start: -7px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 20px;
+		height: 20px;
+		padding: 0;
+		border: 1px solid var(--toast-close-border);
+		border-radius: 50%;
+		background: var(--toast-close-surface);
+		color: var(--toast-close-color);
+		cursor: pointer;
+
+		&:focus-visible {
+			@include ui.focus-outline;
+		}
+	}
+	.ridu-toast[data-front="false"]:not([data-expanded="true"]) .ridu-toast__close {
+		display: none;
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.ridu-toast__loader {
+			animation: none;
+		}
+	}
+}
+
+@keyframes ridu-toast-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}

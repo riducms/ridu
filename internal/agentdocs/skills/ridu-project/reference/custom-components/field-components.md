@@ -15,7 +15,7 @@ application and its `posts` collection.
 | ---------------------------------------------------- | -------------------------- | ------------------------------------------------------------------------------------------- |
 | `defineFieldEditor({ type, component })`             | Yes                        | Registers a Svelte editor for one supported built-in field type.                            |
 | `decodeConfig(value)`                                | When Go supplies settings  | Validates unknown JSON synchronously and returns typed component settings.                  |
-| `fields['app:name']`                                 | Yes                        | Gives the local editor the same key selected in Go.                                         |
+| `fieldEditors['app:name']`                           | Yes                        | Gives the local editor the same key selected in Go.                                         |
 | `field.Admin.Editor`                                 | Yes on each selected field | Uses `field.Component("app:name")`, with optional JSON-safe settings.                       |
 | `FieldEditorProps.field.value` / `.set(value)`       | Supplied by Ridu           | Reads and updates this field's unsaved form value.                                          |
 | `field.inputProps`, `field.readOnly`, `field.issues` | Supplied by Ridu           | Connects labels/errors, enforces read-only UI, and exposes validation feedback.             |
@@ -62,7 +62,7 @@ no second copy of the title to keep in sync.
 
 ## 2. Register the component {#register}
 
-In `admin/src/admin.config.ts`, import the component and add it to `fields`:
+In `admin/src/admin.config.ts`, import the component and add it to `fieldEditors`:
 
 ```ts title="admin/src/admin.config.ts" focus={8-14}
 import { defineAdmin } from '@riducms/plugin/admin';
@@ -72,7 +72,7 @@ import TitleField from './components/title-field.svelte';
 
 export default defineAdmin({
 	plugins: generatedAdminPlugins,
-	fields: {
+	fieldEditors: {
 		// Use this name in the Go field's Editor option.
 		'app:titleCounter': defineFieldEditor({
 			type: 'text',
@@ -90,7 +90,7 @@ and underscores.
 `FieldEditorProps<"text">` in the component.
 
 [`defineFieldEditor`](https://riducms.com/reference/plugin/define-field-editor/) returns the registration stored in
-the `fields` map. [`defineAdmin`](https://riducms.com/reference/plugin/define-admin/) collects that registration with
+the `fieldEditors` map. [`defineAdmin`](https://riducms.com/reference/plugin/define-admin/) collects that registration with
 the rest of your admin settings. Neither helper renders the component here; Ridu renders it when
 an editor opens a Go field that selects its name.
 

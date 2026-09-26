@@ -15,7 +15,7 @@ Add `richtext.New()` to `Config.Plugins` and author fields with `richtext.Field`
 registry imports `richTextAdminPlugin`; do not register it again. Generation rejects incompatible Go
 and npm pairing metadata before the editor loads.
 
-Run `npm run dev`, verify the editor, then create and review the adapter migration before deployment:
+Run `bun run dev`, verify the editor, then create and review the adapter migration before deployment:
 
 ```sh
 ridu migrate create --name add-rich-text
@@ -33,3 +33,9 @@ Portable types are available from `@riducms/plugin-richtext/document`, HTML rend
 `@riducms/plugin-richtext/render`, and optional typed Svelte rendering from
 `@riducms/plugin-richtext/svelte`. These entries do not load the admin editor. See the rich-text
 guide for strict payloads, localization, typed renderers and experimental-content migration.
+
+The supported authoring UI uses semantic SCSS, compact grouped insertion menus, six heading levels,
+Markdown shortcuts, interactive checklists, custom-URL link drawers and intrinsic-ratio media cards.
+See [customizing admin CSS](https://riducms.com/docs/admin/customizing-css/) for styling and the
+[rich-text guide](https://riducms.com/docs/rich-text/) for supported features and limits.
+No utility stylesheet is needed for this plugin's UI.

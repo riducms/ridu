@@ -1,10 +1,8 @@
 <script lang="ts">
 	import type { SchemaField } from "@riducms/protocol";
-	import { fieldControlARIA } from "@riducms/ui";
+	import { fieldControlARIA, Button, Input } from "@riducms/ui";
 	import { untrack } from "svelte";
 
-	import { Button } from "@admin/components/ui/button";
-	import { Input } from "@admin/components/ui/input";
 	import type {
 		DerivedTextBinding,
 		FormController,
@@ -12,6 +10,7 @@
 	import { getAdminRuntime } from "@admin/core/runtime/admin-runtime.svelte";
 	import FieldShell from "@admin/fields/field-shell.svelte";
 	import { normalizeSlug, slugFollowsSource } from "@admin/fields/text/slug";
+	import "@admin/fields/text/slug-field.scss";
 
 	interface Props {
 		field: SchemaField;
@@ -27,21 +26,26 @@
 		fieldControlARIA(field.id, field.admin.description !== undefined, issues.length > 0)
 	);
 	let locked = $state(true);
-	let binding = $state<DerivedTextBinding>();
+	let binding: DerivedTextBinding | undefined;
 
 	$effect(() => {
 		form.revision;
 		const sourcePath = field.text?.slug?.sourcePath;
 		const fieldPath = field.path;
 		if (sourcePath === undefined) return;
-		return untrack(() => {
-			binding = form.bindDerivedText(
-				fieldPath,
-				sourcePath,
-				(source) => normalizeSlug(String(source ?? "")),
-				(current, source) => String(current ?? "") === "" || slugFollowsSource(current, source)
-			);
-		});
+		// Only the initialization snapshot is excluded: later changes are observed by
+		// FormController, while form.revision above owns reset/rebind synchronization.
+		const initial = untrack(() => ({
+			current: form.get(fieldPath),
+			source: form.get(sourcePath),
+		}));
+		binding = form.bindDerivedText(
+			fieldPath,
+			sourcePath,
+			(source) => normalizeSlug(String(source ?? "")),
+			(current, source) => String(current ?? "") === "" || slugFollowsSource(current, source),
+			initial
+		);
 	});
 
 	function generate() {
@@ -60,7 +64,7 @@
 </script>
 
 <FieldShell {field} {issues}>
-	<div class="flex items-center gap-2">
+	<div class="ridu-slug-field">
 		<Input
 			id={field.id}
 			name={field.path}
@@ -70,13 +74,13 @@
 			placeholder={field.admin.placeholder}
 			{...controlARIA}
 			readonly={editingBlocked || locked}
-			class="min-w-0 flex-1 font-mono"
+			class="ridu-slug-field__input"
 			{value}
 			oninput={(event) => setManualValue(event.currentTarget.value)}
 			onblur={normalizeManualValue}
 		/>
 		{#if !field.admin.readOnly}
-			<div class="flex shrink-0 items-center gap-1">
+			<div class="ridu-slug-field__actions">
 				{#if !locked}
 					<Button
 						type="button"

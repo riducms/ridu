@@ -21,6 +21,7 @@ test("interface language, timezone, plugin messages, persistence, and RTL work t
 	await expect(page.locator("html")).toHaveAttribute("lang", "fr");
 	await expect(page.locator("html")).toHaveAttribute("dir", "ltr");
 	await expect(page.getByRole("heading", { name: "Profil et préférences" })).toBeVisible();
+	await expect(page.getByRole("link", { name: "Contrat de l’extension" })).toBeVisible();
 
 	await chooseRiduSelect(page, page.getByLabel("Fuseau horaire"), "Paris");
 	await expect
@@ -42,6 +43,7 @@ test("interface language, timezone, plugin messages, persistence, and RTL work t
 	await expect(page.locator("html")).toHaveAttribute("lang", "ar");
 	await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
 	await expect(page.locator("html")).toHaveAttribute("data-admin-language", "ar");
+	await expect(page.getByRole("link", { name: "عقد الإضافة" })).toBeVisible();
 
 	await page.goto("/admin");
 	await expect(page.getByRole("heading", { name: "النشاط التحريري" })).toBeVisible();

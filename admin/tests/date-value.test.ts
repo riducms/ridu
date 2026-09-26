@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { createAdminI18n, en } from "@riducms/translations";
 
 import {
+	dateTimeHasAmbiguousWallTime,
 	datePickerFormValue,
 	datePickerValue,
 	timeFieldFormValue,
@@ -36,4 +37,22 @@ describe("date field presentation", () => {
 			"2026-09-15T09:30:00.000Z"
 		);
 	});
+});
+
+test.each([
+	["2027-03-28T00:30:00.000Z", "Europe/London", "2027-03-28T00:30:00"],
+	["2027-03-28T01:30:00.000Z", "Europe/London", "2027-03-28T02:30:00"],
+	["2027-10-31T02:30:00.000Z", "Europe/London", "2027-10-31T02:30:00"],
+	["2027-09-21T23:30:00.000Z", "Asia/Kolkata", "2027-09-22T05:00:00"],
+	["2027-09-21T23:30:00.000Z", "+05:30", "2027-09-22T05:00:00"],
+])("converts %s through %s", (instant, zone, wallTime) => {
+	const value = datePickerValue(instant, "date-time", zone);
+	expect(value?.toString()).toBe(wallTime);
+	expect(datePickerFormValue(value, "date-time", zone)).toBe(instant);
+});
+
+test("detects both occurrences of a repeated daylight-saving wall time", () => {
+	expect(dateTimeHasAmbiguousWallTime("2027-10-31T00:30:00.000Z", "Europe/London")).toBe(true);
+	expect(dateTimeHasAmbiguousWallTime("2027-10-31T01:30:00.000Z", "Europe/London")).toBe(true);
+	expect(dateTimeHasAmbiguousWallTime("2027-10-31T02:30:00.000Z", "Europe/London")).toBe(false);
 });

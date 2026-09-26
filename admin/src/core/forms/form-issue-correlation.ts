@@ -1,6 +1,6 @@
-import { resolveBlockTypes } from "@riducms/protocol";
+import { isRecord, resolveBlockTypes } from "@riducms/protocol";
 import type { SchemaField, ValidationIssue } from "@riducms/protocol";
-import { embeddedOccurrences, isEmbeddedRecord } from "@admin/core/forms/embedded-fields";
+import { embeddedOccurrences } from "@admin/core/forms/embedded-fields";
 
 export interface FieldValueLocation {
 	schema?: SchemaField;
@@ -64,7 +64,7 @@ export function indexFieldValues(fields: readonly SchemaField[], values: Record<
 		path: string,
 		token: readonly string[]
 	) => {
-		if (!isEmbeddedRecord(value)) return;
+		if (!isRecord(value)) return;
 		for (const child of children)
 			visit(child, value[child.name], `${path}.${child.name}`, [...token, child.id]);
 	};
@@ -74,12 +74,11 @@ export function indexFieldValues(fields: readonly SchemaField[], values: Record<
 		if ((field.type === "array" || field.type === "blocks") && Array.isArray(value)) {
 			const keys = new Map<string, number>();
 			for (const row of value) {
-				if (isEmbeddedRecord(row) && typeof row._key === "string")
+				if (isRecord(row) && typeof row._key === "string")
 					keys.set(row._key, (keys.get(row._key) ?? 0) + 1);
 			}
 			for (const [i, row] of value.entries()) {
-				if (!isEmbeddedRecord(row) || typeof row._key !== "string" || keys.get(row._key) !== 1)
-					continue;
+				if (!isRecord(row) || typeof row._key !== "string" || keys.get(row._key) !== 1) continue;
 				const block = resolveBlockTypes(field.blocks).find(
 					(candidate) => candidate.slug === row.blockType
 				);
@@ -107,6 +106,12 @@ export function indexFieldValues(fields: readonly SchemaField[], values: Record<
 	};
 	for (const field of fields) visit(field, values[field.name], field.path, [field.id]);
 	return locations;
+}
+
+// An index below a schema-owned location has no stable identity of its own.
+// After the container changes, neither issues nor access may follow that index.
+export function canRebaseIndexedSuffix(suffix: string, before: unknown, after: unknown) {
+	return !/\.\d+(?:\.|$)/.test(suffix) || JSON.stringify(before) === JSON.stringify(after);
 }
 
 function correlate(
@@ -137,12 +142,7 @@ function correlate(
 		const target = current.get(source.token);
 		if (target === undefined) return [];
 		const suffix = issue.path.slice(source.path.length);
-		// An envelope index without a schema-owned identity is ambiguous after edits.
-		if (
-			/\.\d+(?:\.|$)/.test(suffix) &&
-			JSON.stringify(source.value) !== JSON.stringify(target.value)
-		)
-			return [];
+		if (!canRebaseIndexedSuffix(suffix, source.value, target.value)) return [];
 		if (JSON.stringify(at(source.value, suffix)) !== JSON.stringify(at(target.value, suffix)))
 			return [];
 		return [{ ...issue, path: target.path + suffix }];
@@ -152,7 +152,7 @@ function correlate(
 function at(value: unknown, suffix: string) {
 	for (const segment of suffix.split(".").filter(Boolean)) {
 		if (Array.isArray(value)) value = value[Number(segment)];
-		else if (isEmbeddedRecord(value)) value = value[segment];
+		else if (isRecord(value)) value = value[segment];
 		else return undefined;
 	}
 	return value;

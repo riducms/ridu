@@ -4,6 +4,7 @@ import {
 	documentSaveButton,
 	loginAsEditor,
 	observePageErrors,
+	submitDocumentForm,
 } from "./helpers";
 
 async function captureSupport(page: Page) {
@@ -61,7 +62,7 @@ test("API-created ordinary array rows mount plugin editors and keep their identi
 	await expect(movedEditor).toHaveText("A plugin field inside an ordinary array.");
 	await movedEditor.fill("Edited after moving.");
 	await page.locator('input[name="notes.1.heading"]').fill("Moved note");
-	await documentSaveButton(page).click();
+	await submitDocumentForm(page);
 	await expect
 		.poll(
 			async () =>
@@ -112,7 +113,7 @@ test("local scalar editors retain occurrence identity, revoke removed bindings a
 	expect(await applyCaptured(page, "Moved first")).toBe("written");
 	await expect(page.locator('input[name="layout.1.heading"]')).toHaveValue("Moved first");
 	await expect(page.locator('input[name="layout.0.heading"]')).toHaveValue("Second");
-	await documentSaveButton(page).click();
+	await submitDocumentForm(page);
 	await expect
 		.poll(
 			async () =>
@@ -120,6 +121,8 @@ test("local scalar editors retain occurrence identity, revoke removed bindings a
 					.layout[1].heading
 		)
 		.toBe("Moved first");
+	// The API can expose the commit before the browser consumes the save response.
+	await expect(documentSaveButton(page)).toHaveAttribute("aria-busy", "false");
 	// Saving resets the form; a previously retained capability cannot edit the new baseline.
 	expect(await applyCaptured(page, "Obsolete save")).toContain("stale");
 	await page

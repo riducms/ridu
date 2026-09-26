@@ -43,6 +43,19 @@ func TestProtocolTypeScriptIsCurrent(t *testing.T) {
 	}
 }
 
+func TestAdminBootstrapProtocolTypeScriptIsCurrent(t *testing.T) {
+	root := moduleRoot(t)
+	path := filepath.Join(root, "packages", "build", "src", "vite", "admin-route-state-version.generated.ts")
+	expected, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read generated admin bootstrap protocol %s: %v\nactual:\n%s", path, err, typescript.AdminBootstrapProtocol())
+	}
+	actual := typescript.AdminBootstrapProtocol()
+	if string(actual) != string(expected) {
+		t.Fatalf("generated admin bootstrap protocol drift; regenerate %s\nexpected:\n%s\nactual:\n%s", path, expected, actual)
+	}
+}
+
 func moduleRoot(t *testing.T) string {
 	t.Helper()
 	_, filename, _, ok := runtime.Caller(0)

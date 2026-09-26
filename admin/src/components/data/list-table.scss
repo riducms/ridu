@@ -1,0 +1,63 @@
+@layer ridu.components {
+	.ridu-list-table {
+		width: 100%;
+		border-collapse: separate;
+		border-spacing: 0;
+		font-size: 13px;
+		line-height: 20px;
+		text-align: start;
+
+		th,
+		td {
+			min-width: 150px;
+			padding: 12px;
+			text-align: start;
+			vertical-align: middle;
+			font-weight: 400;
+		}
+
+		th {
+			color: var(--foreground-muted);
+			height: 54px;
+		}
+
+		td {
+			color: var(--foreground);
+		}
+
+		th:first-child,
+		td:first-child {
+			padding-inline-start: 16px;
+		}
+
+		th:last-child,
+		td:last-child {
+			padding-inline-end: 16px;
+		}
+
+		.ridu-list-table__selection {
+			width: 48px;
+			min-width: 48px;
+		}
+
+		tbody tr:nth-child(odd) {
+			background: var(--background-surface);
+		}
+
+		tbody td:first-child {
+			border-start-start-radius: 3px;
+			border-end-start-radius: 3px;
+		}
+
+		tbody td:last-child {
+			border-start-end-radius: 3px;
+			border-end-end-radius: 3px;
+		}
+
+		td a {
+			color: inherit;
+			text-decoration: underline;
+			text-underline-offset: 2px;
+		}
+	}
+}

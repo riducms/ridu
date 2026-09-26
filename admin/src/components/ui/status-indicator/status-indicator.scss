@@ -1,0 +1,48 @@
+@use "@riducms/ui/styles.scss" as ui;
+
+@layer ridu.components {
+	.ridu-status-indicator {
+		display: inline-flex;
+		align-items: center;
+		gap: 7px;
+		color: var(--foreground-muted);
+		font-size: 12.5px;
+	}
+
+	.ridu-status-indicator--live {
+		color: var(--primary);
+	}
+
+	.ridu-status-indicator--warning {
+		color: var(--warning);
+	}
+
+	.ridu-status-indicator--muted {
+		color: var(--foreground-muted);
+	}
+
+	.ridu-status-indicator--destructive {
+		color: var(--destructive);
+	}
+
+	.ridu-status-indicator--success {
+		color: var(--success);
+	}
+
+	.ridu-status-indicator__dot {
+		flex-shrink: 0;
+		width: 7px;
+		height: 7px;
+		border-radius: 50%;
+		background: currentColor;
+	}
+
+	.ridu-status-indicator__dot--muted {
+		border: 1px solid currentColor;
+		background: transparent;
+	}
+
+	.ridu-status-indicator__dot--pulse {
+		box-shadow: 0 0 9px currentColor;
+	}
+}

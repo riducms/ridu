@@ -1,4 +1,6 @@
+import { isRecord } from "@riducms/protocol";
 import type { RichTextDocument } from "#richtext/document";
+import { renderableRichTextURL } from "#richtext/link-url-policy";
 const base = ["type", "version"];
 const element = [...base, "children", "direction", "format", "indent"];
 const container = [...element, "textFormat", "textStyle"];
@@ -20,10 +22,6 @@ const properties: Readonly<Record<string, readonly string[]>> = {
 };
 const integers = new Set(["detail", "textFormat", "indent", "start", "value"]);
 const nullableStrings = new Set(["target", "rel", "title", "direction"]);
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return value !== null && typeof value === "object" && !Array.isArray(value);
-}
 
 /** Return the first unsupported envelope path without interpreting schema-owned payloads.
  * Both editor admission and portable rendering use this lossless JSON boundary.
@@ -76,7 +74,11 @@ export function documentRecoveryIssue(
 			!["", "left", "start", "center", "right", "end", "justify"].includes(String(node.format))
 		)
 			return `${path}.format`;
-		if (type === "link" && typeof node.url !== "string") return `${path}.url`;
+		if (
+			type === "link" &&
+			(typeof node.url !== "string" || renderableRichTextURL(node.url) === undefined)
+		)
+			return `${path}.url`;
 		if (type === "heading" && !/^h[1-6]$/.test(String(node.tag))) return `${path}.tag`;
 		if (type === "list" && !["bullet", "number", "check"].includes(String(node.listType)))
 			return `${path}.listType`;

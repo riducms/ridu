@@ -128,16 +128,12 @@ func (engine *Engine) ResolveFilteredSelection(ctx context.Context, request Filt
 		itemContext := operationContext
 		itemContext.ID = id
 		itemContext.Data = store.CloneValues(document.Values)
-		capabilities, capabilityError := engine.operationCapabilities(state.transaction, collection, itemContext, &document, deletion, request.TrashOnly, localeSelection)
+		capabilities, capabilityError := engine.capabilitiesInTransaction(state.transaction, collection, itemContext, &document, deletion, request.TrashOnly, localeSelection)
 		if capabilityError != nil {
 			return FilteredSelectionResult{}, capabilityError
 		}
-		fields, fieldError := fieldCapabilities(collection, itemContext, &document, capabilities)
-		if fieldError != nil {
-			return FilteredSelectionResult{}, fieldError
-		}
 		items[index] = FilteredSelectionItem{
-			ID: id, Capabilities: AccessCapabilities{Operations: capabilities, Fields: fields},
+			ID: id, Capabilities: capabilities,
 		}
 	}
 	return FilteredSelectionResult{Items: items}, nil

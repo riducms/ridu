@@ -7,14 +7,22 @@ the browser, without a JavaScript server in production.
 
 ## Choose the API for your job
 
-| Job | Import | Register/select it |
-| --- | --- | --- |
-| Add a field type with its own Go rules and structured value | `defineAdminPlugin`, `definePluginField` from `@riducms/plugin/authoring/v1` | Plugin `fields` map; matching field-type key declared in Go |
-| Supply an alternative advanced field editor in a paired plugin | `defineFieldComponent` from `@riducms/plugin/authoring/v1` | Plugin `components` map; Go `.Admin(field.Admin{Editor: field.PluginComponent(owner, name, config)})` |
-| Change how one application's text/number/checkbox-style field looks | `defineFieldEditor` from `@riducms/plugin/editor` | `defineAdmin({ fields })`; Go `.Admin(field.Admin{Editor: field.Component("app:name", config)})` |
-| Add application routes, dashboard panels or other admin UI | `defineAdmin` from `@riducms/plugin/admin` | `admin/src/admin.config.ts` |
-| Customize an application's array/block row headings | `defineRowLabel` from `@riducms/plugin/admin` | `defineAdmin({ rowLabels })`; Go `.Admin(field.Admin{RowLabel: field.Component("app:name", config)})` |
-| Use the shared visual controls | `@riducms/ui` | Compose controls in your component |
+Collection cards can use `listResultsRenderers` without replacing Ridu's list controller. Custom dashboards
+can use `withAdminLoader` with a generated Go loader reference and `AdminLoaderProps<Data>`.
+The same helper pairs loaders with literal custom routes and collection/global/not-found replacement
+views. Results renderers own their links through `list.documentHref(document)` and `Link` from
+`@riducms/admin/routing`.
+See [custom admin views and data](https://riducms.com/docs/custom-components/custom-views/) for the complete
+Go-to-Svelte contract and its deliberate limits.
+
+| Job                                                                 | Import                                                                       | Register/select it                                                                                      |
+| ------------------------------------------------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Add a field type with its own Go rules and structured value         | `defineAdminPlugin`, `definePluginField` from `@riducms/plugin/authoring/v1` | Plugin `fields` map; matching field-type key declared in Go                                             |
+| Supply an alternative advanced field editor in a paired plugin      | `defineFieldComponent` from `@riducms/plugin/authoring/v1`                   | Plugin `fieldEditors` map; Go `.Admin(field.Admin{Editor: field.PluginComponent(owner, name, config)})` |
+| Change how one application's text/number/checkbox-style field looks | `defineFieldEditor` from `@riducms/plugin/editor`                            | `defineAdmin({ fieldEditors })`; Go `.Admin(field.Admin{Editor: field.Component("app:name", config)})`  |
+| Add application routes, dashboard panels or other admin UI          | `defineAdmin` from `@riducms/plugin/admin`                                   | `admin/src/admin.config.ts`                                                                             |
+| Customize an application's array/block row headings                 | `defineRowLabel` from `@riducms/plugin/admin`                                | `defineAdmin({ rowLabels })`; Go `.Admin(field.Admin{RowLabel: field.Component("app:name", config)})`   |
+| Use the shared visual controls                                      | `@riducms/ui`                                                                | Compose controls in your component                                                                      |
 
 Public component/host types are exported from `@riducms/plugin`. The versioned authoring import
 also exports the plugin field types. Do not import private `admin/src` implementations.
@@ -54,27 +62,39 @@ unknown data, returns the shape your component expects, or throws a useful error
 
 ```ts
 export interface NoteValue {
-  text: string;
+	text: string;
 }
 export interface NoteConfig {
-  copyTo: string;
+	copyTo: string;
 }
 
 export function decodeNote(raw: unknown): NoteValue {
-  if (typeof raw !== "object" || raw === null || Array.isArray(raw) ||
-      !("text" in raw) || typeof raw.text !== "string" || Object.keys(raw).length !== 1) {
-    throw new Error("A note must be an object containing only a text string.");
-  }
-  return { text: raw.text };
+	if (
+		typeof raw !== "object" ||
+		raw === null ||
+		Array.isArray(raw) ||
+		!("text" in raw) ||
+		typeof raw.text !== "string" ||
+		Object.keys(raw).length !== 1
+	) {
+		throw new Error("A note must be an object containing only a text string.");
+	}
+	return { text: raw.text };
 }
 
 export function decodeNoteConfig(raw: unknown): NoteConfig {
-  if (typeof raw !== "object" || raw === null || Array.isArray(raw) ||
-      !("copyTo" in raw) || typeof raw.copyTo !== "string" || !raw.copyTo.trim() ||
-      Object.keys(raw).length !== 1) {
-    throw new Error("Note settings must contain a nonempty copyTo field path.");
-  }
-  return { copyTo: raw.copyTo };
+	if (
+		typeof raw !== "object" ||
+		raw === null ||
+		Array.isArray(raw) ||
+		!("copyTo" in raw) ||
+		typeof raw.copyTo !== "string" ||
+		!raw.copyTo.trim() ||
+		Object.keys(raw).length !== 1
+	) {
+		throw new Error("Note settings must contain a nonempty copyTo field path.");
+	}
+	return { copyTo: raw.copyTo };
 }
 ```
 
@@ -82,35 +102,34 @@ Then write `note-field.svelte`:
 
 ```svelte
 <script lang="ts">
-  import type { PluginFieldProps } from "@riducms/plugin/authoring/v1";
-  import type { NoteValue, NoteConfig } from "./value";
+	import type { PluginFieldProps } from "@riducms/plugin/authoring/v1";
+	import type { NoteValue, NoteConfig } from "./value";
 
-  let { field, config, form }: PluginFieldProps<NoteValue, NoteConfig> = $props();
-  // Remember this document's Title field while this note editor is open.
-  // svelte-ignore state_referenced_locally
-  const title = form.bind(config.copyTo);
+	let { field, config, form }: PluginFieldProps<NoteValue, NoteConfig> = $props();
+	// Remember this document's Title field while this note editor is open.
+	// svelte-ignore state_referenced_locally
+	const title = form.bind(config.copyTo);
 </script>
 
 <label for={field.schema.id}>{field.schema.admin.label}</label>
 <textarea
-  id={field.schema.id}
-  name={field.schema.path}
-  required={field.schema.required}
-  readonly={field.readOnly}
-  aria-invalid={field.issues.length > 0}
-  aria-describedby={`${field.schema.id}-issues`}
-  value={field.value?.text ?? ""}
-  oninput={(event) => field.set({ text: event.currentTarget.value })}
-></textarea>
+	id={field.schema.id}
+	name={field.schema.path}
+	required={field.schema.required}
+	readonly={field.readOnly}
+	aria-invalid={field.issues.length > 0}
+	aria-describedby={`${field.schema.id}-issues`}
+	value={field.value?.text ?? ""}
+	oninput={(event) => field.set({ text: event.currentTarget.value })}></textarea>
 <div id={`${field.schema.id}-issues`} aria-live="polite">
-  {#each field.issues as issue}<p>{issue.message}</p>{/each}
+	{#each field.issues as issue}<p>{issue.message}</p>{/each}
 </div>
 <button
-  type="button"
-  disabled={field.readOnly || title.readOnly || !field.value?.text}
-  onclick={() => title.set(field.value?.text ?? null)}
+	type="button"
+	disabled={field.readOnly || title.readOnly || !field.value?.text}
+	onclick={() => title.set(field.value?.text ?? null)}
 >
-  Use note as title
+	Use note as title
 </button>
 ```
 
@@ -122,15 +141,15 @@ import NoteField from "./note-field.svelte";
 import { decodeNote, decodeNoteConfig } from "./value";
 
 export const editorialAdminPlugin = defineAdminPlugin({
-  key: "editorial-tools",
-  pairingVersion: 1,
-  fields: {
-    "review-note": definePluginField({
-      component: NoteField,
-      decodeValue: decodeNote,
-      decodeConfig: decodeNoteConfig,
-    }),
-  },
+	key: "editorial-tools",
+	pairingVersion: 1,
+	fields: {
+		"review-note": definePluginField({
+			component: NoteField,
+			decodeValue: decodeNote,
+			decodeConfig: decodeNoteConfig,
+		}),
+	},
 });
 ```
 
@@ -185,14 +204,14 @@ expects. This is different from your own `field`, which has your registered deco
 
 ## Values, config and validation
 
-| API | Meaning |
-| --- | --- |
-| `field.value` | Latest checked form value, including unsaved edits. Objects/arrays are copies. |
-| `field.rawValue` | Copied data before decoding, useful for recovery UI when old data is unsupported. |
+| API               | Meaning                                                                                    |
+| ----------------- | ------------------------------------------------------------------------------------------ |
+| `field.value`     | Latest checked form value, including unsaved edits. Objects/arrays are copies.             |
+| `field.rawValue`  | Copied data before decoding, useful for recovery UI when old data is unsupported.          |
 | `field.set(next)` | Replace this value in the normal unsaved form. Use `null` to clear; undefined is rejected. |
-| `field.issues` | Current form/server validation issues for the field and its children. |
-| `form.get(path)` | Copy a value at its current document-root path; does not remember a row's identity. |
-| `form.snapshot()` | Copy current form values once. It is neither live state nor a server fetch. |
+| `field.issues`    | Current form/server validation issues for the field and its children.                      |
+| `form.get(path)`  | Copy a value at its current document-root path; does not remember a row's identity.        |
+| `form.snapshot()` | Copy current form values once. It is neither live state nor a server fetch.                |
 
 Changing an object returned by a read does not edit the form. Call `set` with a replacement value.
 Ridu copies values supplied to `set` too, so mutating your original object afterward does not
@@ -226,11 +245,17 @@ final checks on saving; UI customization does not change storage, filtering or o
 - `collections`: available collection definitions, not the documents themselves.
 - `locale`: content locale, separate from the admin interface language.
 - `documentRevision`: an admin change counter for refreshing UI, not a saved `_revision` number.
+- `canCreateDocument(collection)`: a live presentation hint for showing collection create controls.
+  The reference browser and operation engine still authorize the actual create operation.
 - `findDocument(collection, id, signal?)`: fetch a saved document in the current locale. It does
   not read the current form's unsaved changes.
 - `referenceBrowser`: the related-document picker/editor. Render it and update your field in
-  `onCommit(ids)`. Return false to keep it open; otherwise it closes after acceptance. Saving a
-  related document inside the picker is a separate server operation.
+  `onCommit(ids, collectionSlug)`. Supply `collections` to offer a collection selector; switching
+  clears the list query and uncommitted selection. The admin offers only collections the current
+  session can read and does not browse or commit when none are available. A static `optionFilter`
+  applies to every offered collection; pass a collection-aware resolver when their filter fields
+  differ. Return false to keep it open; otherwise it closes after acceptance. Saving a related
+  document inside the picker is a separate server operation.
 - `requestPlugin<Result>(path, body, signal?)`: POST to this renderer's paired Go plugin endpoint,
   using a relative path such as `generate-title`. The response generic does not validate data;
   request `unknown` and decode it when needed. This does not update your form automatically.
@@ -250,7 +275,7 @@ To edit an existing item's fields directly in the parent form, render:
 
 ```svelte
 {#if selectedIdentity !== undefined && authoring.schemaForm !== undefined}
-  {@render authoring.schemaForm({ treeKey: "widgets", identity: selectedIdentity })}
+	{@render authoring.schemaForm({ treeKey: "widgets", identity: selectedIdentity })}
 {/if}
 ```
 
@@ -264,11 +289,11 @@ name input and its feedback:
 
 ```svelte
 {#if authoring.schemaHeader !== undefined}
-  {@render authoring.schemaHeader({
-    treeKey: "widgets",
-    identity: selectedIdentity,
-    onChange: ({ field, value }) => updateWidgetField(selectedIdentity, field, value),
-  })}
+	{@render authoring.schemaHeader({
+		treeKey: "widgets",
+		identity: selectedIdentity,
+		onChange: ({ field, value }) => updateWidgetField(selectedIdentity, field, value),
+	})}
 {/if}
 ```
 
@@ -305,14 +330,19 @@ embedded-form example and the [rich-text package](../plugin-richtext/) for an ed
 
 ## Other admin UI
 
-Both paired plugins and `defineAdmin` can register `routes`, `dashboard`, `login`, `account`,
-`navigation`, `logoutButton`, `views`, `branding`, `shell`, `providers`, `listCells`,
-`documentActions` and `documentViews`.
+Both paired plugins and `defineAdmin` can register `routes`, `dashboardPanels`, `login`, `account`,
+`navigation`, `logoutButton`, `coreViews`, `branding`, `shellSlots`, `providers`,
+`listCellRenderers`, `listResultsRenderers`, `documentActions` and `documentViews`.
 
 Replacement login/account/navigation/core-view components receive a `defaultView` snippet.
 Render `{@render defaultView()}` to keep the normal screen inside your wrapper. Providers must
 render their `defaultView` to include the nested admin. Host methods perform login/logout,
 refreshes and notifications; application-specific operations use the generated SDK.
+
+`logoutButton` replaces the sign-out control in the navigation footer and receives `host.logout()`.
+The Payload-style shell places this control there rather than in the account menu. A full navigation
+replacement should render its `defaultView` when it wants to retain the framework navigation and
+logout control.
 
 Collection/global view replacements may target one resource or act as a fallback. An exact
 resource match wins over its fallback; duplicate targets and exclusive replacements fail.
@@ -366,6 +396,9 @@ interactions as well.
 
 For custom UI, use the documented editor contracts and run the checks above in the consuming
 application so its Svelte and TypeScript configuration checks the complete integration.
+
+The [custom components guide](https://riducms.com/docs/custom-components/) explains when a
+component is a routed view, form-bound editor, read-only renderer, shell slot, or reusable primitive.
 
 - [Plugin fields and editors](https://riducms.com/docs/fields/plugin/)
 - [Building plugins](https://riducms.com/docs/plugins/)

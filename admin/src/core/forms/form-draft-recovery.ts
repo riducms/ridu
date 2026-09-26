@@ -1,3 +1,4 @@
+import { isRecord } from "@riducms/protocol";
 import type { SchemaCollection } from "@riducms/protocol";
 
 import { cloneFormValues, type FormValues } from "@admin/core/forms/form-schema";
@@ -52,6 +53,22 @@ export function takeFormDraft(
 	}
 }
 
+/** Read a valid recovery checkpoint without consuming it. Startup uses this to
+ * finish data-dependent access before the owning form adopts the draft. */
+export function peekFormDraft(
+	collectionID: string,
+	documentID: string | undefined
+): FormDraftCheckpoint | undefined {
+	try {
+		const encoded = sessionStorage.getItem(storageKey(collectionID, documentID));
+		if (encoded === null) return undefined;
+		const decoded: unknown = JSON.parse(encoded);
+		return isCheckpoint(decoded, collectionID, documentID) ? decoded : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
 export function clearFormDraft(collectionID: string, documentID: string | undefined): void {
 	try {
 		sessionStorage.removeItem(storageKey(collectionID, documentID));
@@ -73,8 +90,4 @@ function isCheckpoint(
 	if (!isRecord(value.collection) || value.collection.id !== collectionID) return false;
 	if (value.documentID !== documentID) return false;
 	return isRecord(value.values) && isRecord(value.original) && typeof value.createdAt === "string";
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
 }

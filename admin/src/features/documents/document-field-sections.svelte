@@ -1,4 +1,5 @@
 <script lang="ts">
+	import "@admin/features/documents/document-field-sections.scss";
 	import type { SchemaField } from "@riducms/protocol";
 
 	import type { FormController } from "@admin/core/forms/form-controller.svelte";
@@ -21,25 +22,15 @@
 	<FieldLayout fields={partition.content} {form} />
 {:else}
 	<div
-		class={[
-			"grid min-w-0 gap-8",
-			!stacked && "xl:grid-cols-[minmax(0,1fr)_minmax(260px,340px)] xl:items-start",
-		]}
+		class={["ridu-document-sections", !stacked && "ridu-document-sections--sidebar"]}
 		data-document-field-columns
 	>
 		{#if partition.content.length > 0}
-			<div class="min-w-0" data-document-main-fields>
+			<div class="ridu-document-sections__main" data-document-main-fields>
 				<FieldLayout fields={partition.content} {form} />
 			</div>
 		{/if}
-		<aside
-			class={[
-				"min-w-0 border-t border-control-border pt-7",
-				!stacked && "xl:border-t-0 xl:border-s xl:pt-0 xl:ps-7",
-				!stacked && partition.content.length === 0 && "xl:col-start-2",
-			]}
-			data-document-sidebar-fields
-		>
+		<aside class="ridu-document-sections__sidebar" data-document-sidebar-fields>
 			<FieldLayout fields={partition.sidebar} {form} />
 		</aside>
 	</div>

@@ -54,6 +54,14 @@ proposed document allow them. The server always rechecks the action when invoked
 
 ![A Post editor showing a published status, selected author, populated rich text, document tabs, and a successful-create notice.](https://raw.githubusercontent.com/riducms/ridu/main/docs/assets/ridu-admin-post-editor.png)
 
+## Inspect the document API {#api}
+
+Open the document's **API** tab to see its current JSON response. You can refresh it, choose a
+content locale and relationship depth, and copy the request URL. The **API reference** button on
+that tab opens collection-specific list, read, create, update, and delete examples in TypeScript,
+cURL, and Go. When editing an existing document, the read example includes its ID. These examples
+describe requests; opening the drawer does not run a mutation.
+
 ## Presentation is not authorization {#access}
 
 `ReadOnly`, `Hidden`, conditions, tabs, and plugin controls affect the editor. They cannot protect a

@@ -4,7 +4,7 @@ import type { SchemaCollection, SchemaField } from "@riducms/protocol";
 
 import { PreferenceWriteQueue } from "@admin/core/preferences/preference-write-queue";
 import {
-	buildListFilterWhere,
+	bulkEditableListFields,
 	defaultListColumns,
 	filterableFields,
 	filterOperatorsFor,
@@ -23,20 +23,94 @@ const fields = [
 ] as SchemaField[];
 
 describe("collection list workspace", () => {
-	test("decodes typed filters into the existing REST where shape", () => {
+	test("limits scalar bulk editing to values represented by the bulk editor", () => {
+		const scalar: SchemaField = {
+			...fields[3]!,
+			id: "status",
+			category: "scalar",
+			required: false,
+			unique: false,
+			select: { options: [], hasMany: false },
+		};
+		expect(
+			bulkEditableListFields([
+				scalar,
+				{
+					...scalar,
+					id: "tags",
+					name: "tags",
+					path: "tags",
+					select: { options: [], hasMany: true },
+				},
+				{ ...scalar, id: "localized", name: "localized", path: "localized", localized: true },
+				{
+					...scalar,
+					id: "readonly",
+					name: "readonly",
+					path: "readonly",
+					admin: { label: "Readonly", readOnly: true },
+				},
+				{
+					...scalar,
+					id: "unique",
+					name: "unique",
+					path: "unique",
+					unique: true,
+				},
+				{
+					...scalar,
+					id: "hidden",
+					name: "hidden",
+					path: "hidden",
+					admin: { label: "Hidden", hidden: true },
+				},
+				{
+					...scalar,
+					id: "virtual",
+					name: "virtual",
+					path: "virtual",
+					virtual: { valueType: "string" },
+				},
+				{
+					...scalar,
+					id: "conditional",
+					name: "conditional",
+					path: "conditional",
+					admin: {
+						label: "Conditional",
+						condition: {
+							kind: "predicate",
+							predicate: {
+								scope: "document",
+								path: "status",
+								operator: "equals",
+								values: [{ type: "string", value: "published" }],
+							},
+						},
+					},
+				},
+			]).map((field) => field.path)
+		).toEqual(["status"]);
+	});
+
+	test("normalizes URL filters for the filter controls", () => {
 		const filters = parseListFilters(
 			JSON.stringify([
-				{ field: "title", operator: "like", value: "launch" },
-				{ field: "capacity", operator: "greaterThanEqual", value: 50 },
-				{ field: "online", operator: "equals", value: "true" },
-				{ field: "missing", operator: "equals", value: "ignored" },
+				[
+					{ field: "title", operator: "like", value: "launch" },
+					{ field: "capacity", operator: "greaterThanEqual", value: 50 },
+					{ field: "online", operator: "equals", value: "true" },
+					{ field: "missing", operator: "equals", value: "ignored" },
+				],
 			]),
 			fields
 		);
-		expect(buildListFilterWhere(filters, fields)).toEqual([
-			{ title: { like: "launch" } },
-			{ capacity: { greaterThanEqual: 50 } },
-			{ online: { equals: true } },
+		expect(filters).toEqual([
+			[
+				{ field: "title", operator: "like", value: "launch" },
+				{ field: "capacity", operator: "greaterThanEqual", value: "50" },
+				{ field: "online", operator: "equals", value: "true" },
+			],
 		]);
 	});
 
@@ -105,10 +179,17 @@ describe("collection list workspace", () => {
 			},
 		] as SchemaField[];
 		expect(
-			listColumnFields({ fields: candidates } as SchemaCollection, "title").map(
-				(field) => field.path
-			)
-		).toEqual(["capacity", "online", "status", "seo.description", "links", "layout", "content"]);
+			listColumnFields({ fields: candidates } as SchemaCollection).map((field) => field.path)
+		).toEqual([
+			"title",
+			"capacity",
+			"online",
+			"status",
+			"seo.description",
+			"links",
+			"layout",
+			"content",
+		]);
 		expect(filterableFields(candidates).map((field) => field.path)).toEqual([
 			"title",
 			"capacity",
@@ -127,35 +208,36 @@ describe("collection list workspace", () => {
 		const collection = {
 			admin: { defaultColumns: ["title", "status", "capacity"] },
 		} as SchemaCollection;
-		expect(defaultListColumns(collection, fields.slice(1))).toEqual(["status", "capacity"]);
+		expect(
+			defaultListColumns(
+				collection,
+				fields.slice(1).map((field) => ({ path: field.path, label: field.admin.label, field }))
+			)
+		).toEqual(["status", "capacity"]);
 		expect(parseListPageSize("100")).toBe(100);
-		expect(parseListPageSize("1000")).toBe(25);
+		expect(parseListPageSize("1000")).toBe(10);
 		expect(
 			normalizeWorkspacePreference(
 				{
-					columns: ["capacity", "missing"],
-					showStatus: false,
-					showID: true,
-					showCreated: true,
-					showUpdated: true,
+					columns: [
+						{ path: "capacity", active: true },
+						{ path: "missing", active: true },
+					],
 					limit: 50,
 				},
 				fields,
 				{
 					columns: [],
-					showStatus: true,
-					showID: false,
-					showCreated: false,
-					showUpdated: true,
 					limit: 25,
 				}
 			)
 		).toEqual({
-			columns: ["capacity"],
-			showStatus: false,
-			showID: true,
-			showCreated: true,
-			showUpdated: true,
+			columns: [
+				{ path: "capacity", active: true },
+				{ path: "title", active: false },
+				{ path: "online", active: false },
+				{ path: "status", active: false },
+			],
 			limit: 50,
 		});
 	});

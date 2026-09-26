@@ -26,7 +26,7 @@ const authoringAPIVersion = 1;
  *
  * Use `fields` for the default editors of new Go field types. Each map key matches
  * a Go `PluginFieldType.Key`, and each value is returned by `definePluginField`.
- * Use `components` for alternative editors made with `defineFieldComponent`,
+ * Use `fieldEditors` for alternative editors made with `defineFieldComponent`,
  * selected explicitly in Go with `field.PluginComponent`. The other options add
  * pages, dashboard panels, navigation, and the UI described by `AdminContributions`.
  *
@@ -60,9 +60,9 @@ export function defineAdminPlugin<const Plugin extends Omit<AdminPlugin, "apiVer
 	const result = Object.freeze({
 		...plugin,
 		...(plugin.fields === undefined ? {} : { fields: Object.freeze({ ...plugin.fields }) }),
-		...(plugin.components === undefined
+		...(plugin.fieldEditors === undefined
 			? {}
-			: { components: Object.freeze({ ...plugin.components }) }),
+			: { fieldEditors: Object.freeze({ ...plugin.fieldEditors }) }),
 		apiVersion: authoringAPIVersion,
 	});
 	const definition: Omit<AdminPlugin, "apiVersion"> = plugin;

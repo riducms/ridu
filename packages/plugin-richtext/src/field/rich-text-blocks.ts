@@ -1,4 +1,4 @@
-import { resolveBlockTypes } from "@riducms/protocol";
+import { isRecord, resolveBlockTypes } from "@riducms/protocol";
 import type { SchemaBlockType, SchemaField } from "@riducms/protocol";
 
 /** The allowlist comes from resolved executable schemas, never plugin settings. */
@@ -10,10 +10,6 @@ export function richTextBlockTypes(field: SchemaField): readonly SchemaBlockType
 				?.cases.find((entry) => entry.tagValue === "block")
 		) ?? []
 	);
-}
-
-export function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 export function blockSummary(fields: Record<string, unknown>, type?: SchemaBlockType): string {

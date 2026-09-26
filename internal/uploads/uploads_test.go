@@ -17,6 +17,7 @@ import (
 	localstorage "github.com/riducms/ridu/adapters/storage/local"
 	"github.com/riducms/ridu/internal/teststore"
 	"github.com/riducms/ridu/internal/uploads"
+	"github.com/riducms/ridu/protocol"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/storage"
 	"github.com/riducms/ridu/store"
@@ -119,7 +120,7 @@ func TestPrepareSniffsImageAndCreatesConfiguredSize(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer prepared.Release()
-	if len(prepared.Keys) != 2 {
+	if len(prepared.Keys) != 3 {
 		t.Fatalf("keys = %v", prepared.Keys)
 	}
 	if filename, _ := prepared.Values["filename"].StringValue(); filename != "unsafe-name.png" {
@@ -289,7 +290,7 @@ func TestDuplicateCopiesOriginalAndDerivedSizes(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer duplicate.Release()
-	if len(duplicate.Keys) != 2 {
+	if len(duplicate.Keys) != 3 {
 		t.Fatalf("duplicated keys = %v", duplicate.Keys)
 	}
 	originalKey, _ := prepared.Values["objectKey"].StringValue()
@@ -345,7 +346,7 @@ func TestRegenerateImageUsesFocalPointForCoverCrop(t *testing.T) {
 	if err := backend.Put(context.Background(), "ridu/test/objects/0123456789abcdef0123456789abcdef/original.png", bytes.NewReader(encoded.Bytes()), int64(encoded.Len()), "image/png"); err != nil {
 		t.Fatal(err)
 	}
-	collection := schema.Collection{Slug: "media", Upload: &schema.UploadSettings{ImageSizes: []schema.ImageSize{{Name: "square", Width: 4, Height: 4, Fit: "cover"}}}}
+	collection := schema.Collection{Slug: "media", Upload: &schema.UploadSettings{MaxFileSize: 4096, MimeTypes: []string{"image/png"}, ImageSizes: []schema.ImageSize{{Name: "square", Width: 4, Height: 4, Fit: "cover"}}}}
 	manager := uploads.Manager{Backend: backend, Locker: teststore.New(), Namespace: "test"}
 	left, err := manager.RegenerateImage(context.Background(), collection, uploads.ImageInput{ObjectKey: "ridu/test/objects/0123456789abcdef0123456789abcdef/original.png", FocalX: 0, FocalY: 50})
 	if err != nil {
@@ -388,7 +389,7 @@ func TestRegenerateImageAppliesAndValidatesFreeformCrop(t *testing.T) {
 	if err := backend.Put(context.Background(), "ridu/test/objects/0123456789abcdef0123456789abcdef/original.png", bytes.NewReader(encoded.Bytes()), int64(encoded.Len()), "image/png"); err != nil {
 		t.Fatal(err)
 	}
-	collection := schema.Collection{Slug: "media", Upload: &schema.UploadSettings{ImageSizes: []schema.ImageSize{{Name: "square", Width: 4, Height: 4, Fit: "cover"}}}}
+	collection := schema.Collection{Slug: "media", Upload: &schema.UploadSettings{MaxFileSize: 4096, MimeTypes: []string{"image/png"}, ImageSizes: []schema.ImageSize{{Name: "square", Width: 4, Height: 4, Fit: "cover"}}}}
 	manager := uploads.Manager{Backend: backend, Locker: teststore.New(), Namespace: "test"}
 	prepared, err := manager.RegenerateImage(context.Background(), collection, uploads.ImageInput{ObjectKey: "ridu/test/objects/0123456789abcdef0123456789abcdef/original.png", FocalX: 50, FocalY: 50, CropX: 50, CropY: 0, CropWidth: 50, CropHeight: 100})
 	if err != nil {
@@ -424,7 +425,7 @@ func TestRegenerateImageKeepsFocalCoordinatesRelativeToOriginalDuringCrop(t *tes
 	if err := backend.Put(context.Background(), "ridu/test/objects/0123456789abcdef0123456789abcdef/original.png", bytes.NewReader(encoded.Bytes()), int64(encoded.Len()), "image/png"); err != nil {
 		t.Fatal(err)
 	}
-	collection := schema.Collection{Slug: "media", Upload: &schema.UploadSettings{ImageSizes: []schema.ImageSize{{Name: "square", Width: 4, Height: 4, Fit: "cover"}}}}
+	collection := schema.Collection{Slug: "media", Upload: &schema.UploadSettings{MaxFileSize: 4096, MimeTypes: []string{"image/png"}, ImageSizes: []schema.ImageSize{{Name: "square", Width: 4, Height: 4, Fit: "cover"}}}}
 	prepared, err := (uploads.Manager{Backend: backend, Locker: teststore.New(), Namespace: "test"}).RegenerateImage(context.Background(), collection, uploads.ImageInput{
 		ObjectKey: "ridu/test/objects/0123456789abcdef0123456789abcdef/original.png", FocalX: 75, FocalY: 50,
 		CropX: 25, CropY: 0, CropWidth: 50, CropHeight: 100,
@@ -491,9 +492,48 @@ func variantPixel(t *testing.T, backend *localstorage.Backend, prepared uploads.
 	if err != nil {
 		t.Fatal(err)
 	}
-	decoded, err := jpeg.Decode(bytes.NewReader(encoded))
+	decoded, _, err := image.Decode(bytes.NewReader(encoded))
 	if err != nil {
 		t.Fatal(err)
 	}
 	return decoded.At(2, 2)
+}
+
+func TestPrepareOrientsEXIFBeforeApplyingSourceCrop(t *testing.T) {
+	backend, err := localstorage.New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var encoded bytes.Buffer
+	if err := jpeg.Encode(&encoded, image.NewRGBA(image.Rect(0, 0, 8, 4)), nil); err != nil {
+		t.Fatal(err)
+	}
+	// Little-endian TIFF orientation 6: the 8x4 encoded image displays as 4x8.
+	exif := []byte{'E', 'x', 'i', 'f', 0, 0, 'I', 'I', 42, 0, 8, 0, 0, 0, 1, 0, 0x12, 1, 3, 0, 1, 0, 0, 0, 6, 0, 0, 0, 0, 0, 0, 0}
+	original := append([]byte{0xff, 0xd8, 0xff, 0xe1, 0, byte(len(exif) + 2)}, exif...)
+	original = append(original, encoded.Bytes()[2:]...)
+	collection := schema.Collection{Slug: "media", Upload: &schema.UploadSettings{MaxFileSize: 4096, MimeTypes: []string{"image/jpeg"}}}
+	prepared, err := (uploads.Manager{Backend: backend, Locker: teststore.New(), Namespace: "orientation"}).Prepare(t.Context(), collection, uploads.Input{
+		Filename: "phone.jpg", Reader: bytes.NewReader(original),
+		Image: &protocol.UploadImageEdit{FocalX: 50, FocalY: 50, CropWidth: 50, CropHeight: 100},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer prepared.Release()
+	width, _ := prepared.Values["width"].NumberValue()
+	height, _ := prepared.Values["height"].NumberValue()
+	if width != 2 || height != 8 {
+		t.Fatalf("oriented crop = %vx%v, want 2x8", width, height)
+	}
+	key, _ := prepared.Values["source"].Get("objectKey").StringValue()
+	reader, _, err := backend.Open(t.Context(), key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reader.Close()
+	retained, err := io.ReadAll(reader)
+	if err != nil || !bytes.Equal(retained, original) {
+		t.Fatal("private EXIF original was altered")
+	}
 }

@@ -1,17 +1,14 @@
 <script lang="ts">
 	import type { Snippet } from "svelte";
+	import "@admin/features/auth/auth.scss";
 
-	let {
-		brand,
-		children,
-		wide = false,
-	}: { brand?: Snippet; children: Snippet; wide?: boolean } = $props();
+	let { brand, children }: { brand?: Snippet; children: Snippet } = $props();
 </script>
 
-<main class="grid min-h-screen place-items-center bg-background px-5 py-12 sm:px-8">
-	<section class={["w-full", wide ? "max-w-180" : "max-w-120"]}>
+<main class="ridu-auth">
+	<section class="ridu-auth__content">
 		{#if brand !== undefined}
-			<header class="mb-10 flex items-center">{@render brand()}</header>
+			<header class="ridu-auth__brand">{@render brand()}</header>
 		{/if}
 		{@render children()}
 	</section>

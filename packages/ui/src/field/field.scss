@@ -1,0 +1,117 @@
+@use "../layers.css";
+
+@layer ridu.components {
+	.ridu-field,
+	.ridu-field-feedback,
+	.ridu-field-control {
+		display: grid;
+		gap: 5px;
+		min-width: 0;
+	}
+	.ridu-field-control {
+		position: relative;
+	}
+	.ridu-field-heading {
+		display: flex;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: 4px;
+		min-width: 0;
+		min-height: var(--line-height-body);
+	}
+	.ridu-field-label {
+		min-width: 0;
+		color: var(--ink-label);
+		font-size: var(--font-size-body);
+		font-weight: 400;
+	}
+	.ridu-field-heading-action {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		min-width: 0;
+	}
+
+	.ridu-field-required {
+		margin-inline-start: 5px;
+		color: var(--destructive);
+		font-weight: 400;
+		&:empty::after {
+			content: "*";
+		}
+	}
+
+	.ridu-field-status {
+		border: 1px solid var(--border);
+		border-radius: 999px;
+		padding: 0.08rem 0.42rem;
+		font-family: var(--font-mono);
+		font-size: 0.625rem;
+		font-weight: 400;
+		line-height: 1.5;
+		color: var(--ink-muted);
+	}
+
+	.ridu-field-help {
+		color: var(--ink-muted);
+		font-size: var(--font-size-body);
+		line-height: 1.5;
+	}
+
+	.ridu-field-error {
+		color: var(--destructive);
+		font-size: var(--font-size-body);
+		line-height: 1.5;
+	}
+
+	/*
+ * Validation feedback is a status surface, not an interactive tooltip. Keep it
+ * anchored to the control without covering its hit target or replacing help copy.
+ */
+	.ridu-field-error-tooltip {
+		position: absolute;
+		z-index: 20;
+		inset-inline-end: 0;
+		inset-block-end: calc(100% + 6px);
+		max-inline-size: 75%;
+		margin: 0;
+		border-radius: 2px;
+		padding: 4px 8px;
+		background: var(--field-error-surface);
+		color: var(--field-error-foreground);
+		font-size: var(--font-size-body);
+		font-weight: 400;
+		line-height: 15px;
+		list-style: none;
+		overflow-wrap: anywhere;
+		pointer-events: none;
+	}
+
+	.ridu-field-error-tooltip::after {
+		position: absolute;
+		inset-block-start: 100%;
+		inset-inline-end: 16px;
+		inline-size: 0;
+		block-size: 0;
+		border: 6px solid transparent;
+		border-block-start-color: var(--field-error-surface);
+		content: "";
+	}
+
+	.ridu-field-error-tooltip > p,
+	.ridu-field-error-tooltip > :where(ul, ol) {
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	.ridu-field-error-tooltip li + li {
+		margin-block-start: 0.2rem;
+	}
+
+	@media (max-width: 34rem) {
+		.ridu-field-error-tooltip {
+			max-inline-size: calc(100% - 0.5rem);
+		}
+	}
+}

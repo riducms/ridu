@@ -1,4 +1,4 @@
-import type { Pagination } from "@riducms/protocol";
+import type { CollectionPageAccess, Pagination } from "@riducms/protocol";
 import type { AdminI18n } from "@riducms/plugin";
 import { createAdminI18n } from "@riducms/translations";
 
@@ -17,6 +17,12 @@ export interface RelationshipLookupRequest {
 	searchField: string | undefined;
 	filter: RelationshipFilter;
 	locale?: string;
+	sort?: string;
+	where?: Record<string, unknown>;
+	includeAccess?: boolean;
+	depth?: number;
+	/** Fill quick-picker suggestions without counting already selected documents. */
+	excludeIDs?: readonly string[];
 }
 
 type RelationshipLookupStatus = "initial" | "loading" | "ready" | "failed";
@@ -36,8 +42,8 @@ export class RelationshipLookupController {
 	#known = $state.raw<Record<string, AdminDocument>>({});
 	#pagination = $state.raw<Pagination>(emptyPagination);
 	#error = $state<string>();
+	#access = $state.raw<CollectionPageAccess>();
 	#request?: AbortController;
-	#requestGeneration = 0;
 
 	constructor(
 		readonly client: AdminClient,
@@ -60,6 +66,11 @@ export class RelationshipLookupController {
 		return this.#error;
 	}
 
+	canReadField = (path: string, id?: string) => {
+		const access = id === undefined ? this.#access?.collection : this.#access?.documents[id];
+		return access?.operations.read === true && access.fields[path]?.read !== false;
+	};
+
 	document(id: string) {
 		return this.#known[id];
 	}
@@ -74,56 +85,73 @@ export class RelationshipLookupController {
 	search = async (request: RelationshipLookupRequest) => {
 		this.#request?.abort();
 		const activeRequest = new AbortController();
-		const generation = ++this.#requestGeneration;
 		this.#request = activeRequest;
 		this.#status = "loading";
 		this.#error = undefined;
 
 		try {
-			const page = await this.client.list(request.slug, {
-				page: request.page,
-				limit: request.limit,
-				where: buildRelationshipWhere(request.searchField, request.search, request.filter),
+			const referenceWhere = buildRelationshipWhere(
+				request.searchField,
+				request.search,
+				request.filter
+			);
+			const predicates = [referenceWhere, request.where].filter((where) => where !== undefined);
+			const excluded = new Set(request.excludeIDs);
+			const options = {
+				limit: excluded.size > 0 ? Math.min(100, request.limit + excluded.size) : request.limit,
+				where: predicates.length > 1 ? { and: predicates } : predicates[0],
+				sort: request.sort ? [request.sort] : undefined,
+				depth: request.depth,
+				includeAccess: request.includeAccess,
 				signal: activeRequest.signal,
 				locale: request.locale,
-			});
-			if (activeRequest.signal.aborted || generation !== this.#requestGeneration) return;
-			this.#docs = page.docs;
+			};
+			let nextPage = request.page;
+			let page;
+			const docs: AdminDocument[] = [];
+
+			// Page through bounded requests instead of sending an unbounded exclusion query.
+			do {
+				page = await this.client.list(request.slug, { ...options, page: nextPage++ });
+				if (activeRequest.signal.aborted) return;
+				docs.push(...page.docs.filter((document) => !excluded.has(document.id)));
+			} while (excluded.size > 0 && docs.length < request.limit && page.pagination.hasNextPage);
+
+			this.#docs = excluded.size > 0 ? docs.slice(0, request.limit) : docs;
 			this.#known = {
 				...this.#known,
-				...Object.fromEntries(page.docs.map((document) => [document.id, document])),
+				...Object.fromEntries(this.#docs.map((document) => [document.id, document])),
 			};
 			this.#pagination = page.pagination;
+			this.#access = "access" in page ? page.access : undefined;
 			this.#status = "ready";
 		} catch (cause) {
-			if (activeRequest.signal.aborted || generation !== this.#requestGeneration) return;
+			if (activeRequest.signal.aborted) return;
 			this.#error =
 				cause instanceof Error ? cause.message : this.i18n.t("errors:relationshipDocumentsLoad");
 			this.#status = "failed";
+			this.#access = undefined;
 		} finally {
 			if (this.#request === activeRequest) this.#request = undefined;
 		}
 	};
 
-	loadDocument = async (slug: string, id: string, locale?: string, signal?: AbortSignal) => {
-		const known = this.#known[id];
-		if (known !== undefined) return known;
-		try {
-			const document = await this.client.find(slug, id, { signal, locale });
-			if (signal?.aborted) return undefined;
-			this.remember(document);
-			return document;
-		} catch (cause) {
-			if (signal?.aborted) return undefined;
-			this.#error =
-				cause instanceof Error ? cause.message : this.i18n.t("errors:relatedDocumentLoad");
-			return undefined;
-		}
-	};
-
-	dispose() {
-		this.#requestGeneration += 1;
+	cancelSearch() {
 		this.#request?.abort();
 		this.#request = undefined;
+	}
+
+	reset() {
+		this.cancelSearch();
+		this.#status = "initial";
+		this.#docs = [];
+		this.#known = {};
+		this.#pagination = emptyPagination;
+		this.#access = undefined;
+		this.#error = undefined;
+	}
+
+	dispose() {
+		this.cancelSearch();
 	}
 }

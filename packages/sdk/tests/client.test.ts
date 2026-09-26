@@ -44,6 +44,56 @@ interface TestConfig extends RiduConfigShape {
 }
 
 describe("Fetch client", () => {
+	it("reads semantic list parts through the configured transport without preparing a route", async () => {
+		let captured: Request | undefined;
+		const signal = new AbortController().signal;
+		const data = { query: { trash: true, locale: "fr" }, counts: { "": { value: 0 } } };
+		const client = createClient<TestConfig>({
+			baseURL: "https://cms.example.test",
+			headers: { "x-client": "yes" },
+			fetch: async (request) => {
+				captured = request as Request;
+				return Response.json(data);
+			},
+		});
+		expect(
+			await client.adminCollectionList("posts", "q=hello+world&trash=true&locale=fr", "counts", {
+				signal,
+			})
+		).toEqual(data);
+		const url = new URL(captured!.url);
+		expect(url.pathname).toBe("/api/admin/collection-list/posts");
+		expect(Object.fromEntries(url.searchParams)).toEqual({
+			q: "hello world",
+			trash: "true",
+			locale: "fr",
+			part: "counts",
+		});
+		expect(captured?.method).toBe("GET");
+		expect(captured?.signal).toBe(signal);
+		expect(captured?.headers.get("x-client")).toBe("yes");
+	});
+
+	it("rejects malformed semantic list data at the transport boundary", async () => {
+		const client = createClient<TestConfig>({
+			baseURL: "https://cms.example.test",
+			fetch: async () => Response.json({ query: { trash: false }, page: { value: {} } }),
+		});
+		await expect(client.adminCollectionList("posts", "", "page")).rejects.toBeInstanceOf(TypeError);
+	});
+
+	it("rejects omitted requested parts instead of marking them ready", async () => {
+		for (const part of ["page", "counts"] as const) {
+			const body =
+				part === "page" ? { query: { trash: false }, counts: {} } : { query: { trash: false } };
+			const client = createClient<TestConfig>({
+				baseURL: "https://cms.example.test",
+				fetch: async () => Response.json(body),
+			});
+			await expect(client.adminCollectionList("posts", "", part)).rejects.toBeInstanceOf(TypeError);
+		}
+	});
+
 	it("routes plugin requests through the configured client transport", async () => {
 		let captured: Request | undefined;
 		const controller = new AbortController();
@@ -306,23 +356,29 @@ describe("Fetch client", () => {
 				return Response.json({ doc: { id: "media_1", focalX: 20, focalY: 80 } });
 			},
 		});
-		const media = await client.updateUploadImage(
+		const media = await client.updateUpload(
 			"media",
 			"media_1",
-			{ focalX: 20, focalY: 80, cropX: 10, cropY: 15, cropWidth: 70, cropHeight: 60 },
+			{
+				data: { alt: "Edited" },
+				image: { focalX: 20, focalY: 80, cropX: 10, cropY: 15, cropWidth: 70, cropHeight: 60 },
+			},
 			{ revision: 4 }
 		);
 		expect(media.focalX).toBe(20);
 		expect(captured?.method).toBe("PATCH");
-		expect(captured?.url).toBe("https://cms.example.test/api/collections/media/media_1/image");
+		expect(captured?.url).toBe("https://cms.example.test/api/collections/media/media_1/upload");
 		expect(captured?.headers.get("if-match")).toBe('"4"');
 		expect(await captured?.json()).toEqual({
-			focalX: 20,
-			focalY: 80,
-			cropX: 10,
-			cropY: 15,
-			cropWidth: 70,
-			cropHeight: 60,
+			data: { alt: "Edited" },
+			image: {
+				focalX: 20,
+				focalY: 80,
+				cropX: 10,
+				cropY: 15,
+				cropWidth: 70,
+				cropHeight: 60,
+			},
 		});
 	});
 
@@ -415,6 +471,94 @@ describe("Fetch client", () => {
 		expect(url.searchParams.get("depth")).toBe("2");
 		expect(url.searchParams.getAll("sort")).toEqual(["title", "-id"]);
 		expect(url.searchParams.get("trash")).toBe("true");
+	});
+
+	it("decodes opt-in collection page access", async () => {
+		let captured: Request | undefined;
+		const access = {
+			operations: {
+				admin: false,
+				create: true,
+				read: true,
+				readVersions: false,
+				update: true,
+				delete: false,
+				duplicate: true,
+				publish: false,
+				unpublish: false,
+				restoreDeleted: false,
+				deletePermanent: false,
+				selectAll: true,
+			},
+			fields: { title: { read: true, create: true, update: true } },
+		};
+		const client = createClient<TestConfig>({
+			baseURL: "https://cms.example.test",
+			fetch: async (request) => {
+				captured = request as Request;
+				return Response.json({
+					docs: [{ id: "post_1", title: "Hello" }],
+					pagination: {
+						page: 1,
+						limit: 25,
+						totalDocs: 1,
+						totalPages: 1,
+						hasNextPage: false,
+						hasPrevPage: false,
+					},
+					access: { collection: access, documents: { post_1: access } },
+				});
+			},
+		});
+
+		const page = await client.list("posts", { includeAccess: true });
+		expect(new URL(captured?.url ?? "").searchParams.get("include-access")).toBe("true");
+		expect(page.access.collection.operations.create).toBe(true);
+		expect(page.access.documents.post_1?.fields.title?.read).toBe(true);
+	});
+
+	it("rejects an enriched page missing access for a returned document", async () => {
+		const access = {
+			operations: {
+				admin: false,
+				create: true,
+				read: true,
+				readVersions: false,
+				update: true,
+				delete: false,
+				duplicate: true,
+				publish: false,
+				unpublish: false,
+				restoreDeleted: false,
+				deletePermanent: false,
+				selectAll: true,
+			},
+			fields: {},
+		};
+		const client = createClient<TestConfig>({
+			baseURL: "https://cms.example.test",
+			fetch: async () =>
+				Response.json({
+					docs: [{ id: "post_1", title: "Hello" }],
+					pagination: {
+						page: 1,
+						limit: 25,
+						totalDocs: 1,
+						totalPages: 1,
+						hasNextPage: false,
+						hasPrevPage: false,
+					},
+					access: { collection: access, documents: {} },
+				}),
+		});
+
+		try {
+			await client.list("posts", { includeAccess: true });
+			expect.unreachable();
+		} catch (error) {
+			expect(error).toBeInstanceOf(RiduError);
+			if (error instanceof RiduError) expect(error.message).toContain("access capabilities");
+		}
 	});
 
 	it("serializes depth for individual document reads", async () => {
@@ -526,10 +670,14 @@ describe("Fetch client", () => {
 		]);
 	});
 
-	it("gets individual versions and manages scheduled publishes", async () => {
+	it("gets individual versions and manages scheduled publications", async () => {
 		const calls: Array<{ method: string; path: string; revision: string | null }> = [];
+		const scheduledActions: string[] = [];
+		const inputs: unknown[] = [];
 		const scheduled = {
 			id: "publish_1",
+			timeZone: "Asia/Kolkata",
+			action: "publish" as const,
 			documentId: "post_1",
 			expectedRevision: 3,
 			runAt: "2030-01-02T03:04:05.000Z",
@@ -559,9 +707,14 @@ describe("Fetch client", () => {
 					calls.at(-1)!.path += url.search;
 					return Response.json({ doc: { id: "post_1", title: "Earlier", _status: "draft" } });
 				}
-				if (current.method === "POST") return Response.json({ scheduledPublish: scheduled });
+				if (current.method === "POST") {
+					const input = (await current.clone().json()) as { action: "publish" | "unpublish" };
+					scheduledActions.push(input.action);
+					inputs.push(input);
+					return Response.json({ scheduledPublication: { ...scheduled, action: input.action } });
+				}
 				if (current.method === "DELETE") return Response.json({ id: scheduled.id, deleted: true });
-				return Response.json({ scheduledPublishes: [scheduled] });
+				return Response.json({ scheduledPublications: [scheduled] });
 			},
 		});
 
@@ -570,11 +723,31 @@ describe("Fetch client", () => {
 			"draft"
 		);
 		expect(
-			(await client.schedulePublish("posts", "post_1", new Date(scheduled.runAt), { revision: 3 }))
-				.id
+			(
+				await client.schedulePublish("posts", "post_1", new Date(scheduled.runAt), {
+					revision: 3,
+					timeZone: "Asia/Kolkata",
+				})
+			).id
 		).toBe("publish_1");
-		expect(await client.scheduledPublishes("posts", "post_1")).toHaveLength(1);
-		expect((await client.cancelScheduledPublish("posts", "post_1", "publish_1")).deleted).toBe(
+		expect(
+			(
+				await client.scheduleUnpublish("posts", "post_1", scheduled.runAt, {
+					revision: 3,
+					timeZone: "Asia/Kolkata",
+				})
+			).action
+		).toBe("unpublish");
+		expect(scheduledActions).toEqual(["publish", "unpublish"]);
+		expect(inputs).toEqual(
+			["publish", "unpublish"].map((action) => ({
+				action,
+				runAt: scheduled.runAt,
+				timeZone: "Asia/Kolkata",
+			}))
+		);
+		expect(await client.scheduledPublications("posts", "post_1")).toEqual([scheduled]);
+		expect((await client.cancelScheduledPublication("posts", "post_1", "publish_1")).deleted).toBe(
 			true
 		);
 		expect(calls).toEqual([
@@ -584,6 +757,7 @@ describe("Fetch client", () => {
 				path: "/api/collections/posts/post_1/restore/2?draft=true",
 				revision: '"3"',
 			},
+			{ method: "POST", path: "/api/collections/posts/post_1/schedule", revision: '"3"' },
 			{ method: "POST", path: "/api/collections/posts/post_1/schedule", revision: '"3"' },
 			{ method: "GET", path: "/api/collections/posts/post_1/schedule", revision: null },
 			{

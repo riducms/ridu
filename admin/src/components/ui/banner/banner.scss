@@ -1,0 +1,28 @@
+@use "@riducms/ui/layers.css";
+
+@layer ridu.components {
+	.ridu-banner {
+		--banner-surface: var(--background-layer);
+		--banner-color: var(--ink-strong);
+		display: flex;
+		align-items: start;
+		gap: 12px;
+		min-width: 0;
+		padding: 10px;
+		border: 0;
+		border-radius: 4px;
+		background: var(--banner-surface);
+		color: var(--banner-color);
+		font-size: var(--font-size-body);
+		line-height: var(--line-height-body);
+		overflow-wrap: anywhere;
+	}
+	.ridu-banner--warning {
+		--banner-surface: var(--status-warning-surface);
+		--banner-color: var(--status-warning-foreground);
+	}
+	.ridu-banner--destructive {
+		--banner-surface: var(--status-error-surface);
+		--banner-color: var(--status-error-action);
+	}
+}

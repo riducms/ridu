@@ -836,16 +836,10 @@ func (transaction *documentTransaction) dismissTaskForTarget(
 	if err != nil {
 		return err
 	}
-	allowed := task.State == store.TaskStateQueued || task.State == store.TaskStateRunning ||
-		task.State == store.TaskStateFailed || task.State == store.TaskStateCanceled
+	allowed := task.State == store.TaskStateQueued || task.State == store.TaskStateFailed || task.State == store.TaskStateCanceled
 	if !found || !allowed || task.Slug != slug || task.Target == nil ||
 		task.Target.CollectionID != target.CollectionID || task.Target.DocumentID != target.DocumentID {
 		return store.ErrNotFound
-	}
-	if task.State == store.TaskStateRunning {
-		if err := transaction.deleteTaskConcurrencyGuard(ctx, sessionContext, task, task.LeaseToken, false); err != nil {
-			return err
-		}
 	}
 	filter := mongoTaskIdentityFilter(task)
 	filter = append(filter,
@@ -862,6 +856,13 @@ func (transaction *documentTransaction) dismissTaskForTarget(
 		return mongoConfirmedTransactionConflict{}
 	}
 	return nil
+}
+
+func (transaction *documentTransaction) DismissTaskForTarget(ctx context.Context, id, slug string, target store.DocumentReference) error {
+	if err := store.ValidateTaskList(store.TaskList{Slug: slug, Target: &target, Limit: 1}); err != nil {
+		return err
+	}
+	return transaction.dismissTaskForTarget(ctx, id, slug, target)
 }
 
 func (backend *Store) HeartbeatTask(ctx context.Context, id, leaseToken string, leaseDuration time.Duration) error {

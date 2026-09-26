@@ -1,8 +1,42 @@
 package main
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"go/types"
+	"strings"
 	"testing"
+
+	"golang.org/x/tools/go/packages"
 )
+
+func TestTypeSignatureOmitsPrivateFields(t *testing.T) {
+	set := token.NewFileSet()
+	file, err := parser.ParseFile(set, "example.go", `package example
+type Definition struct {
+	Name string
+	key string
+	run func() error
+}
+`, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	group := file.Decls[0].(*ast.GenDecl)
+	loaded := &packages.Package{
+		PkgPath: "example", Name: "example",
+		Types:     types.NewPackage("example", "example"),
+		TypesInfo: &types.Info{Types: map[ast.Expr]types.TypeAndValue{}},
+	}
+	result := typeDeclaration(".", set, loaded, group, group.Specs[0].(*ast.TypeSpec))
+	if !strings.Contains(result.Signature, "Name string") || !strings.Contains(result.Signature, "unexported fields") {
+		t.Fatalf("signature must keep exported fields and indicate opaque state: %s", result.Signature)
+	}
+	if strings.Contains(result.Signature, "key") || strings.Contains(result.Signature, "run") {
+		t.Fatalf("signature exposes implementation details: %s", result.Signature)
+	}
+}
 
 func TestExtractUsesStableIDsAndReceiverNames(t *testing.T) {
 	result, err := extract("../../../..", []string{"./field", "./migration/payload"})

@@ -1,13 +1,14 @@
 <script lang="ts" module>
-	import { tv, type VariantProps } from "@riducms/ui";
+	import "@admin/components/ui/banner/banner.scss";
+	import { cv, type VariantProps } from "@riducms/ui";
 
-	export const bannerVariants = tv({
-		base: "flex min-w-0 items-start gap-3 rounded-[3px] border px-3.5 py-3 text-[13.5px] leading-5",
+	const bannerVariants = cv({
+		base: "ridu-banner",
 		variants: {
 			tone: {
-				warning: "border-warning/30 bg-warning/8 text-warning",
-				destructive: "border-destructive/30 bg-destructive/8 text-destructive",
-				neutral: "border-border bg-muted/35 text-foreground-muted",
+				warning: "ridu-banner--warning",
+				destructive: "ridu-banner--destructive",
+				neutral: "ridu-banner--neutral",
 			},
 		},
 		defaultVariants: { tone: "neutral" },
@@ -19,7 +20,7 @@
 <script lang="ts">
 	import type { HTMLAttributes } from "svelte/elements";
 
-	import { cn, type WithElementRef } from "@riducms/ui";
+	import type { WithElementRef } from "@riducms/ui";
 
 	let {
 		ref = $bindable(null),
@@ -33,7 +34,7 @@
 <div
 	bind:this={ref}
 	data-slot="banner"
-	class={cn(bannerVariants({ tone }), className)}
+	class={[bannerVariants({ tone }), className]}
 	role={tone === "destructive" ? "alert" : "status"}
 	{...restProps}
 >

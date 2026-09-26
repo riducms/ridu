@@ -1,6 +1,7 @@
 import { mountAdmin } from "@riducms/admin";
 import { createClient } from "@riducms/sdk";
 import adminConfig from "./admin.config";
+import "./auth-theme.css";
 const target = document.getElementById("app");
 if (target === null) throw new Error('Ridu admin contract requires an element with id "app".');
 mountAdmin({

@@ -19,13 +19,17 @@ import (
 // Factory must provide isolated, migrated storage and register its cleanup.
 type Factory func(*testing.T, ridu.Config) (store.Store, *ridu.App)
 
+// BenchmarkFactory provides the same isolated storage contract to the opt-in
+// aggregate workload without making its timing report an acceptance test.
+type BenchmarkFactory func(testing.TB, ridu.Config) (store.Store, *ridu.App)
+
 type observations struct {
 	rollback    bool
 	occurrences []operation.OccurrenceID
 	original    map[string]string
 }
 
-func configuration(t *testing.T, seen *observations) ridu.Config {
+func configuration(t testing.TB, seen *observations) ridu.Config {
 	t.Helper()
 	config := content.Config()
 	storage, err := localstorage.New(t.TempDir())

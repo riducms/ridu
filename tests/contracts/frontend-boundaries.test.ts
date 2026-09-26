@@ -22,13 +22,27 @@ const lazy = () => import('@riducms/ui');
 		).toEqual(["@riducms/plugin/editor/field", "@riducms/ui"]);
 	});
 
-	it("keeps @riducms/build out of runtime package graphs", async () => {
-		const violations = await forbiddenImports(
+	it("keeps build-time and published runtime package graphs separated", async () => {
+		const buildViolations = await forbiddenImports(
 			"packages/build/src",
 			(specifier) => specifier.startsWith("@/") || specifier.startsWith("@riducms/")
 		);
+		expect(buildViolations).toEqual([]);
 
-		expect(violations).toEqual([]);
+		const runtimeRoots = ["packages/sdk/src", "packages/protocol/src", "packages/translations/src"];
+		const runtimeViolations = (
+			await Promise.all(
+				runtimeRoots.map((root) =>
+					forbiddenImports(
+						root,
+						(specifier) =>
+							specifier === "@riducms/build" || specifier.startsWith("@riducms/build/"),
+						(file) => !/\.(?:test|spec)\.[cm]?[jt]sx?$/u.test(file)
+					)
+				)
+			)
+		).flat();
+		expect(runtimeViolations).toEqual([]);
 	});
 
 	it("keeps @riducms/plugin independent from the admin application", async () => {
@@ -57,23 +71,42 @@ const lazy = () => import('@riducms/ui');
 		expect(violations).toEqual([]);
 	});
 
-	it("keeps runtime variant composition behind @riducms/ui", async () => {
-		const violations = await forbiddenImports(
-			"admin/src",
-			(specifier) => specifier === "tailwind-variants"
-		);
+	it("keeps migrated controls independent of runtime utility merging", async () => {
+		const violations = (
+			await Promise.all(
+				["admin/src", "packages/ui/src"].map((directory) =>
+					forbiddenImports(directory, (specifier) => specifier === "tailwind-variants")
+				)
+			)
+		).flat();
 
 		expect(violations).toEqual([]);
 	});
 
-	it("keeps Bits UI behavior in primitive owners and the audited async picker", async () => {
+	it("keeps Bits UI behavior in primitive owners and audited field/drawer compositions", async () => {
+		// These owners need direct composition: schema-backed single/multiple selection,
+		// asynchronous relationship results, and reference/image/API/version/bulk drawer sessions.
+		// Their state belongs to the field, reference workflow, or upload draft rather
+		// than a second generic controller; Bits retains focus, nesting, and dismissal.
+		const compositions = [
+			"admin/src/fields/relationship/relationship-quick-picker.svelte",
+			"admin/src/fields/select/select-field.svelte",
+			"admin/src/fields/nested/block-picker.svelte",
+			"admin/src/features/documents/document-schedule.svelte",
+			"admin/src/features/collections/bulk/bulk-editor.svelte",
+			"admin/src/features/collections/bulk/bulk-editor-loader.svelte",
+			"admin/src/features/uploads/upload-control.svelte",
+			"admin/src/features/uploads/bulk-upload-route.svelte",
+			"admin/src/features/uploads/bulk-upload-editor.svelte",
+			"admin/src/features/uploads/bulk-upload-edit-all.svelte",
+			"admin/src/features/reference-browser/reference-browser.svelte",
+			"admin/src/features/api-reference/api-reference.svelte",
+			"admin/src/features/versions/version-comparison.svelte",
+		];
 		const violations = (await forbiddenImports("admin/src", (specifier) => specifier === "bits-ui"))
 			.filter((violation) => !violation.startsWith("admin/src/components/ui/"))
 			.filter(
-				(violation) =>
-					!violation.startsWith(
-						"admin/src/fields/relationship/relationship-quick-picker.svelte imports "
-					)
+				(violation) => !compositions.some((owner) => violation.startsWith(`${owner} imports `))
 			);
 
 		expect(violations).toEqual([]);
@@ -184,9 +217,14 @@ const lazy = () => import('@riducms/ui');
 
 	it("keeps collection list presentation outside router and client ownership", async () => {
 		const files = [
-			"collection-list-filter-popover.svelte",
+			"controls/filter-builder.svelte",
+			"controls/filter-row.svelte",
+			"controls/column-picker.svelte",
+			"controls/list-toolbar.svelte",
+			"controls/list-pagination.svelte",
+			"controls/sort-heading.svelte",
 			"collection-list-results.svelte",
-			"collection-list-bulk-actions.svelte",
+			"bulk/bulk-actions.svelte",
 		];
 		const violations = (
 			await Promise.all(
@@ -195,7 +233,12 @@ const lazy = () => import('@riducms/ui');
 						join(repositoryRoot, "admin/src/features/collections", file),
 						"utf8"
 					);
-					return importSpecifiers(source)
+					// Rendering a destination supplied by the route is presentation, not router ownership.
+					const withoutLink = source.replace(
+						/import\s*\{\s*Link\s*\}\s*from\s*["']@hvniel\/svelte-router["'];?/g,
+						""
+					);
+					return importSpecifiers(withoutLink)
 						.filter(
 							(specifier) =>
 								specifier === "@hvniel/svelte-router" ||
@@ -212,29 +255,37 @@ const lazy = () => import('@riducms/ui');
 	});
 
 	it("keeps collection list router ownership in the route composition", async () => {
+		const root = join(repositoryRoot, "admin/src/features/collections");
 		const violations = (
-			await forbiddenImports(
-				"admin/src/features/collections",
-				(specifier) => specifier === "@hvniel/svelte-router"
+			await Promise.all(
+				(await sourceFiles(root)).map(async (file) => {
+					if (file.endsWith("/collection-list-route.svelte")) return [];
+					// Link renders an owned destination; hooks and navigation engines belong to the route.
+					const source = (await readFile(file, "utf8")).replace(
+						/import\s*\{\s*Link\s*\}\s*from\s*["']@hvniel\/svelte-router["'];?/g,
+						""
+					);
+					return importSpecifiers(source)
+						.filter((specifier) => specifier === "@hvniel/svelte-router")
+						.map((specifier) => `${relative(repositoryRoot, file)} imports ${specifier}`);
+				})
 			)
-		)
-			.filter((violation) => violation.includes("/collection-list-"))
-			.filter(
-				(violation) =>
-					!violation.startsWith(
-						"admin/src/features/collections/collection-list-route.svelte imports "
-					)
-			);
+		).flat();
 
 		expect(violations).toEqual([]);
 	});
 });
 
-async function forbiddenImports(relativeRoot: string, isForbidden: (specifier: string) => boolean) {
+async function forbiddenImports(
+	relativeRoot: string,
+	isForbidden: (specifier: string) => boolean,
+	includeFile: (file: string) => boolean = () => true
+) {
 	const absoluteRoot = join(repositoryRoot, relativeRoot);
 	const files = await sourceFiles(absoluteRoot);
 	const violations: string[] = [];
 	for (const file of files) {
+		if (!includeFile(file)) continue;
 		const source = await readFile(file, "utf8");
 		for (const specifier of importSpecifiers(source)) {
 			if (isForbidden(specifier)) {

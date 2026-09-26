@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Dialog as SheetPrimitive } from "bits-ui";
-	import { cn } from "@riducms/ui";
+	import "@admin/components/ui/sheet/sheet.scss";
 
 	let {
 		ref = $bindable(null),
@@ -12,6 +12,6 @@
 <SheetPrimitive.Title
 	bind:ref
 	data-slot="sheet-title"
-	class={cn("text-base font-medium text-foreground", className)}
+	class={["ridu-sheet__title", className]}
 	{...restProps}
 />

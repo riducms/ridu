@@ -1,4 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
+import { userEvent } from "vitest/browser";
 import { render } from "vitest-browser-svelte";
 import { svelte } from "@hvniel/vite-plugin-svelte-inline-component";
 import type { LiveValidationEnvelope, LiveValidationRequest, SchemaField } from "@riducms/protocol";
@@ -154,7 +155,8 @@ it("a real equal-duplicate move cancels positional feedback despite an identical
 	const screen = await render(Harness, props);
 	props.form.set("values", ["A-1", "A-1"]);
 	props.form.liveValidation.flush("values");
-	await screen.getByRole("button", { name: "Move item 1 down", exact: true }).click();
+	await screen.getByRole("textbox", { name: "Values, item 1", exact: true }).click();
+	await userEvent.keyboard("{Alt>}{ArrowDown}{/Alt}");
 	expect(props.form.get("values")).toEqual(["A-1", "A-1"]);
 	expect(props.requests[0]!.signal.aborted).toBe(true);
 	props.form.liveValidation.flush("values");

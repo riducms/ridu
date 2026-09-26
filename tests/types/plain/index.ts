@@ -20,6 +20,7 @@ import {
 	type RevisionOptions,
 } from "@riducms/sdk";
 import type { ApplyPopulate } from "../../../packages/sdk/src/types";
+import type { CollectionPageEnvelope, PageEnvelope } from "../../../packages/protocol/src/index";
 
 const author: Authors = {
 	id: "author_1",
@@ -95,6 +96,21 @@ const client = createClient({ baseURL: "https://cms.example.test" });
 void client.create("posts", create);
 void client.update("posts", post.id, update);
 void client.list("posts", { where, select, populate });
+
+const plainPage = client.list("posts");
+void plainPage.then((page) => {
+	// @ts-expect-error ordinary list pages do not include access metadata.
+	void page.access;
+});
+const explicitlyPlainPage = client.list("posts", { includeAccess: false });
+void explicitlyPlainPage.then((page) => {
+	// @ts-expect-error literal false preserves the ordinary page envelope.
+	void page.access;
+});
+const enrichedPage = client.list("posts", { includeAccess: true });
+void enrichedPage.then((page) => page.access.collection.operations.read);
+declare const includeAccess: boolean;
+const conditionalPage = client.list("posts", { includeAccess });
 void client.create("posts", create, { locale: "fr", draft: true });
 void client.create("history", { event: "generated" }, { draft: false }).then((document) => {
 	const published: "published" = document._status;
@@ -154,6 +170,9 @@ type Equal<Left, Right> =
 		? true
 		: false;
 type Expect<Value extends true> = Value;
+type ConditionalPage = Expect<
+	Equal<Awaited<typeof conditionalPage>, PageEnvelope<Posts> | CollectionPageEnvelope<Posts>>
+>;
 type CollisionTarget = {
 	id: string;
 	createdAt: string;
@@ -221,6 +240,7 @@ void (0 as unknown as EmptyShorthandPopulation);
 void (0 as unknown as EmptySelectOptionPopulation);
 void (0 as unknown as BooleanPopulation);
 void (0 as unknown as DisabledPopulation);
+void (0 as unknown as ConditionalPage);
 
 const repeatedPopulation = client.find("posts", post.id, {
 	select: { sections: true, layout: true },
@@ -359,7 +379,11 @@ void automaticClient.delete("posts", post.id, revisionBearingMutation);
 
 const revisionOnlyMutation: RevisionOptions = { revision: 1 };
 void automaticClient.schedulePublish("posts", post.id, new Date(), revisionOnlyMutation);
+void automaticClient.scheduleUnpublish("posts", post.id, new Date(), revisionOnlyMutation);
 void automaticClient.update("posts", post.id, update, revisionOnlyMutation);
+
+// @ts-expect-error scheduled unpublish requires draft support, not only version history.
+void automaticClient.scheduleUnpublish("history", "history_1", new Date(), revisionOnlyMutation);
 
 const localizedRevisionMutation: MutationOptions<RiduConfig["locale"]> = {
 	locale: "fr",

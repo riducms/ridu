@@ -1,5 +1,7 @@
 import type {
+	UploadImageEdit,
 	AuthSession,
+	AdminCollectionListDataV1,
 	AuthSessionInfo,
 	AuthActionEnvelope,
 	AuthBootstrapEnvelope,
@@ -8,20 +10,26 @@ import type {
 	AccessCapabilitiesEnvelope,
 	LiveValidationRequest,
 	LiveValidationEnvelope,
+	CollectionPageEnvelope,
 	CollectionSelectionEnvelope,
 	DeleteEnvelope,
 	CountEnvelope,
 	LogoutEnvelope,
 	PageEnvelope,
 	SchemaManifest,
-	ScheduledPublish,
+	ScheduledPublication,
 	DocumentLockEnvelope,
 	JoinMutationEnvelope,
 	JoinMutationInput,
 	PreviewToken,
 } from "@riducms/protocol";
 
-export type { JoinMutationInput, PreviewToken, ScheduledPublish } from "@riducms/protocol";
+export type {
+	UploadImageEdit,
+	JoinMutationInput,
+	PreviewToken,
+	ScheduledPublication,
+} from "@riducms/protocol";
 
 /**
  * Generated type and capability contract for one collection.
@@ -351,6 +359,12 @@ export interface MutationOptions<
 	revision?: number;
 }
 
+/** Revision fence and display timezone for a scheduled publication change. */
+export interface PublicationScheduleOptions extends RevisionOptions {
+	/** Region timezone such as Europe/London, UTC, or a ±HH:mm offset. Does not change runAt. */
+	timeZone?: string;
+}
+
 /** Optimistic-concurrency options for mutations that have no locale semantics. */
 export interface RevisionOptions extends RequestOptions {
 	/** Last observed document revision used for optimistic concurrency. */
@@ -397,22 +411,25 @@ export interface UploadOptions<
 > extends MutationLocaleOptions<Locale> {
 	/** Generated document fields to save alongside the uploaded file. */
 	data?: Partial<Data>;
+	filename?: string;
+	image?: UploadImageEdit;
+	/** Publish a versioned asset on its first save. */
+	publish?: boolean;
 }
 
-/** Focal point and optional crop rectangle used to reprocess an uploaded image. */
-export interface UploadImageInput {
-	/** Horizontal focal point as a percentage from 0 through 100. */
-	focalX: number;
-	/** Vertical focal point as a percentage from 0 through 100. */
-	focalY: number;
-	/** Crop rectangle's horizontal origin as a percentage, when cropping. */
-	cropX?: number;
-	/** Crop rectangle's vertical origin as a percentage, when cropping. */
-	cropY?: number;
-	/** Crop rectangle width as a percentage, when cropping. */
-	cropWidth?: number;
-	/** Crop rectangle height as a percentage, when cropping. */
-	cropHeight?: number;
+/** One atomic update to an upload's metadata, file and image transformation. */
+export interface UpdateUploadInput<Data> {
+	data?: Partial<Data>;
+	file?: Blob;
+	filename?: string;
+	image?: UploadImageEdit;
+	publish?: boolean;
+}
+
+/** A downloaded file which has not yet been persisted as a document. */
+export interface UploadFile {
+	blob: Blob;
+	filename: string;
 }
 
 /** Proposed document context used to resolve collection operation capabilities. */
@@ -485,6 +502,8 @@ export interface ListOptions<
 	sort?: readonly string[];
 	/** Read soft-deleted documents instead of active documents. */
 	trash?: boolean;
+	/** Include collection and per-document access capabilities for this page. */
+	includeAccess?: boolean;
 }
 
 /** Projection, population, and locale controls for reading one document or global. */
@@ -673,6 +692,19 @@ export type CollectionQueryResult<
 	Options
 >;
 
+/** Selects the ordinary or access-enriched page shape from list options. */
+export type CollectionListResult<Document, Options> = Options extends object
+	? "includeAccess" extends keyof Options
+		? true extends OptionProperty<Options, "includeAccess">
+			? false extends OptionProperty<Options, "includeAccess">
+				? PageEnvelope<Document> | CollectionPageEnvelope<Document>
+				: undefined extends OptionProperty<Options, "includeAccess">
+					? PageEnvelope<Document> | CollectionPageEnvelope<Document>
+					: CollectionPageEnvelope<Document>
+			: PageEnvelope<Document>
+		: PageEnvelope<Document>
+	: PageEnvelope<Document>;
+
 /** Result shape inferred from a global slug and its literal locale, select, and populate options. */
 export type GlobalQueryResult<
 	Config extends RiduConfigShape,
@@ -734,6 +766,15 @@ export type Middleware = (request: Request, next: MiddlewareNext) => Promise<Res
  * server failures with `RiduError`, except `request`, which preserves raw Fetch semantics.
  */
 export interface RiduClient<Config extends RiduConfigShape = RiduConfigShape> {
+	/** Compiled admin read for a router-root pathname + search (without the admin basename). */
+	adminLoad(key: string, route: string, options?: RequestOptions): Promise<unknown>;
+	/** Framework list read model, also used for initial route preparation. */
+	adminCollectionList(
+		collection: string,
+		query: string,
+		part: "page" | "counts",
+		options?: RequestOptions
+	): Promise<AdminCollectionListDataV1>;
 	/** Fetch and bind the schema manifest visible to the current client. */
 	schema(options?: RequestOptions): Promise<SchemaManifest>;
 	/**
@@ -979,7 +1020,7 @@ export interface RiduClient<Config extends RiduConfigShape = RiduConfigShape> {
 	>(
 		collection: Slug,
 		options?: Options
-	): Promise<PageEnvelope<CollectionQueryResult<Config, Slug, Options>>>;
+	): Promise<CollectionListResult<CollectionQueryResult<Config, Slug, Options>, Options>>;
 
 	/** Count collection documents matching an access-checked filter. */
 	count<Slug extends CollectionSlug<Config>>(
@@ -1156,13 +1197,27 @@ export interface RiduClient<Config extends RiduConfigShape = RiduConfigShape> {
 		options?: UploadOptions<CreateFor<Config, Slug>, LocaleFor<Config>>
 	): Promise<OutputFor<Config, Slug>>;
 
-	/** Update an uploaded image's focal point or crop and reprocess its derived sizes. */
-	updateUploadImage<Slug extends UploadCollectionSlug<Config>>(
+	/** Save file, image and document edits in one revision-checked mutation. */
+	updateUpload<Slug extends UploadCollectionSlug<Config>>(
 		collection: Slug,
 		id: string,
-		input: UploadImageInput,
-		options?: RevisionOptions
+		input: UpdateUploadInput<UpdateFor<Config, Slug>>,
+		options?: MutationOptions<LocaleFor<Config>>
 	): Promise<OutputFor<Config, Slug>>;
+
+	/** Read an immutable original through editor access. Never publicly cache it. */
+	readUploadSource<Slug extends UploadCollectionSlug<Config>>(
+		collection: Slug,
+		id: string,
+		options?: RequestOptions
+	): Promise<Blob>;
+
+	/** Fetch a remote file for local editing without creating a document. */
+	previewUploadFromURL<Slug extends UploadCollectionSlug<Config>>(
+		collection: Slug,
+		url: string,
+		options?: RequestOptions & { id?: string }
+	): Promise<UploadFile>;
 
 	/** List stored versions for one collection document. */
 	versions<
@@ -1194,18 +1249,26 @@ export interface RiduClient<Config extends RiduConfigShape = RiduConfigShape> {
 		collection: Slug,
 		id: string,
 		runAt: string | Date,
-		options?: RevisionOptions
-	): Promise<ScheduledPublish>;
+		options?: PublicationScheduleOptions
+	): Promise<ScheduledPublication>;
 
-	/** List pending publish jobs for one collection document. */
-	scheduledPublishes<Slug extends VersionCollectionSlug<Config>>(
+	/** Schedule a versioned collection document to unpublish at a future instant. */
+	scheduleUnpublish<Slug extends DraftCollectionSlug<Config>>(
+		collection: Slug,
+		id: string,
+		runAt: string | Date,
+		options?: PublicationScheduleOptions
+	): Promise<ScheduledPublication>;
+
+	/** List pending publication changes for one collection document. */
+	scheduledPublications<Slug extends VersionCollectionSlug<Config>>(
 		collection: Slug,
 		id: string,
 		options?: RequestOptions
-	): Promise<ScheduledPublish[]>;
+	): Promise<ScheduledPublication[]>;
 
-	/** Cancel one pending publish job for a collection document. */
-	cancelScheduledPublish<Slug extends VersionCollectionSlug<Config>>(
+	/** Cancel one pending publication change for a collection document. */
+	cancelScheduledPublication<Slug extends VersionCollectionSlug<Config>>(
 		collection: Slug,
 		id: string,
 		jobID: string,

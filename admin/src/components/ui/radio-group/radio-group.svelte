@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { RadioGroup as RadioGroupPrimitive } from "bits-ui";
-	import { cn } from "@riducms/ui";
+	import "@admin/components/ui/radio-group/radio.scss";
 
 	let {
 		ref = $bindable(null),
@@ -14,6 +14,6 @@
 	bind:ref
 	bind:value
 	data-slot="radio-group"
-	class={cn("grid gap-2", className)}
+	class={className ?? "ridu-radio-group"}
 	{...restProps}
 />

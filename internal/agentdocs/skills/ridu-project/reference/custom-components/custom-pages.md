@@ -75,10 +75,24 @@ For content around an existing screen, use [List and edit views](./custom-views.
 
 ## Fetch and change data {#data}
 
-Use the [generated SDK](../typescript-sdk.md) for data requests. The page runs in the browser,
-so it cannot call Go functions directly. A custom server operation needs its own Go implementation
-and access rules.
+For a report or another page that needs data on arrival, follow
+[Load data for an admin page](./loading-data.md). A registered Go loader
+reads the data, and `withAdminLoader` connects its generated reference to your Svelte page.
+Your component receives a ready-to-use `data` prop and a `refresh` function.
+
+Use the [generated SDK](../typescript-sdk.md) for writes or requests triggered later by user
+interaction. The page itself runs in the browser; a loader's Go function runs on the server.
 
 Being signed in gives access to the page, not automatic permission to every action it offers.
 The API checks permissions whenever the page reads or changes data. Show request failures where
 the user can understand and recover from them.
+
+## Link to another admin page {#links}
+
+Use `Link` from `@riducms/admin/routing` for admin destinations. Its `to` value starts at the
+admin root: `/help` opens `/admin/help` with the default base path. It preserves router navigation
+and unsaved-change prompts. You control the link's content and styling; it can contain a title,
+icon, or an entire card. The [list layout example](./list-results.md#component)
+shows it with document destinations.
+
+Use an ordinary `<a>` for external websites and `mailto:` links.

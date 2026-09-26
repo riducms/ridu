@@ -1,0 +1,152 @@
+@use "@riducms/ui/styles.scss" as ui;
+
+@layer ridu.components {
+	.ridu-bulk-edit-overlay {
+		position: fixed;
+		inset: 0;
+		z-index: 50;
+		@include ui.confirmation-overlay;
+	}
+
+	.ridu-bulk-edit-drawer {
+		--bulk-edit-slide: 60px;
+		position: fixed;
+		inset-block: 0;
+		inset-inline: var(--admin-gutter) 0;
+		z-index: 50;
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) 300px;
+		background: var(--background);
+		color: var(--foreground);
+		font-size: var(--font-size-body);
+		line-height: var(--line-height-body);
+		outline: none;
+		animation: ridu-bulk-edit-in 200ms linear;
+
+		&[dir="rtl"] {
+			--bulk-edit-slide: -60px;
+		}
+
+		&[data-state="closed"] {
+			animation: ridu-bulk-edit-out 200ms linear;
+		}
+	}
+
+	.ridu-bulk-edit-main {
+		min-width: 0;
+		overflow: auto;
+		padding: 40px var(--admin-gutter);
+	}
+
+	.ridu-bulk-edit-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 20px;
+		margin-bottom: 20px;
+	}
+
+	.ridu-bulk-edit-title {
+		margin: 0;
+		font-size: 26px;
+		font-weight: 500;
+		line-height: 32px;
+		overflow-wrap: anywhere;
+	}
+
+	.ridu-bulk-edit-close {
+		display: grid;
+		place-items: center;
+		flex-shrink: 0;
+		width: 32px;
+		height: 32px;
+		border: 0;
+		padding: 0;
+		background: none;
+		color: inherit;
+		cursor: pointer;
+
+		&:focus-visible {
+			@include ui.focus-outline;
+		}
+
+		&:disabled {
+			opacity: 0.5;
+			cursor: not-allowed;
+		}
+
+		svg {
+			width: 24px;
+			height: 24px;
+			stroke-width: 1px;
+		}
+	}
+
+	.ridu-bulk-edit-fields {
+		margin-top: 24px;
+	}
+
+	.ridu-bulk-edit-sidebar {
+		display: flex;
+		align-items: flex-start;
+		justify-content: flex-end;
+		flex-wrap: wrap;
+		align-content: flex-start;
+		gap: 10px;
+		border-inline-start: 1px solid var(--border);
+		padding: 40px 20px;
+		overflow: auto;
+	}
+
+	.ridu-bulk-edit-description {
+		@include ui.visually-hidden;
+	}
+
+	.ridu-bulk-field-picker {
+		display: grid;
+		gap: 6px;
+		min-width: 0;
+
+		.ridu-combobox-tag {
+			font-size: 13px;
+		}
+	}
+
+	@media (max-width: 768px) {
+		.ridu-bulk-edit-drawer {
+			inset-inline: 0;
+			grid-template-columns: minmax(0, 1fr);
+			grid-template-rows: minmax(0, 1fr) auto;
+		}
+
+		.ridu-bulk-edit-main {
+			padding-block: 24px;
+		}
+
+		.ridu-bulk-edit-sidebar {
+			border-inline-start: 0;
+			border-top: 1px solid var(--border);
+			padding: 16px var(--admin-gutter);
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.ridu-bulk-edit-drawer[data-state] {
+			animation: none;
+		}
+	}
+}
+
+@keyframes ridu-bulk-edit-in {
+	from {
+		transform: translateX(var(--bulk-edit-slide));
+		opacity: 0;
+	}
+}
+
+@keyframes ridu-bulk-edit-out {
+	to {
+		transform: translateX(var(--bulk-edit-slide));
+		opacity: 0;
+	}
+}

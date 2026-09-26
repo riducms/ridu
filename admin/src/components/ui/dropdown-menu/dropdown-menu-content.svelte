@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { DropdownMenu as DropdownMenuPrimitive } from "bits-ui";
-	import { cn } from "@riducms/ui";
+	import "@admin/components/ui/dropdown-menu/dropdown-menu.scss";
 
 	let {
 		ref = $bindable(null),
@@ -18,10 +18,7 @@
 		{sideOffset}
 		{align}
 		loop
-		class={cn(
-			"ridu-popover-enter z-50 min-w-44 origin-(--bits-menu-content-transform-origin) rounded-[4px] border border-control-border bg-popover p-1 text-[12.5px] text-popover-foreground shadow-[var(--shadow-popover)] outline-none",
-			className
-		)}
+		class={["ridu-dropdown-menu", className]}
 		{...restProps}
 	/>
 </DropdownMenuPrimitive.Portal>

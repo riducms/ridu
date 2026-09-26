@@ -1,0 +1,144 @@
+@use "@riducms/ui/styles.scss" as ui;
+
+@layer ridu.components {
+	.ridu-richtext-link-drawer__header {
+		display: flex;
+		align-items: center;
+		gap: 20px;
+		padding: 40px var(--admin-gutter) 20px;
+	}
+
+	.ridu-richtext-link-drawer__title {
+		margin: 0;
+		min-width: 0;
+		font-size: 26px;
+		font-weight: 500;
+		line-height: 32px;
+		overflow-wrap: anywhere;
+	}
+
+	.ridu-richtext-link-drawer__close {
+		display: grid;
+		place-items: center;
+		width: 40px;
+		height: 40px;
+		margin-inline-start: auto;
+		border: 0;
+		padding: 0;
+		background: none;
+		color: inherit;
+		cursor: pointer;
+
+		&:focus-visible {
+			@include ui.focus-outline;
+		}
+
+		svg {
+			width: 24px;
+			height: 24px;
+			stroke-width: 1px;
+		}
+	}
+
+	.ridu-richtext-link-form {
+		display: grid;
+		gap: 24px;
+		width: 100%;
+		min-width: 0;
+		margin: 0;
+		padding: 30px var(--admin-gutter) 60px;
+	}
+
+	.ridu-richtext-link-checkbox-field {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		min-height: 24px;
+		width: fit-content;
+		color: var(--foreground);
+		font: inherit;
+		cursor: pointer;
+
+		label {
+			cursor: pointer;
+		}
+	}
+
+	.ridu-richtext-link-form__submit {
+		width: 100%;
+	}
+
+	.ridu-richtext-link-preview {
+		position: fixed;
+		z-index: 49;
+		display: flex;
+		align-items: center;
+		inline-size: max-content;
+		max-inline-size: calc(100vw - 24px);
+		min-block-size: 38px;
+		padding-block: 4px;
+		padding-inline: 12px 4px;
+		border: 0;
+		border-radius: var(--control-radius);
+		background: var(--control-surface);
+		color: var(--foreground);
+		box-shadow: var(--richtext-popup-shadow);
+		font-family: var(--font-sans);
+		font-size: var(--font-size-body);
+		line-height: var(--line-height-body);
+	}
+
+	.ridu-richtext-link-preview__url {
+		display: flex;
+		align-items: center;
+		min-width: 0;
+		flex: 1;
+		color: var(--status-success-foreground);
+		font: inherit;
+		white-space: nowrap;
+		text-decoration: underline;
+		text-underline-offset: 2px;
+
+		&[href]:hover {
+			color: var(--success);
+		}
+
+		> svg {
+			flex: 0 0 auto;
+			inline-size: 14px;
+			block-size: 14px;
+			margin-inline-end: 5px;
+		}
+
+		> span {
+			min-width: 0;
+			overflow: hidden;
+			text-overflow: ellipsis;
+		}
+	}
+
+	.ridu-richtext-link-preview__actions {
+		display: flex;
+		align-items: center;
+		gap: 0;
+		flex-shrink: 0;
+
+		.ridu-button {
+			inline-size: 30px;
+			block-size: 30px;
+			border: 0;
+			border-radius: var(--control-radius);
+		}
+
+		svg {
+			width: 14px;
+			height: 14px;
+		}
+	}
+
+	@media (max-width: ui.$small) {
+		.ridu-richtext-link-drawer__header {
+			padding-block-start: 24px;
+		}
+	}
+}

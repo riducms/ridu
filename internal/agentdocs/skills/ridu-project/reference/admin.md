@@ -23,6 +23,10 @@ JavaScript server.
 | Field `.Admin(field.Admin{...})`               | Sets label-adjacent description, layout, visibility, editor, and row presentation.                 |
 | `admin/src/admin.config.ts`                    | Registers application Svelte components, providers, routes, messages, and installed admin plugins. |
 
+For colors, fonts, spacing, and built-in component styles, start with
+[Customizing CSS](./admin/customizing-css.md). Import your stylesheet from `admin/src/main.ts`;
+these visual changes do not need a component registration.
+
 ## How the admin is configured {#framework-owned-shell}
 
 Your Go config determines which collections appear, how fields are laid out, and what each user
@@ -108,9 +112,11 @@ var Posts = ridu.Collection{
 
 ## Versions, locks, and preview {#editorial}
 
-Enable versions to browse a document's history, compare changes, and restore an earlier revision.
-Collections also support scheduled publication: an authorized editor can choose a publication time
-or cancel it later. Globals cannot be scheduled yet.
+Enable versions to browse a document's history, compare two revisions, and restore an earlier
+revision. Collections also support scheduled publishing and unpublishing: choose the action,
+date, time, and display timezone, then review or cancel it from the document's schedule. Globals
+cannot be scheduled yet. See [Drafts and versions](./drafts-and-versions.md) for setup and the
+conditions each action requires.
 
 Document locks show when someone else is editing. The form becomes read-only until the lock is
 released or an authorized editor takes over. This is separate from an account lock caused by failed
@@ -152,6 +158,16 @@ func profileFields() field.Fields {
 
 See [Fields](./fields.md) for the available field types and layout options, or
 [Rich text](./rich-text.md) to add a formatted-text editor.
+
+## Change the admin's appearance {#customizing-css}
+
+Use your application's stylesheet to change the theme or target a built-in component. Ridu's
+CSS variables cover colors, fonts, controls, and page spacing. Named classes let you style
+individual areas such as the login form, navigation, document editor, or rich-text toolbar.
+
+[Customizing CSS](./admin/customizing-css.md) shows where to import the stylesheet, how to
+override built-in styles, and how to support light and dark themes. If you prefer Sass, you can
+also reuse the shared control styles and breakpoints.
 
 ## Custom components {#extend-the-admin}
 

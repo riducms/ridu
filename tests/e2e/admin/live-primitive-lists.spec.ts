@@ -33,7 +33,10 @@ async function create(page: Page, data: Record<string, unknown>) {
 
 async function rowAction(page: Page, path: string, row: number, action: string) {
 	await list(page, path)
-		.getByRole("button", { name: `Open Row ${row + 1} actions`, exact: true })
+		.getByRole("button", {
+			name: `Open Row ${String(row + 1).padStart(2, "0")} actions`,
+			exact: true,
+		})
 		.first()
 		.click();
 	await page.getByRole("menuitem", { name: action, exact: true }).click();
@@ -177,9 +180,7 @@ test("equal duplicate item reorders supersede pending work and old responses can
 			"pending"
 		);
 		let check = nextCheck(page, "supplierCodes");
-		await list(page, "supplierCodes")
-			.getByRole("button", { name: "Move item 1 down", exact: true })
-			.click();
+		await list(page, "supplierCodes").locator("[data-list-item]").first().press("Alt+ArrowDown");
 		await check;
 		expect(requests).toBe(2);
 		await expect(feedback(page, "supplierCodes")).toHaveAttribute(
@@ -421,13 +422,13 @@ test("packaged embedded list editors preserve feedback on their enclosing stable
 		.locator('[data-outline-key="list-b"] [data-field-path$=".supplierCodes"]')
 		.first();
 	let check = nextCheck(page);
-	await first.getByRole("textbox").fill("wrong");
+	await first.locator("[data-list-item]").fill("wrong");
 	await check;
-	await expect(first.getByRole("textbox")).toHaveAttribute("aria-invalid", "true");
+	await expect(first.locator("[data-list-item]")).toHaveAttribute("aria-invalid", "true");
 	check = nextCheck(page);
 	await page.getByRole("button", { name: "Reverse outline cards", exact: true }).click();
 	await check;
-	await expect(first.getByRole("textbox")).toHaveValue("wrong");
-	await expect(first.getByRole("textbox")).toHaveAttribute("aria-invalid", "true");
-	await expect(second.getByRole("textbox")).not.toHaveAttribute("aria-invalid", "true");
+	await expect(first.locator("[data-list-item]")).toHaveValue("wrong");
+	await expect(first.locator("[data-list-item]")).toHaveAttribute("aria-invalid", "true");
+	await expect(second.locator("[data-list-item]")).not.toHaveAttribute("aria-invalid", "true");
 });

@@ -1,7 +1,9 @@
 <script lang="ts">
 	import { Select as SelectPrimitive } from "bits-ui";
 	import CheckIcon from "~icons/lucide/check";
-	import { cn, type WithoutChild } from "@riducms/ui";
+	import { type WithoutChild } from "@riducms/ui";
+
+	import "@admin/components/ui/select/select.scss";
 
 	let {
 		ref = $bindable(null),
@@ -16,20 +18,18 @@
 <SelectPrimitive.Item
 	bind:ref
 	{value}
+	{label}
 	data-slot="select-item"
-	class={cn(
-		"min-h-9 gap-2 rounded-md py-2 pe-8 ps-3 text-[14px] text-foreground-body [&_svg:not([class*='size-'])]:size-3.5 *:[span]:last:flex *:[span]:last:items-center *:[span]:last:gap-2 relative flex w-full cursor-default items-center outline-none select-none data-[highlighted]:bg-control-hover data-[highlighted]:text-foreground data-[selected]:text-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-45 [&_svg]:pointer-events-none [&_svg]:shrink-0",
-		className
-	)}
+	class={["ridu-select__item", className]}
 	{...restProps}
 >
 	{#snippet children({ selected, highlighted })}
-		<span class="absolute end-2 flex size-3.5 items-center justify-center">
+		<span class="ridu-select__indicator">
 			{#if selected}
-				<CheckIcon class="cn-select-item-indicator-icon" />
+				<CheckIcon class="ridu-select__item-check" />
 			{/if}
 		</span>
-		<span class="flex flex-1 gap-2 shrink-0 whitespace-nowrap">
+		<span class="ridu-select__label">
 			{#if childrenProp}
 				{@render childrenProp({ selected, highlighted })}
 			{:else}

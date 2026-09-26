@@ -115,7 +115,10 @@ func (g *goBlocks) writeModelDecoder(out *strings.Builder, name string, collecti
 			metadata = append(metadata, struct{ name, wire string }{"DeletedAt", "deletedAt"})
 		}
 		if collection.Capabilities.Versions {
-			metadata = append(metadata, struct{ name, wire string }{"Status", "_status"}, struct{ name, wire string }{"Revision", "_revision"})
+			metadata = append(metadata, struct{ name, wire string }{"Status", "_status"})
+		}
+		if collection.Versions != nil || collection.Upload != nil {
+			metadata = append(metadata, struct{ name, wire string }{"Revision", "_revision"})
 		}
 		for _, field := range metadata {
 			fmt.Fprintf(out, "if raw,ok:=fields[%q];ok{if err:=json.Unmarshal(raw,&decoded.%s);err!=nil{return blockFieldError(%q,\"invalid metadata\",err)}};", field.wire, field.name, field.wire)

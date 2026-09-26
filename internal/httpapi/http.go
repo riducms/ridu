@@ -53,6 +53,11 @@ type AuthSession struct {
 	Collection schema.CollectionSlug
 	User       store.Document
 	ExpiresAt  time.Time
+	// PreparedSessions and PreparedAPIKeys reuse this exact server-resolved
+	// session during admin bootstrap. They are never serialized or exposed to
+	// application configuration.
+	PreparedSessions func(context.Context) ([]AuthSessionInfo, error)
+	PreparedAPIKeys  func(context.Context) ([]APIKeyInfo, error)
 }
 
 type AuthIdentity struct {
@@ -102,6 +107,7 @@ type LocaleOptions struct {
 }
 
 type Config struct {
+	AdminLoad                    func(context.Context, AdminLoaderRequest) (json.RawMessage, error)
 	Manifest                     schema.Manifest
 	ManifestForRequest           func(context.Context, *AuthIdentity) (schema.Snapshot, error)
 	Engine                       *operationengine.Engine
@@ -142,9 +148,10 @@ type Config struct {
 	DocumentLock                 func(context.Context, string, string, *AuthIdentity) (protocol.DocumentLockEnvelope, error)
 	AcquireDocumentLock          func(context.Context, string, string, bool, *AuthIdentity) (protocol.DocumentLockEnvelope, error)
 	ReleaseDocumentLock          func(context.Context, string, string, *AuthIdentity) error
-	SchedulePublish              func(context.Context, string, string, time.Time, int, *AuthIdentity) (store.ScheduledPublish, error)
-	ScheduledPublishes           func(context.Context, string, string, *AuthIdentity) ([]store.ScheduledPublish, error)
-	CancelScheduledPublish       func(context.Context, string, string, string, *AuthIdentity) error
+	SchedulePublish              func(context.Context, string, string, time.Time, string, int, *AuthIdentity) (store.ScheduledPublication, error)
+	ScheduleUnpublish            func(context.Context, string, string, time.Time, string, int, *AuthIdentity) (store.ScheduledPublication, error)
+	ScheduledPublications        func(context.Context, string, string, *AuthIdentity) ([]store.ScheduledPublication, error)
+	CancelScheduledPublication   func(context.Context, string, string, string, *AuthIdentity) error
 	AllowAuthIPAttempt           func(context.Context, string, string, int, time.Duration) (bool, error)
 	AllowAuthAttempt             func(context.Context, string, string, string, int, time.Duration) (bool, error)
 	AllowedOrigins               []string
@@ -162,11 +169,11 @@ type Config struct {
 	DisableContentSecurityPolicy bool
 	StrictTransportSecurity      string
 	AcquireUpload                func(context.Context, string) (release func(), err error)
-	Upload                       func(context.Context, string, string, io.Reader, store.Values, *AuthIdentity, bool) (store.Document, error)
-	RemoteUpload                 func(context.Context, string, string, store.Values, *AuthIdentity) (store.Document, error)
-	UploadLocalized              func(context.Context, string, string, io.Reader, store.Values, *AuthIdentity, LocaleOptions, bool) (store.Document, error)
-	RemoteUploadLocalized        func(context.Context, string, string, store.Values, *AuthIdentity, LocaleOptions) (store.Document, error)
-	UpdateUploadImage            func(context.Context, string, string, float64, float64, float64, float64, float64, float64, int, *AuthIdentity) (store.Document, error)
+	Upload                       func(context.Context, string, UploadInput, *AuthIdentity, bool) (store.Document, error)
+	UpdateUpload                 func(context.Context, string, string, UploadInput, *AuthIdentity, bool) (store.Document, error)
+	RemoteUpload                 func(context.Context, string, string, UploadInput, *AuthIdentity) (store.Document, error)
+	PreviewUpload                func(context.Context, string, string, string, *AuthIdentity) (io.ReadCloser, storage.Object, string, error)
+	OpenUploadSource             func(context.Context, string, string, *AuthIdentity) (io.ReadCloser, storage.Object, error)
 	Duplicate                    func(context.Context, string, string, store.Values, *AuthIdentity, LocaleOptions) (store.Document, error)
 	OpenUpload                   func(context.Context, string, string, *AuthIdentity) (io.ReadCloser, storage.Object, error)
 	PluginEndpoints              []PluginEndpoint
@@ -360,7 +367,8 @@ func (api *API) serveHTTP(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 	if strings.HasPrefix(request.URL.Path, "/admin") && api.config.AdminAssets != nil {
-		api.admin(writer, request)
+		request = request.WithContext(context.WithValue(request.Context(), adminPreparedRequestIDContextKey{}, requestID))
+		api.admin(writer, request, requestID)
 		return
 	}
 	if request.URL.Path == "/healthz" {
@@ -460,6 +468,16 @@ func (api *API) serveHTTP(writer http.ResponseWriter, request *http.Request) {
 	}
 	if strings.HasPrefix(request.URL.Path, "/api/collections/") {
 		api.collection(writer, request, requestID)
+		return
+	}
+	if strings.HasPrefix(request.URL.Path, "/api/admin/collection-list/") {
+		request = request.WithContext(context.WithValue(request.Context(), adminPreparedRequestIDContextKey{}, requestID))
+		api.adminCollectionList(writer, request, requestID)
+		return
+	}
+	if strings.HasPrefix(request.URL.Path, "/api/admin/loaders/") {
+		request = request.WithContext(context.WithValue(request.Context(), adminPreparedRequestIDContextKey{}, requestID))
+		api.adminLoader(writer, request, requestID)
 		return
 	}
 	if strings.HasPrefix(request.URL.Path, "/api/globals/") {
@@ -763,23 +781,18 @@ func (api *API) accessCapabilities(writer http.ResponseWriter, request *http.Req
 		api.writeError(writer, requestID, &operationengine.Error{Code: "unknown_collection", Status: 404, Message: fmt.Sprintf("collection %q was not found", segments[1])})
 		return
 	}
-	localeOptions, err := decodeLocaleQuery(request)
+	localeOptions, err := decodeLocaleQuery(request.URL.Query())
 	if err != nil {
 		api.writeError(writer, requestID, err)
 		return
 	}
 	identity := api.optionalIdentity(request)
-	capabilities, err := api.config.Engine.Capabilities(request.Context(), operationengine.CapabilitiesRequest{
-		Collection: collectionKey, ID: input.ID, Data: input.Data,
-		Actor: identityActor(identity), ActorCollection: identityCollection(identity), TrashOnly: input.Trash,
-		Locale: localeOptions.locale, FallbackLocales: localeOptions.fallbackLocales,
-		DisableFallback: localeOptions.disableFallback, AllLocales: localeOptions.allLocales,
-	})
+	capabilities, err := api.readDocumentAccess(request.Context(), collectionKey, input.ID, input.Data, input.Trash, identity, localeOptions)
 	if err != nil {
 		api.writeError(writer, requestID, err)
 		return
 	}
-	writeJSON(writer, http.StatusOK, accessCapabilitiesJSON(capabilities))
+	writeJSON(writer, http.StatusOK, capabilities)
 }
 
 func (api *API) filteredCollectionSelection(writer http.ResponseWriter, request *http.Request, requestID, slug string) {
@@ -802,7 +815,7 @@ func (api *API) filteredCollectionSelection(writer http.ResponseWriter, request 
 			return
 		}
 	}
-	localeOptions, err := decodeLocaleQuery(request)
+	localeOptions, err := decodeLocaleQuery(request.URL.Query())
 	if err != nil {
 		api.writeError(writer, requestID, err)
 		return
@@ -904,29 +917,24 @@ func (api *API) global(writer http.ResponseWriter, request *http.Request, reques
 	if len(segments) == 1 {
 		switch request.Method {
 		case http.MethodGet:
-			options, err := decodeListQuery(request, global)
+			options, err := decodeListQuery(request.URL.Query(), global, false)
 			if err != nil {
 				api.writeError(writer, requestID, err)
 				return
 			}
-			result, err := api.config.Engine.Execute(request.Context(), operationengine.Request{
-				Operation: operation.Read, Collection: key, ID: slug, Actor: actor, ActorCollection: actorCollection,
-				Select: options.selectFields, OutputFields: options.outputFields, Populate: options.populate,
-				Locale: options.locale, FallbackLocales: options.fallbackLocales,
-				DisableFallback: options.disableFallback, AllLocales: options.allLocales,
-			})
+			document, err := api.readDocument(request.Context(), key, slug, identity, options)
 			if err != nil {
 				api.writeError(writer, requestID, err)
 				return
 			}
-			writeJSON(writer, http.StatusOK, protocol.DocumentEnvelope[map[string]any]{Doc: documentJSON(*result.Document)})
+			writeJSON(writer, http.StatusOK, protocol.DocumentEnvelope[map[string]any]{Doc: document})
 		case http.MethodPatch:
 			values, err := api.decodeValues(writer, request)
 			if err != nil {
 				api.writeError(writer, requestID, err)
 				return
 			}
-			localeOptions, err := decodeLocaleQuery(request)
+			localeOptions, err := decodeLocaleQuery(request.URL.Query())
 			if err != nil {
 				api.writeError(writer, requestID, err)
 				return
@@ -960,7 +968,7 @@ func (api *API) global(writer http.ResponseWriter, request *http.Request, reques
 			api.methodNotAllowed(writer, requestID, http.MethodGet)
 			return
 		}
-		localeOptions, err := decodeLocaleQuery(request)
+		localeOptions, err := decodeLocaleQuery(request.URL.Query())
 		if err != nil {
 			api.writeError(writer, requestID, err)
 			return
@@ -1003,7 +1011,7 @@ func (api *API) global(writer http.ResponseWriter, request *http.Request, reques
 			api.writeError(writer, requestID, err)
 			return
 		}
-		localeOptions, err := decodeLocaleQuery(request)
+		localeOptions, err := decodeLocaleQuery(request.URL.Query())
 		if err != nil {
 			api.writeError(writer, requestID, err)
 			return
@@ -1032,7 +1040,7 @@ func (api *API) global(writer http.ResponseWriter, request *http.Request, reques
 			api.writeError(writer, requestID, queryError)
 			return
 		}
-		localeOptions, localeError := decodeLocaleQuery(request)
+		localeOptions, localeError := decodeLocaleQuery(request.URL.Query())
 		if localeError != nil {
 			api.writeError(writer, requestID, localeError)
 			return
@@ -1189,39 +1197,128 @@ func (writer *statusWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 
 func (writer *statusWriter) Unwrap() http.ResponseWriter { return writer.ResponseWriter }
 
-func (api *API) admin(writer http.ResponseWriter, request *http.Request) {
+func (api *API) admin(writer http.ResponseWriter, request *http.Request, requestID string) {
 	if request.Method != http.MethodGet && request.Method != http.MethodHead {
 		writer.Header().Set("Allow", "GET, HEAD")
 		http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 	path := strings.TrimPrefix(request.URL.Path, "/admin")
-	if path == "" || path == "/" {
-		writer.Header().Set("Cache-Control", "private, no-store")
-		request.URL.Path = "/"
-		http.FileServer(http.FS(api.config.AdminAssets)).ServeHTTP(writer, request)
-		return
-	}
 	assetPath := strings.TrimPrefix(path, "/")
-	if info, err := fs.Stat(api.config.AdminAssets, assetPath); err == nil && !info.IsDir() {
-		if strings.HasPrefix(assetPath, "assets/") {
-			writer.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
-		} else {
-			writer.Header().Set("Cache-Control", "public, max-age=3600")
+	if assetPath != "" {
+		if info, err := fs.Stat(api.config.AdminAssets, assetPath); err == nil && !info.IsDir() && assetPath != "index.html" {
+			if strings.HasPrefix(assetPath, "assets/") {
+				writer.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+			} else {
+				writer.Header().Set("Cache-Control", "public, max-age=3600")
+			}
+			request.URL.Path = path
+			http.FileServer(http.FS(api.config.AdminAssets)).ServeHTTP(writer, request)
+			return
 		}
-		request.URL.Path = path
-		http.FileServer(http.FS(api.config.AdminAssets)).ServeHTTP(writer, request)
-		return
 	}
 	index, err := fs.ReadFile(api.config.AdminAssets, "index.html")
 	if err != nil {
 		http.Error(writer, "admin assets are unavailable", http.StatusInternalServerError)
 		return
 	}
+	setAdminPreparedHeaders(writer.Header())
+	if request.Method == http.MethodHead {
+		// HEAD proves route availability without resolving a session, running hooks, or reading
+		// route data. Keep it above every bootstrap operation.
+		writer.Header().Set("Content-Type", "text/html; charset=utf-8")
+		writer.WriteHeader(http.StatusOK)
+		return
+	}
+	metadata, metadataError := api.adminBootstrapMetadata()
+	wantsState := acceptsMediaType(request.Header.Get("Accept"), protocol.AdminPreparedRouteStateMediaType)
+	if metadataError != nil {
+		state := api.prepareAdminStateSafely(request, requestID, "", func() protocol.AdminPreparedRouteStateV1 {
+			return api.prepareAdminFallbackState(request, "metadata_unavailable", "The admin will load using its browser route controller.")
+		})
+		if wantsState {
+			writer.Header().Set("Content-Type", protocol.AdminPreparedRouteStateMediaType)
+			writer.WriteHeader(http.StatusOK)
+			_, _ = writer.Write(marshalBoundedAdminState(adminNavigationState(state, request)))
+			return
+		}
+		prefix, suffix, split := adminHTMLPrefix(index, adminBootstrapMetadata{}, state)
+		writer.Header().Set("Content-Type", "text/html; charset=utf-8")
+		writer.WriteHeader(http.StatusOK)
+		if !split {
+			_, _ = writer.Write(index)
+			return
+		}
+		_, _ = writer.Write(prefix)
+		_, _ = writer.Write([]byte("<template id=\"ridu-admin-initial-state\">"))
+		_, _ = writer.Write(marshalBoundedAdminState(state))
+		_, _ = writer.Write([]byte("</template>\n\t\t"))
+		_, _ = writer.Write(suffix)
+		return
+	}
+	if wantsState {
+		// SPA navigation uses the same URL and preparation path as a document request; content
+		// negotiation changes only the envelope that carries the result.
+		writer.Header().Set("Content-Type", protocol.AdminPreparedRouteStateMediaType)
+		state := api.prepareAdminStateSafely(request, requestID, metadata.BuildID, func() protocol.AdminPreparedRouteStateV1 {
+			return api.prepareAdminState(request, metadata, true)
+		})
+		writer.WriteHeader(http.StatusOK)
+		_, _ = writer.Write(marshalBoundedAdminState(adminNavigationState(state, request)))
+		return
+	}
+	state, runtime, identity, classification := api.prepareAdminStateBaseSafely(request, requestID, metadata)
+	prefix, suffix, split := adminHTMLPrefix(index, metadata, state)
+	if !split {
+		writer.Header().Set("Content-Type", "text/html; charset=utf-8")
+		writer.WriteHeader(http.StatusOK)
+		_, _ = writer.Write(index)
+		return
+	}
 	writer.Header().Set("Content-Type", "text/html; charset=utf-8")
-	writer.Header().Set("Cache-Control", "private, no-store")
 	writer.WriteHeader(http.StatusOK)
-	_, _ = writer.Write(index)
+	_, _ = writer.Write(prefix)
+	// Runtime/session resolution has already selected the theme and route module groups. Flush
+	// those preload hints while route data and custom loaders finish through their owning APIs.
+	if flusher, ok := writer.(http.Flusher); ok {
+		flusher.Flush()
+	}
+	if state.Outcome == protocol.AdminPreparedRoutePrepared && state.Route != nil && runtime != nil {
+		func() {
+			defer func() {
+				if recovered := recover(); recovered != nil {
+					api.reportRequestError(request, requestID, errors.New("panic recovered while preparing an admin route"), true, string(debug.Stack()))
+					state.Outcome = protocol.AdminPreparedRouteFallback
+					state.Route = nil
+					state.Loaders = nil
+					state.ModuleGroups = []string{"entry"}
+					state.Diagnostic = &protocol.AdminPreparedRouteDiagnosticV1{Code: "route_prepare_failed", Message: "This route will load using its browser controller."}
+				}
+			}()
+			api.completeAdminPreparedRoute(&state, request, runtime, identity, classification)
+		}()
+	}
+	encoded := marshalBoundedAdminState(state)
+	// The template is inert data, not server-rendered UI. It lands before the entry script in the
+	// suffix, so Svelte can validate and stage the complete snapshot before revealing the route.
+	_, _ = writer.Write([]byte("<template id=\"ridu-admin-initial-state\">"))
+	_, _ = writer.Write(encoded)
+	_, _ = writer.Write([]byte("</template>\n\t\t"))
+	_, _ = writer.Write(suffix)
+}
+
+func acceptsMediaType(header, expected string) bool {
+	for _, candidate := range strings.Split(header, ",") {
+		mediaType, parameters, err := mime.ParseMediaType(strings.TrimSpace(candidate))
+		quality := 1.0
+		if encoded := parameters["q"]; encoded != "" {
+			quality, err = strconv.ParseFloat(encoded, 64)
+		}
+		if err == nil && quality > 0 && strings.EqualFold(mediaType, expected) {
+			return true
+		}
+	}
+	return false
 }
 
 func (api *API) collection(writer http.ResponseWriter, request *http.Request, requestID string) {
@@ -1254,45 +1351,28 @@ func (api *API) collection(writer http.ResponseWriter, request *http.Request, re
 	if len(segments) == 1 {
 		switch request.Method {
 		case http.MethodGet:
-			options, err := decodeListQuery(request, collection)
+			options, err := decodeListQuery(request.URL.Query(), collection, true)
 			if err != nil {
 				api.writeError(writer, requestID, err)
 				return
 			}
-			result, err := api.config.Engine.Execute(request.Context(), operationengine.Request{
-				Operation: operation.Read, Collection: segments[0], Filter: options.filter,
-				Page: options.page, Limit: options.limit, Actor: actor, ActorCollection: actorCollection, Sort: options.sort,
-				Select: options.selectFields, OutputFields: options.outputFields, Populate: options.populate, TrashOnly: options.trashOnly,
-				Locale: options.locale, FallbackLocales: options.fallbackLocales,
-				DisableFallback: options.disableFallback, AllLocales: options.allLocales,
-			})
+			page, err := api.readCollectionPage(request.Context(), segments[0], identity, options)
 			if err != nil {
 				api.writeError(writer, requestID, err)
 				return
 			}
-			page := result.Page
-			totalPages := 0
-			if page.Total > 0 {
-				totalPages = (page.Total + page.Limit - 1) / page.Limit
+			if options.includeAccess {
+				writeJSON(writer, http.StatusOK, page)
+			} else {
+				writeJSON(writer, http.StatusOK, protocol.PageEnvelope[map[string]any]{Docs: page.Docs, Pagination: page.Pagination})
 			}
-			documents := make([]map[string]any, len(page.Documents))
-			for index, document := range page.Documents {
-				documents[index] = documentJSON(document)
-			}
-			writeJSON(writer, http.StatusOK, protocol.PageEnvelope[map[string]any]{
-				Docs: documents,
-				Pagination: protocol.Pagination{
-					Page: page.Page, Limit: page.Limit, TotalDocs: page.Total, TotalPages: totalPages,
-					HasNextPage: page.Page < totalPages, HasPrevPage: page.Page > 1,
-				},
-			})
 		case http.MethodPost:
 			if collection.Auth != nil {
 				api.authCollectionCreateError(writer, requestID, collection)
 				return
 			}
 			if collection.Upload != nil && strings.HasPrefix(request.Header.Get("Content-Type"), "multipart/form-data") {
-				api.createUpload(writer, request, requestID, collection, identity)
+				api.saveUpload(writer, request, requestID, collection, "", identity)
 				return
 			}
 			if collection.Upload != nil {
@@ -1304,7 +1384,7 @@ func (api *API) collection(writer http.ResponseWriter, request *http.Request, re
 				api.writeError(writer, requestID, err)
 				return
 			}
-			localeOptions, err := decodeLocaleQuery(request)
+			localeOptions, err := decodeLocaleQuery(request.URL.Query())
 			if err != nil {
 				api.writeError(writer, requestID, err)
 				return
@@ -1336,22 +1416,17 @@ func (api *API) collection(writer http.ResponseWriter, request *http.Request, re
 		return
 	}
 	if segments[1] == "count" && request.Method == http.MethodGet {
-		options, err := decodeListQuery(request, collection)
+		options, err := decodeListQuery(request.URL.Query(), collection, false)
 		if err != nil {
 			api.writeError(writer, requestID, err)
 			return
 		}
-		result, err := api.config.Engine.Execute(request.Context(), operationengine.Request{
-			Operation: operation.Read, Collection: segments[0], Filter: options.filter,
-			Page: 1, Limit: 1, Actor: actor, ActorCollection: actorCollection, TrashOnly: options.trashOnly,
-			Locale: options.locale, FallbackLocales: options.fallbackLocales,
-			DisableFallback: options.disableFallback, AllLocales: options.allLocales,
-		})
+		count, err := api.readCollectionCount(request.Context(), segments[0], identity, options)
 		if err != nil {
 			api.writeError(writer, requestID, err)
 			return
 		}
-		writeJSON(writer, http.StatusOK, protocol.CountEnvelope{TotalDocs: result.Page.Total})
+		writeJSON(writer, http.StatusOK, protocol.CountEnvelope{TotalDocs: count})
 		return
 	}
 	if segments[1] == "bulk" && request.Method == http.MethodPost {
@@ -1362,33 +1437,32 @@ func (api *API) collection(writer http.ResponseWriter, request *http.Request, re
 		api.createRemoteUpload(writer, request, requestID, collection, identity)
 		return
 	}
+	if segments[1] == "upload-preview" && request.Method == http.MethodPost {
+		api.previewUpload(writer, request, requestID, collection, identity)
+		return
+	}
 	id := segments[1]
 	switch request.Method {
 	case http.MethodGet:
-		options, err := decodeListQuery(request, collection)
+		options, err := decodeListQuery(request.URL.Query(), collection, false)
 		if err != nil {
 			api.writeError(writer, requestID, err)
 			return
 		}
-		result, err := api.config.Engine.Execute(request.Context(), operationengine.Request{
-			Operation: operation.Read, Collection: segments[0], ID: id, Actor: actor, ActorCollection: actorCollection,
-			Select: options.selectFields, OutputFields: options.outputFields, Populate: options.populate,
-			Locale: options.locale, FallbackLocales: options.fallbackLocales,
-			DisableFallback: options.disableFallback, AllLocales: options.allLocales,
-		})
+		document, err := api.readDocument(request.Context(), segments[0], id, identity, options)
 		if err != nil {
 			api.writeError(writer, requestID, err)
 			return
 		}
-		writeJSON(writer, http.StatusOK, protocol.DocumentEnvelope[map[string]any]{Doc: documentJSON(*result.Document)})
-		api.audit(request, requestID, actor, "read", segments[0], result.Document.ID)
+		writeJSON(writer, http.StatusOK, protocol.DocumentEnvelope[map[string]any]{Doc: document})
+		api.audit(request, requestID, actor, "read", segments[0], id, actorCollection)
 	case http.MethodPatch:
 		values, err := api.decodeValues(writer, request)
 		if err != nil {
 			api.writeError(writer, requestID, err)
 			return
 		}
-		localeOptions, err := decodeLocaleQuery(request)
+		localeOptions, err := decodeLocaleQuery(request.URL.Query())
 		if err != nil {
 			api.writeError(writer, requestID, err)
 			return
@@ -1402,7 +1476,7 @@ func (api *API) collection(writer http.ResponseWriter, request *http.Request, re
 		}
 		writeJSON(writer, http.StatusOK, protocol.DocumentEnvelope[map[string]any]{Doc: documentJSON(*result.Document)})
 	case http.MethodDelete:
-		localeOptions, err := decodeLocaleQuery(request)
+		localeOptions, err := decodeLocaleQuery(request.URL.Query())
 		if err != nil {
 			api.writeError(writer, requestID, err)
 			return
@@ -1432,7 +1506,7 @@ func (api *API) emptyCollectionTrash(writer http.ResponseWriter, request *http.R
 		api.writeError(writer, requestID, &operationengine.Error{Code: "bad_operation", Status: 400, Message: "collection does not support trash"})
 		return
 	}
-	localeOptions, err := decodeLocaleQuery(request)
+	localeOptions, err := decodeLocaleQuery(request.URL.Query())
 	if err != nil {
 		api.writeError(writer, requestID, err)
 		return
@@ -1472,47 +1546,6 @@ func (api *API) emptyCollectionTrash(writer http.ResponseWriter, request *http.R
 	writeJSON(writer, http.StatusOK, protocol.BulkEnvelope[map[string]any]{Docs: documents})
 }
 
-func (api *API) createRemoteUpload(writer http.ResponseWriter, request *http.Request, requestID string, collection schema.Collection, identity *AuthIdentity) {
-	actor := identityActor(identity)
-	if request.Method != http.MethodPost {
-		api.methodNotAllowed(writer, requestID, http.MethodPost)
-		return
-	}
-	if collection.Upload == nil || api.config.RemoteUpload == nil && api.config.RemoteUploadLocalized == nil {
-		api.writeError(writer, requestID, &operationengine.Error{Code: "not_found", Status: 404, Message: "remote upload was not found"})
-		return
-	}
-	if collection.Auth != nil {
-		api.authCollectionCreateError(writer, requestID, collection)
-		return
-	}
-	var input struct {
-		URL  string       `json:"url"`
-		Data store.Values `json:"data"`
-	}
-	if err := api.decodeJSON(writer, request, &input); err != nil {
-		api.writeError(writer, requestID, err)
-		return
-	}
-	localeOptions, err := decodeLocaleQuery(request)
-	if err != nil {
-		api.writeError(writer, requestID, err)
-		return
-	}
-	var document store.Document
-	if api.config.RemoteUploadLocalized != nil {
-		document, err = api.config.RemoteUploadLocalized(request.Context(), string(collection.Slug), input.URL, input.Data, identity, localeOptions.public())
-	} else {
-		document, err = api.config.RemoteUpload(request.Context(), string(collection.Slug), input.URL, input.Data, identity)
-	}
-	if err != nil {
-		api.writeError(writer, requestID, err)
-		return
-	}
-	writeJSON(writer, http.StatusCreated, protocol.DocumentEnvelope[map[string]any]{Doc: documentJSON(document)})
-	api.audit(request, requestID, actor, "remote-upload", string(collection.Slug), document.ID)
-}
-
 func (api *API) documentAction(writer http.ResponseWriter, request *http.Request, requestID string, collection schema.Collection, segments []string, actor *store.Document, identity *AuthIdentity) {
 	collectionName, id, action := segments[0], segments[1], segments[2]
 	actorCollection := identityCollection(identity)
@@ -1520,38 +1553,12 @@ func (api *API) documentAction(writer http.ResponseWriter, request *http.Request
 		api.copyLocale(writer, request, requestID, collectionName, id, actor, actorCollection, "copy-locale")
 		return
 	}
-	if len(segments) == 3 && action == "image" {
-		if collection.Upload == nil || api.config.UpdateUploadImage == nil {
-			api.writeError(writer, requestID, &operationengine.Error{Code: "not_found", Status: 404, Message: "image workflow was not found"})
-			return
-		}
-		if request.Method != http.MethodPatch {
-			api.methodNotAllowed(writer, requestID, http.MethodPatch)
-			return
-		}
-		var input struct {
-			FocalX     float64 `json:"focalX"`
-			FocalY     float64 `json:"focalY"`
-			CropX      float64 `json:"cropX"`
-			CropY      float64 `json:"cropY"`
-			CropWidth  float64 `json:"cropWidth"`
-			CropHeight float64 `json:"cropHeight"`
-		}
-		if err := api.decodeJSON(writer, request, &input); err != nil {
-			api.writeError(writer, requestID, err)
-			return
-		}
-		if input.FocalX < 0 || input.FocalX > 100 || input.FocalY < 0 || input.FocalY > 100 {
-			api.writeError(writer, requestID, &operationengine.Error{Code: "validation", Status: 422, Message: "focal coordinates must be between 0 and 100"})
-			return
-		}
-		document, err := api.config.UpdateUploadImage(request.Context(), collectionName, id, input.FocalX, input.FocalY, input.CropX, input.CropY, input.CropWidth, input.CropHeight, revisionHeader(request), identity)
-		if err != nil {
-			api.writeError(writer, requestID, err)
-			return
-		}
-		writeJSON(writer, http.StatusOK, protocol.DocumentEnvelope[map[string]any]{Doc: documentJSON(document)})
-		api.audit(request, requestID, actor, "update-upload-image", collectionName, id)
+	if len(segments) == 3 && action == "upload" {
+		api.saveUpload(writer, request, requestID, collection, id, identity)
+		return
+	}
+	if len(segments) == 3 && action == "upload-source" {
+		api.uploadSource(writer, request, requestID, collection, id, identity)
 		return
 	}
 	if len(segments) == 3 && action == "duplicate" {
@@ -1572,7 +1579,7 @@ func (api *API) documentAction(writer http.ResponseWriter, request *http.Request
 			api.writeError(writer, requestID, &operationengine.Error{Code: "not_found", Status: 404, Message: "document duplication is not available"})
 			return
 		}
-		localeOptions, err := decodeLocaleQuery(request)
+		localeOptions, err := decodeLocaleQuery(request.URL.Query())
 		if err != nil {
 			api.writeError(writer, requestID, err)
 			return
@@ -1602,7 +1609,7 @@ func (api *API) documentAction(writer http.ResponseWriter, request *http.Request
 			api.methodNotAllowed(writer, requestID, method)
 			return
 		}
-		localeOptions, err := decodeLocaleQuery(request)
+		localeOptions, err := decodeLocaleQuery(request.URL.Query())
 		if err != nil {
 			api.writeError(writer, requestID, err)
 			return
@@ -1636,7 +1643,7 @@ func (api *API) documentAction(writer http.ResponseWriter, request *http.Request
 			api.writeError(writer, requestID, err)
 			return
 		}
-		localeOptions, err := decodeLocaleQuery(request)
+		localeOptions, err := decodeLocaleQuery(request.URL.Query())
 		if err != nil {
 			api.writeError(writer, requestID, err)
 			return
@@ -1667,7 +1674,7 @@ func (api *API) documentAction(writer http.ResponseWriter, request *http.Request
 			api.methodNotAllowed(writer, requestID, http.MethodGet)
 			return
 		}
-		localeOptions, err := decodeLocaleQuery(request)
+		localeOptions, err := decodeLocaleQuery(request.URL.Query())
 		if err != nil {
 			api.writeError(writer, requestID, err)
 			return
@@ -1697,7 +1704,7 @@ func (api *API) documentAction(writer http.ResponseWriter, request *http.Request
 		}
 		writeJSON(writer, http.StatusOK, map[string]any{"versions": versionsJSON(versions)})
 	case "schedule":
-		api.scheduledPublish(writer, request, requestID, collectionName, id, segments, actor, identity)
+		api.scheduledPublication(writer, request, requestID, collectionName, id, segments, actor, identity)
 	case "publish", "unpublish":
 		if request.Method != http.MethodPost {
 			api.methodNotAllowed(writer, requestID, http.MethodPost)
@@ -1712,7 +1719,7 @@ func (api *API) documentAction(writer http.ResponseWriter, request *http.Request
 			api.writeError(writer, requestID, err)
 			return
 		}
-		localeOptions, err := decodeLocaleQuery(request)
+		localeOptions, err := decodeLocaleQuery(request.URL.Query())
 		if err != nil {
 			api.writeError(writer, requestID, err)
 			return
@@ -1741,7 +1748,7 @@ func (api *API) documentAction(writer http.ResponseWriter, request *http.Request
 			api.writeError(writer, requestID, queryError)
 			return
 		}
-		localeOptions, localeError := decodeLocaleQuery(request)
+		localeOptions, localeError := decodeLocaleQuery(request.URL.Query())
 		if localeError != nil {
 			api.writeError(writer, requestID, localeError)
 			return
@@ -1849,34 +1856,32 @@ func restoreDraftQuery(request *http.Request) (bool, error) {
 	}
 }
 
-func (api *API) scheduledPublish(writer http.ResponseWriter, request *http.Request, requestID, collection, documentID string, segments []string, actor *store.Document, identity *AuthIdentity) {
-	if api.config.SchedulePublish == nil || api.config.ScheduledPublishes == nil || api.config.CancelScheduledPublish == nil {
+func (api *API) scheduledPublication(writer http.ResponseWriter, request *http.Request, requestID, collection, documentID string, segments []string, actor *store.Document, identity *AuthIdentity) {
+	if api.config.SchedulePublish == nil || api.config.ScheduledPublications == nil || api.config.CancelScheduledPublication == nil {
 		api.writeError(writer, requestID, &operationengine.Error{Code: "not_found", Status: 404, Message: "scheduled publishing is unavailable"})
 		return
 	}
 	switch request.Method {
 	case http.MethodGet:
 		if len(segments) != 3 {
-			api.writeError(writer, requestID, &operationengine.Error{Code: "not_found", Status: 404, Message: "scheduled publish was not found"})
+			api.writeError(writer, requestID, &operationengine.Error{Code: "not_found", Status: 404, Message: "scheduled publication was not found"})
 			return
 		}
-		jobs, err := api.config.ScheduledPublishes(request.Context(), collection, documentID, identity)
+		result, err := api.readScheduledPublications(request.Context(), collection, documentID, identity)
 		if err != nil {
 			api.writeError(writer, requestID, err)
 			return
 		}
-		result := make([]protocol.ScheduledPublish, len(jobs))
-		for index, job := range jobs {
-			result[index] = scheduledPublishJSON(job)
-		}
-		writeJSON(writer, http.StatusOK, protocol.ScheduledPublishesEnvelope{ScheduledPublishes: result})
+		writeJSON(writer, http.StatusOK, protocol.ScheduledPublicationsEnvelope{ScheduledPublications: result})
 	case http.MethodPost:
 		if len(segments) != 3 {
-			api.writeError(writer, requestID, &operationengine.Error{Code: "not_found", Status: 404, Message: "scheduled publish route was not found"})
+			api.writeError(writer, requestID, &operationengine.Error{Code: "not_found", Status: 404, Message: "scheduled publication route was not found"})
 			return
 		}
 		var input struct {
-			RunAt string `json:"runAt"`
+			Action   string `json:"action"`
+			RunAt    string `json:"runAt"`
+			TimeZone string `json:"timeZone"`
 		}
 		if err := api.decodeJSON(writer, request, &input); err != nil {
 			api.writeError(writer, requestID, err)
@@ -1887,33 +1892,46 @@ func (api *API) scheduledPublish(writer http.ResponseWriter, request *http.Reque
 			api.writeError(writer, requestID, &operationengine.Error{Code: "validation", Status: 422, Message: "runAt must be an RFC 3339 timestamp"})
 			return
 		}
-		job, err := api.config.SchedulePublish(request.Context(), collection, documentID, runAt, revisionHeader(request), identity)
+		var job store.ScheduledPublication
+		switch input.Action {
+		case string(store.PublicationActionPublish):
+			job, err = api.config.SchedulePublish(request.Context(), collection, documentID, runAt, input.TimeZone, revisionHeader(request), identity)
+		case string(store.PublicationActionUnpublish):
+			if api.config.ScheduleUnpublish == nil {
+				api.writeError(writer, requestID, &operationengine.Error{Code: "not_found", Status: 404, Message: "scheduled unpublishing is unavailable"})
+				return
+			}
+			job, err = api.config.ScheduleUnpublish(request.Context(), collection, documentID, runAt, input.TimeZone, revisionHeader(request), identity)
+		default:
+			api.writeError(writer, requestID, &operationengine.Error{Code: "validation", Status: 422, Message: "action must be publish or unpublish"})
+			return
+		}
 		if err != nil {
 			api.writeError(writer, requestID, err)
 			return
 		}
-		writeJSON(writer, http.StatusCreated, protocol.ScheduledPublishEnvelope{ScheduledPublish: scheduledPublishJSON(job)})
-		api.audit(request, requestID, actor, "schedule-publish", collection, documentID)
+		writeJSON(writer, http.StatusCreated, protocol.ScheduledPublicationEnvelope{ScheduledPublication: scheduledPublicationJSON(job)})
+		api.audit(request, requestID, actor, "schedule-"+input.Action, collection, documentID)
 	case http.MethodDelete:
 		if len(segments) != 4 {
-			api.writeError(writer, requestID, &operationengine.Error{Code: "bad_request", Status: 400, Message: "scheduled publish id is required"})
+			api.writeError(writer, requestID, &operationengine.Error{Code: "bad_request", Status: 400, Message: "scheduled publication id is required"})
 			return
 		}
-		if err := api.config.CancelScheduledPublish(request.Context(), collection, documentID, segments[3], identity); err != nil {
+		if err := api.config.CancelScheduledPublication(request.Context(), collection, documentID, segments[3], identity); err != nil {
 			api.writeError(writer, requestID, err)
 			return
 		}
 		writeJSON(writer, http.StatusOK, protocol.DeleteEnvelope{ID: segments[3], Deleted: true})
-		api.audit(request, requestID, actor, "cancel-scheduled-publish", collection, documentID)
+		api.audit(request, requestID, actor, "cancel-scheduled-publication", collection, documentID)
 	default:
 		api.methodNotAllowed(writer, requestID, http.MethodGet, http.MethodPost, http.MethodDelete)
 	}
 }
 
-func scheduledPublishJSON(job store.ScheduledPublish) protocol.ScheduledPublish {
-	return protocol.ScheduledPublish{
-		ID: job.ID, DocumentID: job.DocumentID, ExpectedRevision: job.ExpectedRevision,
-		RunAt: job.RunAt.UTC().Format(time.RFC3339Nano), Attempts: job.Attempts,
+func scheduledPublicationJSON(job store.ScheduledPublication) protocol.ScheduledPublication {
+	return protocol.ScheduledPublication{
+		ID: job.ID, Action: string(job.Action), DocumentID: job.DocumentID, ExpectedRevision: job.ExpectedRevision,
+		RunAt: job.RunAt.UTC().Format(time.RFC3339Nano), TimeZone: job.TimeZone, Attempts: job.Attempts,
 		LastError: job.LastError, CreatedAt: job.CreatedAt.UTC().Format(time.RFC3339Nano),
 	}
 }
@@ -1939,7 +1957,7 @@ func (api *API) bulkCollection(writer http.ResponseWriter, request *http.Request
 		return
 	}
 	seen := make(map[string]bool, len(input.IDs))
-	localeOptions, err := decodeLocaleQuery(request)
+	localeOptions, err := decodeLocaleQuery(request.URL.Query())
 	if err != nil {
 		api.writeError(writer, requestID, err)
 		return
@@ -1994,69 +2012,6 @@ func revisionHeader(request *http.Request) int {
 	return revision
 }
 
-func (api *API) createUpload(writer http.ResponseWriter, request *http.Request, requestID string, collection schema.Collection, identity *AuthIdentity) {
-	actor := identityActor(identity)
-	if api.config.Upload == nil && api.config.UploadLocalized == nil {
-		api.writeError(writer, requestID, &operationengine.Error{Code: "upload_unavailable", Status: 503, Message: "upload storage is unavailable"})
-		return
-	}
-	releaseAdmission := func() {}
-	if api.config.AcquireUpload != nil {
-		var admissionError error
-		releaseAdmission, admissionError = api.config.AcquireUpload(request.Context(), string(collection.Slug))
-		if admissionError != nil {
-			api.writeError(writer, requestID, admissionError)
-			return
-		}
-	}
-	defer releaseAdmission()
-	multipartLimit := collection.Upload.MaxFileSize + 1<<20
-	request.Body = http.MaxBytesReader(writer, request.Body, multipartLimit)
-	parseError := request.ParseMultipartForm(maxMultipartMemory)
-	if request.MultipartForm != nil {
-		defer request.MultipartForm.RemoveAll()
-	}
-	if parseError != nil {
-		var maximum *http.MaxBytesError
-		if errors.As(parseError, &maximum) {
-			api.writeError(writer, requestID, &operationengine.Error{Code: "body_too_large", Status: 413, Message: fmt.Sprintf("multipart upload exceeds %d bytes", maximum.Limit)})
-			return
-		}
-		api.writeError(writer, requestID, &operationengine.Error{Code: "bad_request", Status: 400, Message: "invalid multipart upload", Cause: parseError})
-		return
-	}
-	file, header, err := request.FormFile("file")
-	if err != nil {
-		api.writeError(writer, requestID, &operationengine.Error{Code: "validation", Status: 422, Message: "multipart field \"file\" is required", Cause: err})
-		return
-	}
-	defer file.Close()
-	values := store.Values{}
-	if encoded := request.FormValue("data"); encoded != "" {
-		if err := decodeDynamicValues([]byte(encoded), &values); err != nil {
-			api.writeError(writer, requestID, &operationengine.Error{Code: "bad_request", Status: 400, Message: "multipart field \"data\" must be a JSON object", Cause: err})
-			return
-		}
-	}
-	localeOptions, err := decodeLocaleQuery(request)
-	if err != nil {
-		api.writeError(writer, requestID, err)
-		return
-	}
-	var document store.Document
-	if api.config.UploadLocalized != nil {
-		document, err = api.config.UploadLocalized(request.Context(), string(collection.Slug), header.Filename, file, values, identity, localeOptions.public(), api.config.AcquireUpload != nil)
-	} else {
-		document, err = api.config.Upload(request.Context(), string(collection.Slug), header.Filename, file, values, identity, api.config.AcquireUpload != nil)
-	}
-	if err != nil {
-		api.writeError(writer, requestID, err)
-		return
-	}
-	writeJSON(writer, http.StatusCreated, protocol.DocumentEnvelope[map[string]any]{Doc: documentJSON(document)})
-	api.audit(request, requestID, actor, "upload", string(collection.Slug), document.ID)
-}
-
 func (api *API) upload(writer http.ResponseWriter, request *http.Request, requestID string) {
 	if request.Method != http.MethodGet && request.Method != http.MethodHead {
 		api.methodNotAllowed(writer, requestID, http.MethodGet, http.MethodHead)
@@ -2077,6 +2032,10 @@ func (api *API) upload(writer http.ResponseWriter, request *http.Request, reques
 		api.writeError(writer, requestID, err)
 		return
 	}
+	serveUpload(writer, request, reader, object)
+}
+
+func serveUpload(writer http.ResponseWriter, request *http.Request, reader io.ReadCloser, object storage.Object) {
 	defer reader.Close()
 	contentType := object.ContentType
 	if contentType == "" {
@@ -2389,7 +2348,7 @@ func (api *API) createAuthUser(writer http.ResponseWriter, request *http.Request
 	}
 	identity := api.optionalIdentity(request)
 	actor := identityActor(identity)
-	localeOptions, err := decodeLocaleQuery(request)
+	localeOptions, err := decodeLocaleQuery(request.URL.Query())
 	if err != nil {
 		api.writeError(writer, requestID, err)
 		return
@@ -3157,49 +3116,58 @@ type listQuery struct {
 	fallbackLocales []schema.LocaleCode
 	disableFallback bool
 	allLocales      bool
+	includeAccess   bool
 }
 
-func decodeListQuery(request *http.Request, collection schema.Collection) (listQuery, error) {
-	for key := range request.URL.Query() {
-		if key != "page" && key != "limit" && key != "depth" && key != "where" && key != "select" && key != "populate" && key != "sort" && key != "trash" && key != "locale" && key != "fallback-locale" && key != "fallbackLocale" {
+func decodeListQuery(values url.Values, collection schema.Collection, allowAccess bool) (listQuery, error) {
+	for key := range values {
+		if key != "page" && key != "limit" && key != "depth" && key != "where" && key != "select" && key != "populate" && key != "sort" && key != "trash" && key != "locale" && key != "fallback-locale" && key != "fallbackLocale" && (key != "include-access" || !allowAccess) {
 			return listQuery{}, &operationengine.Error{Code: "bad_query", Status: 400, Message: fmt.Sprintf("unknown query parameter %q", key)}
 		}
 	}
-	trashOnly := request.URL.Query().Get("trash") == "true"
-	if encoded := request.URL.Query().Get("trash"); encoded != "" && encoded != "true" && encoded != "false" {
+	includeAccessValues := values["include-access"]
+	if len(includeAccessValues) > 1 {
+		return listQuery{}, &operationengine.Error{Code: "bad_query", Status: 400, Message: "include-access query parameter must be provided once"}
+	}
+	includeAccess := len(includeAccessValues) == 1 && includeAccessValues[0] == "true"
+	if len(includeAccessValues) == 1 && includeAccessValues[0] != "true" && includeAccessValues[0] != "false" {
+		return listQuery{}, &operationengine.Error{Code: "bad_query", Status: 400, Message: "include-access query parameter must be true or false"}
+	}
+	trashOnly := values.Get("trash") == "true"
+	if encoded := values.Get("trash"); encoded != "" && encoded != "true" && encoded != "false" {
 		return listQuery{}, &operationengine.Error{Code: "bad_query", Status: 400, Message: "trash query parameter must be true or false"}
 	}
 	if trashOnly && !collection.Capabilities.Trash {
 		return listQuery{}, &operationengine.Error{Code: "bad_query", Status: 400, Message: "collection does not support trash"}
 	}
-	page, err := positiveInteger(request.URL.Query().Get("page"), 1, 1_000_000)
+	page, err := positiveInteger(values.Get("page"), 1, 1_000_000)
 	if err != nil {
 		return listQuery{}, err
 	}
-	limit, err := positiveInteger(request.URL.Query().Get("limit"), 10, 100)
+	limit, err := positiveInteger(values.Get("limit"), 10, 100)
 	if err != nil {
 		return listQuery{}, err
 	}
 	var filter query.Expression
-	if encoded := request.URL.Query().Get("where"); encoded != "" {
+	if encoded := values.Get("where"); encoded != "" {
 		filter, err = decodeWhere([]byte(encoded), collection)
 		if err != nil {
 			return listQuery{}, &operationengine.Error{Code: "bad_query", Status: 400, Message: "invalid where query", Cause: err}
 		}
 	}
-	sorts, err := decodeSort(request.URL.Query()["sort"], collection)
+	sorts, err := decodeSort(values["sort"], collection)
 	if err != nil {
 		return listQuery{}, &operationengine.Error{Code: "bad_query", Status: 400, Message: "invalid sort query", Cause: err}
 	}
-	selection, err := decodeSelection(request.URL.Query().Get("select"), collection)
+	selection, err := decodeSelection(values.Get("select"), collection)
 	if err != nil {
 		return listQuery{}, &operationengine.Error{Code: "bad_query", Status: 400, Message: "invalid select query", Cause: err}
 	}
-	population, err := decodePopulation(request.URL.Query().Get("populate"), collection)
+	population, err := decodePopulation(values.Get("populate"), collection)
 	if err != nil {
 		return listQuery{}, &operationengine.Error{Code: "bad_query", Status: 400, Message: "invalid populate query", Cause: err}
 	}
-	depthPopulation, err := decodeDepthPopulation(request.URL.Query().Get("depth"), collection)
+	depthPopulation, err := decodeDepthPopulation(values.Get("depth"), collection)
 	if err != nil {
 		return listQuery{}, &operationengine.Error{Code: "bad_query", Status: 400, Message: "invalid depth query", Cause: err}
 	}
@@ -3209,11 +3177,11 @@ func decodeListQuery(request *http.Request, collection schema.Collection) (listQ
 	if len(depthPopulation) != 0 {
 		population = depthPopulation
 	}
-	localeOptions, err := decodeLocaleQuery(request)
+	localeOptions, err := decodeLocaleQuery(values)
 	if err != nil {
 		return listQuery{}, err
 	}
-	return listQuery{page: page, limit: limit, filter: filter, sort: sorts, selectFields: selection.stored, outputFields: selection.output, populate: population, trashOnly: trashOnly,
+	return listQuery{page: page, limit: limit, filter: filter, sort: sorts, selectFields: selection.stored, outputFields: selection.output, populate: population, trashOnly: trashOnly, includeAccess: includeAccess,
 		locale: localeOptions.locale, fallbackLocales: localeOptions.fallbackLocales, disableFallback: localeOptions.disableFallback, allLocales: localeOptions.allLocales}, nil
 }
 
@@ -3238,11 +3206,11 @@ func (options localeQuery) public() LocaleOptions {
 	}
 }
 
-func decodeLocaleQuery(request *http.Request) (localeQuery, error) {
-	locale := strings.TrimSpace(request.URL.Query().Get("locale"))
+func decodeLocaleQuery(values url.Values) (localeQuery, error) {
+	locale := strings.TrimSpace(values.Get("locale"))
 	all := locale == "all" || locale == "*"
-	fallbackValue := request.URL.Query().Get("fallback-locale")
-	if alias := request.URL.Query().Get("fallbackLocale"); alias != "" {
+	fallbackValue := values.Get("fallback-locale")
+	if alias := values.Get("fallbackLocale"); alias != "" {
 		if fallbackValue != "" && fallbackValue != alias {
 			return localeQuery{}, &operationengine.Error{Code: "bad_query", Status: 400, Message: "fallback-locale and fallbackLocale must not conflict"}
 		}
@@ -3388,8 +3356,10 @@ func selectableSystemField(collection schema.Collection, name string) bool {
 		return true
 	case "deletedAt":
 		return collection.Capabilities.Trash
-	case "_status", "_revision":
+	case "_status":
 		return collection.Versions != nil
+	case "_revision":
+		return collection.Versions != nil || collection.Upload != nil
 	default:
 		return false
 	}
@@ -3501,7 +3471,7 @@ func (api *API) methodNotAllowed(writer http.ResponseWriter, requestID string, m
 	api.writeError(writer, requestID, &operationengine.Error{Code: "method_not_allowed", Status: 405, Message: "HTTP method is not allowed"})
 }
 
-func (api *API) writeError(writer http.ResponseWriter, requestID string, err error) {
+func publicErrorPayload(requestID string, err error) protocol.ErrorPayload {
 	status, code, message := http.StatusInternalServerError, "internal", "internal server error"
 	issues := []protocol.ValidationIssue{}
 	var operationError *operationengine.Error
@@ -3516,23 +3486,25 @@ func (api *API) writeError(writer http.ResponseWriter, requestID string, err err
 	} else if errors.Is(err, context.Canceled) {
 		status, code, message = http.StatusRequestTimeout, "request_canceled", "request was canceled"
 	}
+
 	if status >= http.StatusInternalServerError {
-		// RequestError is an explicitly trusted diagnostic sink; response bodies
-		// retain only the stable redacted public envelope below.
+		code, message, issues = "internal", "internal server error", []protocol.ValidationIssue{}
+	}
+	return protocol.ErrorPayload{Code: wireErrorCode(code, status), Status: status, Message: message, RequestID: requestID, Issues: issues}
+}
+
+func (api *API) writeError(writer http.ResponseWriter, requestID string, err error) {
+	payload := publicErrorPayload(requestID, err)
+	if payload.Status >= http.StatusInternalServerError {
 		if tracked, ok := writer.(*statusWriter); ok {
 			api.reportRequestErrorDetails(tracked.method, tracked.path, requestID, err, false, "")
 		}
-		code, message, issues = "internal", "internal server error", []protocol.ValidationIssue{}
 	}
-	wireCode := wireErrorCode(code, status)
 	if tracked, ok := writer.(*statusWriter); ok {
-		tracked.errorCode = string(wireCode)
+		tracked.errorCode = string(payload.Code)
 	}
-	writeJSON(writer, status, protocol.ErrorEnvelope{Error: protocol.ErrorPayload{
-		Code: wireCode, Status: status, Message: message, RequestID: requestID, Issues: issues,
-	}})
+	writeJSON(writer, payload.Status, protocol.ErrorEnvelope{Error: payload})
 }
-
 func wireErrorCode(code string, status int) protocol.ErrorCode {
 	switch code {
 	case "validation":
@@ -3574,6 +3546,8 @@ func documentJSON(document store.Document) map[string]any {
 	}
 	if document.Status != "" {
 		result["_status"] = document.Status
+	}
+	if document.Revision > 0 {
 		result["_revision"] = document.Revision
 	}
 	if len(document.LocalizationSources) > 0 {
@@ -3589,16 +3563,16 @@ func documentJSON(document store.Document) map[string]any {
 	return result
 }
 
-func versionJSON(version store.Version) map[string]any {
-	return map[string]any{
-		"ID": version.ID, "DocumentID": version.DocumentID, "Revision": version.Revision,
-		"Status": version.Status, "Snapshot": documentJSON(version.Snapshot),
-		"CreatedAt": version.CreatedAt.UTC().Format(time.RFC3339Nano),
+func versionJSON(version store.Version) protocol.DocumentVersion[map[string]any] {
+	return protocol.DocumentVersion[map[string]any]{
+		ID: version.ID, DocumentID: version.DocumentID, Revision: version.Revision,
+		Status: string(version.Status), Snapshot: documentJSON(version.Snapshot),
+		CreatedAt: version.CreatedAt.UTC().Format(time.RFC3339Nano),
 	}
 }
 
-func versionsJSON(versions []store.Version) []map[string]any {
-	result := make([]map[string]any, len(versions))
+func versionsJSON(versions []store.Version) []protocol.DocumentVersion[map[string]any] {
+	result := make([]protocol.DocumentVersion[map[string]any], len(versions))
 	for index, version := range versions {
 		result[index] = versionJSON(version)
 	}

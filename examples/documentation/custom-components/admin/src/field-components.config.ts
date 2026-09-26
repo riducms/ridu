@@ -5,7 +5,7 @@ import TitleField from './components/title-field.svelte';
 
 export default defineAdmin({
 	plugins: generatedAdminPlugins,
-	fields: {
+	fieldEditors: {
 		// Use this name in the Go field's Editor option.
 		'app:titleCounter': defineFieldEditor({
 			type: 'text',

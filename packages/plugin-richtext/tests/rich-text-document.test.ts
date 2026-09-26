@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { createEditor } from "lexical";
 
 import { initialEditorState } from "../src/field/rich-text-document";
-import { documentRecoveryIssue } from "../src/document-validation";
+import { decodeRichTextDocument, documentRecoveryIssue } from "../src/document-validation";
 
 describe("rich-text document hydration", () => {
 	it("supplies Lexical element defaults without mutating stored documents", () => {
@@ -117,5 +117,18 @@ describe("rich-text document hydration", () => {
 				`root.children.0.${path}`
 			);
 		}
+	});
+
+	it("rejects links that portable renderers cannot expose", () => {
+		for (const url of ["javascript:alert(1)", "sms:+447700900123", "//example.com/path"])
+			expect(() =>
+				decodeRichTextDocument({
+					version: 1,
+					root: {
+						type: "root",
+						children: [{ type: "link", url, children: [] }],
+					},
+				})
+			).toThrow("root.children.0.url");
 	});
 });

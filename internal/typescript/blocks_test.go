@@ -69,7 +69,7 @@ const newInvalid: PagesLayoutUpdate = [{blockType:"hero",subtitle:"Missing headi
 // @ts-expect-error new array rows still require their authored fields
 const newLinkInvalid: HeroUpdate = {blockType:"hero",_key:"stable",links:[{}]};
 const redacted: Hero = {blockType:"hero",_key:"stable"};
-const populated: Hero = {blockType:"hero",_key:"stable",author:{id:"author-id",createdAt:"now",updatedAt:"now",name:"Author"},image:{id:"asset-id",createdAt:"now",updatedAt:"now"},subtitle:null};
+const populated: Hero = {blockType:"hero",_key:"stable",author:{id:"author-id",createdAt:"now",updatedAt:"now",name:"Author"},image:{id:"asset-id",createdAt:"now",updatedAt:"now",_revision:1},subtitle:null};
 const all: HeroAllLocales = {blockType:"hero",_key:"stable",heading:{en:"Hello",fr:"Bonjour"}};
 const localizedAncestor: PagesAllLocales = {id:"page",createdAt:"now",updatedAt:"now",translated:{en:[{blockType:"hero",_key:"stable",heading:"Hello",author:{id:"author",createdAt:"now",updatedAt:"now",name:{en:"Author"}}}]}};
 // @ts-expect-error output identity is required

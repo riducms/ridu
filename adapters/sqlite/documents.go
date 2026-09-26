@@ -218,7 +218,7 @@ func scanDocumentRecord(row rowScanner, collection schema.Collection) (store.Doc
 	}
 	if collection.Versions != nil {
 		document.Status = store.Status(status)
-	} else {
+	} else if collection.Upload == nil {
 		document.Revision = 0
 	}
 	var values store.Values
@@ -279,6 +279,8 @@ func (transaction *documentTransaction) Create(ctx context.Context, request stor
 				status = store.StatusPublished
 			}
 		}
+	}
+	if request.Collection.Versions != nil || request.Collection.Upload != nil {
 		revision = 1
 	}
 	values := store.CloneValues(request.Values)
@@ -895,7 +897,7 @@ func sqliteValueAtPathForLocales(collection schema.Collection, path query.Path, 
 			}
 			return sqliteDocumentValue{valueSQL: "status COLLATE BINARY", kind: sqliteStringValue, alwaysPresent: true}, true
 		case "_revision":
-			if collection.Versions == nil {
+			if collection.Versions == nil && collection.Upload == nil {
 				return sqliteDocumentValue{}, false
 			}
 			return sqliteDocumentValue{valueSQL: "revision", kind: sqliteNumberValue, alwaysPresent: true}, true
@@ -1095,7 +1097,7 @@ func (transaction *documentTransaction) Update(ctx context.Context, request stor
 	if request.Status != nil {
 		document.Status = *request.Status
 	}
-	if request.Collection.Versions != nil {
+	if request.Collection.Versions != nil || request.Collection.Upload != nil {
 		document.Revision++
 	}
 	if err := transaction.persistDocument(ctx, request.Collection, document); err != nil {
@@ -1526,7 +1528,7 @@ func documentValues(document store.Document, segments []string) []store.Value {
 	if len(segments) == 1 && segments[0] == "_status" && document.Status != "" {
 		return []store.Value{store.String(string(document.Status))}
 	}
-	if len(segments) == 1 && segments[0] == "_revision" && document.Status != "" {
+	if len(segments) == 1 && segments[0] == "_revision" && document.Revision > 0 {
 		return []store.Value{store.Number(float64(document.Revision))}
 	}
 	return valuesAtSegments(document.Values, segments)
@@ -1583,7 +1585,7 @@ func documentValue(document store.Document, segments []string) (store.Value, boo
 	if len(segments) == 1 && segments[0] == "_status" && document.Status != "" {
 		return store.String(string(document.Status)), true
 	}
-	if len(segments) == 1 && segments[0] == "_revision" && document.Status != "" {
+	if len(segments) == 1 && segments[0] == "_revision" && document.Revision > 0 {
 		return store.Number(float64(document.Revision)), true
 	}
 	if len(segments) == 0 {

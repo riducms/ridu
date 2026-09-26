@@ -1,0 +1,20 @@
+@layer ridu.components {
+	.ridu-code-editor {
+		min-width: 0;
+		border: 1px solid var(--control-border);
+		border-radius: var(--control-radius);
+		background: var(--control-surface);
+		overflow: hidden;
+		&:focus-within {
+			border-color: var(--ring);
+		}
+		&[data-invalid="true"] {
+			border-color: var(--control-invalid-border);
+			background: var(--control-invalid-surface);
+		}
+		&[data-readonly="true"] {
+			color: var(--control-disabled-foreground);
+			background: var(--control-surface-disabled);
+		}
+	}
+}

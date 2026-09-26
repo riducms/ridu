@@ -29,15 +29,16 @@ const unexpected = [...actual].filter((path) => !expected.has(path));
 const changed: string[] = [];
 
 for (const path of [...expected].filter((candidate) => actual.has(candidate))) {
-	const expectedPath = expectedByCanonicalPath.get(path);
-	const actualPath = actualByCanonicalPath.get(path);
-	if (expectedPath === undefined || actualPath === undefined) continue;
-	const [expectedBytes, actualBytes] = await Promise.all([
-		Bun.file(resolve(expectedRoot, expectedPath)).bytes(),
-		Bun.file(resolve(actualRoot, actualPath)).bytes(),
+	const expectedPaths = expectedByCanonicalPath.get(path);
+	const actualPaths = actualByCanonicalPath.get(path);
+	if (expectedPaths === undefined || actualPaths === undefined) continue;
+	const [expectedContents, actualContents] = await Promise.all([
+		normalizedContents(expectedRoot, path, expectedPaths),
+		normalizedContents(actualRoot, path, actualPaths),
 	]);
 	if (
-		!Buffer.from(normalize(path, expectedBytes)).equals(Buffer.from(normalize(path, actualBytes)))
+		expectedContents.length !== actualContents.length ||
+		expectedContents.some((content, index) => !content.equals(actualContents[index]!))
 	) {
 		changed.push(path);
 	}
@@ -54,13 +55,24 @@ if (missing.length > 0 || unexpected.length > 0 || changed.length > 0) {
 console.log(`Embedded admin assets match the production build (${expectedFiles.length} files).`);
 
 function canonicalFiles(paths: string[]) {
-	const result = new Map<string, string>();
+	const result = new Map<string, string[]>();
 	for (const path of paths) {
 		const canonical = path.replace(assetHash, "-HASH");
-		if (result.has(canonical)) throw new Error(`ambiguous built asset path: ${canonical}`);
-		result.set(canonical, path);
+		const matches = result.get(canonical);
+		if (matches === undefined) result.set(canonical, [path]);
+		else matches.push(path);
 	}
 	return result;
+}
+
+async function normalizedContents(root: string, canonicalPath: string, paths: string[]) {
+	const contents = await Promise.all(
+		paths.map(async (path) => {
+			const bytes = await Bun.file(resolve(root, path)).bytes();
+			return Buffer.from(normalize(canonicalPath, bytes));
+		})
+	);
+	return contents.sort(Buffer.compare);
 }
 
 function normalize(path: string, bytes: Uint8Array) {

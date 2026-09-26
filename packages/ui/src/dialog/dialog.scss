@@ -1,0 +1,153 @@
+@use "@riducms/ui/styles.scss" as ui;
+@layer ridu.components {
+	.ridu-dialog-overlay {
+		position: fixed;
+		inset: 0;
+		z-index: 50;
+		isolation: isolate;
+		background: var(--media-overlay);
+		backdrop-filter: blur(4px);
+	}
+	.ridu-dialog {
+		position: fixed;
+		top: 50%;
+		left: 50%;
+		z-index: 50;
+		transform: translate(-50%, -50%);
+		display: grid;
+		gap: 24px;
+		width: min(460px, calc(100vw - 32px));
+		padding: 26px;
+		border: 1px solid var(--control-border);
+		border-radius: 4px;
+		background: var(--popover);
+		color: var(--foreground);
+		box-shadow: var(--shadow-dialog);
+		outline: none;
+		font-size: var(--font-size-body);
+	}
+	.ridu-dialog__header {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+	}
+	.ridu-dialog__footer {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: flex-end;
+		gap: 8px;
+	}
+	.ridu-dialog__title {
+		font-size: 16px;
+		line-height: 1.2;
+		font-weight: 500;
+	}
+	.ridu-dialog__description {
+		font-size: var(--font-size-body);
+		line-height: 1.5;
+		color: var(--foreground-muted);
+		a {
+			text-decoration: underline;
+		}
+	}
+	.ridu-dialog__close {
+		position: absolute;
+		inset-block-start: 16px;
+		inset-inline-end: 16px;
+		display: grid;
+		place-items: center;
+		width: 28px;
+		height: 28px;
+		border: 0;
+		border-radius: var(--control-radius);
+		background: transparent;
+		color: var(--foreground-muted);
+		cursor: pointer;
+
+		&:hover {
+			background: var(--control-surface-hover);
+			color: var(--foreground);
+		}
+
+		&:focus-visible {
+			@include ui.focus-outline;
+		}
+
+		svg {
+			width: 14px;
+			height: 14px;
+		}
+	}
+	.ridu-dialog__close-label {
+		@include ui.visually-hidden;
+	}
+	.ridu-dialog-overlay--confirmation {
+		@include ui.confirmation-overlay;
+	}
+	.ridu-dialog--confirmation {
+		@include ui.confirmation-content;
+		.ridu-dialog__title {
+			@include ui.confirmation-title;
+		}
+		.ridu-dialog__description {
+			color: var(--foreground);
+		}
+		.ridu-dialog__footer {
+			justify-content: flex-start;
+		}
+	}
+	.ridu-dialog-overlay--drawer {
+		z-index: 60;
+	}
+	.ridu-dialog-drawer {
+		--dialog-slide: 60px;
+		position: fixed;
+		inset-block: 0;
+		inset-inline-end: 0;
+		inset-inline-start: var(--admin-gutter);
+		z-index: 61;
+		display: flex;
+		flex-direction: column;
+		overflow: auto;
+		background: var(--background);
+		color: var(--foreground);
+		outline: none;
+		box-shadow: var(--shadow-dialog);
+		font-size: var(--font-size-body);
+		line-height: var(--line-height-body);
+		animation: ridu-dialog-drawer-in 200ms linear;
+
+		&[dir="rtl"] {
+			--dialog-slide: -60px;
+		}
+
+		&[data-state="closed"] {
+			animation: ridu-dialog-drawer-out 180ms linear;
+		}
+	}
+
+	@media (max-width: ui.$small) {
+		.ridu-dialog-drawer {
+			inset-inline-start: 10px;
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.ridu-dialog-drawer[data-state] {
+			animation: none;
+		}
+	}
+}
+
+@keyframes ridu-dialog-drawer-in {
+	from {
+		opacity: 0;
+		transform: translateX(var(--dialog-slide));
+	}
+}
+
+@keyframes ridu-dialog-drawer-out {
+	to {
+		opacity: 0;
+		transform: translateX(var(--dialog-slide));
+	}
+}

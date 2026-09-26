@@ -22,6 +22,8 @@ import (
 	"time"
 
 	"github.com/riducms/ridu/internal/operation"
+	"github.com/riducms/ridu/internal/teststore"
+	operationkind "github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/protocol"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
@@ -227,7 +229,7 @@ func TestCORSAllowsSDKRevisionHeadersAndRejectsUnadvertisedHeaders(t *testing.T)
 	}
 }
 
-func TestScheduledPublishTransportCarriesExactAuthIdentity(t *testing.T) {
+func TestScheduledPublicationTransportCarriesExactAuthIdentity(t *testing.T) {
 	manifest := schema.NewManifest(schema.Snapshot{
 		Version: schema.CurrentVersion, Application: schema.Application{Name: "scheduled identity transport"},
 		Collections: []schema.Collection{{
@@ -237,21 +239,27 @@ func TestScheduledPublishTransportCarriesExactAuthIdentity(t *testing.T) {
 		Plugins: []schema.Plugin{},
 	})
 	var received *AuthIdentity
+	unpublishCalled := false
 	handler := New(Config{
 		Manifest: manifest,
 		AuthenticateAPIKey: func(context.Context, string) (AuthIdentity, error) {
 			return AuthIdentity{Collection: "staff", Actor: store.Document{ID: "shared-requester", Values: store.Values{"role": store.String("publisher")}}}, nil
 		},
-		SchedulePublish: func(_ context.Context, collection, documentID string, runAt time.Time, revision int, identity *AuthIdentity) (store.ScheduledPublish, error) {
+		SchedulePublish: func(_ context.Context, collection, documentID string, runAt time.Time, timeZone string, revision int, identity *AuthIdentity) (store.ScheduledPublication, error) {
 			received = identity
-			return store.ScheduledPublish{ID: "schedule-1", CollectionID: "collection-posts", DocumentID: documentID, ExpectedRevision: revision, RunAt: runAt, CreatedAt: time.Now().UTC()}, nil
+			return store.ScheduledPublication{ID: "schedule-1", Action: store.PublicationActionPublish, CollectionID: "collection-posts", DocumentID: documentID, ExpectedRevision: revision, RunAt: runAt, TimeZone: timeZone, CreatedAt: time.Now().UTC()}, nil
 		},
-		ScheduledPublishes: func(context.Context, string, string, *AuthIdentity) ([]store.ScheduledPublish, error) {
+		ScheduleUnpublish: func(_ context.Context, collection, documentID string, runAt time.Time, timeZone string, revision int, identity *AuthIdentity) (store.ScheduledPublication, error) {
+			unpublishCalled = true
+			received = identity
+			return store.ScheduledPublication{ID: "schedule-2", Action: store.PublicationActionUnpublish, CollectionID: "collection-posts", DocumentID: documentID, ExpectedRevision: revision, RunAt: runAt, TimeZone: timeZone, CreatedAt: time.Now().UTC()}, nil
+		},
+		ScheduledPublications: func(context.Context, string, string, *AuthIdentity) ([]store.ScheduledPublication, error) {
 			return nil, nil
 		},
-		CancelScheduledPublish: func(context.Context, string, string, string, *AuthIdentity) error { return nil },
+		CancelScheduledPublication: func(context.Context, string, string, string, *AuthIdentity) error { return nil },
 	})
-	request := httptest.NewRequest(http.MethodPost, "/api/collections/posts/post-1/schedule", strings.NewReader(`{"runAt":"2030-01-02T03:04:05Z"}`))
+	request := httptest.NewRequest(http.MethodPost, "/api/collections/posts/post-1/schedule", strings.NewReader(`{"action":"publish","runAt":"2030-01-02T03:04:05Z","timeZone":"Asia/Kolkata"}`))
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Authorization", "Bearer exact-token")
 	request.Header.Set("If-Match", `"7"`)
@@ -260,8 +268,36 @@ func TestScheduledPublishTransportCarriesExactAuthIdentity(t *testing.T) {
 	if response.Code != http.StatusCreated {
 		t.Fatalf("schedule response = %d: %s", response.Code, response.Body.String())
 	}
+	if !strings.Contains(response.Body.String(), `"timeZone":"Asia/Kolkata"`) {
+		t.Fatalf("missing schedule timezone: %s", response.Body.String())
+	}
 	if received == nil || received.Collection != "staff" || received.Actor.ID != "shared-requester" {
 		t.Fatalf("scheduled identity = %#v", received)
+	}
+	unpublishRequest := httptest.NewRequest(http.MethodPost, "/api/collections/posts/post-1/schedule", strings.NewReader(`{"action":"unpublish","runAt":"2030-01-02T03:04:05Z","timeZone":"Asia/Kolkata"}`))
+	unpublishRequest.Header.Set("Content-Type", "application/json")
+	unpublishRequest.Header.Set("Authorization", "Bearer exact-token")
+	unpublishResponse := httptest.NewRecorder()
+	handler.ServeHTTP(unpublishResponse, unpublishRequest)
+	if !strings.Contains(unpublishResponse.Body.String(), `"timeZone":"Asia/Kolkata"`) {
+		t.Fatalf("missing unpublish timezone: %s", unpublishResponse.Body.String())
+	}
+	if unpublishResponse.Code != http.StatusCreated || !unpublishCalled || received == nil || received.Collection != "staff" {
+		t.Fatalf("scheduled unpublish = %d, called %v, identity %#v: %s", unpublishResponse.Code, unpublishCalled, received, unpublishResponse.Body.String())
+	}
+	for name, body := range map[string]string{
+		"missing action": `{"runAt":"2030-01-02T03:04:05Z","timeZone":"Asia/Kolkata"}`,
+		"unknown action": `{"action":"archive","runAt":"2030-01-02T03:04:05Z","timeZone":"Asia/Kolkata"}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			invalidRequest := httptest.NewRequest(http.MethodPost, "/api/collections/posts/post-1/schedule", strings.NewReader(body))
+			invalidRequest.Header.Set("Content-Type", "application/json")
+			invalidResponse := httptest.NewRecorder()
+			handler.ServeHTTP(invalidResponse, invalidRequest)
+			if invalidResponse.Code != http.StatusUnprocessableEntity {
+				t.Fatalf("invalid scheduled publication = %d: %s", invalidResponse.Code, invalidResponse.Body.String())
+			}
+		})
 	}
 }
 
@@ -604,7 +640,8 @@ func TestMultipartUploadsUseBoundedMemorySpoolingAndRemoveTemporaryFiles(t *test
 		Plugins:     []schema.Plugin{},
 	})
 	var spooledPath string
-	handler := New(Config{Manifest: manifest, Upload: func(_ context.Context, _, _ string, reader io.Reader, _ store.Values, _ *AuthIdentity, _ bool) (store.Document, error) {
+	handler := New(Config{Manifest: manifest, Upload: func(_ context.Context, _ string, input UploadInput, _ *AuthIdentity, _ bool) (store.Document, error) {
+		reader := input.Reader
 		file, ok := reader.(*os.File)
 		if !ok {
 			return store.Document{}, fmt.Errorf("large multipart file remained memory-backed as %T", reader)
@@ -718,7 +755,7 @@ func TestMultipartAdmissionPrecedesAnyRequestBodyRead(t *testing.T) {
 			}
 			return func() { held.Store(false) }, nil
 		},
-		Upload: func(context.Context, string, string, io.Reader, store.Values, *AuthIdentity, bool) (store.Document, error) {
+		Upload: func(context.Context, string, UploadInput, *AuthIdentity, bool) (store.Document, error) {
 			return store.Document{}, &operation.Error{Code: "access_denied", Status: http.StatusForbidden, Message: "operation is not permitted"}
 		},
 	})
@@ -782,7 +819,7 @@ func TestDecodeListQueryExpandsDepthIntoRelationshipPopulation(t *testing.T) {
 	}}
 
 	request := httptest.NewRequest(http.MethodGet, "/api/collections/posts?depth=2", nil)
-	options, decodeErr := decodeListQuery(request, collection)
+	options, decodeErr := decodeListQuery(request.URL.Query(), collection, false)
 	if decodeErr != nil {
 		t.Fatal(decodeErr)
 	}
@@ -794,7 +831,7 @@ func TestDecodeListQueryExpandsDepthIntoRelationshipPopulation(t *testing.T) {
 		"/api/collections/posts?depth=6",
 		"/api/collections/posts?depth=2&populate=%7B%22related%22%3Atrue%7D",
 	} {
-		if _, decodeErr := decodeListQuery(httptest.NewRequest(http.MethodGet, target, nil), collection); decodeErr == nil {
+		if _, decodeErr := decodeListQuery(httptest.NewRequest(http.MethodGet, target, nil).URL.Query(), collection, false); decodeErr == nil {
 			t.Fatalf("invalid depth query succeeded: %s", target)
 		}
 	}
@@ -812,7 +849,7 @@ func TestDecodeListQueryPopulatesNestedGroupArrayAndBlockRelationships(t *testin
 	}}
 
 	request := httptest.NewRequest(http.MethodGet, `/api/collections/posts?populate=%7B%22meta.reviewer%22%3Atrue%2C%22sections.editor%22%3Atrue%2C%22layout.quote.source%22%3Atrue%7D`, nil)
-	options, err := decodeListQuery(request, collection)
+	options, err := decodeListQuery(request.URL.Query(), collection, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -827,7 +864,7 @@ func TestDecodeListQueryPopulatesNestedGroupArrayAndBlockRelationships(t *testin
 	}
 
 	depthRequest := httptest.NewRequest(http.MethodGet, `/api/collections/posts?depth=2`, nil)
-	depthOptions, err := decodeListQuery(depthRequest, collection)
+	depthOptions, err := decodeListQuery(depthRequest.URL.Query(), collection, false)
 	if err != nil || len(depthOptions.populate) != 3 {
 		t.Fatalf("nested depth population = %#v, %v", depthOptions.populate, err)
 	}
@@ -984,16 +1021,85 @@ func TestDecodePopulationTreatsBooleanDepthAndSelectAsAuthoredFields(t *testing.
 
 func TestDecodeListQueryAcceptsTrashOnlyForEnabledCollections(t *testing.T) {
 	request := httptest.NewRequest("GET", "/api/collections/posts?trash=true", nil)
-	options, err := decodeListQuery(request, schema.Collection{Capabilities: schema.Capabilities{Trash: true}})
+	options, err := decodeListQuery(request.URL.Query(), schema.Collection{Capabilities: schema.Capabilities{Trash: true}}, false)
 	if err != nil || !options.trashOnly {
 		t.Fatalf("trash query = %#v, %v", options, err)
 	}
-	if _, err := decodeListQuery(request, schema.Collection{}); err == nil {
+	if _, err := decodeListQuery(request.URL.Query(), schema.Collection{}, false); err == nil {
 		t.Fatal("trash query succeeded for a collection without trash")
 	}
 	invalid := httptest.NewRequest("GET", "/api/collections/posts?trash=yes", nil)
-	if _, err := decodeListQuery(invalid, schema.Collection{Capabilities: schema.Capabilities{Trash: true}}); err == nil {
+	if _, err := decodeListQuery(invalid.URL.Query(), schema.Collection{Capabilities: schema.Capabilities{Trash: true}}, false); err == nil {
 		t.Fatal("invalid trash query value succeeded")
+	}
+}
+
+func TestDecodeListQueryAcceptsAccessEnrichmentOnlyOnCollectionLists(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "/api/collections/posts?include-access=true", nil)
+	options, err := decodeListQuery(request.URL.Query(), schema.Collection{}, true)
+	if err != nil || !options.includeAccess {
+		t.Fatalf("include-access query = %#v, %v", options, err)
+	}
+	for _, target := range []string{
+		"/api/collections/posts?include-access=yes",
+		"/api/collections/posts?include-access=true&include-access=false",
+	} {
+		if _, err := decodeListQuery(httptest.NewRequest(http.MethodGet, target, nil).URL.Query(), schema.Collection{}, true); err == nil {
+			t.Fatalf("invalid include-access query succeeded: %s", target)
+		}
+	}
+	if _, err := decodeListQuery(request.URL.Query(), schema.Collection{}, false); err == nil {
+		t.Fatal("include-access succeeded outside a collection list")
+	}
+}
+
+func TestCollectionListAccessEnvelopeIsOptIn(t *testing.T) {
+	collection := schema.Collection{
+		ID: "collection-posts", Slug: "posts",
+		Labels: schema.CollectionLabels{Singular: "Post", Plural: "Posts"},
+	}
+	engine, err := operation.New(operation.Config{
+		Store: teststore.New(), Collections: []operation.Collection{{Schema: collection}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := engine.Execute(t.Context(), operation.Request{
+		Operation: operationkind.Create, Collection: "posts", ImportID: "post_1",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	handler := New(Config{
+		Engine: engine,
+		Manifest: schema.NewManifest(schema.Snapshot{
+			Version: schema.CurrentVersion, Collections: []schema.Collection{collection},
+		}),
+	})
+
+	request := func(target string) map[string]any {
+		t.Helper()
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, target, nil))
+		if response.Code != http.StatusOK {
+			t.Fatalf("GET %s = %d: %s", target, response.Code, response.Body.String())
+		}
+		var body map[string]any
+		if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+			t.Fatal(err)
+		}
+		return body
+	}
+	if _, exists := request("/api/collections/posts")["access"]; exists {
+		t.Fatal("ordinary collection page unexpectedly contained access metadata")
+	}
+	enriched := request("/api/collections/posts?include-access=true")
+	access, ok := enriched["access"].(map[string]any)
+	if !ok {
+		t.Fatalf("enriched access = %#v", enriched["access"])
+	}
+	documents, ok := access["documents"].(map[string]any)
+	if !ok || len(documents) != 1 || documents["post_1"] == nil || access["collection"] == nil {
+		t.Fatalf("enriched access = %#v", access)
 	}
 }
 

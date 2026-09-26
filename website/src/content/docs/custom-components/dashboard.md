@@ -22,9 +22,9 @@ example uses the props Ridu supplies to show the collections available to the si
 
 | Option                          | Required                | What it does                                                                                          |
 | ------------------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------- |
-| `dashboard[].key`               | Yes                     | Gives the panel a unique registration name.                                                           |
-| `dashboard[].component`         | Yes                     | Supplies the Svelte panel component.                                                                  |
-| `dashboard[].position`          | No; defaults to `after` | Places the panel `before` or `after` Ridu's overview, or uses `replace` for one complete replacement. |
+| `dashboardPanels[].key`         | Yes                     | Gives the panel a unique registration name.                                                           |
+| `dashboardPanels[].component`   | Yes                     | Supplies the Svelte panel component.                                                                  |
+| `dashboardPanels[].position`    | No; defaults to `after` | Places the panel `before` or `after` Ridu's overview, or uses `replace` for one complete replacement. |
 | Component `manifest` prop       | Supplied by Ridu        | Contains collections and globals visible in this admin session.                                       |
 | Component `user` / `i18n` props | Supplied by Ridu        | Exposes the signed-in document when available and current interface formatting.                       |
 
@@ -61,7 +61,7 @@ import CollectionOverview from './components/collection-overview.svelte';
 
 export default defineAdmin({
 	plugins: generatedAdminPlugins,
-	dashboard: [
+	dashboardPanels: [
 		{
 			key: 'collections',
 			component: CollectionOverview,
@@ -88,9 +88,12 @@ everything you want displayed inside your replacement component.
 
 ## Load application data {#data}
 
-Use your [generated SDK](/docs/typescript-sdk/) to fetch counts, reports, or recent documents.
-Show loading, empty, and error states in your component. The API applies the signed-in user's
-permissions to those requests.
+For counts, reports, or recent documents that should be ready when the dashboard appears,
+use a [Go loader](/docs/custom-components/loading-data/#dashboard). It supplies the result
+as a `data` prop, plus `refresh` and `refreshing` for an update button. The guide builds a
+Post summary panel from a Go read through to its Svelte registration.
 
 The collection descriptions supplied in `manifest` are configuration, not a list of stored
-documents. A panel that shows article totals needs to request those totals from the API.
+documents. A panel that shows article totals needs to read those totals from the server.
+Use your [generated SDK](/docs/typescript-sdk/) for writes and interaction-time requests
+that do not need to delay the initial dashboard.

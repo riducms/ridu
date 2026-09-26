@@ -1305,7 +1305,7 @@ type pairedPlugin struct {
 
 func (plugin pairedPlugin) Key() string { return plugin.key }
 func (plugin pairedPlugin) Descriptor() ridu.PluginDescriptor {
-	return ridu.PluginDescriptor{Version: "1.0.0", GoPackage: "example.com/plugins/" + plugin.key, APIVersion: ridu.PluginAPIVersion, Ridu: ridu.RiduCompatibility{Minimum: ridu.FrameworkVersion, MaximumExclusive: "0.3.0"}, Admin: &plugin.admin}
+	return ridu.PluginDescriptor{Version: "1.0.0", GoPackage: "example.com/plugins/" + plugin.key, APIVersion: ridu.PluginAPIVersion, Ridu: ridu.RiduCompatibility{Minimum: ridu.FrameworkVersion}, Admin: &plugin.admin}
 }
 
 type pointerPlugin struct{}

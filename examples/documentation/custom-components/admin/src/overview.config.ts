@@ -5,7 +5,7 @@ import WelcomePanel from './components/welcome-panel.svelte';
 export default defineAdmin({
 	// Include admin components from the project's installed plugins.
 	plugins: generatedAdminPlugins,
-	dashboard: [
+	dashboardPanels: [
 		{ key: 'welcome', component: WelcomePanel, position: 'before' }
 	]
 });

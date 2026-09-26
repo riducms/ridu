@@ -280,14 +280,8 @@ func decodeCollectionDocument(raw bson.Raw, collection schema.Collection) (store
 	if err != nil {
 		return store.Document{}, err
 	}
-	if collection.Versions == nil {
-		if document.Status != "" || document.Revision != 0 {
-			return store.Document{}, fmt.Errorf("stored MongoDB document has version metadata in an unversioned collection")
-		}
-	} else {
-		if err := validateMongoVersionMetadata(collection, document.Status, document.Revision); err != nil {
-			return store.Document{}, fmt.Errorf("stored MongoDB document has invalid version metadata: %w", err)
-		}
+	if err := validateMongoVersionMetadata(collection, document.Status, document.Revision); err != nil {
+		return store.Document{}, fmt.Errorf("stored MongoDB document has invalid version metadata: %w", err)
 	}
 	if err := validateCompleteValues(collection, document.Values); err != nil {
 		return store.Document{}, fmt.Errorf("stored MongoDB document does not match collection %q: %w", collection.ID, storedSchemaRecoveryError(err))
@@ -326,8 +320,15 @@ func storedSchemaRecoveryError(err error) error {
 
 func validateMongoVersionMetadata(collection schema.Collection, status store.Status, revision int) error {
 	if collection.Versions == nil {
-		if status != "" || revision != 0 {
-			return fmt.Errorf("unversioned collection requires empty status and zero revision")
+		if status != "" {
+			return fmt.Errorf("unversioned collection requires empty status")
+		}
+		if collection.Upload != nil {
+			if revision < 1 {
+				return fmt.Errorf("upload revision must be positive")
+			}
+		} else if revision != 0 {
+			return fmt.Errorf("unversioned non-upload collection requires zero revision")
 		}
 		return nil
 	}

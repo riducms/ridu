@@ -7,7 +7,7 @@ import (
 	"github.com/riducms/ridu/internal/teststore"
 )
 
-func TestNewRegistersScheduledPublishingOnlyForVersionedCollections(t *testing.T) {
+func TestNewRegistersScheduledPublicationingOnlyForVersionedCollections(t *testing.T) {
 	backend := teststore.New()
 	withoutVersions, err := New(Config{
 		Name: "Plain",

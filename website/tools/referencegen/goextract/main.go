@@ -202,6 +202,10 @@ func typeDeclaration(root string, set *token.FileSet, loaded *packages.Package, 
 	if docs == nil {
 		docs = group.Doc
 	}
+	// Match Go documentation: show the exported type surface, not private runtime state.
+	ast.FileExports(&ast.File{Decls: []ast.Decl{
+		&ast.GenDecl{Tok: token.TYPE, Specs: []ast.Spec{spec}},
+	}})
 	return declaration{
 		ID:          "go:" + loaded.PkgPath + "#" + spec.Name.Name,
 		Name:        spec.Name.Name,

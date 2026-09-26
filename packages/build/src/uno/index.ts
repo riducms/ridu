@@ -32,7 +32,30 @@ const presetDependencies = [
 ].map((path) => fileURLToPath(new URL(path, import.meta.url)));
 
 export function createAdminUnoConfig(options: AdminUnoConfigOptions = {}) {
+	const wind = presetWind4();
+	// Reserve the public cascade even when a utility-only library stylesheet loads first.
+	// Keep this order aligned with @riducms/ui/layers.css until UnoCSS is retired.
+	const cssLayers = [
+		"ridu",
+		"ridu-plugins",
+		"app",
+		"ridu.reset",
+		"ridu.theme",
+		"ridu.base",
+		"ridu.components",
+		"ridu.utilities",
+	];
 	return defineConfig({
+		layers: Object.fromEntries(cssLayers.map((layer, index) => [layer, -10000 + index])),
+		outputToCssLayers: {
+			allLayers: true,
+			cssLayerName: (layer) =>
+				cssLayers.includes(layer)
+					? layer
+					: ["base", "theme", "properties"].includes(layer)
+						? `ridu.reset.${layer}`
+						: `ridu.utilities.${layer}`,
+		},
 		content: {
 			filesystem: [
 				"./node_modules/bits-ui/dist/**/*.{html,js,svelte,ts}",
@@ -48,7 +71,25 @@ export function createAdminUnoConfig(options: AdminUnoConfigOptions = {}) {
 			presetRiduUtilities(),
 			dashPreset(),
 			ariaPreset,
-			presetWind4(),
+			{
+				name: "ridu-deterministic-wind-theme",
+				preflights: [
+					{
+						layer: "theme",
+						getCSS() {
+							// Wind records discovered theme variables in a Set. Normalize that
+							// discovery order before its preflight serializes the theme layer.
+							const dependencies = wind.meta?.themeDeps;
+							if (!(dependencies instanceof Set)) return "";
+							const ordered = [...dependencies].sort();
+							dependencies.clear();
+							for (const dependency of ordered) dependencies.add(dependency);
+							return "";
+						},
+					},
+				],
+			},
+			wind,
 			shadcnPreset,
 			presetIcons({ scale: 1.2 }),
 			presetTypography(),

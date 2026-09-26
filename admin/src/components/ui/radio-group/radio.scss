@@ -1,0 +1,45 @@
+@use "@riducms/ui/styles.scss" as ui;
+@layer ridu.components {
+	.ridu-radio-group {
+		display: grid;
+		gap: 8px;
+	}
+	.ridu-radio-option {
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
+		min-height: 24px;
+		border: 0;
+		padding: 0;
+		background: transparent;
+		color: var(--foreground);
+		font: inherit;
+		text-align: start;
+		cursor: pointer;
+		&:focus-visible {
+			@include ui.focus-outline;
+		}
+		&[data-disabled] {
+			cursor: not-allowed;
+			color: var(--control-disabled-foreground);
+		}
+		&:hover .ridu-radio-option__control {
+			border-color: var(--control-border-hover);
+		}
+	}
+	.ridu-radio-option__control {
+		@include ui.control-surface;
+		display: grid;
+		place-items: center;
+		flex-shrink: 0;
+		width: 20px;
+		height: 20px;
+		border-radius: 50%;
+	}
+	.ridu-radio-option__dot {
+		width: 8px;
+		height: 8px;
+		border-radius: 50%;
+		background: var(--foreground);
+	}
+}

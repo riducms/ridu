@@ -1148,7 +1148,7 @@ func TestMongoDBCanceledCommitAbortsBeforeSendingCommit(t *testing.T) {
 	mongoCommit(t, verification)
 }
 
-func mongoIntegrationStore(t *testing.T) *Store {
+func mongoIntegrationStore(t testing.TB) *Store {
 	t.Helper()
 	databaseURL := strings.TrimSpace(os.Getenv("RIDU_MONGODB_URL"))
 	if databaseURL == "" {

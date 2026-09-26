@@ -139,7 +139,23 @@ func (backend *Store) DismissTaskForTarget(ctx context.Context, id, slug string,
 	}
 	tag, err := backend.pool.Exec(ctx, `DELETE FROM ridu_tasks
 WHERE id = $1 AND task_slug = $2 AND target_collection_id = $3 AND target_document_id = $4
-  AND state IN ('queued', 'running', 'failed', 'canceled')`, id, slug, target.CollectionID, target.DocumentID)
+  AND state IN ('queued', 'failed', 'canceled')`, id, slug, target.CollectionID, target.DocumentID)
+	if err != nil {
+		return translateError(err)
+	}
+	if tag.RowsAffected() == 0 {
+		return store.ErrNotFound
+	}
+	return nil
+}
+
+func (transaction *documentTransaction) DismissTaskForTarget(ctx context.Context, id, slug string, target store.DocumentReference) error {
+	if err := store.ValidateTaskList(store.TaskList{Slug: slug, Target: &target, Limit: 1}); err != nil {
+		return err
+	}
+	tag, err := transaction.transaction.Exec(ctx, `DELETE FROM ridu_tasks
+WHERE id = $1 AND task_slug = $2 AND target_collection_id = $3 AND target_document_id = $4
+  AND state IN ('queued', 'failed', 'canceled')`, id, slug, target.CollectionID, target.DocumentID)
 	if err != nil {
 		return translateError(err)
 	}

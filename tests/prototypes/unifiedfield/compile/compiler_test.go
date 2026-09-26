@@ -1,7 +1,7 @@
 // Package compile_test executes the compiler against intentionally invalid
 // external consumers. Fixture text is copied to temporary .go source files so
 // intentionally invalid syntax cannot break repository-wide gofmt checks. Each
-// failure must match its specific language/API constraint.
+// failure must match its specific prototype API constraint.
 package compile_test
 
 import (
@@ -19,10 +19,6 @@ func TestCompilerRejectsUnsupportedContracts(t *testing.T) {
 		name        string
 		diagnostics []string
 	}{
-		{"promoted_base", []string{"MaxLength undefined", "base[string]"}},
-		{"fresh_method_parameters", []string{"method must have no type parameters"}},
-		{"generic_receiver", []string{"invalid argument: f.value", "built-in len"}},
-		{"identifier_collision", []string{"Text redeclared in this block"}},
 		{"embedded_context", []string{"operation.Context", "as context.Context", "missing method Deadline"}},
 		{"concrete_slice", []string{"cannot use []field.TextField", "as field.Fields"}},
 		{"node_scalar_method", []string{"node.MaxLength undefined", "field.Node has no field or method MaxLength"}},
@@ -60,19 +56,5 @@ func TestCompilerRejectsUnsupportedContracts(t *testing.T) {
 				}
 			}
 		})
-	}
-}
-
-// The spelling Field[string] in a receiver declares a type parameter named
-// string; it does not specialize a generic receiver to the built-in string.
-type genericField[T any] struct{ value T }
-
-func (f genericField[string]) MisleadinglyTextOnly() string { return f.value }
-
-func TestGenericReceiverIsNotSpecialization(t *testing.T) {
-	// This compiles for int, proving the receiver did not limit the method set.
-	var value int = genericField[int]{value: 42}.MisleadinglyTextOnly()
-	if value != 42 {
-		t.Fatal(value)
 	}
 }

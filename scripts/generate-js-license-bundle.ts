@@ -23,11 +23,7 @@ interface ReviewedNotice {
 }
 
 const reviewedNotices = new Map<string, ReviewedNotice>([
-	["@fontsource-variable/geist@5.3.0", { license: "OFL-1.1", section: "Geist" }],
-	[
-		"@fontsource-variable/spline-sans-mono@5.3.0",
-		{ license: "OFL-1.1", section: "Spline Sans Mono" },
-	],
+	["@fontsource-variable/martian-mono@5.3.0", { license: "OFL-1.1", section: "Martian Mono" }],
 	["@dnd-kit/abstract@0.2.4", { license: "MIT", section: "dnd-kit" }],
 	["@dnd-kit/collision@0.2.4", { license: "MIT", section: "dnd-kit" }],
 	["@dnd-kit/dom@0.2.4", { license: "MIT", section: "dnd-kit" }],

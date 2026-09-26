@@ -153,16 +153,19 @@ describe("advanced plugin occurrence bindings", () => {
 		const host: FieldAuthoringHost = {
 			collections: [],
 			documentRevision: 0,
+			canCreateDocument: (collection) => collection === "posts",
 			findDocument: () =>
 				new Promise((resolve) => {
 					finish = resolve;
 				}),
 			referenceBrowser: (_anchor, props) => {
-				commit = async () => props.onCommit(["one"]);
+				commit = async () => props.onCommit(["one"], "posts");
 				return {};
 			},
 		};
 		const guarded = guardPluginAuthoring(host, binding);
+		expect(guarded.canCreateDocument("posts")).toBe(true);
+		expect(guarded.canCreateDocument("media")).toBe(false);
 		guarded.referenceBrowser({} as never, {
 			field: leaf,
 			collection: {} as never,
@@ -175,6 +178,7 @@ describe("advanced plugin occurrence bindings", () => {
 		});
 		const pending = guarded.findDocument("posts", "one");
 		binding.destroy();
+		expect(() => guarded.canCreateDocument("posts")).toThrow("stale");
 		finish({ id: "one" });
 		await expect(pending).rejects.toThrow("stale");
 		await expect(commit()).rejects.toThrow("stale");
@@ -251,6 +255,7 @@ it("returned drafts cannot revive after removal/reinsertion or write through ret
 		{
 			collections: [],
 			documentRevision: 0,
+			canCreateDocument: () => false,
 			referenceBrowser: () => ({}),
 			findDocument: async () => ({ id: "one" }),
 			beginSchemaDraft(scope) {
@@ -281,6 +286,7 @@ it("completed raw draft sessions release owner cleanup while live drafts remain 
 		{
 			collections: [],
 			documentRevision: 0,
+			canCreateDocument: () => false,
 			referenceBrowser: () => ({}),
 			findDocument: async () => ({ id: "one" }),
 			beginSchemaDraft(scope) {
@@ -385,6 +391,7 @@ it("browser capability forwarding preserves live Svelte prop getters", () => {
 		{
 			collections: [],
 			documentRevision: 0,
+			canCreateDocument: () => false,
 			findDocument: async () => ({ id: "one" }),
 			referenceBrowser: (_anchor, props) => {
 				readOpen = () => props.open;
@@ -436,6 +443,7 @@ it("browser capability forwarding follows replacement spread-props backing objec
 		{
 			collections: [],
 			documentRevision: 0,
+			canCreateDocument: () => false,
 			findDocument: async () => ({ id: "one" }),
 			referenceBrowser: (_anchor, props) => {
 				readOpen = () => props.open;
@@ -523,6 +531,7 @@ it("browser forwarding retains Svelte bindable accessor setters", () => {
 		{
 			collections: [],
 			documentRevision: 0,
+			canCreateDocument: () => false,
 			findDocument: async () => ({ id: "one" }),
 			referenceBrowser: (_anchor, props) => {
 				const setter = Object.getOwnPropertyDescriptor(props, "open")?.set;

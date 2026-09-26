@@ -1,3 +1,4 @@
+import { isRecord } from "@riducms/protocol";
 import type { Decorator } from "@hvniel/lexical-svelte";
 import {
 	$applyNodeReplacement,
@@ -9,7 +10,6 @@ import {
 	type SerializedLexicalNode,
 } from "lexical";
 import RichTextBlockCard from "@plugin-richtext/block/rich-text-block-card.svelte";
-import { isRecord } from "@plugin-richtext/field/rich-text-blocks";
 
 /** Retains the received envelope verbatim so historical content can be exported safely. */
 export type SerializedBlockNode = SerializedLexicalNode & Record<string, unknown>;

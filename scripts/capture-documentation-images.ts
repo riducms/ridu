@@ -1,5 +1,5 @@
 import { copyFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { chromium, type Browser, type Locator, type Page } from "@playwright/test";
@@ -97,22 +97,26 @@ async function run(
 async function generateVariant(variant: Variant) {
 	const target = resolve(captureRoot, variant.name);
 	await rm(target, { recursive: true, force: true });
-	await run("go", [
-		"run",
-		"./internal/dogfood/new",
-		"--target",
-		target,
-		"--module",
-		variant.module,
-		"--scope",
-		"@ridu-docs",
-		"--template",
-		variant.template,
-		"--database",
-		variant.database,
-		"--agent",
-		"none",
-	]);
+	await run(
+		"go",
+		[
+			"run",
+			"./internal/dogfood/new",
+			"--target",
+			target,
+			"--module",
+			variant.module,
+			"--scope",
+			"@ridu-docs",
+			"--template",
+			variant.template,
+			"--database",
+			variant.database,
+			"--agent",
+			"none",
+		],
+		{ env: { GOWORK: "off" } }
+	);
 	return target;
 }
 
@@ -133,24 +137,31 @@ async function overlayFieldGallery(projectRoot: string) {
 
 	const serverPath = resolve(projectRoot, "cmd/server/main.go");
 	let server = await readFile(serverPath, "utf8");
-	server = server.replace(
-		/\n\t\tridu\.WithUploadStorage\(func\(context\.Context\) \(storage\.Backend, error\) \{\n\t\t\treturn localstorage\.New\(filepath\.Join\("\.ridu", "documentation-uploads"\)\)\n\t\t\}\),/g,
-		""
-	);
-	server = server.replace(
-		'"github.com/riducms/ridu/adapters/sqlite"\n',
-		'"github.com/riducms/ridu/adapters/sqlite"\n\tlocalstorage "github.com/riducms/ridu/adapters/storage/local"\n'
-	);
-	server = server.replace(
-		'"github.com/riducms/ridu/store"\n',
-		'"github.com/riducms/ridu/storage"\n\t"github.com/riducms/ridu/store"\n'
-	);
-	server = server.replace(
-		"\t\t}),\n\t\tridu.WithAddress",
-		"\t\t}),\n\t\tridu.WithUploadStorage(func(context.Context) (storage.Backend, error) {\n" +
-			'\t\t\treturn localstorage.New(filepath.Join(".ridu", "documentation-uploads"))\n' +
-			"\t\t}),\n\t\tridu.WithAddress"
-	);
+	const addressOption = "\t\tridu.WithAddress(serverAddress()),";
+	if (!server.includes(addressOption)) {
+		throw new Error("generated server no longer has the expected upload-storage insertion point");
+	}
+	if (!server.includes('localstorage "github.com/riducms/ridu/adapters/storage/local"')) {
+		server = server.replace(
+			'"github.com/riducms/ridu/adapters/sqlite"\n',
+			'"github.com/riducms/ridu/adapters/sqlite"\n\tlocalstorage "github.com/riducms/ridu/adapters/storage/local"\n'
+		);
+	}
+	if (!server.includes('"github.com/riducms/ridu/storage"')) {
+		server = server.replace(
+			'"github.com/riducms/ridu/store"\n',
+			'"github.com/riducms/ridu/storage"\n\t"github.com/riducms/ridu/store"\n'
+		);
+	}
+	if (!server.includes("ridu.WithUploadStorage(")) {
+		server = server.replace(
+			addressOption,
+			"\t\tridu.WithUploadStorage(func(context.Context) (storage.Backend, error) {\n" +
+				'\t\t\treturn localstorage.New(filepath.Join(".ridu", "documentation-uploads"))\n' +
+				"\t\t}),\n" +
+				addressOption
+		);
+	}
 	await writeFile(serverPath, server);
 	await run("gofmt", [
 		"-w",
@@ -191,37 +202,45 @@ async function waitForURL(url: string, app: RunningApp, timeout = 180_000) {
 	throw new Error(`timed out waiting for ${url}: ${lastError}`);
 }
 
-function startSQLiteApp(projectRoot: string, apiPort: number, adminPort: number): RunningApp {
+function startSQLiteApp(projectRoot: string, port: number): RunningApp {
 	const databasePath = resolve(projectRoot, ".ridu/documentation.sqlite");
-	const child = Bun.spawn(
-		[
-			resolve(projectRoot, ".ridu/bin/ridu"),
-			"dev",
-			"--no-docker",
-			"--database-path",
-			databasePath,
-			"--address",
-			`127.0.0.1:${apiPort}`,
-			"--admin-port",
-			String(adminPort),
-		],
-		{
-			cwd: projectRoot,
-			env: { ...Bun.env, GOWORK: "off" },
-			stdin: "ignore",
-			stdout: "pipe",
-			stderr: "pipe",
-		}
-	);
+	const child = Bun.spawn([resolve(projectRoot, "dist", basename(projectRoot))], {
+		cwd: projectRoot,
+		env: {
+			...Bun.env,
+			RIDU_SQLITE_PATH: databasePath,
+			RIDU_ADDRESS: `127.0.0.1:${port}`,
+		},
+		stdin: "ignore",
+		stdout: "pipe",
+		stderr: "pipe",
+	});
 	const logs = Promise.all([collectOutput(child.stdout), collectOutput(child.stderr)]).then(
 		([stdout, stderr]) => `${stdout}\n${stderr}`
 	);
 	return {
 		process: child,
 		logs,
-		apiURL: `http://127.0.0.1:${apiPort}`,
-		adminURL: `http://127.0.0.1:${adminPort}`,
+		apiURL: `http://127.0.0.1:${port}`,
+		adminURL: `http://127.0.0.1:${port}`,
 	};
+}
+
+async function prepareSQLiteApp(projectRoot: string, replaceMigrations = false) {
+	const ridu = resolve(projectRoot, ".ridu/bin/ridu");
+	if (replaceMigrations) {
+		await rm(resolve(projectRoot, "migrations"), { recursive: true, force: true });
+		await mkdir(resolve(projectRoot, "migrations"), { recursive: true });
+		await run(ridu, ["migrate", "create", "--name", "documentation-capture"], {
+			cwd: projectRoot,
+			env: { GOWORK: "off" },
+		});
+	}
+	await run(ridu, ["build"], { cwd: projectRoot, env: { GOWORK: "off" } });
+	await run(ridu, ["migrate", "up", "--database-path", ".ridu/documentation.sqlite"], {
+		cwd: projectRoot,
+		env: { GOWORK: "off" },
+	});
 }
 
 function startPostgresApp(projectRoot: string, apiPort: number, adminPort: number): RunningApp {
@@ -304,18 +323,16 @@ async function logIn(page: Page, email: string, password: string) {
 }
 
 async function firstDocumentID(page: Page, collection: string) {
-	const response = await page.request.get(
-		`/api/collections/${encodeURIComponent(collection)}?limit=1&locale=en`
-	);
-	if (!response.ok()) {
-		throw new Error(`list ${collection} for documentation capture: ${response.status()}`);
-	}
-	const body = (await response.json()) as { docs?: Array<{ id?: string }> };
-	const id = body.docs?.[0]?.id;
-	if (id === undefined || id === "") {
+	const prefix = `/admin/collections/${encodeURIComponent(collection)}/`;
+	const link = page.locator(`.ridu-list-table tbody a[href^="${prefix}"]`).first();
+	await link.waitFor();
+	const href = await link.getAttribute("href");
+	if (href === null) throw new Error(`documentation capture project has no ${collection} row`);
+	const id = new URL(href, page.url()).pathname.slice(prefix.length);
+	if (id === "" || id === "create") {
 		throw new Error(`documentation capture project has no ${collection} document`);
 	}
-	return id;
+	return decodeURIComponent(id);
 }
 
 async function settle(page: Page) {
@@ -356,8 +373,8 @@ async function captureLocator(page: Page, locator: Locator, field: CaptureField)
 		const controlRaw = resolve(temporaryDirectory, `${field.slug}.control.raw.png`);
 		const contentRaw = resolve(temporaryDirectory, `${field.slug}.content.raw.png`);
 		await locator.screenshot({ path: controlRaw, animations: "disabled" });
-		await locator.locator('[data-slot="select-trigger"]').click();
-		const content = page.locator('[data-slot="select-content"]:visible');
+		await locator.locator(".ridu-combobox-trigger").click();
+		const content = page.locator(".ridu-combobox-popup:visible");
 		await content.waitFor();
 		await content.screenshot({ path: contentRaw, animations: "disabled" });
 		await run("magick", ["-background", "#111012", controlRaw, contentRaw, "-append", raw]);
@@ -409,6 +426,7 @@ async function captureFieldApplication(
 	const mediaID = await firstDocumentID(page, "media");
 	await page.goto(`/admin/collections/media/${mediaID}?locale=en`);
 	await page.getByRole("region", { name: "Asset preview" }).waitFor();
+	await page.getByRole("link", { name: "field-guide.png", exact: true }).waitFor();
 	await capturePage(page, "ridu-admin-upload.png");
 
 	await page.goto("/admin/collections/articles/docs-article?locale=en");
@@ -423,7 +441,7 @@ async function captureFieldApplication(
 
 async function createStarterAccount(page: Page) {
 	await page.goto("/admin/");
-	await page.getByRole("heading", { name: /Welcome to/ }).waitFor();
+	await page.getByRole("heading", { name: "Welcome", exact: true }).waitFor();
 	await page.getByLabel("Email", { exact: true }).fill("editor@riducms.test");
 	await page.locator("#ridu-first-user-password").fill("ridu-documentation");
 	await page.locator("#ridu-first-user-password-confirmation").fill("ridu-documentation");
@@ -623,11 +641,13 @@ for (const projectRoot of generatedProjects.values()) await verifyGeneratedVaria
 await rm(resolve(blankSQLite, ".ridu/documentation.sqlite"), { force: true });
 await rm(resolve(blankSQLite, ".ridu/documentation-uploads"), { recursive: true, force: true });
 await rm(resolve(starterSQLite, ".ridu/documentation.sqlite"), { force: true });
+await prepareSQLiteApp(blankSQLite, true);
+await prepareSQLiteApp(starterSQLite);
 
 const browser = await chromium.launch();
 const previewApplication = startPreviewApplication();
 try {
-	const fieldApp = startSQLiteApp(blankSQLite, 18101, 18102);
+	const fieldApp = startSQLiteApp(blankSQLite, 18101);
 	try {
 		await waitForURL(`${fieldApp.apiURL}/readyz`, fieldApp);
 		await waitForURL(`${fieldApp.adminURL}/admin/`, fieldApp);
@@ -637,7 +657,7 @@ try {
 		await stopApp(fieldApp);
 	}
 
-	const starterApp = startSQLiteApp(starterSQLite, 18111, 18112);
+	const starterApp = startSQLiteApp(starterSQLite, 18111);
 	try {
 		await waitForURL(`${starterApp.apiURL}/readyz`, starterApp);
 		await waitForURL(`${starterApp.adminURL}/admin/`, starterApp);

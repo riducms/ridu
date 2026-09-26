@@ -49,7 +49,8 @@ instead. Before deployment, create, review, and verify the selected adapter's mi
 In a collection list, select rows or choose all results matching the current authorized filters.
 The available actions depend on collection configuration and the current actor:
 
-- **Edit** applies one partial value set;
+- **Edit** opens a drawer where you choose fields, enter one partial value set, and apply it to the
+  selected documents;
 - **Publish** and **Unpublish** run their dedicated version lifecycles;
 - **Delete** moves documents to trash when enabled, otherwise it permanently deletes them;
 - **Restore** returns selected trashed documents to the active collection; and
@@ -58,6 +59,16 @@ The available actions depend on collection configuration and the current actor:
 One request accepts 1–100 unique IDs. Ridu authorizes and validates every target, locks the set, runs
 the per-document hooks, and commits all results together. If one document fails, the whole
 batch rolls back. Narrow a filter when **Select all** resolves more than 100 documents.
+
+In the Edit drawer, search for fields and select only those you intend to change. You can edit
+top-level Text, Textarea, Email, Date, Number, Checkbox, single-value Select, and Radio fields.
+Fields must be visible, writable, and stored; localized, unique, and conditionally visible fields
+are excluded. Nested fields and relationships are not available in this drawer.
+
+Clearing a selected input changes that value on every selected document. Review the selected count
+before choosing **Apply Changes**; a field error appears beside the input that needs correction.
+**Publish** and **Unpublish** are separate confirmed actions, so editing and publishing take
+separate requests.
 
 The generated SDK exposes the same operations:
 
@@ -75,8 +86,10 @@ await ridu.bulkRestoreDeleted(
 );
 ```
 
-The admin has no generic bulk create/import action. Use a purpose-built task or import program with
-idempotency, progress, and error handling.
+The admin has no generic bulk create/import action. Upload collections have a separate
+[Bulk upload workspace](/docs/uploads/#bulk-upload) that creates media documents one at a time.
+For other collections, use a purpose-built task or import program with idempotency, progress, and
+error handling.
 
 ## Restore a document {#restore}
 
@@ -99,8 +112,9 @@ preferences, locks, and reference state. Upload object cleanup runs after the da
 failed transaction cannot remove bytes still referenced by content.
 
 Prefer selected permanent deletion when the target set needs review. **Empty trash** is a confirmed,
-collection-wide action, but it is still bounded to 100 accessible documents per atomic request. If
-there are more, delete in reviewed batches.
+collection-wide action: it does not use the current trash search or filter as its scope. It is still
+bounded to 100 accessible documents per atomic request. If there are more, delete in reviewed
+batches.
 
 ```ts
 await ridu.deletePermanent('posts', post.id);

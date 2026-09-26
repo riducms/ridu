@@ -209,22 +209,27 @@ and treats a nil actor as anonymous. Carry the user into local calls when moving
 
 ## Find the matching Ridu feature {#feature-map}
 
-| Payload feature                           | Start here in Ridu                                                                      |
-| ----------------------------------------- | --------------------------------------------------------------------------------------- |
-| `buildConfig`, collections, and globals   | [Configuration](/docs/configuration/) and [Collections and globals](/docs/collections/) |
-| Field objects and reusable field helpers  | [Fields](/docs/fields/)                                                                 |
-| Custom field validation                   | [Custom validation](/docs/fields/validation/)                                           |
-| Collection, global, and field hooks       | [Hooks](/docs/hooks/)                                                                   |
-| Custom React inputs, views, and providers | [Custom components](/docs/custom-components/): write and register Svelte components     |
-| `versions` and `drafts`                   | [Drafts and versions](/docs/drafts-and-versions/)                                       |
-| `@payloadcms/plugin-seo`                  | [SEO plugin](/docs/seo/)                                                                |
-| `@payloadcms/plugin-form-builder`         | [Form Builder](/docs/form-builder/)                                                     |
-| `payload.find(...)`                       | [Local Go API](/docs/local-api/) or [TypeScript SDK](/docs/typescript-sdk/)             |
+| Payload feature                              | Start here in Ridu                                                                      |
+| -------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `buildConfig`, collections, and globals      | [Configuration](/docs/configuration/) and [Collections and globals](/docs/collections/) |
+| Field objects and reusable field helpers     | [Fields](/docs/fields/)                                                                 |
+| Custom field validation                      | [Custom validation](/docs/fields/validation/)                                           |
+| Collection, global, and field hooks          | [Hooks](/docs/hooks/)                                                                   |
+| Custom React inputs, views, and providers    | [Custom components](/docs/custom-components/): write and register Svelte components     |
+| Custom CSS, theme colors, and Sass utilities | [Customizing CSS](/docs/admin/customizing-css/)                                         |
+| `versions` and `drafts`                      | [Drafts and versions](/docs/drafts-and-versions/)                                       |
+| `@payloadcms/plugin-seo`                     | [SEO plugin](/docs/seo/)                                                                |
+| `@payloadcms/plugin-form-builder`            | [Form Builder](/docs/form-builder/)                                                     |
+| `payload.find(...)`                          | [Local Go API](/docs/local-api/) or [TypeScript SDK](/docs/typescript-sdk/)             |
 
 You do not need a Go plugin just to customize the admin. Register your Svelte components in
 `admin/src/admin.config.ts`. Build a [plugin](/docs/plugins/) when you need a new field type or a
 reusable server extension. React components need to be rewritten in Svelte; they cannot be
 imported directly into the Ridu admin.
+
+For visual changes, import your stylesheet from `admin/src/main.ts`. Ridu provides CSS variables,
+named component classes, and optional Sass mixins. Payload selectors and theme variables need to
+be replaced with their Ridu equivalents; start with [Customizing CSS](/docs/admin/customizing-css/).
 
 Payload `endpoints` become Go `ridu.Endpoint` handlers on the app, a collection, or a global.
 Collection URLs change from `/api/<collection-slug>/…` to

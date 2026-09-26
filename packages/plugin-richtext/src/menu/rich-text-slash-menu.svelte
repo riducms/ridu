@@ -22,8 +22,10 @@
 	let { authoring, config }: { authoring: FieldAuthoringHost | undefined; config: RichTextConfig } =
 		$props();
 	const i18n = getAdminI18n();
+	const componentID = $props.id();
+	const menuLabelID = `${componentID}-label`;
 	const editor = useLexicalComposerContext()[0];
-	const trigger = createBasicTypeaheadTriggerMatch("/", { allowWhitespace: true, minLength: 0 });
+	const trigger = createBasicTypeaheadTriggerMatch("/", { minLength: 0 });
 	// Menu options carry attachment identity and the mounted field's feature set is fixed.
 	// svelte-ignore state_referenced_locally
 	const baseOptions = buildRichTextOptions(
@@ -38,16 +40,15 @@
 		contextElement: HTMLElement;
 		getBoundingClientRect: () => DOMRect;
 	} | null>(null);
-	let menuHost = $state<HTMLElement | null>(null);
+	let menuHost = $state.raw<HTMLElement | null>(null);
 	const options = $derived(filterRichTextOptions(baseOptions, query ?? "", i18n.language));
 
 	$effect(() => {
-		if (query !== null) {
-			menuHost?.parentElement?.setAttribute(
-				"aria-label",
-				i18n.t("plugin.richtext:editor.insertBlock")
-			);
-		}
+		const anchor = menuHost?.parentElement;
+		if (anchor === undefined || anchor === null) return;
+		// The upstream anchor rewrites aria-label on every query resolution.
+		anchor.setAttribute("aria-labelledby", menuLabelID);
+		return () => anchor.removeAttribute("aria-labelledby");
 	});
 
 	function openMenu(resolution: MenuResolution) {
@@ -95,12 +96,16 @@
 	{trigger}
 >
 	{#snippet menu(menuProps)}
-		<div bind:this={menuHost} role="presentation"></div>
+		<div bind:this={menuHost} role="presentation">
+			<span id={menuLabelID} class="ridu-richtext-announcement">
+				{i18n.t("plugin.richtext:editor.insertBlock")}
+			</span>
+		</div>
 		{#if menuProps.options.length > 0 && menuAnchor !== null && menuHost !== null}
 			<PopoverRoot open>
 				<PopoverContent
 					portalTo={menuHost}
-					class="w-[min(19rem,calc(100vw-2rem))] p-0 animate-[ridu-richtext-menu-in_150ms_ease] motion-reduce:animate-none"
+					class="ridu-richtext-menu-popover"
 					role="presentation"
 					customAnchor={menuAnchor}
 					side="bottom"
@@ -122,7 +127,6 @@
 								?.setAttribute("aria-activedescendant", `typeahead-item-${index}`);
 						}}
 						onSelect={menuProps.selectOption}
-						embedded
 						idPrefix="typeahead-item"
 					/>
 				</PopoverContent>

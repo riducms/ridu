@@ -1,4 +1,4 @@
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import type { SchemaCollection, SchemaField } from "@riducms/protocol";
 import { createAdminI18n } from "@riducms/translations";
 import { svelte } from "@hvniel/vite-plugin-svelte-inline-component";
@@ -30,12 +30,14 @@ it("reference workflow intersects live owner editability before dispatch and aft
 		unique: false,
 		admin: { label: "Title" },
 	} as SchemaField;
-	const collection = {
+	const collection: SchemaCollection = {
+		id: "posts",
 		slug: "posts",
 		fields: [field],
 		labels: { singular: "Post", plural: "Posts" },
-		capabilities: {},
-	} as SchemaCollection;
+		admin: {},
+		capabilities: { auth: false, upload: false, versions: false, trash: false, locking: false },
+	};
 	let calls = 0;
 	let signal: AbortSignal | undefined;
 	let finish!: (value: { id: string }) => void;
@@ -113,3 +115,65 @@ it("reference workflow intersects live owner editability before dispatch and aft
 	expect(await unmounted).toBe(false);
 	expect(workflow.editorDocument?.id).toBe("one");
 });
+
+it.each(["success", "failure"] as const)(
+	"ignores a late reference commit %s after its owner unmounts",
+	async (outcome) => {
+		const field = {
+			id: "title",
+			name: "title",
+			path: "title",
+			type: "text",
+			category: "scalar",
+			required: false,
+			unique: false,
+			admin: { label: "Title" },
+		} as SchemaField;
+		const collection: SchemaCollection = {
+			id: "posts",
+			slug: "posts",
+			fields: [field],
+			labels: { singular: "Post", plural: "Posts" },
+			admin: {},
+			capabilities: { auth: false, upload: false, versions: false, trash: false, locking: false },
+		};
+		const response = Promise.withResolvers<void>();
+		const onCommit = vi.fn(() => response.promise);
+		const setOpen = vi.fn();
+		const onClose = vi.fn();
+		const error = vi.fn();
+		let workflow!: InstanceType<typeof ReferenceBrowserWorkflow>;
+		const screen = await render(Harness, {
+			options: {
+				runtime: {
+					i18n: createAdminI18n(),
+					client: {},
+					collectionOperations: { posts: { create: true } },
+				},
+				notifications: { error, success() {}, validation() {} },
+				field,
+				collection,
+				hasMany: false,
+				selectedIDs: [],
+				open: false,
+				setOpen,
+				onCommit,
+				onClose,
+			} as unknown as ConstructorParameters<typeof ReferenceBrowserWorkflow>[0],
+			onReady: (value: typeof workflow) => {
+				workflow = value;
+			},
+		});
+
+		const pending = workflow.commitSelection();
+		expect(onCommit).toHaveBeenCalledOnce();
+		await screen.unmount();
+		if (outcome === "success") response.resolve();
+		else response.reject(new Error("Late failure"));
+		await pending;
+
+		expect(setOpen).not.toHaveBeenCalled();
+		expect(onClose).not.toHaveBeenCalled();
+		expect(error).not.toHaveBeenCalled();
+	}
+);

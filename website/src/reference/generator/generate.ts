@@ -239,12 +239,7 @@ function buildSymbol(
 		structuralRows.length > 0 ? structuralRows : fallbackRows,
 		overlay?.parameters ?? []
 	);
-	const source = declaration.source
-		? {
-				...declaration.source,
-				url: `https://github.com/riducms/ridu/blob/main/${declaration.source.path}#L${declaration.source.line}`
-			}
-		: undefined;
+	const source = declaration.source;
 	const sourceSummary = firstParagraph(declaration.summary);
 	const returns = declaration.returns
 		? {
@@ -375,6 +370,7 @@ function synchronizeGoFacadeAliases(modules: ReferenceModule[]): void {
 		}
 		if (!alias.parametersLabel) alias.parametersLabel = target.parametersLabel;
 		if (target.returns) alias.returns = { ...target.returns };
+		alias.details = [...new Set([...alias.details, ...target.details])];
 	}
 }
 
@@ -463,8 +459,13 @@ function validatePackageExportMaps(repositoryRoot: string): void {
 			const manifest = JSON.parse(
 				readFileSync(path.join(repositoryRoot, source.packageJSON), 'utf8')
 			) as { name: string; exports?: Record<string, unknown> | string };
-			const exportKeys =
-				typeof manifest.exports === 'string' ? ['.'] : Object.keys(manifest.exports ?? {});
+			const exportKeys = (
+				typeof manifest.exports === 'string'
+					? [['.', manifest.exports] as const]
+					: Object.entries(manifest.exports ?? {})
+			)
+				.filter(([, target]) => !isStylesheetExport(target))
+				.map(([exportKey]) => exportKey);
 			const registered = new Set(
 				source.entrypoints.map((entrypoint) =>
 					entrypoint.specifier === manifest.name
@@ -500,6 +501,13 @@ function validatePackageExportMaps(repositoryRoot: string): void {
 	if (unregistered.length > 0) {
 		throw new Error(`Unregistered public npm export maps:\n${unregistered.sort().join('\n')}`);
 	}
+}
+
+function isStylesheetExport(target: unknown): boolean {
+	if (typeof target === 'string') return /\.(?:css|scss)$/.test(target);
+	if (target === null || typeof target !== 'object' || Array.isArray(target)) return false;
+	const values = Object.values(target);
+	return values.length > 0 && values.every(isStylesheetExport);
 }
 
 function validatePublicGoPackages(repositoryRoot: string): void {

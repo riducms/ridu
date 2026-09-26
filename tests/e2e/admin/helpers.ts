@@ -17,6 +17,30 @@ export async function expectRiduSelectValue(trigger: Locator, value: string | Re
 export async function chooseContentLocale(page: Page, locale: string, code: string) {
 	await page.getByLabel("Content locale", { exact: true }).click();
 	await page.getByRole("menuitem", { name: `${locale} (${code})`, exact: true }).click();
+	await expect.poll(() => new URL(page.url()).searchParams.get("locale")).toBe(code);
+	const trigger = page.getByLabel("Content locale", { exact: true });
+	await expect(trigger).toContainText(locale);
+	await expect(trigger).toBeEnabled();
+}
+
+// Schema-mismatch recovery belongs to the documented runtime-only fallback: a prepared route and
+// its server reads always share one authoritative manifest. Force that fallback in the few tests
+// that deliberately rewrite the browser's /api/schema response.
+export async function useAdminRuntimeFallback(page: Page) {
+	await page.route("**/admin/**", async (route) => {
+		if (route.request().resourceType() !== "document") {
+			await route.continue();
+			return;
+		}
+		const response = await route.fetch();
+		const html = await response.text();
+		const initialState = /<template id="ridu-admin-initial-state">[\s\S]*?<\/template>/;
+		expect(html).toMatch(initialState);
+		await route.fulfill({
+			response,
+			body: html.replace(initialState, '<template id="ridu-admin-initial-state">{}</template>'),
+		});
+	});
 }
 
 export async function setRiduSliderValue(slider: Locator, value: number) {
@@ -37,7 +61,14 @@ export async function expectRiduDateTimeControl(control: Locator) {
 }
 
 export function documentSaveButton(page: Page) {
-	return page.getByRole("button", { name: /^(Save|Save draft|Publish|Publish changes)$/ }).first();
+	return page
+		.locator(".ridu-document-actions")
+		.getByRole("button", { name: /^(Save|Save draft|Publish|Publish changes)$/ })
+		.first();
+}
+
+export async function submitDocumentForm(page: Page) {
+	await page.locator(".ridu-document-form button[type=submit]").press("Enter");
 }
 
 export async function selectRichText(page: Page, editor: Locator) {

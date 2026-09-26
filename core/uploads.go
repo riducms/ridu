@@ -6,17 +6,24 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	operationengine "github.com/riducms/ridu/internal/operation"
 	"github.com/riducms/ridu/internal/remotefile"
 	"github.com/riducms/ridu/internal/uploads"
+	"github.com/riducms/ridu/operation"
+	"github.com/riducms/ridu/protocol"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/storage"
 	"github.com/riducms/ridu/store"
 )
+
+// UploadImageEdit is the normalized image transformation saved with an upload.
+type UploadImageEdit = protocol.UploadImageEdit
 
 // UploadInput contains a file and document metadata for an upload operation.
 type UploadInput struct {
@@ -24,6 +31,10 @@ type UploadInput struct {
 	Filename string
 	// Reader provides the uploaded bytes.
 	Reader io.Reader
+	// Image stages a crop and focal point with the document mutation.
+	Image *UploadImageEdit
+	// Publish creates a published version when versioning is enabled.
+	Publish bool
 	// Data contains application-owned upload document fields.
 	Data store.Values
 	// Actor is the authenticated document used by access rules.
@@ -36,6 +47,9 @@ type UploadInput struct {
 
 // RemoteUploadInput identifies an HTTP(S) asset and its document metadata.
 type RemoteUploadInput struct {
+	Publish         bool
+	Image           *UploadImageEdit
+	Filename        string
 	URL             string
 	Data            store.Values
 	Actor           *store.Document
@@ -43,26 +57,19 @@ type RemoteUploadInput struct {
 	Locale          LocaleOptions
 }
 
-// UpdateUploadImageInput controls focal-point-aware regeneration of an image
-// upload's configured variants.
-type UpdateUploadImageInput struct {
-	// FocalX is the horizontal focal coordinate from 0 (left) to 100 (right).
-	FocalX float64
-	// FocalY is the vertical focal coordinate from 0 (top) to 100 (bottom).
-	FocalY float64
-	// CropX and CropY are the top-left of an optional normalized crop rectangle.
-	CropX float64
-	CropY float64
-	// CropWidth and CropHeight are zero to clear the crop, otherwise each must
-	// be positive and the rectangle must remain within the original image.
-	CropWidth  float64
-	CropHeight float64
-	// ExpectedRevision rejects changes based on a stale document revision.
+// UpdateUploadInput commits replacement bytes, image edits and document fields
+// together. Reader is nil when retaining the existing file. Image is nil when
+// retaining the saved transformation; a zero crop explicitly restores the source.
+type UpdateUploadInput struct {
+	Filename         string
+	Reader           io.Reader
+	Image            *UploadImageEdit
+	Data             store.Values
 	ExpectedRevision int
-	// Actor is the authenticated document used by read and update access rules.
-	Actor *store.Document
-	// ActorCollection identifies the exact auth collection that owns Actor.
-	ActorCollection schema.CollectionSlug
+	Publish          bool
+	Actor            *store.Document
+	ActorCollection  schema.CollectionSlug
+	Locale           LocaleOptions
 }
 
 // ReconcileResult summarizes an upload-storage reconciliation pass.
@@ -105,14 +112,18 @@ func (application *App) Duplicate(ctx context.Context, collection, id string, ov
 		return application.local.Duplicate(ctx, collection, id, overrides, options)
 	}
 	overrides = uploads.ApplicationValues(overrides)
-	source, err := application.local.Find(ctx, collection, id, FindOptions{
+	source, err := application.local.engine.ReadUploadMetadata(ctx, operationengine.Request{Collection: collection, ID: id,
 		Actor: options.Actor, ActorCollection: options.ActorCollection,
-		Locale: options.Locale, FallbackLocales: append([]schema.LocaleCode(nil), options.FallbackLocales...),
+		Locale: string(options.Locale), FallbackLocales: append([]schema.LocaleCode(nil), options.FallbackLocales...),
 		DisableFallback: options.DisableFallback, AllLocales: options.AllLocales,
 	})
 	if err != nil {
 		return store.Document{}, err
 	}
+	if options.ExpectedRevision != 0 && options.ExpectedRevision != source.Revision {
+		return store.Document{}, &operationengine.Error{Code: "conflict", Status: 409, Message: "document revision is stale", Cause: store.ErrConflict}
+	}
+	options.ExpectedRevision = source.Revision
 	capabilityData := store.CloneValues(source.Values)
 	for name, value := range overrides {
 		capabilityData[name] = value
@@ -182,13 +193,18 @@ func (application *App) upload(ctx context.Context, collection string, input Upl
 	if !capabilities.Operations.Create {
 		return store.Document{}, &operationengine.Error{Code: "access_denied", Status: 403, Message: "operation is not permitted"}
 	}
-	prepared, err := application.uploads.Prepare(ctx, resolved, uploads.Input{Filename: input.Filename, Reader: input.Reader, Values: input.Data, FileAdmissionHeld: fileAdmissionHeld})
+	prepared, err := application.uploads.Prepare(ctx, resolved, uploads.Input{Filename: input.Filename, Reader: input.Reader, Values: input.Data, Image: input.Image, FileAdmissionHeld: fileAdmissionHeld})
 	if err != nil {
 		return store.Document{}, uploadPreparationError(err, "upload could not be stored")
 	}
 	resource := application.uploadTransactionResource(prepared)
+	var draft *bool
+	if input.Publish {
+		published := false
+		draft = &published
+	}
 	document, err := application.local.createStoragePrepared(ctx, collection, prepared.Values, MutationOptions{
-		Actor: input.Actor, ActorCollection: input.ActorCollection,
+		Actor: input.Actor, ActorCollection: input.ActorCollection, Draft: draft,
 		Locale: input.Locale.Locale, FallbackLocales: append([]schema.LocaleCode(nil), input.Locale.FallbackLocales...),
 		DisableFallback: input.Locale.DisableFallback, AllLocales: input.Locale.AllLocales,
 	}, resource)
@@ -233,7 +249,11 @@ func (application *App) UploadFromURL(ctx context.Context, collection string, in
 	if err != nil {
 		return store.Document{}, &operationengine.Error{Code: "validation", Status: 422, Message: err.Error(), Cause: err}
 	}
-	return application.upload(ctx, collection, UploadInput{Filename: remote.Filename, Reader: bytes.NewReader(remote.Bytes), Data: input.Data, Actor: input.Actor, ActorCollection: input.ActorCollection, Locale: input.Locale}, true)
+	filename := remote.Filename
+	if input.Filename != "" {
+		filename = input.Filename
+	}
+	return application.upload(ctx, collection, UploadInput{Filename: filename, Reader: bytes.NewReader(remote.Bytes), Data: input.Data, Image: input.Image, Publish: input.Publish, Actor: input.Actor, ActorCollection: input.ActorCollection, Locale: input.Locale}, true)
 }
 
 // UploadFromURLForIdentity fetches and stores a remote file for one exact
@@ -248,81 +268,114 @@ func (application *App) UploadFromURLForIdentity(ctx context.Context, collection
 	return application.UploadFromURL(ctx, collection, input)
 }
 
-// UpdateUploadImage regenerates configured image sizes around a new focal
-// point, then commits their metadata through the ordinary operation engine.
-func (application *App) UpdateUploadImage(ctx context.Context, collection, id string, input UpdateUploadImageInput) (store.Document, error) {
-	resolved, exists := application.bySlug[collection]
-	if !exists || resolved.Upload == nil {
-		return store.Document{}, &operationengine.Error{Code: "unknown_upload_collection", Status: 404, Message: fmt.Sprintf("upload collection %q was not found", collection)}
-	}
-	capabilities, err := application.local.engine.Capabilities(ctx, operationengine.CapabilitiesRequest{Collection: collection, ID: id, Actor: input.Actor, ActorCollection: input.ActorCollection})
-	if err != nil {
-		return store.Document{}, err
-	}
-	if !capabilities.Operations.Update {
-		return store.Document{}, &operationengine.Error{Code: "access_denied", Status: 403, Message: "operation is not permitted"}
-	}
-	current, err := application.local.Find(ctx, collection, id, FindOptions{Actor: input.Actor, ActorCollection: input.ActorCollection})
-	if err != nil {
-		return store.Document{}, err
-	}
-	publishedVersioned := resolved.Versions != nil && current.Status == store.StatusPublished
-	if publishedVersioned && !capabilities.Operations.Publish {
-		return store.Document{}, &operationengine.Error{Code: "access_denied", Status: 403, Message: "publishing regenerated image variants is not permitted"}
-	}
-	mimeType, _ := current.Values["mimeType"].StringValue()
-	objectKey, _ := current.Values["objectKey"].StringValue()
-	if !strings.HasPrefix(mimeType, "image/") || objectKey == "" {
-		return store.Document{}, &operationengine.Error{Code: "validation", Status: 422, Message: "only image uploads can be regenerated"}
-	}
-	expectedRevision := input.ExpectedRevision
-	if expectedRevision == 0 {
-		expectedRevision = current.Revision
-	} else if expectedRevision != current.Revision {
-		return store.Document{}, &operationengine.Error{Code: "conflict", Status: 409, Message: "document revision is stale", Cause: store.ErrConflict}
-	}
-	prepared, err := application.uploads.RegenerateImage(ctx, resolved, uploads.ImageInput{ObjectKey: objectKey, FocalX: input.FocalX, FocalY: input.FocalY, CropX: input.CropX, CropY: input.CropY, CropWidth: input.CropWidth, CropHeight: input.CropHeight})
-	if err != nil {
-		return store.Document{}, uploadPreparationError(err, "image variants could not be stored")
-	}
-	resource := application.uploadTransactionResource(prepared)
-	mutationOptions := MutationOptions{Actor: input.Actor, ActorCollection: input.ActorCollection, ExpectedRevision: expectedRevision}
-	var updated store.Document
-	if publishedVersioned {
-		updated, err = application.local.publishStoragePrepared(ctx, collection, id, prepared.Values, mutationOptions, resource)
-	} else {
-		updated, err = application.local.updateStoragePrepared(ctx, collection, id, prepared.Values, mutationOptions, resource)
-	}
-	if err != nil {
-		if resource.Claimed() {
-			return store.Document{}, err
-		}
-		rollbackError := application.uploads.Rollback(ctx, prepared)
-		if rollbackError != nil {
-			return store.Document{}, &operationengine.Error{
-				Code: "storage_failed", Status: 500,
-				Message: "image update failed and staged variants could not be removed",
-				Cause:   errors.Join(err, rollbackError),
-			}
-		}
-		return store.Document{}, err
-	}
-	// Superseded variants are left to reconciliation. Its safety window protects
-	// concurrent/nested updates, and retained versions keep their keys referenced
-	// until version pruning makes those objects eligible for deletion.
-	return updated, nil
+// UpdateUpload commits file changes and metadata through the same revisioned
+// operation. Storage preparation never commits a separate partial document.
+func (application *App) UpdateUpload(ctx context.Context, collection, id string, input UpdateUploadInput) (store.Document, error) {
+	return application.updateUpload(ctx, collection, id, input, false)
 }
 
-// UpdateUploadImageForIdentity regenerates image variants for one exact
-// authenticated collection identity. A nil identity remains anonymous.
-func (application *App) UpdateUploadImageForIdentity(ctx context.Context, collection, id string, input UpdateUploadImageInput, identity *AuthIdentity) (store.Document, error) {
+func (application *App) updateUpload(ctx context.Context, collection, id string, input UpdateUploadInput, admissionHeld bool) (store.Document, error) {
+	resolved, exists := application.bySlug[collection]
+	if !exists || resolved.Upload == nil {
+		return store.Document{}, &operationengine.Error{Code: "unknown_upload_collection", Status: 404, Message: "upload collection was not found"}
+	}
+	capabilities, err := application.local.engine.Capabilities(ctx, operationengine.CapabilitiesRequest{Collection: collection, ID: id, Data: input.Data, Actor: input.Actor, ActorCollection: input.ActorCollection, Locale: string(input.Locale.Locale), FallbackLocales: input.Locale.FallbackLocales, DisableFallback: input.Locale.DisableFallback, AllLocales: input.Locale.AllLocales})
+	if err != nil {
+		return store.Document{}, err
+	}
+	if !capabilities.Operations.Update || input.Publish && resolved.Versions != nil && !capabilities.Operations.Publish {
+		return store.Document{}, &operationengine.Error{Code: "access_denied", Status: 403, Message: "operation is not permitted"}
+	}
+	current, err := application.local.engine.ReadUploadMetadata(ctx, operationengine.Request{Operation: operation.Update, Collection: collection, ID: id, Data: input.Data, Actor: input.Actor, ActorCollection: input.ActorCollection, Locale: string(input.Locale.Locale), FallbackLocales: input.Locale.FallbackLocales, DisableFallback: input.Locale.DisableFallback, AllLocales: input.Locale.AllLocales})
+	if err != nil {
+		return store.Document{}, err
+	}
+	if input.ExpectedRevision != 0 && input.ExpectedRevision != current.Revision {
+		return store.Document{}, &operationengine.Error{Code: "conflict", Status: 409, Message: "document revision is stale", Cause: store.ErrConflict}
+	}
+	options := MutationOptions{Actor: input.Actor, ActorCollection: input.ActorCollection, ExpectedRevision: current.Revision, Locale: input.Locale.Locale, FallbackLocales: input.Locale.FallbackLocales, DisableFallback: input.Locale.DisableFallback, AllLocales: input.Locale.AllLocales}
+	values := uploads.ApplicationValues(input.Data)
+	var prepared uploads.Prepared
+	switch {
+	case input.Reader != nil:
+		prepared, err = application.uploads.Prepare(ctx, resolved, uploads.Input{Filename: input.Filename, Reader: input.Reader, Values: values, Image: input.Image, FileAdmissionHeld: admissionHeld})
+	case input.Image != nil:
+		key, _ := current.Values["objectKey"].StringValue()
+		source, _ := current.Values["source"].CopyObject()
+		if sourceKey, valid := source["objectKey"].StringValue(); valid {
+			key = sourceKey
+		}
+		filename, _ := current.Values["filename"].StringValue()
+		if input.Filename != "" {
+			filename = input.Filename
+		}
+		edit := input.Image
+		prepared, err = application.uploads.RegenerateImage(ctx, resolved, uploads.ImageInput{ObjectKey: key, Source: source, Filename: filename, FocalX: edit.FocalX, FocalY: edit.FocalY, CropX: edit.CropX, CropY: edit.CropY, CropWidth: edit.CropWidth, CropHeight: edit.CropHeight})
+	default:
+		if input.Filename != "" {
+			values["filename"] = store.String(uploads.Filename(input.Filename, uploadMIME(current.Values)))
+		}
+	}
+	if err != nil {
+		return store.Document{}, uploadPreparationError(err, "upload changes could not be stored")
+	}
+	for name, value := range prepared.Values {
+		values[name] = value
+	}
+	resource := application.uploadTransactionResource(prepared)
+	var updated store.Document
+	if input.Publish && resolved.Versions != nil {
+		updated, err = application.local.publishStoragePrepared(ctx, collection, id, values, options, resource)
+	} else {
+		updated, err = application.local.updateStoragePrepared(ctx, collection, id, values, options, resource)
+	}
+	if err != nil && !resource.Claimed() {
+		if rollbackError := application.uploads.Rollback(ctx, prepared); rollbackError != nil {
+			return store.Document{}, &operationengine.Error{Code: "storage_failed", Status: 500, Message: "upload update failed and staged objects could not be removed", Cause: errors.Join(err, rollbackError)}
+		}
+	}
+	// Reconciliation retains source and rendition keys referenced by any current,
+	// trashed or versioned document before removing superseded objects.
+	return updated, err
+}
+
+// UpdateUploadForIdentity saves an upload using an exact authenticated identity.
+func (application *App) UpdateUploadForIdentity(ctx context.Context, collection, id string, input UpdateUploadInput, identity *AuthIdentity) (store.Document, error) {
+	return application.updateUploadForIdentity(ctx, collection, id, input, identity, false)
+}
+
+func (application *App) updateUploadForIdentity(ctx context.Context, collection, id string, input UpdateUploadInput, identity *AuthIdentity, admissionHeld bool) (store.Document, error) {
 	actor, actorCollection, err := application.resolveOptionalAuthIdentity(ctx, identity)
 	if err != nil {
 		return store.Document{}, err
 	}
-	input.Actor = actor
-	input.ActorCollection = actorCollection
-	return application.UpdateUploadImage(ctx, collection, id, input)
+	input.Actor, input.ActorCollection = actor, actorCollection
+	return application.updateUpload(ctx, collection, id, input, admissionHeld)
+}
+
+// OpenUploadSourceForIdentity reads the immutable source for an authenticated
+// editor. Public upload delivery deliberately does not resolve source keys.
+func (application *App) OpenUploadSourceForIdentity(ctx context.Context, collection, id string, identity *AuthIdentity) (io.ReadCloser, storage.Object, error) {
+	resolved, exists := application.bySlug[collection]
+	if !exists || resolved.Upload == nil || application.uploads.Backend == nil {
+		return nil, storage.Object{}, uploadNotFound()
+	}
+	actor, actorCollection, err := application.resolveOptionalAuthIdentity(ctx, identity)
+	if err != nil {
+		return nil, storage.Object{}, err
+	}
+	if actor == nil {
+		return nil, storage.Object{}, &operationengine.Error{Code: "access_denied", Status: 401, Message: "authentication is required"}
+	}
+	document, err := application.local.engine.ReadUploadMetadata(ctx, operationengine.Request{Operation: operation.Update, Collection: collection, ID: id, Actor: actor, ActorCollection: actorCollection})
+	if err != nil {
+		return nil, storage.Object{}, err
+	}
+	key, _ := document.Values["source"].Get("objectKey").StringValue()
+	if !application.uploads.OwnsKey(key) {
+		return nil, storage.Object{}, uploadNotFound()
+	}
+	return application.uploads.Backend.Open(ctx, key)
 }
 
 func (application *App) uploadTransactionResource(prepared uploads.Prepared) *operationengine.TransactionResource {
@@ -733,6 +786,9 @@ func (application *App) cleanupPermanentUploadDeleteBatches(ctx context.Context,
 }
 
 func validateImportedUploadObjects(ctx context.Context, manager uploads.Manager, collection schema.Collection, values store.Values) error {
+	if err := manager.ValidateObjectRoles(values); err != nil {
+		return err
+	}
 	objectKeys, err := uploadObjectKeys(values)
 	if err != nil {
 		return err
@@ -765,6 +821,9 @@ func validateImportedUploadObjects(ctx context.Context, manager uploads.Manager,
 
 func uploadObjectKeys(values store.Values) ([]string, error) {
 	keys := make([]string, 0, store.MaxUploadReferenceCandidates)
+	if key, valid := values["source"].Get("objectKey").StringValue(); valid && key != "" {
+		keys = append(keys, key)
+	}
 	if key, exists := values["objectKey"]; exists {
 		if text, valid := key.StringValue(); valid && text != "" {
 			keys = append(keys, text)
@@ -777,8 +836,8 @@ func uploadObjectKeys(values store.Values) ([]string, error) {
 	if sizes.Kind() != store.ValueObject {
 		return keys, nil
 	}
-	if sizes.Len() > store.MaxUploadReferenceCandidates-1 {
-		return nil, fmt.Errorf("upload metadata contains more than %d image variants", store.MaxUploadReferenceCandidates-1)
+	if sizes.Len() > store.MaxUploadReferenceCandidates-2 {
+		return nil, fmt.Errorf("upload metadata contains more than %d image variants", store.MaxUploadReferenceCandidates-2)
 	}
 	for _, size := range sizes.Entries() {
 		key, exists := size.Lookup("objectKey")
@@ -788,3 +847,59 @@ func uploadObjectKeys(values store.Values) ([]string, error) {
 	}
 	return keys, nil
 }
+
+func uploadMIME(values store.Values) string {
+	mimeType, _ := values["mimeType"].StringValue()
+	return mimeType
+}
+
+// PreviewUploadForIdentity downloads a bounded, SSRF-checked remote file without
+// creating a document. Closing the reader releases its file-memory reservation.
+func (application *App) PreviewUploadForIdentity(ctx context.Context, collection, id, remoteURL string, identity *AuthIdentity) (io.ReadCloser, storage.Object, string, error) {
+	resolved, exists := application.bySlug[collection]
+	if !exists || resolved.Upload == nil {
+		return nil, storage.Object{}, "", uploadNotFound()
+	}
+	actor, actorCollection, err := application.resolveOptionalAuthIdentity(ctx, identity)
+	if err != nil {
+		return nil, storage.Object{}, "", err
+	}
+	if actor == nil {
+		return nil, storage.Object{}, "", &operationengine.Error{Code: "access_denied", Status: 401, Message: "authentication is required"}
+	}
+	capabilities, err := application.local.engine.Capabilities(ctx, operationengine.CapabilitiesRequest{Collection: collection, ID: id, Actor: actor, ActorCollection: actorCollection})
+	if err != nil {
+		return nil, storage.Object{}, "", err
+	}
+	allowed := capabilities.Operations.Create
+	if id != "" {
+		allowed = capabilities.Operations.Update
+	}
+	if !allowed {
+		return nil, storage.Object{}, "", &operationengine.Error{Code: "access_denied", Status: 403, Message: "operation is not permitted"}
+	}
+	release, err := application.uploads.AcquireFile(ctx, resolved.Upload.MaxFileSize*2)
+	if err != nil {
+		return nil, storage.Object{}, "", uploadPreparationError(err, "remote file could not be admitted")
+	}
+	remote, err := remotefile.Fetch(ctx, remoteURL, resolved.Upload.MaxFileSize)
+	if err != nil {
+		release()
+		return nil, storage.Object{}, "", &operationengine.Error{Code: "validation", Status: 422, Message: err.Error(), Cause: err}
+	}
+	contentType := strings.Split(http.DetectContentType(remote.Bytes), ";")[0]
+	if !uploads.MIMEAllowed(contentType, resolved.Upload.MimeTypes) {
+		release()
+		return nil, storage.Object{}, "", &operationengine.Error{Code: "validation", Status: 422, Message: "file type is not allowed"}
+	}
+	reader := &previewUploadReader{Reader: bytes.NewReader(remote.Bytes), release: release}
+	return reader, storage.Object{ContentType: contentType, Size: int64(len(remote.Bytes))}, uploads.Filename(remote.Filename, contentType), nil
+}
+
+type previewUploadReader struct {
+	*bytes.Reader
+	release func()
+	once    sync.Once
+}
+
+func (reader *previewUploadReader) Close() error { reader.once.Do(reader.release); return nil }

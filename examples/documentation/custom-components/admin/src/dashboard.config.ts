@@ -4,7 +4,7 @@ import CollectionOverview from './components/collection-overview.svelte';
 
 export default defineAdmin({
 	plugins: generatedAdminPlugins,
-	dashboard: [
+	dashboardPanels: [
 		{
 			key: 'collections',
 			component: CollectionOverview,

@@ -1,8 +1,9 @@
 <script lang="ts">
+	import "@admin/features/uploads/upload-metadata-fields.scss";
 	import { getAdminI18n } from "@riducms/plugin";
 	import type { SchemaField, ValidationIssue } from "@riducms/protocol";
 
-	import { Input } from "@admin/components/ui/input";
+	import { Input } from "@riducms/ui";
 	import { Select, SelectContent, SelectItem, SelectTrigger } from "@admin/components/ui/select";
 
 	interface Props {
@@ -26,7 +27,7 @@
 	}: Props = $props();
 	const i18n = getAdminI18n();
 
-	const metadataEntries = $derived.by(() =>
+	const metadataEntries = $derived(
 		fields.map((field) => {
 			const fieldIssues = issues.filter(
 				(issue) => issue.path === field.path || issue.path === field.name
@@ -54,9 +55,9 @@
 	}
 </script>
 
-<div class="grid gap-3 sm:grid-cols-2">
+<div class="ridu-upload-metadata">
 	{#each metadataEntries as entry (entry.field.id)}
-		<label class="grid gap-1.5 text-[11px] text-foreground-sub" for={entry.inputID}>
+		<label class="ridu-upload-metadata__field" for={entry.inputID}>
 			<span>
 				{i18n.text(entry.field.admin.label, entry.field.admin.labelTranslations)}{entry.field
 					.required
@@ -72,12 +73,12 @@
 				>
 					<SelectTrigger
 						id={entry.inputID}
-						class="w-full"
+						class="ridu-upload-metadata__select"
 						aria-label={controlLabel(entry.field)}
 						aria-invalid={entry.fieldIssues.length > 0}
 						aria-describedby={entry.fieldIssues.length > 0 ? entry.issueID : undefined}
 					>
-						<span class={entry.value === "" ? "text-foreground-placeholder" : undefined}>
+						<span class={entry.value === "" ? "ridu-upload-metadata__placeholder" : undefined}>
 							{selectedLabel(entry.field, entry.value)}
 						</span>
 					</SelectTrigger>
@@ -103,7 +104,7 @@
 				/>
 			{/if}
 			{#if entry.fieldIssues.length > 0}
-				<span id={entry.issueID} class="text-destructive" role="alert">
+				<span id={entry.issueID} class="ridu-field-error" role="alert">
 					{entry.fieldIssues.map((issue) => issue.message).join(" ")}
 				</span>
 			{/if}

@@ -95,7 +95,7 @@ export type FieldEditorProps<Type extends FieldEditorType = FieldEditorType, Con
 	 */
 	authoring: Pick<
 		FieldAuthoringHost,
-		"collections" | "documentRevision" | "referenceBrowser" | "findDocument"
+		"collections" | "documentRevision" | "canCreateDocument" | "referenceBrowser" | "findDocument"
 	> & { readonly locale: string | undefined };
 } & ([Config] extends [undefined]
 	? { config?: never }

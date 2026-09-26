@@ -1,0 +1,175 @@
+@use "@riducms/ui/styles.scss" as ui;
+
+@layer ridu.components {
+	.ridu-shell {
+		font-size: var(--font-size-body);
+		line-height: var(--line-height-body);
+		display: flex;
+		flex-direction: column;
+		min-height: 100dvh;
+		background: var(--background);
+		color: var(--foreground);
+	}
+	.ridu-shell__extension-header {
+		flex-shrink: 0;
+		min-height: 20px;
+		padding-inline: var(--admin-gutter);
+		display: flex;
+		align-items: center;
+		gap: 12px;
+	}
+	.ridu-shell__body {
+		position: relative;
+		flex: 1;
+		min-height: 0;
+	}
+	.ridu-shell__sidebar {
+		position: relative;
+		min-height: 0;
+		overflow: hidden;
+	}
+	.ridu-nav {
+		position: absolute;
+		inset-block: 0;
+		inset-inline-start: 0;
+		width: var(--admin-nav-width);
+		display: flex;
+		flex-direction: column;
+		border-inline-end: 1px solid var(--background-layer);
+		padding-top: var(--admin-header-height);
+		transition: opacity 150ms linear;
+	}
+	.ridu-shell:not(.ridu-shell--nav-open) .ridu-nav {
+		opacity: 0;
+		visibility: hidden;
+	}
+	.ridu-shell__toggle {
+		position: absolute;
+		inset-block-start: 0;
+		inset-inline-start: 0;
+		z-index: 30;
+		width: var(--admin-gutter);
+		height: var(--admin-header-height);
+		display: grid;
+		place-items: center;
+	}
+	.ridu-nav-toggle {
+		display: grid;
+		place-items: center;
+		flex-shrink: 0;
+		width: 24px;
+		height: 24px;
+		border: 0;
+		border-radius: 3px;
+		padding: 2px;
+		background: var(--background);
+		color: var(--foreground);
+		box-shadow: 0 0 0 1px var(--control-border);
+		cursor: pointer;
+
+		svg {
+			width: 20px;
+			height: 20px;
+			stroke-width: 1;
+		}
+
+		&:hover {
+			background: var(--background-layer);
+			box-shadow: 0 0 0 1px var(--ring);
+		}
+
+		&:focus-visible {
+			@include ui.focus-outline;
+		}
+	}
+	[dir="rtl"] .ridu-nav-toggle__collapse {
+		transform: rotate(180deg);
+	}
+	.ridu-shell__main {
+		position: relative;
+		min-width: 0;
+		background: var(--background);
+	}
+	.ridu-shell__header {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		flex-shrink: 0;
+		min-height: var(--admin-header-height);
+		padding-inline: var(--admin-gutter);
+	}
+	.ridu-shell__actions {
+		margin-inline-start: auto;
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		gap: 10px;
+	}
+	.ridu-shell__search {
+		display: grid;
+		place-items: center;
+		width: 24px;
+		height: 24px;
+		padding: 0;
+		border: 0;
+		background: transparent;
+		color: var(--foreground-muted);
+		cursor: pointer;
+
+		svg {
+			width: 16px;
+			height: 16px;
+		}
+
+		&:hover {
+			color: var(--foreground);
+		}
+
+		&:focus-visible {
+			@include ui.focus-outline;
+		}
+	}
+	@media (min-width: (ui.$small + 1px)) {
+		.ridu-shell {
+			height: 100dvh;
+		}
+		.ridu-shell__body {
+			display: grid;
+			grid-template-columns: 0 minmax(0, 1fr);
+			overflow: hidden;
+			transition: grid-template-columns 150ms linear;
+		}
+		.ridu-shell--nav-open .ridu-shell__body {
+			grid-template-columns: var(--admin-nav-width) minmax(0, 1fr);
+		}
+		.ridu-shell__main {
+			display: flex;
+			flex-direction: column;
+			height: 100%;
+			overflow-y: auto;
+		}
+		.ridu-shell__main--contained {
+			overflow: hidden;
+		}
+	}
+	@media (max-width: ui.$medium) {
+		.ridu-shell {
+			font-size: 12px;
+		}
+	}
+	@media (max-width: ui.$small) {
+		.ridu-shell__actions {
+			gap: 8px;
+		}
+		.ridu-shell__header {
+			flex-wrap: wrap;
+			padding-block: 10px;
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.ridu-shell__body,
+		.ridu-nav {
+			transition: none;
+		}
+	}
+}

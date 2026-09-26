@@ -840,6 +840,10 @@ func TestOpenAPIIsDeterministicAndContainsCRUDPaths(t *testing.T) {
 			ID: "articles", Slug: "articles", Labels: schema.CollectionLabels{Singular: "Article", Plural: "Articles"},
 			Capabilities: schema.Capabilities{Versions: true}, Versions: &schema.VersionSettings{Drafts: true},
 			Fields: []schema.Field{{ID: "article-title", Name: "title", Type: schema.FieldTypeText, Required: true}},
+		}, {
+			ID: "history", Slug: "history", Labels: schema.CollectionLabels{Singular: "History entry", Plural: "History entries"},
+			Capabilities: schema.Capabilities{Versions: true}, Versions: &schema.VersionSettings{},
+			Fields: []schema.Field{{ID: "history-title", Name: "title", Type: schema.FieldTypeText, Required: true}},
 		}},
 		Globals: []schema.Global{{
 			ID: "global-site-settings", Slug: "site-settings", Labels: schema.CollectionLabels{Singular: "Site settings", Plural: "Site settings"},
@@ -860,7 +864,7 @@ func TestOpenAPIIsDeterministicAndContainsCRUDPaths(t *testing.T) {
 	if string(first) != string(second) {
 		t.Fatal("OpenAPI generation is not deterministic")
 	}
-	for _, expected := range []string{`"openapi": "3.1.0"`, `"/api/collections/posts"`, `"createposts"`, `"/api/access/collections/posts/selection"`, `"resolveSelectionposts"`, `"/api/collections/posts/{id}/joins/{field}"`, `"mutateJoinposts"`, `"/api/collections/posts/remote-upload"`, `"remoteUploadposts"`, `"/api/collections/posts/{id}/image"`, `"updateUploadImageposts"`, `"/api/collections/posts/{id}/versions/{revision}"`, `"/api/collections/posts/{id}/schedule/{jobId}"`, `"/api/auth/posts/bootstrap"`, `"authBootstrapposts"`, `"/api/globals/site-settings"`, `"/api/globals/site-settings/versions/{revision}"`, `"updateglobal-site-settings"`, `"/api/preferences"`, `"/api/plugins/color/palette"`, `"color-get-palette"`, `"color-post-palette"`, `"/api/maintenance/{region}"`, `"/api/collections/posts/{id}/tracking"`, `"/api/globals/site-settings/refresh/{locale}"`, `"Run regional maintenance"`, `"Custom PUT endpoint"`, `"x-ridu-connect"`, `"Endpoint-defined successful response"`, `"pattern": "^#[0-9A-F]{6}$"`} {
+	for _, expected := range []string{`"openapi": "3.1.0"`, `"/api/collections/posts"`, `"createposts"`, `"/api/access/collections/posts/selection"`, `"resolveSelectionposts"`, `"/api/collections/posts/{id}/joins/{field}"`, `"mutateJoinposts"`, `"/api/collections/posts/remote-upload"`, `"remoteUploadposts"`, `"/api/collections/posts/{id}/upload"`, `"updateUploadposts"`, `"/api/collections/posts/{id}/versions/{revision}"`, `"/api/collections/posts/{id}/schedule/{jobId}"`, `"/api/auth/posts/bootstrap"`, `"authBootstrapposts"`, `"/api/globals/site-settings"`, `"/api/globals/site-settings/versions/{revision}"`, `"updateglobal-site-settings"`, `"/api/preferences"`, `"/api/plugins/color/palette"`, `"color-get-palette"`, `"color-post-palette"`, `"/api/maintenance/{region}"`, `"/api/collections/posts/{id}/tracking"`, `"/api/globals/site-settings/refresh/{locale}"`, `"Run regional maintenance"`, `"Custom PUT endpoint"`, `"x-ridu-connect"`, `"Endpoint-defined successful response"`, `"pattern": "^#[0-9A-F]{6}$"`} {
 		if !strings.Contains(string(first), expected) {
 			t.Fatalf("OpenAPI output missing %s:\n%s", expected, first)
 		}
@@ -947,6 +951,41 @@ func TestOpenAPIIsDeterministicAndContainsCRUDPaths(t *testing.T) {
 		t.Fatalf("selection schemas = request %#v, response %#v, items %#v", selectionRequest, selectionResponse, selectionItems)
 	}
 	paths := requiredOpenAPIMap(t, decoded, "paths")
+	scheduleOperation := requiredOpenAPIMap(t, requiredOpenAPIMap(t, paths, "/api/collections/posts/{id}/schedule"), "post")
+	if scheduleOperation["operationId"] != "schedulePublicationposts" {
+		t.Fatalf("scheduled publication operation = %#v", scheduleOperation)
+	}
+	scheduleRequest := requiredOpenAPIMap(t,
+		requiredOpenAPIMap(t,
+			requiredOpenAPIMap(t, requiredOpenAPIMap(t, scheduleOperation, "requestBody"), "content"),
+			"application/json",
+		),
+		"schema",
+	)
+	scheduleProperties := requiredOpenAPIMap(t, scheduleRequest, "properties")
+	actionSchema := requiredOpenAPIMap(t, scheduleProperties, "action")
+	runAtSchema := requiredOpenAPIMap(t, scheduleProperties, "runAt")
+	actionEnum, _ := json.Marshal(actionSchema["enum"])
+	required, _ := json.Marshal(scheduleRequest["required"])
+	if scheduleRequest["type"] != "object" || scheduleRequest["additionalProperties"] != false || string(required) != `["action","runAt"]` || actionSchema["type"] != "string" || string(actionEnum) != `["publish","unpublish"]` || runAtSchema["type"] != "string" || runAtSchema["format"] != "date-time" {
+		t.Fatalf("scheduled publication request schema = %#v", scheduleRequest)
+	}
+	historySchedule := requiredOpenAPIMap(t, requiredOpenAPIMap(t, paths, "/api/collections/history/{id}/schedule"), "post")
+	historyRequest := requiredOpenAPIMap(t,
+		requiredOpenAPIMap(t,
+			requiredOpenAPIMap(t, requiredOpenAPIMap(t, historySchedule, "requestBody"), "content"),
+			"application/json",
+		),
+		"schema",
+	)
+	historyAction := requiredOpenAPIMap(t, requiredOpenAPIMap(t, historyRequest, "properties"), "action")
+	historyActionEnum, _ := json.Marshal(historyAction["enum"])
+	if string(historyActionEnum) != `["publish"]` {
+		t.Fatalf("history-only schedule actions = %s", historyActionEnum)
+	}
+	if _, exposed := paths["/api/collections/history/{id}/unpublish"]; exposed {
+		t.Fatal("history-only collection exposes unpublish")
+	}
 	maintenancePath := requiredOpenAPIMap(t, paths, "/api/maintenance/{region}")
 	maintenanceOperation := requiredOpenAPIMap(t, maintenancePath, "post")
 	maintenanceParameters, ok := maintenanceOperation["parameters"].([]any)
@@ -1003,12 +1042,38 @@ func TestOpenAPIIsDeterministicAndContainsCRUDPaths(t *testing.T) {
 		}
 	}
 	assertOpenAPIIntegerParameter(t, requiredOpenAPIMap(t, requiredOpenAPIMap(t, paths, "/api/collections/posts"), "get"), "depth", 0, 5)
+	assertOpenAPIParameterNames(t, requiredOpenAPIMap(t, requiredOpenAPIMap(t, paths, "/api/collections/posts"), "get"), []string{"page", "limit", "where", "sort", "include-access", "depth", "select", "populate", "locale", "fallback-locale"})
+	assertOpenAPIParameterNames(t, requiredOpenAPIMap(t, requiredOpenAPIMap(t, paths, "/api/collections/articles/{id}"), "get"), []string{"depth", "select", "populate"})
+	assertOpenAPIParameterNames(t, requiredOpenAPIMap(t, requiredOpenAPIMap(t, paths, "/api/globals/site-settings"), "get"), []string{"depth", "select", "populate", "locale", "fallback-locale"})
 	assertOpenAPINoParameter(t, requiredOpenAPIMap(t, requiredOpenAPIMap(t, paths, "/api/collections/posts"), "post"), "draft")
 	assertOpenAPIBooleanParameter(t, requiredOpenAPIMap(t, requiredOpenAPIMap(t, paths, "/api/collections/articles"), "post"), "draft")
 	assertOpenAPIIntegerParameter(t, requiredOpenAPIMap(t, requiredOpenAPIMap(t, paths, "/api/globals/site-settings"), "get"), "depth", 0, 5)
 	assertOpenAPIStringEnumParameter(t, requiredOpenAPIMap(t, requiredOpenAPIMap(t, paths, "/api/collections/posts"), "get"), "locale", []string{"en", "fr", "all"})
 	assertOpenAPIStringEnumParameter(t, requiredOpenAPIMap(t, requiredOpenAPIMap(t, paths, "/api/collections/posts/{id}/duplicate"), "post"), "locale", []string{"en", "fr", "all"})
 	assertOpenAPIStringEnumParameter(t, requiredOpenAPIMap(t, requiredOpenAPIMap(t, paths, "/api/globals/site-settings"), "patch"), "locale", []string{"en", "fr", "all"})
+}
+
+func assertOpenAPIParameterNames(t *testing.T, operation map[string]any, expected []string) {
+	t.Helper()
+	parameters, ok := operation["parameters"].([]any)
+	if !ok {
+		t.Fatalf("OpenAPI parameters = %#v, want array", operation["parameters"])
+	}
+	names := make([]string, 0, len(parameters))
+	for _, value := range parameters {
+		parameter, ok := value.(map[string]any)
+		if !ok {
+			t.Fatalf("OpenAPI parameter = %#v, want object", value)
+		}
+		name, ok := parameter["name"].(string)
+		if !ok {
+			t.Fatalf("OpenAPI parameter name = %#v, want string", parameter["name"])
+		}
+		names = append(names, name)
+	}
+	if !slices.Equal(names, expected) {
+		t.Fatalf("OpenAPI parameter names = %#v, want %#v", names, expected)
+	}
 }
 
 func assertOpenAPIBooleanParameter(t *testing.T, operation map[string]any, name string) {

@@ -1,15 +1,15 @@
 <script lang="ts" module>
-	import { tv, type VariantProps } from "@riducms/ui";
+	import { cv, type VariantProps } from "@riducms/ui";
 
-	export const statusIndicatorVariants = tv({
-		base: "inline-flex items-center gap-1.75 text-[12.5px] text-foreground-muted",
+	export const statusIndicatorVariants = cv({
+		base: "ridu-status-indicator",
 		variants: {
 			tone: {
-				live: "text-primary",
-				warning: "text-warning",
-				muted: "text-foreground-muted",
-				destructive: "text-destructive",
-				success: "text-success",
+				live: "ridu-status-indicator--live",
+				warning: "ridu-status-indicator--warning",
+				muted: "ridu-status-indicator--muted",
+				destructive: "ridu-status-indicator--destructive",
+				success: "ridu-status-indicator--success",
 			},
 		},
 		defaultVariants: { tone: "muted" },
@@ -20,8 +20,8 @@
 
 <script lang="ts">
 	import type { HTMLAttributes } from "svelte/elements";
-
-	import { cn, type WithElementRef } from "@riducms/ui";
+	import type { WithElementRef } from "@riducms/ui";
+	import "@admin/components/ui/status-indicator/status-indicator.scss";
 
 	let {
 		ref = $bindable(null),
@@ -39,14 +39,14 @@
 <span
 	bind:this={ref}
 	data-slot="status-indicator"
-	class={cn(statusIndicatorVariants({ tone }), className)}
+	class={[statusIndicatorVariants({ tone }), className]}
 	{...restProps}
 >
 	<span
 		class={[
-			"size-1.75 shrink-0 rounded-full",
-			tone === "muted" ? "border border-current bg-transparent" : "bg-current",
-			pulse && "shadow-[0_0_9px_currentColor]",
+			"ridu-status-indicator__dot",
+			{ "ridu-status-indicator__dot--muted": tone === "muted" },
+			{ "ridu-status-indicator__dot--pulse": pulse },
 		]}
 		aria-hidden="true"
 	></span>

@@ -160,6 +160,91 @@ Store plugin data in ordinary collections and fields. Add them through `ConfigTr
 Ridu's permissions, validation, transactions, API, generated types, and admin. The active adapter
 plans their migrations together with application collections. See [Migrations](/docs/migrations/).
 
+## Add a loader to a plugin {#admin-loaders}
+
+A plugin can supply [Go-backed page data](/docs/custom-components/loading-data/) for its
+dashboard panels, custom routes, or collection/global replacement views.
+
+Start with a [paired plugin](/docs/plugins/#create-and-test). Put the loader's Go function
+and input/output structs in that plugin's package, not in the consuming application.
+For this example, change its `NewAdminLoader` key to `editorial-post-summary` to avoid
+collisions with other loaders.
+The [loader guide](/docs/custom-components/loading-data/#loader) explains valid keys and types.
+
+Append the definition in the plugin's existing `TransformConfig` method. For the
+`PostSummary` definition from that guide:
+
+```go
+func (plugin) TransformConfig(config ridu.Config) (ridu.Config, error) {
+	config.Admin.Loaders = append(config.Admin.Loaders, PostSummary)
+	return config, nil
+}
+```
+
+Keep any other changes your transformer already makes. Applications now receive the loader
+when they install the Go plugin; they do not register the function separately.
+
+For a published admin package, generate against a small development application that installs
+your Go plugin. With that application in `example/` and the admin package in `admin/`, run
+these commands from the plugin repository:
+
+```sh title="terminal"
+(cd example && ridu generate)
+mkdir -p admin/src/generated
+cp example/generated/ridu.generated.ts admin/src/generated/ridu.generated.ts
+```
+
+This copies the **complete generated client**, unchanged. Ridu does not currently generate a
+separate plugin-only loader file. Keep the development app small, and include this copy step
+in your package's build process so changes to the Go types reach the admin package.
+Do not handwrite the loader schema or import files from a consuming application's directory.
+
+The generated client imports `@riducms/sdk`. Add it to both `peerDependencies` and
+`devDependencies` in `admin/package.json`, using the same exact Ridu version already listed
+for `@riducms/plugin`. If you reuse the guide's component, add `@riducms/admin` and
+`@riducms/ui` there too: it imports their `Link` and `Button`. Then run
+`bun install --cwd admin`. Declare these direct imports even if your development app already
+installs the packages.
+
+Your package's components and registration now import their own generated module. For example,
+after moving `post-summary.svelte` into `admin/src/`, export a loaded dashboard panel:
+
+```ts
+import { defineAdminPlugin } from '@riducms/plugin/authoring/v1';
+import { withAdminLoader } from '@riducms/plugin';
+import { adminLoaders } from './generated/ridu.generated';
+import PostSummary from './post-summary.svelte';
+
+export const editorialAdminPlugin = defineAdminPlugin({
+	key: 'editorial',
+	pairingVersion: 1,
+	dashboardPanels: [
+		{
+			key: 'post-summary',
+			position: 'before',
+			...withAdminLoader(
+				adminLoaders['editorial-post-summary'],
+				PostSummary
+			)
+		}
+	]
+});
+```
+
+In the component, also change the generated import to `./generated/ridu.generated` and the
+loader/type key to `editorial-post-summary`. Export `editorialAdminPlugin` from your package's
+entry point and name it in the Go descriptor's `Admin.Export`. Keep `key` and `pairingVersion`
+matched to the Go descriptor, as described in [Connect the admin package](#admin-pairing).
+The same pairing works in `routes` or `coreViews`; declare route paths in the Go descriptor when
+adding plugin pages.
+
+The loader result reaches your component through `data`, and `refresh()` runs that loader again.
+Ridu reads through `ctx.List`, `ctx.Find`, and `ctx.Global` use the signed-in user's permissions
+and current locale. A frontend-only plugin needs a Go counterpart for this server-loaded data.
+
+Publish the Go loader and its generated TypeScript reference together when their inputs or
+results change. There is no separate backend route map to maintain for these reads.
+
 ## Remove a plugin {#remove}
 
 ```sh title="terminal"

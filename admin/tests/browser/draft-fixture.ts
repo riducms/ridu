@@ -66,6 +66,7 @@ export function draftFixture(
 		{
 			collections: [],
 			documentRevision: 0,
+			canCreateDocument: () => false,
 			referenceBrowser: () => ({}),
 			findDocument: async () => ({ id: "one" }),
 			beginSchemaDraft(scope) {

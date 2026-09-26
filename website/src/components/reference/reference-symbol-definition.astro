@@ -126,7 +126,9 @@ const sections = [
 			{
 				!embedded && symbol.source && (
 					<p class="reference-source">
-						<a href={symbol.source.url}>
+						<a
+							href={`https://github.com/riducms/ridu/blob/main/${symbol.source.path}#L${symbol.source.line}`}
+						>
 							Source{' '}
 							<code>
 								{symbol.source.path}:{symbol.source.line}

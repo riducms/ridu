@@ -51,7 +51,12 @@ test("document locks offer read-only inspection and explicit takeover", async ({
 			.waitFor({ state: "visible" });
 		await editorPage.goto(`/admin/collections/posts/${postID}`);
 		const lockDialog = editorPage.getByRole("dialog");
-		await expect(lockDialog.getByText("Document locked", { exact: true })).toBeVisible();
+		await expect(
+			lockDialog.getByRole("heading", {
+				name: "admin@riducms.test is currently editing this document",
+				exact: true,
+			})
+		).toBeVisible();
 		await expect(lockDialog).toContainText("admin@riducms.test is currently editing");
 		await lockDialog.getByRole("button", { name: "View read-only" }).click();
 		await expect(
@@ -59,27 +64,29 @@ test("document locks offer read-only inspection and explicit takeover", async ({
 		).toBeVisible();
 		await expect(editorPage.locator('input[name="title"]')).toHaveAttribute("readonly");
 		const readOnlyAuthor = editorPage.locator('[data-field-path="author"]');
-		await readOnlyAuthor.getByRole("button", { name: "Browse users" }).dispatchEvent("click");
+		await readOnlyAuthor.getByRole("button", { name: "Browse users", exact: true }).click();
 		const readOnlyBrowser = editorPage.getByRole("dialog", { name: "Select author" });
-		const readOnlyGroup = readOnlyBrowser.getByRole("radiogroup", { name: "Results" });
-		await expect(readOnlyGroup).toHaveAttribute("aria-readonly", "true");
-		const readOnlyChoice = readOnlyBrowser.getByRole("radio", { checked: true });
-		await expect(readOnlyChoice).toBeVisible();
-		await expect(readOnlyChoice).toBeEnabled();
-		await readOnlyChoice.press("Space");
-		await expect(readOnlyChoice).toBeChecked();
+		const readOnlyResults = readOnlyBrowser.getByRole("table", { name: "Results" });
+		const readOnlyChoice = readOnlyResults.getByRole("row").filter({ hasText: "Demo Author" });
+		await expect(readOnlyChoice).toHaveAttribute("data-selected", "true");
+		await expect(
+			readOnlyChoice.getByRole("button", { name: "Demo Author", exact: true })
+		).toBeDisabled();
 		await expect(readOnlyBrowser.getByRole("button", { name: /Edit / }).first()).toBeEnabled();
+		await expect(
+			readOnlyAuthor.getByRole("button", { name: "Edit Demo Author" }).first()
+		).toBeVisible();
 		await readOnlyBrowser.getByRole("button", { name: "Close relationship browser" }).click();
 		await editorPage.getByRole("tab", { name: "Related", exact: true }).click();
 		const linksField = editorPage.locator('[data-field-path="links"]');
-		await expect(linksField.getByRole("button", { name: "Drag Row 1" })).toBeDisabled();
+		await expect(linksField.getByRole("button", { name: "Drag Row 01" })).toBeDisabled();
 		await expect(linksField.getByRole("button", { name: "Add row" })).toBeDisabled();
 		await expect(linksField.getByLabel("Label", { exact: true })).toHaveAttribute("readonly");
 		await expect(documentSaveButton(editorPage)).toBeDisabled();
 		await editorPage.getByRole("button", { name: "Take over", exact: true }).first().click();
 		await expect(editorPage.getByText("Document lock taken over.")).toBeVisible();
 		await expect(editorPage.locator('input[name="title"]')).not.toHaveAttribute("readonly");
-		await expect(linksField.getByRole("button", { name: "Drag Row 1" })).toBeEnabled();
+		await expect(linksField.getByRole("button", { name: "Drag Row 01" })).toBeEnabled();
 		await expect(linksField.getByLabel("Label", { exact: true })).not.toHaveAttribute("readonly");
 		await expect(editorPage.getByRole("button", { name: "Take over", exact: true })).toHaveCount(0);
 	} finally {
@@ -114,7 +121,7 @@ test("admin presentation follows collection, document, and field access", async 
 	await page.getByLabel("Email address").fill("api@riducms.test");
 	await page.getByRole("textbox", { name: "Password", exact: true }).fill("ridu-api");
 	await page.getByRole("button", { name: "Sign in" }).click();
-	await expect(page.getByRole("alert")).toContainText(
+	await expect(page.getByLabel("Notifications alt+T")).toContainText(
 		"This account does not have access to the admin."
 	);
 	await page.getByLabel("Email address").fill("demo@riducms.local");
@@ -143,12 +150,12 @@ test("date controls preserve configured time-of-day authoring and list presentat
 	await expect(page.getByText("Ridu contributor workshop", { exact: true })).toBeVisible();
 
 	await page.getByRole("button", { name: "Columns" }).click();
-	const startsColumn = page.getByRole("checkbox", { name: "Show Starts at column" });
-	const endsColumn = page.getByRole("checkbox", { name: "Show Ends at column" });
-	if ((await startsColumn.getAttribute("aria-checked")) !== "true") await startsColumn.click();
-	if ((await endsColumn.getAttribute("aria-checked")) !== "true") await endsColumn.click();
+	const startsColumn = page.getByRole("button", { name: "Starts at", exact: true });
+	const endsColumn = page.getByRole("button", { name: "Ends at", exact: true });
+	if ((await startsColumn.getAttribute("aria-pressed")) !== "true") await startsColumn.click();
+	if ((await endsColumn.getAttribute("aria-pressed")) !== "true") await endsColumn.click();
 	await page.keyboard.press("Escape");
-	await expect(page.getByRole("columnheader", { name: "Sort by Starts at" })).toBeVisible();
+	await expect(page.getByRole("columnheader", { name: /^Starts at/ })).toBeVisible();
 	const eventRow = page.getByRole("row").filter({ hasText: "Ridu contributor workshop" });
 	await expect(eventRow).toContainText(/\d{1,2}:\d{2}/);
 
@@ -184,11 +191,19 @@ test("date controls preserve configured time-of-day authoring and list presentat
 		page.getByRole("row").filter({ hasText: "Ridu contributor workshop" })
 	).toContainText(/\d{1,2}:\d{2}/);
 	await page.getByRole("button", { name: "Filters" }).click();
+	await page.getByRole("button", { name: "Add filter", exact: true }).click();
 	await chooseRiduSelect(page, page.getByLabel("Filter field", { exact: true }), "Starts at");
 	const filterDateValue = page.getByLabel("Filter value", { exact: true });
 	await expectRiduDateTimeControl(filterDateValue);
 	await selectRiduCalendarDay(page, filterDateValue);
+	await expect(page).toHaveURL(/filters=/);
+	const filters = JSON.parse(new URL(page.url()).searchParams.get("filters")!);
+	expect(filters[0][0]).toMatchObject({
+		field: "startsAt",
+		value: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/),
+	});
 	await page.keyboard.press("Escape");
+	await page.getByRole("button", { name: "Remove filter 1", exact: true }).click();
 	await expect(page.getByText("Ridu contributor workshop", { exact: true })).toBeVisible();
 
 	await page
@@ -198,9 +213,11 @@ test("date controls preserve configured time-of-day authoring and list presentat
 		.getByRole("region", { name: "Bulk actions" })
 		.getByRole("button", { name: "Edit", exact: true })
 		.click();
-	const bulkEditDialog = page.getByRole("dialog", { name: "Edit 1 selected document" });
-	await chooseRiduSelect(page, bulkEditDialog.getByLabel("Field"), "Starts at");
-	const bulkDateValue = bulkEditDialog.getByLabel("Value");
+	const bulkEditDialog = page.getByRole("dialog", { name: "Editing 1 Event" });
+	const bulkFieldPicker = bulkEditDialog.getByRole("combobox", { name: "Select fields to edit" });
+	await bulkFieldPicker.click();
+	await page.getByRole("option", { name: "Starts at", exact: true }).click();
+	const bulkDateValue = bulkEditDialog.getByLabel("Starts at", { exact: true });
 	await expectRiduDateTimeControl(bulkDateValue);
 	await selectRiduCalendarDay(page, bulkDateValue);
 	const bulkRequest = page.waitForRequest(
@@ -208,7 +225,7 @@ test("date controls preserve configured time-of-day authoring and list presentat
 			new URL(request.url()).pathname === "/api/collections/events/bulk" &&
 			request.method() === "POST"
 	);
-	await bulkEditDialog.getByRole("button", { name: "Apply change" }).click();
+	await bulkEditDialog.getByRole("button", { name: "Apply changes" }).click();
 	const request = await bulkRequest;
 	expect(request.postDataJSON()).toMatchObject({
 		action: "update",
@@ -230,19 +247,23 @@ test("inverse joins expose their own table controls and access-checked mutations
 	await page.getByRole("link", { name: "News", exact: true }).click();
 
 	const join = page.locator('[data-join-field="posts"]');
-	await expect(join.getByRole("columnheader", { name: "Sort by Title" })).toBeVisible();
-	await expect(join.getByRole("columnheader", { name: "Sort by Status" })).toBeVisible();
-	await expect(join.getByRole("columnheader", { name: "Sort by Author" })).toBeVisible();
-	await expect(join.getByRole("columnheader", { name: "Sort by Updated At" })).toBeVisible();
+	for (const label of ["Title", "Status", "Author", "Updated At"]) {
+		await expect(join.getByRole("columnheader").filter({ hasText: label })).toBeVisible();
+	}
 	await expect(join).toContainText("Welcome to Ridu");
-	await join.getByRole("button", { name: "Sort by Title" }).click();
-	await join.getByRole("button", { name: "Sort by Title" }).click();
+	await join.getByRole("button", { name: "Sort Title ascending" }).click();
+	await join.getByRole("button", { name: "Sort Title descending" }).click();
+	await expect(join.getByRole("button", { name: "Sort Title descending" })).toHaveAttribute(
+		"data-active",
+		"true"
+	);
 
 	await join.getByRole("button", { name: "Manage relationships" }).click();
-	const relationshipNotes = page
-		.getByRole("group", { name: "Results" })
-		.getByRole("checkbox")
-		.filter({ hasText: "Relationship field notes" });
+	const relationshipDialog = page.getByRole("dialog", { name: "Add posts in this category" });
+	const relationshipResults = relationshipDialog.getByRole("table", { name: "Results" });
+	const relationshipNotes = relationshipResults.getByRole("checkbox", {
+		name: "Select Relationship field notes",
+	});
 	if ((await relationshipNotes.getAttribute("aria-checked")) !== "true") {
 		await relationshipNotes.click();
 	}
@@ -260,57 +281,56 @@ test("inverse joins expose their own table controls and access-checked mutations
 	const additionResponse = page.waitForResponse(
 		(response) => response.url().includes("/joins/posts") && response.request().method() === "PATCH"
 	);
-	await page.getByRole("button", { name: "Add 2 selected" }).click();
-	await expect(page.getByRole("button", { name: "Applying…" })).toBeDisabled();
-	await expect(page.getByRole("button", { name: "Cancel", exact: true })).toBeDisabled();
+	await relationshipDialog.getByRole("button", { name: "Add 2 selected" }).click();
+	await expect(relationshipDialog.getByRole("button", { name: "Applying…" })).toBeDisabled();
+	await expect(
+		relationshipDialog.getByRole("button", { name: "Cancel", exact: true })
+	).toBeDisabled();
 	await expect(relationshipNotes).toBeDisabled();
 	releaseJoin?.();
 	const addition = await additionRequest;
 	expect(addition.postDataJSON()).toMatchObject({ additions: [expect.any(String)], removals: [] });
 	await additionResponse;
-	await expect(join).toContainText("2 related Posts");
+	await expect(join.getByRole("table").locator("tbody tr")).toHaveCount(2);
 	await expect(join).toContainText("Relationship field notes");
 
 	await join.getByRole("button", { name: "Manage relationships" }).click();
-	const linkedNotes = page
-		.getByRole("group", { name: "Results" })
-		.getByRole("checkbox")
-		.filter({ hasText: "Relationship field notes" });
+	const linkedNotes = relationshipResults.getByRole("checkbox", {
+		name: "Select Relationship field notes",
+	});
 	if ((await linkedNotes.getAttribute("aria-checked")) === "true") await linkedNotes.click();
 	const removalRequest = page.waitForRequest(
 		(request) => request.url().includes("/joins/posts") && request.method() === "PATCH"
 	);
-	await page.getByRole("button", { name: "Add 1 selected" }).click();
+	await relationshipDialog.getByRole("button", { name: "Add 1 selected" }).click();
 	const removal = await removalRequest;
 	expect(removal.postDataJSON()).toMatchObject({ additions: [], removals: [expect.any(String)] });
-	await expect(join).toContainText("1 related Posts");
+	await expect(join.getByRole("table").locator("tbody tr")).toHaveCount(1);
 	await expect(join).not.toContainText("Relationship field notes");
 
 	await join.getByRole("button", { name: "Manage relationships" }).click();
-	const finalRelationship = page
-		.getByRole("group", { name: "Results" })
-		.getByRole("checkbox")
-		.filter({ hasText: "Welcome to Ridu" });
+	const finalRelationship = relationshipResults.getByRole("checkbox", {
+		name: "Select Welcome to Ridu",
+	});
 	await finalRelationship.click();
 	const finalRemovalRequest = page.waitForRequest(
 		(request) => request.url().includes("/joins/posts") && request.method() === "PATCH"
 	);
-	await page.getByRole("button", { name: "Add 0 selected" }).click();
+	await relationshipDialog.getByRole("button", { name: "Add 0 selected" }).click();
 	const finalRemoval = await finalRemovalRequest;
 	expect(finalRemoval.postDataJSON()).toMatchObject({
 		additions: [],
 		removals: [expect.any(String)],
 	});
-	await expect(join).toContainText("Showing 0 related Posts");
+	await expect(join).toContainText("No related posts.");
 
 	await join.getByRole("button", { name: "Manage relationships" }).click();
-	const restoredWelcome = page
-		.getByRole("group", { name: "Results" })
-		.getByRole("checkbox")
-		.filter({ hasText: "Welcome to Ridu" });
+	const restoredWelcome = relationshipResults.getByRole("checkbox", {
+		name: "Select Welcome to Ridu",
+	});
 	if ((await restoredWelcome.getAttribute("aria-checked")) !== "true") {
 		await restoredWelcome.click();
 	}
-	await page.getByRole("button", { name: /^Add(?: 1)? selected$/ }).click();
+	await relationshipDialog.getByRole("button", { name: "Add 1 selected" }).click();
 	await expect(join).toContainText("Welcome to Ridu");
 });

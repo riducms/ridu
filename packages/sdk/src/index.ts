@@ -1,4 +1,5 @@
 export { createClient } from "./client.js";
+export { createAdminLoader, type AdminLoader } from "./admin-loader.js";
 export { RiduError } from "./error.js";
 export {
 	connectLivePreview,
@@ -42,15 +43,18 @@ export type {
 	PopulateFor,
 	RequestOptions,
 	RevisionOptions,
+	PublicationScheduleOptions,
 	MutationOptions,
 	MutationLocaleOptions,
 	RestoreOptions,
 	CopyLocaleInput,
 	UploadCollectionSlug,
 	UploadOptions,
-	UploadImageInput,
+	UpdateUploadInput,
+	UploadImageEdit,
+	UploadFile,
 	Version,
-	ScheduledPublish,
+	ScheduledPublication,
 	VersionCollectionSlug,
 	DraftCollectionSlug,
 	SelectFor,

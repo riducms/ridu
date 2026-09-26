@@ -1,4 +1,6 @@
 import { defineAdminMessages } from "@riducms/plugin";
+import { withAdminLoader } from "@riducms/plugin";
+import { adminLoaders } from "./loaders.generated";
 import { outlineAdminPlugin } from "./outline-plugin";
 import { richTextAdminPlugin } from "@riducms/plugin-richtext";
 import { seoAdminPlugin } from "@riducms/plugin-seo";
@@ -7,6 +9,7 @@ import { ar, en, fr } from "@riducms/translations";
 
 import PluginRoute from "./plugin-route.svelte";
 import DashboardPanel from "./dashboard-panel.svelte";
+import CategoryCards from "./category-cards.svelte";
 import PostInsightsView from "./post-insights-view.svelte";
 import PostReadingTimeCell from "./post-reading-time-cell.svelte";
 import PostReviewAction from "./post-review-action.svelte";
@@ -15,6 +18,7 @@ import AccountFrame from "./account-frame.svelte";
 import NavigationNote from "./navigation-note.svelte";
 import LogoutButton from "./logout-button.svelte";
 import CoreViewFrame from "./core-view-frame.svelte";
+import EditorialView from "./editorial-view.svelte";
 import BrandComponent from "./brand-component.svelte";
 import ShellComponent from "./shell-component.svelte";
 import ProviderFrame from "./provider-frame.svelte";
@@ -71,8 +75,10 @@ const contractMessages = defineAdminMessages({
 	},
 });
 
+const visualPreview = import.meta.env.MODE === "admin-preview";
+
 export default defineAdmin({
-	fields: {
+	fieldEditors: {
 		"app:primitiveText": defineFieldEditor({ type: "text-list", component: PrimitiveTextEditor }),
 		"app:text": defineFieldEditor({ type: "text", component: BasicTextEditor }),
 		"app:capturedText": defineFieldEditor({
@@ -118,6 +124,11 @@ export default defineAdmin({
 	messages: contractMessages,
 	routes: [
 		{
+			path: "editorial-report",
+			navigation: { label: "Editorial report" },
+			...withAdminLoader(adminLoaders["editorial-view"], EditorialView),
+		},
+		{
 			path: "plugin-contract",
 			component: PluginRoute,
 			navigation: {
@@ -126,30 +137,76 @@ export default defineAdmin({
 			},
 		},
 	],
-	dashboard: [{ key: "editorial-pulse", component: DashboardPanel, position: "before" }],
-	login: [{ key: "contract-login", component: LoginFrame, position: "replace" }],
-	account: [
-		{ key: "contract-profile", surface: "profile", component: AccountFrame, position: "replace" },
+	dashboardPanels: visualPreview
+		? []
+		: [
+				{
+					key: "editorial-pulse",
+					position: "before",
+					...withAdminLoader(adminLoaders["editorial-dashboard"], DashboardPanel),
+				},
+			],
+	listResultsRenderers: [
+		{ key: "category-cards", collection: "categories", component: CategoryCards },
 	],
-	navigation: [{ key: "contract-shell", component: NavigationNote, position: "after" }],
-	logoutButton: { key: "contract-logout", component: LogoutButton },
-	views: [
+	login: visualPreview
+		? []
+		: [{ key: "contract-login", component: LoginFrame, position: "replace" }],
+	account: visualPreview
+		? []
+		: [
+				{
+					key: "contract-profile",
+					surface: "profile",
+					component: AccountFrame,
+					position: "replace",
+				},
+			],
+	navigation: visualPreview
+		? []
+		: [{ key: "contract-shell", component: NavigationNote, position: "after" }],
+	logoutButton: visualPreview ? undefined : { key: "contract-logout", component: LogoutButton },
+	coreViews: [
 		{
-			key: "posts-list",
+			key: "records-list",
 			surface: "collectionList",
-			collection: "posts",
-			component: CoreViewFrame,
+			collection: "loader-records",
+			...withAdminLoader(adminLoaders["editorial-view"], EditorialView),
 		},
 		{
-			key: "posts-create",
+			key: "records-create",
 			surface: "collectionCreate",
-			collection: "posts",
+			collection: "loader-records",
+			...withAdminLoader(adminLoaders["editorial-view"], EditorialView),
+		},
+		{
+			key: "records-edit",
+			surface: "collectionEdit",
+			collection: "loader-records",
+			...withAdminLoader(adminLoaders["editorial-view"], EditorialView),
+		},
+		{
+			key: "records-summary",
+			surface: "global",
+			global: "loader-summary",
+			...withAdminLoader(adminLoaders["editorial-view"], EditorialView),
+		},
+		{
+			key: "showcase-list",
+			surface: "collectionList",
+			collection: "payload-only-capabilities",
 			component: CoreViewFrame,
 		},
 		{
-			key: "posts-edit",
+			key: "showcase-create",
+			surface: "collectionCreate",
+			collection: "payload-only-capabilities",
+			component: CoreViewFrame,
+		},
+		{
+			key: "showcase-edit",
 			surface: "collectionEdit",
-			collection: "posts",
+			collection: "payload-only-capabilities",
 			component: CoreViewFrame,
 		},
 		{
@@ -160,18 +217,22 @@ export default defineAdmin({
 		},
 		{ key: "not-found", surface: "notFound", component: CoreViewFrame },
 	],
-	branding: [
-		{ key: "login-brand", surface: "loginLogo", component: BrandComponent },
-		{ key: "navigation-brand", surface: "navigationLogo", component: BrandComponent },
-		{ key: "account-avatar", surface: "accountAvatar", component: BrandComponent },
-	],
-	shell: [
-		{ key: "contract-header", position: "header", component: ShellComponent },
-		{ key: "contract-action", position: "actions", component: ShellComponent },
-		{ key: "contract-settings", position: "settingsMenu", component: ShellComponent },
-	],
-	providers: [{ key: "contract-provider", component: ProviderFrame }],
-	listCells: [
+	branding: visualPreview
+		? []
+		: [
+				{ key: "login-brand", surface: "loginLogo", component: BrandComponent },
+				{ key: "navigation-brand", surface: "navigationLogo", component: BrandComponent },
+				{ key: "account-avatar", surface: "accountAvatar", component: BrandComponent },
+			],
+	shellSlots: visualPreview
+		? []
+		: [
+				{ key: "contract-header", position: "header", component: ShellComponent },
+				{ key: "contract-action", position: "actions", component: ShellComponent },
+				{ key: "contract-settings", position: "settingsMenu", component: ShellComponent },
+			],
+	providers: visualPreview ? [] : [{ key: "contract-provider", component: ProviderFrame }],
+	listCellRenderers: [
 		{
 			key: "reading-time",
 			collection: "posts",

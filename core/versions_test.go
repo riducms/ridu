@@ -71,11 +71,18 @@ func TestDraftPublishingConflictsAndRestore(t *testing.T) {
 	if restoredDraft.Status != store.StatusDraft || restoredDraft.Revision != 5 {
 		t.Fatalf("restored as draft = %#v", restoredDraft)
 	}
+	restoredHistoricalDraft, err := application.Local().Restore(ctx, "posts", draft.ID, 1, ridu.MutationOptions{Actor: actor, ExpectedRevision: restoredDraft.Revision})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if title, _ := restoredHistoricalDraft.Values["title"].StringValue(); title != "First" || restoredHistoricalDraft.Status != store.StatusDraft || restoredHistoricalDraft.Revision != 6 {
+		t.Fatalf("restored historical draft = %#v", restoredHistoricalDraft)
+	}
 	versions, err := application.Local().Versions(ctx, "posts", draft.ID, ridu.FindOptions{Actor: actor})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(versions) != 5 {
+	if len(versions) != 6 {
 		t.Fatalf("versions = %d", len(versions))
 	}
 }
@@ -730,7 +737,7 @@ func TestVersionHistoryAppliesFilteredAccessToEverySnapshot(t *testing.T) {
 	}
 }
 
-func TestScheduledPublishUsesDurableJobBoundary(t *testing.T) {
+func TestScheduledPublicationUsesDurableJobBoundary(t *testing.T) {
 	backend := teststore.New()
 	application, err := ridu.New(ridu.Config{Name: "scheduled", Admin: ridu.AdminConfig{User: "users"}, Collections: []ridu.Collection{
 		{Slug: "users", Auth: true, Fields: field.Fields{field.Text("email").Required().Unique()}},
@@ -753,10 +760,10 @@ func TestScheduledPublishUsesDurableJobBoundary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.SchedulePublish(context.Background(), "books", document.ID, time.Now().Add(-time.Second), document.Revision, identity); err != nil {
+	if _, err := application.SchedulePublish(context.Background(), "books", document.ID, time.Now().Add(-time.Second), ridu.PublicationScheduleOptions{ExpectedRevision: document.Revision}, identity); err != nil {
 		t.Fatal(err)
 	}
-	completed, err := application.RunScheduledPublishes(context.Background(), 10, actor)
+	completed, err := application.RunScheduledPublications(context.Background(), 10, actor)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -766,9 +773,127 @@ func TestScheduledPublishUsesDurableJobBoundary(t *testing.T) {
 	if published, err := application.Local().Find(context.Background(), "books", document.ID, ridu.FindOptions{}); err != nil || published.Status != store.StatusPublished {
 		t.Fatalf("public read = %#v, %v", published, err)
 	}
+	published, err := application.Local().Find(context.Background(), "books", document.ID, ridu.FindOptions{Actor: actor})
+	if err != nil {
+		t.Fatal(err)
+	}
+	unpublishJob, err := application.ScheduleUnpublish(context.Background(), "books", document.ID, time.Now().Add(-time.Second), ridu.PublicationScheduleOptions{ExpectedRevision: published.Revision}, identity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if unpublishJob.Action != store.PublicationActionUnpublish {
+		t.Fatalf("scheduled action = %q", unpublishJob.Action)
+	}
+	completed, err = application.RunScheduledPublications(context.Background(), 10, actor)
+	if err != nil || completed != 1 {
+		t.Fatalf("scheduled unpublish = %d, %v", completed, err)
+	}
+	includeDraft := true
+	unpublished, err := application.Local().Find(context.Background(), "books", document.ID, ridu.FindOptions{Draft: &includeDraft, Actor: actor})
+	if err != nil || unpublished.Status != store.StatusDraft {
+		t.Fatalf("unpublished document = %#v, %v", unpublished, err)
+	}
 }
 
-func TestScheduledPublishTerminalFailureRemainsActionableAndDismissible(t *testing.T) {
+func TestScheduleUnpublishRequiresDraftSupport(t *testing.T) {
+	application, err := ridu.New(ridu.Config{Name: "scheduled history", Collections: []ridu.Collection{{
+		Slug: "events", Versions: true,
+		Fields: field.Fields{field.Text("name").Required()},
+	}}}, teststore.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	document, err := application.Local().Create(t.Context(), "events", store.Values{"name": store.String("Released")}, ridu.MutationOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := application.ScheduleUnpublish(t.Context(), "events", document.ID, time.Now().Add(time.Hour), ridu.PublicationScheduleOptions{ExpectedRevision: document.Revision}, nil); !operationCode(err, "bad_operation") {
+		t.Fatalf("schedule unpublish without drafts error = %v", err)
+	}
+}
+
+func TestScheduledUnpublishFailureUsesPublicationErrorCode(t *testing.T) {
+	backend := teststore.New()
+	application, err := ridu.New(ridu.Config{Name: "scheduled unpublish failure", Collections: []ridu.Collection{{
+		Slug: "books", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true},
+		Fields: field.Fields{field.Text("title").Required()},
+	}}}, backend)
+	if err != nil {
+		t.Fatal(err)
+	}
+	document, err := application.Local().Create(t.Context(), "books", store.Values{"title": store.String("Scheduled")}, ridu.MutationOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	published, err := application.Local().Publish(t.Context(), "books", document.ID, ridu.MutationOptions{ExpectedRevision: document.Revision})
+	if err != nil {
+		t.Fatal(err)
+	}
+	job, err := application.ScheduleUnpublish(t.Context(), "books", published.ID, time.Now().Add(-time.Second), ridu.PublicationScheduleOptions{ExpectedRevision: published.Revision + 1}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if completed, err := application.RunScheduledPublications(t.Context(), 1, nil); err != nil || completed != 0 {
+		t.Fatalf("run stale scheduled unpublish = %d, %v", completed, err)
+	}
+	failed, err := backend.FindTask(t.Context(), job.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if failed.State != store.TaskStateFailed || failed.LastErrorCode != "scheduled_publication_rejected" {
+		t.Fatalf("failed scheduled unpublish = %#v", failed)
+	}
+}
+
+func TestScheduledPublicationDoesNotRequireReadAccess(t *testing.T) {
+	denyRead := func(ridu.AccessContext) (ridu.AccessDecision, error) { return ridu.Deny(), nil }
+	titlePath, err := query.NewPath("title")
+	if err != nil {
+		t.Fatal(err)
+	}
+	allowScheduledTitle := func(ridu.AccessContext) (ridu.AccessDecision, error) {
+		return ridu.Where(query.Equal(titlePath, query.String("Scheduled"))), nil
+	}
+	application, err := ridu.New(ridu.Config{Name: "scheduled without read", Collections: []ridu.Collection{{
+		Slug: "books", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true},
+		Access: ridu.CollectionAccess{Read: denyRead, Publish: allowScheduledTitle, Unpublish: allowScheduledTitle},
+		Fields: field.Fields{field.Text("title").Required()},
+	}}}, teststore.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	document, err := application.Local().Create(t.Context(), "books", store.Values{"title": store.String("Scheduled")}, ridu.MutationOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	publishJob, err := application.SchedulePublish(t.Context(), "books", document.ID, time.Now().Add(time.Hour), ridu.PublicationScheduleOptions{ExpectedRevision: document.Revision}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if publishJob.Action != store.PublicationActionPublish || publishJob.ExpectedRevision != document.Revision {
+		t.Fatalf("scheduled publish = %#v", publishJob)
+	}
+	blocked, err := application.Local().Create(t.Context(), "books", store.Values{"title": store.String("Blocked")}, ridu.MutationOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := application.SchedulePublish(t.Context(), "books", blocked.ID, time.Now().Add(time.Hour), ridu.PublicationScheduleOptions{ExpectedRevision: blocked.Revision}, nil); !operationCode(err, "not_found") {
+		t.Fatalf("filtered scheduled publish error = %v", err)
+	}
+	published, err := application.Local().Publish(t.Context(), "books", document.ID, ridu.MutationOptions{ExpectedRevision: document.Revision})
+	if err != nil {
+		t.Fatal(err)
+	}
+	unpublishJob, err := application.ScheduleUnpublish(t.Context(), "books", document.ID, time.Now().Add(time.Hour), ridu.PublicationScheduleOptions{ExpectedRevision: 0}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if unpublishJob.Action != store.PublicationActionUnpublish || unpublishJob.ExpectedRevision != published.Revision {
+		t.Fatalf("scheduled unpublish = %#v", unpublishJob)
+	}
+}
+
+func TestScheduledPublicationTerminalFailureRemainsActionableAndDismissible(t *testing.T) {
 	backend := teststore.New()
 	application, err := ridu.New(ridu.Config{Name: "scheduled failure", Admin: ridu.AdminConfig{User: "users"}, Collections: []ridu.Collection{
 		{Slug: "users", Auth: true, Fields: field.Fields{field.Text("email").Required().Unique()}},
@@ -792,7 +917,7 @@ func TestScheduledPublishTerminalFailureRemainsActionableAndDismissible(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	job, err := application.SchedulePublish(ctx, "books", document.ID, time.Now().Add(-time.Second), document.Revision, identity)
+	job, err := application.SchedulePublish(ctx, "books", document.ID, time.Now().Add(-time.Second), ridu.PublicationScheduleOptions{ExpectedRevision: document.Revision}, identity)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -801,18 +926,18 @@ func TestScheduledPublishTerminalFailureRemainsActionableAndDismissible(t *testi
 		t.Fatalf("claimed scheduled publish = %#v, %v", claimed, err)
 	}
 	if err := backend.FailTask(ctx, store.TaskFailure{
-		ID: job.ID, LeaseToken: claimed[0].LeaseToken, Code: "scheduled_publish_rejected", Message: "terminal",
+		ID: job.ID, LeaseToken: claimed[0].LeaseToken, Code: "scheduled_publication_rejected", Message: "terminal",
 	}); err != nil {
 		t.Fatal(err)
 	}
-	listed, err := application.ScheduledPublishes(ctx, "books", document.ID, identity)
+	listed, err := application.ScheduledPublications(ctx, "books", document.ID, identity)
 	if err != nil || len(listed) != 1 || listed[0].ID != job.ID || listed[0].LastError != "terminal" {
 		t.Fatalf("listed terminal schedule = %#v, %v", listed, err)
 	}
-	if err := application.CancelScheduledPublish(ctx, "books", document.ID, job.ID, identity); err != nil {
+	if err := application.CancelScheduledPublication(ctx, "books", document.ID, job.ID, identity); err != nil {
 		t.Fatal(err)
 	}
-	listed, err = application.ScheduledPublishes(ctx, "books", document.ID, identity)
+	listed, err = application.ScheduledPublications(ctx, "books", document.ID, identity)
 	if err != nil || len(listed) != 0 {
 		t.Fatalf("listed after terminal dismiss = %#v, %v", listed, err)
 	}
@@ -821,7 +946,7 @@ func TestScheduledPublishTerminalFailureRemainsActionableAndDismissible(t *testi
 	}
 }
 
-func TestScheduledPublishRehydratesRequestingActor(t *testing.T) {
+func TestScheduledPublicationRehydratesRequestingActor(t *testing.T) {
 	backend := teststore.New()
 	publishersOnly := func(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
 		if ctx.Actor != nil {
@@ -851,14 +976,14 @@ func TestScheduledPublishRehydratesRequestingActor(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	job, err := application.SchedulePublish(ctx, "books", document.ID, time.Now().Add(-time.Second), document.Revision, &ridu.AuthIdentity{Collection: "users", Actor: publisher})
+	job, err := application.SchedulePublish(ctx, "books", document.ID, time.Now().Add(-time.Second), ridu.PublicationScheduleOptions{ExpectedRevision: document.Revision}, &ridu.AuthIdentity{Collection: "users", Actor: publisher})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if job.RequestedByCollectionID == "" || job.RequestedByUserID != publisher.ID {
 		t.Fatalf("requesting identity = %q/%q", job.RequestedByCollectionID, job.RequestedByUserID)
 	}
-	completed, err := application.RunScheduledPublishes(ctx, 10, nil)
+	completed, err := application.RunScheduledPublications(ctx, 10, nil)
 	if err != nil || completed != 1 {
 		t.Fatalf("run scheduled = %d, %v", completed, err)
 	}
@@ -867,7 +992,7 @@ func TestScheduledPublishRehydratesRequestingActor(t *testing.T) {
 	}
 }
 
-func TestScheduledPublishRechecksExactAuthCollectionAtExecution(t *testing.T) {
+func TestScheduledPublicationRechecksExactAuthCollectionAtExecution(t *testing.T) {
 	backend := teststore.New()
 	publishersOnly := func(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
 		role := ""
@@ -922,7 +1047,7 @@ func TestScheduledPublishRechecksExactAuthCollectionAtExecution(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	job, err := application.SchedulePublish(ctx, "books", document.ID, time.Now().Add(-time.Second), document.Revision, &ridu.AuthIdentity{
+	job, err := application.SchedulePublish(ctx, "books", document.ID, time.Now().Add(-time.Second), ridu.PublicationScheduleOptions{ExpectedRevision: document.Revision}, &ridu.AuthIdentity{
 		Collection: "staff", Actor: store.Document{ID: requesterID},
 	})
 	if err != nil {
@@ -934,7 +1059,7 @@ func TestScheduledPublishRechecksExactAuthCollectionAtExecution(t *testing.T) {
 	if _, err := application.Local().Update(ctx, "staff", requesterID, store.Values{"role": store.String("viewer")}, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	completed, err := application.RunScheduledPublishes(ctx, 10, nil)
+	completed, err := application.RunScheduledPublications(ctx, 10, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -948,7 +1073,7 @@ func TestScheduledPublishRechecksExactAuthCollectionAtExecution(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if failed.State != store.TaskStateFailed || failed.LastErrorCode != "scheduled_publish_rejected" {
+	if failed.State != store.TaskStateFailed || failed.LastErrorCode != "scheduled_publication_rejected" {
 		t.Fatalf("task after revoked requester = %#v", failed)
 	}
 }

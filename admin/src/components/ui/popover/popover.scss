@@ -1,0 +1,18 @@
+@layer ridu.components {
+	.ridu-popover {
+		display: flex;
+		flex-direction: column;
+		gap: 16px;
+		width: 288px;
+		padding: 8px;
+		border: 1px solid var(--control-border);
+		border-radius: 4px;
+		background: var(--popover);
+		color: var(--popover-foreground);
+		font-size: var(--font-size-body);
+		box-shadow: var(--shadow-popover);
+		z-index: 80;
+		outline: none;
+		transform-origin: var(--bits-popover-content-transform-origin);
+	}
+}

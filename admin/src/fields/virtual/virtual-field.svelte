@@ -1,4 +1,5 @@
 <script lang="ts">
+	import "@admin/fields/field-layout.scss";
 	import type { SchemaField } from "@riducms/protocol";
 
 	import type { FormController } from "@admin/core/forms/form-controller.svelte";
@@ -18,11 +19,7 @@
 </script>
 
 <FieldShell {field} issues={[]}>
-	<output
-		id={field.id}
-		class="block min-h-10 whitespace-pre-wrap rounded-[3px] border border-control-border-disabled bg-control-disabled px-3 py-2.5 text-[13px] leading-5 text-foreground-label"
-		data-virtual-field={field.name}
-	>
+	<output id={field.id} class="ridu-virtual-field" data-virtual-field={field.name}>
 		{formatted}
 	</output>
 </FieldShell>

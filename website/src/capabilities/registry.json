@@ -121,7 +121,7 @@
 		"evidence": [
 			"core/versions_test.go",
 			"admin/tests/version-diff.test.ts",
-			"admin/tests/document-route-dirty.test.ts"
+			"tests/e2e/admin/release-hardening.spec.ts"
 		],
 		"adapters": ["postgres", "sqlite", "mongodb"],
 		"guides": ["/docs/editorial-workflows/", "/docs/drafts-and-versions/"],

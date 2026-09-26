@@ -208,6 +208,14 @@ func (application *App) Handler(options HandlerOptions) http.Handler {
 		}
 	}
 	return httpapi.New(httpapi.Config{
+		AdminLoad: func(ctx context.Context, request httpapi.AdminLoaderRequest) (json.RawMessage, error) {
+			for _, loader := range application.adminLoaders {
+				if loader.key == request.Key {
+					return loader.run(AdminLoadContext{Context: ctx, Pathname: request.Pathname, RouteParams: request.RouteParams, actor: httpIdentityActor(request.Identity), actorCollection: httpIdentityCollection(request.Identity), locale: schema.LocaleCode(request.Locale), local: application.local, auditRead: request.AuditRead}, request.Query)
+				}
+			}
+			return nil, &operationengine.Error{Status: http.StatusNotFound, Code: "admin_loader_not_found", Message: "Admin loader not found."}
+		},
 		Manifest: application.manifest, Engine: application.local.engine,
 		ManifestForRequest: func(ctx context.Context, identity *httpapi.AuthIdentity) (schema.Snapshot, error) {
 			return application.manifestForIdentity(ctx, httpIdentityActor(identity), httpIdentityCollection(identity))
@@ -222,11 +230,11 @@ func (application *App) Handler(options HandlerOptions) http.Handler {
 		},
 		Session: func(ctx context.Context, token string) (httpapi.AuthSession, error) {
 			session, err := application.Session(ctx, token)
-			return httpapi.AuthSession{ID: session.ID, Token: session.Token, Collection: session.Collection, User: session.User, ExpiresAt: session.ExpiresAt}, err
+			return preparedHTTPAuthSession(application, session), err
 		},
 		RotateSession: func(ctx context.Context, token string) (httpapi.AuthSession, error) {
 			session, err := application.RotateSession(ctx, token)
-			return httpapi.AuthSession{ID: session.ID, Token: session.Token, Collection: session.Collection, User: session.User, ExpiresAt: session.ExpiresAt}, err
+			return preparedHTTPAuthSession(application, session), err
 		},
 		Logout: application.Logout, LogoutAll: application.LogoutAll,
 		Sessions: func(ctx context.Context, token string) ([]httpapi.AuthSessionInfo, error) {
@@ -315,14 +323,17 @@ func (application *App) Handler(options HandlerOptions) http.Handler {
 		ReleaseDocumentLock: func(ctx context.Context, collection, id string, identity *httpapi.AuthIdentity) error {
 			return application.ReleaseDocumentLock(ctx, collection, id, authIdentity(identity))
 		},
-		SchedulePublish: func(ctx context.Context, collection, documentID string, runAt time.Time, expectedRevision int, identity *httpapi.AuthIdentity) (store.ScheduledPublish, error) {
-			return application.SchedulePublish(ctx, collection, documentID, runAt, expectedRevision, authIdentity(identity))
+		SchedulePublish: func(ctx context.Context, collection, documentID string, runAt time.Time, timeZone string, expectedRevision int, identity *httpapi.AuthIdentity) (store.ScheduledPublication, error) {
+			return application.SchedulePublish(ctx, collection, documentID, runAt, PublicationScheduleOptions{ExpectedRevision: expectedRevision, TimeZone: timeZone}, authIdentity(identity))
 		},
-		ScheduledPublishes: func(ctx context.Context, collection, documentID string, identity *httpapi.AuthIdentity) ([]store.ScheduledPublish, error) {
-			return application.ScheduledPublishes(ctx, collection, documentID, authIdentity(identity))
+		ScheduleUnpublish: func(ctx context.Context, collection, documentID string, runAt time.Time, timeZone string, expectedRevision int, identity *httpapi.AuthIdentity) (store.ScheduledPublication, error) {
+			return application.ScheduleUnpublish(ctx, collection, documentID, runAt, PublicationScheduleOptions{ExpectedRevision: expectedRevision, TimeZone: timeZone}, authIdentity(identity))
 		},
-		CancelScheduledPublish: func(ctx context.Context, collection, documentID, jobID string, identity *httpapi.AuthIdentity) error {
-			return application.CancelScheduledPublish(ctx, collection, documentID, jobID, authIdentity(identity))
+		ScheduledPublications: func(ctx context.Context, collection, documentID string, identity *httpapi.AuthIdentity) ([]store.ScheduledPublication, error) {
+			return application.ScheduledPublications(ctx, collection, documentID, authIdentity(identity))
+		},
+		CancelScheduledPublication: func(ctx context.Context, collection, documentID, jobID string, identity *httpapi.AuthIdentity) error {
+			return application.CancelScheduledPublication(ctx, collection, documentID, jobID, authIdentity(identity))
 		},
 		AllowAuthIPAttempt: func(ctx context.Context, clientIP, collection string, maximum int, window time.Duration) (bool, error) {
 			key := tokenDigest("ip\x00" + clientIP + "\x00" + collection)
@@ -343,20 +354,20 @@ func (application *App) Handler(options HandlerOptions) http.Handler {
 			}
 			return release, nil
 		},
-		Upload: func(ctx context.Context, collection, filename string, reader io.Reader, values store.Values, identity *httpapi.AuthIdentity, admissionHeld bool) (store.Document, error) {
-			return application.uploadForIdentity(ctx, collection, UploadInput{Filename: filename, Reader: reader, Data: values}, authIdentity(identity), admissionHeld)
+		Upload: func(ctx context.Context, collection string, input httpapi.UploadInput, identity *httpapi.AuthIdentity, admissionHeld bool) (store.Document, error) {
+			return application.uploadForIdentity(ctx, collection, UploadInput{Filename: input.Filename, Reader: input.Reader, Data: input.Data, Image: input.Image, Publish: input.Publish, Locale: uploadLocale(input.Locale)}, authIdentity(identity), admissionHeld)
 		},
-		UploadLocalized: func(ctx context.Context, collection, filename string, reader io.Reader, values store.Values, identity *httpapi.AuthIdentity, options httpapi.LocaleOptions, admissionHeld bool) (store.Document, error) {
-			return application.uploadForIdentity(ctx, collection, UploadInput{Filename: filename, Reader: reader, Data: values, Locale: LocaleOptions{Locale: schema.LocaleCode(options.Locale), FallbackLocales: options.FallbackLocales, DisableFallback: options.DisableFallback, AllLocales: options.AllLocales}}, authIdentity(identity), admissionHeld)
+		UpdateUpload: func(ctx context.Context, collection, id string, input httpapi.UploadInput, identity *httpapi.AuthIdentity, admissionHeld bool) (store.Document, error) {
+			return application.updateUploadForIdentity(ctx, collection, id, UpdateUploadInput{Filename: input.Filename, Reader: input.Reader, Data: input.Data, Image: input.Image, Publish: input.Publish, ExpectedRevision: input.ExpectedRevision, Locale: uploadLocale(input.Locale)}, authIdentity(identity), admissionHeld)
 		},
-		RemoteUpload: func(ctx context.Context, collection, remoteURL string, values store.Values, identity *httpapi.AuthIdentity) (store.Document, error) {
-			return application.UploadFromURLForIdentity(ctx, collection, RemoteUploadInput{URL: remoteURL, Data: values}, authIdentity(identity))
+		RemoteUpload: func(ctx context.Context, collection, remoteURL string, input httpapi.UploadInput, identity *httpapi.AuthIdentity) (store.Document, error) {
+			return application.UploadFromURLForIdentity(ctx, collection, RemoteUploadInput{URL: remoteURL, Filename: input.Filename, Data: input.Data, Image: input.Image, Publish: input.Publish, Locale: uploadLocale(input.Locale)}, authIdentity(identity))
 		},
-		RemoteUploadLocalized: func(ctx context.Context, collection, remoteURL string, values store.Values, identity *httpapi.AuthIdentity, options httpapi.LocaleOptions) (store.Document, error) {
-			return application.UploadFromURLForIdentity(ctx, collection, RemoteUploadInput{URL: remoteURL, Data: values, Locale: LocaleOptions{Locale: schema.LocaleCode(options.Locale), FallbackLocales: options.FallbackLocales, DisableFallback: options.DisableFallback, AllLocales: options.AllLocales}}, authIdentity(identity))
+		PreviewUpload: func(ctx context.Context, collection, id, remoteURL string, identity *httpapi.AuthIdentity) (io.ReadCloser, storage.Object, string, error) {
+			return application.PreviewUploadForIdentity(ctx, collection, id, remoteURL, authIdentity(identity))
 		},
-		UpdateUploadImage: func(ctx context.Context, collection, id string, focalX, focalY, cropX, cropY, cropWidth, cropHeight float64, expectedRevision int, identity *httpapi.AuthIdentity) (store.Document, error) {
-			return application.UpdateUploadImageForIdentity(ctx, collection, id, UpdateUploadImageInput{FocalX: focalX, FocalY: focalY, CropX: cropX, CropY: cropY, CropWidth: cropWidth, CropHeight: cropHeight, ExpectedRevision: expectedRevision}, authIdentity(identity))
+		OpenUploadSource: func(ctx context.Context, collection, id string, identity *httpapi.AuthIdentity) (io.ReadCloser, storage.Object, error) {
+			return application.OpenUploadSourceForIdentity(ctx, collection, id, authIdentity(identity))
 		},
 		Duplicate: func(ctx context.Context, collection, id string, values store.Values, identity *httpapi.AuthIdentity, options httpapi.LocaleOptions) (store.Document, error) {
 			return application.DuplicateForIdentity(ctx, collection, id, values, authIdentity(identity), LocaleOptions{
@@ -519,6 +530,33 @@ func httpIdentityCollection(identity *httpapi.AuthIdentity) schema.CollectionSlu
 	return identity.Collection
 }
 
+func preparedHTTPAuthSession(application *App, session AuthSession) httpapi.AuthSession {
+	prepared := httpapi.AuthSession{
+		ID: session.ID, Token: session.Token, Collection: session.Collection,
+		User: session.User, ExpiresAt: session.ExpiresAt,
+	}
+	// Security-page reads still run their ordinary access checks and, for API keys,
+	// hooks. They reuse the session record already resolved for this request instead
+	// of looking up the bearer credential and owner document a second time.
+	prepared.PreparedSessions = func(ctx context.Context) ([]httpapi.AuthSessionInfo, error) {
+		sessions, err := application.sessionsForResolvedSession(ctx, session, time.Now().UTC())
+		result := make([]httpapi.AuthSessionInfo, len(sessions))
+		for index, current := range sessions {
+			result[index] = httpapi.AuthSessionInfo(current)
+		}
+		return result, err
+	}
+	prepared.PreparedAPIKeys = func(ctx context.Context) ([]httpapi.APIKeyInfo, error) {
+		keys, err := application.apiKeysForResolvedSession(ctx, session, time.Now().UTC())
+		result := make([]httpapi.APIKeyInfo, len(keys))
+		for index, key := range keys {
+			result[index] = httpapi.APIKeyInfo(key)
+		}
+		return result, err
+	}
+	return prepared
+}
+
 func documentLockEnvelope(state DocumentLockState) protocol.DocumentLockEnvelope {
 	result := protocol.DocumentLockEnvelope{Owned: state.Owned, Acquired: state.Acquired, CanTakeOver: state.CanTakeOver}
 	if state.Lock != nil {
@@ -544,4 +582,8 @@ func (application *App) endpointHandler(handler EndpointHandler, scope endpointS
 		}
 		handler(endpoint)
 	}
+}
+
+func uploadLocale(options httpapi.LocaleOptions) LocaleOptions {
+	return LocaleOptions{Locale: schema.LocaleCode(options.Locale), FallbackLocales: options.FallbackLocales, DisableFallback: options.DisableFallback, AllLocales: options.AllLocales}
 }

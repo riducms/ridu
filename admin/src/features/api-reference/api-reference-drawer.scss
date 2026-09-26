@@ -1,0 +1,74 @@
+@layer ridu.components {
+	.ridu-api-reference-overlay {
+		position: fixed;
+		inset: 0;
+		z-index: 50;
+		background: var(--media-overlay);
+	}
+
+	.ridu-api-reference-drawer {
+		position: fixed;
+		inset-block: 0;
+		inset-inline-end: 0;
+		z-index: 50;
+		display: flex;
+		flex-direction: column;
+		width: min(1100px, 100vw);
+		background: var(--background);
+		color: var(--foreground);
+		border-inline-start: 1px solid var(--border);
+		font-size: var(--font-size-body);
+		line-height: var(--line-height-body);
+		outline: none;
+		animation: ridu-api-reference-in 200ms ease-out;
+
+		&[dir="rtl"] {
+			--api-reference-slide: -40px;
+		}
+		&__header {
+			display: flex;
+			justify-content: space-between;
+			align-items: flex-start;
+			gap: 20px;
+			padding: 24px 30px;
+			border-bottom: 1px solid var(--border);
+			.ridu-api-reference-drawer__title {
+				margin: 0 0 8px;
+				font-size: 24px;
+				font-weight: 500;
+			}
+			code {
+				margin-inline-start: 8px;
+				font-size: 15px;
+				color: var(--muted-foreground);
+			}
+			.ridu-api-reference-drawer__description {
+				margin: 0;
+				color: var(--muted-foreground);
+			}
+			svg {
+				width: 20px;
+				height: 20px;
+			}
+		}
+		&__message {
+			padding: 30px;
+		}
+	}
+
+	@keyframes ridu-api-reference-in {
+		from {
+			opacity: 0;
+			transform: translateX(var(--api-reference-slide, 40px));
+		}
+		to {
+			opacity: 1;
+			transform: translateX(0);
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.ridu-api-reference-drawer {
+			animation: none;
+		}
+	}
+}

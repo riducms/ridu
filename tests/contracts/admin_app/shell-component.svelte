@@ -1,7 +1,7 @@
 <script lang="ts">
-	import type { AdminShellComponentProps } from "@riducms/plugin";
+	import type { AdminShellSlotProps } from "@riducms/plugin";
 
-	let { position }: AdminShellComponentProps = $props();
+	let { position }: AdminShellSlotProps = $props();
 </script>
 
 {#if position === "header"}

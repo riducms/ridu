@@ -270,6 +270,63 @@
         "operationId": "listunified-articles",
         "parameters": [
           {
+            "description": "One-based result page.",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "maximum": 1000000,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Maximum documents returned in this page.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "JSON-encoded document filter combined atomically with collection access rules.",
+            "in": "query",
+            "name": "where",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Ordered field names; prefix a field with - for descending order.",
+            "explode": true,
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "style": "form"
+          },
+          {
+            "description": "Include collection and per-document access capabilities for this page.",
+            "in": "query",
+            "name": "include-access",
+            "required": false,
+            "schema": {
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          {
             "description": "Expand readable relationships recursively.",
             "in": "query",
             "name": "depth",
@@ -279,6 +336,24 @@
               "maximum": 5,
               "minimum": 0,
               "type": "integer"
+            }
+          },
+          {
+            "description": "JSON-encoded top-level field selection.",
+            "in": "query",
+            "name": "select",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "JSON-encoded relationship population; cannot be combined with depth.",
+            "in": "query",
+            "name": "populate",
+            "required": false,
+            "schema": {
+              "type": "string"
             }
           },
           {
@@ -311,22 +386,48 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "properties": {
-                    "docs": {
-                      "items": {
-                        "$ref": "#/components/schemas/unified-articles"
+                  "oneOf": [
+                    {
+                      "properties": {
+                        "docs": {
+                          "items": {
+                            "$ref": "#/components/schemas/unified-articles"
+                          },
+                          "type": "array"
+                        },
+                        "pagination": {
+                          "$ref": "#/components/schemas/Pagination"
+                        }
                       },
-                      "type": "array"
+                      "required": [
+                        "docs",
+                        "pagination"
+                      ],
+                      "type": "object"
                     },
-                    "pagination": {
-                      "$ref": "#/components/schemas/Pagination"
+                    {
+                      "properties": {
+                        "access": {
+                          "$ref": "#/components/schemas/CollectionPageAccess"
+                        },
+                        "docs": {
+                          "items": {
+                            "$ref": "#/components/schemas/unified-articles"
+                          },
+                          "type": "array"
+                        },
+                        "pagination": {
+                          "$ref": "#/components/schemas/Pagination"
+                        }
+                      },
+                      "required": [
+                        "docs",
+                        "pagination",
+                        "access"
+                      ],
+                      "type": "object"
                     }
-                  },
-                  "required": [
-                    "docs",
-                    "pagination"
-                  ],
-                  "type": "object"
+                  ]
                 }
               }
             },
@@ -595,6 +696,24 @@
             }
           },
           {
+            "description": "JSON-encoded top-level field selection.",
+            "in": "query",
+            "name": "select",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "JSON-encoded relationship population; cannot be combined with depth.",
+            "in": "query",
+            "name": "populate",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "description": "Select one content locale, or all locales as locale-keyed values.",
             "in": "query",
             "name": "locale",
@@ -805,6 +924,63 @@
         "operationId": "listusers",
         "parameters": [
           {
+            "description": "One-based result page.",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "maximum": 1000000,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Maximum documents returned in this page.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "JSON-encoded document filter combined atomically with collection access rules.",
+            "in": "query",
+            "name": "where",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Ordered field names; prefix a field with - for descending order.",
+            "explode": true,
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "style": "form"
+          },
+          {
+            "description": "Include collection and per-document access capabilities for this page.",
+            "in": "query",
+            "name": "include-access",
+            "required": false,
+            "schema": {
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          {
             "description": "Expand readable relationships recursively.",
             "in": "query",
             "name": "depth",
@@ -815,6 +991,24 @@
               "minimum": 0,
               "type": "integer"
             }
+          },
+          {
+            "description": "JSON-encoded top-level field selection.",
+            "in": "query",
+            "name": "select",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "JSON-encoded relationship population; cannot be combined with depth.",
+            "in": "query",
+            "name": "populate",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -822,22 +1016,48 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "properties": {
-                    "docs": {
-                      "items": {
-                        "$ref": "#/components/schemas/users"
+                  "oneOf": [
+                    {
+                      "properties": {
+                        "docs": {
+                          "items": {
+                            "$ref": "#/components/schemas/users"
+                          },
+                          "type": "array"
+                        },
+                        "pagination": {
+                          "$ref": "#/components/schemas/Pagination"
+                        }
                       },
-                      "type": "array"
+                      "required": [
+                        "docs",
+                        "pagination"
+                      ],
+                      "type": "object"
                     },
-                    "pagination": {
-                      "$ref": "#/components/schemas/Pagination"
+                    {
+                      "properties": {
+                        "access": {
+                          "$ref": "#/components/schemas/CollectionPageAccess"
+                        },
+                        "docs": {
+                          "items": {
+                            "$ref": "#/components/schemas/users"
+                          },
+                          "type": "array"
+                        },
+                        "pagination": {
+                          "$ref": "#/components/schemas/Pagination"
+                        }
+                      },
+                      "required": [
+                        "docs",
+                        "pagination",
+                        "access"
+                      ],
+                      "type": "object"
                     }
-                  },
-                  "required": [
-                    "docs",
-                    "pagination"
-                  ],
-                  "type": "object"
+                  ]
                 }
               }
             },
@@ -1028,6 +1248,24 @@
               "maximum": 5,
               "minimum": 0,
               "type": "integer"
+            }
+          },
+          {
+            "description": "JSON-encoded top-level field selection.",
+            "in": "query",
+            "name": "select",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "JSON-encoded relationship population; cannot be combined with depth.",
+            "in": "query",
+            "name": "populate",
+            "required": false,
+            "schema": {
+              "type": "string"
             }
           }
         ],
@@ -1271,6 +1509,24 @@
         "required": [
           "operations",
           "fields"
+        ]
+      },
+      "CollectionPageAccess": {
+        "type": "object",
+        "properties": {
+          "collection": {
+            "$ref": "#/components/schemas/AccessCapabilities"
+          },
+          "documents": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/AccessCapabilities"
+            },
+            "type": "object"
+          }
+        },
+        "required": [
+          "collection",
+          "documents"
         ]
       },
       "CollectionSelectionEnvelope": {

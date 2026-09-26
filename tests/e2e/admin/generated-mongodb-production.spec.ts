@@ -44,10 +44,14 @@ test("the release-built MongoDB admin preserves create and edit work across relo
 			new URL(response.url()).pathname === "/api/collections/posts"
 	);
 	await documentSaveButton(page).click();
-	expect((await createResponse).ok()).toBe(true);
-	await expect(page).toHaveURL(/\/admin\/collections\/posts\/[^/]+$/);
-	const postID = new URL(page.url()).pathname.split("/").at(-1);
+	const created = await createResponse;
+	expect(created.ok()).toBe(true);
+	const postID = (await created.json()).doc.id;
 	expect(postID).toBeTruthy();
+	// /create also matches a generic document path. Wait for the saved document
+	// and its active form before fill() can touch the inert outgoing create form.
+	await expect(page).toHaveURL((url) => url.pathname === `/admin/collections/posts/${postID}`);
+	await expect(page.locator("main")).not.toHaveAttribute("inert", "");
 
 	await page.getByLabel("Title", { exact: true }).fill("MongoDB production admin canary edited");
 	await page

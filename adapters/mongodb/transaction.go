@@ -472,7 +472,7 @@ func validateRequestEnvelope(request store.Request) error {
 	if request.ExpectedRevision < 0 {
 		return fmt.Errorf("MongoDB expected revision cannot be negative")
 	}
-	if request.ExpectedRevision != 0 && request.Collection.Versions == nil {
+	if request.ExpectedRevision != 0 && request.Collection.Versions == nil && request.Collection.Upload == nil {
 		return fmt.Errorf("MongoDB expected revisions require a versioned collection")
 	}
 	if !request.Collection.Capabilities.Trash && request.Deletion != store.DeletionActive {

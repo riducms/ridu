@@ -6,6 +6,7 @@ import type {
 	RichTextTextNode,
 } from "#richtext/document";
 import { documentRecoveryIssue } from "#richtext/document-validation";
+import { renderableRichTextURL } from "#richtext/link-url-policy";
 
 export type { RichTextBlockRenderers } from "#richtext/document";
 export { documentRecoveryIssue } from "#richtext/document-validation";
@@ -33,14 +34,8 @@ export function escapeRichText(value: string): string {
 }
 
 export function safeRichTextURL(value: string): string {
-	const url = value.trim();
-	if (
-		/[\u0000-\u001f\u007f]/u.test(value) ||
-		url.startsWith("//") ||
-		(/^[a-z][a-z\d+.-]*:/iu.test(url) && !/^(https?|mailto|tel):/iu.test(url))
-	) {
-		throw new Error("Unsafe rich-text link URL");
-	}
+	const url = renderableRichTextURL(value);
+	if (url === undefined) throw new Error("Unsafe rich-text link URL");
 	return url;
 }
 

@@ -131,7 +131,8 @@ jq -S '[.packages[] | select(.SPDXID | startswith("SPDXRef-Package-JS-")) | {nam
 	"$workspace/first/ridu.spdx.json" > "$workspace/sbom-js-inventory.json"
 diff -u "$workspace/expected-js-inventory.json" "$workspace/sbom-js-inventory.json"
 
-jq 'map(if .name == "@fontsource-variable/geist" then .version = "99.0.0" else . end)' \
+jq -e 'any(.[]; .name == "@fontsource-variable/martian-mono")' "$rendered_inventory" >/dev/null
+jq 'map(if .name == "@fontsource-variable/martian-mono" then .version = "99.0.0" else . end)' \
 	"$rendered_inventory" > "$workspace/stale-notice-inventory.json"
 if bun "$repository_root/scripts/generate-js-license-bundle.ts" \
 	"$workspace/stale-notice-inventory.json" \
@@ -140,7 +141,7 @@ if bun "$repository_root/scripts/generate-js-license-bundle.ts" \
 	echo "stale reviewed JavaScript notices were accepted" >&2
 	exit 1
 fi
-jq 'map(select(.name != "@fontsource-variable/geist"))' \
+jq 'map(select(.name != "@fontsource-variable/martian-mono"))' \
 	"$rendered_inventory" > "$workspace/missing-notice-dependency-inventory.json"
 if bun "$repository_root/scripts/generate-js-license-bundle.ts" \
 	"$workspace/missing-notice-dependency-inventory.json" \

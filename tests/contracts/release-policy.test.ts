@@ -83,12 +83,13 @@ test("release configuration orders trusted publication and preserves reviewed ar
 	}
 	expect(workflow.jobs.publish.permissions["id-token"]).toBe("write");
 	const steps = workflow.jobs.publish.steps;
-	const commandIndex = (pattern: RegExp) => {
-		const matching = steps.flatMap((step, index) =>
-			step.run && pattern.test(step.run) ? [index] : []
-		);
+	const stepIndex = (matches: (step: ReleaseStep) => boolean) => {
+		const matching = steps.flatMap((step, index) => (matches(step) ? [index] : []));
 		expect(matching).toHaveLength(1);
 		return matching[0]!;
+	};
+	const commandIndex = (pattern: RegExp) => {
+		return stepIndex((step) => Boolean(step.run && pattern.test(step.run)));
 	};
 	const npm = commandIndex(/\b(?:bash\s+)?\.\/scripts\/publish-release-packages\.sh\b/);
 	const tag = commandIndex(/^\s*git\s+tag\s+/m);
@@ -112,18 +113,32 @@ test("release configuration orders trusted publication and preserves reviewed ar
 	expect(tag).toBeLessThan(draft);
 	expect(draft).toBeLessThan(publish);
 	expect(steps[tag]?.env?.RELEASE_TAG).toBe("${{ steps.release.outputs.tag }}");
-	const guard = steps.find((step) => step.env?.EXPECTED_COMMIT_SHA === "${{ inputs.commit_sha }}");
-	expect(guard).toBeDefined();
-	expect(guard?.run).toMatch(/\btest\s+"\$\{GITHUB_REF\}"\s*=\s*"refs\/heads\/main"/);
-	expect(guard?.run).toMatch(/\btest\s+"\$\{GITHUB_SHA\}"\s*=\s*"\$\{EXPECTED_COMMIT_SHA\}"/);
-	expect(guard?.run).toMatch(
+	const guard = stepIndex((step) => step.env?.EXPECTED_COMMIT_SHA === "${{ inputs.commit_sha }}");
+	expect(steps[guard]?.run).toMatch(/\btest\s+"\$\{GITHUB_REF\}"\s*=\s*"refs\/heads\/main"/);
+	expect(steps[guard]?.run).toMatch(
+		/\btest\s+"\$\{GITHUB_SHA\}"\s*=\s*"\$\{EXPECTED_COMMIT_SHA\}"/
+	);
+	expect(steps[guard]?.run).toMatch(
 		/\btest\s+"\$\(git\s+rev-parse\s+HEAD\)"\s*=\s*"\$\{EXPECTED_COMMIT_SHA\}"/
 	);
+	expect(guard).toBeLessThan(npm);
 	expect(steps[tag]?.run).toMatch(/\bgit\s+tag\s+"\$\{RELEASE_TAG\}"\s+"\$\{GITHUB_SHA\}"/);
-	const attestation = steps.find(
-		(step) => step.uses?.startsWith("actions/attest@") && step.with?.["subject-checksums"]
+	const provenance = stepIndex(
+		(step) =>
+			Boolean(step.uses?.startsWith("actions/attest@")) && Boolean(step.with?.["subject-checksums"])
 	);
-	expect(attestation?.with?.["subject-checksums"]).toBe("dist/SHA256SUMS");
+	expect(steps[provenance]?.with?.["subject-checksums"]).toBe("dist/SHA256SUMS");
+	const sbom = stepIndex(
+		(step) =>
+			Boolean(step.uses?.startsWith("actions/attest@")) &&
+			step.with?.["sbom-path"] === ".ridu/release-metadata/ridu.spdx.json"
+	);
+	expect(steps[sbom]?.with?.["subject-path"]).toContain("dist/*.tar.gz");
+	expect(steps[sbom]?.with?.["subject-path"]).toContain("dist/*.zip");
+	for (const attestation of [provenance, sbom]) {
+		expect(draft).toBeLessThan(attestation);
+		expect(attestation).toBeLessThan(publish);
+	}
 	for (const step of steps) {
 		expect(step.env).not.toHaveProperty("NPM_TOKEN");
 		expect(step.run ?? "").not.toMatch(

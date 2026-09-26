@@ -46,23 +46,23 @@ describe("admin plugin pairing", () => {
 		const resolved = checkedConfig([{ admin, backend }]);
 
 		expect(resolved.plugins).toEqual([admin]);
-		expect(resolved.fields.map((item) => item.registration)).toEqual([field]);
+		expect(resolved.pluginFields.map((item) => item.registration)).toEqual([field]);
 		expect(Object.isFrozen(resolved.plugins)).toBe(true);
-		expect(Object.isFrozen(resolved.fields)).toBe(true);
+		expect(Object.isFrozen(resolved.pluginFields)).toBe(true);
 		expect(resolved.extensions.rowLabels).toEqual([]);
 		expect(Object.isFrozen(resolved.extensions.rowLabels)).toBe(true);
 		expect(resolved.extensions.routes).toEqual([]);
 		expect(Object.isFrozen(resolved.extensions.routes)).toBe(true);
-		expect(resolved.extensions.dashboard).toEqual([]);
+		expect(resolved.extensions.dashboardPanels).toEqual([]);
 		expect(resolved.extensions.login).toEqual([]);
 		expect(resolved.extensions.account).toEqual([]);
 		expect(resolved.extensions.navigation).toEqual([]);
 		expect(resolved.extensions.logoutButton).toBeUndefined();
-		expect(resolved.extensions.views).toEqual([]);
+		expect(resolved.extensions.coreViews).toEqual([]);
 		expect(resolved.extensions.branding).toEqual([]);
-		expect(resolved.extensions.shell).toEqual([]);
+		expect(resolved.extensions.shellSlots).toEqual([]);
 		expect(resolved.extensions.providers).toEqual([]);
-		expect(resolved.extensions.listCells).toEqual([]);
+		expect(resolved.extensions.listCellRenderers).toEqual([]);
 		expect(resolved.extensions.documentActions).toEqual([]);
 		expect(resolved.extensions.documentViews).toEqual([]);
 		expect(resolved.extensions.messages).toEqual({});
@@ -199,21 +199,21 @@ describe("admin plugin pairing", () => {
 				backend: { ...backend, fieldTypes: ["other"] },
 			},
 		]);
-		expect(result.fields[0]?.owner).toBe("color");
-		expect(result.fields[0]?.key).toBe("other");
+		expect(result.pluginFields[0]?.owner).toBe("color");
+		expect(result.pluginFields[0]?.key).toBe("other");
 	});
-	it("derives named built-in renderer ownership from the enclosing plugin", () => {
+	it("derives named built-in field-editor ownership from the enclosing plugin", () => {
 		const title = defineFieldComponent({
 			type: "text",
 			component: () => ({}),
 			decodeValue: (value: unknown): string => String(value),
 		});
-		const resolved = resolvePluginFields([{ ...admin, components: { title } }]);
+		const resolved = resolvePluginFields([{ ...admin, fieldEditors: { title } }]);
 		expect(resolved.find((item) => item.componentKey === "title")?.owner).toBe("color");
 	});
 	it("rejects competing field-type claims from independent plugins", () => {
 		expect(() => resolvePluginFields([admin, { ...admin, key: "other" }])).toThrow(
-			"Duplicate admin field renderer field:color"
+			"Duplicate admin field editor field:color"
 		);
 	});
 
@@ -264,33 +264,35 @@ describe("admin plugin pairing", () => {
 		const component = (() => undefined) as unknown as Component;
 		const extendedAdmin = {
 			...admin,
-			dashboard: [{ key: "summary", component }],
+			dashboardPanels: [{ key: "summary", component }],
 			login: [{ key: "login-message", component, position: "before" as const }],
 			account: [{ key: "profile-message", surface: "profile" as const, component }],
 			navigation: [{ key: "nav-message", position: "after" as const, component }],
 			logoutButton: { key: "logout", component },
-			views: [
+			coreViews: [
 				{ key: "posts-list", surface: "collectionList" as const, collection: "posts", component },
 			],
 			branding: [{ key: "logo", surface: "loginLogo" as const, component }],
-			shell: [{ key: "support", position: "settingsMenu" as const, component }],
+			shellSlots: [{ key: "support", position: "settingsMenu" as const, component }],
 			providers: [{ key: "context", component }],
-			listCells: [{ key: "score", collection: "posts", field: "score", label: "Score", component }],
+			listCellRenderers: [
+				{ key: "score", collection: "posts", field: "score", label: "Score", component },
+			],
 			documentActions: [{ key: "review", collection: "posts", component }],
 			documentViews: [{ key: "insights", label: "Insights", collection: "posts", component }],
 		};
 		const resolved = checkedConfig([{ admin: extendedAdmin, backend }]);
 
-		expect(resolved.extensions.dashboard).toEqual(extendedAdmin.dashboard);
+		expect(resolved.extensions.dashboardPanels).toEqual(extendedAdmin.dashboardPanels);
 		expect(resolved.extensions.login).toEqual(extendedAdmin.login);
 		expect(resolved.extensions.account).toEqual(extendedAdmin.account);
 		expect(resolved.extensions.navigation).toEqual(extendedAdmin.navigation);
 		expect(resolved.extensions.logoutButton).toEqual(extendedAdmin.logoutButton);
-		expect(resolved.extensions.views).toEqual(extendedAdmin.views);
+		expect(resolved.extensions.coreViews).toEqual(extendedAdmin.coreViews);
 		expect(resolved.extensions.branding).toEqual(extendedAdmin.branding);
-		expect(resolved.extensions.shell).toEqual(extendedAdmin.shell);
+		expect(resolved.extensions.shellSlots).toEqual(extendedAdmin.shellSlots);
 		expect(resolved.extensions.providers).toEqual(extendedAdmin.providers);
-		expect(resolved.extensions.listCells).toEqual(extendedAdmin.listCells);
+		expect(resolved.extensions.listCellRenderers).toEqual(extendedAdmin.listCellRenderers);
 		expect(resolved.extensions.documentActions).toEqual(extendedAdmin.documentActions);
 		expect(resolved.extensions.documentViews).toEqual(extendedAdmin.documentViews);
 		expect(Object.isFrozen(resolved.extensions.documentViews)).toBe(true);
@@ -304,7 +306,7 @@ describe("admin plugin pairing", () => {
 						key: "other",
 						pairingVersion: 1,
 						fields: {},
-						dashboard: extendedAdmin.dashboard,
+						dashboardPanels: extendedAdmin.dashboardPanels,
 					},
 					backend: {
 						...backend,
@@ -321,13 +323,13 @@ describe("admin plugin pairing", () => {
 	it("allows only one dashboard replacement", () => {
 		const component = (() => undefined) as unknown as Component;
 		const replacement = { key: "custom", position: "replace" as const, component };
-		const firstAdmin = { ...admin, dashboard: [replacement] };
+		const firstAdmin = { ...admin, dashboardPanels: [replacement] };
 		const secondAdmin = {
 			...admin,
 			key: "other",
 			pairingVersion: 1,
 			fields: {},
-			dashboard: [{ ...replacement, key: "other" }],
+			dashboardPanels: [{ ...replacement, key: "other" }],
 		};
 
 		expect(() =>
@@ -419,7 +421,7 @@ describe("admin plugin pairing", () => {
 		const component = (() => undefined) as unknown as Component;
 		const firstAdmin = {
 			...admin,
-			views: [
+			coreViews: [
 				{ key: "all-lists", surface: "collectionList" as const, component },
 				{ key: "posts-list", surface: "collectionList" as const, collection: "posts", component },
 			],
@@ -429,12 +431,12 @@ describe("admin plugin pairing", () => {
 			key: "other",
 			pairingVersion: 1,
 			fields: {},
-			views: [
+			coreViews: [
 				{ key: "duplicate", surface: "collectionList" as const, collection: "posts", component },
 			],
 		};
 
-		expect(checkedConfig([{ admin: firstAdmin, backend }]).extensions.views).toHaveLength(2);
+		expect(checkedConfig([{ admin: firstAdmin, backend }]).extensions.coreViews).toHaveLength(2);
 		expect(() =>
 			checkedConfig([
 				{ admin: firstAdmin, backend },
@@ -457,7 +459,7 @@ describe("admin plugin pairing", () => {
 		const firstAdmin = {
 			...admin,
 			branding: [{ key: "logo", surface: "navigationLogo" as const, component }],
-			shell: [
+			shellSlots: [
 				{ key: "first", position: "actions" as const, component },
 				{ key: "second", position: "actions" as const, component },
 			],
@@ -470,8 +472,8 @@ describe("admin plugin pairing", () => {
 			branding: [{ key: "other-logo", surface: "navigationLogo" as const, component }],
 		};
 
-		expect(checkedConfig([{ admin: firstAdmin, backend }]).extensions.shell).toEqual(
-			firstAdmin.shell
+		expect(checkedConfig([{ admin: firstAdmin, backend }]).extensions.shellSlots).toEqual(
+			firstAdmin.shellSlots
 		);
 		expect(() =>
 			checkedConfig([
@@ -598,7 +600,7 @@ it("keeps default field identities separate from named component identities", ()
 		key: "plugin",
 		pairingVersion: 1,
 		fields: { color: field },
-		components: {
+		fieldEditors: {
 			color: defineFieldComponent({
 				type: "text",
 				component: () => ({}),
@@ -618,7 +620,7 @@ it("checks completeness at build time while validating selected fields in partia
 	const plugin = defineAdminPlugin({
 		key: "tools",
 		pairingVersion: 1,
-		components: {
+		fieldEditors: {
 			Compact: defineFieldComponent({
 				type: "plugin",
 				fieldType: "color",

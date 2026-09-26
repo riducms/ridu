@@ -1,6 +1,6 @@
 import type { SchemaField } from "@riducms/protocol";
 import type { FormController } from "@admin/core/forms/form-controller.svelte";
-import { indexFieldValues } from "@admin/core/forms/form-issue-correlation";
+import { canRebaseIndexedSuffix, indexFieldValues } from "@admin/core/forms/form-issue-correlation";
 import { fieldAccessPath } from "@admin/fields/nested/scoped-field";
 import { evaluateFieldCondition } from "@admin/core/forms/field-condition";
 
@@ -43,11 +43,7 @@ export function writePluginField(form: FormController, field: SchemaField, value
 			const target = current.get(source.token);
 			if (!target) continue;
 			const suffix = path.slice(source.path.length);
-			if (
-				/\.\d+(?:\.|$)/.test(suffix) &&
-				JSON.stringify(source.value) !== JSON.stringify(target.value)
-			)
-				continue;
+			if (!canRebaseIndexedSuffix(suffix, source.value, target.value)) continue;
 			fields[target.path + suffix] = access;
 		}
 		form.access = { ...form.access, fields };

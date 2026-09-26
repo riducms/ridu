@@ -1,0 +1,1 @@
+@layer ridu.components{.ridu-popover{border:1px solid var(--control-border);background:var(--popover);width:288px;color:var(--popover-foreground);font-size:var(--font-size-body);box-shadow:var(--shadow-popover);z-index:80;transform-origin:var(--bits-popover-content-transform-origin);border-radius:4px;outline:none;flex-direction:column;gap:16px;padding:8px;display:flex}}

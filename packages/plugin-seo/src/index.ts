@@ -19,7 +19,7 @@ import PreviewField from "@plugin-seo/preview-field.svelte";
 export const seoAdminPlugin = defineAdminPlugin({
 	key: "seo",
 	pairingVersion: 1,
-	components: {
+	fieldEditors: {
 		overview: defineFieldComponent({
 			type: "ui",
 			component: OverviewField,

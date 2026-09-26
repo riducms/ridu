@@ -2,8 +2,11 @@
 
 # Customize list and edit views
 
-Use a view component when you want to add content around a collection list, a document editor,
-or a global's edit screen. Your component receives the built-in screen as `defaultView`.
+Use a view component to wrap or completely replace a collection list, a document editor,
+or a global's edit screen. To change just the table into cards while keeping Ridu's controls,
+use [List layouts](./list-results.md) instead.
+
+A view component receives the built-in screen as `defaultView`.
 Rendering it keeps the working list or form on the page.
 
 This example adds an editorial reminder above the Post editor.
@@ -37,7 +40,7 @@ import EditorialScreen from './components/editorial-screen.svelte';
 
 export default defineAdmin({
 	plugins: generatedAdminPlugins,
-	views: [
+	coreViews: [
 		{
 			key: 'posts-editor',
 			surface: 'collectionEdit',
@@ -70,8 +73,47 @@ Give each registration a different key. Two replacements for the same target are
 ## Replace a screen {#replace}
 
 If your component does not render `defaultView`, it replaces the screen completely. You then
-provide its UI and data requests yourself. For most additions, render `defaultView` so you can
-keep the built-in editing and list features.
+provide the page's layout, controls, and data. Use a [Go loader](./loading-data.md)
+when that data should be ready before the component appears.
+
+For example, after creating the `PostSummary` loader and component in that guide, this
+alternative admin config replaces the entire Posts list with the summary:
+
+```ts title="admin/src/admin.config.ts" source="admin/src/post-workspace.config.ts" focus={12-15}
+import { defineAdmin } from '@riducms/plugin/admin';
+import { withAdminLoader } from '@riducms/plugin';
+import { generatedAdminPlugins } from './ridu.plugins.generated';
+import { adminLoaders } from '../../generated/ridu.generated';
+import PostSummary from './components/post-summary.svelte';
+
+export default defineAdmin({
+	plugins: generatedAdminPlugins,
+	coreViews: [
+		{
+			key: 'post-workspace',
+			surface: 'collectionList',
+			collection: 'posts',
+			...withAdminLoader(adminLoaders['post-summary'], PostSummary)
+		}
+	]
+});
+```
+
+Open **Posts** to see the summary instead of the table and toolbar. This is a full replacement:
+it does not inherit search controls, pagination, or bulk actions. Add the controls you need,
+or use `listResultsRenderers` if you want to keep the normal collection workflow.
+
+Use the same `withAdminLoader` pairing for `collectionCreate`, `collectionEdit`, `global`,
+or `notFound`. Ridu supplies the loader with `ctx.RouteParams["collection"]`,
+`ctx.RouteParams["document"]`, or `ctx.RouteParams["global"]` where applicable.
+Use `ctx.Find` or `ctx.Global` to read that resource with the current user's permissions.
+
+An edit or global replacement also handles that screen's API URL. Trash, uploads, and version
+history keep their own built-in screens.
+
+For most additions to an editor, render `defaultView` so you keep its fields and save controls.
+A custom loader does not initialize that built-in editor; rendering `defaultView()` starts
+its normal data loading. Replacing it means implementing your own editing and save workflow.
 
 These components can receive `collection`, `global`, and `documentID`, depending on the screen.
 They do not receive the editor's unsaved form values. Use a

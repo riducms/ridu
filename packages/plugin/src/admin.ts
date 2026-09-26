@@ -27,7 +27,7 @@ import {
 /**
  * Settings for your application's admin, exported from `admin/src/admin.config.ts`.
  * Register your custom components here. Keep `generatedAdminPlugins` in `plugins`
- * to load installed plugins such as rich text. Use `fields` to replace inputs for
+ * to load installed plugins such as rich text. Use `fieldEditors` to replace inputs for
  * text, textarea, email, date, code, number and checkbox fields.
  */
 export interface AdminConfig extends AdminContributions, FieldEditorConfig {
@@ -46,8 +46,8 @@ export interface AdminConfig extends AdminContributions, FieldEditorConfig {
  *
  * Export the result as the default export of `admin/src/admin.config.ts`. Keep
  * `plugins: generatedAdminPlugins` to load installed packages such as rich text.
- * Add `fields` for inputs made with `defineFieldEditor`, `rowLabels` for headings
- * made with `defineRowLabel`, or options such as `dashboard`, `routes`, and
+ * Add `fieldEditors` for inputs made with `defineFieldEditor`, `rowLabels` for headings
+ * made with `defineRowLabel`, or options such as `dashboardPanels`, `routes`, and
  * `documentActions` for other parts of the admin. All options are optional.
  *
  * Application field and row-label keys use `app:name`; select the same key in Go
@@ -70,7 +70,7 @@ export interface AdminConfig extends AdminContributions, FieldEditorConfig {
  *
  * export default defineAdmin({
  *   plugins: generatedAdminPlugins,
- *   dashboard: [{ key: 'welcome', component: WelcomePanel, position: 'before' }]
+ *   dashboardPanels: [{ key: 'welcome', component: WelcomePanel, position: 'before' }]
  * });
  * ```
  */
@@ -81,8 +81,8 @@ export function defineAdmin(config: AdminConfig): AdminConfig {
 /** Static configuration owned by one mounted admin. Changes require remount/HMR. */
 export interface ResolvedAdminConfig {
 	readonly plugins: readonly AdminPlugin[];
-	readonly fields: readonly ResolvedPluginField[];
-	readonly editors: NonNullable<AdminConfig["fields"]>;
+	readonly pluginFields: readonly ResolvedPluginField[];
+	readonly fieldEditors: NonNullable<AdminConfig["fieldEditors"]>;
 	readonly rowLabels: NonNullable<AdminConfig["rowLabels"]>;
 	readonly languages: readonly TranslationLanguage[];
 	readonly extensions: Readonly<ResolvedAdminExtensions>;
@@ -102,8 +102,8 @@ export function resolveAdminConfig(config: AdminConfig = {}): ResolvedAdminConfi
 	const plugins = Object.freeze([...(config.plugins ?? [])]);
 	return Object.freeze({
 		plugins,
-		fields: resolvePluginFields(plugins),
-		editors: Object.freeze({ ...config.fields }),
+		pluginFields: resolvePluginFields(plugins),
+		fieldEditors: Object.freeze({ ...config.fieldEditors }),
 		rowLabels: Object.freeze({ ...config.rowLabels }),
 		languages: Object.freeze(config.languages?.length ? [...config.languages] : [en]),
 		extensions: Object.freeze(resolveAdminExtensions(plugins, config)),
@@ -120,22 +120,22 @@ export function resolveAdminConfig(config: AdminConfig = {}): ResolvedAdminConfi
 export function validateAdminManifest(
 	config: ResolvedAdminConfig,
 	manifest: Pick<SchemaManifest, "collections" | "globals" | "blocks"> &
-		Partial<Pick<SchemaManifest, "plugins">>,
+		Partial<Pick<SchemaManifest, "plugins" | "application">>,
 	options: { completeManifest?: boolean } = {}
 ): void {
 	validateManifestPluginPairs(
 		config.plugins,
-		config.fields,
+		config.pluginFields,
 		manifest,
 		options.completeManifest === true
 	);
-	const validatePluginField = createPluginFieldValidator(config.fields);
+	const validatePluginField = createPluginFieldValidator(config.pluginFields);
 	const failures: string[] = [];
 	bindSchemaManifest(manifest);
 	const inspect = (fields: readonly SchemaField[], owner: string) => {
 		for (const field of fields) {
 			try {
-				validateFieldEditorSelection(config.editors, field);
+				validateFieldEditorSelection(config.fieldEditors, field);
 				validatePluginField(field);
 				const selection = field.nested?.rowLabelComponent;
 				if (selection?.reference !== undefined) {
@@ -174,14 +174,46 @@ export function validateAdminManifest(
 	const collections = new Map(manifest.collections.map((item) => [item.slug, item]));
 	const globals = new Set((manifest.globals ?? []).map((item) => item.slug));
 	const extensions = config.extensions;
-	for (const cell of extensions.listCells) {
+
+	// Loader keys may be reused by several views, but every reference must carry the
+	// exact generated contract for the compiled Go loader. This rejects stale or
+	// hand-authored TypeScript contracts before the view can request data.
+	for (const view of [
+		...extensions.dashboardPanels,
+		...extensions.routes,
+		...extensions.coreViews,
+	]) {
+		if (view.loader === undefined) continue;
+		const contract = manifest.application?.adminLoaders?.find(
+			(loader) => loader.key === view.loader.key
+		);
+		if (contract === undefined || JSON.stringify(contract) !== JSON.stringify(view.loader.contract))
+			throw new Error(
+				`Admin view ${"key" in view ? view.key : view.path} requires a matching generated Go loader; run ridu generate.`
+			);
+	}
+	for (const results of extensions.listResultsRenderers) {
+		if (!collections.has(results.collection))
+			throw new Error(
+				`Admin list results ${results.key} selects unknown collection ${results.collection}.`
+			);
+		if (
+			extensions.coreViews.some(
+				(view) =>
+					view.surface === "collectionList" &&
+					(view.collection === undefined || view.collection === results.collection)
+			)
+		)
+			throw new Error(`Admin list results ${results.key} targets a replaced collection view.`);
+	}
+	for (const cell of extensions.listCellRenderers) {
 		const collection = collections.get(cell.collection);
 		if (!collection?.fields.some((field) => field.name === cell.field || field.path === cell.field))
 			throw new Error(
 				`Admin list cell ${cell.key} selects unknown field ${cell.collection}.${cell.field}.`
 			);
 	}
-	for (const view of extensions.views) {
+	for (const view of extensions.coreViews) {
 		if ("collection" in view && view.collection !== undefined && !collections.has(view.collection))
 			throw new Error(`Admin core view ${view.key} selects unknown collection ${view.collection}.`);
 		if ("global" in view && view.global !== undefined && !globals.has(view.global))

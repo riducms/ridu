@@ -1,0 +1,127 @@
+@use "@riducms/ui/styles.scss" as ui;
+@layer ridu.components {
+	.ridu-schedule__description {
+		@include ui.visually-hidden;
+	}
+
+	.ridu-schedule-overlay {
+		position: fixed;
+		inset: 0;
+		z-index: 70;
+		background: var(--media-overlay);
+		backdrop-filter: blur(4px);
+	}
+	.ridu-schedule {
+		position: fixed;
+		inset-block: 0;
+		inset-inline-end: 0;
+		inset-inline-start: min(calc(var(--drawer-depth) * var(--admin-gutter)), 40vw);
+		z-index: 70;
+		overflow: auto;
+		outline: none;
+		background: var(--background);
+		color: var(--foreground);
+	}
+	.ridu-schedule__header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 20px;
+		padding: 30px var(--admin-gutter);
+		border-bottom: 1px solid var(--control-border);
+	}
+	.ridu-schedule__title {
+		font-size: 26px;
+		line-height: 32px;
+		font-weight: 500;
+		margin: 0;
+	}
+	.ridu-schedule__close {
+		display: grid;
+		place-items: center;
+		width: 40px;
+		height: 40px;
+		border: 0;
+		background: transparent;
+		color: inherit;
+		cursor: pointer;
+		svg {
+			width: 24px;
+			height: 24px;
+			stroke-width: 1;
+		}
+		&:focus-visible {
+			@include ui.focus-outline;
+		}
+	}
+	.ridu-schedule__form {
+		padding: 40px var(--admin-gutter) 60px;
+		label {
+			display: block;
+			margin-block: 30px 5px;
+		}
+		> .ridu-button {
+			margin-top: 47px;
+		}
+	}
+	.ridu-schedule__type {
+		margin: 0 0 18px;
+		padding: 0;
+		border: 0;
+		legend {
+			padding: 0;
+		}
+		.ridu-schedule__choices {
+			display: flex;
+			gap: 36px;
+		}
+	}
+	.ridu-schedule__type + label {
+		margin-top: 0;
+	}
+	.ridu-schedule__zone {
+		display: block;
+		color: var(--foreground-muted);
+		margin-top: 5px;
+	}
+	.ridu-schedule__events {
+		padding: 40px var(--admin-gutter);
+		border-top: 1px solid var(--control-border);
+		h3 {
+			margin: 0 0 20px;
+			font: inherit;
+			font-weight: 600;
+		}
+		> p {
+			padding: 10px;
+			background: var(--control-surface);
+		}
+	}
+	.ridu-schedule__event {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 10px;
+		border-bottom: 1px solid var(--control-border);
+	}
+	.ridu-document-publish {
+		display: flex;
+		> :first-child {
+			border-start-end-radius: 0;
+			border-end-end-radius: 0;
+		}
+	}
+	.ridu-document-publish__toggle {
+		width: 34px;
+		padding: 0;
+		border-start-start-radius: 0;
+		border-end-start-radius: 0;
+		border-inline-start-color: var(--control-border);
+	}
+	.ridu-document-publish__toggle--inactive {
+		--button-background: var(--action-disabled-surface);
+		--button-color: var(--action-disabled-foreground);
+		--button-hover-background: var(--action-disabled-surface);
+		--button-hover-color: var(--action-disabled-foreground);
+	}
+}

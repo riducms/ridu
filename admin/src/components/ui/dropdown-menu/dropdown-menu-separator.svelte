@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { DropdownMenu as DropdownMenuPrimitive } from "bits-ui";
-	import { cn } from "@riducms/ui";
+	import "@admin/components/ui/dropdown-menu/dropdown-menu.scss";
 
 	let {
 		ref = $bindable(null),
@@ -12,6 +12,6 @@
 <DropdownMenuPrimitive.Separator
 	bind:ref
 	data-slot="dropdown-menu-separator"
-	class={cn("-mx-1 my-1 h-px bg-control-border", className)}
+	class={["ridu-dropdown-menu__separator", className]}
 	{...restProps}
 />

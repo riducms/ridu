@@ -167,10 +167,13 @@ func mongoUploadReferenceFilter(valuesExpression, key string) bson.D {
 		bson.D{{Key: "$anyElementTrue", Value: bson.A{mappedVariants}}},
 		false,
 	}}}
-	return bson.D{{Key: "$expr", Value: bson.D{{Key: "$or", Value: bson.A{direct, variant}}}}}
+	return bson.D{{Key: "$expr", Value: bson.D{{Key: "$or", Value: bson.A{direct, variant, bson.D{{Key: "$eq", Value: bson.A{valuesExpression + ".source.objectKey", literalKey}}}}}}}}
 }
 
 func mongoUploadValuesReference(values store.Values, key string) bool {
+	if sourceKey, valid := values["source"].Get("objectKey").StringValue(); valid && sourceKey == key {
+		return true
+	}
 	if objectKey, valid := values["objectKey"].StringValue(); valid && objectKey == key {
 		return true
 	}

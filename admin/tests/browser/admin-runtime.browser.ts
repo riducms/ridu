@@ -12,6 +12,52 @@ import type { AdminClient, AdminDocument } from "@admin/core/api/admin-client";
 
 const { AdminRuntime } = await import("@admin/core/runtime/admin-runtime.svelte");
 
+describe("route content locale", () => {
+	test("prefers a supported URL locale, then the active locale, then the default", () => {
+		const runtime = new AdminRuntime(fixtureClient());
+		runtime.manifest = {
+			...manifest,
+			application: {
+				...manifest.application,
+				localization: {
+					defaultLocale: "en",
+					fallback: true,
+					locales: [
+						{ code: "en", label: "English" },
+						{ code: "fr", label: "French" },
+					],
+				},
+			},
+		};
+		try {
+			expect(runtime.resolveContentLocale("fr")).toBe("fr");
+			for (const requested of [null, undefined, "unknown"])
+				expect(runtime.resolveContentLocale(requested)).toBe("en");
+
+			runtime.contentLocale = "fr";
+			expect(runtime.resolveContentLocale("en")).toBe("en");
+			for (const requested of [null, undefined, "unknown"])
+				expect(runtime.resolveContentLocale(requested)).toBe("fr");
+			expect(runtime.contentLocale).toBe("fr");
+		} finally {
+			runtime.dispose();
+		}
+	});
+
+	test("does not invent a locale when localization is disabled", () => {
+		const runtime = new AdminRuntime(fixtureClient());
+		try {
+			runtime.manifest = {
+				...manifest,
+				application: { ...manifest.application, localization: undefined },
+			};
+			expect(runtime.resolveContentLocale("fr")).toBeUndefined();
+		} finally {
+			runtime.dispose();
+		}
+	});
+});
+
 describe("admin runtime access refresh", () => {
 	test("keeps a valid session and complete capability snapshot when bootstrap access fails", async () => {
 		const previousCollections = {
@@ -139,10 +185,15 @@ function access(admin: boolean): AccessCapabilitiesEnvelope {
 	return { operations: operations(admin), fields: {} };
 }
 
-function fixtureClient(options: {
-	collectionAccess: (slug: string) => Promise<AccessCapabilitiesEnvelope>;
-	logout: () => Promise<{ loggedOut: true }>;
-}): AdminClient {
+function fixtureClient(
+	options: {
+		collectionAccess: (slug: string) => Promise<AccessCapabilitiesEnvelope>;
+		logout: () => Promise<{ loggedOut: true }>;
+	} = {
+		collectionAccess: async () => access(true),
+		logout: async () => ({ loggedOut: true }),
+	}
+): AdminClient {
 	return {
 		schema: async () => manifest,
 		authBootstrap: async () => ({ available: false }),

@@ -219,14 +219,15 @@ func TestFixtureResolvesEveryImplementedAdminFieldFamily(t *testing.T) {
 		t.Fatal(err)
 	}
 	snapshot := manifest.Snapshot()
-	if len(snapshot.Collections) != 27 {
-		t.Fatalf("collections = %d, want 27", len(snapshot.Collections))
+	if len(snapshot.Collections) != 28 {
+		t.Fatalf("collections = %d, want 28", len(snapshot.Collections))
 	}
-	if len(snapshot.Globals) != 2 || snapshot.Globals[0].Slug != "site-settings" || !snapshot.Globals[0].Capabilities.Global || !snapshot.Globals[0].Capabilities.Versions || snapshot.Globals[1].Slug != "validation-settings" {
+	if len(snapshot.Globals) != 3 || snapshot.Globals[0].Slug != "loader-summary" || snapshot.Globals[1].Slug != "site-settings" || !snapshot.Globals[1].Capabilities.Global || !snapshot.Globals[1].Capabilities.Versions || snapshot.Globals[2].Slug != "validation-settings" {
 		t.Fatalf("globals = %#v", snapshot.Globals)
 	}
 
 	wantedCollections := map[schema.CollectionSlug]bool{
+		"loader-records":     false,
 		"primitive-products": false,
 		"unified-articles":   false,
 		"issue-targets":      false,

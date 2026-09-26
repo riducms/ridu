@@ -108,7 +108,7 @@ import { defineFieldEditor } from '@riducms/plugin/editor';\nimport Color from '
 		`${header}
 if (__EDITOR_COMMAND__ !== 'build' || import.meta.env.MODE !== 'production' || import.meta.env.SSR || !import.meta.env.PROD) throw new Error('check must match production client compilation');
 if (process.env.RIDU_EDITOR_TEST_SERVER_FLAG) throw new Error('server environment must not change browser registrations');
-export default defineAdmin({fields:{[import.meta.env.VITE_EDITOR_REFERENCE]:${registration}}});`
+export default defineAdmin({fieldEditors:{[import.meta.env.VITE_EDITOR_REFERENCE]:${registration}}});`
 	);
 	await checkAdminRegistrations({ root, schema });
 
@@ -155,7 +155,7 @@ test("verification follows the build script's mode, config file, environment, al
 import { defineFieldEditor } from '@riducms/plugin/editor';
 import Editor from '@application-editor';
 globalThis.riduApplicationGlobal = true;
-export default defineAdmin({fields:{[import.meta.env.VITE_EDITOR_REFERENCE]:defineFieldEditor({type:'text',component:Editor})}});`
+export default defineAdmin({fieldEditors:{[import.meta.env.VITE_EDITOR_REFERENCE]:defineFieldEditor({type:'text',component:Editor})}});`
 	);
 	const schema = resolve(project, "schema.json");
 	await writeFile(
@@ -191,7 +191,7 @@ export default async (environment) => {
 	await checkAdminRegistrations({ root, schema });
 	// The generated admin imports this public application alias, so the checker
 	// must resolve the registry through it instead of pinning a different file.
-	await writeFile(resolve(root, "src/alternate.config.ts"), "export default {fields:{}};");
+	await writeFile(resolve(root, "src/alternate.config.ts"), "export default {fieldEditors:{}};");
 	await writeFile(
 		resolve(root, "vite.config.ts"),
 		config.replace(
@@ -204,7 +204,7 @@ export default async (environment) => {
 	);
 	const registrySource = await readFile(resolve(root, "src/admin.config.ts"), "utf8");
 	await writeFile(resolve(root, "src/alternate.config.ts"), registrySource);
-	await writeFile(resolve(root, "src/admin.config.ts"), "export default {fields:{}};");
+	await writeFile(resolve(root, "src/admin.config.ts"), "export default {fieldEditors:{}};");
 	await checkAdminRegistrations({ root, schema });
 	await writeFile(resolve(root, "src/admin.config.ts"), registrySource);
 	await writeFile(resolve(root, "vite.config.ts"), config);
@@ -269,7 +269,7 @@ export default async (environment) => {
 	);
 	await writeFile(
 		resolve(root, "src/main.ts"),
-		"import config from '@/admin.config'; globalThis.selectedEditors = Object.keys(config.fields);"
+		"import config from '@/admin.config'; globalThis.selectedEditors = Object.keys(config.fieldEditors);"
 	);
 	const shipped = await runBuild(root);
 	expect(shipped.code, shipped.diagnostic).toBe(0);
@@ -293,7 +293,7 @@ test("verification preserves production minification seen by application hooks",
 		`import { defineAdmin } from '@riducms/plugin/admin';
 import { defineFieldEditor } from '@riducms/plugin/editor';
 import Editor from './editor.svelte';
-export default defineAdmin({fields:{[__EDITOR_REFERENCE__]:defineFieldEditor({type:'text',component:Editor})}});`
+export default defineAdmin({fieldEditors:{[__EDITOR_REFERENCE__]:defineFieldEditor({type:'text',component:Editor})}});`
 	);
 	const schema = resolve(project, "schema.json");
 	await writeFile(
@@ -362,7 +362,7 @@ export default createAdminApplicationConfig({outDir:'./out',schemaReloadSignal:'
 		`import { defineAdmin } from '@riducms/plugin/admin';
 import { defineFieldEditor } from '@riducms/plugin/editor';
 import Editor from 'application-editor';
-export default defineAdmin({fields:{'app:text':defineFieldEditor({type:'text',component:Editor})}});`
+export default defineAdmin({fieldEditors:{'app:text':defineFieldEditor({type:'text',component:Editor})}});`
 	);
 	const schema = resolve(root, "schema.json");
 	await writeFile(schema, JSON.stringify({ collections: [], globals: [] }));
@@ -414,12 +414,12 @@ test("production registry checks validate local surfaces and row labels without 
 	const label = `rowLabels:{'app:summary':defineRowLabel({component:Component,decodeConfig(value){if(value.title !== 'Summary') throw new Error('title required'); return value;}})}`;
 	await writeFile(
 		resolve(root, "src/admin.config.ts"),
-		`${header} export default defineAdmin({${label}, dashboard:[{key:'summary',component:Component}],listCells:[{key:'rows',collection:'posts',field:'rows',label:'Rows',component:Component}],documentActions:[{key:'review',collection:'posts',requires:'update',component:Component}]});`
+		`${header} export default defineAdmin({${label}, dashboardPanels:[{key:'summary',component:Component}],listCellRenderers:[{key:'rows',collection:'posts',field:'rows',label:'Rows',component:Component}],documentActions:[{key:'review',collection:'posts',requires:'update',component:Component}]});`
 	);
 	await checkAdminRegistrations({ root, schema });
 	await writeFile(
 		resolve(root, "src/admin.config.ts"),
-		`${header} export default defineAdmin({dashboard:[{key:'summary',component:Component}]});`
+		`${header} export default defineAdmin({dashboardPanels:[{key:'summary',component:Component}]});`
 	);
 	await expect(checkAdminRegistrations({ root, schema })).rejects.toThrow(
 		"row label app:summary is not registered"
@@ -501,4 +501,57 @@ export default defineAdmin({plugins:[shapes]});`;
 	await expect(checkAdminRegistrations({ root, schema })).rejects.toThrow("limit must be numeric");
 
 	expect((await readdir(root)).includes("out")).toBe(false);
+}, 30_000);
+
+test("development starts without evaluating production bootstrap metadata", async () => {
+	await mkdir(".ridu", { recursive: true });
+	const project = await mkdtemp(resolve(".ridu/admin-dev-bootstrap-"));
+	temporary.push(project);
+	const root = resolve(project, "admin");
+	await mkdir(resolve(root, "src"), { recursive: true });
+	await symlink(resolve("admin/node_modules"), resolve(root, "node_modules"), "dir");
+	await buildScript(root, "node dev-check.mjs");
+	await writeFile(
+		resolve(root, "vite.config.ts"),
+		`
+import { createAdminApplicationConfig } from '@riducms/build/vite';
+export default createAdminApplicationConfig({ outDir: './out', schemaReloadSignal: './reload' });
+`
+	);
+	await writeFile(
+		resolve(root, "src/admin.config.ts"),
+		`
+import { defineAdmin } from '@riducms/plugin/admin';
+if (import.meta.env.DEV && typeof window === 'undefined') {
+  throw new Error('Development config belongs to the browser');
+}
+export default defineAdmin({});
+`
+	);
+	await writeFile(resolve(root, "index.html"), "<main>Development shell</main>");
+	await writeFile(
+		resolve(root, "dev-check.mjs"),
+		`
+import assert from 'node:assert/strict';
+import { createServer as createNetServer } from 'node:net';
+import { createServer } from 'vite';
+const reservation = createNetServer();
+await new Promise((resolve) => reservation.listen(0, '127.0.0.1', resolve));
+const port = reservation.address().port;
+await new Promise((resolve) => reservation.close(resolve));
+const server = await createServer({ server: { host: '127.0.0.1', port, strictPort: true }, logLevel: 'error' });
+try {
+  await server.listen();
+  const response = await fetch(server.resolvedUrls.local[0]);
+  assert.equal(response.status, 200);
+  assert.match(await response.text(), /Development shell/);
+} finally {
+  await server.close();
+}
+// This one-shot startup probe is complete, including Vite shutdown.
+process.exit(0);
+`
+	);
+	const result = await runBuild(root, { NODE_ENV: "development" });
+	expect(result.code, result.diagnostic).toBe(0);
 }, 30_000);

@@ -1,22 +1,22 @@
 import { type ResolvedPluginField } from "@riducms/plugin";
 import type { FieldType, SchemaField } from "@riducms/protocol";
 
-interface FieldRenderer {
+interface FieldEditorRegistration {
 	type: FieldType;
 	extension?: ResolvedPluginField;
 }
 export class FieldRegistry {
-	#plugins = new Map<string, FieldRenderer>();
+	#plugins = new Map<string, FieldEditorRegistration>();
 	register(plugin: ResolvedPluginField) {
 		const identity =
 			plugin.componentKey === undefined
 				? `plugin:${plugin.key}`
 				: `${plugin.registration.type}:${plugin.owner}:${plugin.key}`;
 		if (this.#plugins.has(identity))
-			throw new Error(`Field renderer ${identity} is already registered.`);
+			throw new Error(`Field editor ${identity} is already registered.`);
 		this.#plugins.set(identity, { type: plugin.registration.type, extension: plugin });
 	}
-	resolve(field: SchemaField): FieldRenderer {
+	resolve(field: SchemaField): FieldEditorRegistration {
 		if (field.admin.editor !== undefined)
 			throw new Error(
 				`No local editor ${field.admin.editor.reference} is registered for ${field.path}.`
@@ -27,10 +27,9 @@ export class FieldRegistry {
 			component === undefined
 				? `plugin:${field.plugin?.key}`
 				: `${field.type}:${component.plugin}:${component.component}`;
-		const renderer = this.#plugins.get(identity);
-		if (!renderer)
-			throw new Error(`No admin field renderer can render ${field.path} (${identity}).`);
-		return renderer;
+		const editor = this.#plugins.get(identity);
+		if (!editor) throw new Error(`No admin field editor can render ${field.path} (${identity}).`);
+		return editor;
 	}
 }
 export function createCoreFieldRegistry(

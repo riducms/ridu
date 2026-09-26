@@ -1,0 +1,331 @@
+@use "@riducms/ui/styles.scss" as ui;
+
+@layer ridu.components {
+	.ridu-group-field,
+	.ridu-repeated-field {
+		display: grid;
+		min-width: 0;
+	}
+
+	.ridu-group-field {
+		gap: 20px;
+	}
+
+	.ridu-group-field__header {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 12px;
+		border-bottom: 1px solid var(--control-border);
+		padding-bottom: 10px;
+	}
+
+	.ridu-group-field__heading,
+	.ridu-repeated-field__heading-wrap {
+		min-width: 0;
+	}
+
+	.ridu-group-field__title {
+		margin: 0;
+		color: var(--foreground);
+		font-size: 17px;
+		font-weight: 500;
+		line-height: 24px;
+	}
+
+	.ridu-group-field[data-invalid="true"] .ridu-group-field__title {
+		color: var(--destructive);
+	}
+
+	.ridu-group-field__status,
+	.ridu-repeated-field__status {
+		display: inline-block;
+		margin-top: 4px;
+	}
+
+	.ridu-nested-actions-trigger svg {
+		width: 16px;
+		height: 16px;
+	}
+
+	.ridu-nested-field__note {
+		margin: 0;
+		color: var(--foreground-muted);
+		font-family: var(--font-mono);
+		font-size: 10px;
+		line-height: 16px;
+	}
+
+	.ridu-repeated-field {
+		gap: 12px;
+	}
+
+	.ridu-repeated-field__header {
+		display: flex;
+		align-items: flex-end;
+		justify-content: space-between;
+		flex-wrap: wrap;
+		gap: 12px;
+	}
+
+	.ridu-repeated-field__heading {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		margin: 0;
+		font-size: 19px;
+		line-height: 28px;
+		font-weight: 500;
+		color: var(--foreground);
+	}
+
+	.ridu-repeated-field[data-invalid="true"] > .ridu-field-feedback .ridu-repeated-field__heading {
+		color: var(--destructive);
+	}
+
+	.ridu-error-count {
+		display: inline-flex;
+		align-items: center;
+		flex-shrink: 0;
+		border: 0;
+		border-radius: 10px;
+		padding: 0 5px;
+		background: var(--field-error-surface);
+		color: var(--field-error-foreground);
+		font-size: 12px;
+		font-weight: 400;
+		line-height: 18px;
+	}
+
+	button.ridu-error-count {
+		cursor: pointer;
+		&:focus-visible {
+			@include ui.focus-outline;
+		}
+	}
+
+	.ridu-repeated-field__actions,
+	.ridu-repeated-row__actions {
+		display: flex;
+		align-items: center;
+	}
+
+	.ridu-repeated-field__actions {
+		gap: 4px;
+	}
+
+	.ridu-repeated-field__header-action {
+		padding-inline: 6px;
+	}
+
+	.ridu-repeated-field__recovery {
+		margin: 0;
+		color: var(--destructive);
+		font-size: 13px;
+		line-height: 20px;
+	}
+
+	.ridu-repeated-field__rows {
+		display: grid;
+		gap: 12px;
+	}
+
+	.ridu-repeated-row-sortable {
+		position: relative;
+		display: grid;
+		min-width: 0;
+		&[data-dragging="true"] {
+			z-index: 1;
+		}
+		&[data-dnd-placeholder] {
+			opacity: 0.5;
+		}
+	}
+
+	.ridu-repeated-row {
+		display: grid;
+		overflow: hidden;
+		border: 1px solid var(--control-border);
+		border-radius: 4px;
+		background: var(--background);
+		&:hover {
+			border-color: var(--control-border-hover);
+		}
+		&[data-invalid="true"] {
+			border-color: var(--control-invalid-border);
+			> .ridu-repeated-row__header {
+				background: var(--control-invalid-surface);
+				color: var(--field-error-foreground);
+			}
+		}
+	}
+
+	.ridu-repeated-row__header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 8px;
+		min-height: 40px;
+		padding: 8px 12px;
+		background: var(--control-surface);
+	}
+
+	.ridu-repeated-row__drag {
+		flex-shrink: 0;
+		color: var(--foreground-muted);
+		cursor: grab;
+		&:is(:hover, :focus-visible) {
+			--button-background: var(--background);
+			--button-color: var(--foreground);
+		}
+		&:active:not(:disabled) {
+			cursor: grabbing;
+		}
+		svg {
+			width: 14px;
+			height: 14px;
+		}
+	}
+
+	.ridu-repeated-row__heading {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		min-width: 0;
+		flex: 1;
+		color: var(--foreground-muted);
+		font-size: 12.5px;
+		line-height: 20px;
+	}
+
+	.ridu-repeated-row__number {
+		flex-shrink: 0;
+		color: var(--foreground-muted);
+		font-family: var(--font-mono);
+		font-size: 10px;
+	}
+
+	.ridu-repeated-row__type {
+		flex-shrink: 0;
+		border-radius: 2px;
+		padding: 2px 6px;
+		background: var(--background);
+		color: var(--foreground);
+		font-size: 11px;
+		line-height: 16px;
+	}
+
+	.ridu-repeated-row__label {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		min-width: 0;
+		flex: 1;
+		color: var(--foreground);
+	}
+
+	.ridu-repeated-row__toggle {
+		order: 9999;
+		display: grid;
+		place-items: center;
+		flex-shrink: 0;
+		width: 24px;
+		height: 24px;
+		border: 0;
+		border-radius: var(--control-radius);
+		padding: 0;
+		outline: none;
+		background: transparent;
+		color: var(--foreground-muted);
+		cursor: pointer;
+		&:hover {
+			background: var(--background);
+			color: var(--foreground);
+		}
+		&:focus-visible {
+			@include ui.focus-outline;
+		}
+		svg {
+			width: 14px;
+			height: 14px;
+			transition: transform 200ms ease;
+		}
+		&[aria-expanded="true"] svg {
+			transform: rotate(180deg);
+		}
+	}
+
+	.ridu-repeated-row__actions {
+		gap: 2px;
+	}
+
+	.ridu-repeated-row__remove-action,
+	.ridu-repeated-row__remove-action[data-highlighted] {
+		color: var(--destructive);
+	}
+
+	.ridu-repeated-row__content {
+		display: grid;
+		grid-template-rows: 1fr;
+		opacity: 1;
+		transition:
+			grid-template-rows 200ms ease-out,
+			opacity 200ms ease-out;
+		&[data-collapsed="true"] {
+			visibility: hidden;
+			grid-template-rows: 0fr;
+			opacity: 0;
+		}
+	}
+
+	.ridu-repeated-row__content-clip {
+		min-height: 0;
+		overflow: hidden;
+	}
+
+	.ridu-repeated-row__fields {
+		display: grid;
+		gap: 20px;
+		padding: 20px;
+	}
+
+	.ridu-repeated-field__add {
+		justify-self: start;
+		width: fit-content;
+		padding-inline: 0;
+		--button-color: var(--foreground-muted);
+		--button-hover-background: transparent;
+		--button-hover-color: var(--foreground);
+		svg {
+			width: 20px;
+			height: 20px;
+		}
+	}
+
+	.ridu-block-name {
+		min-width: 0;
+		flex: 1;
+	}
+
+	.ridu-block-name__input {
+		min-width: 0;
+		height: 32px;
+	}
+	.ridu-block-name__label {
+		@include ui.visually-hidden;
+	}
+
+	.ridu-block-name__localization {
+		margin: 4px 0 0;
+		color: var(--foreground-muted);
+		font-size: 12px;
+		line-height: 18px;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.ridu-repeated-row__content,
+		.ridu-repeated-row__toggle svg {
+			transition: none;
+		}
+	}
+}

@@ -33,6 +33,18 @@ Start the Payload admin at <http://localhost:3000/admin>:
 bun run dev:payload-fixture
 ```
 
+For visual comparisons, set `RIDU_PAYLOAD_VISUAL_PREVIEW=true` to remove login prefill and the
+fixture's demo auth, branding, shell, navigation, logout and dashboard decorations. Use a separate
+SQLite database:
+
+```sh
+RIDU_PAYLOAD_VISUAL_PREVIEW=true PAYLOAD_DATABASE_URL="file:$PWD/.ridu/payload-auth-reference.db" \
+  bun run --cwd tests/contracts/payload_server dev -- --hostname 127.0.0.1 --port 18095
+```
+
+Open <http://127.0.0.1:18095/admin/login> beside Ridu's `dev:admin-preview`. Run this command from the
+repository root after installing the fixture dependencies.
+
 The fixture owns a separate `bun.lock` and `node_modules`. It is intentionally not a member of
 Ridu's frontend workspace, because Payload 3 and Ridu use different Lexical versions. Its SQLite
 database, uploaded media, Next cache, and dependencies are ignored.
@@ -57,6 +69,8 @@ size and runtime behavior can be measured without the fixture's development depe
 | `admin@riducms.test`  | `ridu-admin`   | Full visibility and destructive access          |
 | `editor@riducms.test` | `ridu-browser` | Editorial access with protected fields redacted |
 | `demo@riducms.local`  | `ridu-demo`    | Published content plus owned drafts and notes   |
+
+Posts has `trash: true` enabled so its All Posts / Trash views, selection actions and read-only trashed documents are available as a live UI reference.
 
 The database seeds itself on first initialization and does not duplicate the seed on subsequent
 starts. Delete `payload-parity.db` and restart when a clean database is useful.

@@ -4,7 +4,7 @@ import EditorialScreen from './components/editorial-screen.svelte';
 
 export default defineAdmin({
 	plugins: generatedAdminPlugins,
-	views: [
+	coreViews: [
 		{
 			key: 'posts-editor',
 			surface: 'collectionEdit',

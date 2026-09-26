@@ -1,0 +1,221 @@
+@use "@riducms/ui/styles.scss" as ui;
+
+@layer ridu.components {
+	.ridu-sheet-overlay {
+		position: fixed;
+		inset: 0;
+		z-index: 50;
+		background: var(--backdrop);
+		backdrop-filter: blur(4px);
+		animation-fill-mode: both;
+
+		&[data-state="open"] {
+			animation: ridu-sheet-overlay-in 240ms ease-out;
+		}
+
+		&[data-state="closed"] {
+			animation: ridu-sheet-overlay-out 180ms ease-in;
+		}
+	}
+
+	.ridu-sheet {
+		position: fixed;
+		z-index: 50;
+		display: flex;
+		flex-direction: column;
+		background: var(--popover);
+		color: var(--popover-foreground);
+		font-size: var(--font-size-body);
+		box-shadow: var(--shadow-dialog);
+		animation-duration: 300ms;
+		animation-fill-mode: both;
+		animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
+
+		&[data-state="closed"] {
+			animation-duration: 220ms;
+			animation-timing-function: cubic-bezier(0.4, 0, 1, 1);
+		}
+
+		&[data-side="top"] {
+			inset: 0 0 auto;
+			height: auto;
+			border-bottom: 1px solid var(--control-border);
+		}
+
+		&[data-side="right"] {
+			inset: 0 0 0 auto;
+			width: 75%;
+			border-left: 1px solid var(--control-border);
+		}
+
+		&[data-side="bottom"] {
+			inset: auto 0 0;
+			height: auto;
+			border-top: 1px solid var(--control-border);
+		}
+
+		&[data-side="left"] {
+			inset: 0 auto 0 0;
+			width: 75%;
+			border-right: 1px solid var(--control-border);
+		}
+
+		&[data-state="open"][data-side="top"] {
+			animation-name: ridu-sheet-from-top;
+		}
+
+		&[data-state="open"][data-side="right"] {
+			animation-name: ridu-sheet-from-right;
+		}
+
+		&[data-state="open"][data-side="bottom"] {
+			animation-name: ridu-sheet-from-bottom;
+		}
+
+		&[data-state="open"][data-side="left"] {
+			animation-name: ridu-sheet-from-left;
+		}
+
+		&[data-state="closed"][data-side="top"] {
+			animation-name: ridu-sheet-to-top;
+		}
+
+		&[data-state="closed"][data-side="right"] {
+			animation-name: ridu-sheet-to-right;
+		}
+
+		&[data-state="closed"][data-side="bottom"] {
+			animation-name: ridu-sheet-to-bottom;
+		}
+
+		&[data-state="closed"][data-side="left"] {
+			animation-name: ridu-sheet-to-left;
+		}
+	}
+
+	.ridu-sheet__title {
+		color: var(--foreground);
+		font-size: 16px;
+		font-weight: 500;
+	}
+
+	.ridu-sheet__description {
+		color: var(--foreground-muted);
+		font-size: 14px;
+	}
+
+	.ridu-sheet__close {
+		position: absolute;
+		inset-block-start: 16px;
+		inset-inline-end: 16px;
+		display: grid;
+		place-items: center;
+		width: 32px;
+		height: 32px;
+		border: 0;
+		border-radius: 3px;
+		background: var(--secondary);
+		color: var(--foreground-muted);
+		cursor: pointer;
+
+		&:hover {
+			background: var(--control-surface-hover);
+			color: var(--foreground);
+		}
+
+		&:focus-visible {
+			@include ui.focus-outline;
+		}
+
+		svg {
+			width: 16px;
+			height: 16px;
+		}
+	}
+
+	.ridu-sheet__close-label {
+		@include ui.visually-hidden;
+	}
+
+	@media (min-width: 640px) {
+		.ridu-sheet[data-side="left"],
+		.ridu-sheet[data-side="right"] {
+			max-width: 384px;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.ridu-sheet[data-state][data-side],
+		.ridu-sheet-overlay[data-state] {
+			animation-duration: 1ms;
+		}
+	}
+}
+
+@keyframes ridu-sheet-overlay-in {
+	from {
+		opacity: 0;
+	}
+}
+
+@keyframes ridu-sheet-overlay-out {
+	to {
+		opacity: 0;
+	}
+}
+
+@keyframes ridu-sheet-from-top {
+	from {
+		transform: translateY(-100%);
+		opacity: 0;
+	}
+}
+
+@keyframes ridu-sheet-from-right {
+	from {
+		transform: translateX(100%);
+		opacity: 0;
+	}
+}
+
+@keyframes ridu-sheet-from-bottom {
+	from {
+		transform: translateY(100%);
+		opacity: 0;
+	}
+}
+
+@keyframes ridu-sheet-from-left {
+	from {
+		transform: translateX(-100%);
+		opacity: 0;
+	}
+}
+
+@keyframes ridu-sheet-to-top {
+	to {
+		transform: translateY(-100%);
+		opacity: 0;
+	}
+}
+
+@keyframes ridu-sheet-to-right {
+	to {
+		transform: translateX(100%);
+		opacity: 0;
+	}
+}
+
+@keyframes ridu-sheet-to-bottom {
+	to {
+		transform: translateY(100%);
+		opacity: 0;
+	}
+}
+
+@keyframes ridu-sheet-to-left {
+	to {
+		transform: translateX(-100%);
+		opacity: 0;
+	}
+}

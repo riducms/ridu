@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "./fixture";
 import {
 	chooseContentLocale,
-	documentSaveButton,
+	submitDocumentForm,
 	loginAsEditor,
 	observePageErrors,
 } from "./helpers";
@@ -9,14 +9,14 @@ import {
 const collection = "primitive-products";
 const list = (page: Page, path: string) => page.locator(`[data-field-path="${path}"]`).first();
 const item = (page: Page, path: string, index: number) =>
-	list(page, path).getByRole("textbox").nth(index);
+	list(page, path).locator("[data-list-item]").nth(index);
 async function save(page: Page, id: string) {
 	const response = page.waitForResponse(
 		(response) =>
 			response.request().method() === "PATCH" &&
 			new URL(response.url()).pathname === `/api/collections/${collection}/${id}`
 	);
-	await documentSaveButton(page).click();
+	await submitDocumentForm(page);
 	const saved = await response;
 	expect(saved.ok(), await saved.text()).toBe(true);
 	return (await saved.json()).doc;
@@ -51,14 +51,14 @@ test("primitive lists support keyboard editing, duplicate values, custom editors
 		await list(page, "availableSizes")
 			.getByRole("button", { name: "Add item", exact: true })
 			.click();
-		await list(page, "availableSizes").getByRole("textbox").last().fill(value);
+		await list(page, "availableSizes").locator("[data-list-item]").last().fill(value);
 	}
 	await page.locator('[data-local-editor="text-list"]').fill("Hand made\nHand made");
 	await expect(item(page, "readOnlyPoints", 0)).toHaveAttribute("readonly");
 	await expect(
 		list(page, "readOnlyPoints").getByRole("button", { name: "Add item", exact: true })
 	).toBeDisabled();
-	await documentSaveButton(page).click();
+	await submitDocumentForm(page);
 	await expect(page).toHaveURL(new RegExp(`/admin/collections/${collection}/(?!create)[^/?]+`));
 	const id = new URL(page.url()).pathname.split("/").at(-1)!;
 	await page.reload();
@@ -79,7 +79,8 @@ test("primitive lists support keyboard editing, duplicate values, custom editors
 	});
 	expect(administrator.ok(), await administrator.text()).toBe(true);
 	await page.goto(`/admin/collections/${collection}/${id}/versions/${original._revision}`);
-	await page.getByRole("button", { name: /^Restore(?: as draft)?$/, exact: true }).click();
+	await page.getByRole("button", { name: "Restore this version", exact: true }).click();
+	await page.getByRole("button", { name: "Confirm", exact: true }).click();
 	await expect(item(page, "sellingPoints", 0)).toHaveValue("Solid oak");
 	await page.getByRole("button", { name: "More actions" }).click();
 	await page.getByRole("button", { name: "Duplicate", exact: true }).last().click();
@@ -105,14 +106,12 @@ test("nested, repeated and localized list edits preserve enclosing row identity 
 	});
 	await page.goto(`/admin/collections/${collection}/${original.id}`);
 	await item(page, "details.points", 0).fill("Group changed");
-	await list(page, "variants.0.points")
-		.getByRole("button", { name: "Move item 2 up", exact: true })
-		.click();
+	await item(page, "variants.0.points", 1).press("Alt+ArrowUp");
 	await list(page, "content.0.points")
 		.getByRole("button", { name: "Remove item 1", exact: true })
 		.click();
 	await list(page, "variants")
-		.getByRole("button", { name: "Open Row 1 actions", exact: true })
+		.getByRole("button", { name: "Open Row 01 actions", exact: true })
 		.first()
 		.click();
 	await page.getByRole("menuitem", { name: "Move down", exact: true }).click();
@@ -170,26 +169,26 @@ for (const field of ["body", "localizedBody"] as const)
 		await points.getByRole("button", { name: "Remove item 1", exact: true }).click();
 		await drawer.getByRole("button", { name: "Cancel", exact: true }).click();
 		await card.getByRole("button", { name: "Edit", exact: true }).click();
-		await expect(points.getByRole("textbox")).toHaveCount(2);
+		await expect(points.locator("[data-list-item]")).toHaveCount(2);
 		// The drawer schedules initial autofocus; let it finish before filling
 		// another input so it cannot redirect Playwright's keyboard insertion.
-		await expect(points.getByRole("textbox").first()).toBeFocused();
-		await sizes.getByRole("textbox").nth(1).fill("1e-");
-		await expect(sizes.getByRole("textbox").nth(1)).toHaveValue("1e-");
+		await expect(points.locator("[data-list-item]").first()).toBeFocused();
+		await sizes.locator("[data-list-item]").nth(1).fill("1e-");
+		await expect(sizes.locator("[data-list-item]").nth(1)).toHaveValue("1e-");
 		await drawer.getByRole("button", { name: "Apply", exact: true }).click();
 		await expect(drawer).toBeVisible();
 		await expect(sizes).toContainText("item 2: enter a finite number");
-		await sizes.getByRole("textbox").nth(1).fill("1e1");
-		await points.getByRole("textbox").nth(1).fill("Warranty");
-		await points.getByRole("button", { name: "Move item 2 up", exact: true }).click();
+		await sizes.locator("[data-list-item]").nth(1).fill("1e1");
+		await points.locator("[data-list-item]").nth(1).fill("Warranty");
+		await points.locator("[data-list-item]").nth(1).press("Alt+ArrowUp");
 		await drawer.getByRole("button", { name: "Apply", exact: true }).click();
 		const saved = await save(page, original.id);
 		expect(saved[field].root.children[0].fields.points).toEqual(["Warranty", "Oak"]);
 		expect(saved[field].root.children[0].fields.sizes).toEqual([0, 10]);
 		await page.reload();
 		await card.getByRole("button", { name: "Edit", exact: true }).click();
-		await expect(points.getByRole("textbox").nth(0)).toHaveValue("Warranty");
-		await expect(sizes.getByRole("textbox").nth(0)).toHaveValue("0");
+		await expect(points.locator("[data-list-item]").nth(0)).toHaveValue("Warranty");
+		await expect(sizes.locator("[data-list-item]").nth(0)).toHaveValue("0");
 		expect(errors.pageErrors).toEqual([]);
 	});
 
@@ -205,7 +204,7 @@ test("authoritative list constraint issues carry one field target and clear afte
 			response.request().method() === "PATCH" &&
 			new URL(response.url()).pathname === `/api/collections/${collection}/${original.id}`
 	);
-	await documentSaveButton(page).click();
+	await submitDocumentForm(page);
 	const rejected = await response;
 	expect(rejected.status()).toBe(422);
 	const issue = (await rejected.json()).error.issues.find(
@@ -219,9 +218,7 @@ test("authoritative list constraint issues carry one field target and clear afte
 	});
 	expect(issue.message).toMatch(/[Ii]tem 1/);
 	await expect(item(page, "serverPoints", 0)).toHaveAttribute("aria-invalid", "true");
-	await list(page, "serverPoints")
-		.getByRole("button", { name: "Move item 1 down", exact: true })
-		.click();
+	await item(page, "serverPoints", 0).press("Alt+ArrowDown");
 	await expect(item(page, "serverPoints", 1)).toHaveValue("expand");
 	await expect(item(page, "serverPoints", 1)).not.toHaveAttribute("aria-invalid", "true");
 	await save(page, original.id);

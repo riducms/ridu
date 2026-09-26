@@ -1,12 +1,12 @@
 <script lang="ts" module>
-	import { tv, type VariantProps } from "@riducms/ui";
+	import { cv, type VariantProps } from "@riducms/ui";
 
-	export const tabsListVariants = tv({
-		base: "rounded-lg p-0.5 group-data-horizontal/tabs:h-8 group-data-vertical/tabs:p-1 data-[variant=line]:rounded-none group/tabs-list inline-flex w-fit items-center justify-center text-muted-foreground group-data-[orientation=vertical]/tabs:h-fit group-data-[orientation=vertical]/tabs:flex-col",
+	export const tabsListVariants = cv({
+		base: "ridu-tabs__list",
 		variants: {
 			variant: {
-				default: "cn-tabs-list-variant-default border border-control-border bg-tabs-surface",
-				line: "cn-tabs-list-variant-line gap-1 bg-transparent",
+				default: "ridu-tabs__list--default",
+				line: "ridu-tabs__list--line",
 			},
 		},
 		defaultVariants: {
@@ -19,7 +19,7 @@
 
 <script lang="ts">
 	import { Tabs as TabsPrimitive } from "bits-ui";
-	import { cn } from "@riducms/ui";
+	import "@admin/components/ui/tabs/tabs.scss";
 
 	let {
 		ref = $bindable(null),
@@ -35,6 +35,6 @@
 	bind:ref
 	data-slot="tabs-list"
 	data-variant={variant}
-	class={cn(tabsListVariants({ variant }), className)}
+	class={[tabsListVariants({ variant }), className]}
 	{...restProps}
 />

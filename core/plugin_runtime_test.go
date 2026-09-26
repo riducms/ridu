@@ -16,7 +16,7 @@ type runtimePlugin struct{}
 func (runtimePlugin) Key() string { return "runtime" }
 
 func (runtimePlugin) Descriptor() ridu.PluginDescriptor {
-	return ridu.PluginDescriptor{Version: "1.0.0", GoPackage: "example.com/plugins/runtime", APIVersion: ridu.PluginAPIVersion, Ridu: ridu.RiduCompatibility{Minimum: ridu.FrameworkVersion, MaximumExclusive: "0.3.0"}}
+	return ridu.PluginDescriptor{Version: "1.0.0", GoPackage: "example.com/plugins/runtime", APIVersion: ridu.PluginAPIVersion, Ridu: ridu.RiduCompatibility{Minimum: ridu.FrameworkVersion}}
 }
 
 func (runtimePlugin) Hooks() []ridu.PluginHookContribution {
@@ -82,7 +82,7 @@ type transportPlugin struct {
 func (plugin *transportPlugin) Key() string { return "transport" }
 
 func (plugin *transportPlugin) Descriptor() ridu.PluginDescriptor {
-	return ridu.PluginDescriptor{Version: "1.0.0", GoPackage: "example.com/plugins/transport", APIVersion: ridu.PluginAPIVersion, Ridu: ridu.RiduCompatibility{Minimum: ridu.FrameworkVersion, MaximumExclusive: "0.3.0"}}
+	return ridu.PluginDescriptor{Version: "1.0.0", GoPackage: "example.com/plugins/transport", APIVersion: ridu.PluginAPIVersion, Ridu: ridu.RiduCompatibility{Minimum: ridu.FrameworkVersion}}
 }
 
 func (plugin *transportPlugin) BindTransports(ctx ridu.PluginTransportContext) ([]ridu.Endpoint, error) {

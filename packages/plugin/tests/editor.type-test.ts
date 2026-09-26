@@ -30,7 +30,9 @@ function registrations() {
 	defineFieldEditor({ type: "number", component: registeredText.component });
 	// @ts-expect-error erasure must not strip a component's required config decoder
 	defineFieldEditor({ type: "text", component: registeredPalette.component });
-	defineAdmin({ fields: { "app:text": defineFieldEditor({ type: "text", component: Text }) } });
+	defineAdmin({
+		fieldEditors: { "app:text": defineFieldEditor({ type: "text", component: Text }) },
+	});
 	defineFieldEditor({
 		type: "text",
 		component: Palette,
@@ -71,15 +73,17 @@ function registrations() {
 	// @ts-expect-error every possible decoder result must satisfy the component
 	defineFieldEditor({ type: "text", component: Palette, decodeConfig: () => unionConfig });
 	// @ts-expect-error registry entries must have been checked by the helper
-	defineAdmin({ fields: { "app:text": { type: "text", component: Text } } });
+	defineAdmin({ fieldEditors: { "app:text": { type: "text", component: Text } } });
 	// @ts-expect-error field editors do not support relationship value semantics
 	defineFieldEditor({ type: "relationship", component: Text });
-	// @ts-expect-error malformed namespace is rejected by the registry contextual type
-	defineAdmin({ fields: { "other:text": defineFieldEditor({ type: "text", component: Text }) } });
+	defineAdmin({
+		// @ts-expect-error malformed namespace is rejected by the registry contextual type
+		fieldEditors: { "other:text": defineFieldEditor({ type: "text", component: Text }) },
+	});
 	// @ts-expect-error an editor cannot be registered without a component
 	defineFieldEditor({ type: "text" });
 	defineAdmin({
-		fields: {
+		fieldEditors: {
 			"app:text": defineFieldEditor({ type: "text", component: Text }),
 			// @ts-expect-error duplicate object references are diagnosed before runtime
 			"app:text": defineFieldEditor({ type: "text", component: Text }),

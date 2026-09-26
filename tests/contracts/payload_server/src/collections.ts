@@ -232,8 +232,10 @@ const postRead: Access = ({ req }) => {
 
 export const Posts: CollectionConfig = {
 	slug: slugs.posts,
+	trash: true,
 	labels: { plural: "Posts", singular: "Post" },
 	admin: {
+		description: "Versioned editorial content with folders, hierarchy, access rules, and hooks.",
 		components: {
 			beforeList: [adminComponent("PostsListFrame")],
 			edit: {
@@ -652,6 +654,21 @@ export const PayloadCapabilities: CollectionConfig = {
 			},
 		},
 		{ name: "sourceCode", type: "code", admin: { language: "typescript" } },
+		// Virtual examples keep the comparison controls independent of database fixture migrations.
+		{
+			name: "keywords",
+			type: "text",
+			hasMany: true,
+			virtual: true,
+			hooks: { afterRead: [() => ["editorial", "featured"]] },
+		},
+		{
+			name: "ratings",
+			type: "number",
+			hasMany: true,
+			virtual: true,
+			hooks: { afterRead: [() => [3, 5]] },
+		},
 		{
 			type: "collapsible",
 			label: "Payload collapsible layout",

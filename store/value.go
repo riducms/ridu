@@ -250,6 +250,8 @@ func documentMap(document Document) map[string]any {
 	}
 	if document.Status != "" {
 		result["_status"] = document.Status
+	}
+	if document.Revision > 0 {
 		result["_revision"] = document.Revision
 	}
 	for name, value := range document.Values {

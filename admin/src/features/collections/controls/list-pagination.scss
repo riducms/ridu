@@ -1,0 +1,78 @@
+@use "@riducms/ui/styles.scss" as ui;
+
+@layer ridu.components {
+	.ridu-list__chevron-previous {
+		transform: rotate(90deg);
+	}
+	.ridu-list__chevron-next {
+		transform: rotate(-90deg);
+	}
+	[dir="rtl"] .ridu-list__chevron-previous {
+		transform: rotate(-90deg);
+	}
+	[dir="rtl"] .ridu-list__chevron-next {
+		transform: rotate(90deg);
+	}
+
+	.ridu-list-pagination {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 20px;
+
+		nav {
+			display: flex;
+			gap: 5px;
+			align-items: center;
+		}
+	}
+	.ridu-list-pagination__page {
+		display: grid;
+		place-items: center;
+		min-width: 30px;
+		height: 30px;
+		padding: 0 5px;
+		border: 0;
+		border-radius: 3px;
+		background: none;
+		color: var(--foreground);
+		font: inherit;
+		cursor: pointer;
+
+		&[aria-current="page"] {
+			background: var(--background-layer);
+			color: var(--foreground-muted);
+		}
+
+		&:disabled {
+			opacity: 0.4;
+			cursor: default;
+		}
+	}
+	.ridu-list-pagination__summary {
+		display: flex;
+		gap: 20px;
+		align-items: center;
+		white-space: nowrap;
+		margin-inline-start: auto;
+	}
+	.ridu-list-pagination__size {
+		height: auto;
+		min-height: 20px;
+		padding: 0;
+		border: 0;
+		background: none;
+		box-shadow: none;
+		font-weight: 600;
+	}
+
+	.ridu-list-pagination__page:focus-visible {
+		@include ui.focus-outline;
+	}
+	@media (max-width: ui.$small) {
+		.ridu-list-pagination {
+			align-items: flex-start;
+			flex-wrap: wrap;
+		}
+	}
+}

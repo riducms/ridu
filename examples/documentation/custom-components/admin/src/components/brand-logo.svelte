@@ -5,6 +5,21 @@
 </script>
 
 <!-- Reuse the logo at a larger size on the sign-in screen. -->
-<span class="font-semibold" class:text-xl={surface === 'loginLogo'}>
+<span
+	class={[
+		'brand-logo',
+		{ 'brand-logo--login': surface === 'loginLogo' }
+	]}
+>
 	Acme Studio
 </span>
+
+<style>
+	.brand-logo {
+		font-weight: 600;
+	}
+
+	.brand-logo--login {
+		font-size: 1.25rem;
+	}
+</style>

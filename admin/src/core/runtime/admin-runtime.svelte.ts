@@ -5,21 +5,13 @@ import {
 	type ResolvedAdminConfig,
 } from "@riducms/plugin/admin";
 import {
-	type AdminDashboardPanel,
-	type AdminLoginComponent,
-	type AdminAccountComponent,
-	type AdminNavigationComponent,
-	type AdminLogoutButton,
-	type AdminCoreView,
-	type AdminBrandComponent,
-	type AdminShellComponent,
-	type AdminProvider,
-	type AdminDocumentAction,
-	type AdminDocumentView,
-	type AdminListCell,
-	type AdminRoute,
-} from "@riducms/plugin";
-import type { AuthSession, OperationCapabilities, SchemaManifest } from "@riducms/protocol";
+	bindSchemaManifest,
+	type AdminPreparedNavigationV1,
+	type AdminPreparedRuntimeV1,
+	type AuthSession,
+	type OperationCapabilities,
+	type SchemaManifest,
+} from "@riducms/protocol";
 import { RiduError } from "@riducms/sdk";
 import { createContext } from "svelte";
 
@@ -61,9 +53,11 @@ export class AdminRuntime {
 	manifestRefreshError = $state<string>();
 	collectionOperations = $state.raw<Record<string, OperationCapabilities>>({});
 	globalOperations = $state.raw<Record<string, OperationCapabilities>>({});
+	preparedPreferences = $state.raw<Record<string, unknown>>({});
 	themePreference = $state<ThemePreference>("system");
 	resolvedTheme = $state<"light" | "dark">("dark");
 	contentLocale = $state<string>();
+	contentLocaleTransitioning = $state(false);
 	#confirmedThemePreference: ThemePreference = "system";
 	#confirmedThemeOwnerID = "";
 	#confirmedContentLocale?: string;
@@ -75,6 +69,10 @@ export class AdminRuntime {
 	#contentLocaleBlockers = new Map<symbol, () => boolean>();
 	#contentLocaleBlockerSequence = 0;
 	#contentLocaleBlockerRevision = $state(0);
+	#systemThemeQuery?: MediaQueryList;
+	readonly #handleSystemThemeChange = () => {
+		if (this.themePreference === "system") this.#applyTheme();
+	};
 	#preferenceReset?: {
 		sessionID: string | undefined;
 		ownerID: string;
@@ -141,58 +139,20 @@ export class AdminRuntime {
 		};
 	}
 
-	adoptContentLocale(locale: string) {
-		if (!this.contentLocales.some((candidate) => candidate.code === locale)) return false;
-		if (this.contentLocaleSwitchBlocked) return false;
-		if (this.contentLocale === locale) return true;
-		this.contentLocale = locale;
-		void this.refreshAccess(locale).catch(() => {
-			// Route adoption is best-effort; retain the last complete access snapshot on failure.
-		});
-		return true;
-	}
-
-	readonly pluginRoutes: readonly AdminRoute[];
-	readonly dashboardPanels: readonly AdminDashboardPanel[];
-	readonly loginComponents: readonly AdminLoginComponent[];
-	readonly accountComponents: readonly AdminAccountComponent[];
-	readonly navigationComponents: readonly AdminNavigationComponent[];
-	readonly logoutButton?: AdminLogoutButton;
-	readonly coreViews: readonly AdminCoreView[];
-	readonly brandComponents: readonly AdminBrandComponent[];
-	readonly shellComponents: readonly AdminShellComponent[];
-	readonly providers: readonly AdminProvider[];
-	readonly listCells: readonly AdminListCell[];
-	readonly documentActions: readonly AdminDocumentAction[];
-	readonly documentViews: readonly AdminDocumentView[];
 	readonly rowLabels: RowLabelRegistry;
 	readonly i18n: AdminI18nController;
 
 	readonly config: ResolvedAdminConfig;
 	readonly fields: FieldRegistry;
-	readonly editors: ResolvedAdminConfig["editors"];
 
 	constructor(
 		readonly client: AdminClient,
-		config: AdminConfig = {}
+		config: AdminConfig = {},
+		readonly adminBasePath = "/admin"
 	) {
 		this.config = resolveAdminConfig(config);
-		this.fields = createCoreFieldRegistry(this.config.fields);
-		this.editors = this.config.editors;
+		this.fields = createCoreFieldRegistry(this.config.pluginFields);
 		const extensions = this.config.extensions;
-		this.pluginRoutes = extensions.routes;
-		this.dashboardPanels = extensions.dashboard;
-		this.loginComponents = extensions.login;
-		this.accountComponents = extensions.account;
-		this.navigationComponents = extensions.navigation;
-		this.logoutButton = extensions.logoutButton;
-		this.coreViews = extensions.views;
-		this.brandComponents = extensions.branding;
-		this.shellComponents = extensions.shell;
-		this.providers = extensions.providers;
-		this.listCells = extensions.listCells;
-		this.documentActions = extensions.documentActions;
-		this.documentViews = extensions.documentViews;
 		this.rowLabels = createRowLabelRegistry(extensions.rowLabels, this.config.rowLabels);
 		this.i18n = new AdminI18nController(
 			client,
@@ -203,10 +163,65 @@ export class AdminRuntime {
 		);
 		this.#applyTheme();
 		if (typeof window !== "undefined") {
-			window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
-				if (this.themePreference === "system") this.#applyTheme();
-			});
+			this.#systemThemeQuery = window.matchMedia("(prefers-color-scheme: dark)");
+			this.#systemThemeQuery.addEventListener("change", this.#handleSystemThemeChange);
 		}
+	}
+
+	hardNavigate(path: string) {
+		const base = `/${this.adminBasePath.split("/").filter(Boolean).join("/")}`;
+		const route = path.startsWith("/") ? path : `/${path}`;
+		window.location.assign(base === "/" ? route : `${base}${route}`);
+		// Keep identity-changing handlers pending until the new document takes ownership.
+		return new Promise<never>(() => {});
+	}
+
+	dispose() {
+		this.#systemThemeQuery?.removeEventListener("change", this.#handleSystemThemeChange);
+		this.#systemThemeQuery = undefined;
+	}
+
+	adoptPrepared(prepared: AdminPreparedRuntimeV1) {
+		this.#manifestRequest += 1;
+		this.error = undefined;
+		this.loading = true;
+		const manifest = bindSchemaManifest(prepared.manifest);
+		this.#installManifest(manifest);
+		this.session = prepared.session as AuthSession<AdminDocument> | undefined;
+		this.authBootstrapAvailable = prepared.authBootstrapAvailable;
+		this.collectionOperations = { ...prepared.collectionOperations };
+		this.globalOperations = { ...prepared.globalOperations };
+		this.preparedPreferences = { ...prepared.preferences };
+		this.#confirmedThemePreference = isThemePreference(prepared.theme) ? prepared.theme : "system";
+		this.#confirmedThemeOwnerID = preferenceOwnerID(this.session);
+		this.themePreference = this.#confirmedThemePreference;
+		this.#applyTheme();
+		if (
+			prepared.contentLocale !== undefined &&
+			this.contentLocales.some((candidate) => candidate.code === prepared.contentLocale)
+		) {
+			this.contentLocale = prepared.contentLocale;
+			this.#confirmedContentLocale = prepared.contentLocale;
+			this.#confirmedContentLocaleOwnerID = preferenceOwnerID(this.session);
+		}
+		this.i18n.adoptPreparedPreferences(prepared.adminLanguage, prepared.adminTimeZone);
+		this.loading = false;
+	}
+
+	adoptPreparedNavigation(prepared: AdminPreparedNavigationV1) {
+		this.collectionOperations = { ...prepared.collectionOperations };
+		this.globalOperations = { ...prepared.globalOperations };
+		if (
+			prepared.contentLocale !== undefined &&
+			this.contentLocales.some((candidate) => candidate.code === prepared.contentLocale)
+		) {
+			this.contentLocale = prepared.contentLocale;
+			this.#confirmedContentLocale = prepared.contentLocale;
+			this.#confirmedContentLocaleOwnerID = preferenceOwnerID(this.session);
+		}
+		// The context key guarantees this is the same identity. Preferences are
+		// adopted once from the cold document; a navigation response may have started
+		// before a local theme/language/time-zone write and must not roll it back.
 	}
 
 	async loadTheme() {
@@ -238,6 +253,15 @@ export class AdminRuntime {
 
 	contentLocaleForPath(path: string) {
 		return contentLocaleFromPath(path, this.contentLocales);
+	}
+
+	/** A supported URL locale wins; otherwise retain the session's selection or the default. */
+	resolveContentLocale(requested: string | null | undefined) {
+		return (
+			this.contentLocales.find((locale) => locale.code === requested)?.code ??
+			this.contentLocale ??
+			this.manifest?.application.localization?.defaultLocale
+		);
 	}
 
 	async loadContentLocale(activeLocale?: string) {
@@ -274,44 +298,24 @@ export class AdminRuntime {
 			: this.#confirmedContentLocale;
 	}
 
-	async setContentLocale(locale: string) {
+	async persistContentLocalePreference(locale: string) {
 		if (!this.contentLocales.some((candidate) => candidate.code === locale)) return;
 		if (this.contentLocaleSwitchBlocked) throw new ContentLocaleSwitchBlockedError();
-		if (locale === this.contentLocale && locale === this.#confirmedContentLocale) return;
-		const request = ++this.#contentLocaleRequest;
 		const sessionID = this.session?.id;
 		const ownerID = preferenceOwnerID(this.session);
-		this.contentLocale = locale;
-		const accessRefresh = this.refreshAccess(locale);
-		void accessRefresh.catch(() => {
-			// The operation awaits and reconciles this failure after its preference write settles.
-		});
-		try {
-			if (sessionID === undefined || ownerID === "") {
-				await this.client.setPreference("content-locale", { locale });
-			} else {
-				const result = await getPreferenceWriteQueue().enqueue(
-					JSON.stringify([ownerID, "content-locale"]),
-					ownerID,
-					() => this.session?.id === sessionID,
-					() => this.client.setPreference("content-locale", { locale })
-				);
-				if (!result.dispatched) throw new StalePreferenceSessionError();
-			}
-			if (request !== this.#contentLocaleRequest) return;
-			if (this.session?.id !== sessionID || preferenceOwnerID(this.session) !== ownerID) {
-				throw new StalePreferenceSessionError();
-			}
-			await accessRefresh;
-			this.#confirmedContentLocale = locale;
-			this.#confirmedContentLocaleOwnerID = ownerID;
-		} catch (error) {
-			if (request === this.#contentLocaleRequest) {
-				this.contentLocale = this.#confirmedContentLocale;
-				await this.refreshAccess(this.#confirmedContentLocale);
-			}
-			throw error;
+		if (sessionID === undefined || ownerID === "") {
+			await this.client.setPreference("content-locale", { locale });
+		} else {
+			const result = await getPreferenceWriteQueue().enqueue(
+				JSON.stringify([ownerID, "content-locale"]),
+				ownerID,
+				() => this.session?.id === sessionID,
+				() => this.client.setPreference("content-locale", { locale })
+			);
+			if (!result.dispatched) throw new StalePreferenceSessionError();
 		}
+		this.#confirmedContentLocale = locale;
+		this.#confirmedContentLocaleOwnerID = ownerID;
 	}
 
 	async setTheme(preference: ThemePreference) {
@@ -437,6 +441,27 @@ export class AdminRuntime {
 		}
 	}
 
+	#installManifest(manifest: SchemaManifest) {
+		validateAdminManifest(this.config, manifest);
+		this.manifest = manifest;
+		this.manifestRevision += 1;
+		this.#configureContentLocale();
+		this.i18n.configure(manifest.application.adminLocalization);
+		return manifest.application.admin;
+	}
+
+	async #refreshLocalizedAccess() {
+		await this.loadContentLocale(this.#browserRouteContentLocale());
+		const accessAuthoritative = await this.refreshAccess(this.contentLocale);
+		if (!accessAuthoritative || this.session === undefined || this.adminAccessAllowed) return;
+		try {
+			await this.client.logout();
+		} catch {
+			// The local session is still denied even if server cleanup fails.
+		}
+		this.session = undefined;
+	}
+
 	async bootstrap() {
 		const request = ++this.#manifestRequest;
 		this.loading = true;
@@ -444,12 +469,7 @@ export class AdminRuntime {
 		try {
 			const manifest = await this.client.schema();
 			if (request !== this.#manifestRequest) return;
-			validateAdminManifest(this.config, manifest);
-			this.manifest = manifest;
-			this.manifestRevision += 1;
-			this.#configureContentLocale();
-			this.i18n.configure(manifest.application.adminLocalization);
-			const admin = manifest.application.admin;
+			const admin = this.#installManifest(manifest);
 			if (admin !== undefined) {
 				const bootstrap = await this.client.authBootstrap(admin.userCollectionSlug);
 				if (request !== this.#manifestRequest) return;
@@ -471,16 +491,7 @@ export class AdminRuntime {
 				this.session = undefined;
 				this.authBootstrapAvailable = false;
 			}
-			await this.loadContentLocale(this.#browserRouteContentLocale());
-			const accessAuthoritative = await this.refreshAccess(this.contentLocale);
-			if (accessAuthoritative && this.session !== undefined && !this.adminAccessAllowed) {
-				try {
-					await this.client.logout();
-				} catch {
-					// The local session is still denied even if server cleanup fails.
-				}
-				this.session = undefined;
-			}
+			await this.#refreshLocalizedAccess();
 			await Promise.all([this.loadTheme(), this.i18n.loadPreferences()]);
 		} catch (error) {
 			if (request !== this.#manifestRequest) return;
@@ -497,12 +508,7 @@ export class AdminRuntime {
 		try {
 			const manifest = await this.client.schema();
 			if (request !== this.#manifestRequest) return;
-			validateAdminManifest(this.config, manifest);
-			this.manifest = manifest;
-			this.manifestRevision += 1;
-			this.#configureContentLocale();
-			this.i18n.configure(manifest.application.adminLocalization);
-			const admin = manifest.application.admin;
+			const admin = this.#installManifest(manifest);
 			if (admin === undefined || this.session?.collection !== admin.userCollectionSlug) {
 				this.session = undefined;
 			}
@@ -513,16 +519,7 @@ export class AdminRuntime {
 			} else {
 				this.authBootstrapAvailable = false;
 			}
-			await this.loadContentLocale(this.#browserRouteContentLocale());
-			const accessAuthoritative = await this.refreshAccess(this.contentLocale);
-			if (accessAuthoritative && this.session !== undefined && !this.adminAccessAllowed) {
-				try {
-					await this.client.logout();
-				} catch {
-					// The local session is still denied even if server cleanup fails.
-				}
-				this.session = undefined;
-			}
+			await this.#refreshLocalizedAccess();
 			await this.i18n.loadPreferences();
 		} catch (error) {
 			if (request !== this.#manifestRequest) return;

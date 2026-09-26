@@ -1,6 +1,11 @@
 import type { SchemaField } from "@riducms/protocol";
 import { expect, test } from "./fixture";
-import { documentSaveButton, loginAsEditor, observePageErrors } from "./helpers";
+import {
+	loginAsEditor,
+	observePageErrors,
+	submitDocumentForm,
+	useAdminRuntimeFallback,
+} from "./helpers";
 
 test("API keyless blocks survive admin editing, reorder, nested duplication and save", async ({
 	page,
@@ -35,7 +40,7 @@ test("API keyless blocks survive admin editing, reorder, nested duplication and 
 	await page.locator('input[name="layout.0.heading"]').fill("First hero edited");
 	await page.locator('input[name="layout.0.links.0.label"]').fill("First link edited");
 	const links = page.locator('[data-field-path="layout.0.links"]').first();
-	await links.getByRole("button", { name: "Open Row 1 actions", exact: true }).click();
+	await links.getByRole("button", { name: "Open Row 01 actions", exact: true }).click();
 	await page.getByRole("menuitem", { name: "Move down", exact: true }).click();
 	await expect(page.locator('input[name="layout.0.links.1.label"]')).toHaveValue(
 		"First link edited"
@@ -57,7 +62,7 @@ test("API keyless blocks survive admin editing, reorder, nested duplication and 
 			response.request().method() === "PATCH" &&
 			new URL(response.url()).pathname === `/api/collections/pages/${original.id}`
 	);
-	await documentSaveButton(page).click();
+	await submitDocumentForm(page);
 	expect((await saved).ok()).toBe(true);
 	const stored = (await (await page.request.get(`/api/collections/pages/${original.id}`)).json())
 		.doc;
@@ -113,7 +118,7 @@ test("reordering preserves an unsaved edit beside a protected block heading", as
 			response.request().method() === "PATCH" &&
 			new URL(response.url()).pathname === `/api/collections/pages/${original.id}`
 	);
-	await documentSaveButton(page).click();
+	await submitDocumentForm(page);
 	const response = await saved;
 	expect(response.ok(), await response.text()).toBe(true);
 	const submitted = response.request().postDataJSON().layout;
@@ -165,8 +170,8 @@ test("block insertion chooses a variant at the intended position and reveals col
 		.click();
 	await page.getByRole("dialog").getByRole("button", { name: "Hero", exact: true }).click();
 	await layout.getByRole("button", { name: "Collapse all", exact: true }).click();
-	await documentSaveButton(page).click();
-	const summary = layout.getByRole("button", { name: /validation errors:.*Heading/i });
+	await submitDocumentForm(page);
+	const summary = layout.getByRole("button", { name: /1 Error:.*Heading/i });
 	await expect(summary).toBeVisible();
 	await summary.click();
 	await expect(page.locator('input[name="layout.2.heading"]')).toBeFocused();
@@ -183,6 +188,7 @@ test("block insertion chooses a variant at the intended position and reveals col
 
 test("block errors reveal invalid fields inside collapsed sections", async ({ page }) => {
 	await loginAsEditor(page);
+	await useAdminRuntimeFallback(page);
 	const errors = observePageErrors(page);
 	const created = await page.request.post("/api/collections/pages?draft=true", {
 		data: { title: "Nested disclosure", layout: [{ blockType: "hero", heading: "Original" }] },
@@ -217,15 +223,15 @@ test("block errors reveal invalid fields inside collapsed sections", async ({ pa
 	await heading.fill("");
 	await section.locator("summary").click();
 	await layout.getByRole("button", { name: "Collapse all", exact: true }).click();
-	await documentSaveButton(page).click();
-	await layout.getByRole("button", { name: /validation errors:.*Heading/i }).click();
+	await submitDocumentForm(page);
+	await layout.getByRole("button", { name: /1 Error:.*Heading/i }).click();
 	await expect(section).toHaveAttribute("open");
 	await expect(heading).toBeFocused();
 	await heading.fill("Corrected heading");
 	const saved = page.waitForResponse(
 		(response) => response.request().method() === "PATCH" && response.url().includes(original.id)
 	);
-	await documentSaveButton(page).click();
+	await submitDocumentForm(page);
 	expect((await saved).ok()).toBe(true);
 	await page.reload();
 	await section.locator("summary").click();
@@ -238,6 +244,7 @@ test("removed block schemas preserve content and prevent destructive admin savin
 	page,
 }) => {
 	await loginAsEditor(page);
+	await useAdminRuntimeFallback(page);
 	const created = await page.request.post("/api/collections/pages?draft=true", {
 		data: {
 			title: "Recover removed schema",
@@ -271,7 +278,7 @@ test("removed block schemas preserve content and prevent destructive admin savin
 		page.getByRole("alert").filter({ hasText: "Its content is preserved" })
 	).toBeVisible();
 	await page.locator('input[name="title"]').fill("Other edit must not drop blocks");
-	await documentSaveButton(page).click();
+	await submitDocumentForm(page);
 	await expect(
 		page
 			.getByText(

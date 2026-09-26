@@ -1,3 +1,4 @@
+import { isRecord } from "@riducms/protocol";
 export type RichTextFeature =
 	"links" | "lists" | "code" | "horizontal-rule" | "uploads" | "relationships" | "blocks";
 
@@ -43,8 +44,4 @@ export function hasRichTextFeature(config: RichTextConfig, feature: RichTextFeat
 
 function isRichTextFeature(value: unknown): value is RichTextFeature {
 	return typeof value === "string" && features.has(value as RichTextFeature);
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
 }

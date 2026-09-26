@@ -22,6 +22,7 @@ var managedUploadFields = []struct {
 	{"upload-object-key", field.Text("objectKey").Label("Object key").Required().Index()},
 	{"upload-width", field.Number("width").Label("Width")},
 	{"upload-height", field.Number("height").Label("Height")},
+	{"upload-source", field.JSON("source").Label("Image source")},
 	{"upload-sizes", field.JSON("sizes").Label("Generated sizes")},
 	{"upload-focal-x", field.Number("focalX").Label("Focal X")},
 	{"upload-focal-y", field.Number("focalY").Label("Focal Y")},

@@ -93,10 +93,10 @@ func parentLifecycle(t *testing.T, factory Factory) {
 	if stringValue(payload(t, payload(t, duplicate.Values["body"], 1)["detail"], 0)["label"]) != "Nested action" {
 		t.Fatal("duplicate lost nested editor")
 	}
-	if _, err := app.SchedulePublish(ctx, "articles", created.ID, time.Now().Add(-time.Second), restored.Revision, identity); err != nil {
+	if _, err := app.SchedulePublish(ctx, "articles", created.ID, time.Now().Add(-time.Second), ridu.PublicationScheduleOptions{ExpectedRevision: restored.Revision}, identity); err != nil {
 		t.Fatal(err)
 	}
-	if completed, err := app.RunScheduledPublishes(ctx, 10, &user); err != nil || completed != 1 {
+	if completed, err := app.RunScheduledPublications(ctx, 10, &user); err != nil || completed != 1 {
 		t.Fatalf("scheduled publish: %d %v", completed, err)
 	}
 	public, err := app.Local().Find(ctx, "articles", created.ID, ridu.FindOptions{})

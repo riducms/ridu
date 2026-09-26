@@ -13,6 +13,7 @@ import { slugs } from "./shared";
 const filename = fileURLToPath(import.meta.url);
 const dirname = path.dirname(filename);
 const databaseURL = process.env.PAYLOAD_DATABASE_URL;
+const visualPreview = process.env.RIDU_PAYLOAD_VISUAL_PREVIEW === "true";
 const requestedPoolMax = Number(process.env.PAYLOAD_POOL_MAX);
 const poolMax =
 	Number.isSafeInteger(requestedPoolMax) && requestedPoolMax > 0 ? requestedPoolMax : undefined;
@@ -29,25 +30,31 @@ const database = databaseURL?.startsWith("postgres")
 
 export default buildConfig({
 	admin: {
-		autoLogin: {
-			email: "admin@riducms.test",
-			password: "ridu-admin",
-			prefillOnly: true,
-		},
-		avatar: { Component: adminComponent("AccountAvatar") },
+		autoLogin: visualPreview
+			? false
+			: {
+					email: "admin@riducms.test",
+					password: "ridu-admin",
+					prefillOnly: true,
+				},
+		avatar: visualPreview ? "default" : { Component: adminComponent("AccountAvatar") },
 		components: {
-			actions: [adminComponent("ShellAction")],
-			afterNavLinks: [adminComponent("NavigationNote"), adminComponent("PluginRouteLink")],
-			beforeDashboard: [adminComponent("DashboardPanel")],
-			beforeLogin: [adminComponent("LoginFrame")],
-			graphics: {
-				Icon: adminComponent("BrandIcon"),
-				Logo: adminComponent("BrandLogo"),
-			},
-			header: [adminComponent("ShellHeader")],
-			logout: { Button: adminComponent("PluginLogoutButton") },
-			providers: [adminComponent("ProviderBoundary")],
-			settingsMenu: [adminComponent("SettingsMenuItem")],
+			actions: visualPreview ? [] : [adminComponent("ShellAction")],
+			afterNavLinks: visualPreview
+				? []
+				: [adminComponent("NavigationNote"), adminComponent("PluginRouteLink")],
+			beforeDashboard: visualPreview ? [] : [adminComponent("DashboardPanel")],
+			beforeLogin: visualPreview ? [] : [adminComponent("LoginFrame")],
+			graphics: visualPreview
+				? {}
+				: {
+						Icon: adminComponent("BrandIcon"),
+						Logo: adminComponent("BrandLogo"),
+					},
+			header: visualPreview ? [] : [adminComponent("ShellHeader")],
+			logout: visualPreview ? undefined : { Button: adminComponent("PluginLogoutButton") },
+			providers: visualPreview ? [] : [adminComponent("ProviderBoundary")],
+			settingsMenu: visualPreview ? [] : [adminComponent("SettingsMenuItem")],
 			views: {
 				account: { Component: adminComponent("AccountView") },
 				"plugin-contract": {
@@ -57,7 +64,7 @@ export default buildConfig({
 				},
 			},
 		},
-		importMap: { baseDir: path.resolve(dirname) },
+		importMap: { baseDir: path.resolve(dirname), autoGenerate: !visualPreview },
 		livePreview: {
 			breakpoints: [
 				{ name: "mobile", label: "Mobile", width: 375, height: 667 },
@@ -140,6 +147,7 @@ export default buildConfig({
 	sharp,
 	telemetry: false,
 	typescript: {
+		autoGenerate: !visualPreview,
 		outputFile: path.resolve(dirname, "payload-types.ts"),
 	},
 });

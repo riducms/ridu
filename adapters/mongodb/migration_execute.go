@@ -978,7 +978,7 @@ func (backend *Store) rewriteMongoMigrationFrameworkState(ctx context.Context, t
 		return err
 	}
 	defer leave()
-	if err := backend.rewriteMongoScheduledPublishMigrationState(sessionContext, before, after); err != nil {
+	if err := backend.rewriteMongoScheduledPublicationMigrationState(sessionContext, before, after); err != nil {
 		return err
 	}
 	// Rows whose primary key does not depend on the collection identity can be
@@ -1003,35 +1003,35 @@ func (backend *Store) rewriteMongoMigrationFrameworkState(ctx context.Context, t
 	return backend.rewriteMongoIdentityDerivedState(sessionContext, before, after)
 }
 
-const mongoScheduledPublishTaskSlug = "ridu-schedule-publish"
+const mongoScheduledPublicationTaskSlug = "ridu-schedule-publish"
 
-type mongoScheduledPublishTaskRewrite struct {
+type mongoScheduledPublicationTaskRewrite struct {
 	before store.Task
 	after  store.Task
 }
 
-func (backend *Store) rewriteMongoScheduledPublishMigrationState(ctx context.Context, before, after schema.StableID) error {
-	cursor, err := backend.database.Collection(mongoTaskCollectionName).Find(ctx, bson.D{{Key: "slug", Value: mongoScheduledPublishTaskSlug}})
+func (backend *Store) rewriteMongoScheduledPublicationMigrationState(ctx context.Context, before, after schema.StableID) error {
+	cursor, err := backend.database.Collection(mongoTaskCollectionName).Find(ctx, bson.D{{Key: "slug", Value: mongoScheduledPublicationTaskSlug}})
 	if err != nil {
 		return fmt.Errorf("inspect scheduled-publish tasks: %w", translateMongoError(ctx, err))
 	}
-	var rewrites []mongoScheduledPublishTaskRewrite
+	var rewrites []mongoScheduledPublicationTaskRewrite
 	for cursor.Next(ctx) {
 		task, decodeErr := decodeMongoTask(cursor.Current)
 		if decodeErr != nil {
 			_ = cursor.Close(ctx)
 			return fmt.Errorf("decode scheduled-publish task: %w", decodeErr)
 		}
-		if !mongoScheduledPublishTaskMentionsCollection(task, before) {
+		if !mongoScheduledPublicationTaskMentionsCollection(task, before) {
 			continue
 		}
-		updated, changed, rewriteErr := rewriteMongoScheduledPublishTaskCollectionID(task, before, after)
+		updated, changed, rewriteErr := rewriteMongoScheduledPublicationTaskCollectionID(task, before, after)
 		if rewriteErr != nil {
 			_ = cursor.Close(ctx)
 			return fmt.Errorf("rewrite scheduled-publish task %s: %w", task.ID, rewriteErr)
 		}
 		if changed {
-			rewrites = append(rewrites, mongoScheduledPublishTaskRewrite{before: task, after: updated})
+			rewrites = append(rewrites, mongoScheduledPublicationTaskRewrite{before: task, after: updated})
 		}
 	}
 	if err := cursor.Err(); err != nil {
@@ -1040,7 +1040,7 @@ func (backend *Store) rewriteMongoScheduledPublishMigrationState(ctx context.Con
 	}
 	_ = cursor.Close(ctx)
 
-	byTaskID := make(map[string]mongoScheduledPublishTaskRewrite, len(rewrites))
+	byTaskID := make(map[string]mongoScheduledPublicationTaskRewrite, len(rewrites))
 	for _, rewrite := range rewrites {
 		byTaskID[rewrite.before.ID] = rewrite
 	}
@@ -1127,8 +1127,8 @@ func ensureMongoMigrationIdentityAbsent(ctx context.Context, collection *mongo.C
 	return fmt.Errorf("target %s identity already exists", kind)
 }
 
-func mongoScheduledPublishTaskMentionsCollection(task store.Task, collectionID schema.StableID) bool {
-	if task.Slug != mongoScheduledPublishTaskSlug {
+func mongoScheduledPublicationTaskMentionsCollection(task store.Task, collectionID schema.StableID) bool {
+	if task.Slug != mongoScheduledPublicationTaskSlug {
 		return false
 	}
 	if task.Target != nil && task.Target.CollectionID == collectionID || task.RequestedBy != nil && task.RequestedBy.CollectionID == collectionID {
@@ -1147,7 +1147,7 @@ func mongoScheduledPublishTaskMentionsCollection(task store.Task, collectionID s
 	return false
 }
 
-func rewriteMongoScheduledPublishTaskCollectionID(task store.Task, before, after schema.StableID) (store.Task, bool, error) {
+func rewriteMongoScheduledPublicationTaskCollectionID(task store.Task, before, after schema.StableID) (store.Task, bool, error) {
 	var input map[string]json.RawMessage
 	if err := json.Unmarshal(task.Input, &input); err != nil || input == nil {
 		if err == nil {
@@ -1193,7 +1193,7 @@ func rewriteMongoScheduledPublishTaskCollectionID(task store.Task, before, after
 		collectionID = string(after)
 		input["collectionID"], _ = json.Marshal(collectionID)
 		updated.Target.CollectionID = after
-		updated.ConcurrencyKey = mongoScheduledPublishConcurrencyKey(after, documentID)
+		updated.ConcurrencyKey = mongoScheduledPublicationConcurrencyKey(after, documentID)
 		changed = true
 	}
 	if requestedCollectionPresent && requestedCollection == string(before) {
@@ -1230,7 +1230,7 @@ func mongoMigrationOptionalJSONString(input map[string]json.RawMessage, key stri
 	return *value, true, nil
 }
 
-func mongoScheduledPublishConcurrencyKey(collectionID schema.StableID, documentID string) string {
+func mongoScheduledPublicationConcurrencyKey(collectionID schema.StableID, documentID string) string {
 	key := string(collectionID) + ":" + documentID
 	if len(key) <= store.MaxTaskConcurrencyKeyBytes {
 		return key

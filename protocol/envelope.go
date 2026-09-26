@@ -10,6 +10,172 @@ import (
 // independently from the schema manifest and project-command protocols.
 const CurrentVersion uint32 = 1
 
+// AdminPreparedRouteStateVersion is the browser bootstrap snapshot contract.
+const AdminPreparedRouteStateVersion uint32 = 1
+
+const AdminPreparedRouteStateMediaType = "application/vnd.ridu.admin-route-state+json"
+
+type AdminPreparedRouteOutcomeV1 string
+
+const (
+	AdminPreparedRoutePrepared AdminPreparedRouteOutcomeV1 = "prepared"
+	AdminPreparedRouteRedirect AdminPreparedRouteOutcomeV1 = "redirect"
+	AdminPreparedRouteReload   AdminPreparedRouteOutcomeV1 = "reload"
+	AdminPreparedRouteFallback AdminPreparedRouteOutcomeV1 = "fallback"
+)
+
+type AdminPreparedRouteKindV1 string
+
+const (
+	AdminPreparedRouteLogin              AdminPreparedRouteKindV1 = "login"
+	AdminPreparedRouteSetup              AdminPreparedRouteKindV1 = "setup"
+	AdminPreparedRouteDashboard          AdminPreparedRouteKindV1 = "dashboard"
+	AdminPreparedRouteCustom             AdminPreparedRouteKindV1 = "custom"
+	AdminPreparedRouteCollectionList     AdminPreparedRouteKindV1 = "collection-list"
+	AdminPreparedRouteCollectionTrash    AdminPreparedRouteKindV1 = "collection-trash"
+	AdminPreparedRouteCollectionCreate   AdminPreparedRouteKindV1 = "collection-create"
+	AdminPreparedRouteCollectionDocument AdminPreparedRouteKindV1 = "collection-document"
+	AdminPreparedRouteCollectionAPI      AdminPreparedRouteKindV1 = "collection-api"
+	AdminPreparedRouteCollectionVersions AdminPreparedRouteKindV1 = "collection-versions"
+	AdminPreparedRouteGlobalVersions     AdminPreparedRouteKindV1 = "global-versions"
+	AdminPreparedRouteUpload             AdminPreparedRouteKindV1 = "upload"
+	AdminPreparedRouteGlobalDocument     AdminPreparedRouteKindV1 = "global-document"
+	AdminPreparedRouteGlobalAPI          AdminPreparedRouteKindV1 = "global-api"
+	AdminPreparedRouteAccount            AdminPreparedRouteKindV1 = "account"
+	AdminPreparedRouteSecurity           AdminPreparedRouteKindV1 = "security"
+	AdminPreparedRouteNotFound           AdminPreparedRouteKindV1 = "not-found"
+	AdminPreparedRouteError              AdminPreparedRouteKindV1 = "error"
+)
+
+type AdminPreparedRouteDataV1 struct {
+	Kind     AdminPreparedRouteKindV1                       `json:"kind"`
+	Data     *AdminCollectionListDataV1                     `json:"data,omitempty"`
+	Document *AdminDocumentDataV1                           `json:"document,omitempty"`
+	Create   *AdminCreateDataV1                             `json:"create,omitempty"`
+	Versions *AdminVersionsDataV1                           `json:"versions,omitempty"`
+	Access   *AdminReadResultV1[AccessCapabilitiesEnvelope] `json:"access,omitempty"`
+	Security *AdminSecurityDataV1                           `json:"security,omitempty"`
+}
+
+// AdminReadResultV1 preserves independent read failures inside a prepared page.
+// Exactly one of Value or Error is present; it is not an SDK request transcript.
+type AdminReadResultV1[Value any] struct {
+	Value *Value        `json:"value,omitempty"`
+	Error *ErrorPayload `json:"error,omitempty"`
+}
+
+type AdminDocumentDataV1 struct {
+	Document AdminReadResultV1[map[string]any]             `json:"document"`
+	Access   AdminReadResultV1[AccessCapabilitiesEnvelope] `json:"access"`
+}
+
+type AdminCreateDataV1 struct {
+	Values map[string]any                                `json:"values"`
+	Access AdminReadResultV1[AccessCapabilitiesEnvelope] `json:"access"`
+}
+
+type DocumentVersion[Document any] struct {
+	ID         string
+	DocumentID string
+	Revision   int
+	Status     string
+	Snapshot   Document
+	CreatedAt  string
+}
+
+type AdminVersionsDataV1 struct {
+	History  AdminReadResultV1[[]DocumentVersion[map[string]any]] `json:"history"`
+	Detail   *AdminReadResultV1[DocumentVersion[map[string]any]]  `json:"detail,omitempty"`
+	Document AdminDocumentDataV1                                  `json:"document"`
+}
+
+type AdminSecurityDataV1 struct {
+	Sessions AdminReadResultV1[[]AuthSessionInfo] `json:"sessions"`
+	APIKeys  AdminReadResultV1[[]APIKeyInfo]      `json:"apiKeys"`
+}
+
+// AdminCollectionListDataV1 is the list read model, independent of SDK method
+// names. Counts contains only the status counts read by this response.
+type AdminCollectionListDataV1 struct {
+	Query       AdminCollectionListQueryV1            `json:"query"`
+	Page        *AdminCollectionListPageV1            `json:"page,omitempty"`
+	Counts      map[string]AdminCollectionListCountV1 `json:"counts"`
+	Preferences *AdminCollectionListPreferencesV1     `json:"preferences,omitempty"`
+}
+
+type AdminCollectionListQueryV1 struct {
+	Where      json.RawMessage `json:"where,omitempty"`
+	CountWhere json.RawMessage `json:"countWhere,omitempty"`
+	Locale     string          `json:"locale,omitempty"`
+	Trash      bool            `json:"trash"`
+}
+
+type AdminCollectionListPageV1 struct {
+	Value *CollectionPageEnvelope[map[string]any] `json:"value,omitempty"`
+	Error *ErrorPayload                           `json:"error,omitempty"`
+}
+
+type AdminCollectionListCountV1 struct {
+	Value *int          `json:"value,omitempty"`
+	Error *ErrorPayload `json:"error,omitempty"`
+}
+
+type AdminCollectionListPreferenceV1 struct {
+	Value json.RawMessage `json:"value,omitempty"`
+	Error *ErrorPayload   `json:"error,omitempty"`
+}
+
+type AdminCollectionListPreferencesV1 struct {
+	Workspace AdminCollectionListPreferenceV1 `json:"workspace"`
+	Presets   AdminCollectionListPreferenceV1 `json:"presets"`
+}
+
+// AdminPreparedNavigationV1 contains the runtime values resolved for each route.
+// Locale and capabilities can change without changing the identity context.
+type AdminPreparedNavigationV1 struct {
+	CollectionOperations map[string]OperationCapabilities `json:"collectionOperations"`
+	GlobalOperations     map[string]OperationCapabilities `json:"globalOperations"`
+	ContentLocale        string                           `json:"contentLocale,omitempty"`
+}
+
+// AdminPreparedRuntimeV1 is the complete safe global admin bootstrap. It never
+// contains credentials, access predicates, executable hooks, or lock state.
+type AdminPreparedRuntimeV1 struct {
+	AdminPreparedNavigationV1
+	Manifest      schema.Snapshot              `json:"manifest"`
+	Session       *AuthSession[map[string]any] `json:"session,omitempty"`
+	AuthBootstrap bool                         `json:"authBootstrapAvailable"`
+	Theme         string                       `json:"theme"`
+	AdminLanguage string                       `json:"adminLanguage,omitempty"`
+	AdminTimeZone string                       `json:"adminTimeZone,omitempty"`
+	Preferences   map[string]json.RawMessage   `json:"preferences"`
+}
+
+type AdminPreparedRouteDiagnosticV1 struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
+type AdminPreparedRouteStateV1 struct {
+	Version  uint32                      `json:"version"`
+	Outcome  AdminPreparedRouteOutcomeV1 `json:"outcome"`
+	Pathname string                      `json:"pathname"`
+	Search   string                      `json:"search"`
+	// ContextKey binds reusable runtime state to the resolved identity, manifest,
+	// session and admin build. Fingerprint additionally binds it to this route.
+	ContextKey  string `json:"contextKey"`
+	Fingerprint string `json:"fingerprint"`
+	// BuildID identifies the static bootstrap contract used to prepare this response.
+	BuildID      string                                        `json:"buildId"`
+	ModuleGroups []string                                      `json:"moduleGroups"`
+	Runtime      *AdminPreparedRuntimeV1                       `json:"runtime,omitempty"`
+	Navigation   *AdminPreparedNavigationV1                    `json:"navigation,omitempty"`
+	Route        *AdminPreparedRouteDataV1                     `json:"route,omitempty"`
+	Loaders      map[string]AdminReadResultV1[json.RawMessage] `json:"loaders,omitempty"`
+	Location     string                                        `json:"location,omitempty"`
+	Diagnostic   *AdminPreparedRouteDiagnosticV1               `json:"diagnostic,omitempty"`
+}
+
 // ErrorCode is a stable machine-readable failure category.
 type ErrorCode string
 
@@ -73,6 +239,21 @@ type PageEnvelope[Document any] struct {
 	Pagination Pagination `json:"pagination"`
 }
 
+// CollectionPageAccess carries list-scoped access capabilities for the
+// collection and every document returned in the page.
+type CollectionPageAccess struct {
+	Collection AccessCapabilitiesEnvelope            `json:"collection"`
+	Documents  map[string]AccessCapabilitiesEnvelope `json:"documents"`
+}
+
+// CollectionPageEnvelope enriches one collection page with access metadata
+// when the caller explicitly requests it.
+type CollectionPageEnvelope[Document any] struct {
+	Docs       []Document           `json:"docs"`
+	Pagination Pagination           `json:"pagination"`
+	Access     CollectionPageAccess `json:"access"`
+}
+
 // CountEnvelope is the exact cardinality after caller and access filters.
 type CountEnvelope struct {
 	TotalDocs int `json:"totalDocs"`
@@ -107,10 +288,12 @@ type PreferenceEnvelope[Value any] struct {
 	Value Value `json:"value"`
 }
 
-// ScheduledPublish is the safe public representation of one queued publish.
+// ScheduledPublication is the safe public representation of one actionable publication change.
 // Requesting auth identities are deliberately not exposed.
-type ScheduledPublish struct {
+type ScheduledPublication struct {
+	TimeZone         string `json:"timeZone,omitempty"`
 	ID               string `json:"id"`
+	Action           string `json:"action"`
 	DocumentID       string `json:"documentId"`
 	ExpectedRevision int    `json:"expectedRevision"`
 	RunAt            string `json:"runAt"`
@@ -119,12 +302,12 @@ type ScheduledPublish struct {
 	CreatedAt        string `json:"createdAt"`
 }
 
-type ScheduledPublishEnvelope struct {
-	ScheduledPublish ScheduledPublish `json:"scheduledPublish"`
+type ScheduledPublicationEnvelope struct {
+	ScheduledPublication ScheduledPublication `json:"scheduledPublication"`
 }
 
-type ScheduledPublishesEnvelope struct {
-	ScheduledPublishes []ScheduledPublish `json:"scheduledPublishes"`
+type ScheduledPublicationsEnvelope struct {
+	ScheduledPublications []ScheduledPublication `json:"scheduledPublications"`
 }
 
 // OperationCapabilities is a non-secret summary of operations the current

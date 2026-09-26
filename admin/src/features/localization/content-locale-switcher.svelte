@@ -3,7 +3,7 @@
 	import CheckIcon from "~icons/lucide/check";
 	import ChevronDownIcon from "~icons/lucide/chevron-down";
 
-	import { buttonVariants } from "@admin/components/ui/button";
+	import "@admin/features/localization/content-locale-switcher.scss";
 	import {
 		DropdownMenu,
 		DropdownMenuContent,
@@ -16,48 +16,55 @@
 	const runtime = getAdminRuntime();
 	const notifications = getNotificationCenter();
 	const navigate = useNavigate();
-	const location = $derived(useLocation());
+	const location = useLocation();
+
 	const localization = $derived(runtime.manifest?.application.localization);
 	const locale = $derived(
 		localization?.locales.find((candidate) => candidate.code === runtime.contentLocale)
 	);
-	const disabled = $derived(runtime.contentLocaleSwitchBlocked);
+	const disabled = $derived(
+		runtime.contentLocaleSwitchBlocked || runtime.contentLocaleTransitioning
+	);
 
 	$effect(() => {
-		const requested = new URLSearchParams(location.search).get("locale");
+		const requested = new URLSearchParams(location.current.search).get("locale");
 		if (
 			requested !== null &&
 			localization?.locales.some((candidate) => candidate.code === requested) === true &&
 			requested !== runtime.contentLocale
 		) {
-			if (!runtime.adoptContentLocale(requested)) updateRouteLocale(runtime.contentLocale);
+			updateRouteLocale(runtime.contentLocale);
 		}
 	});
 
 	async function selectLocale(nextLocale: string) {
 		if (disabled || nextLocale === runtime.contentLocale) return;
-		const previousLocale = runtime.contentLocale;
-		updateRouteLocale(nextLocale);
+
+		runtime.contentLocaleTransitioning = true;
+
 		try {
-			await runtime.setContentLocale(nextLocale);
+			await runtime.persistContentLocalePreference(nextLocale);
+			await updateRouteLocale(nextLocale);
 		} catch (cause) {
-			updateRouteLocale(runtime.contentLocale ?? previousLocale);
 			notifications.error({
 				title: runtime.i18n.t("errors:save"),
 				message: cause instanceof Error ? cause.message : undefined,
 			});
+		} finally {
+			runtime.contentLocaleTransitioning = false;
 		}
 	}
 
-	function updateRouteLocale(nextLocale: string | undefined) {
-		const search = new URLSearchParams(location.search);
+	async function updateRouteLocale(nextLocale: string | undefined) {
+		const search = new URLSearchParams(location.current.search);
 		if (nextLocale === undefined) search.delete("locale");
 		else search.set("locale", nextLocale);
-		navigate(
+
+		await navigate(
 			{
-				pathname: location.pathname,
+				pathname: location.current.pathname,
 				search: search.size === 0 ? "" : `?${search}`,
-				hash: location.hash,
+				hash: location.current.hash,
 			},
 			{ replace: true }
 		);
@@ -67,16 +74,16 @@
 {#if localization !== undefined && localization.locales.length > 1 && locale !== undefined}
 	<DropdownMenu>
 		<DropdownMenuTrigger
-			class={buttonVariants({ variant: "ghost", size: "sm", class: "gap-1.5 px-2.5" })}
+			class="ridu-content-locale"
 			{disabled}
 			aria-label={runtime.i18n.t("documents:contentLocale")}
 			title={disabled ? runtime.i18n.t("documents:saveBeforeLocaleSwitch") : undefined}
 		>
-			<span class="hidden text-foreground-faint sm:inline">
+			<span class="ridu-content-locale__label">
 				{runtime.i18n.t("documents:locale")}:
 			</span>
 			<span>{locale.label}</span>
-			<ChevronDownIcon class="size-3 text-foreground-faint" aria-hidden="true" />
+			<ChevronDownIcon class="ridu-content-locale__chevron" aria-hidden="true" />
 		</DropdownMenuTrigger>
 		<DropdownMenuContent class="min-w-48">
 			{#each localization.locales as candidate (candidate.code)}

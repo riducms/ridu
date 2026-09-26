@@ -1,44 +1,12 @@
 import { expect, test } from "./fixture";
 
-import { documentSaveButton } from "./helpers";
+import { documentSaveButton, loginAsEditor, observePageErrors } from "./helpers";
 
-test("authentication, dashboard, versions, globals, and field layouts", async ({ page }) => {
-	test.setTimeout(90_000);
-	const consoleErrors: string[] = [];
-	const pageErrors: string[] = [];
-	page.on("console", (message) => {
-		if (message.type() === "error") consoleErrors.push(message.text());
-	});
-	page.on("pageerror", (error) => pageErrors.push(error.message));
-	await page.goto("/admin/collections/posts");
-	await expect(page).toHaveURL(/\/admin\/login\?redirect=%2Fcollections%2Fposts$/);
-	await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
-
-	await page.getByLabel("Email address").fill("editor@riducms.test");
-	await page.getByRole("textbox", { name: "Password", exact: true }).fill("wrong-password");
-	await page.getByRole("button", { name: "Sign in" }).click();
-	await expect(page.getByRole("alert")).toContainText("invalid email or password");
-
-	await page.getByRole("textbox", { name: "Password", exact: true }).fill("ridu-browser");
-	await page.getByRole("button", { name: "Sign in" }).click();
-	const collectionsNavigation = page.getByRole("navigation", { name: "Admin navigation" });
-	await expect(collectionsNavigation).toBeVisible();
-	await page.getByRole("button", { name: "Close navigation" }).click();
-	await expect(collectionsNavigation).toBeHidden();
-	await expect
-		.poll(async () => Math.round((await page.locator("main").boundingBox())?.x ?? -1))
-		.toBe(0);
-	const openMenu = page.getByRole("button", { name: "Open navigation" });
-	await expect(openMenu).toBeFocused();
-	await openMenu.click();
-	await expect(collectionsNavigation).toBeVisible();
-	expect(pageErrors).toEqual([]);
-	expect(consoleErrors).toEqual([
-		"Failed to load resource: the server responded with a status of 401 (Unauthorized)",
-		"Failed to load resource: the server responded with a status of 401 (Unauthorized)",
-	]);
-	consoleErrors.length = 0;
-	await page.getByRole("link", { name: "Ridu editorial kitchen sink", exact: true }).click();
+test("dashboard cards and the plugin route use the configured application extensions", async ({
+	page,
+}) => {
+	const errors = observePageErrors(page);
+	await loginAsEditor(page);
 	await expect(page).toHaveURL(/\/admin\/?$/);
 	await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toContainText("Dashboard");
 	await expect(page.getByRole("heading", { name: "Content", exact: true })).toBeVisible();
@@ -56,30 +24,17 @@ test("authentication, dashboard, versions, globals, and field layouts", async ({
 		"href",
 		"/admin/collections/posts/create"
 	);
-	const contentSummary = collectionsNavigation.locator("summary").filter({ hasText: "Content" });
-	const contentNavigationGroup = contentSummary.locator("..");
-	await contentSummary.click();
-	await expect(
-		contentNavigationGroup.getByRole("link", { name: "Posts", exact: true })
-	).toBeHidden();
-	await contentSummary.click();
-	await expect(
-		contentNavigationGroup.getByRole("link", { name: "Posts", exact: true })
-	).toBeVisible();
 	await expect(page.getByRole("heading", { name: "Editorial pulse" })).toBeVisible();
 	await page.getByRole("link", { name: "Plugin contract", exact: true }).click();
 	await expect(page.getByRole("heading", { name: "Plugin route contract" })).toBeVisible();
-	await page.goto("/admin/collections/pages/pages_10");
-	await expect(page.getByLabel("Title", { exact: true })).toHaveValue("About Ridu");
-	await page.reload();
-	await page.goto("/admin/collections/pages/pages_10/versions/2");
-	await expect(page.getByRole("heading", { name: "Revision 2" })).toBeVisible();
-	await page.getByRole("button", { name: "Restore as draft" }).click();
-	await expect(page).toHaveURL(/\/admin\/collections\/pages\/pages_10(?:\?locale=en)?$/);
-	await expect(page.getByText("Revision 2 restored as draft")).toBeVisible();
-	expect(consoleErrors).toEqual([]);
+	expect(errors.consoleErrors).toEqual([]);
+	expect(errors.pageErrors).toEqual([]);
+});
 
-	await collectionsNavigation.getByRole("link", { name: "Site settings", exact: true }).click();
+test("global authoring preserves published values and global-only actions", async ({ page }) => {
+	const errors = observePageErrors(page);
+	await loginAsEditor(page);
+	await page.goto("/admin/globals/site-settings?locale=en");
 	await expect(page).toHaveURL(/\/admin\/globals\/site-settings(?:\?locale=en)?$/);
 	await expect(page.getByRole("heading", { name: "Site settings", exact: true })).toBeVisible();
 	await expect(page.getByLabel("Site name", { exact: true })).toHaveValue(
@@ -103,15 +58,23 @@ test("authentication, dashboard, versions, globals, and field layouts", async ({
 	await expect(page.getByLabel("Announcement — English", { exact: true })).toHaveValue(
 		"Globals have drafts, hooks, access, versions, and generated types."
 	);
-	expect(consoleErrors).toEqual([]);
+	expect(errors.consoleErrors).toEqual([]);
+	expect(errors.pageErrors).toEqual([]);
+});
 
+test("field layouts, clipboard actions, generated rows, and responsive placement stay integrated", async ({
+	page,
+}) => {
+	test.setTimeout(60_000);
+	const errors = observePageErrors(page);
+	const collectionsNavigation = await loginAsEditor(page);
 	await collectionsNavigation.getByRole("link", { name: "Field showcase", exact: true }).click();
 	await page.getByRole("link", { name: "Field and array parity", exact: true }).click();
 	await expect(page.getByLabel("Title", { exact: true })).toHaveAttribute(
 		"placeholder",
 		"Name this field showcase"
 	);
-	await expect(page.getByLabel("Code", { exact: true })).toHaveValue("export const parity = true;");
+	await expect(page.getByLabel("Code", { exact: true })).toHaveText("export const parity = true;");
 	const audiences = page.locator('[data-field-path="audiences"]');
 	await expect(audiences.getByRole("button", { name: "Remove Editors" })).toBeVisible();
 	await expect(audiences.getByRole("button", { name: "Remove Reviewers" })).toBeVisible();
@@ -121,11 +84,15 @@ test("authentication, dashboard, versions, globals, and field layouts", async ({
 	await page.getByRole("option", { name: "Reviewers", exact: true }).click();
 	await page.getByRole("option", { name: "Administrators", exact: true }).click();
 	await page.keyboard.press("Escape");
-	await expect(audiences.locator("ul > li > span")).toHaveText(["Reviewers", "Administrators"]);
+	await expect(audiences.locator(".ridu-combobox-tag")).toHaveText(["Reviewers", "Administrators"]);
 	const documentSidebar = page.locator("[data-document-sidebar-fields]");
 	await expect(documentSidebar.getByRole("radio", { name: "High", exact: true })).toBeChecked();
-	await expect(documentSidebar.getByLabel("Longitude", { exact: true })).toHaveValue("-0.1276");
-	await expect(documentSidebar.getByLabel("Latitude", { exact: true })).toHaveValue("51.5072");
+	await expect(
+		documentSidebar.getByRole("spinbutton", { name: "Location - Longitude", exact: true })
+	).toHaveValue("-0.1276");
+	await expect(
+		documentSidebar.getByRole("spinbutton", { name: "Location - Latitude", exact: true })
+	).toHaveValue("51.5072");
 	await expect(page.getByText("This content is presentation-only")).toBeVisible();
 	const advancedSettings = page.locator("[data-field-collapsible]");
 	await expect(advancedSettings).not.toHaveAttribute("open");
@@ -204,6 +171,6 @@ test("authentication, dashboard, versions, globals, and field layouts", async ({
 			return sidebarBox.y >= mainBox.y + mainBox.height;
 		})
 		.toBe(true);
-	expect(consoleErrors).toEqual([]);
-	expect(pageErrors).toEqual([]);
+	expect(errors.consoleErrors).toEqual([]);
+	expect(errors.pageErrors).toEqual([]);
 });

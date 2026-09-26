@@ -1,12 +1,13 @@
 <script lang="ts">
 	import { tick } from "svelte";
 	import type { SchemaField } from "@riducms/protocol";
-	import { fieldControlARIA } from "@riducms/ui";
+	import { fieldControlARIA, Button, Input } from "@riducms/ui";
+	import PlusIcon from "~icons/lucide/plus";
+	import "@admin/fields/primitive-list/primitive-list.scss";
 	import ArrowUpIcon from "~icons/lucide/arrow-up";
 	import ArrowDownIcon from "~icons/lucide/arrow-down";
 	import XIcon from "~icons/lucide/x";
-	import { Button } from "@admin/components/ui/button";
-	import { Input } from "@admin/components/ui/input";
+
 	import type { FormController } from "@admin/core/forms/form-controller.svelte";
 	import { getAdminI18n } from "@riducms/plugin";
 	import FieldShell from "@admin/fields/field-shell.svelte";
@@ -38,7 +39,7 @@
 	let container: HTMLDivElement;
 	let announcement = $state("");
 	// Only DOM identity lives here. The form owns all values, including unfinished numeric input.
-	let keys = $state<string[]>([]);
+	let keys = $state.raw<string[]>([]);
 	const itemKey = (index: number) => keys[index] ?? `initial-${index}`;
 
 	async function focusItem(index: number) {
@@ -59,6 +60,20 @@
 		announcement = i18n.t("fields:listAdded", { number: index + 1 });
 		await focusItem(index);
 	}
+	async function typeNewItem(event: Event) {
+		const input = event.currentTarget as HTMLInputElement;
+		if (!canAdd || input.value === "") return;
+		const index = values.length;
+		update(
+			[...values, field.type === "number-list" ? primitiveNumberInput(input.value) : input.value],
+			[...values.map((_, at) => itemKey(at)), crypto.randomUUID()]
+		);
+		input.value = "";
+		await focusItem(index);
+		const item = container.querySelector<HTMLInputElement>(`[data-list-item="${index}"]`);
+		item?.setSelectionRange(item.value.length, item.value.length);
+	}
+
 	function edit(index: number, value: string) {
 		if (editingBlocked) return;
 		const next = [...values];
@@ -87,6 +102,11 @@
 		await focusItem(destination);
 	}
 	function keyboard(event: KeyboardEvent, index: number) {
+		if (event.key === "Enter" && !event.isComposing) {
+			event.preventDefault();
+			container.querySelector<HTMLInputElement>("[data-list-entry]")?.focus();
+			return;
+		}
 		if (!event.altKey || (event.key !== "ArrowUp" && event.key !== "ArrowDown")) return;
 		event.preventDefault();
 		return move(index, event.key === "ArrowUp" ? -1 : 1);
@@ -94,21 +114,32 @@
 </script>
 
 <FieldShell {field} {issues}>
-	<div bind:this={container} class="grid gap-2">
-		<p id="{field.id}-count" class="text-xs text-foreground-muted">
+	<div
+		bind:this={container}
+		class="ridu-primitive-list"
+		data-invalid={issues.length > 0}
+		data-readonly={editingBlocked}
+	>
+		<p id="{field.id}-count" class="ridu-primitive-list__count">
 			{i18n.t("fields:itemCount", { count: values.length })}
 			{#if minimum > 0}
-				· {i18n.t("fields:minimum", { count: minimum })}{/if}
+				· {i18n.t("fields:minimum", { count: minimum })}
+			{/if}
 			{#if field.list?.maxRows}
-				· {i18n.t("fields:maximum", { count: field.list.maxRows })}{/if}
+				· {i18n.t("fields:maximum", { count: field.list.maxRows })}
+			{/if}
 		</p>
-		{#if values.length === 0}<p class="text-sm text-foreground-muted">
+		{#if values.length === 0}
+			<p class="ridu-primitive-list__empty">
 				{i18n.t("fields:listEmpty")}
-			</p>{/if}
-		<ol class="grid gap-2" aria-label={field.admin.label}>
+			</p>
+		{/if}
+		<ol class="ridu-primitive-list__items" aria-label={field.admin.label}>
 			{#each values as value, index (itemKey(index))}
-				<li class="flex items-center gap-1">
+				<li class="ridu-primitive-list__item">
 					<Input
+						class="ridu-primitive-list__input"
+						style={`width: ${Math.max(1, String(value ?? "").length) + 1}ch`}
 						id={index === 0 ? field.id : `${field.id}-item-${itemKey(index)}`}
 						data-list-item={index}
 						aria-label={i18n.t("fields:listItem", {
@@ -126,45 +157,58 @@
 					<Button
 						variant="ghost"
 						size="icon"
+						class="ridu-primitive-list__move"
 						aria-label={i18n.t("fields:listMoveUp", { number: index + 1 })}
 						disabled={editingBlocked || index === 0}
 						onclick={() => move(index, -1)}
 					>
-						<ArrowUpIcon class="size-4" />
+						<ArrowUpIcon />
 					</Button>
 					<Button
 						variant="ghost"
 						size="icon"
+						class="ridu-primitive-list__move"
 						aria-label={i18n.t("fields:listMoveDown", { number: index + 1 })}
 						disabled={editingBlocked || index === values.length - 1}
 						onclick={() => move(index, 1)}
 					>
-						<ArrowDownIcon class="size-4" />
+						<ArrowDownIcon />
 					</Button>
 					<Button
 						variant="ghost"
 						size="icon"
+						class="ridu-primitive-list__remove"
 						aria-label={i18n.t("fields:listRemove", { number: index + 1 })}
 						disabled={editingBlocked}
 						onclick={() => remove(index)}
 					>
-						<XIcon class="size-4" />
+						<XIcon />
 					</Button>
 				</li>
 			{/each}
 		</ol>
+		<input
+			class="ridu-primitive-list__entry"
+			data-list-entry
+			aria-label={`${field.admin.label}: ${i18n.t("fields:listAdd")}`}
+			placeholder={field.admin.placeholder}
+			disabled={!canAdd}
+			autocomplete="off"
+			oninput={typeNewItem}
+		/>
 		<Button
 			id={values.length === 0 ? field.id : undefined}
 			data-list-add
 			aria-label={i18n.t("fields:listAdd")}
 			{...controlARIA}
-			variant="outline"
-			class="w-fit"
+			variant="ghost"
+			size="icon-sm"
+			class="ridu-primitive-list__add"
 			disabled={!canAdd}
 			onclick={add}
 		>
-			{i18n.t("fields:listAdd")}
+			<PlusIcon aria-hidden="true" />
 		</Button>
-		<p class="sr-only" role="status">{announcement}</p>
+		<p class="ridu-primitive-list__announcement" role="status">{announcement}</p>
 	</div>
 </FieldShell>

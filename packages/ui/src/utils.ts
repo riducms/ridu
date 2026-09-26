@@ -1,6 +1,3 @@
-export { cn, tv } from "tailwind-variants";
-export type { ClassValue, VariantProps } from "tailwind-variants";
-
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type WithoutChild<T> = T extends { child?: any } ? Omit<T, "child"> : T;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

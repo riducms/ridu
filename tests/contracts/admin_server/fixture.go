@@ -39,7 +39,8 @@ func fixtureConfig(uploadStorage storage.Backend) ridu.Config {
 			"ar": "مطبخ ريدو التحريري",
 		},
 		Admin: ridu.AdminConfig{
-			User: "users",
+			Loaders: []ridu.AdminLoaderDefinition{editorialDashboard, editorialView},
+			User:    "users",
 			Localization: ridu.AdminLocalizationConfig{
 				Languages: []ridu.AdminLanguage{
 					{
@@ -99,6 +100,7 @@ func fixtureConfig(uploadStorage storage.Backend) ridu.Config {
 			},
 		},
 		Collections: []ridu.Collection{
+			loaderRecords,
 			usersCollection,
 			unifiedfields.Collection(),
 			issuetargets.Collection(),
@@ -120,6 +122,7 @@ func fixtureConfig(uploadStorage storage.Backend) ridu.Config {
 			payloadOnlyCapabilitiesCollection,
 		},
 		Globals: []ridu.Global{
+			loaderSummary,
 			siteSettingsGlobal,
 			livevalidation.Global(),
 		},
@@ -335,7 +338,7 @@ var mediaCollection = ridu.Collection{
 			Label("Alt text").
 			Required().
 			Admin(field.Admin{Description: "Describe the image for people who cannot see it."}),
-		field.Textarea("caption").Admin(field.Admin{Description: "Optional editorial caption."}),
+		field.Textarea("caption"),
 		field.Row(field.Fields{
 			field.Relationship("credit", "users").Admin(field.Admin{Columns: 6}),
 			field.Select("kind").Options(
@@ -347,7 +350,7 @@ var mediaCollection = ridu.Collection{
 		}),
 		field.Array("tags", field.Fields{
 			field.Text("label").Required(),
-		}),
+		}).Admin(field.Admin{RowLabels: field.RowLabels{Singular: "Tag", Plural: "Tags"}}),
 	},
 	Access: ridu.CollectionAccess{
 		Read:   allowEveryone,

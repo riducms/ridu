@@ -18,6 +18,7 @@ import (
 
 // App is a resolved Ridu application bound to one document store.
 type App struct {
+	adminLoaders           []AdminLoaderDefinition
 	manifest               schema.Manifest
 	local                  *LocalAPI
 	auth                   store.AuthStore
@@ -229,6 +230,7 @@ func New(applicationConfig Config, backend store.Store) (*App, error) {
 		uploads:                uploadManager,
 		tasks:                  tasks,
 		taskRegistry:           taskRegistry,
+		adminLoaders:           append([]AdminLoaderDefinition(nil), applicationConfig.Admin.Loaders...),
 		health:                 health,
 		readiness:              readiness,
 		migrationReadiness:     migrationReadiness,
@@ -247,7 +249,7 @@ func New(applicationConfig Config, backend store.Store) (*App, error) {
 		availableLocales:       applicationConfig.Localization.AvailableLocales,
 	}
 	if versionedCollectionsConfigured {
-		application.taskRegistry[builtinPublishTask] = scheduledPublishTaskRuntime(application)
+		application.taskRegistry[builtinPublishTask] = scheduledPublicationTaskRuntime(application)
 	}
 	pluginTransports, err := bindPluginTransports(applicationConfig.Plugins, application)
 	if err != nil {

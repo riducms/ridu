@@ -2,10 +2,13 @@
 
 Build-time configuration for Ridu admin applications and Svelte plugins.
 
-It provides the UnoCSS preset, Svelte preprocessing for Vite, `@/` and Ridu source aliases, Vite
+It provides build-time Sass compilation, the transitional layered UnoCSS preset, Svelte preprocessing for Vite, `@/` and Ridu source aliases, Vite
 library externalisation, icon setup, dependency deduplication, and schema reload during development.
 Pass application or plugin options to its factories instead of copying config files. Frontend
 packages do not need a separate `svelte.config.js`.
+
+Bootstrap metadata is evaluated and emitted only during production builds. Development keeps the
+Vite module graph and browser-loaded application configuration independent of that bundle step.
 
 The application config keeps framework Svelte packages out of dependency prebundling so their
 source aliases and preprocessing work during development. The dependency scanner starts from

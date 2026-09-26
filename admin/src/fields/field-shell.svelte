@@ -10,7 +10,7 @@
 		children,
 	}: {
 		field: SchemaField;
-		issues?: ValidationIssue[];
+		issues?: readonly ValidationIssue[];
 		children: Snippet;
 	} = $props();
 	const errorMessages = $derived(issues.map((issue) => issue.message));

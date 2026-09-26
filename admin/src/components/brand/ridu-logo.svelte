@@ -14,11 +14,25 @@
 </script>
 
 <span
-	class={[
-		"inline-block shrink-0 bg-current [mask:var(--ridu-logo)_center/contain_no-repeat] [-webkit-mask:var(--ridu-logo)_center/contain_no-repeat]",
-		variant === "arch" ? "aspect-[82/70]" : "aspect-[234/70]",
-		className,
-	]}
+	class={["ridu-logo", variant === "arch" ? "ridu-logo--arch" : "ridu-logo--word", className]}
 	style={`--ridu-logo: url("${source}")`}
 	aria-hidden="true"
 ></span>
+
+<style lang="scss">
+	@use "@riducms/ui/layers.css";
+	@layer ridu.components {
+		.ridu-logo {
+			display: inline-block;
+			flex-shrink: 0;
+			background: currentColor;
+			mask: var(--ridu-logo) center / contain no-repeat;
+		}
+		.ridu-logo--arch {
+			aspect-ratio: 82 / 70;
+		}
+		.ridu-logo--word {
+			aspect-ratio: 234 / 70;
+		}
+	}
+</style>

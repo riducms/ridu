@@ -1,19 +1,8 @@
 <script lang="ts">
 	import type { FieldAuthoringHost } from "@riducms/plugin";
 	import type { SchemaCollection, SchemaField } from "@riducms/protocol";
-	import { $insertNodeToNearestRoot, mergeRegister } from "@lexical/utils";
-	import {
-		$createParagraphNode,
-		$getNodeByKey,
-		$getPreviousSelection,
-		$getRoot,
-		$getSelection,
-		$isElementNode,
-		$isParagraphNode,
-		$isRangeSelection,
-		COMMAND_PRIORITY_EDITOR,
-		type NodeKey,
-	} from "lexical";
+	import { mergeRegister } from "@lexical/utils";
+	import { $getNodeByKey, COMMAND_PRIORITY_EDITOR, type NodeKey } from "lexical";
 	import { useLexicalComposerContext } from "@hvniel/lexical-svelte";
 
 	import {
@@ -21,6 +10,10 @@
 		REMOVE_RELATIONSHIP_COMMAND,
 	} from "@plugin-richtext/menu/rich-text-commands";
 	import type { RichTextConfig } from "@plugin-richtext/field/rich-text-config";
+	import {
+		insertReferenceNode,
+		removeReferenceNode,
+	} from "@plugin-richtext/field/reference-node-placement";
 	import {
 		createRelationshipNode,
 		isRelationshipNode,
@@ -38,7 +31,7 @@
 	} = $props();
 	const editor = useLexicalComposerContext()[0];
 	let browserOpen = $state(false);
-	let targetCollection = $state<SchemaCollection>();
+	let targetCollection = $state.raw<SchemaCollection>();
 	let documentID = $state<string>();
 	let browserMode = $state<"edit" | "insert" | "replace">("insert");
 	let replaceNodeKey: NodeKey | undefined;
@@ -61,9 +54,12 @@
 			editor.registerCommand(
 				OPEN_RELATIONSHIP_BROWSER_COMMAND,
 				(payload) => {
-					const collection = relationshipCollections.find(
-						(candidate) => candidate.slug === payload.collectionSlug
-					);
+					const collection =
+						payload.collectionSlug === undefined
+							? relationshipCollections[0]
+							: relationshipCollections.find(
+									(candidate) => candidate.slug === payload.collectionSlug
+								);
 					if (collection === undefined) return false;
 					browserMode =
 						payload.mode ??
@@ -85,16 +81,7 @@
 				(nodeKey) => {
 					const node = $getNodeByKey(nodeKey);
 					if (!isRelationshipNode(node)) return false;
-					const next = node.getNextSibling();
-					const previous = node.getPreviousSibling();
-					node.remove();
-					if ($isElementNode(next)) next.selectStart();
-					else if ($isElementNode(previous)) previous.selectEnd();
-					else {
-						const paragraph = $createParagraphNode();
-						$getRoot().append(paragraph);
-						paragraph.select();
-					}
+					removeReferenceNode(node);
 					return true;
 				},
 				COMMAND_PRIORITY_EDITOR
@@ -102,10 +89,13 @@
 		);
 	});
 
-	function commit(ids: string[]) {
+	function commit(ids: string[], collectionSlug: string) {
 		const id = ids[0];
-		const collection = targetCollection;
-		if (id === undefined || collection === undefined) return;
+		if (
+			id === undefined ||
+			!relationshipCollections.some((collection) => collection.slug === collectionSlug)
+		)
+			return;
 		if (browserMode === "edit") {
 			closeBrowser();
 			return;
@@ -113,21 +103,14 @@
 		editor.update(() => {
 			if (replaceNodeKey !== undefined) {
 				const current = $getNodeByKey(replaceNodeKey);
-				if (isRelationshipNode(current)) current.setReference(collection.slug, id);
+				if (isRelationshipNode(current)) current.setReference(collectionSlug, id);
 				return;
 			}
-			const selection = $getSelection() ?? $getPreviousSelection();
-			if (!$isRangeSelection(selection)) $getRoot().selectEnd();
-			const focusNode = $isRangeSelection(selection) ? selection.focus.getNode() : undefined;
 			const relationship = createRelationshipNode({
 				documentID: id,
-				relationTo: collection.slug,
+				relationTo: collectionSlug,
 			});
-			$insertNodeToNearestRoot(relationship);
-			if ($isParagraphNode(focusNode) && focusNode.getChildrenSize() === 0) focusNode.remove();
-			const paragraph = $createParagraphNode();
-			relationship.insertAfter(paragraph);
-			paragraph.select();
+			insertReferenceNode(relationship);
 		});
 		closeBrowser();
 	}
@@ -165,6 +148,7 @@
 		open
 		field={browserField}
 		collection={targetCollection}
+		{...browserMode === "edit" ? {} : { collections: relationshipCollections }}
 		hasMany={false}
 		selectedIDs={documentID === undefined ? [] : [documentID]}
 		{...browserMode === "edit" && documentID !== undefined ? { initialDocumentID: documentID } : {}}

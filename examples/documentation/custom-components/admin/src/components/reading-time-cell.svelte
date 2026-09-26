@@ -1,7 +1,7 @@
 <script lang="ts">
-	import type { AdminListCellProps } from '@riducms/plugin';
+	import type { AdminListCellRendererProps } from '@riducms/plugin';
 
-	let { value }: AdminListCellProps = $props();
+	let { value }: AdminListCellRendererProps = $props();
 </script>
 
 <span>

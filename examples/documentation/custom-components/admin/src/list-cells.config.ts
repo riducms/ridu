@@ -4,7 +4,7 @@ import ReadingTimeCell from './components/reading-time-cell.svelte';
 
 export default defineAdmin({
 	plugins: generatedAdminPlugins,
-	listCells: [
+	listCellRenderers: [
 		{
 			key: 'reading-time',
 			collection: 'posts',

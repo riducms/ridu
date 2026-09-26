@@ -2,6 +2,7 @@ package typescript
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strconv"
@@ -17,6 +18,11 @@ type clientGenerator struct{ blocks *blocktypes.Catalog }
 // Client generates one application's exact document and SDK binding types.
 func Client(manifest schema.Manifest) ([]byte, error) {
 	snapshot := manifest.Snapshot()
+	// NewManifest also accepts hand-built snapshots, so enforce the loader shape
+	// at this generator boundary before dereferencing array elements below.
+	if err := schema.ValidateAdminLoaders(snapshot.Application.AdminLoaders); err != nil {
+		return nil, err
+	}
 	catalog, err := blocktypes.Build(snapshot)
 	if err != nil {
 		return nil, err
@@ -44,6 +50,27 @@ func Client(manifest schema.Manifest) ([]byte, error) {
 	output.WriteString("import { createClient as createRuntimeClient } from \"@riducms/sdk\";\n")
 	output.WriteString("import type { ClientOptions, RiduClient } from \"@riducms/sdk\";\n\n")
 	output.WriteString("export type ID = string;\n\n")
+	if len(snapshot.Application.AdminLoaders) > 0 {
+		output.WriteString("import { createAdminLoader } from \"@riducms/sdk\";\n\n")
+		output.WriteString("export interface AdminLoaderInputs {\n")
+		for _, loader := range snapshot.Application.AdminLoaders {
+			fmt.Fprintf(&output, "\t%q: %s;\n", loader.Key, adminDataType(loader.Input, true))
+		}
+		output.WriteString("}\n\nexport interface AdminLoaderData {\n")
+		for _, loader := range snapshot.Application.AdminLoaders {
+			fmt.Fprintf(&output, "\t%q: %s;\n", loader.Key, adminDataType(loader.Output, false))
+		}
+		output.WriteString("}\n\n")
+		output.WriteString("export const adminLoaders = {\n")
+		for _, loader := range snapshot.Application.AdminLoaders {
+			encoded, err := json.Marshal(loader)
+			if err != nil {
+				return nil, err
+			}
+			fmt.Fprintf(&output, "\t%q: createAdminLoader<AdminLoaderInputs[%q], AdminLoaderData[%q]>(%s),\n", loader.Key, loader.Key, loader.Key, encoded)
+		}
+		output.WriteString("} as const;\n\n")
+	}
 	if snapshot.Application.Localization != nil {
 		locales := make([]string, len(snapshot.Application.Localization.Locales))
 		for index, locale := range snapshot.Application.Localization.Locales {
@@ -142,6 +169,29 @@ func Client(manifest schema.Manifest) ([]byte, error) {
 	return output.Bytes(), nil
 }
 
+func adminDataType(value schema.AdminDataType, input bool) string {
+	result := value.Kind
+	switch value.Kind {
+	case "object":
+		var fields []string
+		for name, field := range value.Fields {
+			optional := ""
+			if field.Optional || input {
+				optional = "?"
+			}
+			fields = append(fields, strconv.Quote(name)+optional+": "+adminDataType(field, input))
+		}
+		sort.Strings(fields)
+		result = "{ " + strings.Join(fields, "; ") + " }"
+	case "array":
+		result = "Array<" + adminDataType(*value.Element, input) + ">"
+	}
+	if value.Nullable {
+		result += " | null"
+	}
+	return result
+}
+
 func (generator clientGenerator) writeDocumentTypes(output *bytes.Buffer, name string, collection schema.Collection, collectionNames map[schema.StableID]string, pluginTypes map[string]schema.PluginFieldType, localized, allowIDOnCreate bool) {
 	fields := storedFields(collection.Fields)
 	inputFields := writableFields(collection.Fields)
@@ -157,6 +207,8 @@ func (generator clientGenerator) writeDocumentTypes(output *bytes.Buffer, name s
 		} else {
 			output.WriteString("\t_status: \"published\";\n")
 		}
+	}
+	if collection.Versions != nil || collection.Upload != nil {
 		output.WriteString("\t_revision: number;\n")
 	}
 	if localized {
@@ -178,6 +230,8 @@ func (generator clientGenerator) writeDocumentTypes(output *bytes.Buffer, name s
 			} else {
 				output.WriteString("\t_status: \"published\";\n")
 			}
+		}
+		if collection.Versions != nil || collection.Upload != nil {
 			output.WriteString("\t_revision: number;\n")
 		}
 		for _, field := range readFields {
@@ -223,7 +277,10 @@ func (generator clientGenerator) writeDocumentTypes(output *bytes.Buffer, name s
 		output.WriteString("\tdeletedAt?: boolean;\n")
 	}
 	if collection.Versions != nil {
-		output.WriteString("\t_status?: boolean;\n\t_revision?: boolean;\n")
+		output.WriteString("\t_status?: boolean;\n")
+	}
+	if collection.Versions != nil || collection.Upload != nil {
+		output.WriteString("\t_revision?: boolean;\n")
 	}
 	// The REST store projection is deliberately top-level: selecting a container
 	// includes its complete visible value rather than accepting a nested object.
@@ -242,7 +299,10 @@ func (generator clientGenerator) writeDocumentTypes(output *bytes.Buffer, name s
 		output.WriteString("\tdeletedAt?: boolean;\n")
 	}
 	if collection.Versions != nil {
-		output.WriteString("\t_status?: boolean;\n\t_revision?: boolean;\n")
+		output.WriteString("\t_status?: boolean;\n")
+	}
+	if collection.Versions != nil || collection.Upload != nil {
+		output.WriteString("\t_revision?: boolean;\n")
 	}
 	for _, field := range fields {
 		fmt.Fprintf(output, "\t%s?: boolean;\n", property(field.Name))

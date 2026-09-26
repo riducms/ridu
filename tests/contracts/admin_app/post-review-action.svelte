@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { AdminDocumentExtensionProps } from "@riducms/plugin";
+	import { Button } from "@riducms/ui";
 
 	let { document, host }: AdminDocumentExtensionProps = $props();
 
@@ -8,10 +9,4 @@
 	}
 </script>
 
-<button
-	type="button"
-	class="h-9 rounded-lg border border-white/11 px-3 text-[12.5px] font-medium text-foreground-muted hover:bg-white/4 hover:text-foreground"
-	onclick={requestReview}
->
-	Request review
-</button>
+<Button variant="outline" size="lg" onclick={requestReview}>Request review</Button>

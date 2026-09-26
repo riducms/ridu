@@ -6,6 +6,23 @@ import { invalidFieldLabels, validateFormValues } from "../src/core/forms/form-v
 import { initialFormValues } from "../src/core/forms/form-schema";
 
 describe("manifest-derived form validation", () => {
+	it.each(["text", "code", "textarea", "email", "date"] as const)(
+		"validates required and optional %s values through the same string rules",
+		(type) => {
+			for (const required of [false, true]) {
+				const fields = [field("value", type, required)];
+				const validate = (value: unknown) =>
+					validateFormValues(fields, { value }, { requireMissing: true }).map(
+						(issue) => issue.code
+					);
+				expect(validate("some text")).toEqual([]);
+				expect(validate(42)).toEqual(["invalid_type"]);
+				for (const empty of [undefined, null, ""])
+					expect(validate(empty)).toEqual(required ? ["required"] : []);
+			}
+		}
+	);
+
 	it("leaves dynamic defaults omitted for the server while validating explicit empty input", () => {
 		const title = { ...field("title", "text", true), dynamicDefault: true };
 		const rows = field("rows", "array", false);
@@ -218,7 +235,7 @@ describe("manifest-derived form validation", () => {
 					{ code: "required", path: "answers.0.copy", message: "Copy is required" },
 				]
 			)
-		).toEqual(["Title", "Answers → Row 1 → Copy"]);
+		).toEqual(["Title", "Answers 1 → Copy"]);
 	});
 
 	it("uses the interface language for authored labels and validation messages", () => {
@@ -252,7 +269,7 @@ describe("manifest-derived form validation", () => {
 		]);
 		expect(invalidFieldLabels([title, answers], issues, i18n)).toEqual([
 			"Titre",
-			"Réponses → Ligne 1 → Copie",
+			"Réponses 1 → Copie",
 		]);
 	});
 });

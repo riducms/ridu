@@ -588,9 +588,11 @@ it("never serializes malformed numeric input as a successfully decoded empty val
 const JSONEditor = svelte`
 	<script>
 		import ScalarField from "../../src/fields/scalar/scalar-field.svelte";
+		import { setAdminI18n } from "@riducms/plugin";
 		import { setAdminRuntime } from "../../src/core/runtime/admin-runtime.svelte";
 		let { form, field, runtime } = $props();
 		setAdminRuntime(runtime);
+		setAdminI18n(runtime.i18n);
 	</script>
 	<ScalarField {form} {field} />
 `;
@@ -611,7 +613,7 @@ it("a malformed JSON buffer cancels root-dependent checks instead of validating 
 	});
 	form.set("sku", "bad");
 	form.liveValidation.flush("sku");
-	await screen.getByRole("textbox", { name: "Details" }).fill("{");
+	await screen.getByRole("textbox", { name: "Details" }).fill('{"unfinished":');
 	expect(form.get("details")).toEqual({ previous: true });
 	expect(requests[0]!.signal.aborted).toBe(true);
 	expect(form.liveValidation.forField("sku").status).toBe("skipped");
@@ -676,9 +678,11 @@ it("skips an unavailable embedded structure without rejecting an unowned promise
 const RepeatedJSONEditors = svelte`
 	<script>
 		import ScalarField from "../../src/fields/scalar/scalar-field.svelte";
+		import { setAdminI18n } from "@riducms/plugin";
 		import { setAdminRuntime } from "../../src/core/runtime/admin-runtime.svelte";
 		let { form, field, runtime } = $props();
 		setAdminRuntime(runtime);
+		setAdminI18n(runtime.i18n);
 		function rowField(index, row) {
 			return { ...field, id: "details-" + row._key, path: "rows." + index + ".details", admin: { label: "Details " + row._key } };
 		}
@@ -728,21 +732,28 @@ for (const kind of ["array", "blocks"] as const)
 		});
 		form.set("sku", "bad");
 		form.liveValidation.flush("sku");
-		await screen.getByRole("textbox", { name: "Details A" }).fill("{");
+		await screen.getByRole("textbox", { name: "Details A" }).fill('{"unfinished":');
 		expect(requests[0]!.signal.aborted).toBe(true);
+		await expect
+			.element(screen.getByRole("textbox", { name: "Details A" }))
+			.toHaveTextContent('{"unfinished":');
 		const reordered = (form.snapshot().rows as Record<string, unknown>[]).toReversed();
 		form.setRows("rows", reordered);
-		await expect.element(screen.getByRole("textbox", { name: "Details A" })).toHaveValue("{");
+		await expect
+			.element(screen.getByRole("textbox", { name: "Details A" }))
+			.toHaveTextContent('{"unfinished":');
 		expect(form.liveValidation.forField("sku").status).toBe("skipped");
 		form.liveValidation.flush("sku");
 		expect(requests).toHaveLength(1);
 		await screen.getByRole("textbox", { name: "Details A" }).fill('{"valid":true}');
+		// CodeMirror reconciles contenteditable mutations before committing parsed input.
+		await expect.poll(() => form.get("rows.1.details")).toEqual({ valid: true });
 		form.liveValidation.flush("sku");
 		expect(requests).toHaveLength(2);
 		expect((requests[1]!.input.data.rows as Record<string, unknown>[])[1]!.details).toEqual({
 			valid: true,
 		});
-		await screen.getByRole("textbox", { name: "Details A" }).fill("{");
+		await screen.getByRole("textbox", { name: "Details A" }).fill('{"unfinished":');
 		expect(form.liveValidation.forField("sku").status).toBe("skipped");
 		await screen.unmount();
 		form.liveValidation.flush("sku");
