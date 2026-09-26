@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+	parseRelationshipKey,
+	relationshipKey,
 	selectedRelationshipIDs,
 	updateRelationshipValue,
 } from "../src/fields/relationship/relationship-value";
@@ -26,9 +28,16 @@ describe("relationship values", () => {
 		];
 		expect(selectedRelationshipIDs(current, true, true, "people")).toEqual(["people_1"]);
 		expect(updateRelationshipValue(current, ["people_2"], true, true, "people")).toEqual([
-			{ relationTo: "teams", id: "teams_1" },
 			{ relationTo: "people", id: "people_2" },
+			{ relationTo: "teams", id: "teams_1" },
 		]);
+	});
+
+	test("round-trips relationship keys and rejects malformed values", () => {
+		const reference = { relationTo: "people", id: "people_1" };
+		expect(parseRelationshipKey(relationshipKey(reference))).toEqual(reference);
+		expect(parseRelationshipKey("not-json")).toBeUndefined();
+		expect(parseRelationshipKey(JSON.stringify(["people"]))).toBeUndefined();
 	});
 
 	test("derives and combines a document-aware option filter", () => {
@@ -164,4 +173,20 @@ test("relationship filters reject malformed boolean and numeric wire literals", 
 		} as Parameters<typeof relationshipOptionFilters>[0];
 		expect(relationshipOptionFilters(field, {}, "posts")).toBeUndefined();
 	}
+});
+
+test("opening and committing a polymorphic target preserves interleaved order", () => {
+	const current = [
+		{ relationTo: "posts", id: "1" },
+		{ relationTo: "pages", id: "1" },
+		{ relationTo: "posts", id: "2" },
+	];
+	expect(updateRelationshipValue(current, ["1", "2"], true, true, "posts")).toEqual(current);
+	expect(updateRelationshipValue(current, ["2", "1", "3"], true, true, "posts")).toEqual([
+		current[2],
+		current[1],
+		current[0],
+		{ relationTo: "posts", id: "3" },
+	]);
+	expect(updateRelationshipValue(current, [], true, true, "posts")).toEqual([current[1]]);
 });

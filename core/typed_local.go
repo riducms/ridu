@@ -122,6 +122,8 @@ func decodeStoredDocument[Document any](stored store.Document) (Document, error)
 	encodedValues["updatedAt"], _ = json.Marshal(stored.UpdatedAt.Format(time.RFC3339Nano))
 	if stored.Status != "" {
 		encodedValues["_status"], _ = json.Marshal(stored.Status)
+	}
+	if stored.Revision > 0 {
 		encodedValues["_revision"], _ = json.Marshal(stored.Revision)
 	}
 	encoded, err := json.Marshal(encodedValues)

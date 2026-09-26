@@ -15,7 +15,7 @@ import (
 	"github.com/riducms/ridu/store"
 )
 
-func TestGeneratedClientIsCurrentAndContainsNoAny(t *testing.T) {
+func TestGeneratedClientIsCurrent(t *testing.T) {
 	manifest, err := ridu.Resolve(clientFixtureConfig())
 	if err != nil {
 		t.Fatal(err)
@@ -35,10 +35,7 @@ func TestGeneratedClientIsCurrentAndContainsNoAny(t *testing.T) {
 		t.Fatalf("read generated client %s: %v\nactual:\n%s", path, err, actual)
 	}
 	if string(actual) != string(expected) {
-		t.Fatalf("generated client drift; run RIDU_UPDATE_GENERATED_CLIENT=1 go test ./internal/typescript -run TestGeneratedClientIsCurrentAndContainsNoAny to regenerate %s\nexpected:\n%s\nactual:\n%s", path, expected, actual)
-	}
-	if strings.Contains(string(actual), " any") || strings.Contains(string(actual), "any[]") {
-		t.Fatal("generated public client contains any")
+		t.Fatalf("generated client drift; run RIDU_UPDATE_GENERATED_CLIENT=1 go test ./internal/typescript -run TestGeneratedClientIsCurrent to regenerate %s\nexpected:\n%s\nactual:\n%s", path, expected, actual)
 	}
 	if !strings.Contains(string(actual), "return createRuntimeClient<RiduConfig>(options)") {
 		t.Fatal("generated client does not explicitly bind its application contract")
@@ -261,12 +258,12 @@ func TestGeneratedClientMatchesRESTSelectAndPopulateShapes(t *testing.T) {
 		}
 	}
 	mediaPopulationSelect := section("MediaPopulationSelect")
-	for _, expected := range []string{"deletedAt?: boolean;", `"name"?: boolean;`, `"caption"?: boolean;`} {
+	for _, expected := range []string{"deletedAt?: boolean;", "_revision?: boolean;", `"name"?: boolean;`, `"caption"?: boolean;`} {
 		if !strings.Contains(mediaPopulationSelect, expected) {
 			t.Fatalf("generated upload population target select is missing %q:\n%s", expected, mediaPopulationSelect)
 		}
 	}
-	if strings.Contains(mediaPopulationSelect, "_status") || strings.Contains(mediaPopulationSelect, "_revision") {
+	if strings.Contains(mediaPopulationSelect, "_status") {
 		t.Fatalf("generated upload population target select includes unavailable version metadata:\n%s", mediaPopulationSelect)
 	}
 

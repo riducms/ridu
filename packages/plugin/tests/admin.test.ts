@@ -5,11 +5,75 @@ import { defineAdmin, defineRowLabel, type AdminConfig } from "../src/admin";
 import { defineAdminPlugin, defineFieldComponent, definePluginField } from "../src/authoring/v1";
 import { resolveAdminExtensions } from "../src/plugin";
 import { createAdminI18n } from "@riducms/translations";
+import { createAdminLoader } from "@riducms/sdk";
 const Component = () => ({});
+
+test("dashboard, route and core-view loaders must match the generated Go contract", () => {
+	const loader = createAdminLoader<{}, string>({
+		key: "report",
+		input: { kind: "object" },
+		output: { kind: "string" },
+	});
+	const configs: AdminConfig[] = [
+		{ dashboardPanels: [{ key: "report", loader, component: Component }] },
+		{ routes: [{ path: "report", loader, component: Component }] },
+		{ coreViews: [{ key: "report", surface: "notFound", loader, component: Component }] },
+	];
+	for (const config of configs) {
+		const manifest = {
+			application: { name: "Views", adminLoaders: [loader.contract] },
+			collections: [],
+			globals: [],
+			plugins: [],
+		} as unknown as Parameters<typeof validateAdminManifest>[1];
+		validateAdminManifest(resolveAdminConfig(config), manifest, { completeManifest: true });
+		expect(() =>
+			validateAdminManifest(
+				resolveAdminConfig(config),
+				{ ...manifest, application: { name: "Views", adminLoaders: [] } },
+				{ completeManifest: true }
+			)
+		).toThrow("matching generated Go loader");
+	}
+});
+
+test("list results reject competing renderers and replaced collection targets", () => {
+	const results = { key: "cards", collection: "posts", component: Component };
+	expect(() =>
+		resolveAdminConfig({ listResultsRenderers: [results, { ...results, key: "other" }] })
+	).toThrow("already registered");
+	const manifest = {
+		collections: [{ slug: "posts", fields: [] }],
+		globals: [],
+		plugins: [],
+	} as unknown as Parameters<typeof validateAdminManifest>[1];
+	validateAdminManifest(resolveAdminConfig({ listResultsRenderers: [results] }), manifest, {
+		completeManifest: true,
+	});
+	expect(() =>
+		validateAdminManifest(
+			resolveAdminConfig({ listResultsRenderers: [{ ...results, collection: "missing" }] }),
+			manifest,
+			{ completeManifest: true }
+		)
+	).toThrow("unknown collection");
+	expect(() =>
+		validateAdminManifest(
+			resolveAdminConfig({
+				listResultsRenderers: [results],
+				coreViews: [
+					{ key: "replace", surface: "collectionList", collection: "posts", component: Component },
+				],
+			}),
+			manifest,
+			{ completeManifest: true }
+		)
+	).toThrow("replaced collection view");
+});
 const plugin = defineAdminPlugin({
 	key: "paired",
 	pairingVersion: 1,
-	dashboard: [{ key: "paired", component: Component }],
+	dashboardPanels: [{ key: "paired", component: Component }],
 });
 
 test("complete registry validation checks plugin pairing, field ownership and selected renderers", () => {
@@ -95,7 +159,7 @@ test("complete registry validation checks plugin pairing, field ownership and se
 						key: "shapes",
 						pairingVersion: 3,
 						fields: { color, outline: color },
-						components: { text },
+						fieldEditors: { text },
 					}),
 				],
 			},
@@ -117,7 +181,7 @@ test("complete registry validation checks plugin pairing, field ownership and se
 			key: "shapes",
 			pairingVersion: 3,
 			fields: { color, outline: color },
-			components: {
+			fieldEditors: {
 				Alternate: defineFieldComponent({
 					type: "plugin",
 					fieldType,
@@ -135,27 +199,30 @@ test("complete registry validation checks plugin pairing, field ownership and se
 test("local contributions compose after real plugins and share exclusive slots", () => {
 	const config = defineAdmin({
 		plugins: [plugin],
-		dashboard: [{ key: "local", component: Component }],
+		dashboardPanels: [{ key: "local", component: Component }],
 	});
-	expect(resolveAdminExtensions(config.plugins!, config).dashboard.map((item) => item.key)).toEqual(
-		["paired", "local"]
-	);
+	expect(
+		resolveAdminExtensions(config.plugins!, config).dashboardPanels.map((item) => item.key)
+	).toEqual(["paired", "local"]);
 	expect(() =>
-		resolveAdminConfig({ plugins: [plugin], dashboard: [{ key: "paired", component: Component }] })
+		resolveAdminConfig({
+			plugins: [plugin],
+			dashboardPanels: [{ key: "paired", component: Component }],
+		})
 	).toThrow("already registered");
 	const replacing = {
 		...plugin,
-		dashboard: [{ key: "paired", component: Component, position: "replace" as const }],
+		dashboardPanels: [{ key: "paired", component: Component, position: "replace" as const }],
 	};
 	expect(() =>
 		resolveAdminConfig({
 			plugins: [replacing],
-			dashboard: [{ key: "local", component: Component, position: "replace" }],
+			dashboardPanels: [{ key: "local", component: Component, position: "replace" }],
 		})
 	).toThrow("both registered");
 });
 
-test("local routes cannot shadow framework routes or normalize to another registration", () => {
+test("application and plugin routes cannot shadow framework routes or normalize to another registration", () => {
 	for (const path of [
 		"",
 		"/reports",
@@ -175,6 +242,9 @@ test("local routes cannot shadow framework routes or normalize to another regist
 		expect(() => resolveAdminConfig({ routes: [{ path, component: Component }] })).toThrow(
 			"relative path"
 		);
+		expect(() =>
+			resolveAdminConfig({ plugins: [{ ...plugin, routes: [{ path, component: Component }] }] })
+		).toThrow("relative path");
 	}
 	expect(() =>
 		resolveAdminConfig({ routes: [{ path: "reports/today", component: Component }] })
@@ -288,7 +358,7 @@ test("local row labels validate detached config and missing selections without m
 
 test("full registry checks reject absent targets while permission-filtered runtime manifests are allowed", () => {
 	const config = defineAdmin({
-		listCells: [
+		listCellRenderers: [
 			{
 				key: "summary",
 				collection: "posts",
@@ -323,10 +393,10 @@ test("full registry checks reject absent targets while permission-filtered runti
 
 test("malformed unchecked entries fail before mounting", () => {
 	for (const config of [
-		{ dashboard: {} },
-		{ dashboard: [{ key: "x", component: null }] },
-		{ shell: [{ key: "x", component: Component, position: "bad" }] },
-		{ views: [{ key: "x", component: Component, surface: "missing" }] },
+		{ dashboardPanels: {} },
+		{ dashboardPanels: [{ key: "x", component: null }] },
+		{ shellSlots: [{ key: "x", component: Component, position: "bad" }] },
+		{ coreViews: [{ key: "x", component: Component, surface: "missing" }] },
 		{ documentActions: [{ key: "x", component: Component, requires: "superuser" }] },
 	])
 		expect(() => resolveAdminConfig(config as unknown as AdminConfig)).toThrow();
@@ -435,17 +505,20 @@ test("local row label settings distinguish omission, explicit empty config and m
 
 test("authoring is typed only and each resolution owns detached static registries", () => {
 	const plugins = [plugin];
-	const config = { plugins, dashboard: [{ key: "local", component: Component }] };
+	const config = { plugins, dashboardPanels: [{ key: "local", component: Component }] };
 	expect(defineAdmin(config)).toBe(config);
 	const first = resolveAdminConfig(config);
 	plugins.length = 0;
-	config.dashboard.length = 0;
+	config.dashboardPanels.length = 0;
 	expect(first.plugins).toEqual([plugin]);
-	expect(first.extensions.dashboard.map((item) => item.key)).toEqual(["paired", "local"]);
+	expect(first.extensions.dashboardPanels.map((item) => item.key)).toEqual(["paired", "local"]);
 	expect(Object.isFrozen(first)).toBe(true);
-	expect(Object.isFrozen(first.editors)).toBe(true);
+	expect(Object.isFrozen(first.fieldEditors)).toBe(true);
 	expect(resolveAdminConfig(config).plugins).toEqual([]);
-	const conflict = { plugins: [plugin], dashboard: [{ key: "paired", component: Component }] };
+	const conflict = {
+		plugins: [plugin],
+		dashboardPanels: [{ key: "paired", component: Component }],
+	};
 	expect(() => defineAdmin(conflict)).not.toThrow();
 	expect(() => resolveAdminConfig(conflict)).toThrow("already registered");
 });

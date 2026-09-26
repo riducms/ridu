@@ -1,0 +1,113 @@
+@use "@riducms/ui/styles.scss" as ui;
+
+@layer ridu.components {
+	.ridu-reference-list {
+		min-width: 0;
+		font-size: var(--font-size-body);
+		line-height: var(--line-height-body);
+
+		.ridu-list-controls {
+			margin: 0;
+			padding-inline: var(--admin-gutter);
+		}
+
+		.ridu-list-table {
+			th,
+			td {
+				min-width: 115px;
+			}
+
+			.ridu-list-table__selection {
+				min-width: 48px;
+			}
+		}
+	}
+
+	.ridu-reference-list__results {
+		padding: 20px var(--admin-gutter) 0;
+
+		&[aria-busy="true"] tbody {
+			opacity: 0.5;
+		}
+	}
+
+	.ridu-reference-list__document-button {
+		display: inline-flex;
+		align-items: center;
+		gap: 10px;
+		max-width: 100%;
+		padding: 0;
+		border: 0;
+		background: none;
+		color: inherit;
+		font: inherit;
+		text-align: start;
+		text-decoration: underline;
+		text-underline-offset: 2px;
+		cursor: pointer;
+
+		&:focus-visible {
+			@include ui.focus-outline;
+		}
+
+		&:disabled {
+			cursor: default;
+			opacity: 0.5;
+		}
+	}
+
+	.ridu-reference-list__thumbnail {
+		width: 35px;
+		height: 35px;
+		flex: none;
+		object-fit: cover;
+		border-radius: 3px;
+	}
+
+	.ridu-reference-list__edit-button {
+		vertical-align: middle;
+		margin-inline-start: 8px;
+		padding: 4px;
+		border: 0;
+		background: none;
+		color: var(--foreground-muted);
+		cursor: pointer;
+
+		&:hover {
+			color: var(--foreground);
+		}
+
+		&:focus-visible {
+			@include ui.focus-outline;
+		}
+
+		&:disabled {
+			opacity: 0.5;
+			cursor: default;
+		}
+
+		svg {
+			width: 14px;
+			height: 14px;
+		}
+	}
+
+	.ridu-reference-list__footer {
+		padding: 20px var(--admin-gutter) 60px;
+	}
+
+	.ridu-reference-list__selection-actions {
+		display: flex;
+		justify-content: flex-end;
+		gap: 10px;
+		margin-top: 12px;
+	}
+
+	@media (max-width: ui.$small) {
+		.ridu-reference-list .ridu-list-controls,
+		.ridu-reference-list__results,
+		.ridu-reference-list__footer {
+			padding-inline: 15px;
+		}
+	}
+}

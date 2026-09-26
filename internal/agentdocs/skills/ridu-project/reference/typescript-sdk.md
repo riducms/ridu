@@ -92,6 +92,31 @@ const { totalDocs } = await ridu.count('posts', {
 const site = await ridu.global('site-settings');
 ```
 
+An authoring surface can request collection and per-document capabilities with the same list read:
+
+```ts title="authoring-list.ts"
+const page = await ridu.list('posts', {
+	includeAccess: true,
+	populate: { author: { select: { name: true } } }
+});
+
+if (page.access.collection.operations.create) {
+	// Show a create action.
+}
+
+for (const post of page.docs) {
+	console.log(
+		post.author,
+		page.access.documents[post.id].operations.update
+	);
+}
+```
+
+Literal `includeAccess: true` returns `CollectionPageEnvelope<Document>`. Omission or literal
+`false` returns `PageEnvelope<Document>`, and a runtime boolean returns their union. The enriched
+response contains one capability entry for every returned document. These capabilities inform the
+interface; the server still re-authorizes each mutation.
+
 A group, array, or blocks container supports an `exists` filter. Nested group, array-row, and block
 filters use canonical dotted keys such as `"seo.description"`, `"sections.reviewer"`, and
 `"layout.quote.source"`. Generated where contracts do not model these paths as nested objects
@@ -116,23 +141,26 @@ const post = await ridu.create('posts', {
 	status: 'draft'
 });
 
-const published = await ridu.update(
+const updated = await ridu.update(
 	'posts',
 	post.id,
-	{ status: 'published' },
+	{ title: 'SDK guide, revised' },
 	{ revision: post._revision }
 );
 
 await ridu.copyLocale(
 	'posts',
-	published.id,
+	updated.id,
 	{ from: 'en', to: 'fr' },
 	{
-		revision: published._revision
+		revision: updated._revision
 	}
 );
-await ridu.duplicate('posts', published.id);
+await ridu.duplicate('posts', updated.id);
 ```
+
+The example's `status` is an authored field. A versioned document's `_status` changes through
+`publish` or `publishChanges`, as described below.
 
 Related task methods are grouped by capability:
 
@@ -145,8 +173,9 @@ Related task methods are grouped by capability:
 The SDK exposes three precise option families: `MutationLocaleOptions` for single-locale mutations
 without a revision fence, `MutationOptions` for localized revision-aware mutations, and
 `RevisionOptions` for revision-aware operations that do not consume a locale query. `copyLocale`
-and `copyGlobalLocale` take their locale scope from `from` and `to`; `updateUploadImage` and
-`schedulePublish` likewise use revision-only options.
+and `copyGlobalLocale` take their locale scope from `from` and `to`. `schedulePublish` and
+`scheduleUnpublish` use `PublicationScheduleOptions`, which adds an optional display `timeZone` to
+`RevisionOptions`. `updateUpload` takes `MutationOptions` because upload metadata can be localized.
 
 The type system removes collection slugs from capability-specific methods when the generated
 manifest says the capability is absent; the server remains the authorization authority.
@@ -248,10 +277,11 @@ save the form and handle their validation errors separately.
 For versioned collections, use `versions` and `version` to inspect snapshots, then `publish`,
 `publishChanges`, `unpublish`, or `restore`. `publishChanges` submits edited values and the status
 transition as one publish operation, so publish access and hooks cannot be bypassed by an ordinary
-update. `schedulePublish`, `scheduledPublishes`, and `cancelScheduledPublish` manage durable
-collection publication jobs. Versioned globals use `globalVersions`, `globalVersion`,
+update. `schedulePublish`, `scheduleUnpublish`, `scheduledPublications`, and
+`cancelScheduledPublication` manage durable collection publication jobs. Scheduled unpublish is
+limited to draft-capable collections. Versioned globals use `globalVersions`, `globalVersion`,
 `publishGlobal`, `publishGlobalChanges`, `unpublishGlobal`, and `restoreGlobal`; scheduled
-publishing is collection-only today.
+publication changes are collection-only today.
 
 ```ts title="publishing.ts"
 const history = await ridu.versions('posts', post.id);
@@ -270,14 +300,29 @@ const job = await ridu.schedulePublish(
 	restored.id,
 	new Date('2027-01-02T09:00:00Z'),
 	{
-		revision: restored._revision
+		revision: restored._revision,
+		timeZone: 'Europe/London'
 	}
+);
+
+const pending = await ridu.scheduledPublications(
+	'posts',
+	restored.id
 );
 ```
 
+The job's `runAt` is an absolute instant; `timeZone` preserves how that instant is displayed and
+does not alter execution time. `scheduleUnpublish` uses the same options but requires a currently
+published document in a draft-capable collection. Cancel a queued or failed item with
+`cancelScheduledPublication('posts', restored.id, job.id)`. A stale revision or changed access can
+cause a scheduled job to fail when it runs. See [Drafts and versions](./drafts-and-versions.md#scheduling)
+for the worker and authorization behavior.
+
 ## Uploads and media {#uploads}
 
-Upload-enabled collections add three creation paths and one metadata operation:
+Upload-enabled collections use `upload` for a local file and `uploadFromURL` for a server-side
+fetch. Use `updateUpload` to change metadata, replace the file, or change its image settings in one
+revision-checked save:
 
 ```ts title="media.ts"
 const asset = await ridu.upload('media', file, {
@@ -292,24 +337,31 @@ const imported = await ridu.uploadFromURL(
 	}
 );
 
-await ridu.updateUploadImage(
+const edited = await ridu.updateUpload(
 	'media',
 	asset.id,
 	{
-		focalX: 0.5,
-		focalY: 0.35,
-		cropX: 0,
-		cropY: 0,
-		cropWidth: 1200,
-		cropHeight: 630
+		data: { alt: 'Team gathered outside the studio' },
+		image: {
+			focalX: 50,
+			focalY: 35,
+			cropX: 10,
+			cropY: 10,
+			cropWidth: 80,
+			cropHeight: 75
+		}
 	},
 	{ revision: asset._revision }
 );
 ```
 
-`upload` sends multipart data and `uploadFromURL` asks the configured backend to fetch a URL.
-Stored object delivery is an access-checked REST `GET` rather than a document SDK method. File-size,
-MIME, image, remote-host, and storage limits come from server config, not the SDK.
+For a replacement file, add `file` (and optionally `filename`) to the `updateUpload` input. Set
+`publish: true` on an upload or update when the asset should publish in that operation.
+`previewUploadFromURL` returns a `blob` and `filename` for inspection without saving a document;
+`readUploadSource` returns the immutable original file through editor access. Stored object
+delivery remains an access-checked REST `GET`. File-size, MIME, image, remote-host, and storage
+limits come from server config, not the SDK. Image edit coordinates are percentages from 0 to 100.
+See [Uploads](./uploads.md) for the full workflow.
 
 ## Authentication and account tasks {#authentication}
 

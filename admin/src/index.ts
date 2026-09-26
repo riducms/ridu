@@ -1,5 +1,4 @@
-import "@fontsource-variable/geist/wght.css";
-import "@fontsource-variable/spline-sans-mono/wght.css";
+import "@riducms/ui/theme.css";
 import "uno.css";
 import "@admin/app.css";
 

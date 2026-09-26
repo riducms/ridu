@@ -1,0 +1,1 @@
+@layer ridu.components{.ridu-document-module{min-block-size:288px;color:var(--foreground-muted);font-size:var(--font-size-body);place-content:center;justify-items:center;gap:20px;padding:20px;display:grid}.ridu-document-module--upload{min-block-size:192px}.ridu-document-module--error{color:var(--destructive)}.ridu-document-module__message{margin:0}}

@@ -69,16 +69,16 @@ test("spreading a registration cannot separate its decoder from its field type",
 	const number = defineFieldEditor({ type: "number", component: () => ({}) });
 	expect(() =>
 		resolveAdminConfig({
-			fields: { "app:color": { ...text, type: "number", component: number.component } },
+			fieldEditors: { "app:color": { ...text, type: "number", component: number.component } },
 		})
 	).toThrow("defineFieldEditor");
-	expect(() => resolveAdminConfig({ fields: { "app:color": text } })).not.toThrow();
+	expect(() => resolveAdminConfig({ fieldEditors: { "app:color": text } })).not.toThrow();
 });
 
 test("registration rejects malformed application editor references", () => {
 	const editor = defineFieldEditor({ type: "text", component: () => ({}) });
 	for (const reference of ["bad/name", "app:", "other:color"]) {
-		expect(() => resolveAdminConfig({ fields: { [reference]: editor } })).toThrow(
+		expect(() => resolveAdminConfig({ fieldEditors: { [reference]: editor } })).toThrow(
 			"Invalid editor reference"
 		);
 	}
@@ -126,7 +126,7 @@ test("validation traverses nested, block, global and embedded schema and reports
 	expect(() =>
 		validateAdminManifest(
 			resolveAdminConfig({
-				fields: { "app:color": defineFieldEditor({ type: "text", component: () => ({}) }) },
+				fieldEditors: { "app:color": defineFieldEditor({ type: "text", component: () => ({}) }) },
 			}),
 			manifest
 		)
@@ -156,7 +156,7 @@ test("all configured editor failures identify the resource and unified graph fie
 	try {
 		validateAdminManifest(
 			resolveAdminConfig({
-				fields: { "app:color": defineFieldEditor({ type: "text", component: () => ({}) }) },
+				fieldEditors: { "app:color": defineFieldEditor({ type: "text", component: () => ({}) }) },
 			}),
 			manifest
 		);

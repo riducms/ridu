@@ -5,6 +5,9 @@
 You can customize the parts of the admin that surround your content: the logo, navigation,
 login screen, account screens, and header.
 
+To change colors, fonts, spacing, or the login form's width, use
+[Customizing CSS](../admin/customizing-css.md). The components below change what the admin displays.
+
 This example uses a text logo, adds an email link below the navigation links, and shows a short
 message above the login form.
 
@@ -16,8 +19,8 @@ message above the login form.
 | `navigation[]` | `key`, `position`, `component`                     | `before`, `beforeLinks`, `afterLinks`, `after`, or one `replace`.                   |
 | `login[]`      | `key`, `component`; optional `position`            | `before`, `after` (default), or one `replace`.                                      |
 | `account[]`    | `key`, `surface`, `component`; optional `position` | `profile` or `security`, composed before/after or replaced once per surface.        |
-| `shell[]`      | `key`, `position`, `component`                     | `header`, `actions`, or `settingsMenu`.                                             |
-| `logoutButton` | `key`, `component`                                 | Replaces the account menu's sign-out control.                                       |
+| `shellSlots[]` | `key`, `position`, `component`                     | `header`, `actions`, or `settingsMenu`.                                             |
+| `logoutButton` | `key`, `component`                                 | Replaces the sign-out control at the bottom of the navigation.                      |
 
 Every key must be unique in its contribution list. Replacement conflicts fail during admin config
 validation instead of silently choosing one component.
@@ -32,9 +35,24 @@ validation instead of silently choosing one component.
 </script>
 
 <!-- Reuse the logo at a larger size on the sign-in screen. -->
-<span class="font-semibold" class:text-xl={surface === 'loginLogo'}>
+<span
+	class={[
+		'brand-logo',
+		{ 'brand-logo--login': surface === 'loginLogo' }
+	]}
+>
 	Acme Studio
 </span>
+
+<style>
+	.brand-logo {
+		font-weight: 600;
+	}
+
+	.brand-logo--login {
+		font-size: 1.25rem;
+	}
+</style>
 ```
 
 ```svelte title="admin/src/components/support-link.svelte"
@@ -120,9 +138,10 @@ login or account form. Only one replacement for each target is allowed.
 
 ## Header, settings, and logout {#other-locations}
 
-Use `shell` entries to add a component at `header`, `actions`, or `settingsMenu`. The
-`logoutButton` option replaces the logout control; that component receives `host.logout()`
-to sign the user out.
+Use `shellSlots` entries to add a component at `header`, `actions`, or `settingsMenu`. The
+`logoutButton` option replaces the sign-out control at the bottom of the navigation; that component
+receives `host.logout()` to sign the user out. A full navigation replacement must render
+`defaultView` to retain that built-in footer, or supply its own sign-out control.
 
 See the [admin configuration reference](https://riducms.com/reference/plugin/admin-config/) for these
 options and their component prop types. For shared settings across several of your components,

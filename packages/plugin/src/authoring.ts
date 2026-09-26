@@ -41,6 +41,11 @@ export interface FieldReferenceBrowserProps {
 	field: SchemaField;
 	/** The target collection's resolved schema, available from `authoring.collections`. */
 	collection: SchemaCollection;
+	/**
+	 * Optional collection choices. Only readable collections are offered; switching clears the
+	 * current list query and uncommitted selection.
+	 */
+	collections?: readonly SchemaCollection[];
 	/** Allow multiple selections when true; otherwise select at most one document. */
 	hasMany: boolean;
 	/** IDs currently selected by your editor. */
@@ -51,8 +56,20 @@ export interface FieldReferenceBrowserProps {
 	initialDocument?: FieldDocument;
 	/** Fetch and open this document when `initialDocument` is not supplied. */
 	initialDocumentID?: string;
-	/** Limit selectable documents; the server still applies its own access rules. */
-	optionFilter?: FieldReferenceFilter | readonly FieldReferenceFilter[];
+	/** Open a new document form immediately when creation is permitted. */
+	initialCreate?: boolean;
+	/** File dropped into an upload field; opens a new metadata form before any upload is saved. */
+	initialFile?: File;
+	/**
+	 * Limit selectable documents; the server still applies its own access rules. A static filter
+	 * applies to every collection. Use a resolver when collection schemas need different fields.
+	 */
+	optionFilter?:
+		| FieldReferenceFilter
+		| readonly FieldReferenceFilter[]
+		| ((
+				collection: SchemaCollection
+		  ) => FieldReferenceFilter | readonly FieldReferenceFilter[] | undefined);
 	/** Initial values for a new related document, not changes to an existing document. */
 	defaultValues?: Readonly<Record<string, unknown>>;
 	/** Allow creation when access permits it. Set false to hide creation. */
@@ -60,12 +77,12 @@ export interface FieldReferenceBrowserProps {
 	/** Content locale for loading and editing related documents. */
 	locale?: string;
 	/**
-	 * Called when the user confirms the selection. Update your field here.
+	 * Called with selected IDs and their collection slug. Update your field here.
 	 * Return false (or resolve to false) to keep the browser open. Returning void or
 	 * true accepts the selection and closes it while editing remains allowed. A thrown
 	 * error/rejected promise keeps it open and Ridu displays an error notification.
 	 */
-	onCommit: (ids: string[]) => void | boolean | Promise<void | boolean>;
+	onCommit: (ids: string[], collectionSlug: string) => void | boolean | Promise<void | boolean>;
 	/** Called when the browser closes; update your open/closed UI state here. */
 	onClose: () => void;
 }
@@ -206,6 +223,12 @@ export interface FieldAuthoringHost {
 	readonly documentRevision: number;
 	/** The content locale being edited, separate from the admin interface language. */
 	readonly locale?: string;
+	/**
+	 * Whether the current admin session may create documents in this collection.
+	 * This is a presentation hint for create controls, not authorization. Access is
+	 * checked again by the reference browser and operation engine when work is saved.
+	 */
+	canCreateDocument(collection: string): boolean;
 	/** Related-document picker/editor component. Its `onCommit` handler updates your field. */
 	referenceBrowser: Component<FieldReferenceBrowserProps>;
 	/**

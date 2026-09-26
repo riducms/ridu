@@ -405,7 +405,7 @@ func mongoDBSeedSemanticLiveState(t *testing.T, ctx context.Context, backend *St
 		if err != nil {
 			t.Fatal(err)
 		}
-		task := mongoTaskFixture(runAt, mongoScheduledPublishTaskSlug, mongoScheduledPublishConcurrencyKey(authors.ID, targetID))
+		task := mongoTaskFixture(runAt, mongoScheduledPublicationTaskSlug, mongoScheduledPublicationConcurrencyKey(authors.ID, targetID))
 		task.Queue, task.Input = "scheduled-publish", input
 		task.Target = &store.DocumentReference{CollectionID: authors.ID, DocumentID: targetID}
 		task.RequestedBy = &store.DocumentReference{CollectionID: authors.ID, DocumentID: seed.authorID}
@@ -420,7 +420,7 @@ func mongoDBSeedSemanticLiveState(t *testing.T, ctx context.Context, backend *St
 		t.Fatal(err)
 	}
 	seed.scheduledRunningTask, seed.scheduledQueuedTask = running.ID, queued.ID
-	claimed, err := backend.ClaimTasks(ctx, store.TaskClaim{Limit: 1, Slugs: []string{mongoScheduledPublishTaskSlug}, LeaseDuration: 5 * time.Minute})
+	claimed, err := backend.ClaimTasks(ctx, store.TaskClaim{Limit: 1, Slugs: []string{mongoScheduledPublicationTaskSlug}, LeaseDuration: 5 * time.Minute})
 	if err != nil || len(claimed) != 1 || claimed[0].ID != running.ID {
 		t.Fatalf("claim pre-migration scheduled publish = %#v, %v", claimed, err)
 	}
@@ -602,7 +602,7 @@ func mongoDBAssertSemanticLiveRenameAndRetirement(
 	if task.ConcurrencyKey != "authors:opaque" || string(task.Input) != `{"collectionID":"authors","opaque":true}` {
 		t.Fatalf("generic task opaque state was rewritten = %#v", task)
 	}
-	mongoDBAssertSemanticScheduledPublishState(t, ctx, backend, members, seed)
+	mongoDBAssertSemanticScheduledPublicationState(t, ctx, backend, members, seed)
 
 	if _, found, err := findMongoAuthTokenByHash(ctx, backend.authTokenCollection(), seed.retiredToken.TokenHash); err != nil || found {
 		t.Fatalf("retired auth token found = %t, %v", found, err)
@@ -615,7 +615,7 @@ func mongoDBAssertSemanticLiveRenameAndRetirement(
 	}
 }
 
-func mongoDBAssertSemanticScheduledPublishState(t *testing.T, ctx context.Context, backend *Store, members schema.Collection, seed mongoDBSemanticLiveSeed) {
+func mongoDBAssertSemanticScheduledPublicationState(t *testing.T, ctx context.Context, backend *Store, members schema.Collection, seed mongoDBSemanticLiveSeed) {
 	t.Helper()
 	targets := map[string]string{
 		seed.scheduledRunningTask: seed.authorID,
@@ -629,7 +629,7 @@ func mongoDBAssertSemanticScheduledPublishState(t *testing.T, ctx context.Contex
 		if task.Target == nil || task.RequestedBy == nil || task.Target.CollectionID != members.ID || task.RequestedBy.CollectionID != members.ID {
 			t.Fatalf("rewritten scheduled-publish references = %#v", task)
 		}
-		wantKey := mongoScheduledPublishConcurrencyKey(members.ID, targetID)
+		wantKey := mongoScheduledPublicationConcurrencyKey(members.ID, targetID)
 		if task.ConcurrencyKey != wantKey {
 			t.Fatalf("rewritten scheduled-publish concurrency key = %q, want %q", task.ConcurrencyKey, wantKey)
 		}
@@ -651,7 +651,7 @@ func mongoDBAssertSemanticScheduledPublishState(t *testing.T, ctx context.Contex
 		}
 	}
 
-	runningKey := mongoScheduledPublishConcurrencyKey(members.ID, seed.authorID)
+	runningKey := mongoScheduledPublicationConcurrencyKey(members.ID, seed.authorID)
 	runningGuardID := mongoTaskConcurrencyID("scheduled-publish", runningKey)
 	rawGuard, err := backend.taskConcurrencyCollection().FindOne(ctx, bson.D{{Key: "_id", Value: runningGuardID}}).Raw()
 	if err != nil {
@@ -666,13 +666,13 @@ func mongoDBAssertSemanticScheduledPublishState(t *testing.T, ctx context.Contex
 		t.Fatalf("rewritten scheduled-publish guard = %#v", runningGuard)
 	}
 
-	claimed, err := backend.ClaimTasks(ctx, store.TaskClaim{Limit: 1, Slugs: []string{mongoScheduledPublishTaskSlug}, LeaseDuration: 5 * time.Minute})
+	claimed, err := backend.ClaimTasks(ctx, store.TaskClaim{Limit: 1, Slugs: []string{mongoScheduledPublicationTaskSlug}, LeaseDuration: 5 * time.Minute})
 	if err != nil || len(claimed) != 1 || claimed[0].ID != seed.scheduledQueuedTask {
 		t.Fatalf("claim migrated queued scheduled publish = %#v, %v", claimed, err)
 	}
 	for _, targetID := range []string{seed.authorID, seed.queuedAuthorID} {
-		oldKey := mongoScheduledPublishConcurrencyKey("authors", targetID)
-		newKey := mongoScheduledPublishConcurrencyKey(members.ID, targetID)
+		oldKey := mongoScheduledPublicationConcurrencyKey("authors", targetID)
+		newKey := mongoScheduledPublicationConcurrencyKey(members.ID, targetID)
 		oldID := mongoTaskConcurrencyID("scheduled-publish", oldKey)
 		newID := mongoTaskConcurrencyID("scheduled-publish", newKey)
 		if count, err := backend.taskConcurrencyCollection().CountDocuments(ctx, bson.D{{Key: "_id", Value: oldID}}); err != nil || count != 0 {

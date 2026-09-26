@@ -93,6 +93,8 @@ type Locale struct {
 
 // AdminConfig controls application-level behavior of the framework-owned admin.
 type AdminConfig struct {
+	// Loaders registers read-only data functions for admin pages, views and dashboard panels.
+	Loaders []AdminLoaderDefinition
 	// User is the slug of the auth-enabled collection whose sessions may access
 	// the admin. It is required when the application has any auth collection.
 	User schema.CollectionSlug
@@ -441,7 +443,12 @@ func resolveConfig(applicationConfig Config) (Config, schema.Manifest, error) {
 	if _, issues := buildTaskRegistry(working.Tasks); len(issues) != 0 {
 		return Config{}, schema.Manifest{}, schema.NewValidationError(issues)
 	}
+	adminLoaders, err := adminLoaderDescriptors(working.Admin.Loaders)
+	if err != nil {
+		return Config{}, schema.Manifest{}, schema.NewValidationError([]schema.Issue{{Code: "invalid_admin_loader", Path: "admin.loaders", Message: err.Error()}})
+	}
 	manifest, graph, err := configresolver.ResolveGraph(configresolver.Input{
+		AdminLoaders:     adminLoaders,
 		Blocks:           working.Blocks,
 		Name:             working.Name,
 		NameTranslations: cloneStringMap(working.NameTranslations),
@@ -909,6 +916,7 @@ func cloneConfig(applicationConfig Config) Config {
 		cloned.Globals[index].Endpoints = append([]Endpoint(nil), global.Endpoints...)
 	}
 	cloned.Tasks = append([]TaskDefinition(nil), applicationConfig.Tasks...)
+	cloned.Admin.Loaders = append([]AdminLoaderDefinition(nil), applicationConfig.Admin.Loaders...)
 	cloned.Plugins = append([]Plugin(nil), applicationConfig.Plugins...)
 	cloned.pluginEndpoints = append([]runtimePluginEndpoint(nil), applicationConfig.pluginEndpoints...)
 	cloned.Storage = applicationConfig.Storage

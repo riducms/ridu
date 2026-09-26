@@ -1,14 +1,17 @@
 import {
+	isRecord,
 	bindSchemaManifest,
 	isPageEnvelope,
+	isAdminCollectionListData,
+	type AdminCollectionListDataV1,
 	isValidationIssue,
 	type LiveValidationRequest,
 	type LiveValidationEnvelope,
 	type AuthSession,
 	type AccessCapabilitiesEnvelope,
+	type CollectionPageEnvelope,
 	type CollectionSelectionEnvelope,
-	type FieldCapabilities,
-	type OperationCapabilities,
+	isAccessCapabilities,
 	type AuthSessionInfo,
 	type AuthActionEnvelope,
 	type AuthBootstrapEnvelope,
@@ -19,7 +22,7 @@ import {
 	type PageEnvelope,
 	type LogoutEnvelope,
 	type SchemaManifest,
-	type ScheduledPublish,
+	type ScheduledPublication,
 	type DocumentLockEnvelope,
 	type PreviewToken,
 } from "@riducms/protocol";
@@ -47,6 +50,7 @@ import type {
 	PopulateFor,
 	RequestOptions,
 	RevisionOptions,
+	PublicationScheduleOptions,
 	MutationOptions,
 	CreateOptions,
 	RestoreOptions,
@@ -57,7 +61,8 @@ import type {
 	RiduConfigShape,
 	UploadCollectionSlug,
 	UploadOptions,
-	UploadImageInput,
+	UpdateUploadInput,
+	UploadFile,
 	Version,
 	VersionCollectionSlug,
 	DraftCollectionSlug,
@@ -71,6 +76,7 @@ import type {
 	VersionGlobalSlug,
 	DraftGlobalSlug,
 	CollectionQueryResult,
+	CollectionListResult,
 	GlobalQueryResult,
 	AllLocalesOutputFor,
 	GlobalAllLocalesOutputFor,
@@ -157,6 +163,37 @@ class FetchClient<Config extends RiduConfigShape> implements RiduClient<Config> 
 			{ method: "POST", body: JSON.stringify(body) },
 			options
 		)) as Result;
+	}
+
+	/**
+	 * Compiled admin read. The result stays unknown here because only the generated
+	 * loader reference carries this application's Go-derived output contract.
+	 */
+	async adminLoad(key: string, route: string, options?: RequestOptions): Promise<unknown> {
+		return this.#request(
+			`/api/admin/loaders/${encodeURIComponent(key)}?${new URLSearchParams({ route })}`,
+			{ method: "GET" },
+			options
+		);
+	}
+
+	/** Framework list reads share the planner and decoder used for embedded route data. */
+	async adminCollectionList(
+		collection: string,
+		query: string,
+		part: "page" | "counts",
+		options?: RequestOptions
+	): Promise<AdminCollectionListDataV1> {
+		const params = new URLSearchParams(query);
+		params.set("part", part);
+		const body = await this.#request(
+			`/api/admin/collection-list/${encodeURIComponent(collection)}?${params}`,
+			{ method: "GET" },
+			options
+		);
+		if (!isAdminCollectionListData(body) || (part === "page" && body.page === undefined))
+			throw new TypeError("Invalid collection list response");
+		return body;
 	}
 
 	async preference<Value = unknown>(key: string, options?: RequestOptions): Promise<Value> {
@@ -627,7 +664,7 @@ class FetchClient<Config extends RiduConfigShape> implements RiduClient<Config> 
 	>(
 		collection: Slug,
 		options?: Options
-	): Promise<PageEnvelope<CollectionQueryResult<Config, Slug, Options>>> {
+	): Promise<CollectionListResult<CollectionQueryResult<Config, Slug, Options>, Options>> {
 		const query = new URLSearchParams();
 		if (options?.page !== undefined) query.set("page", String(options.page));
 		if (options?.limit !== undefined) query.set("limit", String(options.limit));
@@ -635,6 +672,7 @@ class FetchClient<Config extends RiduConfigShape> implements RiduClient<Config> 
 		if (options?.where !== undefined) query.set("where", JSON.stringify(options.where));
 		if (options?.select !== undefined) query.set("select", JSON.stringify(options.select));
 		if (options?.populate !== undefined) query.set("populate", JSON.stringify(options.populate));
+		if (options?.includeAccess === true) query.set("include-access", "true");
 		if (options?.trash === true) query.set("trash", "true");
 		appendLocaleQuery(query, options);
 		for (const sort of options?.sort ?? []) query.append("sort", sort);
@@ -647,7 +685,11 @@ class FetchClient<Config extends RiduConfigShape> implements RiduClient<Config> 
 		if (!isPageEnvelope<CollectionQueryResult<Config, Slug, Options>>(body)) {
 			throw invalidSuccessEnvelope("page");
 		}
-		return body;
+		if (options?.includeAccess !== true) {
+			return body as CollectionListResult<CollectionQueryResult<Config, Slug, Options>, Options>;
+		}
+		const page = collectionPageFromEnvelope(body);
+		return page as CollectionListResult<CollectionQueryResult<Config, Slug, Options>, Options>;
 	}
 
 	async count<Slug extends CollectionSlug<Config>>(
@@ -782,7 +824,10 @@ class FetchClient<Config extends RiduConfigShape> implements RiduClient<Config> 
 		options?: UploadOptions<CreateFor<Config, Slug>>
 	): Promise<OutputFor<Config, Slug>> {
 		const form = new FormData();
-		form.set("file", file);
+		if (options?.filename) form.set("file", file, options.filename);
+		else form.set("file", file);
+		if (options?.image) form.set("image", JSON.stringify(options.image));
+		if (options?.publish) form.set("publish", "true");
 		if (options?.data !== undefined) form.set("data", JSON.stringify(options.data));
 		const query = new URLSearchParams();
 		appendLocaleQuery(query, options);
@@ -805,29 +850,82 @@ class FetchClient<Config extends RiduConfigShape> implements RiduClient<Config> 
 		const suffix = query.size === 0 ? "" : `?${query}`;
 		const body = await this.#request(
 			`/api/collections/${encodeURIComponent(collection)}/remote-upload${suffix}`,
-			{ method: "POST", body: JSON.stringify({ url, data: options?.data ?? {} }) },
+			{
+				method: "POST",
+				body: JSON.stringify({
+					url,
+					data: options?.data ?? {},
+					image: options?.image,
+					publish: options?.publish,
+					filename: options?.filename,
+				}),
+			},
 			options
 		);
 		return documentFromEnvelope<OutputFor<Config, Slug>>(body);
 	}
 
-	async updateUploadImage<Slug extends UploadCollectionSlug<Config>>(
+	async updateUpload<Slug extends UploadCollectionSlug<Config>>(
 		collection: Slug,
 		id: string,
-		input: UploadImageInput,
-		options?: RevisionOptions
+		input: UpdateUploadInput<UpdateFor<Config, Slug>>,
+		options?: MutationOptions
 	): Promise<OutputFor<Config, Slug>> {
+		const query = new URLSearchParams();
+		appendLocaleQuery(query, options);
+		const suffix = query.size === 0 ? "" : `?${query}`;
+		let payload: FormData | string;
+		if (input.file) {
+			const form = new FormData();
+			if (input.filename) form.set("file", input.file, input.filename);
+			else form.set("file", input.file);
+			if (input.data) form.set("data", JSON.stringify(input.data));
+			if (input.image) form.set("image", JSON.stringify(input.image));
+			if (input.publish) form.set("publish", "true");
+			payload = form;
+		} else payload = JSON.stringify(input);
 		const revision = revisionHeaders(options);
 		const body = await this.#request(
-			`/api/collections/${encodeURIComponent(collection)}/${encodeDocumentID(id)}/image`,
-			{
-				method: "PATCH",
-				body: JSON.stringify(input),
-				...(revision === undefined ? {} : { headers: revision }),
-			},
+			`/api/collections/${encodeURIComponent(collection)}/${encodeDocumentID(id)}/upload${suffix}`,
+			{ method: "PATCH", body: payload, ...(revision === undefined ? {} : { headers: revision }) },
 			options
 		);
 		return documentFromEnvelope<OutputFor<Config, Slug>>(body);
+	}
+
+	async readUploadSource<Slug extends UploadCollectionSlug<Config>>(
+		collection: Slug,
+		id: string,
+		options?: RequestOptions
+	): Promise<Blob> {
+		const response = await this.#response(
+			`/api/collections/${encodeURIComponent(collection)}/${encodeDocumentID(id)}/upload-source`,
+			{ method: "GET" },
+			options,
+			false
+		);
+		if (!response.ok) throw await RiduError.fromResponse(response);
+		return response.blob();
+	}
+
+	async previewUploadFromURL<Slug extends UploadCollectionSlug<Config>>(
+		collection: Slug,
+		url: string,
+		options?: RequestOptions & { id?: string }
+	): Promise<UploadFile> {
+		const response = await this.#response(
+			`/api/collections/${encodeURIComponent(collection)}/upload-preview`,
+			{ method: "POST", body: JSON.stringify({ url, id: options?.id }) },
+			options,
+			true
+		);
+		if (!response.ok) throw await RiduError.fromResponse(response);
+		const disposition = response.headers.get("Content-Disposition") ?? "";
+		const filename =
+			/filename="([^"\\]*(?:\\.[^"\\]*)*)"/i.exec(disposition)?.[1]?.replace(/\\(.)/g, "$1") ??
+			/filename=([^;]+)/i.exec(disposition)?.[1]?.trim() ??
+			"upload";
+		return { blob: await response.blob(), filename };
 	}
 
 	async versions<
@@ -891,29 +989,52 @@ class FetchClient<Config extends RiduConfigShape> implements RiduClient<Config> 
 		collection: Slug,
 		id: string,
 		runAt: string | Date,
-		options?: RevisionOptions
-	): Promise<ScheduledPublish> {
+		options?: PublicationScheduleOptions
+	): Promise<ScheduledPublication> {
+		return this.#schedulePublication(collection, id, runAt, "publish", options);
+	}
+
+	async scheduleUnpublish<Slug extends DraftCollectionSlug<Config>>(
+		collection: Slug,
+		id: string,
+		runAt: string | Date,
+		options?: PublicationScheduleOptions
+	): Promise<ScheduledPublication> {
+		return this.#schedulePublication(collection, id, runAt, "unpublish", options);
+	}
+
+	async #schedulePublication<Slug extends VersionCollectionSlug<Config>>(
+		collection: Slug,
+		id: string,
+		runAt: string | Date,
+		action: ScheduledPublication["action"],
+		options?: PublicationScheduleOptions
+	): Promise<ScheduledPublication> {
 		const headers = revisionHeaders(options);
 		const body = await this.#request(
 			`/api/collections/${encodeURIComponent(collection)}/${encodeDocumentID(id)}/schedule`,
 			{
 				method: "POST",
-				body: JSON.stringify({ runAt: runAt instanceof Date ? runAt.toISOString() : runAt }),
+				body: JSON.stringify({
+					action,
+					runAt: runAt instanceof Date ? runAt.toISOString() : runAt,
+					timeZone: options?.timeZone,
+				}),
 				...(headers === undefined ? {} : { headers }),
 			},
 			options
 		);
-		if (!isRecord(body) || !isScheduledPublish(body.scheduledPublish)) {
-			throw invalidSuccessEnvelope("scheduled publish");
+		if (!isRecord(body) || !isScheduledPublication(body.scheduledPublication)) {
+			throw invalidSuccessEnvelope("scheduled publication");
 		}
-		return body.scheduledPublish;
+		return body.scheduledPublication;
 	}
 
-	async scheduledPublishes<Slug extends VersionCollectionSlug<Config>>(
+	async scheduledPublications<Slug extends VersionCollectionSlug<Config>>(
 		collection: Slug,
 		id: string,
 		options?: RequestOptions
-	): Promise<ScheduledPublish[]> {
+	): Promise<ScheduledPublication[]> {
 		const body = await this.#request(
 			`/api/collections/${encodeURIComponent(collection)}/${encodeDocumentID(id)}/schedule`,
 			{ method: "GET" },
@@ -921,15 +1042,15 @@ class FetchClient<Config extends RiduConfigShape> implements RiduClient<Config> 
 		);
 		if (
 			!isRecord(body) ||
-			!Array.isArray(body.scheduledPublishes) ||
-			!body.scheduledPublishes.every(isScheduledPublish)
+			!Array.isArray(body.scheduledPublications) ||
+			!body.scheduledPublications.every(isScheduledPublication)
 		) {
-			throw invalidSuccessEnvelope("scheduled publishes");
+			throw invalidSuccessEnvelope("scheduled publications");
 		}
-		return body.scheduledPublishes;
+		return body.scheduledPublications;
 	}
 
-	async cancelScheduledPublish<Slug extends VersionCollectionSlug<Config>>(
+	async cancelScheduledPublication<Slug extends VersionCollectionSlug<Config>>(
 		collection: Slug,
 		id: string,
 		jobID: string,
@@ -941,7 +1062,7 @@ class FetchClient<Config extends RiduConfigShape> implements RiduClient<Config> 
 			options
 		);
 		if (!isRecord(body) || body.id !== jobID || body.deleted !== true) {
-			throw invalidSuccessEnvelope("scheduled publish cancellation");
+			throw invalidSuccessEnvelope("scheduled publication cancellation");
 		}
 		return { id: jobID, deleted: true };
 	}
@@ -1462,15 +1583,27 @@ function previewTokenFromEnvelope(value: unknown): PreviewToken {
 }
 
 function accessCapabilitiesFromEnvelope(value: unknown): AccessCapabilitiesEnvelope {
-	if (!isRecord(value) || !isOperationCapabilities(value.operations) || !isRecord(value.fields)) {
-		throw invalidSuccessEnvelope("access capabilities");
+	if (!isAccessCapabilities(value)) throw invalidSuccessEnvelope("access capabilities");
+	return value;
+}
+
+function collectionPageFromEnvelope<Document>(
+	value: PageEnvelope<Document>
+): CollectionPageEnvelope<Document> {
+	const access = Reflect.get(value, "access");
+	if (!isRecord(access)) throw invalidSuccessEnvelope("collection page access");
+	const collection = accessCapabilitiesFromEnvelope(access.collection);
+	if (!isRecord(access.documents)) {
+		throw invalidSuccessEnvelope("collection page document access");
 	}
-	const fields: Record<string, FieldCapabilities> = {};
-	for (const [path, capability] of Object.entries(value.fields)) {
-		if (!isFieldCapabilities(capability)) throw invalidSuccessEnvelope("field capabilities");
-		fields[path] = capability;
+	const documents: Record<string, AccessCapabilitiesEnvelope> = {};
+	for (const document of value.docs) {
+		if (!isRecord(document) || typeof document.id !== "string") {
+			throw invalidSuccessEnvelope("collection page document");
+		}
+		documents[document.id] = accessCapabilitiesFromEnvelope(access.documents[document.id]);
 	}
-	return { operations: value.operations, fields };
+	return { docs: value.docs, pagination: value.pagination, access: { collection, documents } };
 }
 
 function collectionSelectionFromEnvelope(value: unknown): CollectionSelectionEnvelope {
@@ -1537,35 +1670,6 @@ function documentLockFromEnvelope(value: unknown): DocumentLockEnvelope {
 	return value as unknown as DocumentLockEnvelope;
 }
 
-function isOperationCapabilities(value: unknown): value is OperationCapabilities {
-	return (
-		isRecord(value) &&
-		[
-			"admin",
-			"create",
-			"read",
-			"readVersions",
-			"update",
-			"delete",
-			"duplicate",
-			"publish",
-			"unpublish",
-			"restoreDeleted",
-			"deletePermanent",
-			"selectAll",
-		].every((key) => typeof value[key] === "boolean")
-	);
-}
-
-function isFieldCapabilities(value: unknown): value is FieldCapabilities {
-	return (
-		isRecord(value) &&
-		typeof value.read === "boolean" &&
-		typeof value.create === "boolean" &&
-		typeof value.update === "boolean"
-	);
-}
-
 function sessionFromEnvelope<User>(value: unknown) {
 	if (
 		!isRecord(value) ||
@@ -1612,13 +1716,15 @@ function isAPIKey(value: unknown, includeSecret: boolean): value is APIKey | API
 	);
 }
 
-function isScheduledPublish(value: unknown): value is ScheduledPublish {
+function isScheduledPublication(value: unknown): value is ScheduledPublication {
 	return (
 		isRecord(value) &&
 		typeof value.id === "string" &&
+		(value.action === "publish" || value.action === "unpublish") &&
 		typeof value.documentId === "string" &&
 		typeof value.expectedRevision === "number" &&
 		typeof value.runAt === "string" &&
+		(value.timeZone === undefined || typeof value.timeZone === "string") &&
 		typeof value.attempts === "number" &&
 		(value.lastError === undefined || typeof value.lastError === "string") &&
 		typeof value.createdAt === "string"
@@ -1647,10 +1753,6 @@ function invalidSuccessEnvelope(kind: string) {
 		message: `Server returned an invalid ${kind} response envelope`,
 		issues: [],
 	});
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function liveValidationFromEnvelope(value: unknown): LiveValidationEnvelope {

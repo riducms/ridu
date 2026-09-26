@@ -24,14 +24,14 @@ hot reload is designed for feedback speed and is not a bundle-size result.
 
 ## Match the extension to the job {#configuration}
 
-| Need                                    | Registration                                  | Performance boundary                                                                        |
-| --------------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| Change one form control                 | `fields['app:name'] = defineFieldEditor(...)` | Runs with that field occurrence; keep input handling local.                                 |
-| Summarize a repeated row                | `rowLabels['app:name'] = defineRowLabel(...)` | Can rerender while unsaved row values change; avoid scanning unrelated rows.                |
-| Format a collection cell                | `listCells[]`                                 | Runs for every visible cell; render supplied data instead of fetching per cell.             |
-| Add document UI                         | `documentActions[]` or `documentViews[]`      | Receives one saved document; call the SDK only for a deliberate user action or needed view. |
-| Add application navigation/page content | `navigation[]`, `dashboard[]`, or `routes[]`  | Statically registered and included in the application admin build.                          |
-| Share Svelte context                    | `providers[]`                                 | Wraps the complete admin; do only setup that every screen needs.                            |
+| Need                                    | Registration                                        | Performance boundary                                                                        |
+| --------------------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Change one form control                 | `fieldEditors['app:name'] = defineFieldEditor(...)` | Runs with that field occurrence; keep input handling local.                                 |
+| Summarize a repeated row                | `rowLabels['app:name'] = defineRowLabel(...)`       | Can rerender while unsaved row values change; avoid scanning unrelated rows.                |
+| Format a collection cell                | `listCellRenderers[]`                               | Runs for every visible cell; render supplied data instead of fetching per cell.             |
+| Add document UI                         | `documentActions[]` or `documentViews[]`            | Receives one saved document; call the SDK only for a deliberate user action or needed view. |
+| Add application navigation/page content | `navigation[]`, `dashboardPanels[]`, or `routes[]`  | Statically registered and included in the application admin build.                          |
+| Share Svelte context                    | `providers[]`                                       | Wraps the complete admin; do only setup that every screen needs.                            |
 
 Use the smallest extension surface that owns the behavior. A provider that fetches data for one
 page runs more broadly than a request started by that page. A list cell that makes its own request
@@ -68,6 +68,17 @@ index the result by document ID rather than starting one request from every comp
 Relationship and upload controls already use paginated, access-checked browsers. Keep option
 queries bounded and filter on the server; do not download the whole target collection to filter it
 in Svelte.
+
+## Load the data a page needs {#page-data}
+
+For a custom report or dashboard, use a [Go loader](/docs/custom-components/loading-data/)
+to supply initial data before the component appears. Do not fetch that same data again on mount.
+Use the supplied `refresh()` for an explicit update, and put filters in the page's URL.
+
+For a collection's card or table layout, [custom list results](/docs/custom-components/list-results/)
+already receive the current documents, selection, and document destinations. They need no second
+list request. Keep large results paginated and reserve browser requests for data needed by a later
+interaction, such as opening a dialog.
 
 ## Control browser dependencies {#bundle}
 

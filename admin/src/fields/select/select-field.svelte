@@ -1,10 +1,17 @@
 <script lang="ts">
+	import {
+		Combobox,
+		ComboboxInput,
+		ComboboxTrigger,
+		ComboboxPortal,
+		ComboboxViewport,
+		ComboboxContent,
+		ComboboxItem,
+	} from "@admin/components/ui/combobox";
 	import type { SchemaField } from "@riducms/protocol";
 	import { fieldControlARIA } from "@riducms/ui";
 	import XIcon from "~icons/lucide/x";
-
-	import { Button } from "@admin/components/ui/button";
-	import { Select, SelectContent, SelectItem, SelectTrigger } from "@admin/components/ui/select";
+	import ChevronDownIcon from "~icons/lucide/chevron-down";
 	import type { FormController } from "@admin/core/forms/form-controller.svelte";
 	import { getAdminRuntime } from "@admin/core/runtime/admin-runtime.svelte";
 	import FieldShell from "@admin/fields/field-shell.svelte";
@@ -13,120 +20,151 @@
 		selectOptionLabel,
 		selectManyValues,
 	} from "@admin/fields/select/select-value";
+	import "@admin/components/ui/combobox/combobox.scss";
 
-	interface Props {
-		field: SchemaField;
-		form: FormController;
-	}
-
-	let { field, form }: Props = $props();
+	let { field, form }: { field: SchemaField; form: FormController } = $props();
 	const runtime = getAdminRuntime();
-	const hasMany = $derived(field.type === "select" && field.select?.hasMany === true);
+	let anchor = $state<HTMLDivElement | null>(null);
+	let open = $state(false);
+	let query = $state("");
+
+	const hasMany = $derived(field.select?.hasMany === true);
 	const value = $derived(String(form.get(field.path) ?? ""));
 	const values = $derived(selectManyValues(form.get(field.path)));
+	const options = $derived(field.select?.options ?? []);
+	const filtered = $derived(
+		options.filter((option) =>
+			option.label
+				.toLocaleLowerCase(runtime.i18n.language)
+				.includes(query.toLocaleLowerCase(runtime.i18n.language))
+		)
+	);
+	const selectedLabel = $derived(options.find((option) => option.value === value)?.label ?? "");
 	const placeholder = $derived(
 		field.admin.placeholder ?? runtime.i18n.t("fields:select", { label: field.admin.label })
-	);
-	const selectedLabel = $derived(
-		field.select?.options.find((option) => option.value === value)?.label ?? placeholder
-	);
-	const selectedLabels = $derived(
-		values.map((selected) => selectOptionLabel(field.select?.options ?? [], selected))
 	);
 	const issues = $derived(form.issuesFor(field.path));
 	const editingBlocked = $derived(field.admin.readOnly === true || form.editingBlocked);
 	const controlARIA = $derived(
 		fieldControlARIA(field.id, field.admin.description !== undefined, issues.length > 0)
 	);
+	const selection = $derived(
+		hasMany
+			? { type: "multiple" as const, value: values, onValueChange: setValues }
+			: { type: "single" as const, value, onValueChange: setValue }
+	);
 
 	$effect(() => form.register(field.path));
 
 	function setValues(next: string[]) {
-		if (editingBlocked) return;
-		form.set(field.path, [...next]);
+		if (!editingBlocked) form.set(field.path, [...next]);
 	}
 
-	function removeValue(selected: string) {
-		if (editingBlocked) return;
-		form.set(field.path, removeSelectValue(values, selected));
+	function setValue(next: string) {
+		if (!editingBlocked) form.set(field.path, next);
 	}
 </script>
 
 <FieldShell {field} {issues}>
-	{#if hasMany}
-		<Select type="multiple" value={values} onValueChange={setValues} disabled={editingBlocked}>
-			<SelectTrigger
-				id={field.id}
-				class="w-full"
-				{...controlARIA}
-				aria-required={field.required}
-				aria-label={field.admin.label}
-			>
-				<span class={values.length === 0 ? "text-foreground-placeholder" : "truncate"}>
-					{values.length === 0 ? placeholder : runtime.i18n.formatList(selectedLabels)}
-				</span>
-			</SelectTrigger>
-			<SelectContent>
-				{#each field.select?.options ?? [] as option (option.value)}
-					<SelectItem value={option.value} label={option.label} />
-				{/each}
-			</SelectContent>
-		</Select>
-		{#if values.length > 0}
-			<ul
-				class="mt-2 flex flex-wrap gap-1.5"
-				aria-label={runtime.i18n.t("general:selected", { count: values.length })}
-			>
-				{#each values as selected, index (`${selected}:${index}`)}
-					<li
-						class="inline-flex max-w-full items-center gap-1 rounded-[3px] border border-control-border bg-background py-0.5 pe-0.5 ps-2 text-[12px] text-foreground-muted"
-					>
-						<span class="max-w-64 truncate">
-							{selectOptionLabel(field.select?.options ?? [], selected)}
-						</span>
-						{#if !field.admin.readOnly}
-							<Button
-								variant="ghost"
-								size="icon-xs"
-								disabled={editingBlocked}
-								onclick={() => removeValue(selected)}
-								aria-label={runtime.i18n.t("fields:remove", {
-									label: selectOptionLabel(field.select?.options ?? [], selected),
-								})}
-							>
-								<XIcon class="size-3" aria-hidden="true" />
-							</Button>
-						{/if}
-					</li>
-				{/each}
-			</ul>
-		{/if}
-	{:else}
-		<Select
-			type="single"
-			{value}
-			allowDeselect={!field.required}
-			onValueChange={(next) => {
-				if (!editingBlocked) form.set(field.path, next);
-			}}
+	<!-- The combobox must restart when a retained field switches between single and multiple. -->
+	{#key hasMany}
+		<Combobox
+			{...selection}
+			allowDeselect={false}
+			items={options}
 			disabled={editingBlocked}
+			bind:open={
+				() => open,
+				(next) => {
+					open = next;
+					if (!next) query = "";
+				}
+			}
+			inputValue={open || hasMany ? query : selectedLabel}
 		>
-			<SelectTrigger
-				id={field.id}
-				class="w-full"
-				{...controlARIA}
-				aria-required={field.required}
-				aria-label={field.admin.label}
+			<div
+				bind:this={anchor}
+				class="ridu-combobox"
+				aria-invalid={issues.length > 0}
+				data-disabled={editingBlocked}
 			>
-				<span class={value === "" ? "text-foreground-placeholder" : undefined}>
-					{selectedLabel}
-				</span>
-			</SelectTrigger>
-			<SelectContent>
-				{#each field.select?.options ?? [] as option (option.value)}
-					<SelectItem value={option.value} label={option.label} />
-				{/each}
-			</SelectContent>
-		</Select>
-	{/if}
+				<div class="ridu-combobox-value">
+					{#if hasMany}
+						{#each values as selected (selected)}
+							<span class="ridu-combobox-tag">
+								{selectOptionLabel(options, selected)}
+								<button
+									type="button"
+									class="ridu-combobox-icon"
+									disabled={editingBlocked}
+									aria-label={runtime.i18n.t("fields:remove", {
+										label: selectOptionLabel(options, selected),
+									})}
+									onclick={() => setValues(removeSelectValue(values, selected))}
+								>
+									<XIcon />
+								</button>
+							</span>
+						{/each}
+					{/if}
+					<ComboboxInput
+						id={field.id}
+						class="ridu-combobox-input"
+						autocomplete="off"
+						autocorrect="off"
+						autocapitalize="none"
+						spellcheck={false}
+						{placeholder}
+						{...controlARIA}
+						aria-label={field.admin.label}
+						aria-required={field.required}
+						clearOnDeselect
+						onpointerdown={() => (open = true)}
+						oninput={(event) => {
+							query = event.currentTarget.value;
+							open = true;
+						}}
+					/>
+				</div>
+				{#if !hasMany && value}
+					<button
+						type="button"
+						class="ridu-combobox-icon"
+						disabled={editingBlocked}
+						aria-label={runtime.i18n.t("general:clearSelection")}
+						onclick={() => setValue("")}
+					>
+						<XIcon />
+					</button>
+				{/if}
+				<ComboboxTrigger
+					type="button"
+					class="ridu-combobox-icon ridu-combobox-trigger"
+					aria-label={placeholder}
+				>
+					<ChevronDownIcon />
+				</ComboboxTrigger>
+			</div>
+			<ComboboxPortal>
+				<ComboboxContent
+					customAnchor={anchor}
+					sideOffset={0}
+					align="start"
+					class="ridu-combobox-popup"
+				>
+					<ComboboxViewport>
+						{#each filtered as option (option.value)}
+							<ComboboxItem value={option.value} label={option.label} class="ridu-combobox-option">
+								{option.label}
+							</ComboboxItem>
+						{:else}
+							<p class="ridu-combobox-message">
+								{runtime.i18n.t("fields:noMatch", { label: field.admin.label })}
+							</p>
+						{/each}
+					</ComboboxViewport>
+				</ComboboxContent>
+			</ComboboxPortal>
+		</Combobox>
+	{/key}
 </FieldShell>

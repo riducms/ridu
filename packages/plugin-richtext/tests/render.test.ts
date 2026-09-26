@@ -76,7 +76,7 @@ describe("portable rich-text rendering", () => {
 				children: [{ type: "link", url: "javascript:alert(1)", children: [] }],
 			},
 		};
-		expect(() => renderRichTextHTML(unsafe)).toThrow("Unsafe");
+		expect(() => renderRichTextHTML(unsafe)).toThrow("root.children.0.url");
 		let node = { type: "paragraph", children: [] } as RichTextDocument["root"]["children"][number];
 		for (let index = 0; index < 70; index += 1) node = { type: "paragraph", children: [node] };
 		expect(() =>

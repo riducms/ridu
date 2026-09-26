@@ -9,15 +9,15 @@ for (const file of [
 	"meta-image-field",
 ])
 	mock.module(`../src/${file}.svelte`, () => ({ default: () => ({}) }));
-const { generationScopeToken, generationSnapshotToken, lengthState, seoAdminPlugin } =
+const { generationScopeToken, generationSnapshotToken, lengthState, seoAdminPlugin, seoMessages } =
 	await import("../src");
 
 describe("SEO admin contract", () => {
-	it("registers every exact renderer in backend field order", () => {
+	it("registers every exact field editor in backend field order", () => {
 		expect(seoAdminPlugin.key).toBe("seo");
 		expect(seoAdminPlugin.pairingVersion).toBe(1);
 		expect(
-			Object.entries(seoAdminPlugin.components).map(([key, field]) => `${field.type}:${key}`)
+			Object.entries(seoAdminPlugin.fieldEditors).map(([key, field]) => `${field.type}:${key}`)
 		).toEqual(["ui:overview", "text:title", "textarea:description", "upload:image", "ui:preview"]);
 	});
 
@@ -39,7 +39,7 @@ describe("SEO admin contract", () => {
 		});
 	});
 
-	it("detects a draft change while generation is pending", () => {
+	it("distinguishes draft, resource and locale snapshot identities", () => {
 		const submitted = generationSnapshotToken({ title: "Before", nested: { live: true } });
 		expect(generationSnapshotToken({ title: "Before", nested: { live: true } })).toBe(submitted);
 		expect(generationSnapshotToken({ title: "After", nested: { live: true } })).not.toBe(submitted);
@@ -47,5 +47,15 @@ describe("SEO admin contract", () => {
 		expect(generationScopeToken({ collection: "pages", id: "one" }, "en")).toBe(scope);
 		expect(generationScopeToken({ collection: "pages", id: "one" }, "fr")).not.toBe(scope);
 		expect(generationScopeToken({ collection: "pages", id: "two" }, "en")).not.toBe(scope);
+	});
+
+	it("keeps localized length guidance composable with the best-practices link", () => {
+		for (const language of ["fr", "ar"] as const) {
+			const messages = seoMessages.translations?.[language];
+			expect(messages?.lengthTipTitle).toEndWith(" ");
+			expect(messages?.lengthTipDescription).toEndWith(" ");
+			expect(messages?.lengthTipTitle).not.toMatch(/[.!؟]\s$/u);
+			expect(messages?.lengthTipDescription).not.toMatch(/[.!؟]\s$/u);
+		}
 	});
 });

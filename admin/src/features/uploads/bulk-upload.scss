@@ -1,0 +1,526 @@
+@use "@riducms/ui/styles.scss" as ui;
+
+@layer ridu.components {
+	.ridu-bulk-upload {
+		position: fixed;
+		inset: 0;
+		inset-inline-start: 60px;
+		z-index: 40;
+		background: var(--background);
+		color: var(--ink-strong);
+		outline: none;
+	}
+
+	.ridu-bulk-upload-overlay {
+		position: fixed;
+		inset: 0;
+		z-index: 39;
+		background: var(--media-overlay);
+	}
+
+	.ridu-bulk-upload-description {
+		@include ui.visually-hidden;
+	}
+
+	.ridu-bulk-upload-status {
+		@include ui.visually-hidden;
+	}
+
+	.ridu-bulk-upload-header {
+		height: 100px;
+		padding-block: 0;
+		padding-inline: 60px;
+		border-bottom: 1px solid var(--border);
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 24px;
+
+		.ridu-bulk-upload-header__title {
+			margin: 0;
+			font-size: 25px;
+			font-weight: 500;
+			line-height: 1.2;
+		}
+
+		svg {
+			width: 20px;
+			height: 20px;
+			stroke-width: 1.25;
+		}
+	}
+
+	.ridu-bulk-upload-empty {
+		height: calc(100% - 100px);
+		padding: 40px 60px;
+		display: flex;
+		flex-direction: column;
+		gap: 20px;
+		overflow: auto;
+
+		> .ridu-banner,
+		> .ridu-bulk-upload-remote {
+			flex: none;
+		}
+
+		> .ridu-bulk-upload-picker {
+			flex: 1 0 220px;
+		}
+	}
+
+	.ridu-bulk-upload-picker {
+		position: relative;
+		min-height: 220px;
+		border: 1px dashed var(--control-border);
+		background: var(--control-surface);
+		display: grid;
+		place-content: center;
+		justify-items: center;
+		gap: 8px;
+		transition:
+			border-color 120ms ease,
+			background 120ms ease;
+
+		&--dragging {
+			border-color: var(--ring);
+			background: var(--control-surface-hover);
+		}
+
+		> input {
+			@include ui.visually-hidden;
+		}
+
+		> button {
+			border: 0;
+			padding: 8px;
+			background: none;
+			color: inherit;
+			font: inherit;
+			font-weight: 600;
+			cursor: pointer;
+			display: inline-flex;
+			align-items: center;
+			gap: 8px;
+
+			&:focus-visible {
+				@include ui.focus-outline;
+			}
+
+			&:disabled {
+				opacity: 0.5;
+				cursor: not-allowed;
+			}
+
+			svg {
+				width: 18px;
+				height: 18px;
+				stroke-width: 1.5;
+			}
+		}
+
+		> p {
+			margin: 0;
+			color: var(--ink-muted);
+		}
+
+		&--compact {
+			min-height: 0;
+			border: 0;
+			background: none;
+			display: block;
+
+			> button {
+				padding: 3px 7px;
+				border: 1px solid var(--control-border);
+				border-radius: 999px;
+				font-size: 11px;
+
+				svg {
+					display: none;
+				}
+			}
+		}
+	}
+
+	.ridu-bulk-upload-workspace {
+		display: grid;
+		grid-template-columns: 300px minmax(0, 1fr);
+		height: 100%;
+	}
+
+	.ridu-bulk-upload-workspace__sidebar {
+		min-height: 0;
+		border-inline-end: 1px solid var(--border);
+		display: flex;
+		flex-direction: column;
+		background: var(--control-surface);
+	}
+
+	.ridu-bulk-upload-sidebar {
+		min-height: 0;
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+	}
+
+	.ridu-bulk-upload-sidebar__header {
+		height: 100px;
+		padding: 24px 20px;
+		border-bottom: 1px solid var(--border);
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 10px;
+
+		strong {
+			min-width: 0;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+		}
+	}
+
+	.ridu-bulk-upload-sidebar__list {
+		min-height: 0;
+		padding: 8px 0;
+		overflow: auto;
+	}
+
+	.ridu-bulk-upload-file {
+		position: relative;
+		margin: 0 8px 2px;
+		border-radius: var(--control-radius);
+
+		&--active {
+			background: var(--control-surface-hover);
+		}
+
+		&--error {
+			box-shadow: inset 3px 0 0 var(--destructive);
+		}
+	}
+
+	.ridu-bulk-upload-file__select {
+		width: 100%;
+		min-height: 48px;
+		border: 0;
+		padding: 8px 36px 8px 8px;
+		background: none;
+		color: inherit;
+		font: inherit;
+		text-align: start;
+		cursor: pointer;
+		display: grid;
+		grid-template-columns: 24px minmax(0, 1fr) auto;
+		align-items: center;
+		gap: 8px;
+
+		&:focus-visible {
+			@include ui.focus-outline;
+		}
+	}
+
+	.ridu-bulk-upload-file__thumbnail {
+		width: 24px;
+		height: 24px;
+		border-radius: 2px;
+		overflow: hidden;
+		display: grid;
+		place-items: center;
+		background: var(--background-layer);
+
+		canvas,
+		img {
+			width: 100%;
+			height: 100%;
+			object-fit: cover;
+		}
+
+		svg {
+			width: 14px;
+			height: 14px;
+		}
+	}
+
+	.ridu-bulk-upload-file__details {
+		min-width: 0;
+		display: grid;
+		gap: 1px;
+		font-size: 11px;
+		color: var(--ink-muted);
+	}
+
+	.ridu-bulk-upload-file__name {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: 12px;
+		font-weight: 600;
+		color: var(--ink-strong);
+	}
+
+	.ridu-bulk-upload-file__status,
+	.ridu-bulk-upload-file__issues {
+		font-size: 10px;
+		line-height: 18px;
+		white-space: nowrap;
+	}
+
+	.ridu-bulk-upload-file__issues {
+		min-width: 18px;
+		height: 18px;
+		padding: 0 5px;
+		border-radius: 999px;
+		background: var(--destructive);
+		color: var(--destructive-foreground);
+		font-weight: 700;
+		text-align: center;
+	}
+
+	.ridu-bulk-upload-file__remove {
+		position: absolute;
+		inset-inline-end: 8px;
+		top: 50%;
+		transform: translateY(-50%);
+		width: 24px;
+		height: 24px;
+		border: 0;
+		padding: 5px;
+		background: transparent;
+		color: var(--ink-muted);
+		cursor: pointer;
+
+		&:hover {
+			color: var(--ink-strong);
+		}
+
+		&:focus-visible {
+			@include ui.focus-outline;
+		}
+
+		&:disabled {
+			opacity: 0.4;
+			cursor: not-allowed;
+		}
+
+		svg {
+			width: 14px;
+			height: 14px;
+		}
+	}
+
+	.ridu-bulk-upload-editor {
+		min-width: 0;
+		min-height: 0;
+		display: grid;
+		grid-template-rows: 100px 56px minmax(0, 1fr);
+		grid-template-areas:
+			"header"
+			"actions"
+			"form";
+
+		> .ridu-bulk-upload-header {
+			grid-area: header;
+		}
+	}
+
+	.ridu-bulk-upload-actions {
+		grid-area: actions;
+		position: relative;
+		z-index: 2;
+		height: 56px;
+		padding-block: 0;
+		padding-inline: 60px;
+		border-bottom: 1px solid var(--border);
+		background: var(--background);
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 20px;
+	}
+
+	.ridu-bulk-upload-actions__navigation {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+
+		p {
+			margin: 0 8px 0 0;
+			color: var(--ink-muted);
+			white-space: nowrap;
+		}
+
+		.ridu-button:last-child {
+			margin-inline-start: 8px;
+		}
+
+		.ridu-bulk-upload-actions__chevron:dir(rtl) {
+			transform: rotate(180deg);
+		}
+	}
+
+	.ridu-bulk-upload-editor__form {
+		grid-area: form;
+		min-height: 0;
+		padding: 30px 60px;
+		overflow: auto;
+
+		> fieldset {
+			min-width: 0;
+			border: 0;
+			padding: 0;
+			margin: 0;
+			display: grid;
+			gap: 40px;
+		}
+
+		.ridu-document-sections {
+			margin-top: 0;
+		}
+	}
+
+	.ridu-bulk-upload-editor__error {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 16px;
+	}
+
+	.ridu-bulk-upload-editor__result,
+	.ridu-bulk-upload-remote__result {
+		display: inline-flex;
+		margin-bottom: 20px;
+		font-weight: 600;
+	}
+
+	.ridu-bulk-upload-remote {
+		border-top: 1px solid var(--border);
+		background: var(--control-surface);
+
+		> summary {
+			padding: 14px 20px;
+			cursor: pointer;
+			font-weight: 600;
+
+			&:focus-visible {
+				@include ui.focus-outline;
+			}
+		}
+
+		> form {
+			max-height: min(60vh, 640px);
+			padding: 4px 20px 20px;
+			overflow: auto;
+			display: grid;
+			gap: 16px;
+
+			> p {
+				margin: 0;
+				color: var(--ink-muted);
+				line-height: 1.5;
+			}
+
+			> fieldset {
+				min-width: 0;
+				border: 0;
+				padding: 0;
+				margin: 0;
+			}
+		}
+	}
+
+	.ridu-bulk-upload-empty > .ridu-bulk-upload-remote {
+		border: 1px solid var(--border);
+		background: transparent;
+	}
+
+	.ridu-bulk-upload-remote__url {
+		display: flex;
+		gap: 8px;
+	}
+
+	.ridu-bulk-upload + .ridu-bulk-edit-overlay,
+	.ridu-bulk-upload ~ .ridu-bulk-edit-overlay {
+		z-index: 50;
+	}
+
+	.ridu-bulk-edit-drawer--uploads {
+		inset-inline-start: 120px;
+		z-index: 51;
+	}
+
+	@media (max-width: 768px) {
+		.ridu-bulk-upload {
+			inset-inline-start: 0;
+		}
+
+		.ridu-bulk-upload-header {
+			height: 80px;
+			padding: 0 24px;
+		}
+
+		.ridu-bulk-upload-empty {
+			height: calc(100% - 80px);
+			padding: 24px;
+		}
+
+		.ridu-bulk-upload-workspace {
+			grid-template-columns: minmax(0, 1fr);
+			grid-template-rows: minmax(0, 1fr) auto;
+		}
+
+		.ridu-bulk-upload-editor {
+			grid-column: 1;
+			grid-row: 1;
+			grid-template-rows: 80px minmax(0, 1fr) auto;
+			grid-template-areas:
+				"header"
+				"form"
+				"actions";
+		}
+
+		.ridu-bulk-upload-actions {
+			height: auto;
+			min-height: 64px;
+			padding: 12px 20px;
+			border-top: 1px solid var(--border);
+			border-bottom: 0;
+			flex-wrap: wrap;
+		}
+
+		.ridu-bulk-upload-actions__navigation {
+			flex: 1;
+		}
+
+		.ridu-bulk-upload-editor__form {
+			padding: 30px 24px;
+		}
+
+		.ridu-bulk-upload-workspace__sidebar {
+			grid-column: 1;
+			grid-row: 2;
+			max-height: 42vh;
+			border-inline-end: 0;
+			border-top: 1px solid var(--border);
+		}
+
+		.ridu-bulk-upload-sidebar__header {
+			height: auto;
+			min-height: 64px;
+		}
+
+		.ridu-bulk-upload-sidebar__list {
+			max-height: 180px;
+		}
+
+		.ridu-bulk-edit-drawer--uploads {
+			inset-inline-start: 0;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.ridu-bulk-upload-picker {
+			transition: none;
+		}
+	}
+}

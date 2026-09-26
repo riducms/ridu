@@ -1190,13 +1190,13 @@ func TestAtlasSchemaIncludesDurableTasks(t *testing.T) {
 	}
 }
 
-func TestScheduledPublishConcurrencyKeysRespectDurableBounds(t *testing.T) {
-	if got := scheduledPublishConcurrencyKey("posts", "post-1"); got != "posts:post-1" {
+func TestScheduledPublicationConcurrencyKeysRespectDurableBounds(t *testing.T) {
+	if got := scheduledPublicationConcurrencyKey("posts", "post-1"); got != "posts:post-1" {
 		t.Fatalf("ordinary concurrency key = %q", got)
 	}
 	longID := strings.Repeat("document", 60)
-	key := scheduledPublishConcurrencyKey("posts", longID)
-	if len(key) > store.MaxTaskConcurrencyKeyBytes || !strings.HasPrefix(key, "sha256-") || key != scheduledPublishConcurrencyKey("posts", longID) {
+	key := scheduledPublicationConcurrencyKey("posts", longID)
+	if len(key) > store.MaxTaskConcurrencyKeyBytes || !strings.HasPrefix(key, "sha256-") || key != scheduledPublicationConcurrencyKey("posts", longID) {
 		t.Fatalf("bounded concurrency key = %q", key)
 	}
 }

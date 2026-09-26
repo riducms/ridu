@@ -23,18 +23,38 @@ export interface ListFilter {
 	value: string;
 }
 
+export interface ListColumn {
+	path: string;
+	label: string;
+	field?: SchemaField;
+}
+
+/** OR groups containing AND conditions. */
+export type ListFilterGroup = ListFilter[];
+
+export interface ListColumnSelection {
+	path: string;
+	active: boolean;
+}
+
 export interface ListWorkspacePreference {
-	columns: string[];
-	showStatus: boolean;
-	showID: boolean;
-	showCreated: boolean;
-	showUpdated: boolean;
+	columns: ListColumnSelection[];
 	limit: ListPageSize;
 }
 
+/** The resolved list view, also stored when an author saves a named view. */
+export interface ListViewState extends ListWorkspacePreference {
+	q: string;
+	status: string;
+	folder: string;
+	view: "list" | "hierarchy";
+	filters: ListFilterGroup[];
+	sort: string;
+}
+
 const textOperators: readonly ListFilterOperator[] = [
-	"like",
 	"equals",
+	"like",
 	"notEquals",
 	"contains",
 	"exists",
@@ -50,12 +70,29 @@ const orderedOperators: readonly ListFilterOperator[] = [
 ];
 const identityOperators: readonly ListFilterOperator[] = ["equals", "notEquals", "exists"];
 
-export function listColumnFields(collection: SchemaCollection | undefined, titleName?: string) {
+export function listColumnFields(collection: SchemaCollection | undefined) {
 	return (collection?.fields ?? []).flatMap((field) => {
-		if (field.name === titleName || field.type === "ui") return [];
+		if (field.type === "ui") return [];
 		if (field.type === "group") return nestedFields(field, "columns");
 		return [field];
 	});
+}
+
+export function bulkEditableListFields(fields: readonly SchemaField[]) {
+	return fields.filter(
+		(field) =>
+			field.category === "scalar" &&
+			!field.localized &&
+			!field.unique &&
+			field.virtual === undefined &&
+			!field.admin.hidden &&
+			!field.admin.readOnly &&
+			field.admin.condition === undefined &&
+			(field.type !== "select" || !field.select?.hasMany) &&
+			["text", "textarea", "email", "date", "number", "checkbox", "select", "radio"].includes(
+				field.type
+			)
+	);
 }
 
 export function filterableFields(fields: readonly SchemaField[]) {
@@ -87,18 +124,23 @@ export function sortableField(field: SchemaField) {
 
 export function defaultListColumns(
 	collection: SchemaCollection | undefined,
-	fields: readonly SchemaField[]
+	fields: readonly ListColumn[]
 ) {
 	const byName = new Map(fields.map((field) => [field.path, field.path]));
 	for (const field of fields) {
-		if (field.path === field.name && !byName.has(field.name)) byName.set(field.name, field.path);
+		if (
+			field.field !== undefined &&
+			field.path === field.field.name &&
+			!byName.has(field.field.name)
+		)
+			byName.set(field.field!.name, field.path);
 	}
 	const configured = (collection?.admin.defaultColumns ?? []).flatMap((name) => {
 		const path = byName.get(name);
 		return path === undefined ? [] : [path];
 	});
 	if (configured.length > 0) return configured;
-	return fields.slice(0, 2).map((field) => field.path);
+	return [...new Set([fields[0]?.path ?? "id", "id", "updatedAt", "createdAt"])];
 }
 
 export function filterOperatorsFor(field: SchemaField): readonly ListFilterOperator[] {
@@ -126,7 +168,17 @@ export function filterOperatorLabel(operator: ListFilterOperator, i18n: AdminI18
 	return i18n.t(labels[operator]);
 }
 
-export function normalizeListFilters(value: unknown, fields: readonly SchemaField[]): ListFilter[] {
+export function normalizeListFilters(
+	value: unknown,
+	fields: readonly SchemaField[]
+): ListFilterGroup[] {
+	if (!Array.isArray(value)) return [];
+	return value
+		.map((group) => normalizeFilterGroup(group, fields))
+		.filter((group) => group.length > 0);
+}
+
+function normalizeFilterGroup(value: unknown, fields: readonly SchemaField[]): ListFilter[] {
 	if (!Array.isArray(value)) return [];
 	const byName = new Map(fields.map((field) => [field.path, field]));
 	return value.flatMap((candidate) => {
@@ -166,56 +218,21 @@ export function parseListFilters(encoded: string | null, fields: readonly Schema
 	}
 }
 
-export function buildListFilterWhere(
-	filters: readonly ListFilter[],
-	fields: readonly SchemaField[]
-) {
-	const byName = new Map(fields.map((field) => [field.path, field]));
-	return filters.flatMap((filter): Record<string, unknown>[] => {
-		const field = byName.get(filter.field);
-		if (field === undefined || !filterOperatorsFor(field).includes(filter.operator)) return [];
-		if (filter.operator === "exists") {
-			return [{ [filter.field]: { exists: filter.value !== "false" } }];
-		}
-		if (filter.value === "" && field.type !== "text-list") return [];
-		let value: string | number | boolean = filter.value;
-		if (field.type === "number" || field.type === "number-list") {
-			value = Number(filter.value);
-			if (!Number.isFinite(value)) return [];
-		} else if (field.type === "checkbox") {
-			value = filter.value === "true";
-		}
-		return [{ [filter.field]: { [filter.operator]: filter.operator === "in" ? [value] : value } }];
-	});
-}
-
-export function parseListPageSize(value: string | null, fallback: ListPageSize = 25): ListPageSize {
+export function parseListPageSize(value: string | null, fallback: ListPageSize = 10): ListPageSize {
 	const parsed = Number(value);
 	return listPageSizes.includes(parsed as ListPageSize) ? (parsed as ListPageSize) : fallback;
 }
 
 export function normalizeWorkspacePreference(
 	value: unknown,
-	fields: readonly SchemaField[],
+	fields: readonly Pick<ListColumn, "path">[],
 	fallback: ListWorkspacePreference
 ): ListWorkspacePreference {
 	if (typeof value !== "object" || value === null) return fallback;
-	const eligible = new Set(fields.map((field) => field.path));
-	const rawColumns = Reflect.get(value, "columns");
-	const columns = Array.isArray(rawColumns)
-		? rawColumns.filter((name): name is string => typeof name === "string" && eligible.has(name))
-		: fallback.columns;
-	const showStatus = Reflect.get(value, "showStatus");
-	const showID = Reflect.get(value, "showID");
-	const showCreated = Reflect.get(value, "showCreated");
-	const showUpdated = Reflect.get(value, "showUpdated");
+	const columns = normalizeColumnSelection(Reflect.get(value, "columns"), fields, fallback.columns);
 	const rawLimit = Reflect.get(value, "limit");
 	return {
 		columns,
-		showStatus: typeof showStatus === "boolean" ? showStatus : fallback.showStatus,
-		showID: typeof showID === "boolean" ? showID : fallback.showID,
-		showCreated: typeof showCreated === "boolean" ? showCreated : fallback.showCreated,
-		showUpdated: typeof showUpdated === "boolean" ? showUpdated : fallback.showUpdated,
 		limit: parseListPageSize(
 			typeof rawLimit === "number" ? String(rawLimit) : null,
 			fallback.limit
@@ -223,10 +240,37 @@ export function normalizeWorkspacePreference(
 	};
 }
 
-export function visibleColumnNames(encoded: string | null, fallback: readonly string[]) {
-	if (encoded === null) return [...fallback];
-	const names = encoded.split(",").filter(Boolean);
-	return [...new Set(names)];
+export function normalizeColumnSelection(
+	value: unknown,
+	fields: readonly { path: string }[],
+	fallback: readonly ListColumnSelection[]
+): ListColumnSelection[] {
+	const eligible = new Set(fields.map((field) => field.path));
+	const seen = new Set<string>();
+	const columns = (Array.isArray(value) ? value : fallback).flatMap((candidate: unknown) => {
+		if (typeof candidate !== "object" || candidate === null) return [];
+		const path = Reflect.get(candidate, "path"),
+			active = Reflect.get(candidate, "active");
+		if (
+			typeof path !== "string" ||
+			typeof active !== "boolean" ||
+			!eligible.has(path) ||
+			seen.has(path)
+		)
+			return [];
+		seen.add(path);
+		return [{ path, active }];
+	});
+	return [
+		...columns,
+		...fields
+			.filter((field) => !seen.has(field.path))
+			.map((field) => ({ path: field.path, active: false })),
+	];
+}
+
+export function encodeColumnSelection(columns: readonly ListColumnSelection[]) {
+	return columns.map((column) => (column.active ? column.path : `-${column.path}`)).join(",");
 }
 
 function nestedFields(field: SchemaField, mode: "columns" | "filters"): SchemaField[] {
@@ -276,4 +320,61 @@ function filterableLeaf(field: SchemaField) {
 		field.type !== "point" &&
 		field.type !== "code"
 	);
+}
+
+/** Queryable document metadata is owned by the runtime, rather than application fields. */
+export function listMetadataFields(
+	collection: SchemaCollection | undefined,
+	i18n: AdminI18n
+): SchemaField[] {
+	const fields: SchemaField[] = [
+		{
+			id: "id",
+			name: "id",
+			path: "id",
+			type: "text",
+			category: "scalar",
+			required: false,
+			unique: false,
+			admin: { label: "ID" },
+		},
+		...(["createdAt", "updatedAt"] as const).map((path) => ({
+			id: path,
+			name: path,
+			path,
+			type: "date" as const,
+			date: { format: "date-time" as const },
+			category: "scalar" as const,
+			required: false,
+			unique: false,
+			admin: {
+				label: i18n.t(path === "createdAt" ? "collections:createdAt" : "collections:updatedAt"),
+			},
+		})),
+	];
+	if (collection?.capabilities.versions)
+		fields.push({
+			id: "_status",
+			name: "_status",
+			path: "_status",
+			type: "select",
+			category: "scalar",
+			required: false,
+			unique: false,
+			admin: {
+				label: i18n.t(
+					collection.fields.some((field) => field.name === "status")
+						? "collections:publicationStatus"
+						: "documents:status"
+				),
+			},
+			select: {
+				hasMany: false,
+				options: [
+					{ label: i18n.t("documents:draft"), value: "draft" },
+					{ label: i18n.t("documents:published"), value: "published" },
+				],
+			},
+		});
+	return fields;
 }

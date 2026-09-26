@@ -1,4 +1,5 @@
 import { scalarLiteralValue } from "@admin/core/forms/scalar-literal";
+import { readDocumentPath } from "@admin/core/schema/read-document-path";
 import type { FieldReferenceFilter } from "@riducms/plugin";
 import type { SchemaField } from "@riducms/protocol";
 
@@ -49,7 +50,7 @@ export function relationshipOptionFilters(
 					? undefined
 					: typeof values === "function"
 						? values(candidate.sourcePath)
-						: readPath(values, candidate.sourcePath)
+						: readDocumentPath(values, candidate.sourcePath)
 				: scalarLiteralValue(candidate.value);
 		if (typeof value !== "string" && typeof value !== "number" && typeof value !== "boolean") {
 			return [];
@@ -63,13 +64,4 @@ export function relationshipOptionFilters(
 		];
 	});
 	return filters.length === 0 ? undefined : filters;
-}
-
-function readPath(values: Record<string, unknown>, path: string) {
-	let current: unknown = values;
-	for (const segment of path.split(".")) {
-		if (typeof current !== "object" || current === null || Array.isArray(current)) return undefined;
-		current = (current as Record<string, unknown>)[segment];
-	}
-	return current;
 }

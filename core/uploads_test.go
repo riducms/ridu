@@ -13,6 +13,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -502,9 +504,7 @@ func TestUploadSpecializedOperationsPreserveExactActorCollection(t *testing.T) {
 	if duplicated.ID == document.ID {
 		t.Fatal("upload duplicate reused the source document ID")
 	}
-	updated, err := application.UpdateUploadImageForIdentity(ctx, "media", document.ID, ridu.UpdateUploadImageInput{
-		FocalX: 25, FocalY: 75, ExpectedRevision: document.Revision,
-	}, identity)
+	updated, err := application.UpdateUploadForIdentity(ctx, "media", document.ID, ridu.UpdateUploadInput{Publish: true, ExpectedRevision: document.Revision, Image: &ridu.UploadImageEdit{FocalX: 25, FocalY: 75}}, identity)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -827,7 +827,7 @@ func TestCommittedDuplicateAndRegenerationObjectsSurviveAfterCommitFailure(t *te
 	}
 
 	failingOperation = operation.Update
-	if _, err := application.UpdateUploadImage(context.Background(), "media", original.ID, ridu.UpdateUploadImageInput{FocalX: 25, FocalY: 75, ExpectedRevision: original.Revision}); !operationCode(err, "hook_failed") {
+	if _, err := application.UpdateUpload(context.Background(), "media", original.ID, ridu.UpdateUploadInput{Publish: true, ExpectedRevision: original.Revision, Image: &ridu.UploadImageEdit{FocalX: 25, FocalY: 75}}); !operationCode(err, "hook_failed") {
 		t.Fatalf("regeneration after-commit error = %v", err)
 	}
 	failingOperation = ""
@@ -949,7 +949,7 @@ func TestAmbiguousUploadCommitsRetainGeneratedObjects(t *testing.T) {
 			t.Fatal(err)
 		}
 		oldKeys := imageSizeKeys(t, source.Values)
-		_, err = application.UpdateUploadImage(context.Background(), "media", source.ID, ridu.UpdateUploadImageInput{FocalX: 25, FocalY: 75, ExpectedRevision: source.Revision})
+		_, err = application.UpdateUpload(context.Background(), "media", source.ID, ridu.UpdateUploadInput{Publish: true, ExpectedRevision: source.Revision, Image: &ridu.UploadImageEdit{FocalX: 25, FocalY: 75}})
 		requireAmbiguousCommitError(t, err)
 		updated, err := application.Local().Find(context.Background(), "media", source.ID, ridu.FindOptions{})
 		if err != nil {
@@ -1193,14 +1193,14 @@ func TestUpdateUploadImageCommitsFocalMetadataAndRetainsVersionedVariants(t *tes
 		t.Fatal(err)
 	}
 	oldKeys := imageSizeKeys(t, document.Values)
-	updated, err := application.UpdateUploadImage(context.Background(), "media", document.ID, ridu.UpdateUploadImageInput{FocalX: 10, FocalY: 90, CropX: 10, CropY: 20, CropWidth: 70, CropHeight: 60, ExpectedRevision: document.Revision})
+	updated, err := application.UpdateUpload(context.Background(), "media", document.ID, ridu.UpdateUploadInput{Publish: true, ExpectedRevision: document.Revision, Image: &ridu.UploadImageEdit{FocalX: 10, FocalY: 90, CropX: 10, CropY: 20, CropWidth: 70, CropHeight: 60}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if focalX, _ := updated.Values["focalX"].NumberValue(); focalX != 10 {
 		t.Fatalf("focalX = %v", focalX)
 	}
-	if focalY, _ := updated.Values["focalY"].NumberValue(); focalY != 90 {
+	if focalY, _ := updated.Values["focalY"].NumberValue(); focalY != 80 {
 		t.Fatalf("focalY = %v", focalY)
 	}
 	if cropWidth, _ := updated.Values["cropWidth"].NumberValue(); cropWidth != 70 {
@@ -1229,7 +1229,7 @@ func TestUpdateUploadImageCommitsFocalMetadataAndRetainsVersionedVariants(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.UpdateUploadImage(context.Background(), "media", document.ID, ridu.UpdateUploadImageInput{FocalX: 50, FocalY: 50, ExpectedRevision: document.Revision}); !operationCode(err, "conflict") {
+	if _, err := application.UpdateUpload(context.Background(), "media", document.ID, ridu.UpdateUploadInput{Publish: true, ExpectedRevision: document.Revision, Image: &ridu.UploadImageEdit{FocalX: 50, FocalY: 50}}); !operationCode(err, "conflict") {
 		t.Fatalf("stale regeneration error = %v", err)
 	}
 	objectsAfterConflict, err := listAllStorageObjects(context.Background(), backend, "")
@@ -1308,7 +1308,7 @@ func TestUploadRestoreRejectsMissingHistoricalObjects(t *testing.T) {
 		t.Fatal(err)
 	}
 	oldKeys := imageSizeKeys(t, created.Values)
-	updated, err := application.UpdateUploadImage(context.Background(), "media", created.ID, ridu.UpdateUploadImageInput{FocalX: 25, FocalY: 75, ExpectedRevision: created.Revision})
+	updated, err := application.UpdateUpload(context.Background(), "media", created.ID, ridu.UpdateUploadInput{Publish: true, ExpectedRevision: created.Revision, Image: &ridu.UploadImageEdit{FocalX: 25, FocalY: 75}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1388,7 +1388,7 @@ func TestUploadRestoreLocksAndRevalidatesKeysAfterVersionPruningCleanup(t *testi
 	if err := os.Chtimes(filepath.Join(storageRoot, filepath.FromSlash(oldKeys[0])), time.Now().Add(-time.Hour), time.Now().Add(-time.Hour)); err != nil {
 		t.Fatal(err)
 	}
-	second, err := application.UpdateUploadImage(context.Background(), "media", created.ID, ridu.UpdateUploadImageInput{FocalX: 20, FocalY: 80, ExpectedRevision: created.Revision})
+	second, err := application.UpdateUpload(context.Background(), "media", created.ID, ridu.UpdateUploadInput{Publish: true, ExpectedRevision: created.Revision, Image: &ridu.UploadImageEdit{FocalX: 20, FocalY: 80}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1409,7 +1409,7 @@ func TestUploadRestoreLocksAndRevalidatesKeysAfterVersionPruningCleanup(t *testi
 	case <-time.After(time.Second):
 		t.Fatal("restore did not pause between historical read and update admission")
 	}
-	third, err := application.UpdateUploadImage(context.Background(), "media", created.ID, ridu.UpdateUploadImageInput{FocalX: 40, FocalY: 60, ExpectedRevision: second.Revision})
+	third, err := application.UpdateUpload(context.Background(), "media", created.ID, ridu.UpdateUploadInput{Publish: true, ExpectedRevision: second.Revision, Image: &ridu.UploadImageEdit{FocalX: 40, FocalY: 60}})
 	if err != nil {
 		close(resume)
 		t.Fatal(err)
@@ -1652,7 +1652,7 @@ func TestUnversionedImageRegenerationDefersSupersededVariantsToReconciliation(t 
 		t.Fatal(err)
 	}
 	oldKeys := imageSizeKeys(t, document.Values)
-	if _, err := application.UpdateUploadImage(context.Background(), "media", document.ID, ridu.UpdateUploadImageInput{FocalX: 25, FocalY: 50, ExpectedRevision: document.Revision}); err != nil {
+	if _, err := application.UpdateUpload(context.Background(), "media", document.ID, ridu.UpdateUploadInput{Publish: true, ExpectedRevision: document.Revision, Image: &ridu.UploadImageEdit{FocalX: 25, FocalY: 50}}); err != nil {
 		t.Fatal(err)
 	}
 	for _, key := range oldKeys {
@@ -1700,7 +1700,7 @@ func TestUnversionedImageRegenerationUsesOneUploadLockSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	oldKeys := imageSizeKeys(t, document.Values)
-	if _, err := application.UpdateUploadImage(context.Background(), "media", document.ID, ridu.UpdateUploadImageInput{FocalX: 25, FocalY: 50, ExpectedRevision: document.Revision}); err != nil {
+	if _, err := application.UpdateUpload(context.Background(), "media", document.ID, ridu.UpdateUploadInput{Publish: true, ExpectedRevision: document.Revision, Image: &ridu.UploadImageEdit{FocalX: 25, FocalY: 50}}); err != nil {
 		t.Fatalf("regeneration exhausted the single upload-lock session: %v", err)
 	}
 	for _, key := range oldKeys {
@@ -1893,7 +1893,7 @@ func TestRESTUpdatesUploadImageFocalPoint(t *testing.T) {
 		t.Fatal(err)
 	}
 	client := handlerClient(application.Handler(ridu.HandlerOptions{}))
-	response := requestJSON(t, client, http.MethodPatch, "http://ridu.test/api/collections/media/"+document.ID+"/image", strings.NewReader(`{"focalX":25,"focalY":75,"cropX":10,"cropY":15,"cropWidth":80,"cropHeight":70}`), "")
+	response := requestJSON(t, client, http.MethodPatch, "http://ridu.test/api/collections/media/"+document.ID+"/upload", strings.NewReader(`{"image":{"focalX":25,"focalY":75,"cropX":10,"cropY":15,"cropWidth":80,"cropHeight":70}}`), "")
 	if response.StatusCode != http.StatusOK {
 		t.Fatalf("image update = %d: %s", response.StatusCode, readBody(t, response))
 	}
@@ -1904,7 +1904,7 @@ func TestRESTUpdatesUploadImageFocalPoint(t *testing.T) {
 	if body.Doc["focalX"] != float64(25) || body.Doc["focalY"] != float64(75) || body.Doc["cropWidth"] != float64(80) {
 		t.Fatalf("image update document = %#v", body.Doc)
 	}
-	invalid := requestJSON(t, client, http.MethodPatch, "http://ridu.test/api/collections/media/"+document.ID+"/image", strings.NewReader(`{"focalX":101,"focalY":50}`), "")
+	invalid := requestJSON(t, client, http.MethodPatch, "http://ridu.test/api/collections/media/"+document.ID+"/upload", strings.NewReader(`{"image":{"focalX":101,"focalY":50}}`), "")
 	if invalid.StatusCode != http.StatusUnprocessableEntity {
 		t.Fatalf("invalid focal status = %d", invalid.StatusCode)
 	}
@@ -2174,7 +2174,7 @@ func TestPartialUploadPreparationKeepsImportLockedUntilRollbackDeletesObjects(t 
 	case <-time.After(time.Second):
 		t.Fatal("partial upload never acquired its generated-object lock")
 	}
-	if len(preparationKeys) != 2 || preparationKeys[0] != originalKey {
+	if len(preparationKeys) != 3 || preparationKeys[0] != originalKey {
 		t.Fatalf("partial upload lock keys = %v, original = %q", preparationKeys, originalKey)
 	}
 
@@ -2435,7 +2435,7 @@ func TestGeneratedImageRegenerationBlocksCleanupUntilUnversionedCommit(t *testin
 	}
 	updateDone := make(chan updateResult, 1)
 	go func() {
-		document, updateError := application.UpdateUploadImage(context.Background(), "media", source.ID, ridu.UpdateUploadImageInput{FocalX: 25, FocalY: 75, ExpectedRevision: source.Revision})
+		document, updateError := application.UpdateUpload(context.Background(), "media", source.ID, ridu.UpdateUploadInput{Publish: true, ExpectedRevision: source.Revision, Image: &ridu.UploadImageEdit{FocalX: 25, FocalY: 75}})
 		updateDone <- updateResult{document: document, err: updateError}
 	}()
 	preparationLock := awaitGeneratedObjectLock(t, documentStore, "image regeneration")
@@ -2455,7 +2455,14 @@ func TestGeneratedImageRegenerationBlocksCleanupUntilUnversionedCommit(t *testin
 		cleanupDone <- cleanupResult{result: result, err: cleanupError}
 	}()
 	cleanupLock := awaitGeneratedObjectLock(t, documentStore, "image regeneration cleanup")
-	requireSameSingleObjectLock(t, preparationLock, cleanupLock)
+	if len(preparationLock) != 2 || len(cleanupLock) != 2 {
+		t.Fatalf("expected primary and rendition locks: %v, %v", preparationLock, cleanupLock)
+	}
+	sort.Strings(preparationLock)
+	sort.Strings(cleanupLock)
+	if !reflect.DeepEqual(preparationLock, cleanupLock) {
+		t.Fatalf("preparation and cleanup locks differ: %v, %v", preparationLock, cleanupLock)
+	}
 	select {
 	case result := <-cleanupDone:
 		t.Fatalf("cleanup passed in-flight image regeneration: %#v, %v", result.result, result.err)
@@ -2478,7 +2485,7 @@ func TestGeneratedImageRegenerationBlocksCleanupUntilUnversionedCommit(t *testin
 	case <-time.After(time.Second):
 		t.Fatal("cleanup did not resume after image regeneration committed")
 	}
-	if cleaned.err != nil || cleaned.result.Candidates != 1 || cleaned.result.Deleted != 0 {
+	if cleaned.err != nil || cleaned.result.Candidates != 2 || cleaned.result.Deleted != 0 {
 		t.Fatalf("cleanup result = %#v, %v", cleaned.result, cleaned.err)
 	}
 	newKeys := imageSizeKeys(t, updated.document.Values)
@@ -2635,7 +2642,7 @@ func TestUnversionedImageRegenerationRetainsVariantSharedByImportedDocument(t *t
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.UpdateUploadImage(context.Background(), "media", first.ID, ridu.UpdateUploadImageInput{FocalX: 50, FocalY: 50, ExpectedRevision: first.Revision}); err != nil {
+	if _, err := application.UpdateUpload(context.Background(), "media", first.ID, ridu.UpdateUploadInput{Publish: true, ExpectedRevision: first.Revision, Image: &ridu.UploadImageEdit{FocalX: 50, FocalY: 50}}); err != nil {
 		t.Fatal(err)
 	}
 	reader, _, err := application.OpenUpload(context.Background(), "media", shared, nil)
@@ -2715,5 +2722,167 @@ func TestUploadImageConfigurationEnforcesProcessingBudgets(t *testing.T) {
 				t.Fatalf("invalid %s configuration error = %v", name, err)
 			}
 		})
+	}
+}
+
+func TestUploadEditsCommitMetadataAndPublicCropWhileKeepingPrivateSource(t *testing.T) {
+	ctx := context.Background()
+	backend, err := localstorage.New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	editorOnly := func(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
+		if ctx.Actor != nil && ctx.ActorCollection == "users" {
+			return ridu.Allow(), nil
+		}
+		return ridu.Deny(), nil
+	}
+	application, err := ridu.New(ridu.Config{Name: "staged images", Admin: ridu.AdminConfig{User: "users"}, Storage: backend, StorageNamespace: "staged-images", Collections: []ridu.Collection{
+		{Slug: "users", Auth: true, Fields: field.Fields{field.Text("email").Required().Unique()}},
+		{Slug: "media", Upload: true, UploadConfig: ridu.UploadConfig{MaxFileSize: 4096, MimeTypes: []string{"image/png"}, ImageSizes: []ridu.ImageSize{{Name: "thumb", Width: 2, Height: 2, Fit: "cover"}}}, Fields: field.Fields{field.Text("alt").Required()}, Access: ridu.CollectionAccess{Create: editorOnly, Update: editorOnly}},
+	}}, teststore.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	actor, err := application.Local().Create(ctx, "users", store.Values{"email": store.String("editor@example.test")}, ridu.MutationOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	identity := &ridu.AuthIdentity{Collection: "users", Actor: actor}
+	original := image.NewNRGBA(image.Rect(0, 0, 12, 8))
+	original.SetNRGBA(7, 3, color.NRGBA{R: 200, G: 100, B: 40, A: 120})
+	var bytesOriginal bytes.Buffer
+	if err := png.Encode(&bytesOriginal, original); err != nil {
+		t.Fatal(err)
+	}
+	document, err := application.UploadForIdentity(ctx, "media", ridu.UploadInput{Filename: "photo.png", Reader: bytes.NewReader(bytesOriginal.Bytes()), Data: store.Values{"alt": store.String("First")}, Image: &ridu.UploadImageEdit{FocalX: 50, FocalY: 50, CropX: 25, CropY: 25, CropWidth: 50, CropHeight: 50}}, identity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertDimensions := func(document store.Document, width, height int) {
+		t.Helper()
+		key, _ := document.Values["objectKey"].StringValue()
+		reader, _, err := application.OpenUpload(ctx, "media", key, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer reader.Close()
+		decoded, _, err := image.Decode(reader)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if decoded.Bounds().Dx() != width || decoded.Bounds().Dy() != height {
+			t.Fatalf("public image bounds = %v, want %dx%d", decoded.Bounds(), width, height)
+		}
+		storedWidth, _ := document.Values["width"].NumberValue()
+		storedHeight, _ := document.Values["height"].NumberValue()
+		if storedWidth != float64(width) || storedHeight != float64(height) {
+			t.Fatal("public dimensions disagree with metadata")
+		}
+	}
+	assertDimensions(document, 6, 4)
+	sourceKey, _ := document.Values["source"].Get("objectKey").StringValue()
+	if reader, _, err := application.OpenUpload(ctx, "media", sourceKey, nil); err == nil {
+		reader.Close()
+		t.Fatal("private source was publicly delivered")
+	}
+	if reader, _, err := application.OpenUploadSourceForIdentity(ctx, "media", document.ID, nil); err == nil {
+		reader.Close()
+		t.Fatal("anonymous source read succeeded")
+	}
+	reader, _, err := application.OpenUploadSourceForIdentity(ctx, "media", document.ID, identity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sourceBytes, err := io.ReadAll(reader)
+	reader.Close()
+	if err != nil || !bytes.Equal(sourceBytes, bytesOriginal.Bytes()) {
+		t.Fatal("source bytes were modified")
+	}
+	updated, err := application.UpdateUploadForIdentity(ctx, "media", document.ID, ridu.UpdateUploadInput{ExpectedRevision: document.Revision, Data: store.Values{"alt": store.String("Second")}, Image: &ridu.UploadImageEdit{FocalX: 60, FocalY: 40, CropWidth: 75, CropHeight: 100}}, identity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertDimensions(updated, 9, 8)
+	if alt, _ := updated.Values["alt"].StringValue(); alt != "Second" || updated.Revision != document.Revision+1 {
+		t.Fatal("metadata and crop did not commit in one revision")
+	}
+	if key, _ := updated.Values["source"].Get("objectKey").StringValue(); key != sourceKey {
+		t.Fatal("re-edit replaced immutable source")
+	}
+	if _, err := application.UpdateUploadForIdentity(ctx, "media", document.ID, ridu.UpdateUploadInput{ExpectedRevision: document.Revision, Data: store.Values{"alt": store.String("Stale")}, Image: &ridu.UploadImageEdit{FocalX: 50, FocalY: 50}}, identity); !operationCode(err, "conflict") {
+		t.Fatalf("stale edit error = %v", err)
+	}
+	if _, err := application.UpdateUploadForIdentity(ctx, "media", document.ID, ridu.UpdateUploadInput{ExpectedRevision: updated.Revision, Data: store.Values{"alt": store.String("")}, Image: &ridu.UploadImageEdit{FocalX: 50, FocalY: 50}}, identity); !operationCode(err, "validation") {
+		t.Fatalf("invalid metadata error = %v", err)
+	}
+	unchanged, err := application.Local().Find(ctx, "media", document.ID, ridu.FindOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertDimensions(unchanged, 9, 8)
+	restored, err := application.UpdateUploadForIdentity(ctx, "media", document.ID, ridu.UpdateUploadInput{ExpectedRevision: updated.Revision, Image: &ridu.UploadImageEdit{FocalX: 50, FocalY: 50}}, identity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertDimensions(restored, 12, 8)
+	key, _ := restored.Values["objectKey"].StringValue()
+	reader, _, err = backend.Open(ctx, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resetBytes, err := io.ReadAll(reader)
+	reader.Close()
+	if err != nil || !bytes.Equal(resetBytes, bytesOriginal.Bytes()) {
+		t.Fatal("reset did not restore original encoded bytes")
+	}
+}
+
+func TestUploadCreateCanPublishAndReeditRedactedSource(t *testing.T) {
+	backend, err := localstorage.New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	application, err := ridu.New(ridu.Config{Name: "published uploads", Storage: backend, StorageNamespace: "published-upload", Collections: []ridu.Collection{{
+		Slug: "media", Upload: true, Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true},
+		UploadConfig: ridu.UploadConfig{MaxFileSize: 4096, MimeTypes: []string{"image/png"}},
+		Fields:       field.Fields{field.JSON("source").Access(field.Access{Read: func(operation.Context) (bool, error) { return false, nil }})},
+	}}}, teststore.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var encoded bytes.Buffer
+	if err := png.Encode(&encoded, image.NewRGBA(image.Rect(0, 0, 10, 8))); err != nil {
+		t.Fatal(err)
+	}
+	created, err := application.Upload(t.Context(), "media", ridu.UploadInput{Filename: "published.png", Reader: bytes.NewReader(encoded.Bytes()), Publish: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.Status != store.StatusPublished || created.Revision != 1 {
+		t.Fatalf("created state = %s revision %d", created.Status, created.Revision)
+	}
+	if _, exists := created.Values["source"]; exists {
+		t.Fatal("source metadata was not redacted")
+	}
+	updated, err := application.UpdateUpload(t.Context(), "media", created.ID, ridu.UpdateUploadInput{Publish: true, ExpectedRevision: created.Revision, Image: &ridu.UploadImageEdit{FocalX: 50, FocalY: 50, CropWidth: 50, CropHeight: 100}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	width, _ := updated.Values["width"].NumberValue()
+	if width != 5 || updated.Revision != 2 || updated.Status != store.StatusPublished {
+		t.Fatal("canonical source was not used for published edit")
+	}
+	duplicate, err := application.Duplicate(t.Context(), "media", created.ID, nil, ridu.MutationOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	reset, err := application.UpdateUpload(t.Context(), "media", duplicate.ID, ridu.UpdateUploadInput{ExpectedRevision: duplicate.Revision, Publish: true, Image: &ridu.UploadImageEdit{FocalX: 50, FocalY: 50}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	width, _ = reset.Values["width"].NumberValue()
+	if width != 10 {
+		t.Fatal("duplicate did not copy the private original")
 	}
 }

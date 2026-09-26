@@ -1,12 +1,15 @@
 <script lang="ts">
 	import type { SchemaField } from "@riducms/protocol";
+	import "@admin/fields/field-layout.scss";
 
 	let { field }: { field: SchemaField } = $props();
 </script>
 
-<aside class="border-s-2 border-control-border py-0.5 ps-3" data-ui-field={field.name}>
-	<p class="text-[13px] font-medium text-foreground">{field.admin.label}</p>
-	{#if field.admin.description}<p class="mt-1 text-[12.5px] leading-5 text-foreground-muted">
+<aside class="ridu-ui-field" data-ui-field={field.name}>
+	<p class="ridu-ui-field__title">{field.admin.label}</p>
+	{#if field.admin.description}
+		<p class="ridu-ui-field__description">
 			{field.admin.description}
-		</p>{/if}
+		</p>
+	{/if}
 </aside>

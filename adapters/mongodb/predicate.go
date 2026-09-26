@@ -1340,7 +1340,7 @@ func resolveMongoPredicatePath(collection schema.Collection, path query.Path, ro
 				return mongoPredicatePath{storagePath: scope.path(mongoStatusPath), kind: mongoStringScalar, alwaysPresent: true}, nil
 			}
 		case "_revision":
-			if collection.Versions != nil {
+			if collection.Versions != nil || collection.Upload != nil {
 				return mongoPredicatePath{storagePath: scope.path(mongoRevisionPath), kind: mongoIntegerScalar, alwaysPresent: true}, nil
 			}
 		}
@@ -1591,7 +1591,7 @@ func resolveMongoProjectionPath(collection schema.Collection, path query.Path) (
 				return mongoStatusPath, nil
 			}
 		case "_revision":
-			if collection.Versions != nil {
+			if collection.Versions != nil || collection.Upload != nil {
 				return mongoRevisionPath, nil
 			}
 		}

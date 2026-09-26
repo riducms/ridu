@@ -1,0 +1,26 @@
+@use "@riducms/ui/styles.scss" as ui;
+
+@layer ridu.components {
+	.ridu-date-control-loader {
+		@include ui.control-surface;
+		display: flex;
+		align-items: center;
+		min-height: var(--control-height);
+		padding-inline: var(--control-padding-inline);
+		color: var(--foreground-muted);
+		font-size: var(--font-size-body);
+	}
+
+	.ridu-date-control-loader--failed {
+		align-items: flex-start;
+		flex-direction: column;
+		gap: 8px;
+		border-color: var(--control-invalid-border);
+		background: var(--control-invalid-surface);
+		color: var(--foreground);
+
+		p {
+			margin: 0;
+		}
+	}
+}

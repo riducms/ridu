@@ -1,0 +1,37 @@
+@use "@riducms/ui/styles.scss" as ui;
+
+@layer ridu.components {
+	.ridu-account-menu__trigger {
+		display: grid;
+		place-items: center;
+		flex-shrink: 0;
+		width: 25px;
+		height: 25px;
+		border: 0;
+		padding: 0;
+		background: transparent;
+		color: var(--foreground);
+		cursor: pointer;
+		border-radius: 50%;
+
+		&:focus-visible {
+			@include ui.focus-outline;
+		}
+	}
+	.ridu-account-menu__avatar {
+		fill: var(--nav-indicator-color);
+		overflow: visible;
+	}
+	.ridu-account-menu__avatar-background {
+		fill: var(--background-surface);
+		stroke: var(--nav-indicator-color);
+		stroke-width: 1px;
+	}
+	.ridu-account-menu__trigger:hover .ridu-account-menu__avatar {
+		fill: var(--foreground-muted);
+	}
+	.ridu-account-menu__trigger:hover .ridu-account-menu__avatar-background {
+		fill: var(--background-layer);
+		stroke: var(--foreground-muted);
+	}
+}

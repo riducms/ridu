@@ -214,6 +214,24 @@ export class AdminI18nController implements AdminI18n {
 		this.#applyDocumentLanguage();
 	}
 
+	adoptPreparedPreferences(language: string | undefined, timeZone: string | undefined) {
+		this.#preferenceRequest += 1;
+		this.#languageWrite += 1;
+		this.#timeZoneWrite += 1;
+		if (language !== undefined && this.languages.some((item) => item.code === language)) {
+			this.#language = language;
+			this.#confirmedLanguage = language;
+			writeBrowserPreference(browserLanguageKey, language);
+		}
+		if (timeZone !== undefined && this.timeZones.some((item) => item.id === timeZone)) {
+			this.#timeZone = timeZone;
+			this.#confirmedTimeZone = timeZone;
+			writeBrowserPreference(browserTimeZoneKey, timeZone);
+		}
+		this.#invalidateTranslator();
+		this.#applyDocumentLanguage();
+	}
+
 	async setLanguage(language: string) {
 		if (!this.languages.some((item) => item.code === language)) {
 			throw new Error(`Admin language ${language} is not configured.`);

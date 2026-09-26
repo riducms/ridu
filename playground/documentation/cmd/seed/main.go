@@ -46,10 +46,9 @@ func run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	bootstrap := &store.Document{ID: "documentation-bootstrap", Values: store.Values{}}
 	administrator, err := application.Local().Import(ctx, "users", store.Values{
 		"email": store.String("docs@riducms.test"),
-	}, ridu.ImportOptions{ID: "docs-user", Status: store.StatusPublished}, bootstrap)
+	}, ridu.ImportOptions{ID: "docs-user", Status: store.StatusPublished})
 	if err != nil {
 		return fmt.Errorf("create documentation user: %w", err)
 	}
@@ -61,7 +60,7 @@ func run(ctx context.Context) error {
 		Reader:   bytes.NewReader(samplePNG()),
 		Data: store.Values{
 			"alt":     store.String("Pink and green Ridu field guide cover"),
-			"caption": store.String("Generated deterministically by the documentation playground."),
+			"caption": store.String("A two-color cover for the field guide."),
 		},
 		Actor: &administrator,
 	})
@@ -71,18 +70,18 @@ func run(ctx context.Context) error {
 	category, err := application.Local().Import(ctx, "categories", store.Values{
 		"name": store.String("Guides"),
 		"slug": store.String("guides"),
-	}, ridu.ImportOptions{ID: "docs-category", Status: store.StatusPublished}, &administrator)
+	}, ridu.ImportOptions{ID: "docs-category", Status: store.StatusPublished, Actor: &administrator, ActorCollection: "users"})
 	if err != nil {
 		return fmt.Errorf("create category: %w", err)
 	}
 	_, err = application.Local().Import(ctx, "articles", store.Values{
 		"title":    store.String("Build a focused content model"),
-		"summary":  store.String("A small article used by the documentation playground."),
+		"summary":  store.String("Organize reusable content with clear fields and relationships."),
 		"status":   store.String("published"),
 		"category": store.String(category.ID),
 		"cover":    store.String(media.ID),
 		"content":  richDocument("Ridu keeps every authoring surface connected to executable Go configuration."),
-	}, ridu.ImportOptions{ID: "docs-article", Status: store.StatusPublished}, &administrator)
+	}, ridu.ImportOptions{ID: "docs-article", Status: store.StatusPublished, Actor: &administrator, ActorCollection: "users"})
 	if err != nil {
 		return fmt.Errorf("create article: %w", err)
 	}
@@ -120,7 +119,7 @@ func run(ctx context.Context) error {
 		"tabIntroduction": store.String("The first tab keeps top-level values top-level."),
 		"settings":        store.Object(store.Values{"theme": store.String("Focused")}),
 		"content":         richDocument("Rich text is supplied by a paired Go and admin plugin."),
-	}, ridu.ImportOptions{ID: "docs-field-guide", Status: store.StatusPublished}, &administrator)
+	}, ridu.ImportOptions{ID: "docs-field-guide", Status: store.StatusPublished, Actor: &administrator, ActorCollection: "users"})
 	if err != nil {
 		return fmt.Errorf("create field guide: %w", err)
 	}

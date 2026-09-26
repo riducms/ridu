@@ -1,3 +1,4 @@
+import { isRecord } from "@riducms/protocol";
 import {
 	LiveValidationController,
 	type LiveValidationTransport,
@@ -29,6 +30,7 @@ import {
 	submissionFormValues,
 } from "@admin/core/forms/form-schema";
 import { validateFormValues, unknownBlockIssues } from "@admin/core/forms/form-validation";
+import { readFormPath } from "@admin/core/forms/form-path";
 
 export type { DetachedDraftValue, FormValues } from "@admin/core/forms/form-schema";
 
@@ -263,7 +265,8 @@ export class FormController {
 		path: string,
 		sourcePath: string,
 		derive: (source: unknown) => string,
-		follows: (current: unknown, source: unknown) => boolean
+		follows: (current: unknown, source: unknown) => boolean,
+		initial?: { current: unknown; source: unknown }
 	): DerivedTextBinding {
 		let binding = this.#derivedTextBindings.get(path);
 		if (binding !== undefined && binding.sourcePath !== sourcePath) {
@@ -272,10 +275,11 @@ export class FormController {
 			binding = undefined;
 		}
 		if (binding === undefined) {
-			const source = this.get(sourcePath);
+			const source = initial === undefined ? this.get(sourcePath) : initial.source;
+			const current = initial === undefined ? this.get(path) : initial.current;
 			const state: DerivedTextBindingState = {
 				sourcePath,
-				following: follows(this.get(path), source),
+				following: follows(current, source),
 				derive,
 				stop: () => undefined,
 			};
@@ -284,7 +288,10 @@ export class FormController {
 			});
 			this.#derivedTextBindings.set(path, state);
 			binding = state;
-			if (state.following) this.#setDerivedText(path, state.derive(source));
+			if (state.following) {
+				const derived = state.derive(source);
+				if (String(current ?? "") !== derived) this.set(path, derived);
+			}
 		}
 		const active = binding;
 		return {
@@ -302,7 +309,7 @@ export class FormController {
 	get(path: string): unknown {
 		if (this.#readContext !== undefined && !Object.hasOwn(this.values, path.split(".")[0] ?? ""))
 			return this.#readContext.get(path);
-		return readPath(this.values, path);
+		return readFormPath(this.values, path);
 	}
 
 	/** Shared identity lookups: a mounted header never scans every sibling on its own. */
@@ -628,6 +635,7 @@ export class FormController {
 		this.original = result.original;
 		this.issues = [];
 		this.#submittingIssues = [];
+		this.submitting = false;
 		this.revision = ++this.#revision;
 		return { detached: result.detached, restoredFields: 0 };
 	}
@@ -646,6 +654,7 @@ export class FormController {
 		this.original = result.original;
 		this.issues = [];
 		this.#submittingIssues = [];
+		this.submitting = false;
 		this.revision = ++this.#revision;
 		return { detached: result.detached, restoredFields: result.restoredFields };
 	}
@@ -830,18 +839,6 @@ function uniqueValidationIssues(issues: readonly ValidationIssue[]) {
 	return [...unique.values()];
 }
 
-function readPath(values: FormValues, path: string) {
-	let current: unknown = values;
-	for (const segment of path.split(".")) {
-		if (Array.isArray(current)) {
-			current = current[Number(segment)];
-		} else if (isRecord(current)) {
-			current = current[segment];
-		} else return undefined;
-	}
-	return current;
-}
-
 function writePath(values: FormValues, path: string, value: unknown) {
 	const segments = path.split(".");
 	let current: FormValues | unknown[] = values;
@@ -867,10 +864,6 @@ function getChild(container: FormValues | unknown[], segment: string) {
 function setChild(container: FormValues | unknown[], segment: string, value: unknown) {
 	if (Array.isArray(container)) container[Number(segment)] = value;
 	else container[segment] = value;
-}
-
-function isRecord(value: unknown): value is FormValues {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function embeddedOccurrenceKey(occurrence: EmbeddedOccurrence) {

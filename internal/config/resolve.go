@@ -8,7 +8,6 @@ import (
 	"sort"
 	"strings"
 	"time"
-	_ "time/tzdata"
 	"unicode"
 
 	"github.com/riducms/ridu/field"
@@ -115,7 +114,8 @@ func (resolver *resolver) resolve() (schema.Manifest, error) {
 	return schema.NewManifest(schema.Snapshot{
 		Version: schema.CurrentVersion,
 		Application: schema.Application{
-			Name: applicationName, NameTranslations: applicationNameTranslations,
+			AdminLoaders: resolver.input.AdminLoaders,
+			Name:         applicationName, NameTranslations: applicationNameTranslations,
 			AllowIDOnCreate: resolver.input.AllowIDOnCreate,
 			Admin:           admin, AdminLocalization: adminLocalization, Localization: localization,
 			Endpoints: endpoints,
@@ -179,7 +179,7 @@ func (resolver *resolver) resolveAdminLocalization() *schema.AdminLocalizationSe
 		path := fmt.Sprintf("admin.localization.timeZones[%d]", index)
 		id := strings.TrimSpace(timeZone.ID)
 		label := strings.TrimSpace(timeZone.Label)
-		if !validAdminTimeZoneID(id) {
+		if !schema.IsValidTimeZoneID(id) {
 			resolver.issue("invalid_admin_timezone", path+".id", "admin timezone must be UTC, an offset such as +05:30, or a safe IANA timezone such as Europe/London")
 		}
 		if previous, exists := timeZones[id]; id != "" && exists {
@@ -236,40 +236,6 @@ func cloneTranslations(input map[string]string) map[string]string {
 		cloned[language] = value
 	}
 	return cloned
-}
-
-func validAdminTimeZoneID(value string) bool {
-	if value == "" || value != strings.TrimSpace(value) || len(value) > 128 || strings.Contains(value, "..") || strings.HasPrefix(value, "/") || strings.HasSuffix(value, "/") {
-		return false
-	}
-	if validAdminTimeZoneOffset(value) {
-		return true
-	}
-	if value != "UTC" && !strings.Contains(value, "/") {
-		return false
-	}
-	for _, character := range value {
-		if unicode.IsLetter(character) || unicode.IsDigit(character) || strings.ContainsRune("_+-/", character) {
-			continue
-		}
-		return false
-	}
-	_, err := time.LoadLocation(value)
-	return err == nil
-}
-
-func validAdminTimeZoneOffset(value string) bool {
-	if len(value) != 6 || (value[0] != '+' && value[0] != '-') || value[3] != ':' {
-		return false
-	}
-	for _, index := range []int{1, 2, 4, 5} {
-		if value[index] < '0' || value[index] > '9' {
-			return false
-		}
-	}
-	hours := int(value[1]-'0')*10 + int(value[2]-'0')
-	minutes := int(value[4]-'0')*10 + int(value[5]-'0')
-	return hours <= 23 && minutes <= 59
 }
 
 func canonicalAdminLanguageCode(value string) (string, bool) {
@@ -533,7 +499,7 @@ func (resolver *resolver) resolvePlugins() []schema.Plugin {
 			routes := make(map[string]struct{}, len(plugin.Admin.Routes))
 			for routeIndex, route := range plugin.Admin.Routes {
 				if !schema.IsValidAdminPluginRoute(route) {
-					resolver.issue("invalid_admin_plugin_route", fmt.Sprintf("%s.routes[%d]", adminPath, routeIndex), "admin plugin route must be a relative path without traversal, query, fragment, or wildcard segments")
+					resolver.issue("invalid_admin_plugin_route", fmt.Sprintf("%s.routes[%d]", adminPath, routeIndex), "admin plugin route must be a literal relative path outside framework namespaces")
 				}
 				if _, duplicate := routes[route]; duplicate {
 					resolver.issue("duplicate_admin_plugin_route", fmt.Sprintf("%s.routes[%d]", adminPath, routeIndex), fmt.Sprintf("admin plugin route %q is already declared", route))
@@ -899,8 +865,10 @@ func collectionDefaultColumnExists(collection Collection, fields map[string]sche
 		return true
 	case "deletedAt":
 		return collection.Trash
-	case "_status", "_revision":
+	case "_status":
 		return collection.Versions
+	case "_revision":
+		return collection.Versions || collection.Upload
 	}
 	return false
 }

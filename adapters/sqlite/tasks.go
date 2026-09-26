@@ -154,10 +154,26 @@ func (backend *Store) DismissTaskForTarget(ctx context.Context, id, slug string,
 	return backend.withImmediate(ctx, func(connection *sql.Conn) error {
 		result, err := connection.ExecContext(ctx, `DELETE FROM ridu_tasks
 WHERE id = ? AND slug = ? AND target_collection_id = ? AND target_document_id = ?
-  AND state IN ('queued', 'running', 'failed', 'canceled')`,
+  AND state IN ('queued', 'failed', 'canceled')`,
 			id, slug, string(target.CollectionID), target.DocumentID)
 		return sqliteTaskMutationResult(result, err, store.ErrNotFound)
 	})
+}
+
+func (transaction *documentTransaction) DismissTaskForTarget(ctx context.Context, id, slug string, target store.DocumentReference) error {
+	if err := store.ValidateTaskList(store.TaskList{Slug: slug, Target: &target, Limit: 1}); err != nil {
+		return err
+	}
+	leave, err := transaction.enter(ctx, true)
+	if err != nil {
+		return err
+	}
+	defer leave()
+	result, err := transaction.connection.ExecContext(ctx, `DELETE FROM ridu_tasks
+WHERE id = ? AND slug = ? AND target_collection_id = ? AND target_document_id = ?
+  AND state IN ('queued', 'failed', 'canceled')`,
+		id, slug, string(target.CollectionID), target.DocumentID)
+	return sqliteTaskMutationResult(result, err, store.ErrNotFound)
 }
 
 func (backend *Store) ClaimTasks(ctx context.Context, request store.TaskClaim) ([]store.Task, error) {

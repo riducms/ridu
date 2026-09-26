@@ -20,7 +20,7 @@ func (*generationTestPlugin) Key() string { return "generator" }
 func (*generationTestPlugin) Descriptor() PluginDescriptor {
 	return PluginDescriptor{
 		Version: "0.1.0", GoPackage: "example.com/generator", APIVersion: PluginAPIVersion,
-		Ridu: RiduCompatibility{Minimum: FrameworkVersion, MaximumExclusive: "0.3.0"},
+		Ridu: RiduCompatibility{Minimum: FrameworkVersion},
 	}
 }
 

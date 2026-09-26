@@ -1,0 +1,98 @@
+@use "@riducms/ui/styles.scss" as ui;
+
+@layer ridu.components {
+	.ridu-richtext-relationship-card {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		inline-size: min(100%, 360px);
+		margin-block: 12px;
+		padding: 14px 15px;
+		border: 1px solid var(--control-border);
+		border-radius: var(--control-radius);
+		background: var(--control-surface);
+		box-shadow: var(--control-shadow);
+		color: var(--foreground);
+		font-family: var(--font-sans);
+		line-height: var(--line-height-body);
+		transition:
+			border-color 100ms,
+			box-shadow 100ms;
+
+		&:hover {
+			border-color: var(--control-border-hover);
+		}
+
+		&.is-selected {
+			border-color: var(--foreground-muted);
+			box-shadow:
+				var(--control-shadow),
+				0 0 0 1px var(--foreground-muted);
+		}
+	}
+
+	.ridu-richtext-relationship-card__content {
+		display: grid;
+		flex: 1;
+		gap: 5px;
+		min-width: 0;
+	}
+
+	.ridu-richtext-relationship-card__label,
+	.ridu-richtext-relationship-card__title {
+		overflow: hidden;
+		line-height: 16px;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.ridu-richtext-relationship-card__label {
+		color: var(--foreground-muted);
+		font-size: 12px;
+	}
+
+	.ridu-richtext-relationship-card__title {
+		display: block;
+		min-width: 0;
+		max-width: 100%;
+		border: 0;
+		padding: 0;
+		background: transparent;
+		color: var(--foreground);
+		font: inherit;
+		font-weight: 600;
+		text-align: start;
+		text-decoration: underline;
+		text-decoration-thickness: 1px;
+		text-underline-offset: 2px;
+		cursor: pointer;
+
+		&:focus-visible {
+			@include ui.focus-outline;
+		}
+
+		&:disabled {
+			color: var(--control-disabled-foreground);
+			text-decoration: none;
+			cursor: default;
+		}
+	}
+
+	.ridu-richtext-relationship-card__actions {
+		display: flex;
+		align-items: center;
+		flex-shrink: 0;
+		gap: 3px;
+	}
+
+	@media (max-width: 30rem) {
+		.ridu-richtext-relationship-card {
+			align-items: flex-start;
+			flex-wrap: wrap;
+		}
+
+		.ridu-richtext-relationship-card__actions {
+			margin-inline-start: auto;
+		}
+	}
+}

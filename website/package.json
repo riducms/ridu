@@ -29,11 +29,12 @@
 		"astro": "^7.2.8"
 	},
 	"devDependencies": {
-		"@riducms/build": "file:../packages/build",
 		"@astrojs/check": "^0.9.6",
 		"@astrojs/markdown-satteri": "0.3.7",
 		"@iconify/json": "^2.2.518",
 		"@iconify/utils": "^3.1.4",
+		"@riducms/build": "file:../packages/build",
+		"@riducms/ui": "file:../packages/ui",
 		"@types/bun": "^1.4.0",
 		"@types/mdast": "^4.0.4",
 		"@unocss/astro": "66.7.5",

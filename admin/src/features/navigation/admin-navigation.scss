@@ -1,0 +1,133 @@
+@use "@riducms/ui/styles.scss" as ui;
+
+@layer ridu.components {
+	.ridu-nav__brand {
+		position: absolute;
+		inset-block-start: 0;
+		inset-inline: var(--admin-gutter) 20px;
+		height: var(--admin-header-height);
+		display: flex;
+		align-items: center;
+		overflow: hidden;
+	}
+	.ridu-nav__scroll {
+		min-height: 0;
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		overflow-y: auto;
+		padding: 0 20px calc(var(--admin-space) * 2);
+		scrollbar-width: none;
+
+		&::-webkit-scrollbar {
+			display: none;
+		}
+	}
+	.ridu-nav__group {
+		flex-shrink: 0;
+		margin-bottom: 10px;
+	}
+	.ridu-nav__group-toggle {
+		display: flex;
+		justify-content: space-between;
+		align-items: flex-start;
+		gap: 10px;
+		margin-bottom: 5px;
+		padding: 0;
+		list-style: none;
+		cursor: pointer;
+		color: var(--nav-group-color);
+		font: inherit;
+
+		&::-webkit-details-marker {
+			display: none;
+		}
+
+		&:hover {
+			color: var(--foreground);
+		}
+
+		&:focus-visible {
+			@include ui.focus-outline;
+		}
+	}
+	.ridu-nav__chevron {
+		width: 12px;
+		height: 20px;
+		flex-shrink: 0;
+		color: var(--nav-indicator-color);
+	}
+	.ridu-nav__group[open] .ridu-nav__chevron {
+		transform: rotate(180deg);
+	}
+	.ridu-nav__links {
+		display: grid;
+	}
+	.ridu-nav__link {
+		position: relative;
+		display: flex;
+		align-items: center;
+		padding-block: 2.5px;
+		padding-inline-end: 30px;
+		color: var(--foreground);
+		text-decoration: none;
+		line-height: 20px;
+
+		&:hover,
+		&:focus-visible {
+			text-decoration: underline;
+		}
+
+		&:focus-visible {
+			@include ui.focus-outline;
+		}
+	}
+	.ridu-nav__link--active {
+		font-weight: 600;
+
+		&::before {
+			content: "";
+			position: absolute;
+			inset-inline-start: -20px;
+			height: 16px;
+			width: 2px;
+			background: var(--foreground);
+			border-start-end-radius: 2px;
+			border-end-end-radius: 2px;
+		}
+	}
+	.ridu-nav__link--pending {
+		opacity: 0.6;
+	}
+	.ridu-nav__controls {
+		margin-top: auto;
+		padding-top: 20px;
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 15px;
+	}
+	@media (min-width: (ui.$small + 1px)) and (max-width: ui.$medium) {
+		.ridu-nav__scroll {
+			padding-inline: 10px;
+		}
+		.ridu-nav__link--active::before {
+			inset-inline-start: -10px;
+		}
+	}
+	@media (max-width: ui.$small) {
+		.ridu-nav__scroll {
+			padding-inline: var(--admin-gutter);
+		}
+		.ridu-nav__link {
+			font-size: 17.5px;
+			line-height: 30px;
+		}
+		.ridu-nav__link--active::before {
+			inset-inline-start: calc(-1 * var(--admin-gutter));
+		}
+		.ridu-nav__brand {
+			inset-inline-start: 56px;
+		}
+	}
+}

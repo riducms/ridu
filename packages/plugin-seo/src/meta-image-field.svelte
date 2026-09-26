@@ -2,10 +2,11 @@
 	import type { PluginFieldProps, FieldDocument } from "@riducms/plugin";
 	import { Button, FieldFrame, fieldControlARIA } from "@riducms/ui";
 	import ImageIcon from "~icons/lucide/image";
-	import SearchIcon from "~icons/lucide/search";
+	import PencilIcon from "~icons/lucide/pencil";
 	import XIcon from "~icons/lucide/x";
 
 	import { GenerationController } from "@plugin-seo/generation-controller.svelte";
+	import "@plugin-seo/seo.scss";
 
 	let {
 		field: binding,
@@ -31,20 +32,31 @@
 	);
 	const ReferenceBrowser = $derived(authoring?.referenceBrowser);
 	let browserOpen = $state(false);
-	let browserMode = $state<"inspect" | "select">("select");
+	let browserMode = $state<"create" | "inspect" | "select">("select");
+	let initialFile = $state.raw<File>();
+	let dragging = $state(false);
 	let document = $state.raw<FieldDocument>();
 	let loadFailed = $state(false);
 	const generation = new GenerationController();
+	const intakeEnabled = $derived(
+		!editingBlocked && target !== undefined && ReferenceBrowser !== undefined
+	);
+	const canCreateImage = $derived(
+		intakeEnabled && target !== undefined && authoring.canCreateDocument(target.slug)
+	);
 
 	$effect(() => () => generation.cancel());
 	$effect(() => {
 		const id = value;
+		void authoring.documentRevision;
+		void authoring.locale;
 		if (id === "" || target === undefined || authoring === undefined) {
 			document = undefined;
 			loadFailed = false;
 			return;
 		}
 		const request = new AbortController();
+		document = undefined;
 		loadFailed = false;
 		authoring
 			.findDocument(target.slug, id, request.signal)
@@ -67,12 +79,26 @@
 
 	function commit(ids: string[]) {
 		binding.set(ids[0] ?? null);
-		browserOpen = false;
+		closeBrowser();
 	}
 
-	function openBrowser(mode: "inspect" | "select") {
+	function closeBrowser() {
+		browserOpen = false;
+		initialFile = undefined;
+		dragging = false;
+	}
+
+	function openBrowser(mode: "create" | "inspect" | "select", file?: File) {
 		browserMode = mode;
+		initialFile = file;
 		browserOpen = true;
+	}
+
+	function drop(event: DragEvent) {
+		event.preventDefault();
+		dragging = false;
+		const file = event.dataTransfer?.files[0];
+		if (canCreateImage && file) openBrowser("create", file);
 	}
 
 	function documentLabel() {
@@ -82,9 +108,45 @@
 		}
 		return value;
 	}
+
+	function fileSize(bytes: unknown): string | undefined {
+		if (typeof bytes !== "number" || !Number.isFinite(bytes) || bytes < 0) return undefined;
+		if (bytes < 1024)
+			return i18n.formatNumber(bytes, { style: "unit", unit: "byte", unitDisplay: "long" });
+
+		const units = ["KB", "MB", "GB", "TB"];
+		const exponent = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length);
+		return `${i18n.formatNumber(bytes / 1024 ** exponent, { maximumFractionDigits: 0 })}${units[exponent - 1]}`;
+	}
+
+	function documentMetadata() {
+		if (loadFailed) return i18n.t("plugin.seo:imageUnavailable");
+		return [
+			fileSize(document?.filesize),
+			typeof document?.width === "number" && typeof document?.height === "number"
+				? `${document.width}x${document.height}`
+				: undefined,
+			typeof document?.mimeType === "string" ? document.mimeType : undefined,
+		]
+			.filter((part): part is string => part !== undefined)
+			.join(" — ");
+	}
 </script>
 
 <div data-field-path={field.path}>
+	{#snippet headingAction()}
+		<span class="ridu-seo-heading-separator" aria-hidden="true">—</span>
+		<Button
+			variant="link"
+			size="xs"
+			class="ridu-seo-generate"
+			disabled={editingBlocked || generation.status === "pending"}
+			aria-busy={generation.status === "pending"}
+			onclick={generate}
+		>
+			{i18n.t("plugin.seo:autoGenerate")}
+		</Button>
+	{/snippet}
 	<FieldFrame
 		controlID={field.id}
 		label={field.admin.label}
@@ -92,78 +154,90 @@
 		readOnly={field.admin.readOnly}
 		description={field.admin.description}
 		errors={issues.map((issue) => issue.message)}
+		class="ridu-seo-field"
+		headingAction={generationEnabled ? headingAction : undefined}
 	>
-		{#if generationEnabled}<div
-				class="-mt-1 flex flex-wrap items-center gap-1 text-[11.5px] text-foreground-muted"
-			>
-				<span>{i18n.t("plugin.seo:imageAutoGenerationTip")}</span>
-				<Button
-					variant="link"
-					size="xs"
-					class="h-auto px-0"
-					disabled={editingBlocked || generation.status === "pending"}
-					aria-busy={generation.status === "pending"}
-					onclick={generate}
-				>
-					{i18n.t("plugin.seo:autoGenerate")}
-				</Button>
-			</div>{/if}
+		{#if generationEnabled}
+			<p class="ridu-seo-guidance">{i18n.t("plugin.seo:imageAutoGenerationTip")}</p>
+		{/if}
 		{#if value === ""}
-			<Button
-				id={field.id}
-				aria-label={i18n.t("plugin.seo:selectImage")}
-				{...controlARIA}
-				variant="outline"
-				class="aria-invalid:!border-destructive"
-				disabled={editingBlocked || target === undefined || ReferenceBrowser === undefined}
-				onclick={() => openBrowser("select")}
-			>
-				<SearchIcon />
-				{i18n.t("plugin.seo:selectImage")}
-			</Button>
-		{:else}
+			<!-- File drops supplement the keyboard-accessible create and browse actions. -->
+			<!-- svelte-ignore a11y_no_static_element_interactions -->
 			<div
-				class="flex min-w-0 items-center gap-2.5 rounded-[4px] border border-control-border bg-control p-2 aria-invalid:!border-destructive/65"
-				aria-invalid={controlARIA["aria-invalid"]}
+				class="ridu-seo-image-intake"
+				role="region"
+				aria-label={field.admin.label}
+				data-dragging={dragging}
+				data-invalid={controlARIA["aria-invalid"]}
+				ondragover={(event) => {
+					event.preventDefault();
+					if (canCreateImage) {
+						dragging = true;
+						if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+					}
+				}}
+				ondragleave={(event) => {
+					if (!event.currentTarget.contains(event.relatedTarget as Node | null)) dragging = false;
+				}}
+				ondrop={drop}
 			>
-				<button
+				{#if canCreateImage}
+					<Button variant="secondary" size="sm" onclick={() => openBrowser("create")}>
+						{i18n.t("plugin.seo:createNewImage")}
+					</Button>
+					<span>{i18n.t("plugin.seo:or")}</span>
+				{/if}
+				<Button
 					id={field.id}
-					aria-label={i18n.t("plugin.seo:inspectImage")}
+					aria-label={i18n.t("plugin.seo:chooseExistingImage")}
 					{...controlARIA}
-					type="button"
-					class="flex min-w-0 flex-1 items-center gap-2.5 rounded-[3px] text-start outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed"
+					variant="secondary"
+					size="sm"
 					disabled={editingBlocked || target === undefined || ReferenceBrowser === undefined}
-					onclick={() => openBrowser("inspect")}
+					onclick={() => openBrowser("select")}
 				>
-					<span
-						class="grid size-11 shrink-0 place-items-center overflow-hidden rounded-[3px] bg-background text-foreground-faint"
-					>
+					{i18n.t("plugin.seo:chooseExistingImage")}
+				</Button>
+				{#if canCreateImage}
+					<span class="ridu-seo-image-intake-copy">
+						{i18n.t("plugin.seo:imageSourceTip")}
+					</span>
+				{/if}
+			</div>
+		{:else}
+			<div class="ridu-seo-image-selection" aria-invalid={controlARIA["aria-invalid"]}>
+				<div class="ridu-seo-image-content">
+					<span class="ridu-seo-image-thumbnail">
 						{#if typeof document?.url === "string" && String(document?.mimeType ?? "").startsWith("image/")}
-							<img class="size-full object-cover" src={document.url} alt="" />
-						{:else}<ImageIcon aria-hidden="true" />{/if}
+							<img src={document.url} alt="" />
+						{:else}
+							<ImageIcon aria-hidden="true" />
+						{/if}
 					</span>
-					<span class="min-w-0 flex-1">
-						<span class="block truncate text-[13px] text-foreground-strong">{documentLabel()}</span>
-						<span class="block truncate font-mono text-[10px] text-foreground-faint">{value}</span>
-						{#if loadFailed}<span class="block text-[11px] text-destructive">
-								{i18n.t("plugin.seo:imageUnavailable")}
-							</span>{/if}
+					<span class="ridu-seo-image-details">
+						{#if typeof document?.url === "string"}
+							<a class="ridu-seo-image-name" href={document.url} target="_blank" rel="noreferrer">
+								{documentLabel()}
+							</a>
+						{:else}
+							<span class="ridu-seo-image-name">{documentLabel()}</span>
+						{/if}
+						<span class="ridu-seo-image-metadata">{documentMetadata()}</span>
 					</span>
-					<span class="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium">
-						<SearchIcon aria-hidden="true" />
-						{i18n.t("plugin.seo:inspectImage")}
-					</span>
-				</button>
-				{#if !field.admin.readOnly}<div class="flex shrink-0 gap-1">
-						<Button
-							variant="outline"
-							size="xs"
-							disabled={editingBlocked}
-							onclick={() => openBrowser("select")}
-						>
-							<SearchIcon aria-hidden="true" />
-							{i18n.t("plugin.seo:replaceImage")}
-						</Button>
+				</div>
+				<div class="ridu-seo-image-actions">
+					<Button
+						id={field.id}
+						{...controlARIA}
+						variant="ghost"
+						size="icon-xs"
+						disabled={editingBlocked || target === undefined || ReferenceBrowser === undefined}
+						onclick={() => openBrowser("inspect")}
+						aria-label={i18n.t("plugin.seo:inspectImage")}
+					>
+						<PencilIcon />
+					</Button>
+					{#if !field.admin.readOnly}
 						<Button
 							variant="ghost"
 							size="icon-xs"
@@ -173,22 +247,20 @@
 						>
 							<XIcon />
 						</Button>
-					</div>{/if}
+					{/if}
+				</div>
 			</div>
 		{/if}
-		<div class="flex items-center gap-2">
-			<span
-				class={[
-					"rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
-					value === "" ? "bg-destructive/10 text-destructive" : "bg-success/12 text-success",
-				]}
-			>
+		<div class="ridu-seo-image-status">
+			<span class="ridu-seo-pill" data-tone={value === "" ? "danger" : "success"}>
 				{value === "" ? i18n.t("plugin.seo:noImage") : i18n.t("plugin.seo:good")}
 			</span>
 		</div>
-		{#if generation.status === "error"}<p class="text-[12px] text-destructive" role="alert">
+		{#if generation.status === "error"}
+			<p class="ridu-seo-error" role="alert">
 				{i18n.t("plugin.seo:generationFailed")}
-			</p>{/if}
+			</p>
+		{/if}
 	</FieldFrame>
 </div>
 
@@ -200,10 +272,12 @@
 		hasMany={false}
 		selectedIDs={value === "" ? [] : [value]}
 		readOnly={browserMode === "inspect" ? (field.admin.readOnly ?? false) : false}
+		initialCreate={browserMode === "create"}
+		{...initialFile === undefined ? {} : { initialFile }}
 		{...browserMode === "inspect" && document !== undefined ? { initialDocument: document } : {}}
 		{...browserMode === "inspect" && value !== "" ? { initialDocumentID: value } : {}}
 		locale={form.contentLocale ?? ""}
 		onCommit={commit}
-		onClose={() => (browserOpen = false)}
+		onClose={closeBrowser}
 	/>
 {/if}

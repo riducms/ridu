@@ -65,16 +65,22 @@ const references: ReferenceDefinition[] = [
 	{ source: "docs/graphql.md", target: "ridu-project/reference/graphql.md" },
 	{ source: "docs/mcp.md", target: "ridu-project/reference/mcp.md" },
 	{ source: "docs/admin.md", target: "ridu-project/reference/admin.md" },
+	{
+		source: "docs/admin/customizing-css.md",
+		target: "ridu-project/reference/admin/customizing-css.md",
+	},
 	{ source: "docs/custom-components.md", target: "ridu-project/reference/custom-components.md" },
 	...[
 		"field-components",
 		"row-labels",
 		"list-cells",
+		"list-results",
 		"dashboard",
 		"custom-pages",
 		"document-views",
 		"document-actions",
 		"custom-views",
+		"loading-data",
 		"branding-and-navigation",
 		"providers",
 	].map((name) => ({

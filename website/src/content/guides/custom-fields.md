@@ -284,7 +284,7 @@ The two helpers serve different purposes:
 See [PluginFieldProps](/reference/plugin/plugin-field-props/) for everything passed to `ColorField`,
 including `field`, `form`, and document-picking tools. If your plugin needs to offer a second editor
 for an existing field, use [defineFieldComponent](/reference/plugin/define-field-component/) in its
-`components` map; the application chooses it explicitly with
+`fieldEditors` map; the application chooses it explicitly with
 [field.PluginComponent](/reference/field/plugin-component/).
 
 Run `ridu check` in an application using the plugin to catch a missing component, mismatched

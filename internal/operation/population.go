@@ -135,7 +135,7 @@ func populationMetadataAvailable(collections map[schema.StableID]schema.Collecti
 			if !exists {
 				continue
 			}
-			if name == "deletedAt" && collection.Capabilities.Trash || (name == "_status" || name == "_revision") && collection.Versions != nil {
+			if name == "deletedAt" && collection.Capabilities.Trash || name == "_status" && collection.Versions != nil || name == "_revision" && (collection.Versions != nil || collection.Upload != nil) {
 				return true, true
 			}
 		}

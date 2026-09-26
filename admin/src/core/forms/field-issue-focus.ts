@@ -3,7 +3,7 @@ import { tick } from "svelte";
 export const fieldIssueRevealEvent = "ridu:reveal-field-issue";
 
 /** Open lazy field disclosures and repeated rows before focusing the invalid control. */
-export async function focusFieldIssue(path: string) {
+export async function focusFieldIssue(path: string, root: HTMLElement) {
 	const selector = `[data-field-path="${CSS.escape(path)}"]`;
 	let previous: HTMLElement | null = null;
 	// Each reveal can mount the next schema boundary. Bound the search by the
@@ -12,7 +12,7 @@ export async function focusFieldIssue(path: string) {
 		const segments = path.split(".");
 		let container: HTMLElement | null = null;
 		while (segments.length > 0 && container === null) {
-			container = document.querySelector<HTMLElement>(
+			container = root.querySelector<HTMLElement>(
 				`[data-field-path="${CSS.escape(segments.join("."))}"]`
 			);
 			segments.pop();
@@ -21,7 +21,7 @@ export async function focusFieldIssue(path: string) {
 		previous = container;
 		for (
 			let ancestor = container.parentElement;
-			ancestor !== null;
+			ancestor !== null && root.contains(ancestor);
 			ancestor = ancestor.parentElement
 		) {
 			if (ancestor instanceof HTMLDetailsElement && ancestor.hasAttribute("data-field-collapsible"))
@@ -29,7 +29,7 @@ export async function focusFieldIssue(path: string) {
 		}
 		container.dispatchEvent(new Event(fieldIssueRevealEvent, { bubbles: true }));
 		await tick();
-		const revealed = document.querySelector<HTMLElement>(selector);
+		const revealed = root.querySelector<HTMLElement>(selector);
 		const control = revealed?.querySelector<HTMLElement>(
 			"input:not([disabled]), textarea:not([disabled]), [contenteditable='true'], button:not([disabled]), [tabindex]:not([tabindex='-1'])"
 		);

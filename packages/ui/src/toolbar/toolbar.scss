@@ -1,0 +1,24 @@
+@use "@riducms/ui/styles.scss" as ui;
+
+@layer ridu.components {
+	.ridu-toolbar {
+		display: flex;
+		align-items: center;
+	}
+	.ridu-toolbar__button {
+		display: inline-grid;
+		place-items: center;
+		border: 0;
+		background: transparent;
+		color: inherit;
+		font: inherit;
+		cursor: pointer;
+		&:focus-visible {
+			@include ui.focus-outline;
+		}
+		&:disabled {
+			pointer-events: none;
+			opacity: 0.45;
+		}
+	}
+}

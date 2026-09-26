@@ -7,6 +7,7 @@ import (
 
 	"github.com/riducms/ridu/internal/localization"
 	"github.com/riducms/ridu/operation"
+	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
 )
@@ -118,11 +119,150 @@ func (engine *Engine) Capabilities(ctx context.Context, request CapabilitiesRequ
 		}
 	}
 
-	operations, err := engine.operationCapabilities(state.transaction, collection, operationContext, document, deletion, request.TrashOnly, selection)
+	return engine.capabilitiesInTransaction(state.transaction, collection, operationContext, document, deletion, request.TrashOnly, selection)
+}
+
+// PublicationTarget loads only the metadata needed to schedule a publish or
+// unpublish. The selected lifecycle access predicate remains attached to the
+// same atomic store read, so scheduling does not accidentally require Read.
+func (engine *Engine) PublicationTarget(ctx context.Context, request CapabilitiesRequest, kind operation.Kind) (document store.Document, err error) {
+	if kind != operation.Publish && kind != operation.Unpublish {
+		return store.Document{}, &Error{Code: "bad_operation", Status: 400, Message: "publication target requires publish or unpublish"}
+	}
+	collection, exists := engine.collections[request.Collection]
+	if !exists || collection.Schema.Versions == nil {
+		return store.Document{}, &Error{Code: "not_found", Status: 404, Message: "versioned collection was not found"}
+	}
+	if kind == operation.Unpublish && !collection.Schema.Versions.Drafts {
+		return store.Document{}, &Error{Code: "bad_operation", Status: 400, Message: "collection does not support drafts"}
+	}
+	selection, localeError := localization.Resolve(engine.localization, request.Locale, request.FallbackLocales, request.DisableFallback, request.AllLocales)
+	if localeError != nil {
+		return store.Document{}, &Error{Code: "bad_locale", Status: 400, Message: localeError.Error(), Cause: localeError}
+	}
+	state, ownsTransaction, err := engine.transaction(ctx, transactionReadOnly)
+	if err != nil {
+		return store.Document{}, transactionAdmissionError("begin publication target read", err)
+	}
+	transactionContext := context.WithValue(ctx, transactionKey{}, state)
+	if ownsTransaction {
+		defer func() {
+			if rollbackError := engine.rollbackTransactionState(ctx, state); rollbackError != nil {
+				err = rollbackOperationError("rollback publication target read", err, rollbackError)
+			}
+		}()
+	}
+	operationContext := Context{
+		Context: transactionContext, Operation: kind, Collection: collection.Schema, ID: request.ID,
+		Actor: cloneDocumentPointer(request.Actor), ActorCollection: request.ActorCollection,
+		Locale: selection.Locale, AllLocales: selection.All,
+		Locales: append([]schema.LocaleCode(nil), selection.Configured...),
+	}
+	decision, accessError := authorize(collection, operationContext)
+	if accessError != nil {
+		return store.Document{}, capabilityAccessError("publication access rule failed", accessError)
+	}
+	if decision.Kind == Deny {
+		return store.Document{}, &Error{Code: "access_denied", Status: 403, Message: "operation is not permitted"}
+	}
+	document, err = state.transaction.Find(transactionContext, store.Request{
+		Collection: collection.Schema, Collections: engine.schemas, ID: request.ID,
+		Access: decision.Access, Deletion: store.DeletionActive, Select: []query.Path{},
+		Locales: selection.Configured, LocaleChain: selection.Chain, AllLocales: selection.All,
+	})
+	if err != nil {
+		return store.Document{}, translateStoreError(err)
+	}
+	return document, nil
+}
+
+// MutatePublicationTarget runs one framework-owned callback after the selected
+// lifecycle access predicate has matched a mutation-locked document and before
+// that write transaction commits.
+func (engine *Engine) MutatePublicationTarget(ctx context.Context, request CapabilitiesRequest, kind operation.Kind, mutation TransactionMutation) (err error) {
+	if kind != operation.Publish && kind != operation.Unpublish {
+		return &Error{Code: "bad_operation", Status: 400, Message: "publication target requires publish or unpublish"}
+	}
+	if mutation == nil {
+		return &Error{Code: "bad_operation", Status: 400, Message: "publication target mutation is required"}
+	}
+	collection, exists := engine.collections[request.Collection]
+	if !exists || collection.Schema.Versions == nil {
+		return &Error{Code: "not_found", Status: 404, Message: "versioned collection was not found"}
+	}
+	if kind == operation.Unpublish && !collection.Schema.Versions.Drafts {
+		return &Error{Code: "bad_operation", Status: 400, Message: "collection does not support drafts"}
+	}
+	selection, localeError := localization.Resolve(engine.localization, request.Locale, request.FallbackLocales, request.DisableFallback, request.AllLocales)
+	if localeError != nil {
+		return &Error{Code: "bad_locale", Status: 400, Message: localeError.Error(), Cause: localeError}
+	}
+	state, ownsTransaction, err := engine.transaction(ctx, transactionWrite)
+	if err != nil {
+		return transactionAdmissionError("begin publication target mutation", err)
+	}
+	if state.rollbackOnly != nil {
+		return transactionAbortedOperationError(state.rollbackOnly)
+	}
+	transactionContext := context.WithValue(ctx, transactionKey{}, state)
+	if !ownsTransaction {
+		defer func() {
+			if err != nil {
+				state.markRollbackOnly(err)
+			}
+		}()
+	}
+	if ownsTransaction {
+		defer func() {
+			if !state.finished {
+				if rollbackError := engine.rollbackTransactionState(ctx, state); rollbackError != nil {
+					err = rollbackOperationError("rollback publication target mutation", err, rollbackError)
+				}
+			}
+		}()
+	}
+	operationContext := Context{
+		Context: transactionContext, Operation: kind, Collection: collection.Schema, ID: request.ID,
+		Actor: cloneDocumentPointer(request.Actor), ActorCollection: request.ActorCollection,
+		Locale: selection.Locale, AllLocales: selection.All,
+		Locales: append([]schema.LocaleCode(nil), selection.Configured...),
+	}
+	decision, accessError := authorize(collection, operationContext)
+	if accessError != nil {
+		return capabilityAccessError("publication access rule failed", accessError)
+	}
+	if decision.Kind == Deny {
+		return &Error{Code: "access_denied", Status: 403, Message: "operation is not permitted"}
+	}
+	document, findError := state.transaction.Find(transactionContext, store.Request{
+		Collection: collection.Schema, Collections: engine.schemas, ID: request.ID,
+		Access: decision.Access, Deletion: store.DeletionActive, Lock: store.LockMutation, Select: []query.Path{},
+		Locales: selection.Configured, LocaleChain: selection.Chain, AllLocales: selection.All,
+	})
+	if errors.Is(findError, store.ErrNotFound) {
+		return &Error{Code: "access_denied", Status: 403, Message: "operation is not permitted"}
+	}
+	if findError != nil {
+		return translateStoreError(findError)
+	}
+	if mutationError := mutation(transactionContext, state.transaction, collection.Schema, document); mutationError != nil {
+		return translateStoreError(mutationError)
+	}
+	if !ownsTransaction {
+		return nil
+	}
+	if commitError := engine.commitTransaction(ctx, state); commitError != nil {
+		return commitAttemptedError(commitError)
+	}
+	return nil
+}
+
+func (engine *Engine) capabilitiesInTransaction(transaction store.Transaction, collection Collection, operationContext Context, document *store.Document, deletion store.DeletionMode, trashOnly bool, selection localization.Selection) (AccessCapabilities, error) {
+	operations, err := engine.operationCapabilities(transaction, collection, operationContext, document, deletion, trashOnly, selection)
 	if err != nil {
 		return AccessCapabilities{}, err
 	}
-	if request.ID != "" && document == nil && !collection.Schema.Capabilities.Global && !hasDocumentCapability(operations) {
+	if operationContext.ID != "" && document == nil && !collection.Schema.Capabilities.Global && !hasDocumentCapability(operations) {
 		return AccessCapabilities{}, &Error{Code: "not_found", Status: 404, Message: "document was not found"}
 	}
 	fields, err := fieldCapabilities(collection, operationContext, document, operations)
@@ -130,6 +270,37 @@ func (engine *Engine) Capabilities(ctx context.Context, request CapabilitiesRequ
 		return AccessCapabilities{}, err
 	}
 	return AccessCapabilities{Operations: operations, Fields: fields}, nil
+}
+
+func (engine *Engine) collectionPageAccess(transaction store.Transaction, collection Collection, base Context, page store.Page, readDecision Decision, deletion store.DeletionMode, trashOnly, publishedOnly bool, selection localization.Selection) (*CollectionPageAccess, error) {
+	collectionAccess, err := engine.capabilitiesInTransaction(transaction, collection, base, nil, deletion, trashOnly, selection)
+	if err != nil {
+		return nil, err
+	}
+	documents := make(map[string]AccessCapabilities, len(page.Documents))
+	for _, listed := range page.Documents {
+		if err := base.Context.Err(); err != nil {
+			return nil, err
+		}
+		document, findError := transaction.Find(base.Context, store.Request{
+			Collection: collection.Schema, Collections: engine.schemas, ID: listed.ID,
+			Access: readDecision.Access, Deletion: deletion, PublishedOnly: publishedOnly,
+			Locales: selection.Configured, LocaleChain: selection.Chain, AllLocales: selection.All,
+		})
+		if findError != nil {
+			return nil, translateStoreError(fmt.Errorf("read collection list capability document: %w", findError))
+		}
+		document = localization.ProjectDocument(document, collection.Schema.Fields, selection)
+		operationContext := base
+		operationContext.ID = document.ID
+		operationContext.Data = store.CloneValues(document.Values)
+		access, capabilityError := engine.capabilitiesInTransaction(transaction, collection, operationContext, &document, deletion, trashOnly, selection)
+		if capabilityError != nil {
+			return nil, capabilityError
+		}
+		documents[document.ID] = access
+	}
+	return &CollectionPageAccess{Collection: collectionAccess, Documents: documents}, nil
 }
 
 func (engine *Engine) operationCapabilities(transaction store.Transaction, collection Collection, base Context, document *store.Document, deletion store.DeletionMode, trashOnly bool, selection localization.Selection) (OperationCapabilities, error) {
@@ -274,9 +445,11 @@ func (engine *Engine) operationCapabilities(transaction store.Transaction, colle
 		if err != nil {
 			return OperationCapabilities{}, err
 		}
-		unpublish, err = allowed(operation.Unpublish, data, store.DeletionActive)
-		if err != nil {
-			return OperationCapabilities{}, err
+		if collection.Schema.Versions.Drafts {
+			unpublish, err = allowed(operation.Unpublish, data, store.DeletionActive)
+			if err != nil {
+				return OperationCapabilities{}, err
+			}
 		}
 	}
 	unlock := false

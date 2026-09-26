@@ -1,4 +1,4 @@
-import type { SchemaField } from "@riducms/protocol";
+import type { SchemaField, AdminCollectionListPreferencesV1 } from "@riducms/protocol";
 import { RiduError } from "@riducms/sdk";
 import type { AdminI18n } from "@riducms/translations";
 
@@ -9,34 +9,20 @@ import {
 	normalizeWorkspacePreference,
 	parseListFilters,
 	parseListPageSize,
-	type ListFilter,
-	type ListPageSize,
+	type ListColumnSelection,
+	type ListViewState,
 	type ListWorkspacePreference,
 } from "@admin/features/collections/list-workspace";
 
-export interface CollectionListPreset {
+export interface CollectionListPreset extends ListViewState {
 	name: string;
-	q: string;
-	status: string;
-	folder: string;
-	view: "list" | "hierarchy";
-	filters: ListFilter[];
-	sort: string;
-	columns: string[];
-	limit: ListPageSize;
-	showStatus: boolean;
-	showID: boolean;
-	showCreated: boolean;
-	showUpdated: boolean;
 }
-
-export type CollectionListPresetInput = Omit<CollectionListPreset, "name">;
 
 interface CollectionListPreferenceRoute {
 	slug: string;
 	sessionID: string;
 	preferenceOwnerID: string;
-	columnFields: readonly SchemaField[];
+	columnFields: readonly Pick<SchemaField, "path">[];
 	filterFields: readonly SchemaField[];
 	defaultColumns: readonly string[];
 }
@@ -56,11 +42,7 @@ interface ActivePreferenceRoute extends CollectionListPreferenceRoute {
 
 const initialWorkspace: ListWorkspacePreference = {
 	columns: [],
-	showStatus: true,
-	showID: false,
-	showCreated: false,
-	showUpdated: true,
-	limit: 25,
+	limit: 10,
 };
 
 export class CollectionListPreferencesController {
@@ -70,7 +52,7 @@ export class CollectionListPreferencesController {
 	#active?: ActivePreferenceRoute;
 	#generation = 0;
 	#presetLoad?: AbortController;
-	#workspaceLoad?: AbortController;
+	#workspaceLoad = $state.raw<AbortController>();
 	#workspaceWrites = getPreferenceWriteQueue();
 	#workspaceSaveVersions = new Map<string, number>();
 	#unsubscribeWorkspace?: () => void;
@@ -83,7 +65,11 @@ export class CollectionListPreferencesController {
 		private readonly i18n: AdminI18n
 	) {}
 
-	enter = (route: CollectionListPreferenceRoute) => {
+	get workspacePending() {
+		return this.#workspaceLoad !== undefined;
+	}
+
+	enter = (route: CollectionListPreferenceRoute, initial?: AdminCollectionListPreferencesV1) => {
 		const key = routeKey(route);
 		if (this.#active?.key === key) return;
 		this.#abortLoads();
@@ -104,8 +90,36 @@ export class CollectionListPreferencesController {
 		this.presets = [];
 		this.#subscribeWrites(this.#active);
 		if (route.sessionID === "" || route.slug === "") return;
-		this.#loadWorkspace(this.#active, fallback);
-		this.#loadPresets(this.#active);
+		const workspace = initial?.workspace;
+		if (workspace !== undefined) {
+			if (workspace.error === undefined) {
+				this.workspace = normalizeWorkspacePreference(
+					workspace.value,
+					route.columnFields,
+					fallback
+				);
+			} else if (workspace.error.code !== "not_found") {
+				this.notifications.error({
+					title: this.i18n.t("collections:listPreferencesUnavailable"),
+					message: workspace.error.message,
+				});
+			}
+		} else {
+			this.#loadWorkspace(this.#active, fallback);
+		}
+		const presets = initial?.presets;
+		if (presets !== undefined) {
+			if (presets.error === undefined) {
+				this.presets = validPresets(presets.value, route.filterFields, route.defaultColumns);
+			} else if (presets.error.code !== "not_found") {
+				this.notifications.error({
+					title: this.i18n.t("collections:savedViewsUnavailable"),
+					message: presets.error.message,
+				});
+			}
+		} else {
+			this.#loadPresets(this.#active);
+		}
 	};
 
 	persistWorkspace = async (next: ListWorkspacePreference) => {
@@ -140,7 +154,7 @@ export class CollectionListPreferencesController {
 		}
 	};
 
-	savePreset = async (name: string, input: CollectionListPresetInput) => {
+	savePreset = async (name: string, input: ListViewState) => {
 		const active = this.#active;
 		const normalizedName = name.trim();
 		if (
@@ -341,7 +355,7 @@ function ownerKey(route: CollectionListPreferenceRoute) {
 }
 
 function fallbackWorkspace(defaultColumns: readonly string[]): ListWorkspacePreference {
-	return { ...initialWorkspace, columns: [...defaultColumns] };
+	return { ...initialWorkspace, columns: defaultColumns.map((path) => ({ path, active: true })) };
 }
 
 function validPresets(
@@ -358,9 +372,7 @@ function validPresets(
 			typeof record.q !== "string" ||
 			typeof record.status !== "string" ||
 			typeof record.folder !== "string" ||
-			(record.view !== "list" && record.view !== "hierarchy") ||
-			typeof record.showStatus !== "boolean" ||
-			typeof record.showUpdated !== "boolean"
+			(record.view !== "list" && record.view !== "hierarchy")
 		) {
 			return [];
 		}
@@ -377,16 +389,18 @@ function validPresets(
 				),
 				sort: typeof record.sort === "string" ? record.sort : "",
 				columns: Array.isArray(record.columns)
-					? record.columns.filter((name): name is string => typeof name === "string")
-					: [...defaultColumns],
+					? record.columns.filter(
+							(column): column is ListColumnSelection =>
+								typeof column === "object" &&
+								column !== null &&
+								typeof column.path === "string" &&
+								typeof column.active === "boolean"
+						)
+					: defaultColumns.map((path) => ({ path, active: true })),
 				limit: parseListPageSize(
 					typeof record.limit === "number" ? String(record.limit) : null,
-					25
+					10
 				),
-				showStatus: record.showStatus,
-				showID: record.showID === true,
-				showCreated: record.showCreated === true,
-				showUpdated: record.showUpdated,
 			},
 		];
 	});

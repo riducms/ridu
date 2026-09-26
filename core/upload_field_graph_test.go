@@ -75,7 +75,7 @@ func TestUploadGraphPreservesManagedStorageContracts(t *testing.T) {
 		t.Fatal(err)
 	}
 	fields := resolution.Manifest().Snapshot().Collections[0].Fields
-	if len(fields) != 14 {
+	if len(fields) != 15 {
 		t.Fatalf("managed field count = %d", len(fields))
 	}
 	expected := map[string]schema.Field{

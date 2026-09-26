@@ -1,0 +1,190 @@
+@use "@riducms/ui/styles.scss" as ui;
+
+@layer ridu.components {
+	.ridu-api-reference {
+		display: grid;
+		grid-template-columns: 180px minmax(0, 1fr);
+		min-height: 0;
+		flex: 1;
+
+		&__operations {
+			display: flex;
+			flex-direction: column;
+			gap: 4px;
+			padding: 24px 12px;
+			border-inline-end: 1px solid var(--border);
+			overflow: auto;
+
+			button {
+				padding: 10px 14px;
+				border: 0;
+				border-radius: var(--radius-sm);
+				background: transparent;
+				color: var(--muted-foreground);
+				text-align: start;
+				white-space: nowrap;
+				cursor: pointer;
+				&:hover,
+				&[aria-current] {
+					background: var(--muted);
+					color: var(--foreground);
+				}
+			}
+		}
+		button:focus-visible,
+		pre:focus-visible,
+		&__table-scroll:focus-visible,
+		summary:focus-visible {
+			@include ui.focus-outline;
+		}
+		&__body {
+			min-width: 0;
+			overflow: auto;
+			padding: 30px;
+		}
+		&__section {
+			margin-bottom: 32px;
+			h2,
+			h3 {
+				margin: 0 0 16px;
+				font-weight: 500;
+			}
+			h2 {
+				font-size: 22px;
+				span {
+					color: var(--muted-foreground);
+					font-size: 18px;
+				}
+			}
+			h3 {
+				font-size: 18px;
+			}
+			p {
+				margin: 12px 0;
+				color: var(--muted-foreground);
+			}
+		}
+		&__endpoint {
+			display: flex;
+			gap: 12px;
+			padding: 14px 16px;
+			border: 1px solid var(--border);
+			border-radius: var(--radius-sm);
+			background: var(--card);
+			code {
+				overflow-wrap: anywhere;
+			}
+		}
+		code,
+		pre {
+			font-family: var(--font-mono);
+			font-size: 12px;
+		}
+		&__code-toolbar {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 8px;
+
+			.ridu-tabs__list {
+				min-width: 0;
+				overflow-x: auto;
+			}
+		}
+
+		&__notice {
+			padding-inline-start: 14px;
+			border-inline-start: 2px solid var(--border);
+		}
+		&__parameters {
+			margin: 0;
+			> div {
+				display: grid;
+				grid-template-columns: 130px minmax(0, 1fr);
+				gap: 12px;
+				padding-block: 12px;
+				border-top: 1px solid var(--border);
+			}
+			dd {
+				margin: 0;
+				color: var(--muted-foreground);
+			}
+		}
+		&__table-scroll {
+			overflow: auto;
+		}
+		table {
+			width: 100%;
+			border-collapse: collapse;
+			text-align: start;
+		}
+		th,
+		td {
+			padding: 14px 12px;
+			text-align: start;
+			vertical-align: top;
+			border-bottom: 1px solid var(--border);
+			overflow-wrap: anywhere;
+		}
+		th {
+			color: var(--muted-foreground);
+			font-weight: 400;
+		}
+		td {
+			min-width: 100px;
+			p {
+				margin: 4px 0;
+			}
+		}
+		&__badges {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 4px;
+			span {
+				padding: 2px 6px;
+				border-radius: var(--radius-sm);
+				background: var(--muted);
+				font-size: 11px;
+			}
+		}
+		details {
+			margin-top: 8px;
+			summary {
+				cursor: pointer;
+			}
+			pre {
+				max-width: 300px;
+				overflow: auto;
+			}
+		}
+		.ridu-json-viewer {
+			border: 1px solid var(--border);
+			border-radius: var(--radius-sm);
+			max-height: 430px;
+			overflow: auto;
+		}
+	}
+
+	@media (max-width: 700px) {
+		.ridu-api-reference {
+			grid-template-columns: minmax(0, 1fr);
+			grid-template-rows: auto minmax(0, 1fr);
+			&__operations {
+				flex-direction: row;
+				padding: 10px;
+				border-inline-end: 0;
+				border-bottom: 1px solid var(--border);
+			}
+			&__body {
+				padding: 20px;
+			}
+			&__parameters > div {
+				grid-template-columns: minmax(0, 1fr);
+				gap: 4px;
+			}
+		}
+		.ridu-api-reference-drawer__header {
+			padding: 20px;
+		}
+	}
+}

@@ -22,11 +22,15 @@ func TestSQLiteRichTextBlockNamesAcceptance(t *testing.T) {
 	richtextblocks.RunNames(t, sqliteRichTextBlocksFactory)
 }
 
-func TestSQLiteRichTextBlocksPerformance(t *testing.T) {
-	richtextblocks.RunPerformance(t, "sqlite", sqliteRichTextBlocksFactory)
+func BenchmarkSQLiteRichTextBlocksPerformance(b *testing.B) {
+	richtextblocks.RunPerformanceBenchmark(b, "sqlite", sqliteRichTextBlocksBackend)
 }
 
 func sqliteRichTextBlocksFactory(t *testing.T, config ridu.Config) (store.Store, *ridu.App) {
+	return sqliteRichTextBlocksBackend(t, config)
+}
+
+func sqliteRichTextBlocksBackend(t testing.TB, config ridu.Config) (store.Store, *ridu.App) {
 	t.Helper()
 	backend, err := sqlite.Open(t.Context(), filepath.Join(t.TempDir(), "blocks.sqlite"))
 	if err != nil {

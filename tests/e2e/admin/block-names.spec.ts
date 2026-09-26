@@ -1,5 +1,5 @@
 import { expect, test } from "./fixture";
-import { documentSaveButton, loginAsEditor, observePageErrors } from "./helpers";
+import { submitDocumentForm, loginAsEditor, observePageErrors } from "./helpers";
 import { block, richDocument, bodyCards } from "./rich-text-block-fixture";
 
 test("names stay separate from content through collapse, reorder, duplicate and save", async ({
@@ -55,7 +55,7 @@ test("names stay separate from content through collapse, reorder, duplicate and 
 			response.request().method() === "PATCH" &&
 			new URL(response.url()).pathname === `/api/collections/block-names/${original.id}`
 	);
-	await documentSaveButton(page).click();
+	await submitDocumentForm(page);
 	const response = await saved;
 	expect(response.ok(), await response.text()).toBe(true);
 	await page.reload();
@@ -183,7 +183,7 @@ test("rich-text names retain focus and history and share drawer Apply/Cancel", a
 			response.request().method() === "PATCH" &&
 			new URL(response.url()).pathname === `/api/collections/block-names/${original.id}`
 	);
-	await documentSaveButton(page).click();
+	await submitDocumentForm(page);
 	const response = await saved;
 	expect(response.ok(), await response.text()).toBe(true);
 	await page.reload();
@@ -215,12 +215,12 @@ test("server name validation focuses the header without mounting collapsed conte
 	await layout.getByRole("button", { name: "Collapse", exact: true }).click();
 	const name = layout.getByRole("textbox", { name: "Block name", exact: true });
 	await name.fill("invalid");
-	await documentSaveButton(page).click();
+	await submitDocumentForm(page);
 	await expect(layout.getByText("Choose a descriptive block name", { exact: true })).toBeVisible();
 	await expect(name).toBeFocused();
 	await expect(page.locator('input[name="layout.0.heading"]')).toHaveCount(0);
 	await name.fill("");
-	await documentSaveButton(page).click();
+	await submitDocumentForm(page);
 	await page.reload();
 	await expect(name).toHaveValue("");
 	await expect(name).toHaveAttribute("placeholder", "Heading");

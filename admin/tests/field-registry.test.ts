@@ -87,15 +87,15 @@ describe("core field registry", () => {
 		};
 
 		expect(
-			createCoreFieldRegistry(resolveAdminConfig({ plugins: [plugin] }).fields).resolve(field)
+			createCoreFieldRegistry(resolveAdminConfig({ plugins: [plugin] }).pluginFields).resolve(field)
 				.extension?.registration.component
 		).toBe(component);
 		expect(() => createCoreFieldRegistry().resolve(field)).toThrow(
-			"No admin field renderer can render accent (plugin:color)"
+			"No admin field editor can render accent (plugin:color)"
 		);
 	});
 
-	it("resolves exact plugin renderers without replacing built-in storage semantics", () => {
+	it("resolves exact plugin field editors without replacing built-in storage semantics", () => {
 		const overview = (() => undefined) as unknown as Component<
 			import("@riducms/plugin").PluginFieldProps<undefined, undefined, "ui">
 		>;
@@ -108,7 +108,7 @@ describe("core field registry", () => {
 					defineAdminPlugin({
 						key: "seo",
 						pairingVersion: 1,
-						components: {
+						fieldEditors: {
 							overview: defineFieldComponent({
 								type: "ui",
 								component: overview,
@@ -122,7 +122,7 @@ describe("core field registry", () => {
 						},
 					}),
 				],
-			}).fields
+			}).pluginFields
 		);
 		const base: SchemaField = {
 			id: "posts-meta-overview",

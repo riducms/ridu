@@ -1,10 +1,11 @@
-import { resolveBlockTypes } from "@riducms/protocol";
+import { isRecord, resolveBlockTypes } from "@riducms/protocol";
 import { embeddedOccurrences } from "@admin/core/forms/embedded-fields";
 import type { AdminI18n } from "@riducms/plugin";
 import { createAdminI18n } from "@riducms/translations";
 import type { SchemaField, ValidationIssue } from "@riducms/protocol";
 
 import { initialFormValues, type FormValues } from "@admin/core/forms/form-schema";
+import { joinFormPath } from "@admin/core/forms/form-path";
 
 export interface FormValidationOptions {
 	requireMissing: boolean;
@@ -66,13 +67,8 @@ function resolveFieldLabel(
 		const [index, ...childSegments] = remaining;
 		const rowLabels = isIndex(index)
 			? [
-					...labels,
-					translate(
-						i18n,
-						"fields:rowNumber",
-						{ number: Number(index) + 1 },
-						`Row ${Number(index) + 1}`
-					),
+					...parents,
+					`${localizedFieldLabel(field, i18n)} ${i18n?.formatNumber(Number(index) + 1) ?? Number(index) + 1}`,
 				]
 			: labels;
 		return resolveFieldLabel(
@@ -121,7 +117,7 @@ function validateFields(
 ) {
 	for (const field of fields) {
 		if (field.category === "presentation") continue;
-		const path = joinPath(prefix, field.name);
+		const path = joinFormPath(prefix, field.name);
 		if (!include(path, field.path)) continue;
 		const exists = Object.hasOwn(values, field.name);
 		const value = values[field.name];
@@ -182,11 +178,9 @@ function validateFields(
 			case "text":
 			case "code":
 			case "textarea":
-				validateString(field, value, path, issues, i18n);
-				break;
 			case "email":
 			case "date":
-				validateOptionalString(field, value, path, issues, i18n);
+				validateString(field, value, path, issues, i18n);
 				break;
 			case "number":
 				if (typeof value !== "number" || !Number.isFinite(value)) {
@@ -327,31 +321,6 @@ function validatePrimitiveList(
 }
 
 function validateString(
-	field: SchemaField,
-	value: unknown,
-	path: string,
-	issues: ValidationIssue[],
-	i18n?: AdminI18n
-) {
-	if (typeof value !== "string") {
-		issues.push(
-			issue(
-				"invalid_type",
-				path,
-				translate(
-					i18n,
-					"errors:string",
-					{ label: localizedFieldLabel(field, i18n) },
-					`${localizedFieldLabel(field, i18n)} must be a string`
-				)
-			)
-		);
-	} else if (field.required && value.length === 0) {
-		issues.push(requiredIssue(field, path, i18n));
-	}
-}
-
-function validateOptionalString(
 	field: SchemaField,
 	value: unknown,
 	path: string,
@@ -837,14 +806,6 @@ function issue(code: string, path: string, message: string): ValidationIssue {
 	return { code, path, message };
 }
 
-function joinPath(prefix: string, name: string) {
-	return prefix === "" ? name : `${prefix}.${name}`;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function translate(
 	i18n: AdminI18n | undefined,
 	key: Parameters<AdminI18n["t"]>[0],
@@ -868,7 +829,7 @@ export function unknownBlockIssues(
 	const issues: ValidationIssue[] = [];
 	for (const field of fields) {
 		const value = values[field.name];
-		const path = joinPath(prefix, field.name);
+		const path = joinFormPath(prefix, field.name);
 		if (field.type === "group" && isRecord(value))
 			issues.push(...unknownBlockIssues(field.nested?.fields ?? [], value, i18n, path));
 		if (field.type === "plugin") {

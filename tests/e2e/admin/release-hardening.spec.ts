@@ -1,6 +1,12 @@
 import { expect, test } from "./fixture";
+import type { AdminPreparedRouteStateV1 } from "@riducms/protocol";
 
-import { documentSaveButton, loginAsEditor, uploadFixturePng } from "./helpers";
+import {
+	documentSaveButton,
+	loginAsEditor,
+	uploadFixturePng,
+	useAdminRuntimeFallback,
+} from "./helpers";
 
 test("new versioned documents make draft and publish intent explicit", async ({ page }) => {
 	await loginAsEditor(page);
@@ -209,6 +215,7 @@ test("selecting an upload file participates in unsaved-navigation protection", a
 });
 
 test("no-draft collection creation requires publish capability", async ({ page }) => {
+	await useAdminRuntimeFallback(page);
 	await page.route("**/api/schema", async (route) => {
 		const response = await route.fetch();
 		const body = (await response.json()) as {
@@ -253,6 +260,7 @@ test("published edits checkpoint locally without being background-published", as
 	await loginAsEditor(page);
 	await page.goto("/admin/collections/posts");
 	await page.getByRole("link", { name: "Welcome to Ridu", exact: true }).click();
+	await expect(page).toHaveURL(/\/admin\/collections\/posts\/[^/?]+\?locale=en$/);
 	const documentID = new URL(page.url()).pathname.split("/").at(-1);
 	await page.locator('input[name="title"]').fill("Must remain an explicit publish");
 	await page.clock.fastForward(15_000);
@@ -287,6 +295,7 @@ test("published edits use the publish endpoint and remain published", async ({ p
 	await loginAsEditor(page);
 	await page.goto("/admin/collections/posts");
 	await page.getByRole("link", { name: "Welcome to Ridu", exact: true }).click();
+	await expect(page).toHaveURL(/\/admin\/collections\/posts\/[^/?]+\?locale=en$/);
 	const documentID = new URL(page.url()).pathname.split("/").at(-1);
 	expect(documentID).toBeTruthy();
 	let ordinaryUpdates = 0;
@@ -316,12 +325,19 @@ test("published edits use the publish endpoint and remain published", async ({ p
 });
 
 test("published edits require publish capability", async ({ page }) => {
-	await page.route(/\/api\/access\/collections\/posts(?:\?|$)/, async (route) => {
+	await page.route(/\/admin\/collections\/posts\/[^/?]+(?:\?|$)/, async (route) => {
 		const response = await route.fetch();
-		const body = (await response.json()) as { operations: { publish: boolean; update: boolean } };
-		body.operations.update = true;
-		body.operations.publish = false;
-		await route.fulfill({ response, json: body });
+		const state = (await response.json()) as Extract<
+			AdminPreparedRouteStateV1,
+			{ outcome: "prepared" }
+		>;
+		expect(state.outcome).toBe("prepared");
+		if (state.route.kind !== "collection-document") throw new Error("Expected document state");
+		const access = state.route.document.access.value;
+		if (access === undefined) throw new Error("Expected document access");
+		access.operations.update = true;
+		access.operations.publish = false;
+		await route.fulfill({ response, json: state });
 	});
 	let publishRequests = 0;
 	page.on("request", (request) => {
@@ -370,7 +386,7 @@ test("dirty drafts autosave to a new server revision", async ({ page }) => {
 		});
 });
 
-test("publication controls cannot erase dirty draft edits", async ({ page }) => {
+test("draft publication saves dirty edits atomically", async ({ page }) => {
 	await loginAsEditor(page);
 	const created = await page.request.post("/api/collections/posts?draft=true", {
 		data: { title: "Publication control draft", summary: "Stored before editing." },
@@ -378,8 +394,76 @@ test("publication controls cannot erase dirty draft edits", async ({ page }) => 
 	expect(created.ok()).toBe(true);
 	const documentID = (await created.json()).doc.id;
 	await page.goto(`/admin/collections/posts/${documentID}`);
+	await expect(page.getByRole("link", { name: "Versions", exact: true })).toBeVisible();
+	const publish = page.getByRole("button", { name: "Publish changes", exact: true });
+	await expect(publish).toBeEnabled();
 	await page.locator('input[name="title"]').fill("Dirty draft edit");
-	await expect(page.getByRole("button", { name: "Publish", exact: true })).toBeDisabled();
-	await page.getByRole("button", { name: "Save draft", exact: true }).click();
-	await expect(page.getByRole("button", { name: "Publish", exact: true })).toBeEnabled();
+	const publishResponse = page.waitForResponse(
+		(response) =>
+			response.request().method() === "POST" &&
+			new URL(response.url()).pathname === `/api/collections/posts/${documentID}/publish`
+	);
+	await publish.click();
+	expect((await publishResponse).ok()).toBe(true);
+	const response = await page.request.get(`/api/collections/posts/${documentID}`);
+	expect(response.ok()).toBe(true);
+	expect((await response.json()).doc).toMatchObject({
+		title: "Dirty draft edit",
+		_status: "published",
+	});
+	await expect(page.getByText("Published", { exact: true }).first()).toBeVisible();
+	await expect(publish).toBeDisabled();
+	await expect(page.getByText("Last saved less than a minute ago")).toBeVisible();
+	await page.setViewportSize({ width: 1280, height: 720 });
+	const bar = await page.locator(".ridu-document-bar").boundingBox();
+	const heading = await page.getByRole("heading", { name: "Dirty draft edit" }).boundingBox();
+	expect((bar?.y ?? 0) - (heading?.y ?? 0)).toBe(96);
+	expect(bar?.height).toBe(56);
+	await page.getByRole("button", { name: "Schedule", exact: true }).click();
+	await page.getByRole("button", { name: "Schedule publication", exact: true }).click();
+	await expect(page.getByRole("dialog").getByRole("radio", { name: "Unpublish" })).toBeChecked();
+	const dialog = page.getByRole("dialog");
+	const timeZone = dialog.getByRole("combobox", { name: "Timezone", exact: true });
+	await expect(timeZone).toHaveValue(/^\(UTC\+0[01]:00\) London \(.+\)$/);
+	await timeZone.fill("Paris");
+	await page.getByRole("option", { name: /^\(UTC\+0[12]:00\) Paris \(.+\)$/ }).click();
+	const year = new Date().getUTCFullYear() + 2;
+	for (const [segment, digits] of [
+		["month", "01"],
+		["day,", "15"],
+		["year", String(year)],
+		["hour", "11"],
+		["minute", "30"],
+		["AM/PM", "a"],
+	] as const) {
+		const control = dialog.getByRole("spinbutton", { name: new RegExp(segment) });
+		await control.click();
+		await control.pressSequentially(digits);
+	}
+	const scheduledResponse = page.waitForResponse(
+		(response) =>
+			response.request().method() === "POST" &&
+			new URL(response.url()).pathname === `/api/collections/posts/${documentID}/schedule`
+	);
+	await dialog.getByRole("button", { name: "Save", exact: true }).click();
+	const scheduled = await scheduledResponse;
+	expect(scheduled.status()).toBe(201);
+	const event = (await scheduled.json()).scheduledPublication;
+	expect(event).toMatchObject({
+		action: "unpublish",
+		timeZone: "Europe/Paris",
+		runAt: `${year}-01-15T10:30:00Z`,
+	});
+	await expect(dialog.locator(".ridu-schedule__zone")).toHaveText(
+		"(UTC+01:00) Paris (Central European Standard Time)"
+	);
+	await page.reload();
+	await page.getByRole("button", { name: "Schedule", exact: true }).click();
+	await page.getByRole("button", { name: "Schedule publication", exact: true }).click();
+	await expect(page.locator(".ridu-schedule__zone")).toHaveText(
+		"(UTC+01:00) Paris (Central European Standard Time)"
+	);
+	await expect(page.locator(".ridu-schedule__event")).toContainText("11:30 AM");
+	await page.getByRole("button", { name: "Cancel scheduled unpublish", exact: true }).click();
+	await expect(page.getByText("No upcoming events scheduled.", { exact: true })).toBeVisible();
 });

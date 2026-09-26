@@ -1,0 +1,32 @@
+@use "@riducms/ui/styles.scss" as ui;
+
+@layer ridu.components {
+	.ridu-upload-metadata {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 20px;
+	}
+
+	.ridu-upload-metadata__field {
+		display: grid;
+		align-content: start;
+		gap: 5px;
+		min-inline-size: 0;
+		color: var(--ink-label);
+		font-size: var(--font-size-body);
+	}
+
+	.ridu-upload-metadata__select {
+		inline-size: 100%;
+	}
+
+	.ridu-upload-metadata__placeholder {
+		color: var(--ink-placeholder);
+	}
+
+	@media (max-width: ui.$small) {
+		.ridu-upload-metadata {
+			grid-template-columns: minmax(0, 1fr);
+		}
+	}
+}

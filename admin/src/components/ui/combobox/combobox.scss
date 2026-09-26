@@ -1,0 +1,163 @@
+@use "@riducms/ui/styles.scss" as ui;
+
+@layer ridu.components {
+	.ridu-combobox {
+		@include ui.control-surface;
+		display: flex;
+		align-items: center;
+		min-height: var(--control-height);
+		min-width: 0;
+		&:hover {
+			border-color: var(--control-border-hover);
+		}
+		&:focus-within {
+			border-color: var(--ring);
+		}
+		&[aria-invalid="true"] {
+			border-color: var(--control-invalid-border);
+		}
+		&[data-disabled="true"] {
+			opacity: 0.5;
+		}
+	}
+	.ridu-combobox-value {
+		position: relative;
+		min-width: 0;
+		flex: 1;
+		display: flex;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: 5px;
+		padding-inline-start: var(--control-padding-inline);
+	}
+	.ridu-combobox-input {
+		min-width: 24px;
+		width: 0;
+		flex: 1;
+		height: calc(var(--control-height) - 2px);
+		border: 0;
+		padding: 0;
+		background: transparent;
+		color: var(--foreground);
+		font: inherit;
+		outline: 0;
+		box-shadow: none;
+		&::placeholder {
+			color: var(--ink-placeholder);
+		}
+	}
+	.ridu-combobox-value:has(.ridu-combobox-selection) .ridu-combobox-input {
+		color: transparent;
+		caret-color: var(--foreground);
+	}
+
+	.ridu-combobox-selection {
+		position: absolute;
+		inset-inline-start: var(--control-padding-inline);
+		display: flex;
+		align-items: center;
+		gap: 5px;
+		max-width: calc(100% - 24px);
+		pointer-events: none;
+		span {
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+		}
+		button {
+			pointer-events: auto;
+		}
+	}
+	.ridu-combobox-icon {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		flex-shrink: 0;
+		width: 24px;
+		height: 26px;
+		border: 0;
+		background: transparent;
+		color: var(--foreground-muted);
+		padding: 0;
+		cursor: pointer;
+		svg {
+			width: 14px;
+			height: 14px;
+		}
+		&:hover {
+			color: var(--foreground);
+		}
+		&:disabled {
+			cursor: not-allowed;
+		}
+	}
+	.ridu-combobox-trigger {
+		margin-inline-end: 8px;
+	}
+	.ridu-combobox-add {
+		width: 40px;
+		height: calc(var(--control-height) - 2px);
+		border-inline-start: 1px solid var(--control-border);
+	}
+	.ridu-combobox-popup {
+		z-index: 80;
+		width: var(--bits-combobox-anchor-width);
+		max-height: min(320px, var(--bits-combobox-content-available-height));
+		overflow: auto;
+		background: var(--background-surface);
+		color: var(--foreground);
+		border: 1px solid var(--control-border);
+		border-radius: 0 0 var(--control-radius) var(--control-radius);
+		box-shadow: var(--shadow-popover);
+		outline: 0;
+	}
+	.ridu-combobox-option {
+		padding: 9px 14px;
+		cursor: pointer;
+		outline: none;
+		min-height: 36px;
+		&[data-highlighted] {
+			background: var(--control-surface-hover);
+		}
+		&[data-selected] {
+			background: var(--background-layer);
+		}
+		&[data-disabled] {
+			opacity: 0.5;
+		}
+	}
+	.ridu-combobox-message {
+		padding: 10px 14px;
+		color: var(--foreground-muted);
+		margin: 0;
+	}
+	.ridu-combobox-group {
+		margin: 0;
+		padding: 10px 14px 4px;
+		font-size: 12px;
+		color: var(--foreground-muted);
+	}
+	.ridu-combobox-browse {
+		display: flex;
+		gap: 8px;
+		width: 100%;
+		padding: 10px 14px;
+		border: 0;
+		background: transparent;
+		color: var(--foreground);
+		font: inherit;
+		cursor: pointer;
+		&:hover {
+			background: var(--control-surface-hover);
+		}
+	}
+	.ridu-combobox-tag {
+		display: inline-flex;
+		align-items: center;
+		gap: 3px;
+		background: var(--background-layer);
+		padding-inline-start: 6px;
+		border-radius: 2px;
+		margin-block: 4px;
+	}
+}

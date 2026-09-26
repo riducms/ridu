@@ -1,0 +1,34 @@
+@use "@riducms/ui/styles.scss" as ui;
+
+@layer ridu.components {
+	.ridu-logout {
+		display: grid;
+		place-items: center;
+		width: 20px;
+		height: 20px;
+		padding: 0;
+		border: 0;
+		background: transparent;
+		color: var(--foreground);
+		cursor: pointer;
+
+		svg {
+			width: 20px;
+			height: 20px;
+			stroke-width: 1;
+		}
+
+		&:focus-visible {
+			@include ui.focus-outline;
+		}
+
+		&:disabled {
+			opacity: 0.5;
+			cursor: wait;
+		}
+	}
+	.ridu-logout__error {
+		color: var(--destructive);
+		margin: 0;
+	}
+}

@@ -40,6 +40,10 @@ test("ordinary forms leave dynamic defaults omitted until save and retain explic
 	await expect(page.locator('input[name="title"]')).toHaveValue("Untitled");
 	await expect(page.locator('input[name="note"]')).toHaveValue("");
 	await expect(page.locator('input[name="title"]')).toHaveAttribute("required");
+	// The create response precedes the transition into the saved document.
+	// fill() can write into inert outgoing DOM, unlike an actual user.
+	await expect(page).toHaveURL((url) => url.pathname.endsWith(`/${original.id}`));
+	await expect(page.locator("main")).not.toHaveAttribute("inert", "");
 	await page.locator('input[name="title"]').fill("Saved title");
 	expect((await save(page, original.id)).ok()).toBe(true);
 	await page.reload();
@@ -81,7 +85,7 @@ test("embedded rich-text insertion defers required dynamic defaults until the pa
 		.getByRole("button", { name: "Add block", exact: true })
 		.click();
 	const picker = page.getByRole("dialog", { name: "Insert block", exact: true });
-	await picker.getByRole("option", { name: /^Card Structured block/ }).click();
+	await picker.getByRole("option", { name: "Card", exact: true }).click();
 	const drawer = page.getByRole("dialog", { name: "Insert Card", exact: true });
 	await expect(drawer.locator('input[name$=".title"]')).toHaveValue("");
 	await expect(drawer.locator('input[name$=".note"]')).toHaveValue("");
@@ -119,12 +123,13 @@ test("relationship quick-create accepts an omitted dynamic-default heading", asy
 	await page
 		.locator('[data-field-path="related"]')
 		.first()
-		.getByRole("button", { name: "Browse default examples" })
+		.getByRole("combobox", { name: "Related", exact: true })
 		.click();
+	await page.getByRole("button", { name: /^Browse all default examples/ }).click();
 	const select = page.getByRole("dialog", { name: "Select related", exact: true });
-	await select.getByRole("button", { name: "Create default example", exact: true }).click();
+	await select.getByRole("button", { name: "Create New", exact: true }).click();
 	const drawer = page.getByRole("dialog", { name: "New default example", exact: true });
-	const title = drawer.getByPlaceholder("Untitled default example");
+	const title = drawer.getByLabel("Title", { exact: true });
 	await expect(title).toHaveValue("");
 	await expect(title).not.toHaveAttribute("required");
 	const saved = page.waitForResponse(
@@ -132,12 +137,17 @@ test("relationship quick-create accepts an omitted dynamic-default heading", asy
 			result.request().method() === "POST" &&
 			new URL(result.url()).pathname === "/api/collections/dynamic-defaults"
 	);
-	await title.press("Enter");
+	await drawer.getByRole("button", { name: "Save", exact: true }).click();
 	const response = await saved;
 	expect(response.ok(), await response.text()).toBe(true);
+	expect(response.request().postDataJSON()).not.toHaveProperty("title");
 	expect((await response.json()).doc.title).toBe("Untitled");
-	await expect(select.getByRole("radio", { name: /Untitled/ })).toBeChecked();
-	await select.getByRole("button", { name: "Select", exact: true }).click();
+	const createdRow = select.getByRole("table", { name: "Results" }).getByRole("row").filter({
+		hasText: "Untitled",
+	});
+	await expect(createdRow).toHaveAttribute("data-selected", "true");
+	await createdRow.getByRole("button", { name: "Untitled", exact: true }).click();
+	await expect(select).toBeHidden();
 	const parentSaved = await save(page, parent.id);
 	expect(parentSaved.ok(), await parentSaved.text()).toBe(true);
 });

@@ -9,7 +9,7 @@ export const presetSiteSearch = definePreset(() => ({
 			'size-1em fill-none stroke-current stroke-width-[1.7] [stroke-linecap:round] [stroke-linejoin:round]',
 		'search-trigger-label': 'hidden text-14px xl:inline',
 		'search-trigger-shortcut':
-			'hidden px-[0.36rem] py-[0.06rem] font-mono text-10px text-ink-faint xl:(block justify-self-end)',
+			'hidden w-12 px-[0.36rem] py-[0.06rem] text-center font-mono text-10px text-ink-faint xl:(block justify-self-end)',
 		'search-keycap':
 			'border border-line-strong rd-2px bg-surface-raised/72 shadow-[inset_0_-1px_0_rgba(255,255,255,0.04)]',
 		'search-dialog':

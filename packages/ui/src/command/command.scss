@@ -1,0 +1,98 @@
+@use "../layers.css";
+
+@layer ridu.components {
+	.ridu-command {
+		display: flex;
+		min-inline-size: 0;
+		min-block-size: 0;
+		flex-direction: column;
+		overflow: hidden;
+	}
+
+	.ridu-command__input {
+		box-sizing: border-box;
+		inline-size: 100%;
+		block-size: 48px;
+		border: 0;
+		background: transparent;
+		color: var(--foreground);
+		caret-color: var(--primary);
+		font: inherit;
+		font-size: 15.5px;
+		outline: none;
+
+		&::placeholder {
+			color: var(--ink-faint);
+			opacity: 1;
+		}
+	}
+
+	.ridu-command__list {
+		max-block-size: 330px;
+		padding: 6px;
+		overflow-x: hidden;
+		overflow-y: auto;
+	}
+
+	.ridu-command__empty {
+		padding: 40px 24px;
+		color: var(--ink-faint);
+		font-size: 14px;
+		text-align: center;
+	}
+
+	.ridu-command__group-heading {
+		padding: 12px 10px 6px;
+		color: var(--ink-faint);
+		font-family: var(--font-mono);
+		font-size: 9.5px;
+		letter-spacing: 0.14em;
+		text-transform: uppercase;
+	}
+
+	.ridu-command__group-items {
+		display: grid;
+		gap: 2px;
+	}
+
+	.ridu-command__item {
+		display: flex;
+		align-items: center;
+		min-block-size: 36px;
+		gap: 10px;
+		padding: 6px 10px;
+		border-radius: 3px;
+		color: var(--foreground-muted);
+		font-size: 12.5px;
+		cursor: pointer;
+		outline: none;
+		transition:
+			background-color 100ms,
+			color 100ms;
+
+		&:hover,
+		&[data-selected] {
+			background: var(--control-surface-hover);
+			color: var(--foreground);
+		}
+
+		&[data-disabled] {
+			pointer-events: none;
+			opacity: 0.45;
+		}
+	}
+
+	.ridu-command__separator {
+		inline-size: 100%;
+		block-size: 1px;
+		margin: 6px 0;
+		border: 0;
+		background: var(--control-border);
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.ridu-command__item {
+			transition: none;
+		}
+	}
+}

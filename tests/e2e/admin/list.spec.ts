@@ -1,6 +1,168 @@
 import { expect, test } from "./fixture";
+import type { AdminPreparedRouteStateV1 } from "@riducms/protocol";
 
-import { chooseRiduSelect, expectRiduSelectValue } from "./helpers";
+import { chooseRiduSelect, expectRiduSelectValue, loginAsEditor } from "./helpers";
+
+test("collection search keeps focus and caret while superseding pending results", async ({
+	page,
+}) => {
+	await loginAsEditor(page);
+	await page.goto("/admin/collections/posts");
+	await page.getByRole("checkbox", { name: "Select Welcome to Ridu", exact: true }).click();
+
+	const search = page.getByRole("searchbox", { name: "Search by Title", exact: true });
+	const results = page.locator('[data-slot="collection-list-results"]');
+	const held = Promise.withResolvers<void>();
+	const started = Promise.withResolvers<void>();
+	const endpoint = (url: URL) => url.pathname === "/admin/collections/posts";
+
+	await page.route(endpoint, async (route) => {
+		if (new URL(route.request().url()).searchParams.get("q") === "W") {
+			started.resolve();
+			await held.promise;
+		}
+
+		try {
+			await route.continue();
+		} catch {
+			// Further typing can abort the held navigation before it reaches the server.
+		}
+	});
+
+	try {
+		await search.click();
+		await page.keyboard.insertText("W");
+		await started.promise;
+		await expect(search).toBeFocused();
+		await expect(page.locator("main")).not.toHaveAttribute("inert", "");
+		await expect(page.locator("main")).toHaveAttribute("aria-busy", "true");
+		await expect(results).toHaveAttribute("inert", "");
+		await expect(page.locator(".ridu-list__header")).toHaveAttribute("inert", "");
+
+		// Keyboard input must reach the existing focus; locator.fill would conceal a blur.
+		await page.keyboard.insertText("elcom");
+		await expect(page).toHaveURL(/q=Welcom(?:&|$)/);
+		await expect(search).toHaveValue("Welcom");
+		await expect(search).toBeFocused();
+		await expect(results).not.toHaveAttribute("inert", "");
+		await expect(page.getByRole("link", { name: "Welcome to Ridu", exact: true })).toBeVisible();
+		await expect(
+			page.getByRole("link", { name: "Relationship field notes", exact: true })
+		).toHaveCount(0);
+
+		await page.keyboard.press("Home");
+		await page.keyboard.press("ArrowRight");
+		await page.keyboard.insertText("X");
+		await expect(page).toHaveURL(/q=WXelcom(?:&|$)/);
+		await expect(search).toBeFocused();
+		await expect
+			.poll(() => search.evaluate((input: HTMLInputElement) => input.selectionStart))
+			.toBe(2);
+
+		await page.keyboard.press("Backspace");
+		await expect(page).toHaveURL(/q=Welcom(?:&|$)/);
+		await page.keyboard.press("End");
+		await page.keyboard.insertText("e");
+		await expect(page).toHaveURL(/q=Welcome(?:&|$)/);
+		await expect(search).toBeFocused();
+
+		await page.getByRole("button", { name: "Clear search", exact: true }).click();
+		await expect(page).not.toHaveURL(/[?&]q=/);
+		await expect(search).toHaveValue("");
+		await expect(search).toBeFocused();
+	} finally {
+		held.resolve();
+		await page.unroute(endpoint);
+	}
+});
+
+test("collection controls compose changes while an earlier query is pending", async ({ page }) => {
+	await loginAsEditor(page);
+	await page.goto("/admin/collections/posts");
+	await page.getByRole("button", { name: "More", exact: true }).click();
+
+	const held = Promise.withResolvers<void>();
+	const started = Promise.withResolvers<string>();
+	const endpoint = (url: URL) => url.pathname === "/admin/collections/posts";
+
+	await page.route(endpoint, async (route) => {
+		const search = new URL(route.request().url()).searchParams;
+		const folder = search.get("folder");
+		if (folder && !search.has("view")) {
+			started.resolve(folder);
+			await held.promise;
+		}
+
+		try {
+			await route.continue();
+		} catch {
+			// The combined query supersedes the held folder-only navigation.
+		}
+	});
+
+	try {
+		await chooseRiduSelect(page, page.getByLabel("Folder", { exact: true }), "Editorial");
+		const folder = await started.promise;
+		await page.getByRole("button", { name: "Hierarchy", exact: true }).click();
+		await expect(page).toHaveURL(
+			(url) =>
+				url.searchParams.get("folder") === folder && url.searchParams.get("view") === "hierarchy"
+		);
+		await expectRiduSelectValue(page.getByLabel("Folder", { exact: true }), "Editorial");
+		await expect(page.getByRole("button", { name: "Hierarchy", exact: true })).toHaveAttribute(
+			"aria-pressed",
+			"true"
+		);
+	} finally {
+		held.resolve();
+		await page.unroute(endpoint);
+	}
+
+	await page.reload();
+	await page.getByRole("button", { name: "More", exact: true }).click();
+	await expectRiduSelectValue(page.getByLabel("Folder", { exact: true }), "Editorial");
+	await expect(page.getByRole("button", { name: "Hierarchy", exact: true })).toHaveAttribute(
+		"aria-pressed",
+		"true"
+	);
+});
+
+test("column choices retain rapid toggles while results are pending", async ({ page }) => {
+	await loginAsEditor(page);
+	await page.goto("/admin/collections/posts");
+	await page.getByRole("button", { name: "Columns", exact: true }).click();
+
+	const held = Promise.withResolvers<void>();
+	const started = Promise.withResolvers<void>();
+	const endpoint = (url: URL) => url.pathname === "/admin/collections/posts";
+	await page.route(endpoint, async (route) => {
+		const columns = new URL(route.request().url()).searchParams.get("columns")?.split(",") ?? [];
+		if (columns.includes("summary") && !columns.includes("createdAt")) {
+			started.resolve();
+			await held.promise;
+		}
+		try {
+			await route.continue();
+		} catch {
+			// The second toggle supersedes the held navigation.
+		}
+	});
+
+	try {
+		await page.getByRole("button", { name: "Summary", exact: true }).click();
+		await started.promise;
+		await page.getByRole("button", { name: "Created At", exact: true }).click();
+		await expect(page.getByRole("columnheader", { name: /^Summary\b/ })).toBeVisible();
+		await expect(page.getByRole("columnheader", { name: /^Created At\b/ })).toBeVisible();
+		await expect(page).toHaveURL((url) => {
+			const columns = url.searchParams.get("columns")?.split(",") ?? [];
+			return columns.includes("summary") && columns.includes("createdAt");
+		});
+	} finally {
+		held.resolve();
+		await page.unroute(endpoint);
+	}
+});
 
 test("collection list workspace is schema-driven and persisted", async ({ page }) => {
 	await page.goto("/admin/login");
@@ -17,17 +179,18 @@ test("collection list workspace is schema-driven and persisted", async ({ page }
 	await collectionNavigation.getByRole("link", { name: "Pages", exact: true }).click();
 	await expect(page.getByRole("heading", { name: "Pages", exact: true })).toBeVisible();
 	await page.getByRole("button", { name: /Filters/ }).click();
+	await page.getByRole("button", { name: "Add filter", exact: true }).click();
 	await chooseRiduSelect(page, page.getByLabel("Filter field", { exact: true }), "Title");
-	await page.getByLabel("Filter value", { exact: true }).fill("draft that must not cross routes");
+
 	await collectionNavigation.getByRole("link", { name: "Editorial notes", exact: true }).click();
 	await expect(page.getByRole("heading", { name: "Editorial notes", exact: true })).toBeVisible();
 	await page.getByRole("button", { name: /Filters/ }).click();
-	await expectRiduSelectValue(page.getByLabel("Filter field", { exact: true }), "Choose a field");
+	await expect(page.getByText("No filters set", { exact: true })).toBeVisible();
 	await page.keyboard.press("Escape");
 	await page.goBack();
 	await expect(page.getByRole("heading", { name: "Pages", exact: true })).toBeVisible();
 	await page.getByRole("button", { name: /Filters/ }).click();
-	await expectRiduSelectValue(page.getByLabel("Filter field", { exact: true }), "Choose a field");
+	await expect(page.getByText("No filters set", { exact: true })).toBeVisible();
 	await page.keyboard.press("Escape");
 	await collectionNavigation.getByRole("link", { name: "Posts", exact: true }).click();
 	await expect(page.getByRole("heading", { name: "Posts", exact: true })).toBeVisible();
@@ -35,49 +198,58 @@ test("collection list workspace is schema-driven and persisted", async ({ page }
 	await expect(welcomeRow.getByText(/^\d+ min$/)).toBeVisible();
 	const postSearch = page.getByPlaceholder(/^Search by /);
 	const failedSearch = "no document can match this extraction proof";
-	let failFilteredList = true;
-	const postListEndpoint = (url: URL) => url.pathname === "/api/collections/posts";
-	await page.route(postListEndpoint, async (route) => {
+	const postStateEndpoint = (url: URL) => url.pathname === "/admin/collections/posts";
+	await page.route(postStateEndpoint, async (route) => {
 		const url = new URL(route.request().url());
-		if (route.request().method() === "GET" && url.searchParams.has("where") && failFilteredList) {
-			await route.fulfill({ status: 503 });
+		if (url.searchParams.get("q") === failedSearch) {
+			const response = await route.fetch();
+			const state = (await response.json()) as Extract<
+				AdminPreparedRouteStateV1,
+				{ outcome: "prepared" }
+			>;
+			expect(state.outcome).toBe("prepared");
+			if (state.route.kind !== "collection-list") throw new Error("Expected list data");
+			state.route.data.page = {
+				error: { code: "internal", status: 503, message: "Forced list failure", issues: [] },
+			};
+			await route.fulfill({ response, json: state });
 			return;
 		}
 		await route.fallback();
 	});
 	const failedListResponse = page.waitForResponse(
 		(response) =>
-			new URL(response.url()).pathname === "/api/collections/posts" &&
+			new URL(response.url()).pathname === "/admin/collections/posts" &&
 			response.request().method() === "GET" &&
-			new URL(response.url()).searchParams.has("where")
+			new URL(response.url()).searchParams.get("q") === failedSearch
 	);
 	await postSearch.fill(failedSearch);
-	expect((await failedListResponse).status()).toBe(503);
+	expect((await failedListResponse).status()).toBe(200);
 	await expect(page.getByRole("button", { name: "Retry" })).toBeVisible();
 	await expect(page.getByText("Welcome to Ridu", { exact: true })).toBeVisible();
-	failFilteredList = false;
+	await page.unroute(postStateEndpoint);
 	await page.getByRole("button", { name: "Retry" }).click();
 	await expect(page.getByRole("heading", { name: "Nothing matches" })).toBeVisible();
 	await page.getByRole("button", { name: "Clear filters" }).click();
 	await expect(postSearch).toBeFocused();
 	await expect(page.getByText("Welcome to Ridu", { exact: true })).toBeVisible();
-	await page.unroute(postListEndpoint);
 
 	await page.getByRole("button", { name: "Columns" }).click();
-	await page.getByRole("checkbox", { name: "Show Summary column" }).click();
-	await page.getByRole("checkbox", { name: "Show ID column" }).click();
-	await page.getByRole("checkbox", { name: "Show created column" }).click();
+	await page.getByRole("button", { name: "Summary", exact: true }).click();
+	await page.getByRole("button", { name: "ID", exact: true }).click();
+	await page.getByRole("button", { name: "Created At", exact: true }).click();
+	await page.getByRole("button", { name: "Updated At", exact: true }).click();
 	await page.keyboard.press("Escape");
 	await expect(page.getByRole("columnheader", { name: "Summary" })).toBeVisible();
-	await expect(page.getByRole("columnheader", { name: "ID", exact: true })).toBeVisible();
-	await expect(page.getByRole("columnheader", { name: "Created", exact: true })).toBeVisible();
+	await expect(page.getByRole("columnheader", { name: /^ID\b/ })).toBeVisible();
+	await expect(page.getByRole("columnheader", { name: /^Created At\b/ })).toBeVisible();
 	await expect(welcomeRow.getByText(/^posts_/)).toBeVisible();
 
 	let releaseSortedList!: () => void;
 	let markSortedListStarted!: () => void;
 	const sortedListRelease = new Promise<void>((resolve) => (releaseSortedList = resolve));
 	const sortedListStarted = new Promise<void>((resolve) => (markSortedListStarted = resolve));
-	await page.route(/\/api\/collections\/posts(?:\?|$)/, async (route) => {
+	await page.route(postStateEndpoint, async (route) => {
 		const url = new URL(route.request().url());
 		if (route.request().method() !== "GET" || url.searchParams.get("sort") !== "title") {
 			await route.fallback();
@@ -87,26 +259,29 @@ test("collection list workspace is schema-driven and persisted", async ({ page }
 		await sortedListRelease;
 		await route.continue();
 	});
-	const sortByTitle = page.getByRole("button", { name: "Sort by Title" });
+	const sortByTitle = page.getByRole("button", { name: "Sort Title ascending" });
+	const listResults = page.locator('[data-slot="collection-list-results"]');
+	await expect(listResults).not.toHaveAttribute("inert", "");
 	await sortByTitle.focus();
+	await expect(sortByTitle).toBeFocused();
 	await sortByTitle.press("Enter");
 	await sortedListStarted;
-	const listResults = page.locator('[data-slot="collection-list-results"]');
-	await expect(listResults).toHaveAttribute("aria-busy", "true");
+	await expect(listResults).toHaveAttribute("inert", "");
+	await expect(page.locator("main")).toHaveAttribute("aria-busy", "true");
 	await expect(page.getByText("Welcome to Ridu", { exact: true })).toBeVisible();
-	await expect(welcomeRow.getByRole("checkbox")).toBeDisabled();
-	await expect(sortByTitle).toBeFocused();
 	releaseSortedList();
 	await expect(page).toHaveURL(/sort=title/);
 	await expect(listResults).toHaveAttribute("aria-busy", "false");
-	await expect(page.getByRole("columnheader", { name: "Sort by Title" })).toHaveAttribute(
-		"aria-sort",
-		"ascending"
-	);
+	await expect(
+		page
+			.getByRole("columnheader")
+			.filter({ has: page.getByRole("button", { name: "Sort Title ascending", exact: true }) })
+	).toHaveAttribute("aria-sort", "ascending");
 	await expect(sortByTitle).toBeFocused();
-	await page.unroute(/\/api\/collections\/posts(?:\?|$)/);
+	await page.unroute(postStateEndpoint);
 
 	await page.getByRole("button", { name: /Filters/ }).click();
+	await page.getByRole("button", { name: "Add filter", exact: true }).click();
 	await chooseRiduSelect(
 		page,
 		page.getByLabel("Filter field", { exact: true }),
@@ -118,7 +293,7 @@ test("collection list workspace is schema-driven and persisted", async ({ page }
 		"is greater than"
 	);
 	await page.getByLabel("Filter value", { exact: true }).fill("5");
-	await page.getByRole("button", { name: "Add filter" }).click();
+
 	await page.keyboard.press("Escape");
 	await expect(page.getByText("Welcome to Ridu")).toBeVisible();
 	await expect(page.getByText("Relationship field notes")).toHaveCount(0);
@@ -131,22 +306,18 @@ test("collection list workspace is schema-driven and persisted", async ({ page }
 	await expect(page).toHaveURL(filteredURL);
 	await expect(page.getByText("Relationship field notes")).toHaveCount(0);
 
-	await page.getByRole("button", { name: "More", exact: true }).click();
 	await chooseRiduSelect(page, page.getByLabel("Documents per page"), "10 per page");
-	await page.keyboard.press("Escape");
-	await page.getByRole("button", { name: "Saved views" }).click();
+	await page.getByRole("button", { name: "More", exact: true }).click();
 	await page.getByLabel("Saved view name").fill("Long-form posts");
 	await page.getByRole("button", { name: "Save", exact: true }).click();
 	await expect(page.getByRole("button", { name: "Long-form posts", exact: true })).toBeVisible();
 
 	await page.goto("/admin/collections/posts");
 	await expect(page.getByRole("columnheader", { name: "Summary" })).toBeVisible();
-	await expect(page.getByRole("columnheader", { name: "ID", exact: true })).toBeVisible();
-	await expect(page.getByRole("columnheader", { name: "Created", exact: true })).toBeVisible();
+	await expect(page.getByRole("columnheader", { name: /^ID\b/ })).toBeVisible();
+	await expect(page.getByRole("columnheader", { name: /^Created At\b/ })).toBeVisible();
+	await expectRiduSelectValue(page.getByLabel("Documents per page"), "Per Page: 10");
 	await page.getByRole("button", { name: "More", exact: true }).click();
-	await expectRiduSelectValue(page.getByLabel("Documents per page"), "10 per page");
-	await page.keyboard.press("Escape");
-	await page.getByRole("button", { name: "Saved views" }).click();
 	await page.getByRole("button", { name: "Long-form posts", exact: true }).click();
 	await expect(page).toHaveURL(/filters=/);
 	await expect(page).toHaveURL(/sort=title/);
@@ -154,16 +325,17 @@ test("collection list workspace is schema-driven and persisted", async ({ page }
 
 	await page.goto("/admin/collections/posts");
 	await page.getByRole("button", { name: "Columns" }).click();
-	await expect(page.getByRole("checkbox", { name: "Show Seo > Description column" })).toBeVisible();
-	await page.getByRole("checkbox", { name: "Show Seo > Description column" }).click();
+	await expect(page.getByRole("button", { name: "SEO > Description", exact: true })).toBeVisible();
+	await page.getByRole("button", { name: "SEO > Description", exact: true }).click();
 	await page.keyboard.press("Escape");
-	await expect(page.getByRole("columnheader", { name: "Sort by Seo > Description" })).toBeVisible();
+	await expect(page.getByRole("columnheader", { name: /^SEO > Description/ })).toBeVisible();
 
 	await page.getByRole("button", { name: /Filters/ }).click();
+	await page.getByRole("button", { name: "Add filter", exact: true }).click();
 	await chooseRiduSelect(page, page.getByLabel("Filter field", { exact: true }), "Links > Label");
 	await chooseRiduSelect(page, page.getByLabel("Filter operator", { exact: true }), "equals");
 	await page.getByLabel("Filter value", { exact: true }).fill("Payload parity roadmap");
-	await page.getByRole("button", { name: "Add filter" }).click();
+
 	await page.keyboard.press("Escape");
 	await expect(page.getByText("Relationship field notes")).toBeVisible();
 	await expect(page.getByText("Welcome to Ridu")).toHaveCount(0);
@@ -202,14 +374,18 @@ test("collection list workspace is schema-driven and persisted", async ({ page }
 		await route.continue();
 	});
 	await page.getByRole("button", { name: "Columns" }).click();
-	await page.getByRole("checkbox", { name: "Show updated column" }).click();
+	await page.getByRole("button", { name: "Updated At", exact: true }).click();
 	await firstWorkspaceWriteStarted;
-	await page.getByRole("checkbox", { name: "Show created column" }).click();
-	await expect(page.getByRole("checkbox", { name: "Show created column" })).not.toBeChecked();
+	await page.getByRole("button", { name: "Created At", exact: true }).click();
+	await expect(page.getByRole("button", { name: "Created At", exact: true })).toHaveAttribute(
+		"aria-pressed",
+		"false"
+	);
 	expect(workspaceWriteCount).toBe(1);
 	releaseFirstWorkspaceWrite();
 	const latestWorkspace = await secondWorkspaceWriteStarted;
-	expect(latestWorkspace).toMatchObject({ showCreated: false, showUpdated: false });
+	expect(latestWorkspace.columns).toContainEqual({ path: "createdAt", active: false });
+	expect(latestWorkspace.columns).toContainEqual({ path: "updatedAt", active: false });
 	expect(workspaceWriteOrder).toEqual(["first released", "second started"]);
 	await page.keyboard.press("Escape");
 	await page.unroute(postsWorkspacePattern);
@@ -235,20 +411,19 @@ test("collection list workspace is schema-driven and persisted", async ({ page }
 	await collectionNavigation.getByRole("link", { name: "Events", exact: true }).click();
 	await expect(page.getByRole("heading", { name: "Events", exact: true })).toBeVisible();
 	await page.getByRole("button", { name: "Columns" }).click();
-	await page.getByRole("checkbox", { name: "Show ID column" }).click();
+	await page.getByRole("button", { name: "Capacity", exact: true }).click();
 	await oldWorkspaceStarted;
 	await collectionNavigation.getByRole("link", { name: "Editorial notes", exact: true }).click();
 	await expect(page.getByRole("heading", { name: "Editorial notes", exact: true })).toBeVisible();
-	await expect(page.getByRole("columnheader", { name: "ID", exact: true })).toHaveCount(0);
-	await page.getByRole("button", { name: "More", exact: true }).click();
-	await expectRiduSelectValue(page.getByLabel("Documents per page"), "25 per page");
+	await expect(page.getByRole("columnheader", { name: /^Capacity\b/ })).toHaveCount(0);
+	await expectRiduSelectValue(page.getByLabel("Documents per page"), "Per Page: 10");
 	releaseOldWorkspace();
 	await oldWorkspaceFinished;
-	await expect(page.getByRole("columnheader", { name: "ID", exact: true })).toHaveCount(0);
-	await expectRiduSelectValue(page.getByLabel("Documents per page"), "25 per page");
+	await expect(page.getByRole("columnheader", { name: /^Capacity\b/ })).toHaveCount(0);
+	await expectRiduSelectValue(page.getByLabel("Documents per page"), "Per Page: 10");
 	await collectionNavigation.getByRole("link", { name: "Events", exact: true }).click();
 	await expect(page.getByRole("heading", { name: "Events", exact: true })).toBeVisible();
-	await expect(page.getByRole("columnheader", { name: "ID", exact: true })).toBeVisible();
+	await expect(page.getByRole("columnheader", { name: /^Capacity\b/ })).toBeVisible();
 	await page.unroute(eventsWorkspacePattern);
 
 	const workspaceResetOrder: string[] = [];
@@ -282,10 +457,13 @@ test("collection list workspace is schema-driven and persisted", async ({ page }
 		if (writeNumber === 2) markResetWorkspaceWritesFinished();
 	});
 	await page.getByRole("button", { name: "Columns" }).click();
-	await page.getByRole("checkbox", { name: "Show created column" }).click();
+	await page.getByRole("button", { name: "Created At", exact: true }).click();
 	await resetWorkspaceWriteStarted;
-	await page.getByRole("checkbox", { name: "Show updated column" }).click();
-	await expect(page.getByRole("checkbox", { name: "Show updated column" })).not.toBeChecked();
+	await page.getByRole("button", { name: "Updated At", exact: true }).click();
+	await expect(page.getByRole("button", { name: "Updated At", exact: true })).toHaveAttribute(
+		"aria-pressed",
+		"false"
+	);
 	expect(resetWorkspaceWriteCount).toBe(1);
 	await page.keyboard.press("Escape");
 	await page.getByRole("button", { name: /Open account menu for Ridu Editor/ }).click();
@@ -327,16 +505,16 @@ test("collection list workspace is schema-driven and persisted", async ({ page }
 
 	await collectionNavigation.getByRole("link", { name: "Events", exact: true }).click();
 	await expect(page.getByRole("heading", { name: "Events", exact: true })).toBeVisible();
-	await expect(page.getByRole("columnheader", { name: "ID", exact: true })).toHaveCount(0);
-	await expect(page.getByRole("columnheader", { name: "Created", exact: true })).toHaveCount(0);
-	await expect(page.getByRole("columnheader", { name: "Updated", exact: true })).toBeVisible();
+	await expect(page.getByRole("columnheader", { name: /^ID\b/ })).toBeVisible();
+	await expect(page.getByRole("columnheader", { name: /^Created At\b/ })).toBeVisible();
+	await expect(page.getByRole("columnheader", { name: /^Updated At\b/ })).toBeVisible();
 	await collectionNavigation.getByRole("link", { name: "Posts", exact: true }).click();
-	await page.getByRole("button", { name: "Saved views" }).click();
+	await page.getByRole("button", { name: "More", exact: true }).click();
 	await expect(page.getByRole("button", { name: "Long-form posts", exact: true })).toHaveCount(0);
 	await page.keyboard.press("Escape");
 	await page.setViewportSize({ width: 390, height: 844 });
 	const tableContainer = page.locator(
-		'[data-slot="collection-list-results"] [data-slot="table-container"]'
+		'[data-slot="collection-list-results"] .ridu-list-table__scroll'
 	);
 	await expect(tableContainer).toBeVisible();
 	expect(
@@ -472,7 +650,7 @@ test("collection selection can expand from the visible page to every filtered do
 	const listHeld = new Promise<void>((resolve) => {
 		releaseList = resolve;
 	});
-	await page.route(/\/api\/collections\/posts(?:\?|$)/, async (route) => {
+	await page.route(/\/admin\/collections\/posts(?:\?|$)/, async (route) => {
 		if (route.request().method() === "GET") await listHeld;
 		try {
 			await route.continue();
@@ -481,15 +659,93 @@ test("collection selection can expand from the visible page to every filtered do
 		}
 	});
 	await page.getByPlaceholder(/^Search by /).fill("query that supersedes selection");
-	await expect(bulkActions).toBeHidden();
-	const stalePageSelection = page.getByRole("checkbox", { name: "Select all rows" });
-	await expect(stalePageSelection).toBeDisabled();
-	await stalePageSelection.evaluate((element) => (element as HTMLElement).click());
-	await expect(bulkActions).toBeHidden();
+	await expect(page.locator('[data-slot="collection-list-results"]')).toHaveAttribute("inert", "");
 	releaseList();
-	releaseSelection();
 	await canceledPromotion;
-	await page.unroute(/\/api\/collections\/posts(?:\?|$)/);
+	releaseSelection();
+	await page.unroute(/\/admin\/collections\/posts(?:\?|$)/);
 	await page.unroute("**/api/access/collections/posts/selection*");
 	await expect(bulkActions).toBeHidden();
+});
+
+test("collection filters compose OR groups and AND conditions; columns retain hidden order", async ({
+	page,
+}) => {
+	await page.goto("/admin/login");
+	await page.getByLabel("Email address").fill("editor@riducms.test");
+	await page.getByRole("textbox", { name: "Password", exact: true }).fill("ridu-browser");
+	await page.getByRole("button", { name: "Sign in", exact: true }).click();
+	await page.getByRole("navigation", { name: "Admin navigation" }).waitFor({ state: "visible" });
+	await page.goto("/admin/collections/posts");
+	const table = page.getByRole("table");
+	await page.getByRole("button", { name: "Filters", exact: true }).click();
+	await page.getByRole("button", { name: "Add filter", exact: true }).click();
+	await page.getByLabel("Filter value", { exact: true }).fill("Welcome to Ridu");
+	await expect(table.getByText("Relationship field notes", { exact: true })).toHaveCount(0);
+	await expect(table.getByText("Welcome to Ridu", { exact: true })).toBeVisible();
+	await expect(page.getByLabel("Filter value", { exact: true })).toBeFocused();
+	await page.getByRole("button", { name: "Or", exact: true }).click();
+	await page.getByLabel("Filter value", { exact: true }).nth(1).fill("Relationship field notes");
+	await expect(table.getByText("Relationship field notes", { exact: true })).toBeVisible();
+	await expect(table.getByText("Welcome to Ridu", { exact: true })).toBeVisible();
+	await page.getByRole("button", { name: "Add AND condition", exact: true }).nth(1).click();
+	await chooseRiduSelect(page, page.getByLabel("Filter field", { exact: true }).nth(2), "Status");
+	await chooseRiduSelect(
+		page,
+		page.getByLabel("Filter value", { exact: true }).nth(2),
+		"Published"
+	);
+	await expect(table.getByText("Relationship field notes", { exact: true })).toHaveCount(0);
+	await expect(table.getByText("Welcome to Ridu", { exact: true })).toBeVisible();
+	await page.reload();
+	await expect(table.getByText("Welcome to Ridu", { exact: true })).toBeVisible();
+	await expect(table.getByText("Relationship field notes", { exact: true })).toHaveCount(0);
+	const descending = page.getByRole("button", { name: "Sort Title descending", exact: true });
+	await descending.focus();
+	await descending.press("Enter");
+	await expect(table.getByRole("columnheader").filter({ has: descending })).toHaveAttribute(
+		"aria-sort",
+		"descending"
+	);
+	await expect(descending).toBeFocused();
+	await page.getByRole("button", { name: /^Filters/ }).click();
+	const removeLast = page.getByRole("button", { name: "Remove filter 3", exact: true });
+	await removeLast.focus();
+	await removeLast.press("Enter");
+	await expect(table.getByRole("row")).toHaveCount(3);
+	await expect(page.getByRole("button", { name: "Remove filter 2", exact: true })).toBeFocused();
+	await page.getByRole("button", { name: "Columns", exact: true }).click();
+	const title = page.getByRole("button", { name: "Title", exact: true });
+	await title.focus();
+	await title.press("Enter");
+	await expect(title).toHaveAttribute("aria-pressed", "false");
+	await expect(title).toBeFocused();
+	const handle = page.getByRole("button", { name: "Reorder Title column", exact: true });
+	await handle.focus();
+	await handle.press("Space");
+	await handle.press("ArrowRight");
+	await handle.press("Space");
+	await expect
+		.poll(() => new URL(page.url()).searchParams.get("columns")?.split(",").indexOf("-title"))
+		.toBeGreaterThan(0);
+	await expect(handle).toBeFocused();
+	const reorderedColumns = new URL(page.url()).searchParams.get("columns")!.split(",");
+	await title.click();
+	await expect(title).toHaveAttribute("aria-pressed", "true");
+	await expect(table.getByRole("columnheader").nth(1)).toContainText("Status");
+	const activeTitleIndex =
+		reorderedColumns
+			.filter((column) => !column.startsWith("-") || column === "-title")
+			.indexOf("-title") + 1;
+	await expect(table.getByRole("columnheader").nth(activeTitleIndex)).toContainText("Title");
+	await page.reload();
+	await expect(table.getByRole("columnheader").nth(1)).toContainText("Status");
+	await expect(table.getByRole("columnheader").nth(activeTitleIndex)).toContainText("Title");
+
+	// Plugin cells retain their interactive content and a canonical document entry point.
+	await page.goto("/admin/collections/posts?columns=readingMinutes");
+	await expect(table.getByRole("columnheader")).toHaveCount(2);
+	await expect(table.getByRole("link", { name: "Welcome to Ridu", exact: true })).toBeVisible();
+	await table.getByRole("link", { name: "Welcome to Ridu", exact: true }).click();
+	await expect(page).toHaveURL(/\/admin\/collections\/posts\/[^?]+/);
 });

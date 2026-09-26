@@ -271,6 +271,8 @@ export interface Category {
 	createdAt: string;
 }
 /**
+ * Versioned editorial content with folders, hierarchy, access rules, and hooks.
+ *
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "posts".
  */
@@ -364,6 +366,7 @@ export interface Post {
 	lastEditedBy?: (number | null) | User;
 	updatedAt: string;
 	createdAt: string;
+	deletedAt?: string | null;
 	_status?: ("draft" | "published") | null;
 }
 /**
@@ -509,6 +512,8 @@ export interface PayloadCapability {
 	 */
 	location?: [number, number] | null;
 	sourceCode?: string | null;
+	keywords?: string[] | null;
+	ratings?: number[] | null;
 	minimum?: number | null;
 	boundedRows?:
 		| {
@@ -1140,6 +1145,7 @@ export interface PostsSelect<T extends boolean = true> {
 	lastEditedBy?: T;
 	updatedAt?: T;
 	createdAt?: T;
+	deletedAt?: T;
 	_status?: T;
 }
 /**
@@ -1253,6 +1259,8 @@ export interface PayloadCapabilitiesSelect<T extends boolean = true> {
 	presentation?: T;
 	location?: T;
 	sourceCode?: T;
+	keywords?: T;
+	ratings?: T;
 	minimum?: T;
 	boundedRows?:
 		| T

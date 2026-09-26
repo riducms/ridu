@@ -5,8 +5,16 @@ export async function insertBlock(page: Page, editor: Locator, type: string) {
 	await editor.press("ControlOrMeta+End");
 	await editor.press("Enter");
 	await page.keyboard.type(`/${type}`);
-	const option = page.getByRole("option", { name: new RegExp(`^${type} Structured block`) });
+	const option = page.getByRole("option", { name: type, exact: true });
 	await expect(option).toBeVisible();
+	const targetIndex = await option.evaluate((element) => {
+		const menu = element.closest("[data-richtext-menu-surface]");
+		if (menu === null) throw new Error("Expected the rich-text insertion menu.");
+		return Array.from(menu.querySelectorAll('[role="option"]')).indexOf(element);
+	});
+	if (targetIndex < 0) throw new Error(`Could not locate the ${type} insertion option.`);
+	for (let index = 0; index < targetIndex; index += 1) await page.keyboard.press("ArrowDown");
+	await expect(option).toHaveAttribute("aria-selected", "true");
 	await page.keyboard.press("Enter");
 	const drawer = page.getByRole("dialog", { name: `Insert ${type}`, exact: true });
 	await expect(drawer).toBeVisible();

@@ -1,0 +1,117 @@
+@use "@riducms/ui/styles.scss" as ui;
+
+@layer ridu.components {
+	.ridu-live-preview__status {
+		@include ui.visually-hidden;
+	}
+
+	.ridu-live-preview {
+		display: flex;
+		flex: none;
+		flex-direction: column;
+		min-width: 0;
+		height: min(720px, 100dvh);
+		min-height: 540px;
+		background: var(--background);
+	}
+	.ridu-live-preview__toolbar {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: center;
+		gap: 6px;
+		min-height: 34px;
+		padding: 6px;
+		border-bottom: 1px solid var(--control-border);
+	}
+	.ridu-live-preview .ridu-live-preview__select {
+		height: 20px;
+		gap: 3px;
+		padding: 0;
+		border: 0;
+		background: transparent;
+		box-shadow: none;
+		font-size: 12px;
+		&:focus-visible {
+			outline: 1px solid var(--control-border-hover);
+		}
+		svg {
+			width: 16px;
+			height: 16px;
+		}
+	}
+	.ridu-live-preview-menu {
+		width: 150px;
+		padding: 10px;
+		.ridu-select__item {
+			min-height: 27px;
+			padding: 3px 10px;
+			&[data-selected] {
+				background: var(--control-surface-hover);
+			}
+		}
+		.ridu-select__indicator {
+			display: none;
+		}
+	}
+	.ridu-live-preview__dimensions {
+		display: flex;
+		align-items: center;
+		gap: 5px;
+	}
+	.ridu-live-preview .ridu-live-preview__size {
+		width: 50px;
+		min-height: 20px;
+		height: 20px;
+		padding: 0 3px;
+		border-radius: 2px;
+		font-size: 12px;
+	}
+	.ridu-live-preview__external {
+		display: grid;
+		place-items: center;
+		width: 20px;
+		height: 20px;
+		color: inherit;
+		svg {
+			width: 16px;
+			height: 16px;
+		}
+	}
+	.ridu-live-preview__viewport {
+		flex: 1;
+		min-height: 0;
+		overflow: auto;
+		&:not([data-preview-viewport="responsive"]) {
+			padding: 20px;
+		}
+	}
+	.ridu-live-preview__frame {
+		margin-inline: auto;
+		overflow: hidden;
+		background: var(--preview-canvas);
+		iframe {
+			display: block;
+			max-width: none;
+			border: 0;
+			background: var(--preview-canvas);
+			transform-origin: top left;
+		}
+	}
+	.ridu-live-preview__loading {
+		display: grid;
+		min-height: 240px;
+		place-items: center;
+		color: var(--foreground-muted);
+	}
+	.ridu-live-preview__error {
+		margin: 20px;
+	}
+	@media (min-width: 1240px) {
+		.ridu-live-preview {
+			flex: 1;
+			height: auto;
+			min-height: 0;
+		}
+	}
+}

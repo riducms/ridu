@@ -1,0 +1,126 @@
+@use "@riducms/ui/styles.scss" as ui;
+@layer ridu.components {
+	.ridu-select__trigger {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 10px;
+		min-width: 0;
+		height: var(--control-height);
+		padding: 0 var(--control-padding-inline);
+		@include ui.control-surface;
+		color: var(--foreground);
+		font: inherit;
+		cursor: pointer;
+
+		&:hover {
+			border-color: var(--control-border-hover);
+		}
+
+		&:focus,
+		&:active {
+			border-color: var(--ring);
+			outline: 0;
+		}
+
+		&[data-size="compact"] {
+			height: 36px;
+		}
+
+		&[data-size="toolbar"] {
+			height: 34px;
+			padding-inline: 10px;
+		}
+
+		&:disabled {
+			opacity: 0.5;
+			cursor: not-allowed;
+		}
+
+		&[aria-invalid="true"] {
+			border-color: var(--control-invalid-border);
+		}
+	}
+	.ridu-select__chevron {
+		width: 20px;
+		height: 20px;
+		flex-shrink: 0;
+		color: var(--foreground-muted);
+	}
+	.ridu-select__content {
+		position: relative;
+		isolation: isolate;
+		z-index: 90;
+		overflow: auto;
+		max-height: var(--bits-select-content-available-height);
+		min-width: 140px;
+		padding: 5px;
+		border: 1px solid var(--control-border);
+		border-radius: 3px;
+		background: var(--background-surface);
+		color: var(--foreground);
+		box-shadow: var(--control-shadow);
+	}
+	.ridu-select__viewport {
+		width: 100%;
+		min-width: calc(var(--bits-select-anchor-width) - 12px);
+	}
+	.ridu-select__item {
+		position: relative;
+		display: flex;
+		align-items: center;
+		min-height: 34px;
+		padding-block: 7px;
+		padding-inline: 10px 30px;
+		border-radius: 3px;
+		font-size: 13px;
+		cursor: pointer;
+		outline: none;
+		user-select: none;
+
+		&[data-highlighted] {
+			background: var(--control-surface-hover);
+		}
+
+		&[data-disabled] {
+			opacity: 0.5;
+			pointer-events: none;
+		}
+	}
+	.ridu-select__indicator {
+		position: absolute;
+		inset-inline-end: 8px;
+		width: 14px;
+		height: 14px;
+
+		svg {
+			width: 14px;
+			height: 14px;
+		}
+	}
+	.ridu-select__label {
+		display: flex;
+		gap: 8px;
+		white-space: nowrap;
+	}
+	.ridu-select__scroll {
+		position: relative;
+		z-index: 1;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 100%;
+		padding-block: 4px;
+		background: var(--popover);
+		cursor: default;
+
+		svg {
+			width: 16px;
+			height: 16px;
+		}
+	}
+	.ridu-select__item-check {
+		width: 14px;
+		height: 14px;
+	}
+}

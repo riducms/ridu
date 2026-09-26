@@ -1,0 +1,36 @@
+@use "@riducms/ui/styles.scss" as ui;
+
+@layer ridu.components {
+	.ridu-checkbox {
+		display: grid;
+		place-items: center;
+		width: 20px;
+		height: 20px;
+		flex-shrink: 0;
+		padding: 0;
+		border: 1px solid var(--control-border);
+		border-radius: 3px;
+		background: var(--control-surface);
+		color: var(--foreground);
+		cursor: pointer;
+
+		&:hover {
+			border-color: var(--control-border-hover);
+		}
+
+		&:focus-visible {
+			@include ui.focus-outline;
+		}
+
+		&[data-disabled] {
+			opacity: 0.5;
+			cursor: not-allowed;
+		}
+
+		.ridu-checkbox__mark {
+			width: 12px;
+			height: 12px;
+			stroke-width: 2.5;
+		}
+	}
+}

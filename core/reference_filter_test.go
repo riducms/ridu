@@ -475,7 +475,7 @@ func TestReferenceOptionFiltersGuardDuplicateStatusVersionAndTrashRestore(t *tes
 		Collections: []ridu.Collection{
 			{Slug: "people", Fields: field.Fields{field.Text("category")}},
 			{
-				Slug: "entries", Versions: true, Trash: true,
+				Slug: "entries", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true}, Trash: true,
 				Fields: field.Fields{field.Text("category"), field.Relationship("author", "people").FilterOptionRules(field.OptionFilter("category", field.FilterEquals, "category"))},
 			},
 		},

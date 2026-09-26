@@ -1,5 +1,7 @@
-import { resolveBlockTypes } from "@riducms/protocol";
+import { isRecord, resolveBlockTypes } from "@riducms/protocol";
 import { embeddedOccurrences, transformEmbeddedPayloads } from "@admin/core/forms/embedded-fields";
+import { joinFormPath, readFormPath } from "@admin/core/forms/form-path";
+import { schemaFieldDefault } from "@admin/core/schema/field-default";
 import type { SchemaField } from "@riducms/protocol";
 
 export type FormValues = Record<string, unknown>;
@@ -52,7 +54,7 @@ export function shouldSubmitLocalizedPath(
 	return (
 		source === undefined ||
 		source === locale ||
-		!deepEqual(readPath(values, path), readPath(original, provenancePath))
+		!deepEqual(readFormPath(values, path), readFormPath(original, provenancePath))
 	);
 }
 
@@ -103,7 +105,7 @@ function submissionRecord(
 	const values = isRecord(input) ? input : {};
 	const submitted: FormValues = {};
 	for (const field of fields) {
-		const path = joinPath(prefix, field.name);
+		const path = joinFormPath(prefix, field.name);
 		if (
 			field.category === "presentation" ||
 			!include(path, field.path) ||
@@ -193,18 +195,6 @@ function localizationProvenancePath(
 				: undefined;
 	}
 	return resolved.join(".");
-}
-
-function readPath(values: unknown, path: string) {
-	let current = values;
-	for (const segment of path.split(".")) {
-		current = Array.isArray(current)
-			? current[Number(segment)]
-			: isRecord(current)
-				? current[segment]
-				: undefined;
-	}
-	return current;
 }
 
 export function reconcileFormSchema(
@@ -360,7 +350,7 @@ function reconcileFieldValue(
 			currentValue,
 			originalValue,
 			detached,
-			joinPath(parentPath, next.name),
+			joinFormPath(parentPath, next.name),
 			initializeDefaults
 		);
 		return {
@@ -406,7 +396,7 @@ function reconcileFieldValue(
 	) {
 		const reconcilePayloads = (value: unknown, before: unknown, report: DetachedDraftValue[]) => {
 			const copy = cloneFormValue(value);
-			const fieldPath = joinPath(parentPath, next.name);
+			const fieldPath = joinFormPath(parentPath, next.name);
 			const old = embeddedOccurrences(previous, before, fieldPath);
 			const currentOld = embeddedOccurrences(previous, value, fieldPath);
 			const candidates = embeddedOccurrences(next, copy, fieldPath);
@@ -482,7 +472,7 @@ function reconcileArrayValue(
 	const originalRows = Array.isArray(originalValue) ? originalValue : [];
 	const previousChildren = previous.nested?.fields ?? [];
 	const nextChildren = next.nested?.fields ?? [];
-	const rowPath = joinPath(parentPath, next.name);
+	const rowPath = joinFormPath(parentPath, next.name);
 
 	return {
 		currentPresent,
@@ -541,7 +531,7 @@ function reconcileBlocksValue(
 	const nextBlocks = new Map(
 		(resolveBlockTypes(next.blocks) ?? []).map((block) => [block.slug, block])
 	);
-	const rowPath = joinPath(parentPath, next.name);
+	const rowPath = joinFormPath(parentPath, next.name);
 	const keptCurrent: unknown[] = [];
 
 	for (const [index, row] of currentRows.entries()) {
@@ -625,19 +615,6 @@ function compatibleFields(previous: SchemaField, next: SchemaField) {
 	return true;
 }
 
-function fieldDefault(field: SchemaField) {
-	if (field.type === "select" && field.select?.hasMany === true) {
-		if ((field.select.defaultValues?.length ?? 0) === 0) return { present: false };
-		return { present: true, value: field.select.defaultValues };
-	}
-	if (field.default === undefined) return { present: false };
-	if (field.type === "text-list" || field.type === "number-list")
-		return { present: true, value: JSON.parse(field.default) };
-	if (field.type === "number") return { present: true, value: Number(field.default) };
-	if (field.type === "checkbox") return { present: true, value: field.default === "true" };
-	return { present: true, value: field.default };
-}
-
 function initialFieldValue(
 	field: SchemaField,
 	value?: unknown,
@@ -665,7 +642,7 @@ function initialFieldValue(
 		}
 		return { present: true, value };
 	}
-	const direct = fieldDefault(field);
+	const direct = schemaFieldDefault(field);
 	if (direct.present) return direct;
 	if (field.type === "group") {
 		const nested = initialFormValues(field.nested?.fields ?? []);
@@ -692,7 +669,7 @@ function detachedValue(
 	return {
 		fieldId: field.id,
 		label: field.admin.label,
-		path: joinPath(parentPath, field.name),
+		path: joinFormPath(parentPath, field.name),
 		reason,
 		value: cloneFormValue(value),
 	};
@@ -711,16 +688,8 @@ function copyReservedValue(source: FormValues, target: FormValues, name: string)
 	if (Object.hasOwn(source, name)) target[name] = cloneFormValue(source[name]);
 }
 
-function joinPath(parent: string, child: string) {
-	return parent === "" ? child : `${parent}.${child}`;
-}
-
 function deepEqual(left: unknown, right: unknown) {
 	return JSON.stringify(left) === JSON.stringify(right);
-}
-
-function isRecord(value: unknown): value is FormValues {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 export function cloneFormValues(values: FormValues): FormValues {
@@ -745,7 +714,7 @@ function embeddedProvenancePath(
 	prefix = ""
 ): string | undefined {
 	for (const field of fields) {
-		const fieldPath = joinPath(prefix, field.name);
+		const fieldPath = joinFormPath(prefix, field.name);
 		if (!path.startsWith(`${fieldPath}.`)) continue;
 		const value = current[field.name];
 		const before = original[field.name];

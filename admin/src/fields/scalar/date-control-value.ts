@@ -44,6 +44,19 @@ export function datePickerFormValue(
 	return toCalendarDate(value).toString();
 }
 
+/** Reports whether a canonical instant displays as a repeated wall time in timeZone. */
+export function dateTimeHasAmbiguousWallTime(value: unknown, timeZone = getLocalTimeZone()) {
+	const wallTime = datePickerValue(value, "date-time", timeZone);
+	if (wallTime === undefined) return false;
+	try {
+		toCalendarDateTime(wallTime).toDate(timeZone, "reject");
+		return false;
+	} catch {
+		// A wall time projected from a real instant always exists, so rejection means that it occurs twice.
+		return true;
+	}
+}
+
 /** Time-only fields remain pure clock values; a timezone must never be introduced. */
 export function timeFieldValue(value: unknown): Time | undefined {
 	const encoded = String(value ?? "");

@@ -1,6 +1,10 @@
 services:
   mongodb:
     image: mongo:8.2.9-noble@sha256:007773db61cb1aa44e526fb7175fc582902e67d4e6cc5f13106445767d46c818
+    ulimits:
+      nofile:
+        soft: 64000
+        hard: 64000
     command: ["mongod", "--replSet", "ridu-rs0", "--bind_ip_all"]
     ports:
       - "127.0.0.1::27017"
@@ -16,6 +20,10 @@ services:
 
   mongodb-standalone:
     image: mongo:8.2.9-noble@sha256:007773db61cb1aa44e526fb7175fc582902e67d4e6cc5f13106445767d46c818
+    ulimits:
+      nofile:
+        soft: 64000
+        hard: 64000
     command: ["mongod", "--bind_ip_all"]
     ports:
       - "127.0.0.1::27017"

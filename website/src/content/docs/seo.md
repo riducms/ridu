@@ -146,9 +146,25 @@ Injected metadata fields become localized when application content localization 
 admin shows exact-language values, reports missing fallback values, and passes the selected locale
 to generation callbacks.
 
-`UploadsCollection` must name an upload-enabled collection. Authors can select an existing asset,
-inspect the selected upload, replace it, remove it, or ask the configured image generator for an
-asset ID. Upload access and normal document validation still apply.
+`UploadsCollection` must name an upload-enabled collection. Authors can create an upload through the
+host authoring drawer, choose an existing asset, inspect and edit the selected upload, remove the
+image from this document, or ask the configured image generator for an asset ID. Upload access and
+normal document validation still apply.
+
+## Write and review metadata {#authoring}
+
+Open a configured document's SEO fields. The overview counts title, description, and image checks;
+the suggested title and description lengths guide the author but do not block Save. Enter a title
+and description, or choose **Auto-generate** beside a field when its callback is configured. The
+description input grows as you type. The result preview reads the current unsaved title and
+description and uses `GenerateURL` when configured.
+
+For the image, choose **Create new** to upload an asset with its own metadata, or **Choose existing**
+to select one from the configured upload collection. When creation is allowed, dropping an image on
+the empty image area also opens the asset drawer. A selected image shows its filename, dimensions,
+size, and MIME type. **Inspect image** opens the asset for permitted edits, including replacing its
+file; **Remove image** clears only this document's reference. Save the parent document to persist
+the chosen image ID.
 
 ## Place metadata in tabs {#tabs}
 

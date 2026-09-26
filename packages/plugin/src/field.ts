@@ -299,7 +299,7 @@ type NamedFieldTarget<Type extends FieldType, Key extends string> = Type extends
 /**
  * Register a plugin component that can replace an existing field's editor.
  *
- * Put the result in `defineAdminPlugin({ components: { colorSwatch: ... } })`.
+ * Put the result in `defineAdminPlugin({ fieldEditors: { colorSwatch: ... } })`.
  * Go selects that name through `field.PluginComponent(pluginKey, "colorSwatch")`
  * in the field's `Admin.Editor` setting. This changes the input while keeping
  * the original Go field's storage, validation, permissions, and generated types.
@@ -319,7 +319,7 @@ type NamedFieldTarget<Type extends FieldType, Key extends string> = Type extends
  * errors for invalid input. Go still validates the document when it is saved.
  *
  * @param definition The existing field type, component, and value/settings decoders.
- * @returns A frozen registration for the plugin's `components` map. It preserves
+ * @returns A frozen registration for the plugin's `fieldEditors` map. It preserves
  * the selected field type and inferred value/input types; it does not create a new field type.
  * @throws If the field type, component, decoders, or plugin field-type selection are invalid.
  * @example
@@ -330,7 +330,7 @@ type NamedFieldTarget<Type extends FieldType, Key extends string> = Type extends
  * export const editorialAdminPlugin = defineAdminPlugin({
  *   key: 'editorial-tools',
  *   pairingVersion: 1,
- *   components: {
+ *   fieldEditors: {
  *     colorSwatch: defineFieldComponent({
  *       type: 'text',
  *       component: ColorSwatch,
@@ -359,7 +359,7 @@ export function defineFieldComponent<
 		}
 ): PluginFieldRegistration<Value, Input, Type> & NamedFieldTarget<Type, Key>;
 /**
- * Name an alternative editor in your paired plugin's `components` map. Go selects
+ * Name an alternative editor in your paired plugin's `fieldEditors` map. Go selects
  * it with `.Admin(field.Admin{Editor: field.PluginComponent(pluginKey, componentName, config)})`. Set `type` to
  * the actual field type; also supply `fieldType` for plugin values. `decodeValue`
  * checks reads/writes and `decodeConfig` checks settings, synchronously. Changing
@@ -379,7 +379,7 @@ export function defineFieldComponent<
 		}
 ): PluginFieldRegistration<Value, Value, Type> & NamedFieldTarget<Type, Key>;
 /**
- * Name an alternative editor without settings in your plugin's `components` map.
+ * Name an alternative editor without settings in your plugin's `fieldEditors` map.
  * Go selects it with `field.Admin.Editor`. Set the actual schema `type`, plus
  * `fieldType` for plugin values. Supply synchronous `decodeValue` and `decodeInput`
  * for different saved/write shapes. Omit the Go settings argument; no config prop is
@@ -400,7 +400,7 @@ export function defineFieldComponent<
 		}
 ): PluginFieldRegistration<Value, Input, Type> & NamedFieldTarget<Type, Key>;
 /**
- * Name an alternative editor without settings in your plugin's `components` map.
+ * Name an alternative editor without settings in your plugin's `fieldEditors` map.
  * Go selects it with `field.Admin.Editor`. Set the actual schema `type`, plus
  * `fieldType` for plugin values. `decodeValue` synchronously checks reads/writes.
  * Omit the Go settings argument; no config prop is passed. Any supplied component
@@ -463,10 +463,10 @@ function createRegistration(
 		blocks: true,
 		plugin: true,
 	};
-	if (!Object.hasOwn(supported, type)) throw new Error(`Unsupported field renderer type ${type}.`);
+	if (!Object.hasOwn(supported, type)) throw new Error(`Unsupported field editor type ${type}.`);
 	if ("canRender" in definition || "key" in definition || "componentKey" in definition)
 		throw new Error(
-			"Renderer matching comes from its keyed registration; key/canRender/componentKey are not supported."
+			"Field editor matching comes from its keyed registration; key/canRender/componentKey are not supported."
 		);
 	if (
 		typeof definition.component !== "function" ||

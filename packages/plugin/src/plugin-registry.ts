@@ -8,14 +8,14 @@ export interface ResolvedPluginField {
 	readonly owner: string;
 	/** Field-type key for a default editor, or component name for an explicitly selected editor. */
 	readonly key: string;
-	/** Present only for editors registered in `components` and selected by Go `AdminComponent`. */
+	/** Present only for editors registered in `fieldEditors` and selected by Go `AdminComponent`. */
 	readonly componentKey?: string;
 	readonly registration: RegisteredPluginField;
 }
 
 /**
  * Collect field registrations, checking plugin IDs, field-type ownership, named
- * components and API versions. Throws on malformed/duplicate registrations.
+ * field editors and API versions. Throws on malformed/duplicate registrations.
  * Used by Ridu's runtime/check tooling; authors normally call the registration
  * helpers and retain their generated plugin list instead of invoking this directly.
  */
@@ -37,7 +37,7 @@ export function resolvePluginFields(
 		owners.add(plugin.key);
 		for (const [kind, entries] of [
 			["fields", plugin.fields],
-			["components", plugin.components],
+			["fieldEditors", plugin.fieldEditors],
 		] as const) {
 			if (entries === undefined) continue;
 			if (
@@ -63,15 +63,14 @@ export function resolvePluginFields(
 				)
 					throw new Error(`Plugin ${plugin.key} ${kind}.${key} uses the wrong registration kind.`);
 				const identity = kind === "fields" ? `field:${key}` : `component:${plugin.key}:${key}`;
-				if (identities.has(identity))
-					throw new Error(`Duplicate admin field renderer ${identity}.`);
+				if (identities.has(identity)) throw new Error(`Duplicate admin field editor ${identity}.`);
 				identities.add(identity);
 				resolved.push(
 					Object.freeze({
 						owner: plugin.key,
 						key,
 						registration,
-						...(kind === "components" ? { componentKey: key } : {}),
+						...(kind === "fieldEditors" ? { componentKey: key } : {}),
 					})
 				);
 			}
@@ -89,7 +88,7 @@ export function validateManifestPluginPairs(
 	complete: boolean
 ): void {
 	// Startup may receive only public or access-filtered schemas. Build/check own
-	// completeness; selected fields below still validate their exact renderer.
+	// completeness; selected fields below still validate their exact editor.
 	if (complete && manifest.plugins !== undefined)
 		for (const item of registrations) {
 			if (
@@ -99,7 +98,7 @@ export function validateManifestPluginPairs(
 				)
 			)
 				throw new Error(
-					`Named renderer ${item.owner}:${item.key} selects undeclared field type ${item.registration.fieldType}.`
+					`Named field editor ${item.owner}:${item.key} selects undeclared field type ${item.registration.fieldType}.`
 				);
 		}
 	if (manifest.plugins !== undefined) {
@@ -136,7 +135,7 @@ export function createPluginFieldValidator(registrations: readonly ResolvedPlugi
 	const fields = new Map(
 		registrations.filter((item) => item.componentKey === undefined).map((item) => [item.key, item])
 	);
-	const components = new Map(
+	const fieldEditors = new Map(
 		registrations
 			.filter((item) => item.componentKey !== undefined)
 			.map((item) => [`${item.owner}:${item.key}`, item])
@@ -145,14 +144,14 @@ export function createPluginFieldValidator(registrations: readonly ResolvedPlugi
 		const selection = field.admin.component;
 		const selected =
 			selection !== undefined
-				? components.get(`${selection.plugin}:${selection.component}`)
+				? fieldEditors.get(`${selection.plugin}:${selection.component}`)
 				: field.type === "plugin"
 					? fields.get(field.plugin?.key ?? "")
 					: undefined;
 		if (selection !== undefined || field.type === "plugin") {
 			if (selected === undefined)
 				throw new Error(
-					`Missing renderer for ${selection !== undefined ? `${selection.plugin}:${selection.component}` : field.plugin?.key}.`
+					`Missing field editor for ${selection !== undefined ? `${selection.plugin}:${selection.component}` : field.plugin?.key}.`
 				);
 			selected.registration.decodeConfig(field);
 		}

@@ -25,15 +25,19 @@ export function guardPluginAuthoring(
 			binding.assertActive();
 			return host.locale;
 		},
+		canCreateDocument(collection) {
+			binding.assertActive();
+			return host.canCreateDocument(collection);
+		},
 		referenceBrowser: (anchor, props) => {
 			binding.assertActive();
 			const overrides = {
 				get readOnly() {
 					return binding.readOnly || props.readOnly;
 				},
-				onCommit: async (ids: string[]) => {
+				onCommit: async (ids: string[], collectionSlug: string) => {
 					binding.assertEditable();
-					const result = await props.onCommit([...ids]);
+					const result = await props.onCommit([...ids], collectionSlug);
 					binding.assertEditable();
 					return result;
 				},

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onDestroy, type Component } from "svelte";
+	import type { Component } from "svelte";
 	import { SvelteMap } from "svelte/reactivity";
 	import type {
 		EmbeddedSchemaDraft,
@@ -46,12 +46,9 @@
 	const Editor = extension.registration.component as Component<
 		Omit<PluginFieldProps<unknown, unknown, FieldType>, "config"> & { config?: unknown }
 	>;
-	onDestroy(field.destroy);
+	$effect(() => field.destroy);
 	const drafts = new SvelteMap<EmbeddedSchemaDraft, HostedSchemaDraft>();
 	const draftAliases = new WeakMap<EmbeddedSchemaDraft, EmbeddedSchemaDraft>();
-	onDestroy(() => {
-		for (const draft of drafts.keys()) draft.discard();
-	});
 	const authoring: FieldAuthoringHost = {
 		schemaForm,
 		schemaHeader,
@@ -90,13 +87,14 @@
 		get locale() {
 			return form.contentLocale;
 		},
+		canCreateDocument: (collection) => runtime.collectionOperations[collection]?.create === true,
 		referenceBrowser: ReferenceBrowser,
 		findDocument: (collection, id, signal) =>
 			runtime.client.find(collection, id, { signal, locale: form.contentLocale }),
 		async requestPlugin<Result>(path: string, body: unknown, signal?: AbortSignal) {
 			const owner = extension.owner;
 			if (owner === undefined) {
-				throw new Error("This field renderer does not have an owning plugin");
+				throw new Error("This field editor does not have an owning plugin");
 			}
 			return runtime.client.requestPlugin<Result>(owner, path, body, { signal });
 		},

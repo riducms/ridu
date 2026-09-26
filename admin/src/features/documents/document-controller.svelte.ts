@@ -1,9 +1,10 @@
 import { connectDocumentLiveValidation } from "@admin/core/forms/live-validation.svelte";
-import type { DocumentLockEnvelope, SchemaCollection } from "@riducms/protocol";
+import type { AdminCreateDataV1, AdminDocumentDataV1, SchemaCollection } from "@riducms/protocol";
 import { RiduError } from "@riducms/sdk";
-import { tick, untrack } from "svelte";
+import { formatAdminDateTime } from "@admin/core/i18n/format-admin-date-time";
+import { tick } from "svelte";
 
-import type { AdminDocument, AdminVersion } from "@admin/core/api/admin-client";
+import type { AdminDocument } from "@admin/core/api/admin-client";
 import { FormController, FormValidationError } from "@admin/core/forms/form-controller.svelte";
 import {
 	clearFormDraft,
@@ -13,14 +14,19 @@ import {
 import { documentFormValues, initialFormValues } from "@admin/core/forms/form-schema";
 import { invalidFieldLabels } from "@admin/core/forms/form-validation";
 import type { NotificationCenter } from "@admin/core/notifications/notification-center.svelte";
+import { samePreparedCreateValues } from "@admin/core/bootstrap/admin-bootstrap";
 import {
 	collectionPath,
 	createDocumentPath,
 	documentPath,
 	globalPath,
+	withContentLocale,
 } from "@admin/core/routing/admin-paths";
 import type { AdminRuntime } from "@admin/core/runtime/admin-runtime.svelte";
-import { documentHeadingField } from "@admin/features/documents/document-heading";
+import { DocumentLockController } from "@admin/features/documents/document-lock-controller.svelte";
+import { documentTitleField } from "@admin/features/documents/document-title";
+import { isUploadMetadataField } from "@admin/features/uploads/upload-document-contracts";
+import { UploadDraft } from "@admin/features/uploads/upload-draft.svelte";
 
 type Navigate = (to: string, options?: { replace?: boolean }) => void;
 
@@ -31,96 +37,84 @@ interface DocumentControllerOptions {
 	get slug(): string;
 	get documentID(): string | undefined;
 	get global(): boolean;
-	get view(): "edit" | "api";
 	get locale(): string | undefined;
+	get editable(): boolean;
+	readonly prepared?: AdminDocumentDataV1 | AdminCreateDataV1;
 }
 
-const uploadMetadataFields = new Set([
-	"filename",
-	"mimeType",
-	"filesize",
-	"url",
-	"objectKey",
-	"width",
-	"height",
-	"sizes",
-	"focalX",
-	"focalY",
-	"cropX",
-	"cropY",
-	"cropWidth",
-	"cropHeight",
-]);
+interface DocumentRouteSnapshot {
+	slug: string;
+	documentID: string | undefined;
+	locale: string | undefined;
+	manifestRevision: number;
+	global: boolean;
+	editable: boolean;
+	prepared?: AdminDocumentDataV1 | AdminCreateDataV1;
+}
 
 export class DocumentController {
 	readonly form: FormController;
+	readonly lock: DocumentLockController;
 	collection = $state.raw<SchemaCollection>();
 	collectionAvailable = $state(true);
 	loading = $state(true);
 	error = $state<string>();
-	selectedFiles = $state<FileList>();
-	currentRevision = $state(0);
-	currentStatus = $state<"draft" | "published">("published");
-	versions = $state.raw<AdminVersion[]>([]);
-	versionOperation = $state(false);
-	imageOperation = $state(false);
-	imageOutcomeUncertain = $state(false);
+	readonly upload: UploadDraft;
+	publicationOperation = $state(false);
 	saveOutcomeUncertain = $state(false);
 	duplicateOperation = $state(false);
 	deleteDialogOpen = $state(false);
-	restoreDialogOpen = $state(false);
-	pendingRestore = $state.raw<AdminVersion>();
 	currentDocument = $state.raw<AdminDocument>();
-	documentView = $state("edit");
-	copiedAssetURL = $state(false);
-	documentLock = $state.raw<DocumentLockEnvelope>();
-	lockOperation = $state(false);
+	lastSavedAt = $state<number>();
+	unlockOperation = $state(false);
+	copyLocaleOperation = $state(false);
 	#activeRouteKey = "";
+	#routeGeneration = 0;
 	#activeContentLocale?: string;
 	#appliedManifestRevision = 0;
-	#copyResetTimer?: number;
-	#lockRefreshTimer?: number;
-	#lockRoute?: { collection: string; documentID: string };
+	#scheduledRouteKey = "";
+	#formChangeGeneration = 0;
+	#stopObservingFormChanges: () => void;
+	#loadRequest?: AbortController;
 	#saveRequest?: AbortController;
-	#imageRequest?: AbortController;
+	#forceUnlockRequest?: AbortController;
+	#copyLocaleRequest?: AbortController;
 
-	constructor(readonly options: DocumentControllerOptions) {
+	constructor(private readonly options: DocumentControllerOptions) {
+		this.upload = new UploadDraft(
+			options.runtime.client,
+			() => this.collectionSlug,
+			options.runtime.i18n
+		);
 		this.form = new FormController({}, options.runtime.i18n);
+		this.lock = new DocumentLockController({
+			runtime: options.runtime,
+			notifications: options.notifications,
+			form: this.form,
+		});
+		this.#stopObservingFormChanges = this.form.observeChanges(() => {
+			this.#formChangeGeneration += 1;
+		});
 		connectDocumentLiveValidation(this.form, options.runtime.client);
-		$effect(() => {
-			const slug = this.options.slug;
-			const documentID = this.options.global ? slug : this.options.documentID;
-			const locale = this.options.locale;
-			// Route setup reads the manifest inside an untracked controller operation, so manifest
-			// readiness must remain an explicit synchronization dependency for direct lazy-route loads.
-			if (this.options.runtime.manifestRevision === 0) return;
-			return untrack(() => this.#enterRoute(slug, documentID, locale));
-		});
-
-		$effect(() => {
-			const view = this.options.view;
-			untrack(() => {
-				if (view === "api") this.documentView = "api";
-				else if (this.documentView === "api") this.documentView = "edit";
+		this.#scheduleRouteSync(this.#routeSnapshot());
+		$effect.pre(() => {
+			const global = this.options.global;
+			this.#scheduleRouteSync({
+				slug: this.options.slug,
+				documentID: global ? this.options.slug : this.options.documentID,
+				locale: this.options.locale,
+				manifestRevision: this.options.runtime.manifestRevision,
+				global,
+				editable: this.options.editable,
+				prepared: this.options.prepared,
 			});
-		});
-
-		$effect(() => {
-			const revision = this.options.runtime.manifestRevision;
-			if (revision === 0 || revision === this.#appliedManifestRevision) return;
-			if (this.#appliedManifestRevision === 0) {
-				this.#appliedManifestRevision = revision;
-				return;
-			}
-			this.#appliedManifestRevision = revision;
-			untrack(() => this.#applySchemaUpdate());
 		});
 
 		$effect(() => {
 			const checkpoint = () => this.checkpointDraft();
 			const leavePage = () => {
 				checkpoint();
-				this.#releaseLock();
+				this.lock.release();
 			};
 			window.addEventListener("pagehide", leavePage);
 			const hot = import.meta.hot;
@@ -128,6 +122,14 @@ export class DocumentController {
 			return () => {
 				window.removeEventListener("pagehide", leavePage);
 				hot?.off("vite:beforeFullReload", checkpoint);
+				this.#routeGeneration += 1;
+				this.#cancelRouteRequests();
+				this.#loadRequest?.abort();
+				this.#stopObservingFormChanges();
+				this.form.disposeBindings();
+				this.upload.dispose();
+				this.#saveRequest?.abort();
+				this.lock.release();
 			};
 		});
 
@@ -137,7 +139,7 @@ export class DocumentController {
 			if (documentID === undefined || interval <= 0) return;
 
 			const timer = window.setInterval(async () => {
-				if (!this.canSave || this.versionOperation) return;
+				if (!this.canSave || this.publicationOperation) return;
 				// A background update to a published document would make its edits public.
 				// Keep a recoverable local checkpoint until the author explicitly chooses
 				// Publish changes; draft documents can use the ordinary server mutation.
@@ -146,15 +148,40 @@ export class DocumentController {
 			}, interval * 1_000);
 			return () => window.clearInterval(timer);
 		});
+	}
 
-		$effect(() => () => {
-			this.form.disposeBindings();
-			this.#saveRequest?.abort();
-			this.#imageRequest?.abort();
-			if (this.#copyResetTimer !== undefined) window.clearTimeout(this.#copyResetTimer);
-			if (this.#lockRefreshTimer !== undefined) window.clearInterval(this.#lockRefreshTimer);
-			this.#releaseLock();
-		});
+	#routeSnapshot(): DocumentRouteSnapshot {
+		const slug = this.options.slug;
+		const global = this.options.global;
+		return {
+			slug,
+			documentID: global ? slug : this.options.documentID,
+			locale: this.options.locale,
+			manifestRevision: this.options.runtime.manifestRevision,
+			global,
+			editable: this.options.editable,
+			prepared: this.options.prepared,
+		};
+	}
+
+	#scheduleRouteSync(snapshot: DocumentRouteSnapshot) {
+		const { slug, documentID, locale, manifestRevision, global, editable } = snapshot;
+		if (manifestRevision === 0) return;
+		const key = `${global ? "global" : "collection"}:${slug}:${documentID ?? "new"}:${locale ?? "default"}:${editable ? "edit" : "read"}:${manifestRevision}`;
+		if (key === this.#scheduledRouteKey) return;
+		this.#scheduledRouteKey = key;
+		// Initial construction is outside dependency collection; retained routes commit in
+		// $effect.pre. The key guard makes any dependencies read during the commit disappear on its
+		// guarded rerun, leaving only the explicit route-option reads above.
+		this.#enterRoute(
+			slug,
+			documentID,
+			locale,
+			manifestRevision,
+			global,
+			editable,
+			snapshot.prepared
+		);
 	}
 
 	get documentID() {
@@ -189,12 +216,36 @@ export class DocumentController {
 		return this.collection?.versionSettings?.drafts === true;
 	}
 
+	get currentRevision() {
+		const revision = this.currentDocument?._revision;
+		return typeof revision === "number" ? revision : 0;
+	}
+
+	get currentStatus(): "draft" | "published" {
+		if (this.currentDocument === undefined) return this.draftsCollection ? "draft" : "published";
+		return this.currentDocument._status === "draft" ? "draft" : "published";
+	}
+
 	get selectedFile() {
-		return this.selectedFiles?.item(0) ?? undefined;
+		return this.upload.file;
 	}
 
 	get hasUnsavedChanges() {
-		return this.form.dirty || (this.creating && this.selectedFile !== undefined);
+		return this.form.dirty || this.upload.dirty;
+	}
+
+	get creatingAuthUser() {
+		return this.creating && !this.globalResource && this.collection?.capabilities.auth === true;
+	}
+
+	get canForceUnlock() {
+		return (
+			!this.globalResource &&
+			!this.creating &&
+			this.collection?.capabilities.auth === true &&
+			(this.collection.authSettings?.maxLoginAttempts ?? 0) > 0 &&
+			this.form.access?.operations.update === true
+		);
 	}
 
 	get canSave() {
@@ -204,102 +255,81 @@ export class DocumentController {
 		const publicationAllowed =
 			!this.creating || !this.versionedCollection || this.draftsCollection || this.canPublish;
 		const inputReady = this.creating
-			? !this.uploadCollection || this.selectedFile !== undefined
+			? !this.uploadCollection || this.upload.file !== undefined
 			: this.hasUnsavedChanges;
 		return (
 			this.collectionAvailable &&
 			!this.saveOutcomeUncertain &&
-			!this.imageOutcomeUncertain &&
-			!this.imageOperation &&
-			!this.lockedByAnotherEditor &&
+			!this.upload.busy &&
+			!this.upload.editingImage &&
+			!this.lock.lockedByAnotherEditor &&
 			operationAllowed &&
 			publicationAllowed &&
 			!this.form.submitting &&
-			inputReady
+			!this.form.writeBlocked &&
+			inputReady &&
+			(!this.uploadCollection || this.upload.present)
 		);
 	}
 
-	get lockedByAnotherEditor() {
-		return this.documentLock?.lock !== null && this.documentLock?.owned === false;
-	}
-
-	get lockOwnerLabel() {
-		return this.documentLock?.lock?.ownerLabel;
-	}
-
-	get lockUpdatedAt() {
-		return this.documentLock?.lock?.updatedAt;
-	}
-
-	get canTakeOverLock() {
-		return this.lockedByAnotherEditor && this.documentLock?.canTakeOver === true;
-	}
-
 	get headingField() {
-		return documentHeadingField(this.collection, (path) => this.form.canRead(path));
-	}
-
-	get titleField() {
-		if (this.globalResource) return undefined;
-		return this.headingField?.type === "text" && this.headingField.admin.row === undefined
-			? this.headingField
-			: undefined;
+		return this.uploadCollection
+			? undefined
+			: documentTitleField(this.collection, (path) => this.form.canRead(path));
 	}
 
 	get documentFields() {
 		return (this.collection?.fields ?? []).filter(
 			(field) =>
 				this.form.canRead(field.path) &&
-				!(this.uploadCollection && uploadMetadataFields.has(field.name))
+				!(this.uploadCollection && isUploadMetadataField(field.name))
 		);
 	}
 
 	get canDelete() {
-		return !this.lockedByAnotherEditor && this.form.access?.operations.delete === true;
+		return !this.lock.lockedByAnotherEditor && this.form.access?.operations.delete === true;
 	}
 
 	get canDuplicate() {
-		return !this.lockedByAnotherEditor && this.form.access?.operations.duplicate === true;
+		return !this.lock.lockedByAnotherEditor && this.form.access?.operations.duplicate === true;
 	}
 
 	get canPublish() {
-		return !this.lockedByAnotherEditor && this.form.access?.operations.publish === true;
+		return (
+			!this.lock.lockedByAnotherEditor &&
+			!this.form.writeBlocked &&
+			this.form.access?.operations.publish === true
+		);
 	}
 
 	get canUnpublish() {
-		return !this.lockedByAnotherEditor && this.form.access?.operations.unpublish === true;
-	}
-
-	get canRestoreVersion() {
-		if (this.lockedByAnotherEditor || this.form.access?.operations.update !== true) return false;
-		const status = this.pendingRestore?.Status;
-		return status === "draft"
-			? this.form.access?.operations.unpublish === true
-			: this.form.access?.operations.publish === true;
+		return (
+			!this.lock.lockedByAnotherEditor &&
+			!this.form.writeBlocked &&
+			this.form.access?.operations.unpublish === true
+		);
 	}
 
 	get canReadVersions() {
 		return !this.creating && this.form.access?.operations.readVersions === true;
 	}
 
-	get canEditImage() {
+	get canEditUpload() {
 		return (
 			this.uploadCollection &&
-			!this.creating &&
-			!this.lockedByAnotherEditor &&
+			!this.lock.lockedByAnotherEditor &&
 			!this.form.submitting &&
-			!this.imageOutcomeUncertain &&
-			this.assetMimeType?.startsWith("image/") === true &&
-			this.form.access?.operations.update === true &&
-			(!this.versionedCollection ||
-				this.currentStatus !== "published" ||
-				this.form.access?.operations.publish === true)
+			!this.saveOutcomeUncertain &&
+			!this.form.writeBlocked &&
+			(this.creating
+				? this.form.access?.operations.create === true
+				: this.form.access?.operations.update === true)
 		);
 	}
 
 	get validationFields() {
 		return (this.collection?.fields ?? []).filter(
-			(field) => !(this.uploadCollection && uploadMetadataFields.has(field.name))
+			(field) => !(this.uploadCollection && isUploadMetadataField(field.name))
 		);
 	}
 
@@ -312,18 +342,8 @@ export class DocumentController {
 
 	get documentHeading() {
 		if (this.globalResource) return this.collectionSingularLabel;
-		if (this.uploadCollection) {
-			const filename = this.currentDocument?.filename;
-			if (typeof filename === "string" && filename.trim().length > 0) return filename;
-			if (this.selectedFile !== undefined) return this.selectedFile.name;
-			return this.creating
-				? this.options.runtime.i18n.t("documents:newLabel", {
-						label: this.collectionSingularLabel.toLocaleLowerCase(
-							this.options.runtime.i18n.language
-						),
-					})
-				: this.options.runtime.i18n.t("documents:untitledAsset");
-		}
+		if (this.uploadCollection)
+			return this.upload.filename || this.options.runtime.i18n.t("documents:untitled");
 		const value =
 			this.headingField === undefined ? undefined : this.form.get(this.headingField.path);
 		const title = typeof value === "string" ? value.trim() : "";
@@ -347,39 +367,6 @@ export class DocumentController {
 		return this.#documentString("mimeType");
 	}
 
-	get assetSize() {
-		const value = this.#documentNumber("filesize");
-		if (value === undefined) return undefined;
-		if (value < 1_024)
-			return this.options.runtime.i18n.formatNumber(value, { style: "unit", unit: "byte" });
-		if (value < 1_048_576)
-			return this.options.runtime.i18n.formatNumber(value / 1_024, {
-				maximumFractionDigits: 0,
-				style: "unit",
-				unit: "kilobyte",
-			});
-		return this.options.runtime.i18n.formatNumber(value / 1_048_576, {
-			maximumFractionDigits: value < 10_485_760 ? 1 : 0,
-			style: "unit",
-			unit: "megabyte",
-		});
-	}
-
-	get assetDimensions() {
-		const width = this.#documentNumber("width");
-		const height = this.#documentNumber("height");
-		return width !== undefined && height !== undefined
-			? `${this.options.runtime.i18n.formatNumber(width)} × ${this.options.runtime.i18n.formatNumber(height)}`
-			: undefined;
-	}
-
-	revealFirstIssue = () => {
-		const issue = this.form.issues[0];
-		if (issue === undefined) return undefined;
-		this.documentView = "edit";
-		return issue.path;
-	};
-
 	checkpointDraft = () => {
 		const collection = this.collection;
 		if (collection === undefined) return;
@@ -397,146 +384,103 @@ export class DocumentController {
 		const collection = this.collection;
 		if (collection !== undefined) clearFormDraft(collection.id, this.documentID);
 		this.form.reset($state.snapshot(this.form.original));
-		this.selectedFiles = undefined;
+		this.upload.reset(this.currentDocument);
+	};
+
+	forceUnlock = async () => {
+		const { runtime, notifications } = this.options;
+		if (this.collection === undefined || this.currentDocument === undefined) return;
+		const request = new AbortController();
+		this.#forceUnlockRequest?.abort();
+		this.#forceUnlockRequest = request;
+		this.unlockOperation = true;
+		try {
+			await runtime.client.forceUnlock(this.collection.slug, this.currentDocument.id, {
+				signal: request.signal,
+			});
+			if (request.signal.aborted) return;
+			notifications.success({ title: runtime.i18n.t("documents:accountUnlocked") });
+		} catch (cause) {
+			if (request.signal.aborted) return;
+			notifications.error({
+				title: runtime.i18n.t("documents:accountUnlockFailed"),
+				message: cause instanceof Error ? cause.message : undefined,
+			});
+		} finally {
+			if (!request.signal.aborted) {
+				this.#forceUnlockRequest = undefined;
+				this.unlockOperation = false;
+			}
+		}
+	};
+
+	copyFromLocale = async (source: string) => {
+		const { runtime, notifications } = this.options;
+		if (
+			this.contentLocale === undefined ||
+			source === this.contentLocale ||
+			this.currentDocument === undefined ||
+			this.copyLocaleOperation
+		)
+			return;
+		const request = new AbortController();
+		const destinationLocale = this.contentLocale;
+		const document = this.currentDocument;
+		this.#copyLocaleRequest?.abort();
+		this.#copyLocaleRequest = request;
+		this.copyLocaleOperation = true;
+		try {
+			if (this.globalResource) {
+				await runtime.client.copyGlobalLocale(
+					this.collectionSlug,
+					{ from: source, to: destinationLocale },
+					{ revision: document._revision, signal: request.signal }
+				);
+			} else {
+				await runtime.client.copyLocale(
+					this.collectionSlug,
+					document.id,
+					{ from: source, to: destinationLocale },
+					{ revision: document._revision, signal: request.signal }
+				);
+			}
+			if (request.signal.aborted) return;
+			await this.refresh();
+			if (request.signal.aborted) return;
+			runtime.documentsChanged();
+			notifications.success({
+				title: runtime.i18n.t("documents:localeCopied"),
+				message: runtime.i18n.t("documents:localeCopiedDescription", {
+					source,
+					destination: destinationLocale,
+				}),
+			});
+		} catch (cause) {
+			if (request.signal.aborted) return;
+			notifications.error({
+				title: runtime.i18n.t("documents:localeNotCopied"),
+				message:
+					cause instanceof Error ? cause.message : runtime.i18n.t("documents:localeCopyFailed"),
+			});
+		} finally {
+			if (!request.signal.aborted) {
+				this.#copyLocaleRequest = undefined;
+				this.copyLocaleOperation = false;
+			}
+		}
 	};
 
 	refresh = async () => {
 		const documentID = this.documentID;
-		if (documentID === undefined || this.collection === undefined) return;
-		const request = new AbortController();
-		await this.#load(this.collection.slug, documentID, request.signal);
-	};
-
-	takeOverLock = async () => {
-		const documentID = this.documentID;
 		if (
 			documentID === undefined ||
-			this.collection?.capabilities.locking !== true ||
-			!this.canTakeOverLock
+			this.collection === undefined ||
+			this.#saveRequest !== undefined ||
+			this.upload.busy ||
+			this.publicationOperation
 		)
-			return false;
-		this.lockOperation = true;
-		try {
-			const state = await this.options.runtime.client.acquireDocumentLock(
-				this.collectionSlug,
-				documentID,
-				true
-			);
-			this.#applyLock(state);
-			this.options.notifications.success({
-				title: this.options.runtime.i18n.t("documents:lockTakenOver"),
-			});
-			return state.owned;
-		} catch (cause) {
-			this.options.notifications.error({
-				title: this.options.runtime.i18n.t("documents:lockTakeoverFailed"),
-				message: cause instanceof Error ? cause.message : undefined,
-			});
-			return false;
-		} finally {
-			this.lockOperation = false;
-		}
-	};
-
-	updateUploadImage = async (input: {
-		focalX: number;
-		focalY: number;
-		cropX: number;
-		cropY: number;
-		cropWidth: number;
-		cropHeight: number;
-	}) => {
-		const documentID = this.documentID;
-		if (documentID === undefined || !this.canEditImage || this.imageOperation) return false;
-		const routeKey = this.#activeRouteKey;
-		const collectionSlug = this.collectionSlug;
-		const request = new AbortController();
-		this.#imageRequest?.abort();
-		this.#imageRequest = request;
-		this.imageOperation = true;
-		try {
-			const updated = await this.options.runtime.client.updateUploadImage(
-				collectionSlug,
-				documentID,
-				input,
-				{ revision: this.currentRevision, signal: request.signal }
-			);
-			if (request.signal.aborted || this.#activeRouteKey !== routeKey) return false;
-			this.#applyImageDocument(updated);
-			this.imageOutcomeUncertain = false;
-			this.options.runtime.documentsChanged();
-			this.options.notifications.success({
-				title: this.options.runtime.i18n.t("uploads:imageSizesRegenerated"),
-				message:
-					input.cropWidth > 0
-						? this.options.runtime.i18n.t("uploads:cropAndFocalUpdated", {
-								cropWidth: this.options.runtime.i18n.formatNumber(Math.round(input.cropWidth)),
-								cropHeight: this.options.runtime.i18n.formatNumber(Math.round(input.cropHeight)),
-								focalX: this.options.runtime.i18n.formatNumber(Math.round(input.focalX)),
-								focalY: this.options.runtime.i18n.formatNumber(Math.round(input.focalY)),
-							})
-						: this.options.runtime.i18n.t("uploads:focalUpdated", {
-								focalX: this.options.runtime.i18n.formatNumber(Math.round(input.focalX)),
-								focalY: this.options.runtime.i18n.formatNumber(Math.round(input.focalY)),
-							}),
-			});
-			await Promise.allSettled([
-				this.#refreshVersions(documentID),
-				this.#refreshAccess(documentID),
-			]);
-			return true;
-		} catch (cause) {
-			if (request.signal.aborted || this.#activeRouteKey !== routeKey) return false;
-			const confirmedFailure = cause instanceof RiduError && cause.status < 500;
-			if (!confirmedFailure) {
-				try {
-					const refreshed = await this.options.runtime.client.find(collectionSlug, documentID, {
-						signal: request.signal,
-						locale: this.contentLocale,
-					});
-					if (request.signal.aborted || this.#activeRouteKey !== routeKey) return false;
-					this.#applyImageDocument(refreshed);
-					this.imageOutcomeUncertain = false;
-					await Promise.allSettled([
-						this.#refreshVersions(documentID),
-						this.#refreshAccess(documentID),
-					]);
-					if (imageEditMatches(refreshed, input)) {
-						this.options.notifications.success({
-							title: this.options.runtime.i18n.t("uploads:imageSizesRegenerated"),
-							message: this.options.runtime.i18n.t("uploads:imageStateRecovered"),
-						});
-						return true;
-					}
-					this.options.notifications.error({
-						title: this.options.runtime.i18n.t("uploads:imageSizesNotRegenerated"),
-						message: this.options.runtime.i18n.t("uploads:serverStateRefreshed"),
-					});
-					return false;
-				} catch {
-					if (request.signal.aborted || this.#activeRouteKey !== routeKey) return false;
-					this.imageOutcomeUncertain = true;
-					this.options.notifications.error({
-						title: this.options.runtime.i18n.t("uploads:imageOutcomeUnknown"),
-						message: this.options.runtime.i18n.t("uploads:imageOutcomeUnknownDescription"),
-					});
-					return false;
-				}
-			}
-			this.options.notifications.error({
-				title: this.options.runtime.i18n.t("uploads:imageSizesNotRegenerated"),
-				message:
-					cause instanceof Error
-						? cause.message
-						: this.options.runtime.i18n.t("uploads:focalUpdateFailed"),
-			});
-			return false;
-		} finally {
-			if (this.#imageRequest === request) {
-				this.#imageRequest = undefined;
-				this.imageOperation = false;
-			}
-		}
+			return;
+		await this.#load(this.collection.slug, documentID);
 	};
 
 	save = async ({
@@ -545,18 +489,16 @@ export class DocumentController {
 		publish = false,
 	}: { silent?: boolean; password?: string; publish?: boolean } = {}) => {
 		if (!this.canSave) return false;
-		const publishingChanges =
-			publish && !this.creating && this.versionedCollection && this.currentStatus === "published";
+		const publishingChanges = publish && !this.creating && this.versionedCollection;
 		if (publishingChanges && !this.canPublish) return false;
-		const creatingUpload = this.creating && this.uploadCollection;
-		const routeKey = this.#activeRouteKey;
 		const collectionSlug = this.collectionSlug;
 		const documentID = this.documentID;
 		const request = new AbortController();
 		this.#saveRequest?.abort();
 		this.#saveRequest = request;
+		this.#cancelLoad();
+		const wasCreating = this.creating;
 		try {
-			const wasCreating = this.creating;
 			const saved = await this.form.submit(this.validationFields, this.creating, async (values) => {
 				if (this.globalResource) {
 					if (publishingChanges) {
@@ -573,6 +515,20 @@ export class DocumentController {
 					});
 				}
 				if (documentID !== undefined) {
+					if (this.uploadCollection) {
+						return this.options.runtime.client.updateUpload(
+							collectionSlug,
+							documentID,
+							{
+								data: values,
+								file: this.upload.file,
+								filename: this.upload.filename,
+								image: this.upload.image,
+								publish: publishingChanges,
+							},
+							{ revision: this.currentRevision, signal: request.signal, locale: this.contentLocale }
+						);
+					}
 					if (publishingChanges) {
 						return this.options.runtime.client.publishChanges(collectionSlug, documentID, values, {
 							revision: this.currentRevision,
@@ -606,15 +562,18 @@ export class DocumentController {
 				if (this.selectedFile === undefined)
 					throw new Error(this.options.runtime.i18n.t("uploads:chooseFileBeforeSaving"));
 				return this.options.runtime.client.upload(collectionSlug, this.selectedFile, {
+					filename: this.upload.filename,
+					image: this.upload.image,
+					publish,
 					data: values,
 					signal: request.signal,
 					locale: this.contentLocale,
 				});
 			});
-			if (request.signal.aborted || this.#activeRouteKey !== routeKey) return false;
+			if (request.signal.aborted) return false;
 			this.saveOutcomeUncertain = false;
 			this.#applyDocument(saved);
-			if (creatingUpload) this.selectedFiles = undefined;
+			this.lastSavedAt = Date.now();
 			this.options.runtime.documentsChanged();
 			clearFormDraft(this.collection?.id ?? this.collectionSlug, this.documentID);
 			if (!silent) {
@@ -632,18 +591,19 @@ export class DocumentController {
 				// Let the route clear any blocked departure now that the successful save has
 				// removed both form and upload dirtiness before replacing the create URL.
 				await tick();
+				if (request.signal.aborted) return false;
 				this.options.navigate(
 					withContentLocale(documentPath(this.collectionSlug, saved.id), this.contentLocale),
 					{ replace: true }
 				);
 			} else {
-				await Promise.allSettled([this.#refreshVersions(saved.id), this.#refreshAccess(saved.id)]);
+				await this.#refreshAccess(saved.id);
 			}
-			return true;
+			return !request.signal.aborted;
 		} catch (cause) {
-			if (request.signal.aborted || this.#activeRouteKey !== routeKey) return false;
+			if (request.signal.aborted) return false;
 			if (
-				creatingUpload &&
+				this.uploadCollection &&
 				!(cause instanceof FormValidationError) &&
 				(!(cause instanceof RiduError) || cause.status >= 500)
 			) {
@@ -651,7 +611,11 @@ export class DocumentController {
 				if (!silent) {
 					this.options.notifications.error({
 						title: this.options.runtime.i18n.t("uploads:outcomeUnknown"),
-						message: this.options.runtime.i18n.t("uploads:outcomeUnknownDescription"),
+						message: this.options.runtime.i18n.t(
+							wasCreating
+								? "uploads:outcomeUnknownDescription"
+								: "uploads:saveOutcomeUnknownDescription"
+						),
 					});
 				}
 				return false;
@@ -686,8 +650,19 @@ export class DocumentController {
 	};
 
 	changePublication = async (next: "draft" | "published") => {
-		if (this.documentID === undefined || this.lockedByAnotherEditor) return;
-		this.versionOperation = true;
+		const allowed = next === "published" ? this.canPublish : this.canUnpublish;
+		if (
+			this.documentID === undefined ||
+			!allowed ||
+			this.form.submitting ||
+			this.publicationOperation ||
+			this.upload.busy ||
+			this.saveOutcomeUncertain
+		)
+			return;
+		this.#cancelLoad();
+		this.publicationOperation = true;
+		const generation = this.#routeGeneration;
 		try {
 			const saved =
 				next === "published"
@@ -709,12 +684,12 @@ export class DocumentController {
 								revision: this.currentRevision,
 								locale: this.contentLocale,
 							});
+			if (generation !== this.#routeGeneration) return;
 			this.#applyDocument(saved);
+			this.lastSavedAt = Date.now();
 			this.options.runtime.documentsChanged();
-			await Promise.allSettled([
-				this.#refreshVersions(this.documentID),
-				this.#refreshAccess(this.documentID),
-			]);
+			await this.#refreshAccess(this.documentID);
+			if (generation !== this.#routeGeneration) return;
 			this.options.notifications.success({
 				title: this.options.runtime.i18n.t(
 					next === "published" ? "documents:publishedTitle" : "documents:unpublishedTitle"
@@ -726,6 +701,7 @@ export class DocumentController {
 				}),
 			});
 		} catch (cause) {
+			if (generation !== this.#routeGeneration) return;
 			this.options.notifications.error({
 				title: this.options.runtime.i18n.t("documents:statusNotChanged"),
 				message:
@@ -734,13 +710,15 @@ export class DocumentController {
 						: this.options.runtime.i18n.t("documents:statusChangeFailed"),
 			});
 		} finally {
-			this.versionOperation = false;
+			if (generation === this.#routeGeneration) this.publicationOperation = false;
 		}
 	};
 
 	duplicate = async () => {
-		if (this.documentID === undefined || this.globalResource || this.lockedByAnotherEditor) return;
+		if (this.documentID === undefined || this.globalResource || this.lock.lockedByAnotherEditor)
+			return;
 		this.duplicateOperation = true;
+		const generation = this.#routeGeneration;
 		try {
 			const duplicated = await this.options.runtime.client.duplicate(
 				this.collectionSlug,
@@ -748,6 +726,7 @@ export class DocumentController {
 				{},
 				{ locale: this.contentLocale }
 			);
+			if (generation !== this.#routeGeneration) return;
 			this.options.runtime.documentsChanged();
 			this.options.notifications.success({
 				title: this.options.runtime.i18n.t("documents:duplicatedLabel", {
@@ -759,6 +738,7 @@ export class DocumentController {
 				withContentLocale(documentPath(this.collectionSlug, duplicated.id), this.contentLocale)
 			);
 		} catch (cause) {
+			if (generation !== this.#routeGeneration) return;
 			this.options.notifications.error({
 				title: this.options.runtime.i18n.t("documents:notDuplicated"),
 				message:
@@ -767,57 +747,17 @@ export class DocumentController {
 						: this.options.runtime.i18n.t("documents:duplicateFailed"),
 			});
 		} finally {
-			this.duplicateOperation = false;
-		}
-	};
-
-	restore = async (version: AdminVersion) => {
-		if (this.documentID === undefined || this.lockedByAnotherEditor || !this.canRestoreVersion)
-			return;
-		this.versionOperation = true;
-		try {
-			const saved = this.globalResource
-				? await this.options.runtime.client.restoreGlobal(this.collectionSlug, version.Revision, {
-						revision: this.currentRevision,
-						locale: this.contentLocale,
-					})
-				: await this.options.runtime.client.restore(
-						this.collectionSlug,
-						this.documentID,
-						version.Revision,
-						{ revision: this.currentRevision, locale: this.contentLocale }
-					);
-			this.#applyDocument(saved);
-			this.options.runtime.documentsChanged();
-			await Promise.allSettled([
-				this.#refreshVersions(this.documentID),
-				this.#refreshAccess(this.documentID),
-			]);
-			this.options.notifications.success({
-				title: this.options.runtime.i18n.t("versions:revisionRestoredTitle"),
-				message: this.options.runtime.i18n.t("versions:revisionIsCurrent", {
-					revision: this.options.runtime.i18n.formatNumber(version.Revision),
-				}),
-			});
-		} catch (cause) {
-			this.options.notifications.error({
-				title: this.options.runtime.i18n.t("versions:revisionNotRestored"),
-				message:
-					cause instanceof Error
-						? cause.message
-						: this.options.runtime.i18n.t("versions:revisionRestoreFailed"),
-			});
-		} finally {
-			this.versionOperation = false;
-			this.restoreDialogOpen = false;
-			this.pendingRestore = undefined;
+			if (generation === this.#routeGeneration) this.duplicateOperation = false;
 		}
 	};
 
 	remove = async () => {
-		if (this.documentID === undefined || this.lockedByAnotherEditor) return;
+		if (this.documentID === undefined || this.lock.lockedByAnotherEditor) return;
+		this.#cancelLoad();
+		const generation = this.#routeGeneration;
 		try {
 			await this.options.runtime.client.delete(this.collectionSlug, this.documentID);
+			if (generation !== this.#routeGeneration) return;
 			this.options.runtime.documentsChanged();
 			this.deleteDialogOpen = false;
 			this.options.notifications.success({
@@ -834,6 +774,7 @@ export class DocumentController {
 			});
 			this.options.navigate(collectionPath(this.collectionSlug));
 		} catch (cause) {
+			if (generation !== this.#routeGeneration) return;
 			this.options.notifications.error({
 				title: this.options.runtime.i18n.t("documents:notDeleted"),
 				message:
@@ -844,64 +785,81 @@ export class DocumentController {
 		}
 	};
 
-	requestRestore = (version: AdminVersion) => {
-		this.pendingRestore = version;
-		this.restoreDialogOpen = true;
-	};
-
-	versionDate = (version: AdminVersion) => this.#formatDate(version.CreatedAt);
-
 	documentDate = (value: string | undefined) =>
-		value === undefined ? "—" : this.#formatDate(value);
+		value === undefined ? "—" : formatAdminDateTime(value, this.options.runtime.i18n);
 
-	copyAssetURL = async () => {
-		if (this.assetURL === undefined) return;
-		await navigator.clipboard.writeText(new URL(this.assetURL, window.location.origin).href);
-		this.copiedAssetURL = true;
-		this.options.notifications.success({
-			title: this.options.runtime.i18n.t("uploads:urlCopied"),
-			message: this.options.runtime.i18n.t("uploads:urlCopiedDescription"),
-		});
-		if (this.#copyResetTimer !== undefined) window.clearTimeout(this.#copyResetTimer);
-		this.#copyResetTimer = window.setTimeout(() => {
-			this.copiedAssetURL = false;
-			this.#copyResetTimer = undefined;
-		}, 1_500);
-	};
+	#cancelRouteRequests() {
+		this.#forceUnlockRequest?.abort();
+		this.#copyLocaleRequest?.abort();
+		this.#forceUnlockRequest = undefined;
+		this.#copyLocaleRequest = undefined;
+		this.unlockOperation = false;
+		this.copyLocaleOperation = false;
+	}
 
-	#enterRoute(slug: string, documentID: string | undefined, locale: string | undefined) {
-		const resourceKey = `${this.options.global ? "global" : "collection"}:${slug}:${documentID ?? "new"}`;
-		const routeKey = `${resourceKey}:${locale ?? "default"}`;
+	#enterRoute(
+		slug: string,
+		documentID: string | undefined,
+		locale: string | undefined,
+		manifestRevision: number,
+		global: boolean,
+		editable: boolean,
+		prepared?: AdminDocumentDataV1 | AdminCreateDataV1
+	) {
+		const resourceKey = `${global ? "global" : "collection"}:${slug}:${documentID ?? "new"}`;
+		const ownerKey = `${resourceKey}:${locale ?? "default"}`;
+		const routeKey = `${ownerKey}:${editable ? "edit" : "read"}`;
+		const sameOwner = this.#activeRouteKey.startsWith(`${ownerKey}:`);
 		if (
 			this.#activeRouteKey.startsWith(`${resourceKey}:`) &&
 			this.#activeRouteKey !== routeKey &&
 			this.hasUnsavedChanges
 		) {
+			if (manifestRevision !== this.#appliedManifestRevision) {
+				this.#appliedManifestRevision = manifestRevision;
+				this.#applySchemaUpdate();
+			}
 			return;
 		}
+		if (this.#activeRouteKey === routeKey && this.collection !== undefined) {
+			if (manifestRevision !== this.#appliedManifestRevision) {
+				this.#appliedManifestRevision = manifestRevision;
+				this.#applySchemaUpdate();
+			} else if (prepared !== undefined && !this.hasUnsavedChanges) {
+				this.#load(slug, documentID, false, prepared);
+			}
+			return;
+		}
+		this.#appliedManifestRevision = manifestRevision;
+		if (this.#activeRouteKey !== routeKey && !sameOwner) {
+			// A later visit to the same URL is a different owner for mutation completions.
+			this.#routeGeneration += 1;
+			this.#cancelRouteRequests();
+			this.publicationOperation = false;
+			this.duplicateOperation = false;
+			this.deleteDialogOpen = false;
+			this.currentDocument = undefined;
+			this.lastSavedAt = undefined;
+			this.upload.reset(this.currentDocument);
+		}
+		this.#cancelLoad();
 		this.#activeContentLocale = locale;
-		if (this.#activeRouteKey !== "" && this.#activeRouteKey !== routeKey) {
+		if (this.#activeRouteKey !== "" && this.#activeRouteKey !== routeKey && !sameOwner) {
 			this.#saveRequest?.abort();
 			this.#saveRequest = undefined;
-			this.#imageRequest?.abort();
-			this.#imageRequest = undefined;
-			this.imageOperation = false;
 		}
 		const collection = (
-			this.options.global
-				? this.options.runtime.manifest?.globals
-				: this.options.runtime.manifest?.collections
+			global ? this.options.runtime.manifest?.globals : this.options.runtime.manifest?.collections
 		)?.find((item) => item.slug === slug);
 		if (collection === undefined) {
 			this.#activeRouteKey = routeKey;
-			this.#releaseLock();
+			this.lock.release();
 			this.collection = undefined;
 			this.collectionAvailable = false;
 			this.currentDocument = undefined;
-			this.selectedFiles = undefined;
-			this.versions = [];
+			this.upload.reset(this.currentDocument);
 			this.form.reset({});
-			this.form.setResource({ collection: slug, id: documentID, global: this.options.global });
+			this.form.setResource({ collection: slug, id: documentID, global });
 			this.loading = false;
 			this.error = this.options.runtime.i18n.t("documents:collectionUnavailable");
 			this.form.setAccess(undefined, documentID === undefined ? "create" : "update");
@@ -911,43 +869,24 @@ export class DocumentController {
 		this.form.setResource({
 			collection: collection.slug,
 			id: documentID,
-			global: this.options.global,
+			global,
 		});
-		if (
-			this.#lockRoute !== undefined &&
-			(this.#lockRoute.collection !== collection.slug || this.#lockRoute.documentID !== documentID)
-		) {
-			this.#releaseLock();
-		}
+		this.lock.releaseUnless(collection.slug, documentID);
+		if (!editable) this.lock.release();
 		this.collectionAvailable = true;
-		if (this.#activeRouteKey === routeKey) {
-			if (!this.loading || documentID === undefined) return;
-			const request = new AbortController();
-			this.#load(collection.slug, documentID, request.signal);
-			return () => request.abort();
-		}
-
 		this.#activeRouteKey = routeKey;
 		this.saveOutcomeUncertain = false;
-		this.imageOutcomeUncertain = false;
 		this.form.setAccess(undefined, documentID === undefined ? "create" : "update");
 		if (documentID === undefined) {
 			this.form.reset(initialFormValues(collection.fields), collection.fields);
 			this.form.setLocalization(locale);
-			this.versions = [];
 			this.currentDocument = undefined;
-			this.currentRevision = 0;
-			this.currentStatus = this.draftsCollection ? "draft" : "published";
-			this.documentLock = undefined;
-			this.form.writeBlocked = false;
+			this.lock.release();
 			this.#restoreDraft();
-			const request = new AbortController();
-			this.#loadCreateAccess(collection.slug, request.signal);
-			return () => request.abort();
+			this.#load(collection.slug, undefined, false, prepared);
+			return;
 		}
-		const request = new AbortController();
-		this.#load(collection.slug, documentID, request.signal);
-		return () => request.abort();
+		this.#load(collection.slug, documentID, false, prepared);
 	}
 
 	#applySchemaUpdate() {
@@ -958,17 +897,32 @@ export class DocumentController {
 				? this.options.runtime.manifest?.globals
 				: this.options.runtime.manifest?.collections
 		)?.find((item) => item.id === previous.id);
+		this.#cancelLoad();
+		this.#routeGeneration += 1;
+		this.#cancelRouteRequests();
+		this.#saveRequest?.abort();
+		this.publicationOperation = false;
+		this.duplicateOperation = false;
+		this.lock.pause();
+		const result = this.form.reconcile(
+			previous.fields,
+			next?.fields ?? previous.fields,
+			this.creating
+		);
 		if (next === undefined) {
+			this.lock.release();
 			this.collectionAvailable = false;
+			this.form.writeBlocked = true;
+			this.form.setAccess(undefined, this.creating ? "create" : "update");
 			this.options.notifications.error({
 				title: this.options.runtime.i18n.t("documents:collectionRemoved"),
 			});
 			return;
 		}
 
-		const result = this.form.reconcile(previous.fields, next.fields, this.creating);
 		this.collection = next;
 		this.collectionAvailable = true;
+		if (!next.capabilities.locking || previous.slug !== next.slug) this.lock.release();
 		if (result.detached.length > 0) {
 			this.options.notifications.warning({
 				title: this.options.runtime.i18n.t("documents:schemaUpdatedWithDraft"),
@@ -978,6 +932,15 @@ export class DocumentController {
 			});
 		}
 		if (previous.slug !== next.slug) {
+			// The resulting URL is the same editor under its renamed resource, so its
+			// next route synchronization must not reload and replace the retained draft.
+			const documentID = this.globalResource ? next.slug : this.documentID;
+			this.#activeRouteKey = `${this.globalResource ? "global" : "collection"}:${next.slug}:${documentID ?? "new"}:${this.contentLocale ?? "default"}:${this.options.editable ? "edit" : "read"}`;
+			this.form.setResource({
+				collection: next.slug,
+				id: documentID,
+				global: this.globalResource,
+			});
 			this.options.navigate(
 				withContentLocale(
 					this.globalResource
@@ -990,13 +953,21 @@ export class DocumentController {
 				{ replace: true }
 			);
 		}
+		// Field access is keyed by path, so the old envelope is invalid after reconciliation.
+		this.form.setAccess(undefined, this.creating ? "create" : "update");
+		this.form.writeBlocked = true;
+		this.#load(
+			next.slug,
+			this.globalResource ? next.slug : this.documentID,
+			this.currentDocument !== undefined
+		);
 	}
 
 	#restoreDraft() {
 		const collection = this.collection;
-		if (collection === undefined) return;
+		if (collection === undefined) return false;
 		const checkpoint = takeFormDraft(collection.id, this.documentID);
-		if (checkpoint === undefined) return;
+		if (checkpoint === undefined) return false;
 		const result = this.form.recover(
 			{ values: checkpoint.values, original: checkpoint.original },
 			checkpoint.collection.fields,
@@ -1017,53 +988,81 @@ export class DocumentController {
 		if (result.restoredFields === 0 || result.detached.length > 0)
 			this.options.notifications.warning({ title, message });
 		else this.options.notifications.success({ title });
+		return result.restoredFields > 0;
 	}
 
-	async #load(slug: string, documentID: string, signal: AbortSignal) {
+	#cancelLoad() {
+		this.#loadRequest?.abort();
+		this.#loadRequest = undefined;
+		this.loading = false;
+	}
+
+	async #load(
+		slug: string,
+		documentID?: string,
+		preserveDocument = false,
+		prepared?: AdminDocumentDataV1 | AdminCreateDataV1
+	) {
+		this.#loadRequest?.abort();
+		this.#loadRequest = undefined;
+		if (prepared !== undefined && this.#adoptPreparedLoad(prepared, slug, documentID)) return;
+		const request = new AbortController();
+		this.#loadRequest = request;
+		const { signal } = request;
+		const global = this.globalResource;
+		const locale = this.contentLocale;
+		// A refresh may replace the draft it started with, never edits made while it was pending.
+		const revision = this.form.revision;
+		const uploadRevision = this.upload.revision;
+		const changeGeneration = this.#formChangeGeneration;
 		this.loading = true;
 		this.error = undefined;
 		try {
 			const [document, access] = await Promise.all([
-				this.globalResource
-					? this.options.runtime.client.global(slug, {
-							signal,
-							locale: this.contentLocale,
-						})
-					: this.options.runtime.client.find(slug, documentID, {
-							signal,
-							locale: this.contentLocale,
-						}),
-				this.globalResource
-					? this.options.runtime.client.globalAccess(slug, {
-							signal,
-							locale: this.contentLocale,
-						})
+				documentID === undefined || preserveDocument
+					? undefined
+					: global
+						? this.options.runtime.client.global(slug, { signal, locale })
+						: this.options.runtime.client.find(slug, documentID, { signal, locale }),
+				global
+					? this.options.runtime.client.globalAccess(slug, { signal, locale })
 					: this.options.runtime.client.collectionAccess(slug, {
 							id: documentID,
+							...(documentID === undefined ? { data: $state.snapshot(this.form.values) } : {}),
 							signal,
-							locale: this.contentLocale,
+							locale,
 						}),
 			]);
-			this.form.setAccess(access, "update");
-			this.#applyDocument(document, true);
-			if (this.versionedCollection && access.operations.readVersions) {
-				this.versions = this.globalResource
-					? await this.options.runtime.client.globalVersions(slug, {
-							signal,
-							locale: this.contentLocale,
-						})
-					: await this.options.runtime.client.versions(slug, documentID, {
-							signal,
-							locale: this.contentLocale,
-						});
-			} else {
-				this.versions = [];
+			if (signal.aborted) return;
+			const formUnchanged =
+				this.form.revision === revision &&
+				this.upload.revision === uploadRevision &&
+				this.#formChangeGeneration === changeGeneration;
+			this.form.setAccess(access, documentID === undefined ? "create" : "update");
+			if (document !== undefined && formUnchanged) {
+				const uncertain = this.saveOutcomeUncertain;
+				if (uncertain) clearFormDraft(this.collection?.id ?? slug, documentID);
+				this.#applyDocument(document, !uncertain);
 			}
-			if (!this.globalResource && this.collection?.capabilities.locking === true) {
-				await this.#acquireLock(slug, documentID, signal);
+			if (
+				documentID !== undefined &&
+				!global &&
+				this.options.editable &&
+				this.collection?.capabilities.locking === true
+			) {
+				// The form is complete before the lock request starts. Writes remain
+				// disabled until the server confirms ownership.
+				this.form.writeBlocked = true;
+				this.loading = false;
+				await tick();
+				if (signal.aborted || this.#loadRequest !== request) return;
+				await this.lock.acquire(
+					slug,
+					documentID,
+					this.collection.documentLockSettings?.durationSeconds ?? 120
+				);
 			} else {
-				this.documentLock = undefined;
-				this.form.writeBlocked = false;
+				this.lock.release();
 			}
 		} catch (cause) {
 			if (signal.aborted) return;
@@ -1072,187 +1071,101 @@ export class DocumentController {
 					? cause.message
 					: this.options.runtime.i18n.t("documents:loadFailed");
 		} finally {
-			if (!signal.aborted) this.loading = false;
+			if (this.#loadRequest === request) {
+				this.#loadRequest = undefined;
+				this.loading = false;
+			}
 		}
 	}
 
-	async #acquireLock(slug: string, documentID: string, signal?: AbortSignal) {
-		const state = await this.options.runtime.client.acquireDocumentLock(slug, documentID, false, {
-			signal,
-		});
-		if (signal?.aborted) return;
-		this.#lockRoute = { collection: slug, documentID };
-		this.#applyLock(state);
-		if (state.owned) this.#startLockRefresh(slug, documentID);
-	}
-
-	#applyLock(state: DocumentLockEnvelope) {
-		this.documentLock = state;
-		this.form.writeBlocked = state.lock !== null && !state.owned;
-		if (state.owned && this.#lockRoute !== undefined) {
-			this.#startLockRefresh(this.#lockRoute.collection, this.#lockRoute.documentID);
+	#adoptPreparedLoad(
+		prepared: AdminDocumentDataV1 | AdminCreateDataV1,
+		slug: string,
+		documentID?: string
+	) {
+		if (
+			"values" in prepared &&
+			!samePreparedCreateValues(prepared.values, $state.snapshot(this.form.values))
+		)
+			return false;
+		const document = "document" in prepared ? prepared.document : undefined;
+		const access = prepared.access;
+		this.loading = false;
+		this.error = document?.error?.message ?? access.error?.message;
+		if (this.error !== undefined) {
+			this.form.setAccess(undefined, documentID === undefined ? "create" : "update");
+			return true;
 		}
+		this.form.setAccess(access.value, documentID === undefined ? "create" : "update");
+		if (document?.value !== undefined) this.#applyDocument(document.value, true);
+		if (
+			documentID !== undefined &&
+			!this.globalResource &&
+			this.options.editable &&
+			this.collection?.capabilities.locking === true
+		) {
+			this.form.writeBlocked = true;
+			this.#acquirePreparedLock(this.#routeGeneration, slug, documentID);
+		} else {
+			this.lock.release();
+		}
+		return true;
 	}
 
-	#startLockRefresh(collection: string, documentID: string) {
-		if (this.#lockRefreshTimer !== undefined) window.clearInterval(this.#lockRefreshTimer);
-		const interval = Math.max(
-			5,
-			Math.floor((this.collection?.documentLockSettings?.durationSeconds ?? 120) / 3)
+	async #acquirePreparedLock(generation: number, slug: string, documentID: string) {
+		await tick();
+		if (
+			generation !== this.#routeGeneration ||
+			this.documentID !== documentID ||
+			!this.options.editable
+		)
+			return;
+		await this.lock.acquire(
+			slug,
+			documentID,
+			this.collection?.documentLockSettings?.durationSeconds ?? 120
 		);
-		this.#lockRefreshTimer = window.setInterval(async () => {
-			try {
-				const state = await this.options.runtime.client.acquireDocumentLock(collection, documentID);
-				this.#applyLock(state);
-			} catch {
-				// A failed heartbeat is reflected by the next explicit request or save conflict.
-			}
-		}, interval * 1_000);
-	}
-
-	#releaseLock() {
-		if (this.#lockRefreshTimer !== undefined) {
-			window.clearInterval(this.#lockRefreshTimer);
-			this.#lockRefreshTimer = undefined;
-		}
-		const route = this.#lockRoute;
-		const owned = this.documentLock?.owned === true;
-		this.#lockRoute = undefined;
-		this.documentLock = undefined;
-		this.form.writeBlocked = false;
-		if (route !== undefined && owned) {
-			this.options.runtime.client
-				.releaseDocumentLock(route.collection, route.documentID, { keepalive: true })
-				.catch(() => {});
-		}
-	}
-
-	async #loadCreateAccess(slug: string, signal: AbortSignal) {
-		this.loading = true;
-		this.error = undefined;
-		try {
-			const access = await this.options.runtime.client.collectionAccess(slug, {
-				data: $state.snapshot(this.form.values),
-				signal,
-				locale: this.contentLocale,
-			});
-			if (!signal.aborted) this.form.setAccess(access, "create");
-		} catch (cause) {
-			if (!signal.aborted) {
-				this.error =
-					cause instanceof Error
-						? cause.message
-						: this.options.runtime.i18n.t("documents:accessEvaluationFailed");
-			}
-		} finally {
-			if (!signal.aborted) this.loading = false;
-		}
 	}
 
 	async #refreshAccess(documentID: string) {
-		const routeKey = this.#activeRouteKey;
+		const generation = this.#routeGeneration;
 		const collectionSlug = this.collectionSlug;
-		const access = this.globalResource
-			? await this.options.runtime.client.globalAccess(collectionSlug, {
-					locale: this.contentLocale,
-				})
-			: await this.options.runtime.client.collectionAccess(collectionSlug, {
-					id: documentID,
-					locale: this.contentLocale,
-				});
-		if (this.#activeRouteKey === routeKey) this.form.setAccess(access, "update");
-	}
-
-	async #refreshVersions(documentID: string) {
-		const routeKey = this.#activeRouteKey;
-		const collectionSlug = this.collectionSlug;
-		if (this.versionedCollection && this.canReadVersions) {
-			const versions = this.globalResource
-				? await this.options.runtime.client.globalVersions(collectionSlug, {
-						locale: this.contentLocale,
-					})
-				: await this.options.runtime.client.versions(collectionSlug, documentID, {
-						locale: this.contentLocale,
+		const global = this.globalResource;
+		const locale = this.contentLocale;
+		try {
+			const access = global
+				? await this.options.runtime.client.globalAccess(collectionSlug, { locale })
+				: await this.options.runtime.client.collectionAccess(collectionSlug, {
+						id: documentID,
+						locale,
 					});
-			if (this.#activeRouteKey === routeKey) this.versions = versions;
-		} else {
-			if (this.#activeRouteKey === routeKey) this.versions = [];
+			if (generation !== this.#routeGeneration) return;
+			this.form.setAccess(access, "update");
+			this.error = undefined;
+		} catch (cause) {
+			if (generation !== this.#routeGeneration) return;
+			this.form.setAccess(undefined, "update");
+			this.error =
+				cause instanceof Error
+					? cause.message
+					: this.options.runtime.i18n.t("documents:accessEvaluationFailed");
 		}
 	}
 
 	#applyDocument(document: AdminDocument, recoverDraft = false) {
+		this.saveOutcomeUncertain = false;
 		this.currentDocument = document;
+		this.upload.reset(document);
 		this.form.reset(
 			documentFormValues(this.collection?.fields ?? [], document),
 			this.collection?.fields ?? []
 		);
 		this.form.setLocalization(this.contentLocale, document._localization?.sources);
-		this.currentRevision = typeof document._revision === "number" ? document._revision : 0;
-		this.currentStatus = document._status === "draft" ? "draft" : "published";
 		if (recoverDraft) this.#restoreDraft();
-	}
-
-	#applyImageDocument(document: AdminDocument) {
-		this.currentDocument = document;
-		this.form.setLocalization(this.contentLocale, document._localization?.sources);
-		for (const name of uploadMetadataFields) {
-			this.form.values[name] = document[name];
-			this.form.original[name] = document[name];
-		}
-		this.currentRevision = typeof document._revision === "number" ? document._revision : 0;
-		this.currentStatus = document._status === "draft" ? "draft" : "published";
 	}
 
 	#documentString(name: string) {
 		const value = this.currentDocument?.[name];
 		return typeof value === "string" && value.length > 0 ? value : undefined;
 	}
-
-	#documentNumber(name: string) {
-		const value = this.currentDocument?.[name];
-		return typeof value === "number" && Number.isFinite(value) ? value : undefined;
-	}
-
-	#formatDate(value: string) {
-		const date = new Date(value);
-		if (Number.isNaN(date.valueOf())) return value;
-		return this.options.runtime.i18n.formatDate(date, {
-			day: "2-digit",
-			month: "short",
-			year: "numeric",
-		});
-	}
-
-	#fieldForIssue(path: string) {
-		return this.documentFields.find(
-			(field) => path === field.path || path.startsWith(`${field.name}.`)
-		);
-	}
-}
-
-function imageEditMatches(
-	document: AdminDocument,
-	input: {
-		focalX: number;
-		focalY: number;
-		cropX: number;
-		cropY: number;
-		cropWidth: number;
-		cropHeight: number;
-	}
-) {
-	return (
-		document.focalX === input.focalX &&
-		document.focalY === input.focalY &&
-		document.cropX === input.cropX &&
-		document.cropY === input.cropY &&
-		document.cropWidth === input.cropWidth &&
-		document.cropHeight === input.cropHeight
-	);
-}
-
-function withContentLocale(path: string, locale: string | undefined) {
-	if (locale === undefined) return path;
-	const search = new URLSearchParams({ locale });
-	return `${path}?${search.toString()}`;
 }

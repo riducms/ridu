@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Popover as PopoverPrimitive } from "bits-ui";
-	import { cn, type WithoutChildrenOrChild } from "@riducms/ui";
+	import "@admin/components/ui/popover/popover.scss";
+	import { type WithoutChildrenOrChild } from "@riducms/ui";
 
 	let {
 		ref = $bindable(null),
@@ -20,10 +21,7 @@
 		data-slot="popover-content"
 		{sideOffset}
 		{align}
-		class={cn(
-			"ridu-popover-enter flex flex-col gap-4 rounded-[4px] border border-control-border bg-popover p-2 text-sm text-popover-foreground shadow-[var(--shadow-popover)] z-50 w-72 origin-(--bits-popover-content-transform-origin) outline-none",
-			className
-		)}
+		class={["ridu-popover ridu-popover-enter", className]}
 		{...restProps}
 	/>
 </PopoverPrimitive.Portal>

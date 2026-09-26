@@ -189,22 +189,27 @@ and treats a nil actor as anonymous. Carry the user into local calls when moving
 
 ## Find the matching Ridu feature {#feature-map}
 
-| Payload feature                           | Start here in Ridu                                                                      |
-| ----------------------------------------- | --------------------------------------------------------------------------------------- |
-| `buildConfig`, collections, and globals   | [Configuration](../../ridu-project/reference/configuration.md) and [Collections and globals](../../ridu-project/reference/collections.md) |
-| Field objects and reusable field helpers  | [Fields](../../ridu-project/reference/fields.md)                                                                 |
-| Custom field validation                   | [Custom validation](../../ridu-project/reference/fields/validation.md)                                           |
-| Collection, global, and field hooks       | [Hooks](../../ridu-project/reference/hooks.md)                                                                   |
-| Custom React inputs, views, and providers | [Custom components](../../ridu-project/reference/custom-components.md): write and register Svelte components     |
-| `versions` and `drafts`                   | [Drafts and versions](../../ridu-project/reference/drafts-and-versions.md)                                       |
-| `@payloadcms/plugin-seo`                  | [SEO plugin](../../ridu-project/reference/seo.md)                                                                |
-| `@payloadcms/plugin-form-builder`         | [Form Builder](../../ridu-project/reference/form-builder.md)                                                     |
-| `payload.find(...)`                       | [Local Go API](../../ridu-project/reference/local-api.md) or [TypeScript SDK](../../ridu-project/reference/typescript-sdk.md)             |
+| Payload feature                              | Start here in Ridu                                                                      |
+| -------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `buildConfig`, collections, and globals      | [Configuration](../../ridu-project/reference/configuration.md) and [Collections and globals](../../ridu-project/reference/collections.md) |
+| Field objects and reusable field helpers     | [Fields](../../ridu-project/reference/fields.md)                                                                 |
+| Custom field validation                      | [Custom validation](../../ridu-project/reference/fields/validation.md)                                           |
+| Collection, global, and field hooks          | [Hooks](../../ridu-project/reference/hooks.md)                                                                   |
+| Custom React inputs, views, and providers    | [Custom components](../../ridu-project/reference/custom-components.md): write and register Svelte components     |
+| Custom CSS, theme colors, and Sass utilities | [Customizing CSS](../../ridu-project/reference/admin/customizing-css.md)                                         |
+| `versions` and `drafts`                      | [Drafts and versions](../../ridu-project/reference/drafts-and-versions.md)                                       |
+| `@payloadcms/plugin-seo`                     | [SEO plugin](../../ridu-project/reference/seo.md)                                                                |
+| `@payloadcms/plugin-form-builder`            | [Form Builder](../../ridu-project/reference/form-builder.md)                                                     |
+| `payload.find(...)`                          | [Local Go API](../../ridu-project/reference/local-api.md) or [TypeScript SDK](../../ridu-project/reference/typescript-sdk.md)             |
 
 You do not need a Go plugin just to customize the admin. Register your Svelte components in
 `admin/src/admin.config.ts`. Build a [plugin](../../ridu-project/reference/plugins.md) when you need a new field type or a
 reusable server extension. React components need to be rewritten in Svelte; they cannot be
 imported directly into the Ridu admin.
+
+For visual changes, import your stylesheet from `admin/src/main.ts`. Ridu provides CSS variables,
+named component classes, and optional Sass mixins. Payload selectors and theme variables need to
+be replaced with their Ridu equivalents; start with [Customizing CSS](../../ridu-project/reference/admin/customizing-css.md).
 
 Payload `endpoints` become Go `ridu.Endpoint` handlers on the app, a collection, or a global.
 Collection URLs change from `/api/<collection-slug>/…` to

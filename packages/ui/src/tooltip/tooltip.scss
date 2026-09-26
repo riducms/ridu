@@ -1,0 +1,77 @@
+@use "../layers.css";
+
+@layer ridu.components {
+	.ridu-tooltip {
+		box-sizing: border-box;
+		z-index: 100;
+		inline-size: fit-content;
+		max-inline-size: min(20rem, calc(100vw - 16px));
+		padding: 4px 8px;
+		border-radius: 2px;
+		background: var(--foreground);
+		color: var(--background);
+		font-family: var(--font-sans);
+		font-size: 11px;
+		font-weight: 400;
+		line-height: 16px;
+		white-space: nowrap;
+		box-shadow: var(--shadow-popover);
+		transform-origin: var(--bits-tooltip-content-transform-origin);
+
+		&[data-state="delayed-open"],
+		&[data-state="instant-open"] {
+			animation: ridu-tooltip-in 150ms ease both;
+		}
+
+		&[data-state="closed"] {
+			animation: ridu-tooltip-out 150ms ease both;
+		}
+	}
+
+	.ridu-tooltip__arrow {
+		z-index: 50;
+		inline-size: 10px;
+		block-size: 10px;
+		background: var(--foreground);
+		translate: 0 calc(-50% - 2px);
+		rotate: 45deg;
+		border-radius: 2px;
+		pointer-events: none;
+
+		&[data-side="top"] {
+			translate: 50% calc(-50% + 2px);
+		}
+
+		&[data-side="bottom"] {
+			translate: -50% calc(50% - 1px);
+		}
+
+		&[data-side="right"] {
+			translate: calc(50% + 2px) 50%;
+		}
+
+		&[data-side="left"] {
+			translate: 0 calc(-50% + 3px);
+		}
+	}
+
+	@keyframes ridu-tooltip-in {
+		from {
+			opacity: 0;
+			transform: scale(0.95);
+		}
+	}
+
+	@keyframes ridu-tooltip-out {
+		to {
+			opacity: 0;
+			transform: scale(0.95);
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.ridu-tooltip[data-state] {
+			animation: none;
+		}
+	}
+}

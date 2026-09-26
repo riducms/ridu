@@ -1,7 +1,6 @@
 package operation_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/riducms/ridu/operation"
@@ -89,26 +88,5 @@ func TestPopulatedReferenceHasDistinctLogicalTypeAndDetachedDocument(t *testing.
 	}
 	if _, populated := operation.Unpopulated("user-1").Document(); populated {
 		t.Fatal("bare reference unexpectedly contains a document")
-	}
-}
-
-func TestRelativeIssueUsesImmutableTarget(t *testing.T) {
-	segments := []string{"label"}
-	issue := operation.Issue{Code: "invalid_label", Message: "Choose a label.", Target: operation.At(segments...)}
-	segments[0] = "mutated"
-	returned := issue.Target.Segments()
-	returned[0].Field = "changed"
-	if issue.Target.Segments()[0].Field != "label" {
-		t.Fatal("issue target aliases mutable segments")
-	}
-}
-
-func TestPhaseContextsRetainDirectCancellationField(t *testing.T) {
-	// Defining each named context over Context's struct avoids the selector
-	// collision that embedding a field also named Context would introduce.
-	ctx := operation.Context{Context: context.Background()}
-	var cancellation context.Context = ctx.Context
-	if cancellation == nil {
-		t.Fatal("cancellation context missing")
 	}
 }

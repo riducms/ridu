@@ -21,7 +21,10 @@ async function rowAction(page: Page, path: string, index: number, action: string
 	await page
 		.locator(`[data-field-path="${path}"]`)
 		.first()
-		.getByRole("button", { name: `Open Row ${index + 1} actions`, exact: true })
+		.getByRole("button", {
+			name: `Open Row ${String(index + 1).padStart(2, "0")} actions`,
+			exact: true,
+		})
 		.first()
 		.click();
 	await page.getByRole("menuitem", { name: action, exact: true }).click();
@@ -184,7 +187,7 @@ for (const field of ["body", "localizedBody"] as const)
 			"aria-invalid",
 			"true"
 		);
-		await drawer.getByRole("button", { name: "Open Row 1 actions", exact: true }).click();
+		await drawer.getByRole("button", { name: "Open Row 01 actions", exact: true }).click();
 		await page.getByRole("menuitem", { name: "Move down", exact: true }).click();
 		await expect(drawer.locator('input[name$=".links.1.url"]')).toHaveAttribute(
 			"aria-invalid",

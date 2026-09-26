@@ -59,10 +59,12 @@ test("a generated MongoDB starter survives ordinary authoring and safe schema re
 			new URL(response.url()).pathname === "/api/collections/posts"
 	);
 	await documentSaveButton(page).click();
-	expect((await createResponse).ok()).toBe(true);
-	await expect(page).toHaveURL(/\/admin\/collections\/posts\/[^/]+$/);
-	const postID = new URL(page.url()).pathname.split("/").at(-1);
+	const created = await createResponse;
+	expect(created.ok()).toBe(true);
+	const postID = (await created.json()).doc.id;
 	expect(postID).toBeTruthy();
+	await expect(page).toHaveURL((url) => url.pathname === `/admin/collections/posts/${postID}`);
+	await expect(page.locator("main")).not.toHaveAttribute("inert", "");
 
 	await page.getByLabel("Title", { exact: true }).fill("Generated MongoDB authoring edited");
 	await content.fill("Rich text was edited through the generated MongoDB admin.");

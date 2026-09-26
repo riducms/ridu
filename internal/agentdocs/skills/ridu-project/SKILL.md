@@ -64,6 +64,8 @@ the reference needed for the change:
   [reference/graphql.md](reference/graphql.md), and [reference/mcp.md](reference/mcp.md)
 - Custom Svelte inputs, row labels, table cells, dashboards, pages, document screens, and branding:
   [reference/custom-components.md](reference/custom-components.md)
+- Admin colors, typography, component classes, and Sass utilities:
+  [reference/admin/customizing-css.md](reference/admin/customizing-css.md)
 - New field types with Go validation and Svelte editors:
   [reference/custom-fields.md](reference/custom-fields.md)
 - Admin task workflows: [reference/admin.md](reference/admin.md),
@@ -119,8 +121,9 @@ SCRAM-SHA-256 authentication and CA- and hostname-verified TLS. Give the running
 a database-scoped credential. The release gate separates it from one controlled operational identity
 used for both shadow verification and backup/restore. That is release-gate evidence;
 deployments should split the operational duties into narrower credentials where practical. Never
-place operational credentials in the server environment. Local ARM runs are preflight only; the
-production support evidence comes from the GitHub Linux x86-64 release job.
+place operational credentials in the server environment. Local ARM runs are preflight only;
+production support requires the recorded Linux x86-64 qualification run before publication.
+The GitHub workflow publishes the qualified release.
 
 For every release with a new migration artifact, review that exact immutable artifact—even when a
 data-only transform leaves the manifest unchanged. If planning reports a transform or resource

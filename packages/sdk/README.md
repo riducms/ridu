@@ -21,6 +21,11 @@ const posts = await ridu.list("posts", {
 });
 ```
 
+Pass `includeAccess: true` when an authoring surface needs collection and per-document
+capabilities alongside the page. The opt-in response is a `CollectionPageEnvelope`; ordinary list
+calls retain the smaller `PageEnvelope`. Capabilities describe available controls, while the server
+still authorizes each mutation.
+
 Browser clients use the default cookie credentials. Long-running service clients should use an
 expiring API key. `RiduError` carries stable codes, HTTP status, path-aware issues, and request
 context; do not reduce failures to an untyped string.

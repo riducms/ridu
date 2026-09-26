@@ -1,0 +1,308 @@
+@use "@riducms/ui/styles.scss" as ui;
+
+@layer ridu.components {
+	.ridu-richtext-upload-card {
+		position: relative;
+		inline-size: min(100%, var(--ridu-richtext-upload-width));
+		max-inline-size: 100%;
+		margin-block: 12px;
+		overflow: hidden;
+		border: 1px solid var(--control-border);
+		border-radius: var(--control-radius);
+		background: var(--control-surface);
+		box-shadow: var(--control-shadow);
+		color: var(--foreground);
+		font-family: var(--font-sans);
+		line-height: var(--line-height-body);
+		transition:
+			border-color 100ms,
+			box-shadow 100ms;
+
+		&[data-align="center"] {
+			margin-inline: auto;
+		}
+
+		&[data-align="right"],
+		&[data-align="end"] {
+			margin-inline-start: auto;
+			margin-inline-end: 0;
+		}
+
+		&[data-align="left"],
+		&[data-align="start"] {
+			margin-inline-start: 0;
+			margin-inline-end: auto;
+		}
+
+		&:hover,
+		&:focus-within {
+			border-color: var(--control-border-hover);
+		}
+
+		&.is-selected {
+			border-color: var(--foreground-muted);
+			box-shadow:
+				var(--control-shadow),
+				0 0 0 1px var(--foreground-muted);
+		}
+	}
+
+	.ridu-richtext-upload-card__media {
+		position: relative;
+		inline-size: 100%;
+		background: var(--background);
+	}
+
+	.ridu-richtext-upload-card__preview {
+		position: relative;
+		display: grid;
+		place-items: center;
+		inline-size: 100%;
+		aspect-ratio: var(--ridu-richtext-upload-aspect);
+		max-block-size: 450px;
+		overflow: hidden;
+		background: var(--background);
+	}
+
+	.ridu-richtext-upload-card__preview.is-loading::after {
+		position: absolute;
+		inset: 0;
+		background: linear-gradient(
+			100deg,
+			transparent 25%,
+			color-mix(in srgb, var(--foreground) 6%, transparent) 50%,
+			transparent 75%
+		);
+		background-size: 200% 100%;
+		content: "";
+		animation: ridu-richtext-upload-loading 1.4s linear infinite;
+	}
+
+	.ridu-richtext-upload-card__image {
+		position: absolute;
+		inset: 0;
+		display: block;
+		inline-size: 100%;
+		block-size: 100%;
+		object-fit: contain;
+	}
+
+	.ridu-richtext-upload-card__file-preview {
+		display: grid;
+		place-items: center;
+		gap: 7px;
+		max-inline-size: 80%;
+		color: var(--foreground-muted);
+		font-family: var(--font-mono);
+		font-size: 11px;
+		line-height: 16px;
+		letter-spacing: 0.12em;
+		text-transform: uppercase;
+	}
+
+	.ridu-richtext-upload-card__extension {
+		font-size: 13px;
+		font-weight: 500;
+	}
+
+	.ridu-richtext-upload-card__preview-name {
+		max-inline-size: 100%;
+		overflow: hidden;
+		color: var(--foreground-soft);
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.ridu-richtext-upload-card__actions {
+		position: absolute;
+		inset-block-start: 10px;
+		inset-inline-end: 10px;
+		z-index: 2;
+		display: flex;
+		align-items: center;
+		gap: 3px;
+		padding: 3px;
+		border: 1px solid var(--control-border);
+		border-radius: var(--control-radius);
+		background: var(--control-surface);
+		box-shadow: var(--shadow-popover);
+		color: var(--foreground);
+		opacity: 0;
+		transform: translateY(-6px);
+		pointer-events: none;
+		transition:
+			opacity 150ms,
+			transform 150ms;
+
+		&.is-visible,
+		.ridu-richtext-upload-card:hover &,
+		.ridu-richtext-upload-card:focus-within & {
+			opacity: 1;
+			transform: translateY(0);
+			pointer-events: auto;
+		}
+	}
+
+	.ridu-richtext-upload-card__action {
+		--button-color: var(--foreground-muted);
+		--button-hover-color: var(--foreground);
+		--button-hover-background: var(--control-surface-hover);
+	}
+
+	.ridu-richtext-upload-card__metadata {
+		position: absolute;
+		inset-inline: 0;
+		inset-block-end: 0;
+		z-index: 2;
+		display: flex;
+		align-items: baseline;
+		flex-wrap: wrap;
+		gap: 10px;
+		min-width: 0;
+		padding: 10px 14px;
+		background: var(--media-overlay);
+		box-shadow: var(--shadow-popover);
+		color: var(--media-foreground);
+		opacity: 0;
+		pointer-events: none;
+		backdrop-filter: saturate(1.2) blur(8px);
+		transition: opacity 150ms;
+
+		.ridu-richtext-upload-card:hover &,
+		.ridu-richtext-upload-card:focus-within &,
+		.ridu-richtext-upload-card.is-read-only & {
+			opacity: 1;
+			pointer-events: auto;
+		}
+	}
+
+	.ridu-richtext-upload-card__filename {
+		min-width: 0;
+		flex: 1;
+		overflow: hidden;
+		border: 0;
+		padding: 0;
+		background: transparent;
+		color: var(--media-foreground);
+		font: inherit;
+		font-weight: 600;
+		line-height: 18px;
+		text-align: start;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+
+		&:is(button) {
+			text-decoration: underline;
+			text-decoration-thickness: 1px;
+			text-underline-offset: 2px;
+			cursor: pointer;
+		}
+
+		&:focus-visible {
+			@include ui.focus-outline;
+		}
+	}
+
+	.ridu-richtext-upload-card__collection {
+		flex-shrink: 0;
+		max-inline-size: 45%;
+		overflow: hidden;
+		color: color-mix(in srgb, var(--media-foreground) 70%, transparent);
+		font-size: 12px;
+		line-height: 16px;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.ridu-richtext-upload-card__caption {
+		border-block-start: 1px solid var(--control-border);
+		padding: 9px 13px;
+		background: color-mix(in srgb, var(--background) 45%, transparent);
+	}
+
+	.ridu-richtext-upload-card__caption-editor {
+		display: flex;
+		align-items: flex-start;
+		gap: 8px;
+	}
+
+	.ridu-richtext-upload-card__caption-icon {
+		inline-size: 12px;
+		block-size: 12px;
+		margin-block-start: 5px;
+		flex-shrink: 0;
+		color: var(--foreground-soft);
+	}
+
+	.ridu-richtext-upload-card__caption-input {
+		min-block-size: 20px;
+		inline-size: 100%;
+		resize: none;
+		overflow: hidden;
+		border: 0;
+		padding: 0;
+		background: transparent;
+		box-shadow: none;
+		color: var(--foreground-muted);
+		font-size: 13px;
+		line-height: 19px;
+		text-align: start;
+		field-sizing: content;
+
+		&:hover,
+		&:focus {
+			border: 0;
+			box-shadow: none;
+		}
+
+		&:focus {
+			color: var(--foreground);
+		}
+	}
+
+	.ridu-richtext-upload-card__caption-text {
+		margin: 0;
+		color: var(--foreground-muted);
+		font-size: 13px;
+		line-height: 19px;
+		text-align: start;
+	}
+
+	@keyframes ridu-richtext-upload-loading {
+		to {
+			background-position: -200% 0;
+		}
+	}
+
+	@media (max-width: 30rem) {
+		.ridu-richtext-upload-card__metadata {
+			align-items: flex-start;
+			flex-direction: column;
+			gap: 2px;
+		}
+
+		.ridu-richtext-upload-card__collection {
+			max-inline-size: 100%;
+		}
+	}
+
+	@media (hover: none) {
+		.ridu-richtext-upload-card__actions,
+		.ridu-richtext-upload-card__metadata {
+			opacity: 1;
+			transform: none;
+			pointer-events: auto;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.ridu-richtext-upload-card__actions,
+		.ridu-richtext-upload-card__metadata {
+			transition-duration: 1ms;
+		}
+
+		.ridu-richtext-upload-card__preview.is-loading::after {
+			animation: none;
+		}
+	}
+}

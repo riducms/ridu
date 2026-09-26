@@ -60,10 +60,30 @@ const structuredData = {
 ---
 
 <!doctype html>
-<html lang="en-GB">
+<html lang="en-GB" transition:animate="none">
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<!-- Keep the skip link hidden before shared styles load during navigation. -->
+		<style is:inline>
+			.skip-link {
+				position: fixed;
+				top: 0.75rem;
+				left: 0.75rem;
+				z-index: 300;
+				padding: 0.55rem 0.75rem;
+				background: var(--colors-ink, #f5f3f4);
+				color: var(--colors-canvas, #0d0a0c);
+				font-size: 0.8rem;
+				font-weight: 700;
+				text-decoration: none;
+				clip-path: inset(50%);
+			}
+
+			.skip-link:focus-visible {
+				clip-path: none;
+			}
+		</style>
 		<meta name="generator" content={Astro.generator} />
 		<title>{fullTitle}</title>
 		<meta name="description" content={description} />

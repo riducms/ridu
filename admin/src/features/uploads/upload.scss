@@ -1,0 +1,361 @@
+@use "@riducms/ui/styles.scss" as ui;
+
+@layer ridu.components {
+	.ridu-upload-description {
+		@include ui.visually-hidden;
+	}
+
+	.ridu-upload {
+		display: flex;
+		align-items: center;
+		min-height: 82px;
+		border: 1px solid var(--control-border);
+		border-radius: var(--control-radius);
+		background: var(--control-surface);
+		position: relative;
+		&--dragging {
+			border-color: var(--ring);
+			background: var(--control-surface-hover);
+		}
+	}
+	.ridu-upload-choose,
+	.ridu-upload-url {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		padding: 20px;
+		width: 100%;
+	}
+	.ridu-upload-choose {
+		flex-wrap: wrap;
+		span {
+			color: var(--ink-muted);
+		}
+	}
+	.ridu-upload-url .ridu-input {
+		flex: 1;
+	}
+	.ridu-upload-thumbnail {
+		width: 140px;
+		height: 120px;
+		flex: 0 0 140px;
+		display: grid;
+		place-items: center;
+		overflow: hidden;
+		img,
+		canvas {
+			width: 100%;
+			height: 100%;
+			object-fit: cover;
+		}
+		svg {
+			width: 36px;
+			height: 36px;
+		}
+	}
+	.ridu-upload-details {
+		padding: 16px 20px;
+		min-width: 0;
+		flex: 1;
+		p {
+			margin: 2px 0 14px;
+		}
+	}
+	.ridu-upload-name {
+		display: flex;
+		gap: 6px;
+		align-items: center;
+		a {
+			font-weight: 600;
+			overflow-wrap: anywhere;
+			text-decoration: none;
+		}
+	}
+	.ridu-upload-actions {
+		display: flex;
+		gap: 10px;
+	}
+	.ridu-upload-remove {
+		margin-inline-end: 20px;
+		flex-shrink: 0;
+	}
+	.ridu-upload-error {
+		color: var(--destructive);
+	}
+	.ridu-upload-drawer-overlay {
+		position: fixed;
+		inset: 0;
+		background: var(--media-overlay);
+		z-index: 70;
+	}
+	.ridu-upload-drawer {
+		position: fixed;
+		inset: 0 0 0 60px;
+		z-index: 71;
+		background: var(--background);
+		color: var(--ink-strong);
+		overflow-y: auto;
+		outline: none;
+		box-shadow: var(--shadow-dialog);
+		padding: 0;
+		animation: ridu-upload-drawer-in 200ms ease;
+		&[data-state="closed"] {
+			animation: ridu-upload-drawer-out 160ms ease;
+		}
+	}
+	.ridu-upload-drawer-header {
+		height: 100px;
+		padding: 30px 60px;
+		border-bottom: 1px solid var(--control-border);
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 20px;
+		.ridu-upload-drawer-title {
+			font-size: 25px;
+			font-weight: 500;
+			line-height: 1.2;
+			margin: 0;
+			overflow-wrap: anywhere;
+		}
+	}
+	.ridu-image-editor-actions {
+		position: absolute;
+		top: 34px;
+		right: 60px;
+		display: flex;
+		gap: 20px;
+	}
+	.ridu-upload-drawer:has(.ridu-image-editor-actions) .ridu-upload-drawer-header {
+		padding-inline-end: 300px;
+	}
+	.ridu-image-editor {
+		display: grid;
+		grid-template-columns: minmax(0, 7fr) minmax(300px, 3fr);
+		min-height: calc(100% - 100px);
+	}
+	.ridu-image-editor-preview {
+		padding: 30px 30px 60px 60px;
+		min-width: 0;
+	}
+	.ridu-crop-surface {
+		position: relative;
+		width: 100%;
+	}
+	.ridu-crop-canvas {
+		display: block;
+		width: 100%;
+		img {
+			display: block;
+			width: 100%;
+			user-select: none;
+		}
+	}
+	.ridu-crop-selection {
+		position: absolute;
+		top: 0;
+		outline: 1px dashed var(--ink-strong);
+		box-shadow: 0 0 0 2000px var(--media-overlay);
+	}
+	.ridu-crop-selection cropper-handle:focus-visible {
+		outline: 2px solid var(--ring);
+		outline-offset: 2px;
+	}
+	.ridu-focal-point {
+		position: absolute;
+		transform: translate(-50%, -50%);
+		border: 1px solid var(--ink-muted);
+		border-radius: 50%;
+		width: 36px;
+		height: 36px;
+		background: var(--media-overlay);
+		color: var(--ink-strong);
+		font-size: 30px;
+		line-height: 1;
+		font-weight: 300;
+		cursor: move;
+		touch-action: none;
+	}
+	.ridu-image-editor-controls {
+		border-inline-start: 1px solid var(--control-border);
+		section {
+			padding: 44px 30px 30px;
+			border-bottom: 1px solid var(--control-border);
+		}
+		header {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 16px;
+			margin-bottom: 32px;
+		}
+		h3 {
+			font-size: 20px;
+			margin: 0;
+			font-weight: 500;
+		}
+		p {
+			margin: 0 0 12px;
+			line-height: 1.6;
+		}
+	}
+	.ridu-image-editor-pair {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 20px;
+		label {
+			display: grid;
+			gap: 3px;
+		}
+	}
+	.ridu-upload-drawer-message {
+		padding: 30px 60px;
+	}
+	.ridu-upload-renditions {
+		display: grid;
+		grid-template-columns: minmax(0, 3fr) minmax(320px, 2fr);
+		min-height: calc(100% - 100px);
+	}
+	.ridu-rendition-preview {
+		min-width: 0;
+		header {
+			padding: 20px 60px;
+			border-bottom: 1px solid var(--control-border);
+		}
+		p {
+			margin: 0;
+			color: var(--ink-muted);
+		}
+		a {
+			font-weight: 600;
+			text-decoration: none;
+			overflow-wrap: anywhere;
+		}
+	}
+	.ridu-rendition-image {
+		padding: 30px 30px 60px 60px;
+		img {
+			display: block;
+			max-width: 100%;
+			height: auto;
+		}
+	}
+	.ridu-rendition-list {
+		border-inline-start: 1px solid var(--control-border);
+		padding: 30px;
+		display: flex;
+		flex-direction: column;
+		gap: 14px;
+	}
+	.ridu-rendition-option {
+		display: flex;
+		align-items: center;
+		gap: 20px;
+		text-align: start;
+		background: transparent;
+		padding: 10px;
+		border: 0;
+		color: inherit;
+		font: inherit;
+		cursor: pointer;
+		&[aria-pressed="true"],
+		&:hover {
+			background: var(--background-layer);
+		}
+		img {
+			width: 130px;
+			max-height: 130px;
+			object-fit: contain;
+		}
+		strong {
+			display: block;
+			overflow-wrap: anywhere;
+		}
+	}
+	.ridu-rendition-label {
+		display: block;
+		color: var(--ink-muted);
+	}
+	@keyframes ridu-upload-drawer-in {
+		from {
+			transform: translateX(100%);
+		}
+		to {
+			transform: translateX(0);
+		}
+	}
+	@keyframes ridu-upload-drawer-out {
+		to {
+			transform: translateX(100%);
+		}
+	}
+	@media (max-width: 900px) {
+		.ridu-upload-drawer {
+			inset-inline-start: 20px;
+		}
+		.ridu-upload-drawer-header {
+			height: auto;
+			min-height: 90px;
+			padding: 24px;
+			h2 {
+				font-size: 20px;
+			}
+		}
+		.ridu-upload-drawer:has(.ridu-image-editor-actions) .ridu-upload-drawer-header {
+			padding-inline-end: 24px;
+		}
+		.ridu-image-editor-actions {
+			position: static;
+			padding: 16px 24px;
+			justify-content: flex-end;
+		}
+		.ridu-image-editor {
+			display: block;
+		}
+		.ridu-image-editor-preview {
+			padding: 24px;
+		}
+		.ridu-image-editor-controls {
+			border: 0;
+			display: grid;
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			section {
+				padding: 24px;
+				border-top: 1px solid var(--control-border);
+			}
+		}
+		.ridu-upload-renditions {
+			display: block;
+		}
+		.ridu-rendition-preview header,
+		.ridu-rendition-image,
+		.ridu-rendition-list {
+			padding: 24px;
+		}
+	}
+	@media (max-width: 550px) {
+		.ridu-image-editor-controls {
+			display: block;
+		}
+		.ridu-upload-thumbnail {
+			width: 90px;
+			flex-basis: 90px;
+			height: 120px;
+		}
+		.ridu-upload-details {
+			padding: 12px;
+		}
+		.ridu-upload-actions {
+			flex-wrap: wrap;
+			gap: 6px;
+		}
+		.ridu-upload-remove {
+			margin-inline-end: 8px;
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.ridu-upload-drawer {
+			animation: none;
+		}
+	}
+}

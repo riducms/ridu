@@ -1,3 +1,4 @@
+import { isRecord } from "@riducms/protocol";
 import { documentRecoveryIssue } from "@plugin-richtext/document-validation";
 import type { RichTextConfig } from "@plugin-richtext/field/rich-text-config";
 
@@ -37,8 +38,4 @@ function withElementDefaults(node: Record<string, unknown>): Record<string, unkn
 		format: node.format ?? "",
 		indent: node.indent ?? 0,
 	};
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
 }

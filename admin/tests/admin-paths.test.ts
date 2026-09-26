@@ -2,10 +2,14 @@ import { describe, expect, test } from "bun:test";
 
 import {
 	adminLoginPath,
+	adminLayoutRouteBehavior,
+	adminPathSegments,
 	adminRedirectFromSearch,
 	adminRoutePatterns,
 	documentIDFromAdminPath,
 	documentPath,
+	humanizeAdminPathSegment,
+	parseAdminVersionRevision,
 } from "@admin/core/routing/admin-paths";
 
 describe("admin authentication redirects", () => {
@@ -33,6 +37,8 @@ describe("admin document paths", () => {
 		for (const id of ["folder/item", "%2F", "x%2Fy", "spaces and £"]) {
 			const pathname = documentPath("posts", id);
 			expect(documentIDFromAdminPath(pathname)).toBe(id);
+			expect(documentIDFromAdminPath(pathname.replace("collections", "COLLECTIONS"))).toBe(id);
+			expect(documentIDFromAdminPath(pathname.replace("collections", "%63ollections"))).toBe(id);
 		}
 	});
 
@@ -41,4 +47,43 @@ describe("admin document paths", () => {
 		expect(documentIDFromAdminPath("/globals/site-settings")).toBeUndefined();
 		expect(documentIDFromAdminPath("/collections/posts/%zz")).toBeUndefined();
 	});
+});
+
+describe("admin path labels", () => {
+	test("decodes valid segments and preserves malformed escape sequences", () => {
+		expect(adminPathSegments("/reports/sales%20report")).toEqual(["reports", "sales report"]);
+		expect(adminPathSegments("/reports/%E0%A4%A")).toEqual(["reports", "%E0%A4%A"]);
+	});
+
+	test("humanizes hyphens and underscores consistently", () => {
+		expect(humanizeAdminPathSegment("sales_report-history", "en")).toBe("Sales report history");
+	});
+
+	test("accepts only positive safe integer version revisions", () => {
+		expect(parseAdminVersionRevision("12")).toBe(12);
+		for (const value of [undefined, "", "0", "-1", "1.5", "nope", String(2 ** 53)]) {
+			expect(parseAdminVersionRevision(value)).toBeUndefined();
+		}
+	});
+});
+
+describe("admin layout route behavior", () => {
+	for (const [pathname, expected] of [
+		["/", { ownsViewport: false, waitsForPage: false }],
+		["/collections/posts", { ownsViewport: false, waitsForPage: true }],
+		["/collections/posts/trash", { ownsViewport: false, waitsForPage: true }],
+		["/collections/posts/upload", { ownsViewport: false, waitsForPage: false }],
+		["/collections/posts/create", { ownsViewport: true, waitsForPage: true }],
+		["/collections/posts/post-1", { ownsViewport: true, waitsForPage: true }],
+		["/collections/posts/post-1/api", { ownsViewport: true, waitsForPage: true }],
+		["/collections/posts/post-1/versions", { ownsViewport: false, waitsForPage: false }],
+		["/globals/site-settings", { ownsViewport: true, waitsForPage: true }],
+		["/globals/site-settings/api", { ownsViewport: true, waitsForPage: true }],
+		["/globals/site-settings/versions", { ownsViewport: false, waitsForPage: false }],
+		["/plugin/reports", { ownsViewport: false, waitsForPage: false }],
+	] as const) {
+		test(pathname, () => {
+			expect(adminLayoutRouteBehavior(pathname)).toEqual(expected);
+		});
+	}
 });

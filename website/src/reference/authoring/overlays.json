@@ -1,6 +1,392 @@
 {
 	"schemaVersion": 1,
 	"overlays": {
+		"go:github.com/riducms/ridu#AdminLoadContext": {
+			"summary": "Read content for the signed-in user while a Go admin loader runs.",
+			"group": "Types",
+			"parametersLabel": "Context values",
+			"parameters": [
+				{
+					"name": "Context",
+					"type": "context.Context",
+					"description": "Request cancellation context. Pass it to external services or other cancellable reads."
+				},
+				{
+					"name": "Pathname",
+					"type": "string",
+					"description": "Current page path without the admin base path, such as /collections/posts/123."
+				},
+				{
+					"name": "RouteParams",
+					"type": "map[string]string",
+					"description": "Collection, document, or global identifiers for a built-in route. A literal custom route has no route parameters."
+				}
+			],
+			"details": [
+				"Use List, Find, and Global for content reads; they bind the current actor and request locale with the application's configured fallback chain. Actor, ActorCollection, Locale, FallbackLocales, DisableFallback, and AllLocales options cannot override this policy.",
+				"Use Actor and ActorCollection when your external service needs application-specific access checks. URL parameters identify requested data; they are not permission grants."
+			],
+			"example": "post, err := ctx.Find(\n\tctx.RouteParams[\"collection\"],\n\tctx.RouteParams[\"document\"],\n\tridu.FindOptions{},\n)\nif err != nil {\n\treturn SummaryData{}, err\n}\ntitle, _ := post.Values[\"title\"].StringValue()",
+			"keywords": [],
+			"relatedDocs": ["/docs/custom-components/loading-data/"],
+			"relatedSymbols": [],
+			"typeLinkIDs": {}
+		},
+		"go:github.com/riducms/ridu/core#AdminLoaderDefinition": {
+			"summary": "A Go admin loader ready to register in your application's Admin.Loaders.",
+			"group": "Types",
+			"parametersLabel": "Members",
+			"parameters": [],
+			"details": [
+				"This value has no public fields. Create it with NewAdminLoader, then add it to Config.Admin.Loaders; do not construct an empty definition.",
+				"Registration describes the loader's Go input and output for generation. Ridu runs the handler only when a selected page requests it."
+			],
+			"example": "summary := ridu.NewAdminLoader(\"post-summary\", loadPostSummary)\nadmin := ridu.AdminConfig{\n\tUser: \"users\",\n\tLoaders: []ridu.AdminLoaderDefinition{summary},\n}",
+			"keywords": [],
+			"relatedDocs": ["/docs/custom-components/loading-data/"],
+			"relatedSymbols": [
+				"go:github.com/riducms/ridu/core#NewAdminLoader",
+				"go:github.com/riducms/ridu/core#AdminConfig"
+			],
+			"typeLinkIDs": {}
+		},
+		"go:github.com/riducms/ridu#AdminLoaderDefinition": {
+			"summary": "A Go admin loader ready to register in your application's Admin.Loaders.",
+			"group": "Types",
+			"parametersLabel": "Members",
+			"parameters": [],
+			"details": [
+				"This value has no public fields. Create it with NewAdminLoader, then add it to Config.Admin.Loaders; do not construct an empty definition.",
+				"Registration describes the loader's Go input and output for generation. Ridu runs the handler only when a selected page requests it."
+			],
+			"example": "summary := ridu.NewAdminLoader(\"post-summary\", loadPostSummary)\nadmin := ridu.AdminConfig{\n\tUser: \"users\",\n\tLoaders: []ridu.AdminLoaderDefinition{summary},\n}",
+			"keywords": [],
+			"relatedDocs": ["/docs/custom-components/loading-data/"],
+			"relatedSymbols": [
+				"go:github.com/riducms/ridu/core#NewAdminLoader",
+				"go:github.com/riducms/ridu/core#AdminConfig"
+			],
+			"typeLinkIDs": {}
+		},
+		"go:github.com/riducms/ridu#NewAdminLoader": {
+			"summary": "Define a Go read function whose result is supplied to an admin component.",
+			"group": "Functions",
+			"parametersLabel": "Arguments",
+			"parameters": [
+				{
+					"name": "key",
+					"type": "string",
+					"description": "Application-wide unique key, at most 80 characters. Start with a lowercase letter; use lowercase letters, digits, and single hyphens between words, such as editorial-post-summary. Use the same key from generated adminLoaders."
+				},
+				{
+					"name": "handler",
+					"type": "func(AdminLoadContext, Input) (Output, error)",
+					"description": "Read function receiving the current request context and URL query inputs. Return browser-safe data or an error."
+				}
+			],
+			"details": [
+				"Register the result in Config.Admin.Loaders, then run ridu generate. Generation derives the input and output TypeScript types from your Go structs.",
+				"Use explicit json tags. Query inputs are scalar fields; missing values retain Go zero values. Return structs, scalar values, arrays, slices, pointers, or time.Time; maps, recursive types, and custom JSON codecs are not supported.",
+				"The function can run on page entry, URL changes, or refresh. Keep it read-only. ctx.List, ctx.Find, and ctx.Global enforce Ridu permissions and the current locale; external services need your own access checks."
+			],
+			"example": "type CountInput struct{}\ntype CountData struct {\n\tTotal int `json:\"total\"`\n}\n\nvar PostCount = ridu.NewAdminLoader(\"post-count\",\n\tfunc(ctx ridu.AdminLoadContext, _ CountInput) (CountData, error) {\n\t\tposts, err := ctx.List(\"posts\", ridu.ListOptions{Limit: 1})\n\t\treturn CountData{Total: posts.Total}, err\n\t},\n)",
+			"keywords": [],
+			"relatedDocs": ["/docs/custom-components/loading-data/"],
+			"relatedSymbols": [
+				"go:github.com/riducms/ridu/core#AdminLoadContext",
+				"go:github.com/riducms/ridu/core#AdminConfig"
+			],
+			"typeLinkIDs": {},
+			"returns": {
+				"type": "AdminLoaderDefinition",
+				"description": "A loader definition to append to Config.Admin.Loaders. Defining or registering it does not run the data read."
+			}
+		},
+		"go:github.com/riducms/ridu/core#NewAdminLoader": {
+			"summary": "Define a Go read function whose result is supplied to an admin component.",
+			"group": "Functions",
+			"parametersLabel": "Arguments",
+			"parameters": [
+				{
+					"name": "key",
+					"type": "string",
+					"description": "Application-wide unique key, at most 80 characters. Start with a lowercase letter; use lowercase letters, digits, and single hyphens between words, such as editorial-post-summary. Use the same key from generated adminLoaders."
+				},
+				{
+					"name": "handler",
+					"type": "func(AdminLoadContext, Input) (Output, error)",
+					"description": "Read function receiving the current request context and URL query inputs. Return browser-safe data or an error."
+				}
+			],
+			"details": [
+				"Register the result in Config.Admin.Loaders, then run ridu generate. Generation derives the input and output TypeScript types from your Go structs.",
+				"Use explicit json tags. Query inputs are scalar fields; missing values retain Go zero values. Return structs, scalar values, arrays, slices, pointers, or time.Time; maps, recursive types, and custom JSON codecs are not supported.",
+				"The function can run on page entry, URL changes, or refresh. Keep it read-only. ctx.List, ctx.Find, and ctx.Global enforce Ridu permissions and the current locale; external services need your own access checks."
+			],
+			"example": "type CountInput struct{}\ntype CountData struct {\n\tTotal int `json:\"total\"`\n}\n\nvar PostCount = ridu.NewAdminLoader(\"post-count\",\n\tfunc(ctx ridu.AdminLoadContext, _ CountInput) (CountData, error) {\n\t\tposts, err := ctx.List(\"posts\", ridu.ListOptions{Limit: 1})\n\t\treturn CountData{Total: posts.Total}, err\n\t},\n)",
+			"keywords": [],
+			"relatedDocs": ["/docs/custom-components/loading-data/"],
+			"relatedSymbols": [
+				"go:github.com/riducms/ridu/core#AdminLoadContext",
+				"go:github.com/riducms/ridu/core#AdminConfig"
+			],
+			"typeLinkIDs": {},
+			"returns": {
+				"type": "AdminLoaderDefinition",
+				"description": "A loader definition to append to Config.Admin.Loaders. Defining or registering it does not run the data read."
+			}
+		},
+		"go:github.com/riducms/ridu/core#AdminLoadContext": {
+			"summary": "Read content for the signed-in user while a Go admin loader runs.",
+			"group": "Types",
+			"parametersLabel": "Context values",
+			"parameters": [
+				{
+					"name": "Context",
+					"type": "context.Context",
+					"description": "Request cancellation context. Pass it to external services or other cancellable reads."
+				},
+				{
+					"name": "Pathname",
+					"type": "string",
+					"description": "Current page path without the admin base path, such as /collections/posts/123."
+				},
+				{
+					"name": "RouteParams",
+					"type": "map[string]string",
+					"description": "Collection, document, or global identifiers for a built-in route. A literal custom route has no route parameters."
+				}
+			],
+			"details": [
+				"Use List, Find, and Global for content reads; they bind the current actor and request locale with the application's configured fallback chain. Actor, ActorCollection, Locale, FallbackLocales, DisableFallback, and AllLocales options cannot override this policy.",
+				"Use Actor and ActorCollection when your external service needs application-specific access checks. URL parameters identify requested data; they are not permission grants."
+			],
+			"example": "post, err := ctx.Find(\n\tctx.RouteParams[\"collection\"],\n\tctx.RouteParams[\"document\"],\n\tridu.FindOptions{},\n)\nif err != nil {\n\treturn SummaryData{}, err\n}\ntitle, _ := post.Values[\"title\"].StringValue()",
+			"keywords": [],
+			"relatedDocs": ["/docs/custom-components/loading-data/"],
+			"relatedSymbols": [],
+			"typeLinkIDs": {}
+		},
+		"go:github.com/riducms/ridu/core#AdminLoadContext.List": {
+			"summary": "Read a filtered page of documents as the current admin user.",
+			"group": "Methods",
+			"parametersLabel": "Arguments",
+			"parameters": [
+				{
+					"name": "collection",
+					"type": "string",
+					"description": "Collection slug to read."
+				},
+				{
+					"name": "options",
+					"type": "ListOptions",
+					"description": "Filters, sort, page size, and population settings. Identity and locale come from the request."
+				}
+			],
+			"details": [
+				"Uses the normal content operation with the request's permissions, field redaction, hooks, and content locale. Return the error from your loader so the admin can offer retry."
+			],
+			"example": "posts, err := ctx.List(\"posts\", ridu.ListOptions{Limit: 20})",
+			"keywords": [],
+			"relatedDocs": ["/docs/custom-components/loading-data/"],
+			"relatedSymbols": [],
+			"typeLinkIDs": {},
+			"returns": {
+				"type": "(store.Page, error)",
+				"description": "A page of accessible documents and its matching total, or the read error."
+			}
+		},
+		"go:github.com/riducms/ridu/core#AdminLoadContext.Find": {
+			"summary": "Read one saved document as the current admin user.",
+			"group": "Methods",
+			"parametersLabel": "Arguments",
+			"parameters": [
+				{
+					"name": "collection",
+					"type": "string",
+					"description": "Collection slug containing the document."
+				},
+				{
+					"name": "id",
+					"type": "string",
+					"description": "ID of the saved document."
+				},
+				{
+					"name": "options",
+					"type": "FindOptions",
+					"description": "Selection and population settings. Identity and locale come from the request."
+				}
+			],
+			"details": [
+				"Uses the normal content operation with the request's permissions, field redaction, hooks, and content locale. Return the error from your loader so the admin can offer retry."
+			],
+			"example": "post, err := ctx.Find(\n\t\"posts\",\n\tctx.RouteParams[\"document\"],\n\tridu.FindOptions{},\n)",
+			"keywords": [],
+			"relatedDocs": ["/docs/custom-components/loading-data/"],
+			"relatedSymbols": [],
+			"typeLinkIDs": {},
+			"returns": {
+				"type": "(store.Document, error)",
+				"description": "The access-filtered document, or an error such as denied or not found."
+			}
+		},
+		"go:github.com/riducms/ridu/core#AdminLoadContext.Global": {
+			"summary": "Read a global's saved values as the current admin user.",
+			"group": "Methods",
+			"parametersLabel": "Arguments",
+			"parameters": [
+				{
+					"name": "slug",
+					"type": "string",
+					"description": "Slug of the global to read."
+				},
+				{
+					"name": "options",
+					"type": "FindOptions",
+					"description": "Selection and population settings. Identity and locale come from the request."
+				}
+			],
+			"details": [
+				"Uses the normal content operation with the request's permissions, field redaction, hooks, and content locale. Return the error from your loader so the admin can offer retry."
+			],
+			"example": "settings, err := ctx.Global(\"site-settings\", ridu.FindOptions{})",
+			"keywords": [],
+			"relatedDocs": ["/docs/custom-components/loading-data/"],
+			"relatedSymbols": [],
+			"typeLinkIDs": {},
+			"returns": {
+				"type": "(store.Document, error)",
+				"description": "The readable global values, or an error if the read cannot complete."
+			}
+		},
+		"ts:@riducms/plugin#withAdminLoader": {
+			"summary": "Connect a generated Go loader reference to the Svelte component that displays its data.",
+			"group": "Functions",
+			"parametersLabel": "Arguments",
+			"parameters": [
+				{
+					"name": "loader",
+					"type": "AdminLoader<Input, Data>",
+					"description": "Reference from your generated adminLoaders object. Its key, query input, and result types come from Go."
+				},
+				{
+					"name": "component",
+					"type": "Component<Props>",
+					"description": "Svelte component accepting AdminLoaderProps<Data>, plus any props for its dashboard, route, or replacement-view location."
+				}
+			],
+			"details": [
+				"Spread the result into a dashboard, routes, or views registration. Keep the location-specific settings such as path, position, collection, and surface on that entry.",
+				"The component receives data, refresh, and refreshing. It does not need an initial fetch or a second copy of the loaded data.",
+				"This helper checks the component/data pairing at compile time. It does not execute the Go handler or register it on the server; add the Go definition to Config.Admin.Loaders first."
+			],
+			"example": "import { withAdminLoader } from '@riducms/plugin';\nimport { adminLoaders } from '../../generated/ridu.generated';\nimport PostSummary from './components/post-summary.svelte';\n\nconst report = {\n  path: 'post-report',\n  ...withAdminLoader(adminLoaders['post-summary'], PostSummary)\n};",
+			"keywords": [],
+			"relatedDocs": ["/docs/custom-components/loading-data/"],
+			"relatedSymbols": [
+				"ts:@riducms/plugin#AdminLoaderProps",
+				"ts:@riducms/plugin#AdminRoute",
+				"ts:@riducms/plugin#AdminDashboardPanel"
+			],
+			"typeLinkIDs": {},
+			"returns": {
+				"type": "{ loader, component }",
+				"description": "The loader/component pair to spread into an admin registration. Ridu supplies the data when that registered component is shown."
+			}
+		},
+		"ts:@riducms/plugin#AdminLoaderProps": {
+			"summary": "Props supplied to a component paired with a Go admin loader.",
+			"group": "Interfaces",
+			"parametersLabel": "Component props",
+			"parameters": [
+				{
+					"name": "data",
+					"type": "Data",
+					"description": "Latest successful loader result. Read it directly from props; it updates when the URL changes or a refresh completes."
+				},
+				{
+					"name": "refresh",
+					"type": "() => Promise<void>",
+					"description": "Run the same loader again for the current page URL. Change the URL to change filters; refresh takes no filter arguments."
+				},
+				{
+					"name": "refreshing",
+					"type": "boolean",
+					"description": "True during an explicit refresh. Use it to disable the refresh button while keeping previous data visible."
+				}
+			],
+			"details": [
+				"Ridu supplies initial loading and retry states around the component. A failed refresh keeps the previous successful data.",
+				"Combine this type with AdminCoreViewProps when a replacement uses collection, global, documentID, or defaultView."
+			],
+			"example": "let { data, refresh, refreshing }: AdminLoaderProps<\n  AdminLoaderData['post-summary']\n> = $props();",
+			"keywords": [],
+			"relatedDocs": ["/docs/custom-components/loading-data/"],
+			"relatedSymbols": [
+				"ts:@riducms/plugin#withAdminLoader",
+				"ts:@riducms/plugin#AdminCoreViewProps"
+			],
+			"typeLinkIDs": {}
+		},
+		"ts:@riducms/plugin#AdminListResultsRendererProps": {
+			"summary": "Props for a custom collection results layout.",
+			"group": "Interfaces",
+			"parametersLabel": "Component props",
+			"parameters": [
+				{
+					"name": "collection",
+					"type": "SchemaCollection",
+					"description": "Collection configuration for the currently displayed list."
+				},
+				{
+					"name": "list",
+					"type": "AdminCollectionList",
+					"description": "Current documents, titles, destinations, selection state, and selection commands. Ridu continues to own the list requests."
+				},
+				{
+					"name": "i18n",
+					"type": "AdminI18n",
+					"description": "Current interface translations and formatting."
+				}
+			],
+			"details": [
+				"Register the component in listResultsRenderers with an exact collection slug. Use coreViews instead when replacing the entire page.",
+				"Read the current list directly; do not fetch its documents again. The surrounding list retains search, filters, pagination, empty/error states, and bulk actions."
+			],
+			"example": "<script lang=\"ts\">\n  import type { AdminListResultsRendererProps } from '@riducms/plugin';\n  import { Link } from '@riducms/admin/routing';\n  let { list }: AdminListResultsRendererProps = $props();\n</script>\n\n{#each list.documents as document (document.id)}\n  <Link to={list.documentHref(document)}>{list.title(document)}</Link>\n{/each}",
+			"keywords": [],
+			"relatedDocs": ["/docs/custom-components/list-results/"],
+			"relatedSymbols": [
+				"ts:@riducms/plugin#AdminCollectionList",
+				"ts:@riducms/plugin#AdminListResultsRenderer"
+			],
+			"typeLinkIDs": {}
+		},
+		"ts:@riducms/plugin#AdminCollectionList.documentHref": {
+			"summary": "Build a document destination for your collection card or row link.",
+			"group": "Methods",
+			"parametersLabel": "Arguments",
+			"parameters": [
+				{
+					"name": "document",
+					"type": "FieldDocument",
+					"description": "One document from list.documents."
+				}
+			],
+			"details": [
+				"Returns a router-root path with an encoded document ID and the current content locale. Pass it to Link from @riducms/admin/routing; Link adds the configured admin base path.",
+				"You own the link's markup, appearance, and content. Keep selection buttons outside a linked card."
+			],
+			"example": "<Link to={list.documentHref(document)}>\n  {list.title(document)}\n</Link>",
+			"keywords": [],
+			"relatedDocs": ["/docs/custom-components/list-results/"],
+			"relatedSymbols": [],
+			"typeLinkIDs": {},
+			"returns": {
+				"type": "string",
+				"description": "A router-root URL such as /collections/posts/123?locale=en, ready for a Link to prop."
+			}
+		},
 		"go:github.com/riducms/ridu#New": {
 			"summary": "Create an application from config and a document store.",
 			"group": "Functions",
@@ -7426,8 +7812,8 @@
 				"App": "go:github.com/riducms/ridu/core#App"
 			}
 		},
-		"go:github.com/riducms/ridu/core#App.UpdateUploadImage": {
-			"summary": "Regenerate configured variants around a focal point or crop.",
+		"go:github.com/riducms/ridu/core#App.UpdateUpload": {
+			"summary": "Commit replacement bytes, image edits, and document fields as one upload update.",
 			"group": "Uploads",
 			"parametersLabel": "",
 			"parameters": [
@@ -7448,7 +7834,7 @@
 				},
 				{
 					"name": "input",
-					"type": "UpdateUploadImageInput",
+					"type": "UpdateUploadInput",
 					"description": "The input value."
 				}
 			],
@@ -7457,10 +7843,10 @@
 				"description": "The declared result."
 			},
 			"details": [
-				"Coordinates object locks, optimistic revision, ordinary update access, and rollback."
+				"Coordinates storage preparation, optimistic revision, update and publish access, and rollback."
 			],
 			"example": "",
-			"keywords": ["core.App.UpdateUploadImage", "App.UpdateUploadImage"],
+			"keywords": ["core.App.UpdateUpload", "App.UpdateUpload"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {
@@ -7535,7 +7921,7 @@
 				}
 			],
 			"returns": {
-				"type": "(store.ScheduledPublish, error)",
+				"type": "(store.ScheduledPublication, error)",
 				"description": "The declared result."
 			},
 			"details": [],
@@ -7547,8 +7933,8 @@
 				"App": "go:github.com/riducms/ridu/core#App"
 			}
 		},
-		"go:github.com/riducms/ridu/core#App.ScheduledPublishes": {
-			"summary": "List scheduled publishes for one authorized document.",
+		"go:github.com/riducms/ridu/core#App.ScheduledPublications": {
+			"summary": "List scheduled publications for one authorized document.",
 			"group": "Publishing",
 			"parametersLabel": "",
 			"parameters": [
@@ -7574,20 +7960,20 @@
 				}
 			],
 			"returns": {
-				"type": "([]store.ScheduledPublish, error)",
+				"type": "([]store.ScheduledPublication, error)",
 				"description": "The declared result."
 			},
 			"details": [],
 			"example": "",
-			"keywords": ["core.App.ScheduledPublishes", "App.ScheduledPublishes"],
+			"keywords": ["core.App.ScheduledPublications", "App.ScheduledPublications"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {
 				"App": "go:github.com/riducms/ridu/core#App"
 			}
 		},
-		"go:github.com/riducms/ridu/core#App.CancelScheduledPublish": {
-			"summary": "Dismiss one scheduled publish for an authorized document.",
+		"go:github.com/riducms/ridu/core#App.CancelScheduledPublication": {
+			"summary": "Dismiss one scheduled publication for an authorized document.",
 			"group": "Publishing",
 			"parametersLabel": "",
 			"parameters": [
@@ -7623,15 +8009,15 @@
 			},
 			"details": [],
 			"example": "",
-			"keywords": ["core.App.CancelScheduledPublish", "App.CancelScheduledPublish"],
+			"keywords": ["core.App.CancelScheduledPublication", "App.CancelScheduledPublication"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {
 				"App": "go:github.com/riducms/ridu/core#App"
 			}
 		},
-		"go:github.com/riducms/ridu/core#App.RunScheduledPublishes": {
-			"summary": "Claim and run a bounded publish batch.",
+		"go:github.com/riducms/ridu/core#App.RunScheduledPublications": {
+			"summary": "Claim and run a bounded publication batch.",
 			"group": "Publishing",
 			"parametersLabel": "",
 			"parameters": [
@@ -7656,10 +8042,10 @@
 				"description": "The declared result."
 			},
 			"details": [
-				"Execute normally runs this worker. Direct use is for explicit job runners and tests. Each publish rechecks revision and access."
+				"Execute normally runs this worker. Direct use is for explicit job runners and tests. Each publication change rechecks revision and access."
 			],
 			"example": "",
-			"keywords": ["core.App.RunScheduledPublishes", "App.RunScheduledPublishes"],
+			"keywords": ["core.App.RunScheduledPublications", "App.RunScheduledPublications"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {
@@ -8609,8 +8995,8 @@
 				"App": "go:github.com/riducms/ridu/core#App"
 			}
 		},
-		"go:github.com/riducms/ridu/core#App.UpdateUploadImageForIdentity": {
-			"summary": "Regenerate image variants for one exact authenticated identity.",
+		"go:github.com/riducms/ridu/core#App.UpdateUploadForIdentity": {
+			"summary": "Save an upload for one exact authenticated identity.",
 			"group": "Uploads",
 			"parametersLabel": "",
 			"parameters": [
@@ -8631,7 +9017,7 @@
 				},
 				{
 					"name": "input",
-					"type": "UpdateUploadImageInput",
+					"type": "UpdateUploadInput",
 					"description": "The input value."
 				},
 				{
@@ -8646,7 +9032,7 @@
 			},
 			"details": [],
 			"example": "",
-			"keywords": ["core.App.UpdateUploadImageForIdentity", "App.UpdateUploadImageForIdentity"],
+			"keywords": ["core.App.UpdateUploadForIdentity", "App.UpdateUploadForIdentity"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {
@@ -12436,45 +12822,40 @@
 			"relatedSymbols": [],
 			"typeLinkIDs": {}
 		},
-		"go:github.com/riducms/ridu/core#UpdateUploadImageInput": {
-			"summary": "Focal point and optional crop for regenerating image variants.",
+		"go:github.com/riducms/ridu/core#UpdateUploadInput": {
+			"summary": "Atomic upload replacement, image edit, document data, and publishing input.",
 			"group": "Uploads",
 			"parametersLabel": "",
 			"parameters": [
 				{
-					"name": "FocalX",
-					"type": "float64",
-					"description": "Horizontal focal coordinate from 0 (left) to 100 (right)."
+					"name": "Filename",
+					"type": "string",
+					"description": "Renames the upload while retaining its current bytes when Reader is nil."
 				},
 				{
-					"name": "FocalY",
-					"type": "float64",
-					"description": "Vertical focal coordinate from 0 (top) to 100 (bottom)."
+					"name": "Reader",
+					"type": "io.Reader",
+					"description": "Supplies replacement bytes; nil retains the existing file."
 				},
 				{
-					"name": "CropX",
-					"type": "float64",
-					"description": "Normalized crop rectangle left edge."
+					"name": "Image",
+					"type": "*UploadImageEdit",
+					"description": "Applies image focal-point or crop changes; nil retains the saved transformation."
 				},
 				{
-					"name": "CropY",
-					"type": "float64",
-					"description": "Normalized crop rectangle top edge."
-				},
-				{
-					"name": "CropWidth",
-					"type": "float64",
-					"description": "Crop width; zero with CropHeight clears the crop."
-				},
-				{
-					"name": "CropHeight",
-					"type": "float64",
-					"description": "Crop height; a positive rectangle must remain inside the source."
+					"name": "Data",
+					"type": "store.Values",
+					"description": "Updates ordinary upload document fields in the same operation."
 				},
 				{
 					"name": "ExpectedRevision",
 					"type": "int",
 					"description": "Rejects changes based on a stale document revision."
+				},
+				{
+					"name": "Publish",
+					"type": "bool",
+					"description": "Publishes the resulting version when the collection supports drafts."
 				},
 				{
 					"name": "Actor",
@@ -12485,11 +12866,61 @@
 					"name": "ActorCollection",
 					"type": "schema.CollectionSlug",
 					"description": "Identifies the exact auth collection owning Actor."
+				},
+				{
+					"name": "Locale",
+					"type": "LocaleOptions",
+					"description": "Scopes localized document fields for the update."
 				}
 			],
 			"details": [],
 			"example": "",
-			"keywords": ["core.UpdateUploadImageInput", "UpdateUploadImageInput"],
+			"keywords": ["core.UpdateUploadInput", "UpdateUploadInput"],
+			"relatedDocs": [],
+			"relatedSymbols": [],
+			"typeLinkIDs": {}
+		},
+		"go:github.com/riducms/ridu/core#UploadImageEdit": {
+			"summary": "A reversible crop and focal point on the oriented source image.",
+			"group": "Uploads",
+			"parametersLabel": "",
+			"parameters": [
+				{
+					"name": "FocalX",
+					"type": "float64",
+					"description": "Horizontal focal coordinate from 0 through 100."
+				},
+				{
+					"name": "FocalY",
+					"type": "float64",
+					"description": "Vertical focal coordinate from 0 through 100."
+				},
+				{
+					"name": "CropX",
+					"type": "float64",
+					"description": "Crop rectangle horizontal origin as a source-image percentage."
+				},
+				{
+					"name": "CropY",
+					"type": "float64",
+					"description": "Crop rectangle vertical origin as a source-image percentage."
+				},
+				{
+					"name": "CropWidth",
+					"type": "float64",
+					"description": "Crop width; zero with CropHeight clears the crop."
+				},
+				{
+					"name": "CropHeight",
+					"type": "float64",
+					"description": "Crop height; a positive rectangle must remain within the source."
+				}
+			],
+			"details": [
+				"Coordinates are percentages of the oriented source image, not a generated rendition."
+			],
+			"example": "",
+			"keywords": ["core.UploadImageEdit", "UploadImageEdit"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {}
@@ -20861,7 +21292,7 @@
 			"relatedSymbols": [],
 			"typeLinkIDs": {}
 		},
-		"go:github.com/riducms/ridu/store#ScheduledPublish": {
+		"go:github.com/riducms/ridu/store#ScheduledPublication": {
 			"summary": "Adapter-neutral revision-fenced future publish record.",
 			"group": "Publishing adapter contracts",
 			"parametersLabel": "",
@@ -20919,7 +21350,7 @@
 			],
 			"details": [],
 			"example": "",
-			"keywords": ["store.ScheduledPublish", "ScheduledPublish"],
+			"keywords": ["store.ScheduledPublication", "ScheduledPublication"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {}
@@ -25485,7 +25916,7 @@
 			"relatedSymbols": [],
 			"typeLinkIDs": {}
 		},
-		"go:github.com/riducms/ridu/protocol#ScheduledPublish": {
+		"go:github.com/riducms/ridu/protocol#ScheduledPublication": {
 			"summary": "Safe queued-publish metadata.",
 			"group": "Authoring state",
 			"parametersLabel": "",
@@ -25528,49 +25959,49 @@
 			],
 			"details": ["Requesting identities are deliberately omitted."],
 			"example": "",
-			"keywords": ["protocol.ScheduledPublish", "ScheduledPublish"],
+			"keywords": ["protocol.ScheduledPublication", "ScheduledPublication"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {}
 		},
-		"go:github.com/riducms/ridu/protocol#ScheduledPublishEnvelope": {
+		"go:github.com/riducms/ridu/protocol#ScheduledPublicationEnvelope": {
 			"summary": "One created scheduled-publish record.",
 			"group": "Authoring state",
 			"parametersLabel": "",
 			"parameters": [
 				{
-					"name": "ScheduledPublish",
-					"type": "ScheduledPublish",
-					"description": "The ScheduledPublish value."
+					"name": "ScheduledPublication",
+					"type": "ScheduledPublication",
+					"description": "The ScheduledPublication value."
 				}
 			],
 			"details": [],
 			"example": "",
-			"keywords": ["protocol.ScheduledPublishEnvelope", "ScheduledPublishEnvelope"],
+			"keywords": ["protocol.ScheduledPublicationEnvelope", "ScheduledPublicationEnvelope"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {
-				"ScheduledPublish": "go:github.com/riducms/ridu/protocol#ScheduledPublish"
+				"ScheduledPublication": "go:github.com/riducms/ridu/protocol#ScheduledPublication"
 			}
 		},
-		"go:github.com/riducms/ridu/protocol#ScheduledPublishesEnvelope": {
+		"go:github.com/riducms/ridu/protocol#ScheduledPublicationsEnvelope": {
 			"summary": "Queued, running, and actionable failed publish records for one document.",
 			"group": "Authoring state",
 			"parametersLabel": "",
 			"parameters": [
 				{
-					"name": "ScheduledPublishes",
-					"type": "[]ScheduledPublish",
-					"description": "The ScheduledPublishes value."
+					"name": "ScheduledPublications",
+					"type": "[]ScheduledPublication",
+					"description": "The ScheduledPublications value."
 				}
 			],
 			"details": [],
 			"example": "",
-			"keywords": ["protocol.ScheduledPublishesEnvelope", "ScheduledPublishesEnvelope"],
+			"keywords": ["protocol.ScheduledPublicationsEnvelope", "ScheduledPublicationsEnvelope"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {
-				"ScheduledPublish": "go:github.com/riducms/ridu/protocol#ScheduledPublish"
+				"ScheduledPublication": "go:github.com/riducms/ridu/protocol#ScheduledPublication"
 			}
 		},
 		"go:github.com/riducms/ridu/protocol#AuthSession": {
@@ -36379,9 +36810,19 @@
 					"description": "The uploadFromURL value."
 				},
 				{
-					"name": "updateUploadImage",
-					"type": "<Slug extends UploadCollectionSlug<Config>>(collection: Slug, id: string, input: UploadImageInput, options?: RevisionOptions) => Promise<OutputFor<Config, Slug>>",
-					"description": "The updateUploadImage value."
+					"name": "updateUpload",
+					"type": "<Slug extends UploadCollectionSlug<Config>>(collection: Slug, id: string, input: UpdateUploadInput<UpdateFor<Config, Slug>>, options?: MutationOptions<LocaleFor<Config>>) => Promise<OutputFor<Config, Slug>>",
+					"description": "The updateUpload value."
+				},
+				{
+					"name": "readUploadSource",
+					"type": "<Slug extends UploadCollectionSlug<Config>>(collection: Slug, id: string, options?: RequestOptions) => Promise<Blob>",
+					"description": "The readUploadSource value."
+				},
+				{
+					"name": "previewUploadFromURL",
+					"type": "<Slug extends UploadCollectionSlug<Config>>(collection: Slug, url: string, options?: RequestOptions & { id?: string }) => Promise<UploadFile>",
+					"description": "The previewUploadFromURL value."
 				},
 				{
 					"name": "versions",
@@ -36395,18 +36836,18 @@
 				},
 				{
 					"name": "schedulePublish",
-					"type": "<Slug extends VersionCollectionSlug<Config>>(collection: Slug, id: string, runAt: string | Date, options?: RevisionOptions) => Promise<ScheduledPublish>",
+					"type": "<Slug extends VersionCollectionSlug<Config>>(collection: Slug, id: string, runAt: string | Date, options?: RevisionOptions) => Promise<ScheduledPublication>",
 					"description": "The schedulePublish value."
 				},
 				{
-					"name": "scheduledPublishes",
-					"type": "<Slug extends VersionCollectionSlug<Config>>(collection: Slug, id: string, options?: RequestOptions) => Promise<ScheduledPublish[]>",
-					"description": "The scheduledPublishes value."
+					"name": "scheduledPublications",
+					"type": "<Slug extends VersionCollectionSlug<Config>>(collection: Slug, id: string, options?: RequestOptions) => Promise<ScheduledPublication[]>",
+					"description": "The scheduledPublications value."
 				},
 				{
-					"name": "cancelScheduledPublish",
+					"name": "cancelScheduledPublication",
 					"type": "<Slug extends VersionCollectionSlug<Config>>(collection: Slug, id: string, jobID: string, options?: RequestOptions) => Promise<DeleteEnvelope>",
-					"description": "The cancelScheduledPublish value."
+					"description": "The cancelScheduledPublication value."
 				},
 				{
 					"name": "publish",
@@ -37008,45 +37449,40 @@
 			"relatedSymbols": [],
 			"typeLinkIDs": {}
 		},
-		"ts:@riducms/sdk#UploadImageInput": {
-			"summary": "Focal point and optional crop rectangle for regenerating configured image sizes.",
+		"ts:@riducms/sdk#UpdateUploadInput": {
+			"summary": "One atomic update to an upload's metadata, file, and image transformation.",
 			"group": "Interfaces",
 			"parametersLabel": "",
 			"parameters": [
 				{
-					"name": "focalX",
-					"type": "number",
-					"description": "The focalX value."
+					"name": "data",
+					"type": "Partial<Data>",
+					"description": "Document fields saved with the upload."
 				},
 				{
-					"name": "focalY",
-					"type": "number",
-					"description": "The focalY value."
+					"name": "file",
+					"type": "Blob",
+					"description": "Replacement bytes; omission retains the existing file."
 				},
 				{
-					"name": "cropX",
-					"type": "number",
-					"description": "The cropX value."
+					"name": "filename",
+					"type": "string",
+					"description": "Optional replacement filename."
 				},
 				{
-					"name": "cropY",
-					"type": "number",
-					"description": "The cropY value."
+					"name": "image",
+					"type": "UploadImageEdit",
+					"description": "Focal-point or crop changes applied to configured image sizes."
 				},
 				{
-					"name": "cropWidth",
-					"type": "number",
-					"description": "The cropWidth value."
-				},
-				{
-					"name": "cropHeight",
-					"type": "number",
-					"description": "The cropHeight value."
+					"name": "publish",
+					"type": "boolean",
+					"description": "Publishes the resulting version when the collection supports drafts."
 				}
 			],
 			"details": [],
 			"example": "",
-			"keywords": ["UploadImageInput", "@riducms/sdk.UploadImageInput"],
+			"keywords": ["UpdateUploadInput", "@riducms/sdk.UpdateUploadInput"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {}
@@ -39656,7 +40092,7 @@
 				"protocol.JoinMutationInput": "ts:@riducms/protocol#JoinMutationInput"
 			}
 		},
-		"ts:@riducms/sdk#ScheduledPublish": {
+		"ts:@riducms/sdk#ScheduledPublication": {
 			"summary": "A durable scheduled-publication job returned by publishing methods.",
 			"group": "Types",
 			"parametersLabel": "",
@@ -39699,11 +40135,11 @@
 			],
 			"details": ["Re-exported from @riducms/protocol for SDK consumers."],
 			"example": "",
-			"keywords": ["ScheduledPublish", "@riducms/sdk.ScheduledPublish"],
+			"keywords": ["ScheduledPublication", "@riducms/sdk.ScheduledPublication"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {
-				"protocol.ScheduledPublish": "ts:@riducms/protocol#ScheduledPublish"
+				"protocol.ScheduledPublication": "ts:@riducms/protocol#ScheduledPublication"
 			}
 		},
 		"ts:@riducms/sdk#CopyLocaleInput": {
@@ -42839,8 +43275,8 @@
 				"RiduError": "ts:@riducms/sdk#RiduError"
 			}
 		},
-		"ts:@riducms/sdk#RiduClient.updateUploadImage": {
-			"summary": "Update non-localized focal/crop metadata and regenerate configured image sizes.",
+		"ts:@riducms/sdk#RiduClient.updateUpload": {
+			"summary": "Save file, image, and document edits in one revision-checked mutation.",
 			"group": "Uploads",
 			"parametersLabel": "",
 			"parameters": [
@@ -42856,12 +43292,12 @@
 				},
 				{
 					"name": "input",
-					"type": "UploadImageInput",
+					"type": "UpdateUploadInput<UpdateFor<Config, Slug>>",
 					"description": "The input value."
 				},
 				{
 					"name": "options",
-					"type": "RevisionOptions | undefined",
+					"type": "MutationOptions<LocaleFor<Config>> | undefined",
 					"description": "The options value."
 				}
 			],
@@ -42871,7 +43307,7 @@
 			},
 			"details": [],
 			"example": "",
-			"keywords": ["RiduClient.updateUploadImage", "@riducms/sdk.RiduClient.updateUploadImage"],
+			"keywords": ["RiduClient.updateUpload", "@riducms/sdk.RiduClient.updateUpload"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {
@@ -43053,7 +43489,7 @@
 				}
 			],
 			"returns": {
-				"type": "Promise<ScheduledPublish>",
+				"type": "Promise<ScheduledPublication>",
 				"description": "The declared result."
 			},
 			"details": [],
@@ -43090,7 +43526,7 @@
 				"RiduError": "ts:@riducms/sdk#RiduError"
 			}
 		},
-		"ts:@riducms/sdk#RiduClient.scheduledPublishes": {
+		"ts:@riducms/sdk#RiduClient.scheduledPublications": {
 			"summary": "List scheduled publication jobs for one document.",
 			"group": "Versions and publishing",
 			"parametersLabel": "",
@@ -43112,12 +43548,15 @@
 				}
 			],
 			"returns": {
-				"type": "Promise<ScheduledPublish[]>",
+				"type": "Promise<ScheduledPublication[]>",
 				"description": "The declared result."
 			},
 			"details": [],
 			"example": "",
-			"keywords": ["RiduClient.scheduledPublishes", "@riducms/sdk.RiduClient.scheduledPublishes"],
+			"keywords": [
+				"RiduClient.scheduledPublications",
+				"@riducms/sdk.RiduClient.scheduledPublications"
+			],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {
@@ -43149,7 +43588,7 @@
 				"RiduError": "ts:@riducms/sdk#RiduError"
 			}
 		},
-		"ts:@riducms/sdk#RiduClient.cancelScheduledPublish": {
+		"ts:@riducms/sdk#RiduClient.cancelScheduledPublication": {
 			"summary": "Cancel one scheduled publication job.",
 			"group": "Versions and publishing",
 			"parametersLabel": "",
@@ -43182,8 +43621,8 @@
 			"details": [],
 			"example": "",
 			"keywords": [
-				"RiduClient.cancelScheduledPublish",
-				"@riducms/sdk.RiduClient.cancelScheduledPublish"
+				"RiduClient.cancelScheduledPublication",
+				"@riducms/sdk.RiduClient.cancelScheduledPublication"
 			],
 			"relatedDocs": [],
 			"relatedSymbols": [],
@@ -45810,7 +46249,7 @@
 			"relatedSymbols": [],
 			"typeLinkIDs": {}
 		},
-		"ts:@riducms/protocol#ScheduledPublish": {
+		"ts:@riducms/protocol#ScheduledPublication": {
 			"summary": "A durable scheduled-publication job.",
 			"group": "Interfaces",
 			"parametersLabel": "",
@@ -45853,43 +46292,49 @@
 			],
 			"details": [],
 			"example": "",
-			"keywords": ["ScheduledPublish", "@riducms/protocol.ScheduledPublish"],
+			"keywords": ["ScheduledPublication", "@riducms/protocol.ScheduledPublication"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {}
 		},
-		"ts:@riducms/protocol#ScheduledPublishEnvelope": {
+		"ts:@riducms/protocol#ScheduledPublicationEnvelope": {
 			"summary": "One scheduled publication response.",
 			"group": "Interfaces",
 			"parametersLabel": "",
 			"parameters": [
 				{
-					"name": "scheduledPublish",
-					"type": "ScheduledPublish",
-					"description": "The scheduledPublish value."
+					"name": "scheduledPublication",
+					"type": "ScheduledPublication",
+					"description": "The scheduledPublication value."
 				}
 			],
 			"details": [],
 			"example": "",
-			"keywords": ["ScheduledPublishEnvelope", "@riducms/protocol.ScheduledPublishEnvelope"],
+			"keywords": [
+				"ScheduledPublicationEnvelope",
+				"@riducms/protocol.ScheduledPublicationEnvelope"
+			],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {}
 		},
-		"ts:@riducms/protocol#ScheduledPublishesEnvelope": {
+		"ts:@riducms/protocol#ScheduledPublicationsEnvelope": {
 			"summary": "A list of scheduled publication jobs.",
 			"group": "Interfaces",
 			"parametersLabel": "",
 			"parameters": [
 				{
-					"name": "scheduledPublishes",
-					"type": "ScheduledPublish[]",
-					"description": "The scheduledPublishes value."
+					"name": "scheduledPublications",
+					"type": "ScheduledPublication[]",
+					"description": "The scheduledPublications value."
 				}
 			],
 			"details": [],
 			"example": "",
-			"keywords": ["ScheduledPublishesEnvelope", "@riducms/protocol.ScheduledPublishesEnvelope"],
+			"keywords": [
+				"ScheduledPublicationsEnvelope",
+				"@riducms/protocol.ScheduledPublicationsEnvelope"
+			],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {}
@@ -49181,7 +49626,7 @@
 					"targetID": "ts:@riducms/plugin/authoring/v1#definePluginField"
 				},
 				{
-					"name": "components",
+					"name": "fieldEditors",
 					"type": "Readonly<Record<string, RegisteredPluginField & ({ readonly type: Exclude<FieldType, \"plugin\">; } | { readonly type: \"plugin\"; readonly fieldType: string; })>>",
 					"description": "Optional. Map component names to `defineFieldComponent` results. Go chooses an alternative editor with `field.PluginComponent(pluginKey, componentName)`.",
 					"targetID": "ts:@riducms/plugin/authoring/v1#defineFieldComponent"
@@ -49210,7 +49655,7 @@
 					"targetID": "ts:@riducms/plugin#AdminRoute"
 				},
 				{
-					"name": "dashboard",
+					"name": "dashboardPanels",
 					"type": "readonly AdminDashboardPanel[]",
 					"description": "Optional. Add panels before or after the dashboard, or replace it. Each entry names a key, component, and position; the default position is after.",
 					"targetID": "ts:@riducms/plugin#AdminDashboardPanel"
@@ -49240,7 +49685,7 @@
 					"targetID": "ts:@riducms/plugin#AdminLogoutButton"
 				},
 				{
-					"name": "views",
+					"name": "coreViews",
 					"type": "readonly AdminCoreView[]",
 					"description": "Optional. Wrap or replace collection lists, create/edit forms, global editors, or the not-found page. The component can render `defaultView` to keep the built-in screen.",
 					"targetID": "ts:@riducms/plugin#AdminCoreView"
@@ -49252,10 +49697,10 @@
 					"targetID": "ts:@riducms/plugin#AdminBrandComponent"
 				},
 				{
-					"name": "shell",
-					"type": "readonly AdminShellComponent[]",
+					"name": "shellSlots",
+					"type": "readonly AdminShellSlot[]",
 					"description": "Optional. Add a component to the header, global actions, or account settings menu.",
-					"targetID": "ts:@riducms/plugin#AdminShellComponent"
+					"targetID": "ts:@riducms/plugin#AdminShellSlot"
 				},
 				{
 					"name": "providers",
@@ -49264,10 +49709,10 @@
 					"targetID": "ts:@riducms/plugin#AdminProvider"
 				},
 				{
-					"name": "listCells",
-					"type": "readonly AdminListCell[]",
+					"name": "listCellRenderers",
+					"type": "readonly AdminListCellRenderer[]",
 					"description": "Optional. Change how a field appears in a collection table. Each entry selects a collection, field path, and component.",
-					"targetID": "ts:@riducms/plugin#AdminListCell"
+					"targetID": "ts:@riducms/plugin#AdminListCellRenderer"
 				},
 				{
 					"name": "documentActions",
@@ -49386,7 +49831,7 @@
 					"description": "The routes value."
 				},
 				{
-					"name": "dashboard",
+					"name": "dashboardPanels",
 					"type": "readonly AdminDashboardPanel[]",
 					"description": "The dashboard value."
 				},
@@ -49411,7 +49856,7 @@
 					"description": "The logoutButton value."
 				},
 				{
-					"name": "views",
+					"name": "coreViews",
 					"type": "readonly AdminCoreView[]",
 					"description": "The views value."
 				},
@@ -49421,8 +49866,8 @@
 					"description": "The branding value."
 				},
 				{
-					"name": "shell",
-					"type": "readonly AdminShellComponent[]",
+					"name": "shellSlots",
+					"type": "readonly AdminShellSlot[]",
 					"description": "The shell value."
 				},
 				{
@@ -49431,8 +49876,8 @@
 					"description": "The providers value."
 				},
 				{
-					"name": "listCells",
-					"type": "readonly AdminListCell[]",
+					"name": "listCellRenderers",
+					"type": "readonly AdminListCellRenderer[]",
 					"description": "The listCells value."
 				},
 				{
@@ -51826,7 +52271,7 @@
 			"relatedSymbols": [],
 			"typeLinkIDs": {}
 		},
-		"ts:@riducms/plugin#AdminShellPosition": {
+		"ts:@riducms/plugin#AdminShellSlotPosition": {
 			"summary": "An exact global shell insertion point.",
 			"group": "Types",
 			"parametersLabel": "",
@@ -52084,12 +52529,12 @@
 			],
 			"details": [],
 			"example": "",
-			"keywords": ["AdminShellPosition", "@riducms/plugin.AdminShellPosition"],
+			"keywords": ["AdminShellSlotPosition", "@riducms/plugin.AdminShellSlotPosition"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {}
 		},
-		"ts:@riducms/plugin#AdminShellComponent": {
+		"ts:@riducms/plugin#AdminShellSlot": {
 			"summary": "A component inserted at a global shell position.",
 			"group": "Interfaces",
 			"parametersLabel": "",
@@ -52101,30 +52546,30 @@
 				},
 				{
 					"name": "position",
-					"type": "AdminShellPosition",
+					"type": "AdminShellSlotPosition",
 					"description": "The position value."
 				},
 				{
 					"name": "component",
-					"type": "Component<AdminShellComponentProps, {}, string>",
+					"type": "Component<AdminShellSlotProps, {}, string>",
 					"description": "The component value."
 				}
 			],
 			"details": [],
 			"example": "",
-			"keywords": ["AdminShellComponent", "@riducms/plugin.AdminShellComponent"],
+			"keywords": ["AdminShellSlot", "@riducms/plugin.AdminShellSlot"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {}
 		},
-		"ts:@riducms/plugin#AdminShellComponentProps": {
+		"ts:@riducms/plugin#AdminShellSlotProps": {
 			"summary": "Shared extension context and shell insertion point.",
 			"group": "Interfaces",
 			"parametersLabel": "",
 			"parameters": [
 				{
 					"name": "position",
-					"type": "AdminShellPosition",
+					"type": "AdminShellSlotPosition",
 					"description": "The position value."
 				},
 				{
@@ -52145,7 +52590,7 @@
 			],
 			"details": [],
 			"example": "",
-			"keywords": ["AdminShellComponentProps", "@riducms/plugin.AdminShellComponentProps"],
+			"keywords": ["AdminShellSlotProps", "@riducms/plugin.AdminShellSlotProps"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {}
@@ -52196,7 +52641,7 @@
 			"relatedSymbols": [],
 			"typeLinkIDs": {}
 		},
-		"ts:@riducms/plugin#AdminListCell": {
+		"ts:@riducms/plugin#AdminListCellRenderer": {
 			"summary": "A renderer for one exact collection and field pair.",
 			"group": "Interfaces",
 			"parametersLabel": "",
@@ -52228,18 +52673,18 @@
 				},
 				{
 					"name": "component",
-					"type": "Component<AdminListCellProps, {}, string>",
+					"type": "Component<AdminListCellRendererProps, {}, string>",
 					"description": "The component value."
 				}
 			],
 			"details": [],
 			"example": "",
-			"keywords": ["AdminListCell", "@riducms/plugin.AdminListCell"],
+			"keywords": ["AdminListCellRenderer", "@riducms/plugin.AdminListCellRenderer"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {}
 		},
-		"ts:@riducms/plugin#AdminListCellProps": {
+		"ts:@riducms/plugin#AdminListCellRendererProps": {
 			"summary": "Manifest context, document, and value for a custom list cell.",
 			"group": "Interfaces",
 			"parametersLabel": "",
@@ -52272,7 +52717,7 @@
 			],
 			"details": [],
 			"example": "",
-			"keywords": ["AdminListCellProps", "@riducms/plugin.AdminListCellProps"],
+			"keywords": ["AdminListCellRendererProps", "@riducms/plugin.AdminListCellRendererProps"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {}
@@ -52953,36 +53398,6 @@
 			"relatedSymbols": [],
 			"typeLinkIDs": {}
 		},
-		"ts:@riducms/plugin#AdminDashboardPanel.component": {
-			"summary": "Public method AdminDashboardPanel.component from @riducms/plugin.",
-			"group": "Methods",
-			"parametersLabel": "",
-			"parameters": [
-				{
-					"name": "internals",
-					"type": "Brand<\"ComponentInternals\">",
-					"description": "The internals value."
-				},
-				{
-					"name": "props",
-					"type": "AdminDashboardPanelProps",
-					"description": "The props passed to the component."
-				}
-			],
-			"returns": {
-				"type": "{ $on?(type: string, callback: (e: any) => void): () => void; $set?(props: Partial<AdminDashboardPanelProps>): void; }",
-				"description": "The declared result."
-			},
-			"details": [],
-			"example": "",
-			"keywords": [
-				"AdminDashboardPanel.component",
-				"@riducms/plugin.AdminDashboardPanel.component"
-			],
-			"relatedDocs": [],
-			"relatedSymbols": [],
-			"typeLinkIDs": {}
-		},
 		"ts:@riducms/plugin#AdminDocumentAction.component": {
 			"summary": "Public method AdminDocumentAction.component from @riducms/plugin.",
 			"group": "Methods",
@@ -53256,8 +53671,8 @@
 			"relatedSymbols": [],
 			"typeLinkIDs": {}
 		},
-		"ts:@riducms/plugin#AdminListCell.component": {
-			"summary": "Public method AdminListCell.component from @riducms/plugin.",
+		"ts:@riducms/plugin#AdminListCellRenderer.component": {
+			"summary": "Public method AdminListCellRenderer.component from @riducms/plugin.",
 			"group": "Methods",
 			"parametersLabel": "",
 			"parameters": [
@@ -53268,17 +53683,20 @@
 				},
 				{
 					"name": "props",
-					"type": "AdminListCellProps",
+					"type": "AdminListCellRendererProps",
 					"description": "The props passed to the component."
 				}
 			],
 			"returns": {
-				"type": "{ $on?(type: string, callback: (e: any) => void): () => void; $set?(props: Partial<AdminListCellProps>): void; }",
+				"type": "{ $on?(type: string, callback: (e: any) => void): () => void; $set?(props: Partial<AdminListCellRendererProps>): void; }",
 				"description": "The declared result."
 			},
 			"details": [],
 			"example": "",
-			"keywords": ["AdminListCell.component", "@riducms/plugin.AdminListCell.component"],
+			"keywords": [
+				"AdminListCellRenderer.component",
+				"@riducms/plugin.AdminListCellRenderer.component"
+			],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {}
@@ -53499,33 +53917,6 @@
 			"relatedSymbols": [],
 			"typeLinkIDs": {}
 		},
-		"ts:@riducms/plugin#AdminRoute.component": {
-			"summary": "Svelte route component rendered by the framework router.",
-			"group": "Methods",
-			"parametersLabel": "",
-			"parameters": [
-				{
-					"name": "internals",
-					"type": "Brand<\"ComponentInternals\">",
-					"description": "The internals value."
-				},
-				{
-					"name": "props",
-					"type": "{}",
-					"description": "The props passed to the component."
-				}
-			],
-			"returns": {
-				"type": "{ $on?(type: string, callback: (e: any) => void): () => void; $set?(props: Partial<{}>): void; }",
-				"description": "The declared result."
-			},
-			"details": [],
-			"example": "",
-			"keywords": ["AdminRoute.component", "@riducms/plugin.AdminRoute.component"],
-			"relatedDocs": [],
-			"relatedSymbols": [],
-			"typeLinkIDs": {}
-		},
 		"ts:@riducms/plugin#AdminProvider.component": {
 			"summary": "Public method AdminProvider.component from @riducms/plugin.",
 			"group": "Methods",
@@ -53578,8 +53969,8 @@
 			"relatedSymbols": [],
 			"typeLinkIDs": {}
 		},
-		"ts:@riducms/plugin#AdminShellComponent.component": {
-			"summary": "Public method AdminShellComponent.component from @riducms/plugin.",
+		"ts:@riducms/plugin#AdminShellSlot.component": {
+			"summary": "Public method AdminShellSlot.component from @riducms/plugin.",
 			"group": "Methods",
 			"parametersLabel": "",
 			"parameters": [
@@ -53590,20 +53981,17 @@
 				},
 				{
 					"name": "props",
-					"type": "AdminShellComponentProps",
+					"type": "AdminShellSlotProps",
 					"description": "The props passed to the component."
 				}
 			],
 			"returns": {
-				"type": "{ $on?(type: string, callback: (e: any) => void): () => void; $set?(props: Partial<AdminShellComponentProps>): void; }",
+				"type": "{ $on?(type: string, callback: (e: any) => void): () => void; $set?(props: Partial<AdminShellSlotProps>): void; }",
 				"description": "The declared result."
 			},
 			"details": [],
 			"example": "",
-			"keywords": [
-				"AdminShellComponent.component",
-				"@riducms/plugin.AdminShellComponent.component"
-			],
+			"keywords": ["AdminShellSlot.component", "@riducms/plugin.AdminShellSlot.component"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {}
@@ -54027,21 +54415,21 @@
 			"typeLinkIDs": {}
 		},
 		"ts:@riducms/ui#Button": {
-			"summary": "A Ridu-themed button or anchor with optional integrated tooltip.",
+			"summary": "A themed button or link with optional tooltip.",
 			"group": "Types",
 			"parametersLabel": "",
 			"parameters": [],
 			"details": [
-				"Variants are default, outline, secondary, ghost, destructive, and link. Sizes are default, xs, sm, lg, icon, icon-xs, icon-sm, and icon-lg. href selects anchor rendering; disabled anchors remove href and become unfocusable."
+				"Variant and size default to default; see ButtonVariant and ButtonSize for choices. class adds an application class. href renders an anchor; disabled anchors drop href and keyboard focus."
 			],
-			"example": "<Button\n\tvariant=\"outline\"\n\tsize=\"sm\"\n\ttooltip=\"Refresh\"\n\tonclick={refresh}\n>\n\tRefresh\n</Button>",
+			"example": "<Button variant=\"outline\" size=\"sm\" class=\"post-cards__select\">\n\tSelect\n</Button>",
 			"keywords": ["Button", "@riducms/ui.Button"],
-			"relatedDocs": [],
-			"relatedSymbols": [],
+			"relatedDocs": ["/docs/admin/customizing-css/"],
+			"relatedSymbols": ["ts:@riducms/ui#ButtonVariant", "ts:@riducms/ui#ButtonSize"],
 			"typeLinkIDs": {}
 		},
 		"ts:@riducms/ui#ButtonProps": {
-			"summary": "Merged button/anchor attributes and Ridu variant controls.",
+			"summary": "Button and anchor attributes plus variant, size, tooltip, and class props.",
 			"group": "Types",
 			"parametersLabel": "",
 			"parameters": [],
@@ -54053,11 +54441,11 @@
 			"typeLinkIDs": {}
 		},
 		"ts:@riducms/ui#buttonVariants": {
-			"summary": "The shared tailwind-variants recipe used by Button.",
+			"summary": "Return Button's base, variant, and size classes.",
 			"group": "Types",
 			"parametersLabel": "",
 			"parameters": [],
-			"details": [],
+			"details": ["Accepts variant, size, and optional class; omitted choices use defaults."],
 			"example": "",
 			"keywords": ["buttonVariants", "@riducms/ui.buttonVariants"],
 			"relatedDocs": [],
@@ -54368,38 +54756,6 @@
 			"relatedSymbols": [],
 			"typeLinkIDs": {}
 		},
-		"ts:@riducms/ui#cn": {
-			"summary": "Compose class values using the package-owned tailwind-variants runtime.",
-			"group": "Functions",
-			"parametersLabel": "",
-			"parameters": [],
-			"returns": {
-				"type": "CnReturn",
-				"description": "The declared result."
-			},
-			"details": [],
-			"example": "",
-			"keywords": ["cn", "@riducms/ui.cn"],
-			"relatedDocs": [],
-			"relatedSymbols": [],
-			"typeLinkIDs": {}
-		},
-		"ts:@riducms/ui#tv": {
-			"summary": "Create shared variant recipes using the package-owned tailwind-variants runtime.",
-			"group": "Functions",
-			"parametersLabel": "",
-			"parameters": [],
-			"returns": {
-				"type": "TVReturnType<V, S, B, EV, ES, E>",
-				"description": "The declared result."
-			},
-			"details": [],
-			"example": "",
-			"keywords": ["tv", "@riducms/ui.tv"],
-			"relatedDocs": [],
-			"relatedSymbols": [],
-			"typeLinkIDs": {}
-		},
 		"ts:@riducms/ui#WithoutChild": {
 			"summary": "Remove a child snippet property when present.",
 			"group": "Types",
@@ -54454,28 +54810,50 @@
 			"relatedSymbols": [],
 			"typeLinkIDs": {}
 		},
-		"ts:@riducms/ui#ClassValue": {
-			"summary": "Class input accepted by cn and variant recipes.",
-			"group": "Types",
-			"parametersLabel": "",
-			"parameters": [],
-			"details": [],
-			"example": "",
-			"keywords": ["ClassValue", "@riducms/ui.ClassValue"],
-			"relatedDocs": [],
-			"relatedSymbols": [],
-			"typeLinkIDs": {}
-		},
 		"ts:@riducms/ui#VariantProps": {
-			"summary": "Infer variant props from a tailwind-variants recipe.",
+			"summary": "Infer variant props from a cv() recipe.",
 			"group": "Types",
 			"parametersLabel": "",
 			"parameters": [],
-			"details": [],
+			"details": ["Excludes class; see cv() for usage."],
 			"example": "",
 			"keywords": ["VariantProps", "@riducms/ui.VariantProps"],
 			"relatedDocs": [],
-			"relatedSymbols": [],
+			"relatedSymbols": ["ts:@riducms/ui#cv"],
+			"typeLinkIDs": {}
+		},
+		"ts:@riducms/ui#cv": {
+			"summary": "Define typed semantic class variants, defaults, and class passthrough.",
+			"group": "Functions",
+			"parametersLabel": "Recipe",
+			"parameters": [
+				{
+					"name": "base",
+					"type": "string",
+					"description": "Class always included."
+				},
+				{
+					"name": "variants",
+					"type": "Record<string, Record<string, string>>",
+					"description": "Named choice-to-class mappings. class cannot be an axis."
+				},
+				{
+					"name": "defaultVariants",
+					"type": "NoInfer<VariantSelection<T>>",
+					"description": "Choices used for omitted or undefined axes."
+				}
+			],
+			"returns": {
+				"type": "(props?: VariantSelection<T> & { class?: string }) => string",
+				"description": "Joins selected classes into one string."
+			},
+			"details": [
+				"No utility merging or compound variants. Svelte class arrays compose conditional classes; CSS controls precedence."
+			],
+			"example": "import { cv, type VariantProps } from '@riducms/ui';\n\nconst notice = cv({\n\tbase: 'notice',\n\tvariants: {\n\t\ttone: {\n\t\t\tneutral: 'notice--neutral',\n\t\t\twarning: 'notice--warning'\n\t\t}\n\t},\n\tdefaultVariants: { tone: 'neutral' }\n});\ntype NoticeTone = VariantProps<typeof notice>['tone'];\nconst className = notice({ tone: 'warning', class: 'app-notice' });",
+			"keywords": ["cv", "semantic variants", "CSS classes", "@riducms/ui.cv"],
+			"relatedDocs": ["/docs/admin/customizing-css/"],
+			"relatedSymbols": ["ts:@riducms/ui#VariantProps", "ts:@riducms/ui#buttonVariants"],
 			"typeLinkIDs": {}
 		},
 		"ts:@riducms/plugin-richtext#richTextAdminPlugin": {
@@ -56745,9 +57123,19 @@
 					"description": "The uploadFromURL value."
 				},
 				{
-					"name": "updateUploadImage",
-					"type": "<Slug>(collection: Slug, id: string, input: UploadImageInput, options?: RevisionOptions) => Promise<Record<string, unknown> & { id: string; createdAt?: string; updatedAt?: string; deletedAt?: string; _status?: \"draft\" | \"published\"; _revision?: number; _localization?: { sources: Record<string, string>; }; }>",
-					"description": "The updateUploadImage value."
+					"name": "updateUpload",
+					"type": "<Slug>(collection: Slug, id: string, input: UpdateUploadInput<Record<string, unknown>>, options?: MutationOptions<string> | undefined) => Promise<Record<string, unknown> & { id: string; createdAt?: string; updatedAt?: string; deletedAt?: string; _status?: \"draft\" | \"published\"; _revision?: number; _localization?: { sources: Record<string, string>; }; }>",
+					"description": "The updateUpload value."
+				},
+				{
+					"name": "readUploadSource",
+					"type": "<Slug>(collection: Slug, id: string, options?: RequestOptions) => Promise<Blob>",
+					"description": "The readUploadSource value."
+				},
+				{
+					"name": "previewUploadFromURL",
+					"type": "<Slug>(collection: Slug, url: string, options?: RequestOptions & { id?: string }) => Promise<UploadFile>",
+					"description": "The previewUploadFromURL value."
 				},
 				{
 					"name": "versions",
@@ -56761,18 +57149,18 @@
 				},
 				{
 					"name": "schedulePublish",
-					"type": "<Slug>(collection: Slug, id: string, runAt: string | Date, options?: RevisionOptions) => Promise<ScheduledPublish>",
+					"type": "<Slug>(collection: Slug, id: string, runAt: string | Date, options?: RevisionOptions) => Promise<ScheduledPublication>",
 					"description": "The schedulePublish value."
 				},
 				{
-					"name": "scheduledPublishes",
-					"type": "<Slug>(collection: Slug, id: string, options?: RequestOptions) => Promise<ScheduledPublish[]>",
-					"description": "The scheduledPublishes value."
+					"name": "scheduledPublications",
+					"type": "<Slug>(collection: Slug, id: string, options?: RequestOptions) => Promise<ScheduledPublication[]>",
+					"description": "The scheduledPublications value."
 				},
 				{
-					"name": "cancelScheduledPublish",
+					"name": "cancelScheduledPublication",
 					"type": "<Slug>(collection: Slug, id: string, jobID: string, options?: RequestOptions) => Promise<DeleteEnvelope>",
-					"description": "The cancelScheduledPublish value."
+					"description": "The cancelScheduledPublication value."
 				},
 				{
 					"name": "publish",
@@ -59132,34 +59520,14 @@
 					"description": "The documents:anotherEditor value."
 				},
 				{
-					"name": "documents:apiActions",
-					"type": "TranslationMessage",
-					"description": "The documents:apiActions value."
-				},
-				{
 					"name": "documents:apiAuthenticated",
 					"type": "TranslationMessage",
 					"description": "The documents:apiAuthenticated value."
 				},
 				{
-					"name": "documents:apiAuthenticatedDescription",
+					"name": "documents:apiURL",
 					"type": "TranslationMessage",
-					"description": "The documents:apiAuthenticatedDescription value."
-				},
-				{
-					"name": "documents:apiAvailableAfterSave",
-					"type": "TranslationMessage",
-					"description": "The documents:apiAvailableAfterSave value."
-				},
-				{
-					"name": "documents:apiCreate",
-					"type": "TranslationMessage",
-					"description": "The documents:apiCreate value."
-				},
-				{
-					"name": "documents:apiCurrentSession",
-					"type": "TranslationMessage",
-					"description": "The documents:apiCurrentSession value."
+					"description": "Label for the document API request URL."
 				},
 				{
 					"name": "documents:apiDepth",
@@ -59167,54 +59535,9 @@
 					"description": "The documents:apiDepth value."
 				},
 				{
-					"name": "documents:apiDepthDescription",
-					"type": "TranslationMessage",
-					"description": "The documents:apiDepthDescription value."
-				},
-				{
-					"name": "documents:apiDescription",
-					"type": "TranslationMessage",
-					"description": "The documents:apiDescription value."
-				},
-				{
-					"name": "documents:apiExampleLanguage",
-					"type": "TranslationMessage",
-					"description": "The documents:apiExampleLanguage value."
-				},
-				{
-					"name": "documents:apiExampleOnly",
-					"type": "TranslationMessage",
-					"description": "The documents:apiExampleOnly value."
-				},
-				{
-					"name": "documents:apiListSearch",
-					"type": "TranslationMessage",
-					"description": "The documents:apiListSearch value."
-				},
-				{
-					"name": "documents:apiMutationDescription",
-					"type": "TranslationMessage",
-					"description": "The documents:apiMutationDescription value."
-				},
-				{
-					"name": "documents:apiPublicRequest",
-					"type": "TranslationMessage",
-					"description": "The documents:apiPublicRequest value."
-				},
-				{
-					"name": "documents:apiRequestExample",
-					"type": "TranslationMessage",
-					"description": "The documents:apiRequestExample value."
-				},
-				{
 					"name": "documents:apiRequestFailed",
 					"type": "TranslationMessage",
 					"description": "The documents:apiRequestFailed value."
-				},
-				{
-					"name": "documents:apiRequestParameters",
-					"type": "TranslationMessage",
-					"description": "The documents:apiRequestParameters value."
 				},
 				{
 					"name": "documents:apiRequesting",
@@ -59230,16 +59553,6 @@
 					"name": "documents:apiRunnableAfterSave",
 					"type": "TranslationMessage",
 					"description": "The documents:apiRunnableAfterSave value."
-				},
-				{
-					"name": "documents:apiUpdate",
-					"type": "TranslationMessage",
-					"description": "The documents:apiUpdate value."
-				},
-				{
-					"name": "documents:apiView",
-					"type": "TranslationMessage",
-					"description": "The documents:apiView value."
 				},
 				{
 					"name": "documents:apiViewLoadFailed",
@@ -59775,11 +60088,6 @@
 					"name": "documents:workspaceLoadFailed",
 					"type": "TranslationMessage",
 					"description": "The documents:workspaceLoadFailed value."
-				},
-				{
-					"name": "documents:liveRESTExplorer",
-					"type": "TranslationMessage",
-					"description": "The documents:liveRESTExplorer value."
 				},
 				{
 					"name": "errors:accessDenied",
@@ -61597,9 +61905,9 @@
 					"description": "The versions:saved value."
 				},
 				{
-					"name": "versions:schedulePublish",
+					"name": "versions:schedulePublication",
 					"type": "TranslationMessage",
-					"description": "The versions:schedulePublish value."
+					"description": "The versions:schedulePublication value."
 				},
 				{
 					"name": "versions:allVersions",
@@ -61622,9 +61930,19 @@
 					"description": "The versions:cancelScheduledPublish value."
 				},
 				{
+					"name": "versions:cancelScheduledUnpublish",
+					"type": "TranslationMessage",
+					"description": "The versions:cancelScheduledUnpublish value."
+				},
+				{
 					"name": "versions:chooseFuturePublishTime",
 					"type": "TranslationMessage",
 					"description": "The versions:chooseFuturePublishTime value."
+				},
+				{
+					"name": "versions:chooseFutureUnpublishTime",
+					"type": "TranslationMessage",
+					"description": "The versions:chooseFutureUnpublishTime value."
 				},
 				{
 					"name": "versions:compareRevisionWith",
@@ -61682,11 +62000,6 @@
 					"description": "The versions:previousCurrentPreserved value."
 				},
 				{
-					"name": "versions:publishDateTime",
-					"type": "TranslationMessage",
-					"description": "The versions:publishDateTime value."
-				},
-				{
 					"name": "versions:publishNotScheduled",
 					"type": "TranslationMessage",
 					"description": "The versions:publishNotScheduled value."
@@ -61700,6 +62013,11 @@
 					"name": "versions:publishScheduled",
 					"type": "TranslationMessage",
 					"description": "The versions:publishScheduled value."
+				},
+				{
+					"name": "versions:unpublishScheduled",
+					"type": "TranslationMessage",
+					"description": "The versions:unpublishScheduled value."
 				},
 				{
 					"name": "versions:resourceUnavailable",
@@ -61787,19 +62105,14 @@
 					"description": "The versions:scheduleNotCancelled value."
 				},
 				{
-					"name": "versions:scheduledPublishCancelled",
+					"name": "versions:scheduledPublicationCancelled",
 					"type": "TranslationMessage",
-					"description": "The versions:scheduledPublishCancelled value."
+					"description": "The versions:scheduledPublicationCancelled value."
 				},
 				{
-					"name": "versions:scheduledPublishing",
+					"name": "versions:scheduledPublicationDescription",
 					"type": "TranslationMessage",
-					"description": "The versions:scheduledPublishing value."
-				},
-				{
-					"name": "versions:scheduledPublishingDescription",
-					"type": "TranslationMessage",
-					"description": "The versions:scheduledPublishingDescription value."
+					"description": "The versions:scheduledPublicationDescription value."
 				},
 				{
 					"name": "versions:scheduling",
@@ -62931,7 +63244,7 @@
 				},
 				{
 					"name": "messages",
-					"type": "Readonly<Record<\"account:account\" | \"account:accountMenu\" | \"account:accountMenuLabel\" | \"account:accountSecurity\" | \"account:activeSessions\" | \"account:adminRole\" | \"account:adminTheme\" | \"account:appearance\" | \"account:apiKeys\" | \"account:apiKeyCopied\" | \"account:apiKeyCopyFailed\" | \"account:apiKeyCreated\" | \"account:apiKeyNamePlaceholder\" | \"account:apiKeyRevoked\" | \"account:apiKeysDescription\" | \"account:changePassword\" | \"account:confirmRevokeAPIKey\" | \"account:confirmRevokeSession\" | \"account:confirmSignOutAll\" | \"account:copyAPIKeyNow\" | \"account:createKey\" | \"account:created\" | \"account:currentSession\" | \"account:currentPassword\" | \"account:expires\" | \"account:expiration\" | \"account:interfaceLanguage\" | \"account:languageSaveFailed\" | \"account:languageSaved\" | \"account:lastSeen\" | \"account:loadingSessions\" | \"account:name\" | \"account:never\" | \"account:newPassword\" | \"account:noAPIKeys\" | \"account:noSessions\" | \"account:password\" | \"account:passwordDescription\" | \"account:passwordMismatch\" | \"account:passwordUpdated\" | \"account:preferencesReset\" | \"account:preferencesResetFailed\" | \"account:preferencesStored\" | \"account:profile\" | \"account:profileAndPreferences\" | \"account:profileDescription\" | \"account:profileLoadFailed\" | \"account:profileRules\" | \"account:profileSaveFailed\" | \"account:profileUpdated\" | \"account:resetAllPreferences\" | \"account:resettingPreferences\" | \"account:resetPreferences\" | \"account:revoke\" | \"account:revokeCredentialDescription\" | \"account:saveProfile\" | \"account:savingProfile\" | \"account:security\" | \"account:securityAction\" | \"account:securityDescription\" | \"account:securityLoadFailed\" | \"account:securityOperationFailed\" | \"account:sessionRevoked\" | \"account:sessionsDescription\" | \"account:signOutAll\" | \"account:signOutAllDescription\" | \"account:signedInUser\" | \"account:signedOutAll\" | \"account:signingOut\" | \"account:signOutFailed\" | \"account:systemTheme\" | \"account:lightTheme\" | \"account:darkTheme\" | \"account:theme\" | \"account:themeSaveFailed\" | \"account:themeSaved\" | \"account:timeZone\" | \"account:timeZoneSaveFailed\" | \"account:timeZoneSaved\" | \"account:unknownClient\" | \"account:updatePassword\" | \"account:updatingPassword\" | \"account:updateProfile\" | \"auth:accountCreated\" | \"auth:accountReady\" | \"auth:adminAccessDenied\" | \"auth:adminBrand\" | \"auth:adminLabel\" | \"auth:autoSignInFailed\" | \"auth:backToLogin\" | \"auth:checkEmail\" | \"auth:chooseNewPassword\" | \"auth:confirmPassword\" | \"auth:configuredCollectionUnavailable\" | \"auth:correctInvalidFields\" | \"auth:createAccount\" | \"auth:createFirstUser\" | \"auth:creatingAccount\" | \"auth:credentials\" | \"auth:email\" | \"auth:emailPlaceholder\" | \"auth:emailSent\" | \"auth:emailVerificationFailed\" | \"auth:emailVerified\" | \"auth:enterPassword\" | \"auth:firstAccountCreateFailed\" | \"auth:firstAccountExists\" | \"auth:firstAccountIdentityUnavailable\" | \"auth:firstAccountNoAdminAccess\" | \"auth:firstTimeSetup\" | \"auth:firstUserDescription\" | \"auth:forgotPassword\" | \"auth:forgotPasswordDescription\" | \"auth:hidePassword\" | \"auth:hidePasswordConfirmation\" | \"auth:login\" | \"auth:loginFailed\" | \"auth:logout\" | \"auth:missingResetToken\" | \"auth:missingVerificationToken\" | \"auth:password\" | \"auth:passwordMismatch\" | \"auth:passwordPlaceholder\" | \"auth:passwordRange\" | \"auth:passwordMinimum\" | \"auth:passwordResetFailed\" | \"auth:passwordResetSent\" | \"auth:passwordResetSuccess\" | \"auth:passwordTooLong\" | \"auth:passwordTooShort\" | \"auth:requestAnotherLink\" | \"auth:requestVerification\" | \"auth:resetRequestFailed\" | \"auth:resetPassword\" | \"auth:resettingPassword\" | \"auth:sendResetLink\" | \"auth:sendVerificationLink\" | \"auth:sending\" | \"auth:setupCompleted\" | \"auth:showPassword\" | \"auth:showPasswordConfirmation\" | \"auth:signingIn\" | \"auth:verificationDescription\" | \"auth:verificationRequestFailed\" | \"auth:verificationSent\" | \"auth:verifyDescription\" | \"auth:verifyEmail\" | \"auth:verifyYourEmail\" | \"auth:verifying\" | \"auth:welcome\" | \"collections:addFilter\" | \"collections:actions\" | \"collections:allDocumentsNotSelected\" | \"collections:allFolders\" | \"collections:allSelected\" | \"collections:applyChange\" | \"collections:applying\" | \"collections:backToCollection\" | \"collections:blockNumber\" | \"collections:bulkActions\" | \"collections:bulkEditDescription\" | \"collections:bulkEditSelected\" | \"collections:bulkOperationFailed\" | \"collections:cannotUndo\" | \"collections:chooseField\" | \"collections:chooseOperator\" | \"collections:chooseValue\" | \"collections:clearSearch\" | \"collections:clearSelection\" | \"collections:clearValue\" | \"collections:collectionDocuments\" | \"collections:collectionView\" | \"collections:confirmDeleteDocumentPermanently\" | \"collections:confirmDeleteSelected\" | \"collections:confirmDeleteSelectedPermanently\" | \"collections:confirmEmptyTrash\" | \"collections:confirmRestoreSelected\" | \"collections:contentLocale\" | \"collections:created\" | \"collections:deleteDocumentPermanently\" | \"collections:deletePermanently\" | \"collections:deleteSavedView\" | \"collections:deleteSelectedDescription\" | \"collections:disabled\" | \"collections:document\" | \"collections:documentCount\" | \"collections:documentNotDeleted\" | \"collections:documentNotRestored\" | \"collections:documentPermanentlyDeleted\" | \"collections:documentRestored\" | \"collections:documents\" | \"collections:documentsDeleted\" | \"collections:documentsLoadFailed\" | \"collections:documentsPerPage\" | \"collections:documentsPermanentlyDeleted\" | \"collections:documentsPublished\" | \"collections:documentsRestored\" | \"collections:documentsUnpublished\" | \"collections:documentsUpdated\" | \"collections:draftsAndVersions\" | \"collections:emptyDescription\" | \"collections:emptyTrashDescription\" | \"collections:enabled\" | \"collections:field\" | \"collections:filteredResultLoadFailed\" | \"collections:filterDocuments\" | \"collections:filterField\" | \"collections:filterOperator\" | \"collections:filterSummary\" | \"collections:filterValue\" | \"collections:folder\" | \"collections:hasValue\" | \"collections:hierarchy\" | \"collections:isEmpty\" | \"collections:listPreferencesNotSaved\" | \"collections:listPreferencesUnavailable\" | \"collections:listView\" | \"collections:loadingDocuments\" | \"collections:manageFolders\" | \"collections:moreItems\" | \"collections:nextPage\" | \"collections:noDocumentsChanged\" | \"collections:noMatchingDocuments\" | \"collections:nothingMatches\" | \"collections:openDocument\" | \"collections:operationFailed\" | \"collections:operator\" | \"collections:operatorContains\" | \"collections:operatorEquals\" | \"collections:operatorExists\" | \"collections:operatorGreaterThan\" | \"collections:operatorGreaterThanEqual\" | \"collections:operatorLessThan\" | \"collections:operatorLessThanEqual\" | \"collections:operatorLike\" | \"collections:operatorNotEquals\" | \"collections:pageSize\" | \"collections:pagination\" | \"collections:perPage\" | \"collections:previousPage\" | \"collections:rangeSummary\" | \"collections:relatedDocument\" | \"collections:removeFilter\" | \"collections:restoreDocument\" | \"collections:restoreSelectedDescription\" | \"collections:rowNumber\" | \"collections:savedViewDeleted\" | \"collections:savedViewName\" | \"collections:savedViewNotDeleted\" | \"collections:savedViews\" | \"collections:savedViewsUnavailable\" | \"collections:searchBy\" | \"collections:searchDocuments\" | \"collections:searchPlaceholder\" | \"collections:selectAll\" | \"collections:selectAllRows\" | \"collections:selectAllUnavailable\" | \"collections:selectDocument\" | \"collections:selecting\" | \"collections:selectionLimitDescription\" | \"collections:showColumn\" | \"collections:showCreatedColumn\" | \"collections:showIDColumn\" | \"collections:showStatusColumn\" | \"collections:showUpdatedColumn\" | \"collections:sortBy\" | \"collections:status\" | \"collections:statusFilters\" | \"collections:title\" | \"collections:trashEmpty\" | \"collections:trashEmptyDescription\" | \"collections:trashNotEmptied\" | \"collections:updated\" | \"collections:value\" | \"collections:view\" | \"collections:viewName\" | \"collections:viewNotSaved\" | \"collections:viewSaved\" | \"collections:all\" | \"collections:bulkEdit\" | \"collections:bulkUpload\" | \"collections:clearFilters\" | \"collections:columns\" | \"collections:createNew\" | \"collections:empty\" | \"collections:emptyTrash\" | \"collections:filters\" | \"collections:pageSummary\" | \"collections:search\" | \"collections:selected\" | \"collections:sort\" | \"collections:trash\" | \"collections:trashFor\" | \"dashboard:create\" | \"dashboard:extensions\" | \"dashboard:heading\" | \"dashboard:open\" | \"dashboard:welcome\" | \"documents:api\" | \"documents:apiFor\" | \"documents:autosave\" | \"documents:copyFromLocale\" | \"documents:create\" | \"documents:created\" | \"documents:delete\" | \"documents:discard\" | \"documents:download\" | \"documents:draft\" | \"documents:duplicate\" | \"documents:edit\" | \"documents:editing\" | \"documents:editedSince\" | \"documents:inheritedFrom\" | \"documents:lastModified\" | \"documents:livePreview\" | \"documents:missingTranslation\" | \"documents:publish\" | \"documents:published\" | \"documents:restore\" | \"documents:save\" | \"documents:saveDraft\" | \"documents:publishing\" | \"documents:unsavedChanges\" | \"documents:leaveWithoutSavingQuestion\" | \"documents:leaveWithoutSavingDescription\" | \"documents:keepEditing\" | \"documents:leaveWithoutSaving\" | \"documents:schedule\" | \"documents:takeOver\" | \"documents:unpublish\" | \"documents:updated\" | \"documents:versions\" | \"documents:versionsFor\" | \"documents:accessEvaluationFailed\" | \"documents:accountUnlocked\" | \"documents:accountUnlockFailed\" | \"documents:anotherEditor\" | \"documents:apiActions\" | \"documents:apiAuthenticated\" | \"documents:apiAuthenticatedDescription\" | \"documents:apiAvailableAfterSave\" | \"documents:apiCreate\" | \"documents:apiCurrentSession\" | \"documents:apiDepth\" | \"documents:apiDepthDescription\" | \"documents:apiDescription\" | \"documents:apiExampleLanguage\" | \"documents:apiExampleOnly\" | \"documents:apiListSearch\" | \"documents:apiMutationDescription\" | \"documents:apiPublicRequest\" | \"documents:apiRequestExample\" | \"documents:apiRequestFailed\" | \"documents:apiRequestParameters\" | \"documents:apiRequesting\" | \"documents:apiRunRequest\" | \"documents:apiRunnableAfterSave\" | \"documents:apiUpdate\" | \"documents:apiView\" | \"documents:apiViewLoadFailed\" | \"documents:authorizingDraftPreview\" | \"documents:breadcrumb\" | \"documents:cancel\" | \"documents:closeLivePreview\" | \"documents:collectionRemoved\" | \"documents:collectionUnavailable\" | \"documents:confirmPassword\" | \"documents:contentLocale\" | \"documents:copied\" | \"documents:copy\" | \"documents:copyFrom\" | \"documents:copying\" | \"documents:copyReady\" | \"documents:copyURL\" | \"documents:createdLabel\" | \"documents:createdLabelPlain\" | \"documents:credentials\" | \"documents:credentialsDescription\" | \"documents:currentlyEditing\" | \"documents:dashboard\" | \"documents:deleteAsset\" | \"documents:deleteDescription\" | \"documents:deleteDocument\" | \"documents:deleteFailed\" | \"documents:deletedLabel\" | \"documents:deletedSuccessfully\" | \"documents:deleteQuestion\" | \"documents:destructiveAction\" | \"documents:document\" | \"documents:documentLocked\" | \"documents:documentViews\" | \"documents:draftFieldsRestored\" | \"documents:duplicateFailed\" | \"documents:duplicatedLabel\" | \"documents:duplicating\" | \"documents:editingLeaseActive\" | \"documents:enterNewAccountPassword\" | \"documents:forceUnlock\" | \"documents:globals\" | \"documents:goBack\" | \"documents:incompatibleDraftValues\" | \"documents:lastModifiedLabel\" | \"documents:loadFailed\" | \"documents:loadingAPIView\" | \"documents:loadingDocument\" | \"documents:locale\" | \"documents:localeCopied\" | \"documents:localeCopiedDescription\" | \"documents:localeCopyFailed\" | \"documents:localeNotCopied\" | \"documents:localeSwitchDirty\" | \"documents:lockOptionsReadOnly\" | \"documents:lockOptionsWithTakeover\" | \"documents:lockedReadOnly\" | \"documents:lockTakenOver\" | \"documents:lockTakeoverFailed\" | \"documents:moreActions\" | \"documents:movedToTrashLabel\" | \"documents:moveToTrash\" | \"documents:moveToTrashDescription\" | \"documents:moveToTrashQuestion\" | \"documents:newLabel\" | \"documents:noDraftFieldsRestored\" | \"documents:notDeleted\" | \"documents:notDuplicated\" | \"documents:notSaved\" | \"documents:openAPIURL\" | \"documents:openPreviewWindow\" | \"documents:password\" | \"documents:passwordMinimum\" | \"documents:passwordsDoNotMatch\" | \"documents:passwordTooLong\" | \"documents:passwordTooShort\" | \"documents:previewAuthorizationFailed\" | \"documents:previewAuthorizing\" | \"documents:previewConnected\" | \"documents:previewConnecting\" | \"documents:previewHeight\" | \"documents:previewUnavailable\" | \"documents:previewViewport\" | \"documents:previewWidth\" | \"documents:previewZoom\" | \"documents:publishChanges\" | \"documents:publishedTitle\" | \"documents:responsive\" | \"documents:restoreFromTrash\" | \"documents:retryPreview\" | \"documents:saved\" | \"documents:saveBeforeLocaleSwitch\" | \"documents:saveFailed\" | \"documents:saveOrDiscardFirst\" | \"documents:saveToSwitchLocale\" | \"documents:saving\" | \"documents:schemaUpdated\" | \"documents:schemaUpdatedWithDraft\" | \"documents:status\" | \"documents:statusChangeFailed\" | \"documents:statusNotChanged\" | \"documents:statusNow\" | \"documents:takingOver\" | \"documents:unlocking\" | \"documents:unpublishedTitle\" | \"documents:untitled\" | \"documents:untitledAsset\" | \"documents:viewReadOnly\" | \"documents:workspaceLoadFailed\" | \"documents:liveRESTExplorer\" | \"errors:accessDenied\" | \"errors:adminBootstrapFailed\" | \"errors:couldNotLoadApplication\" | \"errors:loadAdmin\" | \"errors:loadDocument\" | \"errors:notFound\" | \"errors:notFoundCode\" | \"errors:notFoundDescription\" | \"errors:notFoundHeading\" | \"errors:returnDashboard\" | \"errors:required\" | \"errors:save\" | \"errors:unknown\" | \"errors:allowedOption\" | \"errors:array\" | \"errors:blockObject\" | \"errors:blockType\" | \"errors:boolean\" | \"errors:clipboardBlockType\" | \"errors:clipboardField\" | \"errors:clipboardGroup\" | \"errors:clipboardMaxRows\" | \"errors:clipboardMinRows\" | \"errors:clipboardRow\" | \"errors:clipboardRows\" | \"errors:correctInvalidFields\" | \"errors:duplicateOption\" | \"errors:fieldRequired\" | \"errors:finiteNumber\" | \"errors:maxRows\" | \"errors:minRows\" | \"errors:object\" | \"errors:oneBlock\" | \"errors:oneReference\" | \"errors:oneRow\" | \"errors:polymorphicReference\" | \"errors:referenceID\" | \"errors:relatedDocumentLoad\" | \"errors:relatedDocumentsUpdate\" | \"errors:relationshipDocumentsLoad\" | \"errors:relationshipTargetUnavailable\" | \"errors:rowObject\" | \"errors:selectedDocumentsLoad\" | \"errors:string\" | \"errors:updateUnconfirmed\" | \"errors:validJSON\" | \"errors:validPoint\" | \"fields:add\" | \"fields:addBelow\" | \"fields:addBlock\" | \"fields:addRelationship\" | \"fields:addRow\" | \"fields:asset\" | \"fields:block\" | \"fields:blockNumber\" | \"fields:browse\" | \"fields:browseAll\" | \"fields:choose\" | \"fields:chooseBlockFor\" | \"fields:clear\" | \"fields:collapse\" | \"fields:collapseAll\" | \"fields:content\" | \"fields:copy\" | \"fields:copied\" | \"fields:copyField\" | \"fields:copyRow\" | \"fields:create\" | \"fields:createdAt\" | \"fields:document\" | \"fields:drag\" | \"fields:duplicate\" | \"fields:edit\" | \"fields:editRelationship\" | \"fields:expand\" | \"fields:generateSlug\" | \"fields:id\" | \"fields:inspectEdit\" | \"fields:invalidCount\" | \"fields:itemCount\" | \"fields:joinChanges\" | \"fields:labeledRowNumber\" | \"fields:latitude\" | \"fields:lockSlug\" | \"fields:loading\" | \"fields:longitude\" | \"fields:manageRelationships\" | \"fields:maximum\" | \"fields:minimum\" | \"fields:moveDown\" | \"fields:moveUp\" | \"fields:noBlocks\" | \"fields:noMatch\" | \"fields:noMaximum\" | \"fields:noMinimum\" | \"fields:noRelated\" | \"fields:open\" | \"fields:openActions\" | \"fields:openCalendar\" | \"fields:paste\" | \"fields:pasted\" | \"fields:pasteField\" | \"fields:pasteRow\" | \"fields:readOnly\" | \"fields:relatedDocument\" | \"fields:relationship\" | \"fields:relationships\" | \"fields:remove\" | \"fields:removeRelationship\" | \"fields:rowLimits\" | \"fields:rowNumber\" | \"fields:search\" | \"fields:searchBlock\" | \"fields:searchLabel\" | \"fields:select\" | \"fields:selectDate\" | \"fields:sections\" | \"fields:showAll\" | \"fields:showingRelated\" | \"fields:sortBy\" | \"fields:status\" | \"fields:untitled\" | \"fields:updated\" | \"fields:updatedAt\" | \"fields:unlockSlug\" | \"fields:updating\" | \"fields:upload\" | \"general:add\" | \"general:apply\" | \"general:back\" | \"general:bulkActions\" | \"general:cancel\" | \"general:clear\" | \"general:clearSelection\" | \"general:close\" | \"general:confirm\" | \"general:continue\" | \"general:copy\" | \"general:copyJSON\" | \"general:copyUnavailable\" | \"general:copied\" | \"general:codeExample\" | \"general:create\" | \"general:delete\" | \"general:done\" | \"general:edit\" | \"general:escape\" | \"general:exitExpandedJSONView\" | \"general:expandJSONView\" | \"general:expandedJSONDescription\" | \"general:expandedJSONResponse\" | \"general:jsonData\" | \"general:loading\" | \"general:loadingSchema\" | \"general:more\" | \"general:next\" | \"general:no\" | \"general:none\" | \"general:notifications\" | \"general:open\" | \"general:pagination\" | \"general:previous\" | \"general:replace\" | \"general:remove\" | \"general:retry\" | \"general:riduApplication\" | \"general:save\" | \"general:search\" | \"general:select\" | \"general:selected\" | \"general:dismissNotification\" | \"general:yes\" | \"navigation:closeMenu\" | \"navigation:adminHeader\" | \"navigation:adminNavigation\" | \"navigation:adminNavigationDescription\" | \"navigation:applyingSchemaUpdate\" | \"navigation:breadcrumb\" | \"navigation:collection\" | \"navigation:collectionBadge\" | \"navigation:collections\" | \"navigation:commandDescription\" | \"navigation:commandMenu\" | \"navigation:commandSearch\" | \"navigation:commandSearchPlaceholder\" | \"navigation:document\" | \"navigation:documentBadge\" | \"navigation:globals\" | \"navigation:loadingDocuments\" | \"navigation:loadingPage\" | \"navigation:navigate\" | \"navigation:navigateRidu\" | \"navigation:newBadge\" | \"navigation:nothingMatches\" | \"navigation:nothingMatchesQuery\" | \"navigation:openMenu\" | \"navigation:page\" | \"navigation:pluginShellHeader\" | \"navigation:plugins\" | \"navigation:search\" | \"navigation:searchAndNavigate\" | \"navigation:searchAndNavigateShortcut\" | \"navigation:schemaUpdateFailed\" | \"navigation:toggleMenu\" | \"reference:createNew\" | \"reference:noResults\" | \"reference:searchOrCreate\" | \"reference:accessCheckFailed\" | \"reference:addLabel\" | \"reference:addSelected\" | \"reference:all\" | \"reference:api\" | \"reference:applying\" | \"reference:backToResults\" | \"reference:browserDescription\" | \"reference:cancel\" | \"reference:cannotCreate\" | \"reference:cannotUpdate\" | \"reference:closeBrowser\" | \"reference:collectionFilters\" | \"reference:confirmPassword\" | \"reference:createdLabel\" | \"reference:createLabel\" | \"reference:credentials\" | \"reference:currentPayload\" | \"reference:deselectLabel\" | \"reference:discard\" | \"reference:discardChanges\" | \"reference:discardDescription\" | \"reference:document\" | \"reference:documents\" | \"reference:edit\" | \"reference:editLabel\" | \"reference:enterNewAccountPassword\" | \"reference:images\" | \"reference:keepEditing\" | \"reference:loadingRelated\" | \"reference:newLabel\" | \"reference:newMetadata\" | \"reference:nextPage\" | \"reference:nothingMatches\" | \"reference:password\" | \"reference:passwordMinimum\" | \"reference:passwordsDoNotMatch\" | \"reference:passwordTooLong\" | \"reference:passwordTooShort\" | \"reference:previousPage\" | \"reference:range\" | \"reference:readOnlyDescription\" | \"reference:relatedLoadFailed\" | \"reference:relatedNotSaved\" | \"reference:relatedSaveFailed\" | \"reference:results\" | \"reference:saved\" | \"reference:saveLabel\" | \"reference:saving\" | \"reference:search\" | \"reference:select\" | \"reference:selectedNotSaved\" | \"reference:selectLabel\" | \"reference:unsavedChanges\" | \"reference:untitledLabel\" | \"reference:updateNotConfirmed\" | \"reference:uploadNew\" | \"uploads:addFiles\" | \"uploads:bulkUpload\" | \"uploads:chooseFile\" | \"uploads:dropFiles\" | \"uploads:original\" | \"uploads:pasteURL\" | \"uploads:upload\" | \"uploads:accessCheckFailed\" | \"uploads:applyImageEdit\" | \"uploads:assetPreview\" | \"uploads:assetURL\" | \"uploads:assetsUploaded\" | \"uploads:bulkUploadDescription\" | \"uploads:chooseFileBeforeCreating\" | \"uploads:chooseFileBeforeSaving\" | \"uploads:chooseFilesForQueue\" | \"uploads:chooseFileToUpload\" | \"uploads:chooseFocalPoint\" | \"uploads:chooseValue\" | \"uploads:configuredTypes\" | \"uploads:correctMetadata\" | \"uploads:createPermissionDenied\" | \"uploads:cropAndFocalUpdated\" | \"uploads:cropBoundary\" | \"uploads:cropDescription\" | \"uploads:dimensions\" | \"uploads:editFilename\" | \"uploads:editImage\" | \"uploads:enableCrop\" | \"uploads:file\" | \"uploads:filename\" | \"uploads:files\" | \"uploads:focalKeyboardInstructions\" | \"uploads:focalOutcomeUnknown\" | \"uploads:focalPoint\" | \"uploads:focalPointDescription\" | \"uploads:focalPosition\" | \"uploads:focalUpdated\" | \"uploads:focalUpdateFailed\" | \"uploads:height\" | \"uploads:horizontal\" | \"uploads:horizontalFocalPoint\" | \"uploads:imageEditDescription\" | \"uploads:imageOutcomeUnknown\" | \"uploads:imageOutcomeUnknownDescription\" | \"uploads:imageSizes\" | \"uploads:imageSizesNotRegenerated\" | \"uploads:imageSizesRegenerated\" | \"uploads:imageStateRecovered\" | \"uploads:importFromURL\" | \"uploads:importing\" | \"uploads:left\" | \"uploads:loadingAssetPreview\" | \"uploads:maximumSize\" | \"uploads:needAttention\" | \"uploads:noFilesQueued\" | \"uploads:notConfigured\" | \"uploads:openAsset\" | \"uploads:openImportedAsset\" | \"uploads:outcomeNotConfirmed\" | \"uploads:outcomeUnknown\" | \"uploads:outcomeUnknownDescription\" | \"uploads:outcomeUnknownListRefreshed\" | \"uploads:previewGeneratedSizes\" | \"uploads:previewSizes\" | \"uploads:queueSummary\" | \"uploads:regenerating\" | \"uploads:remoteAssetUploaded\" | \"uploads:remoteImportDescription\" | \"uploads:remoteOutcomeNotConfirmed\" | \"uploads:removeFilename\" | \"uploads:retryFilename\" | \"uploads:serverStateRefreshed\" | \"uploads:size\" | \"uploads:sizesFor\" | \"uploads:statusComplete\" | \"uploads:statusFailed\" | \"uploads:statusQueued\" | \"uploads:statusUncertain\" | \"uploads:statusUploading\" | \"uploads:top\" | \"uploads:type\" | \"uploads:unknownOutcomesDescription\" | \"uploads:untitledAsset\" | \"uploads:uploadCount\" | \"uploads:uploading\" | \"uploads:uploadingFilename\" | \"uploads:uploadQueue\" | \"uploads:urlCopied\" | \"uploads:urlCopiedDescription\" | \"uploads:urlImportMetadata\" | \"uploads:vertical\" | \"uploads:verticalFocalPoint\" | \"uploads:width\" | \"versions:compare\" | \"versions:current\" | \"versions:history\" | \"versions:restore\" | \"versions:saved\" | \"versions:schedulePublish\" | \"versions:allVersions\" | \"versions:backToDocument\" | \"versions:cancel\" | \"versions:cancelScheduledPublish\" | \"versions:chooseFuturePublishTime\" | \"versions:compareRevisionWith\" | \"versions:comparisonRevision\" | \"versions:false\" | \"versions:field\" | \"versions:historyDescription\" | \"versions:historyLoadFailed\" | \"versions:modifiedFieldsOnly\" | \"versions:noComparison\" | \"versions:noModifiedFields\" | \"versions:noRevisions\" | \"versions:previousCurrentPreserved\" | \"versions:publishDateTime\" | \"versions:publishNotScheduled\" | \"versions:publishScheduleFailed\" | \"versions:publishScheduled\" | \"versions:resourceUnavailable\" | \"versions:restoreAsDraft\" | \"versions:restoreDescription\" | \"versions:restoreRevisionQuestion\" | \"versions:restoring\" | \"versions:revision\" | \"versions:revisionIsCurrent\" | \"versions:revisionNotRestored\" | \"versions:revisionRestoreFailed\" | \"versions:revisionRestored\" | \"versions:revisionRestoredAsDraft\" | \"versions:revisionRestoredTitle\" | \"versions:revisionWithStatus\" | \"versions:savedRevisions\" | \"versions:savedRevisionsDescription\" | \"versions:scheduleCancelFailed\" | \"versions:scheduleNotCancelled\" | \"versions:scheduledPublishCancelled\" | \"versions:scheduledPublishing\" | \"versions:scheduledPublishingDescription\" | \"versions:scheduling\" | \"versions:shortRevision\" | \"versions:status\" | \"versions:total\" | \"versions:true\" | \"versions:versionLocale\", TranslationMessage>>",
+					"type": "Readonly<Record<\"documents:scheduleFor\" | \"documents:saveBeforeSchedule\" | \"documents:upcomingEvents\" | \"documents:noScheduledEvents\" | \"general:or\" | \"fields:chooseExisting\" | \"fields:time\" | \"fields:codeEditorLoadFailed\" | \"fields:dateControlLoadFailed\" | \"reference:browserLoadFailed\" | \"uploads:reloadSaved\" | \"uploads:saveOutcomeUnknownDescription\" | \"uploads:fileTooLarge\" | \"uploads:fileTypeDenied\" | \"uploads:fileOpenFailed\" | \"uploads:fileDownloadFailed\" | \"uploads:previewLoadFailed\" | \"fields:liveValidationPending\" | \"fields:liveValidationFailed\" | \"fields:liveValidationRetry\" | \"fields:liveValidationSkipped\" | \"collections:clearStatus\" | \"collections:publicationStatus\" | \"collections:createdAt\" | \"collections:updatedAt\" | \"collections:createNewButton\" | \"collections:sortAscending\" | \"collections:sortDescending\" | \"collections:reorderColumn\" | \"collections:noFilters\" | \"collections:filterWhere\" | \"collections:or\" | \"collections:and\" | \"collections:addAndFilter\" | \"collections:perPageLabel\" | \"collections:operatorIncludesItem\" | \"fields:listAdd\" | \"fields:listEmpty\" | \"fields:listItem\" | \"fields:listMoveUp\" | \"fields:listMoveDown\" | \"fields:listRemove\" | \"fields:listAdded\" | \"fields:listRemoved\" | \"fields:listMoved\" | \"errors:listMinItems\" | \"errors:listMaxItems\" | \"errors:listItemString\" | \"errors:listItemNumber\" | \"errors:listItemMinLength\" | \"errors:listItemMaxLength\" | \"errors:listItemMin\" | \"errors:listItemMax\" | \"errors:unknownBlockRecovery\" | \"fields:rowError\" | \"fields:rowErrors\" | \"account:account\" | \"account:accountMenu\" | \"account:accountMenuLabel\" | \"account:accountSecurity\" | \"account:activeSessions\" | \"account:adminRole\" | \"account:adminTheme\" | \"account:appearance\" | \"account:apiKeys\" | \"account:apiKeyCopied\" | \"account:apiKeyCopyFailed\" | \"account:apiKeyCreated\" | \"account:apiKeyNamePlaceholder\" | \"account:apiKeyRevoked\" | \"account:apiKeysDescription\" | \"account:changePassword\" | \"account:confirmRevokeAPIKey\" | \"account:confirmRevokeSession\" | \"account:confirmSignOutAll\" | \"account:copyAPIKeyNow\" | \"account:createKey\" | \"account:created\" | \"account:currentSession\" | \"account:currentPassword\" | \"account:expires\" | \"account:expiration\" | \"account:interfaceLanguage\" | \"account:languageSaveFailed\" | \"account:languageSaved\" | \"account:lastSeen\" | \"account:loadingSessions\" | \"account:name\" | \"account:never\" | \"account:newPassword\" | \"account:noAPIKeys\" | \"account:noSessions\" | \"account:password\" | \"account:passwordDescription\" | \"account:passwordMismatch\" | \"account:passwordUpdated\" | \"account:preferencesReset\" | \"account:preferencesResetFailed\" | \"account:preferencesStored\" | \"account:profile\" | \"account:profileAndPreferences\" | \"account:profileDescription\" | \"account:profileLoadFailed\" | \"account:profileRules\" | \"account:profileSaveFailed\" | \"account:profileUpdated\" | \"account:resetAllPreferences\" | \"account:resettingPreferences\" | \"account:resetPreferences\" | \"account:revoke\" | \"account:revokeCredentialDescription\" | \"account:saveProfile\" | \"account:savingProfile\" | \"account:security\" | \"account:securityAction\" | \"account:securityDescription\" | \"account:securityLoadFailed\" | \"account:securityOperationFailed\" | \"account:sessionRevoked\" | \"account:sessionsDescription\" | \"account:signOutAll\" | \"account:signOutAllDescription\" | \"account:signedInUser\" | \"account:signedOutAll\" | \"account:signingOut\" | \"account:signOutFailed\" | \"account:systemTheme\" | \"account:lightTheme\" | \"account:darkTheme\" | \"account:theme\" | \"account:themeSaveFailed\" | \"account:themeSaved\" | \"account:timeZone\" | \"account:timeZoneSaveFailed\" | \"account:timeZoneSaved\" | \"account:unknownClient\" | \"account:updatePassword\" | \"account:updatingPassword\" | \"account:updateProfile\" | \"auth:accountCreated\" | \"auth:accountReady\" | \"auth:adminAccessDenied\" | \"auth:adminBrand\" | \"auth:autoSignInFailed\" | \"auth:backToLogin\" | \"auth:checkEmail\" | \"auth:chooseNewPassword\" | \"auth:confirmPassword\" | \"auth:configuredCollectionUnavailable\" | \"auth:correctInvalidFields\" | \"auth:createAccount\" | \"auth:createFirstUser\" | \"auth:creatingAccount\" | \"auth:credentials\" | \"auth:email\" | \"auth:invalidEmail\" | \"auth:emailPlaceholder\" | \"auth:emailSent\" | \"auth:emailVerificationFailed\" | \"auth:emailVerified\" | \"auth:enterPassword\" | \"auth:firstAccountCreateFailed\" | \"auth:firstAccountExists\" | \"auth:firstAccountIdentityUnavailable\" | \"auth:firstAccountNoAdminAccess\" | \"auth:firstUserDescription\" | \"auth:forgotPassword\" | \"auth:forgotPasswordDescription\" | \"auth:hidePassword\" | \"auth:hidePasswordConfirmation\" | \"auth:login\" | \"auth:loginFailed\" | \"auth:logout\" | \"auth:missingResetToken\" | \"auth:missingVerificationToken\" | \"auth:password\" | \"auth:passwordMismatch\" | \"auth:passwordPlaceholder\" | \"auth:passwordRange\" | \"auth:passwordMinimum\" | \"auth:passwordResetFailed\" | \"auth:passwordResetSent\" | \"auth:passwordResetSuccess\" | \"auth:passwordTooLong\" | \"auth:passwordTooShort\" | \"auth:requestAnotherLink\" | \"auth:requestVerification\" | \"auth:resetRequestFailed\" | \"auth:resetPassword\" | \"auth:resettingPassword\" | \"auth:sendResetLink\" | \"auth:sendVerificationLink\" | \"auth:sending\" | \"auth:setupCompleted\" | \"auth:showPassword\" | \"auth:showPasswordConfirmation\" | \"auth:signingIn\" | \"auth:verificationDescription\" | \"auth:verificationRequestFailed\" | \"auth:verificationSent\" | \"auth:verifyDescription\" | \"auth:verifyEmail\" | \"auth:verifyYourEmail\" | \"auth:verifying\" | \"auth:welcome\" | \"collections:addFilter\" | \"collections:actions\" | \"collections:allDocumentsNotSelected\" | \"collections:allFolders\" | \"collections:allSelected\" | \"collections:applyChange\" | \"collections:applying\" | \"collections:backToCollection\" | \"collections:blockNumber\" | \"collections:bulkActions\" | \"collections:bulkEditDescription\" | \"collections:bulkEditSelected\" | \"collections:bulkOperationFailed\" | \"collections:cannotUndo\" | \"collections:chooseField\" | \"collections:chooseOperator\" | \"collections:chooseValue\" | \"collections:clearSearch\" | \"collections:clearSelection\" | \"collections:clearValue\" | \"collections:collectionDocuments\" | \"collections:collectionView\" | \"collections:confirmDeleteDocumentPermanently\" | \"collections:confirmDeleteSelected\" | \"collections:confirmDeleteSelectedPermanently\" | \"collections:confirmEmptyTrash\" | \"collections:confirmRestoreSelected\" | \"collections:contentLocale\" | \"collections:created\" | \"collections:deleteDocumentPermanently\" | \"collections:deletePermanently\" | \"collections:deleteSavedView\" | \"collections:deleteSelectedDescription\" | \"collections:disabled\" | \"collections:document\" | \"collections:documentCount\" | \"collections:documentNotDeleted\" | \"collections:documentNotRestored\" | \"collections:documentPermanentlyDeleted\" | \"collections:documentRestored\" | \"collections:documents\" | \"collections:documentsDeleted\" | \"collections:documentsLoadFailed\" | \"collections:documentsPerPage\" | \"collections:documentsPermanentlyDeleted\" | \"collections:documentsPublished\" | \"collections:documentsRestored\" | \"collections:documentsUnpublished\" | \"collections:documentsUpdated\" | \"collections:draftsAndVersions\" | \"collections:emptyDescription\" | \"collections:emptyTrashDescription\" | \"collections:enabled\" | \"collections:field\" | \"collections:filteredResultLoadFailed\" | \"collections:filterDocuments\" | \"collections:filterField\" | \"collections:filterOperator\" | \"collections:filterSummary\" | \"collections:filterValue\" | \"collections:folder\" | \"collections:hasValue\" | \"collections:hierarchy\" | \"collections:isEmpty\" | \"collections:listPreferencesNotSaved\" | \"collections:listPreferencesUnavailable\" | \"collections:listView\" | \"collections:loadingDocuments\" | \"collections:manageFolders\" | \"collections:moreItems\" | \"collections:nextPage\" | \"collections:noDocumentsChanged\" | \"collections:noMatchingDocuments\" | \"collections:nothingMatches\" | \"collections:openDocument\" | \"collections:operationFailed\" | \"collections:operator\" | \"collections:operatorContains\" | \"collections:operatorEquals\" | \"collections:operatorExists\" | \"collections:operatorGreaterThan\" | \"collections:operatorGreaterThanEqual\" | \"collections:operatorLessThan\" | \"collections:operatorLessThanEqual\" | \"collections:operatorLike\" | \"collections:operatorNotEquals\" | \"collections:pageSize\" | \"collections:pagination\" | \"collections:perPage\" | \"collections:previousPage\" | \"collections:rangeSummary\" | \"collections:relatedDocument\" | \"collections:removeFilter\" | \"collections:restoreDocument\" | \"collections:restoreSelectedDescription\" | \"collections:rowNumber\" | \"collections:savedViewDeleted\" | \"collections:savedViewName\" | \"collections:savedViewNotDeleted\" | \"collections:savedViews\" | \"collections:savedViewsUnavailable\" | \"collections:searchBy\" | \"collections:searchDocuments\" | \"collections:searchPlaceholder\" | \"collections:selectAll\" | \"collections:selectAllRows\" | \"collections:selectAllUnavailable\" | \"collections:selectDocument\" | \"collections:selecting\" | \"collections:selectionLimitDescription\" | \"collections:showColumn\" | \"collections:showCreatedColumn\" | \"collections:showIDColumn\" | \"collections:showStatusColumn\" | \"collections:showUpdatedColumn\" | \"collections:sortBy\" | \"collections:status\" | \"collections:statusFilters\" | \"collections:title\" | \"collections:allDocuments\" | \"collections:collectionViews\" | \"collections:noTrashResults\" | \"collections:trashNotEmptied\" | \"collections:updated\" | \"collections:value\" | \"collections:view\" | \"collections:viewName\" | \"collections:viewNotSaved\" | \"collections:viewSaved\" | \"collections:all\" | \"collections:bulkEdit\" | \"collections:bulkUpload\" | \"collections:clearFilters\" | \"collections:columns\" | \"collections:createNew\" | \"collections:empty\" | \"collections:emptyTrash\" | \"collections:filters\" | \"collections:pageSummary\" | \"collections:search\" | \"collections:selected\" | \"collections:sort\" | \"collections:trash\" | \"collections:trashFor\" | \"dashboard:create\" | \"dashboard:extensions\" | \"dashboard:heading\" | \"dashboard:open\" | \"dashboard:welcome\" | \"development:documentation\" | \"development:documentationDescription\" | \"development:ready\" | \"development:retrySchemaUpdate\" | \"development:schema\" | \"development:schemaUpdateApplied\" | \"development:schemaUpdateFailed\" | \"development:tools\" | \"development:toolsStatus\" | \"development:upToDate\" | \"documents:creatingLabel\" | \"documents:api\" | \"documents:apiFor\" | \"documents:autosave\" | \"documents:copyFromLocale\" | \"documents:create\" | \"documents:created\" | \"documents:delete\" | \"documents:discard\" | \"documents:download\" | \"documents:draft\" | \"documents:duplicate\" | \"documents:edit\" | \"documents:editing\" | \"documents:editedSince\" | \"documents:inheritedFrom\" | \"documents:lastModified\" | \"documents:livePreview\" | \"documents:missingTranslation\" | \"documents:publish\" | \"documents:published\" | \"documents:restore\" | \"documents:save\" | \"documents:saveDraft\" | \"documents:publishing\" | \"documents:unsavedChanges\" | \"documents:leaveWithoutSavingQuestion\" | \"documents:leaveWithoutSavingDescription\" | \"documents:keepEditing\" | \"documents:leaveWithoutSaving\" | \"documents:schedule\" | \"documents:takeOver\" | \"documents:unpublish\" | \"documents:updated\" | \"documents:versions\" | \"documents:versionsFor\" | \"documents:accessEvaluationFailed\" | \"documents:accountUnlocked\" | \"documents:accountUnlockFailed\" | \"documents:anotherEditor\" | \"documents:apiAuthenticated\" | \"documents:apiURL\" | \"documents:apiDepth\" | \"documents:apiRequestFailed\" | \"documents:apiRequesting\" | \"documents:apiRunRequest\" | \"documents:apiRunnableAfterSave\" | \"documents:apiViewLoadFailed\" | \"documents:authorizingDraftPreview\" | \"documents:breadcrumb\" | \"documents:cancel\" | \"documents:closeLivePreview\" | \"documents:collectionRemoved\" | \"documents:collectionUnavailable\" | \"documents:confirmPassword\" | \"documents:contentLocale\" | \"documents:copied\" | \"documents:copy\" | \"documents:copyFrom\" | \"documents:copying\" | \"documents:copyReady\" | \"documents:copyURL\" | \"documents:createdLabel\" | \"documents:createdLabelPlain\" | \"documents:credentials\" | \"documents:credentialsDescription\" | \"documents:currentlyEditing\" | \"documents:dashboard\" | \"documents:deleteAsset\" | \"documents:deleteDescription\" | \"documents:deleteDocument\" | \"documents:deleteFailed\" | \"documents:deletedLabel\" | \"documents:deletedSuccessfully\" | \"documents:deleteQuestion\" | \"documents:destructiveAction\" | \"documents:document\" | \"documents:documentLocked\" | \"documents:documentViews\" | \"documents:draftFieldsRestored\" | \"documents:duplicateFailed\" | \"documents:duplicatedLabel\" | \"documents:duplicating\" | \"documents:editingLeaseActive\" | \"documents:enterNewAccountPassword\" | \"documents:forceUnlock\" | \"documents:globals\" | \"documents:goBack\" | \"documents:incompatibleDraftValues\" | \"documents:lastModifiedLabel\" | \"documents:loadFailed\" | \"documents:loadingAPIView\" | \"documents:loadingDocument\" | \"documents:locale\" | \"documents:localeCopied\" | \"documents:localeCopiedDescription\" | \"documents:localeCopyFailed\" | \"documents:localeNotCopied\" | \"documents:localeSwitchDirty\" | \"documents:lockOptionsReadOnly\" | \"documents:lockOptionsWithTakeover\" | \"documents:lockedReadOnly\" | \"documents:lockTakenOver\" | \"documents:lockTakeoverFailed\" | \"documents:moreActions\" | \"documents:movedToTrashLabel\" | \"documents:moveToTrash\" | \"documents:moveToTrashDescription\" | \"documents:moveToTrashQuestion\" | \"documents:newLabel\" | \"documents:noDraftFieldsRestored\" | \"documents:notDeleted\" | \"documents:notDuplicated\" | \"documents:notSaved\" | \"documents:openAPIURL\" | \"documents:openPreviewWindow\" | \"documents:password\" | \"documents:passwordMinimum\" | \"documents:passwordsDoNotMatch\" | \"documents:passwordTooLong\" | \"documents:passwordTooShort\" | \"documents:previewAuthorizationFailed\" | \"documents:previewAuthorizing\" | \"documents:previewConnected\" | \"documents:previewConnecting\" | \"documents:previewHeight\" | \"documents:previewUnavailable\" | \"documents:customViewport\" | \"documents:previewViewport\" | \"documents:previewWidth\" | \"documents:previewZoom\" | \"documents:publishChanges\" | \"documents:publishedTitle\" | \"documents:responsive\" | \"documents:restoreFromTrash\" | \"documents:retryPreview\" | \"documents:saved\" | \"documents:saveBeforeLocaleSwitch\" | \"documents:saveFailed\" | \"documents:saveOrDiscardFirst\" | \"documents:saveToSwitchLocale\" | \"documents:saving\" | \"documents:schemaUpdatedWithDraft\" | \"documents:status\" | \"documents:statusChangeFailed\" | \"documents:statusNotChanged\" | \"documents:statusNow\" | \"documents:takingOver\" | \"documents:unlocking\" | \"documents:unpublishedTitle\" | \"documents:untitled\" | \"documents:untitledAsset\" | \"documents:viewReadOnly\" | \"documents:workspaceLoadFailed\" | \"errors:accessDenied\" | \"errors:adminBootstrapFailed\" | \"errors:couldNotLoadApplication\" | \"errors:loadAdmin\" | \"errors:loadDocument\" | \"errors:notFound\" | \"errors:notFoundCode\" | \"errors:notFoundDescription\" | \"errors:notFoundHeading\" | \"errors:returnDashboard\" | \"errors:required\" | \"errors:save\" | \"errors:unknown\" | \"errors:allowedOption\" | \"errors:array\" | \"errors:blockObject\" | \"errors:blockType\" | \"errors:boolean\" | \"errors:clipboardBlockType\" | \"errors:clipboardField\" | \"errors:clipboardGroup\" | \"errors:clipboardMaxRows\" | \"errors:clipboardMinRows\" | \"errors:clipboardRow\" | \"errors:clipboardRows\" | \"errors:correctInvalidFields\" | \"errors:duplicateOption\" | \"errors:fieldRequired\" | \"errors:finiteNumber\" | \"errors:maxRows\" | \"errors:minRows\" | \"errors:object\" | \"errors:oneBlock\" | \"errors:oneReference\" | \"errors:oneRow\" | \"errors:polymorphicReference\" | \"errors:referenceID\" | \"errors:relatedDocumentLoad\" | \"errors:relatedDocumentsUpdate\" | \"errors:relationshipDocumentsLoad\" | \"errors:relationshipTargetUnavailable\" | \"errors:rowObject\" | \"errors:selectedDocumentsLoad\" | \"errors:string\" | \"errors:updateUnconfirmed\" | \"errors:validJSON\" | \"errors:validPoint\" | \"fields:add\" | \"fields:addBelow\" | \"fields:addBlock\" | \"fields:addRelationship\" | \"fields:addRow\" | \"fields:asset\" | \"fields:block\" | \"fields:blockNumber\" | \"fields:browse\" | \"fields:browseAll\" | \"fields:choose\" | \"fields:chooseBlockFor\" | \"fields:clear\" | \"fields:collapse\" | \"fields:collapseAll\" | \"fields:content\" | \"fields:copy\" | \"fields:copied\" | \"fields:copyField\" | \"fields:copyRow\" | \"fields:create\" | \"fields:createdAt\" | \"fields:document\" | \"fields:drag\" | \"fields:duplicate\" | \"fields:edit\" | \"fields:editRelationship\" | \"fields:expand\" | \"fields:generateSlug\" | \"fields:id\" | \"fields:inspectEdit\" | \"fields:invalidCount\" | \"fields:itemCount\" | \"fields:joinChanges\" | \"fields:labeledRowNumber\" | \"fields:latitude\" | \"fields:lockSlug\" | \"fields:loading\" | \"fields:longitude\" | \"fields:addNew\" | \"fields:manageRelationships\" | \"fields:maximum\" | \"fields:minimum\" | \"fields:moveDown\" | \"fields:moveUp\" | \"fields:noBlocks\" | \"fields:noMatch\" | \"fields:noMaximum\" | \"fields:noMinimum\" | \"fields:noRelated\" | \"fields:open\" | \"fields:openActions\" | \"fields:openCalendar\" | \"fields:paste\" | \"fields:pasted\" | \"fields:pasteField\" | \"fields:pasteRow\" | \"fields:readOnly\" | \"fields:relatedDocument\" | \"fields:relationship\" | \"fields:relationships\" | \"fields:remove\" | \"fields:removeRelationship\" | \"fields:rowLimits\" | \"fields:rowNumber\" | \"fields:search\" | \"fields:searchBlock\" | \"fields:searchLabel\" | \"fields:select\" | \"fields:selectDate\" | \"fields:sections\" | \"fields:showAll\" | \"fields:showingRelated\" | \"fields:sortBy\" | \"fields:status\" | \"fields:untitled\" | \"fields:updated\" | \"fields:updatedAt\" | \"fields:unlockSlug\" | \"fields:updating\" | \"fields:upload\" | \"general:add\" | \"general:apply\" | \"fields:embeddedEditTitle\" | \"fields:embeddedEditDescription\" | \"errors:pendingEmbeddedEdit\" | \"errors:staleEmbeddedEdit\" | \"general:back\" | \"general:bulkActions\" | \"general:cancel\" | \"general:clear\" | \"general:clearSelection\" | \"general:close\" | \"general:confirm\" | \"general:continue\" | \"general:copy\" | \"general:copyJSON\" | \"general:copyUnavailable\" | \"general:copied\" | \"general:codeExample\" | \"general:create\" | \"general:delete\" | \"general:done\" | \"general:edit\" | \"general:escape\" | \"general:exitExpandedJSONView\" | \"general:expandJSONView\" | \"general:expandedJSONDescription\" | \"general:expandedJSONResponse\" | \"general:jsonData\" | \"general:loading\" | \"general:loadingSchema\" | \"general:more\" | \"general:next\" | \"general:no\" | \"general:none\" | \"general:notifications\" | \"general:open\" | \"general:pagination\" | \"general:previous\" | \"general:replace\" | \"general:remove\" | \"general:reloadPage\" | \"general:retry\" | \"general:riduApplication\" | \"general:save\" | \"general:search\" | \"general:select\" | \"general:selected\" | \"general:dismissNotification\" | \"general:yes\" | \"navigation:closeMenu\" | \"navigation:adminHeader\" | \"navigation:adminNavigation\" | \"navigation:adminNavigationDescription\" | \"navigation:applyingSchemaUpdate\" | \"navigation:breadcrumb\" | \"navigation:collection\" | \"navigation:collectionBadge\" | \"navigation:collections\" | \"navigation:commandDescription\" | \"navigation:commandMenu\" | \"navigation:commandSearch\" | \"navigation:commandSearchPlaceholder\" | \"navigation:document\" | \"navigation:documentBadge\" | \"navigation:globals\" | \"navigation:loadingDocuments\" | \"navigation:loadingPage\" | \"navigation:navigate\" | \"navigation:navigateRidu\" | \"navigation:newBadge\" | \"navigation:nothingMatches\" | \"navigation:nothingMatchesQuery\" | \"navigation:openMenu\" | \"navigation:page\" | \"navigation:pluginShellHeader\" | \"navigation:plugins\" | \"navigation:search\" | \"navigation:searchAndNavigate\" | \"navigation:searchAndNavigateShortcut\" | \"navigation:schemaUpdateFailed\" | \"navigation:toggleMenu\" | \"reference:createNew\" | \"reference:noResults\" | \"reference:searchOrCreate\" | \"reference:accessCheckFailed\" | \"reference:addLabel\" | \"reference:addSelected\" | \"reference:all\" | \"reference:api\" | \"reference:applying\" | \"reference:backToResults\" | \"reference:browserDescription\" | \"reference:cancel\" | \"reference:cannotCreate\" | \"reference:cannotUpdate\" | \"reference:closeBrowser\" | \"reference:collectionFilters\" | \"reference:confirmPassword\" | \"reference:createdLabel\" | \"reference:createLabel\" | \"reference:credentials\" | \"reference:currentPayload\" | \"reference:deselectLabel\" | \"reference:discard\" | \"reference:discardChanges\" | \"reference:discardDescription\" | \"reference:document\" | \"reference:documents\" | \"reference:edit\" | \"reference:editLabel\" | \"reference:enterNewAccountPassword\" | \"reference:images\" | \"reference:keepEditing\" | \"reference:loadingRelated\" | \"reference:newLabel\" | \"reference:newMetadata\" | \"reference:nextPage\" | \"reference:nothingMatches\" | \"reference:password\" | \"reference:passwordMinimum\" | \"reference:passwordsDoNotMatch\" | \"reference:passwordTooLong\" | \"reference:passwordTooShort\" | \"reference:previousPage\" | \"reference:range\" | \"reference:readOnlyDescription\" | \"reference:relatedLoadFailed\" | \"reference:relatedNotSaved\" | \"reference:relatedSaveFailed\" | \"reference:results\" | \"reference:saved\" | \"reference:saveLabel\" | \"reference:saving\" | \"reference:search\" | \"reference:select\" | \"reference:selectedNotSaved\" | \"reference:selectLabel\" | \"reference:unsavedChanges\" | \"reference:untitledLabel\" | \"reference:updateNotConfirmed\" | \"reference:uploadNew\" | \"uploads:addFiles\" | \"uploads:bulkUpload\" | \"uploads:chooseFile\" | \"uploads:dropFiles\" | \"uploads:original\" | \"uploads:pasteURL\" | \"uploads:upload\" | \"uploads:accessCheckFailed\" | \"uploads:applyImageEdit\" | \"uploads:assetPreview\" | \"uploads:assetURL\" | \"uploads:assetsUploaded\" | \"uploads:bulkUploadDescription\" | \"uploads:chooseFileBeforeCreating\" | \"uploads:chooseFileBeforeSaving\" | \"uploads:chooseFilesForQueue\" | \"uploads:chooseFileToUpload\" | \"uploads:chooseFocalPoint\" | \"uploads:addFile\" | \"uploads:dropFile\" | \"uploads:editingFilename\" | \"uploads:crop\" | \"uploads:cropPosition\" | \"uploads:cropHandle\" | \"uploads:widthPixels\" | \"uploads:heightPixels\" | \"uploads:reset\" | \"uploads:chooseValue\" | \"uploads:configuredTypes\" | \"uploads:correctMetadata\" | \"uploads:createPermissionDenied\" | \"uploads:cropAndFocalUpdated\" | \"uploads:cropBoundary\" | \"uploads:cropDescription\" | \"uploads:dimensions\" | \"uploads:editFilename\" | \"uploads:editImage\" | \"uploads:enableCrop\" | \"uploads:file\" | \"uploads:filename\" | \"uploads:files\" | \"uploads:focalKeyboardInstructions\" | \"uploads:focalOutcomeUnknown\" | \"uploads:focalPoint\" | \"uploads:focalPointDescription\" | \"uploads:focalPosition\" | \"uploads:focalUpdated\" | \"uploads:focalUpdateFailed\" | \"uploads:height\" | \"uploads:horizontal\" | \"uploads:horizontalFocalPoint\" | \"uploads:imageEditDescription\" | \"uploads:imageOutcomeUnknown\" | \"uploads:imageOutcomeUnknownDescription\" | \"uploads:imageSizes\" | \"uploads:imageSizesNotRegenerated\" | \"uploads:imageSizesRegenerated\" | \"uploads:imageStateRecovered\" | \"uploads:importFromURL\" | \"uploads:importing\" | \"uploads:left\" | \"uploads:loadingAssetPreview\" | \"uploads:maximumSize\" | \"uploads:needAttention\" | \"uploads:noFilesQueued\" | \"uploads:notConfigured\" | \"uploads:openAsset\" | \"uploads:openImportedAsset\" | \"uploads:outcomeNotConfirmed\" | \"uploads:outcomeUnknown\" | \"uploads:outcomeUnknownDescription\" | \"uploads:outcomeUnknownListRefreshed\" | \"uploads:previewGeneratedSizes\" | \"uploads:previewSizes\" | \"uploads:queueSummary\" | \"uploads:regenerating\" | \"uploads:remoteAssetUploaded\" | \"uploads:remoteImportDescription\" | \"uploads:remoteOutcomeNotConfirmed\" | \"uploads:removeFilename\" | \"uploads:retryFilename\" | \"uploads:serverStateRefreshed\" | \"uploads:size\" | \"uploads:sizesFor\" | \"uploads:statusComplete\" | \"uploads:statusFailed\" | \"uploads:statusQueued\" | \"uploads:statusUncertain\" | \"uploads:statusUploading\" | \"uploads:top\" | \"uploads:type\" | \"uploads:unknownOutcomesDescription\" | \"uploads:untitledAsset\" | \"uploads:uploadCount\" | \"uploads:uploading\" | \"uploads:uploadingFilename\" | \"uploads:uploadQueue\" | \"uploads:urlCopied\" | \"uploads:urlCopiedDescription\" | \"uploads:urlImportMetadata\" | \"uploads:vertical\" | \"uploads:verticalFocalPoint\" | \"uploads:width\" | \"versions:compare\" | \"versions:current\" | \"versions:history\" | \"versions:restore\" | \"versions:saved\" | \"versions:schedulePublication\" | \"versions:allVersions\" | \"versions:backToDocument\" | \"versions:cancel\" | \"versions:cancelScheduledPublish\" | \"versions:cancelScheduledUnpublish\" | \"versions:chooseFuturePublishTime\" | \"versions:chooseFutureUnpublishTime\" | \"versions:compareRevisionWith\" | \"versions:comparisonRevision\" | \"versions:false\" | \"versions:field\" | \"versions:historyDescription\" | \"versions:historyLoadFailed\" | \"versions:modifiedFieldsOnly\" | \"versions:noComparison\" | \"versions:noModifiedFields\" | \"versions:noRevisions\" | \"versions:previousCurrentPreserved\" | \"versions:publishNotScheduled\" | \"versions:publishScheduleFailed\" | \"versions:publishScheduled\" | \"versions:unpublishScheduled\" | \"versions:resourceUnavailable\" | \"versions:restoreAsDraft\" | \"versions:restoreDescription\" | \"versions:restoreRevisionQuestion\" | \"versions:restoring\" | \"versions:revision\" | \"versions:revisionIsCurrent\" | \"versions:revisionNotRestored\" | \"versions:revisionRestoreFailed\" | \"versions:revisionRestored\" | \"versions:revisionRestoredAsDraft\" | \"versions:revisionRestoredTitle\" | \"versions:revisionWithStatus\" | \"versions:savedRevisions\" | \"versions:savedRevisionsDescription\" | \"versions:scheduleCancelFailed\" | \"versions:scheduleNotCancelled\" | \"versions:scheduledPublicationCancelled\" | \"versions:scheduledPublicationDescription\" | \"versions:scheduling\" | \"versions:shortRevision\" | \"versions:status\" | \"versions:total\" | \"versions:true\" | \"versions:versionLocale\", TranslationMessage>>",
 					"description": "The messages value."
 				}
 			],
@@ -63704,7 +64017,7 @@
 				"Use this function once in admin/src/admin.config.ts. Keep plugins: `generatedAdminPlugins` when adding your own settings so installed plugins continue to load.",
 				"The fields map contains application inputs made with `defineFieldEditor`. It is different from `defineAdminPlugin`’s fields map, which contains editors for new Go plugin field types.",
 				"Installed plugins are processed first, followed by application entries. Keys must be unique, and conflicting replacements cause an error rather than silently replacing one another.",
-				"The helper checks JavaScript registrations immediately. Run ridu check to also compare them with the Go schema, including component selections, supported field types, routes, and settings.",
+				"The helper preserves typed configuration; run ridu check to validate registrations against the Go schema, including field types, route paths, and component selections.",
 				"The example adds WelcomePanel above the dashboard. The Custom components tutorial includes the Svelte component and shows how to try it."
 			],
 			"example": "import { defineAdmin } from '@riducms/plugin/admin';\nimport { generatedAdminPlugins } from './ridu.plugins.generated';\nimport WelcomePanel from './components/welcome-panel.svelte';\n\nexport default defineAdmin({\n  plugins: generatedAdminPlugins,\n  dashboard: [\n    { key: 'welcome', component: WelcomePanel, position: 'before' }\n  ]\n});",
@@ -63712,7 +64025,9 @@
 			"relatedDocs": [
 				"/docs/custom-components/",
 				"/docs/custom-components/field-components/",
-				"/docs/custom-components/row-labels/"
+				"/docs/custom-components/row-labels/",
+				"/docs/custom-components/list-results/",
+				"/docs/custom-components/loading-data/"
 			],
 			"relatedSymbols": [
 				"ts:@riducms/plugin/admin#AdminConfig",
@@ -63730,7 +64045,7 @@
 			},
 			"returns": {
 				"type": "AdminConfig",
-				"description": "The same `AdminConfig` object after checking its registrations. Export it as the default from admin/src/admin.config.ts; calling `defineAdmin` does not render components or send requests."
+				"description": "The same typed AdminConfig object. Export it as the default from admin/src/admin.config.ts; calling defineAdmin does not render components, send requests, or validate the Go schema."
 			},
 			"options": [
 				{
@@ -63740,7 +64055,7 @@
 					"targetID": "ts:@riducms/plugin#AdminPlugin"
 				},
 				{
-					"name": "fields",
+					"name": "fieldEditors",
 					"type": "Readonly<Record<`app:${string}`, RegisteredFieldEditor>>",
 					"description": "Optional. Custom inputs made with `defineFieldEditor`. Register under app:name, then select that name in the Go field’s `Admin.Editor` setting.",
 					"targetID": "ts:@riducms/plugin/editor#RegisteredFieldEditor"
@@ -63770,16 +64085,22 @@
 					"targetID": "ts:@riducms/plugin#AdminRoute"
 				},
 				{
-					"name": "dashboard",
+					"name": "dashboardPanels",
 					"type": "readonly AdminDashboardPanel[]",
 					"description": "Optional. Add panels before or after the dashboard, or replace it. Each entry names a key, component, and position; the default position is after.",
 					"targetID": "ts:@riducms/plugin#AdminDashboardPanel"
 				},
 				{
-					"name": "listCells",
-					"type": "readonly AdminListCell[]",
+					"name": "listCellRenderers",
+					"type": "readonly AdminListCellRenderer[]",
 					"description": "Optional. Change how a field appears in a collection table. Each entry selects a collection, field path, and component.",
-					"targetID": "ts:@riducms/plugin#AdminListCell"
+					"targetID": "ts:@riducms/plugin#AdminListCellRenderer"
+				},
+				{
+					"name": "listResultsRenderers",
+					"type": "readonly AdminListResultsRenderer[]",
+					"description": "Optional. Replace a collection's results layout while keeping its queries, search, filters, pagination, and selection. Cannot target a collection with a whole-list view replacement.",
+					"targetID": "ts:@riducms/plugin#AdminListResultsRenderer"
 				},
 				{
 					"name": "documentViews",
@@ -63794,7 +64115,7 @@
 					"targetID": "ts:@riducms/plugin#AdminDocumentAction"
 				},
 				{
-					"name": "views",
+					"name": "coreViews",
 					"type": "readonly AdminCoreView[]",
 					"description": "Optional. Wrap or replace collection lists, create/edit forms, global editors, or the not-found page. The component can render `defaultView` to keep the built-in screen.",
 					"targetID": "ts:@riducms/plugin#AdminCoreView"
@@ -63830,10 +64151,10 @@
 					"targetID": "ts:@riducms/plugin#AdminLogoutButton"
 				},
 				{
-					"name": "shell",
-					"type": "readonly AdminShellComponent[]",
+					"name": "shellSlots",
+					"type": "readonly AdminShellSlot[]",
 					"description": "Optional. Add a component to the header, global actions, or account settings menu.",
-					"targetID": "ts:@riducms/plugin#AdminShellComponent"
+					"targetID": "ts:@riducms/plugin#AdminShellSlot"
 				},
 				{
 					"name": "providers",
@@ -63873,7 +64194,9 @@
 			"relatedDocs": [
 				"/guides/custom-fields/",
 				"/docs/plugins/#admin-pairing",
-				"/docs/custom-components/"
+				"/docs/custom-components/",
+				"/docs/custom-components/list-results/",
+				"/docs/custom-components/loading-data/"
 			],
 			"relatedSymbols": [
 				"ts:@riducms/plugin#AdminPlugin",
@@ -63891,7 +64214,7 @@
 			},
 			"returns": {
 				"type": "Plugin & { readonly apiVersion: 1; }",
-				"description": "A frozen copy of the plugin with `apiVersion`: 1. Its fields and components maps are also copied and frozen. TypeScript retains each field’s inferred value and input types. Export this result using the name declared by Go `Admin.Export`."
+				"description": "A frozen copy of the plugin with `apiVersion`: 1. Its fields and fieldEditors maps are also copied and frozen. TypeScript retains each field’s inferred value and input types. Export this result using the name declared by Go `Admin.Export`."
 			},
 			"options": [
 				{
@@ -63911,8 +64234,8 @@
 					"targetID": "ts:@riducms/plugin/authoring/v1#definePluginField"
 				},
 				{
-					"name": "components",
-					"type": "AdminPlugin[\"components\"]",
+					"name": "fieldEditors",
+					"type": "AdminPlugin[\"fieldEditors\"]",
 					"description": "Optional. Map component names to `defineFieldComponent` results. Go chooses an alternative editor with `field.PluginComponent(pluginKey, componentName)`.",
 					"targetID": "ts:@riducms/plugin/authoring/v1#defineFieldComponent"
 				},
@@ -63940,16 +64263,22 @@
 					"targetID": "ts:@riducms/plugin#AdminRoute"
 				},
 				{
-					"name": "dashboard",
+					"name": "dashboardPanels",
 					"type": "readonly AdminDashboardPanel[]",
 					"description": "Optional. Add panels before or after the dashboard, or replace it. Each entry names a key, component, and position; the default position is after.",
 					"targetID": "ts:@riducms/plugin#AdminDashboardPanel"
 				},
 				{
-					"name": "listCells",
-					"type": "readonly AdminListCell[]",
+					"name": "listCellRenderers",
+					"type": "readonly AdminListCellRenderer[]",
 					"description": "Optional. Change how a field appears in a collection table. Each entry selects a collection, field path, and component.",
-					"targetID": "ts:@riducms/plugin#AdminListCell"
+					"targetID": "ts:@riducms/plugin#AdminListCellRenderer"
+				},
+				{
+					"name": "listResultsRenderers",
+					"type": "readonly AdminListResultsRenderer[]",
+					"description": "Optional. Replace a collection's results layout while keeping its queries, search, filters, pagination, and selection. Cannot target a collection with a whole-list view replacement.",
+					"targetID": "ts:@riducms/plugin#AdminListResultsRenderer"
 				},
 				{
 					"name": "documentViews",
@@ -63964,7 +64293,7 @@
 					"targetID": "ts:@riducms/plugin#AdminDocumentAction"
 				},
 				{
-					"name": "views",
+					"name": "coreViews",
 					"type": "readonly AdminCoreView[]",
 					"description": "Optional. Wrap or replace collection lists, create/edit forms, global editors, or the not-found page. The component can render `defaultView` to keep the built-in screen.",
 					"targetID": "ts:@riducms/plugin#AdminCoreView"
@@ -64000,10 +64329,10 @@
 					"targetID": "ts:@riducms/plugin#AdminLogoutButton"
 				},
 				{
-					"name": "shell",
-					"type": "readonly AdminShellComponent[]",
+					"name": "shellSlots",
+					"type": "readonly AdminShellSlot[]",
 					"description": "Optional. Add a component to the header, global actions, or account settings menu.",
-					"targetID": "ts:@riducms/plugin#AdminShellComponent"
+					"targetID": "ts:@riducms/plugin#AdminShellSlot"
 				},
 				{
 					"name": "providers",
@@ -64339,7 +64668,7 @@
 					"targetID": "ts:@riducms/plugin#AdminRoute"
 				},
 				{
-					"name": "dashboard",
+					"name": "dashboardPanels",
 					"type": "readonly AdminDashboardPanel[]",
 					"description": "Optional. Add panels before or after the dashboard, or replace it. Each entry names a key, component, and position; the default position is after.",
 					"targetID": "ts:@riducms/plugin#AdminDashboardPanel"
@@ -64369,7 +64698,7 @@
 					"targetID": "ts:@riducms/plugin#AdminLogoutButton"
 				},
 				{
-					"name": "views",
+					"name": "coreViews",
 					"type": "readonly AdminCoreView[]",
 					"description": "Optional. Wrap or replace collection lists, create/edit forms, global editors, or the not-found page. The component can render `defaultView` to keep the built-in screen.",
 					"targetID": "ts:@riducms/plugin#AdminCoreView"
@@ -64381,10 +64710,10 @@
 					"targetID": "ts:@riducms/plugin#AdminBrandComponent"
 				},
 				{
-					"name": "shell",
-					"type": "readonly AdminShellComponent[]",
+					"name": "shellSlots",
+					"type": "readonly AdminShellSlot[]",
 					"description": "Optional. Add a component to the header, global actions, or account settings menu.",
-					"targetID": "ts:@riducms/plugin#AdminShellComponent"
+					"targetID": "ts:@riducms/plugin#AdminShellSlot"
 				},
 				{
 					"name": "providers",
@@ -64393,10 +64722,10 @@
 					"targetID": "ts:@riducms/plugin#AdminProvider"
 				},
 				{
-					"name": "listCells",
-					"type": "readonly AdminListCell[]",
+					"name": "listCellRenderers",
+					"type": "readonly AdminListCellRenderer[]",
 					"description": "Optional. Change how a field appears in a collection table. Each entry selects a collection, field path, and component.",
-					"targetID": "ts:@riducms/plugin#AdminListCell"
+					"targetID": "ts:@riducms/plugin#AdminListCellRenderer"
 				},
 				{
 					"name": "documentActions",
@@ -64444,7 +64773,7 @@
 					"targetID": "ts:@riducms/plugin#AdminRoute"
 				},
 				{
-					"name": "dashboard",
+					"name": "dashboardPanels",
 					"type": "readonly AdminDashboardPanel[]",
 					"description": "Optional. Add panels before or after the dashboard, or replace it. Each entry names a key, component, and position; the default position is after.",
 					"targetID": "ts:@riducms/plugin#AdminDashboardPanel"
@@ -64474,7 +64803,7 @@
 					"targetID": "ts:@riducms/plugin#AdminLogoutButton"
 				},
 				{
-					"name": "views",
+					"name": "coreViews",
 					"type": "readonly AdminCoreView[]",
 					"description": "Optional. Wrap or replace collection lists, create/edit forms, global editors, or the not-found page. The component can render `defaultView` to keep the built-in screen.",
 					"targetID": "ts:@riducms/plugin#AdminCoreView"
@@ -64486,10 +64815,10 @@
 					"targetID": "ts:@riducms/plugin#AdminBrandComponent"
 				},
 				{
-					"name": "shell",
-					"type": "readonly AdminShellComponent[]",
+					"name": "shellSlots",
+					"type": "readonly AdminShellSlot[]",
 					"description": "Optional. Add a component to the header, global actions, or account settings menu.",
-					"targetID": "ts:@riducms/plugin#AdminShellComponent"
+					"targetID": "ts:@riducms/plugin#AdminShellSlot"
 				},
 				{
 					"name": "providers",
@@ -64498,10 +64827,10 @@
 					"targetID": "ts:@riducms/plugin#AdminProvider"
 				},
 				{
-					"name": "listCells",
-					"type": "readonly AdminListCell[]",
+					"name": "listCellRenderers",
+					"type": "readonly AdminListCellRenderer[]",
 					"description": "Optional. Change how a field appears in a collection table. Each entry selects a collection, field path, and component.",
-					"targetID": "ts:@riducms/plugin#AdminListCell"
+					"targetID": "ts:@riducms/plugin#AdminListCellRenderer"
 				},
 				{
 					"name": "documentActions",

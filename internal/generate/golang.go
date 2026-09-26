@@ -136,6 +136,8 @@ func writeGoModel(output *strings.Builder, name string, collection schema.Collec
 		}
 		if collection.Capabilities.Versions {
 			output.WriteString("\tStatus string `json:\"_status\"`\n")
+		}
+		if collection.Versions != nil || collection.Upload != nil {
 			output.WriteString("\tRevision int `json:\"_revision\"`\n")
 		}
 	}
@@ -187,6 +189,8 @@ func goModelFieldNames(collection schema.Collection, reserved ...string) []strin
 	}
 	if collection.Capabilities.Versions {
 		used["Status"] = true
+	}
+	if collection.Versions != nil || collection.Upload != nil {
 		used["Revision"] = true
 	}
 

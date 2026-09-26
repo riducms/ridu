@@ -3,16 +3,11 @@ import { RiduError } from "@riducms/sdk";
 
 import { FormController, FormValidationError } from "@admin/core/forms/form-controller.svelte";
 import { initialFormValues } from "@admin/core/forms/form-schema";
-import type { NotificationCenter } from "@admin/core/notifications/notification-center.svelte";
 import { adminRoutePatterns } from "@admin/core/routing/admin-paths";
 import type { AdminRuntime } from "@admin/core/runtime/admin-runtime.svelte";
 
-type Navigate = (to: string, options?: { replace?: boolean }) => void;
-
 interface CreateFirstUserControllerOptions {
 	runtime: AdminRuntime;
-	notifications: NotificationCenter;
-	navigate: Navigate;
 }
 
 export class CreateFirstUserController {
@@ -21,7 +16,7 @@ export class CreateFirstUserController {
 	passwordConfirmation = $state("");
 	pending = $state(false);
 	error = $state<string>();
-	credentialIssue = $state<string>();
+	credentialIssue = $state<{ path: "password" | "passwordConfirmation"; message: string }>();
 	#request?: AbortController;
 	#generation = 0;
 
@@ -62,8 +57,16 @@ export class CreateFirstUserController {
 			this.error = this.options.runtime.i18n.t("auth:configuredCollectionUnavailable");
 			return undefined;
 		}
-		this.credentialIssue = this.#validatePassword(collection);
-		if (this.credentialIssue !== undefined) return "password";
+		const passwordMessage = this.#validatePassword(collection);
+		this.credentialIssue =
+			passwordMessage === undefined ? undefined : { path: "password", message: passwordMessage };
+		if (this.credentialIssue === undefined && this.password !== this.passwordConfirmation) {
+			this.credentialIssue = {
+				path: "passwordConfirmation",
+				message: this.options.runtime.i18n.t("auth:passwordMismatch"),
+			};
+		}
+		if (this.credentialIssue !== undefined) return this.credentialIssue.path;
 
 		const generation = ++this.#generation;
 		const request = new AbortController();
@@ -85,7 +88,7 @@ export class CreateFirstUserController {
 			if (typeof identity !== "string" || identity.trim() === "") {
 				throw new Error(this.options.runtime.i18n.t("auth:firstAccountIdentityUnavailable"));
 			}
-			const session = await this.options.runtime.client.login(
+			await this.options.runtime.client.login(
 				collection.slug,
 				{ email: identity, password: this.password },
 				{ signal: request.signal }
@@ -102,43 +105,17 @@ export class CreateFirstUserController {
 				} catch {
 					// The setup route remains closed even if cookie cleanup fails.
 				}
-				throw new Error(this.options.runtime.i18n.t("auth:firstAccountNoAdminAccess"));
+				if (!this.#current(generation, request)) return undefined;
+				await this.#continueToLogin("denied");
 			}
 
-			this.options.runtime.authBootstrapAvailable = false;
-			this.options.runtime.session = session;
-			await Promise.all([
-				this.options.runtime.loadTheme(),
-				this.options.runtime.loadContentLocale(),
-				this.options.runtime.i18n.loadPreferences(),
-			]);
-			const preferredAccessAuthoritative = await this.options.runtime.refreshAccess(
-				this.options.runtime.contentLocale
-			);
-			if (
-				preferredAccessAuthoritative &&
-				this.options.runtime.collectionOperations[collection.slug]?.admin !== true
-			) {
-				try {
-					await this.options.runtime.client.logout({ signal: request.signal });
-				} catch {
-					// The setup route remains closed even if cookie cleanup fails.
-				}
-				this.options.runtime.session = undefined;
-				throw new Error(this.options.runtime.i18n.t("auth:firstAccountNoAdminAccess"));
-			}
 			if (!this.#current(generation, request)) return undefined;
-			this.options.navigate(adminRoutePatterns.home, { replace: true });
+			await this.options.runtime.hardNavigate(adminRoutePatterns.home);
 			return undefined;
 		} catch (cause) {
 			if (!this.#current(generation, request)) return undefined;
 			if (accountCreated) {
-				this.#continueToLogin(
-					this.options.runtime.i18n.t("auth:accountCreated"),
-					cause instanceof Error
-						? this.options.runtime.i18n.t("auth:autoSignInFailed", { message: cause.message })
-						: this.options.runtime.i18n.t("auth:accountReady")
-				);
+				await this.#continueToLogin("created");
 				return undefined;
 			}
 			if (cause instanceof FormValidationError) {
@@ -148,7 +125,7 @@ export class CreateFirstUserController {
 			if (cause instanceof RiduError) {
 				const passwordIssue = cause.issues.find((issue) => issue.path === "password");
 				if (passwordIssue !== undefined) {
-					this.credentialIssue = passwordIssue.message;
+					this.credentialIssue = { path: "password", message: passwordIssue.message };
 					this.form.issues = this.form.issues.filter((issue) => issue.path !== "password");
 					this.error = this.options.runtime.i18n.t("auth:correctInvalidFields");
 					return "password";
@@ -161,10 +138,7 @@ export class CreateFirstUserController {
 				});
 				if (!this.#current(generation, request)) return undefined;
 				if (!bootstrap.available) {
-					this.#continueToLogin(
-						this.options.runtime.i18n.t("auth:setupCompleted"),
-						this.options.runtime.i18n.t("auth:firstAccountExists")
-					);
+					await this.#continueToLogin("completed");
 					return undefined;
 				}
 			} catch {
@@ -189,10 +163,8 @@ export class CreateFirstUserController {
 		this.#request = undefined;
 	}
 
-	#continueToLogin(title: string, message: string) {
-		this.options.notifications.error({ title, message });
-		this.options.navigate(adminRoutePatterns.login, { replace: true });
-		this.options.runtime.authBootstrapAvailable = false;
+	async #continueToLogin(notice: "created" | "completed" | "denied") {
+		await this.options.runtime.hardNavigate(`${adminRoutePatterns.login}?setup=${notice}`);
 	}
 
 	#current(generation: number, request: AbortController) {
@@ -211,9 +183,6 @@ export class CreateFirstUserController {
 			return this.options.runtime.i18n.t("auth:passwordTooLong", {
 				maximum: this.options.runtime.i18n.formatNumber(settings?.passwordMaxBytes ?? 72),
 			});
-		}
-		if (this.password !== this.passwordConfirmation) {
-			return this.options.runtime.i18n.t("auth:passwordMismatch");
 		}
 		return undefined;
 	}

@@ -1,4 +1,4 @@
-import { resolveBlockTypes } from "@riducms/protocol";
+import { isRecord, resolveBlockTypes } from "@riducms/protocol";
 import type { SchemaField } from "@riducms/protocol";
 import type { FormController } from "@admin/core/forms/form-controller.svelte";
 import { scopeRepeatedRowField } from "@admin/fields/nested/scoped-field";
@@ -34,11 +34,11 @@ export function captureFieldOccurrence(form: FormController, target: string): Fi
 			if (field.type === "group") {
 				// An absent optional object may initialize through its visible inputs.
 				// Once present, removing it revokes the child occurrence immediately.
-				let initialized = record(form.get(current));
+				let initialized = isRecord(form.get(current));
 				const objectPath = () => {
 					const current = path();
 					if (current === undefined) return;
-					if (record(form.get(current))) initialized = true;
+					if (isRecord(form.get(current))) initialized = true;
 					else if (initialized) return;
 					return current;
 				};
@@ -50,7 +50,7 @@ export function captureFieldOccurrence(form: FormController, target: string): Fi
 				const index = Number(target.slice(current.length + 1).split(".")[0]);
 				if (!Array.isArray(rows) || !Number.isSafeInteger(index)) continue;
 				const row: unknown = rows[index];
-				if (!record(row) || typeof row._key !== "string" || !row._key)
+				if (!isRecord(row) || typeof row._key !== "string" || !row._key)
 					throw new Error(`Cannot bind ${target}: rows require stable _key values.`);
 				const key = row._key,
 					variant = row.blockType;
@@ -99,7 +99,4 @@ export function captureFieldOccurrence(form: FormController, target: string): Fi
 	if (!found || found.resolve() === undefined)
 		throw new Error(`Cannot bind ${target}: no unique live schema field occurrence exists.`);
 	return found;
-}
-function record(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
 }

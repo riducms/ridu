@@ -1,3 +1,4 @@
+import { documentLabel } from "@admin/features/documents/document-title";
 import type { SchemaField } from "@riducms/protocol";
 
 import type { AdminDocument } from "@admin/core/api/admin-client";
@@ -7,6 +8,9 @@ import { localizeSchemaCollection } from "@admin/core/i18n/localized-schema";
 
 import {
 	selectedRelationshipIDs,
+	relationshipReferences,
+	relationshipKey,
+	type PolymorphicReference,
 	updateRelationshipValue,
 } from "@admin/fields/relationship/relationship-value";
 
@@ -23,6 +27,8 @@ export class RelationshipFieldController {
 	browserOpen = $state(false);
 	initialDocument = $state.raw<AdminDocument>();
 	initialDocumentID = $state<string>();
+	initialCreate = $state(false);
+	initialFile = $state.raw<File>();
 	#formRevision = 0;
 
 	constructor(readonly options: RelationshipFieldControllerOptions) {
@@ -52,16 +58,16 @@ export class RelationshipFieldController {
 		});
 
 		$effect(() => {
-			const slug = this.currentTarget?.collectionSlug;
-			const ids = [...this.selectedIDs];
+			const references = this.references;
+			const locale = this.options.form.contentLocale;
 			const revision = this.options.runtime.documentRevision;
-			if (slug === undefined || ids.length === 0) {
+			if (references.length === 0) {
 				this.documents = {};
 				this.hydrationError = undefined;
 				return;
 			}
 			const request = new AbortController();
-			this.#hydrateSelected(slug, ids, revision, request.signal);
+			this.#hydrateSelected(references, locale, revision, request.signal);
 			return () => request.abort();
 		});
 	}
@@ -95,6 +101,48 @@ export class RelationshipFieldController {
 			: localizeSchemaCollection(collection, this.options.runtime.i18n);
 	}
 
+	get references() {
+		return relationshipReferences(
+			this.options.form.get(this.options.field.path),
+			this.hasMany,
+			this.polymorphic,
+			this.targets[0]?.collectionSlug ?? ""
+		);
+	}
+
+	get selections() {
+		return this.references.map((reference) => ({
+			...reference,
+			key: relationshipKey(reference),
+			label: this.label(reference.id, reference.relationTo),
+			document: this.documents[relationshipKey(reference)],
+		}));
+	}
+
+	setReferences = (references: readonly PolymorphicReference[]) => {
+		if (this.options.field.admin.readOnly || this.options.form.editingBlocked) return;
+		const values = references.map((reference) => (this.polymorphic ? reference : reference.id));
+		this.options.form.set(
+			this.options.field.path,
+			this.hasMany ? values : (values[0] ?? (this.polymorphic ? null : ""))
+		);
+	};
+
+	removeReference = (reference: PolymorphicReference) => {
+		this.setReferences(
+			this.references.filter(
+				(candidate) => relationshipKey(candidate) !== relationshipKey(reference)
+			)
+		);
+	};
+
+	move = (from: number, to: number) => {
+		const references = [...this.references];
+		const [moved] = references.splice(from, 1);
+		if (moved) references.splice(to, 0, moved);
+		this.setReferences(references);
+	};
+
 	get selectedIDs() {
 		return selectedRelationshipIDs(
 			this.options.form.get(this.options.field.path),
@@ -116,32 +164,30 @@ export class RelationshipFieldController {
 		this.selectedTarget = target;
 	};
 
-	label = (id: string) => {
-		const document = this.documents[id];
+	label = (id: string, target = this.selectedTarget) => {
+		const document = this.documents[relationshipKey({ relationTo: target, id })];
 		if (document === undefined) return id;
-		if (this.targetCollection?.capabilities.upload) return String(document.filename ?? id);
-		const titleField = findDisplayField(this.targetCollection?.fields ?? []);
-		return String((titleField === undefined ? undefined : document[titleField.name]) ?? id);
+		const collection = this.options.runtime.manifest?.collections.find(
+			(collection) => collection.slug === target
+		);
+		if (collection?.capabilities.upload) return String(document.filename ?? id);
+		return documentLabel(collection, document);
 	};
 
-	initials = (id: string) =>
-		this.label(id)
-			.trim()
-			.split(/\s+/)
-			.filter(Boolean)
-			.slice(0, 2)
-			.map((part) => part[0]?.toLocaleUpperCase(this.options.runtime.i18n.language) ?? "")
-			.join("");
-
-	mediaURL = (document: AdminDocument | undefined) =>
-		typeof document?.url === "string" ? document.url : undefined;
-
-	isImage = (document: AdminDocument | undefined) =>
-		typeof document?.mimeType === "string" && document.mimeType.startsWith("image/");
-
-	openBrowser = (documentID?: string) => {
+	openBrowser = (
+		documentID?: string,
+		create = false,
+		target = this.selectedTarget,
+		file?: File
+	) => {
+		this.selectedTarget = target;
+		this.initialFile = file;
+		this.initialCreate = create;
 		this.initialDocumentID = documentID;
-		this.initialDocument = documentID === undefined ? undefined : this.documents[documentID];
+		this.initialDocument =
+			documentID === undefined
+				? undefined
+				: this.documents[relationshipKey({ relationTo: target, id: documentID })];
 		this.browserOpen = true;
 	};
 
@@ -152,6 +198,7 @@ export class RelationshipFieldController {
 	commit = (ids: string[]) => {
 		const field = this.options.field;
 		const form = this.options.form;
+		if (field.admin.readOnly || form.editingBlocked) return;
 		form.set(
 			field.path,
 			updateRelationshipValue(
@@ -169,16 +216,16 @@ export class RelationshipFieldController {
 	};
 
 	async #hydrateSelected(
-		slug: string,
-		ids: readonly string[],
+		references: readonly PolymorphicReference[],
+		locale: string | undefined,
 		revision: number,
 		signal: AbortSignal
 	) {
 		const results = await Promise.allSettled(
-			ids.map((id) =>
-				this.options.runtime.client.find(slug, id, {
+			references.map((reference) =>
+				this.options.runtime.client.find(reference.relationTo, reference.id, {
 					signal,
-					locale: this.options.form.contentLocale,
+					locale,
 				})
 			)
 		);
@@ -187,8 +234,9 @@ export class RelationshipFieldController {
 		let failed = false;
 		for (let index = 0; index < results.length; index += 1) {
 			const result = results[index];
-			const id = ids[index];
-			if (result?.status === "fulfilled" && id !== undefined) documents[id] = result.value;
+			const reference = references[index];
+			if (result?.status === "fulfilled" && reference !== undefined)
+				documents[relationshipKey(reference)] = result.value;
 			else failed = true;
 		}
 		this.documents = documents;
@@ -234,12 +282,4 @@ function relationshipTargets(field: SchemaField) {
 		];
 	}
 	return [];
-}
-
-function findDisplayField(fields: readonly SchemaField[]) {
-	return (
-		fields.find((field) => field.name === "title" || field.name === "name") ??
-		fields.find((field) => field.type === "text" && field.name !== "email") ??
-		fields.find((field) => field.type === "text" || field.type === "email")
-	);
 }

@@ -104,7 +104,7 @@ test("unified fields preserve generated editor settings, nested issue identities
 	);
 	await page
 		.locator('[data-field-path="sections"]')
-		.getByRole("button", { name: "Open Row 1 actions", exact: true })
+		.getByRole("button", { name: "Open Row 01 actions", exact: true })
 		.first()
 		.click();
 	await page.getByRole("menuitem", { name: "Move down", exact: true }).click();

@@ -6,42 +6,23 @@ test("account profile, theme preferences, reset, and force unlock are available"
 	page,
 }) => {
 	await page.goto("/admin/login");
-	let releaseLoginTheme!: () => void;
-	let markLoginThemeStarted!: () => void;
-	let markLoginThemeFinished!: () => void;
-	const loginThemeRelease = new Promise<void>((resolve) => (releaseLoginTheme = resolve));
-	const loginThemeStarted = new Promise<void>((resolve) => (markLoginThemeStarted = resolve));
-	const loginThemeFinished = new Promise<void>((resolve) => (markLoginThemeFinished = resolve));
-	await page.route("**/api/preferences/theme", async (route) => {
-		if (route.request().method() !== "GET") {
-			await route.continue();
-			return;
-		}
-		markLoginThemeStarted();
-		await loginThemeRelease;
-		await route.fulfill({
-			status: 200,
-			contentType: "application/json",
-			body: JSON.stringify({ value: "system" }),
-		});
-		markLoginThemeFinished();
+	const initialPreferenceReads: string[] = [];
+	page.on("request", (request) => {
+		const path = new URL(request.url()).pathname;
+		if (request.method() === "GET" && path.startsWith("/api/preferences"))
+			initialPreferenceReads.push(path);
 	});
 	await page.getByLabel("Email address").fill("admin@riducms.test");
 	await page.getByRole("textbox", { name: "Password", exact: true }).fill("ridu-admin");
 	await page.getByRole("button", { name: "Sign in" }).click();
 	await page.getByRole("navigation", { name: "Admin navigation" }).waitFor({ state: "visible" });
+	expect(initialPreferenceReads).toEqual([]);
 
 	await page.getByRole("button", { name: /Open account menu for Ridu Administrator/ }).click();
 	await page.getByRole("link", { name: "Profile & preferences" }).click();
 	await chooseRiduSelect(page, page.getByLabel("Theme"), "Dark");
 	await expectRiduSelectValue(page.getByLabel("Theme"), "Dark");
 	await expect(page).toHaveURL(/\/admin\/account$/);
-	await loginThemeStarted;
-	await expectRiduSelectValue(page.getByLabel("Theme"), "Dark");
-	releaseLoginTheme();
-	await loginThemeFinished;
-	await expectRiduSelectValue(page.getByLabel("Theme"), "Dark");
-	await page.unroute("**/api/preferences/theme");
 	await chooseRiduSelect(page, page.getByLabel("Theme"), "System");
 	await expectRiduSelectValue(page.getByLabel("Theme"), "System");
 	let concurrentThemeWriteCount = 0;
@@ -217,25 +198,25 @@ test("account profile, theme preferences, reset, and force unlock are available"
 	});
 	await chooseRiduSelect(page, page.getByLabel("Theme"), "Light");
 	await oldSessionThemeStarted;
-	await page.getByRole("button", { name: /Open account menu for Ridu Administrator/ }).click();
-	await page.getByRole("button", { name: "Sign out" }).click();
+	await page
+		.getByRole("navigation", { name: "Admin navigation" })
+		.getByRole("button", { name: "Sign out" })
+		.click();
 	await page.getByLabel("Email address").fill("editor@riducms.test");
 	await page.getByRole("textbox", { name: "Password", exact: true }).fill("ridu-browser");
 	await page.getByRole("button", { name: "Sign in" }).click();
 	await page.getByRole("button", { name: /Open account menu for Ridu Editor/ }).click();
-	await page.getByRole("link", { name: "Profile & preferences" }).click();
+	await page
+		.locator('[data-slot="popover-content"]')
+		.getByRole("link", { name: "Profile & preferences" })
+		.click();
 	await expectRiduSelectValue(page.getByLabel("Theme"), "System");
 	await chooseRiduSelect(page, page.getByLabel("Theme"), "Dark");
 	await newSessionThemeStarted;
 	await expectRiduSelectValue(page.getByLabel("Theme"), "Dark");
 	expect(crossSessionResetCount).toBe(0);
-	const oldSessionThemeResponse = page.waitForResponse(
-		(response) =>
-			response.request().method() === "PUT" && response.url().includes("/api/preferences/theme")
-	);
 	releaseOldSessionTheme();
 	await oldSessionThemeFinished;
-	await oldSessionThemeResponse;
 	await expectRiduSelectValue(page.getByLabel("Theme"), "Dark");
 	expect(crossSessionResetCount).toBe(0);
 	const newSessionThemeResponse = page.waitForResponse(
@@ -267,20 +248,29 @@ test("plugins can wrap auth and account views and compose the authenticated shel
 	await page.goto("/admin/login");
 	await expect(page.getByText("Custom login wrapper", { exact: true })).toBeVisible();
 	await expect(page.getByText("Ridu extension", { exact: true })).toBeVisible();
+	const signInNavigations: string[] = [];
+	page.on("request", (request) => {
+		if (new URL(request.url()).pathname === "/admin/")
+			signInNavigations.push(request.resourceType());
+	});
 	await page.getByLabel("Email address").fill("editor@riducms.test");
 	await page.getByRole("textbox", { name: "Password", exact: true }).fill("ridu-browser");
 	await page.getByRole("button", { name: "Sign in" }).click();
 	await expect(page.getByText("Ridu editorial kitchen sink plugin shell")).toBeVisible();
+	await expect(page.getByRole("navigation", { name: "Admin navigation" })).not.toContainText(
+		"Ridu editorial kitchen sink plugin shell"
+	);
+	expect(signInNavigations).toEqual(["document"]);
 	await expect(page.getByText("Plugin header", { exact: true })).toBeVisible();
 	await expect(page.getByRole("button", { name: "Plugin action" })).toBeVisible();
 	await expect(
 		page.getByRole("link", { name: "Ridu editorial kitchen sink", exact: true })
 	).toBeVisible();
-	await page.goto("/admin/collections/posts");
+	await page.goto("/admin/collections/payload-only-capabilities");
 	await expect(page.getByText("Plugin collectionList view", { exact: true })).toBeVisible();
-	await page.goto("/admin/collections/posts/create");
+	await page.goto("/admin/collections/payload-only-capabilities/create");
 	await expect(page.getByText("Plugin collectionCreate view", { exact: true })).toBeVisible();
-	await page.goto("/admin/collections/posts");
+	await page.goto("/admin/collections/payload-only-capabilities");
 	await page.locator("tbody a").first().click();
 	await expect(page.getByText("Plugin collectionEdit view", { exact: true })).toBeVisible();
 	await page.goto("/admin/globals/site-settings");
@@ -297,10 +287,38 @@ test("plugins can wrap auth and account views and compose the authenticated shel
 	await expect(page.getByText("Custom profile wrapper for Ridu Editor")).toBeVisible();
 	await expect(page.getByLabel("Name", { exact: true })).toHaveValue("Ridu Editor");
 
-	await page.getByRole("button", { name: /Open account menu for Ridu Editor/ }).click();
-	await page.getByRole("button", { name: "Plugin sign out" }).click();
+	const loginRequests: string[] = [];
+	page.on("request", (request) => {
+		const url = new URL(request.url());
+		if (url.pathname === "/admin/login")
+			loginRequests.push(`${request.resourceType()} ${url.search}`);
+	});
+	await page
+		.getByRole("navigation", { name: "Admin navigation" })
+		.getByRole("button", { name: "Plugin sign out" })
+		.click();
 	await expect(page).toHaveURL(/\/admin\/login$/);
 	await expect(page.getByText("Custom login wrapper", { exact: true })).toBeVisible();
+	expect(loginRequests).toEqual(["document "]);
+});
+
+test("first-user recovery explains the outcome on the login document", async ({ page }) => {
+	await page.goto("/admin/login?setup=created");
+	await expect(page.getByRole("status")).toContainText(
+		"Your account was created. Sign in to continue."
+	);
+	await page.reload();
+	await expect(page.getByRole("status")).toContainText(
+		"Your account was created. Sign in to continue."
+	);
+	await page.goto("/admin/login?setup=completed");
+	await expect(page.getByRole("status")).toContainText(
+		"A first account already exists. Sign in instead."
+	);
+	await page.goto("/admin/login?setup=denied");
+	await expect(page.getByRole("alert")).toHaveText(
+		"The new account does not have access to the admin."
+	);
 });
 
 test("auth user creation validates and stores a usable password", async ({ page }) => {

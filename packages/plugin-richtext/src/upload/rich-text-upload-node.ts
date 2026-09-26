@@ -93,6 +93,7 @@ export class UploadNode extends DecoratorBlockNode {
 			props: {
 				caption: this.__caption,
 				documentID: this.__documentID,
+				format: this.__format,
 				nodeKey: this.getKey(),
 				relationTo: this.__relationTo,
 			},

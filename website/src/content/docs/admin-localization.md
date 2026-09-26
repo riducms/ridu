@@ -62,6 +62,12 @@ Application name, collections/globals, fields, choices, blocks, tabs, row labels
 timezones support typed translated labels. Plugin messages use namespaced build-validated catalogs.
 Dates, numbers, plurals, and relative time use the active language/timezone through `Intl`.
 
+When an editor [schedules a collection publication](/docs/drafts-and-versions/#scheduling), the
+schedule drawer starts with the configured default timezone and lets the editor choose another
+configured zone. Clearing the choice uses the browser timezone. The selected zone is saved with
+that event for display, while the publication time remains an absolute instant. Choosing a zone in
+the drawer does not change the editor's account timezone preference.
+
 ## Author localized content {#content-locale}
 
 The global content-locale switcher controls exact/fallback values, list filters, relationships,

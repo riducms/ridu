@@ -90,6 +90,12 @@ Preserve both parameters through application redirects.
 _The panel reads the saved draft with a scoped capability and receives unsaved form updates through
 a validated browser channel._
 
+In the editor, open **Live Preview** and choose a named breakpoint or **Responsive** from the
+viewport menu. Responsive uses the space available in the panel. Enter a width or height to switch
+to a custom viewport, or change the zoom to inspect a large layout in a smaller panel. These
+controls only resize the iframe; they do not change the document or the frontend's own responsive
+rules. **Open preview window** uses the same live updates in a separate window.
+
 ## Read the saved draft on the server {#server-read}
 
 Use the generated client from your application frontend. It sends the preview token as a bearer

@@ -6,12 +6,12 @@
 		type RiduLivePreviewUpdateMessage,
 	} from "@riducms/sdk";
 	import ExternalLinkIcon from "~icons/lucide/external-link";
-	import XIcon from "~icons/lucide/x";
-	import { TooltipContent, TooltipRoot, TooltipTrigger } from "@riducms/ui";
+	import { TooltipContent, TooltipRoot, TooltipTrigger, Button, Input } from "@riducms/ui";
 
-	import { Button, buttonVariants } from "@admin/components/ui/button";
+	import "@admin/features/documents/live-preview-panel.scss";
+
 	import { Banner } from "@admin/components/ui/banner";
-	import { Input } from "@admin/components/ui/input";
+
 	import { Select, SelectContent, SelectItem, SelectTrigger } from "@admin/components/ui/select";
 	import type { FormValues } from "@admin/core/forms/form-schema";
 	import { getAdminRuntime } from "@admin/core/runtime/admin-runtime.svelte";
@@ -28,21 +28,21 @@
 		documentID,
 		resource,
 		values,
-		onclose,
 	}: {
 		preview: SchemaLivePreview;
 		collection: string;
 		documentID: string;
 		resource: "collection" | "global";
 		values: FormValues;
-		onclose: () => void;
 	} = $props();
 
 	const runtime = getAdminRuntime();
 	let iframe = $state<HTMLIFrameElement>();
 	let viewport = $state("responsive");
-	let responsiveWidth = $state(768);
-	let responsiveHeight = $state(720);
+	let availableWidth = $state(768);
+	let availableHeight = $state(720);
+	let customWidth = $state(768);
+	let customHeight = $state(720);
 	let zoom = $state(100);
 	let iframeReady = $state(false);
 	let popupReady = false;
@@ -52,12 +52,41 @@
 	let capability = $state<PreviewToken>();
 	let capabilityError = $state<string>();
 	let capabilityRevision = $state(0);
+	let activeCapabilityToken: string | undefined;
+	let activeCapabilityOwner: string | undefined;
 	const channel = crypto.randomUUID();
 	const selectedBreakpoint = $derived(
-		preview.breakpoints?.find((breakpoint) => breakpoint.name === viewport)
+		preview.breakpoints?.find((breakpoint) => `breakpoint:${breakpoint.name}` === viewport)
 	);
-	const frameWidth = $derived(selectedBreakpoint?.width ?? responsiveWidth);
-	const frameHeight = $derived(selectedBreakpoint?.height ?? responsiveHeight);
+	const frameWidth = $derived(
+		Math.max(
+			1,
+			Math.round(
+				selectedBreakpoint?.width ?? (viewport === "custom" ? customWidth : availableWidth)
+			)
+		)
+	);
+	const frameHeight = $derived(
+		Math.max(
+			1,
+			Math.round(
+				selectedBreakpoint?.height ?? (viewport === "custom" ? customHeight : availableHeight)
+			)
+		)
+	);
+	const viewportLabel = $derived(
+		selectedBreakpoint
+			? runtime.i18n.text(selectedBreakpoint.label, selectedBreakpoint.labelTranslations)
+			: runtime.i18n.t(viewport === "custom" ? "documents:customViewport" : "documents:responsive")
+	);
+
+	function resizeViewport(axis: "width" | "height", event: Event) {
+		const value = Number((event.currentTarget as HTMLInputElement).value);
+		if (!Number.isFinite(value) || value < 1 || value > 3840) return;
+		customWidth = axis === "width" ? value : frameWidth;
+		customHeight = axis === "height" ? value : frameHeight;
+		viewport = "custom";
+	}
 	const previewURL = $derived(
 		capability === undefined
 			? undefined
@@ -169,25 +198,18 @@
 	$effect(() => {
 		capabilityRevision;
 		const controller = new AbortController();
-		void authorizePreview(controller.signal);
+		const owner = `${resource}:${collection}:${documentID}`;
+		if (activeCapabilityOwner !== owner) releaseCapability();
+		void authorizePreview(owner, controller.signal);
 		return () => controller.abort();
 	});
 
-	$effect(() => {
-		const token = capability?.token;
-		if (token === undefined) return;
-		return () => {
-			void runtime.client.revokePreviewToken(token, { keepalive: true }).catch(() => undefined);
-		};
-	});
-
-	$effect(() => {
-		return () => {
-			if (popupWindow !== null && !popupWindow.closed) popupWindow.close();
-			popupWindow = null;
-			popupReady = false;
-			popupCapabilityToken = undefined;
-		};
+	$effect(() => () => {
+		releaseCapability();
+		if (popupWindow !== null && !popupWindow.closed) popupWindow.close();
+		popupWindow = null;
+		popupReady = false;
+		popupCapabilityToken = undefined;
 	});
 
 	$effect(() => {
@@ -197,35 +219,50 @@
 		return () => window.clearTimeout(timeout);
 	});
 
-	async function authorizePreview(signal: AbortSignal) {
+	async function authorizePreview(owner: string, signal: AbortSignal) {
 		capabilityError = undefined;
 		try {
-			capability =
+			const nextCapability =
 				resource === "global"
 					? await runtime.client.createGlobalPreviewToken(collection, { signal })
 					: await runtime.client.createPreviewToken(collection, documentID, { signal });
+			if (signal.aborted) {
+				revokeCapability(nextCapability.token);
+				return;
+			}
+			const previousToken = activeCapabilityToken;
+			activeCapabilityToken = nextCapability.token;
+			activeCapabilityOwner = owner;
+			capability = nextCapability;
+			if (previousToken !== undefined && previousToken !== nextCapability.token) {
+				revokeCapability(previousToken);
+			}
 		} catch (cause) {
 			if (signal.aborted) return;
-			capability = undefined;
+			releaseCapability();
 			capabilityError =
 				cause instanceof Error
 					? cause.message
 					: runtime.i18n.t("documents:previewAuthorizationFailed");
 		}
 	}
+
+	function releaseCapability() {
+		const token = activeCapabilityToken;
+		activeCapabilityToken = undefined;
+		activeCapabilityOwner = undefined;
+		capability = undefined;
+		if (token !== undefined) revokeCapability(token);
+	}
+
+	function revokeCapability(token: string) {
+		void runtime.client.revokePreviewToken(token, { keepalive: true }).catch(() => undefined);
+	}
 </script>
 
-<section
-	class="flex min-h-[540px] min-w-0 flex-1 flex-col border-t border-control-border bg-background-layer min-[1240px]:min-h-0 min-[1240px]:border-t-0 min-[1240px]:border-s"
-	aria-label={runtime.i18n.t("documents:livePreview")}
->
-	<div
-		class="flex min-h-12 flex-wrap items-center gap-1.5 border-b border-control-border px-3 py-2"
-	>
-		<span
-			class="font-mono me-1 text-[9px] tracking-[0.08em] text-foreground-faint uppercase"
-			role="status"
-		>
+<section class="ridu-live-preview" aria-label={runtime.i18n.t("documents:livePreview")}>
+	<div class="ridu-live-preview__toolbar">
+		<span class="ridu-live-preview__status" role="status">
 			{capabilityError !== undefined
 				? runtime.i18n.t("documents:previewUnavailable")
 				: capability === undefined
@@ -234,154 +271,116 @@
 						? runtime.i18n.t("documents:previewConnected")
 						: runtime.i18n.t("documents:previewConnecting")}
 		</span>
-		<div class="flex items-center gap-1" aria-label={runtime.i18n.t("documents:previewViewport")}>
-			<Button
-				variant="ghost"
-				size="sm"
-				class={[
-					"h-7 px-2.5 text-[11px]",
-					viewport === "responsive" && "bg-control-hover text-foreground",
-				]}
-				onclick={() => (viewport = "responsive")}
+		<Select type="single" bind:value={viewport}>
+			<SelectTrigger
+				class="ridu-live-preview__select"
+				aria-label={runtime.i18n.t("documents:previewViewport")}
 			>
-				{runtime.i18n.t("documents:responsive")}
-			</Button>
-			{#each preview.breakpoints ?? [] as breakpoint (breakpoint.name)}
-				<Button
-					variant="ghost"
-					size="sm"
-					class={[
-						"h-7 px-2.5 text-[11px]",
-						viewport === breakpoint.name && "bg-control-hover text-foreground",
-					]}
-					onclick={() => (viewport = breakpoint.name)}
-				>
-					{runtime.i18n.text(breakpoint.label, breakpoint.labelTranslations)}
-				</Button>
-			{/each}
+				{viewportLabel}
+			</SelectTrigger>
+			<SelectContent class="ridu-live-preview-menu" align="end">
+				{#each preview.breakpoints ?? [] as breakpoint (breakpoint.name)}
+					<SelectItem
+						value={`breakpoint:${breakpoint.name}`}
+						label={runtime.i18n.text(breakpoint.label, breakpoint.labelTranslations)}
+					/>
+				{/each}
+				<SelectItem value="responsive" label={runtime.i18n.t("documents:responsive")} />
+				{#if viewport === "custom"}
+					<SelectItem value="custom" label={runtime.i18n.t("documents:customViewport")} />
+				{/if}
+			</SelectContent>
+		</Select>
+
+		<div class="ridu-live-preview__dimensions">
+			<Input
+				class="ridu-live-preview__size"
+				type="number"
+				min="1"
+				max="3840"
+				value={frameWidth}
+				aria-label={runtime.i18n.t("documents:previewWidth")}
+				oninput={(event) => resizeViewport("width", event)}
+			/>
+			<span aria-hidden="true">×</span>
+			<Input
+				class="ridu-live-preview__size"
+				type="number"
+				min="1"
+				max="3840"
+				value={frameHeight}
+				aria-label={runtime.i18n.t("documents:previewHeight")}
+				oninput={(event) => resizeViewport("height", event)}
+			/>
 		</div>
-		<div class="ms-auto flex items-center gap-1.5">
-			<div class="font-mono flex items-center gap-1 text-[9.5px] text-foreground-faint">
-				<label>
-					<span class="sr-only">{runtime.i18n.t("documents:previewWidth")}</span>
-					{#if selectedBreakpoint !== undefined}
-						<Input
-							class="h-7 w-15 px-1.5 text-center text-[10px]"
-							type="number"
-							value={frameWidth}
-							disabled
-						/>
-					{:else}
-						<Input
-							class="h-7 w-15 px-1.5 text-center text-[10px]"
-							type="number"
-							min="240"
-							max="3840"
-							bind:value={responsiveWidth}
-						/>
-					{/if}
-				</label>
-				×
-				<label>
-					<span class="sr-only">{runtime.i18n.t("documents:previewHeight")}</span>
-					{#if selectedBreakpoint !== undefined}
-						<Input
-							class="h-7 w-15 px-1.5 text-center text-[10px]"
-							type="number"
-							value={frameHeight}
-							disabled
-						/>
-					{:else}
-						<Input
-							class="h-7 w-15 px-1.5 text-center text-[10px]"
-							type="number"
-							min="240"
-							max="3840"
-							bind:value={responsiveHeight}
-						/>
-					{/if}
-				</label>
-			</div>
-			<label>
-				<span class="sr-only">{runtime.i18n.t("documents:previewZoom")}</span>
-				<Select type="single" value={String(zoom)} onValueChange={(next) => (zoom = Number(next))}>
-					<SelectTrigger
-						size="toolbar"
-						class="w-18 text-[10px]"
-						aria-label={runtime.i18n.t("documents:previewZoom")}
-					>
-						{runtime.i18n.formatNumber(zoom / 100, { style: "percent" })}
-					</SelectTrigger>
-					<SelectContent>
-						{#each [50, 75, 100] as percentage}
-							<SelectItem
-								value={String(percentage)}
-								label={runtime.i18n.formatNumber(percentage / 100, { style: "percent" })}
-							/>
-						{/each}
-					</SelectContent>
-				</Select>
-			</label>
-			{#if previewURL !== undefined}
-				<TooltipRoot>
-					<TooltipTrigger>
-						{#snippet child({ props })}
-							<a
-								{...props}
-								class={buttonVariants({ variant: "ghost", size: "icon-sm" })}
-								href={previewURL}
-								target="_blank"
-								rel="opener"
-								aria-label={runtime.i18n.t("documents:openPreviewWindow")}
-								onclick={openPreviewWindow}
-							>
-								<ExternalLinkIcon class="size-3.5" />
-							</a>
-						{/snippet}
-					</TooltipTrigger>
-					<TooltipContent>{runtime.i18n.t("documents:openPreviewWindow")}</TooltipContent>
-				</TooltipRoot>
-			{/if}
-			<Button
-				variant="ghost"
-				size="icon-sm"
-				onclick={onclose}
-				aria-label={runtime.i18n.t("documents:closeLivePreview")}
-				tooltip={runtime.i18n.t("documents:closeLivePreview")}
+		<Select type="single" value={String(zoom)} onValueChange={(next) => (zoom = Number(next))}>
+			<SelectTrigger
+				class="ridu-live-preview__select"
+				aria-label={runtime.i18n.t("documents:previewZoom")}
 			>
-				<XIcon class="size-3.5" />
-			</Button>
-		</div>
+				{runtime.i18n.formatNumber(zoom / 100, { style: "percent" })}
+			</SelectTrigger>
+			<SelectContent class="ridu-live-preview-menu" align="end">
+				{#each [50, 75, 100, 125, 150, 200] as percentage}
+					<SelectItem
+						value={String(percentage)}
+						label={runtime.i18n.formatNumber(percentage / 100, { style: "percent" })}
+					/>
+				{/each}
+			</SelectContent>
+		</Select>
+		{#if previewURL !== undefined}
+			<TooltipRoot>
+				<TooltipTrigger>
+					{#snippet child({ props })}
+						<a
+							{...props}
+							class="ridu-live-preview__external"
+							href={previewURL}
+							target="_blank"
+							rel="opener"
+							aria-label={runtime.i18n.t("documents:openPreviewWindow")}
+							onclick={openPreviewWindow}
+						>
+							<ExternalLinkIcon />
+						</a>
+					{/snippet}
+				</TooltipTrigger>
+				<TooltipContent>{runtime.i18n.t("documents:openPreviewWindow")}</TooltipContent>
+			</TooltipRoot>
+		{/if}
 	</div>
-	<div class="min-h-0 flex-1 overflow-auto p-4" data-preview-viewport={viewport}>
+
+	<div
+		class="ridu-live-preview__viewport"
+		data-preview-viewport={viewport}
+		bind:clientWidth={availableWidth}
+		bind:clientHeight={availableHeight}
+	>
 		{#if capabilityError !== undefined}
-			<Banner class="mx-auto mt-8 max-w-lg" tone="destructive">
-				<div class="flex flex-1 items-center justify-between gap-4">
-					<span>{capabilityError}</span>
-					<Button variant="outline" size="sm" onclick={() => capabilityRevision++}>
-						{runtime.i18n.t("documents:retryPreview")}
-					</Button>
-				</div>
+			<Banner class="ridu-live-preview__error" tone="destructive">
+				<span>{capabilityError}</span>
+				<Button variant="outline" size="sm" onclick={() => capabilityRevision++}>
+					{runtime.i18n.t("documents:retryPreview")}
+				</Button>
 			</Banner>
 		{:else if previewURL === undefined}
-			<div class="grid min-h-72 place-items-center text-[12px] text-foreground-faint">
+			<div class="ridu-live-preview__loading">
 				{runtime.i18n.t("documents:authorizingDraftPreview")}
 			</div>
 		{:else}
 			<div
-				class="mx-auto overflow-hidden rounded-[4px] border border-control-border bg-preview-canvas shadow-lg"
+				class="ridu-live-preview__frame"
 				style:width="{frameWidth * (zoom / 100)}px"
 				style:height="{frameHeight * (zoom / 100)}px"
 			>
 				<iframe
 					bind:this={iframe}
-					class="block border-0 bg-preview-canvas"
 					src={previewURL}
 					title={runtime.i18n.t("documents:livePreview")}
 					width={frameWidth}
 					height={frameHeight}
 					style:transform="scale({zoom / 100})"
-					style:transform-origin="top left"
 					onload={handleLoad}
 				></iframe>
 			</div>

@@ -6,21 +6,35 @@ contracts.
 
 ## Set up the repository
 
-Use Go 1.25 or newer and Bun 1.4.0. PostgreSQL integration uses PostgreSQL 17; SQLite uses the bundled
+Use Go 1.25.13 or newer, Node.js 24, and Bun 1.4.0. PostgreSQL integration uses PostgreSQL 17; SQLite uses the bundled
 pure-Go driver and does not require CGO or an external database service.
 
 ```sh
 git clone https://github.com/riducms/ridu.git
 cd ridu
 bun install --frozen-lockfile
-make check
+make check-fast
 ```
 
 Use `make demo` for a local in-memory admin tour. PostgreSQL integration tests are opt-in and read
 their connection details from the environment; ordinary checks do not require a running database.
-Run `make sqlite-test` for changes to SQLite or shared database behavior. Use `make admin-dev` for
-the framework-owned admin loop and `make documentation-check` to verify the public documentation
-site.
+Run `make sqlite-test` for changes to SQLite or shared database behavior. Use
+`bun run dev:admin-fixture` to exercise the complete contract admin, and use
+`make documentation-check` to verify the public documentation site.
+
+For frontend hot reload, start the API fixture and the admin in separate terminals:
+
+```sh
+# Terminal one
+RIDU_BROWSER_ADDRESS=127.0.0.1:8080 go run ./tests/contracts/admin_server
+
+# Terminal two
+bun run --cwd admin dev --host 127.0.0.1
+```
+
+Open `http://127.0.0.1:5173/admin/login` and sign in with `editor@riducms.test` and
+`ridu-browser`. The admin proxies API requests to port 8080. Restart the Go fixture after Go
+changes; its in-memory data resets to the seeded content on restart.
 
 Before changing scaffolding, release resolution, or initial generation, exercise the real CLI
 binary against the repository's local versioned module proxy. The target must not already exist and
@@ -71,6 +85,8 @@ changes.
 A useful test protects a named behavior, detects a plausible defect, and adds evidence that the
 retained tests do not already provide. Judge that evidence against execution time, setup, flakiness
 and maintenance cost. Test count and coverage percentage alone do not establish value.
+
+Use these criteria when adding, reviewing, or consolidating tests:
 
 - Assert observable results, persisted state, or an explicit boundary. For example, zero store
   reads can be an authorization guarantee; an exact private helper call sequence usually is not.

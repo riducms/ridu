@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onDestroy, type Component } from "svelte";
+	import type { Component } from "svelte";
 	import type { SchemaField } from "@riducms/protocol";
 	import type { FieldAuthoringHost, AdminI18n } from "@riducms/plugin";
 	import type { FieldEditorProps, RegisteredFieldEditor } from "@riducms/plugin/editor";
@@ -40,7 +40,7 @@
 		() => runtime.manifestRevision
 	);
 	const guardedAuthoring = guardEditorAuthoring(() => authoring, field.assertActive);
-	onDestroy(field.destroy);
+	$effect(() => field.destroy);
 </script>
 
 <Editor

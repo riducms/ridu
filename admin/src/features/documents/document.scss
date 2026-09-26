@@ -1,0 +1,274 @@
+@use "@riducms/ui/styles.scss" as ui;
+
+@layer ridu.components {
+	.ridu-document-notice {
+		margin-block-end: 24px;
+	}
+	.ridu-document-notice__message {
+		min-inline-size: 0;
+		flex: 1;
+	}
+	.ridu-document-notice__icon {
+		margin-block-start: 2px;
+		inline-size: 16px;
+		block-size: 16px;
+		flex-shrink: 0;
+	}
+	.ridu-document-notice__error-marker {
+		inline-size: 8px;
+		block-size: 8px;
+		flex-shrink: 0;
+		border-radius: 50%;
+		background: var(--destructive);
+	}
+	.ridu-document-loading {
+		display: grid;
+		gap: 20px;
+	}
+	.ridu-document-loading__heading {
+		block-size: 48px;
+		inline-size: 66.6667%;
+	}
+	.ridu-document-loading__input {
+		margin-block-start: 20px;
+		block-size: var(--control-height);
+	}
+	.ridu-document-loading__textarea {
+		block-size: 112px;
+	}
+	.ridu-document-form__fieldset {
+		display: contents;
+	}
+	.ridu-document-form__submit {
+		@include ui.visually-hidden;
+	}
+	.ridu-document-menu__locale-trigger {
+		min-inline-size: 112px;
+	}
+	.ridu-document-menu__locale-code {
+		margin-inline-start: 4px;
+		color: var(--ink-faint);
+	}
+
+	.ridu-document {
+		display: flex;
+		flex-direction: column;
+		min-height: 100vh;
+		font-size: var(--font-size-body);
+		line-height: var(--line-height-body);
+	}
+	.ridu-document--api {
+		.ridu-document-header {
+			box-shadow: inset 0 -1px var(--control-border);
+		}
+		.ridu-document-title {
+			line-height: 36px;
+		}
+		.ridu-document-fields {
+			padding: 0;
+		}
+	}
+
+	.ridu-document-header {
+		flex-shrink: 0;
+		background: var(--background);
+	}
+	.ridu-document-heading {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 20px;
+		min-height: 68px;
+		padding: 8px var(--admin-gutter) 24px;
+	}
+	.ridu-document-description {
+		margin: -8px var(--admin-gutter) 24px;
+		color: var(--foreground-muted);
+		font-size: 14px;
+	}
+	.ridu-document-title {
+		margin: 0;
+		font-size: 32px;
+		line-height: 36px;
+		font-weight: 500;
+		letter-spacing: -0.5px;
+		overflow-wrap: anywhere;
+		min-width: 0;
+	}
+	.ridu-document-tabs {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		flex-shrink: 0;
+	}
+	.ridu-document-tab {
+		border: 0;
+		background: transparent;
+		display: flex;
+		align-items: center;
+		gap: 5px;
+		height: 34px;
+		padding: 0 14px;
+		font: inherit;
+		font-size: 14px;
+		color: var(--foreground);
+		text-decoration: none;
+		cursor: pointer;
+		border-radius: 3px;
+		&--active {
+			background: var(--background-layer);
+			font-weight: 600;
+		}
+		&:hover {
+			background: var(--background-surface);
+		}
+	}
+	.ridu-document-bar {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 20px;
+		min-height: 56px;
+		flex-shrink: 0;
+		padding: 8px var(--admin-gutter);
+		border-block: 1px solid var(--control-border);
+		background: var(--background);
+		position: sticky;
+		top: 0;
+		z-index: 20;
+	}
+	.ridu-document-metadata {
+		display: flex;
+		gap: 20px;
+		flex: 1 1 auto;
+		min-width: 0;
+		font-size: 13px;
+		color: var(--foreground-muted);
+		> span {
+			min-width: 0;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+		}
+		> span:first-child {
+			flex: 0 0 auto;
+		}
+		> .ridu-document-metadata__saved {
+			flex: 0 0 auto;
+		}
+	}
+	.ridu-document-metadata-value {
+		font-weight: 600;
+		color: var(--foreground);
+	}
+	.ridu-document-actions {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		flex-shrink: 0;
+		.ridu-button--small {
+			block-size: 34px;
+			padding-inline: 12px;
+			font-size: 13px;
+		}
+		.ridu-button--icon-small {
+			inline-size: 32px;
+			block-size: 32px;
+		}
+		.ridu-button--large {
+			block-size: 38px;
+			padding-inline: 12px;
+			font-size: 13px;
+		}
+		svg {
+			width: 16px;
+			height: 16px;
+		}
+	}
+	.ridu-document-actions__more {
+		width: 32px;
+		height: 32px;
+		padding: 0;
+	}
+	.ridu-document-menu {
+		width: 210px;
+		gap: 0;
+		padding: 10px 0;
+	}
+	.ridu-document-menu__item {
+		justify-content: flex-start;
+		width: 100%;
+		min-height: 34px;
+		padding: 6px 20px;
+		border-radius: 0;
+		font-weight: 400;
+	}
+	.ridu-document-menu__link {
+		display: flex;
+		color: inherit;
+		text-decoration: none;
+		&:hover {
+			background: var(--control-surface-hover);
+		}
+	}
+	.ridu-document-menu__locale {
+		padding: 0 10px 10px;
+	}
+	.ridu-document-body {
+		display: flex;
+		flex: 1;
+		flex-direction: column;
+		min-height: 0;
+	}
+	.ridu-document-editor {
+		flex: 1;
+		min-width: 0;
+	}
+	@media (min-width: 1240px) {
+		.ridu-document-body--preview {
+			flex-direction: row;
+			overflow: hidden;
+			> .ridu-document-editor {
+				flex: 0 0 40%;
+				overflow-y: auto;
+			}
+		}
+	}
+	.ridu-document-fields {
+		width: 100%;
+		padding: 30px var(--admin-gutter) 60px;
+	}
+	.ridu-document-form {
+		display: grid;
+		gap: 24px;
+	}
+	@media (min-width: 768px) {
+		.ridu-document {
+			height: 100%;
+			min-height: 0;
+			overflow: hidden auto;
+		}
+	}
+	@media (max-width: 700px) {
+		.ridu-document-heading {
+			align-items: flex-start;
+			flex-direction: column;
+		}
+		.ridu-document-title {
+			font-size: 28px;
+		}
+		.ridu-document-bar {
+			flex-wrap: wrap;
+		}
+		.ridu-document-metadata {
+			gap: 6px 16px;
+			flex-basis: 100%;
+		}
+		.ridu-document-actions {
+			margin-inline-start: auto;
+			max-width: 100%;
+			flex-wrap: wrap;
+			justify-content: flex-end;
+		}
+	}
+}

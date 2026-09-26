@@ -34,6 +34,7 @@ var mongoUploadMetadataFields = []mongoUploadMetadataField{
 	{id: "upload-object-key", name: "objectKey", label: "Object key", typeName: schema.FieldTypeText, required: true, indexed: true},
 	{id: "upload-width", name: "width", label: "Width", typeName: schema.FieldTypeNumber},
 	{id: "upload-height", name: "height", label: "Height", typeName: schema.FieldTypeNumber},
+	{id: "upload-source", name: "source", label: "Image source", typeName: schema.FieldTypeJSON},
 	{id: "upload-sizes", name: "sizes", label: "Generated sizes", typeName: schema.FieldTypeJSON},
 	{id: "upload-focal-x", name: "focalX", label: "Focal X", typeName: schema.FieldTypeNumber},
 	{id: "upload-focal-y", name: "focalY", label: "Focal Y", typeName: schema.FieldTypeNumber},

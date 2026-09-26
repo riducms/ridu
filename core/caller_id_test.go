@@ -163,7 +163,7 @@ func TestRESTCreateAcceptsOnlyConfiguredStringDocumentIDs(t *testing.T) {
 
 }
 
-func TestMaximumCallerIDRemainsReachableByScheduledPublishing(t *testing.T) {
+func TestMaximumCallerIDRemainsReachableByScheduledPublicationing(t *testing.T) {
 	ctx := context.Background()
 	application, err := ridu.New(ridu.Config{
 		Name: "Caller ID scheduled publishing", AllowIDOnCreate: true, Admin: ridu.AdminConfig{User: "users"},
@@ -190,15 +190,15 @@ func TestMaximumCallerIDRemainsReachableByScheduledPublishing(t *testing.T) {
 	if err != nil || document.ID != id {
 		t.Fatalf("maximum-ID draft = %#v, %v", document, err)
 	}
-	job, err := application.SchedulePublish(ctx, "posts", id, time.Now().Add(time.Hour), document.Revision, identity)
+	job, err := application.SchedulePublish(ctx, "posts", id, time.Now().Add(time.Hour), ridu.PublicationScheduleOptions{ExpectedRevision: document.Revision}, identity)
 	if err != nil || job.DocumentID != id {
 		t.Fatalf("maximum-ID schedule = %#v, %v", job, err)
 	}
-	jobs, err := application.ScheduledPublishes(ctx, "posts", id, identity)
+	jobs, err := application.ScheduledPublications(ctx, "posts", id, identity)
 	if err != nil || len(jobs) != 1 || jobs[0].ID != job.ID {
 		t.Fatalf("maximum-ID scheduled list = %#v, %v", jobs, err)
 	}
-	if err := application.CancelScheduledPublish(ctx, "posts", id, job.ID, identity); err != nil {
+	if err := application.CancelScheduledPublication(ctx, "posts", id, job.ID, identity); err != nil {
 		t.Fatal(err)
 	}
 }

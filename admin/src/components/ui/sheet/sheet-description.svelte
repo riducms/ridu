@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Dialog as SheetPrimitive } from "bits-ui";
-	import { cn } from "@riducms/ui";
+	import "@admin/components/ui/sheet/sheet.scss";
 
 	let {
 		ref = $bindable(null),
@@ -12,6 +12,6 @@
 <SheetPrimitive.Description
 	bind:ref
 	data-slot="sheet-description"
-	class={cn("text-sm text-muted-foreground", className)}
+	class={["ridu-sheet__description", className]}
 	{...restProps}
 />

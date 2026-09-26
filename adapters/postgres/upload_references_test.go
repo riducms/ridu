@@ -28,10 +28,10 @@ func TestPostgresUploadReferenceStatementCoalescesCollectionsAndVersions(t *test
 	if got := strings.Count(statement, "SELECT DISTINCT object_key"); got != 1 {
 		t.Fatalf("statement performs %d outer reference queries: %s", got, statement)
 	}
-	if got := strings.Count(statement, "ridu_versions"); got != 2 {
+	if got := strings.Count(statement, "ridu_versions"); got != 3 {
 		t.Fatalf("version branches = %d in %s", got, statement)
 	}
-	if got := strings.Count(statement, " = ANY($1::text[])"); got != 3 {
+	if got := strings.Count(statement, " = ANY($1::text[])"); got != 4 {
 		t.Fatalf("candidate predicates = %d in %s", got, statement)
 	}
 	if got := strings.Count(statement, "jsonb_path_query_array("); got != 3 || strings.Contains(statement, "jsonb_each") {

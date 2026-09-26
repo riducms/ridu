@@ -1,0 +1,1 @@
+var e=new Set([`filename`,`mimeType`,`filesize`,`url`,`objectKey`,`width`,`height`,`sizes`,`source`,`focalX`,`focalY`,`cropX`,`cropY`,`cropWidth`,`cropHeight`]);function t(t){return e.has(t)}export{t};

@@ -1,4 +1,4 @@
-import { resolveBlockTypes } from "@riducms/protocol";
+import { isRecord, resolveBlockTypes } from "@riducms/protocol";
 import type {
 	SchemaBlockType,
 	SchemaEmbeddedTree,
@@ -32,7 +32,7 @@ export function embeddedOccurrences(field: SchemaField, value: unknown, path = f
 		let root: unknown = value;
 		let rootPath = path;
 		for (const segment of tree.root) {
-			root = isEmbeddedRecord(root) ? root[segment] : undefined;
+			root = isRecord(root) ? root[segment] : undefined;
 			rootPath += `.${segment}`;
 		}
 		const keys = new Set<string>();
@@ -41,7 +41,7 @@ export function embeddedOccurrences(field: SchemaField, value: unknown, path = f
 				fail(nodePath, "Embedded field traversal budget exceeded", "embedded_budget");
 				return;
 			}
-			if (!isEmbeddedRecord(node)) {
+			if (!isRecord(node)) {
 				fail(nodePath, "Embedded tree node must be an object");
 				return;
 			}
@@ -49,7 +49,7 @@ export function embeddedOccurrences(field: SchemaField, value: unknown, path = f
 			if (branch !== undefined) {
 				const payload = node[branch.payload];
 				const payloadPath = `${nodePath}.${branch.payload}`;
-				if (!isEmbeddedRecord(payload)) {
+				if (!isRecord(payload)) {
 					fail(payloadPath, "Embedded payload must be an object");
 				} else {
 					const block = resolveBlockTypes(branch).find(
@@ -125,8 +125,4 @@ export function transformEmbeddedPayloads(
 		Object.assign(occurrence.payload, transformed);
 	}
 	return value;
-}
-
-export function isEmbeddedRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
 }

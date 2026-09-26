@@ -112,7 +112,7 @@ test("100 mixed cards keep nested editors lazy and measure typing and block acti
 	await page
 		.locator('[data-field-path="body"]')
 		.first()
-		.getByRole("button", { name: /^Add block —/ })
+		.getByRole("button", { name: "Insert paragraph", exact: true })
 		.click();
 	await editor.press("Backspace");
 	await editor.evaluate((element) => {

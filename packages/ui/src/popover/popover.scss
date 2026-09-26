@@ -1,0 +1,16 @@
+@use "../layers.css";
+
+@layer ridu.components {
+	.ridu-popover-content {
+		box-sizing: border-box;
+		z-index: 80;
+		overflow: hidden;
+		border: 1px solid var(--control-border);
+		border-radius: 4px;
+		background: var(--popover);
+		color: var(--popover-foreground);
+		box-shadow: var(--shadow-popover);
+		outline: none;
+		transform-origin: var(--bits-popover-content-transform-origin);
+	}
+}

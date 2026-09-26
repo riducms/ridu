@@ -6,8 +6,8 @@ import (
 	"testing"
 )
 
-func TestRewriteScheduledPublishTaskCollectionIDPreservesUnknownInput(t *testing.T) {
-	row := scheduledPublishTaskRenameRow{
+func TestRewriteScheduledPublicationTaskCollectionIDPreservesUnknownInput(t *testing.T) {
+	row := scheduledPublicationTaskRenameRow{
 		ID:                      "task-1",
 		TargetCollectionID:      sql.NullString{String: "users-old", Valid: true},
 		TargetDocumentID:        sql.NullString{String: "post-1", Valid: true},
@@ -23,14 +23,14 @@ func TestRewriteScheduledPublishTaskCollectionIDPreservesUnknownInput(t *testing
         }`),
 		ConcurrencyKey: sql.NullString{String: "users-old:post-1", Valid: true},
 	}
-	encoded, concurrencyKey, target, requester, err := rewriteScheduledPublishTaskCollectionID(row, "users-old", "users-new")
+	encoded, concurrencyKey, target, requester, err := rewriteScheduledPublicationTaskCollectionID(row, "users-old", "users-new")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if target != "users-new" || requester != "users-new" {
 		t.Fatalf("identity rewrite = target %#v requester %#v", target, requester)
 	}
-	if want := scheduledPublishConcurrencyKey("users-new", "post-1"); concurrencyKey != want {
+	if want := scheduledPublicationConcurrencyKey("users-new", "post-1"); concurrencyKey != want {
 		t.Fatalf("concurrency key = %q, want %q", concurrencyKey, want)
 	}
 	var input map[string]any
@@ -46,14 +46,14 @@ func TestRewriteScheduledPublishTaskCollectionIDPreservesUnknownInput(t *testing
 	}
 }
 
-func TestRewriteScheduledPublishTaskCollectionIDFailsClosedOnDivergentIdentity(t *testing.T) {
-	row := scheduledPublishTaskRenameRow{
+func TestRewriteScheduledPublicationTaskCollectionIDFailsClosedOnDivergentIdentity(t *testing.T) {
+	row := scheduledPublicationTaskRenameRow{
 		ID:                 "task-1",
 		TargetCollectionID: sql.NullString{String: "users-old", Valid: true},
 		TargetDocumentID:   sql.NullString{String: "post-1", Valid: true},
 		Input:              json.RawMessage(`{"collectionID":"different","documentID":"post-1","expectedRevision":3}`),
 	}
-	if _, _, _, _, err := rewriteScheduledPublishTaskCollectionID(row, "users-old", "users-new"); err == nil {
+	if _, _, _, _, err := rewriteScheduledPublicationTaskCollectionID(row, "users-old", "users-new"); err == nil {
 		t.Fatal("expected divergent persisted identity to fail closed")
 	}
 }

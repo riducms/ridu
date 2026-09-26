@@ -87,14 +87,14 @@ func openAPI(manifest schema.Manifest) ([]byte, error) {
 		localeParameters := localizationParameters(snapshot.Application.Localization, collection.Fields)
 		document.Paths["/api/collections/"+slug+"/validate"] = map[string]any{"post": liveValidationOperation(name, snapshot.Application.Localization, false)}
 		listSpec := operationSpec("List "+collection.Labels.Plural, "list"+name, "200")
-		listSpec["parameters"] = append(depthParameters(), localeParameters...)
+		listSpec["parameters"] = append(collectionListParameters(collection), localeParameters...)
 		createSpec := operationSpec("Create "+collection.Labels.Singular, "create"+name, "201")
 		createSpec["parameters"] = append(createDraftParameters(collection), localeParameters...)
 		document.Paths["/api/collections/"+slug] = map[string]any{
 			"get": listSpec, "post": createSpec,
 		}
 		findSpec := operationSpec("Find "+collection.Labels.Singular, "find"+name, "200")
-		findSpec["parameters"] = append(depthParameters(), localeParameters...)
+		findSpec["parameters"] = append(resourceReadParameters(), localeParameters...)
 		updateSpec := operationSpec("Update "+collection.Labels.Singular, "update"+name, "200")
 		updateSpec["parameters"] = localeParameters
 		deleteSpec := operationSpec("Delete "+collection.Labels.Singular, "delete"+name, "200")
@@ -210,12 +210,31 @@ func openAPI(manifest schema.Manifest) ([]byte, error) {
 		if collection.Upload != nil {
 			remoteUploadSpec := operationSpec("Create "+collection.Labels.Singular+" from a public URL", "remoteUpload"+name, "201")
 			remoteUploadSpec["parameters"] = localeParameters
-			document.Paths["/api/collections/"+slug+"/remote-upload"] = map[string]any{
-				"post": remoteUploadSpec,
-			}
-			document.Paths["/api/collections/"+slug+"/{id}/image"] = map[string]any{
-				"patch": operationSpec("Regenerate "+collection.Labels.Singular+" image sizes", "updateUploadImage"+name, "200"),
-			}
+			remoteUploadSpec["requestBody"] = map[string]any{"required": true, "content": map[string]any{"application/json": map[string]any{"schema": map[string]any{
+				"type": "object", "required": []string{"url"}, "properties": map[string]any{
+					"url": map[string]any{"type": "string", "format": "uri"}, "data": map[string]any{"type": "object"},
+					"image": uploadImageSchema(), "filename": map[string]any{"type": "string"}, "publish": map[string]any{"type": "boolean"},
+				},
+			}}}}
+			document.Paths["/api/collections/"+slug+"/remote-upload"] = map[string]any{"post": remoteUploadSpec}
+			uploadSpec := operationSpec("Save "+collection.Labels.Singular+" file, image and document edits", "updateUpload"+name, "200")
+			uploadSpec["parameters"] = uploadDocumentParameters(localeParameters, true)
+			uploadSpec["requestBody"] = uploadRequestBody(true)
+			document.Paths["/api/collections/"+slug+"/{id}/upload"] = map[string]any{"patch": uploadSpec}
+			sourceSpec := operationSpec("Read editor-only image source", "readUploadSource"+name, "200")
+			sourceSpec["parameters"] = uploadDocumentParameters(localeParameters, false)
+			sourceSpec["description"] = "Authenticated, private source download. Both read and update access predicates must match the document. Never delivered by the public upload URL."
+			sourceHeadSpec := operationSpec("Read editor-only image source metadata", "headUploadSource"+name, "200")
+			sourceHeadSpec["parameters"] = uploadDocumentParameters(localeParameters, false)
+			sourceHeadSpec["description"] = sourceSpec["description"]
+			document.Paths["/api/collections/"+slug+"/{id}/upload-source"] = map[string]any{"get": sourceSpec, "head": sourceHeadSpec}
+			previewSpec := operationSpec("Download a remote file without creating a document", "previewUpload"+name, "200")
+			previewSpec["requestBody"] = map[string]any{"required": true, "content": map[string]any{"application/json": map[string]any{"schema": map[string]any{
+				"type": "object", "required": []string{"url"}, "properties": map[string]any{
+					"url": map[string]any{"type": "string", "format": "uri"}, "id": map[string]any{"type": "string"},
+				},
+			}}}}
+			document.Paths["/api/collections/"+slug+"/upload-preview"] = map[string]any{"post": previewSpec}
 		}
 		if collection.Versions != nil {
 			versionBase := "/api/collections/" + slug + "/{id}"
@@ -230,22 +249,36 @@ func openAPI(manifest schema.Manifest) ([]byte, error) {
 			}
 			publishSpec := operationSpec("Publish "+collection.Labels.Singular, "publish"+name, "200")
 			publishSpec["parameters"] = localeParameters
-			unpublishSpec := operationSpec("Unpublish "+collection.Labels.Singular, "unpublish"+name, "200")
-			unpublishSpec["parameters"] = localeParameters
 			document.Paths[versionBase+"/publish"] = map[string]any{"post": publishSpec}
-			document.Paths[versionBase+"/unpublish"] = map[string]any{"post": unpublishSpec}
+			if collection.Versions.Drafts {
+				unpublishSpec := operationSpec("Unpublish "+collection.Labels.Singular, "unpublish"+name, "200")
+				unpublishSpec["parameters"] = localeParameters
+				document.Paths[versionBase+"/unpublish"] = map[string]any{"post": unpublishSpec}
+			}
 			restoreSpec := operationSpec("Restore "+collection.Labels.Singular, "restore"+name, "200")
 			restoreSpec["parameters"] = append(restoreVersionParameters(), localeParameters...)
 			document.Paths[versionBase+"/restore/{revision}"] = map[string]any{
 				"post": restoreSpec,
 			}
+			scheduleActions := []string{"publish"}
+			if collection.Versions.Drafts {
+				scheduleActions = append(scheduleActions, "unpublish")
+			}
+			scheduleSpec := operationSpec("Schedule "+collection.Labels.Singular+" publication change", "schedulePublication"+name, "201")
+			scheduleSpec["requestBody"] = map[string]any{"required": true, "content": map[string]any{"application/json": map[string]any{"schema": map[string]any{
+				"type": "object", "additionalProperties": false, "required": []string{"action", "runAt"}, "properties": map[string]any{
+					"action":   map[string]any{"type": "string", "enum": scheduleActions},
+					"runAt":    map[string]any{"type": "string", "format": "date-time"},
+					"timeZone": map[string]any{"type": "string", "description": "Optional region timezone such as Europe/London, UTC, or ±HH:mm offset retained for display; runAt remains the scheduled instant."},
+				},
+			}}}}
 			document.Paths[versionBase+"/schedule"] = map[string]any{
-				"get":  operationSpec("List scheduled publishes for "+collection.Labels.Singular, "scheduledPublishes"+name, "200"),
-				"post": operationSpec("Schedule "+collection.Labels.Singular+" publish", "schedulePublish"+name, "201"),
+				"get":  operationSpec("List scheduled publications for "+collection.Labels.Singular, "scheduledPublications"+name, "200"),
+				"post": scheduleSpec,
 			}
 			document.Paths[versionBase+"/schedule/{jobId}"] = map[string]any{
 				"parameters": []map[string]any{{"name": "jobId", "in": "path", "required": true, "schema": map[string]string{"type": "string"}}},
-				"delete":     operationSpec("Cancel "+collection.Labels.Singular+" scheduled publish", "cancelScheduledPublish"+name, "200"),
+				"delete":     operationSpec("Cancel "+collection.Labels.Singular+" scheduled publication", "cancelScheduledPublication"+name, "200"),
 			}
 		}
 		if err := generator.addOpenAPIResourceSchema(document.Components.Schemas, name, collection, pluginTypes); err != nil {
@@ -256,16 +289,29 @@ func openAPI(manifest schema.Manifest) ([]byte, error) {
 		for _, operation := range []map[string]any{findSpec, updateSpec, deleteSpec} {
 			addOpenAPIJSONResponse(operation, "200", docResponse)
 		}
-		addOpenAPIJSONResponse(listSpec, "200", map[string]any{"type": "object", "properties": map[string]any{
+		pageResponse := map[string]any{"type": "object", "properties": map[string]any{
 			"docs":       map[string]any{"type": "array", "items": map[string]any{"$ref": "#/components/schemas/" + name}},
 			"pagination": map[string]any{"$ref": "#/components/schemas/Pagination"},
-		}, "required": []string{"docs", "pagination"}})
+		}, "required": []string{"docs", "pagination"}}
+		accessPageResponse := map[string]any{"type": "object", "properties": map[string]any{
+			"docs":       map[string]any{"type": "array", "items": map[string]any{"$ref": "#/components/schemas/" + name}},
+			"pagination": map[string]any{"$ref": "#/components/schemas/Pagination"},
+			"access":     map[string]any{"$ref": "#/components/schemas/CollectionPageAccess"},
+		}, "required": []string{"docs", "pagination", "access"}}
+		addOpenAPIJSONResponse(listSpec, "200", map[string]any{"oneOf": []any{pageResponse, accessPageResponse}})
 		if err := generator.addInputResourceSchemas(document.Components.Schemas, name, collection, pluginTypes, snapshot.Application.AllowIDOnCreate); err != nil {
 			return nil, err
 		}
-		createSpec["requestBody"] = openAPIJSONRequest(name + "Create")
-		if collection.Upload != nil {
-			createSpec["requestBody"] = map[string]any{"required": true, "content": map[string]any{"multipart/form-data": map[string]any{"schema": map[string]any{"type": "object", "properties": map[string]any{"file": map[string]any{"type": "string", "format": "binary"}, "data": map[string]any{"type": "string", "contentMediaType": "application/json", "contentSchema": map[string]any{"$ref": "#/components/schemas/" + name + "Create"}}}, "required": []string{"file"}}}}}
+		if collection.Upload == nil {
+			createSpec["requestBody"] = openAPIJSONRequest(name + "Create")
+		} else {
+			requestBody := uploadRequestBody(false)
+			content := requestBody["content"].(map[string]any)
+			multipart := content["multipart/form-data"].(map[string]any)["schema"].(map[string]any)
+			data := multipart["properties"].(map[string]any)["data"].(map[string]any)
+			data["contentMediaType"] = "application/json"
+			data["contentSchema"] = map[string]any{"$ref": "#/components/schemas/" + name + "Create"}
+			createSpec["requestBody"] = requestBody
 		}
 		updateSpec["requestBody"] = openAPIJSONRequest(name + "Update")
 	}
@@ -274,7 +320,7 @@ func openAPI(manifest schema.Manifest) ([]byte, error) {
 		localeParameters := localizationParameters(snapshot.Application.Localization, global.Fields)
 		document.Paths["/api/globals/"+slug+"/validate"] = map[string]any{"post": liveValidationOperation(name, snapshot.Application.Localization, true)}
 		readSpec := operationSpec("Read "+global.Labels.Singular, "read"+name, "200")
-		readSpec["parameters"] = append(depthParameters(), localeParameters...)
+		readSpec["parameters"] = append(resourceReadParameters(), localeParameters...)
 		updateSpec := operationSpec("Update "+global.Labels.Singular, "update"+name, "200")
 		updateSpec["parameters"] = localeParameters
 		document.Paths["/api/globals/"+slug] = map[string]any{
@@ -481,6 +527,65 @@ func depthParameters() []map[string]any {
 		"description": "Expand readable relationships recursively.",
 		"schema":      map[string]any{"type": "integer", "minimum": 0, "maximum": 5, "default": 0},
 	}}
+}
+
+func collectionListAccessParameters() []map[string]any {
+	return []map[string]any{{
+		"name": "include-access", "in": "query", "required": false,
+		"description": "Include collection and per-document access capabilities for this page.",
+		"schema":      map[string]any{"type": "boolean", "default": false},
+	}}
+}
+
+func collectionListParameters(collection schema.Collection) []map[string]any {
+	parameters := []map[string]any{
+		{
+			"name": "page", "in": "query", "required": false,
+			"description": "One-based result page.",
+			"schema":      map[string]any{"type": "integer", "minimum": 1, "maximum": 1_000_000, "default": 1},
+		},
+		{
+			"name": "limit", "in": "query", "required": false,
+			"description": "Maximum documents returned in this page.",
+			"schema":      map[string]any{"type": "integer", "minimum": 1, "maximum": 100, "default": 10},
+		},
+		{
+			"name": "where", "in": "query", "required": false,
+			"description": "JSON-encoded document filter combined atomically with collection access rules.",
+			"schema":      map[string]any{"type": "string"},
+		},
+		{
+			"name": "sort", "in": "query", "required": false,
+			"description": "Ordered field names; prefix a field with - for descending order.",
+			"style":       "form", "explode": true,
+			"schema": map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+		},
+	}
+	parameters = append(parameters, collectionListAccessParameters()...)
+	parameters = append(parameters, resourceReadParameters()...)
+	if collection.Capabilities.Trash {
+		parameters = append(parameters, map[string]any{
+			"name": "trash", "in": "query", "required": false,
+			"description": "Read soft-deleted documents instead of active documents.",
+			"schema":      map[string]any{"type": "boolean", "default": false},
+		})
+	}
+	return parameters
+}
+
+func resourceReadParameters() []map[string]any {
+	return append(depthParameters(),
+		map[string]any{
+			"name": "select", "in": "query", "required": false,
+			"description": "JSON-encoded top-level field selection.",
+			"schema":      map[string]any{"type": "string"},
+		},
+		map[string]any{
+			"name": "populate", "in": "query", "required": false,
+			"description": "JSON-encoded relationship population; cannot be combined with depth.",
+			"schema":      map[string]any{"type": "string"},
+		},
+	)
 }
 
 func localizationParameters(settings *schema.LocalizationSettings, fields []schema.Field) []map[string]any {
@@ -925,6 +1030,16 @@ func addCollectionSelectionSchemas(schemas map[string]openAPISchema) {
 			},
 		},
 		Required: []string{"operations", "fields"},
+	}
+	schemas["CollectionPageAccess"] = openAPISchema{
+		Type: "object",
+		Properties: map[string]any{
+			"collection": map[string]string{"$ref": "#/components/schemas/AccessCapabilities"},
+			"documents": map[string]any{
+				"type": "object", "additionalProperties": map[string]string{"$ref": "#/components/schemas/AccessCapabilities"},
+			},
+		},
+		Required: []string{"collection", "documents"},
 	}
 	schemas["CollectionSelectionInput"] = openAPISchema{
 		Type: "object",

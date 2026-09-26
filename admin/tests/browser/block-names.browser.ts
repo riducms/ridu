@@ -399,9 +399,7 @@ it("focuses an inline name issue while its block body remains collapsed", async 
 	await collapse.click();
 	const expand = screen.getByRole("button", { name: "Expand", exact: true });
 	await expect.element(expand).toHaveAttribute("aria-expanded", "false");
-	await screen
-		.getByRole("button", { name: "1 validation errors: Name is required", exact: true })
-		.click();
+	await screen.getByRole("button", { name: "1 Error: Name is required", exact: true }).click();
 	await expect
 		.element(screen.getByRole("textbox", { name: "Block name", exact: true }))
 		.toHaveFocus();

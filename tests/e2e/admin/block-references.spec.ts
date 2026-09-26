@@ -81,7 +81,7 @@ for (const mode of ["inline", "reference"] as const) {
 		);
 		expect(issue.path).toBe("layout.0.controlled");
 		expect(JSON.parse(issue.target)).toEqual(expect.arrayContaining(["card", "a"]));
-		await layout.getByRole("button", { name: /validation errors:.*Controlled/i }).click();
+		await layout.getByRole("button", { name: /1 Error:.*Controlled/i }).click();
 		await expect(page.locator('input[name="layout.0.controlled"]')).toBeFocused();
 		// Server admission uses the candidate root even when the client presents an editable control.
 		await page.route(

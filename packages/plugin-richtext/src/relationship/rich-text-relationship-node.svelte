@@ -5,13 +5,17 @@
 		useLexicalNodeSelection,
 	} from "@hvniel/lexical-svelte";
 	import { getAdminI18n } from "@riducms/plugin";
+	import { Button } from "@riducms/ui";
 	import type { NodeKey } from "lexical";
+	import ReplaceIcon from "~icons/lucide/refresh-cw";
+	import RemoveIcon from "~icons/lucide/x";
 
 	import { getRichTextAuthoringHost } from "@plugin-richtext/field/rich-text-context.svelte";
 	import {
 		OPEN_RELATIONSHIP_BROWSER_COMMAND,
 		REMOVE_RELATIONSHIP_COMMAND,
 	} from "@plugin-richtext/menu/rich-text-commands";
+	import "@plugin-richtext/relationship/rich-text-relationship-node.scss";
 
 	let {
 		documentID,
@@ -44,6 +48,8 @@
 		if (authoring === undefined) return;
 		void authoring.documentRevision;
 		const request = new AbortController();
+		document = undefined;
+		loadError = false;
 		authoring
 			.findDocument(relationTo, documentID, request.signal)
 			.then((value) => {
@@ -88,54 +94,54 @@
 </script>
 
 <article
-	class={[
-		"group/relationship relative my-6 flex items-center gap-3 rounded-[4px] border border-control-border bg-control px-4 py-3.5 transition-colors hover:border-primary/45",
-		isSelected() && "border-primary/50",
-	]}
+	class={["ridu-richtext-relationship-card", isSelected() && "is-selected"]}
+	data-selected={isSelected() || undefined}
+	aria-busy={authoring !== undefined && document === undefined && !loadError}
 	role="group"
 	aria-label={i18n.t("plugin.richtext:relationship.label", {
 		collection: collection?.labels.singular ?? relationTo,
 		title,
 	})}
 >
-	<span
-		class="font-mono grid size-9 shrink-0 place-items-center rounded-full bg-primary/10 text-[11px] font-semibold text-brand-primary-soft"
-		aria-hidden="true"
-	>
-		{(collection?.labels.singular ?? relationTo).slice(0, 2).toLocaleUpperCase(i18n.language)}
-	</span>
-	<button
-		type="button"
-		class="min-w-0 flex-1 cursor-pointer border-0 bg-transparent p-0 text-start outline-none"
-		disabled={!isEditable()}
-		onclick={openDocument}
-	>
-		<span class="block truncate text-[13.5px] font-medium text-foreground-strong">
-			{loadError ? i18n.t("plugin.richtext:relationship.unavailable") : title}
-		</span>
-		<span class="font-mono mt-0.5 block truncate text-[10px] text-foreground-faint">
+	<div class="ridu-richtext-relationship-card__content" aria-live="polite">
+		<span class="ridu-richtext-relationship-card__label">
 			{collection?.labels.singular ?? relationTo} · {documentID}
 		</span>
-	</button>
+		<button
+			type="button"
+			class="ridu-richtext-relationship-card__title"
+			disabled={!isEditable()}
+			onclick={openDocument}
+		>
+			{loadError ? i18n.t("plugin.richtext:relationship.unavailable") : title}
+		</button>
+	</div>
 	{#if isEditable()}
 		<div
-			class="flex shrink-0 items-center gap-1"
+			class="ridu-richtext-relationship-card__actions"
+			role="group"
 			aria-label={i18n.t("plugin.richtext:relationship.actions")}
 		>
-			<button
-				type="button"
-				class="rounded-[3px] px-2 py-1.5 text-[11px] text-foreground-muted hover:bg-control-hover hover:text-foreground"
+			<Button
+				class="ridu-richtext-relationship-card__action"
+				variant="ghost"
+				size="icon-sm"
 				onclick={replaceDocument}
+				aria-label={i18n.t("plugin.richtext:relationship.replace")}
+				tooltip={i18n.t("plugin.richtext:relationship.replace")}
 			>
-				{i18n.t("plugin.richtext:relationship.replace")}
-			</button>
-			<button
-				type="button"
-				class="rounded-[3px] px-2 py-1.5 text-[11px] text-destructive hover:bg-destructive/10"
+				<ReplaceIcon />
+			</Button>
+			<Button
+				class="ridu-richtext-relationship-card__action"
+				variant="ghost"
+				size="icon-sm"
 				onclick={removeRelationship}
+				aria-label={i18n.t("plugin.richtext:relationship.remove")}
+				tooltip={i18n.t("plugin.richtext:relationship.remove")}
 			>
-				{i18n.t("plugin.richtext:relationship.remove")}
-			</button>
+				<RemoveIcon />
+			</Button>
 		</div>
 	{/if}
 </article>

@@ -369,10 +369,10 @@ type SnapshotStore interface {
 }
 
 // MaxUploadReferenceCandidates is the largest object-key set one targeted
-// upload-reference query may inspect. An upload owns one original object and
+// upload-reference query may inspect. An upload owns a private source, a primary rendition, and
 // at most 64 configured image variants, so the bound covers one complete
 // document while preventing adapters from receiving an unbounded query.
-const MaxUploadReferenceCandidates = 65
+const MaxUploadReferenceCandidates = 66
 
 // UploadReferenceRequest asks whether a bounded set of object keys is still
 // named by a current, trashed, or versioned upload document. Collections must
@@ -510,6 +510,10 @@ type Transaction interface {
 	// DeleteDocumentState idempotently removes framework-owned database state
 	// where the document is either the target or the owning principal.
 	DeleteDocumentState(context.Context, DocumentReference) error
+	// DismissTaskForTarget removes a queued, failed, or canceled target-scoped
+	// task in this document transaction. Running tasks remain lease-owned and
+	// cannot be reported as canceled while their handler may still commit work.
+	DismissTaskForTarget(context.Context, string, string, DocumentReference) error
 	Commit(context.Context) error
 	Rollback(context.Context) error
 }
@@ -641,8 +645,11 @@ type AuthUnlockTransaction interface {
 	ForceUnlockAuth(context.Context, schema.StableID, string) error
 }
 
-type ScheduledPublish struct {
+type ScheduledPublication struct {
+	// TimeZone retains the author-selected display zone without changing RunAt.
+	TimeZone                string
 	ID                      string
+	Action                  PublicationAction
 	CollectionID            schema.StableID
 	DocumentID              string
 	ExpectedRevision        int
@@ -653,6 +660,14 @@ type ScheduledPublish struct {
 	LastError               string
 	CreatedAt               time.Time
 }
+
+// PublicationAction is the status transition performed by a scheduled task.
+type PublicationAction string
+
+const (
+	PublicationActionPublish   PublicationAction = "publish"
+	PublicationActionUnpublish PublicationAction = "unpublish"
+)
 
 // TaskState is the persisted lifecycle of one durable task. A running task is
 // owned only while its lease token and expiry remain current. Terminal tasks
@@ -754,9 +769,8 @@ type TaskStore interface {
 	ListTasks(context.Context, TaskList) ([]Task, error)
 	CancelTask(context.Context, string) error
 	// DismissTaskForTarget removes one task only when its slug and target match.
-	// This powers target-scoped action lists such as scheduled publishing: every
-	// listed queued, running, failed, or canceled item remains dismissible while
-	// general CancelTask keeps retained cancellation status for typed callers.
+	// Queued, failed, and canceled items are dismissible; running work remains
+	// lease-owned because removing its record cannot stop its handler safely.
 	DismissTaskForTarget(context.Context, string, string, DocumentReference) error
 	ClaimTasks(context.Context, TaskClaim) ([]Task, error)
 	HeartbeatTask(context.Context, string, string, time.Duration) error

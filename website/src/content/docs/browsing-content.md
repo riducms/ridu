@@ -65,12 +65,19 @@ field access.
 Open **Posts** in the admin, then use the toolbar to:
 
 1. search the configured title field;
-2. add typed filters and combine them with the current locale/workflow state;
-3. sort by a supported field and choose the page size;
-4. show or hide ID, timestamps, status, nested group paths, relationships, and uploads; and
+2. open **Filters** to add typed conditions, join conditions with **and**, and add **or** groups;
+3. use a column's ascending or descending button to sort, then choose 10, 25, 50, or 100 results
+   per page below the table;
+4. open **Columns** to show or hide ID, timestamps, status, nested group paths, relationships, and
+   uploads, and drag the column pills into the order you want; and
 5. select the current page or resolve a bounded filtered selection for bulk work.
 
-The URL owns page, search, sort, filter, locale, folder, hierarchy, and trash state. Reloading or
+Search and the current folder or status choice combine with the filter groups. The **More** menu
+holds folder and hierarchy controls when configured, plus personal saved views when signed in.
+Column order includes hidden columns, so showing one again restores its place. A saved view captures
+the current list setup; it does not create a shared view for other users.
+
+The URL owns page, search, sort, filters, columns, locale, folder, hierarchy, and trash state. Reloading or
 sharing an allowed URL reproduces the workspace rather than resetting to hidden component state.
 Per-user column/page-size choices and saved views use authenticated preferences.
 
@@ -78,6 +85,11 @@ Relationship and upload cells resolve readable labels through access-checked req
 field stays redacted in the table even if another user saved it as a visible column.
 
 ![A Posts list in the Ridu admin showing one published post with search, filter, column, saved-view, sort, and selection controls.](../../../../docs/assets/ridu-admin-posts-list.png)
+
+Choose **API reference** in the collection header to inspect list, read, create, update, and delete
+requests for this collection. It shows TypeScript SDK, cURL, and Go local API examples, field
+details, query options, and example responses. The examples are for inspection and copying; they
+do not submit a request.
 
 ## Empty, failed, and large result sets {#troubleshooting}
 

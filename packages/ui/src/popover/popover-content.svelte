@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Popover } from "bits-ui";
 
-	import { cn } from "@ui/utils";
+	import "@ui/popover/popover.scss";
 
 	let {
 		ref = $bindable(null),
@@ -19,10 +19,7 @@
 		data-slot="popover-content"
 		{sideOffset}
 		{align}
-		class={cn(
-			"z-80 overflow-hidden rounded-[4px] border border-control-border bg-popover text-popover-foreground shadow-[var(--shadow-popover)] outline-none origin-(--bits-popover-content-transform-origin)",
-			className
-		)}
+		class={["ridu-popover-content", className]}
 		{...restProps}
 	/>
 </Popover.Portal>

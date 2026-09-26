@@ -2,7 +2,7 @@ import {
 	createClient,
 	type CollectionContract,
 	type Version,
-	type ScheduledPublish,
+	type ScheduledPublication,
 	type RiduClient,
 } from "@riducms/sdk";
 import type { FieldDocument } from "@riducms/plugin";
@@ -38,7 +38,7 @@ export interface AdminConfig {
 }
 
 export type AdminVersion = Version<AdminDocument>;
-export type AdminScheduledPublish = ScheduledPublish;
+export type AdminScheduledPublication = ScheduledPublication;
 
 export type AdminClient = RiduClient<AdminConfig>;
 

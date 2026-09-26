@@ -1,5 +1,0 @@
-package identifiercollision
-
-type Text struct{}
-
-func Text(name string) Text { return Text{} }

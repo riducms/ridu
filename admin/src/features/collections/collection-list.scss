@@ -1,0 +1,261 @@
+@use "@riducms/ui/styles.scss" as ui;
+
+@layer ridu.components {
+	.ridu-list {
+		width: 100%;
+		min-width: 0;
+		padding: 0 var(--admin-gutter) var(--admin-gutter);
+		font-size: var(--font-size-body);
+		line-height: var(--line-height-body);
+	}
+	.ridu-list__header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 20px;
+		flex-wrap: wrap;
+		margin-bottom: 20px;
+		min-height: 36px;
+	}
+	.ridu-list__title {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+	}
+	.ridu-list__header-actions {
+		display: flex;
+		align-items: center;
+		gap: 20px;
+		flex-wrap: wrap;
+	}
+	.ridu-list__error {
+		margin-top: 24px;
+	}
+	.ridu-list__error-marker {
+		width: 8px;
+		height: 8px;
+		flex-shrink: 0;
+		border-radius: 50%;
+		background: var(--destructive);
+	}
+	.ridu-list__error-message {
+		min-width: 0;
+		flex: 1;
+	}
+	.ridu-list-bulk-module-overlay {
+		@include ui.confirmation-overlay;
+		position: fixed;
+		inset: 0;
+		z-index: 50;
+	}
+	.ridu-list-bulk-module {
+		@include ui.confirmation-content;
+		position: fixed;
+		top: 50%;
+		left: 50%;
+		z-index: 50;
+		display: grid;
+		gap: 24px;
+		transform: translate(-50%, -50%);
+		outline: none;
+	}
+	.ridu-list-bulk-module__header {
+		display: grid;
+		gap: 8px;
+	}
+	.ridu-list-bulk-module__title {
+		@include ui.confirmation-title;
+	}
+	.ridu-list-bulk-module__description {
+		font-size: var(--font-size-body);
+		line-height: 1.5;
+	}
+	.ridu-list-bulk-module__actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px;
+	}
+	.ridu-list__views {
+		display: flex;
+		gap: 10px;
+	}
+	.ridu-list__view {
+		padding: 4px 12px;
+		border: 1px solid transparent;
+		border-radius: 3px;
+		color: var(--foreground);
+		font-weight: 500;
+		line-height: 22px;
+		text-decoration: none;
+		white-space: nowrap;
+
+		&:hover {
+			background: var(--background-surface);
+		}
+
+		&[aria-current="page"] {
+			background: var(--background-layer);
+			font-weight: 600;
+		}
+	}
+	.ridu-list__title h1 {
+		margin: 0;
+		font-size: 32px;
+		line-height: 36px;
+		font-weight: 500;
+		letter-spacing: -0.5px;
+	}
+	.ridu-list__pill {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 5px;
+		padding: 0 8px;
+		border: 0;
+		border-radius: 3px;
+		background: var(--pill-surface);
+		color: var(--ink-strong);
+		font: inherit;
+		line-height: 24px;
+		text-decoration: none;
+		white-space: nowrap;
+		cursor: pointer;
+
+		&:hover {
+			background: var(--background-layer);
+		}
+	}
+	.ridu-list__pill:focus-visible,
+	.ridu-list__view:focus-visible,
+	.ridu-list__text-action:focus-visible,
+	.ridu-list__circle:focus-visible {
+		@include ui.focus-outline;
+	}
+	.ridu-list__pill:disabled {
+		background: var(--pill-surface);
+		color: var(--pill-disabled-foreground);
+		cursor: not-allowed;
+	}
+	.ridu-list__text-action:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+	.ridu-list__text-action {
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
+		border: 0;
+		padding: 0;
+		background: none;
+		font: inherit;
+		color: inherit;
+		cursor: pointer;
+		text-decoration: none;
+
+		&:hover {
+			text-decoration: underline;
+		}
+	}
+	.ridu-list__circle {
+		display: inline-grid;
+		place-items: center;
+		width: 20px;
+		height: 20px;
+		padding: 0;
+		border: 1px solid var(--control-border);
+		border-radius: 50%;
+		background: none;
+		color: inherit;
+		cursor: pointer;
+		flex-shrink: 0;
+
+		svg {
+			width: 16px;
+			height: 16px;
+		}
+	}
+	.ridu-list__chevron-up {
+		transform: rotate(180deg);
+	}
+	.ridu-list-results {
+		min-width: 0;
+		margin-bottom: 20px;
+
+		&[aria-busy="true"] tbody {
+			opacity: 0.5;
+		}
+	}
+	.ridu-list-table__scroll {
+		overflow-x: auto;
+		max-width: 100%;
+	}
+	.ridu-list-table__document-link {
+		margin-inline-start: 10px;
+	}
+	.ridu-list-selection {
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		flex-wrap: wrap;
+		gap: 12px;
+		color: var(--foreground-muted);
+
+		& > span {
+			white-space: nowrap;
+		}
+
+		.ridu-list__text-action[aria-disabled="true"] {
+			opacity: 0.5;
+			cursor: not-allowed;
+		}
+	}
+	.ridu-list__empty {
+		padding: 20px;
+		background: var(--background-surface);
+		border-radius: 3px;
+
+		h2 {
+			font-size: 20px;
+			line-height: 28px;
+			margin: 0 0 10px;
+			font-weight: 500;
+		}
+
+		p {
+			margin: 0 0 20px;
+			color: var(--foreground-muted);
+		}
+	}
+	.ridu-list__empty--trash {
+		padding: 10px 0 0;
+		background: none;
+		border-radius: 0;
+
+		p {
+			margin: 0;
+			color: var(--foreground);
+		}
+	}
+	.ridu-list__loading {
+		height: 200px;
+		padding: 20px;
+		background: var(--background-surface);
+		color: var(--foreground-muted);
+	}
+	@media (max-width: ui.$small) {
+		.ridu-list__title h1 {
+			font-size: 26px;
+			line-height: 32px;
+		}
+		.ridu-list-selection {
+			position: fixed;
+			inset-inline: 0;
+			bottom: 0;
+			z-index: 30;
+			padding: 15px;
+			background: var(--background);
+			border-top: 1px solid var(--control-border);
+			justify-content: center;
+		}
+	}
+}

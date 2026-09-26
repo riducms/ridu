@@ -1,0 +1,223 @@
+@use "@riducms/ui/styles.scss" as ui;
+
+@layer ridu.components {
+	.ridu-date-control {
+		@include ui.control-surface;
+		display: flex;
+		align-items: center;
+		width: 100%;
+		min-height: var(--control-height);
+		padding-inline: var(--control-padding-inline) 8px;
+		color: var(--ink-strong);
+		font-size: var(--font-size-body);
+		&:hover {
+			border-color: var(--control-border-hover);
+			box-shadow: var(--control-hover-shadow);
+		}
+		&:focus-within {
+			border-color: var(--ring);
+		}
+		&[data-disabled],
+		&[data-readonly] {
+			background: var(--control-surface-disabled);
+			color: var(--control-disabled-foreground);
+			box-shadow: none;
+			border-color: var(--control-border-disabled);
+		}
+		&[aria-invalid="true"] {
+			border-color: var(--control-invalid-border);
+			background: var(--control-invalid-surface);
+		}
+	}
+	.ridu-date-control--compact,
+	.ridu-date-control--toolbar {
+		min-height: 34px;
+	}
+	.ridu-date-control__input {
+		display: flex;
+		align-items: center;
+		gap: 2px;
+		min-width: 0;
+		flex: 1;
+		user-select: none;
+	}
+	.ridu-date-control__segment {
+		outline: none;
+		padding: 1px;
+		white-space: nowrap;
+		&:focus {
+			background: var(--control-surface-hover);
+		}
+		&[data-placeholder] {
+			color: var(--ink-placeholder);
+		}
+	}
+	.ridu-date-control__button {
+		display: grid;
+		place-items: center;
+		flex-shrink: 0;
+		width: 28px;
+		height: 28px;
+		border: 0;
+		padding: 0;
+		background: transparent;
+		color: var(--foreground-muted);
+		cursor: pointer;
+		&:first-of-type {
+			margin-inline-start: auto;
+		}
+		&:hover {
+			color: var(--foreground);
+		}
+		&:focus-visible {
+			@include ui.focus-outline;
+		}
+		&:disabled {
+			cursor: not-allowed;
+		}
+		svg {
+			width: 16px;
+			height: 16px;
+		}
+	}
+	.ridu-popover.ridu-date-popup {
+		width: auto;
+		padding: 0;
+		gap: 0;
+	}
+	.ridu-date-picker {
+		display: flex;
+		max-width: calc(100vw - 24px);
+		background: var(--popover);
+		color: var(--foreground);
+	}
+	.ridu-date-calendar {
+		width: 264px;
+		padding: 10px;
+	}
+	.ridu-date-calendar__header {
+		display: flex;
+		align-items: center;
+		gap: 5px;
+		height: 35px;
+		margin-bottom: 5px;
+	}
+	.ridu-date-calendar__nav {
+		display: grid;
+		place-items: center;
+		width: 24px;
+		padding: 0;
+		border: 0;
+		background: transparent;
+		color: inherit;
+		cursor: pointer;
+		svg {
+			width: 16px;
+			height: 16px;
+		}
+		&:focus-visible {
+			@include ui.focus-outline;
+		}
+	}
+	.ridu-date-calendar__select {
+		min-width: 0;
+		flex: 1;
+		appearance: auto;
+		background: transparent;
+		color: inherit;
+		border: 0;
+		font: inherit;
+		option {
+			color: var(--foreground);
+			background: var(--popover);
+		}
+	}
+	.ridu-date-calendar__grid {
+		width: 100%;
+		border-collapse: separate;
+		border-spacing: 2px;
+		th {
+			font-weight: 400;
+			height: 25px;
+		}
+		td {
+			padding: 0;
+		}
+	}
+	.ridu-date-calendar__day {
+		display: grid;
+		place-items: center;
+		width: 30px;
+		height: 30px;
+		border: 1px solid var(--control-border);
+		background: transparent;
+		border-radius: 2px;
+		color: inherit;
+		cursor: pointer;
+		&[data-outside-month] {
+			color: var(--ink-faint);
+		}
+		&:hover,
+		&[data-selected] {
+			background: var(--control-surface-hover);
+		}
+		&[data-selected] {
+			border-color: var(--foreground-muted);
+		}
+		&:focus-visible {
+			@include ui.focus-outline;
+		}
+		&[data-disabled] {
+			opacity: 0.4;
+			cursor: not-allowed;
+		}
+	}
+	.ridu-date-picker__time {
+		display: flex;
+		flex-direction: column;
+		flex: 0 0 110px;
+		border-inline-start: 1px solid var(--control-border);
+	}
+	.ridu-date-picker__time-label {
+		display: grid;
+		place-items: center;
+		height: 50px;
+		flex-shrink: 0;
+	}
+	.ridu-date-picker__times {
+		overflow-y: auto;
+		height: 236px;
+		padding: 0 6px 6px;
+	}
+	.ridu-date-picker__time-option {
+		display: block;
+		width: 100%;
+		padding: 7px 5px;
+		border: 0;
+		border-radius: 2px;
+		background: transparent;
+		color: inherit;
+		text-align: center;
+		font: inherit;
+		cursor: pointer;
+		&:hover,
+		&[data-state="checked"] {
+			background: var(--control-surface-hover);
+		}
+		&:focus-visible {
+			@include ui.focus-outline(-2px);
+		}
+	}
+	@media (max-width: 420px) {
+		.ridu-date-calendar {
+			width: 240px;
+			padding: 5px;
+		}
+		.ridu-date-calendar__day {
+			width: 28px;
+		}
+		.ridu-date-picker__time {
+			flex-basis: 85px;
+		}
+	}
+}

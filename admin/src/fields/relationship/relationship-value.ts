@@ -26,16 +26,20 @@ export function updateRelationshipValue(
 ): unknown {
 	if (!polymorphic) return hasMany ? [...ids] : (ids[0] ?? "");
 
-	const previous = hasMany
-		? Array.isArray(current)
-			? current.filter((item) => isPolymorphicReference(item) && item.relationTo !== target)
-			: []
-		: [];
 	const references = ids.map((id) => ({ relationTo: target, id }));
-	return hasMany ? [...previous, ...references] : (references[0] ?? null);
+	if (!hasMany) return references[0] ?? null;
+
+	let index = 0;
+	const previous = Array.isArray(current) ? current.filter(isPolymorphicReference) : [];
+	const result = previous.flatMap((reference) => {
+		if (reference.relationTo !== target) return [reference];
+		const replacement = references[index++];
+		return replacement ? [replacement] : [];
+	});
+	return [...result, ...references.slice(index)];
 }
 
-function isPolymorphicReference(value: unknown): value is PolymorphicReference {
+export function isPolymorphicReference(value: unknown): value is PolymorphicReference {
 	return (
 		typeof value === "object" &&
 		value !== null &&
@@ -44,4 +48,39 @@ function isPolymorphicReference(value: unknown): value is PolymorphicReference {
 		"id" in value &&
 		typeof value.id === "string"
 	);
+}
+
+/** Ordered identities for every target, including polymorphic many-value fields. */
+export function relationshipReferences(
+	value: unknown,
+	hasMany: boolean,
+	polymorphic: boolean,
+	target: string
+): PolymorphicReference[] {
+	const values = hasMany ? (Array.isArray(value) ? value : []) : [value];
+	return values.flatMap((item) => {
+		if (polymorphic) return isPolymorphicReference(item) ? [item] : [];
+		return typeof item === "string" && item !== "" ? [{ relationTo: target, id: item }] : [];
+	});
+}
+
+export function relationshipKey(reference: PolymorphicReference) {
+	return JSON.stringify([reference.relationTo, reference.id]);
+}
+
+export function parseRelationshipKey(value: string): PolymorphicReference | undefined {
+	try {
+		const parsed: unknown = JSON.parse(value);
+		if (
+			!Array.isArray(parsed) ||
+			parsed.length !== 2 ||
+			typeof parsed[0] !== "string" ||
+			typeof parsed[1] !== "string"
+		) {
+			return undefined;
+		}
+		return { relationTo: parsed[0], id: parsed[1] };
+	} catch {
+		return undefined;
+	}
 }

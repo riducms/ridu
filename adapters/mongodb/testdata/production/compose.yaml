@@ -1,5 +1,9 @@
 x-mongodb-member: &mongodb-member
   image: mongo:8.2.9-noble@sha256:007773db61cb1aa44e526fb7175fc582902e67d4e6cc5f13106445767d46c818
+  ulimits:
+    nofile:
+      soft: 64000
+      hard: 64000
   network_mode: host
   entrypoint: ["/bin/bash", "/ridu-fixture/start-member.sh"]
   restart: "no"

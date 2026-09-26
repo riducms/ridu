@@ -2,6 +2,36 @@
 
 export const PROTOCOL_VERSION = 1 as const;
 
+export const ADMIN_PREPARED_ROUTE_STATE_VERSION = 1 as const;
+
+export const ADMIN_PREPARED_ROUTE_STATE_MEDIA_TYPE = "application/vnd.ridu.admin-route-state+json" as const;
+
+export type AdminPreparedRouteOutcomeV1 =
+	| "prepared"
+	| "redirect"
+	| "reload"
+	| "fallback";
+
+export type AdminPreparedRouteKindV1 =
+	| "login"
+	| "setup"
+	| "dashboard"
+	| "custom"
+	| "collection-list"
+	| "collection-trash"
+	| "collection-create"
+	| "collection-document"
+	| "collection-api"
+	| "collection-versions"
+	| "global-versions"
+	| "upload"
+	| "global-document"
+	| "global-api"
+	| "account"
+	| "security"
+	| "not-found"
+	| "error";
+
 export type ErrorCode =
 	| "validation"
 	| "access_denied"
@@ -52,6 +82,171 @@ export type FieldCategory =
 export const SCHEMA_MANIFEST_VERSION = 1 as const;
 
 export const ADMIN_PLUGIN_API_VERSION = 1 as const;
+
+export type AdminPreparedRouteDataV1 =
+	| { kind: "login" }
+	| { kind: "setup" }
+	| { kind: "dashboard" }
+	| { kind: "custom" }
+	| { kind: "collection-list"; data: AdminCollectionListDataV1 }
+	| { kind: "collection-trash"; data: AdminCollectionListDataV1 }
+	| { kind: "collection-create"; create: AdminCreateDataV1 }
+	| { kind: "collection-document"; document: AdminDocumentDataV1 }
+	| { kind: "collection-api"; document: AdminDocumentDataV1 }
+	| { kind: "collection-versions"; versions: AdminVersionsDataV1 }
+	| { kind: "global-versions"; versions: AdminVersionsDataV1 }
+	| { kind: "upload"; access: AdminReadResultV1<AccessCapabilitiesEnvelope> }
+	| { kind: "global-document"; document: AdminDocumentDataV1 }
+	| { kind: "global-api"; document: AdminDocumentDataV1 }
+	| { kind: "account"; document: AdminDocumentDataV1 }
+	| { kind: "security"; security: AdminSecurityDataV1 }
+	| { kind: "not-found" }
+	| { kind: "error" };
+
+/** Crop and focal coordinates are percentages of the oriented source image. */
+export interface UploadImageEdit {
+  focalX: number;
+  focalY: number;
+  cropX: number;
+  cropY: number;
+  cropWidth: number;
+  cropHeight: number;
+}
+
+export type AdminReadResultV1<Value> =
+	| { value: Value; error?: never }
+	| { error: ErrorPayload; value?: never };
+
+export type AdminDocumentV1 = Record<string, unknown> & {
+	id: string;
+	createdAt?: string;
+	updatedAt?: string;
+	deletedAt?: string;
+	_status?: "draft" | "published";
+	_revision?: number;
+	_localization?: { sources: Record<string, string> };
+};
+
+export interface AdminDocumentDataV1 {
+	document: AdminReadResultV1<AdminDocumentV1>;
+	access: AdminReadResultV1<AccessCapabilitiesEnvelope>;
+}
+
+export interface AdminCreateDataV1 {
+	values: Record<string, unknown>;
+	access: AdminReadResultV1<AccessCapabilitiesEnvelope>;
+}
+
+
+export interface DocumentVersion<Document> {
+	ID: string;
+	DocumentID: string;
+	Revision: number;
+	Status: "draft" | "published";
+	Snapshot: Document;
+	CreatedAt: string;
+}
+
+export interface AdminVersionsDataV1 {
+	history: AdminReadResultV1<DocumentVersion<AdminDocumentV1>[]>;
+	detail?: AdminReadResultV1<DocumentVersion<AdminDocumentV1>>;
+	document: AdminDocumentDataV1;
+}
+
+export interface AdminSecurityDataV1 {
+	sessions: AdminReadResultV1<AuthSessionInfo[]>;
+	apiKeys: AdminReadResultV1<APIKeyInfo[]>;
+}
+
+export type AdminCollectionListPageV1 =
+	| { value: CollectionPageEnvelope<Record<string, unknown> & { id: string }>; error?: never }
+	| { error: ErrorPayload; value?: never };
+
+export type AdminCollectionListCountV1 =
+	| { value: number; error?: never }
+	| { error: ErrorPayload; value?: never };
+
+export type AdminCollectionListPreferenceV1 =
+	| { value: unknown; error?: never }
+	| { error: ErrorPayload; value?: never };
+
+export interface AdminCollectionListPreferencesV1 {
+	workspace: AdminCollectionListPreferenceV1;
+	presets: AdminCollectionListPreferenceV1;
+}
+
+export interface AdminCollectionListDataV1 {
+	query: { where?: Record<string, unknown>; countWhere?: Record<string, unknown>; locale?: string; trash: boolean };
+	page?: AdminCollectionListPageV1;
+	counts: Record<string, AdminCollectionListCountV1>;
+	preferences?: AdminCollectionListPreferencesV1;
+}
+
+export interface AdminPreparedNavigationV1 {
+	collectionOperations: Record<string, OperationCapabilities>;
+	globalOperations: Record<string, OperationCapabilities>;
+	contentLocale?: string;
+}
+
+export interface AdminPreparedRuntimeV1 extends AdminPreparedNavigationV1 {
+	manifest: SchemaManifest;
+	session?: AuthSession<Record<string, unknown>>;
+	authBootstrapAvailable: boolean;
+	theme: "system" | "light" | "dark";
+	adminLanguage?: string;
+	adminTimeZone?: string;
+	preferences: Record<string, unknown>;
+}
+
+export interface AdminPreparedRouteDiagnosticV1 {
+	code: string;
+	message: string;
+}
+
+interface AdminPreparedRouteStateBaseV1 {
+	version: typeof ADMIN_PREPARED_ROUTE_STATE_VERSION;
+	pathname: string;
+	search: string;
+	contextKey: string;
+	fingerprint: string;
+	buildId: string;
+	moduleGroups: string[];
+	diagnostic?: AdminPreparedRouteDiagnosticV1;
+	loaders?: Record<string, AdminReadResultV1<unknown>>;
+}
+
+type AdminPreparedRuntimeStateV1 =
+	| { runtime: AdminPreparedRuntimeV1; navigation?: never }
+	| { runtime?: never; navigation: AdminPreparedNavigationV1 };
+
+export type AdminPreparedRouteStateV1 =
+	| (AdminPreparedRouteStateBaseV1 & AdminPreparedRuntimeStateV1 & {
+		outcome: "prepared";
+		route: AdminPreparedRouteDataV1;
+		location?: never;
+	})
+	| (AdminPreparedRouteStateBaseV1 & {
+		outcome: "redirect";
+		location: string;
+		runtime?: AdminPreparedRuntimeV1;
+		navigation?: AdminPreparedNavigationV1;
+		route?: never;
+	})
+	| (AdminPreparedRouteStateBaseV1 & {
+		outcome: "reload";
+		runtime?: never;
+		navigation?: never;
+		route?: never;
+		location?: never;
+	})
+	| (AdminPreparedRouteStateBaseV1 & {
+		outcome: "fallback";
+		runtime?: AdminPreparedRuntimeV1;
+		navigation?: AdminPreparedNavigationV1;
+		route?: never;
+		location?: never;
+		diagnostic: AdminPreparedRouteDiagnosticV1;
+	});
 
 export interface ValidationIssue {
 	code: string;
@@ -121,6 +316,15 @@ export interface PageEnvelope<Document> {
 	pagination: Pagination;
 }
 
+export interface CollectionPageAccess {
+	collection: AccessCapabilitiesEnvelope;
+	documents: Record<string, AccessCapabilitiesEnvelope>;
+}
+
+export interface CollectionPageEnvelope<Document> extends PageEnvelope<Document> {
+	access: CollectionPageAccess;
+}
+
 export interface CountEnvelope {
 	totalDocs: number;
 }
@@ -148,8 +352,10 @@ export interface PreferenceEnvelope<Value> {
 	value: Value;
 }
 
-export interface ScheduledPublish {
+export interface ScheduledPublication {
+	timeZone?: string;
 	id: string;
+	action: "publish" | "unpublish";
 	documentId: string;
 	expectedRevision: number;
 	runAt: string;
@@ -158,12 +364,12 @@ export interface ScheduledPublish {
 	createdAt: string;
 }
 
-export interface ScheduledPublishEnvelope {
-	scheduledPublish: ScheduledPublish;
+export interface ScheduledPublicationEnvelope {
+	scheduledPublication: ScheduledPublication;
 }
 
-export interface ScheduledPublishesEnvelope {
-	scheduledPublishes: ScheduledPublish[];
+export interface ScheduledPublicationsEnvelope {
+	scheduledPublications: ScheduledPublication[];
 }
 
 export interface OperationCapabilities {
@@ -311,6 +517,7 @@ export interface SchemaManifest {
 }
 
 export interface SchemaApplication {
+	adminLoaders?: SchemaAdminLoader[];
 	name: string;
 	nameTranslations?: Record<string, string>;
 	allowIDOnCreate?: boolean;
@@ -318,6 +525,20 @@ export interface SchemaApplication {
 	adminLocalization?: SchemaAdminLocalizationSettings;
 	localization?: SchemaLocalizationSettings;
 	endpoints?: SchemaEndpoint[];
+}
+
+export interface SchemaAdminLoader {
+	key: string;
+	input: AdminDataType;
+	output: AdminDataType;
+}
+
+export interface AdminDataType {
+	kind: "string" | "number" | "boolean" | "object" | "array";
+	nullable?: boolean;
+	optional?: boolean;
+	fields?: Record<string, AdminDataType>;
+	element?: AdminDataType;
 }
 
 export interface SchemaEndpoint {

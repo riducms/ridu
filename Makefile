@@ -1,15 +1,9 @@
-.PHONY: admin-build admin-dev build check check-dev check-fast check-full cli-clean-install-test demo dependency-check documentation-check dogfood-new format format-check go-format-check go-test go-test-after-vet go-test-dev go-vet go-vuln-check install lint mongodb-fixture-test mongodb-generated-project-test mongodb-production-test mongodb-test packed-release-check performance-check playground-ridu-dev playground-ridu-down playground-ridu-hydrate playground-ridu-reset postgres-browser-test postgres-test release-build-check release-check release-version-check runtime-packages-build security-check sqlite-no-cgo-test sqlite-payload-baseline-test sqlite-race-test sqlite-smoke-test sqlite-test test typecheck
+.DEFAULT_GOAL := check-fast
 
-build:
-	bun run build
+.PHONY: check-dev check-fast check-full cli-clean-install-test demo dependency-check documentation-check dogfood-new format format-check go-format-check go-test go-test-after-vet go-test-dev go-vet go-vuln-check mongodb-fixture-test mongodb-generated-project-test mongodb-production-test mongodb-test packed-release-check performance-check playground-ridu-dev playground-ridu-down playground-ridu-hydrate playground-ridu-reset postgres-browser-test postgres-test release-build-check release-check release-version-check richtext-blocks-performance runtime-packages-build security-check sqlite-no-cgo-test sqlite-payload-baseline-test sqlite-race-test sqlite-smoke-test sqlite-test test
 
-admin-build:
-	cd admin && bun run build
-
-admin-dev:
-	go run ./internal/dogfood/admin
-
-demo: admin-build
+demo:
+	bun run generate:admin-assets
 	RIDU_BROWSER_ADDRESS=127.0.0.1:8080 go run ./tests/contracts/admin_server
 
 dogfood-new:
@@ -28,8 +22,6 @@ playground-ridu-down:
 
 playground-ridu-reset:
 	docker compose -p ridu-playground -f ./playground/ridu/compose.yaml down --volumes
-
-check: check-fast
 
 check-dev: go-format-check go-test-dev
 	bun run check:dev
@@ -128,6 +120,18 @@ performance-check:
 	bun run build:admin-fixture
 	RIDU_ADMIN_FIXTURE_PREBUILT=true bun run test:performance
 
+# Reports descriptive rich-text aggregate timings as JSON. These diagnostics
+# have no pass/fail threshold and stay separate from correctness gates.
+richtext-blocks-performance:
+	@case "$(ADAPTER)" in \
+		""|memory) package=./core; benchmark=BenchmarkRichTextBlocksEnginePerformance ;; \
+		sqlite) package=./adapters/sqlite; benchmark=BenchmarkSQLiteRichTextBlocksPerformance ;; \
+		postgres) package=./adapters/postgres; benchmark=BenchmarkPostgresRichTextBlocksPerformance ;; \
+		mongodb) package=./adapters/mongodb; benchmark=BenchmarkMongoDBRichTextBlocksPerformance ;; \
+		*) echo 'ADAPTER must be memory, sqlite, postgres, or mongodb' >&2; exit 2 ;; \
+	esac; \
+	go test -v -run '^$$' -bench "^$${benchmark}$$" -benchtime=1x "$$package"
+
 sqlite-test: sqlite-race-test sqlite-no-cgo-test sqlite-smoke-test sqlite-payload-baseline-test
 
 sqlite-race-test:
@@ -185,14 +189,5 @@ mongodb-fixture-test:
 	$(MAKE) mongodb-generated-project-test
 	$(MAKE) mongodb-production-test
 
-install:
-	bun install --frozen-lockfile
-
-lint:
-	bun run lint
-
 test: go-test
 	bun run test
-
-typecheck:
-	bun run check:types

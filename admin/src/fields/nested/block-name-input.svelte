@@ -1,7 +1,6 @@
 <script lang="ts">
-	import { onDestroy } from "svelte";
 	import type { SchemaBlockType, SchemaField } from "@riducms/protocol";
-	import { Input } from "@admin/components/ui/input";
+	import { Input } from "@riducms/ui";
 	import FieldMessages from "@admin/fields/field-messages.svelte";
 	import LiveValidationFeedback from "@admin/fields/live-validation-feedback.svelte";
 	import type { FormController } from "@admin/core/forms/form-controller.svelte";
@@ -13,6 +12,7 @@
 		contentLocaleLabel,
 		withContentLocaleLabel,
 	} from "@admin/fields/localized-field-presentation";
+	import "@admin/fields/nested/nested-field.scss";
 
 	let {
 		schema,
@@ -55,7 +55,7 @@
 			else form.set(binding.schema.path, value);
 		}
 	);
-	onDestroy(binding.destroy);
+	$effect(() => binding.destroy);
 	const current = $derived(binding.schema);
 	const placeholder = $derived(
 		blockHeaderValue(
@@ -82,13 +82,13 @@
 </script>
 
 {#if binding.visible}
-	<div class="min-w-0 flex-1" data-field-path={current.path} onfocusout={focusout}>
+	<div class="ridu-block-name" data-field-path={current.path} onfocusout={focusout}>
 		<FieldMessages
 			controlID={current.id}
 			description={current.admin.description}
 			issues={binding.issues}
 		>
-			<label class="sr-only" for={current.id}>{current.admin.label}</label>
+			<label class="ridu-block-name__label" for={current.id}>{current.admin.label}</label>
 			<Input
 				{...binding.inputProps}
 				value={binding.value ?? ""}
@@ -97,7 +97,7 @@
 				{disabled}
 				minlength={current.text?.minLength}
 				maxlength={current.text?.maxLength}
-				class="h-8 min-w-0"
+				class="ridu-block-name__input"
 				oninput={(event) => binding.set(event.currentTarget.value)}
 				onkeydown={keydown}
 			/>
@@ -107,15 +107,14 @@
 			i18n={runtime.i18n}
 			path={current.path}
 		/>
-		{#if inherited !== undefined}<p
-				class="mt-1 text-xs text-foreground-faint"
-				data-localization-source={inherited}
-			>
+		{#if inherited !== undefined}
+			<p class="ridu-block-name__localization" data-localization-source={inherited}>
 				{runtime.i18n.t("documents:inheritedFrom", {
 					locale: contentLocaleLabel(runtime.contentLocales, inherited) ?? inherited,
 				})}
-			</p>{:else if current.localized && form.contentLocale !== undefined && binding.value === undefined}
-			<p class="mt-1 text-xs text-foreground-faint" data-localization-missing={form.contentLocale}>
+			</p>
+		{:else if current.localized && form.contentLocale !== undefined && binding.value === undefined}
+			<p class="ridu-block-name__localization" data-localization-missing={form.contentLocale}>
 				{runtime.i18n.t("documents:missingTranslation", {
 					locale:
 						contentLocaleLabel(runtime.contentLocales, form.contentLocale) ?? form.contentLocale,

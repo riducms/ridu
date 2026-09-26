@@ -102,11 +102,15 @@ With the default configuration, editors can add:
 - headings, quotes, alignment, indentation, line breaks, and inline bold, italic, underline,
   strike-through, subscript, superscript, and code.
 
-Type `/` to open the insert menu, or select text to open the formatting toolbar. Media and related
-documents use the same picker as ordinary upload and relationship fields. Removing one of these
-cards removes it from the article without deleting the original file or document.
+Type `/` to search the insert menu. The block action beside a paragraph opens a picker for inserting
+another block. Select text to open the formatting toolbar: choose a paragraph, heading, quote, or
+list style; apply inline marks such as **bold** or `code`; or adjust alignment and indentation.
+The toolbar follows the selection and its link and list controls appear only when those features
+are enabled. Media and related documents use the same picker as ordinary upload and relationship
+fields. Removing one of these cards removes it from the article without deleting the original file
+or document.
 
-![A Post editor showing rich text alongside the other document fields.](https://raw.githubusercontent.com/riducms/ridu/main/docs/assets/ridu-admin-rich-text.png)
+![Rich text content in the Post editor.](https://raw.githubusercontent.com/riducms/ridu/main/docs/assets/ridu-admin-rich-text.png)
 
 A media card can have its own caption without changing the file's shared `alt` text:
 
@@ -128,6 +132,26 @@ broken reference.
 For stronger reference handling, put an ordinary upload or relationship field inside a
 [custom block](#blocks). Those fields can check that the target exists, populate its data, and
 control what happens when it is deleted.
+
+### Add or change a link {#links}
+
+Select text and choose **Link** from the toolbar, or press `Ctrl+K` (`⌘K` on macOS). The link drawer
+lets you change the display text and URL and choose whether the link opens in a new tab. When the
+caret is inside an existing link, the link options let you open, edit, or remove it. Cancel leaves
+the document as it was; removing a link keeps its text and can be undone.
+
+An address such as `ridu.dev/docs` becomes `https://ridu.dev/docs`. Relative paths and `http`,
+`https`, `mailto`, and `tel` URLs are accepted. Unsafe schemes such as `javascript:` are rejected
+before a link is inserted and during rendering.
+
+### Type formatting shortcuts {#shortcuts}
+
+Common Markdown patterns turn into rich-text nodes as you type: `#` through `######` for headings,
+`>` for a quote, list markers for numbered, bulleted, or check lists, backticks for inline or block
+code, and `[label](https://example.com)` for a link. Bold, italic, and strike-through markers also work. These are
+typing shortcuts, not Markdown import or export; the saved value is still the versioned JSON
+document. Optional shortcuts follow `Config.Features`, so disabling links, lists, or code also
+removes their corresponding shortcuts.
 
 ## Choose the available editing tools {#features}
 
@@ -319,7 +343,7 @@ The TypeScript equivalent maps keys to functions that return HTML. Use
 for Svelte components. Missing renderers cause an error unless you provide a visible fallback.
 Renderers do not fetch related documents; load that data before rendering it.
 
-Tables, custom inline content, Markdown shortcuts, HTML/Markdown import and export, plain-text
+Tables, custom inline content, HTML/Markdown import and export, plain-text
 rendering, and collaborative editing are not available yet.
 
 ## Change block definitions safely {#migrations}

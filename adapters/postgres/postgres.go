@@ -407,9 +407,14 @@ func (transaction *documentTransaction) Create(ctx context.Context, request stor
 				status = store.StatusPublished
 			}
 		}
-		columns = append(columns, quote("_status"), quote("_revision"))
-		arguments = append(arguments, status, 1)
-		placeholders = append(placeholders, fmt.Sprintf("$%d", len(arguments)-1), fmt.Sprintf("$%d", len(arguments)))
+		columns = append(columns, quote("_status"))
+		arguments = append(arguments, status)
+		placeholders = append(placeholders, fmt.Sprintf("$%d", len(arguments)))
+	}
+	if request.Collection.Versions != nil || request.Collection.Upload != nil {
+		columns = append(columns, quote("_revision"))
+		arguments = append(arguments, 1)
+		placeholders = append(placeholders, fmt.Sprintf("$%d", len(arguments)))
 	}
 	for _, field := range fields {
 		value, exists := values[field.Name]
@@ -1012,8 +1017,10 @@ func (transaction *documentTransaction) Update(ctx context.Context, request stor
 		arguments = append(arguments, encoded)
 		assignments = append(assignments, fmt.Sprintf("%s = $%d", quote(fieldColumn(field.ID)), len(arguments)))
 	}
-	if request.Collection.Versions != nil {
+	if request.Collection.Versions != nil || request.Collection.Upload != nil {
 		assignments = append(assignments, quote("_revision")+" = "+quote("_revision")+" + 1")
+	}
+	if request.Collection.Versions != nil {
 		if request.Status != nil {
 			arguments = append(arguments, *request.Status)
 			assignments = append(assignments, fmt.Sprintf("%s = $%d", quote("_status"), len(arguments)))
@@ -1519,7 +1526,10 @@ func scanDocument(row rowScanner, collection schema.Collection, fields []schema.
 func documentDestinations(document *store.Document, collection schema.Collection, fields []schema.Field) ([]any, func() error) {
 	destinations := []any{&document.ID, &document.CreatedAt, &document.UpdatedAt, &document.DeletedAt}
 	if collection.Versions != nil {
-		destinations = append(destinations, &document.Status, &document.Revision)
+		destinations = append(destinations, &document.Status)
+	}
+	if collection.Versions != nil || collection.Upload != nil {
+		destinations = append(destinations, &document.Revision)
 	}
 	fieldValues := make([]any, len(fields))
 	for index, field := range fields {
@@ -2686,7 +2696,10 @@ func escapeLike(value string) string {
 func selectColumns(collection schema.Collection, fields []schema.Field, locales []schema.LocaleCode) string {
 	columns := []string{quote("id"), quote("created_at"), quote("updated_at"), quote("deleted_at")}
 	if collection.Versions != nil {
-		columns = append(columns, quote("_status"), quote("_revision"))
+		columns = append(columns, quote("_status"))
+	}
+	if collection.Versions != nil || collection.Upload != nil {
+		columns = append(columns, quote("_revision"))
 	}
 	for _, field := range fields {
 		if !field.Localized {

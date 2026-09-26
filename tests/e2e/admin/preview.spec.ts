@@ -37,6 +37,7 @@ test("document live preview streams unsaved drafts across configured viewports",
 	});
 	expect(postID).toBeDefined();
 	await page.goto(`/admin/collections/posts/${postID}/api`);
+	await page.getByRole("link", { name: "Edit", exact: true }).click();
 	const previewTokenPattern = `**/api/preview/collections/posts/${postID}/token`;
 	const rotatedTokens: string[] = [];
 	let previewTokenMintCount = 0;
@@ -70,16 +71,44 @@ test("document live preview streams unsaved drafts across configured viewports",
 	expect((await previewTokenResponse).status()).toBe(201);
 	await expect(page).toHaveURL(new RegExp(`/admin/collections/posts/${postID}(?:\\?locale=en)?$`));
 	const preview = page.frameLocator('iframe[title="Live preview"]');
-	await expect(page.getByText("Connected", { exact: true })).toBeVisible();
+	await expect(page.getByRole("region", { name: "Live preview" }).getByRole("status")).toHaveText(
+		"Connected"
+	);
 	await expect(preview.getByRole("heading", { name: "Relationship field notes" })).toBeVisible();
 	await page.locator('input[name="title"]').fill("Unsaved preview headline");
 	await expect(preview.getByRole("heading", { name: "Unsaved preview headline" })).toBeVisible();
-	await page.getByRole("button", { name: "Mobile", exact: true }).click();
+	await page.getByRole("button", { name: "Preview viewport", exact: true }).click();
+	await page.getByRole("option", { name: "Mobile", exact: true }).click();
 	const previewRegion = page.getByRole("region", { name: "Live preview" });
 	await expect(previewRegion.getByRole("spinbutton").nth(0)).toHaveValue("375");
 	await expect(previewRegion.getByRole("spinbutton").nth(1)).toHaveValue("667");
 	await expect(page.locator('iframe[title="Live preview"]')).toHaveAttribute("width", "375");
 	await expect(page.locator('iframe[title="Live preview"]')).toHaveAttribute("height", "667");
+	await previewRegion.getByRole("spinbutton").nth(0).fill("420");
+	await expect(page.locator('iframe[title="Live preview"]')).toHaveAttribute("width", "420");
+	await expect(previewRegion.getByRole("button", { name: "Preview viewport" })).toHaveText(
+		"Custom"
+	);
+	await previewRegion.getByRole("button", { name: "Preview zoom" }).click();
+	await page.getByRole("option", { name: "150%", exact: true }).click();
+	await expect(page.locator('iframe[title="Live preview"]')).toHaveCSS(
+		"transform",
+		"matrix(1.5, 0, 0, 1.5, 0, 0)"
+	);
+	await previewRegion.getByRole("button", { name: "Preview viewport" }).click();
+	await page.getByRole("option", { name: "Responsive", exact: true }).click();
+	const originalViewport = page.viewportSize()!;
+	await page.setViewportSize({ width: 390, height: 844 });
+	await expect
+		.poll(async () => (await previewRegion.boundingBox())?.height)
+		.toBeLessThanOrEqual(720);
+	await expect
+		.poll(async () =>
+			Number(await page.locator('iframe[title="Live preview"]').getAttribute("height"))
+		)
+		.toBeLessThanOrEqual(720);
+	await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+	await page.setViewportSize(originalViewport);
 	const previewWindowLink = page.getByRole("link", { name: "Open preview in new window" });
 	const escapedPreviewOrigin = adminServer.previewURL.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 	await expect(previewWindowLink).toHaveAttribute(
@@ -147,7 +176,9 @@ test("document live preview streams unsaved drafts across configured viewports",
 	);
 	await page.getByRole("button", { name: "Live preview", exact: true }).click();
 	expect((await replacementTokenResponse).status()).toBe(201);
-	await expect(page.getByText("Connected", { exact: true })).toBeVisible();
+	await expect(page.getByRole("region", { name: "Live preview" }).getByRole("status")).toHaveText(
+		"Connected"
+	);
 	await expect(page.getByRole("dialog", { name: "Leave without saving?" })).toHaveCount(0);
 	const replacementPopupPromise = page.waitForEvent("popup");
 	await page.getByRole("link", { name: "Open preview in new window" }).click();
@@ -215,8 +246,12 @@ test("live preview popups are owned independently by each admin page", async ({
 	await secondAdmin.goto(`/admin/collections/posts/${postIDs[1]}`);
 	await page.getByRole("button", { name: "Live preview", exact: true }).click();
 	await secondAdmin.getByRole("button", { name: "Live preview", exact: true }).click();
-	await expect(page.getByText("Connected", { exact: true })).toBeVisible();
-	await expect(secondAdmin.getByText("Connected", { exact: true })).toBeVisible();
+	await expect(page.getByRole("region", { name: "Live preview" }).getByRole("status")).toHaveText(
+		"Connected"
+	);
+	await expect(
+		secondAdmin.getByRole("region", { name: "Live preview" }).getByRole("status")
+	).toHaveText("Connected");
 
 	const firstPopupPromise = page.waitForEvent("popup");
 	await page.getByRole("link", { name: "Open preview in new window" }).click();

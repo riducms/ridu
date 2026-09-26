@@ -1,7 +1,7 @@
+import { isRecord } from "@riducms/protocol";
 import type { FieldAuthoringHost } from "@riducms/plugin";
 import type { SchemaBlockType } from "@riducms/protocol";
 import type { SerializedLexicalNode } from "lexical";
-import { isRecord } from "@plugin-richtext/field/rich-text-blocks";
 import { documentRecoveryIssue } from "@plugin-richtext/document-validation";
 
 /** Validates first, then copies only declared payloads through the generic schema host. */

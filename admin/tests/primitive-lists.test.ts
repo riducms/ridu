@@ -9,7 +9,7 @@ import {
 import { primitiveNumberInput } from "@admin/fields/primitive-list/primitive-number-input";
 import {
 	filterOperatorsFor,
-	buildListFilterWhere,
+	parseListFilters,
 	sortableField,
 } from "@admin/features/collections/list-workspace";
 
@@ -112,11 +112,15 @@ describe("primitive list form contract", () => {
 			expect(filterOperatorsFor(field)).toEqual(["in", "exists"]);
 			expect(sortableField(field)).toBe(false);
 			expect(
-				buildListFilterWhere([{ field: "values", operator: "equals", value: "1" }], [field])
+				parseListFilters(JSON.stringify([[{ field: "values", operator: "equals", value: "1" }]]), [
+					field,
+				])
 			).toEqual([]);
 			expect(
-				buildListFilterWhere([{ field: "values", operator: "in", value: "1" }], [field])
-			).toEqual([{ values: { in: [type === "text-list" ? "1" : 1] } }]);
+				parseListFilters(JSON.stringify([[{ field: "values", operator: "in", value: "1" }]]), [
+					field,
+				])
+			).toEqual([[{ field: "values", operator: "in", value: "1" }]]);
 		}
 	});
 });

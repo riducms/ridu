@@ -40,7 +40,8 @@
 	{#each values as node}
 		{#if node.type === "block"}
 			{const Block = $derived(component(node.fields))}
-			{#if Block !== undefined}<Block block={node.fields} />
+			{#if Block !== undefined}
+				<Block block={node.fields} />
 			{:else}
 				{const failure = $derived(
 					unsupported(
@@ -52,10 +53,13 @@
 			{/if}
 		{:else if node.type === "text"}
 			{@html renderRichTextText(node)}
-		{:else if node.type === "linebreak"}<br />
-		{:else if node.type === "horizontalrule"}<hr />
+		{:else if node.type === "linebreak"}
+			<br />
+		{:else if node.type === "horizontalrule"}
+			<hr />
 		{:else if node.type === "upload" || node.type === "relationship"}
-			{#if references !== undefined}{@render references(node)}
+			{#if references !== undefined}
+				{@render references(node)}
 			{:else}
 				{const failure = $derived(
 					unsupported(node, `No renderer registered for rich-text node ${node.type}`)
@@ -63,7 +67,8 @@
 				{@render failure.render(failure.node, failure.error)}
 			{/if}
 		{:else if node.type === "paragraph" || node.type === "heading" || node.type === "quote" || node.type === "link" || node.type === "list" || node.type === "listitem" || node.type === "code"}
-			{#if node.type === "code"}<pre><code>{@render nodes(node.children)}</code></pre>
+			{#if node.type === "code"}
+				<pre><code>{@render nodes(node.children)}</code></pre>
 			{:else}
 				<svelte:element
 					this={richTextElementTag(node)}

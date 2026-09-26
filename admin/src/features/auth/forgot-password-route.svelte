@@ -3,14 +3,15 @@
 	import { RiduError } from "@riducms/sdk";
 
 	import { Banner } from "@admin/components/ui/banner";
-	import { Button } from "@admin/components/ui/button";
-	import { Input } from "@admin/components/ui/input";
+	import { Button } from "@riducms/ui";
 	import { adminRoutePatterns } from "@admin/core/routing/admin-paths";
 	import { getAdminRuntime } from "@admin/core/runtime/admin-runtime.svelte";
+	import AuthField from "@admin/features/auth/auth-field.svelte";
 	import AuthFrame from "@admin/features/auth/auth-frame.svelte";
 
 	const runtime = getAdminRuntime();
 	const authCollection = $derived(runtime.authCollection);
+
 	let email = $state("");
 	let pending = $state(false);
 	let sent = $state(false);
@@ -19,8 +20,10 @@
 	async function submit(event: SubmitEvent) {
 		event.preventDefault();
 		if (authCollection === undefined) return;
+
 		pending = true;
 		error = undefined;
+
 		try {
 			await runtime.client.requestPasswordReset(authCollection.slug, email);
 			sent = true;
@@ -35,42 +38,47 @@
 
 <AuthFrame>
 	{#if sent}
-		<div class="grid gap-5">
-			<h1 class="text-[32px] leading-tight font-medium tracking-[-0.025em] text-foreground">
+		<div class="ridu-auth__stack">
+			<h1 class="ridu-auth__heading">
 				{runtime.i18n.t("auth:emailSent")}
 			</h1>
-			<p class="max-w-112 text-[13.5px] leading-5.5 text-foreground-muted">
+			<p class="ridu-auth__description">
 				{runtime.i18n.t("auth:passwordResetSent")}
 			</p>
-			<Link
-				class="w-fit text-[12.5px] text-foreground underline underline-offset-2 hover:text-foreground-muted"
-				to={adminRoutePatterns.login}
-			>
+			<Link class="ridu-auth__link" to={adminRoutePatterns.login}>
 				{runtime.i18n.t("auth:backToLogin")}
 			</Link>
 		</div>
 	{:else}
-		<form class="grid gap-5" onsubmit={submit}>
-			<div>
-				<h1 class="text-[32px] leading-tight font-medium tracking-[-0.025em] text-foreground">
+		<form class="ridu-auth__form" onsubmit={submit}>
+			<div class="ridu-auth__header">
+				<h1 class="ridu-auth__heading">
 					{runtime.i18n.t("auth:forgotPassword")}
 				</h1>
-				<p class="mt-2 text-[13.5px] leading-5.5 text-foreground-muted">
+				<p class="ridu-auth__description">
 					{runtime.i18n.t("auth:forgotPasswordDescription")}
 				</p>
 			</div>
-			<label class="grid gap-2" for="reset-email">
-				<span class="ridu-field-label">{runtime.i18n.t("auth:email")}</span>
-				<Input id="reset-email" type="email" autocomplete="email" bind:value={email} required />
-			</label>
-			{#if error !== undefined}<Banner tone="destructive">{error}</Banner>{/if}
-			<Button class="h-10 w-full" type="submit" size="lg" disabled={pending}>
+			<AuthField
+				disabled={pending}
+				id="reset-email"
+				label={runtime.i18n.t("auth:email")}
+				autocomplete="email"
+				bind:value={email}
+			/>
+			{#if error !== undefined}
+				<Banner tone="destructive">{error}</Banner>
+			{/if}
+			<Button
+				class="ridu-auth__submit"
+				type="submit"
+				size="lg"
+				disabled={pending}
+				aria-busy={pending}
+			>
 				{pending ? runtime.i18n.t("auth:sending") : runtime.i18n.t("auth:sendResetLink")}
 			</Button>
-			<Link
-				class="w-fit text-[12.5px] text-foreground underline underline-offset-2 hover:text-foreground-muted"
-				to={adminRoutePatterns.login}
-			>
+			<Link class="ridu-auth__link" to={adminRoutePatterns.login}>
 				{runtime.i18n.t("auth:backToLogin")}
 			</Link>
 		</form>

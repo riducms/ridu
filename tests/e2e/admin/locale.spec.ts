@@ -3,9 +3,11 @@ import { expect, test } from "./fixture";
 import {
 	chooseContentLocale,
 	chooseRiduSelect,
-	documentSaveButton,
 	expectRiduSelectValue,
+	submitDocumentForm,
 } from "./helpers";
+
+const adminPreparedRouteStateMediaType = "application/vnd.ridu.admin-route-state+json";
 
 test("localized authoring preserves fallback provenance and isolates locale writes", async ({
 	page,
@@ -79,8 +81,9 @@ test("localized authoring preserves fallback provenance and isolates locale writ
 	);
 	await expect(page.getByLabel("Slug", { exact: true })).toBeVisible();
 	await expect(page.getByText("Inherited from English", { exact: true }).first()).toBeVisible();
-	await page.getByRole("button", { name: "Parent", exact: true }).click();
-	await page.getByLabel("Search Posts").fill("Cible relationnelle française");
+	await page
+		.getByRole("combobox", { name: "Parent", exact: true })
+		.fill("Cible relationnelle française");
 	await expect(
 		page.getByRole("option", { name: "Cible relationnelle française", exact: true })
 	).toBeVisible();
@@ -90,7 +93,7 @@ test("localized authoring preserves fallback provenance and isolates locale writ
 	await page.locator('textarea[name="summary"]').fill("Résumé français isolé");
 	await expect(locale).toBeDisabled();
 	await expect(page.locator('input[name="title"]')).toHaveValue("Preuve de localisation française");
-	await documentSaveButton(page).click();
+	await submitDocumentForm(page);
 	await expect(page.getByText("Updated successfully.")).toBeVisible();
 	await expect(page.getByText("Inherited from English", { exact: true })).toHaveCount(0);
 	await expect(page.getByLabel("Title — French", { exact: true })).toBeVisible();
@@ -111,7 +114,11 @@ test("localized authoring preserves fallback provenance and isolates locale writ
 	await expectRiduSelectValue(locale, "French");
 	const usersRequest = page.waitForRequest((request) => {
 		const url = new URL(request.url());
-		return request.method() === "GET" && url.pathname === "/api/collections/users";
+		return (
+			request.method() === "GET" &&
+			url.pathname === "/admin/collections/users" &&
+			request.headers().accept === adminPreparedRouteStateMediaType
+		);
 	});
 	await page.getByRole("link", { name: "Users", exact: true }).click();
 	expect(new URL((await usersRequest).url()).searchParams.get("locale")).toBe("fr");
@@ -120,6 +127,7 @@ test("localized authoring preserves fallback provenance and isolates locale writ
 	await expect(page).toHaveURL(/\/admin\/collections\/posts\?locale=fr$/);
 	await page.goto(`/admin/collections/posts/${postID}?locale=fr`);
 
+	await page.getByRole("button", { name: "More actions", exact: true }).click();
 	await chooseRiduSelect(page, page.getByLabel("Copy localized values"), /^English en$/);
 	await expect(page.getByText("Localized values from en now populate fr.")).toBeVisible();
 	await expect(page.locator('input[name="title"]')).toHaveValue("English localization proof");

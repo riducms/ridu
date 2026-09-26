@@ -1,10 +1,11 @@
+import type { RichTextIconName } from "@plugin-richtext/toolbar/toolbar-icon.svelte";
 import { $createCodeNode } from "@lexical/code";
 import {
 	INSERT_CHECK_LIST_COMMAND,
 	INSERT_ORDERED_LIST_COMMAND,
 	INSERT_UNORDERED_LIST_COMMAND,
 } from "@lexical/list";
-import { $createHeadingNode, $createQuoteNode } from "@lexical/rich-text";
+import { $createHeadingNode, $createQuoteNode, type HeadingTagType } from "@lexical/rich-text";
 import { $setBlocksType } from "@lexical/selection";
 import type { SchemaBlockType } from "@riducms/protocol";
 import type { AdminI18n, FieldAuthoringHost } from "@riducms/plugin";
@@ -24,13 +25,15 @@ import {
 } from "@plugin-richtext/menu/rich-text-commands";
 import { hasRichTextFeature, type RichTextConfig } from "@plugin-richtext/field/rich-text-config";
 
+export { filterRichTextOptions } from "@plugin-richtext/menu/rich-text-option-filter";
+
 export class RichTextMenuOption extends MenuOption {
 	readonly label: string;
 	readonly description: string;
-	readonly glyph: string;
+	readonly icon: RichTextIconName;
+	readonly group: "lists" | "basic" | "blocks";
 	readonly keywords: readonly string[];
 	readonly select: () => void;
-	readonly keyHint: string;
 	readonly preservePlaceholder: boolean;
 	readonly restoreEditorFocus: boolean;
 	readonly blockType: string | undefined;
@@ -39,11 +42,11 @@ export class RichTextMenuOption extends MenuOption {
 		key: string,
 		label: string,
 		description: string,
-		glyph: string,
+		icon: RichTextIconName,
 		keywords: readonly string[],
 		select: () => void,
 		options: {
-			keyHint?: string;
+			group?: "lists" | "basic" | "blocks";
 			preservePlaceholder?: boolean;
 			restoreEditorFocus?: boolean;
 			blockType?: string;
@@ -52,10 +55,10 @@ export class RichTextMenuOption extends MenuOption {
 		super(key);
 		this.label = label;
 		this.description = description;
-		this.glyph = glyph;
+		this.icon = icon;
+		this.group = options.group ?? "basic";
 		this.keywords = keywords;
 		this.select = select;
-		this.keyHint = options.keyHint ?? "↵";
 		this.preservePlaceholder = options.preservePlaceholder ?? true;
 		this.restoreEditorFocus = options.restoreEditorFocus ?? true;
 		this.blockType = options.blockType;
@@ -74,31 +77,26 @@ export function buildRichTextOptions(
 			"paragraph",
 			i18n.t("plugin.richtext:option.paragraph.label"),
 			i18n.t("plugin.richtext:option.paragraph.description"),
-			"¶",
+			"paragraph",
 			keywords(i18n.t("plugin.richtext:option.paragraph.keywords")),
 			() => $setBlock($createParagraphNode)
 		),
-		new RichTextMenuOption(
-			"heading-2",
-			i18n.t("plugin.richtext:option.heading2.label"),
-			i18n.t("plugin.richtext:option.heading2.description"),
-			"h2",
-			keywords(i18n.t("plugin.richtext:option.heading2.keywords")),
-			() => $setBlock(() => $createHeadingNode("h2"))
-		),
-		new RichTextMenuOption(
-			"heading-3",
-			i18n.t("plugin.richtext:option.heading3.label"),
-			i18n.t("plugin.richtext:option.heading3.description"),
-			"h3",
-			keywords(i18n.t("plugin.richtext:option.heading3.keywords")),
-			() => $setBlock(() => $createHeadingNode("h3"))
+		...[1, 2, 3, 4, 5, 6].map(
+			(level) =>
+				new RichTextMenuOption(
+					`heading-${level}`,
+					i18n.t("plugin.richtext:editor.heading", { level }),
+					"",
+					`h${level}` as RichTextIconName,
+					["heading", "title", `h${level}`],
+					() => $setBlock(() => $createHeadingNode(`h${level}` as HeadingTagType))
+				)
 		),
 		new RichTextMenuOption(
 			"quote",
 			i18n.t("plugin.richtext:option.quote.label"),
 			i18n.t("plugin.richtext:option.quote.description"),
-			'"',
+			"quote",
 			keywords(i18n.t("plugin.richtext:option.quote.keywords")),
 			() => $setBlock($createQuoteNode)
 		),
@@ -110,25 +108,28 @@ export function buildRichTextOptions(
 				"bulleted-list",
 				i18n.t("plugin.richtext:option.bulletedList.label"),
 				i18n.t("plugin.richtext:option.bulletedList.description"),
-				"•",
+				"unordered",
 				keywords(i18n.t("plugin.richtext:option.bulletedList.keywords")),
-				() => editor.dispatchCommand(INSERT_UNORDERED_LIST_COMMAND, undefined)
+				() => editor.dispatchCommand(INSERT_UNORDERED_LIST_COMMAND, undefined),
+				{ group: "lists" }
 			),
 			new RichTextMenuOption(
 				"numbered-list",
 				i18n.t("plugin.richtext:option.numberedList.label"),
 				i18n.t("plugin.richtext:option.numberedList.description"),
-				"1.",
+				"ordered",
 				keywords(i18n.t("plugin.richtext:option.numberedList.keywords")),
-				() => editor.dispatchCommand(INSERT_ORDERED_LIST_COMMAND, undefined)
+				() => editor.dispatchCommand(INSERT_ORDERED_LIST_COMMAND, undefined),
+				{ group: "lists" }
 			),
 			new RichTextMenuOption(
 				"checklist",
 				i18n.t("plugin.richtext:option.checklist.label"),
 				i18n.t("plugin.richtext:option.checklist.description"),
-				"☑",
+				"check",
 				keywords(i18n.t("plugin.richtext:option.checklist.keywords")),
-				() => editor.dispatchCommand(INSERT_CHECK_LIST_COMMAND, undefined)
+				() => editor.dispatchCommand(INSERT_CHECK_LIST_COMMAND, undefined),
+				{ group: "lists" }
 			)
 		);
 	}
@@ -139,7 +140,7 @@ export function buildRichTextOptions(
 				"code-block",
 				i18n.t("plugin.richtext:option.codeBlock.label"),
 				i18n.t("plugin.richtext:option.codeBlock.description"),
-				"</>",
+				"code-block",
 				keywords(i18n.t("plugin.richtext:option.codeBlock.keywords")),
 				() => $setBlock($createCodeNode)
 			)
@@ -152,7 +153,7 @@ export function buildRichTextOptions(
 				"divider",
 				i18n.t("plugin.richtext:option.divider.label"),
 				i18n.t("plugin.richtext:option.divider.description"),
-				"—",
+				"divider",
 				keywords(i18n.t("plugin.richtext:option.divider.keywords")),
 				() => editor.dispatchCommand(INSERT_HORIZONTAL_RULE_COMMAND, undefined),
 				{ preservePlaceholder: false }
@@ -174,7 +175,7 @@ export function buildRichTextOptions(
 					i18n.t("plugin.richtext:option.upload.description", {
 						label: collection.labels.singular.toLocaleLowerCase(i18n.language),
 					}),
-					"ref",
+					"upload",
 					[...keywords(i18n.t("plugin.richtext:option.upload.keywords")), collection.slug],
 					() =>
 						queueMicrotask(() =>
@@ -186,77 +187,73 @@ export function buildRichTextOptions(
 				)
 			);
 		}
-		options.splice(4, 0, ...uploadOptions);
+		options.push(...uploadOptions);
 	}
 
-	if (hasRichTextFeature(config, "relationships")) {
-		const allowed = new Set(config.relationshipCollections);
-		const relationshipOptions: RichTextMenuOption[] = [];
-		for (const collection of authoring?.collections ?? []) {
-			if (allowed.size > 0 && !allowed.has(collection.slug)) continue;
-			relationshipOptions.push(
-				new RichTextMenuOption(
-					`relationship-${collection.slug}`,
-					i18n.t("plugin.richtext:option.relationship.label", {
-						label: collection.labels.singular,
-					}),
-					i18n.t("plugin.richtext:option.relationship.description", {
-						label: collection.labels.singular.toLocaleLowerCase(i18n.language),
-					}),
-					"rel",
-					[...keywords(i18n.t("plugin.richtext:option.relationship.keywords")), collection.slug],
-					() =>
-						queueMicrotask(() =>
-							editor.dispatchCommand(OPEN_RELATIONSHIP_BROWSER_COMMAND, {
-								collectionSlug: collection.slug,
-							})
-						),
-					{ restoreEditorFocus: false }
-				)
-			);
-		}
-		// Upload and relationship labels can intentionally overlap (for example,
-		// Asset and Related Asset). Preserve the established upload result first
-		// for keyboard selection and append the explicit relationship commands.
-		options.push(...relationshipOptions);
+	if (
+		hasRichTextFeature(config, "relationships") &&
+		authoring?.collections.some(
+			(collection) =>
+				config.relationshipCollections.length === 0 ||
+				config.relationshipCollections.includes(collection.slug)
+		)
+	) {
+		options.push(
+			new RichTextMenuOption(
+				"relationship",
+				i18n.t("plugin.richtext:option.relationship.label"),
+				i18n.t("plugin.richtext:option.relationship.description"),
+				"relationship",
+				keywords(i18n.t("plugin.richtext:option.relationship.keywords")),
+				() => queueMicrotask(() => editor.dispatchCommand(OPEN_RELATIONSHIP_BROWSER_COMMAND, {})),
+				{ restoreEditorFocus: false }
+			)
+		);
 	}
 
 	if (hasRichTextFeature(config, "blocks") && authoring?.beginSchemaDraft !== undefined) {
-		options.splice(
-			4,
-			0,
+		options.push(
 			...blockTypes.map(
 				(type) =>
 					new RichTextMenuOption(
 						`block-${type.slug}`,
 						type.labels.singular,
 						i18n.t("plugin.richtext:block.description", { key: type.slug }),
-						"▣",
+						"block",
 						["block", type.slug, type.labels.singular],
 						() =>
 							queueMicrotask(() =>
 								editor.dispatchCommand(OPEN_BLOCK_EDITOR_COMMAND, { blockType: type.slug })
 							),
-						{ restoreEditorFocus: false, blockType: type.slug }
+						{ restoreEditorFocus: false, blockType: type.slug, group: "blocks" }
 					)
 			)
 		);
 	}
-	return options;
-}
-
-export function filterRichTextOptions(
-	options: readonly RichTextMenuOption[],
-	query: string,
-	language?: string
-): RichTextMenuOption[] {
-	const normalized = query.trim().toLocaleLowerCase(language);
-	if (normalized === "") return [...options];
-	return options.filter(
-		(option) =>
-			option.label.toLocaleLowerCase(language).includes(normalized) ||
-			option.description.toLocaleLowerCase(language).includes(normalized) ||
-			option.keywords.some((keyword) => keyword.toLocaleLowerCase(language).includes(normalized))
+	// Later basic features move their merged group after the list group in Payload's default menu.
+	const groupOrder = { lists: 0, basic: 1, blocks: 2 };
+	const iconOrder: RichTextIconName[] = [
+		"check",
+		"ordered",
+		"unordered",
+		"divider",
+		"upload",
+		"quote",
+		"relationship",
+		"h1",
+		"h2",
+		"h3",
+		"h4",
+		"h5",
+		"h6",
+		"paragraph",
+		"code-block",
+		"block",
+	];
+	return options.sort(
+		(a, b) =>
+			groupOrder[a.group] - groupOrder[b.group] ||
+			iconOrder.indexOf(a.icon) - iconOrder.indexOf(b.icon)
 	);
 }
 

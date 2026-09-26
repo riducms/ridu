@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { AlertDialog as AlertDialogPrimitive } from "bits-ui";
 
+	import "@ui/confirmation-dialog/confirmation-dialog.scss";
 	import { buttonVariants } from "@ui/button/button.svelte";
 
 	let {
@@ -24,11 +25,15 @@
 	} = $props();
 
 	let pending = $state(false);
-	let cancelButton = $state<HTMLButtonElement | null>(null);
+	// Only the autofocus handler reads this DOM binding.
+	// svelte-ignore non_reactive_update
+	let cancelButton: HTMLButtonElement | null = null;
 
 	async function submitConfirmation() {
 		if (disabled || pending) return;
+
 		pending = true;
+
 		try {
 			await onconfirm();
 			open = false;
@@ -47,25 +52,23 @@
 	<AlertDialogPrimitive.Portal>
 		<AlertDialogPrimitive.Overlay
 			data-slot="confirmation-dialog-overlay"
-			class="fixed inset-0 z-50 bg-backdrop backdrop-blur-[2px]"
+			class="ridu-confirmation-overlay"
 		/>
 		<AlertDialogPrimitive.Content
 			data-slot="confirmation-dialog-content"
-			class="ridu-dialog-enter fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-6 rounded-[4px] border border-control-border bg-popover p-6.5 text-[14.5px] text-popover-foreground shadow-[var(--shadow-dialog)] outline-none sm:max-w-[460px]"
+			class="ridu-confirmation ridu-dialog-enter"
 			onOpenAutoFocus={focusCancel}
 			onEscapeKeydown={(event) => pending && event.preventDefault()}
 		>
-			<header class="grid gap-2">
-				<AlertDialogPrimitive.Title
-					class="font-serif text-[28px] leading-tight font-normal text-foreground"
-				>
+			<header class="ridu-confirmation__header">
+				<AlertDialogPrimitive.Title class="ridu-confirmation__title">
 					{title}
 				</AlertDialogPrimitive.Title>
-				<AlertDialogPrimitive.Description class="text-[13px] leading-5 text-foreground-muted">
+				<AlertDialogPrimitive.Description class="ridu-confirmation__description">
 					{description}
 				</AlertDialogPrimitive.Description>
 			</header>
-			<footer class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+			<footer class="ridu-confirmation__footer">
 				<AlertDialogPrimitive.Cancel
 					bind:ref={cancelButton}
 					type="button"
@@ -76,7 +79,8 @@
 				</AlertDialogPrimitive.Cancel>
 				<AlertDialogPrimitive.Action
 					type="button"
-					class={buttonVariants({ variant: destructive ? "destructive" : "default" })}
+					class={buttonVariants()}
+					data-destructive={destructive}
 					disabled={disabled || pending}
 					aria-busy={pending}
 					onclick={submitConfirmation}

@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { Select as SelectPrimitive } from "bits-ui";
 	import ChevronDownIcon from "~icons/lucide/chevron-down";
-	import { cn, type WithoutChildrenOrChild } from "@riducms/ui";
+	import { type WithoutChildrenOrChild } from "@riducms/ui";
+	import "@admin/components/ui/select/select.scss";
 
 	let {
 		ref = $bindable(null),
@@ -13,10 +14,7 @@
 <SelectPrimitive.ScrollDownButton
 	bind:ref
 	data-slot="select-scroll-down-button"
-	class={cn(
-		"z-10 flex cursor-default items-center justify-center bg-popover py-1 [&_svg:not([class*='size-'])]:size-4 bottom-0 w-full",
-		className
-	)}
+	class={["ridu-select__scroll", className]}
 	{...restProps}
 >
 	<ChevronDownIcon />

@@ -1,0 +1,171 @@
+@use "@riducms/ui/styles.scss" as ui;
+
+@layer ridu.components {
+	.ridu-field-grid,
+	.ridu-field-row {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr);
+		gap: 20px 10px;
+	}
+	.ridu-field-layout-item {
+		min-width: 0;
+		grid-column: span 1 / span 1;
+	}
+	.ridu-field-row,
+	.ridu-field-tabs,
+	.ridu-field-collapsible {
+		grid-column: 1 / -1;
+	}
+	.ridu-field-tabs {
+		min-width: 0;
+		gap: 0;
+	}
+	.ridu-field-tabs__list {
+		align-self: stretch;
+		justify-content: flex-start;
+		width: auto;
+		gap: 20px;
+		border-bottom: 1px solid var(--control-border);
+		border-radius: 0;
+		padding: 0;
+		background: transparent;
+		overflow: auto hidden;
+	}
+	.ridu-field-tabs__trigger {
+		flex: none;
+		min-height: 60px;
+		padding: 15px 0;
+		font-size: 16px;
+		font-weight: 400;
+	}
+	.ridu-field-tabs__content {
+		padding-top: 20px;
+		&[hidden] {
+			display: none;
+		}
+	}
+	.ridu-field-collapsible {
+		border: 1px solid var(--control-border);
+		border-radius: var(--control-radius);
+		min-width: 0;
+	}
+	.ridu-field-collapsible__heading {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 10px;
+		padding: 10px 15px;
+		min-height: 40px;
+		background: var(--control-surface);
+		cursor: pointer;
+		list-style: none;
+		&::-webkit-details-marker {
+			display: none;
+		}
+		&:hover {
+			background: var(--control-surface-hover);
+		}
+		&:focus-visible {
+			@include ui.focus-outline;
+		}
+		svg {
+			width: 16px;
+			height: 16px;
+		}
+	}
+	.ridu-field-collapsible[open] > .ridu-field-collapsible__heading svg {
+		transform: rotate(180deg);
+	}
+	.ridu-field-collapsible__content {
+		padding: 20px;
+	}
+	.ridu-checkbox-field {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		min-height: 24px;
+		width: fit-content;
+		font: inherit;
+		color: var(--foreground);
+		cursor: pointer;
+		&:has([disabled]) {
+			color: var(--control-disabled-foreground);
+			cursor: not-allowed;
+		}
+	}
+	.ridu-point-field {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 20px;
+	}
+	.ridu-point-field__coordinate {
+		display: grid;
+		gap: 5px;
+		font: inherit;
+		color: var(--foreground);
+	}
+	.ridu-field-localization-note,
+	.ridu-field-live-validation {
+		margin: 5px 0 0;
+		color: var(--foreground-muted);
+		font-size: 12px;
+		line-height: 18px;
+	}
+	.ridu-field-localization-note {
+		font-family: var(--font-mono);
+	}
+	.ridu-field-live-validation--failed {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+	}
+	.ridu-field-live-validation > p {
+		margin: 0;
+	}
+	.ridu-field-radio-options {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 4px 28px;
+	}
+	.ridu-ui-field {
+		border-inline-start: 2px solid var(--control-border);
+		padding-block: 2px;
+		padding-inline: 12px 0;
+	}
+	.ridu-ui-field__title,
+	.ridu-ui-field__description {
+		margin: 0;
+	}
+	.ridu-ui-field__title {
+		color: var(--foreground);
+		font-size: 13px;
+		font-weight: 500;
+	}
+	.ridu-ui-field__description {
+		margin-top: 4px;
+		color: var(--foreground-muted);
+		font-size: 12.5px;
+		line-height: 20px;
+	}
+	.ridu-virtual-field {
+		@include ui.control-surface;
+		display: block;
+		min-height: 40px;
+		padding: 10px 15px;
+		white-space: pre-wrap;
+		background: var(--control-surface-disabled);
+		border-color: var(--control-border-disabled);
+		color: var(--control-disabled-foreground);
+	}
+	@media (min-width: 640px) {
+		.ridu-field-grid,
+		.ridu-field-row {
+			grid-template-columns: repeat(12, minmax(0, 1fr));
+		}
+		@for $columns from 1 through 12 {
+			.ridu-field-layout-item[data-field-columns="#{$columns}"] {
+				grid-column: span $columns / span $columns;
+			}
+		}
+	}
+}

@@ -1,4 +1,5 @@
 import { expect, it } from "vitest";
+import { userEvent } from "vitest/browser";
 import { render } from "vitest-browser-svelte";
 import { svelte } from "@hvniel/vite-plugin-svelte-inline-component";
 import { defineFieldEditor, type FieldBinding } from "@riducms/plugin/editor";
@@ -47,11 +48,10 @@ const PlainLabel = svelte`
 const Label = svelte`
 	<script module>export const mounts = [];</script>
 	<script>
-		import { onDestroy } from "svelte";
 		let { row, rowNumber, config } = $props();
 		const mount = { get row() { return row; }, get number() { return rowNumber; }, destroyed: false };
 		mounts.push(mount);
-		onDestroy(() => mount.destroyed = true);
+		$effect(() => () => { mount.destroyed = true; });
 	</script>
 	<span data-row-label={row._key}>{config.prefix}: {row.title}</span>
 `;
@@ -118,7 +118,7 @@ function runtime() {
 			},
 		},
 		plugins: [],
-		fields: {
+		fieldEditors: {
 			"app:plain": defineFieldEditor({ type: "text", component: PlainEditor }),
 			"app:accent": defineFieldEditor({
 				type: "text",
@@ -173,6 +173,40 @@ function rows(type: "array" | "blocks" = "array"): SchemaField {
 			: {}),
 	};
 }
+
+it("preserves a repeated row's surface while dragging", async () => {
+	const field = rows();
+	const form = new FormController();
+	form.reset({ rows: [{ _key: "a", title: "First" }] }, [field]);
+	const screen = await render(Harness, { form, fields: [field], runtime: runtime() });
+	const handle = screen.getByRole("button", { name: /^Drag / });
+	const surface = handle.element().closest(".ridu-repeated-row")!;
+	const appearance = () => {
+		const style = getComputedStyle(surface);
+
+		return {
+			background: style.backgroundColor,
+			borderStyle: style.borderStyle,
+			borderWidth: style.borderWidth,
+			opacity: style.opacity,
+		};
+	};
+	const resting = appearance();
+	expect(resting.background).not.toBe("rgba(0, 0, 0, 0)");
+	expect(resting.borderStyle).toBe("solid");
+	expect(resting.borderWidth).toBe("1px");
+	expect(resting.opacity).toBe("1");
+
+	handle.element().focus();
+	await userEvent.keyboard("{Space}");
+	await expect.element(handle).toHaveAttribute("aria-grabbed", "true");
+	expect(appearance()).toEqual(resting);
+
+	await userEvent.keyboard("{Escape}");
+	await expect.element(handle).toHaveFocus();
+	await expect.poll(appearance).toEqual(resting);
+	await screen.unmount();
+});
 
 it("one configured editor works at root, group and localized fields and obeys ancestor state", async () => {
 	bindings.length = 0;

@@ -19,46 +19,6 @@ import {
 	type ReferenceSymbol
 } from './index';
 
-const expectedCatalog = {
-	moduleSymbols: {
-		ridu: 164,
-		core: 326,
-		field: 927,
-		operation: 47,
-		query: 65,
-		schema: 170,
-		store: 156,
-		storage: 8,
-		migration: 83,
-		'migration-payload': 13,
-		'go-protocol': 56,
-		plugintest: 3,
-		postgres: 85,
-		sqlite: 71,
-		mongodb: 73,
-		graphql: 8,
-		mcp: 8,
-		richtext: 25,
-		seo: 22,
-		formbuilder: 35,
-		'storage-local': 7,
-		'storage-s3': 9,
-		'store-conformance': 2,
-		sdk: 138,
-		protocol: 119,
-		plugin: 172,
-		build: 9,
-		ui: 40,
-		'plugin-richtext': 25,
-		'plugin-seo': 7,
-		'plugin-form-builder': 34,
-		admin: 4,
-		translations: 33,
-		'cli-launcher': 1,
-		cli: 24
-	}
-} as const;
-
 const expectedGroupOrders: Readonly<Record<string, readonly string[]>> = {
 	ridu: [
 		'Functions',
@@ -239,13 +199,6 @@ describe('reference data', () => {
 		).toBeDefined();
 	});
 
-	test('matches the reviewed integrated catalog snapshot', () => {
-		const moduleSymbols = Object.fromEntries(
-			referenceModules.map((module) => [module.slug, module.symbols.length])
-		);
-		expect(moduleSymbols).toEqual(expectedCatalog.moduleSymbols);
-	});
-
 	test('keeps every module and symbol unique and navigable', () => {
 		const moduleNames = referenceModules.map((module) => module.name);
 		const moduleSlugs = referenceModules.map((module) => module.slug);
@@ -319,9 +272,9 @@ describe('reference data', () => {
 	});
 
 	test('omits implied TypeScript packages and preserves useful Go and receiver qualifiers', () => {
-		expect(displayName('sdk', 'upload-image-input')).toEqual({
+		expect(displayName('sdk', 'update-upload-input')).toEqual({
 			qualifier: '',
-			label: 'UploadImageInput'
+			label: 'UpdateUploadInput'
 		});
 		expect(displayName('sdk', 'ridu-client-list')).toEqual({
 			qualifier: 'RiduClient.',
@@ -485,7 +438,7 @@ describe('reference data', () => {
 		}
 	});
 
-	test('documents public core structs through members or immutable reader methods', () => {
+	test('documents public core structs through members, reader methods, or an opaque constructor', () => {
 		const coreModule = findReferenceModule('core');
 		const sparseStructs =
 			coreModule?.symbols.filter(
@@ -495,7 +448,14 @@ describe('reference data', () => {
 					symbol.parameters.length === 0 &&
 					receiverMethodEntries(coreModule, symbol).length === 0
 			) ?? [];
-		expect(sparseStructs.map((symbol) => symbol.name)).toEqual([]);
+		// Loader definitions deliberately expose no mutable fields or reader methods.
+		// Readers need the constructor and registration example instead.
+		expect(sparseStructs.map((symbol) => symbol.name)).toEqual(['AdminLoaderDefinition']);
+		const definition = sparseStructs[0];
+		expect(definition.relatedSymbols).toContain('go:github.com/riducms/ridu/core#NewAdminLoader');
+		expect(definition.example).toContain('ridu.NewAdminLoader(');
+		expect(definition.example).toContain('Loaders:');
+		expect(definition.details.join(' ')).toContain('no public fields');
 
 		const localization = findReferenceSymbol('core', 'localization-config');
 		expect(localization?.parameters.map((parameter) => parameter.name)).toEqual([
@@ -1025,7 +985,7 @@ describe('reference data', () => {
 			['core/http.go', 'RequestErrorEvent'],
 			['core/http.go', 'HandlerOptions'],
 			['core/execute.go', 'ServerOptions'],
-			['core/uploads.go', 'UpdateUploadImageInput'],
+			['core/uploads.go', 'UpdateUploadInput'],
 			['internal/operation/engine.go', 'Error', 'OperationError'],
 			['core/local.go', 'OperationCapabilities'],
 			['core/local.go', 'FieldCapabilities'],

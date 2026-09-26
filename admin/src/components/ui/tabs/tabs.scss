@@ -1,0 +1,86 @@
+@use "@riducms/ui/styles.scss" as ui;
+
+@layer ridu.components {
+	.ridu-tabs {
+		display: flex;
+		gap: 20px;
+		min-width: 0;
+	}
+	.ridu-tabs[data-orientation="horizontal"] {
+		flex-direction: column;
+	}
+	.ridu-tabs__list {
+		display: inline-flex;
+		align-items: center;
+		width: fit-content;
+		gap: 20px;
+		color: var(--foreground-muted);
+	}
+	.ridu-tabs__list[data-orientation="vertical"] {
+		flex-direction: column;
+		align-items: stretch;
+	}
+	.ridu-tabs__list--default {
+		padding: 4px;
+		gap: 4px;
+		background: var(--control-surface);
+		border-radius: var(--control-radius);
+	}
+	.ridu-tabs__trigger {
+		position: relative;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 8px;
+		padding: 10px 15px;
+		border: 0;
+		border-radius: var(--control-radius);
+		background: transparent;
+		color: inherit;
+		font: inherit;
+		white-space: nowrap;
+		cursor: pointer;
+		&:hover,
+		&[data-state="active"] {
+			color: var(--foreground);
+		}
+		&:focus-visible {
+			@include ui.focus-outline;
+		}
+		&:disabled {
+			opacity: 0.5;
+			cursor: not-allowed;
+		}
+		svg {
+			width: 16px;
+			height: 16px;
+		}
+	}
+	.ridu-tabs__list--default .ridu-tabs__trigger[data-state="active"] {
+		background: var(--control-surface-hover);
+	}
+	.ridu-tabs__list--line .ridu-tabs__trigger {
+		border-radius: 0;
+		&::after {
+			content: "";
+			position: absolute;
+			inset-inline: 0;
+			bottom: 0;
+			height: 2px;
+			background: transparent;
+		}
+		&[data-state="active"]::after {
+			background: var(--foreground);
+		}
+		&[data-orientation="vertical"]::after {
+			inset: 0 0 0 auto;
+			width: 2px;
+			height: auto;
+		}
+	}
+	.ridu-tabs__content {
+		flex: 1;
+		min-width: 0;
+		outline: none;
+	}
+}

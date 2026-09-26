@@ -20,6 +20,7 @@
 		MOVE_BLOCK_COMMAND,
 		UPDATE_BLOCK_NAME_COMMAND,
 	} from "@plugin-richtext/menu/rich-text-commands";
+	import "@plugin-richtext/block/rich-text-block-card.scss";
 
 	let {
 		nodeKey,
@@ -133,10 +134,10 @@
 
 <article
 	class={[
-		"ridu-richtext-embedded-card my-5 rounded-md border border-control-border bg-control p-4 outline-none focus-visible:ring-2 focus-visible:ring-ring",
-		nameField !== undefined && "whitespace-normal",
-		selected() && "border-primary",
-		issues.length > 0 && "border-destructive",
+		"ridu-richtext-embedded-card ridu-richtext-block-card",
+		nameField !== undefined && "has-name-field",
+		selected() && "is-selected",
+		issues.length > 0 && "has-issues",
 	]}
 	data-block-key={identity}
 	data-block-type={blockType}
@@ -146,7 +147,7 @@
 >
 	{#if nameField !== undefined && authoring?.schemaHeader !== undefined}
 		<div
-			class="mb-2"
+			class="ridu-richtext-block-card__name"
 			onfocuscapture={nameHistory.reset.bind(nameHistory)}
 			onblurcapture={nameHistory.reset.bind(nameHistory)}
 			onkeydowncapture={nameKeydown}
@@ -159,11 +160,11 @@
 			})}
 		</div>
 	{/if}
-	<div class="flex flex-wrap items-center justify-between gap-3">
+	<div class="ridu-richtext-block-card__header">
 		<button
 			type="button"
 			data-block-select
-			class="min-w-24 flex-1 text-start rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+			class="ridu-richtext-block-card__select"
 			aria-label={i18n.t("plugin.richtext:block.select", {
 				label: type?.labels.singular ?? blockType,
 			})}
@@ -171,36 +172,56 @@
 			onclickcapture={select}
 			onkeydowncapture={keydown}
 		>
-			<span class="block text-xs font-medium text-foreground-muted">
+			<span class="ridu-richtext-block-card__label">
 				{type?.labels.singular ?? blockType}
 			</span>
-			{#if nameField === undefined}<span class="block mt-1 truncate text-sm text-foreground">
+			{#if nameField === undefined}
+				<span class="ridu-richtext-block-card__summary">
 					{summary}
-				</span>{/if}
+				</span>
+			{/if}
 		</button>
 		{#if editable()}
-			<div class="flex shrink-0 gap-1">
-				<Button size="sm" variant="ghost" onclick={edit} disabled={recovery}>
+			<div
+				class="ridu-richtext-block-card__actions"
+				role="group"
+				aria-label={i18n.t("plugin.richtext:editor.blockActions")}
+			>
+				<Button
+					class="ridu-richtext-block-card__action"
+					size="sm"
+					variant="ghost"
+					onclick={edit}
+					disabled={recovery}
+				>
 					{i18n.t("plugin.richtext:block.edit")}
 				</Button>
-				<Button size="sm" variant="ghost" onclick={duplicate} disabled={recovery}>
+				<Button
+					class="ridu-richtext-block-card__action"
+					size="sm"
+					variant="ghost"
+					onclick={duplicate}
+					disabled={recovery}
+				>
 					{i18n.t("plugin.richtext:block.duplicate")}
 				</Button>
-				<Button size="sm" variant="ghost" onclick={remove}>
+				<Button class="ridu-richtext-block-card__action" size="sm" variant="ghost" onclick={remove}>
 					{i18n.t("plugin.richtext:block.remove")}
 				</Button>
 			</div>
 		{/if}
 	</div>
 	{#if recovery}
-		<p role="alert" class="mt-2 text-sm text-destructive">
-			{i18n.t("plugin.richtext:block.recovery")}
-		</p>
-		<Button size="sm" variant="outline" onclick={exportBlock}>
-			{i18n.t("plugin.richtext:block.export")}
-		</Button>
+		<div class="ridu-richtext-block-card__recovery">
+			<p role="alert" class="ridu-richtext-block-card__status">
+				{i18n.t("plugin.richtext:block.recovery")}
+			</p>
+			<Button size="sm" variant="outline" onclick={exportBlock}>
+				{i18n.t("plugin.richtext:block.export")}
+			</Button>
+		</div>
 	{:else if issues.length > 0}
-		<p class="mt-2 text-sm text-destructive">
+		<p class="ridu-richtext-block-card__status">
 			{i18n.t("plugin.richtext:block.issues", { count: issues.length })}
 		</p>
 	{/if}

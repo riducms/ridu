@@ -1,8 +1,8 @@
 <script lang="ts">
+	import "@ui/field/field.scss";
 	import type { Snippet } from "svelte";
 
 	import { fieldDescriptionID, fieldErrorID } from "@ui/field/field-feedback";
-	import { cn } from "@ui/utils";
 
 	let {
 		controlID,
@@ -22,8 +22,8 @@
 	const errorID = $derived(fieldErrorID(controlID));
 </script>
 
-<div class={cn("grid gap-2", className)}>
-	<div class="relative grid gap-2">
+<div class={["ridu-field-feedback", className]}>
+	<div class="ridu-field-control">
 		{#if errors.length > 0}
 			<div id={errorID} class="ridu-field-error-tooltip" role="alert" aria-atomic="true">
 				{#each errors as error, index (`${error}:${index}`)}
@@ -33,7 +33,9 @@
 		{/if}
 		{@render children()}
 	</div>
-	{#if description !== undefined}<p id={descriptionID} class="ridu-field-help">
+	{#if description !== undefined}
+		<p id={descriptionID} class="ridu-field-help">
 			{description}
-		</p>{/if}
+		</p>
+	{/if}
 </div>

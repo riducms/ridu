@@ -993,7 +993,7 @@ func applyContentRename(ctx context.Context, transaction *sql.Tx, artifact ridum
 	return nil
 }
 
-type scheduledPublishTaskRenameRow struct {
+type scheduledPublicationTaskRenameRow struct {
 	ID                      string
 	TargetCollectionID      sql.NullString
 	TargetDocumentID        sql.NullString
@@ -1019,9 +1019,9 @@ FOR UPDATE`, before)
 	if err != nil {
 		return err
 	}
-	var scheduled []scheduledPublishTaskRenameRow
+	var scheduled []scheduledPublicationTaskRenameRow
 	for rows.Next() {
-		var row scheduledPublishTaskRenameRow
+		var row scheduledPublicationTaskRenameRow
 		if err := rows.Scan(&row.ID, &row.TargetCollectionID, &row.TargetDocumentID,
 			&row.RequestedByCollectionID, &row.RequestedByDocumentID, &row.Input, &row.ConcurrencyKey); err != nil {
 			rows.Close()
@@ -1033,7 +1033,7 @@ FOR UPDATE`, before)
 		return err
 	}
 	for _, row := range scheduled {
-		input, concurrencyKey, targetCollection, requesterCollection, err := rewriteScheduledPublishTaskCollectionID(row, before, after)
+		input, concurrencyKey, targetCollection, requesterCollection, err := rewriteScheduledPublicationTaskCollectionID(row, before, after)
 		if err != nil {
 			return fmt.Errorf("rewrite scheduled-publish task %s: %w", row.ID, err)
 		}
@@ -1053,7 +1053,7 @@ WHERE id = $1`, row.ID, targetCollection, requesterCollection, input, concurrenc
 	return err
 }
 
-func rewriteScheduledPublishTaskCollectionID(row scheduledPublishTaskRenameRow, before, after string) ([]byte, string, any, any, error) {
+func rewriteScheduledPublicationTaskCollectionID(row scheduledPublicationTaskRenameRow, before, after string) ([]byte, string, any, any, error) {
 	var input map[string]json.RawMessage
 	if err := json.Unmarshal(row.Input, &input); err != nil || input == nil {
 		if err == nil {
@@ -1099,7 +1099,7 @@ func rewriteScheduledPublishTaskCollectionID(row scheduledPublishTaskRenameRow, 
 	if collectionID == before {
 		collectionID = after
 		input["collectionID"], _ = json.Marshal(after)
-		concurrencyKey = scheduledPublishConcurrencyKey(collectionID, documentID)
+		concurrencyKey = scheduledPublicationConcurrencyKey(collectionID, documentID)
 	}
 	if requestedCollectionPresent && requestedCollection == before {
 		requestedCollection = after

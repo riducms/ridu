@@ -13,6 +13,20 @@ regression. Generated growth tests assert structural bounds and real consumer co
 browser performance case enforces its typing/insert/reorder thresholds with one worker; ordinary
 E2E continues to prove nested editors mount lazily and retain their values.
 
+The rich-text block aggregate report is a separate diagnostic with no pass/fail threshold. It
+prints JSON for create, read, update and retained-version costs across the fixed block/byte matrix:
+
+```sh
+make richtext-blocks-performance                    # in-memory engine
+make richtext-blocks-performance ADAPTER=sqlite
+RIDU_POSTGRES_URL='postgres://...' make richtext-blocks-performance ADAPTER=postgres
+RIDU_MONGODB_URL='mongodb://...' make richtext-blocks-performance ADAPTER=mongodb
+```
+
+The database variants use the same isolated real-adapter fixtures as their acceptance contracts.
+The command fixes `-benchtime=1x`; invoke the benchmarks directly only with that setting so each
+large matrix case runs once.
+
 For a focused CPU profile:
 
 ```sh

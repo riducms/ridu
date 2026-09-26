@@ -23,7 +23,6 @@ export default defineConfig((environment) => {
 				"@dnd-kit-svelte/svelte/sortable",
 				"@hvniel/svelte-router",
 				"svelte-sonner",
-				"@riducms/ui > tailwind-variants",
 			],
 		},
 		test: {

@@ -2,11 +2,11 @@
 	import { getAdminI18n, type EmbeddedSchemaDraftEditorProps } from "@riducms/plugin";
 	import type { HostedSchemaDraft } from "@admin/core/forms/embedded-schema-draft.svelte";
 	import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@admin/components/ui/sheet";
-	import { Button } from "@admin/components/ui/button";
+	import { Button } from "@riducms/ui";
 	import { focusFieldIssue } from "@admin/core/forms/field-issue-focus";
 	import FieldLayout from "@admin/fields/field-layout.svelte";
 	import BlockHeader from "@admin/fields/nested/block-header.svelte";
-	import { onDestroy } from "svelte";
+	import "@admin/fields/embedded-schema-draft-editor.scss";
 
 	let {
 		session,
@@ -16,7 +16,10 @@
 	// svelte-ignore state_referenced_locally
 	const draft = session.draft;
 	const i18n = getAdminI18n();
-	onDestroy(() => draft.discard());
+	// Only event handlers read this DOM binding.
+	// svelte-ignore non_reactive_update
+	let contentElement: HTMLElement | null = null;
+	$effect(() => () => draft.discard());
 
 	function cancel() {
 		draft.discard();
@@ -25,7 +28,7 @@
 	async function apply() {
 		if (!draft.validate()) {
 			const issue = draft.issues[0];
-			if (issue !== undefined) await focusFieldIssue(issue.path);
+			if (issue !== undefined && contentElement) await focusFieldIssue(issue.path, contentElement);
 			return;
 		}
 		options.onApply(draft.payload());
@@ -40,21 +43,22 @@
 	}}
 >
 	<SheetContent
-		class="w-full sm:max-w-2xl"
+		bind:ref={contentElement}
+		class="ridu-embedded-draft"
 		showCloseButton={false}
 		onOpenAutoFocus={async (event) => {
 			const issue = draft.issues[0];
-			if (issue !== undefined) {
+			if (issue !== undefined && contentElement) {
 				event.preventDefault();
-				await focusFieldIssue(issue.path);
+				await focusFieldIssue(issue.path, contentElement);
 			}
 		}}
 	>
-		<div class="border-b border-border px-6 py-4">
+		<div class="ridu-embedded-draft__header">
 			<SheetTitle>{options.title ?? i18n.t("fields:embeddedEditTitle")}</SheetTitle>
 			<SheetDescription>{i18n.t("fields:embeddedEditDescription")}</SheetDescription>
 			{#if !draft.stale && session.block.admin?.nameField !== undefined}
-				<div class="mt-3">
+				<div class="ridu-embedded-draft__name">
 					<BlockHeader
 						block={session.block}
 						path={draft.id}
@@ -64,23 +68,27 @@
 				</div>
 			{/if}
 		</div>
-		<div class="min-h-0 flex-1 overflow-y-auto px-6 py-5" data-schema-draft={draft.id}>
+		<div class="ridu-embedded-draft__content" data-schema-draft={draft.id}>
 			{#if draft.stale}
-				<p role="alert" class="mb-4 text-destructive">
+				<p role="alert" class="ridu-embedded-draft__error">
 					{i18n.t("errors:staleEmbeddedEdit")}
 				</p>
 			{/if}
 			{#if draft.issues.length > 0}
-				<div role="alert" class="mb-4 text-destructive">
-					{#each draft.issues as issue}<p>{issue.message}</p>{/each}
+				<div role="alert" class="ridu-embedded-draft__error">
+					{#each draft.issues as issue}
+						<p>{issue.message}</p>
+					{/each}
 				</div>
 			{/if}
-			{#if !draft.stale}<FieldLayout
+			{#if !draft.stale}
+				<FieldLayout
 					fields={session.fields.filter((field) => field.name !== session.block.admin?.nameField)}
 					form={session.form}
-				/>{/if}
+				/>
+			{/if}
 		</div>
-		<div class="flex justify-end gap-2 border-t border-border px-6 py-4">
+		<div class="ridu-embedded-draft__actions">
 			<Button variant="outline" onclick={cancel}>{i18n.t("general:cancel")}</Button>
 			<Button onclick={apply} disabled={draft.stale}>{i18n.t("general:apply")}</Button>
 		</div>

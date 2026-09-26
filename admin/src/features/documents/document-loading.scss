@@ -1,0 +1,24 @@
+@layer ridu.components {
+	.ridu-document-module {
+		display: grid;
+		place-content: center;
+		justify-items: center;
+		gap: 20px;
+		min-block-size: 288px;
+		padding: 20px;
+		color: var(--foreground-muted);
+		font-size: var(--font-size-body);
+
+		&--upload {
+			min-block-size: 192px;
+		}
+
+		&--error {
+			color: var(--destructive);
+		}
+	}
+
+	.ridu-document-module__message {
+		margin: 0;
+	}
+}

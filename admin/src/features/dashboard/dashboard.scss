@@ -1,0 +1,131 @@
+@use "@riducms/ui/styles.scss" as ui;
+
+@layer ridu.components {
+	.ridu-dashboard {
+		width: 100%;
+		padding: 0 var(--admin-gutter) var(--admin-gutter);
+	}
+	.ridu-dashboard__groups {
+		padding: 6px;
+		display: grid;
+		gap: var(--admin-space);
+	}
+	.ridu-dashboard__group {
+		display: flex;
+		flex-direction: column;
+		gap: var(--admin-space);
+	}
+	.ridu-dashboard__heading {
+		margin: 0;
+		font-size: 26px;
+		line-height: 32px;
+		font-weight: 500;
+	}
+	.ridu-dashboard__cards {
+		display: grid;
+		grid-template-columns: repeat(5, minmax(0, 1fr));
+		gap: 12px;
+	}
+	.ridu-dashboard__card {
+		position: relative;
+		display: flex;
+		justify-content: space-between;
+		align-self: start;
+		gap: 16px;
+		height: 100%;
+		min-height: 80px;
+		padding: 16px;
+		background: var(--background-surface);
+		border: 1px solid var(--control-border);
+		border-radius: 4px;
+		transition:
+			border-color 100ms,
+			box-shadow 100ms;
+
+		&:hover {
+			border-color: var(--control-border-hover);
+			box-shadow: var(--dashboard-card-shadow);
+		}
+	}
+	.ridu-dashboard__card-link {
+		position: absolute;
+		inset: 0;
+		border-radius: inherit;
+	}
+	.ridu-dashboard__card-link:focus-visible,
+	.ridu-dashboard__create:focus-visible {
+		@include ui.focus-outline;
+	}
+	.ridu-dashboard__card-title {
+		margin: 2px 0;
+		min-width: 0;
+		flex: 1;
+		font-size: var(--font-size-body);
+		font-weight: 600;
+		line-height: 16px;
+		overflow-wrap: anywhere;
+	}
+	.ridu-dashboard__create {
+		position: relative;
+		z-index: 1;
+		flex-shrink: 0;
+		display: grid;
+		place-items: center;
+		width: 22px;
+		height: 22px;
+		border: 1px solid var(--control-border);
+		border-radius: 50%;
+		color: var(--foreground-muted);
+
+		svg {
+			width: 16px;
+			height: 16px;
+			stroke-width: 1;
+		}
+
+		&:hover {
+			background: var(--background);
+			border-color: var(--ring);
+			box-shadow: var(--control-shadow);
+			color: var(--foreground);
+		}
+	}
+	.ridu-dashboard__extensions {
+		display: grid;
+		gap: var(--admin-space);
+		margin-bottom: 30px;
+	}
+	.ridu-dashboard__groups + .ridu-dashboard__extensions {
+		margin-top: 30px;
+		margin-bottom: 0;
+	}
+	@media (max-width: ui.$large) {
+		.ridu-dashboard__cards {
+			grid-template-columns: repeat(4, minmax(0, 1fr));
+		}
+	}
+	@media (max-width: ui.$medium) {
+		.ridu-dashboard__cards {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
+	}
+	@media (max-width: ui.$small) {
+		.ridu-dashboard__cards {
+			gap: 8px;
+		}
+		.ridu-dashboard__heading {
+			font-size: 17px;
+			line-height: 32px;
+		}
+	}
+	@media (max-width: 400px) {
+		.ridu-dashboard__cards {
+			grid-template-columns: minmax(0, 1fr);
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.ridu-dashboard__card {
+			transition: none;
+		}
+	}
+}

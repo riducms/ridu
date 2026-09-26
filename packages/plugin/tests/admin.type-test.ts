@@ -2,31 +2,31 @@ import type { Component } from "svelte";
 import type {
 	AdminDashboardPanelProps,
 	AdminDocumentExtensionProps,
-	AdminListCellProps,
+	AdminListCellRendererProps,
 } from "../src/plugin";
 import { defineAdmin, defineRowLabel, type RowLabelProps } from "../src/admin";
 declare const Dashboard: Component<AdminDashboardPanelProps>;
 declare const Action: Component<AdminDocumentExtensionProps>;
-declare const Cell: Component<AdminListCellProps>;
+declare const Cell: Component<AdminListCellRendererProps>;
 declare const Label: Component<RowLabelProps<{ title: string }>>;
 declare const Wrong: Component<{ value: number }>;
 export function componentProbes() {
 	defineAdmin({
-		dashboard: [{ key: "summary", component: Dashboard }],
+		dashboardPanels: [{ key: "summary", component: Dashboard }],
 		documentActions: [{ key: "review", component: Action }],
-		listCells: [
+		listCellRenderers: [
 			{ key: "cell", collection: "posts", field: "title", label: "Title", component: Cell },
 		],
 	});
 	// @ts-expect-error dashboard hosts do not provide a document action host
-	defineAdmin({ dashboard: [{ key: "summary", component: Action }] });
+	defineAdmin({ dashboardPanels: [{ key: "summary", component: Action }] });
 	// @ts-expect-error wrong component props
 	defineAdmin({ providers: [{ key: "provider", component: Wrong }] });
 	// @ts-expect-error application field renderers have only the field editor contract
 	defineAdmin({ fieldPlugins: [] });
 	defineAdmin({
 		// @ts-expect-error a core global view cannot select a collection
-		views: [{ key: "global", surface: "global", collection: "posts", component: Dashboard }],
+		coreViews: [{ key: "global", surface: "global", collection: "posts", component: Dashboard }],
 	});
 	defineRowLabel({ component: Label, decodeConfig: () => ({ title: "Title" }) });
 	// @ts-expect-error required config requires a decoder

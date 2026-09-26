@@ -17,21 +17,21 @@ import (
 	"github.com/riducms/ridu/store"
 )
 
-func TestRewriteMongoScheduledPublishTaskCollectionIDPreservesOpaqueState(t *testing.T) {
+func TestRewriteMongoScheduledPublicationTaskCollectionIDPreservesOpaqueState(t *testing.T) {
 	task := store.Task{
-		Slug: mongoScheduledPublishTaskSlug, Queue: "scheduled-publish", ConcurrencyKey: "authors:post-1",
+		Slug: mongoScheduledPublicationTaskSlug, Queue: "scheduled-publish", ConcurrencyKey: "authors:post-1",
 		Input:       json.RawMessage(`{"collectionID":"authors","documentID":"post-1","expectedRevision":3,"requestedByCollectionID":"authors","requestedByUserID":"user-1","future":{"keep":true}}`),
 		Target:      &store.DocumentReference{CollectionID: "authors", DocumentID: "post-1"},
 		RequestedBy: &store.DocumentReference{CollectionID: "authors", DocumentID: "user-1"},
 	}
-	updated, changed, err := rewriteMongoScheduledPublishTaskCollectionID(task, "authors", "members")
+	updated, changed, err := rewriteMongoScheduledPublicationTaskCollectionID(task, "authors", "members")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !changed || updated.Target.CollectionID != "members" || updated.RequestedBy.CollectionID != "members" {
 		t.Fatalf("scheduled-publish identity rewrite = %#v", updated)
 	}
-	if want := mongoScheduledPublishConcurrencyKey("members", "post-1"); updated.ConcurrencyKey != want {
+	if want := mongoScheduledPublicationConcurrencyKey("members", "post-1"); updated.ConcurrencyKey != want {
 		t.Fatalf("scheduled-publish concurrency key = %q, want %q", updated.ConcurrencyKey, want)
 	}
 	var input map[string]any
@@ -53,7 +53,7 @@ func TestRewriteMongoScheduledPublishTaskCollectionIDPreservesOpaqueState(t *tes
 	generic.Slug = "application-owned"
 	generic.Input = json.RawMessage(`{"collectionID":"authors","opaque":true}`)
 	generic.ConcurrencyKey = "authors:opaque"
-	if mongoScheduledPublishTaskMentionsCollection(generic, "authors") {
+	if mongoScheduledPublicationTaskMentionsCollection(generic, "authors") {
 		t.Fatal("generic opaque task was selected for built-in input/concurrency rewriting")
 	}
 	if generic.ConcurrencyKey != "authors:opaque" || string(generic.Input) != `{"collectionID":"authors","opaque":true}` {
@@ -61,13 +61,13 @@ func TestRewriteMongoScheduledPublishTaskCollectionIDPreservesOpaqueState(t *tes
 	}
 }
 
-func TestRewriteMongoScheduledPublishTaskCollectionIDFailsClosedOnDivergence(t *testing.T) {
+func TestRewriteMongoScheduledPublicationTaskCollectionIDFailsClosedOnDivergence(t *testing.T) {
 	task := store.Task{
-		Slug: mongoScheduledPublishTaskSlug, Queue: "scheduled-publish", ConcurrencyKey: "authors:post-1",
+		Slug: mongoScheduledPublicationTaskSlug, Queue: "scheduled-publish", ConcurrencyKey: "authors:post-1",
 		Input:  json.RawMessage(`{"collectionID":"different","documentID":"post-1","expectedRevision":3}`),
 		Target: &store.DocumentReference{CollectionID: "authors", DocumentID: "post-1"},
 	}
-	if _, _, err := rewriteMongoScheduledPublishTaskCollectionID(task, "authors", "members"); err == nil || !strings.Contains(err.Error(), "target reference") {
+	if _, _, err := rewriteMongoScheduledPublicationTaskCollectionID(task, "authors", "members"); err == nil || !strings.Contains(err.Error(), "target reference") {
 		t.Fatalf("divergent scheduled-publish rewrite error = %v", err)
 	}
 }

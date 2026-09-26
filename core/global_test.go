@@ -464,11 +464,14 @@ func TestGlobalStatusCapabilitiesDoNotDependOnReadAccess(t *testing.T) {
 	if capabilities.Operations.Read || !capabilities.Operations.Update || !capabilities.Operations.Publish || !capabilities.Operations.Unpublish {
 		t.Fatalf("persisted unreadable global capabilities = %#v", capabilities.Operations)
 	}
-	current, err = application.Local().UnpublishGlobal(context.Background(), "persisted", ridu.MutationOptions{ExpectedRevision: current.Revision})
+	if _, err := application.Local().UnpublishGlobal(context.Background(), "persisted", ridu.MutationOptions{ExpectedRevision: current.Revision}); !operationCode(err, "validation") {
+		t.Fatalf("draft unpublish error = %v, want validation", err)
+	}
+	current, err = application.Local().PublishGlobal(context.Background(), "persisted", ridu.MutationOptions{ExpectedRevision: current.Revision})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := application.Local().PublishGlobal(context.Background(), "persisted", ridu.MutationOptions{ExpectedRevision: current.Revision}); err != nil {
+	if _, err := application.Local().UnpublishGlobal(context.Background(), "persisted", ridu.MutationOptions{ExpectedRevision: current.Revision}); err != nil {
 		t.Fatal(err)
 	}
 	missing, err := application.Local().Capabilities(context.Background(), "global:missing", "missing", ridu.CapabilityOptions{})

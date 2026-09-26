@@ -13,12 +13,21 @@ export interface OpenUploadBrowserPayload {
 	nodeKey?: NodeKey;
 }
 
-export type OpenRelationshipBrowserPayload = OpenUploadBrowserPayload;
+export interface OpenRelationshipBrowserPayload {
+	collectionSlug?: string;
+	documentID?: string;
+	mode?: "edit" | "insert" | "replace";
+	nodeKey?: NodeKey;
+}
 
 export interface UpdateUploadCaptionPayload {
 	caption: string;
 	nodeKey: NodeKey;
 }
+
+export const OPEN_LINK_EDITOR_COMMAND: LexicalCommand<void> = createCommand(
+	"OPEN_LINK_EDITOR_COMMAND"
+);
 
 export const OPEN_UPLOAD_BROWSER_COMMAND: LexicalCommand<OpenUploadBrowserPayload> = createCommand(
 	"OPEN_UPLOAD_BROWSER_COMMAND"

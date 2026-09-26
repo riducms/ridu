@@ -47,14 +47,37 @@ test("document duplication, trash restoration, and the mobile editor remain comp
 		.getByRole("button", { name: "Delete", exact: true })
 		.click();
 	await expect(page.getByText("Copy of Browser lifecycle post", { exact: true })).toHaveCount(0);
-	await page.locator("header").getByRole("link", { name: "Trash" }).click();
+	await page
+		.getByRole("navigation", { name: "Collection views" })
+		.getByRole("link", { name: "Trash", exact: true })
+		.click();
+	await expect(
+		page
+			.getByRole("navigation", { name: "Collection views" })
+			.getByRole("button", { name: "Trash", exact: true })
+	).toHaveAttribute("aria-current", "page");
+	await expect(page.getByText("Copy of Browser lifecycle post", { exact: true })).toBeVisible();
+	await expect(page.getByRole("columnheader", { name: "Actions", exact: true })).toHaveCount(0);
+	const trashSearch = page.getByPlaceholder(/^Search by /);
+	await trashSearch.fill("No matching trashed post");
+	await expect(page.getByText("No Posts in trash.", { exact: true })).toBeVisible();
+	await expect(page.getByRole("button", { name: "Empty trash", exact: true })).toBeEnabled();
+	await page.getByRole("button", { name: "Empty trash", exact: true }).click();
+	const emptyTrashDialog = page.getByRole("alertdialog", { name: "Empty posts trash?" });
+	await expect(emptyTrashDialog).toContainText("including those outside the current filters");
+	await emptyTrashDialog.getByRole("button", { name: "Cancel", exact: true }).click();
+	await expect(emptyTrashDialog).toBeHidden();
+	await trashSearch.fill("");
 	await expect(page.getByText("Copy of Browser lifecycle post", { exact: true })).toBeVisible();
 	await page.getByRole("button", { name: "Empty trash", exact: true }).click();
 	await page
 		.getByRole("alertdialog", { name: "Empty posts trash?" })
 		.getByRole("button", { name: "Empty trash", exact: true })
 		.click();
-	await expect(page.getByRole("heading", { name: "Trash is empty" })).toBeVisible();
+	await expect(emptyTrashDialog).toBeHidden();
+	await expect(page.getByText("No Posts in trash.", { exact: true })).toBeVisible();
+	await expect(page.getByRole("button", { name: "Empty trash", exact: true })).toBeDisabled();
+	await expect(page.getByRole("navigation", { name: "Pagination" })).toHaveCount(0);
 	await page.goto(directURL);
 
 	await page.getByRole("button", { name: "More actions" }).click();
@@ -63,20 +86,29 @@ test("document duplication, trash restoration, and the mobile editor remain comp
 	await page.getByRole("button", { name: "Move to trash" }).click();
 	await expect(page).toHaveURL(/\/admin\/collections\/posts(?:\?locale=en)?$/);
 	await expect(page.getByText("Browser lifecycle post", { exact: true })).toHaveCount(0);
-	await page.locator("header").getByRole("link", { name: "Trash" }).click();
+	await page
+		.getByRole("navigation", { name: "Collection views" })
+		.getByRole("link", { name: "Trash", exact: true })
+		.click();
+	await expect(
+		page
+			.getByRole("navigation", { name: "Collection views" })
+			.getByRole("button", { name: "Trash", exact: true })
+	).toHaveAttribute("aria-current", "page");
 	await expect(page).toHaveURL(/\/admin\/collections\/posts\/trash(?:\?locale=en)?$/);
 	await expect(page.getByText("Browser lifecycle post", { exact: true })).toBeVisible();
-	const permanentDeleteRowButton = page.getByRole("button", {
-		name: "Delete Browser lifecycle post permanently",
-	});
-	await permanentDeleteRowButton.click();
+	await page.getByRole("checkbox", { name: "Select Browser lifecycle post" }).check();
+	const permanentDeleteButton = page
+		.getByRole("region", { name: "Bulk actions" })
+		.getByRole("button", { name: "Delete", exact: true });
+	await permanentDeleteButton.click();
 	const permanentDeleteDialog = page.getByRole("alertdialog", {
-		name: "Permanently delete this document?",
+		name: "Permanently delete 1 selected document?",
 	});
 	await expect(permanentDeleteDialog).toBeVisible();
 	await page.keyboard.press("Escape");
 	await expect(permanentDeleteDialog).toBeHidden();
-	await expect(permanentDeleteRowButton).toBeFocused();
+	await expect(permanentDeleteButton).toBeFocused();
 	await page.getByRole("checkbox", { name: "Select Browser lifecycle post" }).check();
 	const restoreButton = page.getByRole("button", { name: "Restore", exact: true }).last();
 	await restoreButton.click();
@@ -94,7 +126,9 @@ test("document duplication, trash restoration, and the mobile editor remain comp
 	await expect(restoreButton).toBeFocused();
 	await restoreButton.click();
 	await restoreDialog.getByRole("button", { name: "Restore", exact: true }).click();
-	await expect(page.getByRole("heading", { name: "Trash is empty" })).toBeVisible();
+	await expect(page.getByText("No Posts in trash.", { exact: true })).toBeVisible();
+	await expect(page.getByRole("button", { name: "Empty trash", exact: true })).toBeDisabled();
+	await expect(page.getByRole("navigation", { name: "Pagination" })).toHaveCount(0);
 	await page.goto(directURL);
 	await expect(page.locator('input[name="title"]')).toHaveValue("Browser lifecycle post");
 

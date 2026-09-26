@@ -1,0 +1,144 @@
+@use "../styles" as ui;
+
+@layer ridu.components {
+	.ridu-button {
+		box-sizing: border-box;
+		--button-background: transparent;
+		--button-color: var(--foreground);
+		--button-border: transparent;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		flex-shrink: 0;
+		gap: 8px;
+		block-size: 32px;
+		padding: 4px 12px;
+		border: 1px solid var(--button-border);
+		border-radius: var(--control-radius);
+		background: var(--button-background);
+		color: var(--button-color);
+		font-family: var(--font-sans);
+		font-size: var(--font-size-body);
+		font-weight: 400;
+		line-height: var(--line-height-body);
+		text-decoration: none;
+		white-space: nowrap;
+		cursor: pointer;
+		transition:
+			background-color 100ms,
+			border-color 100ms,
+			color 100ms;
+
+		&:is(:hover, :focus, :active):not(:disabled, [aria-disabled="true"]) {
+			background: var(--button-hover-background, var(--control-surface-hover));
+			color: var(--button-hover-color, var(--button-color));
+			border-color: var(--button-hover-border, var(--button-border));
+		}
+
+		&:focus-visible {
+			@include ui.focus-outline;
+		}
+
+		&:disabled,
+		&[aria-disabled="true"] {
+			pointer-events: none;
+			--button-color: var(--action-disabled-surface);
+			cursor: not-allowed;
+		}
+
+		&[aria-busy="true"] {
+			cursor: wait;
+		}
+
+		&[aria-invalid="true"] {
+			--button-border: var(--destructive);
+			--button-hover-border: var(--destructive);
+		}
+
+		& > svg {
+			flex-shrink: 0;
+			pointer-events: none;
+		}
+	}
+
+	// Consumers set icon geometry with their own semantic classes.
+	:where(.ridu-button > svg) {
+		width: 14px;
+		height: 14px;
+	}
+
+	.ridu-button--primary {
+		--button-background: var(--primary);
+		--button-color: var(--primary-foreground);
+		--button-hover-background: var(--accent-hover);
+		&:disabled,
+		&[aria-disabled="true"] {
+			--button-background: var(--action-disabled-surface);
+			--button-color: var(--action-disabled-foreground);
+		}
+	}
+	.ridu-button--outline,
+	.ridu-button--secondary {
+		--button-border: var(--control-border);
+	}
+	.ridu-button--outline {
+		--button-hover-border: var(--control-border-hover);
+	}
+	.ridu-button--ghost {
+		--button-color: var(--foreground-muted);
+		--button-hover-color: var(--foreground);
+	}
+	.ridu-button:is(
+			.ridu-button--outline,
+			.ridu-button--secondary,
+			.ridu-button--ghost
+		)[aria-expanded="true"] {
+		--button-background: var(--control-surface-hover);
+		--button-color: var(--foreground);
+	}
+	.ridu-button--destructive {
+		--button-background: var(--destructive);
+		--button-color: var(--destructive-foreground);
+		--button-hover-background: var(--destructive-hover);
+	}
+	.ridu-button--link {
+		--button-hover-background: transparent;
+		text-decoration: underline;
+		text-underline-offset: 3px;
+	}
+	.ridu-button--large {
+		block-size: var(--control-height);
+		padding: 8px 16px;
+	}
+	.ridu-button--small {
+		block-size: 30px;
+		padding: 3px 12px;
+		gap: 6px;
+	}
+	.ridu-button--xs {
+		block-size: 24px;
+		padding: 1px 8px;
+		gap: 4px;
+		font-size: 12px;
+	}
+	.ridu-button--icon,
+	.ridu-button--icon-xs,
+	.ridu-button--icon-small,
+	.ridu-button--icon-large {
+		padding: 0;
+		inline-size: 32px;
+		block-size: 32px;
+	}
+	.ridu-button--icon-xs {
+		inline-size: 24px;
+		block-size: 24px;
+	}
+	.ridu-button--icon-small {
+		inline-size: 28px;
+		block-size: 28px;
+	}
+	.ridu-button--icon-large {
+		inline-size: 40px;
+		block-size: 40px;
+	}
+}

@@ -23,6 +23,50 @@ export const adminRoutePatterns = {
 	globalVersion: "/globals/:global/versions/:revision",
 } as const;
 
+export function adminPathSegments(pathname: string): string[] {
+	return pathname
+		.split("/")
+		.filter(Boolean)
+		.map((segment) => {
+			try {
+				return decodeURIComponent(segment);
+			} catch {
+				return segment;
+			}
+		});
+}
+
+export function parseAdminVersionRevision(value: string | undefined): number | undefined {
+	const revision = Number(value);
+	return Number.isSafeInteger(revision) && revision > 0 ? revision : undefined;
+}
+
+export function humanizeAdminPathSegment(value: string, language: string): string {
+	const words = value.replaceAll(/[-_]+/g, " ");
+	return words.charAt(0).toLocaleUpperCase(language) + words.slice(1);
+}
+
+export function adminLayoutRouteBehavior(pathname: string): {
+	ownsViewport: boolean;
+	waitsForPage: boolean;
+} {
+	const segments = adminPathSegments(pathname);
+	const collectionDocument =
+		segments[0] === "collections" &&
+		segments.length > 2 &&
+		segments[2] !== "trash" &&
+		segments[2] !== "upload" &&
+		segments[3] !== "versions";
+	const globalDocument =
+		segments[0] === "globals" && segments.length > 1 && segments[2] !== "versions";
+	const ownsViewport = collectionDocument || globalDocument;
+	const collectionPage =
+		segments[0] === "collections" &&
+		(segments.length === 2 || (segments.length === 3 && segments[2] === "trash"));
+
+	return { ownsViewport, waitsForPage: ownsViewport || collectionPage };
+}
+
 const adminAuthPaths = new Set<string>([
 	adminRoutePatterns.login,
 	adminRoutePatterns.createFirstUser,
@@ -52,7 +96,8 @@ function safeAdminRedirectPath(requestedPath: string | null | undefined): string
 		requestedPath === null ||
 		requestedPath === undefined ||
 		!requestedPath.startsWith("/") ||
-		requestedPath.startsWith("//")
+		requestedPath.startsWith("//") ||
+		requestedPath.includes("\\")
 	) {
 		return adminRoutePatterns.home;
 	}
@@ -92,16 +137,22 @@ export function collectionUploadPath(collection: string): string {
 	return `${collectionPath(collection)}/upload`;
 }
 
+export function withContentLocale(path: string, locale: string | undefined): string {
+	if (locale === undefined) return path;
+	return `${path}?${new URLSearchParams({ locale }).toString()}`;
+}
+
 export function documentPath(collection: string, document: string): string {
 	return `${collectionPath(collection)}/${encodeURIComponent(document)}`;
 }
 
 export function documentIDFromAdminPath(pathname: string): string | undefined {
 	const segments = pathname.split("/");
-	if (segments[1] !== "collections" || segments[3] === undefined || segments[3] === "") {
+	if (segments[1] === undefined || segments[3] === undefined || segments[3] === "") {
 		return undefined;
 	}
 	try {
+		if (decodeURIComponent(segments[1]).toLowerCase() !== "collections") return undefined;
 		return decodeURIComponent(segments[3]);
 	} catch {
 		return undefined;

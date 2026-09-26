@@ -1,0 +1,122 @@
+@use "@riducms/ui/styles.scss" as ui;
+
+@layer ridu.components {
+	.ridu-auth {
+		--auth-width: 480px;
+		--auth-padding-block: 60px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		min-height: 100svh;
+		padding: var(--auth-padding-block) var(--space-base);
+		background: var(--background);
+		color: var(--foreground);
+		font-family: var(--font-sans);
+		font-size: var(--font-size-body);
+		line-height: var(--line-height-body);
+	}
+	.ridu-auth__content {
+		width: 100%;
+		max-width: var(--auth-width);
+		min-width: 0;
+	}
+	.ridu-auth__brand {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 8px;
+		margin-block-end: calc(var(--space-base) * 2);
+	}
+	.ridu-auth__logo {
+		display: inline-flex;
+		color: var(--foreground);
+	}
+	.ridu-auth__logo-mark {
+		height: 40px;
+	}
+	.ridu-auth__heading {
+		margin: 0;
+		font-size: 32px;
+		font-weight: 500;
+		line-height: 36px;
+		letter-spacing: normal;
+	}
+	.ridu-auth__description {
+		margin: 0;
+	}
+	.ridu-auth__header,
+	.ridu-auth__stack,
+	.ridu-auth__form,
+	.ridu-auth__fields {
+		display: grid;
+		gap: var(--space-base);
+		min-width: 0;
+	}
+	.ridu-auth__header {
+		gap: 8px;
+	}
+	.ridu-auth__fields {
+		margin-block-end: 5px;
+	}
+	.ridu-auth__field {
+		display: grid;
+		gap: 5px;
+		min-width: 0;
+	}
+	.ridu-auth__link {
+		width: fit-content;
+		text-decoration: underline;
+
+		&:focus {
+			outline: none;
+			&:not(:focus-visible) {
+				opacity: 0.8;
+			}
+		}
+
+		&:active {
+			opacity: 0.7;
+		}
+	}
+	.ridu-auth__submit {
+		width: 100%;
+		margin-block: 4px 24px;
+	}
+	.ridu-auth__secondary-link {
+		justify-self: center;
+		color: var(--foreground-muted);
+	}
+	.ridu-auth__credentials {
+		display: grid;
+		gap: var(--space-base);
+		border: 0;
+		padding: 0;
+		margin: 0;
+		min-width: 0;
+	}
+	.ridu-auth__fieldset {
+		display: contents;
+	}
+	.ridu-auth__sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+		white-space: nowrap;
+		border: 0;
+	}
+	@media (max-width: ui.$medium) {
+		.ridu-auth {
+			--font-size-body: 12px;
+		}
+	}
+	@media (max-width: ui.$small) {
+		.ridu-auth__heading {
+			font-size: 25px;
+			letter-spacing: -0.5px;
+		}
+	}
+}

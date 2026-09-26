@@ -5,6 +5,7 @@
 	import { RadioCardItem, RadioGroup } from "@admin/components/ui/radio-group";
 	import type { FormController } from "@admin/core/forms/form-controller.svelte";
 	import FieldShell from "@admin/fields/field-shell.svelte";
+	import "@admin/fields/field-layout.scss";
 
 	let { field, form }: { field: SchemaField; form: FormController } = $props();
 	const value = $derived(String(form.get(field.path) ?? ""));
@@ -20,7 +21,7 @@
 <FieldShell {field} {issues}>
 	<RadioGroup
 		id={field.id}
-		class="flex flex-wrap gap-x-7 gap-y-1"
+		class="ridu-field-radio-options"
 		name={field.path}
 		{value}
 		required={field.required && (!field.dynamicDefault || form.get(field.path) !== undefined)}

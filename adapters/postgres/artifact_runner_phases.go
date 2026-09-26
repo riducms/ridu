@@ -742,7 +742,7 @@ func applyBatchPhase(ctx context.Context, connection *sql.Conn, file migrationar
 	}
 }
 
-func scheduledPublishConcurrencyKey(collectionID, documentID string) string {
+func scheduledPublicationConcurrencyKey(collectionID, documentID string) string {
 	key := collectionID + ":" + documentID
 	if len(key) <= store.MaxTaskConcurrencyKeyBytes {
 		return key

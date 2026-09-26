@@ -81,8 +81,8 @@ Ridu adds the following server-owned fields to every upload document:
 | Field                         | Meaning                                                          |
 | ----------------------------- | ---------------------------------------------------------------- |
 | `filename`, `mimeType`        | Sanitized filename and MIME type detected from the file bytes    |
-| `filesize`, `width`, `height` | Original byte size and image dimensions                          |
-| `url`                         | Access-checked delivery path for the original                    |
+| `filesize`, `width`, `height` | Byte size and dimensions of the current primary file             |
+| `url`                         | Access-checked delivery path for the current primary file        |
 | `sizes.card`, `sizes.thumb`   | URL, dimensions, MIME type, and byte size for each image variant |
 | `focalX`, `focalY`            | Image focal point as percentages from `0` through `100`          |
 
@@ -149,7 +149,7 @@ Then create the backend lazily inside `runtimeOptions`. This example uses SQLite
 PostgreSQL or MongoDB `WithStore` block unchanged and add the same highlighted
 `WithUploadStorage` block after it.
 
-```go title="cmd/server/main.go" add={6-12}
+```go title="cmd/server/main.go" add={8-16}
 func runtimeOptions(
 	applicationConfig ridu.Config,
 ) []ridu.ExecuteOption {
@@ -166,7 +166,7 @@ func runtimeOptions(
 			}
 			return localstorage.New(root)
 		}),
-		ridu.WithAddress(env("RIDU_ADDRESS", ":8080")),
+		ridu.WithAddress(serverAddress()),
 		ridu.WithHandlerOptions(ridu.HandlerOptions{
 			AdminAssets: adminassets.FS(),
 			// Keep the remaining generated handler options here.
@@ -221,23 +221,10 @@ an image, or `field.Uploads` when the field should be a gallery. Read the focuse
 
 Run the project-local development loop from the project root. `ridu dev` resolves the updated Go
 config, regenerates contracts, applies the safe additive development schema change, and starts the
-API and admin. These four tabs are the same command; use the package manager selected when the
-project was created.
+API and admin.
 
-```bash title="terminal" package-manager="npm"
-npm run dev
-```
-
-```bash title="terminal" package-manager="bun"
-bun run dev
-```
-
-```bash title="terminal" package-manager="pnpm"
-pnpm run dev
-```
-
-```bash title="terminal" package-manager="yarn"
-yarn run dev
+```bash title="terminal"
+ridu dev
 ```
 
 The server should pass upload-storage readiness and print the admin URL. If it reports
@@ -247,16 +234,32 @@ directory cannot be created.
 ## 6. Upload and reuse an image in the admin {#admin-workflow}
 
 Open `/admin`, sign in, and choose **Media** under **Content**. Select **Create new**, choose an image,
-enter its alt text, and save. Ridu uploads the original, detects its metadata, generates both image
-sizes, and creates the media document.
+enter its alt text, and save. You can also drop a file into the empty file area or paste a public
+image URL. Selecting a local file and pasting a URL both prepare a draft; **Save** creates the media
+document. Ridu uploads the original, detects its metadata, generates both image sizes, and creates
+the media document.
 
 Now open a post. The new **Hero image** field opens a media picker containing the document you just
 created. Selecting it stores that media document's ID on the post; it does not copy the file.
 
-![A Ridu Media document editor showing the asset preview, detected file metadata, authored alt text, image variants, and document actions.](https://raw.githubusercontent.com/riducms/ridu/main/docs/assets/ridu-admin-upload.png)
+![A Ridu Media document editor showing the image preview, file metadata, Edit Image action, alt text, and caption.](https://raw.githubusercontent.com/riducms/ridu/main/docs/assets/ridu-admin-upload.png)
 
-_The preview, generated sizes, and authored fields belong to one media document. The original and
-variant bytes remain in the configured storage backend._
+_The preview, generated sizes, and authored fields belong to one media document. The private source,
+current primary file, and variant bytes remain in the configured storage backend._
+
+## Add several assets {#bulk-upload}
+
+Choose **Bulk upload** from an upload collection's list. Select or drop several files, then use the
+file list and **Previous**/**Next** controls to review each asset's metadata and image settings.
+Ridu proposes alt text from a filename when the collection has an `alt` field; check the wording
+before saving. **Edit all** applies selected, writable scalar fields such as a shared caption to
+the unsaved files in the queue. It does not overwrite every field or edit assets already saved.
+
+Choose **Save** to create the queued assets. Each file is its own create operation: one validation
+failure does not roll back files that completed. Correct a failed file and choose **Retry** for it.
+If the outcome is marked unknown after a network or server failure, inspect the collection before
+trying again so you do not create a duplicate. The workspace also offers a separate public-URL
+import. Leaving with unfinished files asks whether to discard the queue.
 
 ## Upload from application code {#sdk-upload}
 
@@ -280,7 +283,7 @@ export async function uploadHero(file: File, alt: string) {
 
 	return {
 		id: asset.id,
-		originalURL: new URL(asset.url, baseURL).toString(),
+		primaryURL: new URL(asset.url, baseURL).toString(),
 		cardURL: new URL(asset.sizes.card.url, baseURL).toString(),
 		width: asset.width,
 		height: asset.height
@@ -365,11 +368,22 @@ responses, and content that fails the collection's MIME rules. This is a guarded
 not a general server-side proxy. Application-specific host allowlists, moderation, malware
 scanning, and quarantine need a trusted pre-ingestion service or plugin.
 
-## Change the focal point and regenerate sizes {#images}
+## Crop an image and regenerate sizes {#images}
 
-Image uploads start at `{ focalX: 50, focalY: 50 }`, the center of the original. Authors can adjust
-the focal point in the media editor. Application code can do the same and regenerate every named
-size:
+Image uploads start at `{ focalX: 50, focalY: 50 }`, the center of the original. In the media
+editor, choose **Edit Image** to move or resize a crop and adjust the focal point. **Reset** clears
+the crop or recenters the focal point in its respective section. **Cancel** discards changes made in
+that drawer; **Apply Changes** stages them on the document. Choose the document's **Save** action to
+commit the edit and regenerate its named sizes. **Preview Sizes** shows the saved primary file and
+generated variants.
+
+Ridu retains an uncropped, private source image. Reopening **Edit Image** starts from that source,
+so resetting and saving a crop can restore the full image without repeated cropping of the previous
+rendition. This editing flow is available for JPEG and PNG files. Other allowed file types still
+support upload and delivery.
+
+Application code can submit an image edit with other authored metadata in one revision-checked
+upload update:
 
 ```ts title="src/lib/update-crop.ts"
 import { createClient } from '../../generated/ridu.generated';
@@ -380,18 +394,29 @@ export async function keepSubjectInFrame(
 	assetID: string,
 	revision: number
 ) {
-	return ridu.updateUploadImage(
+	return ridu.updateUpload(
 		'media',
 		assetID,
-		{ focalX: 40, focalY: 35 },
+		{
+			data: { caption: 'Ready for the homepage' },
+			image: {
+				focalX: 40,
+				focalY: 35,
+				cropX: 0,
+				cropY: 0,
+				cropWidth: 0,
+				cropHeight: 0
+			}
+		},
 		{ revision }
 	);
 }
 ```
 
 Coordinates are percentages from `0` through `100`, not decimal fractions or source pixels. Pass
-the current `_revision` so an older editor cannot overwrite a newer crop. Optional `cropX`, `cropY`,
-`cropWidth`, and `cropHeight` values use the same percentage coordinate system.
+the current `_revision` so an older editor cannot overwrite a newer crop. A zero crop width and
+height clear the crop. For a selected crop, `cropX`, `cropY`, `cropWidth`, and `cropHeight` use the
+same percentage coordinate system. The admin's width and height controls display source pixels.
 
 ## Deliver files safely {#delivery}
 
@@ -433,7 +458,7 @@ ridu.WithUploadStorage(func(
 		SpoolDirectory: "/var/tmp/ridu-spool",
 	})
 }),
-ridu.WithAddress(env("RIDU_ADDRESS", ":8080")),
+ridu.WithAddress(serverAddress()),
 ```
 
 Use HTTPS for production endpoints. Size the private spool directory for concurrent uploads and

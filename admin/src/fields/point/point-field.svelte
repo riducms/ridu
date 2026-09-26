@@ -1,17 +1,18 @@
 <script lang="ts">
+	import "@admin/fields/field-layout.scss";
 	import type { SchemaField } from "@riducms/protocol";
-	import { fieldControlARIA } from "@riducms/ui";
+	import { fieldControlARIA, Input } from "@riducms/ui";
 
-	import { Input } from "@admin/components/ui/input";
 	import type { FormController } from "@admin/core/forms/form-controller.svelte";
 	import { getAdminRuntime } from "@admin/core/runtime/admin-runtime.svelte";
-	import FieldShell from "@admin/fields/field-shell.svelte";
+	import FieldMessages from "@admin/fields/field-messages.svelte";
 
 	let { field, form }: { field: SchemaField; form: FormController } = $props();
 	const runtime = getAdminRuntime();
-	const value = $derived(
-		Array.isArray(form.get(field.path)) ? (form.get(field.path) as number[]) : []
-	);
+	const value = $derived.by(() => {
+		const current = form.get(field.path);
+		return Array.isArray(current) ? (current as number[]) : [];
+	});
 	const issues = $derived(form.issuesFor(field.path));
 	const editingBlocked = $derived(field.admin.readOnly === true || form.editingBlocked);
 	const controlARIA = $derived(
@@ -28,35 +29,47 @@
 	}
 </script>
 
-<FieldShell {field} {issues}>
-	<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-		<label class="grid gap-1.5 text-[12px] text-foreground-muted">
-			{runtime.i18n.t("fields:longitude")}
-			<Input
-				id={field.id}
-				type="number"
-				min="-180"
-				max="180"
-				step="any"
-				value={value[0] ?? ""}
-				readonly={editingBlocked}
-				{...controlARIA}
-				oninput={(event) => setCoordinate(0, event.currentTarget.valueAsNumber)}
-			/>
-		</label>
-		<label class="grid gap-1.5 text-[12px] text-foreground-muted">
-			{runtime.i18n.t("fields:latitude")}
-			<Input
-				id={`${field.id}-latitude`}
-				type="number"
-				min="-90"
-				max="90"
-				step="any"
-				value={value[1] ?? ""}
-				readonly={editingBlocked}
-				{...controlARIA}
-				oninput={(event) => setCoordinate(1, event.currentTarget.valueAsNumber)}
-			/>
-		</label>
-	</div>
-</FieldShell>
+<div data-field-path={field.path}>
+	<FieldMessages controlID={field.id} {issues} description={field.admin.description}>
+		<div class="ridu-point-field">
+			<label class="ridu-point-field__coordinate">
+				<span>
+					{field.admin.label} - {runtime.i18n.t("fields:longitude")}
+					{#if field.required}
+						<span class="ridu-field-required" aria-hidden="true">*</span>
+					{/if}
+				</span>
+				<Input
+					id={field.id}
+					type="number"
+					min="-180"
+					max="180"
+					step="any"
+					value={value[0] ?? ""}
+					readonly={editingBlocked}
+					{...controlARIA}
+					oninput={(event) => setCoordinate(0, event.currentTarget.valueAsNumber)}
+				/>
+			</label>
+			<label class="ridu-point-field__coordinate">
+				<span>
+					{field.admin.label} - {runtime.i18n.t("fields:latitude")}
+					{#if field.required}
+						<span class="ridu-field-required" aria-hidden="true">*</span>
+					{/if}
+				</span>
+				<Input
+					id={`${field.id}-latitude`}
+					type="number"
+					min="-90"
+					max="90"
+					step="any"
+					value={value[1] ?? ""}
+					readonly={editingBlocked}
+					{...controlARIA}
+					oninput={(event) => setCoordinate(1, event.currentTarget.valueAsNumber)}
+				/>
+			</label>
+		</div>
+	</FieldMessages>
+</div>

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { isRecord } from "@riducms/protocol";
 	import { getAdminI18n, type EmbeddedSchemaDraft, type FieldAuthoringHost } from "@riducms/plugin";
 	import type { SchemaField } from "@riducms/protocol";
 	import { useLexicalComposerContext } from "@hvniel/lexical-svelte";
@@ -9,7 +10,6 @@
 		$insertGeneratedNodes,
 	} from "@lexical/clipboard";
 	import { copyBlockClipboardNodes } from "@plugin-richtext/block/rich-text-block-clipboard";
-	import { isRecord } from "@plugin-richtext/field/rich-text-blocks";
 	import { $insertNodeToNearestRoot, mergeRegister } from "@lexical/utils";
 	import {
 		$addUpdateTag,
@@ -46,6 +46,7 @@
 		MOVE_BLOCK_COMMAND,
 		UPDATE_BLOCK_NAME_COMMAND,
 	} from "@plugin-richtext/menu/rich-text-commands";
+	import "@plugin-richtext/block/rich-text-block-card.scss";
 
 	let { authoring, field }: { authoring: FieldAuthoringHost | undefined; field: SchemaField } =
 		$props();
@@ -319,7 +320,9 @@
 	});
 </script>
 
-{#if message !== ""}<p role="alert" class="text-sm text-destructive">{message}</p>{/if}
+{#if message !== ""}
+	<p role="alert" class="ridu-richtext-block-message">{message}</p>
+{/if}
 {#if session !== undefined && authoring?.schemaDraftEditor !== undefined}
 	{@render authoring.schemaDraftEditor({
 		draft: session.draft,

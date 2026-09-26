@@ -205,6 +205,12 @@ Version history is not a raw database escape hatch:
 This means changing a field-access rule can hide a value in old snapshots without rewriting stored
 history. It also means an ownership predicate can expose different revisions to old and new owners.
 
+In the admin, open a saved document or global and choose **Versions** to browse its history. Select
+a revision to compare it with the previous revision, the latest published revision, or another
+revision from **More versions**. The comparison shows changed fields by default; you can show all
+fields and choose which content locales to compare. If a relationship target can no longer be read,
+its ID remains visible. The comparison follows the current read permissions described above.
+
 ## Restore without rewriting history {#restore}
 
 A restore does not move a pointer backward or delete later revisions. Ridu loads the authorized
@@ -233,37 +239,57 @@ For localized resources, the snapshot is restored as a canonical all-locale valu
 locale cannot accidentally splice old data over another. The response can still be projected to
 the requested locale.
 
-## Schedule collection publishing {#scheduling}
+## Schedule collection publication {#scheduling}
 
-Scheduled publishing is durable for versioned collection documents:
+Scheduled publication changes are durable for versioned collection documents:
 
 ```go
 job, err := app.SchedulePublish(
 	ctx,
 	"posts",
 	post.ID,
-	time.Date(2026, 9, 1, 9, 0, 0, 0, time.UTC),
-	post.Revision,
+	time.Date(2027, 9, 1, 9, 0, 0, 0, time.UTC),
+	ridu.PublicationScheduleOptions{ExpectedRevision: post.Revision, TimeZone: "Europe/London"},
 	identity,
 )
 ```
 
-Scheduling requires publish capability immediately. If the expected revision is zero, Ridu
-captures the current revision so a later edit makes the job stale rather than publishing
-unexpected content. The requesting auth collection and user ID are persisted, not a stale copy of
-the user document.
+For a saved collection document, use **Schedule** to choose Publish or Unpublish and a future time.
+Save unsaved edits first: the drawer will not schedule while the form is dirty. Unpublish is offered
+only for a currently published draft-capable document. The drawer lists upcoming and failed events,
+which an authorized editor can cancel or dismiss.
 
-At execution, the worker reloads that exact user, re-evaluates current publish access, and applies
-the stored revision fence through the normal publish operation. A deleted user, changed role,
-removed collection, stale revision, or failed hook leaves an actionable failed scheduled task
-rather than silently publishing. `ScheduledPublishes` lists queued/running/failed items;
-`CancelScheduledPublish` cancels or dismisses one after rechecking publish permission.
+The schedule drawer offers searchable choices from `Admin.Localization.TimeZones`. Each choice and
+saved event shows its UTC offset at the selected date, configured label, and localized timezone name.
+Changing the timezone preserves the scheduled instant and changes the displayed wall time. The
+drawer starts with the configured default; clearing the choice uses the browser timezone. Each event
+retains its chosen timezone without changing the account preference. The drawer rejects a wall time
+that repeats when daylight saving ends rather than guessing which occurrence was intended.
+
+The Go and SDK schedule methods take an absolute instant. `TimeZone` or `timeZone` only preserves a
+display timezone; it does not change `runAt`. Valid values are `UTC`, a `±HH:mm` offset, or an IANA
+region such as `Europe/London`. Omit the timezone when no display choice needs to be saved. The SDK
+accepts `{ revision, timeZone }` in `schedulePublish` and `scheduleUnpublish`; REST accepts optional
+`timeZone` alongside the required `action` and `runAt` fields.
+
+Scheduled publish requires publish capability; scheduled unpublish requires unpublish capability
+and a currently published document. If the expected revision is zero, Ridu captures the current
+revision so a later edit makes the job stale rather than publishing unexpected content. The
+requesting auth collection and user ID are persisted, not a stale copy of the user document.
+
+At execution, the worker reloads that exact user, re-evaluates the selected action's access, and
+applies the stored revision fence through the normal publish or unpublish operation. A deleted user,
+changed role, removed collection, stale revision, or failed hook leaves an actionable failed
+scheduled task rather than silently changing publication. `ScheduledPublications` lists queued and
+failed items; running work is already executing and is not presented as cancelable.
+`CancelScheduledPublication` cancels or dismisses a listed item after rechecking the selected
+action's permission.
 
 `ridu.Execute` runs the durable task worker. `HandlerOptions.TaskInterval` and `TaskBatch` tune its
-polling. Directly embedded applications can call `RunScheduledPublishes` from their own worker
+polling. Directly embedded applications can call `RunScheduledPublications` from their own worker
 boundary.
 
-Scheduled publishing currently targets collection documents only. Globals support immediate
+Scheduled publication changes currently target collection documents only. Globals support immediate
 publish/unpublish and version restore, but not scheduled global publishing.
 
 ## Versioned globals {#globals}

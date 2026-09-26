@@ -39,6 +39,9 @@ func (transaction *documentTransaction) Create(ctx context.Context, request stor
 	}
 	status := request.Status
 	revision := 0
+	if request.Collection.Upload != nil {
+		revision = 1
+	}
 	if request.Collection.Versions == nil {
 		if status != "" {
 			return store.Document{}, fmt.Errorf("MongoDB document status requires a versioned collection")
@@ -357,7 +360,7 @@ func (transaction *documentTransaction) Update(ctx context.Context, request stor
 		}
 		assignments = append(assignments, valueAssignments...)
 	}
-	if request.Collection.Versions != nil {
+	if request.Collection.Versions != nil || request.Collection.Upload != nil {
 		assignments = append(assignments, bson.E{Key: mongoRevisionPath, Value: bson.D{{Key: "$add", Value: bson.A{"$" + mongoRevisionPath, int64(1)}}}})
 	}
 	update := mongo.Pipeline{bson.D{{Key: "$set", Value: assignments}}}

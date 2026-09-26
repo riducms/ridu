@@ -65,7 +65,48 @@ const measurements = {
 // Optional block-name headers, guarded embedded callbacks and shared occurrence indexes measure
 // 308,900 bytes (+1,848). Allow 2 KiB for these controls; nested editors remain lazy and this adds
 // no runtime dependencies. Preserve the CSS and async caps.
-const budgets = { initialJS: 302 * 1024, initialCSS: 20 * 1024, largestAsyncJS: 150 * 1024 };
+// Router 0.1 and Svelte 5.57, including native route errors and primary-viewport scroll
+// restoration, measure 312,009 bytes. Allow 3 KiB for this dependency/API migration
+// and its admin integration; keep the CSS and async caps unchanged.
+// Request/session ownership, schema-access refresh and resource disposal measure 312,735 bytes
+// (+600 over the preceding admin build). Allow 1 KiB for these reproduced lifetime fixes;
+// keep CSS/async caps unchanged and add no runtime dependency or generic request framework.
+// Atomic collection-page capabilities, independent status-count lifetimes and populated list
+// labels measure 313,749 bytes. Allow 1 KiB for the new SDK decoder and controller behavior;
+// the formatter removes browser fan-out and adds no runtime dependency.
+// Atomic route snapshots, exact seed brokering, startup gating and retained-navigation progress
+// measure 321,119 bytes. Allow 8 KiB for this route-wide contract; route-specific editors remain
+// async and production still adds no JavaScript server runtime.
+// Auth SCSS, public control styles and explicit cascade layers measure about 21,107 gzip bytes of CSS
+// during the UnoCSS migration. Allow 1 KiB beyond the former 20 KiB cap. System typography
+// removes the bundled font files; the JS/async budgets remain unchanged.
+// The sidebar/dashboard migration measures 22,551 CSS bytes (+1,444 over the auth baseline).
+// Semantic shell styles replace its utilities and legacy sidebar tokens; unmigrated families
+// still share the UnoCSS sheet. Allow 2 KiB for this slice; keep both JavaScript caps unchanged.
+// The list, Select and Checkbox SCSS migration measures 24,207 CSS bytes (+1,656), while
+// initial JS falls to 316,573 bytes. Allow 1 KiB more CSS; no dependency or JS-cap increase.
+// Reference drawer/join presentation and shared list controls measure 24,851 initial
+// CSS bytes. Allow 0.5 KiB beyond the list baseline; drawer-only CSS remains lazy,
+// and neither JavaScript budget changes.
+// Document field controls, retained editor lifetimes and semantic popup/tab styles measure
+// 324,329 initial JS bytes and 25,764 initial CSS bytes. Allow 2 KiB JS and 1 KiB CSS for
+// this document-editor slice. CodeMirror and syntax support remain interaction-loaded;
+// the largest async chunk is 92,196 bytes, within the unchanged 150 KiB cap.
+// Isolating relationship surfaces from dnd-kit's popover reset measures 324,615 JS bytes
+// (+18 over the preceding build). Allow 0.25 KiB for the drag container; CSS and async caps stay fixed.
+// Collection API reference adds the drawer shell and translated documentation strings.
+// Measured initial JS is 329,366 bytes and CSS 26,392; allow 5 KiB JS and 0.5 KiB CSS.
+// Schema projection, examples and the reference body load only on interaction; no new dependency.
+// Version history/comparison now loads in its own prepared route group. Initial JS falls to
+// 328,202 bytes; shared table/control CSS chunking measures 26,723 bytes. Allow 0.25 KiB CSS
+// beyond the previous cap; keep JavaScript budgets unchanged and the comparison styles lazy.
+// Completing shared controls and built-in fields in semantic SCSS measures 27,884 initial CSS
+// bytes. Allow 1 KiB for the component-owned rules; calendar styles remain interaction-loaded.
+// Removing tailwind-variants reduces initial JS to 313,266 bytes. Keep both JS caps unchanged.
+// Bulk workflows move both editors behind lazy boundaries, reducing initial JS to 312,082 bytes.
+// The collection loading/error shell and changed shared CSS chunk boundaries measure 28,441
+// initial CSS bytes (+557). Allow 0.75 KiB; workspace/picker CSS remains lazy and JS caps stay fixed.
+const budgets = { initialJS: 322.25 * 1024, initialCSS: 28 * 1024, largestAsyncJS: 150 * 1024 };
 const exceeded = Object.entries(budgets).filter(
 	([name, budget]) => measurements[name as keyof typeof measurements] > budget
 );

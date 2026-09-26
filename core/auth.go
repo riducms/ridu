@@ -30,6 +30,10 @@ type AuthSession struct {
 	User store.Document
 	// ExpiresAt is the absolute UTC expiry time.
 	ExpiresAt time.Time
+	// record is retained only inside the running application so request-scoped
+	// consumers can reuse the exact authenticated session without resolving its
+	// bearer token or owner document again.
+	record store.AuthSession
 }
 
 // AuthIdentity identifies one authenticated document without relying on a
@@ -381,28 +385,30 @@ func (application *App) RotateSession(ctx context.Context, token string) (AuthSe
 		_ = application.auth.DeleteSession(ctx, replacement.TokenHash)
 		return AuthSession{}, err
 	}
-	return AuthSession{ID: current.ID, Token: rotated, Collection: collection.Slug, User: user, ExpiresAt: current.ExpiresAt}, nil
+	return AuthSession{ID: current.ID, Token: rotated, Collection: collection.Slug, User: user, ExpiresAt: current.ExpiresAt, record: replacement}, nil
 }
 
 // Sessions lists every unexpired session owned by the current identity.
 func (application *App) Sessions(ctx context.Context, token string) ([]AuthSessionInfo, error) {
 	now := time.Now().UTC()
-	current, err := application.auth.FindSession(ctx, tokenDigest(token), now)
+	current, err := application.resolveSession(ctx, token, now)
 	if err != nil {
 		return nil, authenticationRequired()
 	}
-	collection, exists := application.authByID[current.CollectionID]
+	return application.sessionsForResolvedSession(ctx, current, now)
+}
+
+func (application *App) sessionsForResolvedSession(ctx context.Context, current AuthSession, now time.Time) ([]AuthSessionInfo, error) {
+	// Reusing the resolved record avoids duplicate credential and owner reads;
+	// the authored session access rule is still evaluated for this operation.
+	collection, exists := application.authByID[current.record.CollectionID]
 	if !exists {
 		return nil, authenticationRequired()
 	}
-	user, err := application.authUser(ctx, collection, current.UserID)
-	if err != nil {
-		return nil, authenticationRequired()
-	}
-	if err := application.authorizeAuth(application.authConfigBySlug[string(collection.Slug)].Access.Session, application.newAuthContext(ctx, AuthOperationRefresh, collection, &user, "", LoginOptions{IPAddress: current.IPAddress, UserAgent: current.UserAgent})); err != nil {
+	if err := application.authorizeAuth(application.authConfigBySlug[string(collection.Slug)].Access.Session, application.newAuthContext(ctx, AuthOperationRefresh, collection, &current.User, "", LoginOptions{IPAddress: current.record.IPAddress, UserAgent: current.record.UserAgent})); err != nil {
 		return nil, err
 	}
-	records, err := application.auth.ListSessions(ctx, current.CollectionID, current.UserID, now)
+	records, err := application.auth.ListSessions(ctx, current.record.CollectionID, current.record.UserID, now)
 	if err != nil {
 		return nil, err
 	}
@@ -411,7 +417,7 @@ func (application *App) Sessions(ctx context.Context, token string) ([]AuthSessi
 		result[index] = AuthSessionInfo{
 			ID: record.ID, CreatedAt: record.CreatedAt, LastSeenAt: record.LastSeenAt,
 			ExpiresAt: record.ExpiresAt, IPAddress: record.IPAddress,
-			UserAgent: record.UserAgent, Current: record.ID == current.ID,
+			UserAgent: record.UserAgent, Current: record.ID == current.record.ID,
 		}
 	}
 	return result, nil
@@ -608,19 +614,21 @@ func (application *App) CreateAPIKey(ctx context.Context, sessionToken, name str
 // APIKeys lists safe metadata for the current identity's active API keys.
 func (application *App) APIKeys(ctx context.Context, sessionToken string) ([]APIKeyInfo, error) {
 	now := time.Now().UTC()
-	current, err := application.auth.FindSession(ctx, tokenDigest(sessionToken), now)
+	current, err := application.resolveSession(ctx, sessionToken, now)
 	if err != nil {
 		return nil, authenticationRequired()
 	}
-	collection, exists := application.authByID[current.CollectionID]
+	return application.apiKeysForResolvedSession(ctx, current, now)
+}
+
+func (application *App) apiKeysForResolvedSession(ctx context.Context, current AuthSession, now time.Time) ([]APIKeyInfo, error) {
+	// The prepared security page shares authentication work only. API-key access
+	// and before/after hooks retain the ordinary APIKeys lifecycle below.
+	collection, exists := application.authByID[current.record.CollectionID]
 	if !exists || !collection.Auth.APIKeys {
 		return nil, authFeatureDisabled("API keys")
 	}
-	user, err := application.authUser(ctx, collection, current.UserID)
-	if err != nil {
-		return nil, authenticationRequired()
-	}
-	authContext := application.newAuthContext(ctx, AuthOperationAPIKey, collection, &user, "", LoginOptions{})
+	authContext := application.newAuthContext(ctx, AuthOperationAPIKey, collection, &current.User, "", LoginOptions{})
 	config := application.authConfigBySlug[string(collection.Slug)]
 	if err := application.authorizeAuth(config.Access.APIKey, authContext); err != nil {
 		return nil, err
@@ -628,7 +636,7 @@ func (application *App) APIKeys(ctx context.Context, sessionToken string) ([]API
 	if err := application.runAuthHooks(config.Hooks.BeforeAPIKey, authContext); err != nil {
 		return nil, err
 	}
-	records, err := application.auth.ListAPIKeys(ctx, current.CollectionID, current.UserID, now)
+	records, err := application.auth.ListAPIKeys(ctx, current.record.CollectionID, current.record.UserID, now)
 	if err != nil {
 		return nil, err
 	}
@@ -985,7 +993,7 @@ func (application *App) createSession(ctx context.Context, collection schema.Col
 	if err := application.auth.CreateSession(ctx, record, expectedPasswordHash); err != nil {
 		return AuthSession{}, err
 	}
-	return AuthSession{ID: id, Token: token, Collection: collection.Slug, User: user, ExpiresAt: expiresAt}, nil
+	return AuthSession{ID: id, Token: token, Collection: collection.Slug, User: user, ExpiresAt: expiresAt, record: record}, nil
 }
 
 func (application *App) resolveSession(ctx context.Context, token string, now time.Time) (AuthSession, error) {
@@ -1010,7 +1018,7 @@ func (application *App) resolveSession(ctx context.Context, token string, now ti
 		}
 		return AuthSession{}, authenticationRequired()
 	}
-	return AuthSession{ID: record.ID, Token: token, Collection: collection.Slug, User: user, ExpiresAt: record.ExpiresAt}, nil
+	return AuthSession{ID: record.ID, Token: token, Collection: collection.Slug, User: user, ExpiresAt: record.ExpiresAt, record: record}, nil
 }
 
 // authOwnerPhysicallyMissing confirms absence inside the exact auth collection
@@ -1098,15 +1106,21 @@ func (application *App) resolveOptionalAuthIdentity(ctx context.Context, identit
 func (application *App) validatePassword(collection, password string) error {
 	resolved := application.authBySlug[collection]
 	settings := resolved.Auth
+	var message string
+	var cause error
 	if utf8.RuneCountInString(password) < settings.PasswordMinLength {
-		return &operationengine.Error{Code: "validation", Status: 422, Message: fmt.Sprintf("password must contain at least %d characters", settings.PasswordMinLength)}
+		message = fmt.Sprintf("password must contain at least %d characters", settings.PasswordMinLength)
+	} else if len([]byte(password)) > settings.PasswordMaxBytes {
+		message = fmt.Sprintf("password must not exceed %d bytes", settings.PasswordMaxBytes)
+	} else if validate := application.authConfigBySlug[collection].Password.Validate; validate != nil {
+		if cause = validate(password); cause != nil {
+			message = cause.Error()
+		}
 	}
-	if len([]byte(password)) > settings.PasswordMaxBytes {
-		return &operationengine.Error{Code: "validation", Status: 422, Message: fmt.Sprintf("password must not exceed %d bytes", settings.PasswordMaxBytes)}
-	}
-	if validate := application.authConfigBySlug[collection].Password.Validate; validate != nil {
-		if err := validate(password); err != nil {
-			return &operationengine.Error{Code: "validation", Status: 422, Message: err.Error(), Cause: err}
+	if message != "" || cause != nil {
+		return &operationengine.Error{
+			Code: "validation", Status: 422, Message: message, Cause: cause,
+			Issues: []schema.Issue{{Code: "password_policy", Path: "password", Message: message}},
 		}
 	}
 	return nil

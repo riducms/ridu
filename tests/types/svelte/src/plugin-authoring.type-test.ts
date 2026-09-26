@@ -113,7 +113,7 @@ definePluginField({ component: distinct, decodeValue: (_raw: unknown) => ({ id: 
 defineAdminPlugin({ key: "wrong-kind", pairingVersion: 1, fields: { text: defineFieldComponent({ type: "text", component: text, decodeValue: (_raw: unknown): string => "x", }), }, });
 // @ts-expect-error plugin-owned field types cannot be named builtin replacements
 // prettier-ignore
-defineAdminPlugin({ key: "wrong-kind", pairingVersion: 1, components: { outline: valid } });
+defineAdminPlugin({ key: "wrong-kind", pairingVersion: 1, fieldEditors: { outline: valid } });
 
 declare const distinctProps: PluginFieldProps<
 	{ id: string; label: string },
@@ -134,10 +134,10 @@ const named = defineFieldComponent({
 	decodeConfig: config,
 });
 const target: "outline" = named.fieldType;
-defineAdminPlugin({ key: "outline-tools", pairingVersion: 1, components: { Outline: named } });
-// @ts-expect-error named plugin renderers require an exact field type
+defineAdminPlugin({ key: "outline-tools", pairingVersion: 1, fieldEditors: { Outline: named } });
+// @ts-expect-error named plugin field editors require an exact field type
 // prettier-ignore
 defineFieldComponent({type:"plugin",component:Configured,decodeValue:decode,decodeConfig:config});
-// @ts-expect-error named renderer cannot be registered as a default field type
+// @ts-expect-error named field editor cannot be registered as a default field type
 // prettier-ignore
 defineAdminPlugin({key:"outline-tools",pairingVersion:1,fields:{outline:named}});

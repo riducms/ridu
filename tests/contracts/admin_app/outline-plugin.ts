@@ -8,7 +8,7 @@ import { decodeOutline } from "./outline-value";
 export const outlineAdminPlugin = defineAdminPlugin({
 	key: "outline",
 	pairingVersion: 1,
-	components: {
+	fieldEditors: {
 		Outline: defineFieldComponent({
 			type: "plugin",
 			fieldType: "outline",

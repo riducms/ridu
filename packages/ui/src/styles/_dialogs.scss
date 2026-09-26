@@ -1,0 +1,21 @@
+// Shared confirmation anatomy used by the admin and public confirmation primitive.
+@mixin confirmation-overlay {
+	background: var(--media-overlay);
+	backdrop-filter: blur(10px);
+}
+@mixin confirmation-content {
+	width: min(640px, calc(100vw - 40px));
+	max-width: none;
+	border: 0;
+	border-radius: 0;
+	padding: 0;
+	background: transparent;
+	color: var(--foreground);
+	box-shadow: none;
+}
+@mixin confirmation-title {
+	font-size: 32px;
+	font-weight: 500;
+	line-height: 1.2;
+	letter-spacing: -0.5px;
+}

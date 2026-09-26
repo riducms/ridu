@@ -1,0 +1,38 @@
+@use "@riducms/ui/layers.css";
+
+@layer ridu.components {
+	.ridu-collapsible-panel:not([hidden]) {
+		// Contain the panel's top margin in the measured height.
+		display: flow-root;
+		animation: ridu-collapsible-panel-open 300ms ease;
+
+		&[data-state="closed"] {
+			animation-name: ridu-collapsible-panel-close;
+		}
+	}
+	@keyframes ridu-collapsible-panel-open {
+		from {
+			height: 0;
+			overflow: hidden;
+		}
+		to {
+			height: var(--bits-collapsible-content-height);
+			overflow: hidden;
+		}
+	}
+	@keyframes ridu-collapsible-panel-close {
+		from {
+			height: var(--bits-collapsible-content-height);
+			overflow: hidden;
+		}
+		to {
+			height: 0;
+			overflow: hidden;
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.ridu-collapsible-panel:not([hidden]) {
+			animation: none;
+		}
+	}
+}

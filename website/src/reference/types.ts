@@ -27,7 +27,6 @@ export interface ReferenceSource {
 	/** Repository-relative source path. Absolute build-machine paths are forbidden. */
 	path: string;
 	line: number;
-	url: string;
 }
 
 export interface ReferenceSymbol {

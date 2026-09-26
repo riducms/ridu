@@ -159,12 +159,13 @@ describe('documentation examples', () => {
 		for (const page of pages) {
 			const source = readFileSync(page.path, 'utf8');
 			const fences = [
-				...source.matchAll(/```(svelte|ts|go) title="([^"]+)"[^\n]*\n([\s\S]*?)\n```/g)
+				...source.matchAll(/```(svelte|ts|go) title="([^"]+)"([^\n]*)\n([\s\S]*?)\n```/g)
 			];
 			expect(fences.length, `${page.name}: no source-backed examples found`).toBeGreaterThan(0);
-			for (const [, , title, code] of fences) {
+			for (const [, , title, metadata, code] of fences) {
 				const file =
-					title === 'admin/src/admin.config.ts' ? `admin/src/${page.name}.config.ts` : title;
+					metadata?.match(/source="([^"]+)"/)?.[1] ??
+					(title === 'admin/src/admin.config.ts' ? `admin/src/${page.name}.config.ts` : title);
 				const fixture = readFileSync(
 					resolve(repositoryRoot, 'examples/documentation/custom-components', file),
 					'utf8'

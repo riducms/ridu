@@ -168,6 +168,8 @@
 }
 
 .docs-prose .doc-option-list dt > code {
+	display: inline-block;
+	max-width: 100%;
 	padding: 0;
 	border: 0;
 	background: transparent;

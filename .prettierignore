@@ -13,3 +13,4 @@ tests/contracts/payload_server/node_modules/
 packages/protocol/src/generated.ts
 tests/contracts/unifiedfields/generated/ridu.generated.ts
 tests/contracts/primitivelists/generated/ridu.generated.ts
+tests/contracts/admin_app/loaders.generated.ts

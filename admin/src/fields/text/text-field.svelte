@@ -1,8 +1,7 @@
 <script lang="ts">
 	import type { SchemaField } from "@riducms/protocol";
-	import { fieldControlARIA } from "@riducms/ui";
+	import { fieldControlARIA, Input } from "@riducms/ui";
 
-	import { Input } from "@admin/components/ui/input";
 	import type { FormController } from "@admin/core/forms/form-controller.svelte";
 	import FieldShell from "@admin/fields/field-shell.svelte";
 	import SlugField from "@admin/fields/text/slug-field.svelte";

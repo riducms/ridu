@@ -7,14 +7,17 @@ require (
 	charm.land/huh/v2 v2.0.3
 	charm.land/lipgloss/v2 v2.0.1
 	github.com/charmbracelet/colorprofile v0.4.2
+	github.com/disintegration/imaging v1.6.2
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/gertd/go-pluralize v0.2.1
 	github.com/gofrs/flock v0.13.1
+	github.com/google/jsonschema-go v0.4.3
 	github.com/graphql-go/graphql v0.8.2-0.20260623012937-6acef3563ff7
 	github.com/jackc/pgx/v5 v5.9.2
 	github.com/modelcontextprotocol/go-sdk v1.7.0
 	go.mongodb.org/mongo-driver/v2 v2.8.2
 	golang.org/x/crypto v0.37.0
+	golang.org/x/image v0.43.0
 	golang.org/x/mod v0.39.0
 	golang.org/x/tools v0.49.0
 	modernc.org/sqlite v1.55.0
@@ -35,7 +38,6 @@ require (
 	github.com/clipperhouse/displaywidth v0.11.0 // indirect
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
-	github.com/google/jsonschema-go v0.4.3 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/klauspost/compress v1.17.6 // indirect
 	github.com/lucasb-eyer/go-colorful v1.3.0 // indirect

@@ -44,7 +44,7 @@ test("command navigation, saved views, and bulk actions", async ({ page }) => {
 	await page.getByRole("button", { name: "Hierarchy", exact: true }).click();
 	await expect(page).toHaveURL(/folder=.*&view=hierarchy/);
 	await page.keyboard.press("Escape");
-	await page.getByRole("button", { name: "Saved views", exact: true }).click();
+	await page.getByRole("button", { name: "More", exact: true }).click();
 	await page.getByLabel("Saved view name", { exact: true }).fill("Editorial hierarchy");
 	await page.getByRole("button", { name: "Save", exact: true }).click();
 	await expect(
@@ -54,7 +54,7 @@ test("command navigation, saved views, and bulk actions", async ({ page }) => {
 	await page.getByRole("button", { name: "More", exact: true }).click();
 	await expectRiduSelectValue(page.getByLabel("Folder", { exact: true }), "Editorial");
 	await page.keyboard.press("Escape");
-	await page.getByRole("button", { name: "Saved views", exact: true }).click();
+	await page.getByRole("button", { name: "More", exact: true }).click();
 	await expect(
 		page.getByRole("button", { name: "Editorial hierarchy", exact: true })
 	).toBeVisible();
@@ -72,6 +72,11 @@ test("command navigation, saved views, and bulk actions", async ({ page }) => {
 		.getByRole("region", { name: "Bulk actions" })
 		.getByRole("button", { name: "Unpublish" })
 		.click();
+	const unpublishDialog = page.getByRole("alertdialog", { name: "Confirm unpublish" });
+	await expect(unpublishDialog).toContainText(
+		"You are about to unpublish all Posts in the selection. Are you sure?"
+	);
+	await unpublishDialog.getByRole("button", { name: "Confirm", exact: true }).click();
 	await expect(
 		page
 			.locator("[data-sonner-toast][data-front='true']")
@@ -82,16 +87,74 @@ test("command navigation, saved views, and bulk actions", async ({ page }) => {
 		.getByRole("region", { name: "Bulk actions" })
 		.getByRole("button", { name: "Edit", exact: true })
 		.click();
-	const bulkEditDialog = page.getByRole("dialog", { name: "Edit 1 selected document" });
-	await chooseRiduSelect(page, bulkEditDialog.getByLabel("Field"), "Reading time (minutes)");
-	await bulkEditDialog.getByLabel("Value").fill("9");
-	await bulkEditDialog.getByRole("button", { name: "Apply change" }).click();
+	const bulkEditDialog = page.getByRole("dialog", { name: "Editing 1 Post" });
+	const fieldPicker = bulkEditDialog.getByRole("combobox", { name: "Select fields to edit" });
+	await fieldPicker.click();
+	await page.getByRole("option", { name: "Reading time (minutes)", exact: true }).click();
+	await fieldPicker.click();
+	await page.getByRole("option", { name: "Featured", exact: true }).click();
+	const readingMinutes = bulkEditDialog.getByLabel("Reading time (minutes)", { exact: true });
+	await readingMinutes.fill("8");
+	await bulkEditDialog.getByRole("checkbox", { name: "Featured", exact: true }).check();
+	await page.route(
+		/\/api\/collections\/posts\/bulk(?:\?.*)?$/,
+		(route) =>
+			route.fulfill({
+				status: 422,
+				contentType: "application/json",
+				body: JSON.stringify({
+					error: {
+						code: "validation",
+						status: 422,
+						message: "Reading time is invalid",
+						issues: [
+							{
+								code: "reserved",
+								path: "readingMinutes",
+								message: "Choose another reading time",
+							},
+						],
+					},
+				}),
+			}),
+		{ times: 1 }
+	);
+	const applyChanges = bulkEditDialog.getByRole("button", { name: "Apply changes" });
+	await applyChanges.click();
+	await expect(
+		bulkEditDialog.getByText("Choose another reading time", { exact: true })
+	).toBeVisible();
+	await expect(readingMinutes).toBeFocused();
+	expect(consoleErrors).toEqual([
+		"Failed to load resource: the server responded with a status of 422 (Unprocessable Entity)",
+	]);
+	consoleErrors.length = 0;
+	await readingMinutes.fill("9");
+	await expect(
+		bulkEditDialog.getByText("Choose another reading time", { exact: true })
+	).toBeHidden();
+	const bulkRequest = page.waitForRequest(
+		(request) =>
+			new URL(request.url()).pathname === "/api/collections/posts/bulk" &&
+			request.method() === "POST"
+	);
+	await applyChanges.click();
+	const request = await bulkRequest;
+	expect(request.postDataJSON()).toMatchObject({
+		action: "update",
+		data: { featured: true, readingMinutes: 9 },
+	});
 	await expect(page.getByRole("region", { name: "Bulk actions" })).toBeHidden();
 	await page.getByRole("checkbox", { name: "Select Welcome to Ridu" }).click();
 	await page
 		.getByRole("region", { name: "Bulk actions" })
 		.getByRole("button", { name: "Publish", exact: true })
 		.click();
+	const publishDialog = page.getByRole("alertdialog", { name: "Confirm publish" });
+	await expect(publishDialog).toContainText(
+		"You are about to publish all Posts in the selection. Are you sure?"
+	);
+	await publishDialog.getByRole("button", { name: "Confirm", exact: true }).click();
 	await expect(
 		page
 			.locator("[data-sonner-toast][data-front='true']")
@@ -101,13 +164,15 @@ test("command navigation, saved views, and bulk actions", async ({ page }) => {
 	await expect(page.getByRole("heading", { name: "Nothing matches" })).toBeVisible();
 	await page.getByRole("button", { name: "Clear filters" }).click();
 	await expect(page.getByText("Welcome to Ridu")).toBeVisible();
-	await page.getByRole("button", { name: "Published 1" }).click();
-	await expect(page.getByText("Welcome to Ridu")).toBeVisible();
-	await expect(page.getByRole("button", { name: "Published 1" })).toHaveAttribute(
-		"aria-pressed",
-		"true"
-	);
-	await page.getByRole("button", { name: "All 2" }).click();
+	await page.getByRole("button", { name: "Filters", exact: true }).click();
+	await page.getByRole("button", { name: "Add filter", exact: true }).click();
+	await chooseRiduSelect(page, page.getByLabel("Filter field", { exact: true }), "Status");
+	await chooseRiduSelect(page, page.getByLabel("Filter value", { exact: true }), "Published");
+	await expect(page.getByText("Welcome to Ridu", { exact: true })).toBeVisible();
+	await expect(page.getByText("Relationship field notes", { exact: true })).toHaveCount(0);
+	await page.getByRole("button", { name: "Remove filter 1", exact: true }).click();
+	await expect(page.getByText("Relationship field notes", { exact: true })).toBeVisible();
+
 	await expect(page.getByRole("columnheader", { name: "Reading time" })).toBeVisible();
 	await expect(page.getByText("9 min", { exact: true })).toBeVisible();
 
@@ -154,13 +219,27 @@ test("relationship browsers, inline documents, uploads, and the document API vie
 	await layoutTabs.getByRole("tab", { name: "Advanced", exact: true }).click();
 	await expect(page.locator('[data-field-path="metadata"]')).toBeVisible();
 	const relatedPosts = page.locator('[data-field-path="relatedPosts"]');
+	const relatedPostsInput = relatedPosts.getByRole("combobox", {
+		name: "Related posts",
+		exact: true,
+	});
+	await relatedPostsInput.click();
+	await expect(page.getByRole("option", { name: "Welcome to Ridu", exact: true })).toBeVisible();
 	await expect(
-		relatedPosts.getByRole("button", { name: "Browse posts", exact: true })
-	).toBeVisible();
+		page.getByRole("option", { name: "Relationship field notes", exact: true })
+	).toHaveCount(0);
+	await page.getByRole("option", { name: "Welcome to Ridu", exact: true }).click();
+	await expect(relatedPostsInput).toHaveValue("");
+	await expect(relatedPostsInput).toBeFocused();
+	await expect(page.getByRole("option")).toHaveCount(0);
+	await relatedPosts.getByRole("button", { name: "Remove Welcome to Ridu", exact: true }).click();
+	await relatedPostsInput.click();
+	await expect(page.getByRole("option", { name: "Welcome to Ridu", exact: true })).toBeVisible();
+	await page.keyboard.press("Escape");
 	const relatedContent = page.locator('[data-field-path="relatedContent"]');
 	let relationDialog = page.getByRole("dialog", { name: "Select related content" });
-	await relatedContent.getByRole("button", { name: "Related content", exact: true }).click();
-	const relatedContentSearch = page.getByRole("combobox", { name: "Search Related content" });
+	await relatedContent.getByRole("combobox", { name: "Related content", exact: true }).click();
+	const relatedContentSearch = page.getByRole("combobox", { name: "Related content", exact: true });
 	await expect(relatedContentSearch).toBeFocused();
 	const relatedPostsGroup = page.getByRole("group", { name: "Posts" });
 	const relatedPagesGroup = page.getByRole("group", { name: "Pages" });
@@ -171,15 +250,14 @@ test("relationship browsers, inline documents, uploads, and the document API vie
 	await expect(relationDialog.getByText("About Ridu", { exact: true })).toBeVisible();
 	await relationDialog.getByRole("button", { name: "Close relationship browser" }).click();
 	const publishedPage = page.locator('[data-field-path="publishedPage"]');
-	await publishedPage.getByRole("button", { name: "Published page", exact: true }).click();
+	await publishedPage.getByRole("combobox", { name: "Published page", exact: true }).click();
 	await expect(page.getByRole("option", { name: "About Ridu", exact: true })).toBeVisible();
 	await expect(page.getByRole("option", { name: "Unreleased page", exact: true })).toHaveCount(0);
 	await page.keyboard.press("Escape");
 	const authorField = page.locator('[data-field-path="author"]');
 	await expect(authorField.getByRole("button", { name: "Edit Ridu Editor" }).first()).toBeVisible();
-	await expect(authorField.getByRole("button", { name: "Browse users" })).toBeVisible();
-	await authorField.getByRole("button", { name: "Author", exact: true }).click();
-	const authorCombobox = page.getByRole("combobox", { name: "Search Users" });
+	await authorField.getByRole("combobox", { name: "Author", exact: true }).click();
+	const authorCombobox = authorField.getByRole("combobox", { name: "Author", exact: true });
 	await expect(authorCombobox).toBeFocused();
 	await authorCombobox.fill("Demo");
 	const demoAuthorOption = page.getByRole("option", { name: "Demo Author" });
@@ -189,65 +267,66 @@ test("relationship browsers, inline documents, uploads, and the document API vie
 	await page.keyboard.press("Enter");
 	await expect(authorField.getByRole("button", { name: "Edit Demo Author" }).first()).toBeVisible();
 
-	await authorField.getByRole("button", { name: "Browse users" }).click();
+	await authorCombobox.click();
+	await page.getByRole("button", { name: /^Browse all users/ }).click();
 	relationDialog = page.getByRole("dialog", { name: "Select author" });
-	const riduEditorRadio = relationDialog.getByRole("radio", { name: /Ridu Editor/ });
-	await expect(riduEditorRadio).toBeVisible();
-	const authorRadios = relationDialog.getByRole("radio");
-	expect(await authorRadios.count()).toBeGreaterThan(1);
-	expect(
-		(await authorRadios.evaluateAll((radios) => radios.map((radio) => radio.tabIndex))).filter(
-			(tabIndex) => tabIndex === 0
-		)
-	).toHaveLength(1);
-	await authorRadios.first().focus();
-	await authorRadios.first().press("ArrowDown");
-	await expect(authorRadios.nth(1)).toBeFocused();
-	await expect(authorRadios.nth(1)).toBeChecked();
-	await riduEditorRadio.click();
-	await riduEditorRadio.press("Space");
-	await expect(riduEditorRadio).toBeChecked();
+	const authorResults = relationDialog.getByRole("table", { name: "Results" });
+	const riduEditorRow = authorResults.getByRole("row").filter({ hasText: "Ridu Editor" });
+	const demoAuthorRow = authorResults.getByRole("row").filter({ hasText: "Demo Author" });
+	await expect(demoAuthorRow).toHaveAttribute("data-selected", "true");
+	await expect(riduEditorRow).toHaveAttribute("data-selected", "false");
+	await expect(authorResults.locator("tbody tr")).not.toHaveCount(0);
 	const authorSearch = relationDialog.getByRole("searchbox", { name: "Search Users" });
-	await authorSearch.fill("Demo");
-	await expect(riduEditorRadio).toBeHidden();
-	const offscreenDemoRadio = relationDialog.getByRole("radio", { name: /Demo Author/ });
-	await expect(offscreenDemoRadio).toBeVisible();
-	expect(
-		(
-			await relationDialog
-				.getByRole("radio")
-				.evaluateAll((radios) => radios.map((radio) => radio.tabIndex))
-		).filter((tabIndex) => tabIndex === 0)
-	).toHaveLength(1);
 	await expect(authorSearch).toBeFocused();
-	for (let index = 0; index < 12; index += 1) {
-		await page.keyboard.press("Tab");
-		if (await offscreenDemoRadio.evaluate((radio) => document.activeElement === radio)) break;
-	}
-	await expect(offscreenDemoRadio).toBeFocused();
-	await expect(offscreenDemoRadio).not.toBeChecked();
-	await authorSearch.fill("");
-	await expect(riduEditorRadio).toBeVisible();
-	await expect(riduEditorRadio).toBeChecked();
-	await relationDialog.getByRole("button", { name: "Select", exact: true }).click();
+	await authorSearch.fill("Demo");
+	await expect(riduEditorRow).toHaveCount(0);
+	const demoAuthorButton = authorResults.getByRole("button", {
+		name: "Demo Author",
+		exact: true,
+	});
+	await expect(demoAuthorButton).toBeVisible();
+	await expect(authorSearch).toBeFocused();
+	await demoAuthorButton.focus();
+	await expect(demoAuthorButton).toBeFocused();
+	await demoAuthorButton.press("Enter");
+	await expect(relationDialog).toBeHidden();
+	await expect(authorField.getByRole("button", { name: "Edit Demo Author" }).first()).toBeVisible();
+
+	await authorCombobox.click();
+	await page.getByRole("button", { name: /^Browse all users/ }).click();
+	relationDialog = page.getByRole("dialog", { name: "Select author" });
+	await relationDialog
+		.getByRole("table", { name: "Results" })
+		.getByRole("button", {
+			name: "Ridu Editor",
+			exact: true,
+		})
+		.click();
+	await expect(relationDialog).toBeHidden();
 	await expect(authorField.getByRole("button", { name: "Edit Ridu Editor" }).first()).toBeVisible();
 
-	await authorField.getByRole("button", { name: "Browse users" }).click();
+	await authorCombobox.click();
+	await page.getByRole("button", { name: /^Browse all users/ }).click();
 	relationDialog = page.getByRole("dialog", { name: "Select author" });
-	await relationDialog.getByRole("button", { name: "Create user" }).click();
+	await relationDialog.getByRole("button", { name: "Create New" }).click();
 	let documentDialog = page.getByRole("dialog", { name: "New user" });
 	await documentDialog.getByLabel("Name", { exact: true }).fill("Inline Author");
 	await documentDialog.getByLabel("Email", { exact: true }).fill("inline@riducms.test");
 	await documentDialog.getByLabel("Password", { exact: true }).fill("inline-secret");
 	await documentDialog.getByLabel("Confirm password", { exact: true }).fill("inline-secret");
-	await documentDialog.getByRole("button", { name: "Create user" }).first().click();
+	await documentDialog.getByRole("button", { name: "Save", exact: true }).click();
 	relationDialog = page.getByRole("dialog", { name: "Select author" });
-	await expect(relationDialog.getByRole("radio", { name: /Inline Author/ })).toBeChecked();
-	await relationDialog.getByRole("button", { name: "Select", exact: true }).click();
+	const inlineAuthorRow = relationDialog
+		.getByRole("table", { name: "Results" })
+		.getByRole("row")
+		.filter({ hasText: "Inline Author" });
+	await expect(inlineAuthorRow).toHaveAttribute("data-selected", "true");
+	await inlineAuthorRow.getByRole("button", { name: "Inline Author", exact: true }).click();
+	await expect(relationDialog).toBeHidden();
 	await authorField.getByRole("button", { name: "Edit Inline Author" }).first().click();
 	documentDialog = page.getByRole("dialog", { name: "Inline Author" });
 	await documentDialog.getByLabel("Name", { exact: true }).fill("Inline Author Edited");
-	await documentDialog.getByRole("button", { name: "Save user" }).first().click();
+	await documentDialog.getByRole("button", { name: "Save", exact: true }).click();
 	documentDialog = page.getByRole("dialog", { name: "Inline Author Edited" });
 	await expect(documentDialog).toBeVisible();
 	await documentDialog.getByRole("button", { name: "Close relationship browser" }).click();
@@ -257,20 +336,32 @@ test("relationship browsers, inline documents, uploads, and the document API vie
 
 	await page
 		.locator('[data-field-path="cover"]')
-		.getByRole("button", { name: "Replace", exact: true })
+		.getByRole("button", { name: "Remove ridu-cover.png", exact: true })
+		.click();
+	await page
+		.locator('[data-field-path="cover"]')
+		.getByRole("button", { name: "Choose from existing", exact: true })
 		.click();
 	relationDialog = page.getByRole("dialog", { name: "Select cover" });
-	await relationDialog.getByRole("button", { name: "Images", exact: true }).click();
 	await relationDialog.getByRole("searchbox", { name: "Search Media" }).fill("field-notes");
-	await expect(relationDialog.getByRole("radio", { name: "Select field-notes.png" })).toBeVisible();
+	const mediaResults = relationDialog.getByRole("table", { name: "Results" });
+	const fieldNotesRow = mediaResults.getByRole("row").filter({ hasText: "field-notes.png" });
+	await expect(
+		fieldNotesRow.getByRole("button", { name: "field-notes.png", exact: true })
+	).toBeVisible();
+	await expect(fieldNotesRow.locator(".ridu-reference-list__thumbnail")).toBeVisible();
 	await relationDialog.getByRole("button", { name: "Edit field-notes.png" }).click();
-	documentDialog = page.getByRole("dialog", { name: "Green field notes cover" });
-	await expect(documentDialog.getByText("24 × 16")).toBeVisible();
-	await expect(documentDialog.getByText("image/png")).toBeVisible();
+	documentDialog = page.getByRole("dialog", { name: "field-notes.png" });
+	const fieldNotesPreview = documentDialog.getByRole("region", { name: "Asset preview" });
+	await expect(fieldNotesPreview).toContainText("24 × 16");
+	await expect(fieldNotesPreview).toContainText("image/png");
+	await expect(documentDialog.getByLabel("Alt text", { exact: true })).toHaveValue(
+		"Green field notes cover"
+	);
 	await documentDialog.getByRole("button", { name: "Back to results" }).click();
 	relationDialog = page.getByRole("dialog", { name: "Select cover" });
 	await relationDialog.getByRole("searchbox", { name: "Search Media" }).fill("");
-	await relationDialog.getByRole("button", { name: "Upload new" }).click();
+	await relationDialog.getByRole("button", { name: "Create New" }).click();
 	documentDialog = page.getByRole("dialog", { name: "New asset" });
 	await documentDialog.locator('input[type="file"]').setInputFiles({
 		name: "inline-cover.png",
@@ -281,10 +372,10 @@ test("relationship browsers, inline documents, uploads, and the document API vie
 		),
 	});
 	await documentDialog.getByRole("button", { name: "Back to results" }).click();
-	const discardFileDialog = page.getByRole("dialog", { name: "Discard changes?" });
+	const discardFileDialog = page.getByRole("alertdialog", { name: "Discard changes?" });
 	await expect(discardFileDialog).toBeVisible();
 	await discardFileDialog.getByRole("button", { name: "Keep editing" }).click();
-	await documentDialog.getByPlaceholder("Untitled asset").fill("Inline cover");
+	await documentDialog.getByLabel("Alt text", { exact: true }).fill("Inline cover");
 	let releaseInlineUpload!: () => void;
 	const inlineUploadGate = new Promise<void>((resolve) => {
 		releaseInlineUpload = resolve;
@@ -298,32 +389,36 @@ test("relationship browsers, inline documents, uploads, and the document API vie
 		await inlineUploadGate;
 		await route.continue();
 	});
-	await documentDialog.getByRole("button", { name: "Create asset" }).first().click();
+	await documentDialog.getByRole("button", { name: "Save", exact: true }).click();
 	await expect(documentDialog.getByRole("button", { name: "Back to results" })).toBeDisabled();
 	await expect(
 		documentDialog.getByRole("button", { name: "Close relationship browser" })
 	).toBeDisabled();
 	releaseInlineUpload();
 	relationDialog = page.getByRole("dialog", { name: "Select cover" });
-	await expect(
-		relationDialog.getByRole("radio", { name: "Select inline-cover.png" })
-	).toBeChecked();
+	const inlineCoverRow = relationDialog
+		.getByRole("table", { name: "Results" })
+		.getByRole("row")
+		.filter({ hasText: "inline-cover.png" });
+	await expect(inlineCoverRow).toHaveAttribute("data-selected", "true");
 	await page.unroute(inlineUploadURL);
-	await relationDialog.getByRole("button", { name: "Select", exact: true }).click();
+	await inlineCoverRow.getByRole("button", { name: "inline-cover.png", exact: true }).click();
+	await expect(relationDialog).toBeHidden();
 	await expect(page.getByText("inline-cover.png", { exact: true })).toBeVisible();
 
 	await page
 		.locator('[data-field-path="relatedPosts"]')
-		.getByRole("button", { name: "Browse posts", exact: true })
+		.getByRole("combobox", { name: "Related posts", exact: true })
 		.click();
+	await page.getByRole("button", { name: /^Browse all posts/ }).click();
 	relationDialog = page.getByRole("dialog", { name: "Add related posts" });
 	await expect(
-		relationDialog.getByRole("checkbox", { name: /Relationship field notes/ })
+		relationDialog.getByRole("checkbox", { name: "Select Relationship field notes" })
 	).toBeChecked();
-	await relationDialog.getByRole("button", { name: "Create post" }).click();
+	await relationDialog.getByRole("button", { name: "Create New" }).click();
 	documentDialog = page.getByRole("dialog", { name: "New post" });
-	await documentDialog.getByPlaceholder("Untitled post").fill("Inline related post");
-	await documentDialog.getByRole("button", { name: "Create post" }).first().click();
+	await documentDialog.getByLabel("Title — English", { exact: true }).fill("Inline related post");
+	await documentDialog.getByRole("button", { name: "Save", exact: true }).click();
 	await expect(documentDialog.getByText("Summary is required")).toBeVisible();
 	await expect(documentDialog.getByLabel("Summary — English", { exact: true })).toBeFocused();
 	await expect(
@@ -334,9 +429,11 @@ test("relationship browsers, inline documents, uploads, and the document API vie
 	await documentDialog
 		.getByLabel("Summary — English", { exact: true })
 		.fill("Created from the related-post browser.");
-	await documentDialog.getByRole("button", { name: "Create post" }).first().click();
+	await documentDialog.getByRole("button", { name: "Save", exact: true }).click();
 	relationDialog = page.getByRole("dialog", { name: "Add related posts" });
-	await expect(relationDialog.getByRole("checkbox", { name: /Inline related post/ })).toBeChecked();
+	await expect(
+		relationDialog.getByRole("checkbox", { name: "Select Inline related post" })
+	).toBeChecked();
 	await relationDialog.getByRole("button", { name: "Edit Inline related post" }).click();
 	documentDialog = page.getByRole("dialog", { name: "Inline related post" });
 	await expect(documentDialog.getByRole("textbox", { name: "Content — English" })).toBeVisible();
@@ -352,21 +449,11 @@ test("relationship browsers, inline documents, uploads, and the document API vie
 		.getByRole("button", { name: "Leave without saving" })
 		.click();
 	await expect(page.getByRole("heading", { name: "Posts" })).toBeVisible();
-	await page.getByRole("link", { name: "Create", exact: true }).click();
-	await page.getByRole("link", { name: "API" }).click();
+	await page.getByRole("link", { name: /^New / }).click();
+	await expect(page.getByRole("navigation", { name: "Document views" })).toHaveCount(0);
+	await page.goto("/admin/collections/posts/create/api?locale=en");
 	await expect(page).toHaveURL(/\/admin\/collections\/posts\/create\/api(?:\?locale=en)?$/);
-	await expect(page.getByRole("heading", { name: "API" })).toBeVisible();
-	await expect(
-		page
-			.getByRole("status")
-			.filter({ hasText: "This endpoint becomes runnable after the document is saved." })
-	).toBeVisible();
-	const apiActions = page.getByRole("navigation", { name: "API actions" });
-	await apiActions.getByRole("button", { name: "POST Create" }).click();
-	await expect(
-		page.getByRole("status").filter({ hasText: "Mutation examples are not executed here" })
-	).toBeVisible();
-	await apiActions.getByRole("button", { name: "GET View" }).click();
+	await expect(page.getByRole("region", { name: "API", exact: true })).toBeVisible();
 	await expect(
 		page
 			.getByRole("status")
@@ -374,16 +461,15 @@ test("relationship browsers, inline documents, uploads, and the document API vie
 	).toBeVisible();
 	const jsonData = page.getByLabel("JSON data");
 	await expect(jsonData).toBeVisible();
-	const jsonRoot = jsonData.locator("details").first();
-	const jsonRootSummary = jsonRoot.locator("summary");
-	await jsonRootSummary.focus();
-	await jsonRootSummary.press("Space");
-	await expect(jsonRoot).not.toHaveAttribute("open");
-	await jsonRootSummary.press("Enter");
-	await expect(jsonRoot).toHaveAttribute("open", "");
+	const jsonRoot = jsonData.getByRole("button", { name: "JSON", exact: true });
+	await jsonRoot.focus();
+	await jsonRoot.press("Space");
+	await expect(jsonRoot).toHaveAttribute("aria-expanded", "false");
+	await jsonRoot.press("Enter");
+	await expect(jsonRoot).toHaveAttribute("aria-expanded", "true");
 	await expect(page.getByRole("button", { name: "Copy JSON" })).toBeVisible();
 	await page.reload();
-	await expect(page.getByRole("heading", { name: "API" })).toBeVisible();
+	await expect(page.getByRole("region", { name: "API", exact: true })).toBeVisible();
 	await expect(page.getByLabel("JSON data")).toBeVisible();
 	await page.getByRole("link", { name: "Edit", exact: true }).click();
 	await expect(page).toHaveURL(/\/admin\/collections\/posts\/create(?:\?locale=en)?$/);

@@ -351,14 +351,14 @@ func TestTypedTaskResultRejectsPersistedOutputOutsideItsExactContract(t *testing
 	assertTaskErrorCode(t, err, TaskErrorInvalidOutput)
 }
 
-func TestScheduledPublishConcurrencyKeyIsBoundedForImportedDocumentIDs(t *testing.T) {
-	if got := scheduledPublishConcurrencyKey("posts", "post-1"); got != "posts:post-1" {
+func TestScheduledPublicationConcurrencyKeyIsBoundedForImportedDocumentIDs(t *testing.T) {
+	if got := scheduledPublicationConcurrencyKey("posts", "post-1"); got != "posts:post-1" {
 		t.Fatalf("ordinary concurrency key = %q", got)
 	}
 	longID := strings.Repeat("document", 60)
-	first := scheduledPublishConcurrencyKey("posts", longID)
-	second := scheduledPublishConcurrencyKey("posts", longID)
-	other := scheduledPublishConcurrencyKey("posts", longID+"x")
+	first := scheduledPublicationConcurrencyKey("posts", longID)
+	second := scheduledPublicationConcurrencyKey("posts", longID)
+	other := scheduledPublicationConcurrencyKey("posts", longID+"x")
 	if len(first) > store.MaxTaskConcurrencyKeyBytes || first != second || first == other || !strings.HasPrefix(first, "sha256-") {
 		t.Fatalf("bounded concurrency keys = %q / %q / %q", first, second, other)
 	}

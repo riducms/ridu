@@ -147,6 +147,7 @@ type (
 	ExecuteOption                = core.ExecuteOption
 	FieldValidatorProvider       = core.FieldValidatorProvider
 	FindOptions                  = core.FindOptions
+	PublicationScheduleOptions   = core.PublicationScheduleOptions
 	FieldCapabilities            = core.FieldCapabilities
 	HandlerOptions               = core.HandlerOptions
 	ImageSize                    = core.ImageSize
@@ -181,6 +182,8 @@ type (
 	StorageFactory               = core.StorageFactory
 	StoreFactory                 = core.StoreFactory
 	TaskDefinition               = core.TaskDefinition
+	AdminLoaderDefinition        = core.AdminLoaderDefinition
+	AdminLoadContext             = core.AdminLoadContext
 	TaskContext                  = core.TaskContext
 	TaskOption                   = core.TaskOption
 	TaskReconciler               = core.TaskReconciler
@@ -192,6 +195,9 @@ type (
 	TaskState                    = store.TaskState
 	UploadConfig                 = core.UploadConfig
 	UploadInput                  = core.UploadInput
+	UpdateUploadInput            = core.UpdateUploadInput
+	UploadImageEdit              = core.UploadImageEdit
+	RemoteUploadInput            = core.RemoteUploadInput
 	VersionConfig                = core.VersionConfig
 )
 
@@ -239,6 +245,11 @@ type (
 )
 
 const MaxTaskPayloadBytes = core.MaxTaskPayloadBytes
+
+// NewAdminLoader registers a typed, authenticated admin read function.
+func NewAdminLoader[Input, Output any](key string, handler func(AdminLoadContext, Input) (Output, error)) AdminLoaderDefinition {
+	return core.NewAdminLoader(key, handler)
+}
 
 func NewTask[Input, Output any](slug string, handler TaskHandler[Input, Output], options ...TaskOption) TypedTask[Input, Output] {
 	return core.NewTask(slug, handler, options...)

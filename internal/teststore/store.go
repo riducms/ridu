@@ -332,7 +332,7 @@ func (backend *Store) DismissTaskForTarget(ctx context.Context, id, slug string,
 
 func dismissibleTaskState(state store.TaskState) bool {
 	switch state {
-	case store.TaskStateQueued, store.TaskStateRunning, store.TaskStateFailed, store.TaskStateCanceled:
+	case store.TaskStateQueued, store.TaskStateFailed, store.TaskStateCanceled:
 		return true
 	default:
 		return false
@@ -1078,6 +1078,27 @@ type transaction struct {
 	deletedState        map[store.DocumentReference]struct{}
 	references          map[string]referenceindex.Entry
 	authBootstrapLocked bool
+	dismissedTasks      map[string]store.Task
+}
+
+func (transaction *transaction) DismissTaskForTarget(ctx context.Context, id, slug string, target store.DocumentReference) error {
+	if err := transaction.writable(ctx); err != nil {
+		return err
+	}
+	if err := store.ValidateTaskList(store.TaskList{Slug: slug, Target: &target, Limit: 1}); err != nil {
+		return err
+	}
+	transaction.store.mu.Lock()
+	defer transaction.store.mu.Unlock()
+	task, exists := transaction.store.tasks[id]
+	if !exists || task.Slug != slug || task.Target == nil || *task.Target != target || !dismissibleTaskState(task.State) {
+		return store.ErrNotFound
+	}
+	if transaction.dismissedTasks == nil {
+		transaction.dismissedTasks = make(map[string]store.Task)
+	}
+	transaction.dismissedTasks[id] = cloneTask(task)
+	return nil
 }
 
 func (transaction *transaction) LockUploadObjects(ctx context.Context, objectKeys []string) (func(), error) {
@@ -1191,6 +1212,8 @@ func (transaction *transaction) Create(ctx context.Context, request store.Create
 				status = store.StatusPublished
 			}
 		}
+	}
+	if request.Collection.Versions != nil || request.Collection.Upload != nil {
 		revision = 1
 	}
 	values := store.CloneValues(request.Values)
@@ -1469,6 +1492,11 @@ func (transaction *transaction) ReferencedUploadObjects(ctx context.Context, req
 }
 
 func collectUploadObjectReferences(values store.Values, candidates, referenced map[string]struct{}) {
+	if key, valid := values["source"].Get("objectKey").StringValue(); valid {
+		if _, wanted := candidates[key]; wanted {
+			referenced[key] = struct{}{}
+		}
+	}
 	if key, valid := values["objectKey"].StringValue(); valid {
 		if _, wanted := candidates[key]; wanted {
 			referenced[key] = struct{}{}
@@ -1726,7 +1754,7 @@ func (transaction *transaction) Update(ctx context.Context, request store.Update
 	if request.Status != nil {
 		document.Status = *request.Status
 	}
-	if request.Collection.Versions != nil {
+	if request.Collection.Versions != nil || request.Collection.Upload != nil {
 		document.Revision++
 	}
 	if uniqueConflict(collection, request.Collection, document, document.ID) {
@@ -2051,6 +2079,13 @@ func (transaction *transaction) Commit(ctx context.Context) error {
 			return store.ErrNotFound
 		}
 	}
+	for id, expected := range transaction.dismissedTasks {
+		current, exists := transaction.store.tasks[id]
+		if !exists || current.Slug != expected.Slug || current.State != expected.State || current.LeaseToken != expected.LeaseToken ||
+			current.Target == nil || expected.Target == nil || *current.Target != *expected.Target {
+			return store.ErrConflict
+		}
+	}
 	transaction.store.documents = cloneCollections(transaction.documents)
 	transaction.store.versions = cloneVersions(transaction.versions)
 	transaction.store.references = cloneReferenceEntries(transaction.references)
@@ -2063,6 +2098,9 @@ func (transaction *transaction) Commit(ctx context.Context) error {
 	}
 	for key, credential := range transaction.credentialUpdates {
 		transaction.store.credentials[key] = credential
+	}
+	for id := range transaction.dismissedTasks {
+		delete(transaction.store.tasks, id)
 	}
 	transaction.store.events = append(transaction.store.events, "commit")
 	transaction.done = true
@@ -2636,6 +2674,9 @@ func compareTimes(left, right time.Time) int {
 }
 
 func documentValues(document store.Document, segments []string) []store.Value {
+	if len(segments) == 1 && segments[0] == "_revision" && document.Revision > 0 {
+		return []store.Value{store.Number(float64(document.Revision))}
+	}
 	if len(segments) == 1 && segments[0] == "id" {
 		return []store.Value{store.String(document.ID)}
 	}
@@ -2690,6 +2731,9 @@ func valuesBelow(value store.Value, segments []string) []store.Value {
 }
 
 func documentValue(document store.Document, segments []string) (store.Value, bool) {
+	if len(segments) == 1 && segments[0] == "_revision" && document.Revision > 0 {
+		return store.Number(float64(document.Revision)), true
+	}
 	if len(segments) == 0 {
 		return store.Value{}, false
 	}

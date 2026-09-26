@@ -15,6 +15,7 @@ var (
 	pluginKeyPattern      = regexp.MustCompile(`^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$`)
 	adminPackagePattern   = regexp.MustCompile(`^(?:@[a-z0-9][a-z0-9._-]*/)?[a-z0-9][a-z0-9._-]*(?:/[A-Za-z0-9._-]+)*$`)
 	adminExportPattern    = regexp.MustCompile(`^[A-Za-z_$][A-Za-z0-9_$]*$`)
+	adminRoutePattern     = regexp.MustCompile(`^[A-Za-z0-9_-]+(?:/[A-Za-z0-9_-]+)*$`)
 	goPackagePattern      = regexp.MustCompile(`^[A-Za-z0-9._~-]+(?:/[A-Za-z0-9._~-]+)+$`)
 	localeCodePattern     = regexp.MustCompile(`^[A-Za-z0-9]+(?:[-_][A-Za-z0-9]+)*$`)
 )
@@ -92,10 +93,19 @@ func SemanticVersionInRange(version, minimum, maximumExclusive string) bool {
 	return semver.Compare(canonical, "v"+minimum) >= 0 && (maximumExclusive == "" || semver.Compare(canonical, "v"+maximumExclusive) < 0)
 }
 
-// IsValidAdminPluginRoute reports whether a relative plugin route cannot
-// shadow framework-owned login or collection routes.
+// IsValidAdminPluginRoute reports whether a literal relative plugin route
+// stays outside framework-owned namespaces, matching admin registration rules.
 func IsValidAdminPluginRoute(value string) bool {
-	return value != "" && value == strings.TrimSpace(value) && !strings.ContainsAny(value, " \t\r\n") && !strings.HasPrefix(value, "/") && !strings.HasPrefix(value, "./") && value != "login" && value != "collections" && !strings.HasPrefix(value, "collections/") && !strings.Contains(value, "..") && !strings.ContainsAny(value, "?#*")
+	if !adminRoutePattern.MatchString(value) {
+		return false
+	}
+	root, _, _ := strings.Cut(value, "/")
+	switch strings.ToLower(root) {
+	case "account", "collections", "globals", "login", "create-first-user", "forgot-password", "reset-password", "request-verification", "verify-email":
+		return false
+	default:
+		return true
+	}
 }
 
 // IsValidAdminPluginAsset reports whether value is a safe package-relative

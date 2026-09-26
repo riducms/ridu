@@ -1,0 +1,7 @@
+@import '@riducms/ui/layers.css';
+
+@layer app {
+	.post-cards__select {
+		justify-content: flex-start;
+	}
+}

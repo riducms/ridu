@@ -1,0 +1,17 @@
+@use "@riducms/ui/styles.scss" as ui;
+
+@layer ridu.components {
+	.ridu-kbd {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-height: 20px;
+		padding-inline: 6px;
+		border: 1px solid var(--control-border);
+		border-radius: 4px;
+		color: var(--ink-faint);
+		font-family: var(--font-mono);
+		font-size: 10px;
+		line-height: 1;
+	}
+}

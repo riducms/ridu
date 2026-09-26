@@ -88,7 +88,7 @@ for (const kind of ["plugin", "local"] as const)
 		});
 		const runtime = new AdminRuntime(createAdminClient(), {
 			plugins: kind === "plugin" ? [plugin] : [],
-			fields:
+			fieldEditors:
 				kind === "local"
 					? { "app:note": defineFieldEditor({ type: "text", component: NoteEditor }) }
 					: {},

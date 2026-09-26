@@ -8,7 +8,7 @@
 		"allowArbitraryExtensions": true,
 		"exactOptionalPropertyTypes": true,
 		"noUncheckedIndexedAccess": true,
-		"types": ["svelte"],
+		"types": ["svelte", "vite/client"],
 		"skipLibCheck": true,
 		"paths": {
 			"@ui/*": ["../../../packages/ui/src/*"]

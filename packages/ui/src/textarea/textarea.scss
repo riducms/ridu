@@ -1,0 +1,42 @@
+@use "../styles" as ui;
+
+@layer ridu.components {
+	.ridu-textarea {
+		@include ui.control-surface;
+		display: block;
+		width: 100%;
+		min-width: 0;
+		min-height: calc(var(--line-height-body) * 3);
+		padding: 8px var(--control-padding-inline);
+		resize: vertical;
+		field-sizing: content;
+		font: inherit;
+		color: var(--ink-strong);
+		line-height: var(--line-height-body);
+		outline: none;
+		&::placeholder {
+			color: var(--ink-placeholder);
+		}
+		&:hover {
+			border-color: var(--control-border-hover);
+			box-shadow: var(--control-hover-shadow);
+		}
+		&:focus {
+			border-color: var(--ring);
+		}
+		&:disabled,
+		&[readonly] {
+			background: var(--control-surface-disabled);
+			color: var(--control-disabled-foreground);
+			border-color: var(--control-border-disabled);
+			box-shadow: none;
+		}
+		&:disabled {
+			cursor: not-allowed;
+		}
+		&[aria-invalid="true"] {
+			border-color: var(--control-invalid-border);
+			background: var(--control-invalid-surface);
+		}
+	}
+}

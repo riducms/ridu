@@ -12,5 +12,7 @@
 
 <article>
 	<h1>{article.title ?? ""}</h1>
-	{#if article.body}<RichText value={article.body} {blocks} />{/if}
+	{#if article.body}
+		<RichText value={article.body} {blocks} />
+	{/if}
 </article>

@@ -14,7 +14,7 @@ function editorCompilerContract() {
 	// @ts-expect-error the original Svelte component still requires decoded config
 	defineFieldEditor({ type: "text", component: registered.component });
 	defineAdmin({
-		fields: {
+		fieldEditors: {
 			"app:example": defineFieldEditor({
 				type: "text",
 				component: LocalTextEditor,

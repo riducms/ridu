@@ -23,11 +23,15 @@ func TestPostgresRichTextBlockNamesAcceptance(t *testing.T) {
 	richtextblocks.RunNames(t, postgresRichTextBlocksFactory)
 }
 
-func TestPostgresRichTextBlocksPerformance(t *testing.T) {
-	richtextblocks.RunPerformance(t, "postgres", postgresRichTextBlocksFactory)
+func BenchmarkPostgresRichTextBlocksPerformance(b *testing.B) {
+	richtextblocks.RunPerformanceBenchmark(b, "postgres", postgresRichTextBlocksBackend)
 }
 
 func postgresRichTextBlocksFactory(t *testing.T, config ridu.Config) (store.Store, *ridu.App) {
+	return postgresRichTextBlocksBackend(t, config)
+}
+
+func postgresRichTextBlocksBackend(t testing.TB, config ridu.Config) (store.Store, *ridu.App) {
 	t.Helper()
 	backend, manifest := integrationBackend(t, t.Context(), config)
 	artifact, err := postgres.BuildArtifact(t.Context(), "richtext-blocks", nil, manifest, nil, false)

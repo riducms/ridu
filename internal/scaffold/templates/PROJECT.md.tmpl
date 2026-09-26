@@ -194,9 +194,10 @@ or plugin-owned values belong to a paired Go/admin plugin, not a local `fieldPlu
 
 ### Customize an existing admin surface
 
-Import `defineAdmin` from `@riducms/plugin/admin`. Register local `dashboard`, `routes`, `login`,
-`account`, `navigation`, `logoutButton`, `views`, `branding`, `shell`, `providers`, `listCells`,
-`documentActions`, and `documentViews` directly in `admin.config.ts`. Their props are the public
+Import `defineAdmin` from `@riducms/plugin/admin`. Register local `dashboardPanels`, `routes`,
+`login`, `account`, `navigation`, `logoutButton`, `coreViews`, `branding`, `shellSlots`,
+`providers`, `listCellRenderers`, `listResultsRenderers`, `documentActions`, and `documentViews`
+directly in `admin.config.ts`. Their props are the public
 host contracts exported by `@riducms/plugin`. Keep `plugins: generatedAdminPlugins` to compose the
 paired plugins declared in Go. Entries compose in plugin-then-application order and conflicts fail.
 Application messages use `app:message` keys. Local routes use literal relative paths outside the
@@ -253,8 +254,8 @@ replica set authenticated with SCRAM-SHA-256 and reached through CA- and hostnam
 is deliberately a bounded release claim: it does not qualify Atlas, Amazon DocumentDB, Azure Cosmos
 DB, standalone servers, other MongoDB versions or topologies, other operating systems or
 architectures, arbitrary scale, network-partition matrices, or point-in-time recovery.
-Local ARM runs are preflight only; the production support evidence comes from the GitHub Linux
-x86-64 release job.
+Local ARM runs are preflight only; production support requires the recorded Linux x86-64
+qualification run before publication. The GitHub workflow publishes the qualified release.
 
 The release gate proves two credential boundaries:
 

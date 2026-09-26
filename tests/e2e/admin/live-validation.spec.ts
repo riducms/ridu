@@ -29,7 +29,11 @@ async function expectInvalidBorder(control: Locator) {
 					document.body.append(candidate);
 				}
 				neutral.setAttribute("aria-invalid", "false");
+				if (element.matches(".ridu-input:hover")) {
+					probe.style.borderColor = "var(--control-invalid-border-hover)";
+				}
 				const expected = getComputedStyle(probe).borderColor;
+				const unfocusedShadow = getComputedStyle(probe).boxShadow;
 				const neutralColor = getComputedStyle(neutral).borderColor;
 				probe.remove();
 				neutral.remove();
@@ -37,7 +41,13 @@ async function expectInvalidBorder(control: Locator) {
 				const actual = styles.borderColor;
 				const focusVisible = element.matches(":focus-visible");
 				const focusOutlined = styles.outlineStyle !== "none" && styles.outlineWidth !== "0px";
-				const focusTreatment = !focusVisible || (!focusOutlined && styles.boxShadow !== "none");
+				// Payload inputs retain their invalid border without an outer focus ring.
+				// Other control families still own their visible focus treatment.
+				const focusTreatment =
+					!focusVisible ||
+					(element.matches(".ridu-input") && styles.outlineStyle === "none") ||
+					focusOutlined ||
+					(styles.boxShadow !== "none" && styles.boxShadow !== unfocusedShadow);
 				return actual === expected && expected !== neutralColor && focusTreatment
 					? "match"
 					: `actual=${actual}; invalid=${expected}; neutral=${neutralColor}; readonly=${element.hasAttribute("readonly")}; disabled=${element.matches(":disabled")}; focus=${focusVisible}; outline=${styles.outlineStyle} ${styles.outlineWidth}; shadow=${styles.boxShadow}`;
@@ -136,7 +146,10 @@ async function rowAction(page: Page, field: string, row: number, action: string)
 	await page
 		.locator(`[data-field-path="${field}"]`)
 		.first()
-		.getByRole("button", { name: `Open Row ${row + 1} actions`, exact: true })
+		.getByRole("button", {
+			name: `Open Row ${String(row + 1).padStart(2, "0")} actions`,
+			exact: true,
+		})
 		.first()
 		.click();
 	await page.getByRole("menuitem", { name: action, exact: true }).click();
@@ -156,7 +169,7 @@ test("supplier-dependent live feedback reaches ordinary and configured editors w
 	await expectDescriptionOnly(page, custom, customMessages);
 	const body = page.locator('[data-field-path="body"]');
 	const bodyEditor = body.locator(".ridu-richtext-content");
-	const bodyFooter = body.getByRole("button", { name: /^Add block —/ });
+	const bodyFooter = body.getByRole("button", { name: "Insert paragraph", exact: true });
 	await expect(bodyEditor).toHaveAttribute("contenteditable", "true");
 	await expect(bodyFooter).toBeEnabled();
 	await expect(body.getByText(richTextPrompt, { exact: true })).toBeVisible();
@@ -227,10 +240,9 @@ test("supplier-dependent live feedback reaches ordinary and configured editors w
 		await expectInvalidMessages(page, custom, customMessages);
 		await expectInvalidBorder(custom);
 		await expect(bodyEditor).toHaveAttribute("contenteditable", "false");
-		await expect(bodyFooter).toBeVisible();
-		await expect(bodyFooter).toBeDisabled();
-		await expect(body.getByText(richTextPrompt, { exact: true })).toBeVisible();
-		await expect(body.getByText("No content", { exact: true })).toHaveCount(0);
+		await expect(bodyFooter).toHaveCount(0);
+		await expect(body.getByText(richTextPrompt, { exact: true })).toHaveCount(0);
+		await expect(body.getByText("No content", { exact: true })).toBeVisible();
 	} finally {
 		releaseSave();
 	}

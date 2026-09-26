@@ -3,5 +3,5 @@
 	"compilerOptions": {
 		"types": ["bun", "svelte", "vite/client"]
 	},
-	"include": ["tests/**/*.ts"]
+	"include": ["src/*.d.ts", "tests/**/*.ts"]
 }

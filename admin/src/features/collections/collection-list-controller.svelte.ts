@@ -1,4 +1,13 @@
-import type { AccessCapabilitiesEnvelope, Pagination, SchemaSelectOption } from "@riducms/protocol";
+import { documentLabel } from "@admin/features/documents/document-title";
+import { untrack } from "svelte";
+import { RiduError } from "@riducms/sdk";
+import type {
+	AccessCapabilitiesEnvelope,
+	AdminCollectionListDataV1,
+	CollectionPageEnvelope,
+	Pagination,
+	SchemaCollection,
+} from "@riducms/protocol";
 import type { AdminI18n } from "@riducms/translations";
 
 import type { AdminClient, AdminDocument } from "@admin/core/api/admin-client";
@@ -10,46 +19,38 @@ interface CollectionListControllerOptions {
 	i18n: AdminI18n;
 	get slug(): string;
 	get locale(): string | undefined;
-	get page(): number;
-	get search(): string;
-	get titleField(): string | undefined;
-	get status(): string;
-	get statusField(): string | undefined;
-	get statusOptions(): readonly SchemaSelectOption[];
-	get versioned(): boolean;
+	get query(): string;
+	get ready(): boolean;
+	get prepared(): AdminCollectionListDataV1 | undefined;
+	get collection(): SchemaCollection | undefined;
 	get trashOnly(): boolean;
-	get folderField(): string | undefined;
-	get folderID(): string;
-	get hierarchy(): boolean;
-	get limit(): number;
-	get sort(): readonly string[];
-	get filterWhere(): readonly Where[];
 }
 
 interface CollectionListRequest {
 	slug: string;
 	locale: string | undefined;
-	page: number;
-	limit: number;
-	search: string;
-	titleField: string | undefined;
-	status: string;
-	statusField: string | undefined;
-	statusValues: readonly string[];
+	query: string;
 	trashOnly: boolean;
-	folderField: string | undefined;
-	folderID: string;
-	hierarchy: boolean;
-	sort: readonly string[];
-	filterWhere: readonly Where[];
+}
+
+interface CollectionListMutation {
+	request: CollectionListRequest;
+	collection: SchemaCollection | undefined;
+}
+
+export interface CollectionBulkUpdateTarget {
+	readonly ids: readonly string[];
+	readonly slug: string;
+	readonly locale: string | undefined;
+	readonly collection: SchemaCollection | undefined;
+	readonly accessIdentity: Readonly<Record<string, AccessCapabilitiesEnvelope>>;
 }
 
 type CollectionListStatus = "initial" | "loading" | "ready" | "failed";
-type Where = Record<string, unknown>;
 
 const emptyPagination: Pagination = {
 	page: 1,
-	limit: 25,
+	limit: 10,
 	totalDocs: 0,
 	totalPages: 0,
 	hasNextPage: false,
@@ -59,66 +60,104 @@ const emptyPagination: Pagination = {
 const maxAtomicSelection = 100;
 
 export class CollectionListController {
-	showStatus = $state(true);
-	showUpdated = $state(true);
 	selectedIDs = $state.raw<Set<string>>(new Set());
 	#status = $state<CollectionListStatus>("initial");
 	#docs = $state.raw<AdminDocument[]>([]);
 	#pagination = $state.raw<Pagination>(emptyPagination);
-	#statusCounts = $state.raw<Record<string, number>>({});
 	#collectionAccess = $state.raw<AccessCapabilitiesEnvelope>();
 	#documentAccess = $state.raw<Record<string, AccessCapabilitiesEnvelope>>({});
-	#error = $state<string>();
+	#pageError = $state<string>();
 	#request?: AbortController;
 	#selectionRequest?: AbortController;
 	#requestGeneration = 0;
+	#mutation?: CollectionListMutation;
+	#disposed = false;
 	#current?: CollectionListRequest;
+	#selectionWhere?: Record<string, unknown>;
+	#collection?: SchemaCollection;
+	#prepared?: AdminCollectionListDataV1;
 	#desiredRequestKey = $state("");
-	#desiredSelectionQueryKey = $state("");
 	#loadedRequestKey = $state<string>();
-	#loadedSelectionQueryKey = $state<string>();
-	mutationPending = $state.raw<Set<string>>(new Set());
+	#loadedSelectionQueryKey?: string;
 	bulkPending = $state(false);
 	selectionPending = $state(false);
 
 	constructor(readonly options: CollectionListControllerOptions) {
-		$effect(() => {
-			const request: CollectionListRequest = {
-				slug: this.options.slug,
-				locale: this.options.locale,
-				page: this.options.hierarchy ? 1 : this.options.page,
-				limit: this.options.hierarchy ? 100 : this.options.limit,
-				search: this.options.search,
-				titleField: this.options.titleField,
-				status: this.options.status,
-				statusField: this.options.statusField,
-				statusValues: this.options.statusOptions.map((option) => option.value),
-				trashOnly: this.options.trashOnly,
-				folderField: this.options.folderField,
-				folderID: this.options.folderID,
-				hierarchy: this.options.hierarchy,
-				sort: this.options.sort,
-				filterWhere: this.options.filterWhere,
-			};
-			if (request.slug === "") return;
+		$effect.pre(() => {
+			if (this.#disposed) return;
+			const request = this.#requestFromOptions();
+			const collection = this.options.collection;
+			// Revoke an outgoing mutation even while the next route's preferences are loading.
+			if (
+				this.#mutation !== undefined &&
+				(requestKey(this.#mutation.request) !== requestKey(request) ||
+					this.#mutation.collection !== collection)
+			)
+				this.#invalidateMutation();
 			const previous = this.#current;
-			if (previous !== undefined && selectionQueryKey(previous) !== selectionQueryKey(request)) {
-				this.clearSelection();
-			}
-			if (previous !== undefined && requestKey(previous) !== requestKey(request)) {
+			const schemaChanged = collection !== this.#collection;
+			if (
+				previous !== undefined &&
+				(schemaChanged || requestKey(previous) !== requestKey(request))
+			) {
 				this.#requestGeneration += 1;
 				this.#request?.abort();
 				this.#request = undefined;
+				this.#cancelSelectionRequest();
+			}
+			if (!this.options.ready || request.slug === "") return;
+			this.#collection = collection;
+			if (schemaChanged) {
+				this.clearSelection();
+				this.#loadedRequestKey = undefined;
 			}
 			this.#current = request;
 			this.#desiredRequestKey = requestKey(request);
-			this.#desiredSelectionQueryKey = selectionQueryKey(request);
-			const delay = request.search.trim().length > 0 ? 180 : 0;
-			const timer = window.setTimeout(() => this.#open(request), delay);
+			const prepared = this.options.prepared;
+			if (prepared !== undefined && prepared !== this.#prepared) {
+				this.#prepared = prepared;
+				// Merging selected-row access must not turn selection into a route dependency.
+				untrack(() => this.#adoptPrepared(request, prepared));
+				return;
+			}
+			const search = new URLSearchParams(request.query).get("q") ?? "";
+			const searchChanged =
+				previous !== undefined && new URLSearchParams(previous.query).get("q") !== search;
+			const delay = searchChanged && search.trim().length > 0 ? 180 : 0;
+			const timer = window.setTimeout(async () => {
+				if (this.#loadedRequestKey !== requestKey(request)) await this.#open(request);
+			}, delay);
 			return () => window.clearTimeout(timer);
 		});
-
 		$effect(() => () => this.dispose());
+	}
+
+	#requestFromOptions(): CollectionListRequest {
+		return {
+			slug: this.options.slug,
+			locale: this.options.locale,
+			query: this.options.query,
+			trashOnly: this.options.trashOnly,
+		};
+	}
+
+	#adoptPrepared(request: CollectionListRequest, data: AdminCollectionListDataV1) {
+		this.#pageError = undefined;
+		this.#applyListPage(request, data);
+	}
+
+	#applyListPage(request: CollectionListRequest, data: AdminCollectionListDataV1) {
+		const key = selectionQueryKey(request, data.query);
+		if (this.#loadedSelectionQueryKey !== key) this.clearSelection();
+		const page = data.page;
+		if (page === undefined) throw new Error("Collection list response omitted its page");
+		if (page.error !== undefined) {
+			this.#failPage(new RiduError(page.error));
+		} else {
+			this.#selectionWhere = data.query.where;
+			this.#applyPage(request, page.value);
+			this.#loadedSelectionQueryKey = key;
+		}
 	}
 
 	get status() {
@@ -133,10 +172,6 @@ export class CollectionListController {
 		return this.#pagination;
 	}
 
-	get statusCounts() {
-		return this.#statusCounts;
-	}
-
 	get canCreate() {
 		return this.#collectionAccess?.operations.create === true;
 	}
@@ -144,6 +179,10 @@ export class CollectionListController {
 	get canBulkUpdate() {
 		return this.#selectedAllow("update");
 	}
+
+	canBulkUpdateField = (path: string) =>
+		this.canBulkUpdate &&
+		[...this.selectedIDs].every((id) => this.#documentAccess[id]?.fields[path]?.update !== false);
 
 	get canBulkPublish() {
 		return this.#selectedAllow("publish");
@@ -165,11 +204,6 @@ export class CollectionListController {
 		return this.#selectedAllow("deletePermanent");
 	}
 
-	canRestore = (id: string) => this.#documentAccess[id]?.operations.restoreDeleted === true;
-
-	canDeletePermanent = (id: string) =>
-		this.#documentAccess[id]?.operations.deletePermanent === true;
-
 	canReadField = (path: string, id?: string) => {
 		const access = id === undefined ? this.#collectionAccess : this.#documentAccess[id];
 		if (access?.operations.read !== true) return false;
@@ -177,31 +211,7 @@ export class CollectionListController {
 	};
 
 	get error() {
-		return this.#error;
-	}
-
-	get statusColumnAvailable() {
-		return this.options.statusField !== undefined || this.options.versioned;
-	}
-
-	get statusVisible() {
-		return this.showStatus && this.statusColumnAvailable;
-	}
-
-	get allDocuments() {
-		return this.options.statusField === undefined
-			? this.pagination.totalDocs
-			: (this.statusCounts[""] ?? this.pagination.totalDocs);
-	}
-
-	get rangeStart() {
-		return this.pagination.totalDocs === 0
-			? 0
-			: (this.pagination.page - 1) * this.pagination.limit + 1;
-	}
-
-	get rangeEnd() {
-		return Math.min(this.pagination.page * this.pagination.limit, this.pagination.totalDocs);
+		return this.#pageError;
 	}
 
 	get selectedOnPage() {
@@ -223,7 +233,7 @@ export class CollectionListController {
 		return (
 			this.selectionControlsReady &&
 			this.#collectionAccess?.operations.selectAll === true &&
-			this.allOnPageSelected &&
+			this.selectedIDs.size > 0 &&
 			this.selectedIDs.size < this.pagination.totalDocs
 		);
 	}
@@ -232,8 +242,9 @@ export class CollectionListController {
 		return (
 			this.selectionControlsReady &&
 			this.#collectionAccess?.operations.selectAll === true &&
-			this.allOnPageSelected &&
-			this.pagination.totalDocs > this.docs.length
+			this.selectedIDs.size > 0 &&
+			(this.pagination.totalDocs > this.selectedIDs.size ||
+				this.selectedIDs.size > this.docs.length)
 		);
 	}
 
@@ -241,62 +252,17 @@ export class CollectionListController {
 		return this.#desiredRequestKey !== "" && this.#loadedRequestKey === this.#desiredRequestKey;
 	}
 
-	get selectionQueryReady() {
-		return (
-			this.#desiredSelectionQueryKey !== "" &&
-			this.#loadedSelectionQueryKey === this.#desiredSelectionQueryKey
-		);
-	}
-
 	get selectionLimitExceeded() {
 		return this.pagination.totalDocs > maxAtomicSelection;
 	}
 
-	retry = async () => {
-		if (this.#current !== undefined) await this.#open(this.#current);
-	};
+	get selectionLimit() {
+		return maxAtomicSelection;
+	}
 
-	setShowStatus = (show: boolean) => {
-		this.showStatus = show;
-	};
+	retry = () => (this.#current === undefined ? Promise.resolve() : this.#open(this.#current));
 
-	setShowUpdated = (show: boolean) => {
-		this.showUpdated = show;
-	};
-
-	title = (document: AdminDocument) =>
-		String(
-			(this.options.titleField === undefined ? undefined : document[this.options.titleField]) ??
-				document.id
-		);
-
-	documentStatus = (document: AdminDocument) => {
-		if (typeof document._status === "string") return document._status;
-		if (this.options.statusField === undefined) return undefined;
-		const value = document[this.options.statusField];
-		return typeof value === "string" ? value : undefined;
-	};
-
-	statusLabel = (value: string) => {
-		const configured = this.options.statusOptions.find((option) => option.value === value)?.label;
-		if (configured !== undefined) return configured;
-		const normalized = value.toLocaleLowerCase(this.options.i18n.language);
-		if (normalized === "published") return this.options.i18n.t("documents:published");
-		if (normalized === "draft") return this.options.i18n.t("documents:draft");
-		return humanize(value, this.options.i18n.language);
-	};
-
-	statusTone = (value: string) => {
-		const normalized = value.toLocaleLowerCase(this.options.i18n.language);
-		if (normalized === "published" || normalized === "live") return "live";
-		if (normalized === "draft") return "muted";
-		return "warning";
-	};
-
-	updated = (document: AdminDocument) => formatUpdated(document.updatedAt, this.options.i18n);
-	created = (document: AdminDocument) => formatUpdated(document.createdAt, this.options.i18n);
-
-	optionCount = (option: SchemaSelectOption) => this.statusCounts[option.value];
+	title = (document: AdminDocument) => documentLabel(this.options.collection, document);
 
 	toggleDocument = (id: string, checked: boolean) => {
 		if (!this.selectionControlsReady || !this.docs.some((document) => document.id === id)) return;
@@ -332,14 +298,14 @@ export class CollectionListController {
 			this.selectionPending
 		)
 			return;
-		const selectionKey = selectionQueryKey(request);
+		const selectionKey = this.#loadedSelectionQueryKey;
 		this.#selectionRequest?.abort();
 		const activeRequest = new AbortController();
 		this.#selectionRequest = activeRequest;
 		this.selectionPending = true;
 		try {
 			const selection = await this.options.client.resolveFilteredSelection(request.slug, {
-				where: buildWhere(request),
+				where: this.#selectionWhere,
 				trash: request.trashOnly,
 				locale: request.locale,
 				signal: activeRequest.signal,
@@ -347,7 +313,7 @@ export class CollectionListController {
 			if (
 				activeRequest.signal.aborted ||
 				this.#current === undefined ||
-				selectionKey !== selectionQueryKey(this.#current)
+				selectionKey !== this.#loadedSelectionQueryKey
 			)
 				return;
 			this.selectedIDs = new Set(selection.items.map((item) => item.id));
@@ -371,43 +337,41 @@ export class CollectionListController {
 		}
 	};
 
-	restore = async (id: string) => {
-		await this.#mutate(id, "restore");
-	};
+	captureBulkUpdateTarget = (
+		ids: readonly string[] = [...this.selectedIDs]
+	): CollectionBulkUpdateTarget => ({
+		ids: [...ids],
+		slug: this.options.slug,
+		locale: this.options.locale,
+		collection: this.options.collection,
+		accessIdentity: this.#documentAccess,
+	});
 
-	deletePermanent = async (id: string) => {
-		await this.#mutate(id, "permanent");
+	bulkUpdate = async (target: CollectionBulkUpdateTarget, data: Record<string, unknown>) => {
+		if (
+			target.slug !== this.options.slug ||
+			target.locale !== this.options.locale ||
+			target.collection !== this.options.collection ||
+			target.accessIdentity !== this.#documentAccess
+		)
+			return false;
+		return this.#bulk("update", data, { ids: target.ids, surfaceIssues: true });
 	};
-
-	bulkUpdate = async (data: Record<string, unknown>) => {
-		return this.#bulk("update", data);
-	};
-
-	bulkPublish = async () => {
-		await this.#bulk("publish");
-	};
-
-	bulkUnpublish = async () => {
-		await this.#bulk("unpublish");
-	};
-
-	bulkDelete = async () => {
-		await this.#bulk("delete");
-	};
-
-	bulkRestore = async () => {
-		await this.#bulk("restoreDeleted");
-	};
-
-	bulkDeletePermanent = async () => {
-		await this.#bulk("deletePermanent");
-	};
+	bulkPublish = () => this.#bulk("publish");
+	bulkUnpublish = () => this.#bulk("unpublish");
+	bulkDelete = () => this.#bulk("delete");
+	bulkRestore = () => this.#bulk("restoreDeleted");
+	bulkDeletePermanent = () => this.#bulk("deletePermanent");
 
 	emptyTrash = async () => {
-		if (this.bulkPending) return;
-		this.bulkPending = true;
+		const mutation = this.#beginMutation();
+		if (mutation === undefined) return;
+		const { request } = mutation;
 		try {
-			const documents = await this.options.client.emptyTrash(this.options.slug);
+			const documents = await this.options.client.emptyTrash(request.slug, {
+				locale: request.locale,
+			});
+			if (!this.#ownsMutation(mutation)) return;
 			this.clearSelection();
 			this.options.notifications.success({
 				title: this.options.i18n.t("collections:documentsPermanentlyDeleted", {
@@ -415,8 +379,9 @@ export class CollectionListController {
 					formattedCount: this.options.i18n.formatNumber(documents.length),
 				}),
 			});
-			if (this.#current !== undefined) await this.#open(this.#current);
+			await this.#open(request);
 		} catch (cause) {
+			if (!this.#ownsMutation(mutation)) return;
 			this.options.notifications.error({
 				title: this.options.i18n.t("collections:trashNotEmptied"),
 				message:
@@ -425,11 +390,13 @@ export class CollectionListController {
 						: this.options.i18n.t("collections:noDocumentsChanged"),
 			});
 		} finally {
-			this.bulkPending = false;
+			if (this.#mutation === mutation) this.#invalidateMutation();
 		}
 	};
 
 	dispose() {
+		this.#disposed = true;
+		this.#invalidateMutation();
 		this.#requestGeneration += 1;
 		this.#request?.abort();
 		this.#request = undefined;
@@ -443,180 +410,152 @@ export class CollectionListController {
 	}
 
 	#open = async (request: CollectionListRequest) => {
-		if (
-			this.#current !== undefined &&
-			selectionQueryKey(this.#current) !== selectionQueryKey(request)
-		) {
-			this.clearSelection();
-		}
+		if (this.#disposed) return;
 		this.#current = request;
 		this.#request?.abort();
 		const activeRequest = new AbortController();
 		const generation = ++this.#requestGeneration;
 		this.#request = activeRequest;
 		this.#status = "loading";
-		this.#error = undefined;
+		this.#pageError = undefined;
 
 		try {
-			const [page, statusCounts, collectionAccess] = await Promise.all([
-				this.options.client.list(request.slug, {
-					page: request.page,
-					limit: request.limit,
-					where: buildWhere(request),
-					sort: request.sort,
-					trash: request.trashOnly,
-					locale: request.locale,
-					signal: activeRequest.signal,
-				}),
-				this.#loadStatusCounts(request, activeRequest.signal),
-				this.options.client.collectionAccess(request.slug, {
-					trash: request.trashOnly,
-					locale: request.locale,
-					signal: activeRequest.signal,
-				}),
-			]);
-			const documentAccessEntries = await Promise.all(
-				page.docs.map(async (document) => {
-					try {
-						return [
-							document.id,
-							await this.options.client.collectionAccess(request.slug, {
-								id: document.id,
-								trash: request.trashOnly,
-								locale: request.locale,
-								signal: activeRequest.signal,
-							}),
-						] as const;
-					} catch {
-						return undefined;
-					}
-				})
+			const data = await this.options.client.adminCollectionList(
+				request.slug,
+				request.query,
+				"page",
+				{ signal: activeRequest.signal }
 			);
 			if (activeRequest.signal.aborted || generation !== this.#requestGeneration) return;
-			this.#docs = page.docs;
-			this.#pagination = page.pagination;
-			this.#statusCounts = statusCounts;
-			this.#collectionAccess = collectionAccess;
-			const visibleAccess = Object.fromEntries(
-				documentAccessEntries.filter((entry) => entry !== undefined)
-			);
-			this.#documentAccess = {
-				...Object.fromEntries(
-					Object.entries(this.#documentAccess).filter(([id]) => this.selectedIDs.has(id))
-				),
-				...visibleAccess,
-			};
-			this.#loadedRequestKey = requestKey(request);
-			this.#loadedSelectionQueryKey = selectionQueryKey(request);
-			this.#status = "ready";
+			this.#applyListPage(request, data);
 		} catch (cause) {
 			if (activeRequest.signal.aborted || generation !== this.#requestGeneration) return;
-			this.#error =
-				cause instanceof Error
-					? cause.message
-					: this.options.i18n.t("collections:documentsLoadFailed");
-			this.#status = "failed";
+			this.#failPage(cause);
 		} finally {
 			if (this.#request === activeRequest) this.#request = undefined;
 		}
 	};
 
-	async #loadStatusCounts(request: CollectionListRequest, signal: AbortSignal) {
-		if (request.statusField === undefined || request.statusValues.length === 0) return {};
-		const entries = await Promise.all([
-			this.options.client
-				.count(request.slug, {
-					where: buildWhere(request, ""),
-					trash: request.trashOnly,
-					locale: request.locale,
-					signal,
-				})
-				.then((result) => ["", result.totalDocs] as const),
-			...request.statusValues.map(async (status) => {
-				const result = await this.options.client.count(request.slug, {
-					where: buildWhere(request, status),
-					trash: request.trashOnly,
-					locale: request.locale,
-					signal,
-				});
-				return [status, result.totalDocs] as const;
-			}),
-		]);
-		return Object.fromEntries(entries);
+	#applyPage(request: CollectionListRequest, page: CollectionPageEnvelope<AdminDocument>) {
+		this.#docs = page.docs;
+		this.#pagination = page.pagination;
+		this.#collectionAccess = page.access.collection;
+		const visibleIDs = new Set(page.docs.map((document) => document.id));
+		this.#documentAccess = {
+			...Object.fromEntries(
+				Object.entries(this.#documentAccess).filter(
+					([id]) => this.selectedIDs.has(id) && !visibleIDs.has(id)
+				)
+			),
+			...page.access.documents,
+		};
+		this.#loadedRequestKey = requestKey(request);
+		this.#status = "ready";
+	}
+
+	#failPage(cause: unknown) {
+		const visibleIDs = new Set(this.#docs.map((document) => document.id));
+		this.#collectionAccess = undefined;
+		this.#documentAccess = Object.fromEntries(
+			Object.entries(this.#documentAccess).filter(
+				([id]) => this.selectedIDs.has(id) && !visibleIDs.has(id)
+			)
+		);
+		this.#pageError =
+			cause instanceof Error
+				? cause.message
+				: this.options.i18n.t("collections:documentsLoadFailed");
+		this.#status = "failed";
+	}
+
+	#beginMutation() {
+		if (this.#disposed || this.bulkPending || !this.options.ready) return;
+		const request = this.#requestFromOptions();
+		const collection = this.options.collection;
+		if (
+			this.#current === undefined ||
+			requestKey(this.#current) !== requestKey(request) ||
+			this.#collection !== collection
+		)
+			return;
+		const mutation = { request, collection };
+		this.#mutation = mutation;
+		this.bulkPending = true;
+		return mutation;
+	}
+
+	#ownsMutation(mutation: CollectionListMutation) {
+		return (
+			!this.#disposed &&
+			this.#mutation === mutation &&
+			requestKey(mutation.request) === requestKey(this.#requestFromOptions()) &&
+			mutation.collection === this.options.collection
+		);
+	}
+
+	#invalidateMutation() {
+		this.#mutation = undefined;
+		this.bulkPending = false;
 	}
 
 	#selectedAllow(
 		operation: "update" | "delete" | "publish" | "unpublish" | "restoreDeleted" | "deletePermanent"
 	) {
-		return (
-			this.selectedIDs.size > 0 &&
-			[...this.selectedIDs].every((id) => this.#documentAccess[id]?.operations[operation] === true)
-		);
+		return this.#idsAllow([...this.selectedIDs], operation);
 	}
 
-	async #mutate(id: string, action: "restore" | "permanent") {
-		if (this.mutationPending.has(id)) return;
-		this.mutationPending = new Set(this.mutationPending).add(id);
-		try {
-			if (action === "restore") await this.options.client.restoreDeleted(this.options.slug, id);
-			else await this.options.client.deletePermanent(this.options.slug, id);
-			this.options.notifications.success({
-				title:
-					action === "restore"
-						? this.options.i18n.t("collections:documentRestored")
-						: this.options.i18n.t("collections:documentPermanentlyDeleted"),
-			});
-			if (this.#current !== undefined) await this.#open(this.#current);
-		} catch (cause) {
-			this.options.notifications.error({
-				title:
-					action === "restore"
-						? this.options.i18n.t("collections:documentNotRestored")
-						: this.options.i18n.t("collections:documentNotDeleted"),
-				message:
-					cause instanceof Error
-						? cause.message
-						: this.options.i18n.t("collections:operationFailed"),
-			});
-		} finally {
-			const pending = new Set(this.mutationPending);
-			pending.delete(id);
-			this.mutationPending = pending;
-		}
+	#idsAllow(
+		ids: readonly string[],
+		operation: "update" | "delete" | "publish" | "unpublish" | "restoreDeleted" | "deletePermanent"
+	) {
+		return (
+			ids.length > 0 && ids.every((id) => this.#documentAccess[id]?.operations[operation] === true)
+		);
 	}
 
 	async #bulk(
 		action: "update" | "publish" | "unpublish" | "delete" | "restoreDeleted" | "deletePermanent",
-		data?: Record<string, unknown>
+		data?: Record<string, unknown>,
+		options: { ids?: readonly string[]; surfaceIssues?: boolean } = {}
 	) {
-		const ids = [...this.selectedIDs];
-		if (ids.length === 0 || this.bulkPending || !this.selectionQueryReady) return false;
-		this.bulkPending = true;
+		const ids = [...(options.ids ?? this.selectedIDs)];
+		if (!this.selectionControlsReady || !this.#idsAllow(ids, action)) return false;
+		if (
+			action === "update" &&
+			Object.keys(data ?? {}).some((path) =>
+				ids.some((id) => this.#documentAccess[id]?.fields[path]?.update === false)
+			)
+		)
+			return false;
+		const mutation = this.#beginMutation();
+		if (mutation === undefined) return false;
+		const { request } = mutation;
 		try {
 			if (action === "update")
-				await this.options.client.bulkUpdate(this.options.slug, ids, data ?? {}, {
-					locale: this.options.locale,
+				await this.options.client.bulkUpdate(request.slug, ids, data ?? {}, {
+					locale: request.locale,
 				});
 			else if (action === "publish")
-				await this.options.client.bulkPublish(this.options.slug, ids, {
-					locale: this.options.locale,
+				await this.options.client.bulkPublish(request.slug, ids, {
+					locale: request.locale,
 				});
 			else if (action === "unpublish")
-				await this.options.client.bulkUnpublish(this.options.slug, ids, {
-					locale: this.options.locale,
+				await this.options.client.bulkUnpublish(request.slug, ids, {
+					locale: request.locale,
 				});
 			else if (action === "delete")
-				await this.options.client.bulkDelete(this.options.slug, ids, {
-					locale: this.options.locale,
+				await this.options.client.bulkDelete(request.slug, ids, {
+					locale: request.locale,
 				});
 			else if (action === "restoreDeleted")
-				await this.options.client.bulkRestoreDeleted(this.options.slug, ids, {
-					locale: this.options.locale,
+				await this.options.client.bulkRestoreDeleted(request.slug, ids, {
+					locale: request.locale,
 				});
 			else
-				await this.options.client.bulkDeletePermanent(this.options.slug, ids, {
-					locale: this.options.locale,
+				await this.options.client.bulkDeletePermanent(request.slug, ids, {
+					locale: request.locale,
 				});
+			if (!this.#ownsMutation(mutation)) return false;
 			this.clearSelection();
 			this.options.notifications.success({
 				title: this.options.i18n.t(bulkTranslationKey(action), {
@@ -624,9 +563,10 @@ export class CollectionListController {
 					formattedCount: this.options.i18n.formatNumber(ids.length),
 				}),
 			});
-			if (this.#current !== undefined) await this.#open(this.#current);
-			return true;
+			await this.#open(request);
+			return this.#ownsMutation(mutation);
 		} catch (cause) {
+			if (!this.#ownsMutation(mutation)) return false;
 			this.options.notifications.error({
 				title: this.options.i18n.t("collections:bulkOperationFailed"),
 				message:
@@ -634,9 +574,11 @@ export class CollectionListController {
 						? cause.message
 						: this.options.i18n.t("collections:noDocumentsChanged"),
 			});
+			if (options.surfaceIssues && cause instanceof RiduError && cause.issues.length > 0)
+				throw cause;
 			return false;
 		} finally {
-			this.bulkPending = false;
+			if (this.#mutation === mutation) this.#invalidateMutation();
 		}
 	}
 }
@@ -652,66 +594,13 @@ function bulkTranslationKey(
 	return "collections:documentsDeleted" as const;
 }
 
-function buildWhere(request: CollectionListRequest, status = request.status) {
-	const filters: Where[] = [];
-	const search = request.search.trim();
-	if (search.length > 0 && request.titleField !== undefined) {
-		filters.push({ [request.titleField]: { like: search } });
-	}
-	if (status !== "" && request.statusField !== undefined) {
-		filters.push({ [request.statusField]: { equals: status } });
-	}
-	if (request.folderID !== "" && request.folderField !== undefined) {
-		filters.push({ [request.folderField]: { equals: request.folderID } });
-	}
-	filters.push(...request.filterWhere);
-	if (filters.length === 0) return undefined;
-	if (filters.length === 1) return filters[0];
-	return { and: filters };
-}
-
-function selectionQueryKey(request: CollectionListRequest) {
-	return JSON.stringify({
-		slug: request.slug,
-		locale: request.locale,
-		search: request.search,
-		titleField: request.titleField,
-		status: request.status,
-		statusField: request.statusField,
-		trashOnly: request.trashOnly,
-		folderField: request.folderField,
-		folderID: request.folderID,
-		hierarchy: request.hierarchy,
-		sort: request.sort,
-		filterWhere: request.filterWhere,
-	});
+function selectionQueryKey(
+	request: CollectionListRequest,
+	query: AdminCollectionListDataV1["query"]
+) {
+	return JSON.stringify([request.slug, query.locale, query.trash, query.where]);
 }
 
 function requestKey(request: CollectionListRequest) {
 	return JSON.stringify(request);
-}
-
-function humanize(value: string, language: string) {
-	return value
-		.replaceAll(/[_-]+/g, " ")
-		.replace(/\b\w/g, (letter) => letter.toLocaleUpperCase(language));
-}
-
-function formatUpdated(value: string | undefined, i18n: AdminI18n) {
-	if (value === undefined) return "—";
-	const date = new Date(value);
-	if (Number.isNaN(date.valueOf())) return value;
-	const seconds = Math.round((date.valueOf() - Date.now()) / 1_000);
-	if (Math.abs(seconds) < 60) return i18n.formatRelativeTime(seconds, "second");
-	const minutes = Math.round(seconds / 60);
-	if (Math.abs(minutes) < 60) return i18n.formatRelativeTime(minutes, "minute");
-	const hours = Math.round(minutes / 60);
-	if (Math.abs(hours) < 24) return i18n.formatRelativeTime(hours, "hour");
-	const days = Math.round(hours / 24);
-	if (Math.abs(days) < 7) return i18n.formatRelativeTime(days, "day");
-	return i18n.formatDate(date, {
-		day: "2-digit",
-		month: "short",
-		year: date.getFullYear() === new Date().getFullYear() ? undefined : "numeric",
-	});
 }

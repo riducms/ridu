@@ -23,8 +23,8 @@ func TestMongoDBRichTextBlockNamesAcceptance(t *testing.T) {
 	richtextblocks.RunNames(t, mongoRichTextBlocksFactory)
 }
 
-func TestMongoDBRichTextBlocksPerformance(t *testing.T) {
-	richtextblocks.RunPerformance(t, "mongodb", mongoRichTextBlocksFactory)
+func BenchmarkMongoDBRichTextBlocksPerformance(b *testing.B) {
+	richtextblocks.RunPerformanceBenchmark(b, "mongodb", mongoRichTextBlocksBackend)
 }
 
 // This supplements the local development replica-set run with the existing
@@ -61,6 +61,10 @@ func TestMongoDBRichTextBlocksProductionReplicaSet(t *testing.T) {
 }
 
 func mongoRichTextBlocksFactory(t *testing.T, config ridu.Config) (store.Store, *ridu.App) {
+	return mongoRichTextBlocksBackend(t, config)
+}
+
+func mongoRichTextBlocksBackend(t testing.TB, config ridu.Config) (store.Store, *ridu.App) {
 	t.Helper()
 	backend := mongoIntegrationStore(t)
 	app, err := ridu.New(config, backend)

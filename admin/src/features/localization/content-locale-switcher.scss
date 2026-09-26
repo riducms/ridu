@@ -1,0 +1,43 @@
+@use "@riducms/ui/styles.scss" as ui;
+
+@layer ridu.components {
+	.ridu-content-locale {
+		display: flex;
+		align-items: center;
+		gap: 3px;
+		padding: 0 6px;
+		border: 0;
+		border-radius: 2px;
+		background: var(--background-layer);
+		color: var(--foreground);
+		font: inherit;
+		line-height: 20px;
+		cursor: pointer;
+		white-space: nowrap;
+
+		&:hover {
+			background: var(--control-border);
+		}
+
+		&:focus-visible {
+			@include ui.focus-outline;
+		}
+
+		&:disabled {
+			opacity: 0.5;
+			cursor: not-allowed;
+		}
+	}
+	.ridu-content-locale__label {
+		color: var(--foreground-muted);
+	}
+	.ridu-content-locale__chevron {
+		width: 12px;
+		height: 12px;
+	}
+	@media (max-width: ui.$small) {
+		.ridu-content-locale__label {
+			display: none;
+		}
+	}
+}

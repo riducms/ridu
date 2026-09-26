@@ -37,7 +37,7 @@ export type FieldEditorDefinition<Type extends FieldEditorType, Config = undefin
 
 const registration = Symbol("ridu-field-editor");
 const registeredEditors = new WeakSet<RegisteredFieldEditor>();
-/** Registration returned by `defineFieldEditor`; store it in `defineAdmin({ fields: ... })`. */
+/** Registration returned by `defineFieldEditor`; store it in `defineAdmin({ fieldEditors: ... })`. */
 export interface RegisteredFieldEditor {
 	readonly [registration]: true;
 	readonly type: FieldEditorType;
@@ -51,7 +51,7 @@ export interface RegisteredFieldEditor {
  * Register a Svelte component to replace a field input in your application.
  * Supports text, textarea, email, date, code, number, checkbox, text-list and number-list fields.
  *
- * Put the result under an `app:name` key in `defineAdmin({ fields: ... })` and
+ * Put the result under an `app:name` key in `defineAdmin({ fieldEditors: ... })` and
  * select that same key in Go with `field.Admin{Editor: field.Component("app:name")}`. The Go field keeps
  * its original storage, validation and filtering behaviour.
  *
@@ -67,7 +67,7 @@ export interface RegisteredFieldEditor {
  * TypeScript infers the `Config` type from the decoder's return value.
  *
  * @param definition The existing field type, Svelte component, and optional settings decoder.
- * @returns A frozen registration for `defineAdmin`'s `fields` map. This does not
+ * @returns A frozen registration for `defineAdmin`'s `fieldEditors` map. This does not
  * render the component, select it on a Go field, or change the stored value type.
  * @throws If the type is unsupported or the component is invalid. `ridu check`
  * also checks the selected Go field type and its settings before deployment.
@@ -80,7 +80,7 @@ export interface RegisteredFieldEditor {
  *
  * export default defineAdmin({
  *   plugins: generatedAdminPlugins,
- *   fields: {
+ *   fieldEditors: {
  *     'app:titleCounter': defineFieldEditor({ type: 'text', component: TitleField })
  *   }
  * });
@@ -117,12 +117,12 @@ export function defineFieldEditor<const Type extends FieldEditorType, Config = u
 
 export interface FieldEditorConfig {
 	/** Custom field inputs selected by Go `field.Admin{Editor: field.Component("app:name")}`. Use `defineFieldEditor` for each entry. */
-	fields?: Readonly<Record<`app:${string}`, RegisteredFieldEditor>>;
+	fieldEditors?: Readonly<Record<`app:${string}`, RegisteredFieldEditor>>;
 }
 
 /** The application owns one static configuration; packaged plugins retain their pairing contracts. */
 export function validateFieldEditorRegistrations(config: FieldEditorConfig): void {
-	for (const [reference, editor] of Object.entries(config.fields ?? {})) {
+	for (const [reference, editor] of Object.entries(config.fieldEditors ?? {})) {
 		if (!localEditorReference.test(reference))
 			throw new Error(
 				`Invalid editor reference ${reference}; expected app:name in admin/src/admin.config.ts.`
@@ -134,14 +134,14 @@ export function validateFieldEditorRegistrations(config: FieldEditorConfig): voi
 
 /** Check one local selection using the same decoder as the mounted editor. */
 export function validateFieldEditorSelection(
-	editors: NonNullable<FieldEditorConfig["fields"]>,
+	fieldEditors: NonNullable<FieldEditorConfig["fieldEditors"]>,
 	field: SchemaField
 ): void {
 	const reference = field.admin.editor?.reference;
 	if (reference === undefined) return;
 	if (!localEditorReference.test(reference))
 		throw new Error(`Malformed editor reference ${reference}; expected app:name.`);
-	const editor = editors[reference as `app:${string}`];
+	const editor = fieldEditors[reference as `app:${string}`];
 	if (editor === undefined)
 		throw new Error(
 			`Editor ${reference} is not registered. Register it in admin/src/admin.config.ts or change the field component in Go.`

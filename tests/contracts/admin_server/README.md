@@ -17,6 +17,11 @@ admin, set `RIDU_BROWSER_ADMIN_DIR`; to change the listener, set `RIDU_BROWSER_A
 Go command without `RIDU_BROWSER_ADMIN_DIR` intentionally serves the generic framework bundle, which
 cannot render application-owned field plugins such as rich text.
 
+Posts uses the framework's default list, create, and edit views, so cold loads and navigation
+exercise prepared route snapshots. The Field showcase collection (`payload-only-capabilities`)
+hosts the collection replacement-view contracts and intentionally uses the browser-loader fallback.
+Login, account/security, Site settings, and the not-found view also have fixture replacements.
+
 The fixture uses the strict in-memory store by default. Set `RIDU_POSTGRES_URL` to run the same
 config against PostgreSQL. Browser runs create a unique `ridu_admin_fixture_*` schema, hold a
 PostgreSQL advisory ownership lock for the server lifetime, connect through that schema's

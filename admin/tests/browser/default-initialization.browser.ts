@@ -16,8 +16,6 @@ describe("create-flow default initialization", () => {
 		const collection = collectionWithDefaults(true);
 		const controller = new CreateFirstUserController({
 			runtime: { authCollection: collection } as AdminRuntime,
-			notifications: {} as NotificationCenter,
-			navigate: () => undefined,
 		});
 
 		expect(controller.form.values).toEqual({
@@ -29,6 +27,53 @@ describe("create-flow default initialization", () => {
 		});
 		expect(controller.form.dirty).toBe(false);
 	});
+
+	for (const outcome of ["success", "login-failed", "already-created", "admin-denied"] as const) {
+		it(`keeps setup identity unchanged until document navigation after ${outcome}`, async () => {
+			const collection = collectionWithDefaults(true);
+			collection.fields.push(textField("email", "ada@example.test"));
+			const destinations: string[] = [];
+			const runtime = {
+				authCollection: collection,
+				authBootstrapAvailable: true,
+				session: undefined,
+				i18n: createAdminI18n(),
+				collectionOperations: { targets: { admin: outcome !== "admin-denied" } },
+				refreshAccess: async () => true,
+				client: {
+					createAuthUser: async (_slug: string, values: Record<string, unknown>) => {
+						if (outcome === "already-created") throw new Error("Setup already completed");
+						return { ...values, id: "ada" };
+					},
+					login: async () => {
+						if (outcome === "login-failed") throw new Error("Sign-in failed");
+						return { id: "session", collection: "targets", user: { id: "ada" } };
+					},
+					authBootstrap: async () => ({ available: false }),
+					logout: async () => ({ loggedOut: true }),
+				},
+				hardNavigate: (path: string) => {
+					destinations.push(path);
+					return new Promise<never>(() => {});
+				},
+			} as unknown as AdminRuntime;
+			const controller = new CreateFirstUserController({ runtime });
+			controller.password = "correct-horse";
+			controller.passwordConfirmation = "correct-horse";
+			controller.submit();
+			await expect
+				.poll(() => destinations)
+				.toEqual([
+					outcome === "success"
+						? "/"
+						: `/login?setup=${outcome === "login-failed" ? "created" : outcome === "admin-denied" ? "denied" : "completed"}`,
+				]);
+			expect(runtime.session).toBeUndefined();
+			expect(runtime.authBootstrapAvailable).toBe(true);
+			expect(controller.pending).toBe(true);
+			controller.destroy();
+		});
+	}
 
 	it("uses canonical defaults for inline creation and preserves explicit relationship values", async () => {
 		const collection = collectionWithDefaults();
@@ -50,8 +95,7 @@ describe("create-flow default initialization", () => {
 		});
 
 		controller.openNewDocument();
-		await Promise.resolve();
-		await Promise.resolve();
+		await expect.poll(() => controller.editorLoading).toBe(false);
 
 		expect(controller.form.values).toEqual({
 			owner: "source-document",
@@ -118,14 +162,15 @@ describe("create-flow default initialization", () => {
 		});
 
 		controller.openNewDocument();
-		await Promise.resolve();
-		await Promise.resolve();
+		await expect.poll(() => controller.editorLoading).toBe(false);
 
 		expect(controller.form.dirty).toBe(false);
 		expect(controller.canSave).toBe(false);
-		controller.selectedFiles = {
-			item: () => ({ name: "asset.png" }),
-		} as unknown as FileList;
+		await controller.upload.select(new File(["asset"], "asset.txt", { type: "text/plain" }), {
+			maxFileSize: 1024,
+			mimeTypes: ["text/plain"],
+			private: false,
+		});
 		expect(controller.canSave).toBe(true);
 	});
 

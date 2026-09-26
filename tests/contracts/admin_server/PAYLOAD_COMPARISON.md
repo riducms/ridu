@@ -163,7 +163,7 @@ every result matching the current query.
 | Filtering                        | Field/operator/value filter builder across the schema                                                           | Typed group, array-row, and block-row leaf filters plus top-level/workflow/folder predicates, compiled by both in-memory and PostgreSQL stores                                                                           |
 | Page size                        | 5/10/25/50/100 selector                                                                                         | 10/25/50/100 selector, persisted in workspace preferences and named views                                                                                                                                                |
 | Selection                        | Select current page or all matches; bulk Edit, Publish, Unpublish, and Delete                                   | Select the current page or resolve up to 100 filtered/read-visible matches in one server request, then atomically Edit, Publish, Unpublish, Delete, Restore, or permanently delete; larger sets require narrower filters |
-| Trash                            | Collection trash route, empty-trash action, selected restore/permanent-delete workflow                          | Dedicated route with per-row and atomic selected restore/permanent delete, bulk active-to-trash, and confirmed collection-wide Empty trash                                                                               |
+| Trash                            | Collection trash route, empty-trash action, selected restore/permanent-delete workflow                          | Dedicated route with atomic selected restore/permanent delete, bulk active-to-trash, and confirmed collection-wide Empty trash                                                                               |
 | Media list                       | Bulk Upload in addition to ordinary create                                                                      | Permission-aware bulk queue with per-file metadata, row status, retry, and direct links to completed assets                                                                                                              |
 | Saved/hierarchical views         | Payload supports preferences, presets, folders, and hierarchy-oriented views                                    | Server-backed named views capture query, workflow, folder, hierarchy, columns, sorting, filters, and page size                                                                                                           |
 
@@ -193,7 +193,7 @@ workspace also carries the selected locale across reads and restores.
 Payload's version history is a dedicated paginated route. Ridu now has the same core workspace:
 dedicated collection/global history and revision URLs, pagination, readable field-aware comparison,
 a Modified fields only toggle, arbitrary revision selection, ordinary restore, and restore as draft.
-Collection history also lists, creates, and cancels durable scheduled publishes. Separate
+Collection history also lists, creates, and cancels durable scheduled publication changes. Separate
 collection/global `ReadVersions` rules protect snapshots independently from current-document reads;
 locale selection and fallback apply to version list, detail, comparison, and restore.
 

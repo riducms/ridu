@@ -9,20 +9,26 @@ for your editors.
 For these changes, create a component and import it in `admin/src/admin.config.ts`. You can use
 components from your application directly. You do not need to build a plugin.
 
+For colors, fonts, spacing, or changes to the appearance of existing controls, start with
+[Customizing CSS](./admin/customizing-css.md).
+
 ## Choose what to customize {#choose}
 
-| I want to…                                       | Start here                                                                  |
-| ------------------------------------------------ | --------------------------------------------------------------------------- |
-| Change an input or add information beside it     | [Field components](./custom-components/field-components.md)               |
-| Change the heading of an array or block row      | [Row labels](./custom-components/row-labels.md)                           |
-| Change how a value appears in a collection table | [Table cells](./custom-components/list-cells.md)                          |
-| Add a panel to the dashboard                     | [Dashboard](./custom-components/dashboard.md)                             |
-| Add a page with its own URL and navigation link  | [Custom pages](./custom-components/custom-pages.md)                       |
-| Add a tab beside Edit and API                    | [Document tabs](./custom-components/document-views.md)                    |
-| Add a button beside the document actions         | [Document buttons](./custom-components/document-actions.md)               |
-| Add content around a list or document editor     | [List and edit views](./custom-components/custom-views.md)                |
-| Change the logo, navigation, or login screen     | [Branding and navigation](./custom-components/branding-and-navigation.md) |
-| Share settings between my components             | [Shared settings](./custom-components/providers.md)                       |
+| I want to…                                         | Start here                                                                  |
+| -------------------------------------------------- | --------------------------------------------------------------------------- |
+| Change an input or add information beside it       | [Field components](./custom-components/field-components.md)               |
+| Change the heading of an array or block row        | [Row labels](./custom-components/row-labels.md)                           |
+| Change how a value appears in a collection table   | [Table cells](./custom-components/list-cells.md)                          |
+| Show collection results as cards or a custom table | [List layouts](./custom-components/list-results.md)                       |
+| Add a panel to the dashboard                       | [Dashboard](./custom-components/dashboard.md)                             |
+| Add a page with its own URL and navigation link    | [Custom pages](./custom-components/custom-pages.md)                       |
+| Add a tab beside Edit and API                      | [Document tabs](./custom-components/document-views.md)                    |
+| Add a button beside the document actions           | [Document buttons](./custom-components/document-actions.md)               |
+| Add content around a list or document editor       | [List and edit views](./custom-components/custom-views.md)                |
+| Replace an entire collection or global screen      | [Replace a screen](./custom-components/custom-views.md#replace)           |
+| Load server data before a custom page appears      | [Loading data](./custom-components/loading-data.md)                       |
+| Change the logo, navigation, or login screen       | [Branding and navigation](./custom-components/branding-and-navigation.md) |
+| Share settings between my components               | [Shared settings](./custom-components/providers.md)                       |
 
 ## Add your first component {#first-component}
 
@@ -51,8 +57,8 @@ Create `admin/src/components/welcome-panel.svelte`:
 The script receives the signed-in `user` from Ridu. The message also shows their email when it
 is available. `$props()` is how a Svelte 5 component reads the values passed to it.
 
-Import it in `admin/src/admin.config.ts` and add it to `dashboard`. If this file already contains
-other settings, keep them and add the new import and dashboard entry.
+Import it in `admin/src/admin.config.ts` and add it to `dashboardPanels`. If this file already
+contains other settings, keep them and add the new import and dashboard-panel entry.
 
 ```ts title="admin/src/admin.config.ts" focus={8-10}
 import { defineAdmin } from '@riducms/plugin/admin';
@@ -62,7 +68,7 @@ import WelcomePanel from './components/welcome-panel.svelte';
 export default defineAdmin({
 	// Include admin components from the project's installed plugins.
 	plugins: generatedAdminPlugins,
-	dashboard: [
+	dashboardPanels: [
 		{ key: 'welcome', component: WelcomePanel, position: 'before' }
 	]
 });
@@ -89,14 +95,15 @@ not need to run it before trying each change in the admin.
 A registration helper connects a component to the part of the admin that will render it.
 The helpers below do different jobs; you do not need all of them for a customization.
 
-| What you are building                                             | Helper                                                            | Where you use it                                          |
-| ----------------------------------------------------------------- | ----------------------------------------------------------------- | --------------------------------------------------------- |
-| Your application's admin configuration                            | [defineAdmin](https://riducms.com/reference/plugin/define-admin/)                    | Export it from `admin/src/admin.config.ts`.               |
-| A different input for an existing text, number, or checkbox field | [defineFieldEditor](https://riducms.com/reference/plugin/define-field-editor/)       | Add its result to `defineAdmin`'s `fields` map.           |
-| A summary in an array or block row's heading                      | [defineRowLabel](https://riducms.com/reference/plugin/define-row-label/)             | Add its result to `defineAdmin`'s `rowLabels` map.        |
-| An admin package shipped with a Go plugin                         | [defineAdminPlugin](https://riducms.com/reference/plugin/define-admin-plugin/)       | Export it from the plugin's JavaScript package.           |
-| The editor for a new Go field type                                | [definePluginField](https://riducms.com/reference/plugin/define-plugin-field/)       | Add its result to `defineAdminPlugin`'s `fields` map.     |
-| An alternative editor supplied by a plugin                        | [defineFieldComponent](https://riducms.com/reference/plugin/define-field-component/) | Add its result to `defineAdminPlugin`'s `components` map. |
+| What you are building                                             | Helper                                                            | Where you use it                                                          |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Your application's admin configuration                            | [defineAdmin](https://riducms.com/reference/plugin/define-admin/)                    | Export it from `admin/src/admin.config.ts`.                               |
+| A different input for an existing text, number, or checkbox field | [defineFieldEditor](https://riducms.com/reference/plugin/define-field-editor/)       | Add its result to `defineAdmin`'s `fieldEditors` map.                     |
+| A summary in an array or block row's heading                      | [defineRowLabel](https://riducms.com/reference/plugin/define-row-label/)             | Add its result to `defineAdmin`'s `rowLabels` map.                        |
+| An admin package shipped with a Go plugin                         | [defineAdminPlugin](https://riducms.com/reference/plugin/define-admin-plugin/)       | Export it from the plugin's JavaScript package.                           |
+| The editor for a new Go field type                                | [definePluginField](https://riducms.com/reference/plugin/define-plugin-field/)       | Add its result to `defineAdminPlugin`'s `fields` map.                     |
+| An alternative editor supplied by a plugin                        | [defineFieldComponent](https://riducms.com/reference/plugin/define-field-component/) | Add its result to `defineAdminPlugin`'s `fieldEditors` map.               |
+| A page or dashboard panel with Go-loaded data                     | [withAdminLoader](https://riducms.com/reference/plugin/with-admin-loader/)           | Spread the pair into a `routes`, `dashboardPanels`, or `coreViews` entry. |
 
 For most application changes, start with `defineAdmin` and the tutorial for the component you
 want to add. Use the plugin helpers when you are packaging UI alongside Go behavior. The
@@ -110,8 +117,10 @@ The field props references show what your Svelte component receives:
 ## Where your code runs {#where-code-runs}
 
 Admin components run in the browser. They use Svelte 5, and their TypeScript is bundled with the
-admin when you build the application. Use the [generated SDK](./typescript-sdk.md) when a
-component needs to read or change server data. The API checks the signed-in user's permissions.
+admin when you build the application. Use a [Go loader](./custom-components/loading-data.md)
+for the data a page needs before it appears, or the [generated SDK](./typescript-sdk.md)
+for writes and requests started by user interaction. Both apply the signed-in user's permissions
+to Ridu content reads.
 See [Admin performance](https://riducms.com/docs/performance/admin/) before adding a large browser dependency or doing
 network work from a component that repeats for every row or table cell.
 

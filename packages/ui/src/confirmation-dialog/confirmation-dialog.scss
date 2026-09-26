@@ -1,0 +1,36 @@
+@use "@riducms/ui/styles.scss" as ui;
+@layer ridu.components {
+	.ridu-confirmation-overlay {
+		@include ui.confirmation-overlay;
+		position: fixed;
+		inset: 0;
+		z-index: 50;
+	}
+	.ridu-confirmation {
+		@include ui.confirmation-content;
+		position: fixed;
+		top: 50%;
+		left: 50%;
+		transform: translate(-50%, -50%);
+		z-index: 50;
+		display: grid;
+		gap: 24px;
+		outline: none;
+	}
+	.ridu-confirmation__header {
+		display: grid;
+		gap: 8px;
+	}
+	.ridu-confirmation__title {
+		@include ui.confirmation-title;
+	}
+	.ridu-confirmation__description {
+		font-size: var(--font-size-body);
+		line-height: 1.5;
+	}
+	.ridu-confirmation__footer {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px;
+	}
+}

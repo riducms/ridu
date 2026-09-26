@@ -10,6 +10,7 @@ import (
 )
 
 type Input struct {
+	AdminLoaders     []schema.AdminLoader
 	Blocks           []field.Block
 	Name             string
 	NameTranslations map[string]string

@@ -713,7 +713,7 @@ func TestRESTInverseJoinRedactsTargetFields(t *testing.T) {
 	}
 }
 
-func TestRESTVersionDetailAndScheduledPublishing(t *testing.T) {
+func TestRESTVersionDetailAndScheduledPublicationing(t *testing.T) {
 	application, err := ridu.New(ridu.Config{Name: "Scheduled REST", Collections: []ridu.Collection{{
 		Slug: "posts", Versions: true,
 		VersionConfig: ridu.VersionConfig{Drafts: true},
@@ -748,31 +748,31 @@ func TestRESTVersionDetailAndScheduledPublishing(t *testing.T) {
 		t.Fatalf("version = %#v", version.Version)
 	}
 
-	scheduleResponse := requestJSON(t, client, http.MethodPost, base+"/schedule", strings.NewReader(`{"runAt":"2030-01-02T03:04:05Z"}`), "")
+	scheduleResponse := requestJSON(t, client, http.MethodPost, base+"/schedule", strings.NewReader(`{"action":"publish","runAt":"2030-01-02T03:04:05Z"}`), "")
 	if scheduleResponse.StatusCode != http.StatusCreated {
 		t.Fatalf("schedule = %d: %s", scheduleResponse.StatusCode, readBody(t, scheduleResponse))
 	}
-	var scheduled protocol.ScheduledPublishEnvelope
+	var scheduled protocol.ScheduledPublicationEnvelope
 	decodeResponse(t, scheduleResponse, &scheduled)
-	if scheduled.ScheduledPublish.DocumentID != document.ID || scheduled.ScheduledPublish.ExpectedRevision != document.Revision {
-		t.Fatalf("scheduled = %#v", scheduled.ScheduledPublish)
+	if scheduled.ScheduledPublication.DocumentID != document.ID || scheduled.ScheduledPublication.ExpectedRevision != document.Revision {
+		t.Fatalf("scheduled = %#v", scheduled.ScheduledPublication)
 	}
 
 	listResponse := requestJSON(t, client, http.MethodGet, base+"/schedule", nil, "")
-	var listed protocol.ScheduledPublishesEnvelope
+	var listed protocol.ScheduledPublicationsEnvelope
 	decodeResponse(t, listResponse, &listed)
-	if len(listed.ScheduledPublishes) != 1 || listed.ScheduledPublishes[0].ID != scheduled.ScheduledPublish.ID {
-		t.Fatalf("scheduled list = %#v", listed.ScheduledPublishes)
+	if len(listed.ScheduledPublications) != 1 || listed.ScheduledPublications[0].ID != scheduled.ScheduledPublication.ID {
+		t.Fatalf("scheduled list = %#v", listed.ScheduledPublications)
 	}
 
-	cancelResponse := requestJSON(t, client, http.MethodDelete, base+"/schedule/"+scheduled.ScheduledPublish.ID, nil, "")
+	cancelResponse := requestJSON(t, client, http.MethodDelete, base+"/schedule/"+scheduled.ScheduledPublication.ID, nil, "")
 	if cancelResponse.StatusCode != http.StatusOK {
 		t.Fatalf("cancel = %d: %s", cancelResponse.StatusCode, readBody(t, cancelResponse))
 	}
 	listResponse = requestJSON(t, client, http.MethodGet, base+"/schedule", nil, "")
 	decodeResponse(t, listResponse, &listed)
-	if len(listed.ScheduledPublishes) != 0 {
-		t.Fatalf("scheduled list after cancel = %#v", listed.ScheduledPublishes)
+	if len(listed.ScheduledPublications) != 0 {
+		t.Fatalf("scheduled list after cancel = %#v", listed.ScheduledPublications)
 	}
 
 	restoreResponse := requestJSON(t, client, http.MethodPost, base+"/restore/2?draft=true", nil, "")
@@ -790,7 +790,7 @@ func TestRESTVersionDetailAndScheduledPublishing(t *testing.T) {
 	}
 }
 
-func TestRESTScheduledPublishBindsExactAuthCollectionAndRechecksRequester(t *testing.T) {
+func TestRESTScheduledPublicationBindsExactAuthCollectionAndRechecksRequester(t *testing.T) {
 	const requesterID = "shared-schedule-requester"
 	publishersOnly := func(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
 		if ctx.Actor != nil {
@@ -852,7 +852,7 @@ func TestRESTScheduledPublishBindsExactAuthCollectionAndRechecksRequester(t *tes
 	}
 	client := handlerClient(application.Handler(ridu.HandlerOptions{}))
 	target := "http://ridu.test/api/collections/books/" + document.ID + "/schedule"
-	body := strings.NewReader(`{"runAt":"` + time.Now().Add(-time.Second).UTC().Format(time.RFC3339) + `"}`)
+	body := strings.NewReader(`{"action":"publish","timeZone":"Europe/Paris","runAt":"` + time.Now().Add(-time.Second).UTC().Format(time.RFC3339) + `"}`)
 	request, err := http.NewRequest(http.MethodPost, target, body)
 	if err != nil {
 		t.Fatal(err)
@@ -866,9 +866,26 @@ func TestRESTScheduledPublishBindsExactAuthCollectionAndRechecksRequester(t *tes
 	if response.StatusCode != http.StatusCreated {
 		t.Fatalf("schedule = %d: %s", response.StatusCode, readBody(t, response))
 	}
-	var scheduled protocol.ScheduledPublishEnvelope
+	var scheduled protocol.ScheduledPublicationEnvelope
 	decodeResponse(t, response, &scheduled)
-	queued, err := backend.FindTask(ctx, scheduled.ScheduledPublish.ID)
+	if scheduled.ScheduledPublication.TimeZone != "Europe/Paris" {
+		t.Fatalf("schedule timezone = %q", scheduled.ScheduledPublication.TimeZone)
+	}
+	invalidZoneRequest, err := http.NewRequest(http.MethodPost, target, strings.NewReader(`{"action":"publish","runAt":"2030-01-02T03:04:05Z","timeZone":"Invalid/Timezone"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	invalidZoneRequest.Header.Set("Content-Type", "application/json")
+	invalidZoneRequest.Header.Set("X-Schedule-Auth", "accepted")
+	invalidZoneResponse, err := client.Do(invalidZoneRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if invalidZoneResponse.StatusCode != http.StatusUnprocessableEntity {
+		t.Fatalf("invalid timezone status = %d: %s", invalidZoneResponse.StatusCode, readBody(t, invalidZoneResponse))
+	}
+	invalidZoneResponse.Body.Close()
+	queued, err := backend.FindTask(ctx, scheduled.ScheduledPublication.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -880,15 +897,15 @@ func TestRESTScheduledPublishBindsExactAuthCollectionAndRechecksRequester(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	completed, err := application.RunScheduledPublishes(ctx, 10, nil)
+	completed, err := application.RunScheduledPublications(ctx, 10, nil)
 	if err != nil || completed != 0 {
 		t.Fatalf("run scheduled = %d, %v", completed, err)
 	}
-	failed, err := backend.FindTask(ctx, scheduled.ScheduledPublish.ID)
+	failed, err := backend.FindTask(ctx, scheduled.ScheduledPublication.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if failed.State != store.TaskStateFailed || failed.LastErrorCode != "scheduled_publish_rejected" {
+	if failed.State != store.TaskStateFailed || failed.LastErrorCode != "scheduled_publication_rejected" {
 		t.Fatalf("scheduled task after staff revocation = %#v", failed)
 	}
 	draft := true
