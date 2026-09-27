@@ -299,6 +299,35 @@ func (backend *Store) FindSession(ctx context.Context, tokenHash string, now tim
 	return result, err
 }
 
+func (backend *Store) FindSessionByID(ctx context.Context, id string, now time.Time) (store.AuthSession, error) {
+	if err := backend.prepareAuthOperation(ctx, "authentication session lookup"); err != nil {
+		return store.AuthSession{}, err
+	}
+	if err := validateMongoAuthSecretIdentity(id, "auth session ID"); err != nil {
+		return store.AuthSession{}, err
+	}
+	now, _, err := normalizeMongoSystemTime(now, "authentication timestamp")
+	if err != nil {
+		return store.AuthSession{}, err
+	}
+	var result store.AuthSession
+	err = backend.runMongoAuthSnapshot(ctx, func(sessionContext context.Context) error {
+		session, found, err := findMongoAuthSessionByPublicID(sessionContext, backend.authSessionCollection(), id)
+		if err != nil {
+			return err
+		}
+		if !found || !session.Session.ExpiresAt.After(now) {
+			return store.ErrNotFound
+		}
+		if err := backend.rejectMongoAuthIncarnationMismatch(sessionContext, session.Session.CollectionID, session.Session.UserID, session.UserIncarnation); err != nil {
+			return err
+		}
+		result = cloneMongoAuthSession(session.Session)
+		return nil
+	})
+	return result, err
+}
+
 func (backend *Store) ListSessions(ctx context.Context, collectionID schema.StableID, userID string, now time.Time) ([]store.AuthSession, error) {
 	if err := backend.prepareAuthOperation(ctx, "authentication session listing"); err != nil {
 		return nil, err

@@ -6,8 +6,7 @@ eyebrow: 'Data and APIs'
 order: 100
 navigation:
   section: 'Work with data'
-  parent: 'data-access'
-  order: 20
+  order: 40
   title: 'REST API'
 ---
 

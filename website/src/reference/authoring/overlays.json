@@ -5740,14 +5740,14 @@
 			"relatedSymbols": [],
 			"typeLinkIDs": {}
 		},
-		"go:github.com/riducms/ridu#AuthOperationRefresh": {
-			"summary": "Public constant AuthOperationRefresh from github.com/riducms/ridu.",
+		"go:github.com/riducms/ridu#AuthOperationRotate": {
+			"summary": "Public constant AuthOperationRotate from github.com/riducms/ridu.",
 			"group": "Constants",
 			"parametersLabel": "",
 			"parameters": [],
 			"details": [],
 			"example": "",
-			"keywords": ["ridu.AuthOperationRefresh", "AuthOperationRefresh"],
+			"keywords": ["ridu.AuthOperationRotate", "AuthOperationRotate"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {}
@@ -13883,14 +13883,14 @@
 			"relatedSymbols": [],
 			"typeLinkIDs": {}
 		},
-		"go:github.com/riducms/ridu/core#AuthOperationRefresh": {
-			"summary": "Public constant AuthOperationRefresh from github.com/riducms/ridu/core.",
+		"go:github.com/riducms/ridu/core#AuthOperationRotate": {
+			"summary": "Public constant AuthOperationRotate from github.com/riducms/ridu/core.",
 			"group": "Constants",
 			"parametersLabel": "",
 			"parameters": [],
 			"details": [],
 			"example": "",
-			"keywords": ["core.AuthOperationRefresh", "AuthOperationRefresh"],
+			"keywords": ["core.AuthOperationRotate", "AuthOperationRotate"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {}
@@ -40720,34 +40720,25 @@
 				"RiduError": "ts:@riducms/sdk#RiduError"
 			}
 		},
-		"ts:@riducms/sdk#RiduClient.login": {
-			"summary": "Authenticate against an auth-enabled collection.",
+		"ts:@riducms/sdk#RiduAuth.login": {
+			"summary": "Start a session. With a token store the token is persisted before this resolves.",
 			"group": "Authentication",
 			"parametersLabel": "",
 			"parameters": [
-				{
-					"name": "collection",
-					"type": "Slug",
-					"description": "The collection value."
-				},
 				{
 					"name": "credentials",
-					"type": "LoginCredentials",
-					"description": "The credentials value."
+					"type": "",
+					"description": "Email and password; `collection` is optional when the client sets `auth.collection`."
 				},
 				{
 					"name": "options",
-					"type": "RequestOptions | undefined",
-					"description": "The options value."
+					"type": "",
+					"description": "Request options such as an AbortSignal."
 				}
 			],
-			"returns": {
-				"type": "Promise<AuthSession<OutputFor<Config, Slug>>>",
-				"description": "The declared result."
-			},
 			"details": [],
 			"example": "",
-			"keywords": ["RiduClient.login", "@riducms/sdk.RiduClient.login"],
+			"keywords": ["RiduAuth.login", "@riducms/sdk.RiduAuth.login", "client.auth.login"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {
@@ -40779,24 +40770,24 @@
 				"RiduError": "ts:@riducms/sdk#RiduError"
 			}
 		},
-		"ts:@riducms/sdk#RiduClient.session": {
-			"summary": "Read and validate the current session.",
+		"ts:@riducms/sdk#RiduAuth.getSession": {
+			"summary": "Verify the current credential; resolves null without a valid session and rejects on an outage.",
 			"group": "Authentication",
 			"parametersLabel": "",
 			"parameters": [
 				{
 					"name": "options",
-					"type": "RequestOptions | undefined",
-					"description": "The options value."
+					"type": "",
+					"description": "Request options such as an AbortSignal."
 				}
 			],
-			"returns": {
-				"type": "Promise<AuthSession<AuthUser<Config>>>",
-				"description": "The declared result."
-			},
 			"details": [],
 			"example": "",
-			"keywords": ["RiduClient.session", "@riducms/sdk.RiduClient.session"],
+			"keywords": [
+				"RiduAuth.getSession",
+				"@riducms/sdk.RiduAuth.getSession",
+				"client.auth.getSession"
+			],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {
@@ -40828,24 +40819,20 @@
 				"RiduError": "ts:@riducms/sdk#RiduError"
 			}
 		},
-		"ts:@riducms/sdk#RiduClient.refreshSession": {
-			"summary": "Rotate the current session.",
+		"ts:@riducms/sdk#RiduAuth.rotate": {
+			"summary": "Replace the current bearer token without extending the session.",
 			"group": "Authentication",
 			"parametersLabel": "",
 			"parameters": [
 				{
 					"name": "options",
-					"type": "RequestOptions | undefined",
-					"description": "The options value."
+					"type": "",
+					"description": "Request options such as an AbortSignal."
 				}
 			],
-			"returns": {
-				"type": "Promise<AuthSession<AuthUser<Config>>>",
-				"description": "The declared result."
-			},
 			"details": [],
 			"example": "",
-			"keywords": ["RiduClient.refreshSession", "@riducms/sdk.RiduClient.refreshSession"],
+			"keywords": ["RiduAuth.rotate", "@riducms/sdk.RiduAuth.rotate", "client.auth.rotate"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {
@@ -40877,7 +40864,7 @@
 				"RiduError": "ts:@riducms/sdk#RiduError"
 			}
 		},
-		"ts:@riducms/sdk#RiduClient.logout": {
+		"ts:@riducms/sdk#RiduAuth.logout": {
 			"summary": "End the current session.",
 			"group": "Authentication",
 			"parametersLabel": "",
@@ -40888,13 +40875,9 @@
 					"description": "The options value."
 				}
 			],
-			"returns": {
-				"type": "Promise<LogoutEnvelope>",
-				"description": "The declared result."
-			},
 			"details": [],
 			"example": "",
-			"keywords": ["RiduClient.logout", "@riducms/sdk.RiduClient.logout"],
+			"keywords": ["RiduAuth.logout", "@riducms/sdk.RiduAuth.logout", "client.auth.logout"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {
@@ -40926,7 +40909,7 @@
 				"RiduError": "ts:@riducms/sdk#RiduError"
 			}
 		},
-		"ts:@riducms/sdk#RiduClient.logoutAll": {
+		"ts:@riducms/sdk#RiduAuth.logoutAll": {
 			"summary": "End every session owned by the current user.",
 			"group": "Authentication",
 			"parametersLabel": "",
@@ -40937,13 +40920,13 @@
 					"description": "The options value."
 				}
 			],
-			"returns": {
-				"type": "Promise<LogoutEnvelope>",
-				"description": "The declared result."
-			},
 			"details": [],
 			"example": "",
-			"keywords": ["RiduClient.logoutAll", "@riducms/sdk.RiduClient.logoutAll"],
+			"keywords": [
+				"RiduAuth.logoutAll",
+				"@riducms/sdk.RiduAuth.logoutAll",
+				"client.auth.logoutAll"
+			],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {
@@ -40975,7 +40958,7 @@
 				"RiduError": "ts:@riducms/sdk#RiduError"
 			}
 		},
-		"ts:@riducms/sdk#RiduClient.sessions": {
+		"ts:@riducms/sdk#RiduAuth.sessions": {
 			"summary": "List the current user’s active sessions.",
 			"group": "Authentication",
 			"parametersLabel": "",
@@ -40986,13 +40969,9 @@
 					"description": "The options value."
 				}
 			],
-			"returns": {
-				"type": "Promise<AuthSessionInfo[]>",
-				"description": "The declared result."
-			},
 			"details": [],
 			"example": "",
-			"keywords": ["RiduClient.sessions", "@riducms/sdk.RiduClient.sessions"],
+			"keywords": ["RiduAuth.sessions", "@riducms/sdk.RiduAuth.sessions", "client.auth.sessions"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {
@@ -41024,7 +41003,7 @@
 				"RiduError": "ts:@riducms/sdk#RiduError"
 			}
 		},
-		"ts:@riducms/sdk#RiduClient.revokeSession": {
+		"ts:@riducms/sdk#RiduAuth.revokeSession": {
 			"summary": "Revoke one owned session by ID.",
 			"group": "Authentication",
 			"parametersLabel": "",
@@ -41040,13 +41019,13 @@
 					"description": "The options value."
 				}
 			],
-			"returns": {
-				"type": "Promise<DeleteEnvelope>",
-				"description": "The declared result."
-			},
 			"details": [],
 			"example": "",
-			"keywords": ["RiduClient.revokeSession", "@riducms/sdk.RiduClient.revokeSession"],
+			"keywords": [
+				"RiduAuth.revokeSession",
+				"@riducms/sdk.RiduAuth.revokeSession",
+				"client.auth.revokeSession"
+			],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {
@@ -41078,36 +41057,28 @@
 				"RiduError": "ts:@riducms/sdk#RiduError"
 			}
 		},
-		"ts:@riducms/sdk#RiduClient.requestPasswordReset": {
+		"ts:@riducms/sdk#RiduAuth.requestPasswordReset": {
 			"summary": "Request a password-reset token through the configured delivery hook.",
 			"group": "Authentication",
 			"parametersLabel": "",
 			"parameters": [
 				{
-					"name": "collection",
-					"type": "Slug",
-					"description": "The collection value."
-				},
-				{
-					"name": "email",
-					"type": "string",
-					"description": "The email value."
+					"name": "input",
+					"type": "",
+					"description": "The account email and optional collection."
 				},
 				{
 					"name": "options",
-					"type": "RequestOptions | undefined",
-					"description": "The options value."
+					"type": "",
+					"description": "Request options."
 				}
 			],
-			"returns": {
-				"type": "Promise<AuthActionEnvelope>",
-				"description": "The declared result."
-			},
 			"details": [],
 			"example": "",
 			"keywords": [
-				"RiduClient.requestPasswordReset",
-				"@riducms/sdk.RiduClient.requestPasswordReset"
+				"RiduAuth.requestPasswordReset",
+				"@riducms/sdk.RiduAuth.requestPasswordReset",
+				"client.auth.requestPasswordReset"
 			],
 			"relatedDocs": [],
 			"relatedSymbols": [],
@@ -41140,39 +41111,29 @@
 				"RiduError": "ts:@riducms/sdk#RiduError"
 			}
 		},
-		"ts:@riducms/sdk#RiduClient.resetPassword": {
+		"ts:@riducms/sdk#RiduAuth.resetPassword": {
 			"summary": "Consume a password-reset token.",
 			"group": "Authentication",
 			"parametersLabel": "",
 			"parameters": [
 				{
-					"name": "collection",
-					"type": "Slug",
-					"description": "The collection value."
-				},
-				{
-					"name": "token",
-					"type": "string",
-					"description": "The token value."
-				},
-				{
-					"name": "password",
-					"type": "string",
-					"description": "The password value."
+					"name": "input",
+					"type": "",
+					"description": "The reset token, new password, and optional collection."
 				},
 				{
 					"name": "options",
-					"type": "RequestOptions | undefined",
-					"description": "The options value."
+					"type": "",
+					"description": "Request options."
 				}
 			],
-			"returns": {
-				"type": "Promise<AuthActionEnvelope>",
-				"description": "The declared result."
-			},
 			"details": [],
 			"example": "",
-			"keywords": ["RiduClient.resetPassword", "@riducms/sdk.RiduClient.resetPassword"],
+			"keywords": [
+				"RiduAuth.resetPassword",
+				"@riducms/sdk.RiduAuth.resetPassword",
+				"client.auth.resetPassword"
+			],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {
@@ -41204,29 +41165,29 @@
 				"RiduError": "ts:@riducms/sdk#RiduError"
 			}
 		},
-		"ts:@riducms/sdk#RiduClient.authBootstrap": {
-			"summary": "Check whether the configured admin collection still allows one-time first-user setup.",
+		"ts:@riducms/sdk#RiduAuth.bootstrap": {
+			"summary": "Check whether an auth collection still permits its first bootstrap user.",
 			"group": "Authentication",
 			"parametersLabel": "",
 			"parameters": [
 				{
-					"name": "collection",
-					"type": "Slug",
-					"description": "The collection value."
+					"name": "input",
+					"type": "",
+					"description": "The auth collection to check."
 				},
 				{
 					"name": "options",
-					"type": "RequestOptions | undefined",
-					"description": "The options value."
+					"type": "",
+					"description": "Request options such as an AbortSignal."
 				}
 			],
-			"returns": {
-				"type": "Promise<AuthBootstrapEnvelope>",
-				"description": "The declared result."
-			},
 			"details": [],
 			"example": "",
-			"keywords": ["RiduClient.authBootstrap", "@riducms/sdk.RiduClient.authBootstrap"],
+			"keywords": [
+				"RiduAuth.bootstrap",
+				"@riducms/sdk.RiduAuth.bootstrap",
+				"client.auth.bootstrap"
+			],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {
@@ -41258,39 +41219,29 @@
 				"RiduError": "ts:@riducms/sdk#RiduError"
 			}
 		},
-		"ts:@riducms/sdk#RiduClient.createAuthUser": {
-			"summary": "Create an auth user and credential together.",
+		"ts:@riducms/sdk#RiduAuth.createUser": {
+			"summary": "Create a user in an auth-enabled collection, including sign-up.",
 			"group": "Authentication",
 			"parametersLabel": "",
 			"parameters": [
 				{
-					"name": "collection",
-					"type": "Slug",
-					"description": "The collection value."
-				},
-				{
-					"name": "data",
-					"type": "CreateFor<Config, Slug>",
-					"description": "The data value."
-				},
-				{
-					"name": "password",
-					"type": "string",
-					"description": "The password value."
+					"name": "input",
+					"type": "",
+					"description": "The new user document, password, and optional collection."
 				},
 				{
 					"name": "options",
-					"type": "MutationLocaleOptions<LocaleFor<Config>> | undefined",
-					"description": "The options value."
+					"type": "",
+					"description": "Locale and request options."
 				}
 			],
-			"returns": {
-				"type": "Promise<OutputFor<Config, Slug>>",
-				"description": "The declared result."
-			},
 			"details": [],
 			"example": "",
-			"keywords": ["RiduClient.createAuthUser", "@riducms/sdk.RiduClient.createAuthUser"],
+			"keywords": [
+				"RiduAuth.createUser",
+				"@riducms/sdk.RiduAuth.createUser",
+				"client.auth.createUser"
+			],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {
@@ -41322,34 +41273,29 @@
 				"RiduError": "ts:@riducms/sdk#RiduError"
 			}
 		},
-		"ts:@riducms/sdk#RiduClient.requestVerification": {
+		"ts:@riducms/sdk#RiduAuth.requestVerification": {
 			"summary": "Request an email-verification token through the configured delivery hook.",
 			"group": "Authentication",
 			"parametersLabel": "",
 			"parameters": [
 				{
-					"name": "collection",
-					"type": "Slug",
-					"description": "The collection value."
-				},
-				{
-					"name": "email",
-					"type": "string",
-					"description": "The email value."
+					"name": "input",
+					"type": "",
+					"description": "The account email and optional collection."
 				},
 				{
 					"name": "options",
-					"type": "RequestOptions | undefined",
-					"description": "The options value."
+					"type": "",
+					"description": "Request options."
 				}
 			],
-			"returns": {
-				"type": "Promise<AuthActionEnvelope>",
-				"description": "The declared result."
-			},
 			"details": [],
 			"example": "",
-			"keywords": ["RiduClient.requestVerification", "@riducms/sdk.RiduClient.requestVerification"],
+			"keywords": [
+				"RiduAuth.requestVerification",
+				"@riducms/sdk.RiduAuth.requestVerification",
+				"client.auth.requestVerification"
+			],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {
@@ -41381,34 +41327,29 @@
 				"RiduError": "ts:@riducms/sdk#RiduError"
 			}
 		},
-		"ts:@riducms/sdk#RiduClient.verifyEmail": {
+		"ts:@riducms/sdk#RiduAuth.verifyEmail": {
 			"summary": "Consume an email-verification token.",
 			"group": "Authentication",
 			"parametersLabel": "",
 			"parameters": [
 				{
-					"name": "collection",
-					"type": "Slug",
-					"description": "The collection value."
-				},
-				{
-					"name": "token",
-					"type": "string",
-					"description": "The token value."
+					"name": "input",
+					"type": "",
+					"description": "The verification token and optional collection."
 				},
 				{
 					"name": "options",
-					"type": "RequestOptions | undefined",
-					"description": "The options value."
+					"type": "",
+					"description": "Request options."
 				}
 			],
-			"returns": {
-				"type": "Promise<AuthActionEnvelope>",
-				"description": "The declared result."
-			},
 			"details": [],
 			"example": "",
-			"keywords": ["RiduClient.verifyEmail", "@riducms/sdk.RiduClient.verifyEmail"],
+			"keywords": [
+				"RiduAuth.verifyEmail",
+				"@riducms/sdk.RiduAuth.verifyEmail",
+				"client.auth.verifyEmail"
+			],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {
@@ -41440,34 +41381,29 @@
 				"RiduError": "ts:@riducms/sdk#RiduError"
 			}
 		},
-		"ts:@riducms/sdk#RiduClient.changePassword": {
+		"ts:@riducms/sdk#RiduAuth.changePassword": {
 			"summary": "Change the current user’s password.",
 			"group": "Authentication",
 			"parametersLabel": "",
 			"parameters": [
 				{
-					"name": "currentPassword",
-					"type": "string",
-					"description": "The currentPassword value."
-				},
-				{
-					"name": "password",
-					"type": "string",
-					"description": "The password value."
+					"name": "input",
+					"type": "",
+					"description": "The current password and its replacement."
 				},
 				{
 					"name": "options",
-					"type": "RequestOptions | undefined",
-					"description": "The options value."
+					"type": "",
+					"description": "Request options."
 				}
 			],
-			"returns": {
-				"type": "Promise<AuthActionEnvelope>",
-				"description": "The declared result."
-			},
 			"details": [],
 			"example": "",
-			"keywords": ["RiduClient.changePassword", "@riducms/sdk.RiduClient.changePassword"],
+			"keywords": [
+				"RiduAuth.changePassword",
+				"@riducms/sdk.RiduAuth.changePassword",
+				"client.auth.changePassword"
+			],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {
@@ -41499,7 +41435,7 @@
 				"RiduError": "ts:@riducms/sdk#RiduError"
 			}
 		},
-		"ts:@riducms/sdk#RiduClient.createAPIKey": {
+		"ts:@riducms/sdk#RiduAuth.createAPIKey": {
 			"summary": "Create an API key; its secret is returned only once.",
 			"group": "Authentication",
 			"parametersLabel": "",
@@ -41515,15 +41451,15 @@
 					"description": "The options value."
 				}
 			],
-			"returns": {
-				"type": "Promise<APIKey>",
-				"description": "The declared result."
-			},
 			"details": [
 				"CreateAPIKeyInput is the SDK’s internal name for the inline input shape; it is not a separately importable export."
 			],
 			"example": "",
-			"keywords": ["RiduClient.createAPIKey", "@riducms/sdk.RiduClient.createAPIKey"],
+			"keywords": [
+				"RiduAuth.createAPIKey",
+				"@riducms/sdk.RiduAuth.createAPIKey",
+				"client.auth.createAPIKey"
+			],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {
@@ -41555,7 +41491,7 @@
 				"RiduError": "ts:@riducms/sdk#RiduError"
 			}
 		},
-		"ts:@riducms/sdk#RiduClient.apiKeys": {
+		"ts:@riducms/sdk#RiduAuth.apiKeys": {
 			"summary": "List API-key metadata without secrets.",
 			"group": "Authentication",
 			"parametersLabel": "",
@@ -41566,13 +41502,9 @@
 					"description": "The options value."
 				}
 			],
-			"returns": {
-				"type": "Promise<APIKeyInfo[]>",
-				"description": "The declared result."
-			},
 			"details": [],
 			"example": "",
-			"keywords": ["RiduClient.apiKeys", "@riducms/sdk.RiduClient.apiKeys"],
+			"keywords": ["RiduAuth.apiKeys", "@riducms/sdk.RiduAuth.apiKeys", "client.auth.apiKeys"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {
@@ -41604,7 +41536,7 @@
 				"RiduError": "ts:@riducms/sdk#RiduError"
 			}
 		},
-		"ts:@riducms/sdk#RiduClient.revokeAPIKey": {
+		"ts:@riducms/sdk#RiduAuth.revokeAPIKey": {
 			"summary": "Revoke one API key.",
 			"group": "Authentication",
 			"parametersLabel": "",
@@ -41620,13 +41552,13 @@
 					"description": "The options value."
 				}
 			],
-			"returns": {
-				"type": "Promise<DeleteEnvelope>",
-				"description": "The declared result."
-			},
 			"details": [],
 			"example": "",
-			"keywords": ["RiduClient.revokeAPIKey", "@riducms/sdk.RiduClient.revokeAPIKey"],
+			"keywords": [
+				"RiduAuth.revokeAPIKey",
+				"@riducms/sdk.RiduAuth.revokeAPIKey",
+				"client.auth.revokeAPIKey"
+			],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {
@@ -41658,34 +41590,29 @@
 				"RiduError": "ts:@riducms/sdk#RiduError"
 			}
 		},
-		"ts:@riducms/sdk#RiduClient.forceUnlock": {
+		"ts:@riducms/sdk#RiduAuth.forceUnlock": {
 			"summary": "Clear lockout state for an auth user when authorized.",
 			"group": "Authentication",
 			"parametersLabel": "",
 			"parameters": [
 				{
-					"name": "collection",
-					"type": "Slug",
-					"description": "The collection value."
-				},
-				{
-					"name": "id",
-					"type": "string",
-					"description": "The id value."
+					"name": "input",
+					"type": "",
+					"description": "The locked user ID and optional collection."
 				},
 				{
 					"name": "options",
-					"type": "RequestOptions | undefined",
-					"description": "The options value."
+					"type": "",
+					"description": "Request options."
 				}
 			],
-			"returns": {
-				"type": "Promise<AuthActionEnvelope>",
-				"description": "The declared result."
-			},
 			"details": [],
 			"example": "",
-			"keywords": ["RiduClient.forceUnlock", "@riducms/sdk.RiduClient.forceUnlock"],
+			"keywords": [
+				"RiduAuth.forceUnlock",
+				"@riducms/sdk.RiduAuth.forceUnlock",
+				"client.auth.forceUnlock"
+			],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {

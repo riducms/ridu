@@ -11,96 +11,49 @@ navigation:
   title: 'Transactions and errors'
 ---
 
-Use hooks inside the transaction for database changes that must succeed together, such as
-saving a post and its audit entry. Use `AfterCommit` for email or webhooks once that save
-has succeeded, and `AfterError` to report a failed operation.
+Every create, update, or delete runs in a database transaction. Hooks that run before the
+commit can save related documents in the same transaction, so everything is saved together or
+nothing is. `AfterCommit` hooks run once the save has succeeded, which makes them the place for
+email and webhooks. `AfterError` hooks report operations that failed.
 
 ## Choose the hook for the work {#configuration}
 
-| Hook or option                 | Use it for                                                                       | Failure behavior                                                                 |
-| ------------------------------ | -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| `AfterChange`                  | Related Ridu writes that must commit with the document.                          | An error rolls the transaction back.                                             |
-| `AfterOperation`               | Final database work for any operation before response processing and commit.     | An error can still roll a write back.                                            |
-| `AfterCommit`                  | Email, webhooks, external search, and effects that require a committed document. | An error is reported but cannot undo the commit.                                 |
-| `Config.AfterCommit`           | Central scheduling or instrumentation of after-commit effects.                   | The dispatcher owns when `effect.Run` executes; it is not automatically durable. |
-| A registered task              | Retryable background work with serializable input.                               | The selected store owns durable queue state and retries.                         |
-| `AfterError`                   | Logging or observing the original operation failure.                             | Returning `nil` does not make the failed operation succeed.                      |
-| `ctx.Local` with `ctx.Context` | Nested reads/writes through the normal engine and active transaction.            | Access, validation, hooks, and cancellation still apply.                         |
+| Hook or option                    | Use it for                                                         | If it fails                                                                 |
+| --------------------------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------------- |
+| `AfterChange`, `AfterDelete`      | Related Ridu writes that must be saved together with the document. | The whole transaction rolls back.                                           |
+| `AfterOperation`                  | Final database work for any kind of operation.                     | The transaction rolls back.                                                 |
+| `AfterCommit`                     | Email, webhooks, search indexes, and cache purges.                 | The document stays saved; the caller receives an error.                     |
+| `Config.AfterCommit`              | Scheduling every after-commit effect centrally.                    | The dispatcher decides when effects run. Ridu does not store or retry them. |
+| A registered [task](/docs/tasks/) | Background work that must be retried until it succeeds.            | The store keeps the task and retries it.                                    |
+| `AfterError`                      | Logging or reporting a failed operation.                           | The original failure still reaches the caller.                              |
 
 ## Save related documents together {#nested-operations}
 
-Use a collection or global hook's `ctx.Local` to write a related document. Pass `ctx.Context`
-so the related write shares the transaction: either both writes succeed or neither is saved.
-The related operation still runs its own access rules, validation, and hooks.
+A collection or global hook can create, update, or delete other documents through `ctx.Local`.
+Pass `ctx.Context` as the first argument so the related write joins the current transaction:
+either both writes are saved, or neither is.
 
-This example adds an audit record after a post changes. Add `AuditLog` to `Config.Collections`,
-and choose its access rules as you would for any other collection:
-
-```go title="content/audit_log.go" focus={21-24,29-34,36-37}
-package content
-
-import (
-	"github.com/riducms/ridu"
-	"github.com/riducms/ridu/field"
-	"github.com/riducms/ridu/store"
-)
-
-var AuditLog = ridu.Collection{
-	Slug: "audit-log",
-	Fields: field.Fields{
-		field.Text("document").Required(),
-		field.Text("operation").Required(),
-	},
-}
-
-func writeAuditEntry(ctx ridu.HookContext) error {
-	if ctx.Document == nil {
-		return nil
-	}
-	// Reuse the transaction so the post and audit entry save together.
-	_, err := ctx.Local.Create(
-		ctx.Context,
-		"audit-log",
-		store.Values{
-			"document":  store.String(ctx.Document.ID),
-			"operation": store.String(string(ctx.Operation)),
-		},
-		// Local API calls do not inherit the user or locale.
-		ridu.MutationOptions{
-			Actor:           ctx.Actor,
-			ActorCollection: ctx.ActorCollection,
-			Locale:          ctx.Locale,
-		},
-	)
-	// An audit failure must also fail the post's save.
-	return err
-}
+```go
+_, err := ctx.Local.Create(ctx.Context, "audit-log", values, ridu.MutationOptions{
+	// Local API calls do not inherit these; pass them explicitly.
+	Actor:           ctx.Actor,
+	ActorCollection: ctx.ActorCollection,
+	Locale:          ctx.Locale,
+})
+return err // An error here rolls back the original save too.
 ```
 
-Register `writeAuditEntry` on the posts collection:
+The [`AfterChange` audit example](/docs/hooks/collections/#after-change) shows the complete hook.
+A few rules apply to every related write:
 
-```go focus={3}
-Hooks: ridu.CollectionHooks{
-	// Save the audit entry in the same transaction as the post.
-	AfterChange: []ridu.Hook{writeAuditEntry},
-},
-```
-
-After a successful save, there is an audit record with the post ID and operation. If the audit
-write is rejected, the post change is rolled back too. A failed nested operation marks the shared
-transaction as failed; swallowing its error does not make the outer save succeed.
-
-The options pass the signed-in user, auth collection, and locale to the related write.
-See [Hook context](/docs/hooks/context/#nested-operations) for how to carry those values through
-local API calls.
-
-Keep related writes out of a standalone read's hooks: that transaction is read-only. Reads made
-while preparing a write response may share a writable transaction, which is another reason to
-choose a write hook for this work.
-
-Register this hook on Posts, not AuditLog: logging the audit collection's own changes would
-create a loop. See [Avoid repeated hook calls](/docs/hooks/context/#recursion) before writing
-back to a document from its hooks.
+- The related operation runs its own access rules, validation, and hooks.
+- If it fails, the shared transaction fails. Ignoring the error does not save the original
+  document.
+- A standalone read runs in a read-only transaction, so write from a save or delete hook, not
+  from `AfterRead` or `BeforeRead`.
+- Attach the hook to the collection being changed, not to the collection it writes to. An audit
+  hook on the audit collection would log its own entries forever. See
+  [Avoid triggering the same hook again](/docs/hooks/context/#recursion).
 
 ## Send notifications after a successful save {#after-commit}
 
@@ -200,56 +153,37 @@ can trigger its hooks again, so keep the notification helper focused on delivery
 
 ## Log a failed operation {#handle-errors}
 
-Use `AfterError` to log a failure or record a metric. It receives the original error in
-`ctx.Error`. Returning `nil` does not make the failed request succeed, and returning another
-error does not replace the original failure.
+`AfterError` hooks run when an operation fails, with the failure in `ctx.Error`. The
+[`AfterError` example](/docs/hooks/collections/#after-error) logs it. Two rules to remember:
 
-```go title="content/log_failures.go" focus={12,14-15}
-package content
+- Returning `nil` does not make the failed operation succeed, and returning another error does
+  not replace the original one.
+- For a write that fails before commit, the hook runs after the rollback. Log the failure; do not
+  try to repair the write by starting new writes from this hook.
 
-import (
-	"log"
-
-	"github.com/riducms/ridu"
-)
-
-func logFailure(ctx ridu.HookContext) error {
-	log.Printf(
-		"Ridu %s failed (collection=%s global=%s): %v",
-		ctx.Operation, ctx.CollectionID, ctx.GlobalID, ctx.Error,
-	)
-	// Finish logging; the original failure still reaches the caller.
-	return nil
-}
-```
-
-Attach it to a collection or global with:
+To log failures from every collection and global, add the hook to your application's
+`ridu.Config` instead:
 
 ```go
-Hooks: ridu.CollectionHooks{
-	AfterError: []ridu.Hook{logFailure},
-},
+config.Hooks.AfterError = []ridu.Hook{logFailure}
 ```
 
-For failures anywhere in the application, also add `logFailure` to
-`Config.Hooks.AfterError`. If a collection or global is known, its error hooks run before the
-application's error hooks. Avoid attaching the same logger in both places if you want one entry
-per failure.
+Application error hooks also see failures that happen before Ridu knows which collection is
+involved. When a collection or global is known, its own `AfterError` hooks run first. Add a logger
+in one place only if you want one entry per failure.
 
-For a top-level write that fails before commit, error hooks run after rollback. If an after-commit
-hook fails, the write is already committed. A failure in a nested local API operation can run error
-hooks while the outer transaction is marked for rollback. Keep this hook
-focused on logging; do not try to repair the failed write by starting more writes from it.
+### What the caller sees when a hook fails {#hook-errors}
 
-### Return validation messages from a validator {#hook-errors}
+An error from a hook stops the operation. The caller receives a `hook_failed` error (HTTP 500)
+with a generic message such as `before delete hook failed`. Your error's own message stays on the
+server: the Go local API keeps it in the error chain, where `errors.Unwrap` and `errors.Is` can
+reach it, and `AfterError` hooks receive it. Before commit, the failure also rolls back the write
+and any related writes, even when it comes from `AfterChange`, `AfterOperation`, or `AfterRead`.
 
-A non-nil error from an ordinary hook stops the operation and normally becomes `hook_failed`.
-Before commit, that failure rolls back the write and related transactional writes. Even an
-`AfterChange`, `AfterOperation`, or `AfterRead` failure can still trigger a rollback.
-
-Use [custom validation](/docs/fields/validation/) to tell an author that a field value is invalid.
-Its `operation.Issue` messages appear beside the appropriate inputs. Return an ordinary error
-when your code could not finish its work, such as a failed related lookup or unavailable service.
+To tell an author that a value is wrong, use [custom validation](/docs/fields/validation/)
+instead. Its `operation.Issue` messages appear beside the field in the admin and are returned to
+API callers. Return an ordinary error from a hook when your code could not finish its work, such
+as a failed lookup or an unavailable service.
 
 ## Keep hooks predictable and fast {#performance}
 

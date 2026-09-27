@@ -1,6 +1,7 @@
 export { createClient } from "./client.js";
 export { createAdminLoader, type AdminLoader } from "./admin-loader.js";
 export { RiduError } from "./error.js";
+export { memoryTokenStore } from "./token-store.js";
 export {
 	connectLivePreview,
 	RIDU_LIVE_PREVIEW_CHANNEL_PARAM,
@@ -12,6 +13,17 @@ export {
 	type RiduLivePreviewUpdateMessage,
 } from "./live-preview.js";
 export type {
+	AuthCollectionInput,
+	AuthOptions,
+	AuthSession,
+	AuthSessionInfo,
+	LoginInput,
+	RiduAuth,
+	SessionCollection,
+	SessionFor,
+	SessionTokenStore,
+	UploadURL,
+	UploadURLOptions,
 	ClientOptions,
 	LiveValidationOptions,
 	AuthCollectionSlug,

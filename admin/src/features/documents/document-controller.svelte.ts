@@ -395,9 +395,10 @@ export class DocumentController {
 		this.#forceUnlockRequest = request;
 		this.unlockOperation = true;
 		try {
-			await runtime.client.forceUnlock(this.collection.slug, this.currentDocument.id, {
-				signal: request.signal,
-			});
+			await runtime.client.auth.forceUnlock(
+				{ collection: this.collection.slug, id: this.currentDocument.id },
+				{ signal: request.signal }
+			);
 			if (request.signal.aborted) return;
 			notifications.success({ title: runtime.i18n.t("documents:accountUnlocked") });
 		} catch (cause) {
@@ -545,10 +546,10 @@ export class DocumentController {
 				if (this.collection?.capabilities.auth) {
 					if (password === undefined)
 						throw new Error(this.options.runtime.i18n.t("documents:enterNewAccountPassword"));
-					return this.options.runtime.client.createAuthUser(collectionSlug, values, password, {
-						signal: request.signal,
-						locale: this.contentLocale,
-					});
+					return this.options.runtime.client.auth.createUser(
+						{ collection: collectionSlug, data: values, password },
+						{ signal: request.signal, locale: this.contentLocale }
+					);
 				}
 				if (!this.uploadCollection) {
 					return this.options.runtime.client.create(collectionSlug, values, {

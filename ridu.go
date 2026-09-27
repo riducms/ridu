@@ -197,6 +197,8 @@ type (
 	UploadInput                  = core.UploadInput
 	UpdateUploadInput            = core.UpdateUploadInput
 	UploadImageEdit              = core.UploadImageEdit
+	UploadGrantRequest           = core.UploadGrantRequest
+	UploadGrant                  = core.UploadGrant
 	RemoteUploadInput            = core.RemoteUploadInput
 	VersionConfig                = core.VersionConfig
 )
@@ -213,7 +215,8 @@ const (
 
 	AuthOperationLogin             = core.AuthOperationLogin
 	AuthOperationLogout            = core.AuthOperationLogout
-	AuthOperationRefresh           = core.AuthOperationRefresh
+	AuthOperationRotate            = core.AuthOperationRotate
+	AuthOperationSession           = core.AuthOperationSession
 	AuthOperationPasswordReset     = core.AuthOperationPasswordReset
 	AuthOperationEmailVerification = core.AuthOperationEmailVerification
 	AuthOperationAPIKey            = core.AuthOperationAPIKey

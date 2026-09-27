@@ -77,9 +77,10 @@ export class CreateFirstUserController {
 		let accountCreated = false;
 		try {
 			await this.form.submit(this.fields, true, (values) =>
-				this.options.runtime.client.createAuthUser(collection.slug, values, this.password, {
-					signal: request.signal,
-				})
+				this.options.runtime.client.auth.createUser(
+					{ collection: collection.slug, data: values, password: this.password },
+					{ signal: request.signal }
+				)
 			);
 			accountCreated = true;
 			if (!this.#current(generation, request)) return undefined;
@@ -88,9 +89,8 @@ export class CreateFirstUserController {
 			if (typeof identity !== "string" || identity.trim() === "") {
 				throw new Error(this.options.runtime.i18n.t("auth:firstAccountIdentityUnavailable"));
 			}
-			await this.options.runtime.client.login(
-				collection.slug,
-				{ email: identity, password: this.password },
+			await this.options.runtime.client.auth.login(
+				{ collection: collection.slug, email: identity, password: this.password },
 				{ signal: request.signal }
 			);
 			if (!this.#current(generation, request)) return undefined;
@@ -101,7 +101,7 @@ export class CreateFirstUserController {
 				this.options.runtime.collectionOperations[collection.slug]?.admin !== true
 			) {
 				try {
-					await this.options.runtime.client.logout({ signal: request.signal });
+					await this.options.runtime.client.auth.logout({ signal: request.signal });
 				} catch {
 					// The setup route remains closed even if cookie cleanup fails.
 				}
@@ -133,9 +133,10 @@ export class CreateFirstUserController {
 			}
 
 			try {
-				const bootstrap = await this.options.runtime.client.authBootstrap(collection.slug, {
-					signal: request.signal,
-				});
+				const bootstrap = await this.options.runtime.client.auth.bootstrap(
+					{ collection: collection.slug },
+					{ signal: request.signal }
+				);
 				if (!this.#current(generation, request)) return undefined;
 				if (!bootstrap.available) {
 					await this.#continueToLogin("completed");

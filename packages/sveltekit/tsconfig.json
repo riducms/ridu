@@ -1,0 +1,7 @@
+{
+	"extends": "../../tsconfig.base.json",
+	"compilerOptions": {
+		"types": ["bun", "node", "@sveltejs/kit"]
+	},
+	"include": ["src/**/*.ts", "tests/**/*.ts"]
+}

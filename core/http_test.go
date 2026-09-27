@@ -1550,11 +1550,11 @@ func TestHTTPSecurityRateLimitSessionRotationTrustedProxyAndAudit(t *testing.T) 
 	if resolved.StatusCode != http.StatusOK || len(resolved.Cookies()) != 0 {
 		t.Fatalf("current session must not rotate implicitly: status=%d cookies=%#v", resolved.StatusCode, resolved.Cookies())
 	}
-	current := requestJSON(t, client, http.MethodPost, "http://ridu.test/api/auth/refresh", nil, original.String())
+	current := requestJSON(t, client, http.MethodPost, "http://ridu.test/api/auth/rotate", nil, original.String())
 	if current.StatusCode != http.StatusOK || len(current.Cookies()) != 1 || current.Cookies()[0].Value == original.Value {
 		t.Fatalf("session was not rotated: status=%d cookies=%#v", current.StatusCode, current.Cookies())
 	}
-	stale := requestJSON(t, client, http.MethodPost, "http://ridu.test/api/auth/refresh", nil, original.String())
+	stale := requestJSON(t, client, http.MethodPost, "http://ridu.test/api/auth/rotate", nil, original.String())
 	if stale.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("rotated session remained valid: %d", stale.StatusCode)
 	}

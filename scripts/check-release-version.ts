@@ -9,6 +9,7 @@ const packageDefinitions = [
 	{ path: "packages/ui/package.json", name: "@riducms/ui" },
 	{ path: "packages/protocol/package.json", name: "@riducms/protocol" },
 	{ path: "packages/sdk/package.json", name: "@riducms/sdk" },
+	{ path: "packages/sveltekit/package.json", name: "@riducms/sveltekit" },
 	{ path: "packages/translations/package.json", name: "@riducms/translations" },
 	{ path: "packages/plugin-richtext/package.json", name: "@riducms/plugin-richtext" },
 	{ path: "packages/plugin-seo/package.json", name: "@riducms/plugin-seo" },

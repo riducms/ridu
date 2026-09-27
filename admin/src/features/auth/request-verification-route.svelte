@@ -25,7 +25,7 @@
 		error = undefined;
 
 		try {
-			await runtime.client.requestVerification(authCollection.slug, email);
+			await runtime.client.auth.requestVerification({ collection: authCollection.slug, email });
 			sent = true;
 		} catch (cause) {
 			error =

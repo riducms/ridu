@@ -18,7 +18,7 @@
 		error = undefined;
 
 		try {
-			await runtime.client.logout();
+			await runtime.client.auth.logout();
 			await runtime.hardNavigate(adminRoutePatterns.login);
 		} catch (cause) {
 			error = cause instanceof Error ? cause.message : runtime.i18n.t("account:signOutFailed");

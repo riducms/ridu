@@ -57,6 +57,7 @@ func Protocol() []byte {
 		string(protocol.ErrorEmailNotVerified),
 		string(protocol.ErrorAuthFeatureDisabled),
 		string(protocol.ErrorInvalidAuthToken),
+		string(protocol.ErrorInvalidCredential),
 		string(protocol.ErrorInvalidPreviewToken),
 		string(protocol.ErrorSelectionTooLarge),
 	})
@@ -147,6 +148,27 @@ func writeUnion(output *bytes.Buffer, name string, values []string) {
 
 var protocolInterfaces = strings.TrimSpace(`
 /** Crop and focal coordinates are percentages of the oriented source image. */
+export interface UploadGrantRequestItem {
+	id: string;
+	size?: string;
+}
+
+export interface UploadGrantsRequest {
+	items: UploadGrantRequestItem[];
+	expiresIn?: number;
+}
+
+export interface UploadGrant {
+	id: string;
+	size?: string;
+	url: string;
+	expiresAt: string;
+}
+
+export interface UploadGrantsEnvelope {
+	grants: UploadGrant[];
+}
+
 export interface UploadImageEdit {
   focalX: number;
   focalY: number;
@@ -500,6 +522,19 @@ export interface AuthSessionsEnvelope {
 
 export interface SessionEnvelope<User> {
 	session: AuthSession<User>;
+}
+
+export type SessionTransport = "cookie" | "token";
+
+export interface LoginRequest {
+	email: string;
+	password: string;
+	transport?: SessionTransport;
+}
+
+export interface SessionTokenEnvelope<User> {
+	session: AuthSession<User>;
+	token: string;
 }
 
 export interface LogoutEnvelope {

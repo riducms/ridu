@@ -1,7 +1,7 @@
 {
 	"name": "@riducms/admin",
 	"description": "Framework-owned Svelte 5 authoring application embedded by Ridu servers.",
-	"version": "0.3.0",
+	"version": "0.4.0",
 	"license": "MIT",
 	"repository": {
 		"type": "git",
@@ -59,8 +59,10 @@
 		"@riducms/sdk": "workspace:*",
 		"@riducms/translations": "workspace:*",
 		"@riducms/ui": "workspace:*",
+		"@twinkleplop/bash": "0.1.5",
+		"@twinkleplop/go": "0.1.5",
+		"@twinkleplop/typescript": "0.1.5",
 		"bits-ui": "^2.18.1",
-		"shiki": "4.4.3",
 		"svelte-sonner": "^1.1.1"
 	},
 	"devDependencies": {

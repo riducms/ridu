@@ -176,6 +176,8 @@ type Config struct {
 	OpenUploadSource             func(context.Context, string, string, *AuthIdentity) (io.ReadCloser, storage.Object, error)
 	Duplicate                    func(context.Context, string, string, store.Values, *AuthIdentity, LocaleOptions) (store.Document, error)
 	OpenUpload                   func(context.Context, string, string, *AuthIdentity) (io.ReadCloser, storage.Object, error)
+	CreateUploadGrants           func(context.Context, string, string, []protocol.UploadGrantRequestItem, time.Duration) ([]protocol.UploadGrant, error)
+	OpenUploadGrant              func(context.Context, string, string, string) (io.ReadCloser, storage.Object, error)
 	PluginEndpoints              []PluginEndpoint
 	PluginTransports             []PluginEndpoint
 	CustomEndpoints              []CustomEndpoint
@@ -364,6 +366,13 @@ func (api *API) serveHTTP(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 	if api.cors(writer, request, requestID) {
+		return
+	}
+	request, credentialError := api.attachCredentialState(request)
+	if credentialError != nil {
+		writer.Header().Set("Content-Type", "application/json")
+		writer.Header().Set("Cache-Control", "no-store")
+		api.writeError(writer, requestID, credentialError)
 		return
 	}
 	if strings.HasPrefix(request.URL.Path, "/admin") && api.config.AdminAssets != nil {
@@ -2013,11 +2022,15 @@ func revisionHeader(request *http.Request) int {
 }
 
 func (api *API) upload(writer http.ResponseWriter, request *http.Request, requestID string) {
+	remainder := strings.TrimPrefix(request.URL.Path, "/api/uploads/")
+	if collection, grants := strings.CutSuffix(remainder, "/grants"); grants && collection != "" && !strings.Contains(collection, "/") {
+		api.uploadGrants(writer, request, requestID, collection)
+		return
+	}
 	if request.Method != http.MethodGet && request.Method != http.MethodHead {
 		api.methodNotAllowed(writer, requestID, http.MethodGet, http.MethodHead)
 		return
 	}
-	remainder := strings.TrimPrefix(request.URL.Path, "/api/uploads/")
 	segments := strings.SplitN(remainder, "/", 2)
 	if len(segments) != 2 || segments[0] == "" || segments[1] == "" || api.config.OpenUpload == nil {
 		api.writeError(writer, requestID, &operationengine.Error{Code: "not_found", Status: 404, Message: "upload was not found"})
@@ -2027,12 +2040,57 @@ func (api *API) upload(writer http.ResponseWriter, request *http.Request, reques
 	if strings.HasPrefix(segments[1], "ridu/") {
 		key = segments[1]
 	}
-	reader, object, err := api.config.OpenUpload(request.Context(), segments[0], key, api.optionalIdentity(request))
+	var reader io.ReadCloser
+	var object storage.Object
+	var err error
+	if grant := request.URL.Query().Get("grant"); grant != "" {
+		if api.config.OpenUploadGrant == nil {
+			api.writeError(writer, requestID, &operationengine.Error{Code: "not_found", Status: 404, Message: "upload was not found"})
+			return
+		}
+		reader, object, err = api.config.OpenUploadGrant(request.Context(), segments[0], key, grant)
+	} else {
+		reader, object, err = api.config.OpenUpload(request.Context(), segments[0], key, api.optionalIdentity(request))
+	}
 	if err != nil {
 		api.writeError(writer, requestID, err)
 		return
 	}
 	serveUpload(writer, request, reader, object)
+}
+
+// uploadGrants mints short-lived delivery URLs for elements such as <img>
+// that cannot send an Authorization header. Grants are bound to a session.
+func (api *API) uploadGrants(writer http.ResponseWriter, request *http.Request, requestID, collection string) {
+	if request.Method != http.MethodPost {
+		api.methodNotAllowed(writer, requestID, http.MethodPost)
+		return
+	}
+	if api.config.CreateUploadGrants == nil {
+		api.writeError(writer, requestID, &operationengine.Error{Code: "not_found", Status: 404, Message: "upload grants are not available"})
+		return
+	}
+	token, _, ok := sessionCredential(request)
+	if !ok {
+		api.writeError(writer, requestID, &operationengine.Error{Code: "access_denied", Status: 401, Message: "a session is required to create upload grants"})
+		return
+	}
+	var input protocol.UploadGrantsRequest
+	if err := api.decodeJSON(writer, request, &input); err != nil {
+		api.writeError(writer, requestID, err)
+		return
+	}
+	if input.ExpiresIn < 0 {
+		api.writeError(writer, requestID, &operationengine.Error{Code: "validation", Status: 422, Message: "expiresIn must be a positive number of seconds"})
+		return
+	}
+	grants, err := api.config.CreateUploadGrants(request.Context(), token, collection, input.Items, time.Duration(input.ExpiresIn)*time.Second)
+	if err != nil {
+		api.writeError(writer, requestID, err)
+		return
+	}
+	writer.Header().Set("Cache-Control", "private, no-store")
+	writeJSON(writer, http.StatusOK, protocol.UploadGrantsEnvelope{Grants: grants})
 }
 
 func serveUpload(writer http.ResponseWriter, request *http.Request, reader io.ReadCloser, object storage.Object) {
@@ -2103,12 +2161,13 @@ func (api *API) auth(writer http.ResponseWriter, request *http.Request, requestI
 			api.writeError(writer, requestID, &operationengine.Error{Code: "unknown_auth_collection", Status: 404, Message: "auth collection was not found"})
 			return
 		}
-		var credentials struct {
-			Email    string `json:"email"`
-			Password string `json:"password"`
-		}
+		var credentials protocol.LoginRequest
 		if err := api.decodeJSON(writer, request, &credentials); err != nil {
 			api.writeError(writer, requestID, err)
+			return
+		}
+		if credentials.Transport != "" && credentials.Transport != protocol.SessionTransportCookie && credentials.Transport != protocol.SessionTransportToken {
+			api.writeError(writer, requestID, &operationengine.Error{Code: "bad_request", Status: 400, Message: `login transport must be "cookie" or "token"`})
 			return
 		}
 		clientIP := api.clientIP(request)
@@ -2125,8 +2184,11 @@ func (api *API) auth(writer http.ResponseWriter, request *http.Request, requestI
 			api.writeError(writer, requestID, err)
 			return
 		}
-		http.SetCookie(writer, &http.Cookie{Name: sessionCookie, Value: session.Token, Path: "/", HttpOnly: true, Secure: api.config.SecureCookies, SameSite: http.SameSiteLaxMode, Expires: session.ExpiresAt})
-		writeJSON(writer, http.StatusOK, sessionEnvelope(session))
+		transport := transportCookie
+		if credentials.Transport == protocol.SessionTransportToken {
+			transport = transportHeader
+		}
+		api.writeIssuedSession(writer, session, transport)
 		api.audit(request, requestID, &session.User, "login", collection, session.User.ID, session.Collection)
 		return
 	}
@@ -2135,17 +2197,19 @@ func (api *API) auth(writer http.ResponseWriter, request *http.Request, requestI
 			api.methodNotAllowed(writer, requestID, http.MethodPost)
 			return
 		}
-		cookie, err := request.Cookie(sessionCookie)
-		if err != nil || api.config.LogoutAll == nil {
+		token, transport, ok := sessionCredential(request)
+		if !ok || api.config.LogoutAll == nil {
 			api.writeError(writer, requestID, &operationengine.Error{Code: "access_denied", Status: 401, Message: "authentication is required"})
 			return
 		}
 		identity := api.optionalIdentity(request)
-		if err := api.config.LogoutAll(request.Context(), cookie.Value); err != nil {
+		if err := api.config.LogoutAll(request.Context(), token); err != nil {
 			api.writeError(writer, requestID, err)
 			return
 		}
-		api.clearSessionCookie(writer)
+		if transport == transportCookie {
+			api.clearSessionCookie(writer)
+		}
 		writeJSON(writer, http.StatusOK, protocol.LogoutEnvelope{LoggedOut: true})
 		api.audit(request, requestID, identityActor(identity), "logout_all", "", "", identityCollection(identity))
 		return
@@ -2155,8 +2219,8 @@ func (api *API) auth(writer http.ResponseWriter, request *http.Request, requestI
 			api.methodNotAllowed(writer, requestID, http.MethodPost)
 			return
 		}
-		cookie, err := request.Cookie(sessionCookie)
-		if err != nil || api.config.ChangePassword == nil {
+		token, transport, ok := sessionCredential(request)
+		if !ok || api.config.ChangePassword == nil {
 			api.writeError(writer, requestID, &operationengine.Error{Code: "access_denied", Status: 401, Message: "authentication is required"})
 			return
 		}
@@ -2169,11 +2233,13 @@ func (api *API) auth(writer http.ResponseWriter, request *http.Request, requestI
 			return
 		}
 		identity := api.optionalIdentity(request)
-		if err := api.config.ChangePassword(request.Context(), cookie.Value, input.CurrentPassword, input.Password); err != nil {
+		if err := api.config.ChangePassword(request.Context(), token, input.CurrentPassword, input.Password); err != nil {
 			api.writeError(writer, requestID, err)
 			return
 		}
-		api.clearSessionCookie(writer)
+		if transport == transportCookie {
+			api.clearSessionCookie(writer)
+		}
 		writeJSON(writer, http.StatusOK, protocol.AuthActionEnvelope{Success: true})
 		api.audit(request, requestID, identityActor(identity), "password_change", "", "", identityCollection(identity))
 		return
@@ -2192,14 +2258,16 @@ func (api *API) auth(writer http.ResponseWriter, request *http.Request, requestI
 			return
 		}
 		identity := api.optionalIdentity(request)
-		cookie, _ := request.Cookie(sessionCookie)
-		if cookie != nil && api.config.Logout != nil {
-			if err := api.config.Logout(request.Context(), cookie.Value); err != nil {
+		token, transport, ok := sessionCredential(request)
+		if ok && api.config.Logout != nil {
+			if err := api.config.Logout(request.Context(), token); err != nil {
 				api.writeError(writer, requestID, err)
 				return
 			}
 		}
-		api.clearSessionCookie(writer)
+		if !ok || transport == transportCookie {
+			api.clearSessionCookie(writer)
+		}
 		writeJSON(writer, http.StatusOK, protocol.LogoutEnvelope{LoggedOut: true})
 		api.audit(request, requestID, identityActor(identity), "logout", "", "", identityCollection(identity))
 		return
@@ -2209,12 +2277,12 @@ func (api *API) auth(writer http.ResponseWriter, request *http.Request, requestI
 			api.methodNotAllowed(writer, requestID, http.MethodGet)
 			return
 		}
-		cookie, err := request.Cookie(sessionCookie)
-		if err != nil || api.config.Sessions == nil {
+		token, _, ok := sessionCredential(request)
+		if !ok || api.config.Sessions == nil {
 			api.writeError(writer, requestID, &operationengine.Error{Code: "access_denied", Status: 401, Message: "authentication is required"})
 			return
 		}
-		sessions, err := api.config.Sessions(request.Context(), cookie.Value)
+		sessions, err := api.config.Sessions(request.Context(), token)
 		if err != nil {
 			api.writeError(writer, requestID, err)
 			return
@@ -2241,13 +2309,13 @@ func (api *API) auth(writer http.ResponseWriter, request *http.Request, requestI
 			api.writeError(writer, requestID, &operationengine.Error{Code: "bad_request", Status: 400, Message: "session ID is invalid"})
 			return
 		}
-		cookie, err := request.Cookie(sessionCookie)
-		if err != nil || api.config.RevokeSession == nil {
+		token, _, ok := sessionCredential(request)
+		if !ok || api.config.RevokeSession == nil {
 			api.writeError(writer, requestID, &operationengine.Error{Code: "access_denied", Status: 401, Message: "authentication is required"})
 			return
 		}
 		identity := api.optionalIdentity(request)
-		if err := api.config.RevokeSession(request.Context(), cookie.Value, sessionID); err != nil {
+		if err := api.config.RevokeSession(request.Context(), token, sessionID); err != nil {
 			api.writeError(writer, requestID, err)
 			return
 		}
@@ -2255,23 +2323,22 @@ func (api *API) auth(writer http.ResponseWriter, request *http.Request, requestI
 		api.audit(request, requestID, identityActor(identity), "session_revoke", "", sessionID, identityCollection(identity))
 		return
 	}
-	if path == "refresh" {
+	if path == "rotate" {
 		if request.Method != http.MethodPost {
 			api.methodNotAllowed(writer, requestID, http.MethodPost)
 			return
 		}
-		cookie, err := request.Cookie(sessionCookie)
-		if err != nil || api.config.RotateSession == nil {
+		token, transport, ok := sessionCredential(request)
+		if !ok || api.config.RotateSession == nil {
 			api.writeError(writer, requestID, &operationengine.Error{Code: "access_denied", Status: 401, Message: "authentication is required"})
 			return
 		}
-		session, err := api.config.RotateSession(request.Context(), cookie.Value)
+		session, err := api.config.RotateSession(request.Context(), token)
 		if err != nil {
 			api.writeError(writer, requestID, err)
 			return
 		}
-		http.SetCookie(writer, &http.Cookie{Name: sessionCookie, Value: session.Token, Path: "/", HttpOnly: true, Secure: api.config.SecureCookies, SameSite: http.SameSiteLaxMode, Expires: session.ExpiresAt})
-		writeJSON(writer, http.StatusOK, sessionEnvelope(session))
+		api.writeIssuedSession(writer, session, transport)
 		return
 	}
 	if path == "me" {
@@ -2279,17 +2346,17 @@ func (api *API) auth(writer http.ResponseWriter, request *http.Request, requestI
 			api.methodNotAllowed(writer, requestID, http.MethodGet)
 			return
 		}
-		cookie, err := request.Cookie(sessionCookie)
-		if err != nil || api.config.Session == nil {
+		state := api.credentialState(request)
+		if state.session == nil && state.cookieErr != nil {
+			api.writeError(writer, requestID, state.cookieErr)
+			return
+		}
+		if state.session == nil {
 			api.writeError(writer, requestID, &operationengine.Error{Code: "access_denied", Status: 401, Message: "authentication is required"})
 			return
 		}
-		session, err := api.config.Session(request.Context(), cookie.Value)
-		if err != nil {
-			api.writeError(writer, requestID, err)
-			return
-		}
-		writeJSON(writer, http.StatusOK, sessionEnvelope(session))
+		writer.Header().Set("Cache-Control", "private, no-store")
+		writeJSON(writer, http.StatusOK, sessionEnvelope(*state.session))
 		return
 	}
 	api.writeError(writer, requestID, &operationengine.Error{Code: "not_found", Status: 404, Message: "auth route was not found"})
@@ -2398,8 +2465,8 @@ func (api *API) accountUnlock(writer http.ResponseWriter, request *http.Request,
 }
 
 func (api *API) apiKeys(writer http.ResponseWriter, request *http.Request, requestID string) {
-	cookie, err := request.Cookie(sessionCookie)
-	if err != nil {
+	token, _, ok := sessionCredential(request)
+	if !ok {
 		api.writeError(writer, requestID, &operationengine.Error{Code: "access_denied", Status: 401, Message: "authentication is required"})
 		return
 	}
@@ -2410,7 +2477,7 @@ func (api *API) apiKeys(writer http.ResponseWriter, request *http.Request, reque
 			api.writeError(writer, requestID, &operationengine.Error{Code: "auth_feature_disabled", Status: 404, Message: "API keys are not enabled"})
 			return
 		}
-		keys, err := api.config.APIKeys(request.Context(), cookie.Value)
+		keys, err := api.config.APIKeys(request.Context(), token)
 		if err != nil {
 			api.writeError(writer, requestID, err)
 			return
@@ -2435,13 +2502,14 @@ func (api *API) apiKeys(writer http.ResponseWriter, request *http.Request, reque
 		}
 		var expiresAt time.Time
 		if input.ExpiresAt != "" {
+			var err error
 			expiresAt, err = time.Parse(time.RFC3339, input.ExpiresAt)
 			if err != nil {
 				api.writeError(writer, requestID, &operationengine.Error{Code: "validation", Status: 422, Message: "API key expiry must be an RFC 3339 timestamp"})
 				return
 			}
 		}
-		key, err := api.config.CreateAPIKey(request.Context(), cookie.Value, input.Name, expiresAt)
+		key, err := api.config.CreateAPIKey(request.Context(), token, input.Name, expiresAt)
 		if err != nil {
 			api.writeError(writer, requestID, err)
 			return
@@ -2462,13 +2530,13 @@ func (api *API) revokeAPIKey(writer http.ResponseWriter, request *http.Request, 
 		api.writeError(writer, requestID, &operationengine.Error{Code: "bad_request", Status: 400, Message: "API key ID is invalid"})
 		return
 	}
-	cookie, err := request.Cookie(sessionCookie)
-	if err != nil || api.config.RevokeAPIKey == nil {
+	token, _, ok := sessionCredential(request)
+	if !ok || api.config.RevokeAPIKey == nil {
 		api.writeError(writer, requestID, &operationengine.Error{Code: "access_denied", Status: 401, Message: "authentication is required"})
 		return
 	}
 	identity := api.optionalIdentity(request)
-	if err := api.config.RevokeAPIKey(request.Context(), cookie.Value, id); err != nil {
+	if err := api.config.RevokeAPIKey(request.Context(), token, id); err != nil {
 		api.writeError(writer, requestID, err)
 		return
 	}
@@ -2604,6 +2672,21 @@ func sessionEnvelope(session AuthSession) protocol.SessionEnvelope[map[string]an
 	}}
 }
 
+// writeIssuedSession delivers a newly issued or rotated token through the
+// selected transport. A token response is never cached and never sets the
+// cookie, so a same-site admin cookie is not replaced by a frontend login.
+func (api *API) writeIssuedSession(writer http.ResponseWriter, session AuthSession, transport sessionTransport) {
+	writer.Header().Set("Cache-Control", "no-store")
+	if transport == transportHeader {
+		writeJSON(writer, http.StatusOK, protocol.SessionTokenEnvelope[map[string]any]{
+			Session: sessionEnvelope(session).Session, Token: session.Token,
+		})
+		return
+	}
+	http.SetCookie(writer, &http.Cookie{Name: sessionCookie, Value: session.Token, Path: "/", HttpOnly: true, Secure: api.config.SecureCookies, SameSite: http.SameSiteLaxMode, Expires: session.ExpiresAt})
+	writeJSON(writer, http.StatusOK, sessionEnvelope(session))
+}
+
 func (api *API) clearSessionCookie(writer http.ResponseWriter) {
 	http.SetCookie(writer, &http.Cookie{
 		Name: sessionCookie, Value: "", Path: "/", HttpOnly: true,
@@ -2629,39 +2712,10 @@ func identityCollection(identity *AuthIdentity) schema.CollectionSlug {
 	return identity.Collection
 }
 
+// optionalIdentity returns the request's single principal. See
+// credentialState for precedence; an explicit credential never falls back.
 func (api *API) optionalIdentity(request *http.Request) *AuthIdentity {
-	cookie, err := request.Cookie(sessionCookie)
-	if err == nil && api.config.Session != nil {
-		session, sessionError := api.config.Session(request.Context(), cookie.Value)
-		if sessionError == nil {
-			return &AuthIdentity{Collection: session.Collection, Actor: session.User}
-		}
-	}
-	if api.config.AuthenticateAPIKey != nil {
-		scheme, credential, found := strings.Cut(request.Header.Get("Authorization"), " ")
-		if found && strings.EqualFold(scheme, "Bearer") {
-			identity, authError := api.config.AuthenticateAPIKey(request.Context(), strings.TrimSpace(credential))
-			if authError == nil {
-				return &identity
-			}
-		}
-	}
-	if api.config.Session != nil {
-		scheme, credential, found := strings.Cut(request.Header.Get("Authorization"), " ")
-		if found && strings.EqualFold(scheme, "Session") {
-			session, sessionError := api.config.Session(request.Context(), strings.TrimSpace(credential))
-			if sessionError == nil {
-				return &AuthIdentity{Collection: session.Collection, Actor: session.User}
-			}
-		}
-	}
-	if api.config.AuthenticateExternal != nil {
-		identity, authError := api.config.AuthenticateExternal(request.Context(), map[string][]string(request.Header.Clone()))
-		if authError == nil {
-			return &identity
-		}
-	}
-	return nil
+	return api.credentialState(request).identity
 }
 
 func (api *API) cors(writer http.ResponseWriter, request *http.Request, requestID string) bool {
@@ -2677,6 +2731,7 @@ func (api *API) cors(writer http.ResponseWriter, request *http.Request, requestI
 	if allowed {
 		writer.Header().Set("Access-Control-Allow-Origin", origin)
 		writer.Header().Set("Access-Control-Allow-Credentials", "true")
+		writer.Header().Set("Access-Control-Expose-Headers", "Content-Disposition, X-Request-ID")
 		writer.Header().Add("Vary", "Origin")
 	}
 	if request.Method == http.MethodOptions && strings.TrimSpace(request.Header.Get("Access-Control-Request-Method")) != "" {
@@ -2696,6 +2751,9 @@ func (api *API) cors(writer http.ResponseWriter, request *http.Request, requestI
 		writer.Header().Add("Vary", "Access-Control-Request-Headers")
 		writer.Header().Set("Access-Control-Allow-Headers", strings.Join(api.allowedHeaders, ", "))
 		writer.Header().Set("Access-Control-Allow-Methods", "GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS")
+		// Direct token clients preflight every mutation; caching the answer keeps
+		// ordinary writes to one round trip.
+		writer.Header().Set("Access-Control-Max-Age", "600")
 		if api.hasMatchingCustomEndpoint(request) {
 			return false
 		}
@@ -3525,6 +3583,8 @@ func wireErrorCode(code string, status int) protocol.ErrorCode {
 		return protocol.ErrorAuthFeatureDisabled
 	case "invalid_auth_token":
 		return protocol.ErrorInvalidAuthToken
+	case "invalid_credential":
+		return protocol.ErrorInvalidCredential
 	case "invalid_preview_token":
 		return protocol.ErrorInvalidPreviewToken
 	case "selection_too_large":

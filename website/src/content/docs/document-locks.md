@@ -125,7 +125,7 @@ overwriting a newer committed document.
 
 An auth account can also be locked after repeated failed sign-ins. That is a separate authentication
 feature controlled by `AuthConfig.MaxLoginAttempts` and `AuthConfig.LockDuration`. An authorized
-administrator uses **Force unlock** or `RiduClient.forceUnlock`; document-lock takeover does not
+administrator uses **Force unlock** or `ridu.auth.forceUnlock`; document-lock takeover does not
 change account state.
 
 ## Troubleshooting {#troubleshooting}

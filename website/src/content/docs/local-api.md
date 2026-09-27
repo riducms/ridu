@@ -6,8 +6,7 @@ eyebrow: 'Data and APIs'
 order: 90
 navigation:
   section: 'Work with data'
-  parent: 'data-access'
-  order: 10
+  order: 30
   title: 'Local Go API'
 ---
 

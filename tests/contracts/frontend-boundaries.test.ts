@@ -57,6 +57,25 @@ const lazy = () => import('@riducms/ui');
 		expect(violations).toEqual([]);
 	});
 
+	it("keeps @riducms/sveltekit on the SDK's public client contract", async () => {
+		// The integration binds an application's generated client; it never reaches into admin,
+		// plugin, protocol, or build internals, and it adds no second transport.
+		const allowed = (specifier: string) =>
+			specifier.startsWith(".") ||
+			specifier === "@riducms/sdk" ||
+			specifier === "svelte" ||
+			specifier.startsWith("svelte/") ||
+			specifier === "@sveltejs/kit" ||
+			specifier === "$app/environment" ||
+			specifier === "$app/navigation";
+		const violations = await forbiddenImports(
+			"packages/sveltekit/src",
+			(specifier) => !allowed(specifier)
+		);
+
+		expect(violations).toEqual([]);
+	});
+
 	it("keeps @riducms/ui independent from application contracts", async () => {
 		const violations = await forbiddenImports("packages/ui/src", (specifier) =>
 			[

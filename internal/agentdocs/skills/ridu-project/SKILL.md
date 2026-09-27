@@ -56,6 +56,8 @@ the reference needed for the change:
 - REST resources and the generated typed Fetch client:
   [reference/rest-api.md](reference/rest-api.md) and
   [reference/typescript-sdk.md](reference/typescript-sdk.md)
+- SvelteKit frontends that call Ridu directly from browsers and server loads:
+  [reference/sveltekit.md](reference/sveltekit.md)
 - Choosing between Local API, REST, SDK, and plugins:
   [reference/data-access.md](reference/data-access.md)
 - Official rich text, SEO, Form Builder, GraphQL, and MCP adoption:

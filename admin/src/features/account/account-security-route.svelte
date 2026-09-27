@@ -194,7 +194,7 @@
 		hostRequest = request;
 
 		try {
-			await runtime.client.logout({ signal: request.signal });
+			await runtime.client.auth.logout({ signal: request.signal });
 			if (request.signal.aborted || runtime.session?.id !== owner) return;
 
 			await runtime.hardNavigate(adminRoutePatterns.login);

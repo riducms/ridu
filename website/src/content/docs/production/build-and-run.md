@@ -6,8 +6,7 @@ eyebrow: 'Production'
 order: 221
 navigation:
   section: 'Develop & operate'
-  parent: 'production'
-  order: 10
+  order: 62
   title: 'Build and run'
 ---
 

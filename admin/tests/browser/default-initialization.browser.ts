@@ -41,16 +41,18 @@ describe("create-flow default initialization", () => {
 				collectionOperations: { targets: { admin: outcome !== "admin-denied" } },
 				refreshAccess: async () => true,
 				client: {
-					createAuthUser: async (_slug: string, values: Record<string, unknown>) => {
-						if (outcome === "already-created") throw new Error("Setup already completed");
-						return { ...values, id: "ada" };
+					auth: {
+						createUser: async (input: { data: Record<string, unknown> }) => {
+							if (outcome === "already-created") throw new Error("Setup already completed");
+							return { ...input.data, id: "ada" };
+						},
+						login: async () => {
+							if (outcome === "login-failed") throw new Error("Sign-in failed");
+							return { id: "session", collection: "targets", user: { id: "ada" } };
+						},
+						bootstrap: async () => ({ available: false }),
+						logout: async () => ({ loggedOut: true }),
 					},
-					login: async () => {
-						if (outcome === "login-failed") throw new Error("Sign-in failed");
-						return { id: "session", collection: "targets", user: { id: "ada" } };
-					},
-					authBootstrap: async () => ({ available: false }),
-					logout: async () => ({ loggedOut: true }),
 				},
 				hardNavigate: (path: string) => {
 					destinations.push(path);

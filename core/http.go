@@ -237,6 +237,22 @@ func (application *App) Handler(options HandlerOptions) http.Handler {
 			return preparedHTTPAuthSession(application, session), err
 		},
 		Logout: application.Logout, LogoutAll: application.LogoutAll,
+		CreateUploadGrants: func(ctx context.Context, token, collection string, items []protocol.UploadGrantRequestItem, lifetime time.Duration) ([]protocol.UploadGrant, error) {
+			requests := make([]UploadGrantRequest, len(items))
+			for index, item := range items {
+				requests[index] = UploadGrantRequest{ID: item.ID, Size: item.Size}
+			}
+			grants, err := application.CreateUploadGrants(ctx, token, collection, requests, lifetime)
+			if err != nil {
+				return nil, err
+			}
+			result := make([]protocol.UploadGrant, len(grants))
+			for index, grant := range grants {
+				result[index] = protocol.UploadGrant{ID: grant.ID, Size: grant.Size, URL: grant.URL, ExpiresAt: grant.ExpiresAt.Format(time.RFC3339)}
+			}
+			return result, nil
+		},
+		OpenUploadGrant: application.OpenUploadWithGrant,
 		Sessions: func(ctx context.Context, token string) ([]httpapi.AuthSessionInfo, error) {
 			sessions, err := application.Sessions(ctx, token)
 			result := make([]httpapi.AuthSessionInfo, len(sessions))

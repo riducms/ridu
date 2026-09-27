@@ -516,23 +516,15 @@ async function verifyGeneratedSDK(projectRoot: string, app: RunningApp) {
 	const scriptPath = resolve(projectRoot, ".ridu/documentation-sdk-read.ts");
 	await writeFile(
 		scriptPath,
-		`import { createClient } from "../generated/ridu.generated";
+		`import { memoryTokenStore } from "@riducms/sdk";
+import { createClient } from "../generated/ridu.generated";
 
-let sessionCookie = "";
 const client = createClient({
 	baseURL: process.env.RIDU_URL!,
-	middleware: [async (request, next) => {
-		const headers = new Headers(request.headers);
-		if (sessionCookie) headers.set("Cookie", sessionCookie);
-		const response = await next(new Request(request, { headers }));
-		const setCookie = response.headers.get("set-cookie");
-		const match = setCookie?.match(/(?:^|,\\s*)(ridu_session=[^;,\\s]+)/);
-		if (match?.[1]) sessionCookie = match[1];
-		return response;
-	}],
+	auth: { collection: "users", token: memoryTokenStore() },
 });
 
-await client.login("users", {
+await client.auth.login({
 	email: process.env.RIDU_EMAIL!,
 	password: process.env.RIDU_PASSWORD!,
 });

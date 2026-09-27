@@ -1,7 +1,7 @@
 {
 	"name": "@riducms/protocol",
 	"description": "Versioned wire contracts shared by Ridu's generated clients and admin.",
-	"version": "0.3.0",
+	"version": "0.4.0",
 	"license": "MIT",
 	"repository": {
 		"type": "git",

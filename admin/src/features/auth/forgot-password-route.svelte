@@ -25,7 +25,7 @@
 		error = undefined;
 
 		try {
-			await runtime.client.requestPasswordReset(authCollection.slug, email);
+			await runtime.client.auth.requestPasswordReset({ collection: authCollection.slug, email });
 			sent = true;
 		} catch (cause) {
 			error =

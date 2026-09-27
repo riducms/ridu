@@ -315,11 +315,11 @@ describe("collection API reference", () => {
 						break;
 					case "create":
 						if (kind === "auth")
-							await client.createAuthUser(
-								"articles",
-								value.schema.create,
-								"REPLACE_WITH_A_PASSWORD"
-							);
+							await client.auth.createUser({
+								collection: "articles",
+								data: value.schema.create,
+								password: "REPLACE_WITH_A_PASSWORD",
+							});
 						else if (kind === "upload")
 							await client.upload("articles", new File(["text"], "test.txt"), {
 								data: value.schema.create,

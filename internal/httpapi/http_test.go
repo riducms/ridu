@@ -261,7 +261,7 @@ func TestScheduledPublicationTransportCarriesExactAuthIdentity(t *testing.T) {
 	})
 	request := httptest.NewRequest(http.MethodPost, "/api/collections/posts/post-1/schedule", strings.NewReader(`{"action":"publish","runAt":"2030-01-02T03:04:05Z","timeZone":"Asia/Kolkata"}`))
 	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Authorization", "Bearer exact-token")
+	request.Header.Set("Authorization", "Bearer ridu_exact_token")
 	request.Header.Set("If-Match", `"7"`)
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
@@ -276,7 +276,7 @@ func TestScheduledPublicationTransportCarriesExactAuthIdentity(t *testing.T) {
 	}
 	unpublishRequest := httptest.NewRequest(http.MethodPost, "/api/collections/posts/post-1/schedule", strings.NewReader(`{"action":"unpublish","runAt":"2030-01-02T03:04:05Z","timeZone":"Asia/Kolkata"}`))
 	unpublishRequest.Header.Set("Content-Type", "application/json")
-	unpublishRequest.Header.Set("Authorization", "Bearer exact-token")
+	unpublishRequest.Header.Set("Authorization", "Bearer ridu_exact_token")
 	unpublishResponse := httptest.NewRecorder()
 	handler.ServeHTTP(unpublishResponse, unpublishRequest)
 	if !strings.Contains(unpublishResponse.Body.String(), `"timeZone":"Asia/Kolkata"`) {
@@ -310,7 +310,7 @@ func TestNativeHTTPAuthenticationCredentials(t *testing.T) {
 			return AuthSession{Collection: "staff", User: store.Document{ID: token}}, nil
 		},
 		AuthenticateAPIKey: func(_ context.Context, token string) (AuthIdentity, error) {
-			if token != "api-key" {
+			if token != "ridu_key_secret" {
 				return AuthIdentity{}, errors.New("invalid API key")
 			}
 			return AuthIdentity{Collection: "staff", Actor: store.Document{ID: token}}, nil
@@ -322,13 +322,18 @@ func TestNativeHTTPAuthenticationCredentials(t *testing.T) {
 		{name: "cookie", cookie: "cookie-token", actorID: "cookie-token"},
 		{name: "session header", authorization: "Session session-token", actorID: "session-token"},
 		{name: "case insensitive session header", authorization: "sEsSiOn session-token", actorID: "session-token"},
-		{name: "API key", authorization: "Bearer api-key", actorID: "api-key"},
-		{name: "case insensitive API key", authorization: "bEaReR api-key", actorID: "api-key"},
+		{name: "API key", authorization: "Bearer ridu_key_secret", actorID: "ridu_key_secret"},
+		{name: "case insensitive API key", authorization: "bEaReR ridu_key_secret", actorID: "ridu_key_secret"},
 		{name: "JWT session header", authorization: "JWT session-token"},
 		{name: "mixed case JWT session header", authorization: "jWt session-token"},
 		{name: "session cannot be an API key", authorization: "Bearer session-token"},
-		{name: "API key cannot be a session", authorization: "Session api-key"},
-		{name: "cookie precedes header", authorization: "Session session-token", cookie: "cookie-token", actorID: "cookie-token"},
+		{name: "API key cannot be a session", authorization: "Session ridu_key_secret"},
+		{name: "session header precedes cookie", authorization: "Session session-token", cookie: "cookie-token", actorID: "session-token"},
+		{name: "API key precedes cookie", authorization: "Bearer ridu_key_secret", cookie: "cookie-token", actorID: "ridu_key_secret"},
+		{name: "invalid session header never falls back to cookie", authorization: "Session stale-token", cookie: "cookie-token"},
+		{name: "invalid API key never falls back to cookie", authorization: "Bearer ridu_stale_key", cookie: "cookie-token"},
+		{name: "empty session header never falls back to cookie", authorization: "Session", cookie: "cookie-token"},
+		{name: "application bearer secret keeps cookie", authorization: "Bearer webhook-secret", cookie: "cookie-token", actorID: "cookie-token"},
 		{name: "cookie with unsupported header", authorization: "JWT session-token", cookie: "cookie-token", actorID: "cookie-token"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -357,14 +362,14 @@ func TestAuditDisambiguatesSameActorIDByAuthCollection(t *testing.T) {
 	handler := New(Config{
 		Manifest: manifest,
 		AuthenticateAPIKey: func(_ context.Context, token string) (AuthIdentity, error) {
-			return AuthIdentity{Collection: schema.CollectionSlug(token), Actor: store.Document{ID: "shared-actor"}}, nil
+			return AuthIdentity{Collection: schema.CollectionSlug(strings.Split(token, "_")[1]), Actor: store.Document{ID: "shared-actor"}}, nil
 		},
 		ResetPreferences: func(context.Context, *AuthIdentity) error { return nil },
 		Audit:            func(event AuditEvent) { events = append(events, event) },
 	})
 	for _, collection := range []string{"staff", "customers"} {
 		request := httptest.NewRequest(http.MethodDelete, "/api/preferences", nil)
-		request.Header.Set("Authorization", "Bearer "+collection)
+		request.Header.Set("Authorization", "Bearer ridu_"+collection+"_secret")
 		response := httptest.NewRecorder()
 		handler.ServeHTTP(response, request)
 		if response.Code != http.StatusOK {
@@ -447,7 +452,7 @@ func TestPreferenceAndLockTransportsCarryExactAuthIdentity(t *testing.T) {
 			body = strings.NewReader(test.body)
 		}
 		request := httptest.NewRequest(test.method, test.path, body)
-		request.Header.Set("Authorization", "Bearer exact-token")
+		request.Header.Set("Authorization", "Bearer ridu_exact_token")
 		if body != nil {
 			request.Header.Set("Content-Type", "application/json")
 		}

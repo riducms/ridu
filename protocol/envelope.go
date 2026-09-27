@@ -191,6 +191,10 @@ const (
 	ErrorEmailNotVerified    ErrorCode = "email_not_verified"
 	ErrorAuthFeatureDisabled ErrorCode = "auth_feature_disabled"
 	ErrorInvalidAuthToken    ErrorCode = "invalid_auth_token"
+	// ErrorInvalidCredential rejects an explicit Authorization credential. It is
+	// distinct from access_denied so clients can discard a stored token without
+	// mistaking an ordinary authorization failure for a lost session.
+	ErrorInvalidCredential   ErrorCode = "invalid_credential"
 	ErrorInvalidPreviewToken ErrorCode = "invalid_preview_token"
 	ErrorSelectionTooLarge   ErrorCode = "selection_too_large"
 )
@@ -419,6 +423,32 @@ type AuthSessionsEnvelope struct {
 // SessionEnvelope contains the current typed auth session.
 type SessionEnvelope[User any] struct {
 	Session AuthSession[User] `json:"session"`
+}
+
+// SessionTransport selects how a login delivers its opaque session token.
+type SessionTransport string
+
+const (
+	// SessionTransportCookie stores the token in Ridu's HttpOnly session cookie.
+	SessionTransportCookie SessionTransport = "cookie"
+	// SessionTransportToken returns the token to the client, which presents it as
+	// Authorization: Session <token>.
+	SessionTransportToken SessionTransport = "token"
+)
+
+// LoginRequest authenticates one auth-collection identity.
+type LoginRequest struct {
+	Email     string           `json:"email"`
+	Password  string           `json:"password"`
+	Transport SessionTransport `json:"transport,omitempty"`
+}
+
+// SessionTokenEnvelope is returned to token-transport clients after login or
+// rotation. Session is safe to serialize into rendered pages; Token is the
+// bearer secret and must not be.
+type SessionTokenEnvelope[User any] struct {
+	Session AuthSession[User] `json:"session"`
+	Token   string            `json:"token"`
 }
 
 // LogoutEnvelope confirms that the current session was cleared.

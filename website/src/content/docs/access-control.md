@@ -12,7 +12,7 @@ aliases:
   ]
 navigation:
   section: 'Work with data'
-  order: 20
+  order: 80
   title: 'Access control'
 ---
 

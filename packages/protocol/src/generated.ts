@@ -44,6 +44,7 @@ export type ErrorCode =
 	| "email_not_verified"
 	| "auth_feature_disabled"
 	| "invalid_auth_token"
+	| "invalid_credential"
 	| "invalid_preview_token"
 	| "selection_too_large";
 
@@ -104,6 +105,27 @@ export type AdminPreparedRouteDataV1 =
 	| { kind: "error" };
 
 /** Crop and focal coordinates are percentages of the oriented source image. */
+export interface UploadGrantRequestItem {
+	id: string;
+	size?: string;
+}
+
+export interface UploadGrantsRequest {
+	items: UploadGrantRequestItem[];
+	expiresIn?: number;
+}
+
+export interface UploadGrant {
+	id: string;
+	size?: string;
+	url: string;
+	expiresAt: string;
+}
+
+export interface UploadGrantsEnvelope {
+	grants: UploadGrant[];
+}
+
 export interface UploadImageEdit {
   focalX: number;
   focalY: number;
@@ -457,6 +479,19 @@ export interface AuthSessionsEnvelope {
 
 export interface SessionEnvelope<User> {
 	session: AuthSession<User>;
+}
+
+export type SessionTransport = "cookie" | "token";
+
+export interface LoginRequest {
+	email: string;
+	password: string;
+	transport?: SessionTransport;
+}
+
+export interface SessionTokenEnvelope<User> {
+	session: AuthSession<User>;
+	token: string;
 }
 
 export interface LogoutEnvelope {

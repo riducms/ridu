@@ -320,9 +320,9 @@
         "summary": "Current session"
       }
     },
-    "/api/auth/refresh": {
+    "/api/auth/rotate": {
       "post": {
-        "operationId": "refreshSession",
+        "operationId": "rotateSession",
         "responses": {
           "200": {
             "description": "Successful response"
@@ -338,7 +338,7 @@
             "description": "Ridu error envelope"
           }
         },
-        "summary": "Rotate current session"
+        "summary": "Rotate the current session token"
       }
     },
     "/api/auth/sessions": {

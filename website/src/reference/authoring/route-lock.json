@@ -587,7 +587,8 @@
 		},
 		"go:github.com/riducms/ridu#AuthOperationRefresh": {
 			"module": "ridu",
-			"symbol": "auth-operation-refresh"
+			"symbol": "auth-operation-refresh",
+			"redirect": "/reference/ridu/auth-operation-rotate/"
 		},
 		"go:github.com/riducms/ridu#TaskBackoffExponential": {
 			"module": "ridu",
@@ -1727,7 +1728,8 @@
 		},
 		"go:github.com/riducms/ridu/core#AuthOperationRefresh": {
 			"module": "core",
-			"symbol": "auth-operation-refresh"
+			"symbol": "auth-operation-refresh",
+			"redirect": "/reference/core/auth-operation-rotate/"
 		},
 		"go:github.com/riducms/ridu/core#BoundTypedCollection.Create": {
 			"module": "core",
@@ -5883,75 +5885,93 @@
 		},
 		"ts:@riducms/sdk#RiduClient.login": {
 			"module": "sdk",
-			"symbol": "ridu-client-login"
+			"symbol": "ridu-client-login",
+			"redirect": "/reference/sdk/ridu-auth-login-method/"
 		},
 		"ts:@riducms/sdk#RiduClient.session": {
 			"module": "sdk",
-			"symbol": "ridu-client-session"
+			"symbol": "ridu-client-session",
+			"redirect": "/reference/sdk/ridu-auth-get-session-method/"
 		},
 		"ts:@riducms/sdk#RiduClient.refreshSession": {
 			"module": "sdk",
-			"symbol": "ridu-client-refresh-session"
+			"symbol": "ridu-client-refresh-session",
+			"redirect": "/reference/sdk/ridu-auth-rotate-method/"
 		},
 		"ts:@riducms/sdk#RiduClient.logout": {
 			"module": "sdk",
-			"symbol": "ridu-client-logout"
+			"symbol": "ridu-client-logout",
+			"redirect": "/reference/sdk/ridu-auth-logout-method/"
 		},
 		"ts:@riducms/sdk#RiduClient.logoutAll": {
 			"module": "sdk",
-			"symbol": "ridu-client-logout-all"
+			"symbol": "ridu-client-logout-all",
+			"redirect": "/reference/sdk/ridu-auth-logout-all-method/"
 		},
 		"ts:@riducms/sdk#RiduClient.sessions": {
 			"module": "sdk",
-			"symbol": "ridu-client-sessions"
+			"symbol": "ridu-client-sessions",
+			"redirect": "/reference/sdk/ridu-auth-sessions-method/"
 		},
 		"ts:@riducms/sdk#RiduClient.revokeSession": {
 			"module": "sdk",
-			"symbol": "ridu-client-revoke-session"
+			"symbol": "ridu-client-revoke-session",
+			"redirect": "/reference/sdk/ridu-auth-revoke-session-method/"
 		},
 		"ts:@riducms/sdk#RiduClient.requestPasswordReset": {
 			"module": "sdk",
-			"symbol": "ridu-client-request-password-reset"
+			"symbol": "ridu-client-request-password-reset",
+			"redirect": "/reference/sdk/ridu-auth-request-password-reset-method/"
 		},
 		"ts:@riducms/sdk#RiduClient.resetPassword": {
 			"module": "sdk",
-			"symbol": "ridu-client-reset-password"
+			"symbol": "ridu-client-reset-password",
+			"redirect": "/reference/sdk/ridu-auth-reset-password-method/"
 		},
 		"ts:@riducms/sdk#RiduClient.authBootstrap": {
 			"module": "sdk",
-			"symbol": "ridu-client-auth-bootstrap"
+			"symbol": "ridu-client-auth-bootstrap",
+			"redirect": "/reference/sdk/ridu-auth-bootstrap-method/"
 		},
 		"ts:@riducms/sdk#RiduClient.createAuthUser": {
 			"module": "sdk",
-			"symbol": "ridu-client-create-auth-user"
+			"symbol": "ridu-client-create-auth-user",
+			"redirect": "/reference/sdk/ridu-auth-create-user-method/"
 		},
 		"ts:@riducms/sdk#RiduClient.requestVerification": {
 			"module": "sdk",
-			"symbol": "ridu-client-request-verification"
+			"symbol": "ridu-client-request-verification",
+			"redirect": "/reference/sdk/ridu-auth-request-verification-method/"
 		},
 		"ts:@riducms/sdk#RiduClient.verifyEmail": {
 			"module": "sdk",
-			"symbol": "ridu-client-verify-email"
+			"symbol": "ridu-client-verify-email",
+			"redirect": "/reference/sdk/ridu-auth-verify-email-method/"
 		},
 		"ts:@riducms/sdk#RiduClient.changePassword": {
 			"module": "sdk",
-			"symbol": "ridu-client-change-password"
+			"symbol": "ridu-client-change-password",
+			"redirect": "/reference/sdk/ridu-auth-change-password-method/"
 		},
 		"ts:@riducms/sdk#RiduClient.createAPIKey": {
 			"module": "sdk",
-			"symbol": "ridu-client-create-a-p-i-key"
+			"symbol": "ridu-client-create-a-p-i-key",
+			"redirect": "/reference/sdk/ridu-auth-create-api-key-method/"
 		},
 		"ts:@riducms/sdk#RiduClient.apiKeys": {
 			"module": "sdk",
-			"symbol": "ridu-client-api-keys"
+			"symbol": "ridu-client-api-keys",
+			"redirect": "/reference/sdk/ridu-auth-api-keys-method/"
 		},
 		"ts:@riducms/sdk#RiduClient.revokeAPIKey": {
 			"module": "sdk",
-			"symbol": "ridu-client-revoke-a-p-i-key"
+			"symbol": "ridu-client-revoke-a-p-i-key",
+			"redirect": "/reference/sdk/ridu-auth-revoke-api-key-method/"
 		},
 		"ts:@riducms/sdk#RiduClient.forceUnlock": {
 			"module": "sdk",
-			"symbol": "ridu-client-force-unlock"
+			"symbol": "ridu-client-force-unlock",
+			"redirect": "/reference/sdk/ridu-auth-force-unlock-method/"
 		},
 		"ts:@riducms/sdk#RiduClient.collectionAccess": {
 			"module": "sdk",
@@ -12454,6 +12474,342 @@
 		"ts:@riducms/ui#DialogTitle": {
 			"module": "ui",
 			"symbol": "dialog-title"
+		},
+		"go:github.com/riducms/ridu#AuthOperationRotate": {
+			"module": "ridu",
+			"symbol": "auth-operation-rotate"
+		},
+		"go:github.com/riducms/ridu#AuthOperationSession": {
+			"module": "ridu",
+			"symbol": "auth-operation-session"
+		},
+		"go:github.com/riducms/ridu/core#AuthOperationRotate": {
+			"module": "core",
+			"symbol": "auth-operation-rotate"
+		},
+		"go:github.com/riducms/ridu/core#AuthOperationSession": {
+			"module": "core",
+			"symbol": "auth-operation-session"
+		},
+		"go:github.com/riducms/ridu/core#App.CreateUploadGrants": {
+			"module": "core",
+			"symbol": "app-create-upload-grants-method"
+		},
+		"go:github.com/riducms/ridu/core#App.OpenUploadWithGrant": {
+			"module": "core",
+			"symbol": "app-open-upload-with-grant-method"
+		},
+		"go:github.com/riducms/ridu/core#DefaultUploadGrantLifetime": {
+			"module": "core",
+			"symbol": "default-upload-grant-lifetime"
+		},
+		"go:github.com/riducms/ridu/core#MaxUploadGrantLifetime": {
+			"module": "core",
+			"symbol": "max-upload-grant-lifetime"
+		},
+		"go:github.com/riducms/ridu/core#MaxUploadGrantsPerRequest": {
+			"module": "core",
+			"symbol": "max-upload-grants-per-request"
+		},
+		"go:github.com/riducms/ridu/core#UploadGrant": {
+			"module": "core",
+			"symbol": "upload-grant"
+		},
+		"go:github.com/riducms/ridu/core#UploadGrantRequest": {
+			"module": "core",
+			"symbol": "upload-grant-request"
+		},
+		"go:github.com/riducms/ridu/protocol#ErrorInvalidCredential": {
+			"module": "go-protocol",
+			"symbol": "error-invalid-credential"
+		},
+		"go:github.com/riducms/ridu/protocol#LoginRequest": {
+			"module": "go-protocol",
+			"symbol": "login-request"
+		},
+		"go:github.com/riducms/ridu/protocol#SessionTokenEnvelope": {
+			"module": "go-protocol",
+			"symbol": "session-token-envelope"
+		},
+		"go:github.com/riducms/ridu/protocol#SessionTransport": {
+			"module": "go-protocol",
+			"symbol": "session-transport"
+		},
+		"go:github.com/riducms/ridu/protocol#SessionTransportCookie": {
+			"module": "go-protocol",
+			"symbol": "session-transport-cookie"
+		},
+		"go:github.com/riducms/ridu/protocol#SessionTransportToken": {
+			"module": "go-protocol",
+			"symbol": "session-transport-token"
+		},
+		"go:github.com/riducms/ridu/protocol#UploadGrant": {
+			"module": "go-protocol",
+			"symbol": "upload-grant"
+		},
+		"go:github.com/riducms/ridu/protocol#UploadGrantRequestItem": {
+			"module": "go-protocol",
+			"symbol": "upload-grant-request-item"
+		},
+		"go:github.com/riducms/ridu/protocol#UploadGrantsEnvelope": {
+			"module": "go-protocol",
+			"symbol": "upload-grants-envelope"
+		},
+		"go:github.com/riducms/ridu/protocol#UploadGrantsRequest": {
+			"module": "go-protocol",
+			"symbol": "upload-grants-request"
+		},
+		"go:github.com/riducms/ridu/adapters/postgres#Store.FindSessionByID": {
+			"module": "postgres",
+			"symbol": "store-find-session-by-id-method"
+		},
+		"go:github.com/riducms/ridu/adapters/sqlite#Store.FindSessionByID": {
+			"module": "sqlite",
+			"symbol": "store-find-session-by-id-method"
+		},
+		"go:github.com/riducms/ridu/adapters/mongodb#Store.FindSessionByID": {
+			"module": "mongodb",
+			"symbol": "store-find-session-by-id-method"
+		},
+		"ts:@riducms/sdk#LoginInput": {
+			"module": "sdk",
+			"symbol": "login-input"
+		},
+		"ts:@riducms/sdk#AuthCollectionInput": {
+			"module": "sdk",
+			"symbol": "auth-collection-input"
+		},
+		"ts:@riducms/sdk#SessionFor": {
+			"module": "sdk",
+			"symbol": "session-for"
+		},
+		"ts:@riducms/sdk#SessionCollection": {
+			"module": "sdk",
+			"symbol": "session-collection"
+		},
+		"ts:@riducms/sdk#AuthOptions": {
+			"module": "sdk",
+			"symbol": "auth-options"
+		},
+		"ts:@riducms/sdk#SessionTokenStore": {
+			"module": "sdk",
+			"symbol": "session-token-store"
+		},
+		"ts:@riducms/sdk#memoryTokenStore": {
+			"module": "sdk",
+			"symbol": "memory-token-store"
+		},
+		"ts:@riducms/sdk#UploadURL": {
+			"module": "sdk",
+			"symbol": "upload-url"
+		},
+		"ts:@riducms/sdk#UploadURLOptions": {
+			"module": "sdk",
+			"symbol": "upload-url-options"
+		},
+		"ts:@riducms/sdk#RiduClient.getUploadURL": {
+			"module": "sdk",
+			"symbol": "ridu-client-get-upload-url-method"
+		},
+		"ts:@riducms/sdk#RiduClient.getUploadURLs": {
+			"module": "sdk",
+			"symbol": "ridu-client-get-upload-ur-ls-method"
+		},
+		"ts:@riducms/sdk#RiduAuth": {
+			"module": "sdk",
+			"symbol": "ridu-auth"
+		},
+		"ts:@riducms/sdk#RiduAuth.login": {
+			"module": "sdk",
+			"symbol": "ridu-auth-login-method"
+		},
+		"ts:@riducms/sdk#RiduAuth.getSession": {
+			"module": "sdk",
+			"symbol": "ridu-auth-get-session-method"
+		},
+		"ts:@riducms/sdk#RiduAuth.rotate": {
+			"module": "sdk",
+			"symbol": "ridu-auth-rotate-method"
+		},
+		"ts:@riducms/sdk#RiduAuth.logout": {
+			"module": "sdk",
+			"symbol": "ridu-auth-logout-method"
+		},
+		"ts:@riducms/sdk#RiduAuth.logoutAll": {
+			"module": "sdk",
+			"symbol": "ridu-auth-logout-all-method"
+		},
+		"ts:@riducms/sdk#RiduAuth.sessions": {
+			"module": "sdk",
+			"symbol": "ridu-auth-sessions-method"
+		},
+		"ts:@riducms/sdk#RiduAuth.revokeSession": {
+			"module": "sdk",
+			"symbol": "ridu-auth-revoke-session-method"
+		},
+		"ts:@riducms/sdk#RiduAuth.requestPasswordReset": {
+			"module": "sdk",
+			"symbol": "ridu-auth-request-password-reset-method"
+		},
+		"ts:@riducms/sdk#RiduAuth.resetPassword": {
+			"module": "sdk",
+			"symbol": "ridu-auth-reset-password-method"
+		},
+		"ts:@riducms/sdk#RiduAuth.bootstrap": {
+			"module": "sdk",
+			"symbol": "ridu-auth-bootstrap-method"
+		},
+		"ts:@riducms/sdk#RiduAuth.createUser": {
+			"module": "sdk",
+			"symbol": "ridu-auth-create-user-method"
+		},
+		"ts:@riducms/sdk#RiduAuth.requestVerification": {
+			"module": "sdk",
+			"symbol": "ridu-auth-request-verification-method"
+		},
+		"ts:@riducms/sdk#RiduAuth.verifyEmail": {
+			"module": "sdk",
+			"symbol": "ridu-auth-verify-email-method"
+		},
+		"ts:@riducms/sdk#RiduAuth.changePassword": {
+			"module": "sdk",
+			"symbol": "ridu-auth-change-password-method"
+		},
+		"ts:@riducms/sdk#RiduAuth.createAPIKey": {
+			"module": "sdk",
+			"symbol": "ridu-auth-create-api-key-method"
+		},
+		"ts:@riducms/sdk#RiduAuth.apiKeys": {
+			"module": "sdk",
+			"symbol": "ridu-auth-api-keys-method"
+		},
+		"ts:@riducms/sdk#RiduAuth.revokeAPIKey": {
+			"module": "sdk",
+			"symbol": "ridu-auth-revoke-api-key-method"
+		},
+		"ts:@riducms/sdk#RiduAuth.forceUnlock": {
+			"module": "sdk",
+			"symbol": "ridu-auth-force-unlock-method"
+		},
+		"ts:@riducms/sdk#AuthSession": {
+			"module": "sdk",
+			"symbol": "auth-session"
+		},
+		"ts:@riducms/sdk#AuthSessionInfo": {
+			"module": "sdk",
+			"symbol": "auth-session-info"
+		},
+		"ts:@riducms/sdk#SessionTokenStore.cleared": {
+			"module": "sdk",
+			"symbol": "session-token-store-cleared-method"
+		},
+		"ts:@riducms/sdk#SessionTokenStore.issued": {
+			"module": "sdk",
+			"symbol": "session-token-store-issued-method"
+		},
+		"ts:@riducms/sdk#SessionTokenStore.verified": {
+			"module": "sdk",
+			"symbol": "session-token-store-verified-method"
+		},
+		"ts:@riducms/sveltekit#defineRidu": {
+			"module": "sveltekit",
+			"symbol": "define-ridu"
+		},
+		"ts:@riducms/sveltekit/server#createRiduHandle": {
+			"module": "sveltekit",
+			"symbol": "create-ridu-handle"
+		},
+		"ts:@riducms/sveltekit/server#createServerClient": {
+			"module": "sveltekit",
+			"symbol": "create-server-client"
+		},
+		"ts:@riducms/sveltekit/server#ServerClientOptions": {
+			"module": "sveltekit",
+			"symbol": "server-client-options"
+		},
+		"ts:@riducms/sveltekit#AUTH_DEPENDENCY": {
+			"module": "sveltekit",
+			"symbol": "auth-dependency"
+		},
+		"ts:@riducms/sveltekit#ClientFactory": {
+			"module": "sveltekit",
+			"symbol": "client-factory"
+		},
+		"ts:@riducms/sveltekit#ConfigOf": {
+			"module": "sveltekit",
+			"symbol": "config-of"
+		},
+		"ts:@riducms/sveltekit#DEFAULT_COOKIE_NAME": {
+			"module": "sveltekit",
+			"symbol": "default-cookie-name"
+		},
+		"ts:@riducms/sveltekit#InferClient": {
+			"module": "sveltekit",
+			"symbol": "infer-client"
+		},
+		"ts:@riducms/sveltekit#InferSession": {
+			"module": "sveltekit",
+			"symbol": "infer-session"
+		},
+		"ts:@riducms/sveltekit#ProvideOptions": {
+			"module": "sveltekit",
+			"symbol": "provide-options"
+		},
+		"ts:@riducms/sveltekit#Ridu": {
+			"module": "sveltekit",
+			"symbol": "ridu"
+		},
+		"ts:@riducms/sveltekit#Ridu.provide": {
+			"module": "sveltekit",
+			"symbol": "ridu-provide-method"
+		},
+		"ts:@riducms/sveltekit#Ridu.use": {
+			"module": "sveltekit",
+			"symbol": "ridu-use-method"
+		},
+		"ts:@riducms/sveltekit#RiduDefinitionOptions": {
+			"module": "sveltekit",
+			"symbol": "ridu-definition-options"
+		},
+		"ts:@riducms/sveltekit#RiduDefinitionOptions.createClient": {
+			"module": "sveltekit",
+			"symbol": "ridu-definition-options-create-client-method"
+		},
+		"ts:@riducms/protocol#LoginRequest": {
+			"module": "protocol",
+			"symbol": "login-request"
+		},
+		"ts:@riducms/protocol#SessionTokenEnvelope": {
+			"module": "protocol",
+			"symbol": "session-token-envelope"
+		},
+		"ts:@riducms/protocol#SessionTransport": {
+			"module": "protocol",
+			"symbol": "session-transport"
+		},
+		"ts:@riducms/protocol#UploadGrant": {
+			"module": "protocol",
+			"symbol": "upload-grant"
+		},
+		"ts:@riducms/protocol#UploadGrantRequestItem": {
+			"module": "protocol",
+			"symbol": "upload-grant-request-item"
+		},
+		"ts:@riducms/protocol#UploadGrantsEnvelope": {
+			"module": "protocol",
+			"symbol": "upload-grants-envelope"
+		},
+		"ts:@riducms/protocol#UploadGrantsRequest": {
+			"module": "protocol",
+			"symbol": "upload-grants-request"
+		},
+		"go:github.com/riducms/ridu#UploadGrant": {
+			"module": "ridu",
+			"symbol": "upload-grant"
+		},
+		"go:github.com/riducms/ridu#UploadGrantRequest": {
+			"module": "ridu",
+			"symbol": "upload-grant-request"
 		}
 	}
 }

@@ -1,4 +1,4 @@
-import { createClient } from "@riducms/sdk";
+import { createClient, type ClientOptions } from "@riducms/sdk";
 
 type Collection<
 	Output,
@@ -62,7 +62,7 @@ interface CapabilityConfig {
 
 const client = createClient<CapabilityConfig>({ baseURL: "https://cms.example.test" });
 
-void client.login("users", { email: "editor@example.test", password: "secret" });
+void client.auth.login({ collection: "users", email: "editor@example.test", password: "secret" });
 void client.upload("media", new Blob(), { data: { alt: "Diagram" } });
 void client.versions("posts", "post-1");
 void client.publish("posts", "post-1");
@@ -73,7 +73,18 @@ void client.globalVersions("site-settings");
 void client.publishGlobal("site-settings");
 
 // @ts-expect-error only auth-enabled collections accept login.
-void client.login("posts", { email: "editor@example.test", password: "secret" });
+void client.auth.login({ collection: "posts", email: "editor@example.test", password: "secret" });
+
+// @ts-expect-error a client without auth.collection names the collection on each call.
+void client.auth.login({ email: "editor@example.test", password: "secret" });
+
+const memberOptions: ClientOptions<"users"> = {
+	baseURL: "https://cms.example.test",
+	auth: { collection: "users" },
+};
+const members = createClient<CapabilityConfig, "users">(memberOptions);
+void members.auth.login({ email: "editor@example.test", password: "secret" });
+void members.auth.getSession().then((session) => session?.collection satisfies "users" | undefined);
 
 // @ts-expect-error only upload-enabled collections accept blobs.
 void client.upload("posts", new Blob());

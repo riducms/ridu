@@ -1,6 +1,6 @@
 ---
 title: 'Collection hooks'
-description: 'Change document values before saving and choose when collection hooks run during creates, reads, updates, and deletes.'
+description: 'Run Go functions before and after a document is validated, saved, read, duplicated, or deleted, with an example for every collection hook.'
 product: core
 eyebrow: 'Hooks'
 order: 81
@@ -11,18 +11,156 @@ navigation:
   title: 'Collection hooks'
 ---
 
-Collection hooks run Go functions when someone creates, reads, updates, or deletes a document.
-Use them when your code needs the whole document: record the editor, calculate several values,
-or save a related record. They run for the admin, REST, the SDK, and the local Go API.
+Collection hooks run your Go functions at set points while Ridu creates, reads, updates, or
+deletes a document. Use them when your code needs the whole document. To change a single field,
+use [field hooks](/docs/hooks/fields/) instead.
 
-Add hooks to the collection's [`Hooks`](/reference/ridu/collection-hooks/) property. Each function
-receives [`ridu.HookContext`](/reference/ridu/hook-context/) and returns an error. Returning `nil`
-lets the operation continue. Ridu waits for each hook before moving to the next stage.
+Add hooks to a collection's `Hooks` property. This collection uses one hook from each section on
+this page:
 
-## Record who edited a document {#derive-values}
+```go title="content/articles.go" focus={21-31}
+package content
 
-Use `BeforeChange` to change document values before saving. This helper records the signed-in
-user's ID on creates and updates:
+import (
+	"github.com/riducms/ridu"
+	"github.com/riducms/ridu/field"
+)
+
+var Articles = ridu.Collection{
+	Slug: "articles",
+	Fields: field.Fields{
+		field.Text("title").Required(),
+		field.Text("slug"),
+		field.Textarea("body"),
+		field.Text("excerpt").Required(),
+		field.Number("wordCount"),
+		field.Text("metaTitle"),
+		field.Checkbox("featured"),
+		field.Text("lastEditedBy"),
+	},
+	// Each list runs its functions in the order you write them.
+	Hooks: ridu.CollectionHooks{
+		BeforeValidate:  []ridu.Hook{fillExcerpt},
+		BeforeChange:    []ridu.Hook{recordLastEditor},
+		BeforeOperation: []ridu.Hook{countWords},
+		AfterChange:     []ridu.Hook{writeAuditEntry},
+		AfterRead:       []ridu.Hook{fillMetaTitle},
+		BeforeDuplicate: []ridu.Hook{markCopy},
+		BeforeDelete:    []ridu.Hook{keepFeatured},
+		AfterError:      []ridu.Hook{logFailure},
+		AfterCommit:     []ridu.Hook{purgeArticleCache},
+	},
+}
+```
+
+Every collection hook has the same shape. It receives a `ridu.HookContext` and returns an error:
+
+```go
+func myHook(ctx ridu.HookContext) error {
+	// Read ctx, or change ctx.Data before a save.
+	return nil // Continue. Return an error to stop the operation.
+}
+```
+
+Hooks run on the server for every request: from the admin, REST, the TypeScript SDK, and the
+local Go API. Ridu waits for each hook to finish before it moves on.
+
+An error from a hook that runs before the transaction commits stops the operation and rolls back
+any writes. The caller receives a `hook_failed` error; your error's message is kept for your logs
+and is not sent to the caller. An error from `AfterCommit` cannot undo the save. See
+[Transactions and errors](/docs/hooks/transactions-and-errors/) for details.
+
+## Hook arguments {#arguments}
+
+`ctx` describes the current operation. Which properties are set depends on the hook; each section
+below lists what its hook receives.
+
+| Property              | Description                                                                                                                |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `ctx.Operation`       | What is happening, such as `operation.Create`, `operation.Update`, or `operation.Read`.                                    |
+| `ctx.Data`            | The values being saved. Change its entries to change what is saved. On an update, it holds only the fields that were sent. |
+| `ctx.Original`        | The saved document before an update, duplicate, or delete. `nil` on create and on reads.                                   |
+| `ctx.Document`        | The document Ridu returns, once it exists. Changes to its values affect the response only.                                 |
+| `ctx.Actor`           | The signed-in user's document, or `nil` for an anonymous request.                                                          |
+| `ctx.ActorCollection` | The auth collection that the signed-in user belongs to.                                                                    |
+| `ctx.Local`           | The [local API](/docs/local-api/), for reading or writing other documents.                                                 |
+| `ctx.Context`         | Cancellation, deadline, and the active transaction. Pass it to `ctx.Local` and network calls.                              |
+| `ctx.Locale`          | The content locale, or empty without [localization](/docs/localization/).                                                  |
+| `ctx.Error`           | The failure. Set only in `AfterError`.                                                                                     |
+| `ctx.CollectionID`    | Ridu's stable ID for the collection. It is not the slug.                                                                   |
+
+Values in `ctx.Data` and `ctx.Document.Values` are `store.Value`s. Read one with
+`ctx.Data["title"].StringValue()` and set one with `ctx.Data["title"] = store.String("Hello")`.
+[Documents and values](/docs/go-packages/store/) covers every value type, and
+[operation kinds](/docs/go-packages/operation/#operation-kinds) lists every `ctx.Operation`.
+
+## Which hooks run for each operation {#lifecycle}
+
+| Operation                          | Hooks, in order                                                                                                        |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Create, update, publish, unpublish | `BeforeValidate` → `BeforeChange` → `BeforeOperation` → `AfterChange` → `AfterOperation` → `AfterRead` → `AfterCommit` |
+| Duplicate                          | `BeforeDuplicate`, then the same hooks as a create                                                                     |
+| Find or list                       | `BeforeRead` → `BeforeValidate` → `BeforeOperation` → `AfterOperation` → `AfterRead` → `AfterCommit`                   |
+| Delete, to trash or permanently    | `BeforeDelete` → `BeforeValidate` → `BeforeOperation` → `AfterDelete` → `AfterOperation` → `AfterRead` → `AfterCommit` |
+| Restore from trash                 | `BeforeValidate` → `BeforeOperation` → `AfterOperation` → `AfterRead` → `AfterCommit`                                  |
+| Any operation that fails           | `AfterError`                                                                                                           |
+
+`BeforeValidate`, `BeforeOperation`, `AfterOperation`, and `AfterCommit` run for reads and deletes
+too. Check `ctx.Operation` when a hook should act only on saves. On a list, `AfterRead` runs once
+for each returned document. [Where validation and field hooks fit](#save-order) shows where
+built-in checks, custom validators, and field hooks run between these hooks.
+
+## BeforeValidate {#before-validate}
+
+Runs before Ridu checks field values, such as `Required()`. Use it to fill in or clean up
+submitted values that must pass those checks.
+
+**Receives:** `ctx.Data` with the submitted values. `ctx.Original` holds the saved document on
+an update.
+
+This hook fills a missing excerpt from the first 30 words of the body. It must run before
+validation: in `BeforeChange`, the required `excerpt` would already have been rejected.
+
+```go title="content/excerpt.go" focus={15-17,23-24}
+package content
+
+import (
+	"strings"
+
+	"github.com/riducms/ridu"
+	"github.com/riducms/ridu/operation"
+	"github.com/riducms/ridu/store"
+)
+
+func fillExcerpt(ctx ridu.HookContext) error {
+	if ctx.Operation != operation.Create {
+		return nil
+	}
+	if excerpt, _ := ctx.Data["excerpt"].StringValue(); excerpt != "" {
+		return nil // The author wrote one.
+	}
+	body, _ := ctx.Data["body"].StringValue()
+	words := strings.Fields(body)
+	if len(words) > 30 {
+		words = words[:30]
+	}
+	// Required() is checked after this hook, so the excerpt passes.
+	ctx.Data["excerpt"] = store.String(strings.Join(words, " "))
+	return nil
+}
+```
+
+Creating an article without an excerpt saves the first 30 words of its body as the excerpt. An
+excerpt the author wrote is kept.
+
+## BeforeChange {#before-change}
+
+<span id="derive-values"></span>
+
+Runs after the built-in checks and before the document is saved. It runs for create, duplicate,
+update, publish, and unpublish. Use it to calculate values or record who made a change.
+
+**Receives:** `ctx.Data` with the values to save, `ctx.Original` on an update, and `ctx.Actor`.
 
 ```go title="content/last_editor.go" focus={19-20}
 package content
@@ -49,103 +187,317 @@ func recordLastEditor(ctx ridu.HookContext) error {
 }
 ```
 
-Add a field to store the ID and register the helper on your collection:
+Save an article while signed in, and `lastEditedBy` stores your user ID. Anonymous saves leave it
+unchanged. Ridu checks values changed here again, and your
+[custom `.Validate(...)` rules](/docs/fields/validation/) run after this hook.
 
-```go title="content/articles.go" focus={14-17}
+## BeforeOperation {#before-operation}
+
+Runs just before Ridu calls the database, for every operation, including reads and deletes. On a
+save, it runs after every `BeforeChange` hook, including hooks added by plugins, so it sees the
+final values.
+
+**Receives:** the same values as `BeforeChange` on a save. On a read, `ctx.Data` is empty.
+
+```go title="content/word_count.go" focus={12-17,22-24}
+package content
+
+import (
+	"strings"
+
+	"github.com/riducms/ridu"
+	"github.com/riducms/ridu/operation"
+	"github.com/riducms/ridu/store"
+)
+
+func countWords(ctx ridu.HookContext) error {
+	switch ctx.Operation {
+	case operation.Create, operation.Duplicate, operation.Update,
+		operation.Publish, operation.Unpublish:
+	default:
+		return nil // BeforeOperation also runs for reads and deletes.
+	}
+	body, sent := ctx.Data["body"].StringValue()
+	if !sent {
+		return nil // This update does not change the body.
+	}
+	// Every BeforeChange hook has run, so this is the final body.
+	words := len(strings.Fields(body))
+	ctx.Data["wordCount"] = store.Number(float64(words))
+	return nil
+}
+```
+
+Saving an article with a 40-word body stores `40` in `wordCount`. An update that changes only the
+title keeps the stored count.
+
+## AfterChange {#after-change}
+
+Runs after the document is saved but before the transaction commits. It runs for create,
+duplicate, update, publish, and unpublish. Use it for related database writes that must succeed
+or fail together with the document.
+
+**Receives:** `ctx.Document`, the saved document, and `ctx.Original` on an update.
+
+This hook adds an audit entry for every save. Add `AuditLog` to `Config.Collections` too:
+
+```go title="content/audit_log.go" focus={21-23,29-34,36-37}
 package content
 
 import (
 	"github.com/riducms/ridu"
 	"github.com/riducms/ridu/field"
+	"github.com/riducms/ridu/store"
 )
 
-var Articles = ridu.Collection{
-	Slug: "articles",
+var AuditLog = ridu.Collection{
+	Slug: "audit-log",
 	Fields: field.Fields{
-		field.Text("title").Required(),
-		field.Text("lastEditedBy"),
+		field.Text("document").Required(),
+		field.Text("operation").Required(),
 	},
-	Hooks: ridu.CollectionHooks{
-		// Run before saving so the editor ID is stored with the article.
-		BeforeChange: []ridu.Hook{recordLastEditor},
-	},
+}
+
+func writeAuditEntry(ctx ridu.HookContext) error {
+	if ctx.Document == nil {
+		return nil
+	}
+	// Passing ctx.Context saves both documents in one transaction.
+	_, err := ctx.Local.Create(
+		ctx.Context,
+		"audit-log",
+		store.Values{
+			"document":  store.String(ctx.Document.ID),
+			"operation": store.String(string(ctx.Operation)),
+		},
+		// Local API calls do not inherit the user or locale.
+		ridu.MutationOptions{
+			Actor:           ctx.Actor,
+			ActorCollection: ctx.ActorCollection,
+			Locale:          ctx.Locale,
+		},
+	)
+	// Returning the error also rolls back the original save.
+	return err
 }
 ```
 
-Add `Articles` to `Config.Collections`. Create or edit an article while signed in: the saved
-`lastEditedBy` value should be your user ID. Anonymous writes leave it unchanged. To include
-duplication, publishing, or unpublishing, add those operation values to the helper's condition.
+Each save adds an audit entry with the article's ID and the operation. If the audit entry cannot
+be saved, the article is not saved either. The audit entry runs its own access rules, validation,
+and hooks. Changing `ctx.Document.Values` here changes only the response; use `BeforeChange` to
+change what is saved.
 
-`ctx.Data` contains the values being saved. Change its entries to update the document; returning
-`nil` keeps those changes. Use `ctx.Original` to compare with the saved document, or `ctx.Actor`
-to read the signed-in user. See [Hook context](/docs/hooks/context/) for the values available at
-each stage and the difference between changing stored values and changing a response.
+## AfterOperation {#after-operation}
 
-## Choose when your hook runs {#lifecycle}
+Runs after the database call for every operation, including reads and deletes, before the
+response is prepared and the transaction commits. An error still rolls back a save. On a list,
+`ctx.Document` is `nil`.
 
-Hook names describe when they run. For example, `BeforeValidate` runs before Ridu checks field
-values, and `AfterCommit` runs once the database has successfully saved the operation. If you add
-several hooks to the same list, Ridu runs them in the order you declare them.
+Most work fits a more specific hook: `AfterChange` for saves, `AfterDelete` for deletes, and
+`AfterRead` for responses. Use `AfterOperation` when one hook must follow every kind of
+operation, and check `ctx.Operation` inside it.
 
-| Hook                          | When it runs                                    | Use it to                                           |
-| ----------------------------- | ----------------------------------------------- | --------------------------------------------------- |
-| `BeforeDuplicate`             | After the source is copied                      | Clear values that should not be copied              |
-| `BeforeValidate`              | Before built-in field checks                    | Trim whitespace or normalize submitted input        |
-| `BeforeChange`                | After built-in checks, before custom validators | Calculate values or record the editor               |
-| `BeforeOperation`             | Before final validation and storage             | Make a final change or inspect an operation         |
-| `BeforeRead`                  | Before documents are read                       | Prepare data needed while reading                   |
-| `BeforeDelete`                | After the original document is loaded           | Clean up related data before deletion               |
-| `AfterChange` / `AfterDelete` | After storage, before the transaction commits   | Write related data that must succeed together       |
-| `AfterRead`                   | Before unreadable fields are removed            | Change values returned to the caller                |
-| `AfterOperation`              | After the operation, before commit              | Run follow-up database work                         |
-| `AfterError`                  | When an operation fails                         | Log the failure or record a metric                  |
-| `AfterCommit`                 | After the transaction commits                   | Send email, call webhooks, or update a search index |
+## BeforeRead {#before-read}
 
-`BeforeDuplicate`, `BeforeChange`, and `AfterChange` are specific to changes. `BeforeDelete`
-and `AfterDelete` run for deletion, including trash and permanent deletion. Restoring a trashed
-document does not run `AfterChange`.
+Runs before a find or list reads from the database. No document has been loaded yet, and
+`ctx.Data` is empty. Use it for work that must happen before any read, such as recording a metric.
 
-`BeforeValidate`, `BeforeOperation`, `AfterOperation`, and `AfterCommit` are shared stages: they
-can run for reads and deletes too. Check `ctx.Operation` when a hook should work only on saves.
-`AfterRead` runs whenever Ridu prepares a returned document, including create, update, and delete
-responses. A list runs it for each returned document.
+To control which documents someone may read, use [access control](/docs/access-control/) instead.
+An access rule filters the database query itself, so it also applies to counts and pagination.
 
-### The order of a save {#save-order}
+## AfterRead {#after-read}
 
-For an ordinary create or update, Ridu runs this sequence:
+Runs for each document Ridu returns, before removing fields the caller is not allowed to read.
+That includes reads and the responses to creates, updates, and deletes. Use it to change the
+response without changing what is stored.
 
-1. Check collection access and load the saved document when updating.
-2. Run the collection's `BeforeValidate` hooks, then the fields' `BeforeValidate` hooks.
-3. Apply [field defaults](/docs/fields/defaults/) to omitted values in new documents, objects, or
-   rows, combine an update with saved values, and run built-in checks.
-4. Run collection hooks, then field hooks, for `BeforeChange` and then `BeforeOperation`.
-5. Recheck values and field permissions, run custom `.Validate(...)` rules, and check relationships.
+**Receives:** `ctx.Document`. Change `ctx.Document.Values` to change the response.
+
+```go title="content/meta_title.go" focus={10-12}
+package content
+
+import "github.com/riducms/ridu"
+
+func fillMetaTitle(ctx ridu.HookContext) error {
+	values := ctx.Document.Values
+	if metaTitle, _ := values["metaTitle"].StringValue(); metaTitle != "" {
+		return nil
+	}
+	// This changes the response only. The stored metaTitle stays
+	// empty, so it keeps following the title when the title changes.
+	values["metaTitle"] = values["title"]
+	return nil
+}
+```
+
+An article with an empty `metaTitle` is returned with its title in that field. Filters and sorting
+still use the stored, empty value. Because a list runs this hook for every document, avoid slow
+lookups here.
+
+## BeforeDuplicate {#before-duplicate}
+
+Runs when a document is duplicated: after Ridu copies the original and before `BeforeValidate`.
+Use it to change values that the copy should not keep.
+
+**Receives:** `ctx.Data` with the copied values, and `ctx.Original`, the document being copied.
+
+```go title="content/mark_copy.go" focus={9-14}
+package content
+
+import (
+	"github.com/riducms/ridu"
+	"github.com/riducms/ridu/store"
+)
+
+func markCopy(ctx ridu.HookContext) error {
+	// Data holds the values copied from the original article.
+	if title, ok := ctx.Data["title"].StringValue(); ok {
+		ctx.Data["title"] = store.String(title + " (copy)")
+	}
+	// The copy should not replace the original on the homepage.
+	ctx.Data["featured"] = store.Boolean(false)
+	return nil
+}
+```
+
+Duplicating a featured article titled “Launch” creates “Launch (copy)”, which is not featured.
+Ridu does not rename unique values for you. A copied [`field.Slug`](/docs/fields/slug/) conflicts
+with the original, so give it a new value, as
+[the field `BeforeDuplicate` example](/docs/hooks/fields/#before-duplicate) does.
+
+## BeforeDelete {#before-delete}
+
+Runs after Ridu loads the document and before deleting it. It runs both when a document moves to
+the trash and when it is deleted permanently. Return an error to stop the delete.
+
+**Receives:** `ctx.Original`, the document about to be deleted.
+
+```go title="content/keep_featured.go" focus={10-14}
+package content
+
+import (
+	"errors"
+
+	"github.com/riducms/ridu"
+)
+
+func keepFeatured(ctx ridu.HookContext) error {
+	// Original is the saved article that is about to be deleted.
+	featured, _ := ctx.Original.Values["featured"].BooleanValue()
+	if featured {
+		return errors.New("remove the article from the homepage first")
+	}
+	return nil
+}
+```
+
+Deleting a featured article fails with `hook_failed`, and the article stays. To decide who may
+delete documents at all, use a `Delete` [access rule](/docs/access-control/).
+
+## AfterDelete {#after-delete}
+
+Runs after the document is deleted but before the transaction commits. An error restores the
+document. Use it for related cleanup that must happen together with the delete.
+
+**Receives:** `ctx.Document` and `ctx.Original`, both holding the deleted document.
+
+The audit hook from [AfterChange](#after-change) works here too, recording deletes as well as
+saves:
+
+```go
+Hooks: ridu.CollectionHooks{
+	AfterChange: []ridu.Hook{writeAuditEntry},
+	AfterDelete: []ridu.Hook{writeAuditEntry},
+},
+```
+
+Restoring a document from the trash does not run the delete hooks or `AfterChange`.
+
+## AfterError {#after-error}
+
+Runs when an operation on this collection fails. Use it to log the failure or report it to an
+error tracker.
+
+**Receives:** `ctx.Error`, the original failure, and `ctx.Operation`.
+
+```go title="content/log_failures.go" focus={12,14-15}
+package content
+
+import (
+	"log"
+
+	"github.com/riducms/ridu"
+)
+
+func logFailure(ctx ridu.HookContext) error {
+	log.Printf(
+		"Ridu %s failed (collection=%s global=%s): %v",
+		ctx.Operation, ctx.CollectionID, ctx.GlobalID, ctx.Error,
+	)
+	// Finish logging; the original failure still reaches the caller.
+	return nil
+}
+```
+
+A blocked delete of a featured article logs a line such as
+`Ridu delete failed (collection=… global=): before delete hook failed`. Returning `nil` does not
+make the operation succeed. To log failures from every collection and global in one place, use
+[application error hooks](/docs/hooks/#application-hooks).
+
+## AfterCommit {#after-commit}
+
+Runs after the transaction commits, for every operation, including reads. Use it for work that
+should happen only once a change is saved, such as sending email, calling a webhook, or clearing
+a cache.
+
+**Receives:** `ctx.Document`, and `ctx.Original` on updates and deletes.
+
+```go title="content/purge_cache.go" focus={16-18,20-22}
+package content
+
+import (
+	"context"
+
+	"github.com/riducms/ridu"
+	"github.com/riducms/ridu/operation"
+)
+
+// purgeCache stands in for your CDN client's purge call.
+var purgeCache = func(ctx context.Context, path string) error {
+	return nil
+}
+
+func purgeArticleCache(ctx ridu.HookContext) error {
+	if ctx.Operation == operation.Read {
+		return nil // AfterCommit also runs after reads.
+	}
+	slug, _ := ctx.Document.Values["slug"].StringValue()
+	// The article is already saved. An error here is reported to the
+	// caller, but it cannot undo the save.
+	return purgeCache(ctx.Context, "/articles/"+slug)
+}
+```
+
+Saving the article `launch` purges `/articles/launch`; reading it purges nothing. If the purge
+fails, the article stays saved and the caller receives an error marked as committed.
+[Send notifications after a successful save](/docs/hooks/transactions-and-errors/#after-commit)
+shows a webhook with a timeout, and how to retry failed deliveries.
+
+## Where validation and field hooks fit {#save-order}
+
+For a create or update, Ridu runs these steps in order:
+
+1. Check collection access. On an update, load the saved document.
+2. Run collection `BeforeValidate` hooks, then field `BeforeValidate` hooks.
+3. Apply [default values](/docs/fields/defaults/), combine an update with the saved values, and
+   run built-in checks such as `Required()`.
+4. Run collection hooks, then field hooks, for `BeforeChange` and then for `BeforeOperation`.
+5. Check the values and field permissions again, and run your custom `.Validate(...)` rules.
 6. Save the document inside the database transaction.
-7. Run collection hooks, then field hooks, for `AfterChange` and then `AfterOperation`.
-8. Prepare the response, including computed fields. Run collection `AfterRead`, then field
-   `AfterRead`, and remove values the caller cannot read.
-9. Commit the transaction, then run field `AfterCommit` hooks followed by collection `AfterCommit`
-   hooks.
+7. Run collection hooks, then field hooks, for `AfterChange` and then for `AfterOperation`.
+8. Prepare the response. Run collection `AfterRead`, then field `AfterRead`, then remove fields the
+   caller cannot read.
+9. Commit the transaction. Run field `AfterCommit` hooks, then collection `AfterCommit` hooks.
 
-A duplicate adds `BeforeDuplicate` before `BeforeValidate`, after copying the source. A publish
-or unpublish also runs the change hooks, with its own `ctx.Operation` value. A failed hook stops
-that operation before later stages run; [after-commit failures](/docs/hooks/transactions-and-errors/#after-commit) are different
-because the database has already committed.
-
-The important distinction is between built-in checks and your custom validators. `BeforeChange`
-receives values that have passed the first built-in checks, but your `.Validate(...)` rules run
-**after** write hooks. Put a rule that must accept or reject the final value in
-[custom validation](/docs/fields/validation/).
-
-For hooks in the same list, declaration order is execution order. Do not rely on the order of
-unrelated fields to coordinate several changes. Put that work in one collection hook.
-
-## Save related records or notify another service {#next-steps}
-
-An `AfterChange` hook still runs inside the transaction. Use it for database changes that must
-succeed together, such as an audit entry. Use `AfterCommit` for email, webhooks, or a search index:
-the document has been saved by then, so a later failure cannot undo it.
-
-[Transactions and errors](/docs/hooks/transactions-and-errors/) shows how to save related
-records, handle failures, and send notifications after commit. For a change to just one field,
-see [Field hooks](/docs/hooks/fields/).
+A duplicate runs `BeforeDuplicate` before step 2. A failed step stops the operation, and the later
+steps do not run.

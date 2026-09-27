@@ -43,10 +43,12 @@ for (const outcome of ["success", "failure"] as const) {
 			}
 		);
 		const forceUnlock = vi.fn(
-			(_collection: string, _id: string, _options?: { signal?: AbortSignal }) =>
+			(_input: { collection: string; id: string }, _options?: { signal?: AbortSignal }) =>
 				forceUnlockResult.promise
 		);
-		const fixture = await documentRouteFixture({ forceUnlock });
+		const fixture = await documentRouteFixture({
+			auth: { forceUnlock },
+		} as unknown as Partial<AdminClient>);
 		try {
 			await fixture.openAction("Force unlock");
 			await fixture.router.navigate("/collections/users/two?locale=en");
@@ -57,7 +59,7 @@ for (const outcome of ["success", "failure"] as const) {
 					"two",
 					expect.objectContaining({ signal: expect.any(AbortSignal) })
 				);
-			const signal = forceUnlock.mock.calls[0]?.[2]?.signal;
+			const signal = forceUnlock.mock.calls[0]?.[1]?.signal;
 			expect(signal?.aborted).toBe(true);
 
 			if (outcome === "success") forceUnlockResult.resolve({ success: true });
@@ -124,13 +126,16 @@ it("does not refresh the new route when an old locale copy completes", async () 
 it("keeps an account unlock active when only the document view changes", async () => {
 	const result = Promise.withResolvers<{ success: true }>();
 	const forceUnlock = vi.fn(
-		(_collection: string, _id: string, _options?: { signal?: AbortSignal }) => result.promise
+		(_input: { collection: string; id: string }, _options?: { signal?: AbortSignal }) =>
+			result.promise
 	);
-	const fixture = await documentRouteFixture({ forceUnlock });
+	const fixture = await documentRouteFixture({
+		auth: { forceUnlock },
+	} as unknown as Partial<AdminClient>);
 	try {
 		await fixture.openAction("Force unlock");
 		await fixture.router.navigate("/collections/users/one/api?locale=en");
-		expect(forceUnlock.mock.calls[0]?.[2]?.signal?.aborted).toBe(false);
+		expect(forceUnlock.mock.calls[0]?.[1]?.signal?.aborted).toBe(false);
 		result.resolve({ success: true });
 		await expect.poll(() => fixture.success).toHaveBeenCalledOnce();
 		expect(fixture.error).not.toHaveBeenCalled();
@@ -172,9 +177,12 @@ for (const change of ["schema", "unmount"] as const) {
 	it(`cancels an account unlock on ${change} without stale notifications`, async () => {
 		const result = Promise.withResolvers<{ success: true }>();
 		const forceUnlock = vi.fn(
-			(_collection: string, _id: string, _options?: { signal?: AbortSignal }) => result.promise
+			(_input: { collection: string; id: string }, _options?: { signal?: AbortSignal }) =>
+				result.promise
 		);
-		const fixture = await documentRouteFixture({ forceUnlock });
+		const fixture = await documentRouteFixture({
+			auth: { forceUnlock },
+		} as unknown as Partial<AdminClient>);
 		let destroyed = false;
 		try {
 			await fixture.openAction("Force unlock");
@@ -183,7 +191,7 @@ for (const change of ["schema", "unmount"] as const) {
 				await fixture.destroy();
 				destroyed = true;
 			}
-			await expect.poll(() => forceUnlock.mock.calls[0]?.[2]?.signal?.aborted).toBe(true);
+			await expect.poll(() => forceUnlock.mock.calls[0]?.[1]?.signal?.aborted).toBe(true);
 			result.resolve({ success: true });
 			await result.promise;
 			expect(fixture.success).not.toHaveBeenCalled();

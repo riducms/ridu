@@ -68,14 +68,14 @@ async function tokenRoute(kind: AuthRoute) {
 		return response.promise;
 	}
 	const runtime = new AdminRuntime({
-		verifyEmail: (_collection: string, token: string, options?: { signal?: AbortSignal }) =>
-			action(token, options?.signal),
-		resetPassword: (
-			_collection: string,
-			token: string,
-			password: string,
-			options?: { signal?: AbortSignal }
-		) => action(token, options?.signal, password),
+		auth: {
+			verifyEmail: (input: { token: string }, options?: { signal?: AbortSignal }) =>
+				action(input.token, options?.signal),
+			resetPassword: (
+				input: { token: string; password: string },
+				options?: { signal?: AbortSignal }
+			) => action(input.token, options?.signal, input.password),
+		},
 	} as unknown as AdminClient);
 	runtime.manifest = {
 		version: SCHEMA_MANIFEST_VERSION,

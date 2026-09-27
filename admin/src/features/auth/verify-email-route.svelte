@@ -43,9 +43,12 @@
 		error = undefined;
 
 		try {
-			await runtime.client.verifyEmail(authCollection.slug, token, {
-				signal: activeRequest.signal,
-			});
+			await runtime.client.auth.verifyEmail(
+				{ collection: authCollection.slug, token },
+				{
+					signal: activeRequest.signal,
+				}
+			);
 			if (!current()) return;
 			complete = true;
 		} catch (cause) {

@@ -436,43 +436,16 @@ func adminLocaleAvailable(snapshot schema.Snapshot, locale string) bool {
 }
 
 func (api *API) resolveAdminPreparedIdentity(request *http.Request) adminPreparedIdentity {
-	resolveSession := func(token string) adminPreparedIdentity {
-		if api.config.Session == nil || strings.TrimSpace(token) == "" {
-			return adminPreparedIdentity{}
-		}
-		session, err := api.config.Session(request.Context(), token)
-		if err != nil {
-			return adminPreparedIdentity{}
-		}
-		identity := &AuthIdentity{Collection: session.Collection, Actor: session.User}
-		safe := sessionEnvelope(session).Session
-		return adminPreparedIdentity{identity: identity, session: &safe, resolvedSession: &session}
+	state := api.credentialState(request)
+	if state.identity == nil {
+		return adminPreparedIdentity{}
 	}
-	// Preserve transport credential precedence: an explicit Session header does
-	// not silently downgrade to a cookie, then Bearer and external auth follow.
-	scheme, credential, hasAuthorization := strings.Cut(request.Header.Get("Authorization"), " ")
-	if hasAuthorization && strings.EqualFold(scheme, "Session") {
-		if resolved := resolveSession(strings.TrimSpace(credential)); resolved.identity != nil {
-			return resolved
-		}
-	} else if cookie, err := request.Cookie(sessionCookie); err == nil {
-		if resolved := resolveSession(cookie.Value); resolved.identity != nil {
-			return resolved
-		}
+	if state.session == nil {
+		return adminPreparedIdentity{identity: state.identity}
 	}
-	if hasAuthorization && strings.EqualFold(scheme, "Bearer") && api.config.AuthenticateAPIKey != nil {
-		identity, err := api.config.AuthenticateAPIKey(request.Context(), strings.TrimSpace(credential))
-		if err == nil {
-			return adminPreparedIdentity{identity: &identity}
-		}
-	}
-	if api.config.AuthenticateExternal != nil {
-		identity, err := api.config.AuthenticateExternal(request.Context(), map[string][]string(request.Header.Clone()))
-		if err == nil {
-			return adminPreparedIdentity{identity: &identity}
-		}
-	}
-	return adminPreparedIdentity{}
+	session := *state.session
+	safe := sessionEnvelope(session).Session
+	return adminPreparedIdentity{identity: state.identity, session: &safe, resolvedSession: &session}
 }
 
 func adminContextKey(snapshot schema.Snapshot, runtime *protocol.AdminPreparedRuntimeV1, identity *AuthIdentity, buildID string) string {

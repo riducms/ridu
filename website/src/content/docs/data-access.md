@@ -1,15 +1,22 @@
 ---
-title: 'Data access overview'
+title: 'Choose an API'
 description: 'Choose between the local Go API, REST, TypeScript SDK, GraphQL, and admin for a task.'
 product: data
 eyebrow: 'Data and APIs'
 order: 85
 aliases:
-  ['crud', 'read data', 'write data', 'API overview', 'operations']
+  [
+    'crud',
+    'read data',
+    'write data',
+    'API overview',
+    'data access',
+    'operations'
+  ]
 navigation:
   section: 'Work with data'
   order: 10
-  title: 'Data access overview'
+  title: 'Choose an API'
 ---
 
 Ridu offers several ways into one operation engine. Choosing a transport changes how you express a

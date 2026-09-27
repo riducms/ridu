@@ -38,6 +38,7 @@ artifacts=(
 	ridu-framework-ui.tgz
 	ridu-framework-build.tgz
 	ridu-framework-sdk.tgz
+	ridu-framework-sveltekit.tgz
 	ridu-framework-plugin.tgz
 	ridu-framework-plugin-richtext.tgz
 	ridu-framework-plugin-seo.tgz
@@ -151,4 +152,4 @@ for index in "${!artifacts[@]}"; do
 	npm publish "$artifact_root/${artifacts[$index]}" "${publish_arguments[@]}"
 done
 
-echo "published or verified all twelve Ridu $version packages at the latest dist-tag"
+echo "published or verified all ${#artifacts[@]} Ridu $version packages at the latest dist-tag"

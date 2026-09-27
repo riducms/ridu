@@ -43,12 +43,13 @@ const fetchWithCookieJar: typeof fetch = async (input, init) => {
 describe("generated MongoDB SDK against the generated server", () => {
 	it("keeps an authenticated cookie jar through CRUD", async () => {
 		const client = createClient({ baseURL, fetch: fetchWithCookieJar });
-		const login = await client.login("users", {
+		const login = await client.auth.login({
+			collection: "users",
 			email: "admin@mongodb-generated.test",
 			password: "mongodb-generated-password",
 		});
 		expect(login.user.email).toBe("admin@mongodb-generated.test");
-		expect((await client.session()).user.email).toBe("admin@mongodb-generated.test");
+		expect((await client.auth.getSession())?.user.email).toBe("admin@mongodb-generated.test");
 
 		const created = await client.create("posts", {
 			title: "Generated SDK MongoDB CRUD",

@@ -14,7 +14,8 @@ const (
 	AuthOperationLogin             AuthOperation = "login"
 	AuthOperationMe                AuthOperation = "me"
 	AuthOperationLogout            AuthOperation = "logout"
-	AuthOperationRefresh           AuthOperation = "refresh"
+	AuthOperationRotate            AuthOperation = "rotate"
+	AuthOperationSession           AuthOperation = "session"
 	AuthOperationPasswordReset     AuthOperation = "password_reset"
 	AuthOperationForgotPassword    AuthOperation = "forgot_password"
 	AuthOperationEmailVerification AuthOperation = "email_verification"
@@ -52,7 +53,7 @@ type AuthAccess struct {
 type AuthHook func(AuthContext) error
 
 // AuthHooks defines auth-specific lifecycle callbacks. Before hooks can reject
-// an operation; if an after-login or after-refresh hook fails, the newly issued
+// an operation; if an after-login or after-rotate hook fails, the newly issued
 // credential is revoked before the error is returned.
 type AuthHooks struct {
 	BeforeLogin          []AuthHook
@@ -60,8 +61,8 @@ type AuthHooks struct {
 	AfterMe              []AuthHook
 	BeforeLogout         []AuthHook
 	AfterLogout          []AuthHook
-	BeforeRefresh        []AuthHook
-	AfterRefresh         []AuthHook
+	BeforeRotate         []AuthHook
+	AfterRotate          []AuthHook
 	BeforeForgotPassword []AuthHook
 	AfterForgotPassword  []AuthHook
 	BeforePasswordReset  []AuthHook

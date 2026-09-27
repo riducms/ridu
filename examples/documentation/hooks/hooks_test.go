@@ -11,6 +11,7 @@ import (
 	"github.com/riducms/ridu"
 	"github.com/riducms/ridu/field"
 	"github.com/riducms/ridu/internal/teststore"
+	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/store"
 )
 
@@ -113,5 +114,53 @@ func TestAuditAndNotificationExamplesRespectCommit(t *testing.T) {
 				t.Fatalf("webhooks after save and read = %d, want %d", got, test.wantWebhooks)
 			}
 		})
+	}
+}
+
+func TestReviewerExampleSeparatesStoredAndReturnedValues(t *testing.T) {
+	users := ridu.Collection{Slug: "users", Fields: field.Fields{
+		field.Text("name").Required(), field.Text("email"),
+	}}
+	reviews := ridu.Collection{Slug: "reviews", Fields: field.Fields{field.Text("title"), Reviewer}}
+	app, err := ridu.New(ridu.Config{Name: "Reviewer example", Collections: []ridu.Collection{users, reviews}}, teststore.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	local := app.Local()
+	author, err := local.Create(t.Context(), "users", store.Values{"name": store.String("Ada"), "email": store.String("ada@example.test")}, ridu.MutationOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	editor, err := local.Create(t.Context(), "users", store.Values{"name": store.String("Grace"), "email": store.String("grace@example.test")}, ridu.MutationOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	self, err := local.Create(t.Context(), "reviews", store.Values{"title": store.String("Own work"), "reviewer": store.String(author.ID)}, ridu.MutationOptions{Actor: &author})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, reviewed := self.Values["reviewer"].StringValue(); reviewed {
+		t.Fatalf("self review was saved: %#v", self.Values["reviewer"])
+	}
+
+	review, err := local.Create(t.Context(), "reviews", store.Values{"title": store.String("Peer work"), "reviewer": store.String(editor.ID)}, ridu.MutationOptions{Actor: &author})
+	if err != nil {
+		t.Fatal(err)
+	}
+	path, err := query.NewPath("reviewer")
+	if err != nil {
+		t.Fatal(err)
+	}
+	read, err := local.Find(t.Context(), "reviews", review.ID, ridu.FindOptions{Populate: []query.Population{{Path: path, Depth: 1}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	returned, populated := read.Values["reviewer"].CopyDocument()
+	if !populated || returned.ID != editor.ID {
+		t.Fatalf("reviewer = %#v, want the populated editor", read.Values["reviewer"])
+	}
+	if name, _ := returned.Values["name"].StringValue(); name != "Grace" || len(returned.Values) != 1 {
+		t.Fatalf("reviewer values = %#v, want only the name", returned.Values)
 	}
 }

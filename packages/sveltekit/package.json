@@ -1,0 +1,48 @@
+{
+	"name": "@riducms/sveltekit",
+	"description": "SvelteKit integration for Ridu: direct browser requests, server rendering, and one session owner.",
+	"version": "0.4.0",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/riducms/ridu.git",
+		"directory": "packages/sveltekit"
+	},
+	"homepage": "https://riducms.com",
+	"bugs": {
+		"url": "https://github.com/riducms/ridu/issues"
+	},
+	"publishConfig": {
+		"access": "public",
+		"provenance": true
+	},
+	"type": "module",
+	"exports": {
+		".": {
+			"types": "./src/index.ts",
+			"svelte": "./src/index.ts",
+			"default": "./src/index.ts"
+		},
+		"./server": {
+			"types": "./src/server.ts",
+			"svelte": "./src/server.ts",
+			"default": "./src/server.ts"
+		}
+	},
+	"files": [
+		"src"
+	],
+	"scripts": {
+		"check": "tsc -p tsconfig.json",
+		"test": "bun test"
+	},
+	"peerDependencies": {
+		"@riducms/sdk": "workspace:*",
+		"@sveltejs/kit": "^2.20.0",
+		"svelte": "^5.29.0"
+	},
+	"devDependencies": {
+		"@riducms/sdk": "workspace:*",
+		"@sveltejs/kit": "^2.48.0"
+	}
+}

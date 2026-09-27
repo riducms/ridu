@@ -173,6 +173,7 @@ Save the document. The list view should now contain **Hello from Ridu**.
 Open `generated/ridu.generated.ts`, then create `scripts/read-posts.ts`:
 
 ```ts title="scripts/read-posts.ts"
+import { memoryTokenStore } from '@riducms/sdk';
 import { createClient } from '../generated/ridu.generated';
 
 const baseURL = process.env.RIDU_URL ?? 'http://localhost:8080';
@@ -185,27 +186,13 @@ if (!email || !password) {
 	);
 }
 
-let sessionCookie = '';
+// A script keeps its session token in memory and sends it on each request.
 const ridu = createClient({
 	baseURL,
-	middleware: [
-		async (request, next) => {
-			const headers = new Headers(request.headers);
-			if (sessionCookie) headers.set('Cookie', sessionCookie);
-
-			const response = await next(new Request(request, { headers }));
-			const setCookie = response.headers.get('set-cookie');
-			const match = setCookie?.match(
-				/(?:^|,\s*)(ridu_session=[^;,\s]+)/
-			);
-			const session = match?.[1];
-			if (session) sessionCookie = session;
-			return response;
-		}
-	]
+	auth: { collection: 'users', token: memoryTokenStore() }
 });
 
-await ridu.login('users', { email, password });
+await ridu.auth.login({ email, password });
 const page = await ridu.list('posts', {
 	where: { status: { equals: 'published' } },
 	select: { title: true, status: true },
@@ -245,11 +232,12 @@ The output includes the post you just created. The collection slug, filter opera
 fields, and returned document shape are inferred from the generated contract; mistyping `posts`,
 `status`, or `published` is a TypeScript error.
 
-The middleware keeps the opaque `ridu_session` cookie in memory for this process and forwards it
-after login. Do not log or persist it. The typed login result does not expose the raw session token.
-Browser applications need no cookie middleware; call `login` once and the SDK's default
-`credentials: "include"` sends the `HttpOnly` cookie. Long-running service clients should use an
-expiring API key rather than a user's password or browser session.
+`memoryTokenStore()` keeps the opaque session token in memory for this process, and the SDK sends
+it as `Authorization: Session <token>` after login. Do not log or persist it. The typed login result
+is the safe session snapshot, without the token. A same-origin browser app needs no store: the SDK
+uses Ridu's `HttpOnly` cookie by default. A SvelteKit app on its own domain uses
+[`@riducms/sveltekit`](/docs/sveltekit/). Long-running service clients should use an expiring API
+key rather than a user's password or session.
 
 ## 5. Change the model {#change-the-model}
 

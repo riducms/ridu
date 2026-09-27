@@ -769,6 +769,17 @@ func Run(t *testing.T, factory Factory) {
 		if err != nil || found.ID != session.ID || found.UserID != user.ID {
 			t.Fatalf("session = %#v, %v", found, err)
 		}
+		// Upload grants name a session by its public ID and verify with its digest.
+		byID, err := auth.FindSessionByID(t.Context(), session.ID, now)
+		if err != nil || byID.ID != session.ID || byID.TokenHash != session.TokenHash || byID.UserID != user.ID {
+			t.Fatalf("session by ID = %#v, %v", byID, err)
+		}
+		if _, err := auth.FindSessionByID(t.Context(), session.ID, session.ExpiresAt); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("expired session by ID error = %v, want not found", err)
+		}
+		if _, err := auth.FindSessionByID(t.Context(), "not-a-session-id", now); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("malformed session ID error = %v, want not found", err)
+		}
 		wrong := session
 		wrong.ID = id(21)
 		wrong.TokenHash = "wrong-password-session"
@@ -780,6 +791,9 @@ func Run(t *testing.T, factory Factory) {
 		}
 		if _, err := auth.FindSession(t.Context(), session.TokenHash, now); !errors.Is(err, store.ErrNotFound) {
 			t.Fatalf("deleted session error = %v, want not found", err)
+		}
+		if _, err := auth.FindSessionByID(t.Context(), session.ID, now); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("deleted session by ID error = %v, want not found", err)
 		}
 	})
 

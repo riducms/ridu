@@ -455,7 +455,7 @@ export class AdminRuntime {
 		const accessAuthoritative = await this.refreshAccess(this.contentLocale);
 		if (!accessAuthoritative || this.session === undefined || this.adminAccessAllowed) return;
 		try {
-			await this.client.logout();
+			await this.client.auth.logout();
 		} catch {
 			// The local session is still denied even if server cleanup fails.
 		}
@@ -471,21 +471,18 @@ export class AdminRuntime {
 			if (request !== this.#manifestRequest) return;
 			const admin = this.#installManifest(manifest);
 			if (admin !== undefined) {
-				const bootstrap = await this.client.authBootstrap(admin.userCollectionSlug);
+				const bootstrap = await this.client.auth.bootstrap({
+					collection: admin.userCollectionSlug,
+				});
 				if (request !== this.#manifestRequest) return;
 				this.authBootstrapAvailable = bootstrap.available;
 				if (bootstrap.available) {
 					this.session = undefined;
 				} else {
-					try {
-						const session = await this.client.session();
-						if (request !== this.#manifestRequest) return;
-						this.session = session.collection === admin.userCollectionSlug ? session : undefined;
-					} catch (error) {
-						if (request !== this.#manifestRequest) return;
-						if (!(error instanceof RiduError) || error.code !== "access_denied") throw error;
-						this.session = undefined;
-					}
+					// getSession resolves null without a session and rejects on an outage.
+					const session = await this.client.auth.getSession();
+					if (request !== this.#manifestRequest) return;
+					this.session = session?.collection === admin.userCollectionSlug ? session : undefined;
 				}
 			} else {
 				this.session = undefined;
@@ -513,7 +510,9 @@ export class AdminRuntime {
 				this.session = undefined;
 			}
 			if (admin !== undefined && this.session === undefined) {
-				const bootstrap = await this.client.authBootstrap(admin.userCollectionSlug);
+				const bootstrap = await this.client.auth.bootstrap({
+					collection: admin.userCollectionSlug,
+				});
 				if (request !== this.#manifestRequest) return;
 				this.authBootstrapAvailable = bootstrap.available;
 			} else {

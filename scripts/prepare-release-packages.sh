@@ -30,7 +30,9 @@ output_root="$(cd "$output_root" && pwd)"
 		--target "$project_root"
 )
 
+package_count=0
 for package_directory in "$project_root/.ridu/packages"/*; do
+	package_count=$((package_count + 1))
 	package_target="$(basename "$package_directory")"
 	(
 		cd "$package_directory"
@@ -41,4 +43,4 @@ for package_directory in "$project_root/.ridu/packages"/*; do
 	)
 done
 
-echo "prepared twelve release-shaped npm tarballs in $output_root"
+echo "prepared $package_count release-shaped npm tarballs in $output_root"

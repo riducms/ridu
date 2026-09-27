@@ -1,7 +1,7 @@
 import { svelte } from "@hvniel/vite-plugin-svelte-inline-component";
 import type { SchemaField } from "@riducms/protocol";
 import { expect, it } from "vitest";
-import { page } from "vitest/browser";
+import { page, userEvent } from "vitest/browser";
 import { render } from "vitest-browser-svelte";
 
 import type { AdminClient } from "@admin/core/api/admin-client";
@@ -35,10 +35,67 @@ function selectField(hasMany: boolean): SchemaField {
 			options: [
 				{ value: "news", label: "News" },
 				{ value: "guides", label: "Guides" },
+				{ value: "reviews", label: "Reviews" },
 			],
 		},
 	};
 }
+
+it.each(["mouse", "keyboard"])(
+	"hides selected options and clears the multi-select search after %s selection",
+	async (method) => {
+		const runtime = new AdminRuntime({} as AdminClient);
+		const field = selectField(true);
+		const form = new FormController({}, runtime.i18n);
+		form.reset({ category: ["news"] }, [field]);
+		const screen = await render(SelectHarness, { runtime, form, field });
+		const input = screen.getByRole("combobox", { name: "Category", exact: true });
+		const guides = page.getByRole("option", { name: "Guides", exact: true });
+		const reviews = page.getByRole("option", { name: "Reviews", exact: true });
+
+		try {
+			await input.click();
+			await expect.element(guides).toBeVisible();
+			await expect
+				.element(page.getByRole("option", { name: "News", exact: true }))
+				.not.toBeInTheDocument();
+
+			if (method === "keyboard") {
+				await input.fill("Review");
+				await expect.element(guides).not.toBeInTheDocument();
+				await userEvent.keyboard("{ArrowDown}{Enter}");
+			} else {
+				await reviews.click();
+			}
+
+			await expect.poll(() => form.get("category")).toEqual(["news", "reviews"]);
+			await expect.element(input).toHaveValue("");
+			await expect.element(input).toHaveFocus();
+			await expect.element(reviews).not.toBeInTheDocument();
+			await expect.element(guides).toBeVisible();
+
+			await screen.getByRole("button", { name: "Remove Reviews", exact: true }).click();
+			await input.click();
+			await expect.element(reviews).toBeVisible();
+			await reviews.click();
+			await expect.element(input).toHaveValue("");
+			await userEvent.keyboard("{Escape}");
+			await input.click();
+			await expect.element(reviews).not.toBeInTheDocument();
+
+			await guides.click();
+			await expect.poll(() => form.get("category")).toEqual(["news", "reviews", "guides"]);
+			await expect.element(page.getByRole("option")).not.toBeInTheDocument();
+			await expect.element(page.getByText("No Category match")).not.toBeInTheDocument();
+			await input.fill("missing");
+			await expect.element(page.getByText("No Category match")).toBeVisible();
+		} finally {
+			await screen.unmount();
+			form.disposeBindings();
+			runtime.dispose();
+		}
+	}
+);
 
 for (const initialHasMany of [false, true]) {
 	const initialMode = initialHasMany ? "multiple" : "single";

@@ -127,7 +127,7 @@ export function referenceCode(
 			break;
 		case "create":
 			if (request.authCreate)
-				call = `const doc = await ridu.createAuthUser(${slug}, ${data}, "REPLACE_WITH_A_PASSWORD");`;
+				call = `const doc = await ridu.auth.createUser({\n  collection: ${slug},\n  data: ${data},\n  password: "REPLACE_WITH_A_PASSWORD",\n});`;
 			else if (request.uploadCreate)
 				call = `async function createUpload(file: File) {\n  const data: RiduConfig["collections"][${slug}]["create"] = ${data};\n  return ridu.upload(${slug}, file, { data });\n}`;
 			else call = `const doc = await ridu.create(${slug}, ${data});`;

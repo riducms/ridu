@@ -34,112 +34,127 @@ navigation:
   title: 'Operations and callbacks'
 ---
 
-Import `github.com/riducms/ridu/operation` when you write a field hook, validator, access rule, or dynamic default.
-It provides the arguments Ridu passes to your function and the results you return: the current
-operation, a value that may be empty, a replacement value, or a validation message.
+Import `github.com/riducms/ridu/operation` when you write a field hook, validator, dynamic
+default, or field access rule. The package defines the arguments Ridu passes to those functions
+and the values they return. You do not need it for a plain field declaration such as
+`field.Text("title").Required()`.
 
-You do not need it for a basic field declaration such as `field.Text("title").Required()`.
-It becomes useful when you add your own behavior, such as trimming a subtitle before saving
-or checking that a sale price is lower than the regular price.
+The package does not run database operations itself. To create, read, or update a document, use
+the [local Go API](/docs/local-api/).
 
-The package does not execute database operations. To create, read, or update a document yourself,
-use the [local Go API](/docs/local-api/). For the values in a document's map, see
-[Document values](/docs/go-packages/store/).
+## At a glance {#overview}
 
-## Check what is happening {#operation-kinds}
+A field callback's signature is made of types from this package:
 
-`ctx.Operation` is an `operation.Kind`: a named value such as `operation.Create` or
-`operation.Update`. Compare it with these constants when your function should run only for
-certain actions.
+```go
+func cleanSubtitle(
+	ctx operation.Context, // The operation and nearby values
+	value operation.Value[string], // This field's value, if any
+) (operation.Change[string], error) // Keep or replace the value
+```
 
-| Constant                    | What it identifies                                              |
-| --------------------------- | --------------------------------------------------------------- |
-| `operation.Create`          | Creating a collection document                                  |
-| `operation.Duplicate`       | Creating a copy of an existing document                         |
-| `operation.Read`            | Reading one document or a list, or reading a global             |
-| `operation.Update`          | Updating a document or global, including a global's first save  |
-| `operation.Delete`          | Deleting a document; moves it to trash when trash is enabled    |
-| `operation.RestoreDeleted`  | Restoring a document from trash                                 |
-| `operation.DeletePermanent` | Permanently deleting a trashed document                         |
-| `operation.Publish`         | Publishing a document or global                                 |
-| `operation.Unpublish`       | Moving a document or global back to draft                       |
-| `operation.ReadVersions`    | Reading retained version history                                |
-| `operation.Admin`           | Checking whether an authenticated user may enter the admin      |
-| `operation.Unlock`          | Checking permission to take over another editor's document lock |
+| Type                                        | What it is                                              | Where you see it                             |
+| ------------------------------------------- | ------------------------------------------------------- | -------------------------------------------- |
+| `operation.Context`                         | The current operation and the values around the field   | The first argument of every field callback   |
+| `operation.Value[T]`                        | A value of type `T` that may be empty                   | The value argument, and what defaults return |
+| `operation.Change[T]`                       | An instruction to keep or replace the field's value     | What field transforms return                 |
+| `operation.Kind`                            | The operation, such as `operation.Create`               | `ctx.Operation`                              |
+| `operation.Issue`                           | A validation message for the author                     | What validators return                       |
+| `operation.ID`, `operation.ReferenceOutput` | A related document's ID, and the reference Ridu returns | Relationship and upload values               |
 
-These names describe the action, not the hook phase. An `AfterRead` hook that prepares a create
-response still sees `operation.Create`. Access checks use these kinds too; a kind's presence
-does not mean every hook runs for it. See the [hook lifecycle](/docs/hooks/collections/#lifecycle)
-for the stages that run on reads, writes, and deletes.
+## operation.Context {#callback-context}
 
-**Restoring a saved version is different from restoring trash.** A version restore checks
-`ReadVersions` permission, then runs `Publish` for a published snapshot or `Unpublish` for a
-draft snapshot. Restoring explicitly as a draft uses `Unpublish`. Use `RestoreDeleted` only for
-the trash action; it does not run `AfterChange`.
+`operation.Context` describes the operation a field callback is part of. Validators, defaults,
+transforms, observers, [virtual field resolvers](/docs/fields/virtual/), and field access rules
+all receive it:
 
-## Read a value that may be empty {#value-presence}
+| Property        | Description                                                                                                                                |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `ctx.Operation` | What is happening, as an [`operation.Kind`](#operation-kinds).                                                                             |
+| `ctx.ID`        | The document's ID. It is empty while a document is being created.                                                                          |
+| `ctx.Actor`     | The signed-in user: `ctx.Actor.ID`, their auth collection, and their fields in `ctx.Actor.Data`. The ID is empty for an anonymous request. |
+| `ctx.Siblings`  | The fields next to this one: the same group, the same array row, or the top level.                                                         |
+| `ctx.Root`      | The document's top-level fields.                                                                                                           |
+| `ctx.Prior`     | The saved values of this field's group or row before the operation. Empty on create and for new rows.                                      |
+| `ctx.Locale`    | The content locale, or empty without localization.                                                                                         |
+| `ctx.Local`     | Reads another document with `ctx.Local.FindByID(...)`, as the same user and in the same transaction.                                       |
+| `ctx.Context`   | Cancellation and deadline. Pass it to `ctx.Local` and network calls.                                                                       |
 
-A field callback reads or returns `operation.Value[T]`. `T` is the Go type of the field value: `string`
-for Text, `float64` for Number, or `bool` for Checkbox, for example. The wrapper records whether
-a value is present separately from the value itself.
+`Siblings`, `Root`, and `Prior` are read-only snapshots. Read a value by its field name:
 
-Call `value.Get()` to read both results, as in `subtitle, present := value.Get()`. Check
-`present` before using the value. When it is false, the first result is Go's zero value for
-that type; it is not a value supplied by the author.
+```go
+title, _ := ctx.Siblings.String("title")
+price, _ := ctx.Siblings.Get("price").NumberValue()
+seoTitle, _ := ctx.Root.Get("seo").Get("title").StringValue()
+```
 
-| Value you construct          | What `Get()` returns | Meaning                                 |
-| ---------------------------- | -------------------- | --------------------------------------- |
-| `operation.Empty[bool]()`    | `false, false`       | No boolean value                        |
-| `operation.Present(false)`   | `false, true`        | An explicit false                       |
-| `operation.Present(0.0)`     | `0, true`            | An explicit number zero                 |
-| `operation.Present("")`      | `"", true`           | An explicit empty string in the wrapper |
-| `operation.Present("Hello")` | `"Hello", true`      | A supplied string                       |
+For the field in a nested group, `ctx.Siblings` is that group. In an array, it is the current row,
+whatever its position. [Using other field values](/docs/fields/callback-values/) covers nested
+rows, translations, and related-document lookups.
 
-`Present(...)` wraps a value. `Empty[T]()` wraps no value and needs the type in square brackets
-because there is no argument from which Go can infer it. An uninitialized `operation.Value[T]`
-is also empty. Normal field validation still applies: a present empty string does not bypass
-a Text field's `Required()` rule.
+### Collection and global hooks use ridu.HookContext {#resource-context}
 
-A dynamic default returns this same wrapper. `operation.Present(value)` supplies the initial
-value; `operation.Empty[T]()` supplies no default, and required validation still applies.
-The callback receives `operation.Context`, with request information and the input
-available before validation. It has no separate current-value argument because it only runs
-for omitted fields that need an initial value. See [Set default field values](/docs/fields/defaults/).
+Collection and global hooks receive [`ridu.HookContext`](/docs/hooks/collections/#arguments)
+instead. It holds the whole document: change entries in its `ctx.Data` map to change several
+fields at once. Its `ctx.Actor` is a document pointer that is `nil` for an anonymous request, and
+its `ctx.Local` is the full local API, which can also save other documents.
+[Hook context](/docs/hooks/context/) compares the two.
+
+## operation.Value {#value-presence}
+
+`operation.Value[T]` carries a value of type `T` that may be empty. `T` is the field's Go type:
+`string` for Text, `float64` for Number, `bool` for Checkbox. Call `Get()` to read the value and
+whether one is present:
+
+```go
+subtitle, present := value.Get()
+if !present {
+	// There is no value. subtitle is "", Go's zero value for a string.
+}
+```
+
+Create a value with `operation.Present(...)`, or an empty one with `operation.Empty[T]()`. An
+empty value needs its type in square brackets, because there is no argument for Go to infer it
+from:
+
+| Value                        | `Get()` returns | Meaning           |
+| ---------------------------- | --------------- | ----------------- |
+| `operation.Present("Hello")` | `"Hello", true` | A string          |
+| `operation.Present("")`      | `"", true`      | An empty string   |
+| `operation.Present(false)`   | `false, true`   | An explicit false |
+| `operation.Empty[bool]()`    | `false, false`  | No value          |
+
+Check `present` before using the value: when it is `false`, the first result is Go's zero value,
+not something an author entered. A [dynamic default](/docs/fields/defaults/) returns the same
+type: `operation.Present(value)` supplies a default, and `operation.Empty[T]()` supplies none.
 
 ### Missing input and explicit null {#raw-input}
 
-A raw field hook, such as `BeforeValidate`, receives `operation.Value[store.Value]` before the
-input has passed type checks. At that stage:
+A raw callback, such as a `BeforeValidate` hook, receives `operation.Value[store.Value]` before
+Ridu has checked the input's type:
 
-- `operation.Empty[store.Value]()` means the caller omitted the field.
-- `operation.Present(store.Null())` means the caller explicitly supplied null.
-- Other present values may still have the wrong type for the field.
+- `operation.Empty[store.Value]()` means the caller did not send the field.
+- `operation.Present(store.Null())` means the caller sent `null`.
+- Any other present value might still have the wrong type for the field.
 
-Typed callbacks run later. An omitted field in an update may already have its saved value,
-and an optional field's null or missing value can become the same empty typed value. Do not
-use a typed callback's `present` flag to decide whether the caller submitted the field.
+Later callbacks receive the typed value. By then, an update that did not send the field carries
+the saved value, so use a raw hook when you need to know what the caller sent. See
+[missing input and null](/docs/fields/callback-values/#missing-input).
 
-Use a raw hook when that distinction affects your rule. `ctx.Root` and `ctx.Siblings` are
-snapshots of values at the current phase; their membership is not a record of submitted keys.
-See [missing input and null](/docs/fields/callback-values/#missing-input) for more detail.
+## operation.Change {#field-changes}
 
-## Keep, replace, or clear a field {#field-changes}
-
-A field transform returns an `operation.Change[T]` and an error. Its return value tells Ridu
-what to do with this field:
+A field transform returns an `operation.Change[T]` that tells Ridu what to do with the field:
 
 | Return                                          | Result                                                                   |
 | ----------------------------------------------- | ------------------------------------------------------------------------ |
-| `operation.Keep[string]()`                      | Leave the current value unchanged                                        |
+| `operation.Keep[string]()`                      | Leave the value unchanged                                                |
 | `operation.Replace(operation.Present("Hello"))` | Set the field to `"Hello"`                                               |
 | `operation.Replace(operation.Empty[string]())`  | Clear the field                                                          |
 | A non-nil error                                 | Stop the operation; a replacement returned with the error is not applied |
 
-`Keep` and `Replace(Empty)` are different. The first preserves a value; the second clears it.
-For an ordinary optional field, clearing produces null. It does not remove the field property
-from stored documents. A required field still has to pass validation.
-
-This reusable field trims a subtitle and clears it when the author enters only spaces:
+`Keep` preserves the value; `Replace(Empty)` clears it. A cleared optional field becomes null,
+and a required field still has to pass validation. This field trims a subtitle and clears it
+when the author enters only spaces:
 
 ```go title="content/subtitle.go" focus={18-21,24-29}
 package content
@@ -174,64 +189,45 @@ func cleanSubtitle(
 }
 ```
 
-Add `Subtitle` to a collection's `Fields`. Saving `"  Hello  "` stores `"Hello"`; saving only
-spaces clears it. An update that omits `subtitle` retains the saved value. The `_` parameter
-means this function does not need its context.
+Saving `"  Hello  "` stores `"Hello"`, and saving only spaces clears the subtitle. An update that
+does not send `subtitle` keeps the saved value. The same results work in an `AfterRead` hook,
+where they change the response instead of the stored value; see
+[Field hooks](/docs/hooks/fields/#return-values).
 
-`BeforeChange` receives typed values and runs before custom validators. Ridu checks the
-replacement again before saving. `AfterRead` transforms use the same keep-or-replace results
-but change only the returned value, leaving storage unchanged. See
-[Field hooks](/docs/hooks/fields/) for both kinds of hook and their registration.
+## operation.Kind {#operation-kinds}
 
-## Read the user and surrounding fields {#callback-context}
+`ctx.Operation` is an `operation.Kind`. Compare it with these constants when your code should run
+only for some operations:
 
-Field validators, defaults, transforms, resolvers, access rules, and observers all receive
-`operation.Context`. Registration determines when a callback runs and whether its return value
-changes stored input or only the response. The context contains snapshots for that phase:
+| Constant                    | What it identifies                                              |
+| --------------------------- | --------------------------------------------------------------- |
+| `operation.Create`          | Creating a collection document                                  |
+| `operation.Duplicate`       | Creating a copy of an existing document                         |
+| `operation.Read`            | Reading one document, a list, or a global                       |
+| `operation.Update`          | Updating a document or global, including a global's first save  |
+| `operation.Publish`         | Publishing a document or global                                 |
+| `operation.Unpublish`       | Moving a document or global back to draft                       |
+| `operation.Delete`          | Deleting a document, or moving it to the trash when trash is on |
+| `operation.RestoreDeleted`  | Restoring a document from the trash                             |
+| `operation.DeletePermanent` | Permanently deleting a trashed document                         |
+| `operation.ReadVersions`    | Reading a document's version history                            |
+| `operation.Admin`           | Checking whether a signed-in user may open the admin            |
+| `operation.Unlock`          | Checking whether a user may take over another editor's lock     |
 
-- `ctx.Operation` identifies the action, and `ctx.ID` identifies the document when it has an ID.
-- `ctx.Actor.ID` identifies the signed-in user; an empty ID means an anonymous request.
-- `ctx.Siblings` contains this field and nearby fields in the same group or row.
-- `ctx.Root` contains top-level fields.
-- `ctx.Prior` contains the previously saved version of this field's group or row. It is empty
-  when there was no previous value there, including a new row or a standalone read.
-- `ctx.Local.FindByID` reads a related document with the current user, exact locale, and active
-  transaction. Pass `ctx.Context` so cancellation travels with the call.
+The kind names the whole operation, not the hook that is running: an `AfterRead` hook preparing
+the response to a create sees `operation.Create`. Access rules use the same kinds.
 
-For example, `ctx.Siblings.String("title")` reads a nearby title without a Go type assertion.
-These views share immutable values: ordinary reads do not copy maps or lists. Each view keeps
-its snapshot when later hooks make changes. A transform must return `operation.Replace(...)`
-for its own field to save a change. See
-[Using other field values](/docs/fields/callback-values/) for nested rows, previous values,
-translations, and related lookups.
+Restoring a saved version is not `RestoreDeleted`. It runs as `Publish` for a published version
+and as `Unpublish` for a draft; `RestoreDeleted` is only for the trash.
 
-### Collection and global hooks use a different context {#resource-context}
+## operation.Issue {#validation-issues}
 
-Collection and global hooks receive `ridu.HookContext`, which works with the whole document.
-Change entries in its `ctx.Data` map before saving to update several fields together. Its
-`ctx.Actor` is a document pointer and is `nil` for an anonymous request. Its `ctx.Local` is the
-full local API, so it can also write related records.
+A field validator returns `[]operation.Issue` when a value is invalid. Each issue has a `Code`
+that API clients can check and a `Message` for the author. Return `nil, nil` to accept the value,
+and a non-nil error only when the check itself could not run, such as a failed lookup.
 
-Field transforms and validators receive their value as a separate argument. Field contexts
-provide a read-only local reader. Use the field
-context for one field's rule; use a collection or global hook for a change involving several
-fields or related writes. [Hook context](/docs/hooks/context/) explains when values are
-available and how to forward the user and locale to related operations.
-
-A relationship also illustrates why the callback phase matters: its write value is an
-`operation.ID`, while its read value is an `operation.ReferenceOutput`. On a read, call `ID()`
-for the referenced ID and `Document()` to check whether the related document was populated.
-Do not assume every read includes the related document.
-
-## Return a validation message {#validation-issues}
-
-Return `[]operation.Issue` from a field validator when a value is invalid. Each issue has a
-stable `Code` for API clients and a `Message` for the author. Returning `nil, nil` accepts the
-value. The separate error return means the check could not run, such as a failed lookup.
-
-Leave `Target` unset to show the message on the field being validated. When a rule compares
-children of a group, use `operation.At("childName")` to show it on the child that needs fixing.
-This pricing group rejects a sale price that is not lower than the regular price:
+An issue appears on the validated field unless you set `Target`. Use `operation.At(...)` to put
+it on a child field instead. This group rejects a sale price that is not lower than the price:
 
 ```go title="content/pricing.go" focus={24-32}
 package content
@@ -270,40 +266,52 @@ func validatePricing(
 }
 ```
 
-Add `Pricing` to a collection's `Fields`. A price of `10` with a sale price of `0` is valid:
-zero is a real price. A sale price of `12` produces a message beside `pricing.salePrice`, and
-the invalid change is not saved. `Target` starts inside the field being validated, so it uses
-`"salePrice"`, not `"pricing.salePrice"`.
+A price of `10` with a sale price of `12` shows a message beside `pricing.salePrice`, and nothing
+is saved. A sale price of `0` is valid, because zero is a real price. `Target` starts inside the
+validated field, so it is `"salePrice"`, not `"pricing.salePrice"`.
 
 ### Put a message on a repeated row {#row-targets}
 
-When validating an entire Array or Blocks field, select a row by its `_key` before selecting
-its child field. Ridu gives each row a stable key so the message can follow it after reordering.
+To target a field inside an array or blocks row, select the row by its `_key` first. Ridu gives
+each row a stable key, so the message follows the row even after reordering:
 
-| Validator location      | Target                                                  | Message belongs to             |
+| Validator on            | Target                                                  | Message appears on             |
 | ----------------------- | ------------------------------------------------------- | ------------------------------ |
-| A `details` group       | `operation.At("seo.title")`                             | The title inside its SEO group |
+| A `details` group       | `operation.At("seo.title")`                             | The title in its SEO group     |
 | A `variants` array      | `operation.At().Row(rowKey).Field("sku")`               | The SKU in that variant        |
-| A `layout` Blocks field | `operation.At().Block(rowKey, "hero").Field("heading")` | The heading in that Hero block |
+| A `layout` blocks field | `operation.At().Block(rowKey, "hero").Field("heading")` | The heading in that Hero block |
 
-Read the key from the candidate row; an array index is not a row key. `Block` also checks the
-block type. A target can stay on the current field or go into its children; it cannot point to
-an unrelated field. Ridu checks the target against the submitted candidate and fills in the
-document, field, and locale information for you.
+Read `rowKey` from the row's `_key` value; an array index is not a row key. A target can point to
+the validated field or any field inside it, but not to an unrelated field. See
+[validation targets](/docs/fields/validation/#rows) for nested lists and translations.
 
-For nested lists and translations, see [validation targets](/docs/fields/validation/#rows).
-For additional types and methods, see the [operation reference](/reference/operation/).
+## operation.ID and operation.ReferenceOutput {#references}
 
-## Check a field while the author edits {#live-validation}
+A relationship or upload field stores the related document's ID as an `operation.ID`. When Ridu
+returns the field, it uses an `operation.ReferenceOutput` instead, which also holds the related
+document if the request asked for it:
 
-`.LiveValidate(...)` callbacks receive `operation.LiveValidationContext` and an
-`operation.Value[T]`, and return the same `[]operation.Issue, error` results as a save validator.
-For a text field, `T` is `string`; a missing or null value is empty.
+```go
+id := reference.ID() // Always available.
+doc, populated := reference.Document()
+if populated {
+	name, _ := doc.Values["name"].StringValue()
+	// ...
+}
+```
 
-This context describes the unsaved form. `Root` and `Siblings` include submitted values and
-retained update values, while `Prior` contains saved values. `Input` lets you distinguish an
-omitted property from an explicit null. Defaults and save hooks have not run, and `ctx.Local`
-can only read documents.
+Write hooks and validators receive the `operation.ID`; `.AfterRead(...)` hooks receive the
+`operation.ReferenceOutput`. To return a changed reference, build one with
+`operation.Populated(document)` or `operation.Unpopulated(id)`. The
+[relationship read hook example](/docs/hooks/fields/#reference-read-hooks) uses both types.
 
-Use the [Live server validation guide](/docs/fields/live-validation/) for commented examples,
-the complete context table, and how to share a rule with `.Validate(...)` on save.
+## operation.LiveValidationContext {#live-validation}
+
+A `.LiveValidate(...)` check runs while an author edits, before saving. It receives
+`operation.LiveValidationContext` and the field's `operation.Value[T]`, and returns the same
+`[]operation.Issue, error` as a save validator.
+
+Its `Root` and `Siblings` hold the unsaved form values, `Prior` holds the saved values, and
+`Input` shows exactly which properties the form sent. Defaults and save hooks have not run yet,
+and `ctx.Local` can only read. The [Live server validation guide](/docs/fields/live-validation/)
+has complete examples, and the [operation reference](/reference/operation/) lists every type.

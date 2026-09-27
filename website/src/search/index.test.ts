@@ -35,7 +35,7 @@ test('SDK internal helper names lead to their public consuming methods', () => {
 	if (!sdk) return;
 
 	for (const [slug, helper] of [
-		['ridu-client-create-a-p-i-key', 'CreateAPIKeyInput'],
+		['ridu-auth-create-api-key-method', 'CreateAPIKeyInput'],
 		['ridu-client-collection-access', 'CollectionAccessOptions'],
 		['ridu-client-global-access', 'GlobalAccessOptions']
 	] as const) {

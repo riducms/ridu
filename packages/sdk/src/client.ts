@@ -1,4 +1,5 @@
 import {
+	isErrorEnvelope,
 	isRecord,
 	bindSchemaManifest,
 	isPageEnvelope,
@@ -25,6 +26,7 @@ import {
 	type ScheduledPublication,
 	type DocumentLockEnvelope,
 	type PreviewToken,
+	type UploadGrant,
 } from "@riducms/protocol";
 
 import { RiduError } from "./error.js";
@@ -57,8 +59,14 @@ import type {
 	SelectFor,
 	UpdateFor,
 	WhereFor,
+	RiduAuth,
 	RiduClient,
 	RiduConfigShape,
+	SessionCollection,
+	SessionFor,
+	SessionTokenStore,
+	UploadURL,
+	UploadURLOptions,
 	UploadCollectionSlug,
 	UploadOptions,
 	UpdateUploadInput,
@@ -91,9 +99,11 @@ import type {
  *
  * Pass the generated `RiduConfig` type when calling the runtime factory directly so collection,
  * global, input, query, and result types stay tied to that application. Generated projects also
- * export a pre-typed wrapper around this function.
+ * export a pre-typed wrapper around this function, which infers `DefaultAuth` from
+ * `auth.collection`; a direct call names it explicitly, as in `createClient<RiduConfig, "users">`.
  *
- * @param options The Ridu origin and optional Fetch, headers, credentials, and middleware.
+ * @param options The Ridu origin, auth collection and session transport, and optional Fetch,
+ *   headers, credentials, and middleware.
  * @returns A client whose methods use the supplied application's generated contracts.
  * @example
  * ```ts
@@ -107,26 +117,416 @@ import type {
  * });
  * ```
  */
-export function createClient<Config extends RiduConfigShape = RiduConfigShape>(
-	options: ClientOptions
-): RiduClient<Config> {
-	return new FetchClient<Config>(options);
+export function createClient<
+	Config extends RiduConfigShape = RiduConfigShape,
+	const DefaultAuth extends AuthCollectionSlug<Config> = never,
+>(options: ClientOptions<DefaultAuth>): RiduClient<Config, DefaultAuth> {
+	return new FetchClient<Config, DefaultAuth>(options);
 }
 
-class FetchClient<Config extends RiduConfigShape> implements RiduClient<Config> {
-	readonly #baseURL: string;
+/** Upload grant requests are chunked to the server's per-request bound. */
+const UPLOAD_GRANT_BATCH = 100;
+
+/** The wire session shape before it is narrowed to an application's auth collections. */
+type AnySession = { id: string; collection: string; user: unknown; expiresAt: string };
+
+interface RequestBehavior {
+	/** Apply a JSON content type to string bodies. */
+	json: boolean;
+	/** Attach the token-transport credential. Login never sends a previous token. */
+	credential: boolean;
+	/** The exact token to send, when the caller reasons about which token it presented. */
+	token?: string | undefined;
+}
+
+class FetchClient<
+	Config extends RiduConfigShape,
+	DefaultAuth extends AuthCollectionSlug<Config>,
+> implements RiduClient<Config, DefaultAuth> {
+	readonly baseURL: string;
+	readonly auth: RiduAuth<Config, DefaultAuth>;
 	readonly #fetch: NonNullable<ClientOptions["fetch"]>;
 	readonly #headers: ClientOptions["headers"];
 	readonly #credentials: NonNullable<ClientOptions["credentials"]>;
 	readonly #dispatch: MiddlewareNext;
+	readonly #tokens: SessionTokenStore<AnySession> | undefined;
+	readonly #authCollection: string | undefined;
+	readonly #memoizeSession: boolean;
+	#sessionMemo: { token: string | undefined; session: Promise<AnySession | null> } | undefined;
 
-	constructor(options: ClientOptions) {
+	constructor(options: ClientOptions<DefaultAuth>) {
 		const baseURL = new URL(options.baseURL);
-		this.#baseURL = baseURL.href.replace(/\/$/, "");
+		this.baseURL = baseURL.href.replace(/\/$/, "");
 		this.#fetch = options.fetch ?? globalThis.fetch.bind(globalThis);
 		this.#headers = options.headers;
-		this.#credentials = options.credentials ?? "include";
+		this.#tokens = options.auth?.token as SessionTokenStore<AnySession> | undefined;
+		this.#authCollection = options.auth?.collection;
+		this.#memoizeSession = options.auth?.memoizeSession === true;
+		this.#credentials = options.credentials ?? (this.#tokens === undefined ? "include" : "omit");
 		this.#dispatch = composeMiddleware(options.middleware ?? [], (request) => this.#fetch(request));
+		this.auth = this.#createAuth();
+	}
+
+	#createAuth(): RiduAuth<Config, DefaultAuth> {
+		// Auth input types are conditional on the configured collection; the runtime reads the
+		// same fields through this structural view.
+		type CollectionChoice = { collection?: string };
+		const client = this;
+		const auth = {
+			get session() {
+				return (client.#tokens?.session ?? null) as SessionFor<
+					Config,
+					SessionCollection<Config, DefaultAuth>
+				> | null;
+			},
+			login: async (credentials: LoginCredentials & CollectionChoice, options?: RequestOptions) => {
+				const collection = client.#collectionFor(credentials.collection, "login");
+				const tokens = client.#tokens;
+				const body = await client.#request(
+					`/api/auth/${encodeURIComponent(collection)}/login`,
+					{
+						method: "POST",
+						body: JSON.stringify({
+							email: credentials.email,
+							password: credentials.password,
+							...(tokens === undefined ? {} : { transport: "token" }),
+						}),
+					},
+					options,
+					{ json: true, credential: false }
+				);
+				client.#sessionMemo = undefined;
+				if (tokens === undefined) return sessionFromEnvelope(body);
+				const issued = sessionTokenFromEnvelope(body);
+				await tokens.issued(issued.token, issued.session);
+				return issued.session;
+			},
+			getSession: (options?: RequestOptions) => client.#getSession(options),
+			rotate: async (options?: RequestOptions) => {
+				const tokens = client.#tokens;
+				const sent = tokens?.token ?? undefined;
+				const body = await client.#request("/api/auth/rotate", { method: "POST" }, options, {
+					json: true,
+					credential: true,
+					token: sent,
+				});
+				client.#sessionMemo = undefined;
+				if (tokens === undefined || sent === undefined) return sessionFromEnvelope(body);
+				const issued = sessionTokenFromEnvelope(body);
+				// A rotation that finishes after another login must not replace the newer token.
+				if (tokens.token === sent) await tokens.issued(issued.token, issued.session);
+				return issued.session;
+			},
+			logout: async (options?: RequestOptions) => {
+				const tokens = client.#tokens;
+				const sent = tokens?.token ?? undefined;
+				if (tokens !== undefined && sent === undefined) return { loggedOut: true as const };
+				try {
+					const body = await client.#request("/api/auth/logout", { method: "POST" }, options, {
+						json: true,
+						credential: true,
+						token: sent,
+					});
+					if (!isRecord(body) || body.loggedOut !== true) throw invalidSuccessEnvelope("logout");
+					return { loggedOut: true as const };
+				} finally {
+					client.#sessionMemo = undefined;
+					if (tokens !== undefined && sent !== undefined) await tokens.cleared(sent);
+				}
+			},
+			logoutAll: async (options?: RequestOptions) => {
+				const sent = client.#tokens?.token ?? undefined;
+				const body = await client.#request("/api/auth/logout-all", { method: "POST" }, options, {
+					json: true,
+					credential: true,
+					token: sent,
+				});
+				if (!isRecord(body) || body.loggedOut !== true) throw invalidSuccessEnvelope("logout-all");
+				await client.#forget(sent);
+				return { loggedOut: true as const };
+			},
+			sessions: async (options?: RequestOptions) => {
+				const body = await client.#request("/api/auth/sessions", { method: "GET" }, options);
+				if (
+					!isRecord(body) ||
+					!Array.isArray(body.sessions) ||
+					!body.sessions.every(isAuthSessionInfo)
+				) {
+					throw invalidSuccessEnvelope("sessions");
+				}
+				return body.sessions;
+			},
+			revokeSession: async (id: string, options?: RequestOptions) => {
+				const body = await client.#request(
+					`/api/auth/sessions/${encodeURIComponent(id)}`,
+					{ method: "DELETE" },
+					options
+				);
+				if (!isRecord(body) || body.id !== id || body.deleted !== true) {
+					throw invalidSuccessEnvelope("session revocation");
+				}
+				return { id, deleted: true as const };
+			},
+			changePassword: async (
+				input: { currentPassword: string; password: string },
+				options?: RequestOptions
+			) => {
+				const sent = client.#tokens?.token ?? undefined;
+				const body = await client.#request(
+					"/api/auth/change-password",
+					{
+						method: "POST",
+						body: JSON.stringify({
+							currentPassword: input.currentPassword,
+							password: input.password,
+						}),
+					},
+					options,
+					{ json: true, credential: true, token: sent }
+				);
+				if (!isRecord(body) || body.success !== true) {
+					throw invalidSuccessEnvelope("password change");
+				}
+				// A password change revokes every session, including this one.
+				await client.#forget(sent);
+				return { success: true as const };
+			},
+			createUser: async (
+				input: { data: unknown; password: string } & CollectionChoice,
+				options?: MutationLocaleOptions
+			) => {
+				const collection = client.#collectionFor(input.collection, "createUser");
+				const query = new URLSearchParams();
+				appendLocaleQuery(query, options);
+				const suffix = query.size === 0 ? "" : `?${query}`;
+				const body = await client.#request(
+					`/api/auth/${encodeURIComponent(collection)}/create-user${suffix}`,
+					{ method: "POST", body: JSON.stringify({ data: input.data, password: input.password }) },
+					options
+				);
+				return documentFromEnvelope(body);
+			},
+			bootstrap: async (input: CollectionChoice, options?: RequestOptions) => {
+				const collection = client.#collectionFor(input.collection, "bootstrap");
+				const body = await client.#request(
+					`/api/auth/${encodeURIComponent(collection)}/bootstrap`,
+					{ method: "GET" },
+					options
+				);
+				if (!isRecord(body) || typeof body.available !== "boolean") {
+					throw invalidSuccessEnvelope("auth bootstrap");
+				}
+				return { available: body.available };
+			},
+			requestPasswordReset: (
+				input: { email: string } & CollectionChoice,
+				options?: RequestOptions
+			) => client.#authAction(input.collection, "forgot-password", { email: input.email }, options),
+			resetPassword: (
+				input: { token: string; password: string } & CollectionChoice,
+				options?: RequestOptions
+			) =>
+				client.#authAction(
+					input.collection,
+					"reset-password",
+					{ token: input.token, password: input.password },
+					options
+				),
+			requestVerification: (
+				input: { email: string } & CollectionChoice,
+				options?: RequestOptions
+			) =>
+				client.#authAction(
+					input.collection,
+					"request-verification",
+					{ email: input.email },
+					options
+				),
+			verifyEmail: (input: { token: string } & CollectionChoice, options?: RequestOptions) =>
+				client.#authAction(input.collection, "verify", { token: input.token }, options),
+			forceUnlock: async (input: { id: string } & CollectionChoice, options?: RequestOptions) => {
+				const collection = client.#collectionFor(input.collection, "forceUnlock");
+				const body = await client.#request(
+					`/api/auth/${encodeURIComponent(collection)}/${encodeDocumentID(input.id)}/unlock`,
+					{ method: "POST" },
+					options
+				);
+				if (!isRecord(body) || body.success !== true) {
+					throw invalidSuccessEnvelope("account unlock");
+				}
+				return { success: true as const };
+			},
+			createAPIKey: async (input: CreateAPIKeyInput, options?: RequestOptions) => {
+				const body = await client.#request(
+					"/api/auth/api-keys",
+					{ method: "POST", body: JSON.stringify(input) },
+					options
+				);
+				if (!isRecord(body) || !isAPIKey(body.apiKey, true)) {
+					throw invalidSuccessEnvelope("API key");
+				}
+				return body.apiKey;
+			},
+			apiKeys: async (options?: RequestOptions) => {
+				const body = await client.#request("/api/auth/api-keys", { method: "GET" }, options);
+				if (
+					!isRecord(body) ||
+					!Array.isArray(body.apiKeys) ||
+					!body.apiKeys.every((key) => isAPIKey(key, false))
+				) {
+					throw invalidSuccessEnvelope("API keys");
+				}
+				return body.apiKeys;
+			},
+			revokeAPIKey: async (id: string, options?: RequestOptions) => {
+				const body = await client.#request(
+					`/api/auth/api-keys/${encodeURIComponent(id)}`,
+					{ method: "DELETE" },
+					options
+				);
+				if (!isRecord(body) || body.id !== id || body.deleted !== true) {
+					throw invalidSuccessEnvelope("API key revocation");
+				}
+				return { id, deleted: true as const };
+			},
+		};
+		return auth as unknown as RiduAuth<Config, DefaultAuth>;
+	}
+
+	#collectionFor(selected: string | undefined, operation: string): string {
+		const collection = selected ?? this.#authCollection;
+		if (collection === undefined || collection === "") {
+			throw new TypeError(
+				`auth.${operation} needs an auth collection; pass { collection } or configure auth.collection`
+			);
+		}
+		return collection;
+	}
+
+	async #getSession(options?: RequestOptions) {
+		const tokens = this.#tokens;
+		const token = tokens?.token ?? undefined;
+		// Without a stored token there is nothing to verify; skip the network.
+		if (tokens !== undefined && token === undefined) return null;
+		const memo = this.#sessionMemo;
+		if (this.#memoizeSession && memo !== undefined && memo.token === token) {
+			return (await memo.session) as SessionFor<
+				Config,
+				SessionCollection<Config, DefaultAuth>
+			> | null;
+		}
+		const session = this.#verifySession(token, options);
+		if (this.#memoizeSession) {
+			const entry = { token, session };
+			this.#sessionMemo = entry;
+			// A failure is not a verdict about the session; the next call must retry.
+			session.catch(() => {
+				if (this.#sessionMemo === entry) this.#sessionMemo = undefined;
+			});
+		}
+		return (await session) as SessionFor<Config, SessionCollection<Config, DefaultAuth>> | null;
+	}
+
+	async #verifySession(token: string | undefined, options?: RequestOptions) {
+		let body: unknown;
+		try {
+			body = await this.#request("/api/auth/me", { method: "GET" }, options, {
+				json: true,
+				credential: true,
+				token,
+			});
+		} catch (error) {
+			// 401 means "no valid session". Every other failure, including an outage, rejects.
+			if (error instanceof RiduError && error.status === 401) return null;
+			throw error;
+		}
+		const session = sessionFromEnvelope<unknown>(body) as AnySession;
+		if (this.#authCollection !== undefined && session.collection !== this.#authCollection) {
+			return null;
+		}
+		if (token !== undefined) this.#tokens?.verified?.(token, session);
+		return session;
+	}
+
+	async #forget(token: string | undefined) {
+		this.#sessionMemo = undefined;
+		if (token !== undefined) await this.#tokens?.cleared(token);
+	}
+
+	async #authAction(
+		selected: string | undefined,
+		action: string,
+		input: Record<string, string>,
+		options?: RequestOptions
+	): Promise<AuthActionEnvelope> {
+		const collection = this.#collectionFor(selected, action);
+		const body = await this.#request(
+			`/api/auth/${encodeURIComponent(collection)}/${action}`,
+			{ method: "POST", body: JSON.stringify(input) },
+			options
+		);
+		if (!isRecord(body) || body.success !== true) {
+			throw invalidSuccessEnvelope("auth action");
+		}
+		return { success: true };
+	}
+
+	async getUploadURL<Slug extends UploadCollectionSlug<Config>>(
+		collection: Slug,
+		id: string,
+		options?: UploadURLOptions
+	): Promise<UploadURL> {
+		const [url] = await this.getUploadURLs(
+			collection,
+			[options?.size === undefined ? id : { id, size: options.size }],
+			options
+		);
+		if (url === undefined) throw invalidSuccessEnvelope("upload URL");
+		return url;
+	}
+
+	async getUploadURLs<Slug extends UploadCollectionSlug<Config>>(
+		collection: Slug,
+		items: readonly (string | { id: string; size?: string })[],
+		options?: Omit<UploadURLOptions, "size">
+	): Promise<UploadURL[]> {
+		const requested = items.map((item) =>
+			typeof item === "string"
+				? { id: item }
+				: { id: item.id, ...(item.size === undefined ? {} : { size: item.size }) }
+		);
+		const batches: (typeof requested)[] = [];
+		for (let index = 0; index < requested.length; index += UPLOAD_GRANT_BATCH) {
+			batches.push(requested.slice(index, index + UPLOAD_GRANT_BATCH));
+		}
+		const results = await Promise.all(
+			batches.map(async (batch) => {
+				const body = await this.#request(
+					`/api/uploads/${encodeURIComponent(collection)}/grants`,
+					{
+						method: "POST",
+						body: JSON.stringify({
+							items: batch,
+							...(options?.expiresIn === undefined ? {} : { expiresIn: options.expiresIn }),
+						}),
+					},
+					options
+				);
+				if (
+					!isRecord(body) ||
+					!Array.isArray(body.grants) ||
+					body.grants.length !== batch.length ||
+					!body.grants.every(isUploadGrant)
+				) {
+					throw invalidSuccessEnvelope("upload grants");
+				}
+				return body.grants.map((grant) => ({
+					url: new URL(grant.url, this.baseURL).href,
+					expiresAt: grant.expiresAt,
+				}));
+			})
+		);
+		return results.flat();
 	}
 
 	async schema(options?: RequestOptions): Promise<SchemaManifest> {
@@ -138,7 +538,7 @@ class FetchClient<Config extends RiduConfigShape> implements RiduClient<Config> 
 	}
 
 	async request(path: string, init: RequestInit = {}, options?: RequestOptions): Promise<Response> {
-		return this.#response(path, init, options, false);
+		return this.#response(path, init, options, { json: false, credential: true });
 	}
 
 	async requestPlugin<Result = unknown>(
@@ -395,202 +795,6 @@ class FetchClient<Config extends RiduConfigShape> implements RiduClient<Config> 
 		return documentFromEnvelope<GlobalOutputFor<Config, Slug>>(body);
 	}
 
-	async login<Slug extends AuthCollectionSlug<Config>>(
-		collection: Slug,
-		credentials: LoginCredentials,
-		options?: RequestOptions
-	): Promise<AuthSession<OutputFor<Config, Slug>>> {
-		const body = await this.#request(
-			`/api/auth/${encodeURIComponent(collection)}/login`,
-			{ method: "POST", body: JSON.stringify(credentials) },
-			options
-		);
-		return sessionFromEnvelope<OutputFor<Config, Slug>>(body);
-	}
-
-	async session(options?: RequestOptions): Promise<AuthSession<AuthUser<Config>>> {
-		const body = await this.#request("/api/auth/me", { method: "GET" }, options);
-		return sessionFromEnvelope<AuthUser<Config>>(body);
-	}
-
-	async refreshSession(options?: RequestOptions): Promise<AuthSession<AuthUser<Config>>> {
-		const body = await this.#request("/api/auth/refresh", { method: "POST" }, options);
-		return sessionFromEnvelope<AuthUser<Config>>(body);
-	}
-
-	async logout(options?: RequestOptions): Promise<LogoutEnvelope> {
-		const body = await this.#request("/api/auth/logout", { method: "POST" }, options);
-		if (!isRecord(body) || body.loggedOut !== true) {
-			throw invalidSuccessEnvelope("logout");
-		}
-		return { loggedOut: true };
-	}
-
-	async logoutAll(options?: RequestOptions): Promise<LogoutEnvelope> {
-		const body = await this.#request("/api/auth/logout-all", { method: "POST" }, options);
-		if (!isRecord(body) || body.loggedOut !== true) {
-			throw invalidSuccessEnvelope("logout-all");
-		}
-		return { loggedOut: true };
-	}
-
-	async sessions(options?: RequestOptions): Promise<AuthSessionInfo[]> {
-		const body = await this.#request("/api/auth/sessions", { method: "GET" }, options);
-		if (
-			!isRecord(body) ||
-			!Array.isArray(body.sessions) ||
-			!body.sessions.every(isAuthSessionInfo)
-		) {
-			throw invalidSuccessEnvelope("sessions");
-		}
-		return body.sessions;
-	}
-
-	async revokeSession(id: string, options?: RequestOptions): Promise<DeleteEnvelope> {
-		const body = await this.#request(
-			`/api/auth/sessions/${encodeURIComponent(id)}`,
-			{ method: "DELETE" },
-			options
-		);
-		if (!isRecord(body) || body.id !== id || body.deleted !== true) {
-			throw invalidSuccessEnvelope("session revocation");
-		}
-		return { id, deleted: true };
-	}
-
-	async requestPasswordReset<Slug extends AuthCollectionSlug<Config>>(
-		collection: Slug,
-		email: string,
-		options?: RequestOptions
-	): Promise<AuthActionEnvelope> {
-		return this.#authAction(collection, "forgot-password", { email }, options);
-	}
-
-	async resetPassword<Slug extends AuthCollectionSlug<Config>>(
-		collection: Slug,
-		token: string,
-		password: string,
-		options?: RequestOptions
-	): Promise<AuthActionEnvelope> {
-		return this.#authAction(collection, "reset-password", { token, password }, options);
-	}
-
-	async authBootstrap<Slug extends AuthCollectionSlug<Config>>(
-		collection: Slug,
-		options?: RequestOptions
-	): Promise<AuthBootstrapEnvelope> {
-		const body = await this.#request(
-			`/api/auth/${encodeURIComponent(collection)}/bootstrap`,
-			{ method: "GET" },
-			options
-		);
-		if (!isRecord(body) || typeof body.available !== "boolean") {
-			throw invalidSuccessEnvelope("auth bootstrap");
-		}
-		return { available: body.available };
-	}
-
-	async createAuthUser<Slug extends AuthCollectionSlug<Config>>(
-		collection: Slug,
-		data: CreateFor<Config, Slug>,
-		password: string,
-		options?: MutationLocaleOptions
-	): Promise<OutputFor<Config, Slug>> {
-		const query = new URLSearchParams();
-		appendLocaleQuery(query, options);
-		const suffix = query.size === 0 ? "" : `?${query}`;
-		const body = await this.#request(
-			`/api/auth/${encodeURIComponent(collection)}/create-user${suffix}`,
-			{ method: "POST", body: JSON.stringify({ data, password }) },
-			options
-		);
-		return documentFromEnvelope<OutputFor<Config, Slug>>(body);
-	}
-
-	async requestVerification<Slug extends AuthCollectionSlug<Config>>(
-		collection: Slug,
-		email: string,
-		options?: RequestOptions
-	): Promise<AuthActionEnvelope> {
-		return this.#authAction(collection, "request-verification", { email }, options);
-	}
-
-	async verifyEmail<Slug extends AuthCollectionSlug<Config>>(
-		collection: Slug,
-		token: string,
-		options?: RequestOptions
-	): Promise<AuthActionEnvelope> {
-		return this.#authAction(collection, "verify", { token }, options);
-	}
-
-	async changePassword(
-		currentPassword: string,
-		password: string,
-		options?: RequestOptions
-	): Promise<AuthActionEnvelope> {
-		const body = await this.#request(
-			"/api/auth/change-password",
-			{ method: "POST", body: JSON.stringify({ currentPassword, password }) },
-			options
-		);
-		if (!isRecord(body) || body.success !== true) {
-			throw invalidSuccessEnvelope("password change");
-		}
-		return { success: true };
-	}
-
-	async createAPIKey(input: CreateAPIKeyInput, options?: RequestOptions): Promise<APIKey> {
-		const body = await this.#request(
-			"/api/auth/api-keys",
-			{ method: "POST", body: JSON.stringify(input) },
-			options
-		);
-		if (!isRecord(body) || !isAPIKey(body.apiKey, true)) {
-			throw invalidSuccessEnvelope("API key");
-		}
-		return body.apiKey;
-	}
-
-	async apiKeys(options?: RequestOptions): Promise<APIKeyInfo[]> {
-		const body = await this.#request("/api/auth/api-keys", { method: "GET" }, options);
-		if (
-			!isRecord(body) ||
-			!Array.isArray(body.apiKeys) ||
-			!body.apiKeys.every((key) => isAPIKey(key, false))
-		) {
-			throw invalidSuccessEnvelope("API keys");
-		}
-		return body.apiKeys;
-	}
-
-	async revokeAPIKey(id: string, options?: RequestOptions): Promise<DeleteEnvelope> {
-		const body = await this.#request(
-			`/api/auth/api-keys/${encodeURIComponent(id)}`,
-			{ method: "DELETE" },
-			options
-		);
-		if (!isRecord(body) || body.id !== id || body.deleted !== true) {
-			throw invalidSuccessEnvelope("API key revocation");
-		}
-		return { id, deleted: true };
-	}
-
-	async forceUnlock<Slug extends AuthCollectionSlug<Config>>(
-		collection: Slug,
-		id: string,
-		options?: RequestOptions
-	): Promise<AuthActionEnvelope> {
-		const body = await this.#request(
-			`/api/auth/${encodeURIComponent(collection)}/${encodeDocumentID(id)}/unlock`,
-			{ method: "POST" },
-			options
-		);
-		if (!isRecord(body) || body.success !== true) {
-			throw invalidSuccessEnvelope("account unlock");
-		}
-		return { success: true };
-	}
-
 	async documentLock<Slug extends CollectionSlug<Config>>(
 		collection: Slug,
 		id: string,
@@ -632,23 +836,6 @@ class FetchClient<Config extends RiduConfigShape> implements RiduClient<Config> 
 			throw invalidSuccessEnvelope("document lock release");
 		}
 		return { id, deleted: true };
-	}
-
-	async #authAction<Slug extends AuthCollectionSlug<Config>>(
-		collection: Slug,
-		action: string,
-		input: Record<string, string>,
-		options?: RequestOptions
-	): Promise<AuthActionEnvelope> {
-		const body = await this.#request(
-			`/api/auth/${encodeURIComponent(collection)}/${action}`,
-			{ method: "POST", body: JSON.stringify(input) },
-			options
-		);
-		if (!isRecord(body) || body.success !== true) {
-			throw invalidSuccessEnvelope("auth action");
-		}
-		return { success: true };
 	}
 
 	async list<
@@ -902,7 +1089,7 @@ class FetchClient<Config extends RiduConfigShape> implements RiduClient<Config> 
 			`/api/collections/${encodeURIComponent(collection)}/${encodeDocumentID(id)}/upload-source`,
 			{ method: "GET" },
 			options,
-			false
+			{ json: false, credential: true }
 		);
 		if (!response.ok) throw await RiduError.fromResponse(response);
 		return response.blob();
@@ -917,7 +1104,7 @@ class FetchClient<Config extends RiduConfigShape> implements RiduClient<Config> 
 			`/api/collections/${encodeURIComponent(collection)}/upload-preview`,
 			{ method: "POST", body: JSON.stringify({ url, id: options?.id }) },
 			options,
-			true
+			{ json: true, credential: true }
 		);
 		if (!response.ok) throw await RiduError.fromResponse(response);
 		const disposition = response.headers.get("Content-Disposition") ?? "";
@@ -1485,8 +1672,13 @@ class FetchClient<Config extends RiduConfigShape> implements RiduClient<Config> 
 		return documentFromEnvelope<GlobalOutputFor<Config, Slug>>(body);
 	}
 
-	async #request(path: string, init: RequestInit, options?: RequestOptions): Promise<unknown> {
-		const response = await this.#response(path, init, options, true);
+	async #request(
+		path: string,
+		init: RequestInit,
+		options?: RequestOptions,
+		behavior: RequestBehavior = { json: true, credential: true }
+	): Promise<unknown> {
+		const response = await this.#response(path, init, options, behavior);
 		if (!response.ok) {
 			throw await RiduError.fromResponse(response);
 		}
@@ -1501,20 +1693,31 @@ class FetchClient<Config extends RiduConfigShape> implements RiduClient<Config> 
 		path: string,
 		init: RequestInit,
 		options: RequestOptions | undefined,
-		defaultJSONContentType: boolean
+		behavior: RequestBehavior
 	): Promise<Response> {
+		// Read the token before any await so the credential sent is the one current at the call.
+		const storedToken =
+			behavior.credential && this.#tokens !== undefined
+				? (behavior.token ?? this.#tokens.token ?? undefined)
+				: undefined;
 		if (!path.startsWith("/") || path.startsWith("//") || path.includes("#")) {
 			throw new TypeError("request path must be an absolute-path reference");
 		}
-		const target = new URL(path, this.#baseURL);
-		if (target.origin !== new URL(this.#baseURL).origin || target.hash !== "") {
+		const target = new URL(path, this.baseURL);
+		if (target.origin !== new URL(this.baseURL).origin || target.hash !== "") {
 			throw new TypeError("request path must stay on the configured origin and omit fragments");
 		}
 		const headers = new Headers(await resolveHeaders(this.#headers));
 		for (const [name, value] of new Headers(init.headers)) headers.set(name, value);
 		for (const [name, value] of new Headers(options?.headers)) headers.set(name, value);
+		// An explicit Authorization header, such as a preview token, is never replaced.
+		let sentToken: string | undefined;
+		if (storedToken !== undefined && !headers.has("authorization")) {
+			sentToken = storedToken;
+			headers.set("authorization", `Session ${sentToken}`);
+		}
 		if (
-			defaultJSONContentType &&
+			behavior.json &&
 			init.body !== undefined &&
 			!(init.body instanceof FormData) &&
 			!headers.has("content-type")
@@ -1528,7 +1731,24 @@ class FetchClient<Config extends RiduConfigShape> implements RiduClient<Config> 
 			...(options?.signal === undefined ? {} : { signal: options.signal }),
 			...(options?.keepalive === undefined ? {} : { keepalive: options.keepalive }),
 		});
-		return this.#dispatch(request);
+		const response = await this.#dispatch(request);
+		if (sentToken !== undefined && response.status === 401) {
+			await this.#rejected(response, sentToken);
+		}
+		return response;
+	}
+
+	/** Forget a stored token that Ridu rejected, unless a newer token has replaced it. */
+	async #rejected(response: Response, token: string) {
+		let body: unknown;
+		try {
+			body = await response.clone().json();
+		} catch {
+			return;
+		}
+		if (isErrorEnvelope(body) && body.error.code === "invalid_credential") {
+			await this.#forget(token);
+		}
 	}
 }
 
@@ -1668,6 +1888,23 @@ function documentLockFromEnvelope(value: unknown): DocumentLockEnvelope {
 		throw invalidSuccessEnvelope("document lock");
 	}
 	return value as unknown as DocumentLockEnvelope;
+}
+
+function isUploadGrant(value: unknown): value is UploadGrant {
+	return (
+		isRecord(value) &&
+		typeof value.id === "string" &&
+		typeof value.url === "string" &&
+		typeof value.expiresAt === "string" &&
+		(value.size === undefined || typeof value.size === "string")
+	);
+}
+
+function sessionTokenFromEnvelope(value: unknown) {
+	if (!isRecord(value) || typeof value.token !== "string" || value.token === "") {
+		throw invalidSuccessEnvelope("session token");
+	}
+	return { session: sessionFromEnvelope<unknown>(value) as AnySession, token: value.token };
 }
 
 function sessionFromEnvelope<User>(value: unknown) {

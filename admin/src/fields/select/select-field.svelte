@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { flushSync } from "svelte";
 	import {
 		Combobox,
 		ComboboxInput,
@@ -33,13 +34,16 @@
 	const values = $derived(selectManyValues(form.get(field.path)));
 	const options = $derived(field.select?.options ?? []);
 	const filtered = $derived(
-		options.filter((option) =>
-			option.label
-				.toLocaleLowerCase(runtime.i18n.language)
-				.includes(query.toLocaleLowerCase(runtime.i18n.language))
+		options.filter(
+			(option) =>
+				(!hasMany || !values.includes(option.value)) &&
+				option.label
+					.toLocaleLowerCase(runtime.i18n.language)
+					.includes(query.toLocaleLowerCase(runtime.i18n.language))
 		)
 	);
 	const selectedLabel = $derived(options.find((option) => option.value === value)?.label ?? "");
+	const inputValue = $derived(open || hasMany ? query : selectedLabel);
 	const placeholder = $derived(
 		field.admin.placeholder ?? runtime.i18n.t("fields:select", { label: field.admin.label })
 	);
@@ -58,6 +62,7 @@
 
 	function setValues(next: string[]) {
 		if (!editingBlocked) form.set(field.path, [...next]);
+		query = "";
 	}
 
 	function setValue(next: string) {
@@ -80,7 +85,7 @@
 					if (!next) query = "";
 				}
 			}
-			inputValue={open || hasMany ? query : selectedLabel}
+			{inputValue}
 		>
 			<div
 				bind:this={anchor}
@@ -114,17 +119,26 @@
 						autocorrect="off"
 						autocapitalize="none"
 						spellcheck={false}
-						{placeholder}
+						placeholder={hasMany && values.length > 0 ? "" : placeholder}
 						{...controlARIA}
 						aria-label={field.admin.label}
 						aria-required={field.required}
 						clearOnDeselect
 						onpointerdown={() => (open = true)}
 						oninput={(event) => {
-							query = event.currentTarget.value;
-							open = true;
+							const next = event.currentTarget.value;
+							// Filter before Bits chooses its keyboard highlight from the rendered options.
+							flushSync(() => {
+								query = next;
+								open = true;
+							});
 						}}
-					/>
+					>
+						{#snippet child({ props })}
+							<!-- Bits writes the picked label internally; tags already display it. -->
+							<input {...props} value={inputValue} />
+						{/snippet}
+					</ComboboxInput>
 				</div>
 				{#if !hasMany && value}
 					<button
@@ -158,9 +172,11 @@
 								{option.label}
 							</ComboboxItem>
 						{:else}
-							<p class="ridu-combobox-message">
-								{runtime.i18n.t("fields:noMatch", { label: field.admin.label })}
-							</p>
+							{#if query.trim()}
+								<p class="ridu-combobox-message">
+									{runtime.i18n.t("fields:noMatch", { label: field.admin.label })}
+								</p>
+							{/if}
 						{/each}
 					</ComboboxViewport>
 				</ComboboxContent>

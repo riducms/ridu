@@ -22,12 +22,13 @@ func main() {
 
 func run() int {
 	flags := flag.NewFlagSet("playground-ridu-hydrate", flag.ContinueOnError)
-	target := flags.String("target", "", "existing generated Ridu playground directory")
+	target := flags.String("target", "", "existing generated Ridu project directory")
+	updateLockfile := flags.Bool("update-lockfile", false, "let Bun update the project lockfile when its dependencies changed with the framework")
 	if err := flags.Parse(os.Args[1:]); err != nil {
 		return 2
 	}
 	if flags.NArg() != 0 || strings.TrimSpace(*target) == "" {
-		fmt.Fprintln(os.Stderr, "usage: go run ./internal/dogfood/playground --target ./playground/ridu")
+		fmt.Fprintln(os.Stderr, "usage: go run ./internal/dogfood/playground --target ./playground/ridu [--update-lockfile]")
 		return 2
 	}
 
@@ -60,7 +61,7 @@ func run() int {
 		fmt.Fprintf(os.Stderr, "hydrate frontend packages: %v\n", err)
 		return 1
 	}
-	if err := installFrontendDependencies(projectRoot); err != nil {
+	if err := installFrontendDependencies(projectRoot, *updateLockfile); err != nil {
 		fmt.Fprintf(os.Stderr, "install playground frontend dependencies: %v\n", err)
 		return 1
 	}
@@ -85,9 +86,9 @@ func run() int {
 	return 0
 }
 
-func installFrontendDependencies(projectRoot string) error {
+func installFrontendDependencies(projectRoot string, updateLockfile bool) error {
 	arguments := []string{"install"}
-	if err := requireFile(filepath.Join(projectRoot, "bun.lock")); err == nil {
+	if err := requireFile(filepath.Join(projectRoot, "bun.lock")); err == nil && !updateLockfile {
 		arguments = append(arguments, "--frozen-lockfile")
 	}
 	command := exec.Command("bun", arguments...)

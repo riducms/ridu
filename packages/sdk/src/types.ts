@@ -25,6 +25,8 @@ import type {
 } from "@riducms/protocol";
 
 export type {
+	AuthSession,
+	AuthSessionInfo,
 	UploadImageEdit,
 	JoinMutationInput,
 	PreviewToken,
@@ -303,6 +305,93 @@ export type TrashCollectionSlug<Config extends RiduConfigShape> = {
 export interface LoginCredentials {
 	email: string;
 	password: string;
+}
+
+/**
+ * One authenticated session narrowed to the auth collection that owns it. With several auth
+ * collections this is a union discriminated by `collection`.
+ */
+export type SessionFor<
+	Config extends RiduConfigShape,
+	Slug extends AuthCollectionSlug<Config> = AuthCollectionSlug<Config>,
+> = Slug extends unknown
+	? {
+			/** Non-secret session ID used for device management; never a credential. */
+			id: string;
+			collection: Slug;
+			user: OutputFor<Config, Slug>;
+			/** Absolute RFC 3339 expiry. Rotation never extends it. */
+			expiresAt: string;
+		}
+	: never;
+
+/**
+ * Selects the auth collection for one call. It is optional only when the client was created with
+ * `auth.collection`, which becomes `Default`; otherwise every call names its collection.
+ */
+export type AuthCollectionInput<Default extends string, Slug extends string> = [Default] extends [
+	never,
+]
+	? { collection: Slug }
+	: { collection?: Slug };
+
+/** Auth collections a client's sessions can belong to: its default, or every auth collection. */
+export type SessionCollection<
+	Config extends RiduConfigShape,
+	Default extends AuthCollectionSlug<Config>,
+> = [Default] extends [never] ? AuthCollectionSlug<Config> : Default;
+
+/** Credentials for `auth.login`. */
+export type LoginInput<Default extends string, Slug extends string> = LoginCredentials &
+	AuthCollectionInput<Default, Slug>;
+
+/**
+ * Holds a token-transport session for a client. The SDK reads `token` before every request and
+ * reports lifecycle events; the store decides where the token lives. Every event names the token
+ * it concerns, so a store ignores a late response for a token that is no longer current.
+ */
+export interface SessionTokenStore<Session = unknown> {
+	/** The current token. It is read for every request; never cache it in the client. */
+	readonly token: string | null | undefined;
+	/** The latest known session snapshot, exposed as `client.auth.session`. */
+	readonly session?: Session | null;
+	/** Persist a newly issued token. Login and rotation await this before resolving. */
+	issued(token: string, session: Session): void | Promise<void>;
+	/** Record a snapshot verified by `auth.getSession()` for `token`. */
+	verified?(token: string, session: Session): void;
+	/** Forget `token` after logout or rejection. Ignore it if another token is now current. */
+	cleared(token: string): void | Promise<void>;
+}
+
+/** Authentication settings for one client. */
+export interface AuthOptions<Slug extends string = string> {
+	/** Default auth collection for `auth.*` calls that do not name one. */
+	collection?: Slug;
+	/**
+	 * Use the token transport: login requests `{ transport: "token" }` and every request sends
+	 * `Authorization: Session <token>`. Without a store the client uses Ridu's HttpOnly cookie.
+	 */
+	token?: SessionTokenStore;
+	/**
+	 * Reuse the first verified `auth.getSession()` result for the same token. Enable it only for a
+	 * client that serves one incoming request, such as a server-render client.
+	 */
+	memoizeSession?: boolean;
+}
+
+/** Options for short-lived upload delivery URLs. */
+export interface UploadURLOptions extends RequestOptions {
+	/** Configured image size; omit it for the original object. */
+	size?: string;
+	/** Lifetime in seconds, from 1 to 3600. The server default is 600. */
+	expiresIn?: number;
+}
+
+/** A delivery URL that authorizes one upload object without carrying the session token. */
+export interface UploadURL {
+	/** Absolute URL, safe to use as an `<img>` or download `src` until `expiresAt`. */
+	url: string;
+	expiresAt: string;
 }
 
 /** Details used to create an API key for the current actor. */
@@ -732,9 +821,11 @@ export type GlobalQueryResult<
 >;
 
 /** Transport configuration shared by every request from a Ridu client. */
-export interface ClientOptions {
+export interface ClientOptions<AuthSlug extends string = never> {
 	/** Absolute Ridu server origin; any trailing slash is normalized away. */
 	baseURL: string;
+	/** Default auth collection and session transport. */
+	auth?: AuthOptions<AuthSlug>;
 	/** Fetch implementation, usually supplied by server frameworks or tests. */
 	fetch?: (
 		input: Parameters<typeof globalThis.fetch>[0],
@@ -746,7 +837,10 @@ export interface ClientOptions {
 		| (() =>
 				| ConstructorParameters<typeof Headers>[0]
 				| Promise<ConstructorParameters<typeof Headers>[0]>);
-	/** Fetch credentials mode; defaults to `"include"` for browser cookie sessions. */
+	/**
+	 * Fetch credentials mode. Defaults to `"include"` for cookie sessions and to `"omit"` when an
+	 * `auth.token` store is configured, so ambient cookies never accompany a token request.
+	 */
 	credentials?: RequestInit["credentials"];
 	/** Ordered request middleware wrapped around the configured Fetch implementation. */
 	middleware?: readonly Middleware[];
@@ -765,7 +859,10 @@ export type Middleware = (request: Request, next: MiddlewareNext) => Promise<Res
  * literal locale, selection, and population options. Methods return ordinary promises and reject
  * server failures with `RiduError`, except `request`, which preserves raw Fetch semantics.
  */
-export interface RiduClient<Config extends RiduConfigShape = RiduConfigShape> {
+export interface RiduClient<
+	Config extends RiduConfigShape = RiduConfigShape,
+	DefaultAuth extends AuthCollectionSlug<Config> = never,
+> {
 	/** Compiled admin read for a router-root pathname + search (without the admin basename). */
 	adminLoad(key: string, route: string, options?: RequestOptions): Promise<unknown>;
 	/** Framework list read model, also used for initial route preparation. */
@@ -816,95 +913,35 @@ export interface RiduClient<Config extends RiduConfigShape = RiduConfigShape> {
 		options?: RequestOptions
 	): Promise<Result>;
 
-	/** Start a session by logging in through an auth-enabled collection. */
-	login<Slug extends AuthCollectionSlug<Config>>(
-		collection: Slug,
-		credentials: LoginCredentials,
-		options?: RequestOptions
-	): Promise<AuthSession<OutputFor<Config, Slug>>>;
+	/**
+	 * Authentication, session, and account operations; see `RiduAuth`. The mapped copy keeps
+	 * clients comparable member by member, so an exact generated client still fits a wider
+	 * contract such as the admin's.
+	 */
+	readonly auth: {
+		[Member in keyof RiduAuth<Config, DefaultAuth>]: RiduAuth<Config, DefaultAuth>[Member];
+	};
 
-	/** Read the current actor and session metadata. */
-	session(options?: RequestOptions): Promise<AuthSession<AuthUser<Config>>>;
-	/** Refresh the current session and return its updated actor and metadata. */
-	refreshSession(options?: RequestOptions): Promise<AuthSession<AuthUser<Config>>>;
+	/** Normalized Ridu origin used for every request and returned upload URL. */
+	readonly baseURL: string;
 
-	/** End the current session. */
-	logout(options?: RequestOptions): Promise<LogoutEnvelope>;
-
-	/** End every session belonging to the current actor. */
-	logoutAll(options?: RequestOptions): Promise<LogoutEnvelope>;
-
-	/** List active sessions belonging to the current actor. */
-	sessions(options?: RequestOptions): Promise<AuthSessionInfo[]>;
-
-	/** Revoke one session belonging to the current actor. */
-	revokeSession(id: string, options?: RequestOptions): Promise<DeleteEnvelope>;
-
-	/** Request a password-reset message for an auth-enabled collection. */
-	requestPasswordReset<Slug extends AuthCollectionSlug<Config>>(
-		collection: Slug,
-		email: string,
-		options?: RequestOptions
-	): Promise<AuthActionEnvelope>;
-
-	/** Replace a password using a valid password-reset token. */
-	resetPassword<Slug extends AuthCollectionSlug<Config>>(
-		collection: Slug,
-		token: string,
-		password: string,
-		options?: RequestOptions
-	): Promise<AuthActionEnvelope>;
-
-	/** Check whether an auth collection still permits its first bootstrap user. */
-	authBootstrap<Slug extends AuthCollectionSlug<Config>>(
-		collection: Slug,
-		options?: RequestOptions
-	): Promise<AuthBootstrapEnvelope>;
-
-	/** Create a user in an auth-enabled collection, including bootstrap and managed-user flows. */
-	createAuthUser<Slug extends AuthCollectionSlug<Config>>(
-		collection: Slug,
-		data: CreateFor<Config, Slug>,
-		password: string,
-		options?: MutationLocaleOptions<LocaleFor<Config>>
-	): Promise<OutputFor<Config, Slug>>;
-
-	/** Request an email-verification message for an auth-enabled collection. */
-	requestVerification<Slug extends AuthCollectionSlug<Config>>(
-		collection: Slug,
-		email: string,
-		options?: RequestOptions
-	): Promise<AuthActionEnvelope>;
-
-	/** Verify an email address with a valid verification token. */
-	verifyEmail<Slug extends AuthCollectionSlug<Config>>(
-		collection: Slug,
-		token: string,
-		options?: RequestOptions
-	): Promise<AuthActionEnvelope>;
-
-	/** Change the current actor's password after confirming the existing password. */
-	changePassword(
-		currentPassword: string,
-		password: string,
-		options?: RequestOptions
-	): Promise<AuthActionEnvelope>;
-
-	/** Create an API key and return its secret, which later listings omit. */
-	createAPIKey(input: CreateAPIKeyInput, options?: RequestOptions): Promise<APIKey>;
-
-	/** List API-key metadata for the current actor without returning key secrets. */
-	apiKeys(options?: RequestOptions): Promise<APIKeyInfo[]>;
-
-	/** Revoke one API key belonging to the current actor. */
-	revokeAPIKey(id: string, options?: RequestOptions): Promise<DeleteEnvelope>;
-
-	/** Clear an auth user's login-attempt lock when the current actor is allowed to do so. */
-	forceUnlock<Slug extends AuthCollectionSlug<Config>>(
+	/**
+	 * Create a short-lived delivery URL for a private upload. Use it where the browser cannot send
+	 * an `Authorization` header, such as `<img src>`. The URL never contains the session token and
+	 * stops working when the session ends or read access is lost.
+	 */
+	getUploadURL<Slug extends UploadCollectionSlug<Config>>(
 		collection: Slug,
 		id: string,
-		options?: RequestOptions
-	): Promise<AuthActionEnvelope>;
+		options?: UploadURLOptions
+	): Promise<UploadURL>;
+
+	/** Create delivery URLs for up to 100 uploads in one request, returned in input order. */
+	getUploadURLs<Slug extends UploadCollectionSlug<Config>>(
+		collection: Slug,
+		items: readonly (string | { id: string; size?: string })[],
+		options?: Omit<UploadURLOptions, "size">
+	): Promise<UploadURL[]>;
 
 	/** Read one actor-scoped preference value. */
 	preference<Value = unknown>(key: string, options?: RequestOptions): Promise<Value>;
@@ -1386,4 +1423,122 @@ export interface RiduClient<Config extends RiduConfigShape = RiduConfigShape> {
 		revision: number,
 		options?: RestoreOptions<LocaleFor<Config>, GlobalDraftsFor<Config, Slug>>
 	): Promise<GlobalOutputFor<Config, Slug>>;
+}
+
+/**
+ * Authentication operations for one client. Calls that act on an auth collection use the
+ * client's `auth.collection` unless they name one.
+ */
+export interface RiduAuth<
+	Config extends RiduConfigShape = RiduConfigShape,
+	DefaultAuth extends AuthCollectionSlug<Config> = never,
+> {
+	/**
+	 * The latest session snapshot held by the configured token store, or `null`. It is reactive
+	 * when the store is, as in `@riducms/sveltekit`. It is a display hint; call `getSession()` to
+	 * verify with Ridu.
+	 */
+	readonly session: SessionFor<Config, SessionCollection<Config, DefaultAuth>> | null;
+
+	/**
+	 * Start a session. With a token store the token is persisted before this resolves, so an
+	 * immediate navigation is already authenticated.
+	 */
+	login<Slug extends AuthCollectionSlug<Config> = SessionCollection<Config, DefaultAuth>>(
+		credentials: LoginInput<DefaultAuth, Slug>,
+		options?: RequestOptions
+	): Promise<SessionFor<Config, Slug>>;
+
+	/**
+	 * Verify the current credential with Ridu. Resolves `null` when there is no valid session,
+	 * including a session from another auth collection than a configured `auth.collection`. An
+	 * unavailable server still rejects, so an outage never looks like a logout.
+	 */
+	getSession(
+		options?: RequestOptions
+	): Promise<SessionFor<Config, SessionCollection<Config, DefaultAuth>> | null>;
+
+	/**
+	 * Replace the current bearer token without extending the session. The old token stops working
+	 * immediately, so never call this automatically from concurrent tabs or server renders.
+	 */
+	rotate(
+		options?: RequestOptions
+	): Promise<SessionFor<Config, SessionCollection<Config, DefaultAuth>>>;
+
+	/** Revoke the current session. A token store forgets its token even if revocation fails. */
+	logout(options?: RequestOptions): Promise<LogoutEnvelope>;
+
+	/** Revoke every session belonging to the current actor. */
+	logoutAll(options?: RequestOptions): Promise<LogoutEnvelope>;
+
+	/** List active sessions belonging to the current actor. */
+	sessions(options?: RequestOptions): Promise<AuthSessionInfo[]>;
+
+	/** Revoke one session belonging to the current actor. */
+	revokeSession(id: string, options?: RequestOptions): Promise<DeleteEnvelope>;
+
+	/** Change the current actor's password. Every session, including this one, is revoked. */
+	changePassword(
+		input: { currentPassword: string; password: string },
+		options?: RequestOptions
+	): Promise<AuthActionEnvelope>;
+
+	/** Create a user in an auth-enabled collection, including sign-up and managed-user flows. */
+	createUser<Slug extends AuthCollectionSlug<Config> = SessionCollection<Config, DefaultAuth>>(
+		input: { data: CreateFor<Config, Slug>; password: string } & AuthCollectionInput<
+			DefaultAuth,
+			Slug
+		>,
+		options?: MutationLocaleOptions<LocaleFor<Config>>
+	): Promise<OutputFor<Config, Slug>>;
+
+	/** Check whether an auth collection still permits its first bootstrap user. */
+	bootstrap<Slug extends AuthCollectionSlug<Config> = SessionCollection<Config, DefaultAuth>>(
+		input: AuthCollectionInput<DefaultAuth, Slug>,
+		options?: RequestOptions
+	): Promise<AuthBootstrapEnvelope>;
+
+	/** Request a password-reset message. The response never reveals whether the account exists. */
+	requestPasswordReset<
+		Slug extends AuthCollectionSlug<Config> = SessionCollection<Config, DefaultAuth>,
+	>(
+		input: { email: string } & AuthCollectionInput<DefaultAuth, Slug>,
+		options?: RequestOptions
+	): Promise<AuthActionEnvelope>;
+
+	/** Replace a password using a valid password-reset token. */
+	resetPassword<Slug extends AuthCollectionSlug<Config> = SessionCollection<Config, DefaultAuth>>(
+		input: { token: string; password: string } & AuthCollectionInput<DefaultAuth, Slug>,
+		options?: RequestOptions
+	): Promise<AuthActionEnvelope>;
+
+	/** Request an email-verification message. */
+	requestVerification<
+		Slug extends AuthCollectionSlug<Config> = SessionCollection<Config, DefaultAuth>,
+	>(
+		input: { email: string } & AuthCollectionInput<DefaultAuth, Slug>,
+		options?: RequestOptions
+	): Promise<AuthActionEnvelope>;
+
+	/** Verify an email address with a valid verification token. */
+	verifyEmail<Slug extends AuthCollectionSlug<Config> = SessionCollection<Config, DefaultAuth>>(
+		input: { token: string } & AuthCollectionInput<DefaultAuth, Slug>,
+		options?: RequestOptions
+	): Promise<AuthActionEnvelope>;
+
+	/** Clear a user's login-attempt lock when the current actor is allowed to do so. */
+	forceUnlock<Slug extends AuthCollectionSlug<Config> = SessionCollection<Config, DefaultAuth>>(
+		input: { id: string } & AuthCollectionInput<DefaultAuth, Slug>,
+		options?: RequestOptions
+	): Promise<AuthActionEnvelope>;
+
+	/** Create an API key and return its secret, which later listings omit. */
+	createAPIKey(input: CreateAPIKeyInput, options?: RequestOptions): Promise<APIKey>;
+
+	/** List API-key metadata for the current actor without returning key secrets. */
+	apiKeys(options?: RequestOptions): Promise<APIKeyInfo[]>;
+
+	/** Revoke one API key belonging to the current actor. */
+	revokeAPIKey(id: string, options?: RequestOptions): Promise<DeleteEnvelope>;
 }

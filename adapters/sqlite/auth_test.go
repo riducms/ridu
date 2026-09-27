@@ -87,6 +87,16 @@ func TestSQLiteAuthCredentialSessionTokenAndAPIKeyLifecycle(t *testing.T) {
 	if rotated.ID != session.ID || !rotated.ExpiresAt.Equal(session.ExpiresAt) || rotated.IPAddress != session.IPAddress || !rotated.LastSeenAt.Equal(now.Add(time.Second)) {
 		t.Fatalf("rotated session = %#v", rotated)
 	}
+	byID, err := backend.FindSessionByID(ctx, session.ID, now)
+	if err != nil || byID.TokenHash != replacement.TokenHash || byID.UserID != "user-1" {
+		t.Fatalf("FindSessionByID() after rotation = %#v, %v", byID, err)
+	}
+	if _, err := backend.FindSessionByID(ctx, session.ID, session.ExpiresAt); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("FindSessionByID() returned an expired session: %v", err)
+	}
+	if _, err := backend.FindSessionByID(ctx, "missing-session", now); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("FindSessionByID() for a missing session = %v", err)
+	}
 
 	key := store.AuthAPIKey{
 		ID: "key-id", TokenHash: "key-hash", CollectionID: collection.ID, UserID: "user-1",
