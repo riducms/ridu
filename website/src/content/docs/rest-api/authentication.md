@@ -16,14 +16,18 @@ password recovery, email verification, account unlocking, and API-key routes are
 
 ## Authenticate a client {#credentials}
 
-| Client situation                                  | Credential to send                                                                      |
-| ------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| Browser signed in through Ridu                    | The HttpOnly `ridu_session` cookie; use `credentials: 'include'` when crossing origins. |
-| Server or non-browser client with a session token | `Authorization: Session <token>`.                                                       |
-| Client with an API key                            | `Authorization: Bearer <key>`.                                                          |
+| Client situation                                | Credential to send                                                         |
+| ----------------------------------------------- | -------------------------------------------------------------------------- |
+| Same-origin browser, such as the embedded admin | The HttpOnly `ridu_session` cookie set by login.                           |
+| Frontend on another domain, server, or script   | `Authorization: Session <token>` from a login with `"transport": "token"`. |
+| Client with an API key                          | `Authorization: Bearer ridu_<id>_<secret>`.                                |
 
-Login establishes a SameSite=Lax cookie. API-key creation specifically requires cookie
-authentication, and the returned secret is shown once; a later list call only returns metadata.
+Login sets a SameSite=Lax cookie unless the body includes `"transport": "token"`; then the response
+is `{ "session": …, "token": "…" }` with `Cache-Control: no-store` and no cookie. An explicit
+`Authorization` credential always wins over the cookie. If it is invalid, expired, or revoked the
+request fails with `401 invalid_credential` instead of using the cookie or anonymous access. API-key
+creation requires a session from either transport, and the returned secret is shown once; a later
+list call only returns metadata.
 
 ## Create users and manage sign-in {#accounts}
 
@@ -31,7 +35,7 @@ authentication, and the returned secret is shown once; a later list call only re
 | -------------------------------------------------- | ----------------------------------------------------------- |
 | `GET /api/auth/{collection}/bootstrap`             | Check whether one-time first-admin setup is available.      |
 | `POST /api/auth/{collection}/create-user`          | Create a user with `{ "data": { … }, "password": "…" }`.    |
-| `POST /api/auth/{collection}/login`                | Authenticate with email and password.                       |
+| `POST /api/auth/{collection}/login`                | Authenticate; `"transport": "token"` returns the token.     |
 | `POST /api/auth/{collection}/forgot-password`      | Request a recovery notification when enabled.               |
 | `POST /api/auth/{collection}/reset-password`       | Consume a recovery token when enabled.                      |
 | `POST /api/auth/{collection}/request-verification` | Request an email-verification notification when enabled.    |
@@ -43,18 +47,30 @@ strategy authentication, lockouts, and the bootstrap lifecycle.
 
 ## Manage the current actor {#actor}
 
-| Method and path                  | What it does                                               |
-| -------------------------------- | ---------------------------------------------------------- |
-| `GET /api/auth/me`               | Read the current session identity.                         |
-| `POST /api/auth/refresh`         | Rotate or refresh the current session.                     |
-| `POST /api/auth/logout`          | Revoke the current session.                                |
-| `POST /api/auth/logout-all`      | Revoke all sessions for the actor.                         |
-| `POST /api/auth/change-password` | Change the password and revoke the current cookie session. |
-| `GET /api/auth/sessions`         | List sessions for the current actor.                       |
-| `DELETE /api/auth/sessions/{id}` | Revoke one session.                                        |
-| `GET /api/auth/api-keys`         | List API-key metadata when enabled.                        |
-| `POST /api/auth/api-keys`        | Create and return a new API-key secret when enabled.       |
-| `DELETE /api/auth/api-keys/{id}` | Revoke an API key.                                         |
+| Method and path                  | What it does                                         |
+| -------------------------------- | ---------------------------------------------------- |
+| `GET /api/auth/me`               | Read the current session identity.                   |
+| `POST /api/auth/rotate`          | Replace the token without extending the session.     |
+| `POST /api/auth/logout`          | Revoke the current session.                          |
+| `POST /api/auth/logout-all`      | Revoke all sessions for the actor.                   |
+| `POST /api/auth/change-password` | Change the password and revoke every session.        |
+| `GET /api/auth/sessions`         | List sessions for the current actor.                 |
+| `DELETE /api/auth/sessions/{id}` | Revoke one session.                                  |
+| `GET /api/auth/api-keys`         | List API-key metadata when enabled.                  |
+| `POST /api/auth/api-keys`        | Create and return a new API-key secret when enabled. |
+| `DELETE /api/auth/api-keys/{id}` | Revoke an API key.                                   |
+
+Every route in this table accepts either session transport and answers in the one it received:
+`rotate` returns a new token to a header client and a new cookie to a cookie client.
+
+## Deliver private uploads to the browser {#upload-grants}
+
+`POST /api/uploads/{collection}/grants` with `{ "items": [{ "id": "…", "size": "thumb" }],
+"expiresIn": 600 }` returns `{ "grants": [{ "id", "size", "url", "expiresAt" }] }` in request
+order. Each `url` is the normal delivery path with a `grant` query value for elements such as
+`<img>` that cannot send a header. A grant never contains the token, lasts at most one hour, and
+stops working when its session ends or the user loses read access. At most 100 items are accepted
+per request.
 
 ## Ask what the actor can do {#capabilities}
 

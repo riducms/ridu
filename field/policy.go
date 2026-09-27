@@ -45,6 +45,8 @@ type RawTransform func(operation.Context, operation.Value[store.Value]) (operati
 type Transform[T any] func(operation.Context, operation.Value[T]) (operation.Change[T], error)
 
 // OutputTransform changes one field in the response without changing storage.
+// Register it with the field's AfterRead method; it is not a Hooks list. T is
+// the field's response type, which differs from its stored type for references.
 // Its context supplies response values, which may include related documents and
 // locale fallback. Return Keep or Replace, as for a write transform. Field read
 // access still runs afterward; visible context data is not permission to expose it.
@@ -70,10 +72,23 @@ type Resolver[T any] func(operation.Context) (operation.Value[T], error)
 // rules cannot return the query predicates supported by collection access rules.
 type AccessRule func(operation.Context) (bool, error)
 
-// Hooks registers transforms and event callbacks for one field. Each list runs
-// in declaration order for each field occurrence, including nested array rows.
-// Collection or global hooks run first in the same phase, except AfterCommit,
-// where field callbacks run first. Use AfterRead for response transformations.
+// Hooks registers transforms and event callbacks for one field's stored value.
+// Each list runs in declaration order for each field occurrence, including
+// nested array rows. Collection or global hooks run first in the same phase,
+// except AfterCommit, where field callbacks run first.
+//
+// Response transforms are not part of Hooks. Register them with the field's
+// AfterRead method instead:
+//
+//	field.Text("code").
+//		Hooks(field.Hooks[string]{BeforeChange: []field.Transform[string]{trim}}).
+//		AfterRead(uppercase)
+//
+// They are separate because a field's response value can have a different type
+// from its stored value: a relationship stores an operation.ID but reads as an
+// operation.ReferenceOutput that may hold the populated document. Join and
+// Virtual fields store nothing, so they accept AfterRead but have no Hooks.
+// Unlike collection hooks, fields also have no BeforeRead or AfterError phase.
 type Hooks[T any] struct {
 	// BeforeDuplicate receives raw copied input before validation. It runs only
 	// when duplicating a collection document, after the resource hook.

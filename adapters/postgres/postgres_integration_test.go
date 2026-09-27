@@ -1987,6 +1987,14 @@ func TestPostgresPermanentDeleteRemovesDocumentState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Upload grants name a session by its public ID; the UUID column must
+	// resolve the ID Ridu issued and reject any other spelling as absent.
+	if byID, err := backend.FindSessionByID(ctx, session.ID, time.Now()); err != nil || byID.ID != session.ID || byID.UserID != actor.ID || byID.TokenHash == "" {
+		t.Fatalf("FindSessionByID() = %#v, %v", byID, err)
+	}
+	if _, err := backend.FindSessionByID(ctx, "not-a-session-id", time.Now()); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("FindSessionByID() with a malformed ID = %v", err)
+	}
 	key, err := application.CreateAPIKey(ctx, session.Token, "old key", time.Now().Add(time.Hour))
 	if err != nil {
 		t.Fatal(err)

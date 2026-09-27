@@ -328,6 +328,7 @@ describe('reference data', () => {
 	test('resolves only directly referenced type-like declarations in source order', () => {
 		expect(referencedRoutes('sdk', 'create-client')).toEqual([
 			'sdk/ridu-config-shape',
+			'sdk/auth-collection-slug',
 			'sdk/client-options',
 			'sdk/ridu-client'
 		]);

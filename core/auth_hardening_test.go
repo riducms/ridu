@@ -729,8 +729,8 @@ func TestCanceledSessionResolutionDoesNotRevokeValidSession(t *testing.T) {
 
 	canceled, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err := application.Session(canceled, session.Token); !operationCode(err, "access_denied") {
-		t.Fatalf("canceled session resolution = %v", err)
+	if _, err := application.Session(canceled, session.Token); err == nil || operationCode(err, "access_denied") {
+		t.Fatalf("canceled session resolution must not look like a logout: %v", err)
 	}
 	if resolved, err := application.Session(context.Background(), session.Token); err != nil || resolved.User.ID != user.ID {
 		t.Fatalf("session was revoked by canceled request: %#v, %v", resolved, err)
@@ -970,21 +970,21 @@ func TestVerificationAndPasswordResetTokensAreSingleUse(t *testing.T) {
 func TestAPIKeysExternalStrategiesAuthHooksAndDistributedRateLimit(t *testing.T) {
 	backend := teststore.New()
 	var userID string
-	var beforeLogin, afterLogin, afterMe, beforeRefresh, afterRefresh, beforeLogout, afterLogout int
+	var beforeLogin, afterLogin, afterMe, beforeRotate, afterRotate, beforeLogout, afterLogout int
 	var beforeAPIKey, afterAPIKey int
 	application := authFixture(t, backend, ridu.AuthConfig{
 		Password: ridu.PasswordPolicy{BcryptCost: bcrypt.MinCost},
 		APIKeys:  true,
 		Hooks: ridu.AuthHooks{
-			BeforeLogin:   []ridu.AuthHook{func(ridu.AuthContext) error { beforeLogin++; return nil }},
-			AfterLogin:    []ridu.AuthHook{func(ridu.AuthContext) error { afterLogin++; return nil }},
-			AfterMe:       []ridu.AuthHook{func(ridu.AuthContext) error { afterMe++; return nil }},
-			BeforeRefresh: []ridu.AuthHook{func(ridu.AuthContext) error { beforeRefresh++; return nil }},
-			AfterRefresh:  []ridu.AuthHook{func(ridu.AuthContext) error { afterRefresh++; return nil }},
-			BeforeLogout:  []ridu.AuthHook{func(ridu.AuthContext) error { beforeLogout++; return nil }},
-			AfterLogout:   []ridu.AuthHook{func(ridu.AuthContext) error { afterLogout++; return nil }},
-			BeforeAPIKey:  []ridu.AuthHook{func(ridu.AuthContext) error { beforeAPIKey++; return nil }},
-			AfterAPIKey:   []ridu.AuthHook{func(ridu.AuthContext) error { afterAPIKey++; return nil }},
+			BeforeLogin:  []ridu.AuthHook{func(ridu.AuthContext) error { beforeLogin++; return nil }},
+			AfterLogin:   []ridu.AuthHook{func(ridu.AuthContext) error { afterLogin++; return nil }},
+			AfterMe:      []ridu.AuthHook{func(ridu.AuthContext) error { afterMe++; return nil }},
+			BeforeRotate: []ridu.AuthHook{func(ridu.AuthContext) error { beforeRotate++; return nil }},
+			AfterRotate:  []ridu.AuthHook{func(ridu.AuthContext) error { afterRotate++; return nil }},
+			BeforeLogout: []ridu.AuthHook{func(ridu.AuthContext) error { beforeLogout++; return nil }},
+			AfterLogout:  []ridu.AuthHook{func(ridu.AuthContext) error { afterLogout++; return nil }},
+			BeforeAPIKey: []ridu.AuthHook{func(ridu.AuthContext) error { beforeAPIKey++; return nil }},
+			AfterAPIKey:  []ridu.AuthHook{func(ridu.AuthContext) error { afterAPIKey++; return nil }},
 		},
 		Strategies: []ridu.AuthStrategy{{Name: "test-header", Authenticate: func(authContext ridu.AuthStrategyContext) (ridu.AuthStrategyResult, error) {
 			values := authContext.Headers["X-Test-Auth"]
@@ -1047,8 +1047,8 @@ func TestAPIKeysExternalStrategiesAuthHooksAndDistributedRateLimit(t *testing.T)
 		t.Fatalf("external identity = %#v, %v", externalIdentity, err)
 	}
 	rotated, err := application.RotateSession(context.Background(), session.Token)
-	if err != nil || beforeRefresh != 1 || afterRefresh != 1 {
-		t.Fatalf("refresh = %#v, %v; hooks before %d after %d", rotated, err, beforeRefresh, afterRefresh)
+	if err != nil || beforeRotate != 1 || afterRotate != 1 {
+		t.Fatalf("refresh = %#v, %v; hooks before %d after %d", rotated, err, beforeRotate, afterRotate)
 	}
 	if err := application.Logout(context.Background(), rotated.Token); err != nil || beforeLogout != 1 || afterLogout != 1 {
 		t.Fatalf("logout = %v; hooks before %d after %d", err, beforeLogout, afterLogout)
@@ -1097,7 +1097,8 @@ func TestAPIKeyOwnerReloadOnlyDeletesConfirmedOrphans(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			backend.resetDeleteObservation()
 			backend.armFindFailure(test.err, nil)
-			if _, err := application.AuthenticateAPIKeyIdentity(context.Background(), key.Key); !operationCode(err, "access_denied") {
+			// A transient owner read is an unavailable service, not a rejected key.
+			if _, err := application.AuthenticateAPIKeyIdentity(context.Background(), key.Key); err == nil || operationCode(err, "access_denied") {
 				t.Fatalf("authentication error = %v", err)
 			}
 			if calls, _, _, _ := backend.deleteObservation(); calls != 0 {

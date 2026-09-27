@@ -23,7 +23,7 @@ it("adopts security data synchronously but reloads through the client", async ()
 	const sessions = vi.fn(async () => []);
 	const apiKeys = vi.fn(async () => []);
 	const controller = new AccountSecurityController(
-		{ sessions, apiKeys } as unknown as AdminClient,
+		{ auth: { sessions, apiKeys } } as unknown as AdminClient,
 		true,
 		translate
 	);
@@ -46,7 +46,7 @@ it("a new security seed supersedes a pending client load and can recover from a 
 	const result = Promise.withResolvers<[]>();
 	const sessions = vi.fn(() => result.promise);
 	const controller = new AccountSecurityController(
-		{ sessions } as unknown as AdminClient,
+		{ auth: { sessions } } as unknown as AdminClient,
 		false,
 		translate
 	);
@@ -89,8 +89,7 @@ it.each(["account", "security"] as const)(
 		const client = {
 			find: vi.fn(),
 			collectionAccess: vi.fn(),
-			sessions: vi.fn(),
-			apiKeys: vi.fn(),
+			auth: { sessions: vi.fn(), apiKeys: vi.fn() },
 		} as unknown as AdminClient;
 		const runtime = new AdminRuntime(client);
 		const user = { id: "user-a", name: "Prepared profile" };
@@ -158,8 +157,8 @@ it.each(["account", "security"] as const)(
 					.toBeVisible();
 			expect(client.find).not.toHaveBeenCalled();
 			expect(client.collectionAccess).not.toHaveBeenCalled();
-			expect(client.sessions).not.toHaveBeenCalled();
-			expect(client.apiKeys).not.toHaveBeenCalled();
+			expect(client.auth.sessions).not.toHaveBeenCalled();
+			expect(client.auth.apiKeys).not.toHaveBeenCalled();
 			expect(
 				document.querySelector('[data-ridu-loading-surface],[data-slot="skeleton"]')
 			).toBeNull();
@@ -175,9 +174,11 @@ it.each(["account", "security"] as const)(
 it("preserves pending and completed security mutations through same-owner query navigation", async () => {
 	const created = Promise.withResolvers<APIKey>();
 	const client = {
-		sessions: vi.fn(async () => []),
-		apiKeys: vi.fn(async () => []),
-		createAPIKey: vi.fn(() => created.promise),
+		auth: {
+			sessions: vi.fn(async () => []),
+			apiKeys: vi.fn(async () => []),
+			createAPIKey: vi.fn(() => created.promise),
+		},
 	} as unknown as AdminClient;
 	const runtime = new AdminRuntime(client);
 	runtime.manifest = {
@@ -218,7 +219,7 @@ it("preserves pending and completed security mutations through same-owner query 
 	try {
 		await screen.getByRole("textbox", { name: "Name", exact: true }).fill("Automation");
 		await screen.getByRole("button", { name: "Create key", exact: true }).click();
-		await expect.poll(() => client.createAPIKey).toHaveBeenCalledOnce();
+		await expect.poll(() => client.auth.createAPIKey).toHaveBeenCalledOnce();
 		await router.navigate("/account/security?y=2&x=1");
 		await router.navigate("/account/security?x=3");
 		created.resolve({
@@ -230,8 +231,8 @@ it("preserves pending and completed security mutations through same-owner query 
 		await expect.element(screen.getByText("only-shown-once")).toBeVisible();
 		await router.navigate("/account/security?x=4");
 		await expect.element(screen.getByText("only-shown-once")).toBeVisible();
-		expect(client.sessions).toHaveBeenCalledOnce();
-		expect(client.apiKeys).toHaveBeenCalledOnce();
+		expect(client.auth.sessions).toHaveBeenCalledOnce();
+		expect(client.auth.apiKeys).toHaveBeenCalledOnce();
 	} finally {
 		await screen.unmount();
 		router.dispose();
@@ -243,11 +244,11 @@ it("preserves pending and completed security mutations through same-owner query 
 it("does not complete a password change for a destroyed account-security owner", async () => {
 	const response = Promise.withResolvers<{ success: true }>();
 	const changePassword = vi.fn(
-		(_currentPassword: string, _password: string, options?: { signal?: AbortSignal }) =>
+		(_input: { currentPassword: string; password: string }, _options?: { signal?: AbortSignal }) =>
 			response.promise
 	);
 	const controller = new AccountSecurityController(
-		{ changePassword } as unknown as AdminClient,
+		{ auth: { changePassword } } as unknown as AdminClient,
 		false,
 		translate
 	);
@@ -257,7 +258,7 @@ it("does not complete a password change for a destroyed account-security owner",
 	response.resolve({ success: true });
 
 	await expect(pending).resolves.toBe(false);
-	expect(changePassword.mock.calls[0]?.[2]?.signal?.aborted).toBe(true);
+	expect(changePassword.mock.calls[0]?.[1]?.signal?.aborted).toBe(true);
 });
 
 it("does not expose an API key result to a destroyed account-security owner", async () => {
@@ -267,7 +268,7 @@ it("does not expose an API key result to a destroyed account-security owner", as
 			response.promise
 	);
 	const controller = new AccountSecurityController(
-		{ createAPIKey } as unknown as AdminClient,
+		{ auth: { createAPIKey } } as unknown as AdminClient,
 		true,
 		translate
 	);
@@ -289,13 +290,12 @@ it("does not expose an API key result to a destroyed account-security owner", as
 it("invalidates an account-security operation when a retained controller loads a new session", async () => {
 	const password = Promise.withResolvers<{ success: true }>();
 	const changePassword = vi.fn(
-		(_currentPassword: string, _password: string, _options?: { signal: AbortSignal }) =>
+		(_input: { currentPassword: string; password: string }, _options?: { signal: AbortSignal }) =>
 			password.promise
 	);
 	const controller = new AccountSecurityController(
 		{
-			changePassword,
-			sessions: vi.fn(async () => []),
+			auth: { changePassword, sessions: vi.fn(async () => []) },
 		} as unknown as AdminClient,
 		false,
 		translate
@@ -306,7 +306,7 @@ it("invalidates an account-security operation when a retained controller loads a
 	password.resolve({ success: true });
 
 	await expect(pending).resolves.toBe(false);
-	expect(changePassword.mock.calls[0]?.[2]?.signal.aborted).toBe(true);
+	expect(changePassword.mock.calls[0]?.[1]?.signal.aborted).toBe(true);
 	expect(controller.status).toBe("ready");
 });
 

@@ -23,8 +23,7 @@ availability:
   anchor: limits
 navigation:
   section: 'Work with data'
-  parent: 'data-access'
-  order: 40
+  order: 20
   title: 'Querying data'
 ---
 

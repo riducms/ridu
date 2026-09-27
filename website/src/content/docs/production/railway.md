@@ -6,9 +6,8 @@ eyebrow: 'Production'
 order: 222
 navigation:
   section: 'Develop & operate'
-  parent: 'production'
-  order: 20
-  title: 'Railway'
+  order: 64
+  title: 'Deploy to Railway'
 ---
 
 Generated projects include `build`, `migrate`, and `start` scripts, and the server automatically

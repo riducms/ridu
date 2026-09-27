@@ -67,9 +67,12 @@
 		pending = true;
 
 		try {
-			await runtime.client.resetPassword(authCollection.slug, token, password, {
-				signal: activeRequest.signal,
-			});
+			await runtime.client.auth.resetPassword(
+				{ collection: authCollection.slug, token, password },
+				{
+					signal: activeRequest.signal,
+				}
+			);
 			if (!current()) return;
 			complete = true;
 			password = "";

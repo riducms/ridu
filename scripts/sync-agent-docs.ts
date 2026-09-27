@@ -58,6 +58,7 @@ const references: ReferenceDefinition[] = [
 	{ source: "docs/data-access.md", target: "ridu-project/reference/data-access.md" },
 	{ source: "docs/rest-api.md", target: "ridu-project/reference/rest-api.md" },
 	{ source: "docs/typescript-sdk.md", target: "ridu-project/reference/typescript-sdk.md" },
+	{ source: "docs/sveltekit.md", target: "ridu-project/reference/sveltekit.md" },
 	{ source: "docs/plugins.md", target: "ridu-project/reference/plugins.md" },
 	{ source: "docs/rich-text.md", target: "ridu-project/reference/rich-text.md" },
 	{ source: "docs/seo.md", target: "ridu-project/reference/seo.md" },

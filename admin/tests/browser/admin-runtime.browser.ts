@@ -196,9 +196,11 @@ function fixtureClient(
 ): AdminClient {
 	return {
 		schema: async () => manifest,
-		authBootstrap: async () => ({ available: false }),
-		session: async () => session,
+		auth: {
+			bootstrap: async () => ({ available: false }),
+			getSession: async () => session,
+			logout: options.logout,
+		},
 		collectionAccess: options.collectionAccess,
-		logout: options.logout,
 	} as unknown as AdminClient;
 }

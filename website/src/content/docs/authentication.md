@@ -1,13 +1,12 @@
 ---
 title: 'Authentication'
-description: 'Configure identities, safe account provisioning, cookie sessions, password recovery, API keys, and custom request strategies.'
+description: 'Configure identities, safe account provisioning, cookie and token sessions, password recovery, API keys, and custom request strategies.'
 product: data
 eyebrow: 'Data and APIs'
 order: 110
 navigation:
   section: 'Work with data'
-  parent: 'data-access'
-  order: 50
+  order: 70
   title: 'Authentication'
 ---
 
@@ -81,11 +80,11 @@ remote-upload, and duplicate creation reject auth collections and direct callers
 `/api/auth/{collection}/create-user`. In TypeScript, use the generated SDK:
 
 ```ts
-const user = await ridu.createAuthUser(
-	'users',
-	{ email: 'editor@example.com', role: 'editor' },
-	'a long application-chosen password'
-);
+const user = await ridu.auth.createUser({
+	collection: 'users',
+	data: { email: 'editor@example.com', role: 'editor' },
+	password: 'a long application-chosen password'
+});
 ```
 
 The dynamic Go local API can create or import an auth collection document, but that alone does not
@@ -149,43 +148,96 @@ reload the actor from that exact collection.
 for API authentication. `CollectionAccess.Admin` on that collection can still deny a particular
 authenticated user from entering the admin.
 
-## Browser sessions {#sessions}
+## Sessions and transports {#sessions}
 
-Password login creates an opaque server-stored session and sets a `ridu_session` cookie. The cookie
-is `HttpOnly`, `SameSite=Lax`, scoped to `/`, and expires at the session's absolute expiry. Set
-`HandlerOptions.SecureCookies` for HTTPS; `ridu.Execute` enables secure cookies unless
+Password login creates an opaque server-stored session. One session engine serves two transports,
+which differ only in how the token travels:
+
+| Transport | Use it for                                                          | Credential                       |
+| --------- | ------------------------------------------------------------------- | -------------------------------- |
+| Cookie    | The embedded admin and same-origin browser apps                     | HttpOnly `ridu_session` cookie   |
+| Token     | Frontends on another domain, server renderers, scripts, native apps | `Authorization: Session <token>` |
+
+The cookie is `HttpOnly`, `SameSite=Lax`, scoped to `/`, and expires at the session's absolute
+expiry. Set `HandlerOptions.SecureCookies` for HTTPS; `ridu.Execute` enables secure cookies unless
 `RIDU_SECURE_COOKIES=false` is set.
 
-The generated Fetch client includes credentials. For a separate browser origin, list the exact
-origin in `HandlerOptions.AllowedOrigins`; Ridu then emits credentialed CORS responses. SameSite=Lax
-still does not make a cross-site embedded authentication design work—deploy the API on a same-site
-origin or choose an application-owned bearer flow.
+A token client logs in with `"transport": "token"` and receives the token in the response instead of
+a cookie. Give the SDK a token store and it does this for you, then sends the token on every
+request:
 
-```ts title="src/auth.ts"
-await ridu.login('users', {
+```ts title="scripts/sync.ts"
+import { memoryTokenStore } from '@riducms/sdk';
+import { createClient } from '../generated/ridu.generated';
+
+const ridu = createClient({
+	baseURL: 'https://cms.example.com',
+	auth: { collection: 'users', token: memoryTokenStore() }
+});
+
+await ridu.auth.login({
 	email: 'editor@example.com',
 	password: 'correct horse battery staple'
 });
 
-const current = await ridu.session();
-console.log(current.collection, current.user, current.expiresAt);
+const current = await ridu.auth.getSession();
+console.log(current?.collection, current?.user, current?.expiresAt);
 
-const sessions = await ridu.sessions();
-await ridu.revokeSession(sessions.find((item) => !item.current)!.id);
-
-await ridu.refreshSession();
-await ridu.logout();
+const sessions = await ridu.auth.sessions();
+await ridu.auth.revokeSession(
+	sessions.find((item) => !item.current)!.id
+);
+await ridu.auth.logout();
 ```
 
-`refreshSession` atomically rotates the bearer token and invalidates the old token; it does not
-extend the original absolute expiry. `logout` is idempotent and revokes the current token.
-`logoutAll` revokes every session for the identity. Session listings expose only safe metadata—ID,
-created/last-seen/expiry times, IP address, user agent, and whether it is current.
+`auth.getSession()` verifies the credential with Ridu. It resolves `null` when there is no valid
+session and rejects when Ridu is unavailable, so an outage never looks like a logout. With
+`auth.collection` set, calls may omit their collection and sessions are typed as that collection's
+users. A SvelteKit application uses [`@riducms/sveltekit`](/docs/sveltekit/), which keeps the token
+in a cookie on the application's own domain so browsers and server renders share one session.
 
-For non-cookie clients, send the opaque session token as `Authorization: Session <token>`.
-Application code can use
-`LoginWithOptions` to record a normalized client IP and user agent, and `Session`, `RotateSession`,
-`Sessions`, `RevokeSession`, `Logout`, and `LogoutAll` to manage the same lifecycle.
+A frontend on another domain calls Ridu directly. List its exact origin in
+`HandlerOptions.AllowedOrigins`. Token requests send no cookies, so they work between unrelated
+domains with third-party cookies blocked. The trade-off is that scripts can read a token the
+application stores; a cross-site scripting flaw can steal it. Keep the cookie transport behind a
+same-origin proxy if that is not acceptable.
+
+### Credential precedence {#credential-precedence}
+
+Each request is evaluated as one principal. An explicit `Authorization: Session <token>` or
+`Authorization: Bearer ridu_…` API key wins over the cookie. If it is invalid, expired, or revoked,
+the request fails with `401 invalid_credential`; Ridu never falls back to the cookie or to anonymous
+access. The SDK forgets a stored token rejected this way. Without an explicit credential, a valid
+cookie applies, then [custom strategies](#custom-strategies). Login, logout, and recovery ignore an
+explicit credential, so a stale token never blocks signing in again.
+
+### Rotation and expiry {#rotation}
+
+`auth.rotate()` replaces the bearer token and invalidates the old one immediately. It never extends
+the absolute expiry, so it is a response to a possibly exposed token, not a way to stay signed in.
+Do not call it automatically from several tabs or server renders. `logout` is idempotent and revokes
+the current token. `logoutAll` revokes every session for the identity. Session listings expose only
+safe metadata: ID, created, last-seen and expiry times, IP address, user agent, and whether it is
+current.
+
+Application code can use `LoginWithOptions` to record a normalized client IP and user agent, and
+`Session`, `RotateSession`, `Sessions`, `RevokeSession`, `Logout`, and `LogoutAll` to manage the
+same lifecycle.
+
+### Private uploads in the browser {#upload-urls}
+
+An `<img>` cannot send an `Authorization` header. Ask for short-lived delivery URLs instead:
+
+```ts
+const [thumbnail] = await ridu.getUploadURLs('media', [
+	{ id: asset.id, size: 'thumb' }
+]);
+```
+
+Each URL names the session by its public ID and carries a signature, never the token. Ridu checks the
+signature, the session, and the owner's current read access on every fetch. Logout, revocation,
+rotation, a password change, or lost access ends the URL. Lifetimes default to ten minutes and are
+capped at one hour.
 
 ## Password policy and lockout {#password-policy}
 
@@ -208,7 +260,7 @@ Credential failures use one `access_denied` response—unknown identity, wrong p
 deleted/inaccessible user, and concurrent credential changes do not reveal which fact was true.
 Password hashing is admission-bounded, and HTTP login has an additional identity/client-window
 rate limiter configured with `HandlerOptions.AuthRateLimit` and `AuthRateWindow`.
-`app.ForceUnlock` and the SDK `forceUnlock` clear failed-attempt state only after collection update
+`app.ForceUnlock` and the SDK `auth.forceUnlock` clear failed-attempt state only after collection update
 access authorizes the caller.
 
 Changing a password verifies the current password, applies the new policy, and revokes every
@@ -246,16 +298,16 @@ enumeration. A reset token is consumed exactly once; resetting replaces the pass
 lockout, and revokes all sessions and API keys in one auth-store transaction. A verification token
 is likewise single-use. Invalid or expired tokens return `invalid_auth_token`.
 
-The SDK exposes `requestPasswordReset`, `resetPassword`, `requestVerification`, and `verifyEmail`;
+The SDK exposes `auth.requestPasswordReset`, `auth.resetPassword`, `auth.requestVerification`, and `auth.verifyEmail`;
 the framework admin includes the matching account flows.
 
 ## API keys {#api-keys}
 
 Set `AuthConfig.APIKeys: true` to allow an authenticated session to mint independent bearer keys.
-Creation requires cookie/session authentication and `AuthConfig.Access.APIKey` permission.
+Creation requires a session from either transport and `AuthConfig.Access.APIKey` permission.
 
 ```ts
-const created = await ridu.createAPIKey({
+const created = await ridu.auth.createAPIKey({
 	name: 'content sync',
 	expiresAt: '2026-12-31T23:59:59Z'
 });

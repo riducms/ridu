@@ -485,10 +485,8 @@ export class ReferenceBrowserWorkflow {
 					);
 				}
 				if (this.collection.capabilities.auth) {
-					return this.options.runtime.client.createAuthUser(
-						this.collection.slug,
-						values,
-						this.newUserPassword,
+					return this.options.runtime.client.auth.createUser(
+						{ collection: this.collection.slug, data: values, password: this.newUserPassword },
 						{ signal: request.signal, locale: this.options.locale }
 					);
 				}

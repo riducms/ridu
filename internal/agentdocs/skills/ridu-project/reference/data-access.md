@@ -1,6 +1,6 @@
 <!-- Generated from website/src/content/docs/data-access.md by scripts/sync-agent-docs.ts. -->
 
-# Data access overview
+# Choose an API
 
 Ridu offers several ways into one operation engine. Choosing a transport changes how you express a
 request, not the access rules, validation, hooks, transactions, relationship population, or field

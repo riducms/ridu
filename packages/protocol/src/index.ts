@@ -231,6 +231,7 @@ const ERROR_CODES: ReadonlySet<ErrorCode> = new Set([
 	"email_not_verified",
 	"auth_feature_disabled",
 	"invalid_auth_token",
+	"invalid_credential",
 	"invalid_preview_token",
 	"selection_too_large",
 ]);

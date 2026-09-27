@@ -6,6 +6,7 @@ import (
 	"crypto/subtle"
 	"encoding/binary"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/riducms/ridu/schema"
@@ -268,6 +269,52 @@ func (backend *Store) FindSession(ctx context.Context, tokenHash string, now tim
   expires_at, created_at, last_seen_at, ip_address, user_agent
 FROM ridu_auth_sessions
 WHERE token_hash = $1 AND expires_at > $2`, tokenHash, now).Scan(
+		&session.ID, &session.TokenHash, &session.CollectionID, &session.UserID,
+		&session.ExpiresAt, &session.CreatedAt, &session.LastSeenAt,
+		&session.IPAddress, &session.UserAgent,
+	)
+	if err != nil {
+		return store.AuthSession{}, translateError(err)
+	}
+	return session, nil
+}
+
+// sessionUUIDText accepts the two UUID spellings Ridu produces: 32 hex digits
+// or the canonical 8-4-4-4-12 form PostgreSQL returns.
+func sessionUUIDText(id string) bool {
+	hex := func(value string) bool {
+		for _, character := range value {
+			if !(character >= '0' && character <= '9' || character >= 'a' && character <= 'f' || character >= 'A' && character <= 'F') {
+				return false
+			}
+		}
+		return true
+	}
+	if len(id) == 32 {
+		return hex(id)
+	}
+	parts := strings.Split(id, "-")
+	if len(id) != 36 || len(parts) != 5 {
+		return false
+	}
+	for index, size := range []int{8, 4, 4, 4, 12} {
+		if len(parts[index]) != size || !hex(parts[index]) {
+			return false
+		}
+	}
+	return true
+}
+
+func (backend *Store) FindSessionByID(ctx context.Context, id string, now time.Time) (store.AuthSession, error) {
+	// Session IDs are stored as UUIDs; any other value cannot name a session.
+	if !sessionUUIDText(id) {
+		return store.AuthSession{}, store.ErrNotFound
+	}
+	var session store.AuthSession
+	err := backend.pool.QueryRow(ctx, `SELECT id, token_hash, collection_id, user_id,
+  expires_at, created_at, last_seen_at, ip_address, user_agent
+FROM ridu_auth_sessions
+WHERE id = $1 AND expires_at > $2`, id, now).Scan(
 		&session.ID, &session.TokenHash, &session.CollectionID, &session.UserID,
 		&session.ExpiresAt, &session.CreatedAt, &session.LastSeenAt,
 		&session.IPAddress, &session.UserAgent,

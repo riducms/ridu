@@ -221,23 +221,29 @@ describe('riduMarkdownCodeMetadata', () => {
 		}
 	});
 
-	it('groups every complete package-manager run in the rendered Quickstart', () => {
-		const markdown = readFileSync(
-			new URL('../content/docs/quickstart.md', import.meta.url),
-			'utf8'
-		).replace(/^---\n[\s\S]*?\n---\n/, '');
-		const { html } = markdownToHtml(markdown, {
-			mdastPlugins: [riduMarkdownCodeMetadata],
-			hastPlugins: [riduMarkdownComponents]
-		});
-		const sourceCount = markdown.match(/package-manager=/g)?.length ?? 0;
+	it('renders every package-manager block in the docs inside a complete tab group', async () => {
+		// An incomplete run silently falls back to separate code blocks, so check real pages.
+		let pages = 0;
+		for await (const relativePath of new Bun.Glob('src/content/**/*.md').scan({
+			cwd: process.cwd(),
+			onlyFiles: true
+		})) {
+			const markdown = readFileSync(relativePath, 'utf8').replace(/^---\n[\s\S]*?\n---\n/, '');
+			const sourceCount = markdown.match(/package-manager=/g)?.length ?? 0;
+			if (sourceCount === 0) continue;
+			pages += 1;
+			const { html } = markdownToHtml(markdown, {
+				mdastPlugins: [riduMarkdownCodeMetadata],
+				hastPlugins: [riduMarkdownComponents]
+			});
 
-		expect(sourceCount % packageManagers.length).toBe(0);
-		expect(html.match(/data-package-manager-tabs=""/g)).toHaveLength(
-			sourceCount / packageManagers.length
-		);
-		expect(html.match(/class="compare-copy code-panel-copy"/g)).toHaveLength(sourceCount);
-		expect(html).not.toContain('data-package-manager-source');
+			expect(sourceCount % packageManagers.length, relativePath).toBe(0);
+			expect(html.match(/data-package-manager-tabs=""/g)?.length, relativePath).toBe(
+				sourceCount / packageManagers.length
+			);
+			expect(html, relativePath).not.toContain('data-package-manager-source');
+		}
+		expect(pages).toBeGreaterThan(0);
 	});
 
 	it('leaves incomplete package-manager runs as ordinary code blocks', () => {

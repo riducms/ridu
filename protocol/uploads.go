@@ -11,3 +11,30 @@ type UploadImageEdit struct {
 	CropWidth  float64 `json:"cropWidth"`
 	CropHeight float64 `json:"cropHeight"`
 }
+
+// UploadGrantRequestItem names one upload document and optional image size.
+type UploadGrantRequestItem struct {
+	ID   string `json:"id"`
+	Size string `json:"size,omitempty"`
+}
+
+// UploadGrantsRequest asks for short-lived delivery URLs. ExpiresIn is in
+// seconds; zero selects the server default.
+type UploadGrantsRequest struct {
+	Items     []UploadGrantRequestItem `json:"items"`
+	ExpiresIn int                      `json:"expiresIn,omitempty"`
+}
+
+// UploadGrant is a delivery URL that authorizes one object without carrying
+// the session token.
+type UploadGrant struct {
+	ID        string `json:"id"`
+	Size      string `json:"size,omitempty"`
+	URL       string `json:"url"`
+	ExpiresAt string `json:"expiresAt"`
+}
+
+// UploadGrantsEnvelope returns grants in request order.
+type UploadGrantsEnvelope struct {
+	Grants []UploadGrant `json:"grants"`
+}

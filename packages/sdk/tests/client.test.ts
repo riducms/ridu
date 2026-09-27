@@ -885,8 +885,9 @@ describe("Fetch client", () => {
 
 	it("uses the stable auth session endpoints", async () => {
 		const paths: string[] = [];
-		const client = createClient<TestConfig>({
+		const client = createClient<TestConfig, "posts">({
 			baseURL: "https://cms.example.test",
+			auth: { collection: "posts" },
 			fetch: async (request) => {
 				const input = request as Request;
 				const url = new URL(input.url);
@@ -923,24 +924,25 @@ describe("Fetch client", () => {
 				});
 			},
 		});
-		expect((await client.authBootstrap("posts")).available).toBe(true);
-		const login = await client.login("posts", {
+		expect((await client.auth.bootstrap({ collection: "posts" })).available).toBe(true);
+		// A client with exactly one auth collection may omit it.
+		const login = await client.auth.login({
 			email: "ada@example.test",
 			password: "secret-pass",
 		});
 		expect(login.user.title).toBe("Session user");
 		expect(login.collection).toBe("posts");
-		expect((await client.session()).expiresAt).toBe("2026-08-05T10:00:00Z");
-		expect((await client.refreshSession()).expiresAt).toBe("2026-08-05T10:00:00Z");
-		expect((await client.logout()).loggedOut).toBe(true);
-		expect((await client.sessions())[0]?.current).toBe(true);
-		expect((await client.revokeSession("session_1")).deleted).toBe(true);
-		expect((await client.logoutAll()).loggedOut).toBe(true);
+		expect((await client.auth.getSession())?.expiresAt).toBe("2026-08-05T10:00:00Z");
+		expect((await client.auth.rotate()).expiresAt).toBe("2026-08-05T10:00:00Z");
+		expect((await client.auth.logout()).loggedOut).toBe(true);
+		expect((await client.auth.sessions())[0]?.current).toBe(true);
+		expect((await client.auth.revokeSession("session_1")).deleted).toBe(true);
+		expect((await client.auth.logoutAll()).loggedOut).toBe(true);
 		expect(paths).toEqual([
 			"GET /api/auth/posts/bootstrap",
 			"POST /api/auth/posts/login",
 			"GET /api/auth/me",
-			"POST /api/auth/refresh",
+			"POST /api/auth/rotate",
 			"POST /api/auth/logout",
 			"GET /api/auth/sessions",
 			"DELETE /api/auth/sessions/session_1",
@@ -958,10 +960,8 @@ describe("Fetch client", () => {
 			},
 		});
 
-		const created = await client.createAuthUser(
-			"posts",
-			{ title: "New account" },
-			"correct-horse",
+		const created = await client.auth.createUser(
+			{ collection: "posts", data: { title: "New account" }, password: "correct-horse" },
 			{
 				locale: "fr",
 				fallbackLocale: false,
@@ -979,8 +979,9 @@ describe("Fetch client", () => {
 
 	it("exposes recovery, verification, and API key endpoints", async () => {
 		const paths: string[] = [];
-		const client = createClient<TestConfig>({
+		const client = createClient<TestConfig, "posts">({
 			baseURL: "https://cms.example.test",
+			auth: { collection: "posts" },
 			fetch: async (request) => {
 				const input = request as Request;
 				const url = new URL(input.url);
@@ -1013,16 +1014,24 @@ describe("Fetch client", () => {
 				return Response.json({ success: true });
 			},
 		});
-		expect((await client.requestPasswordReset("posts", "ada@example.test")).success).toBe(true);
-		expect((await client.resetPassword("posts", "reset-token", "changed-secret")).success).toBe(
+		expect((await client.auth.requestPasswordReset({ email: "ada@example.test" })).success).toBe(
 			true
 		);
-		expect((await client.requestVerification("posts", "ada@example.test")).success).toBe(true);
-		expect((await client.verifyEmail("posts", "verify-token")).success).toBe(true);
-		expect((await client.changePassword("old-secret", "new-secret")).success).toBe(true);
-		expect((await client.createAPIKey({ name: "Deploy" })).key).toBe("ridu_key_secret");
-		expect((await client.apiKeys())[0]?.lastUsedAt).toBe("2026-08-13T10:05:00Z");
-		expect((await client.revokeAPIKey("key_1")).deleted).toBe(true);
+		expect(
+			(await client.auth.resetPassword({ token: "reset-token", password: "changed-secret" }))
+				.success
+		).toBe(true);
+		expect((await client.auth.requestVerification({ email: "ada@example.test" })).success).toBe(
+			true
+		);
+		expect((await client.auth.verifyEmail({ token: "verify-token" })).success).toBe(true);
+		expect(
+			(await client.auth.changePassword({ currentPassword: "old-secret", password: "new-secret" }))
+				.success
+		).toBe(true);
+		expect((await client.auth.createAPIKey({ name: "Deploy" })).key).toBe("ridu_key_secret");
+		expect((await client.auth.apiKeys())[0]?.lastUsedAt).toBe("2026-08-13T10:05:00Z");
+		expect((await client.auth.revokeAPIKey("key_1")).deleted).toBe(true);
 		expect(paths).toEqual([
 			"POST /api/auth/posts/forgot-password",
 			"POST /api/auth/posts/reset-password",
@@ -1146,7 +1155,9 @@ describe("Fetch client", () => {
 				return Response.json({ success: true });
 			},
 		});
-		expect((await client.forceUnlock("posts", "user_1")).success).toBe(true);
+		expect((await client.auth.forceUnlock({ collection: "posts", id: "user_1" })).success).toBe(
+			true
+		);
 		expect(requested).toBe("POST /api/auth/posts/user_1/unlock");
 	});
 

@@ -14,8 +14,7 @@ aliases:
   ]
 navigation:
   section: 'Work with data'
-  parent: 'data-access'
-  order: 60
+  order: 90
   title: 'CORS'
 ---
 
@@ -153,11 +152,16 @@ ridu.WithHandlerOptions(ridu.HandlerOptions{
 Add only headers that your frontend actually sends. Invalid HTTP header names are ignored, and a
 preflight asking for an unlisted header fails closed with `cors_header_denied`.
 
-## Cookies and the TypeScript SDK {#credentials}
+## Cookies, tokens, and the TypeScript SDK {#credentials}
 
-`@riducms/sdk` defaults to Fetch credentials mode `include`, so allowed cross-origin responses
-carry `Access-Control-Allow-Credentials: true` and echo the exact allowed origin. Plain Fetch calls
-must opt into credentials when they use Ridu's session cookie:
+A frontend on a different site should use the token transport: the SDK sends
+`Authorization: Session <token>` with credentials mode `omit`, so no cookie crosses sites and
+blocked third-party cookies do not matter. [`@riducms/sveltekit`](/docs/sveltekit/) configures this
+for SvelteKit. Allowed responses expose `X-Request-ID` and `Content-Disposition` to the page.
+
+Without a token store, `@riducms/sdk` defaults to Fetch credentials mode `include`, so allowed
+cross-origin responses carry `Access-Control-Allow-Credentials: true` and echo the exact allowed
+origin. Plain Fetch calls must opt into credentials when they use Ridu's session cookie:
 
 ```ts title="browser.ts"
 const response = await fetch('https://cms.example.com/api/auth/me', {
@@ -167,14 +171,15 @@ const response = await fetch('https://cms.example.com/api/auth/me', {
 
 Set `SecureCookies` in production; `ridu.Execute` does so unless disabled. The session
 cookie is `SameSite=Lax`. Separate origins that remain on the same site—for example two HTTPS
-subdomains—can use the cookie flow. A genuinely cross-site embedded application should put the API
-on a same-site origin or use an application-owned bearer flow; CORS alone cannot make the browser
-send an ineligible cookie.
+subdomains—can use the cookie flow. A genuinely cross-site application uses the token transport;
+CORS alone cannot make the browser send an ineligible cookie.
 
 ## Preflights and allowed methods {#preflight}
 
 Ridu answers a valid preflight with status `204`, credentialed origin headers, and the allowed
-methods and headers. You can test the boundary independently of application code:
+methods and headers. Browsers may cache the answer for ten minutes (`Access-Control-Max-Age: 600`),
+so a token client's writes usually cost one request. You can test the boundary independently of
+application code:
 
 ```sh title="terminal"
 curl -i -X OPTIONS 'https://cms.example.com/api/schema' \

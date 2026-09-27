@@ -8,7 +8,7 @@ aliases: ['database adapter', 'storage adapter', 'infrastructure']
 navigation:
   section: 'Develop & operate'
   order: 10
-  title: 'Adapters overview'
+  title: 'Adapters'
 ---
 
 Adapters connect Ridu to infrastructure that the framework already knows how to use. A database

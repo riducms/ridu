@@ -2,73 +2,62 @@
 
 # Hook context
 
-Ridu passes information about the current operation to each hook. This argument is usually named
-`ctx`. Collection and global hooks receive one `ridu.HookContext`; field hooks receive a field
-context and a separate value argument.
+Every hook receives an argument usually named `ctx` that describes the current operation.
+Collection and global hooks receive a `ridu.HookContext`, which holds the whole document. Field
+hooks receive an `operation.Context` and their own value as a separate argument.
 
-## Read the document and signed-in user {#hook-context}
+## Collection and field contexts {#hook-context}
 
-Collection and global hooks receive [`ridu.HookContext`](https://riducms.com/reference/ridu/hook-context/).
-Use it to read the signed-in user, inspect the previous document, or change values before a save:
+The two contexts answer the same questions in different ways:
 
-| Value                       | What it contains                                                             |
-| --------------------------- | ---------------------------------------------------------------------------- |
-| `Operation`                 | The create, duplicate, read, update, delete, publish, or unpublish operation |
-| `Actor`                     | The authenticated document, or `nil` for an anonymous operation              |
-| `ActorCollection`           | The auth collection that owns the signed-in user                             |
-| `CollectionID` / `GlobalID` | The stable resource ID; only the matching one is set                         |
-| `Data`                      | Values you can change before the document is saved                           |
-| `Document`                  | The document being returned, once it is available                            |
-| `Original`                  | The saved document before an update or delete                                |
-| `Context`                   | Request cancellation and deadline; pass it to `ctx.Local` calls              |
-| `Local`                     | The local API for reading or writing related documents                       |
-| `Error`                     | The original failure while `AfterError` runs                                 |
-| `Locale` / `AllLocales`     | The locale view selected for this operation                                  |
+| To…                                   | In a collection or global hook                 | In a field hook                                  |
+| ------------------------------------- | ---------------------------------------------- | ------------------------------------------------ |
+| Check what is happening               | `ctx.Operation`                                | `ctx.Operation`                                  |
+| Identify the signed-in user           | `ctx.Actor`, a document; `nil` when anonymous  | `ctx.Actor.ID`; empty when anonymous             |
+| Read the values being saved           | `ctx.Data`                                     | The `value` argument, `ctx.Siblings`, `ctx.Root` |
+| Read the saved values before a change | `ctx.Original`                                 | `ctx.Prior`, for this field's group or row       |
+| Change what is saved                  | Set entries in `ctx.Data`                      | Return `operation.Replace(...)`                  |
+| Change the response                   | Set entries in `ctx.Document.Values`           | Return a change from an `.AfterRead(...)` hook   |
+| Read another document                 | `ctx.Local.Find(...)`                          | `ctx.Local.FindByID(...)`                        |
+| Save another document                 | `ctx.Local.Create(...)`, `Update`, or `Delete` | Not available; use a collection hook             |
+| Check the content locale              | `ctx.Locale`                                   | `ctx.Locale`                                     |
 
-Values in `Data` use [`store.Value`](https://riducms.com/reference/store/value/). Read a string with
-[`StringValue()`](https://riducms.com/reference/store/value-string-value/) and write one with
-[`store.String(...)`](https://riducms.com/reference/store/string/). [Documents and values](../go-packages/store.md)
-explains the complete pattern, including missing values, nested data, and changes to a returned
-document. For collection IDs, document IDs, and locales, read
-[Schema and identifiers](../go-packages/schema.md#identifiers).
+The complete lists are in [collection hook arguments](./collections.md#arguments) and
+[field hook arguments](./fields.md#arguments).
 
 ### Change stored values or response values {#stored-and-returned-values}
 
-Before saving, update entries in `ctx.Data`. After checking that `ctx.Actor` is not `nil`, for
-example, set `ctx.Data["lastEditedBy"] = store.String(ctx.Actor.ID)`. Returning `nil` keeps those changes and
-continues the operation. The hook returns only an error; it does not return a replacement document.
-Assigning a new map to `ctx.Data` itself will not replace Ridu's map.
+In a collection hook, change what is saved by setting entries in `ctx.Data` before the save:
+`ctx.Data["lastEditedBy"] = store.String(ctx.Actor.ID)`. The hook returns only an error, never a
+replacement document, and assigning a new map to `ctx.Data` does not replace Ridu's map.
 
-After storage, `ctx.Document` contains the returned document. Changes to
-`ctx.Document.Values` in `AfterChange`, `AfterOperation`, or `AfterRead` affect the response only;
-they do not update the saved record. Use a before-save hook for a stored change.
+After the save, `ctx.Document` holds the document Ridu returns. Changing `ctx.Document.Values`
+in `AfterChange`, `AfterOperation`, or `AfterRead` changes the response only; the saved document
+stays the same.
 
-`ctx.Original` contains the saved document before an update or delete. It is `nil` for a create,
-and `ctx.Document` is unavailable before a result exists. General hooks on a list do not receive
-a single result document; use `AfterRead` to work with each document.
+`ctx.Operation` names the whole operation, not the current hook. An `AfterRead` hook preparing
+the response to a create sees `operation.Create`, not `operation.Read`. Write hooks see the
+locale being written; `AfterRead` sees the response locale, whose values may include fallback
+text from another locale.
 
-`ctx.Operation` names the original operation. An `AfterRead` hook preparing a newly created post
-still sees `operation.Create`, not `operation.Read`.
+## Read other fields from a field hook {#field-context}
 
-`CollectionID` and `GlobalID` are Ridu's stable identifiers, not the slugs in your config.
-Use `Locale` and `AllLocales` to understand the values supplied to this hook. Write hooks use
-the write locale; `AfterRead` uses the response locale, which may include fallback text.
+A field hook receives read-only views of the values around it:
 
-## Work with a field context {#field-context}
+- `ctx.Siblings` holds this field and the other fields in the same group or array row.
+- `ctx.Root` holds the document's top-level fields.
+- `ctx.Prior` holds the saved version of the same group or row before this operation.
 
-A [field hook](./fields.md) receives `ctx` plus a separate `operation.Value[T]` for its
-own value. The context contains read-only views:
+```go
+title, _ := ctx.Siblings.String("title")
+price, _ := ctx.Siblings.Get("price").NumberValue()
+previousTitle, _ := ctx.Prior.String("title")
+```
 
-- `ctx.Siblings` contains this field and other fields in the same object or row.
-- `ctx.Root` contains the top-level fields.
-- `ctx.Prior` contains the previously saved version of the same object or row.
-
-In a field transform, return `operation.Replace(...)` to change the field. Editing a map or slice read from these
-views does not change the document. Unlike a collection hook's `Actor` pointer, a field context
-uses `ctx.Actor.ID` for the user ID; an empty ID means the request is anonymous.
-
-See [Using other field values](../fields/callback-values.md) for complete examples covering
-nested rows, previous values, translations, and related-document lookups.
+Changing a map or list read from these views does not change the document. Return
+`operation.Replace(...)` to change the hook's own field. See
+[Using other field values](../fields/callback-values.md) for nested rows, translations, and
+related-document lookups.
 
 ## Pass the user and locale to related operations {#nested-operations}
 
@@ -77,9 +66,10 @@ should use the same user, pass `Actor: ctx.Actor` and `ActorCollection: ctx.Acto
 its options. Pass `Locale: ctx.Locale` when it should use the same content language. These
 options are not filled in automatically; a nil actor makes an anonymous request.
 
-Pass `ctx.Context` to share the active transaction and request cancellation. See
-[Save related documents together](./transactions-and-errors.md#nested-operations) for
-the complete audit-log example and rollback behavior.
+Pass `ctx.Context` to share the active transaction and request cancellation. The
+[`AfterChange` audit example](./collections.md#after-change) passes all of these, and
+[Save related documents together](./transactions-and-errors.md#nested-operations)
+explains what rolls back when a related write fails.
 
 The field context's `ctx.Local.FindByID` reader already carries the user, auth collection, exact
 locale, and transaction. It only supports reads; use a collection or global hook for related

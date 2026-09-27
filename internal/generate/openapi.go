@@ -174,9 +174,16 @@ func openAPI(manifest schema.Manifest) ([]byte, error) {
 			document.Paths["/api/auth/"+slug+"/create-user"] = map[string]any{
 				"post": createAuthSpec,
 			}
-			document.Paths["/api/auth/"+slug+"/login"] = map[string]any{
-				"post": operationSpec("Login to "+collection.Labels.Plural, "login"+name, "200"),
+			document.Components.Schemas["LoginRequest"] = openAPISchema{
+				Type: "object", Required: []string{"email", "password"},
+				Properties: map[string]any{
+					"email": map[string]string{"type": "string"}, "password": map[string]string{"type": "string"},
+					"transport": map[string]any{"type": "string", "enum": []string{"cookie", "token"}, "description": "cookie sets the HttpOnly session cookie; token returns the session token in the response body instead."},
+				},
 			}
+			loginSpec := operationSpec("Login to "+collection.Labels.Plural, "login"+name, "200")
+			loginSpec["requestBody"] = openAPIJSONRequest("LoginRequest")
+			document.Paths["/api/auth/"+slug+"/login"] = map[string]any{"post": loginSpec}
 			if collection.Auth.PasswordReset {
 				document.Paths["/api/auth/"+slug+"/forgot-password"] = map[string]any{"post": operationSpec("Request a password reset", "requestPasswordReset"+name, "200")}
 				document.Paths["/api/auth/"+slug+"/reset-password"] = map[string]any{"post": operationSpec("Reset a password", "resetPassword"+name, "200")}
@@ -235,6 +242,12 @@ func openAPI(manifest schema.Manifest) ([]byte, error) {
 				},
 			}}}}
 			document.Paths["/api/collections/"+slug+"/upload-preview"] = map[string]any{"post": previewSpec}
+			addUploadGrantSchemas(document.Components.Schemas)
+			grantSpec := operationSpec("Create short-lived "+collection.Labels.Singular+" delivery URLs", "createUploadGrants"+name, "200")
+			grantSpec["description"] = "Session-bound delivery URLs for elements that cannot send an Authorization header. The URLs never contain the session token and stop working when the session ends or read access is lost."
+			grantSpec["requestBody"] = openAPIJSONRequest("UploadGrantsRequest")
+			addOpenAPIJSONResponse(grantSpec, "200", map[string]any{"$ref": "#/components/schemas/UploadGrantsEnvelope"})
+			document.Paths["/api/uploads/"+slug+"/grants"] = map[string]any{"post": grantSpec}
 		}
 		if collection.Versions != nil {
 			versionBase := "/api/collections/" + slug + "/{id}"
@@ -361,7 +374,7 @@ func openAPI(manifest schema.Manifest) ([]byte, error) {
 		updateSpec["requestBody"] = openAPIJSONRequest(name + "Update")
 	}
 	document.Paths["/api/auth/me"] = map[string]any{"get": operationSpec("Current session", "currentSession", "200")}
-	document.Paths["/api/auth/refresh"] = map[string]any{"post": operationSpec("Rotate current session", "refreshSession", "200")}
+	document.Paths["/api/auth/rotate"] = map[string]any{"post": operationSpec("Rotate the current session token", "rotateSession", "200")}
 	document.Paths["/api/auth/logout"] = map[string]any{"post": operationSpec("Logout", "logout", "200")}
 	document.Paths["/api/auth/logout-all"] = map[string]any{"post": operationSpec("Logout all sessions", "logoutAll", "200")}
 	document.Paths["/api/auth/change-password"] = map[string]any{"post": operationSpec("Change the current password", "changePassword", "200")}
@@ -1137,6 +1150,29 @@ func containsBlockFields(fields []schema.Field) bool {
 		}
 	}
 	return false
+}
+
+func addUploadGrantSchemas(schemas map[string]openAPISchema) {
+	schemas["UploadGrantsRequest"] = openAPISchema{
+		Type: "object", Required: []string{"items"},
+		Properties: map[string]any{
+			"items": map[string]any{"type": "array", "maxItems": 100, "items": map[string]any{
+				"type": "object", "required": []string{"id"},
+				"properties": map[string]any{"id": map[string]string{"type": "string"}, "size": map[string]string{"type": "string"}},
+			}},
+			"expiresIn": map[string]any{"type": "integer", "minimum": 1, "maximum": 3600},
+		},
+	}
+	schemas["UploadGrantsEnvelope"] = openAPISchema{
+		Type: "object", Required: []string{"grants"},
+		Properties: map[string]any{"grants": map[string]any{"type": "array", "items": map[string]any{
+			"type": "object", "required": []string{"id", "url", "expiresAt"},
+			"properties": map[string]any{
+				"id": map[string]string{"type": "string"}, "size": map[string]string{"type": "string"},
+				"url": map[string]string{"type": "string"}, "expiresAt": map[string]string{"type": "string", "format": "date-time"},
+			},
+		}}},
+	}
 }
 
 func openAPIJSONRequest(name string) map[string]any {

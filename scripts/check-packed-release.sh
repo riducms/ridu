@@ -29,7 +29,9 @@ mkdir -p "$artifact_root"
 package_root="$project_root/.ridu/packages"
 source_package_root="$release_workspace/package-sources"
 
+package_count=0
 for package_directory in "$package_root"/*; do
+	package_count=$((package_count + 1))
 	package_target="$(basename "$package_directory")"
 	(
 		cd "$package_directory"
@@ -248,8 +250,8 @@ chmod +x "$fake_npm_bin/npm"
 PATH="$fake_npm_bin:$PATH" RIDU_NPM_INVOCATION_LOG="$npm_invocation_log" \
 	bash "$repository_root/scripts/publish-release-packages.sh" \
 	"$artifact_root" --local-first-publication >/dev/null
-if [[ "$(wc -l < "$npm_invocation_log" | tr -d ' ')" != "12" ]] ||
-	[[ "$(grep -Fc -- '--provenance=false' "$npm_invocation_log")" != "12" ]] ||
+if [[ "$(wc -l < "$npm_invocation_log" | tr -d ' ')" != "$package_count" ]] ||
+	[[ "$(grep -Fc -- '--provenance=false' "$npm_invocation_log")" != "$package_count" ]] ||
 	grep -Eq '(^| )--provenance( |$)' "$npm_invocation_log"; then
 	echo "local first-publication commands did not explicitly disable provenance" >&2
 	exit 1
@@ -258,8 +260,8 @@ fi
 : > "$npm_invocation_log"
 PATH="$fake_npm_bin:$PATH" RIDU_NPM_INVOCATION_LOG="$npm_invocation_log" \
 	bash "$repository_root/scripts/publish-release-packages.sh" "$artifact_root" >/dev/null
-if [[ "$(wc -l < "$npm_invocation_log" | tr -d ' ')" != "12" ]] ||
-	[[ "$(grep -Ec '(^| )--provenance( |$)' "$npm_invocation_log")" != "12" ]] ||
+if [[ "$(wc -l < "$npm_invocation_log" | tr -d ' ')" != "$package_count" ]] ||
+	[[ "$(grep -Ec '(^| )--provenance( |$)' "$npm_invocation_log")" != "$package_count" ]] ||
 	grep -Fq -- '--provenance=false' "$npm_invocation_log"; then
 	echo "trusted-publication commands did not require provenance" >&2
 	exit 1
@@ -277,4 +279,4 @@ if [[ -s "$npm_invocation_log" ]]; then
 	exit 1
 fi
 
-echo "clean Node import, create-ridu forwarding, project-local CLI recovery/execution, strict Node-only types, scaffold, install, check, build, and publication command policy verified from twelve packed Ridu $version artifacts"
+echo "clean Node import, create-ridu forwarding, project-local CLI recovery/execution, strict Node-only types, scaffold, install, check, build, and publication command policy verified from $package_count packed Ridu $version artifacts"

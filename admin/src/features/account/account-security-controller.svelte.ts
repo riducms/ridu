@@ -47,8 +47,10 @@ export class AccountSecurityController {
 		this.error = undefined;
 		try {
 			const [sessions, apiKeys] = await Promise.all([
-				this.client.sessions({ signal: request.signal }),
-				this.apiKeysEnabled ? this.client.apiKeys({ signal: request.signal }) : Promise.resolve([]),
+				this.client.auth.sessions({ signal: request.signal }),
+				this.apiKeysEnabled
+					? this.client.auth.apiKeys({ signal: request.signal })
+					: Promise.resolve([]),
 			]);
 			if (request.signal.aborted || generation !== this.#generation) return;
 			this.sessions = sessions;
@@ -64,7 +66,7 @@ export class AccountSecurityController {
 	revokeSession = async (id: string) => {
 		return this.#run(
 			"session:" + id,
-			(signal) => this.client.revokeSession(id, { signal }),
+			(signal) => this.client.auth.revokeSession(id, { signal }),
 			() => (this.sessions = this.sessions.filter((session) => session.id !== id))
 		);
 	};
@@ -72,7 +74,7 @@ export class AccountSecurityController {
 	logoutAll = async () => {
 		return this.#run(
 			"logout-all",
-			(signal) => this.client.logoutAll({ signal }),
+			(signal) => this.client.auth.logoutAll({ signal }),
 			() => (this.sessions = [])
 		);
 	};
@@ -80,7 +82,7 @@ export class AccountSecurityController {
 	createAPIKey = async (name: string, expiresAt?: string) => {
 		return this.#run(
 			"api-key:create",
-			(signal) => this.client.createAPIKey({ name, expiresAt }, { signal }),
+			(signal) => this.client.auth.createAPIKey({ name, expiresAt }, { signal }),
 			(created) => {
 				this.createdAPIKey = created;
 				this.apiKeys = [
@@ -103,7 +105,7 @@ export class AccountSecurityController {
 	revokeAPIKey = async (id: string) => {
 		return this.#run(
 			"api-key:" + id,
-			(signal) => this.client.revokeAPIKey(id, { signal }),
+			(signal) => this.client.auth.revokeAPIKey(id, { signal }),
 			() => {
 				this.apiKeys = this.apiKeys.filter((key) => key.id !== id);
 				if (this.createdAPIKey?.id === id) this.createdAPIKey = undefined;
@@ -113,7 +115,7 @@ export class AccountSecurityController {
 
 	changePassword = async (currentPassword: string, password: string) => {
 		return this.#run("password", (signal) =>
-			this.client.changePassword(currentPassword, password, { signal })
+			this.client.auth.changePassword({ currentPassword, password }, { signal })
 		);
 	};
 

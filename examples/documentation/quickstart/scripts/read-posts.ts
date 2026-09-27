@@ -1,3 +1,4 @@
+import { memoryTokenStore } from '@riducms/sdk';
 import { createClient } from '../generated/ridu.generated';
 
 const baseURL = process.env.RIDU_URL ?? 'http://localhost:8080';
@@ -10,27 +11,13 @@ if (!email || !password) {
 	);
 }
 
-let sessionCookie = '';
+// A script keeps its session token in memory and sends it on each request.
 const ridu = createClient({
 	baseURL,
-	middleware: [
-		async (request, next) => {
-			const headers = new Headers(request.headers);
-			if (sessionCookie) headers.set('Cookie', sessionCookie);
-
-			const response = await next(new Request(request, { headers }));
-			const setCookie = response.headers.get('set-cookie');
-			const match = setCookie?.match(
-				/(?:^|,\s*)(ridu_session=[^;,\s]+)/
-			);
-			const session = match?.[1];
-			if (session) sessionCookie = session;
-			return response;
-		}
-	]
+	auth: { collection: 'users', token: memoryTokenStore() }
 });
 
-await ridu.login('users', { email, password });
+await ridu.auth.login({ email, password });
 const page = await ridu.list('posts', {
 	where: { status: { equals: 'published' } },
 	select: { title: true, status: true },

@@ -72,7 +72,7 @@ const fetchWithCookieJar: typeof fetch = async (input, init) => {
 describe("release-built generated Fetch SDK", () => {
 	it("runs authenticated CRUD, typed reads, and relationship population", async () => {
 		const client = createClient({ baseURL, fetch: fetchWithCookieJar });
-		const login = await client.login("users", { email, password });
+		const login = await client.auth.login({ collection: "users", email, password });
 		expect(login.user.email).toBe(email);
 
 		const created = await client.create("posts", {

@@ -37,7 +37,7 @@ func TestGeneratedClientIsCurrent(t *testing.T) {
 	if string(actual) != string(expected) {
 		t.Fatalf("generated client drift; run RIDU_UPDATE_GENERATED_CLIENT=1 go test ./internal/typescript -run TestGeneratedClientIsCurrent to regenerate %s\nexpected:\n%s\nactual:\n%s", path, expected, actual)
 	}
-	if !strings.Contains(string(actual), "return createRuntimeClient<RiduConfig>(options)") {
+	if !strings.Contains(string(actual), "return createRuntimeClient<RiduConfig, DefaultAuth>(options)") {
 		t.Fatal("generated client does not explicitly bind its application contract")
 	}
 }

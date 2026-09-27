@@ -50,7 +50,7 @@
 			throw new Error(runtime.i18n.t("auth:configuredCollectionUnavailable"));
 		}
 
-		await runtime.client.login(authCollection.slug, credentials);
+		await runtime.client.auth.login({ collection: authCollection.slug, ...credentials });
 		const destinationLocale = runtime.contentLocaleForPath(postLoginPath);
 		const destinationAccessAuthoritative = await runtime.refreshAccess(
 			destinationLocale ?? runtime.contentLocale
@@ -60,7 +60,7 @@
 			runtime.collectionOperations[authCollection.slug]?.admin !== true
 		) {
 			try {
-				await runtime.client.logout();
+				await runtime.client.auth.logout();
 			} catch {
 				// The shell remains denied even if server cleanup fails.
 			}

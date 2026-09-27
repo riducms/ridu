@@ -363,20 +363,71 @@ delivery remains an access-checked REST `GET`. File-size, MIME, image, remote-ho
 limits come from server config, not the SDK. Image edit coordinates are percentages from 0 to 100.
 See [Uploads](./uploads.md) for the full workflow.
 
+A token client on another origin cannot put its header on an `<img>`. `getUploadURLs` returns
+absolute, short-lived delivery URLs for private uploads in one request, in input order:
+
+```ts title="gallery.ts"
+const urls = await ridu.getUploadURLs(
+	'media',
+	assets.map((asset) => ({ id: asset.id, size: 'thumb' })),
+	{ expiresIn: 1800 }
+);
+```
+
+The URLs never contain the session token and stop working when the session ends or read access is
+lost. Batches above 100 items are split automatically. `getUploadURL` returns one URL.
+
 ## Authentication and account tasks {#authentication}
 
-`login`, `session`, `refreshSession`, `logout`, and `logoutAll` implement the ordinary browser
-session flow. The client defaults `credentials` to `"include"`, so the server’s `ridu_session`
-HttpOnly cookie is sent on same-origin or correctly configured cross-origin requests.
+Authentication lives under `ridu.auth`. Create the client with `auth.collection` and calls that
+act on an auth collection may omit it; sessions are then typed as that collection's users:
 
-Auth collections also enable `createAuthUser`. Configured recovery, verification, API-key, and
-login-attempt-lock features add `requestPasswordReset`, `resetPassword`, `requestVerification`,
-`verifyEmail`, `createAPIKey`, `apiKeys`, `revokeAPIKey`, and `forceUnlock`. Account operations include
-`changePassword`, `sessions`, and `revokeSession`.
+```ts title="lib/ridu.ts"
+export const ridu = createClient({
+	baseURL: 'https://cms.example.com',
+	auth: { collection: 'users' }
+});
 
-For a service client, supply an API key as a Bearer credential. For a raw session token, use the
-`Session` scheme. Creating an API key requires a cookie
-session, and its secret is returned only by `createAPIKey`; later listings expose metadata only.
+await ridu.auth.createUser({
+	data: { email, displayName },
+	password
+});
+const session = await ridu.auth.login({ email, password });
+session.user.displayName;
+```
+
+Without `auth.collection`, pass `{ collection }` on each call. `auth.getSession()` verifies the
+current credential and resolves `null` without a session; it rejects on an outage instead of
+reporting a logout. `auth.rotate()` replaces the token without extending the session. `logout`,
+`logoutAll`, `sessions`, `revokeSession`, and `changePassword` manage the current identity.
+Configured recovery, verification, API-key, and lock features add `requestPasswordReset`,
+`resetPassword`, `requestVerification`, `verifyEmail`, `createAPIKey`, `apiKeys`, `revokeAPIKey`,
+and `forceUnlock`.
+
+By default the client uses Ridu's HttpOnly `ridu_session` cookie and sends `credentials:
+"include"`. A client on another origin, a server renderer, or a script uses the token transport:
+pass a token store and the SDK logs in with `{ transport: "token" }`, persists the token before
+`login` resolves, and sends `Authorization: Session <token>` on every request. Requests read the
+store each time, so a client never holds yesterday's token. A token Ridu rejects as
+`invalid_credential` is cleared unless a newer login already replaced it.
+
+```ts title="scripts/import.ts"
+import { memoryTokenStore } from '@riducms/sdk';
+
+const ridu = createClient({
+	baseURL: process.env.RIDU_URL!,
+	auth: { collection: 'users', token: memoryTokenStore() }
+});
+await ridu.auth.login({ email, password });
+```
+
+A SvelteKit app uses [`@riducms/sveltekit`](./sveltekit.md), whose store keeps the token in a
+cookie on the app's own domain for both browsers and server renders. A request-scoped client can set
+`auth.memoizeSession` so `getSession()` verifies once per request.
+
+For a service client, supply an API key as a Bearer credential. Creating an API key requires a
+session, and its secret is returned only by `auth.createAPIKey`; later listings expose metadata
+only.
 
 ```ts title="service-client.ts"
 const service = createClient({

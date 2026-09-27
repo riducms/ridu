@@ -28,6 +28,7 @@ var packages = []packageDefinition{
 	{name: "@riducms/protocol", source: "packages/protocol", target: "ridu-framework-protocol", build: true},
 	{name: "@riducms/translations", source: "packages/translations", target: "ridu-framework-translations"},
 	{name: "@riducms/sdk", source: "packages/sdk", target: "ridu-framework-sdk", build: true},
+	{name: "@riducms/sveltekit", source: "packages/sveltekit", target: "ridu-framework-sveltekit"},
 	{name: "@riducms/build", source: "packages/build", target: "ridu-framework-build", build: true},
 	{name: "@riducms/plugin", source: "packages/plugin", target: "ridu-framework-plugin"},
 	{name: "@riducms/ui", source: "packages/ui", target: "ridu-framework-ui"},

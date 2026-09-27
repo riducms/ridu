@@ -18,7 +18,7 @@ func writeAuditEntry(ctx ridu.HookContext) error {
 	if ctx.Document == nil {
 		return nil
 	}
-	// Reuse the transaction so the post and audit entry save together.
+	// Passing ctx.Context saves both documents in one transaction.
 	_, err := ctx.Local.Create(
 		ctx.Context,
 		"audit-log",
@@ -33,6 +33,6 @@ func writeAuditEntry(ctx ridu.HookContext) error {
 			Locale:          ctx.Locale,
 		},
 	)
-	// An audit failure must also fail the post's save.
+	// Returning the error also rolls back the original save.
 	return err
 }

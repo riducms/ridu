@@ -16,8 +16,7 @@ aliases:
   ]
 navigation:
   section: 'Work with data'
-  parent: 'data-access'
-  order: 70
+  order: 100
   title: 'Generated types and files'
 ---
 

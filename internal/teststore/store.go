@@ -854,6 +854,17 @@ func (backend *Store) FindSession(_ context.Context, tokenHash string, now time.
 	return cloneAuthSession(session.record), nil
 }
 
+func (backend *Store) FindSessionByID(_ context.Context, id string, now time.Time) (store.AuthSession, error) {
+	backend.mu.Lock()
+	defer backend.mu.Unlock()
+	for _, session := range backend.sessions {
+		if session.record.ID == id && session.record.ExpiresAt.After(now) {
+			return cloneAuthSession(session.record), nil
+		}
+	}
+	return store.AuthSession{}, store.ErrNotFound
+}
+
 func (backend *Store) ListSessions(_ context.Context, collectionID schema.StableID, userID string, now time.Time) ([]store.AuthSession, error) {
 	backend.mu.Lock()
 	defer backend.mu.Unlock()

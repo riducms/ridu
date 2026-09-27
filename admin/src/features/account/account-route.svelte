@@ -336,7 +336,7 @@
 		const request = beginProfileRequest();
 
 		try {
-			await runtime.client.logout({ signal: request.signal });
+			await runtime.client.auth.logout({ signal: request.signal });
 			if (!ownsProfileRequest(request, owner)) return;
 
 			await runtime.hardNavigate(adminRoutePatterns.login);

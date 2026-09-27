@@ -148,7 +148,7 @@ storage root, namespace, port, schema, or database and clean it afterward.
 
 An ordinary project CI job usually needs:
 
-```sh title="terminal" package-manager="npm"
+```sh title="terminal"
 go test ./...
 ridu generate --check
 ridu migrate verify

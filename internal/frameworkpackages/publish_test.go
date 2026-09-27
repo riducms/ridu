@@ -28,7 +28,7 @@ func TestPublishVendorsUnpublishedPackagesAsOneLocalWorkspaceGraph(t *testing.T)
 		t.Fatalf("stale framework package survived workspace replacement: %v", err)
 	}
 
-	for _, target := range []string{"ridu-create", "ridu-framework-admin", "ridu-framework-build", "ridu-framework-cli", "ridu-framework-plugin", "ridu-framework-ui", "ridu-framework-plugin-richtext", "ridu-framework-plugin-seo", "ridu-framework-plugin-form-builder", "ridu-framework-protocol", "ridu-framework-sdk", "ridu-framework-translations"} {
+	for _, target := range []string{"ridu-create", "ridu-framework-admin", "ridu-framework-build", "ridu-framework-cli", "ridu-framework-plugin", "ridu-framework-ui", "ridu-framework-plugin-richtext", "ridu-framework-plugin-seo", "ridu-framework-plugin-form-builder", "ridu-framework-protocol", "ridu-framework-sdk", "ridu-framework-sveltekit", "ridu-framework-translations"} {
 		if _, err := os.Stat(filepath.Join(projectRoot, ".ridu", "packages", target)); err != nil {
 			t.Errorf("hidden dogfood package %s: %v", target, err)
 		}
@@ -52,7 +52,7 @@ func TestPublishVendorsUnpublishedPackagesAsOneLocalWorkspaceGraph(t *testing.T)
 			t.Fatalf("published admin %s: %v", legalFile, err)
 		}
 	}
-	for _, target := range []string{"ridu-create", "ridu-framework-build", "ridu-framework-cli", "ridu-framework-plugin", "ridu-framework-ui", "ridu-framework-plugin-richtext", "ridu-framework-plugin-seo", "ridu-framework-plugin-form-builder", "ridu-framework-protocol", "ridu-framework-sdk", "ridu-framework-translations"} {
+	for _, target := range []string{"ridu-create", "ridu-framework-build", "ridu-framework-cli", "ridu-framework-plugin", "ridu-framework-ui", "ridu-framework-plugin-richtext", "ridu-framework-plugin-seo", "ridu-framework-plugin-form-builder", "ridu-framework-protocol", "ridu-framework-sdk", "ridu-framework-sveltekit", "ridu-framework-translations"} {
 		packageRoot := filepath.Join(projectRoot, ".ridu", "packages", target)
 		if _, err := os.Stat(filepath.Join(packageRoot, "LICENSE")); err != nil {
 			t.Fatalf("published package %s omits LICENSE: %v", target, err)

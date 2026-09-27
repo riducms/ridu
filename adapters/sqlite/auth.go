@@ -313,6 +313,16 @@ FROM ridu_auth_sessions
 WHERE token_hash = ? AND expires_at > ?`, tokenHash, encodeTime(now)))
 }
 
+func (backend *Store) FindSessionByID(ctx context.Context, id string, now time.Time) (store.AuthSession, error) {
+	if err := validateSQLiteTimes("authentication timestamp", now); err != nil {
+		return store.AuthSession{}, err
+	}
+	return scanAuthSession(backend.db.QueryRowContext(ctx, `SELECT id, token_hash, collection_id, user_id,
+  expires_at, created_at, last_seen_at, ip_address, user_agent
+FROM ridu_auth_sessions
+WHERE id = ? AND expires_at > ?`, id, encodeTime(now)))
+}
+
 func (backend *Store) ListSessions(ctx context.Context, collectionID schema.StableID, userID string, now time.Time) ([]store.AuthSession, error) {
 	if err := validateSQLiteTimes("authentication timestamp", now); err != nil {
 		return nil, err

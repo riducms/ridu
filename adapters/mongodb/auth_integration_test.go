@@ -122,6 +122,12 @@ func TestMongoDBAuthCredentialSessionTokenAndAPIKeyLifecycle(t *testing.T) {
 	if err != nil || rotated.ID != session.ID || !rotated.ExpiresAt.Equal(session.ExpiresAt) || !rotated.LastSeenAt.Equal(rollbackSeenAt) {
 		t.Fatalf("rotated session = %#v, %v", rotated, err)
 	}
+	if byID, err := backend.FindSessionByID(t.Context(), session.ID, now); err != nil || byID.TokenHash != replacement.TokenHash {
+		t.Fatalf("FindSessionByID() after rotation = %#v, %v", byID, err)
+	}
+	if _, err := backend.FindSessionByID(t.Context(), session.ID, session.ExpiresAt); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("FindSessionByID() returned an expired session: %v", err)
+	}
 	if sessions, err := backend.ListSessions(t.Context(), collection.ID, user.ID, now); err != nil || len(sessions) != 1 || sessions[0].ID != session.ID {
 		t.Fatalf("ListSessions() = %#v, %v", sessions, err)
 	}

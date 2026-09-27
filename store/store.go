@@ -602,6 +602,9 @@ type AuthStore interface {
 	DeleteUserSession(context.Context, schema.StableID, string, string) error
 	DeleteUserSessions(context.Context, schema.StableID, string) error
 	FindSession(context.Context, string, time.Time) (AuthSession, error)
+	// FindSessionByID resolves an unexpired session by its public ID. It lets a
+	// short-lived capability name its session without carrying the token.
+	FindSessionByID(context.Context, string, time.Time) (AuthSession, error)
 	ListSessions(context.Context, schema.StableID, string, time.Time) ([]AuthSession, error)
 	CreateAuthToken(context.Context, AuthToken) error
 	ResetPasswordWithToken(context.Context, schema.StableID, string, []byte, time.Time) (string, error)

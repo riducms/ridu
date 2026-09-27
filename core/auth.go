@@ -356,7 +356,7 @@ func (application *App) RotateSession(ctx context.Context, token string) (AuthSe
 	now := time.Now().UTC()
 	current, err := application.auth.FindSession(ctx, tokenDigest(token), now)
 	if err != nil {
-		return AuthSession{}, authenticationRequired()
+		return AuthSession{}, sessionLookupError(err)
 	}
 	collection, exists := application.authByID[current.CollectionID]
 	if !exists {
@@ -364,11 +364,11 @@ func (application *App) RotateSession(ctx context.Context, token string) (AuthSe
 	}
 	user, err := application.authUser(ctx, collection, current.UserID)
 	if err != nil {
-		return AuthSession{}, authenticationRequired()
+		return AuthSession{}, authOwnerError(err)
 	}
 	config := application.authConfigBySlug[string(collection.Slug)]
-	authContext := application.newAuthContext(ctx, AuthOperationRefresh, collection, &user, "", LoginOptions{IPAddress: current.IPAddress, UserAgent: current.UserAgent})
-	if err := application.runAuthHooks(config.Hooks.BeforeRefresh, authContext); err != nil {
+	authContext := application.newAuthContext(ctx, AuthOperationRotate, collection, &user, "", LoginOptions{IPAddress: current.IPAddress, UserAgent: current.UserAgent})
+	if err := application.runAuthHooks(config.Hooks.BeforeRotate, authContext); err != nil {
 		return AuthSession{}, err
 	}
 	rotated, err := newOpaqueToken(32)
@@ -381,7 +381,7 @@ func (application *App) RotateSession(ctx context.Context, token string) (AuthSe
 	if err := application.auth.RotateSession(ctx, tokenDigest(token), replacement, now); err != nil {
 		return AuthSession{}, authenticationRequired()
 	}
-	if err := application.runAuthHooks(config.Hooks.AfterRefresh, authContext); err != nil {
+	if err := application.runAuthHooks(config.Hooks.AfterRotate, authContext); err != nil {
 		_ = application.auth.DeleteSession(ctx, replacement.TokenHash)
 		return AuthSession{}, err
 	}
@@ -405,7 +405,7 @@ func (application *App) sessionsForResolvedSession(ctx context.Context, current 
 	if !exists {
 		return nil, authenticationRequired()
 	}
-	if err := application.authorizeAuth(application.authConfigBySlug[string(collection.Slug)].Access.Session, application.newAuthContext(ctx, AuthOperationRefresh, collection, &current.User, "", LoginOptions{IPAddress: current.record.IPAddress, UserAgent: current.record.UserAgent})); err != nil {
+	if err := application.authorizeAuth(application.authConfigBySlug[string(collection.Slug)].Access.Session, application.newAuthContext(ctx, AuthOperationSession, collection, &current.User, "", LoginOptions{IPAddress: current.record.IPAddress, UserAgent: current.record.UserAgent})); err != nil {
 		return nil, err
 	}
 	records, err := application.auth.ListSessions(ctx, current.record.CollectionID, current.record.UserID, now)
@@ -427,7 +427,7 @@ func (application *App) sessionsForResolvedSession(ctx context.Context, current 
 func (application *App) RevokeSession(ctx context.Context, token, sessionID string) error {
 	current, err := application.auth.FindSession(ctx, tokenDigest(token), time.Now().UTC())
 	if err != nil {
-		return authenticationRequired()
+		return sessionLookupError(err)
 	}
 	collection, exists := application.authByID[current.CollectionID]
 	if !exists {
@@ -435,9 +435,9 @@ func (application *App) RevokeSession(ctx context.Context, token, sessionID stri
 	}
 	user, err := application.authUser(ctx, collection, current.UserID)
 	if err != nil {
-		return authenticationRequired()
+		return authOwnerError(err)
 	}
-	if err := application.authorizeAuth(application.authConfigBySlug[string(collection.Slug)].Access.Session, application.newAuthContext(ctx, AuthOperationRefresh, collection, &user, "", LoginOptions{IPAddress: current.IPAddress, UserAgent: current.UserAgent})); err != nil {
+	if err := application.authorizeAuth(application.authConfigBySlug[string(collection.Slug)].Access.Session, application.newAuthContext(ctx, AuthOperationSession, collection, &user, "", LoginOptions{IPAddress: current.IPAddress, UserAgent: current.UserAgent})); err != nil {
 		return err
 	}
 	return application.auth.DeleteUserSession(ctx, current.CollectionID, current.UserID, sessionID)
@@ -447,7 +447,7 @@ func (application *App) RevokeSession(ctx context.Context, token, sessionID stri
 func (application *App) LogoutAll(ctx context.Context, token string) error {
 	current, err := application.auth.FindSession(ctx, tokenDigest(token), time.Now().UTC())
 	if err != nil {
-		return authenticationRequired()
+		return sessionLookupError(err)
 	}
 	collection, exists := application.authByID[current.CollectionID]
 	if !exists {
@@ -455,7 +455,7 @@ func (application *App) LogoutAll(ctx context.Context, token string) error {
 	}
 	user, err := application.authUser(ctx, collection, current.UserID)
 	if err != nil {
-		return authenticationRequired()
+		return authOwnerError(err)
 	}
 	authContext := application.newAuthContext(ctx, AuthOperationLogout, collection, &user, "", LoginOptions{IPAddress: current.IPAddress, UserAgent: current.UserAgent})
 	config := application.authConfigBySlug[string(collection.Slug)]
@@ -507,7 +507,7 @@ func (application *App) ChangePassword(ctx context.Context, sessionToken, curren
 	now := time.Now().UTC()
 	session, err := application.auth.FindSession(ctx, tokenDigest(sessionToken), now)
 	if err != nil {
-		return authenticationRequired()
+		return sessionLookupError(err)
 	}
 	collection, exists := application.authByID[session.CollectionID]
 	if !exists {
@@ -515,7 +515,7 @@ func (application *App) ChangePassword(ctx context.Context, sessionToken, curren
 	}
 	user, err := application.authUser(ctx, collection, session.UserID)
 	if err != nil {
-		return authenticationRequired()
+		return authOwnerError(err)
 	}
 	identity, _ := user.Values[collection.Auth.IdentityField].StringValue()
 	credential, err := application.auth.FindAuthCredential(ctx, collection, identity)
@@ -559,7 +559,7 @@ func (application *App) CreateAPIKey(ctx context.Context, sessionToken, name str
 	now := time.Now().UTC()
 	current, err := application.auth.FindSession(ctx, tokenDigest(sessionToken), now)
 	if err != nil {
-		return APIKey{}, authenticationRequired()
+		return APIKey{}, sessionLookupError(err)
 	}
 	collection, exists := application.authByID[current.CollectionID]
 	if !exists || !collection.Auth.APIKeys {
@@ -577,7 +577,7 @@ func (application *App) CreateAPIKey(ctx context.Context, sessionToken, name str
 	}
 	user, err := application.authUser(ctx, collection, current.UserID)
 	if err != nil {
-		return APIKey{}, authenticationRequired()
+		return APIKey{}, authOwnerError(err)
 	}
 	authContext := application.newAuthContext(ctx, AuthOperationAPIKey, collection, &user, "", LoginOptions{})
 	config := application.authConfigBySlug[string(collection.Slug)]
@@ -654,7 +654,7 @@ func (application *App) apiKeysForResolvedSession(ctx context.Context, current A
 func (application *App) RevokeAPIKey(ctx context.Context, sessionToken, id string) error {
 	current, err := application.auth.FindSession(ctx, tokenDigest(sessionToken), time.Now().UTC())
 	if err != nil {
-		return authenticationRequired()
+		return sessionLookupError(err)
 	}
 	collection, exists := application.authByID[current.CollectionID]
 	if !exists || !collection.Auth.APIKeys {
@@ -662,7 +662,7 @@ func (application *App) RevokeAPIKey(ctx context.Context, sessionToken, id strin
 	}
 	user, err := application.authUser(ctx, collection, current.UserID)
 	if err != nil {
-		return authenticationRequired()
+		return authOwnerError(err)
 	}
 	authContext := application.newAuthContext(ctx, AuthOperationAPIKey, collection, &user, "", LoginOptions{})
 	config := application.authConfigBySlug[string(collection.Slug)]
@@ -695,7 +695,7 @@ func (application *App) AuthenticateAPIKeyIdentity(ctx context.Context, raw stri
 	now := time.Now().UTC()
 	record, err := application.auth.FindAPIKey(ctx, parts[1], now)
 	if err != nil {
-		return AuthIdentity{}, authenticationRequired()
+		return AuthIdentity{}, sessionLookupError(err)
 	}
 	expected := []byte(record.TokenHash)
 	actual := []byte(tokenDigest(raw))
@@ -716,7 +716,7 @@ func (application *App) AuthenticateAPIKeyIdentity(ctx context.Context, raw stri
 		if errors.Is(err, store.ErrNotFound) && application.authOwnerPhysicallyMissing(ctx, collection, record.UserID) {
 			application.deleteOrphanedAPIKey(ctx, record)
 		}
-		return AuthIdentity{}, authenticationRequired()
+		return AuthIdentity{}, authOwnerError(err)
 	}
 	if err := application.auth.TouchAPIKey(ctx, record.ID, now); err != nil {
 		return AuthIdentity{}, authenticationRequired()
@@ -979,7 +979,7 @@ func (application *App) createSession(ctx context.Context, collection schema.Col
 	if err != nil {
 		return AuthSession{}, err
 	}
-	id, err := newOpaqueToken(16)
+	id, err := newSessionID()
 	if err != nil {
 		return AuthSession{}, err
 	}
@@ -1002,7 +1002,7 @@ func (application *App) resolveSession(ctx context.Context, token string, now ti
 	}
 	record, err := application.auth.FindSession(ctx, tokenDigest(token), now)
 	if err != nil {
-		return AuthSession{}, authenticationRequired()
+		return AuthSession{}, sessionLookupError(err)
 	}
 	collection, exists := application.authByID[record.CollectionID]
 	if !exists {
@@ -1016,7 +1016,7 @@ func (application *App) resolveSession(ctx context.Context, token string, now ti
 		if errors.Is(err, store.ErrNotFound) && application.authOwnerPhysicallyMissing(ctx, collection, record.UserID) {
 			application.deleteOrphanedSession(ctx, record.TokenHash)
 		}
-		return AuthSession{}, authenticationRequired()
+		return AuthSession{}, authOwnerError(err)
 	}
 	return AuthSession{ID: record.ID, Token: token, Collection: collection.Slug, User: user, ExpiresAt: record.ExpiresAt, record: record}, nil
 }
@@ -1126,6 +1126,20 @@ func (application *App) validatePassword(collection, password string) error {
 	return nil
 }
 
+// newSessionID returns a random version 4 UUID in canonical text form. Stores
+// with a native UUID column return exactly this spelling, so a session has one
+// ID at login, in session reads, and in device listings.
+func newSessionID() (string, error) {
+	var value [16]byte
+	if _, err := rand.Read(value[:]); err != nil {
+		return "", err
+	}
+	value[6] = value[6]&0x0f | 0x40
+	value[8] = value[8]&0x3f | 0x80
+	encoded := hex.EncodeToString(value[:])
+	return encoded[0:8] + "-" + encoded[8:12] + "-" + encoded[12:16] + "-" + encoded[16:20] + "-" + encoded[20:32], nil
+}
+
 func newOpaqueToken(bytes int) (string, error) {
 	value := make([]byte, bytes)
 	if _, err := rand.Read(value); err != nil {
@@ -1166,6 +1180,34 @@ func invalidCredentials() error {
 
 func authenticationRequired() error {
 	return &operationengine.Error{Code: "access_denied", Status: 401, Message: "authentication is required"}
+}
+
+// sessionLookupError keeps an absent credential distinct from an unavailable
+// store. Only a missing or expired record means the client is unauthenticated;
+// an outage must never be reported to a client as a logout.
+func sessionLookupError(err error) error {
+	if errors.Is(err, store.ErrNotFound) {
+		return authenticationRequired()
+	}
+	return err
+}
+
+// authOwnerError treats a missing or unreadable credential owner as an
+// authentication failure while preserving store, cancellation, and server
+// failures from the owner read.
+func authOwnerError(err error) error {
+	var operationError *operationengine.Error
+	if errors.As(err, &operationError) {
+		switch operationError.Code {
+		case "not_found", "access_denied", "field_access_denied":
+			return authenticationRequired()
+		}
+		return err
+	}
+	if exclusiveStoreNotFound(err) {
+		return authenticationRequired()
+	}
+	return err
 }
 
 func authFeatureDisabled(name string) error {
