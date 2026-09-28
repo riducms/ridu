@@ -425,10 +425,15 @@ test("rich-text formatting, block insertion, embeds, movement, and persistence",
 	await expect(uploadedAsset).toBeVisible();
 	const uploadPreview = uploadedAsset.locator(".ridu-richtext-upload-preview");
 	await expect(uploadPreview.locator("img")).toBeVisible();
+	await expect
+		.poll(async () => {
+			const box = await uploadPreview.boundingBox();
+			return box === null ? 0 : box.width / box.height;
+		})
+		.toBeCloseTo(24 / 16, 1);
 	const uploadBox = await uploadPreview.boundingBox();
 	expect(uploadBox).not.toBeNull();
 	expect(uploadBox!.width).toBeLessThanOrEqual(450);
-	expect(uploadBox!.width / uploadBox!.height).toBeCloseTo(24 / 16, 1);
 	const uploadCaption = uploadedAsset.getByRole("textbox", { name: "Caption for ridu-cover.png" });
 	await uploadCaption.fill("A trail-side code review");
 	await expect(uploadCaption).toHaveValue("A trail-side code review");

@@ -20,6 +20,7 @@ import { ADMIN_PREPARED_ROUTE_STATE_VERSION } from "./admin-route-state-version.
 import { contentCSSHash } from "./compiler-options.js";
 import { riduSchemaReloadPlugin } from "./schema-reload.js";
 import { packageSourceAliasPlugin } from "./source-alias.js";
+import { sharedDependencies } from "./shared-dependencies.js";
 import { packageSourceScanPlugin } from "./source-scan.js";
 import { riduAdminCheckPlugins } from "../admin-check.js";
 
@@ -48,6 +49,7 @@ export function createAdminApplicationConfig(options: AdminApplicationConfigOpti
 		"@riducms/ui",
 		"@riducms/plugin-richtext",
 		"@riducms/plugin-seo",
+		"@riducms/plugin-graphql",
 	];
 	return defineConfig(({ command }) => ({
 		...(options.root === undefined ? {} : { root: options.root }),
@@ -83,7 +85,7 @@ export function createAdminApplicationConfig(options: AdminApplicationConfigOpti
 					]),
 		],
 		resolve: {
-			dedupe: unique(["bits-ui", "svelte", ...(options.dedupe ?? [])]),
+			dedupe: unique([...sharedDependencies, ...(options.dedupe ?? [])]),
 		},
 		optimizeDeps: {
 			// Preserve package-relative aliases and Svelte preprocessing in framework source.

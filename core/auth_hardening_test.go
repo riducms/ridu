@@ -1364,7 +1364,9 @@ func TestAuthIdentityIsValidatedCanonicalizedAndExactlyUnique(t *testing.T) {
 	if identity != "ada@example.test" {
 		t.Fatalf("normalized identity = %q", identity)
 	}
-	if _, err := application.Local().Create(context.Background(), "users", store.Values{"email": store.String("ADA@example.test")}, ridu.MutationOptions{}); !operationCode(err, "conflict") {
+	_, err := application.Local().Create(context.Background(), "users", store.Values{"email": store.String("ADA@example.test")}, ridu.MutationOptions{})
+	var duplicate *ridu.OperationError
+	if !errors.As(err, &duplicate) || duplicate.Code != "validation" || len(duplicate.Issues) != 1 || duplicate.Issues[0].Path != "email" || duplicate.Issues[0].Code != "unique" {
 		t.Fatalf("canonical duplicate = %v", err)
 	}
 	if _, err := application.Local().Create(context.Background(), "users", store.Values{"email": store.String("not-an-email")}, ridu.MutationOptions{}); !operationCode(err, "validation") {

@@ -1344,3 +1344,35 @@ func TestBackendAPI1PairsWithAdminAPI1(t *testing.T) {
 		t.Fatal("incorrect independent API markers")
 	}
 }
+
+func TestPluginPackageVersionsAreCheckedButNotRecordedInTheManifest(t *testing.T) {
+	config := func(version, minimum string) ridu.Config {
+		return ridu.Config{
+			Name:        "Plugin versions",
+			Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{field.Text("title")}}},
+			Plugins: []ridu.Plugin{descriptorPlugin{key: "audit", descriptor: ridu.PluginDescriptor{
+				Version: version, GoPackage: "example.com/plugins/audit", APIVersion: ridu.PluginAPIVersion,
+				Ridu: ridu.RiduCompatibility{Minimum: minimum},
+			}}},
+		}
+	}
+	encode := func(version string) []byte {
+		t.Helper()
+		manifest, err := ridu.Resolve(config(version, ridu.FrameworkVersion))
+		if err != nil {
+			t.Fatal(err)
+		}
+		encoded, err := manifest.Bytes()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return encoded
+	}
+	// Upgrading a plugin package must not look like a schema change that needs a migration.
+	if !bytes.Equal(encode("1.0.0"), encode("1.0.1")) {
+		t.Fatal("a plugin version bump changed the manifest")
+	}
+	if _, err := ridu.Resolve(config("1.0.0", "99.0.0")); err == nil {
+		t.Fatal("an incompatible plugin was accepted")
+	}
+}

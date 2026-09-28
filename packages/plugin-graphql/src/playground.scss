@@ -1,0 +1,301 @@
+@use "@riducms/ui/styles.scss" as ui;
+
+@layer ridu.components {
+	.ridu-graphql {
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+		min-block-size: 560px;
+		block-size: calc(100dvh - var(--admin-header-height, 56px) - 2 * var(--admin-gutter, 24px));
+		color: var(--foreground);
+	}
+
+	.ridu-graphql__header {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: flex-end;
+		justify-content: space-between;
+		gap: 12px;
+	}
+
+	.ridu-graphql__title {
+		margin: 0;
+		font-size: 1.5rem;
+		line-height: 1.2;
+	}
+
+	.ridu-graphql__description {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px;
+		margin: 4px 0 0;
+		color: var(--muted-foreground);
+	}
+
+	.ridu-graphql__description code {
+		font-family: var(--font-mono);
+		color: var(--foreground);
+	}
+
+	.ridu-graphql__actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px;
+	}
+
+	.ridu-graphql__shortcut {
+		margin-inline-start: 6px;
+		font-family: var(--font-sans);
+		font-size: 0.75em;
+		opacity: 0.75;
+	}
+
+	.ridu-graphql__notice {
+		margin: 0;
+		padding: 8px 12px;
+		border: 1px solid var(--status-warning-border);
+		border-radius: var(--radius);
+		background: var(--status-warning-surface);
+		color: var(--status-warning-foreground);
+	}
+
+	.ridu-graphql__notice--error {
+		border-color: var(--status-error-border);
+		background: var(--status-error-surface);
+		color: var(--status-error-foreground);
+	}
+
+	.ridu-graphql__workspace {
+		display: grid;
+		flex: 1;
+		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+		gap: 12px;
+		min-block-size: 0;
+	}
+
+	.ridu-graphql__workspace[data-docs="open"] {
+		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(260px, 340px);
+	}
+
+	.ridu-graphql__request {
+		display: grid;
+		grid-template-rows: minmax(0, 3fr) minmax(0, 1fr);
+		gap: 12px;
+		min-block-size: 0;
+	}
+
+	.ridu-graphql__pane {
+		display: flex;
+		flex-direction: column;
+		min-block-size: 0;
+		overflow: hidden;
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		background: var(--background-surface, var(--card));
+	}
+
+	.ridu-graphql__pane-heading {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 8px;
+		border-block-end: 1px solid var(--border);
+	}
+
+	.ridu-graphql__pane-title {
+		margin: 0;
+		padding: 8px 12px;
+		font-size: 0.8125rem;
+		font-weight: 600;
+		color: var(--muted-foreground);
+	}
+
+	.ridu-graphql__pane > .ridu-graphql__pane-title {
+		border-block-end: 1px solid var(--border);
+	}
+
+	.ridu-graphql__status {
+		padding-inline-end: 12px;
+		font-family: var(--font-mono);
+		font-size: 0.75rem;
+		color: var(--muted-foreground);
+	}
+
+	.ridu-graphql__editor {
+		flex: 1;
+		min-block-size: 0;
+	}
+
+	.ridu-graphql__editor[hidden] {
+		display: none;
+	}
+
+	.ridu-graphql__empty {
+		margin: 0;
+		padding: 16px 12px;
+		color: var(--muted-foreground);
+	}
+
+	.ridu-graphql__pane > .ridu-graphql__notice {
+		margin: 12px;
+	}
+
+	.ridu-graphql__announcement {
+		@include ui.visually-hidden;
+	}
+
+	.ridu-graphql-docs {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		min-block-size: 0;
+		padding: 8px 12px 12px;
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		background: var(--background-surface, var(--card));
+	}
+
+	.ridu-graphql-docs__header {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+	}
+
+	.ridu-graphql-docs__title {
+		flex: 1;
+		min-inline-size: 0;
+		margin: 0;
+		overflow: hidden;
+		font-size: 1rem;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.ridu-graphql-docs__title:focus-visible {
+		outline: var(--focus-outline);
+		outline-offset: var(--focus-outline-offset);
+	}
+
+	.ridu-graphql-docs__body {
+		flex: 1;
+		min-block-size: 0;
+		overflow: auto;
+		font-size: 0.8125rem;
+	}
+
+	.ridu-graphql-docs__section {
+		margin: 12px 0 6px;
+		font-size: 0.75rem;
+		font-weight: 600;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+		color: var(--muted-foreground);
+	}
+
+	.ridu-graphql-docs__list,
+	.ridu-graphql-docs__fields,
+	.ridu-graphql-docs__arguments ul {
+		display: grid;
+		gap: 8px;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	.ridu-graphql-docs__signature,
+	.ridu-graphql-docs__list li,
+	.ridu-graphql-docs__arguments li {
+		font-family: var(--font-mono);
+		overflow-wrap: anywhere;
+	}
+
+	.ridu-graphql-docs__name {
+		color: var(--code-property);
+	}
+
+	.ridu-graphql-docs__keyword {
+		color: var(--code-keyword);
+	}
+
+	.ridu-graphql-docs__type {
+		padding: 0;
+		border: 0;
+		background: none;
+		font: inherit;
+		color: var(--code-type);
+		cursor: pointer;
+		text-align: start;
+	}
+
+	.ridu-graphql-docs__type:hover {
+		text-decoration: underline;
+	}
+
+	.ridu-graphql-docs__type:focus-visible {
+		outline: var(--focus-outline);
+		outline-offset: var(--focus-outline-offset);
+	}
+
+	.ridu-graphql-docs__kind,
+	.ridu-graphql-docs__muted {
+		margin: 0;
+		color: var(--muted-foreground);
+	}
+
+	.ridu-graphql-docs__description {
+		margin: 2px 0 0;
+		font-family: var(--font-sans);
+		color: var(--muted-foreground);
+	}
+
+	.ridu-graphql-docs__warning {
+		margin: 2px 0 0;
+		color: var(--status-warning-foreground);
+	}
+
+	.ridu-graphql-docs__arguments {
+		margin-block-start: 4px;
+	}
+
+	.ridu-graphql-docs__arguments summary {
+		font-family: var(--font-sans);
+		color: var(--muted-foreground);
+		cursor: pointer;
+	}
+
+	.ridu-graphql-docs__arguments ul {
+		margin-block-start: 6px;
+		padding-inline-start: 12px;
+	}
+
+	@media (max-width: 960px) {
+		.ridu-graphql {
+			block-size: auto;
+		}
+
+		.ridu-graphql__workspace,
+		.ridu-graphql__workspace[data-docs="open"] {
+			grid-template-columns: minmax(0, 1fr);
+		}
+
+		.ridu-graphql__request {
+			grid-template-rows: none;
+		}
+
+		.ridu-graphql__pane--query {
+			block-size: 360px;
+		}
+
+		.ridu-graphql__pane--variables {
+			block-size: 160px;
+		}
+
+		.ridu-graphql__pane--response {
+			min-block-size: 320px;
+		}
+
+		.ridu-graphql-docs {
+			max-block-size: 480px;
+		}
+	}
+}

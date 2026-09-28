@@ -22,8 +22,9 @@ func TestArticleHooksRunAtTheirDocumentedStages(t *testing.T) {
 	}
 	t.Cleanup(func() { purgeCache = func(context.Context, string) error { return nil } })
 	var logs bytes.Buffer
+	previousLogOutput := log.Writer()
 	log.SetOutput(&logs)
-	t.Cleanup(func() { log.SetOutput(nil) })
+	t.Cleanup(func() { log.SetOutput(previousLogOutput) })
 
 	backend := teststore.New()
 	config := ridu.Config{Name: "Article hooks", Collections: []ridu.Collection{Articles, AuditLog}}
@@ -33,7 +34,13 @@ func TestArticleHooksRunAtTheirDocumentedStages(t *testing.T) {
 	}
 	local := app.Local()
 	editor := store.Document{ID: "editor-1"}
-	body := strings.Repeat("word ", 40)
+	body := "one two three four five six seven eight nine ten " +
+		"eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty " +
+		"twenty-one twenty-two twenty-three twenty-four twenty-five twenty-six twenty-seven twenty-eight twenty-nine thirty " +
+		"thirty-one thirty-two thirty-three thirty-four thirty-five thirty-six thirty-seven thirty-eight thirty-nine forty"
+	wantExcerpt := "one two three four five six seven eight nine ten " +
+		"eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty " +
+		"twenty-one twenty-two twenty-three twenty-four twenty-five twenty-six twenty-seven twenty-eight twenty-nine thirty"
 
 	created, err := local.Create(t.Context(), "articles", store.Values{
 		"title": store.String("Launch"),
@@ -43,8 +50,8 @@ func TestArticleHooksRunAtTheirDocumentedStages(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if excerpt, _ := created.Values["excerpt"].StringValue(); len(strings.Fields(excerpt)) != 30 {
-		t.Fatalf("excerpt = %q, want the first 30 words", excerpt)
+	if excerpt, _ := created.Values["excerpt"].StringValue(); excerpt != wantExcerpt {
+		t.Fatalf("excerpt = %q, want %q", excerpt, wantExcerpt)
 	}
 	if count, _ := created.Values["wordCount"].NumberValue(); count != 40 {
 		t.Fatalf("wordCount = %v, want 40", count)
@@ -119,8 +126,8 @@ func TestArticleHooksRunAtTheirDocumentedStages(t *testing.T) {
 	logs.Reset()
 	_, err = local.Delete(t.Context(), "articles", featured.ID, ridu.MutationOptions{})
 	var failure *ridu.OperationError
-	if !errors.As(err, &failure) || failure.Code != "hook_failed" ||
-		!strings.Contains(errors.Unwrap(err).Error(), "remove the article from the homepage first") {
+	if !errors.As(err, &failure) || failure.Code != "rejected" || failure.Message != "Remove the article from the homepage first." ||
+		len(failure.Issues) != 1 || failure.Issues[0].Path != "featured" {
 		t.Fatalf("deleting a featured article: %v", err)
 	}
 	if _, err := local.Find(t.Context(), "articles", featured.ID, ridu.FindOptions{}); err != nil {
@@ -136,9 +143,12 @@ func TestArticleHooksRunAtTheirDocumentedStages(t *testing.T) {
 
 func TestFieldDuplicateAndCommitExamples(t *testing.T) {
 	var logs bytes.Buffer
+	previousLogOutput := log.Writer()
 	log.SetOutput(&logs)
-	t.Cleanup(func() { log.SetOutput(nil) })
-	pages := ridu.Collection{Slug: "pages", Fields: field.Fields{field.Text("title").Required(), PageSlug, Status}}
+	t.Cleanup(func() { log.SetOutput(previousLogOutput) })
+	pages := ridu.Collection{Slug: "pages", Fields: field.Fields{
+		field.Text("title").Required(), field.Slug("slug", "title"), StripeProductID, Status,
+	}}
 	app, err := ridu.New(ridu.Config{Name: "Field examples", Collections: []ridu.Collection{pages}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -147,6 +157,7 @@ func TestFieldDuplicateAndCommitExamples(t *testing.T) {
 	editor := store.Document{ID: "editor-1"}
 	page, err := local.Create(t.Context(), "pages", store.Values{
 		"title": store.String("About us"), "status": store.String("draft"),
+		"stripeProductId": store.String("prod_123"),
 	}, ridu.MutationOptions{Actor: &editor})
 	if err != nil {
 		t.Fatal(err)
@@ -157,6 +168,9 @@ func TestFieldDuplicateAndCommitExamples(t *testing.T) {
 	}
 	if slug, _ := copied.Values["slug"].StringValue(); slug != "about-us-copy" {
 		t.Fatalf("copied slug = %q", slug)
+	}
+	if id, linked := copied.Values["stripeProductId"].StringValue(); linked {
+		t.Fatalf("the copy kept the Stripe product %q", id)
 	}
 
 	logs.Reset()

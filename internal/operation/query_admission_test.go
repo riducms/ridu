@@ -20,9 +20,9 @@ func TestQueryAdmissionPrecedesStoreReadsAndFieldRuleEvaluation(t *testing.T) {
 	public, _ := query.NewPath("title")
 	filter := query.Equal(private, query.String("fixture-value"))
 	publicFilter := query.Equal(public, query.String("fixture-title"))
-	and, _ := query.And(publicFilter, filter)
-	or, _ := query.Or(publicFilter, filter)
-	not, _ := query.Not(filter)
+	and := query.And(publicFilter, filter)
+	or := query.Or(publicFilter, filter)
+	not := query.Not(filter)
 	backend := &queryAdmissionStore{Store: teststore.New()}
 	calls := 0
 	collection := queryAdmissionCollection()

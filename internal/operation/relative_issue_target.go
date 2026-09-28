@@ -12,11 +12,17 @@ import (
 // ResolveIssueTarget resolves a callback's relative selectors only within its
 // own candidate value. The caller's exact locale and embedded prefix stay bound.
 func ResolveIssueTarget(field schema.Field, ctx Context, target operation.IssueTarget) (schema.Field, string, schema.LocaleCode, error) {
-	path, locale := ctx.RuntimePath, ctx.Locale
-	value := ctx.Value
-	localized := ctx.AllLocales && field.Localized
-	objectScope := false
-	var children []schema.Field
+	return resolveIssueSegments(field, ctx, ctx.RuntimePath, ctx.Value, ctx.AllLocales && field.Localized, false, nil, target)
+}
+
+// ResolveRootIssueTarget resolves a resource hook's selectors from the
+// document root. A zero target addresses the document itself.
+func ResolveRootIssueTarget(fields []schema.Field, ctx Context, values store.Values, target operation.IssueTarget) (schema.Field, string, schema.LocaleCode, error) {
+	return resolveIssueSegments(schema.Field{}, ctx, "", store.Object(values), false, true, fields, target)
+}
+
+func resolveIssueSegments(field schema.Field, ctx Context, path string, value store.Value, localized, objectScope bool, children []schema.Field, target operation.IssueTarget) (schema.Field, string, schema.LocaleCode, error) {
+	locale := ctx.Locale
 	invalid := func(message string) (schema.Field, string, schema.LocaleCode, error) {
 		return schema.Field{}, "", "", fmt.Errorf("invalid validation issue target at %s: %s", path, message)
 	}

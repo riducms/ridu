@@ -465,14 +465,11 @@ func TestComplexAccessRemainsAnAtomicSQLitePredicate(t *testing.T) {
 	rowsLabel, _ := query.ParsePath("rows.label")
 	title, _ := query.NewPath("title")
 	note, _ := query.NewPath("note")
-	accessExpression, err := query.And(
+	accessExpression := query.And(
 		query.Equal(rowsLabel, query.String("team")),
 		query.Contains(title, "PER"),
 		query.Equal(note, query.Null()),
 	)
-	if err != nil {
-		t.Fatal(err)
-	}
 	access := accessExpression.Node()
 	createdAt, _ := query.NewPath("createdAt")
 	filter := query.GreaterThanEqual(createdAt, query.String("2026-01-02T13:00:00+01:00")).Node()
@@ -632,14 +629,8 @@ func TestNativePredicateNullTruthTableMatchesFunctionalOracle(t *testing.T) {
 
 	valuePath, _ := query.NewPath("value")
 	notEqual := query.NotEqual(valuePath, query.String("equal"))
-	notEqualExpression, err := query.Not(query.Equal(valuePath, query.String("equal")))
-	if err != nil {
-		t.Fatal(err)
-	}
-	notOrderedExpression, err := query.Not(query.GreaterThan(valuePath, query.String("m")))
-	if err != nil {
-		t.Fatal(err)
-	}
+	notEqualExpression := query.Not(query.Equal(valuePath, query.String("equal")))
+	notOrderedExpression := query.Not(query.GreaterThan(valuePath, query.String("m")))
 	tests := []struct {
 		name string
 		node query.Node

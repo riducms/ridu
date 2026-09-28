@@ -27,7 +27,7 @@ func testUnifiedGraphQLContractsAndOccurrenceRuntime(t *testing.T, references bo
 	sku := field.Text("sku").Required().Hooks(field.Hooks[string]{BeforeChange: []field.Transform[string]{
 		func(_ operation.Context, value operation.Value[string]) (operation.Change[string], error) {
 			text, _ := value.Get()
-			return operation.Replace(operation.Present(strings.ToUpper(text))), nil
+			return operation.Set(strings.ToUpper(text)), nil
 		},
 	}}).Validate(func(_ operation.Context, value operation.Value[string]) ([]operation.Issue, error) {
 		if text, _ := value.Get(); text == "INVALID" {

@@ -7,7 +7,11 @@ import { RiduError } from "@riducms/sdk";
 
 import type { AdminDocument } from "@admin/core/api/admin-client";
 import { FormController, FormValidationError } from "@admin/core/forms/form-controller.svelte";
-import { documentFormValues, initialFormValues } from "@admin/core/forms/form-schema";
+import {
+	changedFormValues,
+	documentFormValues,
+	initialFormValues,
+} from "@admin/core/forms/form-schema";
 import { invalidFieldLabels } from "@admin/core/forms/form-validation";
 import type { NotificationCenter } from "@admin/core/notifications/notification-center.svelte";
 import type { AdminRuntime } from "@admin/core/runtime/admin-runtime.svelte";
@@ -450,6 +454,9 @@ export class ReferenceBrowserWorkflow {
 			const saved = await this.form.submit(this.validationFields, this.creating, async (values) => {
 				if (this.options.readOnly) throw new Error("This field is read-only.");
 				if (this.editorDocument !== undefined) {
+					values = changedFormValues(this.validationFields, values, this.form.original, (path) =>
+						this.form.isInherited(path)
+					);
 					if (this.collection.capabilities.upload) {
 						return this.options.runtime.client.updateUpload(
 							this.collection.slug,

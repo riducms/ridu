@@ -28,6 +28,11 @@ type Options struct {
 	MaxComplexity      int
 	MaxListLimit       int
 	AllowIntrospection bool
+	// DisablePlayground removes the GraphQL playground from the admin. The
+	// playground follows the admin's access policy and needs the
+	// @riducms/plugin-graphql admin package; disable it for an API-only
+	// application that does not install that package.
+	DisablePlayground bool
 	// Resources optionally renames or suppresses generated surfaces by
 	// collection/global slug. Omitted resources use their manifest labels and
 	// expose both queries and mutations.
@@ -84,12 +89,20 @@ func New(options ...Options) ridu.Plugin {
 
 func (*plugin) Key() string { return Key }
 
-func (*plugin) Descriptor() ridu.PluginDescriptor {
-	return ridu.PluginDescriptor{
+func (plugin *plugin) Descriptor() ridu.PluginDescriptor {
+	descriptor := ridu.PluginDescriptor{
 		Version: ridu.FrameworkVersion, GoPackage: "github.com/riducms/ridu/plugins/graphql",
 		APIVersion: ridu.PluginAPIVersion,
 		Ridu:       ridu.RiduCompatibility{Minimum: ridu.FrameworkVersion},
 	}
+	if !plugin.options.DisablePlayground {
+		descriptor.Admin = &ridu.AdminPluginMetadata{
+			Package: adminPackage, Export: "graphqlAdminPlugin",
+			APIVersion: ridu.AdminPluginAPIVersion, PairingVersion: AdminPluginPairingVersion,
+			Routes: []string{playgroundRoute},
+		}
+	}
+	return descriptor
 }
 
 func (plugin *plugin) GeneratedArtifacts(ctx ridu.PluginGenerationContext) ([]ridu.PluginGeneratedArtifact, error) {
@@ -185,5 +198,6 @@ func buildExecutable(snapshot riduschema.Snapshot, local *ridu.LocalAPI, app *ri
 }
 
 var _ ridu.DescriptorProvider = (*plugin)(nil)
+var _ ridu.ConfigTransformer = (*plugin)(nil)
 var _ ridu.GenerationProvider = (*plugin)(nil)
 var _ ridu.TransportProvider = (*plugin)(nil)

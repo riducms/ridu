@@ -211,7 +211,7 @@ func (application *App) Handler(options HandlerOptions) http.Handler {
 		AdminLoad: func(ctx context.Context, request httpapi.AdminLoaderRequest) (json.RawMessage, error) {
 			for _, loader := range application.adminLoaders {
 				if loader.key == request.Key {
-					return loader.run(AdminLoadContext{Context: ctx, Pathname: request.Pathname, RouteParams: request.RouteParams, actor: httpIdentityActor(request.Identity), actorCollection: httpIdentityCollection(request.Identity), locale: schema.LocaleCode(request.Locale), local: application.local, auditRead: request.AuditRead}, request.Query)
+					return loader.run(AdminLoadContext{Context: ctx, Pathname: request.Pathname, RouteParams: request.RouteParams, actor: httpIdentityActor(request.Identity), actorCollection: httpIdentityCollection(request.Identity), locale: schema.LocaleCode(request.Locale), local: application.local, manifest: application.manifest, auditRead: request.AuditRead}, request.Query)
 				}
 			}
 			return nil, &operationengine.Error{Status: http.StatusNotFound, Code: "admin_loader_not_found", Message: "Admin loader not found."}

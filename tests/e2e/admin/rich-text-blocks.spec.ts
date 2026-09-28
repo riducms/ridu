@@ -908,12 +908,18 @@ test("unsupported historical document properties remain exportable without a los
 	const submitted = page.waitForRequest(
 		(request) => request.method() === "PATCH" && request.url().includes(original.id)
 	);
-	const rejected = page.waitForResponse(
+	const saved = page.waitForResponse(
 		(response) => response.request().method() === "PATCH" && response.url().includes(original.id)
 	);
 	await submitDocumentForm(page);
-	expect((await submitted).postDataJSON().body).toEqual(historical);
-	expect((await rejected).status()).toBe(422);
+	const patch = (await submitted).postDataJSON();
+	expect(patch).not.toHaveProperty("body");
+	expect(patch.caption).toBe("Sibling edit");
+	const response = await saved;
+	expect(response.ok(), await response.text()).toBe(true);
+	const stored = (await response.json()).doc;
+	expect(stored.body).toEqual(original.body);
+	expect(stored.caption).toBe("Sibling edit");
 	expect(errors.pageErrors).toEqual([]);
 });
 

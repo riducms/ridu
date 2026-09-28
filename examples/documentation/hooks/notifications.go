@@ -15,7 +15,7 @@ func notifyPosts(webhookURL string) ridu.Hook {
 	// Ridu waits for this hook by default, so limit the delivery delay.
 	client := &http.Client{Timeout: 5 * time.Second}
 	return func(ctx ridu.HookContext) error {
-		// AfterCommit runs on reads too; notify only on saves.
+		// AfterCommit also runs after deletes; notify only on saves.
 		switch ctx.Operation {
 		case operation.Create, operation.Duplicate, operation.Update,
 			operation.Publish, operation.Unpublish:

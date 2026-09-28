@@ -65,10 +65,11 @@ func myHook(ctx ridu.HookContext) error {
 Hooks run on the server for every request: from the admin, REST, the TypeScript SDK, and the
 local Go API. Ridu waits for each hook to finish before it moves on.
 
-An error from a hook that runs before the transaction commits stops the operation and rolls back
-any writes. The caller receives a `hook_failed` error; your error's message is kept for your logs
-and is not sent to the caller. An error from `AfterCommit` cannot undo the save. See
-[Transactions and errors](/docs/hooks/transactions-and-errors/) for details.
+Returning an error stops the operation, and Ridu rolls back anything it wrote. To tell the editor
+why, return `ridu.Reject("…")`: the admin shows your message, and API callers receive a
+`rejected` error. Any other error is reported to the caller as an internal error, and its message
+stays in your server logs. An error from `AfterCommit` cannot undo the save; see
+[Transactions and errors](/docs/hooks/transactions-and-errors/).
 
 ## Hook arguments {#arguments}
 
@@ -100,20 +101,21 @@ Values in `ctx.Data` and `ctx.Document.Values` are `store.Value`s. Read one with
 | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | Create, update, publish, unpublish | `BeforeValidate` → `BeforeChange` → `BeforeOperation` → `AfterChange` → `AfterOperation` → `AfterRead` → `AfterCommit` |
 | Duplicate                          | `BeforeDuplicate`, then the same hooks as a create                                                                     |
-| Find or list                       | `BeforeRead` → `BeforeValidate` → `BeforeOperation` → `AfterOperation` → `AfterRead` → `AfterCommit`                   |
-| Delete, to trash or permanently    | `BeforeDelete` → `BeforeValidate` → `BeforeOperation` → `AfterDelete` → `AfterOperation` → `AfterRead` → `AfterCommit` |
-| Restore from trash                 | `BeforeValidate` → `BeforeOperation` → `AfterOperation` → `AfterRead` → `AfterCommit`                                  |
+| Find or list                       | `BeforeRead` → `BeforeOperation` → `AfterOperation` → `AfterRead`                                                      |
+| Delete, to trash or permanently    | `BeforeDelete` → `BeforeOperation` → `AfterDelete` → `AfterOperation` → `AfterRead` → `AfterCommit`                    |
+| Restore from trash                 | `BeforeOperation` → `AfterOperation` → `AfterRead` → `AfterCommit`                                                     |
 | Any operation that fails           | `AfterError`                                                                                                           |
 
-`BeforeValidate`, `BeforeOperation`, `AfterOperation`, and `AfterCommit` run for reads and deletes
-too. Check `ctx.Operation` when a hook should act only on saves. On a list, `AfterRead` runs once
-for each returned document. [Where validation and field hooks fit](#save-order) shows where
+`BeforeOperation` and `AfterOperation` run for every operation, including reads; check
+`ctx.Operation` inside them. `AfterCommit` runs after every committed change, including deletes
+and restores, but never after a read. On a list, `AfterRead` runs once for each returned document. [Where validation and field hooks fit](#save-order) shows where
 built-in checks, custom validators, and field hooks run between these hooks.
 
 ## BeforeValidate {#before-validate}
 
-Runs before Ridu checks field values, such as `Required()`. Use it to fill in or clean up
-submitted values that must pass those checks.
+Runs before Ridu checks field values, such as `Required()`, when a document is created,
+duplicated, updated, published, or unpublished. Use it to fill in or clean up submitted values
+that must pass those checks.
 
 **Receives:** `ctx.Data` with the submitted values. `ctx.Original` holds the saved document on
 an update.
@@ -361,9 +363,10 @@ func markCopy(ctx ridu.HookContext) error {
 ```
 
 Duplicating a featured article titled “Launch” creates “Launch (copy)”, which is not featured.
-Ridu does not rename unique values for you. A copied [`field.Slug`](/docs/fields/slug/) conflicts
-with the original, so give it a new value, as
-[the field `BeforeDuplicate` example](/docs/hooks/fields/#before-duplicate) does.
+Ridu gives a copied [`field.Slug`](/docs/fields/slug/) the next free value, such as
+`launch-copy`. Other unique fields must be cleared or changed in the copy, or the duplicate fails
+with a `unique` error on that field; the
+[field `BeforeDuplicate` example](/docs/hooks/fields/#before-duplicate) clears one.
 
 ## BeforeDelete {#before-delete}
 
@@ -372,26 +375,35 @@ the trash and when it is deleted permanently. Return an error to stop the delete
 
 **Receives:** `ctx.Original`, the document about to be deleted.
 
-```go title="content/keep_featured.go" focus={10-14}
+```go title="content/keep_featured.go" focus={10-11,13-20}
 package content
 
 import (
-	"errors"
-
 	"github.com/riducms/ridu"
+	"github.com/riducms/ridu/operation"
 )
 
 func keepFeatured(ctx ridu.HookContext) error {
 	// Original is the saved article that is about to be deleted.
 	featured, _ := ctx.Original.Values["featured"].BooleanValue()
 	if featured {
-		return errors.New("remove the article from the homepage first")
+		// Reject shows this message to the editor and stops the delete.
+		return ridu.Reject(
+			"Remove the article from the homepage first.",
+			operation.Issue{
+				Code:    "featured",
+				Message: "Untick Featured, then delete the article.",
+				Target:  operation.At("featured"),
+			},
+		)
 	}
 	return nil
 }
 ```
 
-Deleting a featured article fails with `hook_failed`, and the article stays. To decide who may
+Deleting a featured article stops with “Remove the article from the homepage first.” The admin
+shows that message and marks the Featured field with the issue's message. REST, the SDK, and the
+local API return a `rejected` error (HTTP 422) with the same message and issue. To decide who may
 delete documents at all, use a `Delete` [access rule](/docs/access-control/).
 
 ## AfterDelete {#after-delete}
@@ -440,26 +452,25 @@ func logFailure(ctx ridu.HookContext) error {
 ```
 
 A blocked delete of a featured article logs a line such as
-`Ridu delete failed (collection=… global=): before delete hook failed`. Returning `nil` does not
+`Ridu delete failed (collection=… global=): Remove the article from the homepage first.` Returning `nil` does not
 make the operation succeed. To log failures from every collection and global in one place, use
 [application error hooks](/docs/hooks/#application-hooks).
 
 ## AfterCommit {#after-commit}
 
-Runs after the transaction commits, for every operation, including reads. Use it for work that
-should happen only once a change is saved, such as sending email, calling a webhook, or clearing
-a cache.
+Runs after the transaction commits, for every change, including deletes and restores. It never
+runs after a read. Use it for work that should happen only once a change is saved, such as sending
+email, calling a webhook, or clearing a cache.
 
 **Receives:** `ctx.Document`, and `ctx.Original` on updates and deletes.
 
-```go title="content/purge_cache.go" focus={16-18,20-22}
+```go title="content/purge_cache.go" focus={16-19}
 package content
 
 import (
 	"context"
 
 	"github.com/riducms/ridu"
-	"github.com/riducms/ridu/operation"
 )
 
 // purgeCache stands in for your CDN client's purge call.
@@ -468,9 +479,7 @@ var purgeCache = func(ctx context.Context, path string) error {
 }
 
 func purgeArticleCache(ctx ridu.HookContext) error {
-	if ctx.Operation == operation.Read {
-		return nil // AfterCommit also runs after reads.
-	}
+	// AfterCommit runs after every committed change, including deletes.
 	slug, _ := ctx.Document.Values["slug"].StringValue()
 	// The article is already saved. An error here is reported to the
 	// caller, but it cannot undo the save.
@@ -478,8 +487,8 @@ func purgeArticleCache(ctx ridu.HookContext) error {
 }
 ```
 
-Saving the article `launch` purges `/articles/launch`; reading it purges nothing. If the purge
-fails, the article stays saved and the caller receives an error marked as committed.
+Saving or deleting the article `launch` purges `/articles/launch`; reading it purges nothing. If
+the purge fails, the article stays saved and the caller receives an error marked as committed.
 [Send notifications after a successful save](/docs/hooks/transactions-and-errors/#after-commit)
 shows a webhook with a timeout, and how to retry failed deliveries.
 

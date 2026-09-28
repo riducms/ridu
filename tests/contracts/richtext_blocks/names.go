@@ -138,7 +138,7 @@ func nameConfiguration() ridu.Config {
 			if !present {
 				return operation.Keep[string](), nil
 			}
-			return operation.Replace(operation.Present(strings.ToUpper(strings.TrimSpace(text)))), nil
+			return operation.Set(strings.ToUpper(strings.TrimSpace(text))), nil
 		}}})
 	protected := field.Text("protected").Access(field.Access{Update: func(operation.Context) (bool, error) { return false, nil }})
 	named := field.Block{

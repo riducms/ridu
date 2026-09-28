@@ -284,10 +284,7 @@ func referenceOptionPredicate(reference documentReference, source store.Values) 
 		node := expressions[0].Node()
 		return &node, identity.String(), nil
 	}
-	combined, err := query.And(expressions...)
-	if err != nil {
-		return nil, "", err
-	}
+	combined := query.And(expressions...)
 	node := combined.Node()
 	return &node, identity.String(), nil
 }

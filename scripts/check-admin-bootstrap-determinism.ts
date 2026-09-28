@@ -24,7 +24,7 @@ try {
 		throw new Error("fixture build did not select its registered dashboard loader");
 	if (
 		JSON.stringify(metadata.routeLoaders) !==
-			JSON.stringify({ "editorial-report": "editorial-view" }) ||
+			JSON.stringify({ "editorial-report": "editorial-view", graphql: "graphql-playground" }) ||
 		JSON.stringify(metadata.viewLoaders) !==
 			JSON.stringify({
 				"collectionCreate:loader-records": "editorial-view",

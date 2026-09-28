@@ -33,6 +33,7 @@ type AdminLoadContext struct {
 	actorCollection schema.CollectionSlug
 	actor           *store.Document
 	local           *LocalAPI
+	manifest        schema.Manifest
 	auditRead       func(string, string)
 }
 
@@ -47,6 +48,10 @@ func (ctx AdminLoadContext) Actor() *store.Document {
 
 func (ctx AdminLoadContext) Locale() schema.LocaleCode              { return ctx.locale }
 func (ctx AdminLoadContext) ActorCollection() schema.CollectionSlug { return ctx.actorCollection }
+
+// Manifest returns the application's immutable canonical schema. It is not filtered for the
+// current actor and must not be treated as an authorization decision.
+func (ctx AdminLoadContext) Manifest() schema.Manifest { return ctx.manifest }
 
 func (ctx AdminLoadContext) List(collection string, options ListOptions) (store.Page, error) {
 	options.Actor, options.ActorCollection, options.Locale = ctx.actor, ctx.actorCollection, ctx.locale

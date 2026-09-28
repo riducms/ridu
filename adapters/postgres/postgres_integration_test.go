@@ -87,7 +87,7 @@ func TestPostgresMigrationsAndStoreConformance(t *testing.T) {
 	if _, err := application.Session(ctx, session.Token); !hasOperationCode(err, "access_denied") {
 		t.Fatalf("logged-out PostgreSQL session error = %v", err)
 	}
-	if _, err := application.Local().Create(ctx, "users", store.Values{"email": store.String("ada@example.test")}, ridu.MutationOptions{}); !hasOperationCode(err, "conflict") {
+	if _, err := application.Local().Create(ctx, "users", store.Values{"email": store.String("ada@example.test")}, ridu.MutationOptions{}); !hasOperationCode(err, "validation") {
 		t.Fatalf("duplicate unique value error = %v", err)
 	}
 	if _, err := application.Local().Create(ctx, "posts", store.Values{
@@ -277,13 +277,10 @@ func TestPostgresGlobalAllLocalesAccessRequiresEveryLocalizedSnapshot(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	predicate, err := query.And(
+	predicate := query.And(
 		query.Equal(title, query.String("Public")),
 		query.Equal(audience, query.String("Public")),
 	)
-	if err != nil {
-		t.Fatal(err)
-	}
 	filtered := func(ridu.AccessContext) (ridu.AccessDecision, error) {
 		return ridu.Where(predicate), nil
 	}
@@ -510,14 +507,11 @@ func TestPostgresLocalizedIntermediateContainerPredicatesMatchProjectedDocuments
 	if err != nil {
 		t.Fatal(err)
 	}
-	visible, err := query.And(
+	visible := query.And(
 		query.Equal(detailsName, query.String("visible")),
 		query.Equal(rowLabel, query.String("visible")),
 		query.Equal(heading, query.String("visible")),
 	)
-	if err != nil {
-		t.Fatal(err)
-	}
 	filtered := func(ridu.AccessContext) (ridu.AccessDecision, error) {
 		return ridu.Where(visible), nil
 	}
@@ -743,10 +737,7 @@ func TestPostgresRepeatedNullPredicatesMatchProjectedAccessSemantics(t *testing.
 	}
 	nullRows := query.In(rowsLabel, query.Null())
 	mixedRows := query.In(rowsLabel, query.Null(), query.String("visible"))
-	notNullRows, err := query.Not(nullRows)
-	if err != nil {
-		t.Fatal(err)
-	}
+	notNullRows := query.Not(nullRows)
 	assertList("array null-only IN", nullRows, ridu.ListOptions{}, "absent", "empty", "null")
 	assertList("array mixed null IN", mixedRows, ridu.ListOptions{}, "absent", "empty", "mixed", "null")
 	assertList("array outer NOT IN", notNullRows, ridu.ListOptions{}, "mixed", "other")
@@ -839,14 +830,8 @@ func TestPostgresJSONStringPredicatesRemainTypeAwareUnderNot(t *testing.T) {
 	}
 	likeVisible := query.Like(payload, "visible")
 	likeEmpty := query.Like(payload, "")
-	notVisible, err := query.Not(likeVisible)
-	if err != nil {
-		t.Fatal(err)
-	}
-	notEmpty, err := query.Not(likeEmpty)
-	if err != nil {
-		t.Fatal(err)
-	}
+	notVisible := query.Not(likeVisible)
+	notEmpty := query.Not(likeEmpty)
 	assertList("JSON like", likeVisible, "string")
 	assertList("JSON empty like", likeEmpty, "empty", "string")
 	assertList("JSON contains", query.Contains(payload, "visible"), "string")
@@ -859,10 +844,7 @@ func TestPostgresJSONStringPredicatesRemainTypeAwareUnderNot(t *testing.T) {
 	assertList("JSON null equality", query.Equal(payload, query.Null()), "absent", "null")
 	assertList("JSON mixed membership", query.In(payload, query.Null(), query.String("visible"), query.Number(9)), "absent", "string", "number", "null")
 	assertList("JSON ordered number", query.GreaterThan(payload, query.Number(5)), "number")
-	notMixed, err := query.Not(query.In(payload, query.Null(), query.String("visible")))
-	if err != nil {
-		t.Fatal(err)
-	}
+	notMixed := query.Not(query.In(payload, query.Null(), query.String("visible")))
 	assertList("JSON outer NOT membership", notMixed, "empty", "object", "number")
 
 	current = notVisible

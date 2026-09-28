@@ -58,8 +58,8 @@ Field hooks do not have `BeforeRead` or `AfterError`. The
 <span id="save-order"></span>
 
 See [where validation and field hooks fit](./hooks/collections.md#save-order) for the exact
-order of a save, including validation, permissions, and field hooks. Some hooks also run for
-reads and deletes; check `ctx.Operation` when your code should run only on saves.
+order of a save, including validation, permissions, and field hooks. `BeforeOperation` and
+`AfterOperation` also run for reads; check `ctx.Operation` when your code should run only on saves.
 
 Ridu waits for each hook to finish. Use [tasks](https://riducms.com/docs/tasks/) for work that needs background
 processing or retries, and read [after-commit behavior](./hooks/transactions-and-errors.md#after-commit)
@@ -72,8 +72,8 @@ before sending email or calling a webhook.
 - <span id="derive-values"></span>[Record who edited a document](./hooks/collections.md#before-change).
 - <span id="typed-field-hooks"></span>[Change a typed field before saving](./hooks/fields.md#before-change).
 - <span id="read-hooks"></span>[Format a returned value](./hooks/fields.md#after-read).
-- [Give a duplicated document a new slug](./hooks/fields.md#before-duplicate).
-- [Stop a document from being deleted](./hooks/collections.md#before-delete).
+- [Clear a unique value when a document is duplicated](./hooks/fields.md#before-duplicate).
+- [Stop a delete and tell the editor why](./hooks/collections.md#before-delete).
 - <span id="nested-operations"></span>[Save an audit entry in the same transaction](./hooks/collections.md#after-change).
 - [Log a field change after it is saved](./hooks/fields.md#after-commit).
 - <span id="global-hooks"></span>[Add a hook to site settings](./hooks/globals.md#global-hooks).

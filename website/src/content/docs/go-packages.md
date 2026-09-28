@@ -102,15 +102,15 @@ not tell you which properties are available.
 
 The callback decides the return type; a function name such as `validateTitle` does not.
 
-| Callback                                | Usual result                                      | Other result                                       |
-| --------------------------------------- | ------------------------------------------------- | -------------------------------------------------- |
-| Collection or global access rule        | `ridu.Allow(), nil`                               | `ridu.Deny(), nil` or `ridu.Where(filter), nil`    |
-| Field access rule                       | `true, nil`                                       | `false, nil`                                       |
-| Field validator, including live checks  | `nil, nil`                                        | A list of `operation.Issue` messages and `nil`     |
-| Field default                           | `operation.Present(value), nil` to supply a value | `operation.Empty[T](), nil` to supply no default   |
-| Field transform                         | `operation.Keep[T](), nil`                        | `operation.Replace(operation.Present(value)), nil` |
-| Field event hook, such as `AfterChange` | `nil`                                             | An `error` if the work failed                      |
-| Collection or global hook               | `nil`                                             | An `error` if the work failed                      |
+| Callback                                | Usual result                                      | Other result                                               |
+| --------------------------------------- | ------------------------------------------------- | ---------------------------------------------------------- |
+| Collection or global access rule        | `ridu.Allow(), nil`                               | `ridu.Deny(), nil` or `ridu.Where(filter), nil`            |
+| Field access rule                       | `true, nil`                                       | `false, nil`                                               |
+| Field validator, including live checks  | `nil, nil`                                        | A list of `operation.Issue` messages and `nil`             |
+| Field default                           | `operation.Present(value), nil` to supply a value | `operation.Empty[T](), nil` to supply no default           |
+| Field transform                         | `operation.Keep[T](), nil`                        | `operation.Set(value), nil` or `operation.Clear[T](), nil` |
+| Field event hook, such as `AfterChange` | `nil`                                             | An `error` if the work failed                              |
+| Collection or global hook               | `nil`                                             | An `error` if the work failed                              |
 
 The final `nil` in a two-result return means “no execution error.” A denied permission or a
 validation message is an expected result. An `error` means the function could not finish its

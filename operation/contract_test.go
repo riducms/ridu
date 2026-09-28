@@ -35,17 +35,20 @@ func TestRawCarrierRetainsFiniteInputAndSubmissionPresence(t *testing.T) {
 	}
 }
 
-func TestChangeDistinguishesKeepFromReplaceWithEmptyOrZero(t *testing.T) {
+func TestChangeDistinguishesKeepFromSetAndClear(t *testing.T) {
 	if _, replace := operation.Keep[string]().Replacement(); replace {
 		t.Fatal("keep was a replacement")
 	}
-	empty, replace := operation.Replace(operation.Empty[string]()).Replacement()
-	if _, present := empty.Get(); !replace || present {
-		t.Fatal("replacing with empty was confused with keep")
+	if _, replace := (operation.Change[string]{}).Replacement(); replace {
+		t.Fatal("the zero change was not keep")
 	}
-	zero, replace := operation.Replace(operation.Present("")).Replacement()
+	empty, replace := operation.Clear[string]().Replacement()
+	if _, present := empty.Get(); !replace || present {
+		t.Fatal("clear was confused with keep or set")
+	}
+	zero, replace := operation.Set("").Replacement()
 	if value, present := zero.Get(); !replace || !present || value != "" {
-		t.Fatal("explicit zero string was confused with empty or keep")
+		t.Fatal("setting an explicit zero string was confused with clear or keep")
 	}
 }
 

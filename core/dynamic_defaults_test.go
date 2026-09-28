@@ -360,7 +360,7 @@ func TestDynamicDefaultsHookCheckpointAndProvenance(t *testing.T) {
 		BeforeValidate: []field.RawTransform{func(_ operation.Context, value operation.Value[store.Value]) (operation.Change[store.Value], error) {
 			events = append(events, "raw")
 			if useRaw {
-				return operation.Replace(operation.Present(store.String("raw value"))), nil
+				return operation.Set(store.String("raw value")), nil
 			}
 			return operation.Keep[store.Value](), nil
 		}},

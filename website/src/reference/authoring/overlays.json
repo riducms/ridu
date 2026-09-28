@@ -167,6 +167,26 @@
 			"relatedSymbols": [],
 			"typeLinkIDs": {}
 		},
+		"go:github.com/riducms/ridu/core#AdminLoadContext.Manifest": {
+			"summary": "Read the application's immutable canonical schema while an admin loader runs.",
+			"group": "Methods",
+			"parametersLabel": "",
+			"parameters": [],
+			"returns": {
+				"type": "schema.Manifest",
+				"description": "The complete resolved application manifest."
+			},
+			"details": [
+				"The manifest describes application structure and plugin metadata; it is not filtered for the current actor. Use the request-bound List, Find, and Global methods for authorized content reads, and never treat manifest visibility as an access decision."
+			],
+			"example": "snapshot := ctx.Manifest().Snapshot()",
+			"keywords": ["AdminLoadContext.Manifest", "canonical schema", "admin loader manifest"],
+			"relatedDocs": ["/docs/custom-components/loading-data/"],
+			"relatedSymbols": ["go:github.com/riducms/ridu/core#AdminLoadContext"],
+			"typeLinkIDs": {
+				"schema.Manifest": "go:github.com/riducms/ridu/schema#Manifest"
+			}
+		},
 		"go:github.com/riducms/ridu/core#AdminLoadContext.List": {
 			"summary": "Read a filtered page of documents as the current admin user.",
 			"group": "Methods",
@@ -54783,6 +54803,36 @@
 			"relatedSymbols": ["ts:@riducms/ui#VariantProps", "ts:@riducms/ui#buttonVariants"],
 			"typeLinkIDs": {}
 		},
+		"ts:@riducms/plugin-graphql#graphqlAdminPlugin": {
+			"summary": "The paired admin export named by the Go GraphQL plugin descriptor.",
+			"group": "Constants",
+			"parametersLabel": "",
+			"parameters": [],
+			"details": [
+				"Uses admin-plugin API 1, key graphql, and pairing version 1. Install it through ridu plugin add so the generated registry verifies and imports the exact export."
+			],
+			"example": "",
+			"keywords": ["graphqlAdminPlugin", "@riducms/plugin-graphql.graphqlAdminPlugin"],
+			"relatedDocs": ["/docs/graphql/"],
+			"relatedSymbols": ["go:github.com/riducms/ridu/plugins/graphql#New"],
+			"typeLinkIDs": {
+				"AdminPlugin": "ts:@riducms/plugin#AdminPlugin"
+			}
+		},
+		"ts:@riducms/plugin-graphql#graphqlMessages": {
+			"summary": "Exact namespaced English, French, and Arabic messages used by the GraphQL playground.",
+			"group": "Constants",
+			"parametersLabel": "",
+			"parameters": [],
+			"details": [],
+			"example": "",
+			"keywords": ["graphqlMessages", "@riducms/plugin-graphql.graphqlMessages"],
+			"relatedDocs": ["/docs/graphql/"],
+			"relatedSymbols": [],
+			"typeLinkIDs": {
+				"PluginMessageCatalog": "ts:@riducms/plugin#PluginMessageCatalog"
+			}
+		},
 		"ts:@riducms/plugin-richtext#richTextAdminPlugin": {
 			"summary": "The paired admin export named by the Go plugin descriptor.",
 			"group": "Types",
@@ -63539,7 +63589,7 @@
 			"parametersLabel": "",
 			"parameters": [],
 			"details": [
-				"PostgreSQL and MongoDB use --database-url or DATABASE_URL and accept --allow-insecure-database only for local development; SQLite uses --database-path or RIDU_SQLITE_PATH. Current executable config must match the latest artifact target before database inspection proceeds. JSON output exposes adapter-owned phase, step, checksum, and state details."
+				"PostgreSQL and MongoDB use --database-url or DATABASE_URL and accept --allow-insecure-database, or RIDU_ALLOW_INSECURE_DATABASE=true, only for local development; SQLite uses --database-path or RIDU_SQLITE_PATH. Current executable config must match the latest artifact target before database inspection proceeds. JSON output exposes adapter-owned phase, step, checksum, and state details."
 			],
 			"example": "",
 			"keywords": ["ridu migrate plan"],
@@ -63746,6 +63796,22 @@
 			],
 			"example": "",
 			"keywords": ["ridu plugin remove"],
+			"relatedDocs": [],
+			"relatedSymbols": [],
+			"typeLinkIDs": {}
+		},
+		"cli:ridu#ridu upgrade": {
+			"summary": "Move a project to another Ridu release: version pins, dependencies, generated contracts, agent guidance, and any migration the release needs.",
+			"group": "Commands",
+			"parametersLabel": "",
+			"parameters": [],
+			"details": [
+				"Sets every @riducms package in the project's package.json files, the official entries in ridu.plugins.json, and the github.com/riducms/ridu requirement to the release. Linked specifiers such as workspace: and file: are reported and left unchanged.",
+				"It then installs dependencies, runs go mod tidy, and uses the newly installed CLI to run ridu generate, ridu agent sync when agent guidance is installed, and ridu migrate create --name ridu-<version>. When the schema did not change, no migration is created. Review and commit the result.",
+				"With --no-install it only rewrites the pins and prints the remaining commands."
+			],
+			"example": "npx @riducms/cli@X.Y.Z upgrade X.Y.Z",
+			"keywords": ["ridu upgrade", "upgrade ridu", "update ridu"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {}

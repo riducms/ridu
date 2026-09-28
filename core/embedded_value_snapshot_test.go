@@ -85,7 +85,7 @@ func TestEmbeddedValueSnapshotsAcrossNestedListUpdatesAndReads(t *testing.T) {
 		snapshots = append(snapshots, retainedSnapshot{ctx, append([]embeddedValueSnapshotEntry(nil), expected...), value, prior})
 		observed = append(observed, key)
 		expected[index].title = phase + ":" + value
-		return operation.Replace(operation.Present(expected[index].title)), nil
+		return operation.Set(expected[index].title), nil
 	}
 	title := field.Text("title").Required().Hooks(field.Hooks[string]{BeforeChange: []field.Transform[string]{func(ctx operation.Context, input operation.Value[string]) (operation.Change[string], error) {
 		if phase == "read" {

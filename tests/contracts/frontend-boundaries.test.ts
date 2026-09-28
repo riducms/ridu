@@ -136,6 +136,7 @@ const lazy = () => import('@riducms/ui');
 			"packages/plugin-richtext/src",
 			"packages/plugin-seo/src",
 			"packages/plugin-form-builder/src",
+			"packages/plugin-graphql/src",
 		];
 		await Promise.all(pluginRoots.map((root) => access(join(repositoryRoot, root))));
 		const violations = (
@@ -165,6 +166,7 @@ const lazy = () => import('@riducms/ui');
 			"packages/plugin-richtext/src",
 			"packages/plugin-seo/src",
 			"packages/plugin-form-builder/src",
+			"packages/plugin-graphql/src",
 		];
 		const manualCompositeRole =
 			/\brole\s*=\s*(?:["'](?:tree|treeitem|radio|toolbar)["']|\{[^}\n]*["'](?:tree|treeitem|radio|toolbar)["'][^}\n]*\})/gm;
@@ -224,6 +226,7 @@ const lazy = () => import('@riducms/ui');
 			"packages/plugin-richtext/src",
 			"packages/plugin-seo/src",
 			"packages/plugin-form-builder/src",
+			"packages/plugin-graphql/src",
 		];
 		const browserModal =
 			/(?:\b(?:window|globalThis)\s*(?:(?:\?\.|\.)\s*(?:alert|confirm|prompt)|\[\s*["'](?:alert|confirm|prompt)["']\s*\])\s*(?:\?\.)?\s*\(|(?:^|[^\w.])(?:alert|confirm|prompt)\s*\()/gm;

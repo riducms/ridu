@@ -89,6 +89,72 @@ test("API keyless blocks survive admin editing, reorder, nested duplication and 
 	expect(errors.consoleErrors).toEqual([]);
 });
 
+test("administrators can lock and unlock a heading without claiming a protected write", async ({
+	page,
+}) => {
+	const login = await page.request.post("/api/auth/users/login", {
+		data: { email: "admin@riducms.test", password: "ridu-admin" },
+	});
+	expect(login.ok(), await login.text()).toBe(true);
+	const created = await page.request.post("/api/collections/pages?draft=true", {
+		data: {
+			title: "Heading lock regression",
+			layout: [{ blockType: "hero", heading: "Keep this heading" }],
+		},
+	});
+	expect(created.ok(), await created.text()).toBe(true);
+	const original = (await created.json()).doc;
+	const apiPath = `/api/collections/pages/${original.id}`;
+	await page.goto(`/admin/collections/pages/${original.id}`);
+	const heading = page.locator('input[name="layout.0.heading"]');
+	const lock = page.getByRole("checkbox", { name: "Heading Locked", exact: true });
+	await expect(heading).toBeEditable();
+	await lock.check();
+
+	const save = async () => {
+		const pending = page.waitForResponse(
+			(response) =>
+				response.request().method() === "PATCH" && new URL(response.url()).pathname === apiPath
+		);
+		await submitDocumentForm(page);
+		const response = await pending;
+		expect(response.ok(), await response.text()).toBe(true);
+		return response.request().postDataJSON();
+	};
+	const locked = await save();
+	expect(locked.layout).toEqual([
+		{ _key: original.layout[0]._key, blockType: "hero", headingLocked: true },
+	]);
+	await expect(heading).not.toBeEditable();
+	await page.reload();
+	await expect(heading).toHaveValue("Keep this heading");
+	await expect(lock).toBeChecked();
+
+	await page.locator('textarea[name="layout.0.lede"]').fill("Other layout fields still work");
+	const edited = await save();
+	expect(edited.layout[0]).not.toHaveProperty("heading");
+	await expect(heading).not.toBeEditable();
+	const denied = await page.request.patch(apiPath, {
+		data: { layout: [{ _key: original.layout[0]._key, blockType: "hero", heading: "Forbidden" }] },
+	});
+	expect(denied.status()).toBe(403);
+	const stored = (await (await page.request.get(apiPath)).json()).doc;
+	expect(stored.layout[0]).toMatchObject({
+		heading: "Keep this heading",
+		lede: "Other layout fields still work",
+		headingLocked: true,
+	});
+
+	await lock.uncheck();
+	await save();
+	await expect(heading).toBeEditable();
+	await heading.fill("Unlocked edit");
+	await save();
+	await page.reload();
+	await expect(heading).toHaveValue("Unlocked edit");
+	await expect(lock).not.toBeChecked();
+});
+
 test("reordering preserves an unsaved edit beside a protected block heading", async ({ page }) => {
 	await loginAsEditor(page);
 	const errors = observePageErrors(page);

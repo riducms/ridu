@@ -3,6 +3,8 @@ package operation
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/riducms/ridu/field"
 	"github.com/riducms/ridu/operation"
@@ -181,4 +183,71 @@ func mergedStringAtPath(current, original store.Values, segments []string) strin
 
 func stringAtPath(values store.Values, segments []string) string {
 	return mergedStringAtPath(values, nil, segments)
+}
+
+// maxDuplicateSlugAttempts bounds the "-copy-N" search for one slug field.
+const maxDuplicateSlugAttempts = 100
+
+// uniqueDuplicateSlugs gives a duplicate a free slug instead of the original's.
+// Slugs are unique, so a copy that keeps its source's slug can never be saved.
+// A slug that hooks or the caller already changed is left alone. The lookup
+// uses the write transaction, including trashed documents, and the database's
+// unique constraint remains the final authority.
+func uniqueDuplicateSlugs(ctx context.Context, transaction store.Transaction, collection schema.Collection, data store.Values, original *store.Document, locales []schema.LocaleCode) error {
+	if original == nil {
+		return nil
+	}
+	for _, candidate := range collection.Fields {
+		if candidate.Text == nil || candidate.Text.Slug == nil {
+			continue
+		}
+		current, _ := data[candidate.Name].StringValue()
+		source, _ := original.Values[candidate.Name].StringValue()
+		if current == "" || current != source {
+			continue
+		}
+		stem := copySlugStem(current)
+		for attempt := 1; attempt <= maxDuplicateSlugAttempts; attempt++ {
+			next := stem + "-copy"
+			if attempt > 1 {
+				next = fmt.Sprintf("%s-copy-%d", stem, attempt)
+			}
+			taken, err := slugTaken(ctx, transaction, collection, candidate.Name, next, locales)
+			if err != nil {
+				return err
+			}
+			if !taken {
+				data[candidate.Name] = store.String(next)
+				break
+			}
+		}
+	}
+	return nil
+}
+
+// copySlugStem removes an earlier copy suffix, so copying "about-copy" gives
+// "about-copy-2" rather than "about-copy-copy".
+func copySlugStem(slug string) string {
+	if stem, found := strings.CutSuffix(slug, "-copy"); found && stem != "" {
+		return stem
+	}
+	if index := strings.LastIndex(slug, "-copy-"); index > 0 {
+		if _, err := strconv.Atoi(slug[index+len("-copy-"):]); err == nil {
+			return slug[:index]
+		}
+	}
+	return slug
+}
+
+func slugTaken(ctx context.Context, transaction store.Transaction, collection schema.Collection, name, slug string, locales []schema.LocaleCode) (bool, error) {
+	path, err := query.NewPath(name)
+	if err != nil {
+		return false, err
+	}
+	filter := query.Equal(path, query.String(slug)).Node()
+	page, err := transaction.List(ctx, store.Request{Collection: collection, Filter: &filter, Limit: 1, Deletion: store.DeletionAll, Locales: locales})
+	if err != nil {
+		return false, err
+	}
+	return len(page.Documents) != 0, nil
 }

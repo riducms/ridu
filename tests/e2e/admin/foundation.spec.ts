@@ -145,7 +145,7 @@ test("field layouts, clipboard actions, generated rows, and responsive placement
 	);
 	await documentSaveButton(page).click();
 	const submitted = (await updateRequest).postDataJSON();
-	expect(submitted.internalName).toBe("field-array-showcase");
+	expect(submitted).not.toHaveProperty("internalName");
 	expect(submitted.audiences).toEqual(["reviewers", "administrators"]);
 	expect((await updateResponse).ok()).toBe(true);
 	const storedResponse = await page.request.get(

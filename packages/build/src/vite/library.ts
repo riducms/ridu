@@ -6,6 +6,7 @@ import { defineConfig, type Plugin, type PluginOption } from "vite";
 
 import { createAdminUnoConfig } from "../uno/index.js";
 import { contentCSSHash } from "./compiler-options.js";
+import { sharedDependencies } from "./shared-dependencies.js";
 import { packageSourceAliasPlugin } from "./source-alias.js";
 
 type SvelteOptions = NonNullable<Parameters<typeof svelte>[0]>;
@@ -40,7 +41,7 @@ export function createAdminLibraryConfig(options: AdminLibraryConfigOptions = {}
 			}),
 		],
 		resolve: {
-			dedupe: unique(["bits-ui", "svelte", ...(options.dedupe ?? [])]),
+			dedupe: unique([...sharedDependencies, ...(options.dedupe ?? [])]),
 		},
 		build: {
 			lib: { entry, formats: ["es"], fileName: "index" },

@@ -23,8 +23,8 @@ func cleanSubtitle(
 	subtitle = strings.TrimSpace(subtitle)
 	if subtitle == "" {
 		// Clear this optional field instead of saving spaces.
-		return operation.Replace(operation.Empty[string]()), nil
+		return operation.Clear[string](), nil
 	}
-	// Replace supplies this field's new value for the same save.
-	return operation.Replace(operation.Present(subtitle)), nil
+	// Set supplies this field's new value for the same save.
+	return operation.Set(subtitle), nil
 }

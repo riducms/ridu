@@ -56,6 +56,18 @@ func NewPath(segments ...string) (Path, error) {
 	return Path{segments: cloned}, nil
 }
 
+// Field names a field in a filter or sort written in your code, such as
+// Field("price") or Field("seo", "title"). Like regexp.MustCompile, it panics
+// when a name is malformed. Use ParsePath or NewPath for paths from user input,
+// which return an error instead.
+func Field(segments ...string) Path {
+	path, err := NewPath(segments...)
+	if err != nil {
+		panic(err)
+	}
+	return path
+}
+
 // ParsePath validates and constructs a path from its dot-separated form.
 func ParsePath(value string) (Path, error) {
 	if value == "" {

@@ -28,10 +28,10 @@ type HookContext struct {
 	Actor *store.Document
 	// ActorCollection identifies the exact auth collection that owns Actor.
 	ActorCollection schema.CollectionSlug
-	// Data contains values at this phase: submitted input in BeforeValidate,
-	// then the completed document in BeforeChange and BeforeOperation on writes.
-	// Change map entries to change stored values; assigning a new map to Data
-	// does not replace the engine's values. Changes after saving are not persisted.
+	// Data contains the values being saved. On an update it holds only the
+	// fields the caller sent; read unchanged values from Original. Change map
+	// entries to change stored values; assigning a new map to Data does not
+	// replace the engine's values. Changes after saving are not persisted.
 	Data store.Values
 	// Document is the response document when available. AfterRead receives each
 	// document in a list separately. Changes to Document.Values affect the response,
@@ -97,9 +97,9 @@ type AfterCommitDispatcher interface {
 type CollectionHooks struct {
 	// BeforeDuplicate runs after the source is access-checked and copied but before validation.
 	BeforeDuplicate []Hook
-	// BeforeValidate runs before field hooks and built-in checks. On updates,
-	// Data may contain only the submitted fields. This shared phase also runs for
-	// reads and deletes; check Operation when changing write input.
+	// BeforeValidate runs before field hooks and built-in checks for create,
+	// duplicate, update, publish, and unpublish. On updates, Data contains only
+	// the submitted fields.
 	BeforeValidate []Hook
 	// BeforeChange runs after initial built-in validation for create, duplicate,
 	// update, publish, and unpublish. Changes to Data are checked again afterward;
@@ -126,9 +126,9 @@ type CollectionHooks struct {
 	// AfterError observes a failure in this resource through Error. It cannot
 	// suppress that failure; its own error is added to the returned error.
 	AfterError []Hook
-	// AfterCommit runs after a successful commit, including read transactions.
-	// Guard write-only effects with Operation. It runs outside the transaction;
-	// failures cannot roll back saved data, and later effects still run.
+	// AfterCommit runs after a change commits: creates, duplicates, updates,
+	// publishing, deletes, and restores, but never reads. It runs outside the
+	// transaction; failures cannot roll back saved data, and later effects still run.
 	AfterCommit []Hook
 }
 

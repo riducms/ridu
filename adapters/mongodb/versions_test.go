@@ -80,13 +80,10 @@ func TestMongoVersionAccessPredicateTargetsStoredSnapshot(t *testing.T) {
 	collection := mongoVersionedCollection(true, 10)
 	owner, _ := query.NewPath("owner")
 	status, _ := query.NewPath("_status")
-	expression, err := query.And(
+	expression := query.And(
 		query.Equal(owner, query.String("editor")),
 		query.Equal(status, query.String(string(store.StatusDraft))),
 	)
-	if err != nil {
-		t.Fatal(err)
-	}
 	compiled, err := compileMongoNode(collection, expression.Node(), "version access", mongoPredicateScope{storagePrefix: mongoVersionSnapshotPath + "."})
 	if err != nil {
 		t.Fatal(err)

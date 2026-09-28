@@ -53,6 +53,19 @@ func packageManagerAddCommand(manager projectfile.PackageManager, dependency str
 	}
 }
 
+func packageManagerAddToDirectoryCommand(manager projectfile.PackageManager, directory, dependency string) (string, []string) {
+	switch manager {
+	case projectfile.PackageManagerNPM:
+		return "npm", []string{"install", "--workspace", directory, "--save-exact", dependency}
+	case projectfile.PackageManagerPNPM:
+		return "pnpm", []string{"--dir", directory, "add", "--save-exact", dependency}
+	case projectfile.PackageManagerYarn:
+		return "yarn", []string{"--cwd", directory, "add", "--exact", dependency}
+	default:
+		return "bun", []string{"add", "--cwd", directory, "--exact", dependency}
+	}
+}
+
 func packageManagerRemoveCommand(manager projectfile.PackageManager, dependency string) (string, []string) {
 	if manager == projectfile.PackageManagerNPM {
 		return "npm", []string{"uninstall", dependency}

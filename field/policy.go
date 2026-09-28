@@ -33,14 +33,14 @@ type Validator[T any] func(operation.Context, operation.Value[T]) ([]operation.I
 // RawTransform checks or changes one field before input is converted to its Go
 // type. The context supplies surrounding values; the separate value is this
 // field's raw input and may be invalid. Empty means omitted; Present(store.Null())
-// means explicit null. Return Keep to leave it unchanged, Replace to change this field,
+// means explicit null. Return Keep to leave it unchanged, Set or Clear to change this field,
 // or an error to stop. Changing a context snapshot does not change the document.
 type RawTransform func(operation.Context, operation.Value[store.Value]) (operation.Change[store.Value], error)
 
 // Transform checks or changes one field's typed value before saving. The context
 // includes unchanged values from an update and changes made by earlier hooks.
-// Return Keep to leave this field unchanged, Replace(Present(value)) to set it,
-// or Replace(Empty[T]()) to clear it. An error stops the operation. Returned
+// Return Keep to leave this field unchanged, Set(value) to change it, or
+// Clear[T]() to empty it. An error stops the operation. Returned
 // values still pass through validation and field access checks.
 type Transform[T any] func(operation.Context, operation.Value[T]) (operation.Change[T], error)
 
@@ -48,7 +48,7 @@ type Transform[T any] func(operation.Context, operation.Value[T]) (operation.Cha
 // Register it with the field's AfterRead method; it is not a Hooks list. T is
 // the field's response type, which differs from its stored type for references.
 // Its context supplies response values, which may include related documents and
-// locale fallback. Return Keep or Replace, as for a write transform. Field read
+// locale fallback. Return Keep, Set, or Clear, as for a write transform. Field read
 // access still runs afterward; visible context data is not permission to expose it.
 // AfterRead runs after resource response hooks on reads and mutation responses,
 // before final field redaction. Registration determines the callback phase.
@@ -93,9 +93,9 @@ type Hooks[T any] struct {
 	// BeforeDuplicate receives raw copied input before validation. It runs only
 	// when duplicating a collection document, after the resource hook.
 	BeforeDuplicate []RawTransform
-	// BeforeValidate receives raw input before built-in validation. It can supply
-	// or normalize a value before conversion to T. This shared phase also runs on
-	// reads and deletes; check the context's Operation for write-only logic.
+	// BeforeValidate receives raw input before built-in validation on create,
+	// duplicate, update, publish, and unpublish. It can supply or normalize a
+	// value before conversion to T.
 	BeforeValidate []RawTransform
 	// BeforeChange transforms T after initial built-in checks on create,
 	// duplicate, update, publish, and unpublish. Custom validators run later.
@@ -114,9 +114,9 @@ type Hooks[T any] struct {
 	// AfterOperation observes the result before response processing and commit.
 	// It also runs on reads and deletes; check Operation for write-only work.
 	AfterOperation []Observer[T]
-	// AfterCommit observes the value outside the committed transaction, before
-	// resource AfterCommit hooks. It also runs for reads. Errors cannot roll back
-	// saved data, and later effects still run.
+	// AfterCommit observes the value after a change commits, before resource
+	// AfterCommit hooks. It never runs for reads. Errors cannot roll back saved
+	// data, and later effects still run.
 	AfterCommit []Observer[T]
 }
 

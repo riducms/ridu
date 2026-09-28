@@ -15,7 +15,11 @@ interface Binding<Config extends RiduConfigShape, Slug extends AuthCollectionSlu
 }
 
 export interface ServerClientOptions {
-	/** Fetch for server requests to Ridu. Defaults to the definition's fetch or the platform fetch. */
+	/**
+	 * Fetch for server requests to Ridu. Defaults to the definition's fetch, then to SvelteKit's
+	 * `event.fetch`. The client sends its token in a header with `credentials: "omit"`, so
+	 * `event.fetch` does not forward the web app's cookies to Ridu.
+	 */
 	fetch?: ClientOptions["fetch"];
 }
 
@@ -29,7 +33,7 @@ export function createServerClient<
 	Slug extends AuthCollectionSlug<Config>,
 >(
 	ridu: Binding<Config, Slug>,
-	event: Pick<RequestEvent, "cookies" | "url">,
+	event: Pick<RequestEvent, "cookies" | "url"> & Partial<Pick<RequestEvent, "fetch">>,
 	options: ServerClientOptions = {}
 ): RiduClient<Config, Slug> {
 	const definition = ridu[definitionKey];
@@ -40,6 +44,7 @@ export function createServerClient<
 	);
 	return definition.client(store, {
 		...(options.fetch === undefined ? {} : { fetch: options.fetch }),
+		...(event.fetch === undefined ? {} : { fallbackFetch: event.fetch }),
 		memoizeSession: true,
 	});
 }

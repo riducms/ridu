@@ -128,17 +128,29 @@ describe("browser session store", () => {
 		second.peers.push(first);
 		const signingIn = browserStore(jar, undefined, first);
 		const watching = browserStore(jar, undefined, second);
+		const beforeIssuance = {
+			signingIn: signingIn.events.notified,
+			watching: watching.events.notified,
+		};
 		signingIn.store.issued("token_a", session("a"));
 		expect(jar.values.get("ridu_token")).toBe("token_a");
 		expect(signingIn.store.session?.id).toBe("a");
 		expect(watching.store.session?.id).toBe("a");
+		expect(signingIn.events.notified).toBeGreaterThan(beforeIssuance.signingIn);
+		expect(watching.events.notified).toBeGreaterThan(beforeIssuance.watching);
 		expect(watching.events.authChanges).toBe(1);
 		// Only the safe snapshot crosses tabs.
 		expect(JSON.stringify(first.posted)).not.toContain("token_a");
 
+		const beforeClearing = {
+			signingIn: signingIn.events.notified,
+			watching: watching.events.notified,
+		};
 		signingIn.store.cleared("token_a");
 		expect(jar.values.has("ridu_token")).toBe(false);
 		expect(watching.store.session).toBeNull();
+		expect(signingIn.events.notified).toBeGreaterThan(beforeClearing.signingIn);
+		expect(watching.events.notified).toBeGreaterThan(beforeClearing.watching);
 	});
 
 	it("never lets a stale snapshot or late event replace a newer login", () => {
@@ -257,6 +269,30 @@ describe("server client", () => {
 		});
 		expect(await anonymous.auth.getSession()).toBeNull();
 		expect(requests).toHaveLength(2);
+	});
+
+	it("uses SvelteKit's event.fetch unless a fetch is configured", async () => {
+		const calls: string[] = [];
+		const respond = (name: string) => async () => {
+			calls.push(name);
+			return Response.json({ session: session("a") });
+		};
+		const definition = createDefinition({
+			createClient: (options) => createClient<AppConfig>(options as never),
+			baseURL: "https://cms.example.test/",
+			authCollection: "users",
+		});
+		const ridu = { [definitionKey]: definition };
+		const event = {
+			cookies: fakeCookies({ ridu_token: "token_a" }),
+			url: new URL("https://app.example.test/"),
+			fetch: respond("event") as unknown as typeof fetch,
+		};
+		await createServerClient(ridu, event).auth.getSession();
+		await createServerClient(ridu, event, {
+			fetch: respond("option") as unknown as typeof fetch,
+		}).auth.getSession();
+		expect(calls).toEqual(["event", "option"]);
 	});
 });
 

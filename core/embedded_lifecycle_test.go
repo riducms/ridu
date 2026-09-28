@@ -57,7 +57,7 @@ func TestEmbeddedFieldsDefaultsHooksAccessAndIdentity(t *testing.T) {
 	title := field.Text("title").Required().Hooks(field.Hooks[string]{BeforeChange: []field.Transform[string]{func(ctx operation.Context, input operation.Value[string]) (operation.Change[string], error) {
 		identities = append(identities, ctx.OccurrenceID)
 		value, _ := input.Get()
-		return operation.Replace(operation.Present(strings.ToUpper(value))), nil
+		return operation.Set(strings.ToUpper(value)), nil
 	}}})
 	config := embeddedConfig(title, field.Text("secret").Access(field.Access{Read: func(operation.Context) (bool, error) { return false, nil }}))
 	app, err := ridu.New(config, teststore.New())
@@ -324,7 +324,7 @@ func TestEmbeddedAfterReadAndAfterCommitEachObserveOccurrences(t *testing.T) {
 	}}}).ReplaceAfterRead(func(_ operation.Context, input operation.Value[string]) (operation.Change[string], error) {
 		reads++
 		value, _ := input.Get()
-		return operation.Replace(operation.Present("read " + value)), nil
+		return operation.Set("read " + value), nil
 	})
 	config := embeddedConfig(title)
 	app, err := ridu.New(config, teststore.New())
@@ -348,7 +348,7 @@ func TestEmbeddedHookBatchTransformsEachOccurrenceOnce(t *testing.T) {
 	title := field.Text("title").Required().Hooks(field.Hooks[string]{BeforeChange: []field.Transform[string]{func(ctx operation.Context, value operation.Value[string]) (operation.Change[string], error) {
 		calls[ctx.OccurrenceID]++
 		text, _ := value.Get()
-		return operation.Replace(operation.Present("edited " + text)), nil
+		return operation.Set("edited " + text), nil
 	}}})
 	app, err := ridu.New(embeddedConfig(title), teststore.New())
 	if err != nil {
@@ -389,7 +389,7 @@ func BenchmarkEmbeddedHookBatch(b *testing.B) {
 			calls := 0
 			title := field.Text("title").Required().Hooks(field.Hooks[string]{BeforeChange: []field.Transform[string]{func(operation.Context, operation.Value[string]) (operation.Change[string], error) {
 				calls++
-				return operation.Replace(operation.Present("edited")), nil
+				return operation.Set("edited"), nil
 			}}})
 			config := embeddedConfig(title)
 			nodes := make([]store.Value, size)
@@ -566,7 +566,7 @@ func TestEmbeddedParentTransformPreservesSurvivingChildScopes(t *testing.T) {
 		}
 		identities[key] = ctx.OccurrenceID
 		value, _ := input.Get()
-		return operation.Replace(operation.Present(strings.ToUpper(value))), nil
+		return operation.Set(strings.ToUpper(value)), nil
 	}}, AfterChange: []field.Observer[string]{func(ctx operation.Context, _ operation.Value[string]) error {
 		key, _ := ctx.Siblings.String("uid")
 		after = append(after, key)
@@ -579,7 +579,7 @@ func TestEmbeddedParentTransformPreservesSurvivingChildScopes(t *testing.T) {
 		value, _ := input.Get()
 		envelope, _ := value.CopyObject()
 		nodes, _ := envelope["outline"].CopyList()
-		return operation.Replace(operation.Present(outline.Value(nodes[2], nodes[0], outline.Widget("card", "added", store.Values{"title": store.String("new")})))), nil
+		return operation.Set(outline.Value(nodes[2], nodes[0], outline.Widget("card", "added", store.Values{"title": store.String("new")}))), nil
 	}}})
 	config := embeddedConfig()
 	config.Collections[1].Fields = field.Fields{body}

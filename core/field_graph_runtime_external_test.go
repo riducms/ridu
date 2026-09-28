@@ -51,12 +51,12 @@ func graphRuntimeCode(t *testing.T, observations *[]graphRuntimeObservation) fie
 				return operation.Keep[store.Value](), nil
 			}
 			observe("raw", ctx, text)
-			return operation.Replace(operation.Present(store.String(strings.ToLower(strings.TrimSpace(text))))), nil
+			return operation.Set(store.String(strings.ToLower(strings.TrimSpace(text)))), nil
 		}},
 		BeforeChange: []field.Transform[string]{func(ctx operation.Context, input operation.Value[string]) (operation.Change[string], error) {
 			value, _ := input.Get()
 			observe("write", ctx, value)
-			return operation.Replace(operation.Present("code:" + strings.TrimPrefix(value, "code:"))), nil
+			return operation.Set("code:" + strings.TrimPrefix(value, "code:")), nil
 		}},
 		AfterChange: []field.Observer[string]{func(ctx operation.Context, input operation.Value[string]) error {
 			value, _ := input.Get()
@@ -221,7 +221,7 @@ func TestFieldGraphRuntimeTypedChildGuardAfterParentOrResourceTransform(t *testi
 			var hooks ridu.CollectionHooks
 			if owner == "parent" {
 				parent = parent.Hooks(field.Hooks[store.Value]{BeforeChange: []field.Transform[store.Value]{func(operation.Context, operation.Value[store.Value]) (operation.Change[store.Value], error) {
-					return operation.Replace(operation.Present(malformed)), nil
+					return operation.Set(malformed), nil
 				}}})
 			} else {
 				hooks.BeforeChange = []ridu.Hook{func(ctx ridu.HookContext) error { ctx.Data["variant"] = malformed; return nil }}
@@ -259,7 +259,7 @@ func TestFieldGraphRuntimeCustomValidationUsesFinalCandidateOnce(t *testing.T) {
 		return nil, nil
 	})
 	source := field.Text("source").Hooks(field.Hooks[string]{BeforeChange: []field.Transform[string]{func(operation.Context, operation.Value[string]) (operation.Change[string], error) {
-		return operation.Replace(operation.Present("FINAL")), nil
+		return operation.Set("FINAL"), nil
 	}}})
 	app, err := ridu.New(ridu.Config{Name: "Final application validation", Collections: []ridu.Collection{{Slug: "pages", Fields: field.Fields{code, source}}}}, teststore.New())
 	if err != nil {
@@ -552,10 +552,10 @@ func TestFieldTransformsPreserveExpectedNormalization(t *testing.T) {
 	code := field.Text("code").Required().Hooks(field.Hooks[string]{BeforeValidate: []field.RawTransform{func(_ operation.Context, input operation.Value[store.Value]) (operation.Change[store.Value], error) {
 		value, _ := input.Get()
 		text, _ := value.StringValue()
-		return operation.Replace(operation.Present(store.String(strings.TrimSpace(text)))), nil
+		return operation.Set(store.String(strings.TrimSpace(text))), nil
 	}}, BeforeChange: []field.Transform[string]{func(_ operation.Context, input operation.Value[string]) (operation.Change[string], error) {
 		value, _ := input.Get()
-		return operation.Replace(operation.Present(strings.ToUpper(value))), nil
+		return operation.Set(strings.ToUpper(value)), nil
 	}}})
 	app, err := ridu.New(ridu.Config{Name: "Field normalization", Collections: []ridu.Collection{{Slug: "pages", Fields: field.Fields{code}}}}, teststore.New())
 	if err != nil {
@@ -635,7 +635,7 @@ func TestFieldGraphRuntimeContainerTransformDispatchesSurvivingOccurrences(t *te
 		}
 		prior[key] = old
 		value, _ := input.Get()
-		return operation.Replace(operation.Present(strings.ToUpper(value))), nil
+		return operation.Set(strings.ToUpper(value)), nil
 	}}, AfterChange: []field.Observer[string]{func(ctx operation.Context, _ operation.Value[string]) error {
 		key, _ := ctx.Siblings.String("_key")
 		after = append(after, key)
@@ -647,7 +647,7 @@ func TestFieldGraphRuntimeContainerTransformDispatchesSurvivingOccurrences(t *te
 		}
 		value, _ := input.Get()
 		list, _ := value.CopyList()
-		return operation.Replace(operation.Present(store.List(list[2], list[0], graphRuntimeRow("D", "new", "four")))), nil
+		return operation.Set(store.List(list[2], list[0], graphRuntimeRow("D", "new", "four"))), nil
 	}}})
 	app, err := ridu.New(ridu.Config{Name: "Scoped container replacement", Collections: []ridu.Collection{{Slug: "pages", Fields: field.Fields{rows}}}}, teststore.New())
 	if err != nil {
@@ -703,7 +703,7 @@ func TestFieldGraphRuntimeTypedContainerAssignsIdentityBeforeChildDispatch(t *te
 				if host == "blocks" {
 					fresh["blockType"] = store.String("card")
 				}
-				return operation.Replace(operation.Present(store.List(append(rows, store.Object(fresh))...))), nil
+				return operation.Set(store.List(append(rows, store.Object(fresh))...)), nil
 			}}}
 			var container field.Node = field.Array("rows", field.Fields{code}).Hooks(hooks)
 			initial := store.Values{"_key": store.String("retained"), "code": store.String("old")}

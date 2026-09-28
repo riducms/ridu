@@ -24,7 +24,7 @@ func Link(name string) field.GroupField {
 		Hooks(field.Hooks[string]{BeforeChange: []field.Transform[string]{
 			func(_ operation.Context, value operation.Value[string]) (operation.Change[string], error) {
 				if text, present := value.Get(); present {
-					return operation.Replace(operation.Present(strings.TrimSpace(text))), nil
+					return operation.Set(strings.TrimSpace(text)), nil
 				}
 				return operation.Keep[string](), nil
 			},

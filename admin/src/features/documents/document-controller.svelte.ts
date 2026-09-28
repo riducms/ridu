@@ -11,7 +11,11 @@ import {
 	saveFormDraft,
 	takeFormDraft,
 } from "@admin/core/forms/form-draft-recovery";
-import { documentFormValues, initialFormValues } from "@admin/core/forms/form-schema";
+import {
+	changedFormValues,
+	documentFormValues,
+	initialFormValues,
+} from "@admin/core/forms/form-schema";
 import { invalidFieldLabels } from "@admin/core/forms/form-validation";
 import type { NotificationCenter } from "@admin/core/notifications/notification-center.svelte";
 import { samePreparedCreateValues } from "@admin/core/bootstrap/admin-bootstrap";
@@ -501,6 +505,10 @@ export class DocumentController {
 		const wasCreating = this.creating;
 		try {
 			const saved = await this.form.submit(this.validationFields, this.creating, async (values) => {
+				if (!wasCreating)
+					values = changedFormValues(this.validationFields, values, this.form.original, (path) =>
+						this.form.isInherited(path)
+					);
 				if (this.globalResource) {
 					if (publishingChanges) {
 						return this.options.runtime.client.publishGlobalChanges(collectionSlug, values, {

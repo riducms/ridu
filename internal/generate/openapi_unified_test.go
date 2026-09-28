@@ -16,11 +16,11 @@ import (
 func TestOpenAPIUnifiedRequestsWithoutBlocksMatchRuntime(t *testing.T) {
 	app, err := core.New(core.Config{Name: "Unified inputs", Collections: []core.Collection{{Slug: "pages", Fields: field.Fields{
 		field.Text("title").Required().MinLength(2).MaxLength(5).AfterRead(func(operation.Context, operation.Value[string]) (operation.Change[string], error) {
-			return operation.Replace(operation.Present("Published page title")), nil
+			return operation.Set("Published page title"), nil
 		}),
 		field.Number("score").Min(1).Max(5).AfterRead(func(_ operation.Context, value operation.Value[float64]) (operation.Change[float64], error) {
 			if _, present := value.Get(); present {
-				return operation.Replace(operation.Present[float64](100)), nil
+				return operation.Set[float64](100), nil
 			}
 			return operation.Keep[float64](), nil
 		}),
@@ -236,11 +236,11 @@ func TestOpenAPIUnifiedBlockInputsPreserveManagedAndOpaqueValues(t *testing.T) {
 func TestOpenAPIReadTransformsDoNotReapplyCollectionBounds(t *testing.T) {
 	rows := field.Array("rows", field.Fields{field.Text("title")}).Required().MinRows(2).MaxRows(3).
 		AfterRead(func(operation.Context, operation.Value[store.Value]) (operation.Change[store.Value], error) {
-			return operation.Replace(operation.Present(store.List())), nil
+			return operation.Set(store.List()), nil
 		})
 	content := field.Blocks("content", field.Block{Slug: "hero", Fields: field.Fields{field.Text("title")}}).Required().MinRows(2).MaxRows(3).
 		AfterRead(func(operation.Context, operation.Value[store.Value]) (operation.Change[store.Value], error) {
-			return operation.Replace(operation.Present(store.List())), nil
+			return operation.Set(store.List()), nil
 		})
 	app, err := core.New(core.Config{Name: "Transformed output", Collections: []core.Collection{{Slug: "pages", Fields: field.Fields{rows, content}}}}, teststore.New())
 	if err != nil {

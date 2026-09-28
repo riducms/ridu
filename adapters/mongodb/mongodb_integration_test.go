@@ -354,14 +354,10 @@ func TestMongoDBRepeatedRootsWriteProjectAndFailClosedOnCorruptBSON(t *testing.T
 		{id: "corrupt-array-group", repeated: query.Equal(mongoMustPath(t, "rows.details.note"), query.String("never"))},
 		{id: "corrupt-block", repeated: query.Equal(mongoMustPath(t, "layout.hero.heading"), query.String("never"))},
 	} {
-		predicate, err := query.Or(
+		predicate := query.Or(
 			fixture.repeated,
 			query.Equal(mongoMustPath(t, "title"), query.String(fixture.id)),
 		)
-		if err != nil {
-			mongoRollback(t, read)
-			t.Fatal(err)
-		}
 		filter := predicate.Node()
 		page, err := read.List(t.Context(), store.Request{Collection: collection, Filter: &filter, Limit: 10})
 		if err != nil {
@@ -377,19 +373,11 @@ func TestMongoDBRepeatedRootsWriteProjectAndFailClosedOnCorruptBSON(t *testing.T
 			t.Fatalf("direct corrupt repeated read %q was accepted", fixture.id)
 		}
 	}
-	negated, err := query.Not(query.Equal(mongoMustPath(t, "rows.kind"), query.String("never")))
-	if err != nil {
-		mongoRollback(t, read)
-		t.Fatal(err)
-	}
-	corruptOnly, err := query.And(
+	negated := query.Not(query.Equal(mongoMustPath(t, "rows.kind"), query.String("never")))
+	corruptOnly := query.And(
 		query.Equal(mongoMustPath(t, "title"), query.String("corrupt-array-root")),
 		negated,
 	)
-	if err != nil {
-		mongoRollback(t, read)
-		t.Fatal(err)
-	}
 	filter := corruptOnly.Node()
 	page, err := read.List(t.Context(), store.Request{Collection: collection, Filter: &filter, Limit: 10})
 	if err != nil {
@@ -460,22 +448,10 @@ func TestMongoDBRepeatedRootGuardsExcludeCorruptionFromAccessTotalsAndDistinct(t
 	quoteHeading := mongoMustPath(t, "layout.quote.heading")
 	kindMatches := query.Equal(rowKind, query.String("primary"))
 	noteMatches := query.Equal(rowNote, query.String("nested"))
-	forward, err := query.And(kindMatches, noteMatches)
-	if err != nil {
-		t.Fatal(err)
-	}
-	reverse, err := query.And(noteMatches, kindMatches)
-	if err != nil {
-		t.Fatal(err)
-	}
-	forwardNot, err := query.Not(forward)
-	if err != nil {
-		t.Fatal(err)
-	}
-	reverseNot, err := query.Not(reverse)
-	if err != nil {
-		t.Fatal(err)
-	}
+	forward := query.And(kindMatches, noteMatches)
+	reverse := query.And(noteMatches, kindMatches)
+	forwardNot := query.Not(forward)
+	reverseNot := query.Not(reverse)
 
 	assertions := []struct {
 		name   string

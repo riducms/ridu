@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -90,6 +91,8 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer, options O
 		return runPlugin(ctx, args[1:], stdout, stderr, options)
 	case "add":
 		return runPluginAdd(ctx, args[1:], stdout, stderr, options)
+	case "upgrade":
+		return runUpgrade(ctx, args[1:], stdout, stderr, options)
 	default:
 		fmt.Fprintf(stderr, "unknown command %q\n\n", args[0])
 		printUsage(stderr)
@@ -271,14 +274,6 @@ func runPluginAdd(ctx context.Context, args []string, stdout, stderr io.Writer, 
 				output.Error("plugin declares an admin package but this project has no admin directory", nil)
 				return 1
 			}
-			if contractRoot := generatedContractPackageRoot(definition); contractRoot != "" {
-				output.Info("Installing generated-contract dependency", "package", entry.AdminPackage, "version", entry.AdminVersion)
-				command, arguments := packageManagerAddCommand(definition.FrontendPackageManager(), entry.AdminPackage+"@"+entry.AdminVersion)
-				if err := runForeground(ctx, contractRoot, nil, stdout, stderr, command, arguments...); err != nil {
-					output.Error("install generated-contract plugin dependency", err)
-					return 1
-				}
-			}
 			output.Info("Installing admin dependency", "package", entry.AdminPackage, "version", entry.AdminVersion)
 			command, arguments := packageManagerAddCommand(definition.FrontendPackageManager(), entry.AdminPackage+"@"+entry.AdminVersion)
 			if err := runForeground(ctx, definition.Absolute(definition.Admin), nil, stdout, stderr, command, arguments...); err != nil {
@@ -297,14 +292,28 @@ func runPluginAdd(ctx context.Context, args []string, stdout, stderr io.Writer, 
 		return 1
 	}
 	manifest := resolved.Manifest
+	if !*noInstall && entry.AdminPackage != "" && manifestRequiresTypeScriptPackage(manifest, entry.AdminPackage) {
+		contractRoot := generatedContractPackageRoot(definition)
+		contractManifest := generatedContractPackageManifest(definition)
+		if contractRoot != "" && !packageDeclaresDependency(contractManifest, entry.AdminPackage) {
+			output.Info("Installing generated-contract dependency", "package", entry.AdminPackage, "version", entry.AdminVersion)
+			command, arguments := packageManagerAddCommand(definition.FrontendPackageManager(), entry.AdminPackage+"@"+entry.AdminVersion)
+			if err := runForeground(ctx, contractRoot, nil, stdout, stderr, command, arguments...); err != nil {
+				output.Error("install generated-contract plugin dependency", err)
+				return 1
+			}
+		}
+	}
 	if missing := missingGeneratedTypeScriptDependencies(definition, manifest); len(missing) != 0 {
 		output.Error(fmt.Sprintf("plugin compatibility or contract generation failed; installation was rolled back: generated TypeScript requires %s in %s; add the matching package version there and rerun the command", strings.Join(missing, ", "), generatedContractPackageManifest(definition)), nil)
 		return 1
 	}
-	if _, err := generate.RunResolvedProject(definition, resolved, false); err != nil {
+	result, err := generate.RunResolvedProject(definition, resolved, false)
+	if err != nil {
 		output.Error("plugin compatibility or contract generation failed; installation was rolled back", err)
 		return 1
 	}
+	printGenerationWarnings(output, definition, result, frameworkVersion(options))
 	failed = false
 	fmt.Fprintf(stdout, "Registered plugin %s. Review its descriptor, then create and apply any resulting migration.\n", entry.Key)
 	return 0
@@ -540,6 +549,51 @@ func missingGeneratedTypeScriptDependencies(definition projectfile.File, manifes
 	return missing
 }
 
+// missingAdminPluginPackages lists plugin admin packages that the admin package.json does
+// not declare. Projects without an admin have nothing to install.
+func missingAdminPluginPackages(definition projectfile.File, manifest schema.Manifest) []string {
+	if definition.Admin == "" {
+		return nil
+	}
+	adminManifest := filepath.Join(definition.Absolute(definition.Admin), "package.json")
+	seen := make(map[string]struct{})
+	var missing []string
+	for _, plugin := range manifest.Snapshot().Plugins {
+		if plugin.Admin == nil {
+			continue
+		}
+		name := npmPackageRoot(plugin.Admin.Package)
+		if name == "" || packageDeclaresDependency(adminManifest, name) {
+			continue
+		}
+		if _, exists := seen[name]; exists {
+			continue
+		}
+		seen[name] = struct{}{}
+		missing = append(missing, name)
+	}
+	sort.Strings(missing)
+	return missing
+}
+
+func registeredAdminPackageRequirement(definition projectfile.File, name, version string) string {
+	requirement := name
+	if definition.Plugins != "" {
+		if registry, err := pluginregistry.Load(definition.Absolute(definition.Plugins)); err == nil {
+			for _, entry := range registry.Plugins {
+				if npmPackageRoot(entry.AdminPackage) == npmPackageRoot(name) {
+					requirement = name + "@" + entry.AdminVersion
+					break
+				}
+			}
+		}
+	}
+	if strings.HasPrefix(name, "@riducms/") && version != "" && (requirement == name || strings.HasSuffix(requirement, "@latest")) {
+		return name + "@" + version
+	}
+	return requirement
+}
+
 func manifestRequiresAdminPackage(manifest schema.Manifest, name string) bool {
 	for _, plugin := range manifest.Snapshot().Plugins {
 		if plugin.Admin != nil && npmPackageRoot(plugin.Admin.Package) == npmPackageRoot(name) {
@@ -709,6 +763,11 @@ func runMigrate(ctx context.Context, args []string, stdout, stderr io.Writer, op
 	if definition.Database == projectfile.DatabaseSQLite && (*allowInsecureDatabase || *allowMaintenance || operationalFlag) {
 		fmt.Fprintf(stderr, "ridu migrate %s does not accept PostgreSQL transport, maintenance, timeout, or stop-boundary options for SQLite\n", command)
 		return 2
+	}
+	// The generated server reads the same variable, so a project's local .env
+	// works for both `ridu dev` and `ridu migrate`.
+	if command != "create" && definition.Database != projectfile.DatabaseSQLite && !*allowInsecureDatabase && envEnabled("RIDU_ALLOW_INSECURE_DATABASE") {
+		*allowInsecureDatabase = true
 	}
 	directory := definition.Absolute(definition.Migrations)
 	if definition.Database == projectfile.DatabaseMongoDB && command == "create" {
@@ -1991,9 +2050,7 @@ func runGenerate(ctx context.Context, args []string, stdout, stderr io.Writer, o
 		output.Error("generate project", err)
 		return 1
 	}
-	for _, warning := range result.Warnings {
-		output.Warn(warning, nil)
-	}
+	printGenerationWarnings(output, definition, result, frameworkVersion)
 	for _, artifact := range result.Artifacts {
 		relative, relativeError := filepath.Rel(definition.Root, artifact.Path)
 		if relativeError != nil {
@@ -2028,6 +2085,7 @@ Commands:
   doctor    Diagnose local project prerequisites
   plugin    Add or remove compiled backend/admin plugins
   add       Install a plugin (alias for plugin add)
+  upgrade   Move the project to another Ridu release
   version   Print the Ridu CLI version
   help      Show this help
 
@@ -2035,4 +2093,10 @@ Contract versions:
   project protocol %d
   schema manifest  %d
 `, project.ProtocolVersion, schema.CurrentVersion)
+}
+
+// envEnabled reports whether a boolean environment variable is set to true.
+func envEnabled(name string) bool {
+	enabled, err := strconv.ParseBool(strings.TrimSpace(os.Getenv(name)))
+	return err == nil && enabled
 }

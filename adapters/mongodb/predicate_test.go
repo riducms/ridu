@@ -261,10 +261,7 @@ func TestMongoNestedPredicatesGuardEveryObjectAncestor(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	negated, err := query.Not(query.Equal(path, query.String("safe")))
-	if err != nil {
-		t.Fatal(err)
-	}
+	negated := query.Not(query.Equal(path, query.String("safe")))
 	tests := []struct {
 		name string
 		node query.Node
@@ -544,13 +541,10 @@ func TestMongoRepeatedPredicatesPreserveDocumentScopedBooleanSemantics(t *testin
 	rowsKind := mongoMustPath(t, "rows.kind")
 	rowsLabel := mongoMustPath(t, "rows.label")
 
-	splitRows, err := query.And(
+	splitRows := query.And(
 		query.Equal(rowsKind, query.String("primary")),
 		query.Equal(rowsLabel, query.String("visible")),
 	)
-	if err != nil {
-		t.Fatal(err)
-	}
 	compiled, err := compileMongoNode(collection, splitRows.Node(), "filter", mongoPredicateScope{})
 	if err != nil {
 		t.Fatal(err)
@@ -609,10 +603,7 @@ func TestMongoRepeatedNegationAndDisjunctionKeepShapeGuardsOutside(t *testing.T)
 	collection := mongoRepeatedCollection()
 	repeated := query.Equal(mongoMustPath(t, "rows.kind"), query.String("primary"))
 
-	negated, err := query.Not(repeated)
-	if err != nil {
-		t.Fatal(err)
-	}
+	negated := query.Not(repeated)
 	compiled, err := compileMongoNode(collection, negated.Node(), "filter", mongoPredicateScope{})
 	if err != nil {
 		t.Fatal(err)
@@ -622,10 +613,7 @@ func TestMongoRepeatedNegationAndDisjunctionKeepShapeGuardsOutside(t *testing.T)
 		t.Fatalf("repeated NOT lacks an outer shape guard: %#v", compiled)
 	}
 
-	disjunction, err := query.Or(repeated, query.Equal(mongoMustPath(t, "title"), query.String("visible")))
-	if err != nil {
-		t.Fatal(err)
-	}
+	disjunction := query.Or(repeated, query.Equal(mongoMustPath(t, "title"), query.String("visible")))
 	compiled, err = compileMongoNode(collection, disjunction.Node(), "access", mongoPredicateScope{})
 	if err != nil {
 		t.Fatal(err)
@@ -775,10 +763,7 @@ func TestMongoRepeatedShapeGuardDedupUsesTheCompleteResolvedShape(t *testing.T) 
 	note := query.Equal(mongoMustPath(t, "rows.details.note"), query.String("nested"))
 
 	for _, expressions := range [][]query.Expression{{kind, note}, {note, kind}} {
-		conjunction, err := query.And(expressions...)
-		if err != nil {
-			t.Fatal(err)
-		}
+		conjunction := query.And(expressions...)
 		guards, err := mongoNodeRepeatedShapeGuards(collection, conjunction.Node(), "access", mongoPredicateScope{})
 		if err != nil {
 			t.Fatal(err)

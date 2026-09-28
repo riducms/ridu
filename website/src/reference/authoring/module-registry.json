@@ -2684,6 +2684,33 @@
 			]
 		},
 		{
+			"id": "ts:@riducms/plugin-graphql",
+			"name": "@riducms/plugin-graphql",
+			"slug": "plugin-graphql",
+			"packageName": "@riducms/plugin-graphql",
+			"language": "ts",
+			"group": "Official plugins",
+			"summary": "The statically bundled admin GraphQL playground paired with the Go GraphQL plugin.",
+			"groupOrder": ["Constants"],
+			"sources": [
+				{
+					"kind": "typescript",
+					"packageJSON": "packages/plugin-graphql/package.json",
+					"entrypoints": [
+						{
+							"specifier": "@riducms/plugin-graphql",
+							"path": "packages/plugin-graphql/src/index.ts",
+							"tsconfig": "packages/plugin-graphql/tsconfig.json"
+						}
+					]
+				}
+			],
+			"symbolOrder": [
+				"ts:@riducms/plugin-graphql#graphqlAdminPlugin",
+				"ts:@riducms/plugin-graphql#graphqlMessages"
+			]
+		},
+		{
 			"id": "ts:@riducms/admin",
 			"name": "@riducms/admin",
 			"slug": "admin",
@@ -2842,6 +2869,7 @@
 				"cli:ridu#ridu plugin new",
 				"cli:ridu#ridu plugin add",
 				"cli:ridu#ridu plugin remove",
+				"cli:ridu#ridu upgrade",
 				"cli:ridu#ridu version",
 				"cli:ridu#ridu help"
 			]

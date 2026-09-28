@@ -17,11 +17,12 @@ func TestPackageManagerCommands(t *testing.T) {
 		run     string
 		add     []string
 		remove  []string
+		scoped  []string
 	}{
-		{projectfile.PackageManagerNPM, "npm install", "npm run", []string{"install", "--save-exact", "example@1.2.3"}, []string{"uninstall", "example"}},
-		{projectfile.PackageManagerBun, "bun install", "bun run", []string{"add", "--exact", "example@1.2.3"}, []string{"remove", "example"}},
-		{projectfile.PackageManagerPNPM, "pnpm install", "pnpm run", []string{"add", "--save-exact", "example@1.2.3"}, []string{"remove", "example"}},
-		{projectfile.PackageManagerYarn, "yarn install", "yarn run", []string{"add", "--exact", "example@1.2.3"}, []string{"remove", "example"}},
+		{projectfile.PackageManagerNPM, "npm install", "npm run", []string{"install", "--save-exact", "example@1.2.3"}, []string{"uninstall", "example"}, []string{"install", "--workspace", "admin", "--save-exact", "example@1.2.3"}},
+		{projectfile.PackageManagerBun, "bun install", "bun run", []string{"add", "--exact", "example@1.2.3"}, []string{"remove", "example"}, []string{"add", "--cwd", "admin", "--exact", "example@1.2.3"}},
+		{projectfile.PackageManagerPNPM, "pnpm install", "pnpm run", []string{"add", "--save-exact", "example@1.2.3"}, []string{"remove", "example"}, []string{"--dir", "admin", "add", "--save-exact", "example@1.2.3"}},
+		{projectfile.PackageManagerYarn, "yarn install", "yarn run", []string{"add", "--exact", "example@1.2.3"}, []string{"remove", "example"}, []string{"--cwd", "admin", "add", "--exact", "example@1.2.3"}},
 	} {
 		t.Run(string(test.manager), func(t *testing.T) {
 			install, run := packageManagerUserCommands(test.manager)
@@ -41,6 +42,10 @@ func TestPackageManagerCommands(t *testing.T) {
 			_, add := packageManagerAddCommand(test.manager, "example@1.2.3")
 			if !reflect.DeepEqual(add, test.add) {
 				t.Fatalf("add arguments = %#v, want %#v", add, test.add)
+			}
+			scopedCommand, scoped := packageManagerAddToDirectoryCommand(test.manager, "admin", "example@1.2.3")
+			if scopedCommand != string(test.manager) || !reflect.DeepEqual(scoped, test.scoped) {
+				t.Fatalf("scoped add command = %q %#v, want %q %#v", scopedCommand, scoped, test.manager, test.scoped)
 			}
 			_, remove := packageManagerRemoveCommand(test.manager, "example")
 			if !reflect.DeepEqual(remove, test.remove) {

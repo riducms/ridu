@@ -7603,6 +7603,10 @@
 			"module": "cli",
 			"symbol": "plugin-remove"
 		},
+		"cli:ridu#ridu upgrade": {
+			"module": "cli",
+			"symbol": "upgrade"
+		},
 		"cli:ridu#ridu version": {
 			"module": "cli",
 			"symbol": "version"
@@ -9065,7 +9069,8 @@
 		},
 		"go:github.com/riducms/ridu/operation#Replace": {
 			"module": "operation",
-			"symbol": "replace"
+			"symbol": "replace",
+			"redirect": "/reference/operation/set/"
 		},
 		"go:github.com/riducms/ridu/operation#RestoreDeleted": {
 			"module": "operation",
@@ -12810,6 +12815,50 @@
 		"go:github.com/riducms/ridu#UploadGrantRequest": {
 			"module": "ridu",
 			"symbol": "upload-grant-request"
+		},
+		"go:github.com/riducms/ridu#Reject": {
+			"module": "ridu",
+			"symbol": "reject"
+		},
+		"go:github.com/riducms/ridu#RootHooks": {
+			"module": "ridu",
+			"symbol": "root-hooks"
+		},
+		"go:github.com/riducms/ridu/core#Reject": {
+			"module": "core",
+			"symbol": "reject"
+		},
+		"go:github.com/riducms/ridu/operation#Clear": {
+			"module": "operation",
+			"symbol": "clear"
+		},
+		"go:github.com/riducms/ridu/operation#Set": {
+			"module": "operation",
+			"symbol": "set"
+		},
+		"go:github.com/riducms/ridu/query#Field": {
+			"module": "query",
+			"symbol": "field"
+		},
+		"go:github.com/riducms/ridu/protocol#ErrorRejected": {
+			"module": "go-protocol",
+			"symbol": "error-rejected"
+		},
+		"go:github.com/riducms/ridu/plugins/graphql#AdminPluginPairingVersion": {
+			"module": "graphql",
+			"symbol": "admin-plugin-pairing-version"
+		},
+		"ts:@riducms/plugin-graphql#graphqlAdminPlugin": {
+			"module": "plugin-graphql",
+			"symbol": "graphql-admin-plugin"
+		},
+		"ts:@riducms/plugin-graphql#graphqlMessages": {
+			"module": "plugin-graphql",
+			"symbol": "graphql-messages"
+		},
+		"go:github.com/riducms/ridu/core#AdminLoadContext.Manifest": {
+			"module": "core",
+			"symbol": "admin-load-context-manifest-method"
 		}
 	}
 }

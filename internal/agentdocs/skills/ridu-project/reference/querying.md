@@ -199,7 +199,7 @@ For the performance effect of indexes, selection, population, and pool sizing, s
 For [TextList and NumberList](./fields/lists.md), `in` matches a document when any item equals
 any candidate. This finds products with the tag `"sale"` or `"featured"`:
 
-```go title="content/find_tagged.go" focus={15-23}
+```go title="content/find_tagged.go" focus={15-21}
 package content
 
 import (
@@ -214,11 +214,8 @@ func FindTaggedProducts(
 	ctx context.Context,
 	local *ridu.LocalAPI,
 ) (store.Page, error) {
-	tags, err := query.NewPath("tags")
-	if err != nil {
-		return store.Page{}, err
-	}
 	// Match either tag anywhere in the list, using exact values.
+	tags := query.Field("tags")
 	return local.List(ctx, "products", ridu.ListOptions{
 		Where: query.In(tags, query.String("sale"), query.String("featured")),
 		Page:  1,

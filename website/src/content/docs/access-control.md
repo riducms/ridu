@@ -90,7 +90,7 @@ Add the rules to `Access` on your collection. This example lets anyone read post
 users create them, and lets authors update or delete their own posts. The `author` relationship
 stores the user ID checked by `ownDocuments`. The `internalNotes` helper is defined below.
 
-```go title="content/posts.go" focus={23-28}
+```go title="content/posts.go" focus={16-21}
 package content
 
 import (
@@ -99,32 +99,23 @@ import (
 	"github.com/riducms/ridu/query"
 )
 
-func Posts() ridu.Collection {
-	// Check this fixed query path while constructing the config.
-	authorPath, err := query.NewPath("author")
-	if err != nil {
-		panic(err)
-	}
-
-	return ridu.Collection{
-		Slug: "posts",
-		Fields: field.Fields{
-			field.Text("title").Required(),
-			field.Relationship("author", "users").Required(),
-			internalNotes("internalNotes"),
-		},
-		Access: ridu.CollectionAccess{
-			Create: signedIn,
-			Read:   publicRead,
-			Update: ownDocuments(authorPath),
-			Delete: ownDocuments(authorPath),
-		},
-	}
+var Posts = ridu.Collection{
+	Slug: "posts",
+	Fields: field.Fields{
+		field.Text("title").Required(),
+		field.Relationship("author", "users").Required(),
+		internalNotes("internalNotes"),
+	},
+	Access: ridu.CollectionAccess{
+		Create: signedIn,
+		Read:   publicRead,
+		Update: ownDocuments(query.Field("author")),
+		Delete: ownDocuments(query.Field("author")),
+	},
 }
 ```
 
-Use `Posts()` in your config's `Collections` list. It is a function here so it can check the error
-from `query.NewPath` before returning the collection.
+Add `Posts` to your config's `Collections` list.
 
 <aside class="callout" data-variant="important">
 <strong>When to use a filter</strong>

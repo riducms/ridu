@@ -68,7 +68,7 @@ func TestPrimitiveListsMongoDBRepeatedQueryBoundary(t *testing.T) {
 		for _, negate := range []bool{false, true} {
 			expression := query.In(path, test.item)
 			if negate {
-				expression, _ = query.Not(expression)
+				expression = query.Not(expression)
 			}
 			_, err := app.Local().List(t.Context(), "primitive-products", core.ListOptions{Where: expression})
 			var failure *core.OperationError
@@ -119,8 +119,8 @@ func TestPrimitiveListMongoDBNegativePredicatesExcludeCorruptShapes(t *testing.T
 			}
 			path, _ := query.ParsePath("items")
 			title, _ := query.ParsePath("title")
-			negated, _ := query.Not(query.In(path, operand))
-			either, _ := query.Or(query.Equal(title, query.String("x")), query.In(path, operand))
+			negated := query.Not(query.In(path, operand))
+			either := query.Or(query.Equal(title, query.String("x")), query.In(path, operand))
 			for _, expression := range []query.Expression{negated, either} {
 				node := expression.Node()
 				request := store.Request{Collection: collection, Filter: &node}

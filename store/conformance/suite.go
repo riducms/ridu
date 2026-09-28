@@ -361,31 +361,19 @@ func Run(t *testing.T, factory Factory) {
 
 		rowKind := mustPath("rows.kind")
 		rowLabel := mustPath("rows.label")
-		rowAnd, err := query.And(
+		rowAnd := query.And(
 			query.Equal(rowKind, query.String("target")),
 			query.Equal(rowLabel, query.String("target")),
 		)
-		if err != nil {
-			t.Fatal(err)
-		}
-		rowOr, err := query.Or(
+		rowOr := query.Or(
 			query.Equal(rowKind, query.String("target")),
 			query.Equal(rowLabel, query.String("target")),
 		)
-		if err != nil {
-			t.Fatal(err)
-		}
-		rowNot, err := query.Not(rowAnd)
-		if err != nil {
-			t.Fatal(err)
-		}
-		blockAnd, err := query.And(
+		rowNot := query.Not(rowAnd)
+		blockAnd := query.And(
 			query.Equal(mustPath("layout.hero.heading"), query.String("target")),
 			query.Equal(mustPath("layout.hero.tone"), query.String("target")),
 		)
-		if err != nil {
-			t.Fatal(err)
-		}
 		tags := mustPath("tags")
 		tagsExist, err := query.Compare(tags, query.OperatorExists, query.Boolean(true))
 		if err != nil {

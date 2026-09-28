@@ -111,13 +111,10 @@ func TestExpressionSnapshotsAreDetached(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	expression, err := query.And(
+	expression := query.And(
 		query.Equal(status, query.String("published")),
 		query.NotEqual(title, query.String("Hidden")),
 	)
-	if err != nil {
-		t.Fatalf("And: %v", err)
-	}
 
 	snapshot := expression.Node()
 	snapshot.Children[0].Comparison.Operator = query.OperatorNotEqual
@@ -155,5 +152,38 @@ func TestExistsRequiresBooleanOperand(t *testing.T) {
 	}
 	if _, err := query.Compare(path, query.OperatorExists, query.String("yes")); err == nil {
 		t.Fatal("string exists comparison succeeded")
+	}
+}
+
+func TestFieldAndLogicalHelpersPanicOnlyOnProgrammerErrors(t *testing.T) {
+	if got := query.Field("seo", "title").String(); got != "seo.title" {
+		t.Fatalf("Field path = %q", got)
+	}
+	status := query.Equal(query.Field("status"), query.String("published"))
+	if got := query.And(status).Kind(); got != query.ExpressionComparison {
+		t.Fatalf("And with one condition = %q, want the condition itself", got)
+	}
+	if got := query.Or(status).Kind(); got != query.ExpressionComparison {
+		t.Fatalf("Or with one condition = %q, want the condition itself", got)
+	}
+	if got := query.Not(status).Kind(); got != query.ExpressionNot {
+		t.Fatalf("Not kind = %q", got)
+	}
+	for name, call := range map[string]func(){
+		"dotted field":  func() { query.Field("seo.title") },
+		"empty field":   func() { query.Field() },
+		"empty And":     func() { query.And() },
+		"empty Or":      func() { query.Or() },
+		"nil condition": func() { query.And(status, nil) },
+		"nil Not":       func() { query.Not(nil) },
+	} {
+		func() {
+			defer func() {
+				if recover() == nil {
+					t.Errorf("%s did not panic", name)
+				}
+			}()
+			call()
+		}()
 	}
 }

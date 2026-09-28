@@ -45,18 +45,18 @@ func formatValue(
 }
 ```
 
-| Argument        | Description                                                                                             |
-| --------------- | ------------------------------------------------------------------------------------------------------- |
-| `value`         | This field's value. `value.Get()` returns the value and whether one is present.                         |
-| `ctx.Operation` | What is happening, such as `operation.Create`, `operation.Update`, or `operation.Read`.                 |
-| `ctx.ID`        | The document's ID. It is empty while a document is being created.                                       |
-| `ctx.Actor.ID`  | The signed-in user's ID, or empty for an anonymous request. `ctx.Actor.Data` holds the user's fields.   |
-| `ctx.Siblings`  | The fields next to this one: the same group, the same array row, or the top level. Includes this field. |
-| `ctx.Root`      | The document's top-level fields.                                                                        |
-| `ctx.Prior`     | The saved values of this field's group or row before the operation. Empty on create.                    |
-| `ctx.Locale`    | The content locale, or empty without [localization](../localization.md).                               |
-| `ctx.Local`     | Reads another document: `ctx.Local.FindByID(ctx.Context, "users", id)`. It cannot write.                |
-| `ctx.Context`   | Cancellation and deadline. Pass it to `ctx.Local` and network calls.                                    |
+| Argument        | Description                                                                                                            |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `value`         | This field's value. `value.Get()` returns the value and whether one is present.                                        |
+| `ctx.Operation` | What is happening, such as `operation.Create`, `operation.Update`, or `operation.Read`.                                |
+| `ctx.ID`        | The document's ID. On a create it is empty until the document is saved; on a duplicate it is the copy's ID once saved. |
+| `ctx.Actor.ID`  | The signed-in user's ID, or empty for an anonymous request. `ctx.Actor.Data` holds the user's fields.                  |
+| `ctx.Siblings`  | The fields next to this one: the same group, the same array row, or the top level. Includes this field.                |
+| `ctx.Root`      | The document's top-level fields.                                                                                       |
+| `ctx.Prior`     | The saved values of this field's group or row before the operation. Empty on create.                                   |
+| `ctx.Locale`    | The content locale, or empty without [localization](../localization.md).                                              |
+| `ctx.Local`     | Reads another document: `ctx.Local.FindByID(ctx.Context, "users", id)`. It cannot write.                               |
+| `ctx.Context`   | Cancellation and deadline. Pass it to `ctx.Local` and network calls.                                                   |
 
 Read another field with `ctx.Siblings.String("title")`, or
 `ctx.Siblings.Get("price").NumberValue()` for other types. These views are read-only: a hook
@@ -75,24 +75,27 @@ Field hooks come in two kinds:
 
 A transform returns one of these:
 
-| Return value                                   | Effect                                                                   |
-| ---------------------------------------------- | ------------------------------------------------------------------------ |
-| `operation.Keep[string]()`                     | Keep the current value                                                   |
-| `operation.Replace(operation.Present("ABC"))`  | Replace it with `"ABC"`                                                  |
-| `operation.Replace(operation.Empty[string]())` | Clear it; `Required()` and other validation still apply                  |
-| A non-nil `error`                              | Stop the operation; a replacement returned with the error is not applied |
+| Return value                | Effect                                                              |
+| --------------------------- | ------------------------------------------------------------------- |
+| `operation.Keep[string]()`  | Keep the current value                                              |
+| `operation.Set("ABC")`      | Set it to `"ABC"`                                                   |
+| `operation.Clear[string]()` | Clear it; `Required()` and other validation still apply             |
+| A non-nil `error`           | Stop the operation; a change returned with the error is not applied |
 
 An error from any hook that runs before the transaction commits stops the operation and rolls
-back its writes. An error from `AfterCommit` cannot undo the save.
+back its writes. Return `ridu.Reject("…")` to tell the editor why: the admin shows the message,
+and an `operation.Issue` passed to it marks a field, with its `Target` starting at this field. Any
+other error is reported as an internal error. An error from `AfterCommit` cannot undo the save.
 
 ## BeforeValidate {#before-validate}
 
 <span id="normalize-input"></span>
 
-Runs before Ridu checks the value, so the input may be missing or have the wrong type. The hook
-receives the raw input as a `store.Value`. Use it to clean up input before validation.
+Runs before Ridu checks the value when a document is created, duplicated, updated, published, or
+unpublished. The input may be missing or have the wrong type, so the hook receives the raw input
+as a `store.Value`. Use it to clean up input before validation.
 
-```go title="content/posts.go" focus={26-29,35-37}
+```go title="content/posts.go" focus={26-27,33-35}
 package content
 
 import (
@@ -118,10 +121,8 @@ func trimText(
 		// Let Ridu validate values that are not strings.
 		return operation.Keep[store.Value](), nil
 	}
-	// Present wraps the new value; Replace applies it to this field.
-	return operation.Replace(
-		operation.Present(store.String(strings.TrimSpace(text))),
-	), nil
+	// Set replaces this field's value with the trimmed text.
+	return operation.Set(store.String(strings.TrimSpace(text))), nil
 }
 
 var Posts = ridu.Collection{
@@ -135,9 +136,7 @@ var Posts = ridu.Collection{
 ```
 
 Submitting `"  Hello, Ridu  "` stores `"Hello, Ridu"`. A value that is not a string is left for
-Ridu's own validation to reject. `BeforeValidate` also runs for reads, where the value is empty,
-and for deletes, where it holds the saved value. Check `ctx.Operation` if the hook should only
-change submitted input.
+Ridu's own validation to reject, and an update that does not send the title leaves it alone.
 
 ## BeforeChange {#before-change}
 
@@ -147,7 +146,7 @@ Runs after the built-in checks and before the value is saved, for create, duplic
 publish, and unpublish. The value has the field's Go type: `operation.Value[string]` for a Text
 field. Use it to change a valid value before saving.
 
-```go title="content/sku.go" focus={18-21,24-26}
+```go title="content/sku.go" focus={18-19,22-24}
 package content
 
 import (
@@ -165,10 +164,8 @@ func uppercaseSKU(
 	if !present {
 		return operation.Keep[string](), nil
 	}
-	// Replace updates this field; Ridu validates the result again.
-	return operation.Replace(
-		operation.Present(strings.ToUpper(sku)),
-	), nil
+	// Set changes this field; Ridu validates the result again.
+	return operation.Set(strings.ToUpper(sku)), nil
 }
 
 var SKU = field.Text("sku").Required().Hooks(field.Hooks[string]{
@@ -188,7 +185,7 @@ Runs for each document Ridu returns, including the responses to creates and upda
 the response without changing what is stored. Register it with the field's `.AfterRead(...)`
 method.
 
-```go title="content/display_code.go" focus={18-21,24}
+```go title="content/display_code.go" focus={18-19,22}
 package content
 
 import (
@@ -206,10 +203,8 @@ func formatCode(
 	if !present {
 		return operation.Keep[string](), nil
 	}
-	// AfterRead replacements change the response, not storage.
-	return operation.Replace(
-		operation.Present(strings.ToUpper(code)),
-	), nil
+	// In an AfterRead hook, Set changes the response, not storage.
+	return operation.Set(strings.ToUpper(code)), nil
 }
 
 var DisplayCode = field.Text("displayCode").AfterRead(formatCode)
@@ -247,7 +242,7 @@ func clearSelfReview(
 		return operation.Keep[operation.ID](), nil
 	}
 	// Authors cannot review their own work; save it unreviewed.
-	return operation.Replace(operation.Empty[operation.ID]()), nil
+	return operation.Clear[operation.ID](), nil
 }
 
 // Read hooks receive the response value, which may be the populated reviewer.
@@ -265,10 +260,10 @@ func showReviewerName(
 		return operation.Keep[operation.ReferenceOutput](), nil
 	}
 	// Return the reference with only the reviewer's name.
-	return operation.Replace(operation.Present(operation.Populated(store.Document{
+	return operation.Set(operation.Populated(store.Document{
 		ID:     reviewer.ID,
 		Values: store.Values{"name": reviewer.Values["name"]},
-	}))), nil
+	})), nil
 }
 
 var Reviewer = field.Relationship("reviewer", "users").
@@ -285,12 +280,13 @@ the ID unchanged.
 ## BeforeDuplicate {#before-duplicate}
 
 Runs when a document is duplicated, before `BeforeValidate`. It receives the copied value as a
-raw `store.Value`. Use it for values that must not be copied as they are, such as unique ones.
+raw `store.Value`. Use it for values that must not be copied as they are.
 
-A [`field.Slug`](https://riducms.com/docs/fields/slug/) is unique, so duplicating a document fails with a conflict
-unless the copy gets a new slug:
+Ridu already gives a copied [`field.Slug`](https://riducms.com/docs/fields/slug/) the next free value, such as
+`about-us-copy`. Other unique fields need a hook, or the copy fails with a `unique` error on that
+field. This field links a product to Stripe, and a copy must not claim the same Stripe product:
 
-```go title="content/copy_slug.go" focus={18-21,24-26}
+```go title="content/external_id.go" focus={13-14,19}
 package content
 
 import (
@@ -299,37 +295,32 @@ import (
 	"github.com/riducms/ridu/store"
 )
 
-func suffixCopiedSlug(
+func unlinkCopy(
 	_ operation.Context,
-	value operation.Value[store.Value],
+	_ operation.Value[store.Value],
 ) (operation.Change[store.Value], error) {
-	raw, _ := value.Get()
-	slug, ok := raw.StringValue()
-	if !ok || slug == "" {
-		return operation.Keep[store.Value](), nil
-	}
-	// Slugs are unique, so the copy needs its own.
-	return operation.Replace(
-		operation.Present(store.String(slug + "-copy")),
-	), nil
+	// The copy is a new product that Stripe does not know about yet.
+	return operation.Clear[store.Value](), nil
 }
 
-var PageSlug = field.Slug("slug", "title").Hooks(field.Hooks[string]{
-	BeforeDuplicate: []field.RawTransform{suffixCopiedSlug},
-})
+var StripeProductID = field.Text("stripeProductId").Unique().Hooks(
+	field.Hooks[string]{
+		BeforeDuplicate: []field.RawTransform{unlinkCopy},
+	},
+)
 ```
 
-Duplicating a page with the slug `about-us` creates a copy with `about-us-copy`. A second copy of
-the same page would conflict again, so use a longer suffix if editors often duplicate a page more
-than once.
+Duplicating a product saves the copy without a `stripeProductId`, ready to be linked to a new
+Stripe product.
 
 ## AfterCommit {#after-commit}
 
-Runs after the transaction commits, for every operation, including reads. The value is already
-saved, so an error here cannot undo it. Use it for side effects that should only happen after a
-successful save, such as logging a change or notifying another service.
+Runs after the transaction commits, for every change, including deletes and restores, but never
+after a read. The value is already saved, so an error here cannot undo it. Use it for side effects
+that should only happen after a successful save, such as logging a change or notifying another
+service.
 
-```go title="content/status.go" focus={15-18,20-22}
+```go title="content/status.go" focus={15-17,20-22}
 package content
 
 import (
@@ -346,7 +337,7 @@ func logStatusChange(
 	status, _ := value.Get()
 	// Prior holds the values saved before this operation.
 	previous, _ := ctx.Prior.String("status")
-	if ctx.Operation == operation.Read || status == previous {
+	if status == previous {
 		return nil
 	}
 	// The change is committed, so this never logs a rolled-back save.
@@ -377,8 +368,8 @@ These hooks follow the same patterns as the examples above:
 | `AfterDelete`     | Observer  | After the delete, before commit. An error restores the document.                                                          |
 | `AfterOperation`  | Observer  | After the database call for every operation, including reads and deletes, before commit.                                  |
 
-Hooks that run for reads and deletes receive an empty value when there is nothing to work with.
-Check `ctx.Operation` when a hook should act only on saves. The
+`BeforeOperation` and `AfterOperation` also run for reads, where the value can be empty. Check
+`ctx.Operation` when they should act only on saves. The
 [collection hook order](./collections.md#save-order) shows where each field hook runs.
 
 ## Types {#types}

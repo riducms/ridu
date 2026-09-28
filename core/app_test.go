@@ -535,7 +535,7 @@ func TestOmittedOptionalFieldHookCanSupplyAValue(t *testing.T) {
 	application, err := ridu.New(ridu.Config{Name: "Optional field hook", Collections: []ridu.Collection{{
 		Slug: "posts", Fields: field.Fields{field.Text("optional").Hooks(field.Hooks[string]{BeforeValidate: []field.RawTransform{func(_ operation.Context, input operation.Value[store.Value]) (operation.Change[store.Value], error) {
 			if _, supplied := input.Get(); !supplied {
-				return operation.Replace(operation.Present(store.String("hook default"))), nil
+				return operation.Set(store.String("hook default")), nil
 			}
 			return operation.Keep[store.Value](), nil
 		}}, AfterCommit: []field.Observer[string]{func(operation.Context, operation.Value[string]) error { afterCommit++; return nil }}})},

@@ -1,0 +1,51 @@
+{
+	"name": "@riducms/plugin-graphql",
+	"description": "GraphQL playground for Ridu's official GraphQL plugin.",
+	"version": "0.5.0",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/riducms/ridu.git",
+		"directory": "packages/plugin-graphql"
+	},
+	"homepage": "https://riducms.com",
+	"bugs": {
+		"url": "https://github.com/riducms/ridu/issues"
+	},
+	"publishConfig": {
+		"access": "public",
+		"provenance": true
+	},
+	"type": "module",
+	"exports": {
+		".": "./src/index.ts"
+	},
+	"files": [
+		"src"
+	],
+	"scripts": {
+		"check": "svelte-check --tsconfig ./tsconfig.json",
+		"test": "bun test",
+		"build": "vite build"
+	},
+	"dependencies": {
+		"@codemirror/autocomplete": "^6.20.3",
+		"@codemirror/commands": "^6.11.1",
+		"@codemirror/lang-json": "^6.0.2",
+		"@codemirror/language": "^6.12.4",
+		"@codemirror/lint": "^6.9.7",
+		"@codemirror/state": "^6.7.5",
+		"@codemirror/view": "^6.43.12",
+		"@lezer/highlight": "^1.2.3",
+		"@riducms/plugin": "workspace:*",
+		"@riducms/protocol": "workspace:*",
+		"@riducms/sdk": "workspace:*",
+		"@riducms/ui": "workspace:*",
+		"cm6-graphql": "^0.2.2",
+		"graphql": "^16.14.2",
+		"svelte": "^5.56.8"
+	},
+	"devDependencies": {
+		"@riducms/build": "workspace:*"
+	}
+}

@@ -133,7 +133,7 @@ func (hooks *localeViewHooks) change(ctx operation.Context, input operation.Valu
 	if step == 1 {
 		changed = fmt.Sprintf("second-%d", index)
 	}
-	return operation.Replace(operation.Present(changed)), nil
+	return operation.Set(changed), nil
 }
 
 func newLocaleViewFixture(tb testing.TB, ctx context.Context, shape, mode string, size int) localeViewFixture {

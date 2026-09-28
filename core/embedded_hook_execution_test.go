@@ -45,7 +45,7 @@ func TestEmbeddedHookExecutionUsesCurrentValuesAndRetainsSnapshots(t *testing.T)
 				expectedRoots = append(expectedRoots, append([]string(nil), current...))
 				expectedSiblings = append(expectedSiblings, value)
 				current[index] = fmt.Sprintf("%s|%d", value, step)
-				return operation.Replace(operation.Present(current[index])), nil
+				return operation.Set(current[index]), nil
 			}
 			title := field.Text("title").Required()
 			if phase == "write" {
@@ -141,7 +141,7 @@ func TestEmbeddedHookExecutionPreparesNewNestedIdentitiesBetweenCallbacks(t *tes
 			retainedIDs[key] = ctx.OccurrenceID
 		}
 		text, _ := input.Get()
-		return operation.Replace(operation.Present(strings.ToUpper(text))), nil
+		return operation.Set(strings.ToUpper(text)), nil
 	}}, AfterChange: []field.Observer[string]{func(ctx operation.Context, _ operation.Value[string]) error {
 		if active {
 			key, _ := ctx.Siblings.String("uid")
@@ -162,7 +162,7 @@ func TestEmbeddedHookExecutionPreparesNewNestedIdentitiesBetweenCallbacks(t *tes
 			nodes, _ := envelope["outline"].CopyList()
 			fresh := outline.Widget("card", "", store.Values{"title": store.String("fresh"), "links": store.List(store.Object(store.Values{"label": store.String("new link")}))})
 			section := store.Object(store.Values{"kind": store.String("section"), "items": store.List(fresh)})
-			return operation.Replace(operation.Present(outline.Value(nodes[2], nodes[0], section))), nil
+			return operation.Set(outline.Value(nodes[2], nodes[0], section)), nil
 		},
 		func(ctx operation.Context, input operation.Value[store.Value]) (operation.Change[store.Value], error) {
 			if !active {
@@ -255,7 +255,7 @@ func TestEmbeddedHookExecutionRejectsInvalidReplacementBeforeFurtherCallbacks(t 
 			body := outline.Field("body", embeddedCard(title)).Hooks(field.Hooks[store.Value]{BeforeChange: []field.Transform[store.Value]{
 				func(operation.Context, operation.Value[store.Value]) (operation.Change[store.Value], error) {
 					if active {
-						return operation.Replace(operation.Present(test.value)), nil
+						return operation.Set(test.value), nil
 					}
 					return operation.Keep[store.Value](), nil
 				},

@@ -24,9 +24,7 @@ func loadPostSummary(
 	// We need the count, not a page full of post content.
 	options := ridu.ListOptions{Limit: 1}
 	if input.Search != "" {
-		// This fixed field name is a valid query path.
-		title, _ := query.NewPath("title")
-		options.Where = query.Contains(title, input.Search)
+		options.Where = query.Contains(query.Field("title"), input.Search)
 	}
 	posts, err := ctx.List("posts", options)
 	if err != nil {

@@ -198,13 +198,27 @@ ridu migrate verify
 `create` writes an artifact without connecting to a database. `plan` and `status` inspect a
 selected database without changing it. `verify` replays the complete history in an isolated target,
 and `up` applies pending migrations. Select the database with `DATABASE_URL` for PostgreSQL or
-MongoDB, or `RIDU_SQLITE_PATH` for SQLite. SQLite `verify` is the exception: it uses a temporary
+MongoDB, or `RIDU_SQLITE_PATH` for SQLite. For a local PostgreSQL or MongoDB database without TLS,
+set `RIDU_ALLOW_INSECURE_DATABASE=true`, as the scaffolded `.env` does, or pass
+`--allow-insecure-database`. SQLite `verify` is the exception: it uses a temporary
 database and needs no path. SQLite also provides the explicitly destructive `down`, `reset`,
 `refresh`, and `fresh` commands for its reversible local artifacts.
 
 Follow [Migrations](/docs/migrations/) for the complete authoring and deployment workflow. The
 [migration command reference](/reference/cli/migrate-up/) lists every runner option, while each
 [database adapter](/docs/adapters/) explains its own connection and recovery rules.
+
+## Upgrade Ridu {#upgrade}
+
+```bash title="terminal"
+npx @riducms/cli@X.Y.Z upgrade X.Y.Z
+```
+
+`upgrade` moves the project to another release. Run it from the release you are moving to, as
+above, so the upgrade uses that release's rules: it rewrites every `@riducms/*` pin, official
+plugin, and the Go module requirement, installs dependencies, and then runs the new CLI's
+`generate`, `agent sync`, and `migrate create`. Add `--no-install` to rewrite only the pins. See
+[Upgrade a project](/docs/releases/#upgrade) for the review steps.
 
 ## Plugins {#plugins}
 

@@ -105,13 +105,10 @@ func TestRepeatedPathsMatchRowsIndependentlyAndKeepBlockTypes(t *testing.T) {
 		}
 		return parsed
 	}
-	independentRows, err := query.And(
+	independentRows := query.And(
 		query.Equal(path("variants.sku"), query.String("red")),
 		query.LessThanEqual(path("variants.price"), query.Number(10)),
 	)
-	if err != nil {
-		t.Fatal(err)
-	}
 	for _, test := range []struct {
 		name  string
 		where query.Expression

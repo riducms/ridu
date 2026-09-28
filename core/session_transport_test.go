@@ -3,7 +3,7 @@ package core_test
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/base64"
 	"errors"
 	"image"
 	"image/color"
@@ -184,6 +184,15 @@ func TestTokenTransportManagesSessionsWithoutCookies(t *testing.T) {
 	}
 
 	header = sessionHeader(replacement.Token)
+	rotatedMe := fixture.do(t, http.MethodGet, "/api/auth/me", "", header)
+	if rotatedMe.StatusCode != http.StatusOK {
+		t.Fatalf("rotated session = %d: %s", rotatedMe.StatusCode, readBody(t, rotatedMe))
+	}
+	var resolvedReplacement protocol.SessionEnvelope[map[string]any]
+	decodeResponse(t, rotatedMe, &resolvedReplacement)
+	if resolvedReplacement.Session.ID != issued.Session.ID || resolvedReplacement.Session.User["id"] != user.ID {
+		t.Fatalf("rotated session identity = %#v", resolvedReplacement)
+	}
 	logout := fixture.do(t, http.MethodPost, "/api/auth/logout", "", header)
 	if logout.StatusCode != http.StatusOK || len(logout.Cookies()) != 0 {
 		t.Fatalf("header logout = %d cookies=%#v", logout.StatusCode, logout.Cookies())
@@ -333,8 +342,18 @@ func TestUploadGrantsDeliverPrivateObjectsWithoutTheSessionToken(t *testing.T) {
 		t.Fatal(err)
 	}
 	grantValue := tampered.Query().Get("grant")
+	grantParts := strings.Split(grantValue, ".")
+	if len(grantParts) != 4 {
+		t.Fatalf("grant format = %q", grantValue)
+	}
+	signature, err := base64.RawURLEncoding.DecodeString(grantParts[3])
+	if err != nil || len(signature) == 0 {
+		t.Fatalf("grant signature = %q: %v", grantParts[3], err)
+	}
+	signature[0] ^= 1
+	grantParts[3] = base64.RawURLEncoding.EncodeToString(signature)
 	query := tampered.Query()
-	query.Set("grant", grantValue[:len(grantValue)-2]+"AA")
+	query.Set("grant", strings.Join(grantParts, "."))
 	tampered.RawQuery = query.Encode()
 	if forged := fixture.do(t, http.MethodGet, tampered.String(), "", nil); forged.StatusCode != http.StatusUnauthorized || responseErrorCode(t, forged) != protocol.ErrorInvalidCredential {
 		t.Fatal("tampered grant was accepted")
@@ -375,6 +394,7 @@ func TestUploadGrantsDeliverPrivateObjectsWithoutTheSessionToken(t *testing.T) {
 func TestUploadGrantFollowsCurrentReadAccess(t *testing.T) {
 	fixture := newTransportFixture(t)
 	owner := fixture.user(t, "access@example.test")
+	nextOwner := fixture.user(t, "next-owner@example.test")
 	identity := &ridu.AuthIdentity{Collection: "users", Actor: owner}
 	var encoded bytes.Buffer
 	if err := png.Encode(&encoded, image.NewRGBA(image.Rect(0, 0, 2, 2))); err != nil {
@@ -388,17 +408,45 @@ func TestUploadGrantFollowsCurrentReadAccess(t *testing.T) {
 	}
 	issued := fixture.tokenLogin(t, "access@example.test")
 	mint := fixture.do(t, http.MethodPost, "/api/uploads/media/grants", `{"items":[{"id":"`+document.ID+`"}]}`, sessionHeader(issued.Token))
+	if mint.StatusCode != http.StatusOK {
+		t.Fatalf("mint grant = %d: %s", mint.StatusCode, readBody(t, mint))
+	}
 	var grants protocol.UploadGrantsEnvelope
 	decodeResponse(t, mint, &grants)
-	if _, err := fixture.application.Local().Delete(context.Background(), "media", document.ID, ridu.MutationOptions{Actor: &owner, ActorCollection: "users"}); err != nil {
+	if len(grants.Grants) != 1 {
+		t.Fatalf("grants = %#v", grants)
+	}
+	delivered := fixture.do(t, http.MethodGet, grants.Grants[0].URL, "", nil)
+	if delivered.StatusCode != http.StatusOK || delivered.Header.Get("Content-Type") != "image/png" {
+		t.Fatalf("grant before access changed = %d: %s", delivered.StatusCode, readBody(t, delivered))
+	}
+	before := readBody(t, delivered)
+	if _, err := png.Decode(strings.NewReader(before)); err != nil {
+		t.Fatalf("grant delivered invalid PNG bytes: %v", err)
+	}
+	if _, err := fixture.application.Local().Update(context.Background(), "media", document.ID, store.Values{"owner": store.String(nextOwner.ID)}, ridu.MutationOptions{Actor: &owner, ActorCollection: "users"}); err != nil {
 		t.Fatal(err)
 	}
 	response := fixture.do(t, http.MethodGet, grants.Grants[0].URL, "", nil)
-	if response.StatusCode == http.StatusOK {
-		t.Fatal("grant delivered an object after its document was deleted")
+	if response.StatusCode != http.StatusNotFound || responseErrorCode(t, response) != protocol.ErrorNotFound {
+		t.Fatalf("grant after access changed = %d, want 404 not_found", response.StatusCode)
 	}
-	var envelope struct {
-		Error json.RawMessage `json:"error"`
+	current := fixture.do(t, http.MethodGet, "/api/auth/me", "", sessionHeader(issued.Token))
+	if current.StatusCode != http.StatusOK {
+		t.Fatalf("access change invalidated the owner's session: %d: %s", current.StatusCode, readBody(t, current))
 	}
-	decodeResponse(t, response, &envelope)
+	var session protocol.SessionEnvelope[map[string]any]
+	decodeResponse(t, current, &session)
+	if session.Session.ID != issued.Session.ID || session.Session.User["id"] != owner.ID {
+		t.Fatalf("owner's session after access changed = %#v", session)
+	}
+	other := fixture.tokenLogin(t, "next-owner@example.test")
+	objectPath := strings.Split(grants.Grants[0].URL, "?")[0]
+	retained := fixture.do(t, http.MethodGet, objectPath, "", sessionHeader(other.Token))
+	if retained.StatusCode != http.StatusOK || retained.Header.Get("Content-Type") != "image/png" {
+		t.Fatalf("new owner's upload delivery = %d: %s", retained.StatusCode, readBody(t, retained))
+	}
+	if after := readBody(t, retained); after != before {
+		t.Fatal("changing read access changed the upload bytes")
+	}
 }

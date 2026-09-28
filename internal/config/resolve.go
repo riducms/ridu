@@ -562,10 +562,10 @@ func (resolver *resolver) resolvePluginDescriptor(path string, plugin Plugin, re
 	if plugin.Ridu == nil || !schema.IsValidSemanticVersionRange(plugin.Ridu.Minimum, plugin.Ridu.MaximumExclusive) {
 		resolver.issue("invalid_plugin_ridu_compatibility", path+".ridu", "plugin Ridu compatibility requires semantic minimum and optional exclusive maximum versions")
 	}
-	resolved.Version, resolved.GoPackage, resolved.APIVersion = plugin.Version, plugin.GoPackage, plugin.APIVersion
-	if plugin.Ridu != nil {
-		resolved.Ridu = &schema.PluginCompatibility{Minimum: plugin.Ridu.Minimum, MaximumExclusive: plugin.Ridu.MaximumExclusive}
-	}
+	// The package version and Ridu compatibility range are checked here and at
+	// startup, but they are not schema: recording them in the manifest would make
+	// every plugin upgrade look like a data-model change that needs a migration.
+	resolved.GoPackage, resolved.APIVersion = plugin.GoPackage, plugin.APIVersion
 	fieldKeys := make(map[string]struct{}, len(plugin.FieldTypes))
 	for index, fieldType := range plugin.FieldTypes {
 		fieldPath := fmt.Sprintf("%s.fieldTypes[%d]", path, index)

@@ -135,6 +135,7 @@ const expectedGroupOrders: Readonly<Record<string, readonly string[]>> = {
 	'plugin-seo': ['Functions', 'Types', 'Interfaces'],
 	formbuilder: ['Functions', 'Types'],
 	'plugin-form-builder': ['Functions', 'Types', 'Interfaces'],
+	'plugin-graphql': ['Constants'],
 	'storage-local': ['Functions', 'Types', 'Methods'],
 	'storage-s3': ['Functions', 'Types', 'Methods'],
 	cli: ['Commands', 'Agent guidance', 'Migrations', 'Plugins']
@@ -154,7 +155,8 @@ const typescriptEntrypoints: Readonly<Record<string, readonly string[]>> = {
 	'plugin-form-builder': [
 		'packages/plugin-form-builder/src/index.ts',
 		'packages/plugin-form-builder/src/admin.ts'
-	]
+	],
+	'plugin-graphql': ['packages/plugin-graphql/src/index.ts']
 };
 
 const goPackageDirectories: Readonly<Record<string, string>> = {

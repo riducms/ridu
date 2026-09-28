@@ -43,7 +43,7 @@ func TestFieldGraphSubmittedInputAdmission(t *testing.T) {
 						Hooks(field.Hooks[string]{BeforeValidate: []field.RawTransform{func(_ operation.Context, raw operation.Value[store.Value]) (operation.Change[store.Value], error) {
 							if value, present := raw.Get(); present {
 								if text, ok := value.StringValue(); ok {
-									return operation.Replace(operation.Present(store.String(strings.TrimSpace(text)))), nil
+									return operation.Set(store.String(strings.TrimSpace(text))), nil
 								}
 							}
 							return operation.Keep[store.Value](), nil

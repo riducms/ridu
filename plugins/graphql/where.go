@@ -101,10 +101,7 @@ func parseWhere(values map[string]interface{}, paths map[string]string) (query.E
 				return nil, err
 			}
 			if child != nil {
-				negated, err := query.Not(child)
-				if err != nil {
-					return nil, err
-				}
+				negated := query.Not(child)
 				expressions = append(expressions, negated)
 			}
 		default:
@@ -161,7 +158,7 @@ func comparison(path query.Path, operator string, raw interface{}) (query.Expres
 		return nil, err
 	}
 	if operator == "not_in" {
-		return query.Not(expression)
+		return query.Not(expression), nil
 	}
 	return expression, nil
 }
@@ -197,7 +194,7 @@ func combineLogical(kind string, expressions []query.Expression) (query.Expressi
 		return expressions[0], nil
 	}
 	if kind == "or" {
-		return query.Or(expressions...)
+		return query.Or(expressions...), nil
 	}
-	return query.And(expressions...)
+	return query.And(expressions...), nil
 }
