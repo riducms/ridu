@@ -29,7 +29,7 @@ func TestSEOTransformsUnifiedGraphWithoutLosingFieldPolicies(t *testing.T) {
 						return draft.EditText("title", func(title field.TextField) field.TextField {
 							return title.MaxLength(70).Hooks(field.Hooks[string]{BeforeChange: []field.Transform[string]{func(_ operation.Context, value operation.Value[string]) (operation.Change[string], error) {
 								text, _ := value.Get()
-								return operation.Replace(operation.Present("SEO: " + text)), nil
+								return operation.Set("SEO: " + text), nil
 							}}})
 						})
 					})

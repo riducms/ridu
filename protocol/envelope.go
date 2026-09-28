@@ -194,7 +194,10 @@ const (
 	// ErrorInvalidCredential rejects an explicit Authorization credential. It is
 	// distinct from access_denied so clients can discard a stored token without
 	// mistaking an ordinary authorization failure for a lost session.
-	ErrorInvalidCredential   ErrorCode = "invalid_credential"
+	ErrorInvalidCredential ErrorCode = "invalid_credential"
+	// ErrorRejected reports a hook's deliberate refusal. Its message is written
+	// for the person who made the request.
+	ErrorRejected            ErrorCode = "rejected"
 	ErrorInvalidPreviewToken ErrorCode = "invalid_preview_token"
 	ErrorSelectionTooLarge   ErrorCode = "selection_too_large"
 )

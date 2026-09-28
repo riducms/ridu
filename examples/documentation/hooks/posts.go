@@ -23,10 +23,8 @@ func trimText(
 		// Let Ridu validate values that are not strings.
 		return operation.Keep[store.Value](), nil
 	}
-	// Present wraps the new value; Replace applies it to this field.
-	return operation.Replace(
-		operation.Present(store.String(strings.TrimSpace(text))),
-	), nil
+	// Set replaces this field's value with the trimmed text.
+	return operation.Set(store.String(strings.TrimSpace(text))), nil
 }
 
 var Posts = ridu.Collection{

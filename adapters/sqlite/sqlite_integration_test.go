@@ -85,7 +85,8 @@ func TestSQLiteStoreRunsThePayloadDocumentAndAuthVertical(t *testing.T) {
 	}
 	if _, err := application.Local().Create(ctx, "users", store.Values{
 		"email": store.String("ada@example.test"),
-	}, ridu.MutationOptions{}); !sqliteOperationCode(err, "conflict") {
+	}, ridu.MutationOptions{}); !sqliteOperationCode(err, "validation") {
+		// The engine names the unique field that the store refused.
 		t.Fatalf("duplicate unique email error = %v", err)
 	}
 	if _, err := application.Local().Create(ctx, "posts", store.Values{

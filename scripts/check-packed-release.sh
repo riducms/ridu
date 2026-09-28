@@ -180,9 +180,11 @@ printf '%s\n' \
 	'import { richTextMessages } from "@riducms/plugin-richtext";' \
 	'import { seoMessages } from "@riducms/plugin-seo";' \
 	'import { formBuilderMessages } from "@riducms/plugin-form-builder/admin";' \
+	'import { graphqlMessages } from "@riducms/plugin-graphql";' \
 	'void richTextMessages;' \
 	'void seoMessages;' \
-	'void formBuilderMessages;' > "$project_root/admin/src/framework-alias-contract.ts"
+	'void formBuilderMessages;' \
+	'void graphqlMessages;' > "$project_root/admin/src/framework-alias-contract.ts"
 
 (
 	cd "$project_root"

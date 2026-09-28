@@ -101,6 +101,20 @@ function deferred<Value>() {
 describe("token session transport", () => {
 	it("persists a login token before resolving and sends it on every request", async () => {
 		const store = new MemoryStore();
+		const persistenceStarted = deferred<void>();
+		const releasePersistence = deferred<void>();
+		const completionOrder: string[] = [];
+		const persist = store.issued.bind(store);
+		let persistence: Promise<void> | undefined;
+		store.issued = (token, snapshot) => {
+			persistence = (async () => {
+				persistenceStarted.resolve();
+				await releasePersistence.promise;
+				persist(token, snapshot);
+				completionOrder.push("persisted");
+			})();
+			return persistence;
+		};
 		const requests: Request[] = [];
 		const client = createClient<TransportConfig, "users">({
 			baseURL: "https://cms.example.test",
@@ -122,19 +136,34 @@ describe("token session transport", () => {
 			},
 		});
 		store.token = "stale";
-		const signedIn = await client.auth.login({
-			email: "ada@example.test",
-			password: "correct-horse",
-		});
-		expect(signedIn.user.displayName).toBe("Ada");
-		expect(store.token).toBe("token_a");
-		expect(client.auth.session?.user.email).toBe("ada@example.test");
+		const login = client.auth
+			.login({ email: "ada@example.test", password: "correct-horse" })
+			.then((signedIn) => {
+				completionOrder.push("login");
+				return signedIn;
+			});
+		try {
+			await Promise.race([persistenceStarted.promise, login]);
+			expect(persistence).toBeDefined();
+			expect(store.token).toBe("stale");
+			expect(completionOrder).toEqual([]);
+			releasePersistence.resolve();
+			const signedIn = await login;
+			await persistence;
+			expect(completionOrder).toEqual(["persisted", "login"]);
+			expect(signedIn.user.displayName).toBe("Ada");
+			expect(store.token).toBe("token_a");
+			expect(client.auth.session?.user.email).toBe("ada@example.test");
 
-		await client.request("/api/custom");
-		store.token = "token_b";
-		await client.request("/api/custom");
-		expect(requests[1]?.headers.get("authorization")).toBe("Session token_a");
-		expect(requests[2]?.headers.get("authorization")).toBe("Session token_b");
+			await client.request("/api/custom");
+			store.token = "token_b";
+			await client.request("/api/custom");
+			expect(requests[1]?.headers.get("authorization")).toBe("Session token_a");
+			expect(requests[2]?.headers.get("authorization")).toBe("Session token_b");
+		} finally {
+			releasePersistence.resolve();
+			await Promise.allSettled([login, persistence]);
+		}
 	});
 
 	it("omits ambient cookies from token requests", async () => {
@@ -315,19 +344,34 @@ describe("token session transport", () => {
 		const store = new MemoryStore();
 		store.token = "token_a";
 		const pending = deferred<Response>();
+		let rotations = 0;
 		const client = createClient<TransportConfig>({
 			baseURL: "https://cms.example.test",
 			auth: { token: store },
 			fetch: async (input) => {
-				expect((input as Request).headers.get("authorization")).toBe("Session token_a");
+				rotations += 1;
+				if (rotations === 1) {
+					expect((input as Request).headers.get("authorization")).toBe("Session token_a");
+					return Response.json({ session: session(), token: "token_a2" });
+				}
+				expect((input as Request).headers.get("authorization")).toBe("Session token_a2");
 				return pending.promise;
 			},
 		});
+		expect((await client.auth.rotate()).id).toBe("session_1");
+		expect(store.token).toBe("token_a2");
+		expect(store.session).toEqual(session());
 		const rotation = client.auth.rotate();
-		store.issued("token_b", session("session_b"));
-		pending.resolve(Response.json({ session: session(), token: "token_a2" }));
-		await rotation;
-		expect(store.token).toBe("token_b");
+		try {
+			store.issued("token_b", session("session_b"));
+			pending.resolve(Response.json({ session: session(), token: "token_a3" }));
+			await rotation;
+			expect(store.token).toBe("token_b");
+			expect(store.session).toEqual(session("session_b"));
+		} finally {
+			pending.resolve(Response.json({ session: session(), token: "token_a3" }));
+			await Promise.allSettled([rotation]);
+		}
 	});
 
 	it("requires an auth collection when the client has none configured", async () => {
@@ -363,9 +407,15 @@ describe("token session transport", () => {
 		});
 		const ids = Array.from({ length: 150 }, (_, index) => `asset_${index}`);
 		const urls = await client.getUploadURLs("assets", ids, { expiresIn: 300 });
-		expect(bodies.map((body) => body.items.length).sort()).toEqual([100, 50]);
+		expect(bodies.map((body) => body.items.length)).toEqual([100, 50]);
+		expect(bodies.flatMap((body) => body.items.map((item) => item.id))).toEqual(ids);
+		expect(urls).toEqual(
+			ids.map((id) => ({
+				url: `https://cms.example.test/api/uploads/assets/${id}?grant=g`,
+				expiresAt: "2030-01-01T00:10:00Z",
+			}))
+		);
 		expect(bodies[0]?.expiresIn).toBe(300);
-		expect(urls[149]?.url).toBe("https://cms.example.test/api/uploads/assets/asset_149?grant=g");
 		const thumb = await client.getUploadURL("assets", "asset_1", { size: "thumb" });
 		expect(bodies.at(-1)?.items).toEqual([{ id: "asset_1", size: "thumb" }]);
 		expect(thumb.url.startsWith("https://cms.example.test/")).toBe(true);

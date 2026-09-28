@@ -59,27 +59,18 @@ func (budget *whereBudget) decode(encoded []byte, collection schema.Collection, 
 				}
 				decoded[index] = expression
 			}
-			var expression query.Expression
-			var err error
+			// The length check above keeps these helpers from panicking on input.
 			if name == "and" {
-				expression, err = query.And(decoded...)
+				expressions = append(expressions, query.And(decoded...))
 			} else {
-				expression, err = query.Or(decoded...)
+				expressions = append(expressions, query.Or(decoded...))
 			}
-			if err != nil {
-				return nil, err
-			}
-			expressions = append(expressions, expression)
 		case "not":
 			child, err := budget.decode(raw, collection, depth+1)
 			if err != nil {
 				return nil, err
 			}
-			expression, err := query.Not(child)
-			if err != nil {
-				return nil, err
-			}
-			expressions = append(expressions, expression)
+			expressions = append(expressions, query.Not(child))
 		default:
 			path, err := query.ParsePath(name)
 			if err != nil {
@@ -97,10 +88,7 @@ func (budget *whereBudget) decode(encoded []byte, collection schema.Collection, 
 			expressions = append(expressions, expression)
 		}
 	}
-	if len(expressions) == 1 {
-		return expressions[0], nil
-	}
-	return query.And(expressions...)
+	return query.And(expressions...), nil
 }
 
 func queryableSystemField(collection schema.Collection, name string) bool {

@@ -563,6 +563,11 @@ try {
 			console.error(issue.path, issue.message);
 		return;
 	}
+	if (error instanceof RiduError && error.code === 'rejected') {
+		// A server hook refused the change; its message is written for people.
+		alert(error.message);
+		return;
+	}
 	if (error instanceof RiduError && error.code === 'conflict') {
 		// Reload: another writer changed this revision.
 		return;

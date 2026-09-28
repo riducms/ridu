@@ -158,7 +158,7 @@ func primitiveListValueEqual(t *testing.T, actual, want store.Value) {
 }
 
 func listNot(expression query.Expression) query.Expression {
-	result, _ := query.Not(expression)
+	result := query.Not(expression)
 	return result
 }
 func listExists(path query.Path, value bool) query.Expression {

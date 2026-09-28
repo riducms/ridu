@@ -41,6 +41,11 @@ admin's **Generate slug** action returns it to source-derived behavior.
 The source can be a direct string or a string beneath non-repeated groups, for example
 `seo.pageTitle`. It cannot traverse an array or blocks list.
 
+Slugs are unique, so a duplicated document cannot keep its original's slug. Ridu gives the copy
+the next free value: duplicating `about-us` creates `about-us-copy`, then `about-us-copy-2`, and
+copying a copy continues the same sequence. A slug that the duplicate request or a hook sets is
+kept as it is.
+
 ## Configuration {#configuration}
 
 | Constructor or method                     | What it controls                                                                    |

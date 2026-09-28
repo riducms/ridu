@@ -246,6 +246,26 @@ describe('riduMarkdownCodeMetadata', () => {
 		expect(pages).toBeGreaterThan(0);
 	});
 
+	it('keeps every docs line annotation inside its code block', async () => {
+		// A stale focus/add/remove range past the last line breaks the rest of the page's rendering.
+		let annotated = 0;
+		for await (const relativePath of new Bun.Glob('src/content/**/*.md').scan({
+			cwd: process.cwd(),
+			onlyFiles: true
+		})) {
+			const markdown = readFileSync(relativePath, 'utf8');
+			for (const [, meta, code] of markdown.matchAll(/```\w+([^\n]*)\n([\s\S]*?)\n```/g)) {
+				for (const [, ranges] of meta!.matchAll(/(?:focus|add|remove)=\{([^}]*)\}/g)) {
+					annotated += 1;
+					const lines = code!.split('\n').length;
+					const highest = Math.max(...(ranges!.match(/\d+/g) ?? ['0']).map(Number));
+					expect(highest, `${relativePath}: ${meta!.trim()}`).toBeLessThanOrEqual(lines);
+				}
+			}
+		}
+		expect(annotated).toBeGreaterThan(0);
+	});
+
 	it('leaves incomplete package-manager runs as ordinary code blocks', () => {
 		const incomplete = packageManagerMarkdown.split('\n\n').slice(0, 3).join('\n\n');
 		const { html } = markdownToHtml(incomplete, {

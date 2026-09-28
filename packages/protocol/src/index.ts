@@ -233,6 +233,7 @@ const ERROR_CODES: ReadonlySet<ErrorCode> = new Set([
 	"invalid_auth_token",
 	"invalid_credential",
 	"invalid_preview_token",
+	"rejected",
 	"selection_too_large",
 ]);
 

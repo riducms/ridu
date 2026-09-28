@@ -52,8 +52,8 @@ Use `AfterCommit` for email, webhooks, and other work outside the database. `Aft
 runs inside the transaction: a later failure could roll back the document after you had already
 sent an email. `AfterCommit` runs only once that transaction has committed.
 
-This helper sends a JSON webhook with the saved post ID and operation. It ignores reads and
-deletes and gives the HTTP request a five-second timeout:
+This helper sends a JSON webhook with the saved post ID and operation. It ignores deletes and
+restores, which also run `AfterCommit`, and gives the HTTP request a five-second timeout:
 
 ```go title="content/notifications.go" focus={18-24,43-47}
 package content
@@ -73,7 +73,7 @@ func notifyPosts(webhookURL string) ridu.Hook {
 	// Ridu waits for this hook by default, so limit the delivery delay.
 	client := &http.Client{Timeout: 5 * time.Second}
 	return func(ctx ridu.HookContext) error {
-		// AfterCommit runs on reads too; notify only on saves.
+		// AfterCommit also runs after deletes; notify only on saves.
 		switch ctx.Operation {
 		case operation.Create, operation.Duplicate, operation.Update,
 			operation.Publish, operation.Unpublish:
@@ -165,16 +165,24 @@ in one place only if you want one entry per failure.
 
 ### What the caller sees when a hook fails {#hook-errors}
 
-An error from a hook stops the operation. The caller receives a `hook_failed` error (HTTP 500)
-with a generic message such as `before delete hook failed`. Your error's own message stays on the
-server: the Go local API keeps it in the error chain, where `errors.Unwrap` and `errors.Is` can
-reach it, and `AfterError` hooks receive it. Before commit, the failure also rolls back the write
-and any related writes, even when it comes from `AfterChange`, `AfterOperation`, or `AfterRead`.
+Any error from a hook stops the operation. Before commit, it also rolls back the write and any
+related writes, even when it comes from `AfterChange`, `AfterOperation`, or `AfterRead`. What the
+caller sees depends on the error:
 
-To tell an author that a value is wrong, use [custom validation](../fields/validation.md)
-instead. Its `operation.Issue` messages appear beside the field in the admin and are returned to
-API callers. Return an ordinary error from a hook when your code could not finish its work, such
-as a failed lookup or an unavailable service.
+| The hook returns                               | The caller receives                                                                          |
+| ---------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `ridu.Reject("…")`                             | A `rejected` error (HTTP 422) with your message and any issues. The admin shows the message. |
+| `ridu.Reject("…", operation.Issue{Target: …})` | The same, and the admin marks each issue's field.                                            |
+| Any other error                                | An `internal` error (HTTP 500). Your message stays in the server logs and in `AfterError`.   |
+
+Use `ridu.Reject` for a deliberate refusal the editor can act on, such as “Remove the article from
+the homepage first.” Return an ordinary error when your code could not finish its work, such as a
+failed lookup or an unavailable service. In the Go local API, both arrive as a
+`*ridu.OperationError`: `Code` is `"rejected"` or `"hook_failed"`, and `errors.Unwrap` reaches
+an ordinary error's original cause.
+
+To reject a single field value whenever it is saved, [custom validation](../fields/validation.md)
+is usually simpler: it runs on every save and can also check values while the editor types.
 
 ## Keep hooks predictable and fast {#performance}
 

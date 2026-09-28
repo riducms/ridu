@@ -386,6 +386,28 @@
 		},
 		{
 			"module": "cli",
+			"id": "cli:ridu#ridu upgrade",
+			"name": "ridu upgrade",
+			"kind": "command",
+			"signature": "ridu upgrade <version> [--no-install]",
+			"members": [],
+			"parameters": [
+				{
+					"name": "version",
+					"type": "string",
+					"description": "Exact Ridu release, such as 0.5.0 or v0.5.0."
+				},
+				{
+					"name": "--no-install",
+					"type": "boolean",
+					"description": "Only rewrite version pins, then print the remaining commands."
+				}
+			],
+			"aliases": ["ridu upgrade"],
+			"overloads": []
+		},
+		{
+			"module": "cli",
 			"id": "cli:ridu#ridu version",
 			"name": "ridu version",
 			"kind": "command",

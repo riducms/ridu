@@ -5,6 +5,7 @@ import { outlineAdminPlugin } from "./outline-plugin";
 import { richTextAdminPlugin } from "@riducms/plugin-richtext";
 import { seoAdminPlugin } from "@riducms/plugin-seo";
 import { formBuilderAdminPlugin } from "@riducms/plugin-form-builder/admin";
+import { graphqlAdminPlugin } from "@riducms/plugin-graphql";
 import { ar, en, fr } from "@riducms/translations";
 
 import PluginRoute from "./plugin-route.svelte";
@@ -254,6 +255,12 @@ export default defineAdmin({
 			component: PostInsightsView,
 		},
 	],
-	plugins: [richTextAdminPlugin, seoAdminPlugin, formBuilderAdminPlugin, outlineAdminPlugin],
+	plugins: [
+		richTextAdminPlugin,
+		seoAdminPlugin,
+		formBuilderAdminPlugin,
+		graphqlAdminPlugin,
+		outlineAdminPlugin,
+	],
 	languages: [en, fr, ar],
 });

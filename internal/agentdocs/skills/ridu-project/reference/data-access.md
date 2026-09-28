@@ -50,15 +50,10 @@ field-level access. See [Collections and globals](./collections.md) for modeling
 Inside the Go process:
 
 ```go title="Go local API"
-statusPath, err := query.NewPath("status")
-if err != nil {
-	return err
-}
-
 page, err := app.Local().List(ctx, "posts", ridu.ListOptions{
 	Page:  1,
 	Limit: 20,
-	Where: query.Equal(statusPath, query.String("published")),
+	Where: query.Equal(query.Field("status"), query.String("published")),
 	Actor: currentUser,
 })
 if err != nil {

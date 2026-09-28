@@ -128,7 +128,7 @@ func TestUploadGraphOwnsMetadataAccessAndCallbacks(t *testing.T) {
 				}).ReplaceAfterRead(func(ctx operation.Context, value operation.Value[string]) (operation.Change[string], error) {
 					readOccurrence = ctx.OccurrenceID
 					name, _ := value.Get()
-					return operation.Replace(operation.Present(strings.ToUpper(name))), nil
+					return operation.Set(strings.ToUpper(name)), nil
 				})
 			})
 		})

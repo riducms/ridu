@@ -329,7 +329,6 @@ import (
 	"log/slog"
 
 	"github.com/riducms/ridu"
-	"github.com/riducms/ridu/core"
 )
 
 func reportRootFailure(ctx ridu.HookContext) error {
@@ -344,7 +343,7 @@ func reportRootFailure(ctx ridu.HookContext) error {
 func Config() ridu.Config {
 	return ridu.Config{
 		Name: "Acme Editorial",
-		Hooks: core.RootHooks{
+		Hooks: ridu.RootHooks{
 			AfterError: []ridu.Hook{reportRootFailure},
 		},
 		Collections: []ridu.Collection{Users, Posts},

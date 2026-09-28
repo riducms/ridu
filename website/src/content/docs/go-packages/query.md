@@ -8,6 +8,7 @@ relatedSymbolIds:
   - 'go:github.com/riducms/ridu/query#Path'
   - 'go:github.com/riducms/ridu/query#Expression'
   - 'go:github.com/riducms/ridu/query#Value'
+  - 'go:github.com/riducms/ridu/query#Field'
   - 'go:github.com/riducms/ridu/query#NewPath'
   - 'go:github.com/riducms/ridu/query#ParsePath'
   - 'go:github.com/riducms/ridu/query#And'
@@ -18,6 +19,7 @@ aliases:
     'query.Path',
     'query.Expression',
     'query.Value',
+    'query.Field',
     'query.NewPath'
   ]
 navigation:
@@ -44,48 +46,42 @@ A filter is built from three types:
 
 This function builds a filter for in-stock products within a budget:
 
-```go title="content/product_filters.go" focus={15-19}
+```go title="content/product_filters.go" focus={6-10}
 package content
 
 import "github.com/riducms/ridu/query"
 
-func AffordableProducts(maxPrice float64) (query.Expression, error) {
-	price, err := query.NewPath("price")
-	if err != nil {
-		return nil, err
-	}
-	inStock, err := query.NewPath("inStock")
-	if err != nil {
-		return nil, err
-	}
-
+func AffordableProducts(maxPrice float64) query.Expression {
 	// Describe both requirements; this does not read the database yet.
 	return query.And(
-		query.LessThanEqual(price, query.Number(maxPrice)),
-		query.Equal(inStock, query.Boolean(true)),
+		query.LessThanEqual(query.Field("price"), query.Number(maxPrice)),
+		query.Equal(query.Field("inStock"), query.Boolean(true)),
 	)
 }
 ```
 
-`query.NewPath` names each field, `query.Number` and `query.Boolean` supply the values, and
+`query.Field` names each field, `query.Number` and `query.Boolean` supply the values, and
 `query.And` requires both conditions. Building the expression does not read the database: it is a
 value you can store, pass around, and reuse. [Run a filter](#run-filter) executes it.
 
 ## query.Path {#paths}
 
-A `query.Path` names one field. Build it from field names, or parse a dotted string:
+A `query.Path` names one field. In filters you write in code, use `query.Field` with the field's
+name, or its group and field names:
 
-| To name                            | Write                           | Path        |
-| ---------------------------------- | ------------------------------- | ----------- |
-| A top-level field                  | `query.NewPath("title")`        | `title`     |
-| A field inside the `seo` group     | `query.NewPath("seo", "title")` | `seo.title` |
-| A dotted path you received as text | `query.ParsePath("seo.title")`  | `seo.title` |
+| To name                            | Write                          | Path        |
+| ---------------------------------- | ------------------------------ | ----------- |
+| A top-level field                  | `query.Field("title")`         | `title`     |
+| A field inside the `seo` group     | `query.Field("seo", "title")`  | `seo.title` |
+| A dotted path you received as text | `query.ParsePath("seo.title")` | `seo.title` |
+| Field names chosen at runtime      | `query.NewPath(group, name)`   | `seo.title` |
 
-Both functions return an error for a malformed path, such as an empty name.
-`query.NewPath("seo.title")` is also an error, because a dot is not part of a field name; pass
-the names separately or use `ParsePath`.
+`query.Field` panics on a malformed name, such as `query.Field("seo.title")`: a dot is not part
+of a field name, so pass the names separately. Like `regexp.MustCompile`, it is meant for names
+you wrote yourself. For paths that come from input, use `ParsePath` or `NewPath`, which return an
+error instead.
 
-A path is checked against your schema only when the operation runs. `query.NewPath("unknown")`
+A path is checked against your schema only when the operation runs. `query.Field("unknown")`
 succeeds, but a read that uses it fails if the collection has no such field. Fields with read
 access rules cannot be used in caller filters; see
 [protected field queries](/docs/access-control/#protected-field-queries).
@@ -121,7 +117,8 @@ comparison value; the two types are not interchangeable.
 
 ## Comparisons {#operators}
 
-Each helper takes a path and a value, and returns a `query.Expression`:
+Each helper takes a path and a value, and returns a `query.Expression`. In these examples,
+`status`, `price`, and the other names are paths such as `query.Field("price")`:
 
 | Matches documents where the field…               | Example                                                          |
 | ------------------------------------------------ | ---------------------------------------------------------------- |
@@ -137,7 +134,9 @@ To match a field that has a value, or one that has none, use `query.Compare` wit
 `query.OperatorExists`:
 
 ```go
-hasImage, err := query.Compare(image, query.OperatorExists, query.Boolean(true))
+hasImage, err := query.Compare(
+	query.Field("image"), query.OperatorExists, query.Boolean(true),
+)
 ```
 
 The helpers expect a valid path and a matching value, and panic otherwise. That is fine for
@@ -151,20 +150,21 @@ filters written in your code. When the operator or value comes from user input, 
 `query.Not` inverts one:
 
 ```go
-visible, err := query.Or(
-	query.Equal(status, query.String("published")),
-	query.Equal(author, query.String(userID)),
+visible := query.Or(
+	query.Equal(query.Field("status"), query.String("published")),
+	query.Equal(query.Field("author"), query.String(userID)),
 )
 ```
 
-`And` and `Or` need at least two conditions, and `Not` needs exactly one; otherwise they return an
-error. To add an optional condition, use it on its own when it is the only one.
+With a single condition, `And` and `Or` return that condition, so you can pass a list whose
+length varies. Like the comparison helpers, they panic when given no conditions or a `nil` one;
+check the length of a list built from input before calling them.
 
 ## Run a filter {#run-filter}
 
 Pass the expression as `ridu.ListOptions.Where`:
 
-```go title="content/find_products.go" focus={20-25}
+```go title="content/find_products.go" focus={15-20}
 package content
 
 import (
@@ -179,14 +179,9 @@ func FindAffordableProducts(
 	local *ridu.LocalAPI,
 	maxPrice float64,
 ) (store.Page, error) {
-	filter, err := AffordableProducts(maxPrice)
-	if err != nil {
-		return store.Page{}, err
-	}
-
 	// List executes the filter and also applies collection read access.
 	return local.List(ctx, "products", ridu.ListOptions{
-		Where: filter,
+		Where: AffordableProducts(maxPrice),
 		Page:  1,
 		Limit: 20,
 	})
@@ -211,7 +206,7 @@ unchanged.
 An access rule can return [`ridu.Where`](/reference/ridu/where/) with a filter to allow access to
 matching documents only. This collection allows reads of visible products:
 
-```go title="content/products.go" focus={14-17,28}
+```go title="content/products.go" focus={10-13,24}
 package content
 
 import (
@@ -221,13 +216,9 @@ import (
 )
 
 func visibleProducts(ridu.AccessContext) (ridu.AccessDecision, error) {
-	visible, err := query.NewPath("visible")
-	if err != nil {
-		return ridu.Deny(), err
-	}
 	// This filter limits every read, including reads with other filters.
 	return ridu.Where(
-		query.Equal(visible, query.Boolean(true)),
+		query.Equal(query.Field("visible"), query.Boolean(true)),
 	), nil
 }
 
@@ -257,11 +248,7 @@ A filter chooses documents; the list options choose their order and page. Build 
 `query.NewSort`:
 
 ```go
-price, err := query.NewPath("price")
-if err != nil {
-	return store.Page{}, err
-}
-cheapest, err := query.NewSort(price, query.Ascending)
+cheapest, err := query.NewSort(query.Field("price"), query.Ascending)
 if err != nil {
 	return store.Page{}, err
 }

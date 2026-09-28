@@ -520,10 +520,7 @@ func TestPredicateCompilerKeepsOptionalValueComparisonsTwoValued(t *testing.T) {
 		t.Fatalf("not-equal predicate = %s", compiled)
 	}
 
-	not, err := query.Not(query.Equal(path, query.String("hidden")))
-	if err != nil {
-		t.Fatal(err)
-	}
+	not := query.Not(query.Equal(path, query.String("hidden")))
 	compiler = predicateCompiler{collection: collection}
 	compiled, err = compiler.compile(not.Node())
 	if err != nil {
@@ -599,10 +596,7 @@ func TestPredicateCompilerKeepsOptionalValueComparisonsTwoValued(t *testing.T) {
 					t.Fatalf("JSON/plugin string predicate %s is missing %q", compiled, fragment)
 				}
 			}
-			notLike, err := query.Not(like)
-			if err != nil {
-				t.Fatal(err)
-			}
+			notLike := query.Not(like)
 			compiler = predicateCompiler{collection: collection}
 			compiled, err = compiler.compile(notLike.Node())
 			if err != nil {
@@ -721,10 +715,7 @@ func TestPredicateCompilerKeepsOptionalValueComparisonsTwoValued(t *testing.T) {
 		t.Fatalf("repeated mixed IN predicate = %s", compiled)
 	}
 
-	notNullOnly, err := query.Not(nullOnly)
-	if err != nil {
-		t.Fatal(err)
-	}
+	notNullOnly := query.Not(nullOnly)
 	compiler = predicateCompiler{collection: collection}
 	compiled, err = compiler.compile(notNullOnly.Node())
 	if err != nil {

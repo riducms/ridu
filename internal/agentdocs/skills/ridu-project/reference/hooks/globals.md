@@ -43,7 +43,7 @@ available, and each works as described on the collection hooks page:
 
 | Hook                                                           | Runs                                                         |
 | -------------------------------------------------------------- | ------------------------------------------------------------ |
-| [`BeforeValidate`](./collections.md#before-validate)   | Before built-in field checks. Also runs for reads.           |
+| [`BeforeValidate`](./collections.md#before-validate)   | Before built-in field checks when the global is saved.       |
 | [`BeforeChange`](./collections.md#before-change)       | Before saving an update, publish, or unpublish.              |
 | [`BeforeOperation`](./collections.md#before-operation) | Just before the database call. Also runs for reads.          |
 | [`BeforeRead`](./collections.md#before-read)           | Before the global is read.                                   |
@@ -51,7 +51,7 @@ available, and each works as described on the collection hooks page:
 | [`AfterOperation`](./collections.md#after-operation)   | After the database call, before commit. Also runs for reads. |
 | [`AfterRead`](./collections.md#after-read)             | Before the global is returned, including after an update.    |
 | [`AfterError`](./collections.md#after-error)           | When an operation fails.                                     |
-| [`AfterCommit`](./collections.md#after-commit)         | After the transaction commits. Also runs for reads.          |
+| [`AfterCommit`](./collections.md#after-commit)         | After a save commits. Never after a read.                    |
 
 Ridu rejects a global configured with `BeforeDuplicate`, `BeforeDelete`, or `AfterDelete` hooks.
 Global hooks run before field hooks at each stage, except `AfterCommit`, where field hooks run

@@ -1,7 +1,7 @@
 {
 	"name": "@riducms/sveltekit",
 	"description": "SvelteKit integration for Ridu: direct browser requests, server rendering, and one session owner.",
-	"version": "0.4.0",
+	"version": "0.5.0",
 	"license": "MIT",
 	"repository": {
 		"type": "git",

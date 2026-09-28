@@ -71,7 +71,7 @@ func writableSKU(ctx operation.Context) (bool, error) {
 
 func normalizeSKU(_ operation.Context, value operation.Value[string]) (operation.Change[string], error) {
 	if text, present := value.Get(); present {
-		return operation.Replace(operation.Present(strings.ToUpper(strings.TrimSpace(text)))), nil
+		return operation.Set(strings.ToUpper(strings.TrimSpace(text))), nil
 	}
 	return operation.Keep[string](), nil
 }

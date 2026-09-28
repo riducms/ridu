@@ -25,7 +25,7 @@ func cleanSubtitle(
 | ------------------------------------------- | ------------------------------------------------------- | -------------------------------------------- |
 | `operation.Context`                         | The current operation and the values around the field   | The first argument of every field callback   |
 | `operation.Value[T]`                        | A value of type `T` that may be empty                   | The value argument, and what defaults return |
-| `operation.Change[T]`                       | An instruction to keep or replace the field's value     | What field transforms return                 |
+| `operation.Change[T]`                       | Keep, set, or clear the field's value                   | What field transforms return                 |
 | `operation.Kind`                            | The operation, such as `operation.Create`               | `ctx.Operation`                              |
 | `operation.Issue`                           | A validation message for the author                     | What validators return                       |
 | `operation.ID`, `operation.ReferenceOutput` | A related document's ID, and the reference Ridu returns | Relationship and upload values               |
@@ -39,7 +39,7 @@ all receive it:
 | Property        | Description                                                                                                                                |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | `ctx.Operation` | What is happening, as an [`operation.Kind`](#operation-kinds).                                                                             |
-| `ctx.ID`        | The document's ID. It is empty while a document is being created.                                                                          |
+| `ctx.ID`        | The document's ID. On a create it is empty until the document is saved; on a duplicate it is the copy's ID once saved.                     |
 | `ctx.Actor`     | The signed-in user: `ctx.Actor.ID`, their auth collection, and their fields in `ctx.Actor.Data`. The ID is empty for an anonymous request. |
 | `ctx.Siblings`  | The fields next to this one: the same group, the same array row, or the top level.                                                         |
 | `ctx.Root`      | The document's top-level fields.                                                                                                           |
@@ -113,16 +113,17 @@ the saved value, so use a raw hook when you need to know what the caller sent. S
 
 A field transform returns an `operation.Change[T]` that tells Ridu what to do with the field:
 
-| Return                                          | Result                                                                   |
-| ----------------------------------------------- | ------------------------------------------------------------------------ |
-| `operation.Keep[string]()`                      | Leave the value unchanged                                                |
-| `operation.Replace(operation.Present("Hello"))` | Set the field to `"Hello"`                                               |
-| `operation.Replace(operation.Empty[string]())`  | Clear the field                                                          |
-| A non-nil error                                 | Stop the operation; a replacement returned with the error is not applied |
+| Return                      | Result                                                              |
+| --------------------------- | ------------------------------------------------------------------- |
+| `operation.Keep[string]()`  | Leave the value unchanged                                           |
+| `operation.Set("Hello")`    | Set the field to `"Hello"`                                          |
+| `operation.Clear[string]()` | Clear the field                                                     |
+| A non-nil error             | Stop the operation; a change returned with the error is not applied |
 
-`Keep` preserves the value; `Replace(Empty)` clears it. A cleared optional field becomes null,
-and a required field still has to pass validation. This field trims a subtitle and clears it
-when the author enters only spaces:
+`Keep` preserves the value; `Clear` empties it. A cleared optional field becomes null, and a
+required field still has to pass validation. `Set` accepts zero values too: `operation.Set("")`
+saves an empty string. This field trims a subtitle and clears it when the author enters only
+spaces:
 
 ```go title="content/subtitle.go" focus={18-21,24-29}
 package content
@@ -150,10 +151,10 @@ func cleanSubtitle(
 	subtitle = strings.TrimSpace(subtitle)
 	if subtitle == "" {
 		// Clear this optional field instead of saving spaces.
-		return operation.Replace(operation.Empty[string]()), nil
+		return operation.Clear[string](), nil
 	}
-	// Replace supplies this field's new value for the same save.
-	return operation.Replace(operation.Present(subtitle)), nil
+	// Set supplies this field's new value for the same save.
+	return operation.Set(subtitle), nil
 }
 ```
 
@@ -237,6 +238,9 @@ func validatePricing(
 A price of `10` with a sale price of `12` shows a message beside `pricing.salePrice`, and nothing
 is saved. A sale price of `0` is valid, because zero is a real price. `Target` starts inside the
 validated field, so it is `"salePrice"`, not `"pricing.salePrice"`.
+
+Hooks use the same type. Pass issues to [`ridu.Reject`](../hooks/collections.md#before-delete)
+to stop an operation, show the editor a message, and mark the fields to fix.
 
 ### Put a message on a repeated row {#row-targets}
 

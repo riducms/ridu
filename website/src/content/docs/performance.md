@@ -48,7 +48,7 @@ population, and application code reads immutable values without first copying th
 Call the local Go API for server-side reads and writes. It enters the same operation engine as REST
 and the TypeScript SDK, without making a loopback HTTP request:
 
-```go title="content/published_posts.go" focus={17-23}
+```go title="content/published_posts.go" focus={16-23}
 package content
 
 import (
@@ -64,9 +64,10 @@ func PublishedPosts(
 	app *ridu.App,
 	actor *store.Document,
 ) (store.Page, error) {
-	status, _ := query.NewPath("status")
 	return app.Local().List(ctx, "posts", ridu.ListOptions{
-		Where: query.Equal(status, query.String("published")),
+		Where: query.Equal(
+			query.Field("status"), query.String("published"),
+		),
 		Page:  1,
 		Limit: 20,
 		Actor: actor,

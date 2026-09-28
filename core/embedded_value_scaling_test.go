@@ -65,7 +65,7 @@ func benchmarkValueScaling(b *testing.B, native bool) {
 									}
 								}
 								if replace {
-									return operation.Replace(operation.Present("edited")), nil
+									return operation.Set("edited"), nil
 								}
 								return operation.Keep[string](), nil
 							}}})

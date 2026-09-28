@@ -1,6 +1,6 @@
 // Package operation provides the values and context passed to field validators,
 // hooks, defaults, and access rules. Use it to read nearby or previously saved fields,
-// return validation messages, and replace a field value from a hook.
+// return validation messages, and set or clear a field value from a hook.
 package operation
 
 import (
@@ -167,8 +167,8 @@ func Empty[T any]() Value[T] { return Value[T]{} }
 // Get returns the logical value and whether it is present.
 func (value Value[T]) Get() (T, bool) { return value.value, value.present }
 
-// Change is an explicit keep-or-replace result. Its zero value means keep.
-// Replacing with Empty clears the callback's own logical value; it does not
+// Change is what a field transform returns: Keep, Set, or Clear. Its zero
+// value means Keep. Clear empties the callback's own logical value; it does not
 // create an external patch command or durable scalar removal representation.
 type Change[T any] struct {
 	value   Value[T]
@@ -178,10 +178,16 @@ type Change[T any] struct {
 // Keep leaves the callback's logical value unchanged.
 func Keep[T any]() Change[T] { return Change[T]{} }
 
-// Replace replaces the callback's own logical value.
-func Replace[T any](value Value[T]) Change[T] { return Change[T]{value: value, replace: true} }
+// Set replaces the callback's own value with value, including a zero value
+// such as "" or false. Ridu validates the result as usual.
+func Set[T any](value T) Change[T] { return Change[T]{value: Present(value), replace: true} }
+
+// Clear empties the callback's own value. An optional field becomes null; a
+// required field still fails validation.
+func Clear[T any]() Change[T] { return Change[T]{replace: true} }
 
 // Replacement returns the replacement value and whether replacement is asked.
+// Ridu calls it to apply a transform's result; callbacks return Keep, Set, or Clear.
 func (change Change[T]) Replacement() (Value[T], bool) { return change.value, change.replace }
 
 // Issue addresses the current field or a descendant relative to its candidate

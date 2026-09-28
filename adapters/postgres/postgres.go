@@ -127,7 +127,7 @@ func normalizedPoolConfig(options PoolConfig) (*pgxpool.Config, error) {
 		return nil, errors.New("invalid PostgreSQL connection configuration")
 	}
 	if !options.AllowInsecureTransport && !securePostgresTransport(configured) {
-		return nil, fmt.Errorf("PostgreSQL transport must require TLS; configure sslmode=require or stronger, or explicitly allow insecure transport for local development")
+		return nil, fmt.Errorf("PostgreSQL transport must require TLS; configure sslmode=require or stronger. For a local development database, allow plaintext explicitly: set AllowInsecureTransport, RIDU_ALLOW_INSECURE_DATABASE=true for Ridu projects, or pass --allow-insecure-database to the CLI")
 	}
 	configured.MaxConns = options.MaxConnections
 	configured.MinConns = options.MinConnections

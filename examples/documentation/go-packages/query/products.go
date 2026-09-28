@@ -7,13 +7,9 @@ import (
 )
 
 func visibleProducts(ridu.AccessContext) (ridu.AccessDecision, error) {
-	visible, err := query.NewPath("visible")
-	if err != nil {
-		return ridu.Deny(), err
-	}
 	// This filter limits every read, including reads with other filters.
 	return ridu.Where(
-		query.Equal(visible, query.Boolean(true)),
+		query.Equal(query.Field("visible"), query.Boolean(true)),
 	), nil
 }
 

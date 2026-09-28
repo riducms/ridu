@@ -36,7 +36,7 @@ func TestGraphRuntimeLoweringKeepsPlacementAndScopedSnapshots(t *testing.T) {
 	code := field.Text("code").Hooks(field.Hooks[string]{BeforeChange: []field.Transform[string]{func(ctx operation.Context, value operation.Value[string]) (operation.Change[string], error) {
 		contexts = append(contexts, ctx)
 		text, _ := value.Get()
-		return operation.Replace(operation.Present("own:" + text)), nil
+		return operation.Set("own:" + text), nil
 	}}})
 	bindings := graphRuntimeBindings(t, field.Fields{code, field.Group("variant", field.Fields{code})})
 	if len(bindings) != 2 || bindings[0].ID == bindings[1].ID {
@@ -272,7 +272,7 @@ func TestGraphRuntimeParentTransformAssignsIdentityBeforeChildDispatch(t *testin
 		current, _ := value.Get()
 		items, _ := current.CopyList()
 		items = append(items, store.Object(store.Values{"code": store.String("new")}))
-		return operation.Replace(operation.Present(store.List(items...))), nil
+		return operation.Set(store.List(items...)), nil
 	}}})
 	app, err := New(Config{Name: "Parent row identity", Collections: []Collection{{Slug: "pages", Fields: field.Fields{field.Text("trigger"), rows}}}}, teststore.New())
 	if err != nil {

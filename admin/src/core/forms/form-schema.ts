@@ -66,6 +66,16 @@ export function submissionFormValues(
 	return submissionRecord(fields, input, "", include);
 }
 
+/** Project an update onto caller edits, retaining row membership and stable identities. */
+export function changedFormValues(
+	fields: readonly SchemaField[],
+	input: FormValues,
+	original: FormValues,
+	isInherited?: (path: string) => boolean
+): FormValues {
+	return submissionRecord(fields, input, "", () => true, original, isInherited);
+}
+
 /** Initialize a new record, retaining supplied values and container metadata. */
 export function initialFormValues(
 	fields: readonly SchemaField[],
@@ -100,9 +110,12 @@ function submissionRecord(
 	fields: readonly SchemaField[],
 	input: unknown,
 	prefix: string,
-	include: (path: string, canonicalPath: string) => boolean
+	include: (path: string, canonicalPath: string) => boolean,
+	original?: unknown,
+	isInherited?: (path: string) => boolean
 ): FormValues {
 	const values = isRecord(input) ? input : {};
+	const before = isRecord(original) ? original : {};
 	const submitted: FormValues = {};
 	for (const field of fields) {
 		const path = joinFormPath(prefix, field.name);
@@ -113,23 +126,47 @@ function submissionRecord(
 		)
 			continue;
 		const value = values[field.name];
-		if (field.type === "group") {
-			submitted[field.name] = submissionRecord(field.nested?.fields ?? [], value, path, include);
-		} else if (field.type === "array" && Array.isArray(value)) {
-			submitted[field.name] = value.map((row, index) =>
-				submissionRecord(field.nested?.fields ?? [], row, `${path}.${index}`, include)
+		const displayedPrevious = before[field.name];
+		if (Object.hasOwn(before, field.name) && deepEqual(value, displayedPrevious)) continue;
+		// An edited fallback establishes a new locale value, without retained children to merge.
+		const previous = isInherited?.(path) === true ? undefined : displayedPrevious;
+
+		if (field.type === "group" && isRecord(value)) {
+			submitted[field.name] = submissionRecord(
+				field.nested?.fields ?? [],
+				value,
+				path,
+				include,
+				previous,
+				isInherited
 			);
-		} else if (field.type === "blocks" && Array.isArray(value)) {
+		} else if ((field.type === "array" || field.type === "blocks") && Array.isArray(value)) {
+			const previousRows = new Map(
+				(Array.isArray(previous) ? previous : []).flatMap((row) =>
+					isRecord(row) && typeof row._key === "string" ? [[row._key, row] as const] : []
+				)
+			);
+			const blocks = resolveBlockTypes(field.blocks);
 			submitted[field.name] = value.map((row, index) => {
-				if (!isRecord(row) || typeof row.blockType !== "string") return cloneFormValue(row);
-				const block = resolveBlockTypes(field.blocks).find(
-					(candidate) => candidate.slug === row.blockType
+				if (!isRecord(row)) return cloneFormValue(row);
+				const children =
+					field.type === "array"
+						? (field.nested?.fields ?? [])
+						: blocks.find((block) => block.slug === row.blockType)?.fields;
+				if (children === undefined) return cloneFormValue(row);
+
+				const prior = typeof row._key === "string" ? previousRows.get(row._key) : undefined;
+				return submissionRecord(
+					children,
+					row,
+					`${path}.${index}`,
+					include,
+					field.type === "blocks" && prior?.blockType !== row.blockType ? undefined : prior,
+					isInherited
 				);
-				return block === undefined
-					? cloneFormValue(row)
-					: submissionRecord(block.fields, row, `${path}.${index}`, include);
 			});
 		} else if (field.type === "plugin" && field.plugin?.embeddedTrees !== undefined) {
+			const priorOccurrences = embeddedOccurrences(field, previous, path).occurrences;
 			submitted[field.name] = transformEmbeddedPayloads(
 				field,
 				cloneFormValue(value),
@@ -139,7 +176,17 @@ function submissionRecord(
 						occurrence.block.fields,
 						occurrence.payload,
 						occurrence.path,
-						include
+						include,
+						occurrence.identity === undefined
+							? undefined
+							: priorOccurrences.find(
+									(prior) =>
+										prior.tree.key === occurrence.tree.key &&
+										prior.case.tagValue === occurrence.case.tagValue &&
+										prior.block.slug === occurrence.block.slug &&
+										prior.identity === occurrence.identity
+								)?.payload,
+						isInherited
 					),
 					[occurrence.case.discriminator]: occurrence.block.slug,
 					...(occurrence.identity === undefined

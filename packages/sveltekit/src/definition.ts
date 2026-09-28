@@ -28,7 +28,7 @@ export interface RiduDefinitionOptions<Factory extends ClientFactory, Slug exten
 	authCollection: Slug;
 	/** Frontend-domain cookie that stores the session token. Defaults to `ridu_token`. */
 	cookieName?: string;
-	/** Fetch used by server-side clients. Defaults to the platform fetch. */
+	/** Fetch used by server-side clients. Defaults to SvelteKit's `event.fetch`. */
 	fetch?: ClientOptions["fetch"];
 }
 
@@ -44,7 +44,12 @@ export interface RiduDefinition<
 	readonly cookieName: string;
 	client(
 		token: SessionTokenStore<SessionFor<Config, Slug>>,
-		options?: { fetch?: ClientOptions["fetch"]; memoizeSession?: boolean }
+		options?: {
+			fetch?: ClientOptions["fetch"];
+			/** Used when neither the call nor the definition supplies a fetch. */
+			fallbackFetch?: ClientOptions["fetch"];
+			memoizeSession?: boolean;
+		}
 	): RiduClient<Config, Slug>;
 }
 
@@ -62,7 +67,7 @@ export function createDefinition<
 		authCollection: options.authCollection,
 		cookieName,
 		client(token, clientOptions = {}) {
-			const fetch = clientOptions.fetch ?? options.fetch;
+			const fetch = clientOptions.fetch ?? options.fetch ?? clientOptions.fallbackFetch;
 			return options.createClient({
 				baseURL,
 				...(fetch === undefined ? {} : { fetch }),

@@ -307,12 +307,18 @@
 		"name": "GraphQL plugin",
 		"category": "Official plugins",
 		"status": "experimental",
-		"summary": "The opt-in GraphQL plugin adds generated queries and mutations for supported Ridu resources.",
+		"summary": "The opt-in GraphQL plugin adds generated queries and mutations for supported Ridu resources and an admin playground.",
 		"qualificationLimits": [
 			"The API may change before the plugin is marked available; applications that do not import it do not include GraphQL."
 		],
-		"owners": ["plugins/graphql"],
-		"evidence": ["plugins/graphql/graphql_test.go", "plugins/graphql/server_test.go"],
+		"owners": ["plugins/graphql", "@riducms/plugin-graphql"],
+		"evidence": [
+			"plugins/graphql/graphql_test.go",
+			"plugins/graphql/server_test.go",
+			"plugins/graphql/playground_test.go",
+			"packages/plugin-graphql/tests/graphql.test.ts",
+			"tests/e2e/admin/graphql.spec.ts"
+		],
 		"adapters": ["postgres"],
 		"guides": ["/docs/graphql/"],
 		"symbols": ["go:github.com/riducms/ridu/plugins/graphql#New"],

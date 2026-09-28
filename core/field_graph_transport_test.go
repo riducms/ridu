@@ -191,7 +191,7 @@ func TestUnifiedComputedOutputUsesBoundContextSelectionAndRedaction(t *testing.T
 	}).ReplaceAfterRead(func(_ operation.Context, v operation.Value[store.Value]) (operation.Change[store.Value], error) {
 		value, _ := v.Get()
 		text, _ := value.StringValue()
-		return operation.Replace(operation.Present(store.String(text + "!"))), nil
+		return operation.Set(store.String(text + "!")), nil
 	})
 	app, err := ridu.New(ridu.Config{Name: "Bound output", Collections: []ridu.Collection{{Slug: "pages", Fields: field.Fields{field.Text("title"), output, output.Rename("secret").Access(field.Access{Read: func(operation.Context) (bool, error) { return false, nil }})}}}, Globals: []ridu.Global{{Slug: "settings", Fields: field.Fields{field.Text("title"), output}}}}, teststore.New())
 	if err != nil {
@@ -244,7 +244,7 @@ func TestUnifiedComputedOutputRejectsMissingAndInvalidResolvers(t *testing.T) {
 			collection := ridu.Collection{Slug: "pages"}
 			if owner == "field" {
 				output = output.ReplaceAfterRead(func(operation.Context, operation.Value[store.Value]) (operation.Change[store.Value], error) {
-					return operation.Replace(operation.Present(store.Number(42))), nil
+					return operation.Set(store.Number(42)), nil
 				})
 			} else {
 				collection.Hooks.AfterRead = []ridu.Hook{func(ctx ridu.HookContext) error { ctx.Document.Values["summary"] = store.Number(42); return nil }}
@@ -357,7 +357,7 @@ func TestUnifiedRequiredReadOutputCannotBecomeNull(t *testing.T) {
 	for _, nested := range []bool{false, true} {
 		t.Run(map[bool]string{false: "root", true: "row"}[nested], func(t *testing.T) {
 			text := field.Text("title").Required().ReplaceAfterRead(func(operation.Context, operation.Value[string]) (operation.Change[string], error) {
-				return operation.Replace(operation.Empty[string]()), nil
+				return operation.Clear[string](), nil
 			})
 			fields := field.Fields{text}
 			values := store.Values{"title": store.String("Valid input")}

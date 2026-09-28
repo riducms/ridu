@@ -5,6 +5,7 @@ import (
 
 	"github.com/riducms/ridu/core"
 	"github.com/riducms/ridu/migration"
+	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
@@ -68,6 +69,11 @@ type Hook = core.Hook
 //		},
 //	}
 type CollectionHooks = core.CollectionHooks
+
+// RootHooks holds hooks for the whole application. Assign it to Config.Hooks.
+// Its AfterError hooks see every failed operation, including failures that
+// happen before Ridu knows which collection or global is involved.
+type RootHooks = core.RootHooks
 
 // Endpoint declares an application-owned HTTP route on Config, Collection, or
 // Global. Its handler must enforce any endpoint-specific authorization.
@@ -288,6 +294,20 @@ func Deny() AccessDecision { return core.Deny() }
 
 // Where authorizes only documents matching expression.
 func Where(expression query.Expression) AccessDecision { return core.Where(expression) }
+
+// Reject stops an operation from a collection, global, or field hook and shows
+// message to the person who made the request. The admin displays it, and REST,
+// the SDK, and the Local API return it as a "rejected" error (HTTP 422). Any
+// other hook error is reported as an internal failure.
+//
+// Issues mark fields to fix. In a field hook, an issue's Target starts at that
+// field; in a collection or global hook, it starts at the document root:
+//
+//	return ridu.Reject("Remove the article from the homepage first",
+//		operation.Issue{Code: "featured", Message: "Unfeature it", Target: operation.At("featured")})
+func Reject(message string, issues ...operation.Issue) error {
+	return core.Reject(message, issues...)
+}
 
 // Resolve validates executable configuration and returns its canonical manifest.
 func Resolve(applicationConfig Config) (schema.Manifest, error) {

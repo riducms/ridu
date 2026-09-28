@@ -90,7 +90,7 @@ func TestRichTextFactoryOwnsBehaviorThroughRenameNestingAndReuse(t *testing.T) {
 		func(ctx operation.Context, value operation.Value[string]) (operation.Change[string], error) {
 			occurrences = append(occurrences, ctx.OccurrenceID)
 			text, _ := value.Get()
-			return operation.Replace(operation.Present(strings.ToUpper(text))), nil
+			return operation.Set(strings.ToUpper(text)), nil
 		},
 	}})
 	config := richtext.Config{Blocks: []field.Block{{Slug: "callout", Fields: field.Fields{title}}}}

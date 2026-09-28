@@ -818,12 +818,8 @@
   "plugins": [
     {
       "key": "richtext",
-      "version": "0.4.0",
       "goPackage": "github.com/riducms/ridu/plugins/richtext",
       "apiVersion": 1,
-      "ridu": {
-        "minimum": "0.4.0"
-      },
       "admin": {
         "package": "@riducms/plugin-richtext",
         "export": "richTextAdminPlugin",

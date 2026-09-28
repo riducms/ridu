@@ -14,6 +14,7 @@ Commands:
   doctor    Diagnose local project prerequisites
   plugin    Add or remove compiled backend/admin plugins
   add       Install a plugin (alias for plugin add)
+  upgrade   Move the project to another Ridu release
   version   Print the Ridu CLI version
   help      Show this help
 

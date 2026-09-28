@@ -84,7 +84,7 @@ func TestPrimitiveListsSQLiteRepeatedQueryBoundary(t *testing.T) {
 			expression := query.In(path, test.item)
 			want := test.wantID
 			if negate {
-				expression, _ = query.Not(expression)
+				expression = query.Not(expression)
 				want = first.ID
 				if test.wantID == first.ID {
 					want = second.ID

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { SchemaField } from "@riducms/protocol";
 import { embeddedOccurrences } from "@admin/core/forms/embedded-fields";
 import {
+	changedFormValues,
 	initialFormValues,
 	reconcileFormSchema,
 	shouldSubmitLocalizedPath,
@@ -368,6 +369,21 @@ describe("embedded server issue identity", () => {
 });
 
 describe("declarative embedded admin fields", () => {
+	it("patches schema payloads by identity while preserving the surrounding plugin envelope", () => {
+		const before = { body: envelope(card("a"), card("b")) };
+		const copy = card("new");
+		const after = { body: envelope(card("b", "Edited"), card("a"), copy) };
+		const patch = changedFormValues([field], after, before);
+		expect(patch).toEqual({
+			body: envelope(
+				{ kind: "widget", content: { uid: "b", schema: "card", title: "Edited" } },
+				{ kind: "widget", content: { uid: "a", schema: "card" } },
+				copy
+			),
+		});
+		expect(changedFormValues([field], before, before)).toEqual({});
+	});
+
 	it("visits only declared envelope edges and returns exact paths once", () => {
 		const value = envelope(card("first"), card("second"));
 		const found = embeddedOccurrences(field, value);

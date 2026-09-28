@@ -68,7 +68,7 @@ func TestLocalizedFieldHooksRefreshCurrentViewsAfterClear(t *testing.T) {
 					}
 					retained = append(retained, retainedView{context: ctx, step: step})
 					if step == 1 {
-						return operation.Replace(operation.Empty[store.Value]()), nil
+						return operation.Clear[store.Value](), nil
 					}
 					return operation.Keep[store.Value](), nil
 				}

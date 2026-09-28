@@ -1,0 +1,11 @@
+{
+	"extends": "../../tsconfig.svelte.json",
+	"compilerOptions": {
+		"types": ["bun", "svelte"],
+		"paths": {
+			"@ui/*": ["../ui/src/*"]
+		},
+		"exactOptionalPropertyTypes": true
+	},
+	"include": ["src/**/*.ts", "src/**/*.svelte", "tests/**/*.ts"]
+}

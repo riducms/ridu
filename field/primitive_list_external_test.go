@@ -25,7 +25,10 @@ func ProductFacts(name string) field.GroupField {
 				return nil, nil
 			}).Hooks(field.Hooks[[]string]{BeforeChange: []field.Transform[[]string]{
 			func(_ operation.Context, value operation.Value[[]string]) (operation.Change[[]string], error) {
-				return operation.Replace(value), nil
+				if replacement, present := value.Get(); present {
+					return operation.Set(replacement), nil
+				}
+				return operation.Clear[[]string](), nil
 			},
 		}}).Access(field.Access{Update: func(ctx operation.Context) (bool, error) { return ctx.Actor.ID == "editor", nil }}).
 			Private("factory", store.String("product-facts")),

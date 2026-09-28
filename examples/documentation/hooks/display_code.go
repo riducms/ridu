@@ -15,10 +15,8 @@ func formatCode(
 	if !present {
 		return operation.Keep[string](), nil
 	}
-	// AfterRead replacements change the response, not storage.
-	return operation.Replace(
-		operation.Present(strings.ToUpper(code)),
-	), nil
+	// In an AfterRead hook, Set changes the response, not storage.
+	return operation.Set(strings.ToUpper(code)), nil
 }
 
 var DisplayCode = field.Text("displayCode").AfterRead(formatCode)

@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import type { SchemaField } from "@riducms/protocol";
 
 import {
+	changedFormValues,
 	documentFormValues,
 	initialFormValues,
 	localizationSource,
@@ -10,6 +11,98 @@ import {
 	shouldSubmitLocalizedPath,
 	submissionFormValues,
 } from "../src/core/forms/form-schema";
+
+describe("document update submissions", () => {
+	const heading = textField("heading", "heading", "Heading");
+	const locked: SchemaField = { ...heading, id: "locked", name: "locked", type: "checkbox" };
+	const links = arrayField("links", 0, [textField("label", "label", "Label")]);
+	const layout: SchemaField = {
+		...arrayField("layout", 0, []),
+		type: "blocks",
+		blocks: {
+			types: [
+				{
+					slug: "hero",
+					labels: { singular: "Hero", plural: "Heroes" },
+					fields: [heading, locked, links],
+				},
+				{ slug: "quote", labels: { singular: "Quote", plural: "Quotes" }, fields: [heading] },
+			],
+		},
+	};
+
+	it("omits an unchanged heading when its sibling locks it", () => {
+		const hero = { _key: "one", blockType: "hero", heading: "Keep me" };
+		expect(
+			changedFormValues([layout], { layout: [{ ...hero, locked: true }] }, { layout: [hero] })
+		).toEqual({ layout: [{ _key: "one", blockType: "hero", locked: true }] });
+		expect(changedFormValues([layout], { layout: [hero] }, { layout: [hero] })).toEqual({});
+		expect(submissionFormValues([layout], { layout: [hero] })).toEqual({ layout: [hero] });
+		const isInherited = (path: string) => path === "layout";
+		expect(
+			changedFormValues(
+				[layout],
+				{ layout: [{ ...hero, locked: true }] },
+				{ layout: [hero] },
+				isInherited
+			)
+		).toEqual({ layout: [{ ...hero, locked: true }] });
+		expect(
+			changedFormValues([layout], { layout: [hero] }, { layout: [hero] }, isInherited)
+		).toEqual({});
+	});
+
+	it("retains ordering, deletions, and complete new rows while matching nested rows by key", () => {
+		const first = {
+			_key: "one",
+			blockType: "hero",
+			heading: "Same",
+			links: [
+				{ _key: "a", label: "First" },
+				{ _key: "b", label: "Second" },
+			],
+		};
+		const second = { _key: "two", blockType: "hero", heading: "Same" };
+		const copy = { ...second, _key: "copy" };
+		const before = { layout: [first, second, { ...second, _key: "removed" }] };
+		const after = {
+			layout: [
+				second,
+				{ ...first, links: [first.links[1], { ...first.links[0], label: "Edited" }] },
+				copy,
+			],
+		};
+		expect(changedFormValues([layout], after, before)).toEqual({
+			layout: [
+				{ _key: "two", blockType: "hero" },
+				{ _key: "one", blockType: "hero", links: [{ _key: "b" }, { _key: "a", label: "Edited" }] },
+				copy,
+			],
+		});
+		expect(changedFormValues([layout], { layout: [] }, before)).toEqual({ layout: [] });
+		expect(
+			changedFormValues([layout], { layout: [{ ...second, blockType: "quote" }] }, before)
+		).toEqual({ layout: [{ ...second, blockType: "quote" }] });
+	});
+
+	it("keeps explicit clears and whole opaque JSON replacements", () => {
+		const settings = groupField("settings", [heading, locked]);
+		const raw: SchemaField = { ...heading, name: "raw", type: "json" };
+		const fields = [settings, raw];
+		const before = { settings: { heading: "Title", locked: true }, raw: { keep: 1, remove: 2 } };
+		expect(
+			changedFormValues(
+				fields,
+				{ settings: { heading: "", locked: false }, raw: { keep: 1 } },
+				before
+			)
+		).toEqual({ settings: { heading: "", locked: false }, raw: { keep: 1 } });
+		expect(changedFormValues(fields, { settings: null, raw: null }, before)).toEqual({
+			settings: null,
+			raw: null,
+		});
+	});
+});
 
 describe("form schema reconciliation", () => {
 	it("omits UI, inverse join, and virtual values from submissions", () => {

@@ -70,44 +70,41 @@ editing generated output.
 
 ## Upgrade a project {#upgrade}
 
-Read the release notes, then upgrade the project as one unit:
-
-1. Update `@riducms/cli` to the target version.
-2. Update the Go module, framework npm packages, and official plugins to the same exact release version.
-3. Run `ridu generate` and review the generated changes.
-4. Create and review a [migration](/docs/migrations/) when the model changed.
-5. Run `ridu check`, `ridu migrate verify`, and the application's tests.
-6. Rehearse the deployment on a recent restored backup.
-
-Set the version once so the CLI and Go module cannot drift:
+Read the release notes, then run the new release's CLI with `upgrade`. Running the target version
+means the upgrade itself always uses the new release's rules:
 
 ```bash title="terminal" package-manager="npm"
-TARGET_VERSION="X.Y.Z"
-npm install --save-dev --save-exact "@riducms/cli@$TARGET_VERSION"
-go get "github.com/riducms/ridu@v$TARGET_VERSION"
-ridu generate
+npx @riducms/cli@X.Y.Z upgrade X.Y.Z
 ```
 
 ```bash title="terminal" package-manager="bun"
-TARGET_VERSION="X.Y.Z"
-bun add --dev --exact "@riducms/cli@$TARGET_VERSION"
-go get "github.com/riducms/ridu@v$TARGET_VERSION"
-ridu generate
+bunx @riducms/cli@X.Y.Z upgrade X.Y.Z
 ```
 
 ```bash title="terminal" package-manager="pnpm"
-TARGET_VERSION="X.Y.Z"
-pnpm add --save-dev --save-exact --workspace-root "@riducms/cli@$TARGET_VERSION"
-go get "github.com/riducms/ridu@v$TARGET_VERSION"
-ridu generate
+pnpm dlx @riducms/cli@X.Y.Z upgrade X.Y.Z
 ```
 
 ```bash title="terminal" package-manager="yarn"
-TARGET_VERSION="X.Y.Z"
-yarn add --dev --exact --ignore-workspace-root-check "@riducms/cli@$TARGET_VERSION"
-go get "github.com/riducms/ridu@v$TARGET_VERSION"
-ridu generate
+yarn dlx @riducms/cli@X.Y.Z upgrade X.Y.Z
 ```
+
+The command upgrades the project as one unit:
+
+1. It sets every `@riducms/*` package in the project's `package.json` files, the official plugins
+   in `ridu.plugins.json`, and the `github.com/riducms/ridu` Go module to the release.
+2. It installs the new packages and runs `go mod tidy`.
+3. With the newly installed CLI, it runs `ridu generate`, `ridu agent sync` when agent guidance is
+   installed, and `ridu migrate create --name ridu-X-Y-Z`. If the release does not change your
+   schema, no migration is created.
+
+Review the changed files and any new [migration](/docs/migrations/), then run `ridu check`,
+`ridu migrate verify`, and your application's tests. Rehearse the deployment on a recent restored
+backup before production.
+
+Pass `--no-install` to rewrite only the version pins; the command then prints the remaining steps.
+It leaves linked packages, such as `workspace:` or `file:` dependencies, unchanged and warns when
+a `go.work` file still points the Ridu module at a local checkout.
 
 Never edit an applied migration. Add a forward migration to correct it.
 

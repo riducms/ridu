@@ -173,7 +173,11 @@ type AdminSettings struct {
 
 // Plugin records one compiled plugin that participated in config resolution.
 type Plugin struct {
-	Key        string               `json:"key"`
+	Key string `json:"key"`
+	// Version and Ridu are empty in manifests Ridu writes today. Manifests from
+	// Ridu 0.4 and earlier recorded the plugin's package version and supported
+	// Ridu range here; the fields remain so their migration artifacts keep the
+	// same digests. Plugin compatibility is checked when config is resolved.
 	Version    string               `json:"version,omitempty"`
 	GoPackage  string               `json:"goPackage,omitempty"`
 	APIVersion uint32               `json:"apiVersion,omitempty"`
@@ -2052,7 +2056,8 @@ func validatePluginBuildMetadata(plugins []Plugin) error {
 			fieldOwners[plugin.Key] = plugin.Key
 		}
 		if hasDescriptor {
-			if !IsValidSemanticVersion(plugin.Version) || !IsValidGoPackage(plugin.GoPackage) || plugin.APIVersion != CurrentPluginAPIVersion || plugin.Ridu == nil || !IsValidSemanticVersionRange(plugin.Ridu.Minimum, plugin.Ridu.MaximumExclusive) {
+			legacyVersionInvalid := plugin.Version != "" && !IsValidSemanticVersion(plugin.Version) || plugin.Ridu != nil && !IsValidSemanticVersionRange(plugin.Ridu.Minimum, plugin.Ridu.MaximumExclusive)
+			if legacyVersionInvalid || !IsValidGoPackage(plugin.GoPackage) || plugin.APIVersion != CurrentPluginAPIVersion {
 				return fmt.Errorf("invalid versioned plugin descriptor at plugins[%d]", index)
 			}
 			fieldKeys := make(map[string]struct{}, len(plugin.FieldTypes))

@@ -127,11 +127,14 @@ func adaptHooks(hooks []Hook, local **LocalAPI) []operationengine.Hook {
 		current := hook
 		adapted[index] = func(ctx operationengine.Context) error {
 			collectionID, globalID := resourceIDs(ctx.Collection)
-			return current(HookContext{
+			err := current(HookContext{
 				Context: ctx.Context, Operation: ctx.Operation, CollectionID: collectionID, GlobalID: globalID,
 				Actor: cloneDocument(ctx.Actor), ActorCollection: ctx.ActorCollection, Data: ctx.Data, Document: ctx.Document,
 				Original: cloneDocument(ctx.Original), Local: *local,
 				Error: ctx.Error, Locale: ctx.Locale, AllLocales: ctx.AllLocales,
+			})
+			return lowerRejection(err, ctx, func(target operation.IssueTarget) (schema.Field, string, schema.LocaleCode, error) {
+				return operationengine.ResolveRootIssueTarget(ctx.Collection.Fields, ctx, resourceHookValues(ctx), target)
 			})
 		}
 	}

@@ -36,6 +36,7 @@ var packages = []packageDefinition{
 	{name: "@riducms/plugin-richtext", source: "packages/plugin-richtext", target: "ridu-framework-plugin-richtext"},
 	{name: "@riducms/plugin-seo", source: "packages/plugin-seo", target: "ridu-framework-plugin-seo"},
 	{name: "@riducms/plugin-form-builder", source: "packages/plugin-form-builder", target: "ridu-framework-plugin-form-builder"},
+	{name: "@riducms/plugin-graphql", source: "packages/plugin-graphql", target: "ridu-framework-plugin-graphql"},
 }
 
 // Publish copies source packages into ignored directories covered by the

@@ -246,6 +246,11 @@ func finiteCodec(kind store.ValueKind, expected string) graphCodec[store.Value] 
 func lowerTypedPolicies[W, R any](binding *operationengine.FieldBinding, hooks field.Hooks[W], reads []field.OutputTransform[R], validators []field.Validator[W], liveValidators []field.LiveValidator[W], write graphCodec[W], read graphCodec[R], local **LocalAPI) {
 	f, id := binding.Field, binding.ID
 	adaptContext := func(ctx operationengine.Context) operation.Context { return graphCallbackContext(ctx, id, local) }
+	rejected := func(ctx operationengine.Context, err error) error {
+		return lowerRejection(err, ctx, func(target operation.IssueTarget) (schema.Field, string, schema.LocaleCode, error) {
+			return operationengine.ResolveIssueTarget(f, ctx, target)
+		})
+	}
 	raw := func(callbacks []field.RawTransform) []operationengine.Hook {
 		result := make([]operationengine.Hook, len(callbacks))
 		for i, callback := range callbacks {
@@ -258,7 +263,7 @@ func lowerTypedPolicies[W, R any](binding *operationengine.FieldBinding, hooks f
 				if err == nil {
 					applyGraphChange(ctx, f.Name, change, func(value store.Value) store.Value { return value })
 				}
-				return err
+				return rejected(ctx, err)
 			}
 		}
 		return result
@@ -275,7 +280,7 @@ func lowerTypedPolicies[W, R any](binding *operationengine.FieldBinding, hooks f
 				if err == nil {
 					applyGraphChange(ctx, f.Name, change, write.encode)
 				}
-				return err
+				return rejected(ctx, err)
 			}
 		}
 		return result
@@ -292,7 +297,7 @@ func lowerTypedPolicies[W, R any](binding *operationengine.FieldBinding, hooks f
 				if err != nil {
 					return err
 				}
-				return callback(adaptContext(ctx), value)
+				return rejected(ctx, callback(adaptContext(ctx), value))
 			}
 		}
 		return result
@@ -313,7 +318,7 @@ func lowerTypedPolicies[W, R any](binding *operationengine.FieldBinding, hooks f
 			if err == nil {
 				applyGraphChange(ctx, f.Name, change, read.encode)
 			}
-			return err
+			return rejected(ctx, err)
 		})
 	}
 	for _, callback := range validators {

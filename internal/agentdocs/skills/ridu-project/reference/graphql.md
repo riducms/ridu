@@ -11,15 +11,49 @@ bypass access, validation, hooks, transactions, localization, population, or red
 
 ## Use it in a new project {#new-project}
 
-Create an ordinary `starter` or `blank` project, then add the `graphqlplugin.New()` registration
-below. GraphQL is Go-only and has no admin package to install: applications that do not import it do
-not link its parser or execution runtime into the binary.
+Create an ordinary `starter` or `blank` project, then follow the existing-project steps below.
+Applications that do not install the plugin do not link its parser or execution runtime into the
+binary, and their admin does not download the playground.
 
 ## Add it to an existing project {#existing-project}
 
-Import `github.com/riducms/ridu/plugins/graphql` from the published Ridu module already used by the
-project, add it to `Config.Plugins`, and run `go mod tidy`. Do not add an npm package or generated
-admin import; this plugin owns a transport, not an authoring control.
+Add the Go plugin and its admin package together:
+
+```bash title="terminal"
+ridu add graphql \
+  --go-package github.com/riducms/ridu/plugins/graphql \
+  --admin-package @riducms/plugin-graphql
+```
+
+The command installs `@riducms/plugin-graphql` in the admin workspace and registers
+`graphqlplugin.New()` in the generated plugin list, so `installedPlugins()` already includes it.
+Register it by hand instead, as below, when you need options. The generated admin registry imports
+the playground; do not register it again in `admin.config.ts`.
+
+If you register the plugin by hand, install the admin package yourself:
+
+```bash title="terminal" package-manager="bun"
+bun add --cwd admin @riducms/plugin-graphql
+go mod tidy
+```
+
+```bash title="terminal" package-manager="npm"
+npm install --workspace admin @riducms/plugin-graphql
+go mod tidy
+```
+
+```bash title="terminal" package-manager="pnpm"
+pnpm --dir admin add @riducms/plugin-graphql
+go mod tidy
+```
+
+```bash title="terminal" package-manager="yarn"
+yarn --cwd admin add @riducms/plugin-graphql
+go mod tidy
+```
+
+To run GraphQL without the admin playground, set `DisablePlayground: true`; the admin package is
+then not needed.
 
 ## Enable the endpoint {#enable}
 
@@ -44,7 +78,8 @@ func Config() ridu.Config {
 
 The default route is `POST /api/graphql`. An invalid GraphQL name, generated type/root collision,
 unknown resource override, or malformed extension stops startup instead of hiding part of the
-schema. Ridu does not serve a browser playground.
+schema. Signed-in admins can explore and run operations in the
+[admin playground](#playground).
 
 Start the complete development loop:
 
@@ -59,8 +94,42 @@ database migration. If the same change also modifies resources, prepare the sele
 reviewed migration before deployment. Run `ridu check` before committing so generated
 SDL drift is caught.
 
-With the server running, send an authenticated bounded query to `POST /api/graphql`. Also confirm
-that an unauthorized query receives the same denial and field redaction as REST.
+With the server running, open **GraphQL** in the admin sidebar and run the starter query. Also
+confirm that an unauthorized query receives the same denial and field redaction as REST.
+
+## Explore the schema in the playground {#playground}
+
+The admin includes a GraphQL playground at `/admin/graphql`, like Payload's GraphQL playground. It
+runs operations against your endpoint with the current admin credentials, when present, so every
+result follows the same access rules as the rest of the admin.
+
+- **Query editor**: schema-aware autocompletion (`Ctrl+Space`), inline validation, and
+  `Ctrl+Click` (`⌘+Click` on a Mac) on a field or type to open its docs.
+- **Run**: `Ctrl+Enter` (`⌘+Enter`) or the Run button. When the editor holds several named
+  operations, the one under the cursor runs.
+- **Variables**: one JSON object sent with the operation.
+- **Response**: the status, duration, and the ordinary GraphQL response, including `errors`.
+- **Docs**: browse root types, follow type links, and search type and field names.
+
+The playground keeps your last query and variables in the browser and restores them on your next
+visit. Its first query lists a few documents from your first collection.
+
+The schema reaches the playground through an admin loader and follows the admin's existing access
+policy. An application with admin authentication therefore requires an admin session; an
+intentionally public no-auth admin exposes the same schema metadata its manifest already exposes.
+This does not enable GraphQL endpoint introspection: `AllowIntrospection` remains off by default.
+The playground follows a custom `Path`, so it always targets the endpoint the plugin serves.
+
+To serve GraphQL without the playground, disable it:
+
+```go
+graphqlplugin.New(graphqlplugin.Options{
+	DisablePlayground: true,
+})
+```
+
+This removes the admin route and loader. Remove `@riducms/plugin-graphql` from the admin workspace
+afterwards.
 
 ## Query collections {#query-collections}
 

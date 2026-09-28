@@ -21,7 +21,7 @@ func graphNormalize(_ operation.Context, value operation.Value[string]) (operati
 	if !present {
 		return operation.Keep[string](), nil
 	}
-	return operation.Replace(operation.Present(text + "-normalized")), nil
+	return operation.Set(text + "-normalized"), nil
 }
 
 func graphAllow(operation.Context) (bool, error) { return true, nil }
@@ -343,7 +343,10 @@ func TestProductionGraphTraversalAndExplicitSymbolicRenames(t *testing.T) {
 
 func TestProductionGraphReplacementInputsAndReadHookViewsAreDetached(t *testing.T) {
 	output := field.OutputTransform[string](func(_ operation.Context, value operation.Value[string]) (operation.Change[string], error) {
-		return operation.Replace(value), nil
+		if replacement, present := value.Get(); present {
+			return operation.Set(replacement), nil
+		}
+		return operation.Clear[string](), nil
 	})
 	validators := []field.Validator[string]{graphRule}
 	reads := []field.OutputTransform[string]{output}

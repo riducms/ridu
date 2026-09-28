@@ -10,6 +10,7 @@ import (
 	"github.com/riducms/ridu/field"
 	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/plugins/formbuilder"
+	graphqlplugin "github.com/riducms/ridu/plugins/graphql"
 	"github.com/riducms/ridu/plugins/richtext"
 	"github.com/riducms/ridu/plugins/seo"
 	"github.com/riducms/ridu/query"
@@ -63,6 +64,7 @@ func fixtureConfig(uploadStorage storage.Backend) ridu.Config {
 		Plugins: []ridu.Plugin{
 			embeddedplugin.Plugin{},
 			richtext.New(),
+			graphqlplugin.New(),
 			seo.New(seo.Config{
 				Collections:         []schema.CollectionSlug{"pages"},
 				Globals:             []schema.CollectionSlug{"site-settings"},
@@ -948,10 +950,7 @@ func postReadAccess(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
 		return ridu.Allow(), nil
 	}
 	owned := query.Equal(mustPath("author"), query.String(ctx.Actor.ID))
-	visible, err := query.Or(published, owned)
-	if err != nil {
-		return ridu.Deny(), err
-	}
+	visible := query.Or(published, owned)
 	return ridu.Where(visible), nil
 }
 
@@ -1025,7 +1024,7 @@ func actorHasRole(actor *store.Document, roles ...string) bool {
 func trimString(_ operation.Context, value operation.Value[store.Value]) (operation.Change[store.Value], error) {
 	if raw, present := value.Get(); present {
 		if text, valid := raw.StringValue(); valid {
-			return operation.Replace(operation.Present(store.String(strings.TrimSpace(text)))), nil
+			return operation.Set(store.String(strings.TrimSpace(text))), nil
 		}
 	}
 	return operation.Keep[store.Value](), nil
@@ -1099,7 +1098,7 @@ func primitiveListCollection() ridu.Collection {
 				BeforeChange: []field.Transform[[]string]{
 					func(_ operation.Context, value operation.Value[[]string]) (operation.Change[[]string], error) {
 						if items, present := value.Get(); present && len(items) > 0 && items[0] == "expand" {
-							return operation.Replace(operation.Present([]string{strings.Repeat("x", 21)})), nil
+							return operation.Set([]string{strings.Repeat("x", 21)}), nil
 						}
 						return operation.Keep[[]string](), nil
 					},

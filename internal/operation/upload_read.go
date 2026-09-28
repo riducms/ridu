@@ -28,11 +28,7 @@ func (engine *Engine) ReadUploadOwner(ctx context.Context, key string, request R
 		}
 		predicates = append(predicates, query.Equal(sizeKey, query.String(key)))
 	}
-	where := predicates[0]
-	if len(predicates) > 1 {
-		where, _ = query.Or(predicates...)
-	}
-	filter := where.Node()
+	filter := query.Or(predicates...).Node()
 	request.Operation, request.ID, request.Limit = operation.Read, "", 1
 	request.internalFilter = &filter
 	return engine.Execute(ctx, request)

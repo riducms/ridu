@@ -314,7 +314,7 @@ func runCheck(ctx context.Context, args []string, stdout, stderr io.Writer, opti
 		output.Error("generated contracts", err)
 		return 1
 	}
-	printGenerationWarnings(output, result)
+	printGenerationWarnings(output, definition, result, frameworkVersion)
 	fmt.Fprintln(stdout, "ok       generated contracts")
 	if definition.Migrations == "" {
 		output.Error("project ridu.toml does not configure a migrations directory", nil)
@@ -380,12 +380,13 @@ func runBuild(ctx context.Context, args []string, stdout, stderr io.Writer, opti
 		reporter.Error("discover project", err)
 		return 1
 	}
-	result, err := generate.Run(ctx, definition, frameworkVersion(options), false)
+	version := frameworkVersion(options)
+	result, err := generate.Run(ctx, definition, version, false)
 	if err != nil {
 		reporter.Error("generate project", err)
 		return 1
 	}
-	printGenerationWarnings(reporter, result)
+	printGenerationWarnings(reporter, definition, result, version)
 	for _, artifact := range result.Artifacts {
 		if artifact.Changed {
 			fmt.Fprintf(stdout, "generated %s\n", relativePath(definition.Root, artifact.Path))
@@ -977,7 +978,7 @@ func prepareDevelopment(ctx context.Context, definition projectfile.File, versio
 		return developmentPreparation{}, fmt.Errorf("generate contracts: %w", err)
 	}
 	contractDuration := time.Since(contractStarted)
-	printGenerationWarnings(output, result)
+	printGenerationWarnings(output, definition, result, version)
 	if syncSchema && len(result.Warnings) != 0 {
 		return developmentPreparation{}, developmentSchemaWarningError(definition.Database)
 	}
@@ -1510,9 +1511,17 @@ func frameworkVersion(options Options) string {
 	return options.Version
 }
 
-func printGenerationWarnings(output *cliOutput, result generate.Result) {
+func printGenerationWarnings(output *cliOutput, definition projectfile.File, result generate.Result, version string) {
 	for _, warning := range result.Warnings {
 		output.Warn(warning, nil)
+	}
+	// The generated admin registry imports every plugin's admin package, so a missing
+	// one would otherwise surface later as an unresolved import in the admin build.
+	for _, name := range missingAdminPluginPackages(definition, result.Manifest) {
+		directory := relativePath(definition.Root, definition.Absolute(definition.Admin))
+		requirement := registeredAdminPackageRequirement(definition, name, version)
+		command, arguments := packageManagerAddToDirectoryCommand(definition.FrontendPackageManager(), directory, requirement)
+		output.Warn(fmt.Sprintf("a registered plugin needs its admin package %s; install it with `%s %s`", name, command, strings.Join(arguments, " ")), nil)
 	}
 }
 

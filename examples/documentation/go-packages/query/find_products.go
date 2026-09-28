@@ -12,14 +12,9 @@ func FindAffordableProducts(
 	local *ridu.LocalAPI,
 	maxPrice float64,
 ) (store.Page, error) {
-	filter, err := AffordableProducts(maxPrice)
-	if err != nil {
-		return store.Page{}, err
-	}
-
 	// List executes the filter and also applies collection read access.
 	return local.List(ctx, "products", ridu.ListOptions{
-		Where: filter,
+		Where: AffordableProducts(maxPrice),
 		Page:  1,
 		Limit: 20,
 	})

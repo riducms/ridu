@@ -148,34 +148,50 @@ func In(path Path, values ...Value) Expression {
 	return expression
 }
 
-// And combines two or more expressions.
-func And(expressions ...Expression) (Expression, error) {
-	return logical(ExpressionAnd, 2, expressions)
+// And matches documents that satisfy every condition. With one condition it
+// returns that condition. Like Equal, it panics when given no conditions or a
+// nil one; check the length of a list built from input before calling it.
+func And(conditions ...Expression) Expression {
+	return logical(ExpressionAnd, conditions)
 }
 
-// Or combines two or more expressions.
-func Or(expressions ...Expression) (Expression, error) {
-	return logical(ExpressionOr, 2, expressions)
+// Or matches documents that satisfy at least one condition. With one condition
+// it returns that condition. It panics when given no conditions or a nil one.
+func Or(conditions ...Expression) Expression {
+	return logical(ExpressionOr, conditions)
 }
 
-// Not negates one expression.
-func Not(child Expression) (Expression, error) {
-	return logical(ExpressionNot, 1, []Expression{child})
-}
-
-func logical(kind ExpressionKind, requiredChildren int, expressions []Expression) (Expression, error) {
-	if len(expressions) < requiredChildren || kind == ExpressionNot && len(expressions) != 1 {
-		return nil, fmt.Errorf("%s expression requires %d child expression(s)", kind, requiredChildren)
+// Not matches documents that do not satisfy condition. It panics when
+// condition is nil.
+func Not(condition Expression) Expression {
+	if condition == nil {
+		panic(fmt.Errorf("query.Not requires a condition"))
 	}
+	return &expression{kind: ExpressionNot, children: []*expression{expressionFromNode(condition.Node())}}
+}
 
-	children := make([]*expression, len(expressions))
-	for index, child := range expressions {
+func logical(kind ExpressionKind, conditions []Expression) Expression {
+	if len(conditions) == 0 {
+		panic(fmt.Errorf("query.%s requires at least one condition", logicalName(kind)))
+	}
+	children := make([]*expression, len(conditions))
+	for index, child := range conditions {
 		if child == nil {
-			return nil, fmt.Errorf("%s expression child %d must not be nil", kind, index)
+			panic(fmt.Errorf("query.%s condition %d is nil", logicalName(kind), index))
 		}
 		children[index] = expressionFromNode(child.Node())
 	}
-	return &expression{kind: kind, children: children}, nil
+	if len(children) == 1 {
+		return children[0]
+	}
+	return &expression{kind: kind, children: children}
+}
+
+func logicalName(kind ExpressionKind) string {
+	if kind == ExpressionOr {
+		return "Or"
+	}
+	return "And"
 }
 
 func cloneNode(source *expression) Node {

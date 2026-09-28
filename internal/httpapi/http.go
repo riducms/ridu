@@ -3585,6 +3585,8 @@ func wireErrorCode(code string, status int) protocol.ErrorCode {
 		return protocol.ErrorInvalidAuthToken
 	case "invalid_credential":
 		return protocol.ErrorInvalidCredential
+	case "rejected":
+		return protocol.ErrorRejected
 	case "invalid_preview_token":
 		return protocol.ErrorInvalidPreviewToken
 	case "selection_too_large":

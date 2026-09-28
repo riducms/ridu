@@ -66,7 +66,7 @@ func trimTitle(
 		// Keep preserves the current immutable value and avoids replacement work.
 		return operation.Keep[string](), nil
 	}
-	return operation.Replace(operation.Present(trimmed)), nil
+	return operation.Set(trimmed), nil
 }
 
 var Title = field.Text("title").Hooks(field.Hooks[string]{
@@ -74,12 +74,12 @@ var Title = field.Text("title").Hooks(field.Hooks[string]{
 })
 ```
 
-| Callback result                               | Meaning                                                | Relative cost                                 |
-| --------------------------------------------- | ------------------------------------------------------ | --------------------------------------------- |
-| `operation.Keep[T]()`                         | Leave the current logical value and backing unchanged. | Lowest when no change is needed.              |
-| `operation.Replace(operation.Present(value))` | Publish a new logical value for this field.            | Revalidates and updates the affected branch.  |
-| `operation.Replace(operation.Empty[T]())`     | Clear this field.                                      | Still runs requiredness and final validation. |
-| Non-nil `error`                               | Stop the operation; ignore any returned replacement.   | Rolls back pre-commit database work.          |
+| Callback result        | Meaning                                                | Relative cost                                 |
+| ---------------------- | ------------------------------------------------------ | --------------------------------------------- |
+| `operation.Keep[T]()`  | Leave the current logical value and backing unchanged. | Lowest when no change is needed.              |
+| `operation.Set(value)` | Publish a new logical value for this field.            | Revalidates and updates the affected branch.  |
+| `operation.Clear[T]()` | Clear this field.                                      | Still runs requiredness and final validation. |
+| Non-nil `error`        | Stop the operation; ignore any returned replacement.   | Rolls back pre-commit database work.          |
 
 ## Read immutable values without copying {#read-values}
 

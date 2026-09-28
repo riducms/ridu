@@ -181,7 +181,7 @@ func normalizedClientOptions(config Config) (*options.ClientOptions, string, err
 		return nil, "", errors.New("invalid MongoDB connection configuration")
 	}
 	if !config.AllowInsecureTransport && (clientOptions.TLSConfig == nil || clientOptions.TLSConfig.InsecureSkipVerify) {
-		return nil, "", fmt.Errorf("MongoDB transport must verify TLS; configure TLS in the database URL, or explicitly allow insecure transport for local development")
+		return nil, "", fmt.Errorf("MongoDB transport must verify TLS; configure TLS in the database URL. For a local development database, allow plaintext explicitly: set AllowInsecureTransport, RIDU_ALLOW_INSECURE_DATABASE=true for Ridu projects, or pass --allow-insecure-database to the CLI")
 	}
 	applicationName := strings.TrimSpace(config.ApplicationName)
 	if applicationName == "" {

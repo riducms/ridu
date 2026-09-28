@@ -11,6 +11,7 @@
         "@riducms/admin": "workspace:*",
         "@riducms/plugin": "workspace:*",
         "@riducms/plugin-form-builder": "workspace:*",
+        "@riducms/plugin-graphql": "workspace:*",
         "@riducms/plugin-richtext": "workspace:*",
         "@riducms/plugin-seo": "workspace:*",
         "@riducms/sdk": "workspace:*",
@@ -35,7 +36,7 @@
     },
     "admin": {
       "name": "@riducms/admin",
-      "version": "0.4.0",
+      "version": "0.5.0",
       "dependencies": {
         "@codemirror/autocomplete": "^6.20.3",
         "@codemirror/commands": "^6.11.1",
@@ -77,7 +78,7 @@
     },
     "packages/build": {
       "name": "@riducms/build",
-      "version": "0.4.0",
+      "version": "0.5.0",
       "dependencies": {
         "@sveltejs/vite-plugin-svelte": "^7.2.0",
         "@unocss/preset-wind4": "^66.7.5",
@@ -94,14 +95,14 @@
     },
     "packages/cli": {
       "name": "@riducms/cli",
-      "version": "0.4.0",
+      "version": "0.5.0",
       "bin": {
         "ridu": "./src/cli.js",
       },
     },
     "packages/create-ridu": {
       "name": "create-ridu",
-      "version": "0.4.0",
+      "version": "0.5.0",
       "bin": {
         "create-ridu": "./src/cli.js",
       },
@@ -111,7 +112,7 @@
     },
     "packages/plugin": {
       "name": "@riducms/plugin",
-      "version": "0.4.0",
+      "version": "0.5.0",
       "dependencies": {
         "@riducms/protocol": "workspace:*",
         "@riducms/sdk": "workspace:*",
@@ -124,7 +125,7 @@
     },
     "packages/plugin-form-builder": {
       "name": "@riducms/plugin-form-builder",
-      "version": "0.4.0",
+      "version": "0.5.0",
       "devDependencies": {
         "@riducms/plugin": "workspace:*",
         "typescript": "~6.0.2",
@@ -136,9 +137,33 @@
         "@riducms/plugin",
       ],
     },
+    "packages/plugin-graphql": {
+      "name": "@riducms/plugin-graphql",
+      "version": "0.5.0",
+      "dependencies": {
+        "@codemirror/autocomplete": "^6.20.3",
+        "@codemirror/commands": "^6.11.1",
+        "@codemirror/lang-json": "^6.0.2",
+        "@codemirror/language": "^6.12.4",
+        "@codemirror/lint": "^6.9.7",
+        "@codemirror/state": "^6.7.5",
+        "@codemirror/view": "^6.43.12",
+        "@lezer/highlight": "^1.2.3",
+        "@riducms/plugin": "workspace:*",
+        "@riducms/protocol": "workspace:*",
+        "@riducms/sdk": "workspace:*",
+        "@riducms/ui": "workspace:*",
+        "cm6-graphql": "^0.2.2",
+        "graphql": "^16.14.2",
+        "svelte": "^5.56.8",
+      },
+      "devDependencies": {
+        "@riducms/build": "workspace:*",
+      },
+    },
     "packages/plugin-richtext": {
       "name": "@riducms/plugin-richtext",
-      "version": "0.4.0",
+      "version": "0.5.0",
       "dependencies": {
         "@hvniel/lexical-svelte": "^0.1.1",
         "@lexical/clipboard": "0.49.0",
@@ -164,7 +189,7 @@
     },
     "packages/plugin-seo": {
       "name": "@riducms/plugin-seo",
-      "version": "0.4.0",
+      "version": "0.5.0",
       "dependencies": {
         "@riducms/plugin": "workspace:*",
         "@riducms/protocol": "workspace:*",
@@ -177,18 +202,18 @@
     },
     "packages/protocol": {
       "name": "@riducms/protocol",
-      "version": "0.4.0",
+      "version": "0.5.0",
     },
     "packages/sdk": {
       "name": "@riducms/sdk",
-      "version": "0.4.0",
+      "version": "0.5.0",
       "dependencies": {
         "@riducms/protocol": "workspace:*",
       },
     },
     "packages/sveltekit": {
       "name": "@riducms/sveltekit",
-      "version": "0.4.0",
+      "version": "0.5.0",
       "devDependencies": {
         "@riducms/sdk": "workspace:*",
         "@sveltejs/kit": "^2.48.0",
@@ -201,11 +226,11 @@
     },
     "packages/translations": {
       "name": "@riducms/translations",
-      "version": "0.4.0",
+      "version": "0.5.0",
     },
     "packages/ui": {
       "name": "@riducms/ui",
-      "version": "0.4.0",
+      "version": "0.5.0",
       "dependencies": {
         "bits-ui": "^2.18.1",
       },
@@ -475,6 +500,8 @@
 
     "@riducms/plugin-form-builder": ["@riducms/plugin-form-builder@workspace:packages/plugin-form-builder"],
 
+    "@riducms/plugin-graphql": ["@riducms/plugin-graphql@workspace:packages/plugin-graphql"],
+
     "@riducms/plugin-richtext": ["@riducms/plugin-richtext@workspace:packages/plugin-richtext"],
 
     "@riducms/plugin-seo": ["@riducms/plugin-seo@workspace:packages/plugin-seo"],
@@ -653,6 +680,8 @@
 
     "clsx": ["clsx@2.1.1", "", {}, "sha512-eYm0QWBtUrBWZWG0d386OGAw16Z995PiOVo2B7bjWSbHedGl5e0ZWaq65kOGgUSNesEIDkB9ISbTg/JK9dhCZA=="],
 
+    "cm6-graphql": ["cm6-graphql@0.2.2", "", { "dependencies": { "graphql-language-service": "^5.7.0" }, "peerDependencies": { "@codemirror/autocomplete": "^6.0.0", "@codemirror/language": "^6.0.0", "@codemirror/lint": "^6.9.7", "@codemirror/state": "^6.0.0", "@codemirror/view": "^6.0.0", "@lezer/highlight": "^1.0.0", "graphql": "^15.5.0 || ^16.0.0 || ^17.0.0" } }, "sha512-z9DQonlhuCQZotqSxKUMdZpZKZO8xaxx9BQNf2EBr0auunWaS9FJmUoeiBECOn24aZq2UZqcPIa9OwYZolk8Tg=="],
+
     "colorette": ["colorette@2.0.20", "", {}, "sha512-IfEDxwoWIjkeXL1eXcDiow4UbKjhLdq6/EuSVR9GMN7KVH3r9gQ83e73hsz1Nd1T3ijd5xv1wcWRYO+D6kCI2w=="],
 
     "colorjs.io": ["colorjs.io@0.7.1", "", {}, "sha512-LY7OHnJZxHwT5UlzNa9bbhHHDbzB6yE5+3MIPwJEQKRvSCt/T4G7epsj+9j2BExUIIfXFIJGsIXUKdfrK9Q5tA=="],
@@ -670,6 +699,8 @@
     "crelt": ["crelt@1.0.7", "", {}, "sha512-aK6BbWfhf4U/wCcLHKPJl/xa6VkVstRaPywWtMKGwuOLc/wZTyQYuoxgvZnNsBvv7Kg3YTBQYYBCggcviQczuA=="],
 
     "css-tree": ["css-tree@3.2.1", "", { "dependencies": { "mdn-data": "2.27.1", "source-map-js": "^1.2.1" } }, "sha512-X7sjQzceUhu1u7Y/ylrRZFU2FS6LRiFVp6rKLPg23y3x3c3DOKAwuXGDp+PAGjh6CSnCjYeAul8pcT8bAl+lSA=="],
+
+    "debounce-promise": ["debounce-promise@3.1.2", "", {}, "sha512-rZHcgBkbYavBeD9ej6sP56XfG53d51CD4dnaw989YX/nZ/ZJfgRx/9ePKmTNiUiyQvh4mtrMoS3OAWW+yoYtpg=="],
 
     "deepmerge": ["deepmerge@4.3.1", "", {}, "sha512-3sUqbMEc77XqpdNO7FRyRog+eW3ph+GYCbj+rK+uYyRMuwsVy0rMiVtPn+QJlKFvWP/1PYpapqYn0Me2knFn+A=="],
 
@@ -724,6 +755,10 @@
     "get-caller-file": ["get-caller-file@2.0.5", "", {}, "sha512-DyFP3BM/3YHTQOCUL/w0OZHR0lpKeGrxotcHWcqNEdnltqFwXVfhEBQ94eIo34AfQpo0rGki4cyIiftY06h2Fg=="],
 
     "get-east-asian-width": ["get-east-asian-width@1.7.0", "", {}, "sha512-XjH1AECxf0giL2V1aU8vKyRR2ppRUb5c0EvT7zuJTokQ74bNo52zOtghqdWIqrhUD79fo3x0WfKZdOqxF6LG1Q=="],
+
+    "graphql": ["graphql@16.14.2", "", {}, "sha512-Chq1s4CY7jmh8gO2qvLIJyfCDIN+EHLFW/9iShnp1z8FjBQMoodWP1kDC36VAMXXIvAjj4ARa7ntfAV2BrjsbA=="],
+
+    "graphql-language-service": ["graphql-language-service@5.7.0", "", { "dependencies": { "debounce-promise": "^3.1.2", "nullthrows": "^1.0.0", "vscode-languageserver-types": "^3.17.1" }, "peerDependencies": { "graphql": "^15.5.0 || ^16.0.0 || ^17.0.0" }, "bin": { "graphql": "dist/temp-bin.js" } }, "sha512-5mwDb9HyHxMcO9RCLLieg6rC1u9XKJKWhFuvaZFJi3broQZDz1fcFNlm96UCMrIgI6MSsb9RwwqKKp2sZOZ9Gw=="],
 
     "gzip-size": ["gzip-size@6.0.0", "", { "dependencies": { "duplexer": "^0.1.2" } }, "sha512-ax7ZYomf6jqPTQ4+XCpUGyXKHk5WweS+e05MBO4/y3WJ5RkmPXNKvX+bx1behVILVwr6JSQvZAku021CHPXG3Q=="],
 
@@ -806,6 +841,8 @@
     "node-addon-api": ["node-addon-api@7.1.1", "", {}, "sha512-5m3bsyrjFWE1xf7nz7YXdN4udnVtXK6/Yfgn5qnahL6bCkf2yKt4k3nuTKAtT4r3IG8JNR2ncsIMdZuAzJjHQQ=="],
 
     "node-fetch-native": ["node-fetch-native@1.6.7", "", {}, "sha512-g9yhqoedzIUm0nTnTqAQvueMPVOuIY16bqgAJJC8XOOubYFNwz6IER9qs0Gq2Xd0+CecCKFjtdDTMA4u4xG06Q=="],
+
+    "nullthrows": ["nullthrows@1.1.1", "", {}, "sha512-2vPPEi+Z7WqML2jZYddDIfy5Dqb0r2fze2zTxNNknZaFpVHU3mFB3R+DWeJWGVx0ecvttSGlJTI+WG+8Z4cDWw=="],
 
     "obug": ["obug@2.1.4", "", {}, "sha512-4a+OsYv9UktOJKE+l1A4OufDgdRF9PifWj+tJnHURo/P+WOxpG4GzUFL9qCalmWauao6ogiG+QvnCovwPoyAWA=="],
 
@@ -990,6 +1027,8 @@
     "vitest": ["vitest@5.0.0", "", { "dependencies": { "@types/chai": "^5.2.2", "@vitest/mocker": "5.0.0", "chai": "^6.2.2", "es-module-lexer": "^2.3.2", "expect-type": "^1.4.0", "magic-string": "^1.2.3", "obug": "^2.1.4", "picomatch": "^4.0.7", "std-env": "^4.2.0", "tinybench": "6.1.4", "tinyexec": "1.3.0", "tinyglobby": "^0.2.17", "why-is-node-running": "^2.3.0" }, "peerDependencies": { "@edge-runtime/vm": "*", "@opentelemetry/api": "^1.9.0", "@types/node": "^22.0.0 || >=24.0.0", "@vitest/browser-playwright": "5.0.0", "@vitest/browser-preview": "5.0.0", "@vitest/browser-webdriverio": "^5.0.0-beta.5 || >=5.0.0", "@vitest/coverage-istanbul": "5.0.0", "@vitest/coverage-v8": "5.0.0", "@vitest/ui": "5.0.0", "happy-dom": "*", "jsdom": "*", "vite": "^6.4.0 || ^7.0.0 || ^8.0.0" }, "optionalPeers": ["@edge-runtime/vm", "@opentelemetry/api", "@types/node", "@vitest/browser-playwright", "@vitest/browser-preview", "@vitest/browser-webdriverio", "@vitest/coverage-istanbul", "@vitest/coverage-v8", "@vitest/ui", "happy-dom", "jsdom"], "bin": { "vitest": "./vitest.mjs" } }, "sha512-gpsMNoRhMjMktVxPtstOH4/PJuPyovVaMDr4oDilXaGH1EcqM2OE96SoHT2VIQ6fTGtTjqmHDrEu2X9RQiXf8Q=="],
 
     "vitest-browser-svelte": ["vitest-browser-svelte@3.1.0", "", { "dependencies": { "@testing-library/svelte-core": "^1.1.3" }, "peerDependencies": { "svelte": "^3 || ^4 || ^5 || ^5.0.0-next.0", "vitest": "^4.0.0 || ^5.0.0" } }, "sha512-+EBXSed6NArmzOC2DY4v9sI5n9TMIyfkMnewbXNQ7sR5IckQTCx7g1BbLdkH7kzm/tkgG/eEbRYlMWSbVfBtWA=="],
+
+    "vscode-languageserver-types": ["vscode-languageserver-types@3.18.4", "", {}, "sha512-nQsacoiijvl0fRf2q28uFDrAVwRhdCa3QveiF7/CX0r18mLR5FU/1WskSsCKOjmEbtteKUnY8x8Yzxop+k0zwg=="],
 
     "w3c-keyname": ["w3c-keyname@2.2.8", "", {}, "sha512-dpojBhNsCNN7T82Tm7k26A6G9ML3NkhDsnw9n/eoxSRlVBB4CEtIQ/KTCLI2Fwf3ataSXRhYFkQi3SlnFwPvPQ=="],
 

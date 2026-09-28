@@ -14,6 +14,7 @@ const packageDefinitions = [
 	{ path: "packages/plugin-richtext/package.json", name: "@riducms/plugin-richtext" },
 	{ path: "packages/plugin-seo/package.json", name: "@riducms/plugin-seo" },
 	{ path: "packages/plugin-form-builder/package.json", name: "@riducms/plugin-form-builder" },
+	{ path: "packages/plugin-graphql/package.json", name: "@riducms/plugin-graphql" },
 ] as const;
 
 const semanticVersionPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;

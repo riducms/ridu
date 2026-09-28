@@ -16,7 +16,7 @@ func clearSelfReview(
 		return operation.Keep[operation.ID](), nil
 	}
 	// Authors cannot review their own work; save it unreviewed.
-	return operation.Replace(operation.Empty[operation.ID]()), nil
+	return operation.Clear[operation.ID](), nil
 }
 
 // Read hooks receive the response value, which may be the populated reviewer.
@@ -34,10 +34,10 @@ func showReviewerName(
 		return operation.Keep[operation.ReferenceOutput](), nil
 	}
 	// Return the reference with only the reviewer's name.
-	return operation.Replace(operation.Present(operation.Populated(store.Document{
+	return operation.Set(operation.Populated(store.Document{
 		ID:     reviewer.ID,
 		Values: store.Values{"name": reviewer.Values["name"]},
-	}))), nil
+	})), nil
 }
 
 var Reviewer = field.Relationship("reviewer", "users").

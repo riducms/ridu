@@ -36,9 +36,9 @@ if (JSON.stringify(bootstrap.documentViewRoutes) !== JSON.stringify(["posts:insi
 	throw new Error("admin bootstrap metadata did not evaluate the fixture document view");
 if (
 	JSON.stringify(bootstrap.extensionRoutes) !==
-	JSON.stringify(["editorial-report", "plugin-contract"])
+	JSON.stringify(["editorial-report", "graphql", "plugin-contract"])
 )
-	throw new Error("admin bootstrap metadata did not evaluate the fixture extension route");
+	throw new Error("admin bootstrap metadata did not evaluate the fixture extension routes");
 const expectedReplacements = [
 	"account:*",
 	"collectionCreate:loader-records",
@@ -172,7 +172,9 @@ const measurements = {
 // the lazy editor to about 132,000 gzip bytes. Plugin SCSS brings total CSS to about
 // 53,300 bytes. Allow 5 KiB async JS and 2.25 KiB CSS for this reviewed feature slice;
 // keep the entry budget fixed and preserve interaction-only chunk closure checks.
-const budgets = { entryJS: 215 * 1024, largestAsyncJS: 130 * 1024, totalCSS: 52.5 * 1024 };
+// The GraphQL playground route adds 1,329 bytes of lazy CSS (54,578 total); its editor and
+// language tools load in one route chunk. Allow 1.5 KiB CSS; both JS caps remain unchanged.
+const budgets = { entryJS: 215 * 1024, largestAsyncJS: 130 * 1024, totalCSS: 54 * 1024 };
 
 for (const [name, size] of Object.entries(measurements)) {
 	console.log(

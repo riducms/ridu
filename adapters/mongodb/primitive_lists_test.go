@@ -83,8 +83,8 @@ func TestPrimitiveListShapeGuardsSurviveNotAndOr(t *testing.T) {
 	path, _ := query.ParsePath("points")
 	title, _ := query.ParsePath("title")
 	collection := schema.Collection{ID: "products", Slug: "products", Fields: []schema.Field{{ID: "points", Name: "points", Path: path, Type: schema.FieldTypeTextList, Category: schema.FieldCategoryScalar, List: &schema.PrimitiveListField{}, Text: &schema.TextField{}}, {ID: "title", Name: "title", Path: title, Type: schema.FieldTypeText, Category: schema.FieldCategoryScalar, Text: &schema.TextField{}}}}
-	negated, _ := query.Not(query.In(path, query.String("oak")))
-	either, _ := query.Or(query.Equal(title, query.String("x")), query.In(path, query.String("oak")))
+	negated := query.Not(query.In(path, query.String("oak")))
+	either := query.Or(query.Equal(title, query.String("x")), query.In(path, query.String("oak")))
 	for _, expression := range []query.Expression{negated, either} {
 		node := expression.Node()
 		guards, err := mongoNodeRepeatedShapeGuards(collection, node, "filter", mongoPredicateScope{})

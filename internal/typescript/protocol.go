@@ -59,6 +59,7 @@ func Protocol() []byte {
 		string(protocol.ErrorInvalidAuthToken),
 		string(protocol.ErrorInvalidCredential),
 		string(protocol.ErrorInvalidPreviewToken),
+		string(protocol.ErrorRejected),
 		string(protocol.ErrorSelectionTooLarge),
 	})
 	writeUnion(&output, "FieldType", []string{

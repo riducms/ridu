@@ -393,7 +393,7 @@ func TestPublishAndUnpublishRunConfiguredFieldLifecycle(t *testing.T) {
 		if ctx.Operation == operation.Publish {
 			value = "Published by hook"
 		}
-		return operation.Replace(operation.Present(value)), nil
+		return operation.Set(value), nil
 	}}, BeforeOperation: []field.Transform[string]{recordWrite("beforeOperation")}, AfterChange: []field.Observer[string]{record("afterChange")}, AfterOperation: []field.Observer[string]{record("afterOperation")}, AfterCommit: []field.Observer[string]{record("afterCommit")}})
 	application, err := ridu.New(ridu.Config{Name: "Status field hooks", Collections: []ridu.Collection{{Slug: "posts", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true}, Fields: field.Fields{title}}}}, teststore.New())
 	if err != nil {
@@ -427,12 +427,13 @@ func TestPublishAndUnpublishRunConfiguredFieldLifecycle(t *testing.T) {
 	}
 	statusWant := []operation.Kind{operation.Publish, operation.Unpublish}
 	readWant := []operation.Kind{operation.Publish, operation.Unpublish, operation.ReadVersions}
-	for _, phase := range []string{"beforeValidate", "beforeOperation", "afterOperation", "afterCommit"} {
+	for _, phase := range []string{"beforeOperation", "afterOperation"} {
 		if !slices.Equal(seen[phase], readWant) {
 			t.Errorf("%s operations = %v, want %v", phase, seen[phase], readWant)
 		}
 	}
-	for _, phase := range []string{"beforeChange", "afterChange"} {
+	// Validation and commit hooks describe changes, so reading versions skips them.
+	for _, phase := range []string{"beforeValidate", "beforeChange", "afterChange", "afterCommit"} {
 		if !slices.Equal(seen[phase], statusWant) {
 			t.Errorf("%s operations = %v, want %v", phase, seen[phase], statusWant)
 		}

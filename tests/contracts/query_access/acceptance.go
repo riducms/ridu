@@ -85,14 +85,8 @@ func Run(t *testing.T, factory Factory, options Options) {
 			})
 		}
 		for _, fragment := range []string{"orch", "xyz", "launch-"} {
-			or, err := query.Or(query.Equal(path("name"), query.String("Alpha")), query.Contains(path("secret"), fragment))
-			if err != nil {
-				t.Fatal(err)
-			}
-			not, err := query.Not(query.Contains(path("secret"), fragment))
-			if err != nil {
-				t.Fatal(err)
-			}
+			or := query.Or(query.Equal(path("name"), query.String("Alpha")), query.Contains(path("secret"), fragment))
+			not := query.Not(query.Contains(path("secret"), fragment))
 			for _, where := range []query.Expression{
 				query.Contains(path("secret"), fragment),
 				or, not,

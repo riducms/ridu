@@ -238,6 +238,8 @@ type Error struct {
 	// not be proven. External resources must be retained and reconciled instead
 	// of rolled back when this is true.
 	CommitAttempted bool
+	// unique holds a conflicting write's values until its transaction ends.
+	unique *uniqueCandidate
 }
 
 func (operationError *Error) Error() string { return operationError.Message }
@@ -319,6 +321,11 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 	defer func() {
 		if err == nil {
 			return
+		}
+		// A nested operation's conflict is explained by the outermost operation,
+		// once the shared transaction has rolled back.
+		if _, nested := ctx.Value(transactionKey{}).(*transactionState); !nested {
+			err = engine.explainUniqueConflict(context.WithoutCancel(ctx), err)
 		}
 		failureContext.Error = err
 		if hookFailure := runHooks(resourceAfterError, failureContext); hookFailure != nil {
@@ -755,16 +762,22 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 		}
 	}
 
-	if err := runIdentityHooks(collection.Hooks.BeforeValidate, operationContext); err != nil {
-		return Result{}, hookError("before validation", err)
+	// BeforeValidate prepares input, so it runs only for operations that save
+	// submitted or copied values, never for reads, deletes, or restores.
+	if changesDocument(request.Operation) {
+		if err := runIdentityHooks(collection.Hooks.BeforeValidate, operationContext); err != nil {
+			return Result{}, hookError("before validation", err)
+		}
 	}
 	if request.Operation != operation.Read {
 		if identityError := prepareRowIdentities(collection.Schema.Fields, operationContext.Data, false, false); identityError != nil {
 			return Result{}, identityError
 		}
 	}
-	if err := runFieldHooks(collection, operationContext, func(hooks Hooks) []Hook { return hooks.BeforeValidate }, true); err != nil {
-		return Result{}, hookError("field before validation", err)
+	if changesDocument(request.Operation) {
+		if err := runFieldHooks(collection, operationContext, func(hooks Hooks) []Hook { return hooks.BeforeValidate }, true); err != nil {
+			return Result{}, hookError("field before validation", err)
+		}
 	}
 	if request.Operation != operation.Read {
 		if identityError := prepareRowIdentities(collection.Schema.Fields, operationContext.Data, false, false); identityError != nil {
@@ -928,6 +941,11 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 		}
 	}
 	normalizeSlugFields(collection.Schema.Fields, operationContext.Data, submittedData, operationContext.Original, request.Operation)
+	if request.Operation == operation.Duplicate {
+		if slugError := uniqueDuplicateSlugs(transactionContext, state.transaction, collection.Schema, operationContext.Data, operationContext.Original, selection.Configured); slugError != nil {
+			return Result{}, translateStoreError(slugError)
+		}
+	}
 	request.Data = store.CloneValues(operationContext.Data)
 	if request.Operation == operation.Update || request.Operation == operation.Publish || request.Operation == operation.Unpublish {
 		if identityError := validateBlockTypeIdentity(collection.Schema.Fields, originalIdentity, request.Data, false); identityError != nil {
@@ -1254,6 +1272,13 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 		result.Document, err = documentResult(document, storeError)
 	}
 	if err != nil {
+		if changesDocument(request.Operation) {
+			excludeID := request.ID
+			if request.Operation == operation.Duplicate {
+				excludeID = ""
+			}
+			err = withUniqueCandidate(err, uniqueCandidate{collection: collection.Schema, documentID: excludeID, values: store.CloneValues(request.Data), locales: selection.Configured})
+		}
 		return Result{}, err
 	}
 	if request.IncludeAccess {
@@ -1393,6 +1418,11 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 	if hookDocumentBase != nil {
 		document := store.CloneDocument(*hookDocumentBase)
 		operationContext.Document = &document
+		if document.ID != "" {
+			// Later callbacks, including field AfterCommit hooks, identify the
+			// saved document: a create's new ID, or a duplicate's copy.
+			operationContext.ID = document.ID
+		}
 	}
 	divergentHookProjection := hookSelection.Locale != selection.Locale || hookSelection.All != selection.All
 	if changesDocument(request.Operation) {
@@ -1436,11 +1466,14 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 			result.Document = &document
 		}
 	}
-	queueBoundAfterCommit(state, collection, operationContext)
-	for _, hook := range collection.Hooks.AfterCommit {
-		deferredContext := operationContext
-		deferredContext.projections = nil
-		state.afterCommit = append(state.afterCommit, deferredHook{hook: hook, context: deferredContext})
+	// AfterCommit reports committed changes, so reads never queue it.
+	if request.Operation != operation.Read {
+		queueBoundAfterCommit(state, collection, operationContext)
+		for _, hook := range collection.Hooks.AfterCommit {
+			deferredContext := operationContext
+			deferredContext.projections = nil
+			state.afterCommit = append(state.afterCommit, deferredHook{hook: hook, context: deferredContext})
+		}
 	}
 	responseContext := operationContext
 	responseContext.Locale, responseContext.AllLocales = selection.Locale, selection.All
@@ -1743,12 +1776,6 @@ func (engine *Engine) readVersions(ctx context.Context, collectionName, document
 	if err := runHooks(collection.Hooks.BeforeRead, operationContext); err != nil {
 		return nil, hookError("before read", err)
 	}
-	if err := runIdentityHooks(collection.Hooks.BeforeValidate, operationContext); err != nil {
-		return nil, hookError("before validation", err)
-	}
-	if err := runFieldHooks(collection, operationContext, func(hooks Hooks) []Hook { return hooks.BeforeValidate }, true); err != nil {
-		return nil, hookError("field before validation", err)
-	}
 	if err := runIdentityHooks(collection.Hooks.BeforeOperation, operationContext); err != nil {
 		return nil, hookError("before operation", err)
 	}
@@ -1784,12 +1811,6 @@ func (engine *Engine) readVersions(ctx context.Context, collectionName, document
 	}
 	if err := runFieldHooks(collection, operationContext, func(hooks Hooks) []Hook { return hooks.AfterOperation }); err != nil {
 		return nil, hookError("field after operation", err)
-	}
-	queueBoundAfterCommit(state, collection, operationContext)
-	for _, hook := range collection.Hooks.AfterCommit {
-		deferredContext := operationContext
-		deferredContext.projections = nil
-		state.afterCommit = append(state.afterCommit, deferredHook{hook: hook, context: deferredContext})
 	}
 	for index := range versions {
 		if recoveryError := unknownBlockRecoveryError(collection.Schema.Fields, versions[index].Snapshot.Values, true); recoveryError != nil {
@@ -2985,7 +3006,7 @@ func authorizePreparedLocalization(collection Collection, base Context, canonica
 
 func denyAllAccessPredicate() *query.Node {
 	id, _ := query.NewPath("id")
-	expression, _ := query.And(
+	expression := query.And(
 		query.Equal(id, query.String("__ridu_access_denied_a__")),
 		query.Equal(id, query.String("__ridu_access_denied_b__")),
 	)
@@ -3131,6 +3152,10 @@ func transactionAdmissionError(message string, err error) error {
 }
 
 func hookError(phase string, err error) error {
+	var rejection *Rejection
+	if errors.As(err, &rejection) {
+		return &Error{Code: "rejected", Status: 422, Message: rejection.Message, Issues: append([]schema.Issue(nil), rejection.Issues...), Cause: err}
+	}
 	var embeddedFailure *embedded.Error
 	if errors.As(err, &embeddedFailure) {
 		return embeddedOperationError(err, false)

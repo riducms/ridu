@@ -98,6 +98,10 @@ The hook gives each request its own client in `event.locals.ridu`. Compose it wi
 through `sequence`. A server-side login, logout, or rejected token updates the session cookie on the
 response.
 
+Server requests go through SvelteKit's `event.fetch`. The client sends its token in the
+`Authorization` header with `credentials: "omit"`, so the web app's own cookies are never forwarded
+to Ridu. To use another fetch, pass `fetch` to `defineRidu` or `createRiduHandle`.
+
 ## Load and provide the session {#layout}
 
 ```ts title="src/routes/+layout.server.ts"

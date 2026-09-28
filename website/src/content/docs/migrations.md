@@ -99,6 +99,11 @@ removing, editing, or inserting applied history is detected by the database ledg
 Never edit an applied artifact. If a deployment needs correction, restore the committed history and
 create a new forward migration.
 
+Plugin package versions are not part of the schema, so upgrading Ridu or a plugin does not require
+a migration by itself. Manifests written by Ridu 0.4 and earlier did record plugin versions. After
+upgrading such a project, create one migration to record the manifest without them; it contains
+only a schema assertion. [`ridu upgrade`](/docs/releases/#upgrade) creates it for you.
+
 ## Renames preserve identity {#renames}
 
 When a slug or field path changes, `create` proposes only unambiguous one-to-one candidates:

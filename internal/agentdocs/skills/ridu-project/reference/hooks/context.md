@@ -16,7 +16,7 @@ The two contexts answer the same questions in different ways:
 | Identify the signed-in user           | `ctx.Actor`, a document; `nil` when anonymous  | `ctx.Actor.ID`; empty when anonymous             |
 | Read the values being saved           | `ctx.Data`                                     | The `value` argument, `ctx.Siblings`, `ctx.Root` |
 | Read the saved values before a change | `ctx.Original`                                 | `ctx.Prior`, for this field's group or row       |
-| Change what is saved                  | Set entries in `ctx.Data`                      | Return `operation.Replace(...)`                  |
+| Change what is saved                  | Set entries in `ctx.Data`                      | Return `operation.Set(...)` or `operation.Clear` |
 | Change the response                   | Set entries in `ctx.Document.Values`           | Return a change from an `.AfterRead(...)` hook   |
 | Read another document                 | `ctx.Local.Find(...)`                          | `ctx.Local.FindByID(...)`                        |
 | Save another document                 | `ctx.Local.Create(...)`, `Update`, or `Delete` | Not available; use a collection hook             |
@@ -55,7 +55,7 @@ previousTitle, _ := ctx.Prior.String("title")
 ```
 
 Changing a map or list read from these views does not change the document. Return
-`operation.Replace(...)` to change the hook's own field. See
+`operation.Set(...)` or `operation.Clear[T]()` to change the hook's own field. See
 [Using other field values](../fields/callback-values.md) for nested rows, translations, and
 related-document lookups.
 

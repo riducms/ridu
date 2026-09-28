@@ -222,10 +222,10 @@ func TestPrimitiveListTypedReplacementsAndInvalidDynamicDefaults(t *testing.T) {
 	replacement := []float64{0, 2, 2}
 	app, err := core.New(core.Config{Name: "List hooks", Collections: []core.Collection{{Slug: "products", Fields: field.Fields{
 		field.TextList("points").Hooks(field.Hooks[[]string]{BeforeValidate: []field.RawTransform{func(ctx operation.Context, value operation.Value[store.Value]) (operation.Change[store.Value], error) {
-			return operation.Replace(operation.Present(store.List(store.String(""), store.String("from raw hook")))), nil
+			return operation.Set(store.List(store.String(""), store.String("from raw hook"))), nil
 		}}}),
 		field.NumberList("sizes").Hooks(field.Hooks[[]float64]{BeforeChange: []field.Transform[[]float64]{func(ctx operation.Context, value operation.Value[[]float64]) (operation.Change[[]float64], error) {
-			return operation.Replace(operation.Present(replacement)), nil
+			return operation.Set(replacement), nil
 		}}}),
 	}}}}, teststore.New())
 	if err != nil {
@@ -378,15 +378,15 @@ func TestPrimitiveListReadHooksRespectOutputShape(t *testing.T) {
 	for _, clear := range []bool{false, true} {
 		texts := field.TextList("points").Required().MaxRows(1).MaxLength(2).ReplaceAfterRead(func(operation.Context, operation.Value[[]string]) (operation.Change[[]string], error) {
 			if clear {
-				return operation.Replace(operation.Empty[[]string]()), nil
+				return operation.Clear[[]string](), nil
 			}
-			return operation.Replace(operation.Present([]string{"formatted longer", "extra"})), nil
+			return operation.Set([]string{"formatted longer", "extra"}), nil
 		})
 		numbers := field.NumberList("sizes").Required().Max(1).MaxRows(1).ReplaceAfterRead(func(operation.Context, operation.Value[[]float64]) (operation.Change[[]float64], error) {
 			if clear {
-				return operation.Replace(operation.Empty[[]float64]()), nil
+				return operation.Clear[[]float64](), nil
 			}
-			return operation.Replace(operation.Present([]float64{9, 10})), nil
+			return operation.Set([]float64{9, 10}), nil
 		})
 		app, err := core.New(core.Config{Name: "Read lists", Collections: []core.Collection{{Slug: "products", Fields: field.Fields{texts, numbers}}}}, teststore.New())
 		if err != nil {
@@ -434,7 +434,7 @@ func TestPrimitiveListReadOutputRejectsMalformedValues(t *testing.T) {
 			if test.typed {
 				collection.Fields = field.Fields{field.NumberList("value").ReplaceAfterRead(func(operation.Context, operation.Value[[]float64]) (operation.Change[[]float64], error) {
 					if active {
-						return operation.Replace(operation.Present([]float64{test.number})), nil
+						return operation.Set([]float64{test.number}), nil
 					}
 					return operation.Keep[[]float64](), nil
 				})}

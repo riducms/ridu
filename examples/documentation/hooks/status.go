@@ -14,7 +14,7 @@ func logStatusChange(
 	status, _ := value.Get()
 	// Prior holds the values saved before this operation.
 	previous, _ := ctx.Prior.String("status")
-	if ctx.Operation == operation.Read || status == previous {
+	if status == previous {
 		return nil
 	}
 	// The change is committed, so this never logs a rolled-back save.

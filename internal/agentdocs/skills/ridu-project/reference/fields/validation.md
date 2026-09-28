@@ -77,6 +77,17 @@ attempt. It can read other values through its context; see
 To change a value before saving, use a [field hook](../hooks/fields.md#normalize-input).
 Validators report problems; they do not change the document.
 
+### Unique values {#unique}
+
+A field with `.Unique()`, including every [`field.Slug`](https://riducms.com/docs/fields/slug/), cannot hold a value
+another document already uses. A save that repeats one fails with a `unique` issue on that field,
+“Another document already uses this value.”, which the admin shows beside the field. API callers
+receive it as an ordinary `validation` error.
+
+When a document is duplicated, Ridu gives a copied slug the next free value, such as
+`about-us-copy`. Clear or change other unique values in the copy with a
+[`BeforeDuplicate` hook](../hooks/fields.md#before-duplicate).
+
 ## Put a message on a child field {#validation-issue-targets}
 
 Attach a validator directly to the child when the rule only concerns that child. A validator on
