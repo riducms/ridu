@@ -286,8 +286,8 @@ content blocks. It includes both Go validation and the Svelte editor.
 
 Use a [Virtual field](/docs/fields/virtual/) for a value calculated by Go code, such as a display
 name assembled from other fields. The field appears in API responses but is not stored and
-cannot be set by a create or update request. Define its output type with `ValueString`,
-`ValueNumber`, `ValueBoolean`, or `ValueJSON`.
+cannot be set by a create or update request. Its resolver's return type sets the output type:
+`string`, `float64`, `bool`, or `store.Value` for any JSON value.
 
 Joins and virtual fields run when the response requests them. They are not editable inputs.
 

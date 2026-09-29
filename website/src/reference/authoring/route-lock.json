@@ -8625,31 +8625,38 @@
 		},
 		"go:github.com/riducms/ridu/field#OutputField": {
 			"module": "field",
-			"symbol": "output-field"
+			"symbol": "output-field",
+			"redirect": "/reference/field/virtual-field/"
 		},
 		"go:github.com/riducms/ridu/field#OutputField.Access": {
 			"module": "field",
-			"symbol": "output-field-access-method"
+			"symbol": "output-field-access-method",
+			"redirect": "/reference/field/virtual-field-access-method/"
 		},
 		"go:github.com/riducms/ridu/field#OutputField.Admin": {
 			"module": "field",
-			"symbol": "output-field-admin-method"
+			"symbol": "output-field-admin-method",
+			"redirect": "/reference/field/virtual-field-admin-method/"
 		},
 		"go:github.com/riducms/ridu/field#OutputField.EditAdmin": {
 			"module": "field",
-			"symbol": "output-field-edit-admin-method"
+			"symbol": "output-field-edit-admin-method",
+			"redirect": "/reference/field/virtual-field-edit-admin-method/"
 		},
 		"go:github.com/riducms/ridu/field#OutputField.Label": {
 			"module": "field",
-			"symbol": "output-field-label-method"
+			"symbol": "output-field-label-method",
+			"redirect": "/reference/field/virtual-field-label-method/"
 		},
 		"go:github.com/riducms/ridu/field#OutputField.Rename": {
 			"module": "field",
-			"symbol": "output-field-rename-method"
+			"symbol": "output-field-rename-method",
+			"redirect": "/reference/field/virtual-field-rename-method/"
 		},
 		"go:github.com/riducms/ridu/field#OutputField.Resolver": {
 			"module": "field",
-			"symbol": "output-field-resolver-method"
+			"symbol": "output-field-resolver-method",
+			"redirect": "/reference/field/virtual-field-resolver-method/"
 		},
 		"go:github.com/riducms/ridu/field#OutputTransform": {
 			"module": "field",
@@ -9170,7 +9177,8 @@
 		},
 		"go:github.com/riducms/ridu/field#AsOutput": {
 			"module": "field",
-			"symbol": "as-output"
+			"symbol": "as-output",
+			"redirect": "/reference/field/as-virtual/"
 		},
 		"go:github.com/riducms/ridu/plugins/seo#Plugin.TransformFields": {
 			"module": "seo",
@@ -9718,15 +9726,18 @@
 		},
 		"go:github.com/riducms/ridu/field#OutputField.LabelTranslations": {
 			"module": "field",
-			"symbol": "output-field-label-translations-method"
+			"symbol": "output-field-label-translations-method",
+			"redirect": "/reference/field/virtual-field-label-translations-method/"
 		},
 		"go:github.com/riducms/ridu/field#OutputField.Private": {
 			"module": "field",
-			"symbol": "output-field-private-method"
+			"symbol": "output-field-private-method",
+			"redirect": "/reference/field/virtual-field-private-method/"
 		},
 		"go:github.com/riducms/ridu/field#OutputField.RestrictAccess": {
 			"module": "field",
-			"symbol": "output-field-restrict-access-method"
+			"symbol": "output-field-restrict-access-method",
+			"redirect": "/reference/field/virtual-field-restrict-access-method/"
 		},
 		"go:github.com/riducms/ridu/field#PluginField.CollectionReferenceKeys": {
 			"module": "field",
@@ -11706,15 +11717,18 @@
 		},
 		"go:github.com/riducms/ridu/field#OutputField.AfterRead": {
 			"module": "field",
-			"symbol": "output-field-after-read-method"
+			"symbol": "output-field-after-read-method",
+			"redirect": "/reference/field/virtual-field-after-read-method/"
 		},
 		"go:github.com/riducms/ridu/field#OutputField.AfterReadHooks": {
 			"module": "field",
-			"symbol": "output-field-after-read-hooks-method"
+			"symbol": "output-field-after-read-hooks-method",
+			"redirect": "/reference/field/virtual-field-after-read-hooks-method/"
 		},
 		"go:github.com/riducms/ridu/field#OutputField.ReplaceAfterRead": {
 			"module": "field",
-			"symbol": "output-field-replace-after-read-method"
+			"symbol": "output-field-replace-after-read-method",
+			"redirect": "/reference/field/virtual-field-replace-after-read-method/"
 		},
 		"go:github.com/riducms/ridu/field#PluginField.AfterRead": {
 			"module": "field",
@@ -12903,6 +12917,70 @@
 		"go:github.com/riducms/ridu/store#Values.UnmarshalJSON": {
 			"module": "store",
 			"symbol": "values-unmarshal-json-method"
+		},
+		"go:github.com/riducms/ridu/field#AsVirtual": {
+			"module": "field",
+			"symbol": "as-virtual"
+		},
+		"go:github.com/riducms/ridu/field#VirtualField": {
+			"module": "field",
+			"symbol": "virtual-field"
+		},
+		"go:github.com/riducms/ridu/field#VirtualField.Access": {
+			"module": "field",
+			"symbol": "virtual-field-access-method"
+		},
+		"go:github.com/riducms/ridu/field#VirtualField.Admin": {
+			"module": "field",
+			"symbol": "virtual-field-admin-method"
+		},
+		"go:github.com/riducms/ridu/field#VirtualField.AfterRead": {
+			"module": "field",
+			"symbol": "virtual-field-after-read-method"
+		},
+		"go:github.com/riducms/ridu/field#VirtualField.AfterReadHooks": {
+			"module": "field",
+			"symbol": "virtual-field-after-read-hooks-method"
+		},
+		"go:github.com/riducms/ridu/field#VirtualField.EditAdmin": {
+			"module": "field",
+			"symbol": "virtual-field-edit-admin-method"
+		},
+		"go:github.com/riducms/ridu/field#VirtualField.Label": {
+			"module": "field",
+			"symbol": "virtual-field-label-method"
+		},
+		"go:github.com/riducms/ridu/field#VirtualField.LabelTranslations": {
+			"module": "field",
+			"symbol": "virtual-field-label-translations-method"
+		},
+		"go:github.com/riducms/ridu/field#VirtualField.Private": {
+			"module": "field",
+			"symbol": "virtual-field-private-method"
+		},
+		"go:github.com/riducms/ridu/field#VirtualField.Rename": {
+			"module": "field",
+			"symbol": "virtual-field-rename-method"
+		},
+		"go:github.com/riducms/ridu/field#VirtualField.ReplaceAfterRead": {
+			"module": "field",
+			"symbol": "virtual-field-replace-after-read-method"
+		},
+		"go:github.com/riducms/ridu/field#VirtualField.Resolver": {
+			"module": "field",
+			"symbol": "virtual-field-resolver-method"
+		},
+		"go:github.com/riducms/ridu/field#VirtualField.RestrictAccess": {
+			"module": "field",
+			"symbol": "virtual-field-restrict-access-method"
+		},
+		"go:github.com/riducms/ridu/field#VirtualValue": {
+			"module": "field",
+			"symbol": "virtual-value"
+		},
+		"go:github.com/riducms/ridu/plugins/richtext#Admin": {
+			"module": "richtext",
+			"symbol": "admin"
 		}
 	}
 }

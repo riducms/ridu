@@ -16,6 +16,25 @@
 		color: var(--foreground-muted);
 	}
 
+	/* Pinned above the editor and kept in view while its content scrolls. */
+	.ridu-richtext-fixed-toolbar-slot {
+		position: sticky;
+		top: var(--admin-sticky-offset, 0px);
+		z-index: 3;
+		margin-block-end: 12px;
+	}
+
+	.ridu-richtext-fixed-toolbar {
+		box-sizing: border-box;
+		flex-wrap: wrap;
+		gap: 2px;
+		padding: 4px;
+		border: 1px solid var(--control-border);
+		border-radius: var(--control-radius);
+		background: var(--background);
+		color: var(--foreground-muted);
+	}
+
 	.ridu-richtext-toolbar-button {
 		flex-shrink: 0;
 		inline-size: 30px;

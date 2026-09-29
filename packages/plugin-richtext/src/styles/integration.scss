@@ -6,6 +6,15 @@
 		min-inline-size: 0;
 	}
 
+	/* The gutter holds the block handle beside each block. */
+	.ridu-richtext-editor {
+		--ridu-richtext-gutter: 39px;
+		&.is-gutterless,
+		&.is-read-only {
+			--ridu-richtext-gutter: 0px;
+		}
+	}
+
 	.ridu-richtext-canvas {
 		position: relative;
 	}
@@ -16,7 +25,7 @@
 		z-index: 1;
 		min-block-size: 40px;
 		padding: 8px 0;
-		padding-inline-start: 39px;
+		padding-inline-start: var(--ridu-richtext-gutter);
 		border: 0;
 		color: var(--foreground);
 		caret-color: var(--foreground);
@@ -44,17 +53,14 @@
 		border-inline-start: 2px solid var(--control-invalid-border);
 	}
 
-	.ridu-richtext-editor.is-read-only .ridu-richtext-content {
-		padding-inline-start: 0;
-		&::before {
-			display: none;
-		}
+	.ridu-richtext-editor:is(.is-gutterless, .is-read-only) .ridu-richtext-content::before {
+		display: none;
 	}
 
 	.ridu-richtext-placeholder {
 		position: absolute;
 		top: 8px;
-		inset-inline-start: 39px;
+		inset-inline-start: var(--ridu-richtext-gutter);
 		color: var(--ink-placeholder);
 		font-family: var(--font-richtext-body);
 		font-size: 16px;
@@ -274,7 +280,7 @@
 		background: transparent;
 		color: var(--foreground-muted);
 		padding: 4px 0 2px;
-		padding-inline-start: 39px;
+		padding-inline-start: var(--ridu-richtext-gutter);
 		font: inherit;
 		cursor: text;
 		& > span[aria-hidden] {
@@ -312,6 +318,12 @@
 			opacity: 1;
 			pointer-events: auto;
 		}
+	}
+
+	/* Without a gutter, the handle sits just outside the text, whatever its width. */
+	.ridu-richtext-editor.is-gutterless .ridu-richtext-block-toolbar {
+		inset-inline: auto 100%;
+		margin-inline: 0 8px;
 	}
 
 	.ridu-richtext-block-grip {

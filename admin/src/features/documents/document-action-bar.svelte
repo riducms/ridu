@@ -25,6 +25,7 @@
 		onTogglePreview,
 		onSave,
 		onPublish,
+		height = $bindable(0),
 	}: {
 		controller: DocumentController;
 		extensionHost: AdminDocumentExtensionHost;
@@ -34,6 +35,8 @@
 		onTogglePreview: () => void;
 		onSave: (event: Event) => Promise<void>;
 		onPublish: (event: Event) => Promise<void>;
+		/** The bar's rendered height, so content can stick below it. */
+		height?: number;
 	} = $props();
 	// The document controller owns one form for its full lifetime.
 	// svelte-ignore state_referenced_locally
@@ -160,7 +163,7 @@
 	});
 </script>
 
-<div class="ridu-document-bar">
+<div class="ridu-document-bar" bind:offsetHeight={height}>
 	<div class="ridu-document-metadata">
 		{#if controller.creating}
 			<span>

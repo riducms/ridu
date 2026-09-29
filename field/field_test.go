@@ -8,7 +8,6 @@ import (
 
 	"github.com/riducms/ridu/field"
 	"github.com/riducms/ridu/operation"
-	"github.com/riducms/ridu/store"
 )
 
 func TestOptionAndDefaultInputsAreOwned(t *testing.T) {
@@ -206,8 +205,8 @@ func TestConcreteFacadeCategoriesAndCallbackShapes(t *testing.T) {
 		{field.UI("ui"), field.CategoryPresentation},
 		{field.Join("inverse", "posts", "author"), field.CategoryPresentation},
 		{field.Plugin("rich", "rich", nil), field.CategoryPlugin},
-		{field.Virtual("computed", field.ValueString, func(operation.Context) (operation.Value[store.Value], error) {
-			return operation.Present(store.String("computed")), nil
+		{field.Virtual("computed", func(operation.Context) (operation.Value[string], error) {
+			return operation.Present("computed"), nil
 		}), field.CategoryPresentation},
 	}
 	for _, test := range cases {

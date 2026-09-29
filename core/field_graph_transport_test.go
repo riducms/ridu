@@ -184,14 +184,13 @@ func TestUnifiedSaveIssuesFollowServerReorderAndEmbeddedIdentity(t *testing.T) {
 
 func TestUnifiedComputedOutputUsesBoundContextSelectionAndRedaction(t *testing.T) {
 	var contexts []operation.Context
-	output := field.Virtual("summary", field.ValueString, func(ctx operation.Context) (operation.Value[store.Value], error) {
+	output := field.Virtual("summary", func(ctx operation.Context) (operation.Value[string], error) {
 		contexts = append(contexts, ctx)
 		value, _ := ctx.Root.String("title")
-		return operation.Present(store.String(value)), nil
-	}).ReplaceAfterRead(func(_ operation.Context, v operation.Value[store.Value]) (operation.Change[store.Value], error) {
-		value, _ := v.Get()
-		text, _ := value.StringValue()
-		return operation.Set(store.String(text + "!")), nil
+		return operation.Present(value), nil
+	}).ReplaceAfterRead(func(_ operation.Context, v operation.Value[string]) (operation.Change[string], error) {
+		text, _ := v.Get()
+		return operation.Set(text + "!"), nil
 	})
 	app, err := ridu.New(ridu.Config{Name: "Bound output", Collections: []ridu.Collection{{Slug: "pages", Fields: field.Fields{field.Text("title"), output, output.Rename("secret").Access(field.Access{Read: func(operation.Context) (bool, error) { return false, nil }})}}}, Globals: []ridu.Global{{Slug: "settings", Fields: field.Fields{field.Text("title"), output}}}}, teststore.New())
 	if err != nil {
@@ -232,19 +231,23 @@ func TestUnifiedComputedOutputUsesBoundContextSelectionAndRedaction(t *testing.T
 
 func TestUnifiedComputedOutputRejectsMissingAndInvalidResolvers(t *testing.T) {
 	allow := field.Access{Read: func(operation.Context) (bool, error) { return true, nil }}
-	_, err := ridu.Resolve(ridu.Config{Name: "Missing output resolver", Collections: []ridu.Collection{{Slug: "pages", Fields: field.Fields{field.Virtual("summary", field.ValueString, nil).Access(allow)}}}})
+	_, err := ridu.Resolve(ridu.Config{Name: "Missing output resolver", Collections: []ridu.Collection{{Slug: "pages", Fields: field.Fields{field.Virtual[string]("summary", nil).Access(allow)}}}})
 	if err == nil {
 		t.Fatal("missing output resolver accepted")
 	}
 	for _, owner := range []string{"field", "resource"} {
 		t.Run(owner, func(t *testing.T) {
-			output := field.Virtual("summary", field.ValueString, func(operation.Context) (operation.Value[store.Value], error) {
-				return operation.Present(store.String("valid")), nil
+			var output field.Node = field.Virtual("summary", func(operation.Context) (operation.Value[string], error) {
+				return operation.Present("valid"), nil
 			})
 			collection := ridu.Collection{Slug: "pages"}
 			if owner == "field" {
-				output = output.ReplaceAfterRead(func(operation.Context, operation.Value[store.Value]) (operation.Change[store.Value], error) {
-					return operation.Set(store.Number(42)), nil
+				// A typed transform cannot change a scalar's kind; a JSON one can
+				// still return a value the response cannot carry.
+				output = field.Virtual("summary", func(operation.Context) (operation.Value[store.Value], error) {
+					return operation.Present(store.String("valid")), nil
+				}).ReplaceAfterRead(func(operation.Context, operation.Value[store.Value]) (operation.Change[store.Value], error) {
+					return operation.Set(store.Populated(store.Document{ID: "embedded"})), nil
 				})
 			} else {
 				collection.Hooks.AfterRead = []ridu.Hook{func(ctx ridu.HookContext) error { ctx.Document.Values["summary"] = store.Number(42); return nil }}
@@ -322,12 +325,12 @@ func TestUnifiedComputedAllLocalesContextDescribesItsView(t *testing.T) {
 		}
 		return operation.Keep[string](), nil
 	})
-	output := field.Virtual("canonical", field.ValueBoolean, func(ctx operation.Context) (operation.Value[store.Value], error) {
+	output := field.Virtual("canonical", func(ctx operation.Context) (operation.Value[bool], error) {
 		_, object := ctx.Root.Get("title").CopyObject()
 		if object != ctx.AllLocales {
 			t.Errorf("all-locales flag disagrees with root view")
 		}
-		return operation.Present(store.Boolean(ctx.AllLocales)), nil
+		return operation.Present(ctx.AllLocales), nil
 	})
 	config := ridu.Config{Name: "Localized output", Localization: ridu.LocalizationConfig{DefaultLocale: "en", Locales: []ridu.Locale{{Code: "en", Label: "English"}, {Code: "fr", Label: "French"}}}, Collections: []ridu.Collection{{Slug: "pages", Fields: field.Fields{title, output}}}}
 	app, err := ridu.New(config, teststore.New())

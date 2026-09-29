@@ -77,6 +77,7 @@
 	.ridu-upload-reference {
 		@include ui.control-surface;
 		display: flex;
+		min-width: 0;
 		align-items: center;
 		gap: 10px;
 		padding: 10px;
@@ -103,6 +104,18 @@
 		svg {
 			width: 24px;
 			height: 24px;
+		}
+	}
+	/* Images get a cropped preview large enough to recognize the file. */
+	.ridu-upload-reference__thumbnail--image {
+		width: clamp(64px, 28%, 112px);
+		height: auto;
+		aspect-ratio: 16 / 9;
+		overflow: hidden;
+		border-radius: calc(var(--control-radius) - 2px);
+		background: var(--background-layer);
+		img {
+			object-fit: cover;
 		}
 	}
 	.ridu-upload-reference__metadata {

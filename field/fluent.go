@@ -2342,64 +2342,91 @@ func (f LayoutField) Private(namespace string, value store.Value) LayoutField {
 	return f
 }
 
-// OutputField configures a computed response value that cannot be set by a write request.
-type OutputField struct{ nodeView }
+// VirtualValue is a type a virtual field can compute: text as a string, a
+// number as a float64, a checkbox value as a bool, or any JSON value as a
+// store.Value.
+type VirtualValue interface {
+	string | float64 | bool | store.Value
+}
 
-func (f OutputField) Rename(name string) OutputField { f.definition.name = name; return f }
-func (f OutputField) Label(value string) OutputField { f.definition.label = value; return f }
-func (f OutputField) LabelTranslations(values map[string]string) OutputField {
+// VirtualField configures a computed response value that cannot be set by a
+// write request. T is the value its resolver and response transforms use.
+type VirtualField[T VirtualValue] struct{ nodeView }
+
+func (f VirtualField[T]) Rename(name string) VirtualField[T] { f.definition.name = name; return f }
+func (f VirtualField[T]) Label(value string) VirtualField[T] {
+	f.definition.label = value
+	return f
+}
+func (f VirtualField[T]) LabelTranslations(values map[string]string) VirtualField[T] {
 	f.definition.admin.LabelTranslations = cloneTranslations(values)
 	return f
 }
 
 // Admin replaces the complete admin presentation policy.
-func (f OutputField) Admin(value Admin) OutputField {
+func (f VirtualField[T]) Admin(value Admin) VirtualField[T] {
 	f.definition = f.definition.setAdmin(value)
 	return f
 }
 
 // EditAdmin updates selected admin settings while preserving the rest.
-func (f OutputField) EditAdmin(edit func(*Admin)) OutputField {
+func (f VirtualField[T]) EditAdmin(edit func(*Admin)) VirtualField[T] {
 	f.definition = f.definition.setAdmin(editAdmin(f.AdminPolicy(), edit))
 	return f
 }
-func (f OutputField) Private(namespace string, value store.Value) OutputField {
+func (f VirtualField[T]) Private(namespace string, value store.Value) VirtualField[T] {
 	f.definition = f.definition.setPrivate(namespace, value)
 	return f
 }
 
 // Access replaces the complete field access policy.
-func (f OutputField) Access(value Access) OutputField {
+func (f VirtualField[T]) Access(value Access) VirtualField[T] {
 	f.definition = f.definition.withGraph(func(g *graphPolicies) { g.access = value })
 	return f
 }
 
 // RestrictAccess combines supplied rules with existing access rules; both must allow.
-func (f OutputField) RestrictAccess(value Access) OutputField {
+func (f VirtualField[T]) RestrictAccess(value Access) VirtualField[T] {
 	f.definition = f.definition.withGraph(func(g *graphPolicies) { g.access = restrictAccess(g.access, value) })
 	return f
 }
 
 // ReplaceAfterRead replaces response transforms; no callbacks clears them.
-func (f OutputField) ReplaceAfterRead(callbacks ...OutputTransform[store.Value]) OutputField {
-	f.definition = withPolicies[store.Value, store.Value](f.definition, func(p *typedPolicies[store.Value, store.Value]) { p.afterRead = slices.Clone(callbacks) })
+func (f VirtualField[T]) ReplaceAfterRead(callbacks ...OutputTransform[T]) VirtualField[T] {
+	f.definition = withPolicies[T, T](f.definition, func(p *typedPolicies[T, T]) { p.afterRead = slices.Clone(callbacks) })
 	return f
 }
 
 // AfterRead appends response transforms in order; no callbacks does nothing.
-func (f OutputField) AfterRead(callbacks ...OutputTransform[store.Value]) OutputField {
-	f.definition = withPolicies[store.Value, store.Value](f.definition, func(p *typedPolicies[store.Value, store.Value]) {
+func (f VirtualField[T]) AfterRead(callbacks ...OutputTransform[T]) VirtualField[T] {
+	f.definition = withPolicies[T, T](f.definition, func(p *typedPolicies[T, T]) {
 		p.afterRead = append(slices.Clone(p.afterRead), callbacks...)
 	})
 	return f
 }
 
 // AfterReadHooks returns a detached response-transform slice.
-func (f OutputField) AfterReadHooks() []OutputTransform[store.Value] {
-	return slices.Clone(policies[store.Value, store.Value](f.definition).afterRead)
+func (f VirtualField[T]) AfterReadHooks() []OutputTransform[T] {
+	return slices.Clone(policies[T, T](f.definition).afterRead)
 }
-func (f OutputField) Resolver() Resolver[store.Value] {
-	return policies[store.Value, store.Value](f.definition).resolver
+
+// Resolver returns the callback that computes the field.
+func (f VirtualField[T]) Resolver() Resolver[T] {
+	return policies[T, T](f.definition).resolver
+}
+
+// virtualValueType maps a virtual field's Go type to its declared value type.
+func virtualValueType[T VirtualValue]() ValueType {
+	switch any(*new(T)).(type) {
+	case string:
+		return ValueString
+	case float64:
+		return ValueNumber
+	case bool:
+		return ValueBoolean
+	default:
+		return ValueJSON
+	}
 }
 
 // JoinField configures a list of documents that refer back to this document.
@@ -2487,12 +2514,14 @@ func Collapsible(name string, children Fields) LayoutField {
 // UI adds a custom component to the form without storing a value.
 func UI(name string) LayoutField { return LayoutField{nodeView{newNode(KindUI, name)}} }
 
-// Virtual adds a computed field at the document root, using resolver to return its value.
-func Virtual(name string, kind ValueType, resolver Resolver[store.Value]) OutputField {
+// Virtual adds a computed field at the document root. The resolver's type sets
+// the field's value type: string, float64, bool, or store.Value for any JSON
+// value. Return operation.Present(value), or operation.Empty[T]() for null.
+func Virtual[T VirtualValue](name string, resolver Resolver[T]) VirtualField[T] {
 	d := newNode(KindVirtual, name)
-	d.valueType = kind
-	d = withPolicies[store.Value, store.Value](d, func(p *typedPolicies[store.Value, store.Value]) { p.resolver = resolver })
-	return OutputField{nodeView{d}}
+	d.valueType = virtualValueType[T]()
+	d = withPolicies[T, T](d, func(p *typedPolicies[T, T]) { p.resolver = resolver })
+	return VirtualField[T]{nodeView{d}}
 }
 
 // Access replaces the read authorization group on an inverse output join.

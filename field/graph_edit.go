@@ -248,7 +248,16 @@ func concreteFieldShape(d View) string {
 		}
 		return "UploadField"
 	case KindVirtual:
-		return "OutputField"
+		switch d.valueType {
+		case ValueString:
+			return "VirtualField[string]"
+		case ValueNumber:
+			return "VirtualField[float64]"
+		case ValueBoolean:
+			return "VirtualField[bool]"
+		default:
+			return "VirtualField[store.Value]"
+		}
 	case KindRow, KindTabs, KindCollapsible, KindUI:
 		return "LayoutField"
 	case KindJSON:

@@ -36,7 +36,7 @@
 	import RichTextBlockToolbar from "@plugin-richtext/menu/rich-text-block-toolbar.svelte";
 	import RichTextEditabilityPlugin from "@plugin-richtext/field/rich-text-editability-plugin.svelte";
 	import RichTextFooter from "@plugin-richtext/field/rich-text-footer.svelte";
-	import RichTextFloatingToolbar from "@plugin-richtext/toolbar/rich-text-floating-toolbar.svelte";
+	import RichTextToolbars from "@plugin-richtext/toolbar/rich-text-toolbars.svelte";
 	import RichTextLinkPlugin from "@plugin-richtext/link/rich-text-link-plugin.svelte";
 	import { registerSafeLinkTransform } from "@plugin-richtext/link/safe-link-transform";
 	import { richTextMarkdownTransformers } from "@plugin-richtext/field/rich-text-markdown";
@@ -74,6 +74,7 @@
 			: i18n.t("plugin.richtext:editor.placeholder")
 	);
 	let canvasElement = $state<HTMLElement | null>(null);
+	let fixedToolbarSlot = $state<HTMLElement | null>(null);
 	// A mounted field hydrates once; the parent remounts it for schema/revision/locale changes.
 	// svelte-ignore state_referenced_locally
 	const initialValue = binding.rawValue;
@@ -233,6 +234,7 @@
 				"ridu-richtext-editor",
 				issues.length > 0 && "has-error",
 				editingBlocked && "is-read-only",
+				config.admin.hideGutter && "is-gutterless",
 			]}
 			aria-invalid={inputARIA["aria-invalid"]}
 		>
@@ -245,6 +247,9 @@
 				</Button>
 			{:else}
 				<LexicalExtensionComposer {extension} contentEditable={null}>
+					{#if config.admin.fixedToolbar && !editingBlocked}
+						<div class="ridu-richtext-fixed-toolbar-slot" bind:this={fixedToolbarSlot}></div>
+					{/if}
 					<div class="ridu-richtext-canvas" bind:this={canvasElement}>
 						<ContentEditable
 							id={field.id}
@@ -273,7 +278,9 @@
 					{/if}
 					{#if !editingBlocked}
 						<RichTextSlashMenu {authoring} {config} />
-						<RichTextFloatingToolbar {config} />
+						<!-- Mounted after the canvas, where editor listeners have always run; the fixed
+						     toolbar portals into its slot above the text. -->
+						<RichTextToolbars {config} {fixedToolbarSlot} />
 						{#if hasRichTextFeature(config, "links")}
 							<RichTextLinkPlugin />
 						{/if}
@@ -290,7 +297,9 @@
 					<RichTextEditabilityPlugin readOnly={editingBlocked} />
 					<RichTextBlocksPlugin {authoring} {field} />
 					<OnChangePlugin onChange={changed} ignoreSelectionChange />
-					<RichTextFooter readOnly={editingBlocked} />
+					{#if !config.admin.hideInsertParagraphAtEnd}
+						<RichTextFooter readOnly={editingBlocked} />
+					{/if}
 				</LexicalExtensionComposer>
 			{/if}
 		</div>

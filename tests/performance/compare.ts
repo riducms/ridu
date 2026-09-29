@@ -76,7 +76,9 @@ const frameworks: Framework[] = [
 			RIDU_BROWSER_ADDRESS: "127.0.0.1:18181",
 			RIDU_BROWSER_PREVIEW_ADDRESS: "127.0.0.1:18182",
 		},
-		readyPath: "/readyz",
+		// Match Payload: ready means the first successful posts read. The fixture applies its
+		// migrations before listening; /readyz also requires a ridu build migration history.
+		readyPath: '/api/collections/posts?limit=1&select={"title":true,"summary":true,"status":true}',
 		adminPath: "/admin/login",
 		listPath: '/api/collections/posts?limit=10&select={"title":true,"summary":true,"status":true}',
 		findPath: (id) =>

@@ -80,7 +80,7 @@ func TestLiveValidationNilPolicyAndMethodSets(t *testing.T) {
 	if got := field.Snapshot(invalid.ReplaceLiveValidators()).Issues(); len(got) != 0 {
 		t.Fatalf("superseded diagnostic: %#v", got)
 	}
-	for _, node := range (field.Fields{field.Row(nil), field.Collapsible("Details", nil), field.Join("comments", "comments", "post"), field.Virtual("summary", field.ValueString, nil)}) {
+	for _, node := range (field.Fields{field.Row(nil), field.Collapsible("Details", nil), field.Join("comments", "comments", "post"), field.Virtual[string]("summary", nil)}) {
 		for _, method := range []string{"LiveValidate", "ReplaceLiveValidators", "LiveValidators"} {
 			if _, ok := reflect.TypeOf(node).MethodByName(method); ok {
 				t.Errorf("%T exposes %s without a writable value", node, method)
