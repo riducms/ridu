@@ -194,8 +194,7 @@ func (application *App) createAuthUserWithOptions(ctx context.Context, collectio
 		return store.Document{}, err
 	}
 	if authCollection.Auth.VerifyEmail && !bootstrap {
-		self := &store.Document{ID: user.ID, Values: store.Values{}}
-		unredacted, findError := application.local.Find(ctx, collection, user.ID, FindOptions{Actor: self, Locale: options.Locale, FallbackLocales: append([]schema.LocaleCode(nil), options.FallbackLocales...),
+		unredacted, findError := application.local.Find(ctx, collection, user.ID, FindOptions{System: true, Locale: options.Locale, FallbackLocales: append([]schema.LocaleCode(nil), options.FallbackLocales...),
 			DisableFallback: options.DisableFallback, AllLocales: options.AllLocales},
 		)
 		if findError != nil {
@@ -218,8 +217,7 @@ func (application *App) SetPassword(ctx context.Context, collection, userID, pas
 	if err := application.validatePassword(collection, password); err != nil {
 		return err
 	}
-	actor := &store.Document{ID: userID, Values: store.Values{}}
-	user, err := application.local.Find(ctx, string(authCollection.Slug), userID, FindOptions{Actor: actor})
+	user, err := application.local.Find(ctx, string(authCollection.Slug), userID, FindOptions{System: true})
 	if err != nil {
 		return err
 	}

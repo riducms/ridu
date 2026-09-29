@@ -138,9 +138,11 @@ Continue with [Authentication](https://riducms.com/docs/authentication/),
 
 ## Set permissions and run hooks {#runtime-behaviour}
 
-`CollectionAccess` has independent `Admin`, `Create`, `Read`, `ReadVersions`, `Update`, `Publish`,
-`Unpublish`, `Delete`, and `Unlock` rules. A nil `ReadVersions` rule falls back to `Read`; nil
-`Publish`, `Unpublish`, and `Unlock` rules fall back to `Update`. Read and mutation rules can return
+`CollectionAccess` has independent `Admin`, `Create`, `Read`, `ReadVersions`, `ReadDrafts`,
+`Reference`, `Update`, `Publish`, `Unpublish`, `Delete`, and `Unlock` rules. Nil `ReadVersions` and
+[`Reference`](https://riducms.com/docs/relationships/) rules fall back to `Read`;
+nil `Publish`, `Unpublish`, and `Unlock` rules fall back to `Update`. A nil `ReadDrafts` rule lets only
+[editors read drafts](./drafts-and-versions.md#draft-reads). Read and mutation rules can return
 `ridu.Where(...)`, which the store must combine atomically with the caller's filter.
 
 Attach field access and hooks directly with `.Access(field.Access{...})` and
@@ -188,7 +190,7 @@ Its supported surface is smaller:
 | --------------------- | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
 | Cardinality           | Many documents with generated IDs                               | One document whose ID is its slug                                                             |
 | Base operations       | Create, duplicate, find/list, update, delete, bulk              | Read and update                                                                               |
-| Access                | `CollectionAccess` per CRUD/version/admin/lock operation        | `GlobalAccess.Read`, `ReadVersions`, `Update`, `Publish`, and `Unpublish`                     |
+| Access                | `CollectionAccess` per CRUD/version/draft/admin/lock operation  | `GlobalAccess.Read`, `ReadVersions`, `ReadDrafts`, `Update`, `Publish`, and `Unpublish`       |
 | Admin                 | Title, columns, folders, hierarchy, group, description, preview | Group, description, preview                                                                   |
 | Optional capabilities | Auth, upload, versions/drafts, trash, locks                     | Versions/drafts only                                                                          |
 | Versions              | Per-document history, publish/unpublish, restore, scheduling    | Singleton history, publish/unpublish, restore; scheduled global publishing is not implemented |

@@ -12,6 +12,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/riducms/ridu/internal/localnet"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -35,7 +36,8 @@ var databaseNamePattern = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 type Config struct {
 	DatabaseURL string
 	// AllowInsecureTransport permits plaintext or certificate verification
-	// bypasses for an explicitly selected local development fixture.
+	// bypasses to a remote host for an explicitly selected development
+	// fixture. Loopback and Unix-socket databases never need it.
 	AllowInsecureTransport bool
 	ApplicationName        string
 	ConnectTimeout         time.Duration
@@ -180,8 +182,8 @@ func normalizedClientOptions(config Config) (*options.ClientOptions, string, err
 	if err := clientOptions.Validate(); err != nil {
 		return nil, "", errors.New("invalid MongoDB connection configuration")
 	}
-	if !config.AllowInsecureTransport && (clientOptions.TLSConfig == nil || clientOptions.TLSConfig.InsecureSkipVerify) {
-		return nil, "", fmt.Errorf("MongoDB transport must verify TLS; configure TLS in the database URL. For a local development database, allow plaintext explicitly: set AllowInsecureTransport, RIDU_ALLOW_INSECURE_DATABASE=true for Ridu projects, or pass --allow-insecure-database to the CLI")
+	if !config.AllowInsecureTransport && !secureMongoTransport(config.DatabaseURL, clientOptions) {
+		return nil, "", fmt.Errorf("MongoDB transport to a remote host must verify TLS; configure TLS in the database URL. Loopback and Unix-socket databases need no TLS. For another plaintext database secured outside MongoDB, allow it explicitly: set AllowInsecureTransport, RIDU_ALLOW_INSECURE_DATABASE=true for Ridu projects, or pass --allow-insecure-database to the CLI")
 	}
 	applicationName := strings.TrimSpace(config.ApplicationName)
 	if applicationName == "" {
@@ -213,6 +215,23 @@ func normalizedClientOptions(config Config) (*options.ClientOptions, string, err
 		return nil, "", errors.New("invalid MongoDB connection configuration")
 	}
 	return clientOptions, databaseName, nil
+}
+
+// secureMongoTransport requires verified TLS unless every seed host is on this
+// machine. An SRV record names hosts from DNS, so it never counts as local.
+func secureMongoTransport(databaseURL string, clientOptions *options.ClientOptions) bool {
+	if clientOptions.TLSConfig != nil && !clientOptions.TLSConfig.InsecureSkipVerify {
+		return true
+	}
+	if strings.HasPrefix(strings.ToLower(strings.TrimSpace(databaseURL)), "mongodb+srv:") || len(clientOptions.Hosts) == 0 {
+		return false
+	}
+	for _, host := range clientOptions.Hosts {
+		if !localnet.HostPort(host) {
+			return false
+		}
+	}
+	return true
 }
 
 func databaseNameFromURL(databaseURL string) (string, error) {

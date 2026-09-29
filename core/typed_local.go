@@ -137,9 +137,11 @@ func decodeStoredDocument[Document any](stored store.Document) (Document, error)
 // TypedMutationOptions controls a generated mutation whose response is always single-locale.
 // The semantic action consumes the same settings as its LocalAPI equivalent.
 type TypedMutationOptions struct {
-	ID               string
-	Actor            *store.Document
-	ActorCollection  schema.CollectionSlug
+	ID              string
+	Actor           *store.Document
+	ActorCollection schema.CollectionSlug
+	// System skips access rules for trusted server code; see MutationOptions.System.
+	System           bool
 	ExpectedRevision int
 	Populate         []query.Population
 	OutputFields     []query.Path
@@ -150,7 +152,7 @@ type TypedMutationOptions struct {
 }
 
 func (options TypedMutationOptions) mutationOptions() MutationOptions {
-	return MutationOptions{ID: options.ID, Actor: options.Actor, ActorCollection: options.ActorCollection,
+	return MutationOptions{ID: options.ID, Actor: options.Actor, ActorCollection: options.ActorCollection, System: options.System,
 		ExpectedRevision: options.ExpectedRevision, Populate: options.Populate, OutputFields: options.OutputFields,
 		Draft: options.Draft, Locale: options.Locale, FallbackLocales: options.FallbackLocales,
 		DisableFallback: options.DisableFallback}

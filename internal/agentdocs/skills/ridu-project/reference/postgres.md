@@ -219,12 +219,17 @@ or exhaustion of either makes the instance unready before the next upload discov
 
 ## TLS is required by default {#tls}
 
-`OpenWithConfig` rejects plaintext and TLS-fallback URLs unless `AllowInsecureTransport` is true.
-Use `sslmode=require`, `verify-ca`, or preferably `verify-full` in production. Modes such as
-`prefer`, `allow`, and `disable` permit fallback and are rejected.
+`OpenWithConfig` rejects plaintext and TLS-fallback URLs to a remote host unless
+`AllowInsecureTransport` is true. Use `sslmode=require`, `verify-ca`, or preferably `verify-full`
+in production. Modes such as `prefer`, `allow`, and `disable` permit fallback and are rejected.
 
-`AllowInsecureTransport` exists for local Unix sockets and development databases protected outside
-PostgreSQL. Do not expose it as a silent production fallback. Protect credentials independently and
+A host on this machine is the exception: `localhost`, a loopback address, or a Unix-socket
+directory needs no TLS, because nothing off the machine can observe it. Every host in a
+multi-host URL must qualify. That lets `ridu migrate` reach the same local database as `ridu dev`
+without an override.
+
+`AllowInsecureTransport` exists for development databases on another host that are protected
+outside PostgreSQL. Do not expose it as a silent production fallback. Protect credentials independently and
 use a least-privilege application role.
 
 ## Readiness checks {#readiness}

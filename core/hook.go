@@ -28,10 +28,15 @@ type HookContext struct {
 	Actor *store.Document
 	// ActorCollection identifies the exact auth collection that owns Actor.
 	ActorCollection schema.CollectionSlug
+	// System reports that trusted server code started this operation with
+	// System set, so no access rule ran. Nested Local calls do not inherit it:
+	// pass System again when the nested work is also trusted.
+	System bool
 	// Data contains the values being saved. On an update it holds only the
-	// fields the caller sent; read unchanged values from Original. Change map
-	// entries to change stored values; assigning a new map to Data does not
-	// replace the engine's values. Changes after saving are not persisted.
+	// top-level fields the caller sent; Candidate adds the unchanged ones from
+	// Original. Change map entries to change stored values; assigning a new map
+	// to Data does not replace the engine's values. Changes after saving are not
+	// persisted.
 	Data store.Values
 	// Document is the response document when available. AfterRead receives each
 	// document in a list separately. Changes to Document.Values affect the response,
@@ -54,6 +59,24 @@ type HookContext struct {
 	// AllLocales reports whether localized values contain maps keyed by locale.
 	// It describes this hook's values, which may differ from the requested response.
 	AllLocales bool
+}
+
+// Candidate returns the values the document will have once this write is
+// saved: Original's values with each top-level entry of Data in their place.
+// On a create it is a copy of Data. Use it to read a field whether or not the
+// caller sent it, for example to check a rule that spans two fields on a
+// partial update. The map is a detached copy; change Data, not the result, to
+// change what is saved.
+func (ctx HookContext) Candidate() store.Values {
+	// Values are immutable, so copying the map detaches the result.
+	candidate := store.Values{}
+	if ctx.Original != nil {
+		candidate = store.CloneValues(ctx.Original.Values)
+	}
+	for name, value := range ctx.Data {
+		candidate[name] = value
+	}
+	return candidate
 }
 
 // Hook runs during a collection or global lifecycle phase. Its context supplies

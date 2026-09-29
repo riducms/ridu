@@ -35,6 +35,8 @@ func adaptCollection(authored Collection, resolved schema.Collection, local **Lo
 			operation.Duplicate:       adaptAccess(authored.Access.Create, local),
 			operation.Read:            adaptAccess(authored.Access.Read, local),
 			operation.ReadVersions:    adaptAccess(readVersions, local),
+			operation.ReadDrafts:      adaptAccess(authored.Access.ReadDrafts, local),
+			operation.Reference:       adaptAccess(authored.Access.Reference, local),
 			operation.Update:          adaptAccess(authored.Access.Update, local),
 			operation.Publish:         adaptAccess(publish, local),
 			operation.Unpublish:       adaptAccess(unpublish, local),
@@ -79,6 +81,7 @@ func adaptGlobal(authored Global, resolved schema.Global, local **LocalAPI) oper
 		Access: map[operation.Kind]operationengine.Access{
 			operation.Read:         adaptAccess(authored.Access.Read, local),
 			operation.ReadVersions: adaptAccess(readVersions, local),
+			operation.ReadDrafts:   adaptAccess(authored.Access.ReadDrafts, local),
 			operation.Update:       adaptAccess(authored.Access.Update, local),
 			operation.Publish:      adaptAccess(publish, local),
 			operation.Unpublish:    adaptAccess(unpublish, local),
@@ -129,7 +132,7 @@ func adaptHooks(hooks []Hook, local **LocalAPI) []operationengine.Hook {
 			collectionID, globalID := resourceIDs(ctx.Collection)
 			err := current(HookContext{
 				Context: ctx.Context, Operation: ctx.Operation, CollectionID: collectionID, GlobalID: globalID,
-				Actor: cloneDocument(ctx.Actor), ActorCollection: ctx.ActorCollection, Data: ctx.Data, Document: ctx.Document,
+				Actor: cloneDocument(ctx.Actor), ActorCollection: ctx.ActorCollection, System: ctx.System, Data: ctx.Data, Document: ctx.Document,
 				Original: cloneDocument(ctx.Original), Local: *local,
 				Error: ctx.Error, Locale: ctx.Locale, AllLocales: ctx.AllLocales,
 			})

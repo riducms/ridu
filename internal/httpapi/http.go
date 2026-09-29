@@ -3055,13 +3055,40 @@ func validHeaderValue(value string) bool {
 	return !strings.ContainsAny(value, "\r\n")
 }
 
+// failureCause explains a failure for server logs: every wrapped cause after
+// the top-level message, and any field issues. Responses keep them hidden, so
+// without this a hook's real error, such as a reference it could not validate,
+// never reached the log.
+func failureCause(err error) string {
+	if err == nil {
+		return ""
+	}
+	top := err.Error()
+	var parts []string
+	for current := err; current != nil; current = errors.Unwrap(current) {
+		if message := current.Error(); message != top && (len(parts) == 0 || !strings.Contains(parts[len(parts)-1], message)) {
+			parts = append(parts, message)
+		}
+		if operationError, ok := current.(*operationengine.Error); ok {
+			for _, issue := range operationError.Issues {
+				detail := issue.Message
+				if issue.Path != "" {
+					detail = issue.Path + ": " + detail
+				}
+				parts = append(parts, detail)
+			}
+		}
+	}
+	return strings.Join(parts, "; ")
+}
+
 func (api *API) reportRequestError(request *http.Request, requestID string, err error, recovered bool, stack string) {
 	api.reportRequestErrorDetails(request.Method, request.URL.Path, requestID, err, recovered, stack)
 }
 
 func (api *API) reportRequestErrorDetails(method, path, requestID string, err error, recovered bool, stack string) {
 	if api.config.RequestError == nil {
-		slog.Error("Ridu request failed", "request_id", requestID, "method", method, "path", path, "panic", recovered, "error", err, "stack", stack)
+		slog.Error("Ridu request failed", "request_id", requestID, "method", method, "path", path, "panic", recovered, "error", err, "cause", failureCause(err), "stack", stack)
 		return
 	}
 	defer func() {
@@ -3179,6 +3206,9 @@ type listQuery struct {
 
 func decodeListQuery(values url.Values, collection schema.Collection, allowAccess bool) (listQuery, error) {
 	for key := range values {
+		if strings.HasPrefix(key, "where[") {
+			return listQuery{}, &operationengine.Error{Code: "bad_query", Status: 400, Message: "bracket-style where[...] parameters are not supported; send the filter as one URL-encoded JSON where parameter, for example where=" + bracketWhereExample(values)}
+		}
 		if key != "page" && key != "limit" && key != "depth" && key != "where" && key != "select" && key != "populate" && key != "sort" && key != "trash" && key != "locale" && key != "fallback-locale" && key != "fallbackLocale" && (key != "include-access" || !allowAccess) {
 			return listQuery{}, &operationengine.Error{Code: "bad_query", Status: 400, Message: fmt.Sprintf("unknown query parameter %q", key)}
 		}

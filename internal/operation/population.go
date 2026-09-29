@@ -1,6 +1,7 @@
 package operation
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/riducms/ridu/internal/localization"
@@ -11,7 +12,7 @@ import (
 	"github.com/riducms/ridu/store"
 )
 
-func (engine *Engine) preparePopulations(collection Collection, operationContext Context, selection localization.Selection, request *store.Request) *Error {
+func (engine *Engine) preparePopulations(collection Collection, operationContext Context, selection localization.Selection, request *store.Request, includeDrafts bool) *Error {
 	if len(request.Populate) > populationwalk.MaxExplicitPaths {
 		return &Error{Code: "bad_query", Status: 400, Message: fmt.Sprintf("population must not request more than %d fields", populationwalk.MaxExplicitPaths)}
 	}
@@ -68,11 +69,28 @@ func (engine *Engine) preparePopulations(collection Collection, operationContext
 		if err != nil {
 			return &Error{Code: "access_failed", Status: 500, Message: "population access rule failed", Cause: err}
 		}
-		switch decision.Kind {
-		case Where:
-			request.PopulationAccess[targetID] = decision.Access
-		case Deny:
+		if decision.Kind == Deny {
 			request.PopulationAccess[targetID] = denyAllAccessPredicate()
+			continue
+		}
+		if includeDrafts {
+			if decision.Kind == Where {
+				request.PopulationAccess[targetID] = decision.Access
+			}
+			continue
+		}
+		// Each target shows drafts only to actors that may read its drafts,
+		// whatever the root collection allows.
+		access, draftError := engine.publishedTargetAccess(targetCollection, populationContext, decision.Access)
+		if draftError != nil {
+			var operationError *Error
+			if errors.As(draftError, &operationError) {
+				return operationError
+			}
+			return &Error{Code: "access_failed", Status: 500, Message: "population draft access failed", Cause: draftError}
+		}
+		if access != nil {
+			request.PopulationAccess[targetID] = access
 		}
 	}
 	return nil

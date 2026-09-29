@@ -12,6 +12,7 @@ import (
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
 	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 func TestMongoClientConfigurationRequiresNamedDatabaseAndSecureTransport(t *testing.T) {
@@ -25,6 +26,7 @@ func TestMongoClientConfigurationRequiresNamedDatabaseAndSecureTransport(t *test
 		{name: "missing database", config: Config{DatabaseURL: "mongodb://db.example/?tls=true"}, want: "must select a database"},
 		{name: "unsafe database", config: Config{DatabaseURL: "mongodb://db.example/a.b?tls=true"}, want: "letters, numbers"},
 		{name: "plaintext", config: Config{DatabaseURL: "mongodb://db.example/ridu"}, want: "must verify TLS"},
+		{name: "plaintext beside a local host", config: Config{DatabaseURL: "mongodb://localhost,db.example/ridu"}, want: "must verify TLS"},
 		{name: "invalid TLS", config: Config{DatabaseURL: "mongodb://db.example/ridu?tls=true&tlsInsecure=true"}, want: "must verify TLS"},
 		{name: "negative timeout", config: Config{DatabaseURL: "mongodb://db.example/ridu?tls=true", ConnectTimeout: -time.Second}, want: "cannot be negative"},
 		{name: "inverted pool", config: Config{DatabaseURL: "mongodb://db.example/ridu?tls=true", MinPoolSize: 3, MaxPoolSize: 2}, want: "exceeds maximum"},
@@ -49,6 +51,25 @@ func TestMongoClientConfigurationRequiresNamedDatabaseAndSecureTransport(t *test
 	}
 	if database != "ridu_srv" {
 		t.Fatalf("SRV database = %q, want ridu_srv", database)
+	}
+}
+
+// Nothing off the machine can observe a loopback or Unix-socket database, so
+// a local one needs no TLS and no override.
+func TestMongoLocalDatabasesNeedNoTransportOverride(t *testing.T) {
+	for _, databaseURL := range []string{
+		"mongodb://localhost/ridu_local",
+		"mongodb://[::1]:27017/ridu_local",
+		"mongodb://localhost:27017,127.0.0.1:27018/ridu_local?replicaSet=rs0",
+	} {
+		if _, _, err := normalizedClientOptions(Config{DatabaseURL: databaseURL}); err != nil {
+			t.Errorf("local MongoDB URL %q required an override: %v", databaseURL, err)
+		}
+	}
+	srv := options.Client()
+	srv.Hosts = []string{"localhost:27017"}
+	if secureMongoTransport("mongodb+srv://localhost/ridu", srv) {
+		t.Fatal("an SRV URL counted as local although DNS chooses its hosts")
 	}
 }
 

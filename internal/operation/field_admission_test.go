@@ -13,10 +13,13 @@ func TestBoundReadPoliciesProtectNestedQueryPaths(t *testing.T) {
 	child := schema.Field{ID: "meta-secret", Name: "secret", Path: childPath, Type: schema.FieldTypeText, QueryRestricted: true}
 	parent := schema.Field{ID: "meta", Name: "meta", Path: parentPath, Type: schema.FieldTypeGroup, Nested: &schema.NestedField{Fields: []schema.Field{child}}}
 	nested := Collection{Schema: schema.Collection{ID: "nested", Slug: "nested", Fields: []schema.Field{parent}}, Bindings: []FieldBinding{{ID: "resolved-secret", Field: child, Access: FieldRules{Read: func(Context) (bool, error) { return false, nil }}}}}
-	if err := authorizeQuery(nested, nil, []query.Sort{{Path: parentPath, Direction: query.Ascending}}); err == nil {
+	if err := authorizeQuery(nested, false, nil, []query.Sort{{Path: parentPath, Direction: query.Ascending}}); err == nil {
 		t.Fatal("parent container sort bypassed attached descendant policy")
 	}
-	if err := authorizeQuery(nested, query.Equal(childPath, "probe"), nil); err == nil {
+	if err := authorizeQuery(nested, false, query.Equal(childPath, "probe"), nil); err == nil {
 		t.Fatal("nested attached policy did not protect canonical field query")
+	}
+	if err := authorizeQuery(nested, true, query.Equal(childPath, "probe"), []query.Sort{{Path: parentPath, Direction: query.Ascending}}); err != nil {
+		t.Fatalf("a system query was refused a read-ruled field: %v", err)
 	}
 }

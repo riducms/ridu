@@ -49,6 +49,8 @@ type TypedReadOptions struct {
 	Actor *store.Document
 	// ActorCollection identifies the exact auth collection that owns Actor.
 	ActorCollection schema.CollectionSlug
+	// System skips access rules for trusted server code; see ListOptions.System.
+	System bool
 	// Locale selects one configured content locale. Empty uses the application default.
 	Locale schema.LocaleCode
 	// FallbackLocales replaces the locale's configured fallback chain when non-nil.
@@ -86,6 +88,8 @@ type TypedListOptions struct {
 	Actor *store.Document
 	// ActorCollection identifies the exact auth collection that owns Actor.
 	ActorCollection schema.CollectionSlug
+	// System skips access rules for trusted server code; see ListOptions.System.
+	System bool
 	// Locale selects one configured content locale. Empty uses the application default.
 	Locale schema.LocaleCode
 	// FallbackLocales replaces the locale's configured fallback chain when non-nil.
@@ -110,7 +114,7 @@ func listTypedDocuments[Document any](ctx context.Context, local *LocalAPI, slug
 	page, err := local.List(ctx, slug, ListOptions{
 		Where: options.Where, Page: options.Page, Limit: options.Limit, Sort: options.Sort,
 		Select: options.Select, Populate: options.Populate, OutputFields: options.OutputFields,
-		Draft: options.Draft, Actor: options.Actor, ActorCollection: options.ActorCollection,
+		Draft: options.Draft, Actor: options.Actor, ActorCollection: options.ActorCollection, System: options.System,
 		TrashOnly: options.TrashOnly, Locale: options.Locale, FallbackLocales: options.FallbackLocales,
 		DisableFallback: options.DisableFallback, AllLocales: allLocales,
 	})
@@ -154,5 +158,5 @@ func (global BoundTypedAllLocalesGlobal[Document]) Find(ctx context.Context, opt
 }
 
 func (options TypedReadOptions) findOptions(allLocales bool) FindOptions {
-	return FindOptions{Draft: options.Draft, Select: options.Select, Populate: options.Populate, OutputFields: options.OutputFields, Actor: options.Actor, ActorCollection: options.ActorCollection, Locale: options.Locale, FallbackLocales: options.FallbackLocales, DisableFallback: options.DisableFallback, AllLocales: allLocales}
+	return FindOptions{Draft: options.Draft, Select: options.Select, Populate: options.Populate, OutputFields: options.OutputFields, Actor: options.Actor, ActorCollection: options.ActorCollection, System: options.System, Locale: options.Locale, FallbackLocales: options.FallbackLocales, DisableFallback: options.DisableFallback, AllLocales: allLocales}
 }

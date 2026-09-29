@@ -108,6 +108,23 @@ func TestDatabaseCredentialsNeverAppearInHelpDefaults(t *testing.T) {
 	}
 }
 
+func TestMigrateCreateTakesItsNameOnce(t *testing.T) {
+	for _, test := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"migrate", "create", "add-summary", "--name", "other"}, "pass it as an argument or with --name, not both"},
+		{[]string{"migrate", "create", "--name", "other", "add-summary"}, "pass it as an argument or with --name, not both"},
+		{[]string{"migrate", "create", "add-summary", "extra"}, "does not accept positional arguments"},
+		{[]string{"migrate", "status", "add-summary"}, "does not accept positional arguments"},
+	} {
+		var stdout, stderr bytes.Buffer
+		if code := cli.Run(t.Context(), test.args, &stdout, &stderr, cli.Options{WorkingDirectory: t.TempDir()}); code != 2 || !strings.Contains(stderr.String(), test.want) {
+			t.Errorf("ridu %v = %d, %q; want %q", test.args, code, stderr.String(), test.want)
+		}
+	}
+}
+
 func TestNewReleaseOverrideWorksThroughRealBinary(t *testing.T) {
 	frameworkRoot := moduleRoot(t)
 	target := newProjectTarget(t, "binary-dogfood-content")

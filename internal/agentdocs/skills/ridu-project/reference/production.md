@@ -145,7 +145,8 @@ termination grace period; two seconds is a default, not a universal safe value. 
 traffic cutover precedes termination, set `RIDU_READINESS_DRAIN_DELAY=-1s` and use the platform's
 separate drain window for in-flight work.
 
-`RIDU_ALLOW_INSECURE_DATABASE` is for an explicitly local database. `RIDU_ALLOW_UNVERIFIABLE_READINESS`
+`RIDU_ALLOW_INSECURE_DATABASE` is for a development database on another host; loopback and
+Unix-socket databases never need it. `RIDU_ALLOW_UNVERIFIABLE_READINESS`
 is for a custom adapter only after equivalent external checks and auth maintenance exist. Neither is
 a remedy for a failing production dependency.
 

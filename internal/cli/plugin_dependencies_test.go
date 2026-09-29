@@ -35,6 +35,38 @@ func TestMissingGeneratedTypeScriptDependenciesUsesRootManifest(t *testing.T) {
 	}
 }
 
+// A monorepo can generate the client straight into a sibling frontend. That
+// package owns the dependencies: Ridu checks its package.json but never runs a
+// package manager there.
+func TestClientOutsideTheProjectUsesItsOwnPackage(t *testing.T) {
+	workspace := t.TempDir()
+	root := filepath.Join(workspace, "backend")
+	mobile := filepath.Join(workspace, "mobile")
+	for _, directory := range []string{root, filepath.Join(mobile, "lib", "backend")} {
+		if err := os.MkdirAll(directory, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(root, "package.json"), []byte(`{"dependencies":{"@acme/fields":"1.0.0"}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(mobile, "package.json"), []byte(`{"dependencies":{}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	manifest := schema.NewManifest(schema.Snapshot{Plugins: []schema.Plugin{{FieldTypes: []schema.PluginFieldType{{TypeScriptPackage: "@acme/fields"}}}}})
+	definition := projectfile.File{Root: root, Client: "../mobile/lib/backend/ridu.generated.ts"}
+
+	if got := generatedContractPackageRoot(definition); got != "" {
+		t.Fatalf("contract install root = %q, want none outside the project", got)
+	}
+	if got, want := generatedContractPackageManifest(definition), filepath.Join(mobile, "package.json"); got != want {
+		t.Fatalf("contract package manifest = %q, want %q", got, want)
+	}
+	if got, want := missingGeneratedTypeScriptDependencies(definition, manifest), []string{"@acme/fields"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("missing dependencies = %v, want %v", got, want)
+	}
+}
+
 func TestManifestPackageRequirementsKeepSharedDependencies(t *testing.T) {
 	manifest := schema.NewManifest(schema.Snapshot{Plugins: []schema.Plugin{
 		{Admin: &schema.PluginAdmin{Package: "@acme/shared-admin"}},

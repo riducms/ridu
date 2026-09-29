@@ -16,8 +16,10 @@ import (
 // update and publish access and runs publish hooks atomically.
 func (engine *Engine) CopyLocale(ctx context.Context, collectionName, documentID string, source, target schema.LocaleCode, expectedRevision int, actor *store.Document, authorizationOptions ...LocalizationOptions) (document store.Document, err error) {
 	actorCollection := schema.CollectionSlug("")
+	system := false
 	if len(authorizationOptions) != 0 {
 		actorCollection = authorizationOptions[len(authorizationOptions)-1].ActorCollection
+		system = authorizationOptions[len(authorizationOptions)-1].System
 	}
 	if source == "" || target == "" || source == target {
 		return store.Document{}, &Error{Code: "bad_locale", Status: 400, Message: "source and target must be different configured locales"}
@@ -53,12 +55,12 @@ func (engine *Engine) CopyLocale(ctx context.Context, collectionName, documentID
 	// concurrent update can land between the source read and target write and be
 	// silently overwritten by the copied structured value.
 	readRequest := Request{
-		Operation: operation.Read, Collection: collectionName, ID: documentID, Actor: actor, ActorCollection: actorCollection,
+		Operation: operation.Read, Collection: collectionName, ID: documentID, Actor: actor, ActorCollection: actorCollection, System: system,
 		Locale: string(source), DisableFallback: true,
 	}
 	readContext := Context{
 		Context: transactionContext, Operation: operation.Read, Collection: collection.Schema,
-		ID: documentID, Actor: cloneDocumentPointer(actor), ActorCollection: actorCollection, Data: store.Values{},
+		ID: documentID, Actor: cloneDocumentPointer(actor), ActorCollection: actorCollection, System: system, Data: store.Values{},
 		Locale: sourceSelection.Locale, AllLocales: false,
 		Locales: append([]schema.LocaleCode(nil), sourceSelection.Configured...),
 	}
@@ -69,9 +71,13 @@ func (engine *Engine) CopyLocale(ctx context.Context, collectionName, documentID
 	if readDecision.Kind == Deny {
 		return store.Document{}, &Error{Code: "access_denied", Status: 403, Message: "source document may not be read"}
 	}
+	sourcePublishedOnly, draftError := engine.publishedOnly(readRequest, collection, readContext)
+	if draftError != nil {
+		return store.Document{}, draftError
+	}
 	if _, err := transaction.Find(transactionContext, store.Request{
 		Collection: collection.Schema, Collections: engine.schemas, ID: documentID,
-		Access: readDecision.Access, PublishedOnly: publishedOnly(readRequest, collection.Schema),
+		Access: readDecision.Access, PublishedOnly: sourcePublishedOnly,
 		Locales: sourceSelection.Configured, LocaleChain: sourceSelection.Chain, Lock: store.LockMutation,
 	}); err != nil {
 		return store.Document{}, translateStoreError(err)
@@ -96,7 +102,7 @@ func (engine *Engine) CopyLocale(ctx context.Context, collectionName, documentID
 	}
 	updated, err := engine.Execute(transactionContext, Request{
 		Operation: operationKind, Collection: collectionName, ID: documentID, Data: values,
-		ExpectedRevision: expectedRevision, Actor: actor, ActorCollection: actorCollection, Locale: string(target), DisableFallback: true,
+		ExpectedRevision: expectedRevision, Actor: actor, ActorCollection: actorCollection, System: system, Locale: string(target), DisableFallback: true,
 		copyLocaleSource: source,
 	})
 	if err != nil {

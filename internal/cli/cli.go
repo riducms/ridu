@@ -510,19 +510,38 @@ func packageDeclaresDependency(path, name string) bool {
 	return false
 }
 
+// generatedContractPackageRoot is where Ridu may install the generated
+// client's npm dependencies. A client placed outside the project belongs to
+// another package, which Ridu checks but never installs into.
 func generatedContractPackageRoot(definition projectfile.File) string {
-	if definition.Client == "" {
+	if definition.Client == "" || !projectfile.WithinRoot(definition.Client) {
 		return ""
 	}
 	return definition.Root
 }
 
+// generatedContractPackageManifest is the package.json that must declare the
+// generated client's npm dependencies: the project's own, or for a client
+// outside the project, the nearest one above it.
 func generatedContractPackageManifest(definition projectfile.File) string {
-	root := generatedContractPackageRoot(definition)
-	if root == "" {
+	if definition.Client == "" {
 		return ""
 	}
-	return filepath.Join(root, "package.json")
+	if projectfile.WithinRoot(definition.Client) {
+		return filepath.Join(definition.Root, "package.json")
+	}
+	directory := filepath.Dir(definition.Absolute(definition.Client))
+	for {
+		candidate := filepath.Join(directory, "package.json")
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate
+		}
+		parent := filepath.Dir(directory)
+		if parent == directory {
+			return ""
+		}
+		directory = parent
+	}
 }
 
 func missingGeneratedTypeScriptDependencies(definition projectfile.File, manifest schema.Manifest) []string {
@@ -636,7 +655,7 @@ func runMigrate(ctx context.Context, args []string, stdout, stderr io.Writer, op
 	flags.SetOutput(stderr)
 	databaseURL := flags.String("database-url", "", "PostgreSQL or MongoDB URL (defaults to DATABASE_URL)")
 	databasePath := flags.String("database-path", "", "SQLite path (defaults to RIDU_SQLITE_PATH)")
-	allowInsecureDatabase := flags.Bool("allow-insecure-database", false, "explicitly allow plaintext PostgreSQL or MongoDB transport for local operations")
+	allowInsecureDatabase := flags.Bool("allow-insecure-database", false, "allow plaintext PostgreSQL or MongoDB transport to a remote development host; loopback and Unix sockets need no TLS")
 	name := flags.String("name", "", "lowercase kebab-case migration name")
 	transformName := flags.String("transform", "", "compiled data-transform name to bind to the immutable migration artifact")
 	acceptRenames := flags.Bool("accept-renames", false, "accept every unambiguous detected rename without prompting")
@@ -654,6 +673,23 @@ func runMigrate(ctx context.Context, args []string, stdout, stderr io.Writer, op
 	stopAfterStep := flags.String("stop-after-step", "", "stop after a committed step boundary")
 	if err := flags.Parse(args[1:]); err != nil {
 		return 2
+	}
+	// `ridu migrate create <name>` is shorthand for --name. Flag parsing stops
+	// at the name, so any flags after it are parsed again.
+	if command == "create" && flags.NArg() != 0 {
+		positionalName := flags.Arg(0)
+		if *name != "" {
+			fmt.Fprintln(stderr, "ridu migrate create takes the migration name once: pass it as an argument or with --name, not both")
+			return 2
+		}
+		*name = positionalName
+		if err := flags.Parse(flags.Args()[1:]); err != nil {
+			return 2
+		}
+		if *name != positionalName {
+			fmt.Fprintln(stderr, "ridu migrate create takes the migration name once: pass it as an argument or with --name, not both")
+			return 2
+		}
 	}
 	if flags.NArg() != 0 {
 		fmt.Fprintf(stderr, "ridu migrate %s does not accept positional arguments\n", command)

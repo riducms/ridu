@@ -14,7 +14,7 @@ import (
 // context, while submission membership determines whether admission is required.
 // A trusted default or transform of an omitted field is not caller input.
 func authorizeBoundFields(collection Collection, ctx Context, kind operation.Kind, before, after store.Values, authorizeEveryUpdateValue bool) error {
-	if kind != operation.Create && kind != operation.Duplicate && kind != operation.Update {
+	if ctx.System || kind != operation.Create && kind != operation.Duplicate && kind != operation.Update {
 		return nil
 	}
 	hasRules := false
@@ -137,6 +137,9 @@ func indexFieldLocations(locations []fieldLocation) map[string]fieldLocation {
 }
 
 func redactBoundFields(collection Collection, ctx Context, document *store.Document) error {
+	if ctx.System {
+		return nil
+	}
 	ctx.Document = document
 	ctx.Data = document.Values
 	for _, binding := range collection.Bindings {

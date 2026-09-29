@@ -15,6 +15,11 @@ access rules, field redaction, hooks, and generated types in the same content mo
 password hashes, session tokens, API keys, and recovery tokens stay in store-owned credential
 records. Secrets never become fields, manifest data, hook input, or ordinary API output.
 
+<aside class="callout" data-variant="tip">
+<strong>Native apps, servers, and scripts use tokens</strong>
+<p>Login defaults to an HttpOnly cookie for the admin and same-origin browsers. Every other client, including React Native and Expo apps, logs in with <code>"transport": "token"</code> and sends <code>Authorization: Session &lt;token&gt;</code>. The SDK does this when given a token store; see <a href="#sessions">Sessions and transports</a>.</p>
+</aside>
+
 ## Define an auth collection {#auth-collections}
 
 Set `Auth: true` and provide a required, unique, non-localized `email` field. It can be an Email or
@@ -156,7 +161,7 @@ which differ only in how the token travels:
 | Transport | Use it for                                                          | Credential                       |
 | --------- | ------------------------------------------------------------------- | -------------------------------- |
 | Cookie    | The embedded admin and same-origin browser apps                     | HttpOnly `ridu_session` cookie   |
-| Token     | Frontends on another domain, server renderers, scripts, native apps | `Authorization: Session <token>` |
+| Token     | Native apps, frontends on another domain, server renderers, scripts | `Authorization: Session <token>` |
 
 The cookie is `HttpOnly`, `SameSite=Lax`, scoped to `/`, and expires at the session's absolute
 expiry. Set `HandlerOptions.SecureCookies` for HTTPS; `ridu.Execute` enables secure cookies unless

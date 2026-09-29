@@ -168,6 +168,32 @@ func TestLoadRejectsInvalidOrCollidingGeneratedArtifacts(t *testing.T) {
 	}
 }
 
+// Consumer contracts may leave the project so a monorepo can generate them
+// straight into a sibling app. Structural paths and plugin artifacts may not.
+func TestLoadAdmitsConsumerContractsOutsideTheRoot(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "backend", "ridu.toml")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, path, "version = 1\ndatabase = \"postgres\"\nentry = \"./cmd/server\"\nschema = \"./generated/schema.json\"\nclient = \"../mobile/lib/ridu.generated.ts\"\nopenapi = \"../docs/ridu.openapi.json\"\nplugins = \"./plugins.json\"\nplugin_go = \"./content/plugins.go\"\n")
+	project, err := projectfile.Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if project.Client != "../mobile/lib/ridu.generated.ts" || project.OpenAPI != "../docs/ridu.openapi.json" {
+		t.Fatalf("contract paths = %q, %q", project.Client, project.OpenAPI)
+	}
+	if projectfile.WithinRoot(project.Client) || !projectfile.WithinRoot(project.Schema) {
+		t.Fatalf("WithinRoot misclassified %q or %q", project.Client, project.Schema)
+	}
+	for _, key := range []string{"migrations", "admin", "assets"} {
+		writeFile(t, path, "version = 1\ndatabase = \"postgres\"\nentry = \"./cmd/server\"\nschema = \"./generated/schema.json\"\nplugins = \"./plugins.json\"\nplugin_go = \"./content/plugins.go\"\n"+key+" = \"../outside\"\n")
+		if _, err := projectfile.Load(path); err == nil || !strings.Contains(err.Error(), "inside the project root") {
+			t.Fatalf("%s outside the root: Load error = %v", key, err)
+		}
+	}
+}
+
 func writeFile(t *testing.T, path, content string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {

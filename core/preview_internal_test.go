@@ -182,16 +182,9 @@ func TestPreviewTokenBindsExactAuthCollectionAndReloadsActor(t *testing.T) {
 				Admin:  CollectionAdmin{LivePreview: LivePreviewConfig{URL: "https://preview.example.test/posts/{id}"}},
 				Fields: field.Fields{field.Text("title")},
 				Access: CollectionAccess{
-					Create: func(AccessContext) (AccessDecision, error) { return Allow(), nil },
-					Read: func(ctx AccessContext) (AccessDecision, error) {
-						if ctx.Actor != nil {
-							role, _ := ctx.Actor.Values["role"].StringValue()
-							if role == "staff" {
-								return Allow(), nil
-							}
-						}
-						return Deny(), nil
-					},
+					Create:     func(AccessContext) (AccessDecision, error) { return Allow(), nil },
+					Read:       staffRole,
+					ReadDrafts: staffRole,
 				},
 			},
 		},
@@ -501,4 +494,15 @@ func previewErrorCode(err error) string {
 		return operationError.Code
 	}
 	return ""
+}
+
+// staffRole lets staff read posts and their drafts, whichever auth collection
+// they belong to; the preview tests use a non-admin collection deliberately.
+func staffRole(ctx AccessContext) (AccessDecision, error) {
+	if ctx.Actor != nil {
+		if role, _ := ctx.Actor.Values["role"].StringValue(); role == "staff" {
+			return Allow(), nil
+		}
+	}
+	return Deny(), nil
 }

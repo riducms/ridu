@@ -52,12 +52,15 @@ func TestNormalizedPoolConfigValidatesBoundsAndExplicitDisables(t *testing.T) {
 	}
 }
 
-func TestNormalizedPoolConfigRequiresTLSUnlessExplicitlyAdmitted(t *testing.T) {
+func TestNormalizedPoolConfigRequiresTLSToRemoteHostsUnlessExplicitlyAdmitted(t *testing.T) {
 	for _, databaseURL := range []string{
-		"postgres://user:secret@localhost/database",
-		"postgres://user:secret@localhost/database?sslmode=prefer",
-		"postgres://user:secret@localhost/database?sslmode=allow",
-		"postgres://user:secret@localhost/database?sslmode=disable",
+		"postgres://user:secret@db.example/database",
+		"postgres://user:secret@db.example/database?sslmode=prefer",
+		"postgres://user:secret@db.example/database?sslmode=allow",
+		"postgres://user:secret@db.example/database?sslmode=disable",
+		"postgres://user:secret@10.0.0.5/database?sslmode=disable",
+		// Every host must qualify, not just the first one tried.
+		"postgres://user:secret@localhost,db.example/database?sslmode=disable",
 	} {
 		if _, err := normalizedPoolConfig(PoolConfig{DatabaseURL: databaseURL}); err == nil {
 			t.Fatalf("insecure PostgreSQL URL %q succeeded without explicit admission", databaseURL)
@@ -66,6 +69,22 @@ func TestNormalizedPoolConfigRequiresTLSUnlessExplicitlyAdmitted(t *testing.T) {
 		}
 		if _, err := normalizedPoolConfig(PoolConfig{DatabaseURL: databaseURL, AllowInsecureTransport: true}); err != nil {
 			t.Fatalf("explicitly admitted PostgreSQL URL %q failed: %v", databaseURL, err)
+		}
+	}
+
+	// Nothing off the machine can observe a loopback or Unix-socket database,
+	// so a local one needs no TLS and no override: `ridu migrate` reaches the
+	// same database `ridu dev` does.
+	for _, databaseURL := range []string{
+		"postgres://user:secret@localhost/database",
+		"postgres://user:secret@localhost:54339/database?sslmode=disable",
+		"postgres://user:secret@127.0.0.1/database?sslmode=prefer",
+		"postgres://user:secret@[::1]/database?sslmode=disable",
+		"postgres://user:secret@localhost,127.0.0.1/database?sslmode=disable",
+		"postgres:///database?host=/var/run/postgresql",
+	} {
+		if _, err := normalizedPoolConfig(PoolConfig{DatabaseURL: databaseURL}); err != nil {
+			t.Fatalf("local PostgreSQL URL %q required an override: %v", databaseURL, err)
 		}
 	}
 

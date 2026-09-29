@@ -120,7 +120,8 @@ func Config() ridu.Config { return ridu.Config{Name: "Audit",
 		if code == 0 || !strings.Contains(stderr.String(), "create") {
 			t.Fatalf("missing-artifact status = %d: %s\n%s", code, stdout.String(), stderr.String())
 		}
-		run("migrate", "create", "--name", name)
+		// The positional name is shorthand for --name.
+		run("migrate", "create", name)
 		run("migrate", "verify")
 		run("migrate", "up", "--database-path", database)
 		run("migrate", "status", "--database-path", database)

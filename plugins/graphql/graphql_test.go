@@ -883,15 +883,22 @@ func TestGraphQLAndRESTLoginRecordTrustedTransportMetadata(t *testing.T) {
 
 func TestGraphQLVersionsDraftsAndTrashUseRiduLifecycleOperations(t *testing.T) {
 	application, err := ridu.New(ridu.Config{
-		Name: "GraphQL lifecycle", Plugins: []ridu.Plugin{graphqlplugin.New()},
+		Name: "GraphQL lifecycle", Plugins: []ridu.Plugin{graphqlplugin.New()}, Admin: ridu.AdminConfig{User: "users"},
 		Collections: []ridu.Collection{{
 			Slug: "posts", Versions: true, Trash: true,
 			VersionConfig: ridu.VersionConfig{Drafts: true, MaxPerDocument: 10},
 			Fields: field.Fields{
 				field.Text("title").Required(),
 			},
-		}},
+		}, {Slug: "users", Auth: true, Fields: field.Fields{field.Email("email").Required().Unique()}}},
 	}, teststore.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := application.CreateAuthUser(context.Background(), "users", store.Values{"email": store.String("editor@example.test")}, "editor-password-value", ridu.MutationOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	session, err := application.Login(context.Background(), "users", "editor@example.test", "editor-password-value")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -902,9 +909,12 @@ func TestGraphQLVersionsDraftsAndTrashUseRiduLifecycleOperations(t *testing.T) {
 	id := post["id"].(string)
 	hiddenDraft := graphQL(t, server.URL, `query($id: ID!) { Post(id: $id) { id } }`, map[string]interface{}{"id": id})
 	assertErrorCode(t, hiddenDraft, "not_found")
-	visibleDraft := graphQL(t, server.URL, `query($id: ID!) { Post(id: $id, draft: true) { id _status } }`, map[string]interface{}{"id": id})
+	// An anonymous client cannot choose drafts; an editor can.
+	anonymousDraft := graphQL(t, server.URL, `query($id: ID!) { Post(id: $id, draft: true) { id _status } }`, map[string]interface{}{"id": id})
+	assertErrorCode(t, anonymousDraft, "access_denied")
+	visibleDraft := graphQLWithToken(t, server.URL, session.Token, `query { Post(id: "`+id+`", draft: true) { id _status } }`)
 	if objectAt(t, visibleDraft, "data", "Post")["_status"] != "draft" {
-		t.Fatalf("explicit draft read = %#v", visibleDraft)
+		t.Fatalf("editor draft read = %#v", visibleDraft)
 	}
 	publishedCreate := graphQL(t, server.URL, `mutation { createPost(draft: false, data: {title: "Published immediately"}) { id _status } }`)
 	publishedID := objectAt(t, publishedCreate, "data", "createPost")["id"].(string)

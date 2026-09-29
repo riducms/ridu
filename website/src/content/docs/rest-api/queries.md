@@ -30,7 +30,9 @@ result.
 | `locale`          | A configured locale code, `all`, or `*`.                                                                        |
 | `fallback-locale` | One locale, a comma-separated chain, or `false`; `fallbackLocale` is an alias, but both names may not conflict. |
 
-Build JSON-valued parameters with `JSON.stringify` instead of hand-writing escaped query text:
+Build JSON-valued parameters with `JSON.stringify` instead of hand-writing escaped query text.
+Bracket-style filters such as `where[status][equals]=published`, common with `qs`-based APIs, are
+rejected with `bad_query`; the error shows the same filter as JSON.
 
 ```ts title="published-posts.ts" focus={2-7,9-10}
 const query = new URLSearchParams({

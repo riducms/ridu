@@ -136,7 +136,13 @@ func TestRecursivePopulationTraversesNestedShapesWithAccessDepthAndRedaction(t *
 func TestAnonymousPopulationDoesNotExposeDraftTargetsFromPublicSources(t *testing.T) {
 	ctx := context.Background()
 	application, err := ridu.New(ridu.Config{Name: "Published population", Collections: []ridu.Collection{
-		{Slug: "lessons", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true}, Fields: field.Fields{field.Text("title").Required()}},
+		{Slug: "lessons", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true}, Fields: field.Fields{field.Text("title").Required()},
+			Access: ridu.CollectionAccess{ReadDrafts: func(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
+				if ctx.Actor == nil {
+					return ridu.Deny(), nil
+				}
+				return ridu.Allow(), nil
+			}}},
 		{Slug: "links", Fields: field.Fields{field.Relationship("lesson", "lessons").Required()}},
 	}}, teststore.New())
 	if err != nil {

@@ -103,7 +103,8 @@ Use the separate `payload-to-ridu` skill for a Payload migration or parity asses
 - Keep access rules and hooks executable in Go. Admin visibility is presentation, not
   authorization. Filtered access must remain part of the atomic store operation.
 - Use the Local API or generated typed handles for content operations. Do not call a store adapter
-  directly or introduce an authorization bypass flag.
+  directly or teach access rules about a context flag. Server-owned writes, such as stats a hook
+  maintains, pass `System: true` on their Local API options; everything else passes the real caller.
 - Backend plugins are compiled Go packages and admin plugins are statically registered. Do not add
   runtime package installation or a JavaScript production server.
 
