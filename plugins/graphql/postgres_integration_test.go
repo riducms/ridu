@@ -18,6 +18,7 @@ import (
 	graphqlplugin "github.com/riducms/ridu/plugins/graphql"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
+	"github.com/riducms/ridu/store"
 )
 
 func TestGraphQLPostgresCRUDLocalizationAndPopulation(t *testing.T) {
@@ -55,7 +56,7 @@ func TestGraphQLPostgresCRUDLocalizationAndPopulation(t *testing.T) {
 	}
 	defer backend.Close()
 	config := ridu.Config{
-		Name: "GraphQL PostgreSQL", Plugins: []ridu.Plugin{graphqlplugin.New()},
+		Name: "GraphQL PostgreSQL", Plugins: []ridu.Plugin{graphqlplugin.New()}, Admin: ridu.AdminConfig{User: "users"},
 		Localization: ridu.LocalizationConfig{DefaultLocale: "en", Locales: []ridu.Locale{{Code: "en", Label: "English"}, {Code: "fr", Label: "French", FallbackLocales: []schema.LocaleCode{"en"}}}},
 		Collections: []ridu.Collection{
 			{Slug: "categories", Fields: field.Fields{
@@ -72,6 +73,7 @@ func TestGraphQLPostgresCRUDLocalizationAndPopulation(t *testing.T) {
 					field.Text("label"),
 				}),
 			}},
+			{Slug: "users", Auth: true, Fields: field.Fields{field.Email("email").Required().Unique()}},
 		},
 	}
 	manifest, err := ridu.Resolve(config)
@@ -86,6 +88,13 @@ func TestGraphQLPostgresCRUDLocalizationAndPopulation(t *testing.T) {
 		t.Fatal(err)
 	}
 	application, err := ridu.New(config, backend)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := application.CreateAuthUser(ctx, "users", store.Values{"email": store.String("editor@example.test")}, "editor-password-value", ridu.MutationOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	session, err := application.Login(ctx, "users", "editor@example.test", "editor-password-value")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,7 +129,9 @@ func TestGraphQLPostgresCRUDLocalizationAndPopulation(t *testing.T) {
 	draft := graphQL(t, server.URL, `mutation { createPost(data: {title: "Draft"}) { id } }`)
 	draftID := objectAt(t, draft, "data", "createPost")["id"].(string)
 	assertErrorCode(t, graphQL(t, server.URL, `query($id: ID!) { Post(id: $id) { id } }`, map[string]interface{}{"id": draftID}), "not_found")
-	if objectAt(t, graphQL(t, server.URL, `query($id: ID!) { Post(id: $id, draft: true) { id } }`, map[string]interface{}{"id": draftID}), "data", "Post")["id"] != draftID {
-		t.Fatal("PostgreSQL explicit draft read did not return the draft")
+	// An anonymous client cannot choose drafts; an editor can.
+	assertErrorCode(t, graphQL(t, server.URL, `query($id: ID!) { Post(id: $id, draft: true) { id } }`, map[string]interface{}{"id": draftID}), "access_denied")
+	if objectAt(t, graphQLWithToken(t, server.URL, session.Token, `query { Post(id: "`+draftID+`", draft: true) { id } }`), "data", "Post")["id"] != draftID {
+		t.Fatal("PostgreSQL editor draft read did not return the draft")
 	}
 }

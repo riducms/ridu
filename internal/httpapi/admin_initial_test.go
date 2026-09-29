@@ -612,7 +612,7 @@ func TestAdminInitialVersionsRetainIndependentReadsAndExactRevisionErrors(t *tes
 		Fields: []schema.Field{{ID: "title", Name: "title", Path: path, Type: schema.FieldTypeText, Category: schema.FieldCategoryScalar, Text: &schema.TextField{}}},
 	}
 	var reads []operation.Kind
-	engine, err := operationengine.New(operationengine.Config{Store: teststore.New(), Collections: []operationengine.Collection{{
+	engine, err := operationengine.New(operationengine.Config{Store: teststore.New(), EditorCollection: "users", Collections: []operationengine.Collection{{
 		Schema: collection,
 		Hooks: operationengine.Hooks{BeforeRead: []operationengine.Hook{func(ctx operationengine.Context) error {
 			reads = append(reads, ctx.Operation)
@@ -621,7 +621,7 @@ func TestAdminInitialVersionsRetainIndependentReadsAndExactRevisionErrors(t *tes
 			}
 			return nil
 		}}},
-	}}})
+	}, adminEditorCollection()}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -690,8 +690,8 @@ func TestAdminInitialVersionsKeepHistoryLightAndDetailExact(t *testing.T) {
 		Fields: []schema.Field{{ID: "title", Name: "title", Path: path, Type: schema.FieldTypeText, Category: schema.FieldCategoryScalar, Localized: true, Text: &schema.TextField{}}},
 	}
 	engine, err := operationengine.New(operationengine.Config{
-		Store: teststore.New(), Localization: localization,
-		Collections: []operationengine.Collection{{Schema: collection}},
+		Store: teststore.New(), Localization: localization, EditorCollection: "users",
+		Collections: []operationengine.Collection{{Schema: collection}, adminEditorCollection()},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -1121,4 +1121,10 @@ func decodeAdminInitialTemplate(t *testing.T, html string) protocol.AdminPrepare
 		t.Fatal(err)
 	}
 	return state
+}
+
+// adminEditorCollection is the admin's user collection, whose sessions read
+// drafts; core supplies it to the engine from Config.Admin.User.
+func adminEditorCollection() operationengine.Collection {
+	return operationengine.Collection{Schema: schema.Collection{ID: "users", Slug: "users", Capabilities: schema.Capabilities{Auth: true}}}
 }

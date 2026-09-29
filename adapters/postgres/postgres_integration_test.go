@@ -1202,7 +1202,7 @@ func TestArtifactRunnerPreservesNestedFieldsReferencesAndVersionHistory(t *testi
 	if err != nil || len(statuses) != 2 || !statuses[0].Applied || statuses[1].Applied {
 		t.Fatalf("refused content rename changed migration history: %#v, %v", statuses, err)
 	}
-	unchanged, err := beforeApp.Local().Find(ctx, "posts", post.ID, ridu.FindOptions{Actor: &store.Document{ID: "editor"}})
+	unchanged, err := beforeApp.Local().Find(ctx, "posts", post.ID, ridu.FindOptions{System: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1256,8 +1256,7 @@ func TestArtifactRunnerPreservesNestedFieldsReferencesAndVersionHistory(t *testi
 	if published, err := afterApp.Local().Find(ctx, "articles", news.ID, ridu.FindOptions{}); err != nil || published.Status != store.StatusPublished {
 		t.Fatalf("renamed scheduled target = %#v, %v", published, err)
 	}
-	actor := &store.Document{ID: "editor"}
-	preserved, err := afterApp.Local().Find(ctx, "posts", post.ID, ridu.FindOptions{Actor: actor})
+	preserved, err := afterApp.Local().Find(ctx, "posts", post.ID, ridu.FindOptions{System: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1269,7 +1268,7 @@ func TestArtifactRunnerPreservesNestedFieldsReferencesAndVersionHistory(t *testi
 	if relationTo, _ := related["relationTo"].StringValue(); relationTo != "members" {
 		t.Fatalf("relationship target = %#v", related)
 	}
-	versions, err := afterApp.Local().Versions(ctx, "posts", post.ID, ridu.FindOptions{Actor: actor})
+	versions, err := afterApp.Local().Versions(ctx, "posts", post.ID, ridu.FindOptions{System: true})
 	if err != nil || len(versions) != 1 {
 		t.Fatalf("versions = %#v, %v", versions, err)
 	}

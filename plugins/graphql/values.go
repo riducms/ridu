@@ -324,6 +324,17 @@ func boolPointerArg(args map[string]interface{}, name string) *bool {
 	return &result
 }
 
+// readDraftArg returns a read's draft selection. Without an actor Ridu treats
+// an explicit draft read as trusted server code, so an anonymous GraphQL client
+// may not choose one; signed-in clients are checked by the ReadDrafts rule.
+func readDraftArg(args map[string]interface{}, request requestState) (*bool, error) {
+	draft := boolPointerArg(args, "draft")
+	if draft != nil && *draft && request.actor == nil {
+		return nil, extendedError{message: "sign in to read drafts", extensions: map[string]interface{}{"code": "access_denied", "status": 403}}
+	}
+	return draft, nil
+}
+
 func intArg(args map[string]interface{}, name string, fallback int) int {
 	value, ok := args[name].(int)
 	if !ok {

@@ -104,6 +104,18 @@ type CollectionAccess struct {
 	// ReadVersions controls version-history reads and may return a Where
 	// decision. When omitted, Read is used.
 	ReadVersions AccessRule
+	// ReadDrafts controls whether an actor sees draft documents of a versioned
+	// collection, in addition to Read. It accepts only Allow or Deny. When
+	// omitted, only editors do: users of the admin's user collection whose
+	// Admin rule lets them in. Anonymous callers and an app's other auth
+	// collections read published content, and their explicit draft reads fail.
+	ReadDrafts AccessRule
+	// Reference controls which documents of this collection other documents may
+	// point at through relationship and upload fields, and may return a Where
+	// decision. When omitted, Read is used. Set it to let actors link to
+	// documents they may not read, such as sending a friend request to a
+	// learner whose profile is private; population still applies Read.
+	Reference AccessRule
 	// Update controls document updates and may return a Where decision.
 	Update AccessRule
 	// Publish controls publishing and atomic published-document edits. When
@@ -130,6 +142,10 @@ type GlobalAccess struct {
 	// ReadVersions controls version-history reads and may return a Where decision.
 	// When omitted, Read is used.
 	ReadVersions AccessRule
+	// ReadDrafts controls whether an actor sees the draft of a versioned global.
+	// It accepts only Allow or Deny and, when omitted, allows only editors, as
+	// CollectionAccess.ReadDrafts describes.
+	ReadDrafts AccessRule
 	// Update controls global updates and may return a Where decision for an
 	// existing singleton.
 	Update AccessRule

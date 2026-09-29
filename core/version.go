@@ -3,4 +3,4 @@ package core
 // FrameworkVersion identifies the public Go framework and project-command
 // contract compiled into an application. It is independent from schema manifest
 // and machine protocol versions.
-const FrameworkVersion = "0.7.0"
+const FrameworkVersion = "0.8.0"

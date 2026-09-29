@@ -44,6 +44,11 @@ type ListOptions struct {
 	Actor *store.Document
 	// ActorCollection identifies the exact auth collection that owns Actor.
 	ActorCollection schema.CollectionSlug
+	// System runs the call as trusted server code: collection, field, draft
+	// and reference access rules are skipped. Validation, hooks, versions and
+	// reference integrity still apply, and Actor, when set, still reaches
+	// hooks. Only Go code can set it; REST and GraphQL never do.
+	System bool
 	// TrashOnly returns deleted documents and is valid only for trash-enabled collections.
 	TrashOnly bool
 	// Locale selects one configured content locale. Empty uses the application default.
@@ -72,6 +77,8 @@ type DistinctOptions struct {
 	Actor *store.Document
 	// ActorCollection identifies the exact auth collection that owns Actor.
 	ActorCollection schema.CollectionSlug
+	// System skips access rules for trusted server code; see ListOptions.System.
+	System bool
 	// Draft follows List semantics for versioned collections.
 	Draft *bool
 	// TrashOnly returns values from deleted documents and requires trash support.
@@ -95,6 +102,8 @@ type ListWindowOptions struct {
 	Select          []query.Path
 	Actor           *store.Document
 	ActorCollection schema.CollectionSlug
+	// System skips access rules for trusted server code; see ListOptions.System.
+	System          bool
 	Locale          schema.LocaleCode
 	FallbackLocales []schema.LocaleCode
 	DisableFallback bool
@@ -125,6 +134,8 @@ type FindOptions struct {
 	Draft           *bool
 	Actor           *store.Document
 	ActorCollection schema.CollectionSlug
+	// System skips access rules for trusted server code; see ListOptions.System.
+	System          bool
 	TrashOnly       bool
 	Locale          schema.LocaleCode
 	FallbackLocales []schema.LocaleCode
@@ -143,9 +154,14 @@ type FindOptions struct {
 type MutationOptions struct {
 	// ID supplies a caller-owned document ID for create operations when
 	// Config.AllowIDOnCreate is enabled. Other mutations ignore it.
-	ID               string
-	Actor            *store.Document
-	ActorCollection  schema.CollectionSlug
+	ID              string
+	Actor           *store.Document
+	ActorCollection schema.CollectionSlug
+	// System runs the call as trusted server code: collection, field, draft
+	// and reference access rules are skipped. Validation, hooks, versions and
+	// reference integrity still apply, and Actor, when set, still reaches
+	// hooks. Only Go code can set it; REST and GraphQL never do.
+	System           bool
 	ExpectedRevision int
 	Populate         []query.Population
 	// OutputFields limits computed and inverse-join resolution in the returned
@@ -165,6 +181,8 @@ type MutationOptions struct {
 type BulkOptions struct {
 	Actor           *store.Document
 	ActorCollection schema.CollectionSlug
+	// System skips access rules for trusted server code; see MutationOptions.System.
+	System          bool
 	Locale          schema.LocaleCode
 	FallbackLocales []schema.LocaleCode
 	DisableFallback bool
@@ -218,6 +236,8 @@ type OperationError = operationengine.Error
 type ImportOptions struct {
 	Actor           *store.Document
 	ActorCollection schema.CollectionSlug
+	// System skips access rules for trusted server code; see MutationOptions.System.
+	System bool
 	// ID preserves the source document identity.
 	ID string
 	// Status preserves the source draft or published status.
@@ -292,7 +312,7 @@ func (local *LocalAPI) Import(ctx context.Context, collection string, values sto
 			Cause:  err,
 		}
 	}
-	result, err := local.engine.Execute(ctx, operationengine.Request{Operation: operation.Create, Collection: collection, ImportID: options.ID, ImportCreatedAt: options.CreatedAt, ImportUpdatedAt: options.UpdatedAt, Data: values, Status: &options.Status, Actor: options.Actor, ActorCollection: options.ActorCollection})
+	result, err := local.engine.Execute(ctx, operationengine.Request{Operation: operation.Create, Collection: collection, ImportID: options.ID, ImportCreatedAt: options.CreatedAt, ImportUpdatedAt: options.UpdatedAt, Data: values, Status: &options.Status, Actor: options.Actor, ActorCollection: options.ActorCollection, System: options.System})
 	return requiredDocument(result, err)
 }
 
@@ -300,7 +320,7 @@ func (local *LocalAPI) Import(ctx context.Context, collection string, values sto
 // transport-owned projection and population plan.
 func (local *LocalAPI) Find(ctx context.Context, collection, id string, options FindOptions) (store.Document, error) {
 	request := operationengine.Request{
-		Operation: operation.Read, Collection: collection, ID: id, Actor: options.Actor, ActorCollection: options.ActorCollection,
+		Operation: operation.Read, Collection: collection, ID: id, Actor: options.Actor, ActorCollection: options.ActorCollection, System: options.System,
 		Select: options.Select, Populate: options.Populate, OutputFields: cloneOptionalPaths(options.OutputFields), Draft: cloneOptionalBool(options.Draft), TrashOnly: options.TrashOnly,
 		Locale: string(options.Locale), FallbackLocales: append([]schema.LocaleCode(nil), options.FallbackLocales...),
 		DisableFallback: options.DisableFallback, AllLocales: options.AllLocales,
@@ -337,7 +357,7 @@ func (local *LocalAPI) ListJoin(ctx context.Context, collection, id, field strin
 func listRequest(collection string, options ListOptions) operationengine.Request {
 	return operationengine.Request{
 		Operation: operation.Read, Collection: collection, Filter: options.Where,
-		Page: options.Page, Limit: options.Limit, Actor: options.Actor, ActorCollection: options.ActorCollection,
+		Page: options.Page, Limit: options.Limit, Actor: options.Actor, ActorCollection: options.ActorCollection, System: options.System,
 		Sort: options.Sort, Select: options.Select, Populate: options.Populate, OutputFields: cloneOptionalPaths(options.OutputFields), Draft: cloneOptionalBool(options.Draft), TrashOnly: options.TrashOnly,
 		Locale: string(options.Locale), FallbackLocales: append([]schema.LocaleCode(nil), options.FallbackLocales...),
 		DisableFallback: options.DisableFallback, AllLocales: options.AllLocales,
@@ -350,7 +370,7 @@ func listRequest(collection string, options ListOptions) operationengine.Request
 func (local *LocalAPI) Distinct(ctx context.Context, collection string, options DistinctOptions) (store.DistinctPage, error) {
 	return local.engine.Distinct(ctx, operationengine.DistinctRequest{
 		Collection: collection, Field: options.Field, Filter: options.Where,
-		Page: options.Page, Limit: options.Limit, Actor: options.Actor, ActorCollection: options.ActorCollection,
+		Page: options.Page, Limit: options.Limit, Actor: options.Actor, ActorCollection: options.ActorCollection, System: options.System,
 		Draft: cloneOptionalBool(options.Draft), TrashOnly: options.TrashOnly,
 		Locale: string(options.Locale), FallbackLocales: append([]schema.LocaleCode(nil), options.FallbackLocales...),
 		DisableFallback: options.DisableFallback,
@@ -364,7 +384,7 @@ func (local *LocalAPI) Distinct(ctx context.Context, collection string, options 
 func (local *LocalAPI) ListWindow(ctx context.Context, collection string, options ListWindowOptions) (store.Window, error) {
 	result, err := local.engine.Execute(ctx, operationengine.Request{
 		Operation: operation.Read, Collection: collection,
-		Limit: options.Limit, IndexWindow: &store.IndexWindow{Path: options.Index, LowerBound: options.LowerBound, UpperBound: options.UpperBound}, Actor: options.Actor, ActorCollection: options.ActorCollection,
+		Limit: options.Limit, IndexWindow: &store.IndexWindow{Path: options.Index, LowerBound: options.LowerBound, UpperBound: options.UpperBound}, Actor: options.Actor, ActorCollection: options.ActorCollection, System: options.System,
 		Select: options.Select,
 		Locale: string(options.Locale), FallbackLocales: append([]schema.LocaleCode(nil), options.FallbackLocales...),
 		DisableFallback: options.DisableFallback, AllLocales: options.AllLocales,
@@ -418,6 +438,7 @@ func applyMutationOptions(request *operationengine.Request, options MutationOpti
 	}
 	request.Actor = options.Actor
 	request.ActorCollection = options.ActorCollection
+	request.System = options.System
 	request.ExpectedRevision = options.ExpectedRevision
 	request.Populate = append([]query.Population(nil), options.Populate...)
 	request.OutputFields = cloneOptionalPaths(options.OutputFields)
@@ -446,7 +467,7 @@ func cloneOptionalBool(value *bool) *bool {
 func versionLocalizationOptions(options FindOptions) operationengine.LocalizationOptions {
 	return operationengine.LocalizationOptions{
 		Locale: string(options.Locale), FallbackLocales: append([]schema.LocaleCode(nil), options.FallbackLocales...),
-		DisableFallback: options.DisableFallback, AllLocales: options.AllLocales, ActorCollection: options.ActorCollection,
+		DisableFallback: options.DisableFallback, AllLocales: options.AllLocales, ActorCollection: options.ActorCollection, System: options.System,
 	}
 }
 
@@ -469,7 +490,7 @@ func (local *LocalAPI) publishStoragePrepared(ctx context.Context, collection, i
 func (local *LocalAPI) MutateJoin(ctx context.Context, collection, id, field string, additions, removals []string, options MutationOptions) (JoinMutationResult, error) {
 	request := operationengine.JoinMutationRequest{
 		Collection: collection, ID: id, Field: field,
-		Additions: append([]string(nil), additions...), Removals: append([]string(nil), removals...), Actor: options.Actor, ActorCollection: options.ActorCollection,
+		Additions: append([]string(nil), additions...), Removals: append([]string(nil), removals...), Actor: options.Actor, ActorCollection: options.ActorCollection, System: options.System,
 	}
 	request.Locale = string(options.Locale)
 	request.FallbackLocales = append([]schema.LocaleCode(nil), options.FallbackLocales...)
@@ -506,7 +527,7 @@ func (local *LocalAPI) Unpublish(ctx context.Context, collection, id string, opt
 // CopyLocale preserves the exact authenticated collection identity
 // for both the source read and destination mutation lifecycle.
 func (local *LocalAPI) CopyLocale(ctx context.Context, collection, id string, source, target schema.LocaleCode, options MutationOptions) (store.Document, error) {
-	return local.engine.CopyLocale(ctx, collection, id, source, target, options.ExpectedRevision, options.Actor, operationengine.LocalizationOptions{ActorCollection: options.ActorCollection})
+	return local.engine.CopyLocale(ctx, collection, id, source, target, options.ExpectedRevision, options.Actor, operationengine.LocalizationOptions{ActorCollection: options.ActorCollection, System: options.System})
 }
 
 // Versions preserves the exact authenticated collection identity
@@ -536,7 +557,7 @@ func (local *LocalAPI) RestoreAsDraft(ctx context.Context, collection, id string
 func (local *LocalAPI) restoreVersion(ctx context.Context, collection, id string, revision int, draft bool, options MutationOptions) (store.Document, error) {
 	result, err := local.engine.RestorePopulated(ctx, collection, id, revision, options.ExpectedRevision, draft, options.Actor, options.Populate, options.OutputFields, operationengine.LocalizationOptions{
 		Locale: string(options.Locale), FallbackLocales: append([]schema.LocaleCode(nil), options.FallbackLocales...),
-		DisableFallback: options.DisableFallback, AllLocales: options.AllLocales, ActorCollection: options.ActorCollection,
+		DisableFallback: options.DisableFallback, AllLocales: options.AllLocales, ActorCollection: options.ActorCollection, System: options.System,
 	})
 	return requiredDocument(result, err)
 }
@@ -596,7 +617,7 @@ func (local *LocalAPI) BulkDeletePermanent(ctx context.Context, collection strin
 // bounded atomic batch.
 func (local *LocalAPI) EmptyTrash(ctx context.Context, collection string, options BulkOptions) ([]store.Document, error) {
 	listOptions := ListOptions{Page: 1, Limit: 100, TrashOnly: true,
-		Actor: options.Actor, ActorCollection: options.ActorCollection,
+		Actor: options.Actor, ActorCollection: options.ActorCollection, System: options.System,
 		Locale: options.Locale, FallbackLocales: options.FallbackLocales,
 		DisableFallback: options.DisableFallback, AllLocales: options.AllLocales,
 	}
@@ -620,7 +641,7 @@ func (local *LocalAPI) EmptyTrash(ctx context.Context, collection string, option
 func (local *LocalAPI) bulk(ctx context.Context, collection string, ids []string, kind operation.Kind, values store.Values, options BulkOptions) ([]store.Document, error) {
 	requests := make([]operationengine.Request, len(ids))
 	for index, id := range ids {
-		requests[index] = operationengine.Request{Operation: kind, Collection: collection, ID: id, Data: store.CloneValues(values), Actor: options.Actor, ActorCollection: options.ActorCollection,
+		requests[index] = operationengine.Request{Operation: kind, Collection: collection, ID: id, Data: store.CloneValues(values), Actor: options.Actor, ActorCollection: options.ActorCollection, System: options.System,
 			Locale: string(options.Locale), FallbackLocales: append([]schema.LocaleCode(nil), options.FallbackLocales...),
 			DisableFallback: options.DisableFallback, AllLocales: options.AllLocales,
 		}
@@ -643,7 +664,7 @@ func (local *LocalAPI) bulk(ctx context.Context, collection string, ids []string
 // population through the ordinary operation engine.
 func (local *LocalAPI) Global(ctx context.Context, slug string, options FindOptions) (store.Document, error) {
 	request := operationengine.Request{
-		Operation: operation.Read, Collection: "global:" + slug, ID: slug, Actor: options.Actor, ActorCollection: options.ActorCollection,
+		Operation: operation.Read, Collection: "global:" + slug, ID: slug, Actor: options.Actor, ActorCollection: options.ActorCollection, System: options.System,
 		Select: options.Select, Populate: options.Populate, OutputFields: cloneOptionalPaths(options.OutputFields), Draft: cloneOptionalBool(options.Draft),
 		Locale: string(options.Locale), FallbackLocales: append([]schema.LocaleCode(nil), options.FallbackLocales...),
 		DisableFallback: options.DisableFallback, AllLocales: options.AllLocales,
@@ -692,7 +713,7 @@ func (local *LocalAPI) UnpublishGlobal(ctx context.Context, slug string, options
 }
 
 func (local *LocalAPI) CopyGlobalLocale(ctx context.Context, slug string, source, target schema.LocaleCode, options MutationOptions) (store.Document, error) {
-	return local.engine.CopyLocale(ctx, "global:"+slug, slug, source, target, options.ExpectedRevision, options.Actor, operationengine.LocalizationOptions{ActorCollection: options.ActorCollection})
+	return local.engine.CopyLocale(ctx, "global:"+slug, slug, source, target, options.ExpectedRevision, options.Actor, operationengine.LocalizationOptions{ActorCollection: options.ActorCollection, System: options.System})
 }
 
 func (local *LocalAPI) GlobalVersions(ctx context.Context, slug string, options FindOptions) ([]store.Version, error) {
@@ -716,7 +737,7 @@ func (local *LocalAPI) RestoreGlobalAsDraft(ctx context.Context, slug string, re
 func (local *LocalAPI) restoreGlobalVersion(ctx context.Context, slug string, revision int, draft bool, options MutationOptions) (store.Document, error) {
 	result, err := local.engine.RestorePopulated(ctx, "global:"+slug, slug, revision, options.ExpectedRevision, draft, options.Actor, options.Populate, options.OutputFields, operationengine.LocalizationOptions{
 		Locale: string(options.Locale), FallbackLocales: append([]schema.LocaleCode(nil), options.FallbackLocales...),
-		DisableFallback: options.DisableFallback, AllLocales: options.AllLocales, ActorCollection: options.ActorCollection,
+		DisableFallback: options.DisableFallback, AllLocales: options.AllLocales, ActorCollection: options.ActorCollection, System: options.System,
 	})
 	return requiredDocument(result, err)
 }

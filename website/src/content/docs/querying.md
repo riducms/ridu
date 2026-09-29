@@ -114,6 +114,14 @@ const page = await client.list('posts', {
 });
 ```
 
+In Go, build the same terms with `query.Desc` and `query.Asc`:
+
+```go
+page, err := app.Local().List(ctx, "posts", ridu.ListOptions{
+	Sort: []query.Sort{query.Desc("createdAt"), query.Asc("title")},
+})
+```
+
 REST repeats the query key: `?sort=-createdAt&sort=title`. The HTTP API accepts at most 16 unique
 sort fields. Nested repeated structures, groups, arrays, blocks, JSON, and opaque plugin fields are
 not sortable. The store appends `id` as the final tie-breaker when needed, which keeps page ordering

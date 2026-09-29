@@ -12981,6 +12981,22 @@
 		"go:github.com/riducms/ridu/plugins/richtext#Admin": {
 			"module": "richtext",
 			"symbol": "admin"
+		},
+		"go:github.com/riducms/ridu/core#HookContext.Candidate": {
+			"module": "core",
+			"symbol": "hook-context-candidate-method"
+		},
+		"go:github.com/riducms/ridu/operation#ReadDrafts": {
+			"module": "operation",
+			"symbol": "read-drafts"
+		},
+		"go:github.com/riducms/ridu/operation#Reference": {
+			"module": "operation",
+			"symbol": "reference"
+		},
+		"go:github.com/riducms/ridu/migration#UnmanagedSchemaError": {
+			"module": "migration",
+			"symbol": "unmanaged-schema-error"
 		}
 	}
 }

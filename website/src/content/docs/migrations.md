@@ -145,7 +145,8 @@ Safety flags have narrow scopes:
   application process, writer, and worker has stopped. Keep them stopped through retries until
   `status` completes.
 - **`--allow-insecure-database` on database-backed commands** permits plaintext or bypassed
-  certificate verification only for a local PostgreSQL or MongoDB environment. The offline
+  certificate verification to a remote PostgreSQL or MongoDB development host. A loopback or
+  Unix-socket database never needs it. The offline
   `create` command rejects it.
 - **`--allow-unbounded` on `up` or `verify`** permits an applicable zero runner wait or timeout.
   Ordinary production defaults remain bounded, and MongoDB lease expiry is always bounded.

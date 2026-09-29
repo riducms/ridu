@@ -36,7 +36,7 @@ func (engine *Engine) ListJoin(ctx context.Context, collection, id, field string
 	// itself. A capabilities check on an unresolved join cannot establish this.
 	visible, err := engine.Execute(ctx, Request{
 		Operation: operation.Read, Collection: collection, ID: id,
-		Actor: request.Actor, ActorCollection: request.ActorCollection,
+		Actor: request.Actor, ActorCollection: request.ActorCollection, System: request.System,
 		OutputFields: []query.Path{join.Path},
 		Locale:       request.Locale, FallbackLocales: request.FallbackLocales,
 		DisableFallback: request.DisableFallback, AllLocales: request.AllLocales,

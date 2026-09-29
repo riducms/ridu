@@ -67,6 +67,26 @@ const cms = createClient<RiduConfig>({
 });
 ```
 
+### Jest and other CommonJS test runners {#commonjs-test-runners}
+
+`@riducms/sdk` and `@riducms/protocol` ship as ES modules only. Bundlers such as Vite, Metro, and
+webpack load them directly, as does Node's `import`, and Vitest needs no change. Jest transforms
+application code but skips `node_modules` by default, so a test that reaches the generated client
+fails with `SyntaxError: Cannot use import statement outside a module`. Add `@riducms` to the
+packages Jest transforms, keeping your preset's existing entries:
+
+```js title="jest.config.js"
+module.exports = {
+	preset: 'jest-expo',
+	transformIgnorePatterns: [
+		'node_modules/(?!(.pnpm|(jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?/.*|@riducms/.*))'
+	]
+};
+```
+
+The `.pnpm` entry lets the pattern reach packages in pnpm's store layout; omit it for npm, Yarn,
+and Bun installs.
+
 When `ridu dev` is running, a Go config change regenerates this module automatically. Commit the
 result. See [Generated contracts](/docs/generated-contracts/) for one-shot generation and drift
 checks, and the complete [SDK reference](/reference/sdk/) for every type and signature.

@@ -19,6 +19,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/riducms/ridu/internal/localization"
+	"github.com/riducms/ridu/internal/localnet"
 	populationwalk "github.com/riducms/ridu/internal/population"
 	"github.com/riducms/ridu/internal/primitivefield"
 	"github.com/riducms/ridu/internal/referenceindex"
@@ -39,9 +40,10 @@ type Store struct {
 // explicitly disable the corresponding timeout.
 type PoolConfig struct {
 	DatabaseURL string
-	// AllowInsecureTransport explicitly permits plaintext PostgreSQL connections.
-	// Keep this false in production; it exists for local Unix sockets and
-	// development databases whose transport is secured outside PostgreSQL.
+	// AllowInsecureTransport explicitly permits plaintext PostgreSQL
+	// connections to a remote host. Loopback and Unix-socket databases never
+	// need it. Keep this false in production; it exists for development
+	// databases whose transport is secured outside PostgreSQL.
 	AllowInsecureTransport bool
 	ApplicationName        string
 	MaxConnections         int32
@@ -127,7 +129,7 @@ func normalizedPoolConfig(options PoolConfig) (*pgxpool.Config, error) {
 		return nil, errors.New("invalid PostgreSQL connection configuration")
 	}
 	if !options.AllowInsecureTransport && !securePostgresTransport(configured) {
-		return nil, fmt.Errorf("PostgreSQL transport must require TLS; configure sslmode=require or stronger. For a local development database, allow plaintext explicitly: set AllowInsecureTransport, RIDU_ALLOW_INSECURE_DATABASE=true for Ridu projects, or pass --allow-insecure-database to the CLI")
+		return nil, fmt.Errorf("PostgreSQL transport to a remote host must require TLS; configure sslmode=require or stronger. Loopback and Unix-socket databases need no TLS. For another plaintext database secured outside PostgreSQL, allow it explicitly: set AllowInsecureTransport, RIDU_ALLOW_INSECURE_DATABASE=true for Ridu projects, or pass --allow-insecure-database to the CLI")
 	}
 	configured.MaxConns = options.MaxConnections
 	configured.MinConns = options.MinConnections
@@ -161,12 +163,16 @@ func normalizedPoolConfig(options PoolConfig) (*pgxpool.Config, error) {
 	return configured, nil
 }
 
+// securePostgresTransport requires TLS on every endpoint, including sslmode
+// fallbacks, that leaves this machine. Loopback and Unix-socket endpoints may
+// be plaintext: nothing off the host can observe them.
 func securePostgresTransport(configured *pgxpool.Config) bool {
-	if configured == nil || configured.ConnConfig == nil || configured.ConnConfig.TLSConfig == nil {
+	if configured == nil || configured.ConnConfig == nil {
 		return false
 	}
-	for _, fallback := range configured.ConnConfig.Fallbacks {
-		if fallback == nil || fallback.TLSConfig == nil {
+	primary := &pgconn.FallbackConfig{Host: configured.ConnConfig.Host, TLSConfig: configured.ConnConfig.TLSConfig}
+	for _, endpoint := range append([]*pgconn.FallbackConfig{primary}, configured.ConnConfig.Fallbacks...) {
+		if endpoint == nil || (endpoint.TLSConfig == nil && !localnet.Host(endpoint.Host)) {
 			return false
 		}
 	}
@@ -1645,14 +1651,14 @@ func requestPredicateFrom(request store.Request, requireID bool, offset int) (st
 		if err != nil {
 			return "", nil, err
 		}
-		predicates = append(predicates, compiled)
+		predicates = append(predicates, "("+compiled+")")
 	}
 	if request.Access != nil {
 		compiled, err := compileAccessPredicate(&compiler, *request.Access, request.AllLocales, request.Locales)
 		if err != nil {
 			return "", nil, err
 		}
-		predicates = append(predicates, compiled)
+		predicates = append(predicates, "("+compiled+")")
 	}
 	if len(predicates) == 0 {
 		return "TRUE", compiler.arguments, nil
@@ -1725,7 +1731,9 @@ func (compiler *predicateCompiler) compile(node query.Node) (string, error) {
 		if node.Kind == query.ExpressionOr {
 			separator = " OR "
 		}
-		return strings.Join(children, separator), nil
+		// The group carries its own parentheses: callers join predicates with
+		// AND, and an ungrouped `a OR b` there would read as `(... AND a) OR b`.
+		return "(" + strings.Join(children, separator) + ")", nil
 	case query.ExpressionNot:
 		if len(node.Children) != 1 {
 			return "", fmt.Errorf("not predicate requires one child")

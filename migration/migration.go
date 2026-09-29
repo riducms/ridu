@@ -28,6 +28,13 @@ type ArtifactIdentity struct {
 	Digest string `json:"digest"`
 }
 
+// UnmanagedSchemaError reports database objects found where a migration runner
+// expected an empty database. `ridu dev` leaves exactly this behind: it
+// synchronizes a schema directly and never records migration history.
+func UnmanagedSchemaError(engine string, objects []string) error {
+	return fmt.Errorf("unmanaged %s Ridu schema exists without migration history: %s; `ridu dev` synchronizes its schema without recording migrations, so run `ridu migrate` against a database that migrations manage or an empty one", engine, strings.Join(objects, ", "))
+}
+
 // DigestArtifactHistory returns the SHA-256 identity of one complete ordered
 // migration history. Names must be unique and strictly increasing because
 // committed artifact filenames define execution order.

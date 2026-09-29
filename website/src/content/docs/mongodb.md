@@ -309,7 +309,6 @@ migration. Before deployment, verify it and inspect the selected database:
 
 ```bash title="terminal"
 export DATABASE_URL='mongodb://127.0.0.1:27029/ridu?directConnection=true&replicaSet=ridu-rs0'
-export RIDU_ALLOW_INSECURE_DATABASE=true
 ridu migrate verify
 ridu migrate plan
 ridu migrate up
@@ -359,8 +358,9 @@ connection failures, but operators must still keep URLs out of shell history, pr
 logs, generated files, and image layers. A mode-`0600` Database Tools configuration file is one way
 to keep backup credentials out of process arguments.
 
-`RIDU_ALLOW_INSECURE_DATABASE` and `--allow-insecure-database` are for local development only.
-They do not expand the production support profile.
+A database whose every seed host is `localhost` or a loopback address needs no TLS. An SRV URL
+never counts as local. `RIDU_ALLOW_INSECURE_DATABASE` and `--allow-insecure-database` admit
+plaintext to another development host only. They do not expand the production support profile.
 
 ## Immutable migration lifecycle {#migrations}
 

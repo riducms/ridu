@@ -55,11 +55,11 @@ Values returned from the store are detached snapshots. A string relationship val
 when that path is explicitly populated, it becomes a `store.Populated` document value. See
 [Querying data](./querying.md) for expressions, selection, sorting, and bounded population.
 
-## Pass the caller, not a bypass flag {#actors}
+## Pass the caller {#actors}
 
 `Actor` in the final options argument is the authenticated document supplied
-to access rules and hooks. `nil` means anonymous. It never means superuser, and the local API has no
-access-override option.
+to access rules and hooks. `nil` means anonymous. It never means superuser; trusted work says so
+explicitly with [`System`](#system).
 
 When an application has more than one auth collection, a document ID is not a complete identity.
 Carry the collection slug as well:
@@ -86,20 +86,46 @@ code should preserve the exact `ridu.AuthIdentity` established by authentication
 `Actor` and `Collection` into local options. Identity-sensitive application services such as scheduling,
 preferences, previews, account unlocks, and document locks accept `AuthIdentity` directly.
 
+## Trusted server work {#system}
+
+Some writes belong to the server, not to the user who triggered them: a hook that updates a
+learner's stats, enrolls a league's owner, or maintains a counter. Set `System: true` on the options
+for those calls instead of widening access rules for everyone:
+
+```go
+func enrolOwner(ctx ridu.HookContext) error {
+	_, err := ctx.Local.Create(ctx.Context, "memberships", store.Values{
+		"league":  store.String(ctx.Document.ID),
+		"learner": store.String(ctx.Actor.ID),
+	}, ridu.MutationOptions{System: true, Actor: ctx.Actor, ActorCollection: ctx.ActorCollection})
+	return err
+}
+```
+
+A system call skips collection access (including `ReadDrafts` and `Reference`), field access, and
+the restriction on querying fields with read rules. It reads drafts unless `Draft` is `false`.
+Everything else still runs: validation, hooks, versions, reference existence checks, and the
+transaction. `Actor`, when set, still tells hooks whom the work is for, and hooks see
+`ctx.System`. Nested calls do not inherit it; a hook passes `System` again only for work that is
+also trusted.
+
+Only Go code can set `System`. REST, GraphQL, and other transports never accept it, so it cannot
+be requested by a client. Keep it for server-owned work, and pass the real caller everywhere else.
+
 ## Read and write options {#options}
 
 Each semantic action has one signature: context, resource identifiers and required values are
 positional; optional controls go in one final named options value. History revisions remain positional.
 
-| Type                   | Controls                                                                                                                                        |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `FindOptions`          | `Select`, relationship `Populate`, computed/join `OutputFields`, draft visibility, exact actor identity, trash-only mode, and locale projection |
-| `ListOptions`          | All find controls plus `Where`, one-based `Page`, `Limit`, and ordered `Sort`                                                                   |
-| `MutationOptions`      | Exact actor identity, optimistic `ExpectedRevision`, returned population/output fields, draft status, and write locale                          |
-| `CapabilityOptions`    | Candidate `Data`, exact actor identity, trash mode, and locale for a side-effect-free permission summary                                        |
-| `BulkOptions`          | Exact actor identity and locale controls for bulk actions and empty-trash                                                                       |
-| `ImportOptions`        | Exact actor identity and source metadata for import                                                                                             |
-| `TypedMutationOptions` | Mutation controls without `AllLocales`; typed writes remain single-locale                                                                       |
+| Type                   | Controls                                                                                                                                                    |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `FindOptions`          | `Select`, relationship `Populate`, computed/join `OutputFields`, draft visibility, exact actor identity or `System`, trash-only mode, and locale projection |
+| `ListOptions`          | All find controls plus `Where`, one-based `Page`, `Limit`, and ordered `Sort`                                                                               |
+| `MutationOptions`      | Exact actor identity or `System`, optimistic `ExpectedRevision`, returned population/output fields, draft status, and write locale                          |
+| `CapabilityOptions`    | Candidate `Data`, exact actor identity, trash mode, and locale for a side-effect-free permission summary                                                    |
+| `BulkOptions`          | Exact actor identity or `System`, and locale controls for bulk actions and empty-trash                                                                      |
+| `ImportOptions`        | Exact actor identity or `System`, and source metadata for import                                                                                            |
+| `TypedMutationOptions` | Mutation controls without `AllLocales`; typed writes remain single-locale                                                                                   |
 
 Caller `Where`, `Sort`, `Distinct` and `ListWindow` paths follow the
 [field query-access contract](./access-control.md#field-access). A configured Read rule on

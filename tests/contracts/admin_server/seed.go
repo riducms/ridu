@@ -64,13 +64,13 @@ func seedFixture(ctx context.Context, application *ridu.App) (fixtureSeed, error
 	news, err := application.Local().Import(ctx, "categories", store.Values{
 		"name": store.String("News"), "slug": store.String("news"),
 		"seo": store.Object(store.Values{"title": store.String("Ridu news"), "description": store.String("Product and framework updates.")}),
-	}, ridu.ImportOptions{ID: "categories_4", Actor: &editor})
+	}, ridu.ImportOptions{ID: "categories_4", Actor: &editor, ActorCollection: "users"})
 	if err != nil {
 		return fixtureSeed{}, fmt.Errorf("seed category: %w", err)
 	}
 	guides, err := application.Local().Import(ctx, "categories", store.Values{
 		"name": store.String("Guides"), "slug": store.String("guides"),
-	}, ridu.ImportOptions{ID: "categories_5", Actor: &editor})
+	}, ridu.ImportOptions{ID: "categories_5", Actor: &editor, ActorCollection: "users"})
 	if err != nil {
 		return fixtureSeed{}, fmt.Errorf("seed category: %w", err)
 	}
@@ -106,7 +106,7 @@ func seedFixture(ctx context.Context, application *ridu.App) (fixtureSeed, error
 			"body": store.String("This row proves blocks preserve a stable key and discriminator."),
 		})),
 		"metadata": store.Object(store.Values{"fixture": store.Boolean(true), "priority": store.Number(2)}),
-	}, ridu.ImportOptions{ID: "posts_8", Status: store.StatusDraft, Actor: &contributor})
+	}, ridu.ImportOptions{ID: "posts_8", Status: store.StatusDraft, Actor: &contributor, ActorCollection: "users"})
 	if err != nil {
 		return fixtureSeed{}, fmt.Errorf("seed draft post: %w", err)
 	}
@@ -129,11 +129,11 @@ func seedFixture(ctx context.Context, application *ridu.App) (fixtureSeed, error
 			store.Object(store.Values{"_key": store.String("block-related"), "blockType": store.String("related-posts"), "posts": store.List(store.String(draftPost.ID))}),
 		),
 		"internalNotes": store.String("This is deliberately redacted for non-administrators."),
-	}, ridu.ImportOptions{ID: "posts_9", Status: store.StatusDraft, Actor: &editor})
+	}, ridu.ImportOptions{ID: "posts_9", Status: store.StatusDraft, Actor: &editor, ActorCollection: "users"})
 	if err != nil {
 		return fixtureSeed{}, fmt.Errorf("seed published post: %w", err)
 	}
-	publishedPost, err = application.Local().Publish(ctx, "posts", publishedPost.ID, ridu.MutationOptions{Actor: &editor, ExpectedRevision: publishedPost.Revision})
+	publishedPost, err = application.Local().Publish(ctx, "posts", publishedPost.ID, ridu.MutationOptions{Actor: &editor, ActorCollection: "users", ExpectedRevision: publishedPost.Revision})
 	if err != nil {
 		return fixtureSeed{}, fmt.Errorf("publish post: %w", err)
 	}
@@ -149,11 +149,11 @@ func seedFixture(ctx context.Context, application *ridu.App) (fixtureSeed, error
 			store.Object(store.Values{"_key": store.String("page-post"), "blockType": store.String("featured-post"), "post": store.String(publishedPost.ID)}),
 		),
 		"navigation": store.Object(store.Values{"label": store.String("About"), "showInHeader": store.Boolean(true), "showInFooter": store.Boolean(true)}),
-	}, ridu.ImportOptions{ID: "pages_10", Status: store.StatusDraft, Actor: &editor})
+	}, ridu.ImportOptions{ID: "pages_10", Status: store.StatusDraft, Actor: &editor, ActorCollection: "users"})
 	if err != nil {
 		return fixtureSeed{}, fmt.Errorf("seed page: %w", err)
 	}
-	if _, err := application.Local().Publish(ctx, "pages", page.ID, ridu.MutationOptions{Actor: &editor, ExpectedRevision: page.Revision}); err != nil {
+	if _, err := application.Local().Publish(ctx, "pages", page.ID, ridu.MutationOptions{Actor: &editor, ActorCollection: "users", ExpectedRevision: page.Revision}); err != nil {
 		return fixtureSeed{}, fmt.Errorf("publish page: %w", err)
 	}
 	if _, err := application.Local().Import(ctx, "pages", store.Values{
@@ -161,7 +161,7 @@ func seedFixture(ctx context.Context, application *ridu.App) (fixtureSeed, error
 		"layout": store.List(store.Object(store.Values{
 			"_key": store.String("draft-page-hero"), "blockType": store.String("hero"), "heading": store.String("Still being reviewed"),
 		})),
-	}, ridu.ImportOptions{ID: "pages_draft", Status: store.StatusDraft, Actor: &editor}); err != nil {
+	}, ridu.ImportOptions{ID: "pages_draft", Status: store.StatusDraft, Actor: &editor, ActorCollection: "users"}); err != nil {
 		return fixtureSeed{}, fmt.Errorf("seed draft page: %w", err)
 	}
 	contactForm, err := application.Local().Create(ctx, "forms", store.Values{
@@ -236,16 +236,16 @@ func seedFixture(ctx context.Context, application *ridu.App) (fixtureSeed, error
 		"navigation": store.List(store.Object(store.Values{
 			"_key": store.String("global-nav-about"), "label": store.String("About"), "page": store.String(page.ID),
 		})),
-	}, ridu.MutationOptions{Actor: &editor})
+	}, ridu.MutationOptions{Actor: &editor, ActorCollection: "users"})
 	if err != nil {
 		return fixtureSeed{}, fmt.Errorf("seed site settings: %w", err)
 	}
-	if _, err := application.Local().PublishGlobal(ctx, "site-settings", ridu.MutationOptions{Actor: &editor, ExpectedRevision: settings.Revision}); err != nil {
+	if _, err := application.Local().PublishGlobal(ctx, "site-settings", ridu.MutationOptions{Actor: &editor, ActorCollection: "users", ExpectedRevision: settings.Revision}); err != nil {
 		return fixtureSeed{}, fmt.Errorf("publish site settings: %w", err)
 	}
 	publishedPost, err = application.Local().PublishChanges(ctx, "posts", publishedPost.ID, store.Values{
 		"relatedContent": store.Object(store.Values{"relationTo": store.String("pages"), "id": store.String(page.ID)}),
-	}, ridu.MutationOptions{Actor: &editor, ExpectedRevision: publishedPost.Revision})
+	}, ridu.MutationOptions{Actor: &editor, ActorCollection: "users", ExpectedRevision: publishedPost.Revision})
 	if err != nil {
 		return fixtureSeed{}, fmt.Errorf("link polymorphic content: %w", err)
 	}
@@ -259,7 +259,7 @@ func seedFixture(ctx context.Context, application *ridu.App) (fixtureSeed, error
 			store.Object(store.Values{"_key": store.String("slot-admin"), "time": store.String("2026-09-15T11:00:00Z"), "title": store.String("Admin gap audit"), "speaker": store.String(administrator.ID)}),
 		),
 		"registrationSettings": store.Object(store.Values{"waitlist": store.Boolean(true), "reminders": store.List(store.Number(7), store.Number(1))}),
-	}, ridu.MutationOptions{Actor: &editor}); err != nil {
+	}, ridu.MutationOptions{Actor: &editor, ActorCollection: "users"}); err != nil {
 		return fixtureSeed{}, fmt.Errorf("seed event: %w", err)
 	}
 
@@ -267,18 +267,18 @@ func seedFixture(ctx context.Context, application *ridu.App) (fixtureSeed, error
 		"title": store.String("Administrator-only launch notes"), "owner": store.String(administrator.ID),
 		"note":                store.String("Editors can list this note but cannot see the protected details."),
 		"confidentialDetails": store.String("Field-level read access removes this value from editor responses."),
-	}, ridu.MutationOptions{Actor: &administrator}); err != nil {
+	}, ridu.MutationOptions{Actor: &administrator, ActorCollection: "users"}); err != nil {
 		return fixtureSeed{}, fmt.Errorf("seed admin note: %w", err)
 	}
 	if _, err := application.Local().Create(ctx, "editorial-notes", store.Values{
 		"title": store.String("Contributor pitch"), "owner": store.String(contributor.ID),
 		"note": store.String("The contributor account sees this note through an owner predicate."),
-	}, ridu.MutationOptions{Actor: &contributor}); err != nil {
+	}, ridu.MutationOptions{Actor: &contributor, ActorCollection: "users"}); err != nil {
 		return fixtureSeed{}, fmt.Errorf("seed contributor note: %w", err)
 	}
 	if _, err := application.Local().Create(ctx, "redirects", store.Values{
 		"from": store.String("/old-about"), "to": store.String("/about"), "type": store.String("permanent"), "enabled": store.Boolean(true),
-	}, ridu.MutationOptions{Actor: &editor}); err != nil {
+	}, ridu.MutationOptions{Actor: &editor, ActorCollection: "users"}); err != nil {
 		return fixtureSeed{}, fmt.Errorf("seed redirect: %w", err)
 	}
 	if _, err := application.Local().Create(ctx, "payload-only-capabilities", store.Values{
@@ -301,30 +301,30 @@ func seedFixture(ctx context.Context, application *ridu.App) (fixtureSeed, error
 			store.Object(store.Values{"_key": store.String("part-choice"), "blockType": store.String("choice"), "optionKey": store.String("A"), "label": store.String("Alpha")}),
 			store.Object(store.Values{"_key": store.String("part-reorder"), "blockType": store.String("reorder"), "optionKey": store.String("B"), "label": store.String("Beta")}),
 		),
-	}, ridu.MutationOptions{Actor: &editor}); err != nil {
+	}, ridu.MutationOptions{Actor: &editor, ActorCollection: "users"}); err != nil {
 		return fixtureSeed{}, fmt.Errorf("seed field showcase: %w", err)
 	}
 
 	editorialFolder, err := application.Local().Create(ctx, "folders", store.Values{
 		"name": store.String("Editorial"),
-	}, ridu.MutationOptions{Actor: &editor})
+	}, ridu.MutationOptions{Actor: &editor, ActorCollection: "users"})
 	if err != nil {
 		return fixtureSeed{}, fmt.Errorf("seed folder: %w", err)
 	}
 	if _, err := application.Local().Create(ctx, "folders", store.Values{
 		"name": store.String("Archive"), "parent": store.String(editorialFolder.ID),
-	}, ridu.MutationOptions{Actor: &editor}); err != nil {
+	}, ridu.MutationOptions{Actor: &editor, ActorCollection: "users"}); err != nil {
 		return fixtureSeed{}, fmt.Errorf("seed folder: %w", err)
 	}
 	draftPost, err = application.Local().Update(ctx, "posts", draftPost.ID, store.Values{
 		"folder": store.String(editorialFolder.ID),
-	}, ridu.MutationOptions{Actor: &contributor})
+	}, ridu.MutationOptions{Actor: &contributor, ActorCollection: "users"})
 	if err != nil {
 		return fixtureSeed{}, fmt.Errorf("organize draft post: %w", err)
 	}
 	publishedPost, err = application.Local().PublishChanges(ctx, "posts", publishedPost.ID, store.Values{
 		"folder": store.String(editorialFolder.ID), "parent": store.String(draftPost.ID),
-	}, ridu.MutationOptions{Actor: &editor, ExpectedRevision: publishedPost.Revision})
+	}, ridu.MutationOptions{Actor: &editor, ActorCollection: "users", ExpectedRevision: publishedPost.Revision})
 	if err != nil {
 		return fixtureSeed{}, fmt.Errorf("organize published post: %w", err)
 	}

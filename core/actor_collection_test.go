@@ -74,7 +74,7 @@ func TestMutationOptionsForwardIdentityRevisionAndBulkLocales(t *testing.T) {
 		DefaultLocale: "en", Locales: []ridu.Locale{{Code: "en", Label: "English"}, {Code: "fr", Label: "French"}},
 	}, Collections: []ridu.Collection{{Slug: "posts", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true}, Trash: true,
 		Fields: field.Fields{field.Text("title").Localized()},
-		Access: ridu.CollectionAccess{Create: staffOnly, Read: staffOnly, Update: staffOnly, Delete: staffOnly},
+		Access: ridu.CollectionAccess{Create: staffOnly, Read: staffOnly, ReadDrafts: staffOnly, Update: staffOnly, Delete: staffOnly},
 	}}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)

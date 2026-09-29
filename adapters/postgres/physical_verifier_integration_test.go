@@ -344,3 +344,36 @@ func TestPostgresPhysicalVerifierErrorsDoNotExposeDatabaseURL(t *testing.T) {
 		t.Fatalf("physical verifier exposed the PostgreSQL connection URL: %v", err)
 	}
 }
+
+// `ridu dev` synchronizes its schema without recording migrations. Pointing
+// `ridu migrate` at that database must say so instead of listing every
+// development table as drift to drop.
+func TestPostgresMigrationsExplainADevelopmentSyncedDatabase(t *testing.T) {
+	ctx := context.Background()
+	backend := migrationArtifactTestBackend(t)
+	manifest := atlasTestManifest(atlasTextField("posts-title", "title"))
+	statements, err := backend.Plan(ctx, manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := backend.ApplyPlan(ctx, statements); err != nil {
+		t.Fatal(err)
+	}
+	directory := t.TempDir()
+	artifact, err := BuildArtifact(ctx, "initial", nil, manifest, nil, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := migrationartifact.Create(directory, "initial", artifact, time.Unix(1, 0)); err != nil {
+		t.Fatal(err)
+	}
+	for name, run := range map[string]func() error{
+		"status": func() error { _, err := backend.ArtifactStatus(ctx, directory); return err },
+		"up":     func() error { return backend.ApplyArtifacts(ctx, directory) },
+	} {
+		err := run()
+		if err == nil || !strings.Contains(err.Error(), "unmanaged PostgreSQL Ridu schema exists without migration history") || !strings.Contains(err.Error(), "ridu dev") || strings.Contains(err.Error(), "DROP TABLE") {
+			t.Errorf("%s on a development-synced database = %v", name, err)
+		}
+	}
+}

@@ -441,10 +441,14 @@ func (builder *schemaBuilder) addCollection(current resource, queries, mutations
 		Type: object, Args: mergeArgs(enginegraphql.FieldConfigArgument{"id": &enginegraphql.ArgumentConfig{Type: enginegraphql.NewNonNull(enginegraphql.ID)}}, builder.readLocaleArgs()),
 		Resolve: func(params enginegraphql.ResolveParams) (interface{}, error) {
 			request := requestFromContext(params)
+			draft, err := readDraftArg(params.Args, request)
+			if err != nil {
+				return nil, err
+			}
 			document, err := builder.local.Find(params.Context, string(current.Slug), fmt.Sprint(params.Args["id"]), ridu.FindOptions{
 				Actor: request.actor, ActorCollection: request.actorCollection, Populate: builder.populationsFor(current.Fields, params.Info),
 				OutputFields: builder.outputFieldsFor(current.Fields, params.Info),
-				Draft:        boolPointerArg(params.Args, "draft"),
+				Draft:        draft,
 				TrashOnly:    boolArg(params.Args, "trash"), Locale: localeArg(params.Args), FallbackLocales: fallbackArgs(params.Args), DisableFallback: boolArg(params.Args, "disableFallback"), AllLocales: boolArg(params.Args, "allLocales"),
 			})
 			if err != nil {
@@ -473,11 +477,15 @@ func (builder *schemaBuilder) addCollection(current resource, queries, mutations
 		if err != nil {
 			return nil, clientError(err)
 		}
+		draft, err := readDraftArg(params.Args, request)
+		if err != nil {
+			return nil, err
+		}
 		pageResult, err := builder.local.List(params.Context, string(current.Slug), ridu.ListOptions{
 			Where: whereExpression, Page: intArg(params.Args, "page", 1), Limit: boundedLimit(params.Args, builder.options.MaxListLimit), Sort: sorts,
 			Populate: builder.populationsFor(current.Fields, params.Info), Actor: request.actor, ActorCollection: request.actorCollection, TrashOnly: boolArg(params.Args, "trash"),
 			OutputFields: builder.outputFieldsFor(current.Fields, params.Info),
-			Draft:        boolPointerArg(params.Args, "draft"),
+			Draft:        draft,
 			Locale:       localeArg(params.Args), FallbackLocales: fallbackArgs(params.Args), DisableFallback: boolArg(params.Args, "disableFallback"), AllLocales: boolArg(params.Args, "allLocales"),
 		})
 		if err != nil {
@@ -494,7 +502,11 @@ func (builder *schemaBuilder) addCollection(current resource, queries, mutations
 		if err != nil {
 			return nil, clientError(err)
 		}
-		result, err := builder.local.List(params.Context, string(current.Slug), ridu.ListOptions{Where: whereExpression, Page: 1, Limit: 1, Actor: request.actor, ActorCollection: request.actorCollection, OutputFields: []query.Path{}, Draft: boolPointerArg(params.Args, "draft"), TrashOnly: boolArg(params.Args, "trash"), Locale: localeArg(params.Args), FallbackLocales: fallbackArgs(params.Args), DisableFallback: boolArg(params.Args, "disableFallback"), AllLocales: boolArg(params.Args, "allLocales")})
+		draft, err := readDraftArg(params.Args, request)
+		if err != nil {
+			return nil, err
+		}
+		result, err := builder.local.List(params.Context, string(current.Slug), ridu.ListOptions{Where: whereExpression, Page: 1, Limit: 1, Actor: request.actor, ActorCollection: request.actorCollection, OutputFields: []query.Path{}, Draft: draft, TrashOnly: boolArg(params.Args, "trash"), Locale: localeArg(params.Args), FallbackLocales: fallbackArgs(params.Args), DisableFallback: boolArg(params.Args, "disableFallback"), AllLocales: boolArg(params.Args, "allLocales")})
 		if err != nil {
 			return nil, transportError(err)
 		}
@@ -895,10 +907,14 @@ func (builder *schemaBuilder) addGlobal(current resource, queries, mutations eng
 	object := builder.objects[current.ID]
 	if err := addRootField(queries, current.name, &enginegraphql.Field{Type: object, Args: builder.readLocaleArgs(), Resolve: func(params enginegraphql.ResolveParams) (interface{}, error) {
 		request := requestFromContext(params)
+		draft, err := readDraftArg(params.Args, request)
+		if err != nil {
+			return nil, err
+		}
 		document, err := builder.local.Global(params.Context, string(current.Slug), ridu.FindOptions{
 			Actor: request.actor, ActorCollection: request.actorCollection, Populate: builder.populationsFor(current.Fields, params.Info), Locale: localeArg(params.Args),
 			OutputFields:    builder.outputFieldsFor(current.Fields, params.Info),
-			Draft:           boolPointerArg(params.Args, "draft"),
+			Draft:           draft,
 			FallbackLocales: fallbackArgs(params.Args), DisableFallback: boolArg(params.Args, "disableFallback"), AllLocales: boolArg(params.Args, "allLocales"),
 		})
 		if err != nil {

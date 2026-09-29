@@ -167,6 +167,10 @@ func New(applicationConfig Config, backend store.Store) (*App, error) {
 		engineCollections = append(engineCollections, adapted)
 	}
 
+	var adminUserCollection schema.StableID
+	if snapshot.Application.Admin != nil {
+		adminUserCollection = snapshot.Application.Admin.UserCollectionID
+	}
 	engine, err := operationengine.New(operationengine.Config{
 		Collections:               engineCollections,
 		Store:                     backend,
@@ -180,8 +184,9 @@ func New(applicationConfig Config, backend store.Store) (*App, error) {
 		ValidateUploadImport: func(ctx context.Context, collection schema.Collection, values store.Values) error {
 			return validateImportedUploadObjects(ctx, uploadManager, collection, values)
 		},
-		RootAfterError: adaptHooks(applicationConfig.Hooks.AfterError, &local),
-		Localization:   snapshot.Application.Localization,
+		RootAfterError:   adaptHooks(applicationConfig.Hooks.AfterError, &local),
+		Localization:     snapshot.Application.Localization,
+		EditorCollection: adminUserCollection,
 	})
 	if err != nil {
 		return nil, err
@@ -207,10 +212,6 @@ func New(applicationConfig Config, backend store.Store) (*App, error) {
 		if !supported {
 			return nil, fmt.Errorf("document-lock-enabled collections require a store.DocumentLockStore")
 		}
-	}
-	var adminUserCollection schema.StableID
-	if snapshot.Application.Admin != nil {
-		adminUserCollection = snapshot.Application.Admin.UserCollectionID
 	}
 
 	application = &App{

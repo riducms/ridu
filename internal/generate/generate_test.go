@@ -346,6 +346,30 @@ func TestRunResolvedProjectRejectsSymlinkedDestinationOutsideRoot(t *testing.T) 
 	}
 }
 
+// A monorepo backend generates its client straight into a sibling app.
+func TestRunResolvedProjectWritesTheClientIntoASiblingApp(t *testing.T) {
+	workspace := t.TempDir()
+	root := filepath.Join(workspace, "backend")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	definition := projectfile.File{Root: root, Schema: "generated/ridu.schema.json", Client: "../mobile/lib/backend/ridu.generated.ts"}
+	manifest := schema.NewManifest(schema.Snapshot{
+		Version: schema.CurrentVersion, Application: schema.Application{Name: "Sibling client"},
+		Collections: []schema.Collection{}, Plugins: []schema.Plugin{},
+	})
+	if _, err := RunResolvedProject(definition, ResolvedProject{Manifest: manifest}, false); err != nil {
+		t.Fatal(err)
+	}
+	client, err := os.ReadFile(filepath.Join(workspace, "mobile", "lib", "backend", "ridu.generated.ts"))
+	if err != nil || !strings.Contains(string(client), "@riducms/sdk") {
+		t.Fatalf("sibling client = %q, %v", client, err)
+	}
+	if _, err := RunResolvedProject(definition, ResolvedProject{Manifest: manifest}, true); err != nil {
+		t.Fatalf("check mode rejected the current sibling client: %v", err)
+	}
+}
+
 func TestRunResolvedProjectRejectsOverlappingFileDestinationsBeforeCreatingDirectories(t *testing.T) {
 	root := t.TempDir()
 	definition := projectfile.File{

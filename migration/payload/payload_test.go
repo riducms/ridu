@@ -101,7 +101,7 @@ func TestImportPreservesIDsTimestampsAndChosenVersion(t *testing.T) {
 	if result.Imported != 1 {
 		t.Fatalf("imported = %d", result.Imported)
 	}
-	document, err := application.Local().Find(context.Background(), "posts", "payload-id", ridu.FindOptions{Actor: &store.Document{ID: "migrator"}})
+	document, err := application.Local().Find(context.Background(), "posts", "payload-id", ridu.FindOptions{System: true})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -16,14 +16,24 @@ password recovery, email verification, account unlocking, and API-key routes are
 
 ## Authenticate a client {#credentials}
 
-| Client situation                                | Credential to send                                                         |
-| ----------------------------------------------- | -------------------------------------------------------------------------- |
-| Same-origin browser, such as the embedded admin | The HttpOnly `ridu_session` cookie set by login.                           |
-| Frontend on another domain, server, or script   | `Authorization: Session <token>` from a login with `"transport": "token"`. |
-| Client with an API key                          | `Authorization: Bearer ridu_<id>_<secret>`.                                |
+| Client situation                                  | Credential to send                                                         |
+| ------------------------------------------------- | -------------------------------------------------------------------------- |
+| Same-origin browser, such as the embedded admin   | The HttpOnly `ridu_session` cookie set by login.                           |
+| Native app, other-domain frontend, server, script | `Authorization: Session <token>` from a login with `"transport": "token"`. |
+| Client with an API key                            | `Authorization: Bearer ridu_<id>_<secret>`.                                |
 
-Login sets a SameSite=Lax cookie unless the body includes `"transport": "token"`; then the response
-is `{ "session": …, "token": "…" }` with `Cache-Control: no-store` and no cookie. An explicit
+Anything that is not a same-origin browser, including a React Native or Expo app, logs in with
+`"transport": "token"`. Without it, login answers with a cookie that such a client cannot use:
+
+```bash title="terminal"
+curl -X POST https://cms.example.com/api/auth/users/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"reader@example.com","password":"<password>","transport":"token"}'
+```
+
+The response is `{ "session": …, "token": "…" }` with `Cache-Control: no-store` and no cookie.
+Send the token as `Authorization: Session <token>`; the SDK does both steps when given a token
+store. An explicit
 `Authorization` credential always wins over the cookie. If it is invalid, expired, or revoked the
 request fails with `401 invalid_credential` instead of using the cookie or anonymous access. API-key
 creation requires a session from either transport, and the returned secret is shown once; a later

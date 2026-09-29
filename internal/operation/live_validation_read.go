@@ -79,7 +79,7 @@ func (engine *Engine) liveExecuteRead(ctx context.Context, request Request) (res
 	if collection.Schema.Capabilities.Global && request.ID == "" {
 		return result, liveBadRequest("global reads require the singleton ID")
 	}
-	if err := authorizeQuery(collection, request.Filter, request.Sort); err != nil {
+	if err := authorizeQuery(collection, false, request.Filter, request.Sort); err != nil {
 		return result, err
 	}
 	state, owns, beginError := engine.transaction(ctx, transactionReadOnly)
@@ -102,7 +102,11 @@ func (engine *Engine) liveExecuteRead(ctx context.Context, request Request) (res
 	if decision.Kind == Deny {
 		return result, liveDenied()
 	}
-	storeRequest := store.Request{Collection: collection.Schema, Collections: engine.schemas, ID: request.ID, Access: decision.Access, Deletion: store.DeletionActive, Locales: selection.Configured, LocaleChain: selection.Chain, PublishedOnly: publishedOnly(request, collection.Schema), Page: request.Page, Limit: request.Limit, Sort: append([]query.Sort(nil), request.Sort...)}
+	livePublishedOnly, draftError := engine.publishedOnly(request, collection, base)
+	if draftError != nil {
+		return result, draftError
+	}
+	storeRequest := store.Request{Collection: collection.Schema, Collections: engine.schemas, ID: request.ID, Access: decision.Access, Deletion: store.DeletionActive, Locales: selection.Configured, LocaleChain: selection.Chain, PublishedOnly: livePublishedOnly, Page: request.Page, Limit: request.Limit, Sort: append([]query.Sort(nil), request.Sort...)}
 	if request.Filter != nil {
 		node := request.Filter.Node()
 		storeRequest.Filter = &node

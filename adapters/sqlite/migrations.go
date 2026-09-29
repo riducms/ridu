@@ -1373,7 +1373,7 @@ func assertNoSQLiteManagedSchema(ctx context.Context, runner sqlRunner) error {
 		return translateError(err)
 	}
 	if len(names) != 0 {
-		return fmt.Errorf("unmanaged SQLite Ridu schema exists without migration history: %s", strings.Join(names, ", "))
+		return ridumigration.UnmanagedSchemaError("SQLite", names)
 	}
 	return nil
 }

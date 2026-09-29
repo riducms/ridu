@@ -139,3 +139,11 @@ Playwright's JSON reporter expose case timings; distinguish test-result cache hi
 skips and worker parallelism. Never sum nested test durations or promise that removing parallel
 work saves the same amount of gate wall time. Run the affected checks while editing, then one full
 handoff gate; repeat it only after subsequent changes or failures invalidate the evidence.
+
+For release qualification, retain a log and result for each of the ten release stages, together
+with the source revision, toolchain, host and fixture configuration. Resume a failed stage without
+rerunning successful stages on unchanged inputs. Documentation-only corrections need documentation
+checks and an exact comparison of the remaining tested inputs; runtime, dependency, test, build or
+fixture changes invalidate affected results. Security scans remain time-sensitive. The public
+projection reuses these results only after full file/mode equality, then separately checks a clean
+packed-package application and clean website build to prove the export boundary.

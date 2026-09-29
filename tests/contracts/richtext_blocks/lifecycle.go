@@ -46,7 +46,7 @@ func parentLifecycle(t *testing.T, factory Factory) {
 		paragraph("Opening paragraph"), Block("callout", "callout", store.Values{"title": store.String("First title"), "translation": store.String("Hello"), "detail": Document(Block("cta", "inner", store.Values{"label": store.String("Nested action"), "destination": store.String(page.ID)}))}),
 		Block("media", "image", store.Values{"asset": store.String(asset.ID), "caption": store.String("Mountains")}),
 		Block("cta", "action", store.Values{"label": store.String("Read page"), "destination": store.String(page.ID)}), paragraph("Closing paragraph"),
-	)}, ridu.MutationOptions{Actor: &user})
+	)}, ridu.MutationOptions{Actor: &user, ActorCollection: "users"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,25 +65,25 @@ func parentLifecycle(t *testing.T, factory Factory) {
 	if err != nil || stringValue(payload(t, preview.Values["body"], 1)["title"]) != "First title" {
 		t.Fatalf("draft preview: %v", err)
 	}
-	published, err := app.Local().Publish(ctx, "articles", created.ID, ridu.MutationOptions{Actor: &user, ExpectedRevision: created.Revision})
+	published, err := app.Local().Publish(ctx, "articles", created.ID, ridu.MutationOptions{Actor: &user, ActorCollection: "users", ExpectedRevision: created.Revision})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if published.Status != store.StatusPublished {
 		t.Fatal("publish lost status")
 	}
-	changed, err := app.Local().PublishChanges(ctx, "articles", created.ID, store.Values{"body": Document(Block("callout", "callout", store.Values{"title": store.String("Changed title")}))}, ridu.MutationOptions{Actor: &user, ExpectedRevision: published.Revision})
+	changed, err := app.Local().PublishChanges(ctx, "articles", created.ID, store.Values{"body": Document(Block("callout", "callout", store.Values{"title": store.String("Changed title")}))}, ridu.MutationOptions{Actor: &user, ActorCollection: "users", ExpectedRevision: published.Revision})
 	if err != nil {
 		t.Fatal(err)
 	}
-	restored, err := app.Local().RestoreAsDraft(ctx, "articles", created.ID, published.Revision, ridu.MutationOptions{Actor: &user, ExpectedRevision: changed.Revision})
+	restored, err := app.Local().RestoreAsDraft(ctx, "articles", created.ID, published.Revision, ridu.MutationOptions{Actor: &user, ActorCollection: "users", ExpectedRevision: changed.Revision})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if restored.Status != store.StatusDraft || stringValue(payload(t, restored.Values["body"], 1)["title"]) != "First title" || stringValue(payload(t, restored.Values["body"], 1)["_key"]) != "callout" {
 		t.Fatal("restore lost payload, identity or status")
 	}
-	duplicate, err := app.Local().Duplicate(ctx, "articles", created.ID, store.Values{"title": store.String("Copy")}, ridu.MutationOptions{Actor: &user})
+	duplicate, err := app.Local().Duplicate(ctx, "articles", created.ID, store.Values{"title": store.String("Copy")}, ridu.MutationOptions{Actor: &user, ActorCollection: "users"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,7 +131,7 @@ func parentLifecycle(t *testing.T, factory Factory) {
 	if stringValue(payload(t, body, 1)["_key"]) != "callout" {
 		t.Fatal("REST changed identity")
 	}
-	versions, err := app.Local().Versions(ctx, "articles", created.ID, ridu.FindOptions{Actor: &user})
+	versions, err := app.Local().Versions(ctx, "articles", created.ID, ridu.FindOptions{Actor: &user, ActorCollection: "users"})
 	if err != nil || len(versions) != 5 {
 		t.Fatalf("create/publish/edit/restore/schedule version count: %d %v", len(versions), err)
 	}

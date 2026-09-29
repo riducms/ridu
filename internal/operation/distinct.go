@@ -24,6 +24,8 @@ type DistinctRequest struct {
 	Limit           int
 	Actor           *store.Document
 	ActorCollection schema.CollectionSlug
+	// System skips access rules for trusted server code; see Request.System.
+	System          bool
 	Draft           *bool
 	TrashOnly       bool
 	Locale          string
@@ -77,7 +79,7 @@ func (engine *Engine) Distinct(ctx context.Context, request DistinctRequest) (re
 
 	operationContext := Context{
 		Context: transactionContext, Operation: operation.Read, Collection: collection.Schema,
-		Actor: cloneDocumentPointer(request.Actor), ActorCollection: request.ActorCollection,
+		Actor: cloneDocumentPointer(request.Actor), ActorCollection: request.ActorCollection, System: request.System,
 		Locale: selection.Locale, Locales: append([]schema.LocaleCode(nil), selection.Configured...),
 	}
 	decision, accessError := authorize(collection, operationContext)
@@ -91,7 +93,7 @@ func (engine *Engine) Distinct(ctx context.Context, request DistinctRequest) (re
 	if decision.Kind == Deny {
 		return store.DistinctPage{}, &Error{Code: "access_denied", Status: 403, Message: "operation is not permitted"}
 	}
-	if err := authorizeQuery(collection, request.Filter, nil, request.Field); err != nil {
+	if err := authorizeQuery(collection, request.System, request.Filter, nil, request.Field); err != nil {
 		return store.DistinctPage{}, err
 	}
 	distinctTransaction, supported := state.transaction.(store.DistinctTransaction)
@@ -107,10 +109,14 @@ func (engine *Engine) Distinct(ctx context.Context, request DistinctRequest) (re
 	if request.TrashOnly {
 		deletion = store.DeletionTrash
 	}
+	distinctPublishedOnly, draftError := engine.publishedOnly(Request{Operation: operation.Read, Draft: request.Draft}, collection, operationContext)
+	if draftError != nil {
+		return store.DistinctPage{}, draftError
+	}
 	result, err = distinctTransaction.Distinct(transactionContext, store.DistinctRequest{
 		Collection: collection.Schema, Field: request.Field, Filter: filter, Access: decision.Access,
 		Page: request.Page, Limit: request.Limit,
-		PublishedOnly: publishedOnly(Request{Operation: operation.Read, Actor: request.Actor, Draft: request.Draft}, collection.Schema),
+		PublishedOnly: distinctPublishedOnly,
 		Deletion:      deletion, Locales: selection.Configured, LocaleChain: selection.Chain,
 	})
 	if err != nil {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -45,8 +46,8 @@ func TestDraftPublishingConflictsAndRestore(t *testing.T) {
 	if published.Status != store.StatusPublished || published.Revision != 2 {
 		t.Fatalf("published metadata = %s/%d", published.Status, published.Revision)
 	}
-	if _, err := application.Local().Update(ctx, "posts", draft.ID, store.Values{"title": store.String("bypass")}, ridu.MutationOptions{Actor: actor, ExpectedRevision: published.Revision}); !operationCode(err, "publish_required") {
-		t.Fatalf("ordinary published update error = %v, want publish_required", err)
+	if _, err := application.Local().Update(ctx, "posts", draft.ID, store.Values{"title": store.String("bypass")}, ridu.MutationOptions{Actor: actor, ExpectedRevision: published.Revision}); !operationCode(err, "publish_required") || !strings.Contains(err.Error(), "PublishChanges") || !strings.Contains(err.Error(), "/api/collections/posts/{id}/publish") {
+		t.Fatalf("ordinary published update error = %v, want publish_required naming PublishChanges and its route", err)
 	}
 	unchanged, err := application.Local().Find(ctx, "posts", draft.ID, ridu.FindOptions{Actor: actor})
 	if err != nil || stringValue(unchanged.Values["title"]) != "First" || unchanged.Revision != published.Revision {
@@ -554,6 +555,12 @@ func TestVersionHistoryChangesOnlyAfterMutations(t *testing.T) {
 		Slug: "posts", Versions: true,
 		VersionConfig: ridu.VersionConfig{Drafts: true, MaxPerDocument: 10},
 		Fields:        field.Fields{field.Text("title").Required()},
+		Access: ridu.CollectionAccess{ReadDrafts: func(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
+			if ctx.Actor == nil {
+				return ridu.Deny(), nil
+			}
+			return ridu.Allow(), nil
+		}},
 	}}}, teststore.New())
 	if err != nil {
 		t.Fatal(err)
@@ -756,7 +763,7 @@ func TestScheduledPublicationUsesDurableJobBoundary(t *testing.T) {
 	}
 	actor := &publisher
 	identity := &ridu.AuthIdentity{Collection: "users", Actor: publisher}
-	document, err := application.Local().Create(context.Background(), "books", store.Values{"title": store.String("Scheduled")}, ridu.MutationOptions{Actor: actor})
+	document, err := application.Local().Create(context.Background(), "books", store.Values{"title": store.String("Scheduled")}, ridu.MutationOptions{Actor: actor, ActorCollection: "users"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -773,7 +780,7 @@ func TestScheduledPublicationUsesDurableJobBoundary(t *testing.T) {
 	if published, err := application.Local().Find(context.Background(), "books", document.ID, ridu.FindOptions{}); err != nil || published.Status != store.StatusPublished {
 		t.Fatalf("public read = %#v, %v", published, err)
 	}
-	published, err := application.Local().Find(context.Background(), "books", document.ID, ridu.FindOptions{Actor: actor})
+	published, err := application.Local().Find(context.Background(), "books", document.ID, ridu.FindOptions{Actor: actor, ActorCollection: "users"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -789,7 +796,7 @@ func TestScheduledPublicationUsesDurableJobBoundary(t *testing.T) {
 		t.Fatalf("scheduled unpublish = %d, %v", completed, err)
 	}
 	includeDraft := true
-	unpublished, err := application.Local().Find(context.Background(), "books", document.ID, ridu.FindOptions{Draft: &includeDraft, Actor: actor})
+	unpublished, err := application.Local().Find(context.Background(), "books", document.ID, ridu.FindOptions{Draft: &includeDraft, Actor: actor, ActorCollection: "users"})
 	if err != nil || unpublished.Status != store.StatusDraft {
 		t.Fatalf("unpublished document = %#v, %v", unpublished, err)
 	}

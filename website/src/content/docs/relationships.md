@@ -34,9 +34,15 @@ field.Relationship("author", "users").
 ```
 
 The stored value is the target document ID. The target collection must exist, and writes validate
-that the selected document exists, passes target read access, and satisfies any option filter. A
+that the selected document exists, passes the target's access, and satisfies any option filter. A
 required reference cannot use nullify-on-delete because automatic cleanup would create a value
 ordinary validation rejects.
+
+By default the actor must be able to read the target. To let people link to documents they may not
+read, such as sending a friend request to a user with a private profile, set the target
+collection's `Reference` rule. It decides what may be linked to and replaces `Read` for this check
+only; population still applies `Read`, so the link does not reveal the target. A draft target also
+needs [draft access](/docs/drafts-and-versions/#draft-reads).
 
 ## Store many or polymorphic relationships {#many-polymorphic}
 

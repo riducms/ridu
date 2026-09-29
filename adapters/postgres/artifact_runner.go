@@ -857,11 +857,38 @@ func assertPhysicalSchemaForContract(ctx context.Context, transaction *sql.Tx, e
 }
 
 func assertEmptyPhysicalSchema(ctx context.Context, transaction *sql.Tx) error {
+	tables, err := unmanagedPostgresTables(ctx, transaction)
+	if err != nil {
+		return err
+	}
+	if len(tables) != 0 {
+		return ridumigration.UnmanagedSchemaError("PostgreSQL", tables)
+	}
 	empty := schema.NewManifest(schema.Snapshot{
 		Version: schema.CurrentVersion, Application: schema.Application{Name: "Empty migration baseline"},
 		Collections: []schema.Collection{}, Plugins: []schema.Plugin{},
 	})
 	return assertPhysicalSchemaShape(ctx, transaction, empty, emptyAtlasSchema())
+}
+
+// unmanagedPostgresTables lists the tables in the current schema other than
+// the migration ledgers, which a database without applied history must not
+// have.
+func unmanagedPostgresTables(ctx context.Context, transaction *sql.Tx) ([]string, error) {
+	rows, err := transaction.QueryContext(ctx, `SELECT table_name FROM information_schema.tables WHERE table_schema = current_schema() AND table_name NOT IN ('ridu_migrations', 'ridu_migration_steps') ORDER BY table_name`)
+	if err != nil {
+		return nil, fmt.Errorf("list PostgreSQL tables: %w", err)
+	}
+	defer rows.Close()
+	var tables []string
+	for rows.Next() {
+		var table string
+		if err := rows.Scan(&table); err != nil {
+			return nil, err
+		}
+		tables = append(tables, table)
+	}
+	return tables, rows.Err()
 }
 
 func assertPhysicalSchemaShape(ctx context.Context, transaction *sql.Tx, expectedManifest schema.Manifest, expected *atlasschema.Schema) error {

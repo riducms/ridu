@@ -494,6 +494,16 @@
 							"description": "Control version-history reads; defaults to Read."
 						},
 						{
+							"name": "ReadDrafts",
+							"type": "AccessRule",
+							"description": "ReadDrafts controls whether an actor sees draft documents of a versioned\ncollection, in addition to Read. It accepts only Allow or Deny. When\nomitted, only editors do: users of the admin's user collection whose\nAdmin rule lets them in. Anonymous callers and an app's other auth\ncollections read published content, and their explicit draft reads fail."
+						},
+						{
+							"name": "Reference",
+							"type": "AccessRule",
+							"description": "Reference controls which documents of this collection other documents may\npoint at through relationship and upload fields, and may return a Where\ndecision. When omitted, Read is used. Set it to let actors link to\ndocuments they may not read, such as sending a friend request to a\nlearner whose profile is private; population still applies Read."
+						},
+						{
 							"name": "Update",
 							"type": "AccessRule",
 							"description": "Control and optionally filter updates."
@@ -557,6 +567,11 @@
 							"name": "ReadVersions",
 							"type": "AccessRule",
 							"description": "Control version-history reads; defaults to Read."
+						},
+						{
+							"name": "ReadDrafts",
+							"type": "AccessRule",
+							"description": "ReadDrafts controls whether an actor sees the draft of a versioned global.\nIt accepts only Allow or Deny and, when omitted, allows only editors, as\nCollectionAccess.ReadDrafts describes."
 						},
 						{
 							"name": "Update",
@@ -940,9 +955,14 @@
 							"description": "ActorCollection identifies the exact auth collection that owns Actor."
 						},
 						{
+							"name": "System",
+							"type": "bool",
+							"description": "System reports that trusted server code started this operation with\nSystem set, so no access rule ran. Nested Local calls do not inherit it:\npass System again when the nested work is also trusted."
+						},
+						{
 							"name": "Data",
 							"type": "store.Values",
-							"description": "Data contains the values being saved. On an update it holds only the\nfields the caller sent; read unchanged values from Original. Change map\nentries to change stored values; assigning a new map to Data does not\nreplace the engine's values. Changes after saving are not persisted."
+							"description": "Data contains the values being saved. On an update it holds only the\ntop-level fields the caller sent; Candidate adds the unchanged ones from\nOriginal. Change map entries to change stored values; assigning a new map\nto Data does not replace the engine's values. Changes after saving are not\npersisted."
 						},
 						{
 							"name": "Document",
@@ -3836,6 +3856,11 @@
 							"description": "Exact auth collection owning Actor; required to disambiguate multiple auth collections."
 						},
 						{
+							"name": "System",
+							"type": "bool",
+							"description": "System skips access rules for trusted server code; see ListOptions.System."
+						},
+						{
 							"name": "TrashOnly",
 							"type": "bool",
 							"description": "Read from trash; valid only for trash-enabled collections."
@@ -3946,6 +3971,11 @@
 							"description": "Exact auth collection owning Actor."
 						},
 						{
+							"name": "System",
+							"type": "bool",
+							"description": "System runs the call as trusted server code: collection, field, draft\nand reference access rules are skipped. Validation, hooks, versions and\nreference integrity still apply, and Actor, when set, still reaches\nhooks. Only Go code can set it; REST and GraphQL never do."
+						},
+						{
 							"name": "TrashOnly",
 							"type": "bool",
 							"description": "List trashed documents only."
@@ -4036,6 +4066,11 @@
 							"name": "ActorCollection",
 							"type": "schema.CollectionSlug",
 							"description": "Exact auth collection owning Actor."
+						},
+						{
+							"name": "System",
+							"type": "bool",
+							"description": "System skips access rules for trusted server code; see ListOptions.System."
 						},
 						{
 							"name": "Draft",
@@ -4134,6 +4169,11 @@
 							"description": "Exact auth collection owning Actor."
 						},
 						{
+							"name": "System",
+							"type": "bool",
+							"description": "System skips access rules for trusted server code; see ListOptions.System."
+						},
+						{
 							"name": "Locale",
 							"type": "schema.LocaleCode",
 							"description": "Selected content locale."
@@ -4201,6 +4241,11 @@
 							"name": "ActorCollection",
 							"type": "schema.CollectionSlug",
 							"description": "Exact auth collection owning Actor."
+						},
+						{
+							"name": "System",
+							"type": "bool",
+							"description": "System runs the call as trusted server code: collection, field, draft\nand reference access rules are skipped. Validation, hooks, versions and\nreference integrity still apply, and Actor, when set, still reaches\nhooks. Only Go code can set it; REST and GraphQL never do."
 						},
 						{
 							"name": "ExpectedRevision",
@@ -4456,6 +4501,11 @@
 							"name": "ActorCollection",
 							"type": "schema.CollectionSlug",
 							"description": "The ActorCollection value."
+						},
+						{
+							"name": "System",
+							"type": "bool",
+							"description": "System skips access rules for trusted server code; see MutationOptions.System."
 						},
 						{
 							"name": "ID",
@@ -8348,6 +8398,11 @@
 							"description": "The ActorCollection value."
 						},
 						{
+							"name": "System",
+							"type": "bool",
+							"description": "System skips access rules for trusted server code; see MutationOptions.System."
+						},
+						{
 							"name": "Locale",
 							"type": "schema.LocaleCode",
 							"description": "The Locale value."
@@ -8645,6 +8700,11 @@
 							"name": "ActorCollection",
 							"type": "schema.CollectionSlug",
 							"description": "The ActorCollection value."
+						},
+						{
+							"name": "System",
+							"type": "bool",
+							"description": "System skips access rules for trusted server code; see MutationOptions.System."
 						},
 						{
 							"name": "ExpectedRevision",
@@ -8965,7 +9025,7 @@
 					"kind": "constant",
 					"group": "Runtime",
 					"summary": "The semantic Ridu framework version used by the CLI and project-command compatibility handshake.",
-					"signature": "const FrameworkVersion = \"0.7.0\"",
+					"signature": "const FrameworkVersion = \"0.8.0\"",
 					"parameters": [],
 					"parametersLabel": "",
 					"details": [
@@ -9277,7 +9337,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 105
+						"line": 114
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -9290,7 +9350,7 @@
 					"kind": "type",
 					"group": "Local API options",
 					"summary": "Projection, population, authorization, draft, trash, and locale controls for one read.",
-					"signature": "type FindOptions struct {\n\t// Select is nil for all authored fields. A non-nil empty slice returns only\n\t// document metadata.\n\tSelect   []query.Path\n\tPopulate []query.Population\n\t// OutputFields limits computed and inverse-join resolution independently\n\t// from Select. Nil resolves all; a non-nil empty slice resolves none.\n\tOutputFields []query.Path\n\t// Draft explicitly includes draft documents when true or restricts reads to\n\t// published documents when false. Nil preserves the Local API default.\n\tDraft           *bool\n\tActor           *store.Document\n\tActorCollection schema.CollectionSlug\n\tTrashOnly       bool\n\tLocale          schema.LocaleCode\n\tFallbackLocales []schema.LocaleCode\n\tDisableFallback bool\n\tAllLocales      bool\n}",
+					"signature": "type FindOptions struct {\n\t// Select is nil for all authored fields. A non-nil empty slice returns only\n\t// document metadata.\n\tSelect   []query.Path\n\tPopulate []query.Population\n\t// OutputFields limits computed and inverse-join resolution independently\n\t// from Select. Nil resolves all; a non-nil empty slice resolves none.\n\tOutputFields []query.Path\n\t// Draft explicitly includes draft documents when true or restricts reads to\n\t// published documents when false. Nil preserves the Local API default.\n\tDraft           *bool\n\tActor           *store.Document\n\tActorCollection schema.CollectionSlug\n\t// System skips access rules for trusted server code; see ListOptions.System.\n\tSystem          bool\n\tTrashOnly       bool\n\tLocale          schema.LocaleCode\n\tFallbackLocales []schema.LocaleCode\n\tDisableFallback bool\n\tAllLocales      bool\n}",
 					"parameters": [
 						{
 							"name": "Select",
@@ -9321,6 +9381,11 @@
 							"name": "ActorCollection",
 							"type": "schema.CollectionSlug",
 							"description": "Exact auth collection owning Actor; required to disambiguate multiple auth collections."
+						},
+						{
+							"name": "System",
+							"type": "bool",
+							"description": "System skips access rules for trusted server code; see ListOptions.System."
 						},
 						{
 							"name": "TrashOnly",
@@ -9366,7 +9431,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 115
+						"line": 124
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -9379,7 +9444,7 @@
 					"kind": "type",
 					"group": "Local API options",
 					"summary": "Filtering, pagination, projection, population, authorization, and locale controls for a list read.",
-					"signature": "type ListOptions struct {\n\t// Where filters documents before pagination and remains atomic with access predicates.\n\t// Paths with a Read rule on the field or an ancestor are not queryable.\n\tWhere query.Expression\n\t// Page is the one-based result page. Zero selects the first page.\n\tPage int\n\t// Limit is the maximum documents returned per page.\n\tLimit int\n\t// Sort orders results by authored field paths without Read rules on the field or ancestors.\n\t// Container sorts also require all descendants to have no Read rules.\n\tSort []query.Sort\n\t// Select restricts returned document fields.\n\tSelect []query.Path\n\t// Populate expands configured relationship paths.\n\tPopulate []query.Population\n\t// OutputFields limits computed and inverse-join resolution without\n\t// projecting away stored fields. Nil resolves all output fields; a non-nil\n\t// empty slice resolves none.\n\tOutputFields []query.Path\n\t// Draft explicitly includes draft documents when true or restricts reads to\n\t// published documents when false. Nil preserves the Local API default.\n\tDraft *bool\n\t// Actor is the authenticated document used by access rules.\n\tActor *store.Document\n\t// ActorCollection identifies the exact auth collection that owns Actor.\n\tActorCollection schema.CollectionSlug\n\t// TrashOnly returns deleted documents and is valid only for trash-enabled collections.\n\tTrashOnly bool\n\t// Locale selects one configured content locale. Empty uses the application default.\n\tLocale schema.LocaleCode\n\t// FallbackLocales replaces the locale's configured fallback chain when non-nil.\n\tFallbackLocales []schema.LocaleCode\n\t// DisableFallback requires an exact value in Locale.\n\tDisableFallback bool\n\t// AllLocales returns locale-keyed values for localized fields.\n\tAllLocales bool\n}",
+					"signature": "type ListOptions struct {\n\t// Where filters documents before pagination and remains atomic with access predicates.\n\t// Paths with a Read rule on the field or an ancestor are not queryable.\n\tWhere query.Expression\n\t// Page is the one-based result page. Zero selects the first page.\n\tPage int\n\t// Limit is the maximum documents returned per page.\n\tLimit int\n\t// Sort orders results by authored field paths without Read rules on the field or ancestors.\n\t// Container sorts also require all descendants to have no Read rules.\n\tSort []query.Sort\n\t// Select restricts returned document fields.\n\tSelect []query.Path\n\t// Populate expands configured relationship paths.\n\tPopulate []query.Population\n\t// OutputFields limits computed and inverse-join resolution without\n\t// projecting away stored fields. Nil resolves all output fields; a non-nil\n\t// empty slice resolves none.\n\tOutputFields []query.Path\n\t// Draft explicitly includes draft documents when true or restricts reads to\n\t// published documents when false. Nil preserves the Local API default.\n\tDraft *bool\n\t// Actor is the authenticated document used by access rules.\n\tActor *store.Document\n\t// ActorCollection identifies the exact auth collection that owns Actor.\n\tActorCollection schema.CollectionSlug\n\t// System runs the call as trusted server code: collection, field, draft\n\t// and reference access rules are skipped. Validation, hooks, versions and\n\t// reference integrity still apply, and Actor, when set, still reaches\n\t// hooks. Only Go code can set it; REST and GraphQL never do.\n\tSystem bool\n\t// TrashOnly returns deleted documents and is valid only for trash-enabled collections.\n\tTrashOnly bool\n\t// Locale selects one configured content locale. Empty uses the application default.\n\tLocale schema.LocaleCode\n\t// FallbackLocales replaces the locale's configured fallback chain when non-nil.\n\tFallbackLocales []schema.LocaleCode\n\t// DisableFallback requires an exact value in Locale.\n\tDisableFallback bool\n\t// AllLocales returns locale-keyed values for localized fields.\n\tAllLocales bool\n}",
 					"parameters": [
 						{
 							"name": "Where",
@@ -9430,6 +9495,11 @@
 							"name": "ActorCollection",
 							"type": "schema.CollectionSlug",
 							"description": "Exact auth collection owning Actor."
+						},
+						{
+							"name": "System",
+							"type": "bool",
+							"description": "System runs the call as trusted server code: collection, field, draft\nand reference access rules are skipped. Validation, hooks, versions and\nreference integrity still apply, and Actor, when set, still reaches\nhooks. Only Go code can set it; REST and GraphQL never do."
 						},
 						{
 							"name": "TrashOnly",
@@ -9490,7 +9560,7 @@
 					"kind": "type",
 					"group": "Local API options",
 					"summary": "Field, filtering, pagination, authorization, draft, trash, and locale controls for one unique-value read.",
-					"signature": "type DistinctOptions struct {\n\t// Field names the authored scalar, singular relationship, singular upload,\n\t// or document ID whose unique values should be returned.\n\tField query.Path\n\t// Where remains atomic with the collection read-access predicate.\n\tWhere query.Expression\n\t// Page is one-based. Zero selects the first page.\n\tPage int\n\t// Limit follows ordinary Ridu list bounds and defaults.\n\tLimit int\n\tActor *store.Document\n\t// ActorCollection identifies the exact auth collection that owns Actor.\n\tActorCollection schema.CollectionSlug\n\t// Draft follows List semantics for versioned collections.\n\tDraft *bool\n\t// TrashOnly returns values from deleted documents and requires trash support.\n\tTrashOnly       bool\n\tLocale          schema.LocaleCode\n\tFallbackLocales []schema.LocaleCode\n\tDisableFallback bool\n}",
+					"signature": "type DistinctOptions struct {\n\t// Field names the authored scalar, singular relationship, singular upload,\n\t// or document ID whose unique values should be returned.\n\tField query.Path\n\t// Where remains atomic with the collection read-access predicate.\n\tWhere query.Expression\n\t// Page is one-based. Zero selects the first page.\n\tPage int\n\t// Limit follows ordinary Ridu list bounds and defaults.\n\tLimit int\n\tActor *store.Document\n\t// ActorCollection identifies the exact auth collection that owns Actor.\n\tActorCollection schema.CollectionSlug\n\t// System skips access rules for trusted server code; see ListOptions.System.\n\tSystem bool\n\t// Draft follows List semantics for versioned collections.\n\tDraft *bool\n\t// TrashOnly returns values from deleted documents and requires trash support.\n\tTrashOnly       bool\n\tLocale          schema.LocaleCode\n\tFallbackLocales []schema.LocaleCode\n\tDisableFallback bool\n}",
 					"parameters": [
 						{
 							"name": "Field",
@@ -9521,6 +9591,11 @@
 							"name": "ActorCollection",
 							"type": "schema.CollectionSlug",
 							"description": "Exact auth collection owning Actor."
+						},
+						{
+							"name": "System",
+							"type": "bool",
+							"description": "System skips access rules for trusted server code; see ListOptions.System."
 						},
 						{
 							"name": "Draft",
@@ -9567,7 +9642,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 62
+						"line": 67
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -9580,7 +9655,7 @@
 					"kind": "type",
 					"group": "Local API options",
 					"summary": "A count-free bounded unique-index range for background work.",
-					"signature": "type ListWindowOptions struct {\n\tIndex           query.Path\n\tLowerBound      string\n\tUpperBound      string\n\tLimit           int\n\tSelect          []query.Path\n\tActor           *store.Document\n\tActorCollection schema.CollectionSlug\n\tLocale          schema.LocaleCode\n\tFallbackLocales []schema.LocaleCode\n\tDisableFallback bool\n\tAllLocales      bool\n}",
+					"signature": "type ListWindowOptions struct {\n\tIndex           query.Path\n\tLowerBound      string\n\tUpperBound      string\n\tLimit           int\n\tSelect          []query.Path\n\tActor           *store.Document\n\tActorCollection schema.CollectionSlug\n\t// System skips access rules for trusted server code; see ListOptions.System.\n\tSystem          bool\n\tLocale          schema.LocaleCode\n\tFallbackLocales []schema.LocaleCode\n\tDisableFallback bool\n\tAllLocales      bool\n}",
 					"parameters": [
 						{
 							"name": "Index",
@@ -9616,6 +9691,11 @@
 							"name": "ActorCollection",
 							"type": "schema.CollectionSlug",
 							"description": "Exact auth collection owning Actor."
+						},
+						{
+							"name": "System",
+							"type": "bool",
+							"description": "System skips access rules for trusted server code; see ListOptions.System."
 						},
 						{
 							"name": "Locale",
@@ -9655,7 +9735,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 90
+						"line": 97
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -9668,7 +9748,7 @@
 					"kind": "type",
 					"group": "Local API options",
 					"summary": "Authorization, optimistic concurrency, response population, create status, and locale controls for one write.",
-					"signature": "type MutationOptions struct {\n\t// ID supplies a caller-owned document ID for create operations when\n\t// Config.AllowIDOnCreate is enabled. Other mutations ignore it.\n\tID               string\n\tActor            *store.Document\n\tActorCollection  schema.CollectionSlug\n\tExpectedRevision int\n\tPopulate         []query.Population\n\t// OutputFields limits computed and inverse-join resolution in the returned\n\t// document. Nil resolves all; a non-nil empty slice resolves none.\n\tOutputFields []query.Path\n\t// Draft selects draft (true) or published (false) status for versioned\n\t// creates. Updates preserve status so publish and unpublish hooks cannot be bypassed.\n\tDraft           *bool\n\tLocale          schema.LocaleCode\n\tFallbackLocales []schema.LocaleCode\n\tDisableFallback bool\n\tAllLocales      bool\n}",
+					"signature": "type MutationOptions struct {\n\t// ID supplies a caller-owned document ID for create operations when\n\t// Config.AllowIDOnCreate is enabled. Other mutations ignore it.\n\tID              string\n\tActor           *store.Document\n\tActorCollection schema.CollectionSlug\n\t// System runs the call as trusted server code: collection, field, draft\n\t// and reference access rules are skipped. Validation, hooks, versions and\n\t// reference integrity still apply, and Actor, when set, still reaches\n\t// hooks. Only Go code can set it; REST and GraphQL never do.\n\tSystem           bool\n\tExpectedRevision int\n\tPopulate         []query.Population\n\t// OutputFields limits computed and inverse-join resolution in the returned\n\t// document. Nil resolves all; a non-nil empty slice resolves none.\n\tOutputFields []query.Path\n\t// Draft selects draft (true) or published (false) status for versioned\n\t// creates. Updates preserve status so publish and unpublish hooks cannot be bypassed.\n\tDraft           *bool\n\tLocale          schema.LocaleCode\n\tFallbackLocales []schema.LocaleCode\n\tDisableFallback bool\n\tAllLocales      bool\n}",
 					"parameters": [
 						{
 							"name": "ID",
@@ -9684,6 +9764,11 @@
 							"name": "ActorCollection",
 							"type": "schema.CollectionSlug",
 							"description": "Exact auth collection owning Actor."
+						},
+						{
+							"name": "System",
+							"type": "bool",
+							"description": "System runs the call as trusted server code: collection, field, draft\nand reference access rules are skipped. Validation, hooks, versions and\nreference integrity still apply, and Actor, when set, still reaches\nhooks. Only Go code can set it; REST and GraphQL never do."
 						},
 						{
 							"name": "ExpectedRevision",
@@ -9744,7 +9829,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 143
+						"line": 154
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -9818,7 +9903,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 175
+						"line": 193
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -9860,7 +9945,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 210
+						"line": 228
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -9873,7 +9958,7 @@
 					"kind": "type",
 					"group": "Local API options",
 					"summary": "Migration-owned source identity, status, and timestamps.",
-					"signature": "type ImportOptions struct {\n\tActor           *store.Document\n\tActorCollection schema.CollectionSlug\n\t// ID preserves the source document identity.\n\tID string\n\t// Status preserves the source draft or published status.\n\tStatus store.Status\n\t// CreatedAt preserves the source creation timestamp.\n\tCreatedAt time.Time\n\t// UpdatedAt preserves the source modification timestamp.\n\tUpdatedAt time.Time\n}",
+					"signature": "type ImportOptions struct {\n\tActor           *store.Document\n\tActorCollection schema.CollectionSlug\n\t// System skips access rules for trusted server code; see MutationOptions.System.\n\tSystem bool\n\t// ID preserves the source document identity.\n\tID string\n\t// Status preserves the source draft or published status.\n\tStatus store.Status\n\t// CreatedAt preserves the source creation timestamp.\n\tCreatedAt time.Time\n\t// UpdatedAt preserves the source modification timestamp.\n\tUpdatedAt time.Time\n}",
 					"parameters": [
 						{
 							"name": "Actor",
@@ -9884,6 +9969,11 @@
 							"name": "ActorCollection",
 							"type": "schema.CollectionSlug",
 							"description": "The ActorCollection value."
+						},
+						{
+							"name": "System",
+							"type": "bool",
+							"description": "System skips access rules for trusted server code; see MutationOptions.System."
 						},
 						{
 							"name": "ID",
@@ -9921,7 +10011,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 218
+						"line": 236
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -9972,7 +10062,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 241
+						"line": 261
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -10028,7 +10118,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 271
+						"line": 291
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -10079,7 +10169,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 301
+						"line": 321
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -10129,7 +10219,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 312
+						"line": 332
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -10181,7 +10271,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 350
+						"line": 370
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -10233,7 +10323,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 364
+						"line": 384
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -10289,7 +10379,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 408
+						"line": 428
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -10340,7 +10430,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 544
+						"line": 565
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -10391,7 +10481,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 551
+						"line": 572
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -10442,7 +10532,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 558
+						"line": 579
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -10493,7 +10583,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 485
+						"line": 506
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -10549,7 +10639,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 492
+						"line": 513
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -10600,7 +10690,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 499
+						"line": 520
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -10651,7 +10741,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 514
+						"line": 535
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -10707,7 +10797,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 520
+						"line": 541
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -10763,7 +10853,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 524
+						"line": 545
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -10819,7 +10909,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 530
+						"line": 551
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -10870,7 +10960,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 287
+						"line": 307
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -10926,7 +11016,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 383
+						"line": 403
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -10992,7 +11082,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 469
+						"line": 490
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -11053,7 +11143,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 508
+						"line": 529
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -11109,7 +11199,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 566
+						"line": 587
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -11160,7 +11250,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 571
+						"line": 592
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -11211,7 +11301,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 576
+						"line": 597
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -11262,7 +11352,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 581
+						"line": 602
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -11313,7 +11403,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 586
+						"line": 607
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -11364,7 +11454,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 591
+						"line": 612
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -11410,7 +11500,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 597
+						"line": 618
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -11456,7 +11546,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 644
+						"line": 665
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -11507,7 +11597,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 657
+						"line": 678
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -11553,7 +11643,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 667
+						"line": 688
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -11604,7 +11694,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 676
+						"line": 697
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -11650,7 +11740,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 685
+						"line": 706
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -11709,7 +11799,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 694
+						"line": 715
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -11760,7 +11850,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 702
+						"line": 723
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -11811,7 +11901,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 707
+						"line": 728
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -11862,7 +11952,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 712
+						"line": 733
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -11908,7 +11998,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 698
+						"line": 719
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -11940,7 +12030,7 @@
 					],
 					"source": {
 						"path": "core/app.go",
-						"line": 312
+						"line": 313
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -11972,7 +12062,7 @@
 					],
 					"source": {
 						"path": "core/app.go",
-						"line": 313
+						"line": 314
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -12356,7 +12446,7 @@
 					],
 					"source": {
 						"path": "core/auth.go",
-						"line": 247
+						"line": 245
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -12399,7 +12489,7 @@
 					],
 					"source": {
 						"path": "core/auth.go",
-						"line": 340
+						"line": 338
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -12442,7 +12532,7 @@
 					],
 					"source": {
 						"path": "core/auth.go",
-						"line": 355
+						"line": 353
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -12485,7 +12575,7 @@
 					],
 					"source": {
 						"path": "core/auth.go",
-						"line": 392
+						"line": 390
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -12533,7 +12623,7 @@
 					],
 					"source": {
 						"path": "core/auth.go",
-						"line": 427
+						"line": 425
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -12576,7 +12666,7 @@
 					],
 					"source": {
 						"path": "core/auth.go",
-						"line": 475
+						"line": 473
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -12619,7 +12709,7 @@
 					],
 					"source": {
 						"path": "core/auth.go",
-						"line": 447
+						"line": 445
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -12672,7 +12762,7 @@
 					],
 					"source": {
 						"path": "core/auth.go",
-						"line": 506
+						"line": 504
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -12722,7 +12812,7 @@
 					],
 					"source": {
 						"path": "core/auth.go",
-						"line": 773
+						"line": 771
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -12775,7 +12865,7 @@
 					],
 					"source": {
 						"path": "core/auth.go",
-						"line": 811
+						"line": 809
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -12823,7 +12913,7 @@
 					],
 					"source": {
 						"path": "core/auth.go",
-						"line": 849
+						"line": 847
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -12871,7 +12961,7 @@
 					],
 					"source": {
 						"path": "core/auth.go",
-						"line": 883
+						"line": 881
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -12926,7 +13016,7 @@
 					],
 					"source": {
 						"path": "core/auth.go",
-						"line": 558
+						"line": 556
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -12969,7 +13059,7 @@
 					],
 					"source": {
 						"path": "core/auth.go",
-						"line": 690
+						"line": 688
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -13014,7 +13104,7 @@
 					],
 					"source": {
 						"path": "core/auth.go",
-						"line": 736
+						"line": 734
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -14202,7 +14292,7 @@
 					],
 					"source": {
 						"path": "core/auth.go",
-						"line": 615
+						"line": 613
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -14250,7 +14340,7 @@
 					],
 					"source": {
 						"path": "core/auth.go",
-						"line": 654
+						"line": 652
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -14293,7 +14383,7 @@
 					],
 					"source": {
 						"path": "core/auth.go",
-						"line": 683
+						"line": 681
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -14691,7 +14781,7 @@
 					],
 					"source": {
 						"path": "core/auth.go",
-						"line": 213
+						"line": 212
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -14751,7 +14841,7 @@
 					],
 					"source": {
 						"path": "core/auth.go",
-						"line": 253
+						"line": 251
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -14796,7 +14886,7 @@
 					],
 					"source": {
 						"path": "core/auth.go",
-						"line": 729
+						"line": 727
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -15751,7 +15841,7 @@
 					"kind": "type",
 					"group": "Generated Go API",
 					"summary": "Filter, paginate, populate and project generated documents without changing the binding’s locale shape.",
-					"signature": "type TypedListOptions struct {\n\t// Where filters documents before pagination and remains atomic with access predicates.\n\tWhere query.Expression\n\t// Page is the one-based result page. Zero selects the first page.\n\tPage int\n\t// Limit is the maximum documents returned per page.\n\tLimit int\n\t// Sort orders results by authored field paths.\n\tSort []query.Sort\n\t// TrashOnly returns deleted documents and is valid only for trash-enabled collections.\n\tTrashOnly bool\n\t// Draft explicitly includes draft documents when true or restricts reads to\n\t// published documents when false. Nil preserves the Local API default.\n\tDraft *bool\n\t// Select restricts returned document fields.\n\tSelect []query.Path\n\t// Populate expands configured relationship paths.\n\tPopulate []query.Population\n\t// OutputFields limits computed and inverse-join resolution without\n\t// projecting away stored fields. Nil resolves all output fields; a non-nil\n\t// empty slice resolves none.\n\tOutputFields []query.Path\n\t// Actor is the authenticated document used by access rules.\n\tActor *store.Document\n\t// ActorCollection identifies the exact auth collection that owns Actor.\n\tActorCollection schema.CollectionSlug\n\t// Locale selects one configured content locale. Empty uses the application default.\n\tLocale schema.LocaleCode\n\t// FallbackLocales replaces the locale's configured fallback chain when non-nil.\n\tFallbackLocales []schema.LocaleCode\n\t// DisableFallback requires an exact value in Locale.\n\tDisableFallback bool\n}",
+					"signature": "type TypedListOptions struct {\n\t// Where filters documents before pagination and remains atomic with access predicates.\n\tWhere query.Expression\n\t// Page is the one-based result page. Zero selects the first page.\n\tPage int\n\t// Limit is the maximum documents returned per page.\n\tLimit int\n\t// Sort orders results by authored field paths.\n\tSort []query.Sort\n\t// TrashOnly returns deleted documents and is valid only for trash-enabled collections.\n\tTrashOnly bool\n\t// Draft explicitly includes draft documents when true or restricts reads to\n\t// published documents when false. Nil preserves the Local API default.\n\tDraft *bool\n\t// Select restricts returned document fields.\n\tSelect []query.Path\n\t// Populate expands configured relationship paths.\n\tPopulate []query.Population\n\t// OutputFields limits computed and inverse-join resolution without\n\t// projecting away stored fields. Nil resolves all output fields; a non-nil\n\t// empty slice resolves none.\n\tOutputFields []query.Path\n\t// Actor is the authenticated document used by access rules.\n\tActor *store.Document\n\t// ActorCollection identifies the exact auth collection that owns Actor.\n\tActorCollection schema.CollectionSlug\n\t// System skips access rules for trusted server code; see ListOptions.System.\n\tSystem bool\n\t// Locale selects one configured content locale. Empty uses the application default.\n\tLocale schema.LocaleCode\n\t// FallbackLocales replaces the locale's configured fallback chain when non-nil.\n\tFallbackLocales []schema.LocaleCode\n\t// DisableFallback requires an exact value in Locale.\n\tDisableFallback bool\n}",
 					"parameters": [
 						{
 							"name": "Where",
@@ -15809,6 +15899,11 @@
 							"description": "Auth collection owning Actor."
 						},
 						{
+							"name": "System",
+							"type": "bool",
+							"description": "System skips access rules for trusted server code; see ListOptions.System."
+						},
+						{
 							"name": "Locale",
 							"type": "schema.LocaleCode",
 							"description": "Single content locale."
@@ -15837,7 +15932,7 @@
 					],
 					"source": {
 						"path": "core/typed_read.go",
-						"line": 63
+						"line": 65
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -16005,7 +16100,7 @@
 					"kind": "type",
 					"group": "Access",
 					"summary": "Access rules for collection reads and mutations.",
-					"signature": "type CollectionAccess struct {\n\t// Admin controls whether an authenticated user from this auth collection may\n\t// enter the framework admin. It accepts only Allow or Deny and defaults to\n\t// Allow when omitted.\n\tAdmin AccessRule\n\t// Create controls document creation.\n\tCreate AccessRule\n\t// Read controls individual and list reads and may return a Where decision.\n\tRead AccessRule\n\t// ReadVersions controls version-history reads and may return a Where\n\t// decision. When omitted, Read is used.\n\tReadVersions AccessRule\n\t// Update controls document updates and may return a Where decision.\n\tUpdate AccessRule\n\t// Publish controls publishing and atomic published-document edits. When\n\t// omitted, Update is used so existing policies remain coherent.\n\tPublish AccessRule\n\t// Unpublish controls moving a published document back to draft. When\n\t// omitted, Update is used.\n\tUnpublish AccessRule\n\t// Delete controls document deletion and may return a Where decision.\n\tDelete AccessRule\n\t// Unlock controls takeover of another editor's active document lock. When\n\t// omitted, Update is used so existing collection policies remain coherent.\n\tUnlock AccessRule\n}",
+					"signature": "type CollectionAccess struct {\n\t// Admin controls whether an authenticated user from this auth collection may\n\t// enter the framework admin. It accepts only Allow or Deny and defaults to\n\t// Allow when omitted.\n\tAdmin AccessRule\n\t// Create controls document creation.\n\tCreate AccessRule\n\t// Read controls individual and list reads and may return a Where decision.\n\tRead AccessRule\n\t// ReadVersions controls version-history reads and may return a Where\n\t// decision. When omitted, Read is used.\n\tReadVersions AccessRule\n\t// ReadDrafts controls whether an actor sees draft documents of a versioned\n\t// collection, in addition to Read. It accepts only Allow or Deny. When\n\t// omitted, only editors do: users of the admin's user collection whose\n\t// Admin rule lets them in. Anonymous callers and an app's other auth\n\t// collections read published content, and their explicit draft reads fail.\n\tReadDrafts AccessRule\n\t// Reference controls which documents of this collection other documents may\n\t// point at through relationship and upload fields, and may return a Where\n\t// decision. When omitted, Read is used. Set it to let actors link to\n\t// documents they may not read, such as sending a friend request to a\n\t// learner whose profile is private; population still applies Read.\n\tReference AccessRule\n\t// Update controls document updates and may return a Where decision.\n\tUpdate AccessRule\n\t// Publish controls publishing and atomic published-document edits. When\n\t// omitted, Update is used so existing policies remain coherent.\n\tPublish AccessRule\n\t// Unpublish controls moving a published document back to draft. When\n\t// omitted, Update is used.\n\tUnpublish AccessRule\n\t// Delete controls document deletion and may return a Where decision.\n\tDelete AccessRule\n\t// Unlock controls takeover of another editor's active document lock. When\n\t// omitted, Update is used so existing collection policies remain coherent.\n\tUnlock AccessRule\n}",
 					"parameters": [
 						{
 							"name": "Admin",
@@ -16026,6 +16121,16 @@
 							"name": "ReadVersions",
 							"type": "AccessRule",
 							"description": "Control version-history reads; defaults to Read."
+						},
+						{
+							"name": "ReadDrafts",
+							"type": "AccessRule",
+							"description": "ReadDrafts controls whether an actor sees draft documents of a versioned\ncollection, in addition to Read. It accepts only Allow or Deny. When\nomitted, only editors do: users of the admin's user collection whose\nAdmin rule lets them in. Anonymous callers and an app's other auth\ncollections read published content, and their explicit draft reads fail."
+						},
+						{
+							"name": "Reference",
+							"type": "AccessRule",
+							"description": "Reference controls which documents of this collection other documents may\npoint at through relationship and upload fields, and may return a Where\ndecision. When omitted, Read is used. Set it to let actors link to\ndocuments they may not read, such as sending a friend request to a\nlearner whose profile is private; population still applies Read."
 						},
 						{
 							"name": "Update",
@@ -16079,7 +16184,7 @@
 					"kind": "type",
 					"group": "Access",
 					"summary": "Access rules for reading, updating, publishing, and unpublishing a global.",
-					"signature": "type GlobalAccess struct {\n\t// Read controls global reads and may return a Where decision.\n\tRead AccessRule\n\t// ReadVersions controls version-history reads and may return a Where decision.\n\t// When omitted, Read is used.\n\tReadVersions AccessRule\n\t// Update controls global updates and may return a Where decision for an\n\t// existing singleton.\n\tUpdate AccessRule\n\t// Publish controls publishing and atomic published-global edits. When\n\t// omitted, Update is used.\n\tPublish AccessRule\n\t// Unpublish controls moving a published global back to draft. When omitted,\n\t// Update is used.\n\tUnpublish AccessRule\n}",
+					"signature": "type GlobalAccess struct {\n\t// Read controls global reads and may return a Where decision.\n\tRead AccessRule\n\t// ReadVersions controls version-history reads and may return a Where decision.\n\t// When omitted, Read is used.\n\tReadVersions AccessRule\n\t// ReadDrafts controls whether an actor sees the draft of a versioned global.\n\t// It accepts only Allow or Deny and, when omitted, allows only editors, as\n\t// CollectionAccess.ReadDrafts describes.\n\tReadDrafts AccessRule\n\t// Update controls global updates and may return a Where decision for an\n\t// existing singleton.\n\tUpdate AccessRule\n\t// Publish controls publishing and atomic published-global edits. When\n\t// omitted, Update is used.\n\tPublish AccessRule\n\t// Unpublish controls moving a published global back to draft. When omitted,\n\t// Update is used.\n\tUnpublish AccessRule\n}",
 					"parameters": [
 						{
 							"name": "Read",
@@ -16090,6 +16195,11 @@
 							"name": "ReadVersions",
 							"type": "AccessRule",
 							"description": "Control version-history reads; defaults to Read."
+						},
+						{
+							"name": "ReadDrafts",
+							"type": "AccessRule",
+							"description": "ReadDrafts controls whether an actor sees the draft of a versioned global.\nIt accepts only Allow or Deny and, when omitted, allows only editors, as\nCollectionAccess.ReadDrafts describes."
 						},
 						{
 							"name": "Update",
@@ -16120,7 +16230,7 @@
 					],
 					"source": {
 						"path": "core/access.go",
-						"line": 127
+						"line": 139
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -16336,7 +16446,7 @@
 					],
 					"source": {
 						"path": "core/hook.go",
-						"line": 97
+						"line": 120
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -16376,7 +16486,7 @@
 					],
 					"source": {
 						"path": "core/hook.go",
-						"line": 63
+						"line": 86
 					},
 					"relatedDocs": [
 						"/docs/hooks/collections/",
@@ -16392,7 +16502,7 @@
 					"kind": "type",
 					"group": "Types",
 					"summary": "HookContext supplies the request, values, and local API to a collection or global hook. Change entries in Data before saving, or values in Document to change the response after saving. A Hook returns only an error.",
-					"signature": "type HookContext struct {\n\t// Context carries cancellation, deadlines, and the active transaction.\n\t// Pass it to Local calls that must succeed or roll back with this operation.\n\tContext context.Context\n\t// Operation names the document operation, such as Create, Update, or Read,\n\t// not the hook phase. Shared hooks should check it before running write-only work.\n\tOperation operation.Kind\n\t// CollectionID is the collection's stable resource ID, not its slug.\n\t// It is empty for a global operation.\n\tCollectionID schema.StableID\n\t// GlobalID is the global's stable resource ID, not its slug.\n\t// It is empty for a collection operation.\n\tGlobalID schema.StableID\n\t// Actor is the authenticated document, or nil for an anonymous operation.\n\tActor *store.Document\n\t// ActorCollection identifies the exact auth collection that owns Actor.\n\tActorCollection schema.CollectionSlug\n\t// Data contains the values being saved. On an update it holds only the\n\t// fields the caller sent; read unchanged values from Original. Change map\n\t// entries to change stored values; assigning a new map to Data does not\n\t// replace the engine's values. Changes after saving are not persisted.\n\tData store.Values\n\t// Document is the response document when available. AfterRead receives each\n\t// document in a list separately. Changes to Document.Values affect the response,\n\t// not stored data, and remain subject to field read access rules.\n\tDocument *store.Document\n\t// Original is a detached copy of the saved document before an update, delete,\n\t// or duplication. Changing it does not change storage.\n\tOriginal *store.Document\n\t// Local performs nested reads and writes through the normal operation engine.\n\t// Pass Context to reuse the transaction, and pass Actor, ActorCollection, and\n\t// locale options explicitly when the nested operation represents the same user.\n\t// Standalone reads reject nested writes; AfterCommit starts new transactions.\n\tLocal *LocalAPI\n\t// Error is set only for after-error hooks and preserves the original failure.\n\t// Returning nil from AfterError does not make the failed operation succeed.\n\tError error\n\t// Locale is the selected content language. Write hooks use the write locale;\n\t// AfterRead uses the response locale, whose values may include fallback text.\n\tLocale schema.LocaleCode\n\t// AllLocales reports whether localized values contain maps keyed by locale.\n\t// It describes this hook's values, which may differ from the requested response.\n\tAllLocales bool\n}",
+					"signature": "type HookContext struct {\n\t// Context carries cancellation, deadlines, and the active transaction.\n\t// Pass it to Local calls that must succeed or roll back with this operation.\n\tContext context.Context\n\t// Operation names the document operation, such as Create, Update, or Read,\n\t// not the hook phase. Shared hooks should check it before running write-only work.\n\tOperation operation.Kind\n\t// CollectionID is the collection's stable resource ID, not its slug.\n\t// It is empty for a global operation.\n\tCollectionID schema.StableID\n\t// GlobalID is the global's stable resource ID, not its slug.\n\t// It is empty for a collection operation.\n\tGlobalID schema.StableID\n\t// Actor is the authenticated document, or nil for an anonymous operation.\n\tActor *store.Document\n\t// ActorCollection identifies the exact auth collection that owns Actor.\n\tActorCollection schema.CollectionSlug\n\t// System reports that trusted server code started this operation with\n\t// System set, so no access rule ran. Nested Local calls do not inherit it:\n\t// pass System again when the nested work is also trusted.\n\tSystem bool\n\t// Data contains the values being saved. On an update it holds only the\n\t// top-level fields the caller sent; Candidate adds the unchanged ones from\n\t// Original. Change map entries to change stored values; assigning a new map\n\t// to Data does not replace the engine's values. Changes after saving are not\n\t// persisted.\n\tData store.Values\n\t// Document is the response document when available. AfterRead receives each\n\t// document in a list separately. Changes to Document.Values affect the response,\n\t// not stored data, and remain subject to field read access rules.\n\tDocument *store.Document\n\t// Original is a detached copy of the saved document before an update, delete,\n\t// or duplication. Changing it does not change storage.\n\tOriginal *store.Document\n\t// Local performs nested reads and writes through the normal operation engine.\n\t// Pass Context to reuse the transaction, and pass Actor, ActorCollection, and\n\t// locale options explicitly when the nested operation represents the same user.\n\t// Standalone reads reject nested writes; AfterCommit starts new transactions.\n\tLocal *LocalAPI\n\t// Error is set only for after-error hooks and preserves the original failure.\n\t// Returning nil from AfterError does not make the failed operation succeed.\n\tError error\n\t// Locale is the selected content language. Write hooks use the write locale;\n\t// AfterRead uses the response locale, whose values may include fallback text.\n\tLocale schema.LocaleCode\n\t// AllLocales reports whether localized values contain maps keyed by locale.\n\t// It describes this hook's values, which may differ from the requested response.\n\tAllLocales bool\n}",
 					"parameters": [
 						{
 							"name": "Context",
@@ -16425,9 +16535,14 @@
 							"description": "ActorCollection identifies the exact auth collection that owns Actor."
 						},
 						{
+							"name": "System",
+							"type": "bool",
+							"description": "System reports that trusted server code started this operation with\nSystem set, so no access rule ran. Nested Local calls do not inherit it:\npass System again when the nested work is also trusted."
+						},
+						{
 							"name": "Data",
 							"type": "store.Values",
-							"description": "Data contains the values being saved. On an update it holds only the\nfields the caller sent; read unchanged values from Original. Change map\nentries to change stored values; assigning a new map to Data does not\nreplace the engine's values. Changes after saving are not persisted."
+							"description": "Data contains the values being saved. On an update it holds only the\ntop-level fields the caller sent; Candidate adds the unchanged ones from\nOriginal. Change map entries to change stored values; assigning a new map\nto Data does not replace the engine's values. Changes after saving are not\npersisted."
 						},
 						{
 							"name": "Document",
@@ -16505,7 +16620,7 @@
 					],
 					"source": {
 						"path": "core/hook.go",
-						"line": 152
+						"line": 175
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -16545,7 +16660,7 @@
 					],
 					"source": {
 						"path": "core/hook.go",
-						"line": 86
+						"line": 109
 					},
 					"relatedDocs": [
 						"/docs/hooks/transactions-and-errors/#after-commit",
@@ -16603,7 +16718,7 @@
 					],
 					"source": {
 						"path": "core/hook.go",
-						"line": 68
+						"line": 91
 					},
 					"relatedDocs": [
 						"/docs/hooks/transactions-and-errors/#after-commit"
@@ -18843,7 +18958,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 215
+						"line": 233
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -18979,7 +19094,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 188
+						"line": 206
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -19021,7 +19136,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 204
+						"line": 222
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -19063,7 +19178,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 233
+						"line": 253
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -24462,7 +24577,7 @@
 					],
 					"source": {
 						"path": "core/typed_read.go",
-						"line": 98
+						"line": 102
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -24503,7 +24618,7 @@
 					],
 					"source": {
 						"path": "core/typed_read.go",
-						"line": 105
+						"line": 109
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -24537,7 +24652,7 @@
 					],
 					"source": {
 						"path": "core/typed_read.go",
-						"line": 145
+						"line": 149
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -24578,7 +24693,7 @@
 					],
 					"source": {
 						"path": "core/typed_read.go",
-						"line": 151
+						"line": 155
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -24591,7 +24706,7 @@
 					"kind": "type",
 					"group": "Types",
 					"summary": "BulkOptions controls the actor and localization of an atomic batch or empty-trash operation. Bulk actions do not consume per-document revisions, population, draft status, or caller IDs.",
-					"signature": "type BulkOptions struct {\n\tActor           *store.Document\n\tActorCollection schema.CollectionSlug\n\tLocale          schema.LocaleCode\n\tFallbackLocales []schema.LocaleCode\n\tDisableFallback bool\n\tAllLocales      bool\n}",
+					"signature": "type BulkOptions struct {\n\tActor           *store.Document\n\tActorCollection schema.CollectionSlug\n\t// System skips access rules for trusted server code; see MutationOptions.System.\n\tSystem          bool\n\tLocale          schema.LocaleCode\n\tFallbackLocales []schema.LocaleCode\n\tDisableFallback bool\n\tAllLocales      bool\n}",
 					"parameters": [
 						{
 							"name": "Actor",
@@ -24602,6 +24717,11 @@
 							"name": "ActorCollection",
 							"type": "schema.CollectionSlug",
 							"description": "The ActorCollection value."
+						},
+						{
+							"name": "System",
+							"type": "bool",
+							"description": "System skips access rules for trusted server code; see MutationOptions.System."
 						},
 						{
 							"name": "Locale",
@@ -24635,7 +24755,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 165
+						"line": 181
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -24779,6 +24899,36 @@
 					"overloads": []
 				},
 				{
+					"id": "go:github.com/riducms/ridu/core#HookContext.Candidate",
+					"name": "HookContext.Candidate",
+					"slug": "hook-context-candidate-method",
+					"kind": "method",
+					"group": "Methods",
+					"summary": "Candidate returns the values the document will have once this write is saved: Original's values with each top-level entry of Data in their place. On a create it is a copy of Data. Use it to read a field whether or not the caller sent it, for example to check a rule that spans two fields on a partial update. The map is a detached copy; change Data, not the result, to change what is saved.",
+					"signature": "func (ctx HookContext) Candidate() store.Values",
+					"parameters": [],
+					"parametersLabel": "",
+					"returns": {
+						"type": "store.Values",
+						"description": "The declared result."
+					},
+					"details": [],
+					"example": "",
+					"language": "go",
+					"typeLinks": {},
+					"aliases": [
+						"core.HookContext.Candidate",
+						"HookContext.Candidate"
+					],
+					"source": {
+						"path": "core/hook.go",
+						"line": 70
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
 					"id": "go:github.com/riducms/ridu/core#Input.Get",
 					"name": "Input.Get",
 					"slug": "input-get-method",
@@ -24894,7 +25044,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 326
+						"line": 346
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -25068,7 +25218,7 @@
 					],
 					"source": {
 						"path": "core/typed_read.go",
-						"line": 135
+						"line": 139
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -25316,7 +25466,7 @@
 					],
 					"source": {
 						"path": "core/typed_read.go",
-						"line": 132
+						"line": 136
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -25352,7 +25502,7 @@
 					],
 					"source": {
 						"path": "core/typed_read.go",
-						"line": 140
+						"line": 144
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -25365,7 +25515,7 @@
 					"kind": "type",
 					"group": "Types",
 					"summary": "TypedMutationOptions controls a generated mutation whose response is always single-locale. The semantic action consumes the same settings as its LocalAPI equivalent.",
-					"signature": "type TypedMutationOptions struct {\n\tID               string\n\tActor            *store.Document\n\tActorCollection  schema.CollectionSlug\n\tExpectedRevision int\n\tPopulate         []query.Population\n\tOutputFields     []query.Path\n\tDraft            *bool\n\tLocale           schema.LocaleCode\n\tFallbackLocales  []schema.LocaleCode\n\tDisableFallback  bool\n}",
+					"signature": "type TypedMutationOptions struct {\n\tID              string\n\tActor           *store.Document\n\tActorCollection schema.CollectionSlug\n\t// System skips access rules for trusted server code; see MutationOptions.System.\n\tSystem           bool\n\tExpectedRevision int\n\tPopulate         []query.Population\n\tOutputFields     []query.Path\n\tDraft            *bool\n\tLocale           schema.LocaleCode\n\tFallbackLocales  []schema.LocaleCode\n\tDisableFallback  bool\n}",
 					"parameters": [
 						{
 							"name": "ID",
@@ -25381,6 +25531,11 @@
 							"name": "ActorCollection",
 							"type": "schema.CollectionSlug",
 							"description": "The ActorCollection value."
+						},
+						{
+							"name": "System",
+							"type": "bool",
+							"description": "System skips access rules for trusted server code; see MutationOptions.System."
 						},
 						{
 							"name": "ExpectedRevision",
@@ -25442,7 +25597,7 @@
 					"kind": "type",
 					"group": "Types",
 					"summary": "TypedReadOptions controls population/projection without changing the generated definition's single-locale or all-locales output shape.",
-					"signature": "type TypedReadOptions struct {\n\t// Draft explicitly includes draft documents when true or restricts reads to\n\t// published documents when false. Nil preserves the Local API default.\n\tDraft *bool\n\t// Select restricts returned document fields.\n\tSelect []query.Path\n\t// Populate expands configured relationship paths.\n\tPopulate []query.Population\n\t// OutputFields limits computed and inverse-join resolution without\n\t// projecting away stored fields. Nil resolves all output fields; a non-nil\n\t// empty slice resolves none.\n\tOutputFields []query.Path\n\t// Actor is the authenticated document used by access rules.\n\tActor *store.Document\n\t// ActorCollection identifies the exact auth collection that owns Actor.\n\tActorCollection schema.CollectionSlug\n\t// Locale selects one configured content locale. Empty uses the application default.\n\tLocale schema.LocaleCode\n\t// FallbackLocales replaces the locale's configured fallback chain when non-nil.\n\tFallbackLocales []schema.LocaleCode\n\t// DisableFallback requires an exact value in Locale.\n\tDisableFallback bool\n}",
+					"signature": "type TypedReadOptions struct {\n\t// Draft explicitly includes draft documents when true or restricts reads to\n\t// published documents when false. Nil preserves the Local API default.\n\tDraft *bool\n\t// Select restricts returned document fields.\n\tSelect []query.Path\n\t// Populate expands configured relationship paths.\n\tPopulate []query.Population\n\t// OutputFields limits computed and inverse-join resolution without\n\t// projecting away stored fields. Nil resolves all output fields; a non-nil\n\t// empty slice resolves none.\n\tOutputFields []query.Path\n\t// Actor is the authenticated document used by access rules.\n\tActor *store.Document\n\t// ActorCollection identifies the exact auth collection that owns Actor.\n\tActorCollection schema.CollectionSlug\n\t// System skips access rules for trusted server code; see ListOptions.System.\n\tSystem bool\n\t// Locale selects one configured content locale. Empty uses the application default.\n\tLocale schema.LocaleCode\n\t// FallbackLocales replaces the locale's configured fallback chain when non-nil.\n\tFallbackLocales []schema.LocaleCode\n\t// DisableFallback requires an exact value in Locale.\n\tDisableFallback bool\n}",
 					"parameters": [
 						{
 							"name": "Draft",
@@ -25473,6 +25628,11 @@
 							"name": "ActorCollection",
 							"type": "schema.CollectionSlug",
 							"description": "ActorCollection identifies the exact auth collection that owns Actor."
+						},
+						{
+							"name": "System",
+							"type": "bool",
+							"description": "System skips access rules for trusted server code; see ListOptions.System."
 						},
 						{
 							"name": "Locale",
@@ -58631,7 +58791,7 @@
 					],
 					"source": {
 						"path": "operation/contract.go",
-						"line": 44
+						"line": 46
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -58719,7 +58879,7 @@
 					],
 					"source": {
 						"path": "operation/contract.go",
-						"line": 173
+						"line": 178
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -58749,7 +58909,7 @@
 					],
 					"source": {
 						"path": "operation/contract.go",
-						"line": 191
+						"line": 196
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -58779,7 +58939,7 @@
 					],
 					"source": {
 						"path": "operation/contract.go",
-						"line": 187
+						"line": 192
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -58792,7 +58952,7 @@
 					"kind": "type",
 					"group": "Types",
 					"summary": "Context describes one field callback at its current lifecycle phase. Root, Siblings and Prior are detached, immutable snapshots of field values; document metadata such as ID is available separately on Context. A callback changes its own value only through its return value.",
-					"signature": "type Context struct {\n\t// Context carries the operation's cancellation and deadline. Pass it to Local.\n\tContext context.Context\n\t// Operation is the enclosing document operation, such as Create or Update,\n\t// rather than the hook phase currently running.\n\tOperation Kind\n\t// CollectionID identifies the collection; it is empty for a global.\n\t// This is a framework resource identifier, not its authored slug.\n\tCollectionID schema.StableID\n\t// GlobalID identifies the global; it is empty for a collection.\n\t// This is a framework resource identifier, not its authored slug.\n\tGlobalID schema.StableID\n\t// OccurrenceID correlates this field value, including its enclosing stable\n\t// row keys and exact locale where localized. It is not a document ID.\n\tOccurrenceID OccurrenceID\n\t// SchemaOccurrenceID groups callbacks for the same configured field across\n\t// repeated rows and locales. Most application callbacks need neither token.\n\tSchemaOccurrenceID OccurrenceID\n\t// ID identifies the document involved in this phase. It can be empty before\n\t// a newly created document has been assigned an ID.\n\tID ID\n\t// Actor identifies the authenticated document and owning auth collection.\n\t// Actor.ID is empty for an anonymous operation.\n\tActor Actor\n\t// Locale is the selected content locale, or the exact translation when an\n\t// all-locales operation visits a localized value. It is empty without localization.\n\t// On ordinary reads it does not identify a fallback value's source locale.\n\tLocale schema.LocaleCode\n\t// AllLocales reports whether Root retains locale-keyed values. A callback\n\t// visiting one exact translation receives false even during an all-locales read.\n\tAllLocales bool\n\t// Root contains root field values at this phase: input during raw hooks,\n\t// the completed candidate during typed writes and validation, or response\n\t// values during reads. Read values may include requested population and fallback.\n\tRoot View\n\t// Siblings contains the current enclosing object or repeated row, including\n\t// this field. For a root title it is the root; for seo.title it is seo;\n\t// for variants[_key=A].sku it is row A, regardless of that row's current index.\n\tSiblings View\n\t// Prior contains the previous persisted enclosing object or row, including\n\t// this field. Prior.String(\"title\") reads the previous title, not the whole\n\t// previous document. Retained rows match by stable key rather than array index.\n\t// It is empty when no previous enclosing object exists, including create,\n\t// new rows and standalone reads. Localized writes use the exact prior locale;\n\t// fallback text never becomes a previously stored translation.\n\tPrior View\n\t// Local reads a known document under this callback's actor and exact locale,\n\t// reusing an active transaction. It does not grant nested write capabilities.\n\tLocal Reader\n}",
+					"signature": "type Context struct {\n\t// Context carries the operation's cancellation and deadline. Pass it to Local.\n\tContext context.Context\n\t// Operation is the enclosing document operation, such as Create or Update,\n\t// rather than the hook phase currently running.\n\tOperation Kind\n\t// CollectionID identifies the collection; it is empty for a global.\n\t// This is a framework resource identifier, not its authored slug.\n\tCollectionID schema.StableID\n\t// GlobalID identifies the global; it is empty for a collection.\n\t// This is a framework resource identifier, not its authored slug.\n\tGlobalID schema.StableID\n\t// OccurrenceID correlates this field value, including its enclosing stable\n\t// row keys and exact locale where localized. It is not a document ID.\n\tOccurrenceID OccurrenceID\n\t// SchemaOccurrenceID groups callbacks for the same configured field across\n\t// repeated rows and locales. Most application callbacks need neither token.\n\tSchemaOccurrenceID OccurrenceID\n\t// ID identifies the document involved in this phase. It can be empty before\n\t// a newly created document has been assigned an ID.\n\tID ID\n\t// Actor identifies the authenticated document and owning auth collection.\n\t// Actor.ID is empty for an anonymous operation.\n\tActor Actor\n\t// System reports that trusted server code started this operation with\n\t// System set. Field access rules do not run for it; Local reads inherit it.\n\tSystem bool\n\t// Locale is the selected content locale, or the exact translation when an\n\t// all-locales operation visits a localized value. It is empty without localization.\n\t// On ordinary reads it does not identify a fallback value's source locale.\n\tLocale schema.LocaleCode\n\t// AllLocales reports whether Root retains locale-keyed values. A callback\n\t// visiting one exact translation receives false even during an all-locales read.\n\tAllLocales bool\n\t// Root contains root field values at this phase: input during raw hooks,\n\t// the completed candidate during typed writes and validation, or response\n\t// values during reads. Read values may include requested population and fallback.\n\tRoot View\n\t// Siblings contains the current enclosing object or repeated row, including\n\t// this field. For a root title it is the root; for seo.title it is seo;\n\t// for variants[_key=A].sku it is row A, regardless of that row's current index.\n\tSiblings View\n\t// Prior contains the previous persisted enclosing object or row, including\n\t// this field. Prior.String(\"title\") reads the previous title, not the whole\n\t// previous document. Retained rows match by stable key rather than array index.\n\t// It is empty when no previous enclosing object exists, including create,\n\t// new rows and standalone reads. Localized writes use the exact prior locale;\n\t// fallback text never becomes a previously stored translation.\n\tPrior View\n\t// Local reads a known document under this callback's actor and exact locale,\n\t// reusing an active transaction. It does not grant nested write capabilities.\n\tLocal Reader\n}",
 					"parameters": [
 						{
 							"name": "Context",
@@ -58833,6 +58993,11 @@
 							"name": "Actor",
 							"type": "Actor",
 							"description": "Actor identifies the authenticated document and owning auth collection.\nActor.ID is empty for an anonymous operation."
+						},
+						{
+							"name": "System",
+							"type": "bool",
+							"description": "System reports that trusted server code started this operation with\nSystem set. Field access rules do not run for it; Local reads inherit it."
 						},
 						{
 							"name": "Locale",
@@ -58876,7 +59041,7 @@
 					],
 					"source": {
 						"path": "operation/contract.go",
-						"line": 54
+						"line": 56
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -58928,7 +59093,7 @@
 					],
 					"source": {
 						"path": "operation/contract.go",
-						"line": 23
+						"line": 25
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -58954,7 +59119,7 @@
 					],
 					"source": {
 						"path": "operation/contract.go",
-						"line": 25
+						"line": 27
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -59010,7 +59175,7 @@
 					],
 					"source": {
 						"path": "operation/contract.go",
-						"line": 165
+						"line": 170
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -59036,7 +59201,7 @@
 					],
 					"source": {
 						"path": "operation/contract.go",
-						"line": 33
+						"line": 35
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -59078,7 +59243,7 @@
 					],
 					"source": {
 						"path": "operation/contract.go",
-						"line": 197
+						"line": 202
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -59390,7 +59555,7 @@
 					],
 					"source": {
 						"path": "operation/contract.go",
-						"line": 179
+						"line": 184
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -59561,7 +59726,7 @@
 					],
 					"source": {
 						"path": "operation/contract.go",
-						"line": 40
+						"line": 42
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -59597,7 +59762,7 @@
 					],
 					"source": {
 						"path": "operation/contract.go",
-						"line": 215
+						"line": 220
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -59633,7 +59798,7 @@
 					],
 					"source": {
 						"path": "operation/contract.go",
-						"line": 162
+						"line": 167
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -59659,7 +59824,7 @@
 					],
 					"source": {
 						"path": "operation/contract.go",
-						"line": 26
+						"line": 28
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -59692,6 +59857,32 @@
 					"overloads": []
 				},
 				{
+					"id": "go:github.com/riducms/ridu/operation#ReadDrafts",
+					"name": "ReadDrafts",
+					"slug": "read-drafts",
+					"kind": "constant",
+					"group": "Constants",
+					"summary": "Public constant ReadDrafts from github.com/riducms/ridu/operation.",
+					"signature": "const ReadDrafts Kind = \"read-drafts\"",
+					"parameters": [],
+					"parametersLabel": "",
+					"details": [],
+					"example": "",
+					"language": "go",
+					"typeLinks": {},
+					"aliases": [
+						"operation.ReadDrafts",
+						"ReadDrafts"
+					],
+					"source": {
+						"path": "operation/contract.go",
+						"line": 22
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
 					"id": "go:github.com/riducms/ridu/operation#Reader",
 					"name": "Reader",
 					"slug": "reader",
@@ -59717,7 +59908,7 @@
 					],
 					"source": {
 						"path": "operation/contract.go",
-						"line": 113
+						"line": 118
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -59750,6 +59941,32 @@
 					"overloads": []
 				},
 				{
+					"id": "go:github.com/riducms/ridu/operation#Reference",
+					"name": "Reference",
+					"slug": "reference",
+					"kind": "constant",
+					"group": "Constants",
+					"summary": "Public constant Reference from github.com/riducms/ridu/operation.",
+					"signature": "const Reference Kind = \"reference\"",
+					"parameters": [],
+					"parametersLabel": "",
+					"details": [],
+					"example": "",
+					"language": "go",
+					"typeLinks": {},
+					"aliases": [
+						"operation.Reference",
+						"Reference"
+					],
+					"source": {
+						"path": "operation/contract.go",
+						"line": 23
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
 					"id": "go:github.com/riducms/ridu/operation#ReferenceOutput",
 					"name": "ReferenceOutput",
 					"slug": "reference-output",
@@ -59769,7 +59986,7 @@
 					],
 					"source": {
 						"path": "operation/contract.go",
-						"line": 205
+						"line": 210
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -59799,7 +60016,7 @@
 					],
 					"source": {
 						"path": "operation/contract.go",
-						"line": 223
+						"line": 228
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -59829,7 +60046,7 @@
 					],
 					"source": {
 						"path": "operation/contract.go",
-						"line": 220
+						"line": 225
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -59855,7 +60072,7 @@
 					],
 					"source": {
 						"path": "operation/contract.go",
-						"line": 24
+						"line": 26
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -59891,7 +60108,7 @@
 					],
 					"source": {
 						"path": "operation/contract.go",
-						"line": 183
+						"line": 188
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -59927,7 +60144,7 @@
 					],
 					"source": {
 						"path": "operation/contract.go",
-						"line": 126
+						"line": 131
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -59953,7 +60170,7 @@
 					],
 					"source": {
 						"path": "operation/contract.go",
-						"line": 28
+						"line": 30
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -59989,7 +60206,7 @@
 					],
 					"source": {
 						"path": "operation/contract.go",
-						"line": 211
+						"line": 216
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -60015,7 +60232,7 @@
 					],
 					"source": {
 						"path": "operation/contract.go",
-						"line": 27
+						"line": 29
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -60041,7 +60258,7 @@
 					],
 					"source": {
 						"path": "operation/contract.go",
-						"line": 22
+						"line": 24
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -60067,7 +60284,7 @@
 					],
 					"source": {
 						"path": "operation/contract.go",
-						"line": 156
+						"line": 161
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -60097,7 +60314,7 @@
 					],
 					"source": {
 						"path": "operation/contract.go",
-						"line": 168
+						"line": 173
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -60123,7 +60340,7 @@
 					],
 					"source": {
 						"path": "operation/contract.go",
-						"line": 121
+						"line": 126
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -60159,7 +60376,7 @@
 					],
 					"source": {
 						"path": "operation/contract.go",
-						"line": 141
+						"line": 146
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -60195,7 +60412,7 @@
 					],
 					"source": {
 						"path": "operation/contract.go",
-						"line": 134
+						"line": 139
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -60231,7 +60448,7 @@
 					],
 					"source": {
 						"path": "operation/contract.go",
-						"line": 149
+						"line": 154
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -76606,7 +76823,8 @@
 				"Payloads",
 				"Methods",
 				"Constants",
-				"Types"
+				"Types",
+				"Functions"
 			],
 			"symbols": [
 				{
@@ -76690,7 +76908,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 230
+						"line": 237
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -76795,7 +77013,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 34
+						"line": 41
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -76930,7 +77148,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 260
+						"line": 267
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -76974,7 +77192,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 165
+						"line": 172
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -77016,7 +77234,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 153
+						"line": 160
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -77108,7 +77326,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 65
+						"line": 72
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -77162,7 +77380,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 176
+						"line": 183
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -77199,7 +77417,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 190
+						"line": 197
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -77266,7 +77484,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 199
+						"line": 206
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -77310,7 +77528,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 222
+						"line": 229
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -77347,7 +77565,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 93
+						"line": 100
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -77409,7 +77627,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 101
+						"line": 108
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -77437,7 +77655,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 112
+						"line": 119
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -77482,7 +77700,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 116
+						"line": 123
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -77518,7 +77736,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 125
+						"line": 132
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -78696,7 +78914,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 270
+						"line": 277
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -78792,7 +79010,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 282
+						"line": 289
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -78874,7 +79092,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 131
+						"line": 138
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -78904,7 +79122,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 142
+						"line": 149
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -79220,7 +79438,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 161
+						"line": 168
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -79246,7 +79464,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 157
+						"line": 164
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -79272,7 +79490,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 159
+						"line": 166
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -79324,7 +79542,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 73
+						"line": 80
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -79350,7 +79568,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 76
+						"line": 83
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -79376,7 +79594,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 87
+						"line": 94
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -79428,7 +79646,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 83
+						"line": 90
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -79584,7 +79802,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 71
+						"line": 78
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -79610,7 +79828,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 80
+						"line": 87
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -79636,7 +79854,7 @@
 					],
 					"source": {
 						"path": "migration/migration.go",
-						"line": 69
+						"line": 76
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -79660,6 +79878,47 @@
 						"migration.Runner contracts",
 						"Runner contracts"
 					],
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
+					"id": "go:github.com/riducms/ridu/migration#UnmanagedSchemaError",
+					"name": "UnmanagedSchemaError",
+					"slug": "unmanaged-schema-error",
+					"kind": "function",
+					"group": "Functions",
+					"summary": "UnmanagedSchemaError reports database objects found where a migration runner expected an empty database. `ridu dev` leaves exactly this behind: it synchronizes a schema directly and never records migration history.",
+					"signature": "func UnmanagedSchemaError(engine string, objects []string) error",
+					"parameters": [
+						{
+							"name": "engine",
+							"type": "string",
+							"description": "The engine value."
+						},
+						{
+							"name": "objects",
+							"type": "[]string",
+							"description": "The objects value."
+						}
+					],
+					"parametersLabel": "",
+					"returns": {
+						"type": "error",
+						"description": "The declared result."
+					},
+					"details": [],
+					"example": "",
+					"language": "go",
+					"typeLinks": {},
+					"aliases": [
+						"migration.UnmanagedSchemaError",
+						"UnmanagedSchemaError"
+					],
+					"source": {
+						"path": "migration/migration.go",
+						"line": 34
+					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
 					"overloads": []
@@ -84587,7 +84846,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/postgres.go",
-						"line": 64
+						"line": 66
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84631,7 +84890,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/postgres.go",
-						"line": 70
+						"line": 72
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84644,7 +84903,7 @@
 					"kind": "type",
 					"group": "Types",
 					"summary": "Production connection-pool, upload-lock-pool, lifetime, health, and server timeout controls.",
-					"signature": "type PoolConfig struct {\n\tDatabaseURL string\n\t// AllowInsecureTransport explicitly permits plaintext PostgreSQL connections.\n\t// Keep this false in production; it exists for local Unix sockets and\n\t// development databases whose transport is secured outside PostgreSQL.\n\tAllowInsecureTransport bool\n\tApplicationName        string\n\tMaxConnections         int32\n\t// MaxUploadLockConnections bounds the separate advisory-lock pool used\n\t// while object storage and document transactions are coordinated. Keeping\n\t// this pool separate prevents staged uploads from starving their own\n\t// document transactions. Zero selects four connections.\n\tMaxUploadLockConnections        int32\n\tMinConnections                  int32\n\tMaxConnectionLifetime           time.Duration\n\tMaxConnectionLifetimeJitter     time.Duration\n\tMaxConnectionIdleTime           time.Duration\n\tHealthCheckPeriod               time.Duration\n\tConnectTimeout                  time.Duration\n\tStatementTimeout                time.Duration\n\tLockTimeout                     time.Duration\n\tIdleInTransactionSessionTimeout time.Duration\n}",
+					"signature": "type PoolConfig struct {\n\tDatabaseURL string\n\t// AllowInsecureTransport explicitly permits plaintext PostgreSQL\n\t// connections to a remote host. Loopback and Unix-socket databases never\n\t// need it. Keep this false in production; it exists for development\n\t// databases whose transport is secured outside PostgreSQL.\n\tAllowInsecureTransport bool\n\tApplicationName        string\n\tMaxConnections         int32\n\t// MaxUploadLockConnections bounds the separate advisory-lock pool used\n\t// while object storage and document transactions are coordinated. Keeping\n\t// this pool separate prevents staged uploads from starving their own\n\t// document transactions. Zero selects four connections.\n\tMaxUploadLockConnections        int32\n\tMinConnections                  int32\n\tMaxConnectionLifetime           time.Duration\n\tMaxConnectionLifetimeJitter     time.Duration\n\tMaxConnectionIdleTime           time.Duration\n\tHealthCheckPeriod               time.Duration\n\tConnectTimeout                  time.Duration\n\tStatementTimeout                time.Duration\n\tLockTimeout                     time.Duration\n\tIdleInTransactionSessionTimeout time.Duration\n}",
 					"parameters": [
 						{
 							"name": "DatabaseURL",
@@ -84731,7 +84990,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/postgres.go",
-						"line": 40
+						"line": 41
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84846,7 +85105,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/postgres.go",
-						"line": 31
+						"line": 32
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84872,7 +85131,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/postgres.go",
-						"line": 186
+						"line": 192
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84908,7 +85167,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/postgres.go",
-						"line": 194
+						"line": 200
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84951,7 +85210,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/postgres.go",
-						"line": 213
+						"line": 219
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -84999,7 +85258,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/postgres.go",
-						"line": 219
+						"line": 225
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -85035,7 +85294,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/postgres.go",
-						"line": 319
+						"line": 325
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -85071,7 +85330,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/postgres.go",
-						"line": 327
+						"line": 333
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -85784,7 +86043,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/artifact_runner.go",
-						"line": 1688
+						"line": 1715
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -85825,7 +86084,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/artifact_runner.go",
-						"line": 1805
+						"line": 1832
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -92034,7 +92293,7 @@
 					],
 					"source": {
 						"path": "adapters/mongodb/mongodb.go",
-						"line": 91
+						"line": 93
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -92078,7 +92337,7 @@
 					],
 					"source": {
 						"path": "adapters/mongodb/mongodb.go",
-						"line": 98
+						"line": 100
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -92091,7 +92350,7 @@
 					"kind": "type",
 					"group": "Types",
 					"summary": "Runtime-only MongoDB connection behavior.",
-					"signature": "type Config struct {\n\tDatabaseURL string\n\t// AllowInsecureTransport permits plaintext or certificate verification\n\t// bypasses for an explicitly selected local development fixture.\n\tAllowInsecureTransport bool\n\tApplicationName        string\n\tConnectTimeout         time.Duration\n\tServerSelectionTimeout time.Duration\n\tMaxConnectionIdleTime  time.Duration\n\tMaxPoolSize            uint64\n\tMinPoolSize            uint64\n}",
+					"signature": "type Config struct {\n\tDatabaseURL string\n\t// AllowInsecureTransport permits plaintext or certificate verification\n\t// bypasses to a remote host for an explicitly selected development\n\t// fixture. Loopback and Unix-socket databases never need it.\n\tAllowInsecureTransport bool\n\tApplicationName        string\n\tConnectTimeout         time.Duration\n\tServerSelectionTimeout time.Duration\n\tMaxConnectionIdleTime  time.Duration\n\tMaxPoolSize            uint64\n\tMinPoolSize            uint64\n}",
 					"parameters": [
 						{
 							"name": "DatabaseURL",
@@ -92147,7 +92406,7 @@
 					],
 					"source": {
 						"path": "adapters/mongodb/mongodb.go",
-						"line": 35
+						"line": 36
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -92264,7 +92523,7 @@
 					],
 					"source": {
 						"path": "adapters/mongodb/mongodb.go",
-						"line": 50
+						"line": 52
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -92294,7 +92553,7 @@
 					],
 					"source": {
 						"path": "adapters/mongodb/mongodb.go",
-						"line": 239
+						"line": 258
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -92330,7 +92589,7 @@
 					],
 					"source": {
 						"path": "adapters/mongodb/mongodb.go",
-						"line": 262
+						"line": 281
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -135265,7 +135524,7 @@
 					"kind": "command",
 					"group": "Migrations",
 					"summary": "Plan and write one reviewable immutable migration artifact without connecting to a database.",
-					"signature": "ridu migrate create --name <kebab-name> [--accept-renames | --transform <name>] [--allow-destructive]",
+					"signature": "ridu migrate create (<kebab-name> | --name <kebab-name>) [--accept-renames | --transform <name>] [--allow-destructive]",
 					"parameters": [
 						{
 							"name": "--name",

@@ -391,7 +391,7 @@ func TestFixtureSeedsPayloadStyleAccessHooksAndVersions(t *testing.T) {
 	if seed.PublishedPost.Status != store.StatusPublished || seed.PublishedPost.Revision < 2 {
 		t.Fatalf("published post status=%q revision=%d", seed.PublishedPost.Status, seed.PublishedPost.Revision)
 	}
-	categories, err := application.Local().List(ctx, "categories", ridu.ListOptions{Actor: &seed.Editor})
+	categories, err := application.Local().List(ctx, "categories", ridu.ListOptions{Actor: &seed.Editor, ActorCollection: "users"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -416,11 +416,11 @@ func TestFixtureSeedsPayloadStyleAccessHooksAndVersions(t *testing.T) {
 	assertTotal(t, application, "posts", &seed.Contributor, 2)
 	assertTotal(t, application, "editorial-notes", &seed.Contributor, 1)
 
-	adminNotes, err := application.Local().List(ctx, "editorial-notes", ridu.ListOptions{Actor: &seed.Administrator})
+	adminNotes, err := application.Local().List(ctx, "editorial-notes", ridu.ListOptions{Actor: &seed.Administrator, ActorCollection: "users"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	editorNotes, err := application.Local().List(ctx, "editorial-notes", ridu.ListOptions{Actor: &seed.Editor})
+	editorNotes, err := application.Local().List(ctx, "editorial-notes", ridu.ListOptions{Actor: &seed.Editor, ActorCollection: "users"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -433,22 +433,27 @@ func TestFixtureSeedsPayloadStyleAccessHooksAndVersions(t *testing.T) {
 
 	_, err = application.Local().Update(ctx, "posts", seed.DraftPost.ID, store.Values{
 		"status": store.String("published"),
-	}, ridu.MutationOptions{Actor: &seed.Contributor})
+	}, ridu.MutationOptions{Actor: &seed.Contributor, ActorCollection: "users"})
 	assertOperationCode(t, err, "field_access_denied")
 	_, err = application.Local().Update(ctx, "users", seed.Contributor.ID, store.Values{
 		"role": store.String(roleAdministrator),
-	}, ridu.MutationOptions{Actor: &seed.Contributor})
+	}, ridu.MutationOptions{Actor: &seed.Contributor, ActorCollection: "users"})
 	assertOperationCode(t, err, "field_access_denied")
 	if _, err := application.Local().Update(ctx, "users", seed.Contributor.ID, store.Values{
 		"name": store.String("Demo Author Updated"), "role": store.String(roleContributor),
-	}, ridu.MutationOptions{Actor: &seed.Editor}); err != nil {
+	}, ridu.MutationOptions{Actor: &seed.Editor, ActorCollection: "users"}); err != nil {
 		t.Fatalf("editor resubmitting an unchanged protected role: %v", err)
 	}
 }
 
 func assertTotal(t *testing.T, application *ridu.App, collection string, actor *store.Document, expected int) {
 	t.Helper()
-	page, err := application.Local().List(context.Background(), collection, ridu.ListOptions{Actor: actor})
+	options := ridu.ListOptions{Actor: actor}
+	if actor != nil {
+		// Every seeded actor is an admin user, the collection whose users read drafts.
+		options.ActorCollection = "users"
+	}
+	page, err := application.Local().List(context.Background(), collection, options)
 	if err != nil {
 		t.Fatal(err)
 	}

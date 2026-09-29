@@ -474,20 +474,22 @@ func graphCallbackContext(ctx operationengine.Context, id string, local **LocalA
 	return operation.Context{
 		Context: ctx.Context, Operation: ctx.Operation, CollectionID: collectionID, GlobalID: globalID,
 		OccurrenceID: operation.OccurrenceID(ctx.OccurrenceID), SchemaOccurrenceID: operation.OccurrenceID(id), ID: operation.ID(ctx.ID),
-		Actor: actor, Locale: ctx.Locale, AllLocales: ctx.AllLocales, Root: operation.Snapshot(root), Siblings: operation.Snapshot(ctx.SiblingData), Prior: operation.Snapshot(ctx.OriginalSiblingData),
-		Local: graphReader{live: ctx.LiveValidation, local: local, context: ctx.Context, actor: cloneDocument(ctx.Actor), actorCollection: ctx.ActorCollection, locale: ctx.Locale},
+		Actor: actor, System: ctx.System, Locale: ctx.Locale, AllLocales: ctx.AllLocales, Root: operation.Snapshot(root), Siblings: operation.Snapshot(ctx.SiblingData), Prior: operation.Snapshot(ctx.OriginalSiblingData),
+		Local: graphReader{live: ctx.LiveValidation, local: local, context: ctx.Context, actor: cloneDocument(ctx.Actor), actorCollection: ctx.ActorCollection, system: ctx.System, locale: ctx.Locale},
 	}
 }
 
 // graphReader carries the original transaction context even if a callback
-// supplies context.Background. Its only capability is an ordinary authorized
-// exact-locale read; neither actor nor privilege overrides are author inputs.
+// supplies context.Background. Its only capability is an exact-locale read
+// under the operation's own identity; neither actor nor privilege overrides are
+// author inputs. A system operation's reads stay system reads.
 type graphReader struct {
 	live            bool
 	local           **LocalAPI
 	context         context.Context
 	actor           *store.Document
 	actorCollection schema.CollectionSlug
+	system          bool
 	locale          schema.LocaleCode
 }
 
@@ -505,7 +507,7 @@ func (reader graphReader) FindByID(caller context.Context, collection schema.Col
 		return (*reader.local).engine.LiveRead(ctx, operationengine.CapabilitiesRequest{Collection: string(collection), ID: string(id), Actor: cloneDocument(reader.actor), ActorCollection: reader.actorCollection, Locale: string(reader.locale), DisableFallback: true})
 	}
 	return (*reader.local).Find(ctx, string(collection), string(id), FindOptions{
-		Actor: cloneDocument(reader.actor), ActorCollection: reader.actorCollection, Locale: reader.locale, DisableFallback: reader.locale != "",
+		Actor: cloneDocument(reader.actor), ActorCollection: reader.actorCollection, System: reader.system, Locale: reader.locale, DisableFallback: reader.locale != "",
 	})
 }
 

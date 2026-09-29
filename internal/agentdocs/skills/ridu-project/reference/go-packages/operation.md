@@ -180,6 +180,8 @@ only for some operations:
 | `operation.RestoreDeleted`  | Restoring a document from the trash                             |
 | `operation.DeletePermanent` | Permanently deleting a trashed document                         |
 | `operation.ReadVersions`    | Reading a document's version history                            |
+| `operation.ReadDrafts`      | Deciding whether an actor sees draft documents                  |
+| `operation.Reference`       | Deciding whether a relationship may point at a document         |
 | `operation.Admin`           | Checking whether a signed-in user may open the admin            |
 | `operation.Unlock`          | Checking whether a user may take over another editor's lock     |
 
