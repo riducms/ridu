@@ -7,12 +7,13 @@ Use the `query` package to describe which documents you want, such as “product
 documents, or return it from an [access rule](../access-control.md) to limit what a user can see.
 For the `where` syntax used by REST and the TypeScript SDK, see [Querying data](../querying.md).
 
-A filter is built from three types:
+A filter is a `query.Expression`. You build one by naming a field and giving an ordinary Go value
+to compare it with:
 
-| Type               | What it is                | Example                 |
+| Part               | What it is                | Example                 |
 | ------------------ | ------------------------- | ----------------------- |
-| `query.Path`       | The field to check        | The product's `price`   |
-| `query.Value`      | The value to compare with | The number `50`         |
+| Field name         | The field to check        | `"price"`               |
+| Value              | The value to compare with | `50`                    |
 | `query.Expression` | The resulting condition   | `price` is at most `50` |
 
 ## Build a filter {#build-filter}
@@ -27,36 +28,37 @@ import "github.com/riducms/ridu/query"
 func AffordableProducts(maxPrice float64) query.Expression {
 	// Describe both requirements; this does not read the database yet.
 	return query.And(
-		query.LessThanEqual(query.Field("price"), query.Number(maxPrice)),
-		query.Equal(query.Field("inStock"), query.Boolean(true)),
+		query.LessThanEqual("price", maxPrice),
+		query.Equal("inStock", true),
 	)
 }
 ```
 
-`query.Field` names each field, `query.Number` and `query.Boolean` supply the values, and
-`query.And` requires both conditions. Building the expression does not read the database: it is a
-value you can store, pass around, and reuse. [Run a filter](#run-filter) executes it.
+Each comparison takes a field name and a value, and `query.And` requires both conditions. Building
+the expression does not read the database: it is a value you can store, pass around, and reuse.
+[Run a filter](#run-filter) executes it.
 
 ## query.Path {#paths}
 
-A `query.Path` names one field. In filters you write in code, use `query.Field` with the field's
-name, or its group and field names:
+A `query.Path` names one field. In filters you write in code, pass the field's name as a string,
+joining group and field names with a dot: `"title"`, or `"seo.title"` for the `title` field in the
+`seo` group. Every comparison helper, and `query.Asc` and `query.Desc`, converts the name for you.
 
-| To name                            | Write                          | Path        |
-| ---------------------------------- | ------------------------------ | ----------- |
-| A top-level field                  | `query.Field("title")`         | `title`     |
-| A field inside the `seo` group     | `query.Field("seo", "title")`  | `seo.title` |
-| A dotted path you received as text | `query.ParsePath("seo.title")` | `seo.title` |
-| Field names chosen at runtime      | `query.NewPath(group, name)`   | `seo.title` |
+Build a `query.Path` yourself only when a name is not written in your code, or where an option
+takes paths:
 
-`query.Field` panics on a malformed name, such as `query.Field("seo.title")`: a dot is not part
-of a field name, so pass the names separately. Like `regexp.MustCompile`, it is meant for names
-you wrote yourself. For paths that come from input, use `ParsePath` or `NewPath`, which return an
-error instead.
+| To name                            | Write                          |
+| ---------------------------------- | ------------------------------ |
+| A dotted name you received as text | `query.ParsePath("seo.title")` |
+| Field names computed at run time   | `query.NewPath(group, name)`   |
+| A field for `ListOptions.Select`   | `query.Field("seo", "title")`  |
 
-A path is checked against your schema only when the operation runs. `query.Field("unknown")`
-succeeds, but a read that uses it fails if the collection has no such field. Fields with read
-access rules cannot be used in caller filters; see
+A malformed name written in code, such as `"SEO.title"`, panics, like `regexp.MustCompile`. For
+names that come from input, use `ParsePath` or `NewPath`, which return an error instead.
+
+A name is checked against your schema only when the operation runs. `query.Equal("unknown", "x")`
+succeeds, but a read that uses it fails with `bad_query` if the collection has no such field.
+Fields with read access rules cannot be used in caller filters; see
 [protected field queries](../access-control.md#protected-field-queries).
 
 ### Groups, arrays, and blocks {#nested-paths}
@@ -74,45 +76,60 @@ to match both.
 
 ## query.Value {#values}
 
-A `query.Value` is the value inside a comparison. Use the constructor for the kind of value the
-field holds:
+Pass the value you compare with as an ordinary Go value of the kind the field holds:
 
-| To compare with              | Write                      |
-| ---------------------------- | -------------------------- |
-| Text, or a relationship's ID | `query.String("notebook")` |
-| A number                     | `query.Number(50)`         |
-| A checkbox value             | `query.Boolean(true)`      |
-| Null                         | `query.Null()`             |
+| To compare with              | Write                          |
+| ---------------------------- | ------------------------------ |
+| Text, or a relationship's ID | `"notebook"`, `ctx.Actor.ID`   |
+| A number                     | `50`, `price`, `2.5`           |
+| A checkbox value             | `true`                         |
+| A select option              | `"published"`, or a named type |
+| A date and time              | `query.DateTime(time.Now())`   |
+| A date only                  | `"2026-09-29"`                 |
+| Null                         | `query.Null()`                 |
 
-`query.String("50")` is text and `query.Number(50)` is a number, so choose the one that matches
-the field. The similarly named `store.Number(50)` is a document value for saving content, not a
-comparison value; the two types are not interchangeable.
+Named types work too, so a `type Status string` constant can be compared with a select field
+directly. `"50"` is text and `50` is a number, so choose the one that matches the field.
 
-## Comparisons {#operators}
-
-Each helper takes a path and a value, and returns a `query.Expression`. In these examples,
-`status`, `price`, and the other names are paths such as `query.Field("price")`:
-
-| Matches documents where the field…               | Example                                                          |
-| ------------------------------------------------ | ---------------------------------------------------------------- |
-| Equals the value                                 | `query.Equal(status, query.String("published"))`                 |
-| Does not equal the value                         | `query.NotEqual(status, query.String("draft"))`                  |
-| Equals one of several values                     | `query.In(color, query.String("red"), query.String("blue"))`     |
-| Is greater than, or at least, a number or string | `query.GreaterThan(price, query.Number(10))`, `GreaterThanEqual` |
-| Is less than, or at most, a number or string     | `query.LessThan(price, query.Number(50))`, `LessThanEqual`       |
-| Contains the text, ignoring case                 | `query.Contains(title, "ridu")`                                  |
-| Contains every word of the text, ignoring case   | `query.Like(title, "go cms")`                                    |
-
-To match a field that has a value, or one that has none, use `query.Compare` with
-`query.OperatorExists`:
+Dates are stored as text, so a comparison must use the same form the field stores.
+`query.DateTime` converts a `time.Time` to that form for date-and-time fields, `createdAt`, and
+`updatedAt`:
 
 ```go
-hasImage, err := query.Compare(
-	query.Field("image"), query.OperatorExists, query.Boolean(true),
+recent := query.GreaterThan(
+	"publishedAt",
+	query.DateTime(time.Now().AddDate(0, 0, -7)),
 )
 ```
 
-The helpers expect a valid path and a matching value, and panic otherwise. That is fine for
+Compare a date-only field with a `"2026-09-29"` string, such as `t.Format(time.DateOnly)`.
+
+A number is stored as a 64-bit float, which holds integers exactly only up to 2^53. Larger
+integers panic instead of silently losing precision; compare them as strings.
+
+A `query.Value` is the typed form the helpers build internally. Build one with `query.String`,
+`query.Number`, `query.Boolean`, `query.Null`, or `query.List` when you call `query.Compare` or
+need null. The similarly named `store.Number(50)` is a document value for saving content, not a
+comparison value.
+
+## Comparisons {#operators}
+
+Each helper takes a field name and a value, and returns a `query.Expression`:
+
+| Matches documents where the field…               | Example                                                   |
+| ------------------------------------------------ | --------------------------------------------------------- |
+| Equals the value                                 | `query.Equal("status", "published")`                      |
+| Does not equal the value                         | `query.NotEqual("status", "draft")`                       |
+| Equals one of several values                     | `query.In("color", "red", "blue")`                        |
+| Is greater than, or at least, a number or string | `query.GreaterThan("price", 10)`, `GreaterThanEqual`      |
+| Is less than, or at most, a number or string     | `query.LessThan("price", 50)`, `LessThanEqual`            |
+| Contains the text, ignoring case                 | `query.Contains("title", "ridu")`                         |
+| Contains every word of the text, ignoring case   | `query.Like("title", "go cms")`                           |
+| Has a value, or has none                         | `query.Exists("image", true)`, `query.Exists(..., false)` |
+
+To pass a list you built, spread it: `query.In("color", colors...)`.
+
+The helpers expect a valid name and a matching value, and panic otherwise. That is fine for
 filters written in your code. When the operator or value comes from user input, use
 [`query.Compare`](https://riducms.com/reference/query/compare/), which returns an error instead. The
 [operator table](../querying.md#where) shows the matching REST and TypeScript names.
@@ -124,9 +141,19 @@ filters written in your code. When the operator or value comes from user input, 
 
 ```go
 visible := query.Or(
-	query.Equal(query.Field("status"), query.String("published")),
-	query.Equal(query.Field("author"), query.String(userID)),
+	query.Equal("status", "published"),
+	query.Equal("author", userID),
 )
+```
+
+To add optional conditions, extend the filter as you go. `query.And(filter, next)` merges into the
+existing `And` instead of nesting it, so building a filter this way stays cheap:
+
+```go
+filter := query.Equal("group", groupID)
+if kind != "" {
+	filter = query.And(filter, query.Equal("kind", kind))
+}
 ```
 
 With a single condition, `And` and `Or` return that condition, so you can pass a list whose
@@ -179,7 +206,7 @@ unchanged.
 An access rule can return [`ridu.Where`](https://riducms.com/reference/ridu/where/) with a filter to allow access to
 matching documents only. This collection allows reads of visible products:
 
-```go title="content/products.go" focus={10-13,24}
+```go title="content/products.go" focus={10-11,22}
 package content
 
 import (
@@ -190,9 +217,7 @@ import (
 
 func visibleProducts(ridu.AccessContext) (ridu.AccessDecision, error) {
 	// This filter limits every read, including reads with other filters.
-	return ridu.Where(
-		query.Equal(query.Field("visible"), query.Boolean(true)),
-	), nil
+	return ridu.Where(query.Equal("visible", true)), nil
 }
 
 var Products = ridu.Collection{
@@ -217,21 +242,20 @@ Two different things are called “where”:
 
 ## Sort results {#result-options}
 
-A filter chooses documents; the list options choose their order and page. Build a sort term with
-`query.NewSort`:
+A filter chooses documents; the list options choose their order and page. Sort with `query.Asc`
+and `query.Desc`; later terms break ties in earlier ones:
 
 ```go
-cheapest, err := query.NewSort(query.Field("price"), query.Ascending)
-if err != nil {
-	return store.Page{}, err
-}
 return local.List(ctx, "products", ridu.ListOptions{
 	Where: filter,
-	Sort:  []query.Sort{cheapest},
+	Sort: []query.Sort{
+		query.Asc("price"),
+		query.Desc("createdAt"),
+	},
 	Limit: 20,
 })
 ```
 
-Use `query.Descending` for the reverse order. Some fields, such as arrays and blocks, cannot be
-sorted. See [sorting](../querying.md#sort) and [pagination](../querying.md#pagination) for
+When the direction comes from input, use `query.NewSort`, which returns an error for an unknown
+direction. Some fields, such as arrays and blocks, cannot be sorted. See [sorting](../querying.md#sort) and [pagination](../querying.md#pagination) for
 limits, and the [`query` reference](https://riducms.com/reference/query/) for every function.

@@ -191,7 +191,7 @@ func liveDescendScope(scope liveScope, base Context, selector LiveValidationEmbe
 	existing := false
 	var occurrences []embedded.Occurrence
 	var err error
-	if owner.location.value.Kind() != "" {
+	if !owner.location.value.IsZero() {
 		occurrences, err = embedded.Occurrences(owner.binding.Field, owner.location.value, selector.Field, nil)
 	}
 	if err != nil {
@@ -211,7 +211,7 @@ func liveDescendScope(scope liveScope, base Context, selector LiveValidationEmbe
 		oldTokens := fieldIssueTargets(scope.collection.Schema.Fields, scope.prior, false)
 		tokens := fieldIssueTargets(scope.collection.Schema.Fields, scope.data, false)
 		for path, old := range oldEntries {
-			if old.location.value.Kind() == "" || old.location.value.Kind() == store.ValueNull {
+			if old.location.value.IsZero() || old.location.value.Kind() == store.ValueNull {
 				continue
 			}
 			if old.binding.Field.ID != owner.binding.Field.ID || oldTokens[path] != tokens[selector.Field] {
@@ -295,7 +295,7 @@ func liveValidateStructure(fields []schema.Field, values store.Values, path stri
 	for _, field := range fields {
 		value := values[field.Name]
 		current := joinFieldPath(path, field.Name)
-		if embedded.HasFields(field) && value.Kind() != "" && value.Kind() != store.ValueNull {
+		if embedded.HasFields(field) && !value.IsZero() && value.Kind() != store.ValueNull {
 			occurrences, err := embedded.Occurrences(field, value, current, budget)
 			if err != nil {
 				return liveBadRequest("snapshot contains an invalid embedded structure")
@@ -403,7 +403,7 @@ func liveUnavailableField(fields []schema.Field, values store.Values, parts []st
 // Aggregate checks need an actual object/row list; null is not a completed
 // enclosing scope. Scalar emptiness is instead part of the typed Value API.
 func liveStructuredValueAvailable(field schema.Field, value store.Value) bool {
-	if value.Kind() == "" || value.Kind() == store.ValueNull {
+	if value.IsZero() || value.Kind() == store.ValueNull {
 		return field.Type != schema.FieldTypeGroup && field.Type != schema.FieldTypeArray && field.Type != schema.FieldTypeBlocks
 	}
 	switch field.Type {

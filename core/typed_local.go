@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"time"
 
 	"github.com/riducms/ridu/query"
@@ -95,7 +96,7 @@ func typedInputValues[Input any](input Input) (store.Values, error) {
 		return nil, fmt.Errorf("encode typed collection input: %w", err)
 	}
 	var values store.Values
-	if err := json.Unmarshal(encoded, &values); err != nil {
+	if err := values.UnmarshalJSON(encoded); err != nil {
 		return nil, fmt.Errorf("convert typed collection input: %w", err)
 	}
 	return values, nil
@@ -108,25 +109,21 @@ func decodeTypedDocument[Document any](stored store.Document, err error) (Docume
 	return decodeStoredDocument[Document](stored)
 }
 
+// decodeStoredDocument encodes the document once and decodes it into the typed
+// model. Metadata is added after the fields, so it wins a name collision.
 func decodeStoredDocument[Document any](stored store.Document) (Document, error) {
-	encodedValues := make(map[string]json.RawMessage, len(stored.Values)+5)
-	for name, value := range stored.Values {
-		encoded, err := json.Marshal(value)
-		if err != nil {
-			return *new(Document), fmt.Errorf("encode typed document field %q: %w", name, err)
-		}
-		encodedValues[name] = encoded
-	}
-	encodedValues["id"], _ = json.Marshal(stored.ID)
-	encodedValues["createdAt"], _ = json.Marshal(stored.CreatedAt.Format(time.RFC3339Nano))
-	encodedValues["updatedAt"], _ = json.Marshal(stored.UpdatedAt.Format(time.RFC3339Nano))
+	values := make(store.Values, len(stored.Values)+5)
+	maps.Copy(values, stored.Values)
+	values["id"] = store.String(stored.ID)
+	values["createdAt"] = store.String(stored.CreatedAt.Format(time.RFC3339Nano))
+	values["updatedAt"] = store.String(stored.UpdatedAt.Format(time.RFC3339Nano))
 	if stored.Status != "" {
-		encodedValues["_status"], _ = json.Marshal(stored.Status)
+		values["_status"] = store.String(string(stored.Status))
 	}
 	if stored.Revision > 0 {
-		encodedValues["_revision"], _ = json.Marshal(stored.Revision)
+		values["_revision"] = store.Number(float64(stored.Revision))
 	}
-	encoded, err := json.Marshal(encodedValues)
+	encoded, err := values.MarshalJSON()
 	if err != nil {
 		return *new(Document), fmt.Errorf("encode typed document: %w", err)
 	}

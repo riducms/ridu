@@ -80,7 +80,7 @@ func sqliteDocumentMatcher(_ *modernsqlite.FunctionContext, arguments []driver.V
 	}
 	request := registered.(store.Request)
 	var values store.Values
-	if err := json.Unmarshal([]byte(valuesJSON), &values); err != nil {
+	if err := values.UnmarshalJSON([]byte(valuesJSON)); err != nil {
 		return nil, fmt.Errorf("decode SQLite matcher values: %w", err)
 	}
 	document := store.Document{
@@ -222,7 +222,7 @@ func scanDocumentRecord(row rowScanner, collection schema.Collection) (store.Doc
 		document.Revision = 0
 	}
 	var values store.Values
-	if err := json.Unmarshal([]byte(valuesJSON), &values); err != nil {
+	if err := values.UnmarshalJSON([]byte(valuesJSON)); err != nil {
 		return store.Document{}, fmt.Errorf("decode SQLite document values: %w", err)
 	}
 	document.Values = currentValues(collection.Fields, values)
@@ -285,7 +285,7 @@ func (transaction *documentTransaction) Create(ctx context.Context, request stor
 	}
 	values := store.CloneValues(request.Values)
 	canonicalizeSQLiteAuthIdentity(request.Collection, values)
-	encoded, err := json.Marshal(values)
+	encoded, err := values.MarshalJSON()
 	if err != nil {
 		return store.Document{}, fmt.Errorf("encode SQLite document values: %w", err)
 	}
@@ -1114,7 +1114,7 @@ func (transaction *documentTransaction) persistDocument(ctx context.Context, col
 	if err := validateSQLiteTimes("document timestamp", timestamps...); err != nil {
 		return err
 	}
-	encoded, err := json.Marshal(document.Values)
+	encoded, err := document.Values.MarshalJSON()
 	if err != nil {
 		return fmt.Errorf("encode SQLite document values: %w", err)
 	}
@@ -1719,8 +1719,7 @@ func stableSort(sorts []query.Sort) []query.Sort {
 			return result
 		}
 	}
-	id, _ := query.NewPath("id")
-	return append(result, query.Sort{Path: id, Direction: query.Ascending})
+	return append(result, query.Asc("id"))
 }
 
 func compareDocuments(left, right store.Document, sorts []query.Sort) int {
@@ -1762,14 +1761,14 @@ func compareStoreValues(left store.Value, leftExists bool, right store.Value, ri
 	if leftText, ok := left.StringValue(); ok {
 		rightText, valid := right.StringValue()
 		if !valid {
-			return strings.Compare(string(left.Kind()), string(right.Kind()))
+			return strings.Compare(left.Kind().String(), right.Kind().String())
 		}
 		return strings.Compare(leftText, rightText)
 	}
 	if leftNumber, ok := left.NumberValue(); ok {
 		rightNumber, valid := right.NumberValue()
 		if !valid {
-			return strings.Compare(string(left.Kind()), string(right.Kind()))
+			return strings.Compare(left.Kind().String(), right.Kind().String())
 		}
 		if leftNumber < rightNumber {
 			return -1
@@ -1782,7 +1781,7 @@ func compareStoreValues(left store.Value, leftExists bool, right store.Value, ri
 	if leftBool, ok := left.BooleanValue(); ok {
 		rightBool, valid := right.BooleanValue()
 		if !valid {
-			return strings.Compare(string(left.Kind()), string(right.Kind()))
+			return strings.Compare(left.Kind().String(), right.Kind().String())
 		}
 		if leftBool == rightBool {
 			return 0
@@ -1792,7 +1791,7 @@ func compareStoreValues(left store.Value, leftExists bool, right store.Value, ri
 		}
 		return 1
 	}
-	return strings.Compare(string(left.Kind()), string(right.Kind()))
+	return strings.Compare(left.Kind().String(), right.Kind().String())
 }
 
 func (transaction *documentTransaction) prepare(ctx context.Context, document store.Document, request store.Request) (store.Document, error) {

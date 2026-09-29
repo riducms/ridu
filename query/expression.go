@@ -64,7 +64,9 @@ func (expression *expression) Node() Node {
 	return cloneNode(expression)
 }
 
-// Compare constructs a validated field comparison.
+// Compare constructs a validated field comparison from an operator chosen at
+// run time, such as one read from a request. It returns an error where the
+// helpers below panic.
 func Compare(path Path, operator Operator, value Value) (Expression, error) {
 	if path.String() == "" {
 		return nil, fmt.Errorf("comparison requires a non-empty field path")
@@ -94,24 +96,11 @@ func Compare(path Path, operator Operator, value Value) (Expression, error) {
 		return nil, fmt.Errorf("unknown comparison operator %q", operator)
 	}
 
-	comparison := &Comparison{Path: clonePath(path), Operator: operator, Value: cloneValue(value)}
+	// Paths and values cannot be changed after construction, so the comparison
+	// keeps them without copying.
+	comparison := &Comparison{Path: path, Operator: operator, Value: value}
 	return &expression{kind: ExpressionComparison, comparison: comparison}, nil
 }
-
-func GreaterThan(path Path, value Value) Expression {
-	return mustCompare(path, OperatorGreaterThan, value)
-}
-func GreaterThanEqual(path Path, value Value) Expression {
-	return mustCompare(path, OperatorGreaterThanEqual, value)
-}
-func LessThan(path Path, value Value) Expression { return mustCompare(path, OperatorLessThan, value) }
-func LessThanEqual(path Path, value Value) Expression {
-	return mustCompare(path, OperatorLessThanEqual, value)
-}
-func Contains(path Path, value string) Expression {
-	return mustCompare(path, OperatorContains, String(value))
-}
-func Like(path Path, value string) Expression { return mustCompare(path, OperatorLike, String(value)) }
 
 func mustCompare(path Path, operator Operator, value Value) Expression {
 	expression, err := Compare(path, operator, value)
@@ -121,31 +110,62 @@ func mustCompare(path Path, operator Operator, value Value) Expression {
 	return expression
 }
 
-// Equal constructs an equality expression.
-func Equal(path Path, value Value) Expression {
-	expression, err := Compare(path, OperatorEqual, value)
-	if err != nil {
-		panic(err)
-	}
-	return expression
+// Equal matches documents whose field equals value, as in
+// Equal("status", "published") or Equal("parent", query.Null()).
+func Equal[P FieldPath, V Operand](path P, value V) Expression {
+	return mustCompare(pathOf(path), OperatorEqual, valueOf(value))
 }
 
-// NotEqual constructs an inequality expression.
-func NotEqual(path Path, value Value) Expression {
-	expression, err := Compare(path, OperatorNotEqual, value)
-	if err != nil {
-		panic(err)
-	}
-	return expression
+// NotEqual matches documents whose field differs from value.
+func NotEqual[P FieldPath, V Operand](path P, value V) Expression {
+	return mustCompare(pathOf(path), OperatorNotEqual, valueOf(value))
 }
 
-// In constructs a membership expression.
-func In(path Path, values ...Value) Expression {
-	expression, err := Compare(path, OperatorIn, List(values...))
-	if err != nil {
-		panic(err)
+// In matches documents whose field equals one of values, as in
+// In("status", "draft", "published"). With no values it matches nothing.
+func In[P FieldPath, V Operand](path P, values ...V) Expression {
+	items := make([]Value, len(values))
+	for index, value := range values {
+		items[index] = valueOf(value)
 	}
-	return expression
+	return mustCompare(pathOf(path), OperatorIn, Value{kind: ValueList, items: items})
+}
+
+// GreaterThan matches documents whose field is greater than value.
+func GreaterThan[P FieldPath, V Ordered](path P, value V) Expression {
+	return mustCompare(pathOf(path), OperatorGreaterThan, valueOf(value))
+}
+
+// GreaterThanEqual matches documents whose field is at least value.
+func GreaterThanEqual[P FieldPath, V Ordered](path P, value V) Expression {
+	return mustCompare(pathOf(path), OperatorGreaterThanEqual, valueOf(value))
+}
+
+// LessThan matches documents whose field is less than value.
+func LessThan[P FieldPath, V Ordered](path P, value V) Expression {
+	return mustCompare(pathOf(path), OperatorLessThan, valueOf(value))
+}
+
+// LessThanEqual matches documents whose field is at most value.
+func LessThanEqual[P FieldPath, V Ordered](path P, value V) Expression {
+	return mustCompare(pathOf(path), OperatorLessThanEqual, valueOf(value))
+}
+
+// Contains matches documents whose text field contains value, ignoring case.
+func Contains[P FieldPath](path P, value string) Expression {
+	return mustCompare(pathOf(path), OperatorContains, String(value))
+}
+
+// Like matches documents whose text field contains every word of value,
+// ignoring case and word order.
+func Like[P FieldPath](path P, value string) Expression {
+	return mustCompare(pathOf(path), OperatorLike, String(value))
+}
+
+// Exists matches documents that have a value for the field when exists is
+// true, and documents without one when it is false.
+func Exists[P FieldPath](path P, exists bool) Expression {
+	return mustCompare(pathOf(path), OperatorExists, Boolean(exists))
 }
 
 // And matches documents that satisfy every condition. With one condition it
@@ -167,24 +187,41 @@ func Not(condition Expression) Expression {
 	if condition == nil {
 		panic(fmt.Errorf("query.Not requires a condition"))
 	}
-	return &expression{kind: ExpressionNot, children: []*expression{expressionFromNode(condition.Node())}}
+	return &expression{kind: ExpressionNot, children: []*expression{sealed(condition)}}
 }
 
+// logical shares immutable child nodes and merges nested conditions of the same
+// kind: And(And(a, b), c) is And(a, b, c). Flattening copies child pointers into
+// a new slice; it does not copy the nodes themselves.
 func logical(kind ExpressionKind, conditions []Expression) Expression {
 	if len(conditions) == 0 {
 		panic(fmt.Errorf("query.%s requires at least one condition", logicalName(kind)))
 	}
-	children := make([]*expression, len(conditions))
-	for index, child := range conditions {
-		if child == nil {
+	children := make([]*expression, 0, len(conditions))
+	for index, condition := range conditions {
+		if condition == nil {
 			panic(fmt.Errorf("query.%s condition %d is nil", logicalName(kind), index))
 		}
-		children[index] = expressionFromNode(child.Node())
+		child := sealed(condition)
+		if child.kind == kind {
+			children = append(children, child.children...)
+			continue
+		}
+		children = append(children, child)
 	}
 	if len(children) == 1 {
 		return children[0]
 	}
 	return &expression{kind: kind, children: children}
+}
+
+// sealed returns the package's own representation of an expression. Another
+// type can satisfy Expression only by embedding one, so it is copied once.
+func sealed(condition Expression) *expression {
+	if own, ok := condition.(*expression); ok {
+		return own
+	}
+	return expressionFromNode(condition.Node())
 }
 
 func logicalName(kind ExpressionKind) string {
@@ -197,9 +234,8 @@ func logicalName(kind ExpressionKind) string {
 func cloneNode(source *expression) Node {
 	node := Node{Kind: source.kind}
 	if source.comparison != nil {
+		// Path and Value are immutable, so the snapshot copies only the struct.
 		comparison := *source.comparison
-		comparison.Path = clonePath(comparison.Path)
-		comparison.Value = cloneValue(comparison.Value)
 		node.Comparison = &comparison
 	}
 	if source.children != nil {
@@ -215,8 +251,6 @@ func expressionFromNode(node Node) *expression {
 	result := &expression{kind: node.Kind}
 	if node.Comparison != nil {
 		comparison := *node.Comparison
-		comparison.Path = clonePath(comparison.Path)
-		comparison.Value = cloneValue(comparison.Value)
 		result.comparison = &comparison
 	}
 	if node.Children != nil {
@@ -226,13 +260,4 @@ func expressionFromNode(node Node) *expression {
 		}
 	}
 	return result
-}
-
-func clonePath(path Path) Path {
-	return Path{segments: path.Segments()}
-}
-
-func cloneValue(value Value) Value {
-	value.items = cloneValues(value.items)
-	return value
 }

@@ -147,7 +147,7 @@ export const ownPosts: Access = ({ req: { user } }) => {
 };
 ```
 
-```go title="content/post_access.go" group="post-access" tab="Ridu" focus={12-15}
+```go title="content/post_access.go" group="post-access" tab="Ridu" focus={12-13}
 package content
 
 import (
@@ -160,9 +160,7 @@ func ownPosts(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
 		return ridu.Deny(), nil
 	}
 	// Check ownership in the database operation, without a prior read.
-	return ridu.Where(
-		query.Equal(query.Field("author"), query.String(ctx.Actor.ID)),
-	), nil
+	return ridu.Where(query.Equal("author", ctx.Actor.ID)), nil
 }
 ```
 

@@ -2,8 +2,10 @@ package query_test
 
 import (
 	"encoding/json"
+	"math"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/riducms/ridu/query"
 )
@@ -185,5 +187,146 @@ func TestFieldAndLogicalHelpersPanicOnlyOnProgrammerErrors(t *testing.T) {
 			}()
 			call()
 		}()
+	}
+}
+
+type statusName string
+
+type rank uint16
+
+func TestHelpersAcceptFieldNamesAndPlainValues(t *testing.T) {
+	cases := []struct {
+		name       string
+		expression query.Expression
+		want       string
+	}{
+		{"string", query.Equal("status", "published"), `status equal "published"`},
+		{"nested name", query.NotEqual("seo.title", "Draft"), `seo.title not_equal "Draft"`},
+		{"path", query.Equal(query.Field("seo", "title"), query.Null()), `seo.title equal null`},
+		{"named string", query.Equal("status", statusName("draft")), `status equal "draft"`},
+		{"boolean", query.Equal("featured", true), `featured equal true`},
+		{"integer", query.GreaterThan("position", 3), `position greater_than 3`},
+		{"named unsigned", query.LessThanEqual("rank", rank(7)), `rank less_than_equal 7`},
+		{"float", query.GreaterThanEqual("score", 2.5), `score greater_than_equal 2.5`},
+		{"in", query.In("status", "draft", "published"), `status in ["draft","published"]`},
+		{"in values", query.In("status", []query.Value{query.String("draft")}...), `status in ["draft"]`},
+		{"contains", query.Contains("title", "ridu"), `title contains "ridu"`},
+		{"like", query.Like("title", "go cms"), `title like "go cms"`},
+		{"exists", query.Exists("image", false), `image exists false`},
+	}
+	for _, test := range cases {
+		comparison := test.expression.Node().Comparison
+		value, err := json.Marshal(comparison.Value)
+		if err != nil {
+			t.Fatalf("%s: marshal value: %v", test.name, err)
+		}
+		if got := comparison.Path.String() + " " + string(comparison.Operator) + " " + string(value); got != test.want {
+			t.Errorf("%s = %s, want %s", test.name, got, test.want)
+		}
+	}
+}
+
+func TestHelpersPanicOnValuesANumberCannotHold(t *testing.T) {
+	for name, call := range map[string]func(){
+		"malformed name":   func() { query.Equal("SEO.title", "x") },
+		"empty name":       func() { query.Equal("", "x") },
+		"large integer":    func() { query.Equal("id", int64(1)<<60) },
+		"large unsigned":   func() { query.Equal("id", uint64(1)<<60) },
+		"not a number":     func() { query.GreaterThan("score", math.NaN()) },
+		"infinite":         func() { query.LessThan("score", math.Inf(1)) },
+		"list for equal":   func() { query.Equal("status", query.List(query.String("x"))) },
+		"boolean in range": func() { query.GreaterThan("score", query.Boolean(true)) },
+	} {
+		func() {
+			defer func() {
+				if recover() == nil {
+					t.Errorf("%s did not panic", name)
+				}
+			}()
+			call()
+		}()
+	}
+	if got := query.Equal("id", int64(1)<<53).Node().Comparison.Value; got.Kind() != query.ValueNumber {
+		t.Fatalf("2^53 = %v, want a number", got)
+	}
+}
+
+func TestSortHelpers(t *testing.T) {
+	for _, test := range []struct {
+		sort      query.Sort
+		path      string
+		direction query.Direction
+	}{
+		{query.Asc("title"), "title", query.Ascending},
+		{query.Desc("seo.title"), "seo.title", query.Descending},
+		{query.Desc(query.Field("createdAt")), "createdAt", query.Descending},
+	} {
+		if test.sort.Path.String() != test.path || test.sort.Direction != test.direction {
+			t.Errorf("sort = %s %s, want %s %s", test.sort.Path, test.sort.Direction, test.path, test.direction)
+		}
+	}
+}
+
+// embedded satisfies Expression without being the package's own type.
+type embedded struct{ query.Expression }
+
+func TestLogicalHelpersMergeNestedConditions(t *testing.T) {
+	a, b, c := query.Equal("a", 1), query.Equal("b", 2), query.Equal("c", 3)
+	shape := func(expression query.Expression) string {
+		var describe func(query.Node) string
+		describe = func(node query.Node) string {
+			if node.Comparison != nil {
+				return node.Comparison.Path.String()
+			}
+			parts := make([]string, len(node.Children))
+			for index, child := range node.Children {
+				parts[index] = describe(child)
+			}
+			return string(node.Kind) + "(" + strings.Join(parts, " ") + ")"
+		}
+		return describe(expression.Node())
+	}
+	for _, test := range []struct {
+		expression query.Expression
+		want       string
+	}{
+		{query.And(query.And(a, b), c), "and(a b c)"},
+		{query.Or(a, query.Or(b, c)), "or(a b c)"},
+		{query.And(query.Or(a, b), c), "and(or(a b) c)"},
+		{query.Or(query.And(a, b), c), "or(and(a b) c)"},
+		{query.And(query.Not(query.And(a, b)), c), "and(not(and(a b)) c)"},
+		{query.And(embedded{query.And(a, b)}, c), "and(a b c)"},
+		{query.Not(embedded{a}), "not(a)"},
+	} {
+		if got := shape(test.expression); got != test.want {
+			t.Errorf("shape = %s, want %s", got, test.want)
+		}
+	}
+}
+
+func TestBuildingAFilterIncrementallyHasLinearAllocationCount(t *testing.T) {
+	build := func(count int) float64 {
+		return testing.AllocsPerRun(20, func() {
+			filter := query.Equal("a", "x")
+			for range count {
+				filter = query.And(filter, query.Equal("b", "y"))
+			}
+		})
+	}
+	small, large := build(10), build(40)
+	// Sharing immutable nodes keeps allocation counts near 4 times for 4 times
+	// the conditions. This does not measure the bytes copied while flattening.
+	if large > small*6 {
+		t.Fatalf("allocations grew from %.0f to %.0f for 4 times the conditions", small, large)
+	}
+}
+
+func TestDateTimeMatchesTheAdminFormat(t *testing.T) {
+	moment := time.Date(2026, 9, 29, 15, 5, 0, 0, time.FixedZone("BST", 3600))
+	if got, _ := query.DateTime(moment).StringValue(); got != "2026-09-29T14:05:00.000Z" {
+		t.Fatalf("DateTime = %q", got)
+	}
+	if got := query.GreaterThan("publishedAt", query.DateTime(moment)).Kind(); got != query.ExpressionComparison {
+		t.Fatalf("comparison kind = %q", got)
 	}
 }

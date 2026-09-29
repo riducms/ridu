@@ -8,9 +8,7 @@ import (
 
 func visibleProducts(ridu.AccessContext) (ridu.AccessDecision, error) {
 	// This filter limits every read, including reads with other filters.
-	return ridu.Where(
-		query.Equal(query.Field("visible"), query.Boolean(true)),
-	), nil
+	return ridu.Where(query.Equal("visible", true)), nil
 }
 
 var Products = ridu.Collection{

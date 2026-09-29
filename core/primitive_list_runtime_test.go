@@ -269,6 +269,7 @@ func TestPrimitiveListQueryRejectsNonfiniteMembership(t *testing.T) {
 	}
 	path, _ := query.ParsePath("sizes")
 	for _, number := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
+		// The plain helper panics on these; a typed Value reaches the engine.
 		_, err := app.Local().List(t.Context(), "products", core.ListOptions{Where: query.In(path, query.Number(number))})
 		var failure *core.OperationError
 		if !errors.As(err, &failure) || failure.Status != 400 || !strings.Contains(err.Error(), "finite numbers") {

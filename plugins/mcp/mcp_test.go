@@ -32,7 +32,7 @@ func TestMCPListsExplicitToolsAndReadsThroughActorAccessAndRedaction(t *testing.
 		if email != "agent@example.test" {
 			return ridu.Deny(), nil
 		}
-		return ridu.Where(query.Equal(publishedPath, query.Boolean(true))), nil
+		return ridu.Where(query.Equal(publishedPath, true)), nil
 	}
 	authenticatedGlobal := func(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
 		if ctx.Actor == nil || ctx.ActorCollection != "users" {

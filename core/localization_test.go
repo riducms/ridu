@@ -177,7 +177,7 @@ func TestLocalizedScalarCRUDQueryFallbackAndAccessContext(t *testing.T) {
 	}
 
 	title, _ := query.NewPath("title")
-	where := query.Equal(title, query.String("Bonjour"))
+	where := query.Equal(title, "Bonjour")
 	page, err := application.Local().List(ctx, "posts", ridu.ListOptions{Locale: "fr", Where: where})
 	if err != nil || page.Total != 1 || page.Documents[0].ID != english.ID {
 		t.Fatalf("French localized query = %#v, %v", page, err)
@@ -282,7 +282,7 @@ func TestDuplicateAuthorizesEveryRetainedLocale(t *testing.T) {
 						if ctx.Actor == nil {
 							return ridu.Deny(), nil
 						}
-						return ridu.Where(query.Equal(ownerPath, query.String(ctx.Actor.ID))), nil
+						return ridu.Where(query.Equal(ownerPath, ctx.Actor.ID)), nil
 					}
 					return ridu.Allow(), nil
 				}},
@@ -629,7 +629,7 @@ func TestLocalizedDescendantsPreserveSharedNestedStructure(t *testing.T) {
 		t.Fatalf("all-locales nested title = %#v", seo["title"])
 	}
 	path, _ := query.NewPath("seo", "title")
-	page, err := application.Local().List(ctx, "pages", ridu.ListOptions{Locale: "fr", Where: query.Equal(path, query.String("Accueil"))})
+	page, err := application.Local().List(ctx, "pages", ridu.ListOptions{Locale: "fr", Where: query.Equal(path, "Accueil")})
 	if err != nil || page.Total != 1 {
 		t.Fatalf("localized nested query = %#v, %v", page, err)
 	}
@@ -1169,7 +1169,7 @@ func TestLocalizedVersionRestoreValidatesEveryRelationshipLocale(t *testing.T) {
 				Slug: "people", Fields: field.Fields{field.Text("name").Required()},
 				Access: ridu.CollectionAccess{Read: func(ridu.AccessContext) (ridu.AccessDecision, error) {
 					if restrictTargets {
-						return ridu.Where(query.Equal(idPath, query.String(publicID))), nil
+						return ridu.Where(query.Equal(idPath, publicID)), nil
 					}
 					return ridu.Allow(), nil
 				}},
@@ -1333,7 +1333,7 @@ func TestAllLocalesPopulationRequiresTargetAccessForEveryLocale(t *testing.T) {
 			{
 				Slug: "people", Fields: field.Fields{field.Text("name").Required().Localized()},
 				Access: ridu.CollectionAccess{Read: func(ridu.AccessContext) (ridu.AccessDecision, error) {
-					return ridu.Where(query.Equal(name, query.String("Public"))), nil
+					return ridu.Where(query.Equal(name, "Public")), nil
 				}},
 			},
 			{Slug: "posts", Fields: field.Fields{field.Text("title"), field.Relationship("editor", "people")}},
@@ -1497,11 +1497,11 @@ func TestLocalizedRelationshipPopulationUsesTheRequestLocale(t *testing.T) {
 	}
 	editor, _ := query.NewPath("editor")
 	idPath, _ := query.NewPath("id")
-	englishPage, err := application.Local().List(ctx, "posts", ridu.ListOptions{Locale: "en", Where: query.Equal(idPath, query.String(post.ID)), Populate: []query.Population{{Path: editor}}})
+	englishPage, err := application.Local().List(ctx, "posts", ridu.ListOptions{Locale: "en", Where: query.Equal(idPath, post.ID), Populate: []query.Population{{Path: editor}}})
 	if err != nil || len(englishPage.Documents) != 1 {
 		t.Fatal(err)
 	}
-	frenchPage, err := application.Local().List(ctx, "posts", ridu.ListOptions{Locale: "fr", Where: query.Equal(idPath, query.String(post.ID)), Populate: []query.Population{{Path: editor}}})
+	frenchPage, err := application.Local().List(ctx, "posts", ridu.ListOptions{Locale: "fr", Where: query.Equal(idPath, post.ID), Populate: []query.Population{{Path: editor}}})
 	if err != nil || len(frenchPage.Documents) != 1 {
 		t.Fatal(err)
 	}

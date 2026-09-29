@@ -111,7 +111,7 @@ func TestMongoDBVersionTransactionRetentionAccessAndRollback(t *testing.T) {
 		t.Fatalf("retained versions = %#v", items)
 	}
 	ownerPath, _ := query.NewPath("owner")
-	ownerB := query.Equal(ownerPath, query.String("owner-b")).Node()
+	ownerB := query.Equal(ownerPath, "owner-b").Node()
 	visible, err := versionRead.ListVersions(t.Context(), store.VersionRequest{
 		Collection: collection, DocumentID: document.ID, Access: &ownerB,
 	})
@@ -242,7 +242,7 @@ func TestMongoDBVersionAccessUsesRepeatedSnapshotPredicates(t *testing.T) {
 	}
 	mongoCommit(t, write)
 
-	access := query.Equal(mongoMustPath(t, "rows.kind"), query.String("primary")).Node()
+	access := query.Equal(mongoMustPath(t, "rows.kind"), "primary").Node()
 	read := mongoBegin(t, backend, true)
 	visible, err := read.(store.VersionTransaction).ListVersions(t.Context(), store.VersionRequest{
 		Collection: collection,
@@ -267,7 +267,7 @@ func TestMongoDBOperationEngineVersionsRestoreAccessAndSameIDRecreation(t *testi
 		if ctx.Actor == nil {
 			return ridu.Deny(), nil
 		}
-		return ridu.Where(query.Equal(ownerPath, query.String(ctx.Actor.ID))), nil
+		return ridu.Where(query.Equal(ownerPath, ctx.Actor.ID)), nil
 	}
 	application, err := ridu.New(ridu.Config{Name: "MongoDB versions", Collections: []ridu.Collection{{
 		Slug: "posts", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true, MaxPerDocument: 3},

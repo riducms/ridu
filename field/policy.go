@@ -230,10 +230,10 @@ func (c ComponentRef) Err() error {
 	if c.configArguments > 1 {
 		return fmt.Errorf("component accepts at most one configuration object")
 	}
-	if c.configArguments == 1 && c.Config.Kind() == "" {
+	if c.configArguments == 1 && c.Config.IsZero() {
 		return fmt.Errorf("supplied component configuration must be an object; omit the argument for a component without settings")
 	}
-	if c.Key == "" && c.PluginKey == "" && c.Config.Kind() == "" {
+	if c.Key == "" && c.PluginKey == "" && c.Config.IsZero() {
 		return nil
 	}
 	if c.PluginKey == "" {
@@ -248,7 +248,7 @@ func (c ComponentRef) Err() error {
 			return fmt.Errorf("plugin component %q must be a JavaScript identifier", c.Key)
 		}
 	}
-	if c.Config.Kind() != "" {
+	if !c.Config.IsZero() {
 		if c.Config.Kind() != store.ValueObject {
 			return fmt.Errorf("component configuration must be a finite JSON object")
 		}
@@ -269,7 +269,7 @@ func (c ComponentRef) MarshalJSON() ([]byte, error) {
 		return []byte("null"), nil
 	}
 	var config *store.Value
-	if c.Config.Kind() != "" {
+	if !c.Config.IsZero() {
 		value := c.Config
 		config = &value
 	}

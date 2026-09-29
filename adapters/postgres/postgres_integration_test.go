@@ -159,7 +159,7 @@ func TestPostgresExpectedRevisionDoesNotRevealFilteredDocuments(t *testing.T) {
 		Slug: "posts", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true},
 		Fields: field.Fields{field.Text("title").Required(), field.Select("status", "draft", "published").Required()},
 		Access: ridu.CollectionAccess{Update: func(ridu.AccessContext) (ridu.AccessDecision, error) {
-			return ridu.Where(query.Equal(statusPath, query.String("published"))), nil
+			return ridu.Where(query.Equal(statusPath, "published")), nil
 		}},
 	}}}
 	backend, manifest := integrationBackend(t, ctx, config)
@@ -206,7 +206,7 @@ func TestPostgresGlobalFilteredAccessUsesRowsAndVersionSnapshots(t *testing.T) {
 		t.Fatal(err)
 	}
 	filtered := func(ridu.AccessContext) (ridu.AccessDecision, error) {
-		return ridu.Where(query.Equal(siteName, query.String("Ridu"))), nil
+		return ridu.Where(query.Equal(siteName, "Ridu")), nil
 	}
 	allowInitialization := false
 	config := ridu.Config{
@@ -278,8 +278,8 @@ func TestPostgresGlobalAllLocalesAccessRequiresEveryLocalizedSnapshot(t *testing
 		t.Fatal(err)
 	}
 	predicate := query.And(
-		query.Equal(title, query.String("Public")),
-		query.Equal(audience, query.String("Public")),
+		query.Equal(title, "Public"),
+		query.Equal(audience, "Public"),
 	)
 	filtered := func(ridu.AccessContext) (ridu.AccessDecision, error) {
 		return ridu.Where(predicate), nil
@@ -353,7 +353,7 @@ func TestPostgresAllLocalesPopulationRequiresTargetAccessForEveryLocale(t *testi
 			{
 				Slug: "people", Fields: field.Fields{field.Text("name").Required().Localized()},
 				Access: ridu.CollectionAccess{Read: func(ridu.AccessContext) (ridu.AccessDecision, error) {
-					return ridu.Where(query.Equal(name, query.String("Public"))), nil
+					return ridu.Where(query.Equal(name, "Public")), nil
 				}},
 			},
 			{Slug: "posts", Fields: field.Fields{field.Text("title"), field.Relationship("editor", "people")}},
@@ -508,9 +508,9 @@ func TestPostgresLocalizedIntermediateContainerPredicatesMatchProjectedDocuments
 		t.Fatal(err)
 	}
 	visible := query.And(
-		query.Equal(detailsName, query.String("visible")),
-		query.Equal(rowLabel, query.String("visible")),
-		query.Equal(heading, query.String("visible")),
+		query.Equal(detailsName, "visible"),
+		query.Equal(rowLabel, "visible"),
+		query.Equal(heading, "visible"),
 	)
 	filtered := func(ridu.AccessContext) (ridu.AccessDecision, error) {
 		return ridu.Where(visible), nil
@@ -554,7 +554,7 @@ func TestPostgresLocalizedIntermediateContainerPredicatesMatchProjectedDocuments
 	publicRevision := document.Revision
 	for _, path := range []query.Path{detailsName, rowLabel, heading} {
 		page, err := application.Local().List(ctx, "pages", ridu.ListOptions{
-			Locale: "fr", Where: query.Equal(path, query.String("visible")),
+			Locale: "fr", Where: query.Equal(path, "visible"),
 		})
 		if err != nil || page.Total != 1 || page.Documents[0].ID != document.ID {
 			t.Fatalf("French predicate %s = %#v, %v", path.String(), page, err)
@@ -650,7 +650,7 @@ func TestPostgresRepeatedNullPredicatesMatchProjectedAccessSemantics(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	current := query.Equal(title, query.String("never"))
+	current := query.Equal(title, "never")
 	filtered := func(ridu.AccessContext) (ridu.AccessDecision, error) {
 		return ridu.Where(current), nil
 	}
@@ -837,13 +837,13 @@ func TestPostgresJSONStringPredicatesRemainTypeAwareUnderNot(t *testing.T) {
 	assertList("JSON contains", query.Contains(payload, "visible"), "string")
 	assertList("JSON not like", notVisible, "absent", "empty", "object", "number", "null")
 	assertList("JSON not empty like", notEmpty, "absent", "object", "number", "null")
-	assertList("JSON string equality", query.Equal(payload, query.String("visible")), "string")
-	assertList("JSON string inequality", query.NotEqual(payload, query.String("visible")), "absent", "empty", "object", "number", "null")
-	assertList("JSON string kind mismatch", query.Equal(payload, query.String("9")))
-	assertList("JSON number equality", query.Equal(payload, query.Number(9)), "number")
+	assertList("JSON string equality", query.Equal(payload, "visible"), "string")
+	assertList("JSON string inequality", query.NotEqual(payload, "visible"), "absent", "empty", "object", "number", "null")
+	assertList("JSON string kind mismatch", query.Equal(payload, "9"))
+	assertList("JSON number equality", query.Equal(payload, 9), "number")
 	assertList("JSON null equality", query.Equal(payload, query.Null()), "absent", "null")
 	assertList("JSON mixed membership", query.In(payload, query.Null(), query.String("visible"), query.Number(9)), "absent", "string", "number", "null")
-	assertList("JSON ordered number", query.GreaterThan(payload, query.Number(5)), "number")
+	assertList("JSON ordered number", query.GreaterThan(payload, 5), "number")
 	notMixed := query.Not(query.In(payload, query.Null(), query.String("visible")))
 	assertList("JSON outer NOT membership", notMixed, "empty", "object", "number")
 
@@ -924,27 +924,27 @@ func TestPostgresLocalizedScalarStorageQueryAndFallback(t *testing.T) {
 		t.Fatalf("Arabic empty-string fallback = %#v, %v", arabic, err)
 	}
 	title, _ := query.NewPath("title")
-	page, err := application.Local().List(ctx, "posts", ridu.ListOptions{Locale: "fr", Where: query.Equal(title, query.String("Bonjour"))})
+	page, err := application.Local().List(ctx, "posts", ridu.ListOptions{Locale: "fr", Where: query.Equal(title, "Bonjour")})
 	if err != nil || page.Total != 1 || page.Documents[0].ID != document.ID {
 		t.Fatalf("French query = %#v, %v", page, err)
 	}
 	summary, _ := query.NewPath("summary")
-	page, err = application.Local().List(ctx, "posts", ridu.ListOptions{Locale: "ar", Where: query.Equal(summary, query.String("English summary"))})
+	page, err = application.Local().List(ctx, "posts", ridu.ListOptions{Locale: "ar", Where: query.Equal(summary, "English summary")})
 	if err != nil || page.Total != 1 || page.Documents[0].ID != document.ID {
 		t.Fatalf("Arabic empty-string fallback query = %#v, %v", page, err)
 	}
 	description, _ := query.NewPath("seo", "description")
-	page, err = application.Local().List(ctx, "posts", ridu.ListOptions{Locale: "fr", Where: query.Equal(description, query.String("Description française"))})
+	page, err = application.Local().List(ctx, "posts", ridu.ListOptions{Locale: "fr", Where: query.Equal(description, "Description française")})
 	if err != nil || page.Total != 1 || page.Documents[0].ID != document.ID {
 		t.Fatalf("French nested query = %#v, %v", page, err)
 	}
 	detailName, _ := query.NewPath("details", "name")
-	page, err = application.Local().List(ctx, "posts", ridu.ListOptions{Locale: "fr", Where: query.Equal(detailName, query.String("Détails français"))})
+	page, err = application.Local().List(ctx, "posts", ridu.ListOptions{Locale: "fr", Where: query.Equal(detailName, "Détails français")})
 	if err != nil || page.Total != 1 || page.Documents[0].ID != document.ID {
 		t.Fatalf("French localized-parent query = %#v, %v", page, err)
 	}
 	label, _ := query.NewPath("links", "label")
-	page, err = application.Local().List(ctx, "posts", ridu.ListOptions{Locale: "fr", Where: query.Equal(label, query.String("À propos"))})
+	page, err = application.Local().List(ctx, "posts", ridu.ListOptions{Locale: "fr", Where: query.Equal(label, "À propos")})
 	if err != nil || page.Total != 1 || page.Documents[0].ID != document.ID {
 		t.Fatalf("French localized array query = %#v, %v", page, err)
 	}
@@ -1881,13 +1881,13 @@ func integrationConfig() ridu.Config {
 				},
 				Access: ridu.CollectionAccess{
 					Read: func(ridu.AccessContext) (ridu.AccessDecision, error) {
-						return ridu.Where(query.Equal(statusPath, query.String("published"))), nil
+						return ridu.Where(query.Equal(statusPath, "published")), nil
 					},
 					Update: func(ridu.AccessContext) (ridu.AccessDecision, error) {
-						return ridu.Where(query.Equal(statusPath, query.String("published"))), nil
+						return ridu.Where(query.Equal(statusPath, "published")), nil
 					},
 					Delete: func(ridu.AccessContext) (ridu.AccessDecision, error) {
-						return ridu.Where(query.Equal(statusPath, query.String("published"))), nil
+						return ridu.Where(query.Equal(statusPath, "published")), nil
 					},
 				},
 			},

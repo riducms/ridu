@@ -186,7 +186,7 @@ func TestMongoDBUploadDocumentsReferencesPopulationVersionsAndTargetedLookup(t *
 		{name: "configured image size", path: thumbObjectKeyPath, key: "active-variant"},
 	} {
 		page, err := application.Local().List(t.Context(), "media", ridu.ListOptions{
-			Where: query.Equal(candidate.path, query.String(candidate.key)), Limit: 10,
+			Where: query.Equal(candidate.path, candidate.key), Limit: 10,
 		})
 		if err != nil {
 			t.Fatalf("list upload by %s object key: %v", candidate.name, err)
@@ -260,7 +260,7 @@ func TestMongoDBUploadDocumentsReferencesPopulationVersionsAndTargetedLookup(t *
 		t.Fatalf("create corruptible upload owner: %v", err)
 	}
 	matching, err := application.Local().List(t.Context(), "posts", ridu.ListOptions{
-		Where: query.Equal(heroPath, query.String(target.ID)), Limit: 10,
+		Where: query.Equal(heroPath, target.ID), Limit: 10,
 	})
 	if err != nil {
 		t.Fatalf("list singular upload with access composition: %v", err)
@@ -276,7 +276,7 @@ func TestMongoDBUploadDocumentsReferencesPopulationVersionsAndTargetedLookup(t *
 		t.Fatal(err)
 	}
 	corruptMatch, err := application.Local().List(t.Context(), "posts", ridu.ListOptions{
-		Where: query.Equal(heroPath, query.String(otherTarget.ID)), Limit: 10,
+		Where: query.Equal(heroPath, otherTarget.ID), Limit: 10,
 	})
 	if err != nil {
 		t.Fatalf("list over corrupt nested upload owner: %v", err)

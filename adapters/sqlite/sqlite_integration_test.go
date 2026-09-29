@@ -34,13 +34,13 @@ func TestSQLiteStoreRunsThePayloadDocumentAndAuthVertical(t *testing.T) {
 				Fields: field.Fields{field.Text("title").Required().Unique(), field.Select("status", "draft", "published").Required(), field.Relationship("author", "users").Required(), field.Relationships("watchers", "users"), field.Group("metadata", field.Fields{field.Text("source")})},
 				Access: ridu.CollectionAccess{
 					Read: func(ridu.AccessContext) (ridu.AccessDecision, error) {
-						return ridu.Where(query.Equal(statusPath, query.String("published"))), nil
+						return ridu.Where(query.Equal(statusPath, "published")), nil
 					},
 					Update: func(ridu.AccessContext) (ridu.AccessDecision, error) {
-						return ridu.Where(query.Equal(statusPath, query.String("published"))), nil
+						return ridu.Where(query.Equal(statusPath, "published")), nil
 					},
 					Delete: func(ridu.AccessContext) (ridu.AccessDecision, error) {
-						return ridu.Where(query.Equal(statusPath, query.String("published"))), nil
+						return ridu.Where(query.Equal(statusPath, "published")), nil
 					},
 				},
 			},

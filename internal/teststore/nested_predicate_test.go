@@ -29,12 +29,12 @@ func TestNestedPredicatesMatchGroupsArraysAndBlocks(t *testing.T) {
 		{path: "layout.hero.heading", value: "Build with Ridu"},
 	} {
 		path, _ := query.ParsePath(test.path)
-		if !matches(document, query.Equal(path, query.String(test.value)).Node()) {
+		if !matches(document, query.Equal(path, test.value).Node()) {
 			t.Errorf("%s did not match", test.path)
 		}
 	}
 	path, _ := query.ParsePath("links.label")
-	if matches(document, query.NotEqual(path, query.String("Docs")).Node()) {
+	if matches(document, query.NotEqual(path, "Docs").Node()) {
 		t.Fatal("array not-equals matched while one row equals the excluded value")
 	}
 	nullPath, _ := query.ParsePath("optional")

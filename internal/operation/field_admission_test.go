@@ -16,7 +16,7 @@ func TestBoundReadPoliciesProtectNestedQueryPaths(t *testing.T) {
 	if err := authorizeQuery(nested, nil, []query.Sort{{Path: parentPath, Direction: query.Ascending}}); err == nil {
 		t.Fatal("parent container sort bypassed attached descendant policy")
 	}
-	if err := authorizeQuery(nested, query.Equal(childPath, query.String("probe")), nil); err == nil {
+	if err := authorizeQuery(nested, query.Equal(childPath, "probe"), nil); err == nil {
 		t.Fatal("nested attached policy did not protect canonical field query")
 	}
 }

@@ -22,7 +22,7 @@ func TestPostgresReferenceOptionFiltersAreAtomicWithTargetReadAccess(t *testing.
 			{
 				Slug: "people", Fields: field.Fields{field.Text("label"), field.Number("score"), field.Checkbox("visible").Required()},
 				Access: ridu.CollectionAccess{Read: func(ridu.AccessContext) (ridu.AccessDecision, error) {
-					return ridu.Where(query.Equal(visiblePath, query.Boolean(true))), nil
+					return ridu.Where(query.Equal(visiblePath, true)), nil
 				}},
 			},
 			{

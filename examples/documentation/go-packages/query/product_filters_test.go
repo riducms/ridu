@@ -2,7 +2,9 @@ package content
 
 import (
 	"errors"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/riducms/ridu"
 	"github.com/riducms/ridu/adapters/sqlite"
@@ -60,12 +62,8 @@ func TestPathSpellingIsCheckedBeforeSchemaMembership(t *testing.T) {
 		t.Fatal("NewPath accepted a dotted string as one segment")
 	}
 	app := newQueryApp(t, Products)
-	unknown, err := query.NewPath("unknown")
-	if err != nil {
-		t.Fatal(err)
-	}
 	_, err = app.Local().List(t.Context(), "products", ridu.ListOptions{
-		Where: query.Equal(unknown, query.String("anything")),
+		Where: query.Equal("unknown", "anything"),
 	})
 	var failure *ridu.OperationError
 	if !errors.As(err, &failure) || failure.Code != "bad_query" {
@@ -98,16 +96,9 @@ func TestRepeatedPathsMatchRowsIndependentlyAndKeepBlockTypes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	path := func(value string) query.Path {
-		parsed, err := query.ParsePath(value)
-		if err != nil {
-			t.Fatal(err)
-		}
-		return parsed
-	}
 	independentRows := query.And(
-		query.Equal(path("variants.sku"), query.String("red")),
-		query.LessThanEqual(path("variants.price"), query.Number(10)),
+		query.Equal("variants.sku", "red"),
+		query.LessThanEqual("variants.price", 10),
 	)
 	for _, test := range []struct {
 		name  string
@@ -115,9 +106,9 @@ func TestRepeatedPathsMatchRowsIndependentlyAndKeepBlockTypes(t *testing.T) {
 		want  int
 	}{
 		{"different rows satisfy And", independentRows, 1},
-		{"one equal row excludes NotEqual", query.NotEqual(path("variants.sku"), query.String("red")), 0},
-		{"hero path ignores quote", query.Equal(path("layout.hero.heading"), query.String("Sale")), 0},
-		{"quote path finds quote", query.Equal(path("layout.quote.heading"), query.String("Sale")), 1},
+		{"one equal row excludes NotEqual", query.NotEqual("variants.sku", "red"), 0},
+		{"hero path ignores quote", query.Equal("layout.hero.heading", "Sale"), 0},
+		{"quote path finds quote", query.Equal("layout.quote.heading", "Sale"), 1},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			page, err := app.Local().List(t.Context(), "catalog", ridu.ListOptions{Where: test.where})
@@ -125,6 +116,56 @@ func TestRepeatedPathsMatchRowsIndependentlyAndKeepBlockTypes(t *testing.T) {
 				t.Fatalf("total = %d, want %d, error = %v", page.Total, test.want, err)
 			}
 		})
+	}
+}
+
+type productColor string
+
+func TestExistsInAndSortHelpers(t *testing.T) {
+	app := newQueryApp(t, ridu.Collection{
+		Slug: "items",
+		Fields: field.Fields{
+			field.Text("title").Required(),
+			field.Text("color"),
+			field.Number("price"),
+		},
+	})
+	for _, item := range []store.Values{
+		{"title": store.String("Mug"), "color": store.String("red"), "price": store.Number(12)},
+		{"title": store.String("Pen"), "color": store.String("blue"), "price": store.Number(3)},
+		{"title": store.String("Box"), "price": store.Number(7)},
+	} {
+		if _, err := app.Local().Create(t.Context(), "items", item, ridu.MutationOptions{}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	titles := func(where query.Expression, sort ...query.Sort) []string {
+		t.Helper()
+		page, err := app.Local().List(t.Context(), "items", ridu.ListOptions{Where: where, Sort: sort})
+		if err != nil {
+			t.Fatal(err)
+		}
+		names := make([]string, len(page.Documents))
+		for index, document := range page.Documents {
+			names[index], _ = document.Values["title"].StringValue()
+		}
+		return names
+	}
+	for _, test := range []struct {
+		name string
+		got  []string
+		want []string
+	}{
+		{"has a color", titles(query.Exists("color", true), query.Asc("title")), []string{"Mug", "Pen"}},
+		{"has no color", titles(query.Exists("color", false)), []string{"Box"}},
+		{"named type in list", titles(query.In("color", productColor("red"), productColor("blue")), query.Desc("price")), []string{"Mug", "Pen"}},
+		{"integer bound", titles(query.GreaterThan("price", 5), query.Asc("price")), []string{"Box", "Mug"}},
+		{"created before now", titles(query.LessThan("createdAt", query.DateTime(time.Now().Add(time.Minute))), query.Asc("title")), []string{"Box", "Mug", "Pen"}},
+		{"created in the future", titles(query.GreaterThan("createdAt", query.DateTime(time.Now().Add(time.Minute)))), []string{}},
+	} {
+		if strings.Join(test.got, ",") != strings.Join(test.want, ",") {
+			t.Errorf("%s = %v, want %v", test.name, test.got, test.want)
+		}
 	}
 }
 

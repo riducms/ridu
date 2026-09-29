@@ -1,7 +1,5 @@
 package store
 
-import "encoding/json"
-
 const valueListBits = 5
 const valueListWidth = 1 << valueListBits
 
@@ -20,6 +18,29 @@ func newValueList(items []Value) *valueList {
 		return nil
 	}
 	return buildValueList(items, valueListShift(len(items)))
+}
+
+// ownValueList builds a list from items that no caller can change, such as
+// freshly decoded values, so its leaves reuse the slice instead of copying it.
+func ownValueList(items []Value) *valueList {
+	if len(items) == 0 {
+		return nil
+	}
+	return buildOwnedValueList(items, valueListShift(len(items)))
+}
+
+func buildOwnedValueList(items []Value, shift uint) *valueList {
+	if shift == 0 {
+		// Cap the leaf so a later append can never write into a sibling's items.
+		return &valueList{items: items[:len(items):len(items)], length: len(items)}
+	}
+	span := 1 << shift
+	children := make([]*valueList, (len(items)-1)/span+1)
+	for index := range children {
+		start := index * span
+		children[index] = buildOwnedValueList(items[start:min(start+span, len(items))], shift-valueListBits)
+	}
+	return &valueList{children: children, length: len(items)}
 }
 
 func valueListShift(length int) uint {
@@ -103,27 +124,4 @@ func (list *valueList) visit(visitor func(Value) bool) bool {
 		}
 	}
 	return true
-}
-
-func (list *valueList) marshalJSON() ([]byte, error) {
-	encoded := []byte{'['}
-	var marshalError error
-	list.visit(func(item Value) bool {
-		// Marshal each Value through encoding/json, as slice encoding does, so
-		// unsupported child values retain their MarshalerError wrapping.
-		itemJSON, err := json.Marshal(item)
-		if err != nil {
-			marshalError = err
-			return false
-		}
-		if len(encoded) > 1 {
-			encoded = append(encoded, ',')
-		}
-		encoded = append(encoded, itemJSON...)
-		return true
-	})
-	if marshalError != nil {
-		return nil, marshalError
-	}
-	return append(encoded, ']'), nil
 }

@@ -50,7 +50,7 @@ func TestListJoinPreservesSourceReadRulesAndPrivateMembership(t *testing.T) {
 			t.Fatal("private backing relation returned")
 		}
 		path, _ := query.ParsePath("category")
-		_, err = app.Local().ListJoin(t.Context(), "categories", category.ID, "posts", ridu.ListOptions{Where: query.Equal(path, query.String(category.ID))})
+		_, err = app.Local().ListJoin(t.Context(), "categories", category.ID, "posts", ridu.ListOptions{Where: query.Equal(path, category.ID)})
 		var denied *ridu.OperationError
 		if !errors.As(err, &denied) || denied.Code != "field_access_denied" {
 			t.Fatalf("caller cannot reuse private membership as filter: %v", err)

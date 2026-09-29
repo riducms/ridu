@@ -25,7 +25,7 @@ func TestRecursivePopulationTraversesNestedShapesWithAccessDepthAndRedaction(t *
 				return false, nil
 			}})},
 			Access: ridu.CollectionAccess{Read: func(ridu.AccessContext) (ridu.AccessDecision, error) {
-				return ridu.Where(query.Equal(publicPath, query.Boolean(true))), nil
+				return ridu.Where(query.Equal(publicPath, true)), nil
 			}},
 		},
 		{Slug: "teams", Fields: field.Fields{field.Text("name").Required(), field.Relationship("owner", "people")}},

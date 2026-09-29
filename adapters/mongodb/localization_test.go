@@ -88,7 +88,7 @@ func TestMongoLocalizedEnvelopeAdmitsPortableShapes(t *testing.T) {
 func TestMongoLocalizedPredicatesUseOrderedFallbackAndPerLocaleAccess(t *testing.T) {
 	collection := mongoLocalizedScalarCollection()
 	title := collection.Fields[0].Path
-	filter := query.Equal(title, query.String("visible")).Node()
+	filter := query.Equal(title, "visible").Node()
 	compiled, err := compileMongoNode(collection, filter, "filter", mongoPredicateScope{localeChain: []schema.LocaleCode{"fr", "en"}})
 	if err != nil {
 		t.Fatal(err)
@@ -161,7 +161,7 @@ func TestMongoLocalizedSortProjectionAndVersionScopeRemainCanonical(t *testing.T
 	versioned.Versions = &schema.VersionSettings{Drafts: true}
 	versionPredicate, err := compileMongoNode(
 		versioned,
-		query.Equal(title, query.String("visible")).Node(),
+		query.Equal(title, "visible").Node(),
 		"version access",
 		mongoPredicateScope{localeChain: []schema.LocaleCode{"fr", "en"}, storagePrefix: mongoVersionSnapshotPath + "."},
 	)

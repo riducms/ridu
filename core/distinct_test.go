@@ -22,7 +22,7 @@ func TestLocalDistinctComposesReadAccessAndProtectsFieldValues(t *testing.T) {
 				"staff", nil
 		}})},
 		Access: ridu.CollectionAccess{Read: func(ridu.AccessContext) (ridu.AccessDecision, error) {
-			return ridu.Where(query.Equal(audience, query.String("public"))), nil
+			return ridu.Where(query.Equal(audience, "public")), nil
 		}},
 	}}}, teststore.New())
 	if err != nil {
@@ -41,7 +41,7 @@ func TestLocalDistinctComposesReadAccessAndProtectsFieldValues(t *testing.T) {
 	}
 
 	page, err := application.Local().Distinct(t.Context(), "posts", ridu.DistinctOptions{
-		Field: title, Where: query.NotEqual(title, query.String("excluded")), Limit: 10,
+		Field: title, Where: query.NotEqual(title, "excluded"), Limit: 10,
 	})
 	if err != nil {
 		t.Fatal(err)

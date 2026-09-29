@@ -99,7 +99,7 @@ func TestAdminLoaderReadsPreservePredicatesRedactionHooksAndAudit(t *testing.T) 
 			if ctx.Actor != nil {
 				seenActor = ctx.Actor.ID
 			}
-			return Where(query.Equal(title, query.String("visible"))), nil
+			return Where(query.Equal(title, "visible")), nil
 		}},
 		Hooks: CollectionHooks{AfterRead: []Hook{func(HookContext) error { reads++; return nil }}},
 	}}}

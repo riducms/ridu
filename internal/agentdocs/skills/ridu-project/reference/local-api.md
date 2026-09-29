@@ -41,16 +41,11 @@ func RecentPosts(
 	title, _ := post.Values["title"].StringValue()
 	_ = title
 
-	category := query.Field("category")
-	categorySort, err := query.NewSort(category, query.Ascending)
-	if err != nil {
-		return store.Page{}, err
-	}
 	return app.Local().List(ctx, "posts", ridu.ListOptions{
 		Page:  1,
 		Limit: 20,
-		Where: query.Equal(category, query.String("news")),
-		Sort:  []query.Sort{categorySort},
+		Where: query.Equal("category", "news"),
+		Sort:  []query.Sort{query.Asc("category")},
 		Actor: actor,
 	})
 }

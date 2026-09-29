@@ -17,6 +17,18 @@ type Sort struct {
 	Direction Direction
 }
 
+// Asc sorts by a field from lowest to highest, as in Asc("title").
+func Asc[P FieldPath](path P) Sort {
+	return Sort{Path: pathOf(path), Direction: Ascending}
+}
+
+// Desc sorts by a field from highest to lowest, as in Desc("createdAt").
+func Desc[P FieldPath](path P) Sort {
+	return Sort{Path: pathOf(path), Direction: Descending}
+}
+
+// NewSort validates a sort term whose direction is chosen at run time, such as
+// one read from a request. Use Asc or Desc for a sort written in your code.
 func NewSort(path Path, direction Direction) (Sort, error) {
 	if path.String() == "" {
 		return Sort{}, fmt.Errorf("sort requires a field path")
@@ -24,7 +36,7 @@ func NewSort(path Path, direction Direction) (Sort, error) {
 	if direction != Ascending && direction != Descending {
 		return Sort{}, fmt.Errorf("unknown sort direction %q", direction)
 	}
-	return Sort{Path: clonePath(path), Direction: direction}, nil
+	return Sort{Path: path, Direction: direction}, nil
 }
 
 // Population asks a store to replace one relationship ID with its projected

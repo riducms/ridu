@@ -14,7 +14,7 @@ func TestPredicateCompilerUsesNativeSystemTimestampColumns(t *testing.T) {
 	collection := schema.Collection{ID: "posts", Slug: "posts"}
 	createdAt, _ := query.NewPath("createdAt")
 	compiler := predicateCompiler{collection: collection}
-	compiled, err := compiler.compile(query.GreaterThanEqual(createdAt, query.String("2026-01-02T13:00:00+01:00")).Node())
+	compiled, err := compiler.compile(query.GreaterThanEqual(createdAt, "2026-01-02T13:00:00+01:00").Node())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +40,7 @@ func TestPredicateCompilerUsesNativeSystemTimestampColumns(t *testing.T) {
 	}
 
 	compiler = predicateCompiler{collection: collection, snapshot: true}
-	compiled, err = compiler.compile(query.Equal(updatedAt, query.String("2026-01-02T12:00:00Z")).Node())
+	compiled, err = compiler.compile(query.Equal(updatedAt, "2026-01-02T12:00:00Z").Node())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,7 +49,7 @@ func TestPredicateCompilerUsesNativeSystemTimestampColumns(t *testing.T) {
 	}
 
 	compiler = predicateCompiler{collection: collection}
-	compiled, err = compiler.compile(query.NotEqual(createdAt, query.Number(0)).Node())
+	compiled, err = compiler.compile(query.NotEqual(createdAt, 0).Node())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +80,7 @@ func TestPredicateCompilerSupportsNestedGroupsAndRepeatedRows(t *testing.T) {
 
 	linksPath, _ := query.ParsePath("links.label")
 	compiler = predicateCompiler{collection: collection}
-	compiled, err = compiler.compile(query.Equal(linksPath, query.String("Docs")).Node())
+	compiled, err = compiler.compile(query.Equal(linksPath, "Docs").Node())
 	if err != nil {
 		t.Fatalf("compile nested array: %v", err)
 	}
@@ -89,7 +89,7 @@ func TestPredicateCompilerSupportsNestedGroupsAndRepeatedRows(t *testing.T) {
 	}
 
 	compiler = predicateCompiler{collection: collection}
-	compiled, err = compiler.compile(query.NotEqual(linksPath, query.String("Private")).Node())
+	compiled, err = compiler.compile(query.NotEqual(linksPath, "Private").Node())
 	if err != nil {
 		t.Fatalf("compile nested array inequality: %v", err)
 	}
@@ -107,7 +107,7 @@ func TestPredicateCompilerSupportsNestedOpaqueJSONPaths(t *testing.T) {
 		t.Fatal(err)
 	}
 	compiler := predicateCompiler{collection: collection}
-	compiled, err := compiler.compile(query.Equal(path, query.String("ridu/object.png")).Node())
+	compiled, err := compiler.compile(query.Equal(path, "ridu/object.png").Node())
 	if err != nil {
 		t.Fatalf("compile nested JSON path: %v", err)
 	}
@@ -145,7 +145,7 @@ func TestPredicateCompilerSupportsVersionStatusMetadata(t *testing.T) {
 	}
 	collection := schema.Collection{ID: "lessons", Slug: "lessons", Versions: &schema.VersionSettings{Drafts: true}}
 	compiler := predicateCompiler{collection: collection}
-	compiled, err := compiler.compile(query.Equal(status, query.String("published")).Node())
+	compiled, err := compiler.compile(query.Equal(status, "published").Node())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,7 +153,7 @@ func TestPredicateCompilerSupportsVersionStatusMetadata(t *testing.T) {
 		t.Fatalf("status predicate = %s", compiled)
 	}
 	compiler = predicateCompiler{collection: collection, snapshot: true}
-	compiled, err = compiler.compile(query.Equal(status, query.String("draft")).Node())
+	compiled, err = compiler.compile(query.Equal(status, "draft").Node())
 	if err != nil || !strings.Contains(compiled, `"snapshot" ->> 'Status' = $1`) {
 		t.Fatalf("snapshot status predicate = %s, %v", compiled, err)
 	}
@@ -177,7 +177,7 @@ func TestPredicateCompilerUsesStableByteOrderingForText(t *testing.T) {
 				t.Fatal(err)
 			}
 			compiler := predicateCompiler{collection: collection}
-			compiled, err := compiler.compile(query.GreaterThan(path, query.String("Z")).Node())
+			compiled, err := compiler.compile(query.GreaterThan(path, "Z").Node())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -255,7 +255,7 @@ func TestVersionPredicateCompilerReadsSnapshotValues(t *testing.T) {
 	}}
 	ownerPath, _ := query.ParsePath("owner")
 	compiler := predicateCompiler{collection: collection, next: 2, arguments: []any{"posts", "post-1"}, snapshot: true}
-	compiled, err := compiler.compile(query.Equal(ownerPath, query.String("owner-b")).Node())
+	compiled, err := compiler.compile(query.Equal(ownerPath, "owner-b").Node())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -265,7 +265,7 @@ func TestVersionPredicateCompilerReadsSnapshotValues(t *testing.T) {
 
 	linksPath, _ := query.ParsePath("links.label")
 	compiler = predicateCompiler{collection: collection, snapshot: true}
-	compiled, err = compiler.compile(query.Equal(linksPath, query.String("Docs")).Node())
+	compiled, err = compiler.compile(query.Equal(linksPath, "Docs").Node())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -275,7 +275,7 @@ func TestVersionPredicateCompilerReadsSnapshotValues(t *testing.T) {
 
 	collection.Fields[1].Localized = true
 	compiler = predicateCompiler{collection: collection, snapshot: true, localeChain: []schema.LocaleCode{"fr"}}
-	compiled, err = compiler.compile(query.Equal(linksPath, query.String("Documentation")).Node())
+	compiled, err = compiler.compile(query.Equal(linksPath, "Documentation").Node())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -333,7 +333,7 @@ func TestPredicateCompilerInsertsLocaleAtIntermediateContainerBoundaries(t *test
 				t.Fatal(err)
 			}
 			compiler := predicateCompiler{collection: collection, localeChain: []schema.LocaleCode{"fr"}}
-			compiled, err := compiler.compile(query.Equal(path, query.String("visible")).Node())
+			compiled, err := compiler.compile(query.Equal(path, "visible").Node())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -358,7 +358,7 @@ func TestAccessPredicateCompilerChecksIntermediateLocalizedContainersForEveryLoc
 		t.Fatal(err)
 	}
 	compiler := predicateCompiler{collection: collection, localeChain: []schema.LocaleCode{"en"}}
-	compiled, err := compileAccessPredicate(&compiler, query.Equal(path, query.String("visible")).Node(), true, []schema.LocaleCode{"en", "fr"})
+	compiled, err := compileAccessPredicate(&compiler, query.Equal(path, "visible").Node(), true, []schema.LocaleCode{"en", "fr"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -389,7 +389,7 @@ func TestVersionPredicateCompilerInsertsLocaleAtIntermediateContainers(t *testin
 				t.Fatal(err)
 			}
 			compiler := predicateCompiler{collection: collection, snapshot: true, localeChain: []schema.LocaleCode{"fr"}}
-			compiled, err := compiler.compile(query.Equal(path, query.String("visible")).Node())
+			compiled, err := compiler.compile(query.Equal(path, "visible").Node())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -437,7 +437,7 @@ func TestPredicateCompilerSelectsLocalizedContainersBeforeDescendants(t *testing
 				t.Fatal(err)
 			}
 			compiler := predicateCompiler{collection: collection, localeChain: []schema.LocaleCode{"fr", "en"}}
-			compiled, err := compiler.compile(query.Equal(path, query.String("visible")).Node())
+			compiled, err := compiler.compile(query.Equal(path, "visible").Node())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -459,7 +459,7 @@ func TestPredicateCompilerSelectsLocalizedContainersBeforeDescendants(t *testing
 		t.Fatal(err)
 	}
 	compiler := predicateCompiler{collection: collection, localeChain: []schema.LocaleCode{"fr", "en"}}
-	compiled, err := compiler.compile(query.Equal(rootRows, query.String("visible")).Node())
+	compiled, err := compiler.compile(query.Equal(rootRows, "visible").Node())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -469,7 +469,7 @@ func TestPredicateCompilerSelectsLocalizedContainersBeforeDescendants(t *testing
 	}
 
 	compiler = predicateCompiler{collection: collection, snapshot: true, localeChain: []schema.LocaleCode{"fr", "en"}}
-	compiled, err = compiler.compile(query.Equal(rootRows, query.String("visible")).Node())
+	compiled, err = compiler.compile(query.Equal(rootRows, "visible").Node())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -512,7 +512,7 @@ func TestPredicateCompilerKeepsOptionalValueComparisonsTwoValued(t *testing.T) {
 	}
 
 	compiler = predicateCompiler{collection: collection}
-	compiled, err = compiler.compile(query.NotEqual(path, query.String("hidden")).Node())
+	compiled, err = compiler.compile(query.NotEqual(path, "hidden").Node())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -520,7 +520,7 @@ func TestPredicateCompilerKeepsOptionalValueComparisonsTwoValued(t *testing.T) {
 		t.Fatalf("not-equal predicate = %s", compiled)
 	}
 
-	not := query.Not(query.Equal(path, query.String("hidden")))
+	not := query.Not(query.Equal(path, "hidden"))
 	compiler = predicateCompiler{collection: collection}
 	compiled, err = compiler.compile(not.Node())
 	if err != nil {
@@ -565,9 +565,9 @@ func TestPredicateCompilerKeepsOptionalValueComparisonsTwoValued(t *testing.T) {
 		expression query.Expression
 		want       string
 	}{
-		{expression: query.Equal(score, query.String("9")), want: "FALSE"},
-		{expression: query.NotEqual(score, query.String("9")), want: "TRUE"},
-		{expression: query.GreaterThan(score, query.String("9")), want: "FALSE"},
+		{expression: query.Equal(score, "9"), want: "FALSE"},
+		{expression: query.NotEqual(score, "9"), want: "TRUE"},
+		{expression: query.GreaterThan(score, "9"), want: "FALSE"},
 	} {
 		compiler = predicateCompiler{collection: collection}
 		compiled, err = compiler.compile(test.expression.Node())
@@ -625,15 +625,15 @@ func TestPredicateCompilerKeepsOptionalValueComparisonsTwoValued(t *testing.T) {
 		want       []string
 	}{
 		{
-			name: "string equality", expression: query.Equal(metadata, query.String("9")),
+			name: "string equality", expression: query.Equal(metadata, "9"),
 			want: []string{"jsonb_typeof", "= 'string'", "CASE WHEN", "= $1"},
 		},
 		{
-			name: "number equality", expression: query.Equal(metadata, query.Number(9)),
+			name: "number equality", expression: query.Equal(metadata, 9),
 			want: []string{"jsonb_typeof", "= 'number'", "::double precision", "= $1"},
 		},
 		{
-			name: "boolean equality", expression: query.Equal(metadata, query.Boolean(true)),
+			name: "boolean equality", expression: query.Equal(metadata, true),
 			want: []string{"jsonb_typeof", "= 'boolean'", "::boolean", "= $1"},
 		},
 		{
@@ -645,7 +645,7 @@ func TestPredicateCompilerKeepsOptionalValueComparisonsTwoValued(t *testing.T) {
 			want: []string{"IS NULL OR", "= 'null'::jsonb", "= 'string'", "= 'number'"},
 		},
 		{
-			name: "ordered number", expression: query.GreaterThan(metadata, query.Number(5)),
+			name: "ordered number", expression: query.GreaterThan(metadata, 5),
 			want: []string{"= 'number'", "::double precision", "> $1", "COALESCE"},
 		},
 	}
@@ -668,7 +668,7 @@ func TestPredicateCompilerKeepsOptionalValueComparisonsTwoValued(t *testing.T) {
 		t.Fatal(err)
 	}
 	compiler = predicateCompiler{collection: collection}
-	compiled, err = compiler.compile(query.Equal(pluginData, query.Number(9)).Node())
+	compiled, err = compiler.compile(query.Equal(pluginData, 9).Node())
 	if err != nil {
 		t.Fatal(err)
 	}

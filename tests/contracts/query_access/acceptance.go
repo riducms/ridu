@@ -75,7 +75,7 @@ func Run(t *testing.T, factory Factory, options Options) {
 	t.Run("binary-search-substrings-order-and-count", func(t *testing.T) {
 		for _, threshold := range []float64{0, 65536, 73728, 73500, 73501, 1000000} {
 			t.Run(fmt.Sprint(threshold), func(t *testing.T) {
-				_, err := app.Local().List(t.Context(), "employees", ridu.ListOptions{Where: query.GreaterThanEqual(path("salary"), query.Number(threshold)), Limit: 1})
+				_, err := app.Local().List(t.Context(), "employees", ridu.ListOptions{Where: query.GreaterThanEqual(path("salary"), threshold), Limit: 1})
 				denied(t, err, "salary")
 				where := fmt.Sprintf(`{"salary":{"greaterThanEqual":%g}}`, threshold)
 				for _, route := range []string{"", "/count"} {
@@ -85,7 +85,7 @@ func Run(t *testing.T, factory Factory, options Options) {
 			})
 		}
 		for _, fragment := range []string{"orch", "xyz", "launch-"} {
-			or := query.Or(query.Equal(path("name"), query.String("Alpha")), query.Contains(path("secret"), fragment))
+			or := query.Or(query.Equal(path("name"), "Alpha"), query.Contains(path("secret"), fragment))
 			not := query.Not(query.Contains(path("secret"), fragment))
 			for _, where := range []query.Expression{
 				query.Contains(path("secret"), fragment),
@@ -116,13 +116,13 @@ func Run(t *testing.T, factory Factory, options Options) {
 	t.Run("schema-paths-ancestors-locales-and-actors", func(t *testing.T) {
 		for _, name := range []string{"profile.secret", "vault.value", "rows.secret", "lockedRows.value", "layout.hero.secret", "lockedLayout.hero.value", "layout.private.value.label", "body.blocks.block.hero.secret", "body.blocks.block.hero.vault.value", "translation"} {
 			for _, locale := range []schema.LocaleCode{"en", "fr"} {
-				_, err := app.Local().List(t.Context(), "employees", ridu.ListOptions{Where: query.Equal(path(name), query.String("orchid")), Locale: locale})
+				_, err := app.Local().List(t.Context(), "employees", ridu.ListOptions{Where: query.Equal(path(name), "orchid"), Locale: locale})
 				denied(t, err, name)
 			}
 		}
 		// Even a rule that allows this actor remains document-aware; admission
 		// must not speculate by evaluating it once without the target rows.
-		_, err := app.Local().List(t.Context(), "employees", ridu.ListOptions{Where: query.Equal(path("secret"), query.String("launch-orchid")), Actor: &store.Document{ID: "staff"}, ActorCollection: "users"})
+		_, err := app.Local().List(t.Context(), "employees", ridu.ListOptions{Where: query.Equal(path("secret"), "launch-orchid"), Actor: &store.Document{ID: "staff"}, ActorCollection: "users"})
 		denied(t, err, "secret")
 		for _, name := range []string{"profile.secret", "vault.value", "rows.secret", "layout.hero.secret", "translation"} {
 			where := fmt.Sprintf(`{%q:{"equals":"orchid"}}`, name)
@@ -166,7 +166,7 @@ func Run(t *testing.T, factory Factory, options Options) {
 		if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"totalDocs":1`) {
 			t.Fatalf("trusted selection: %d %s", response.Code, response.Body.String())
 		}
-		_, err = app.Local().List(t.Context(), "employees", ridu.ListOptions{Where: query.Equal(path("audience"), query.String("private"))})
+		_, err = app.Local().List(t.Context(), "employees", ridu.ListOptions{Where: query.Equal(path("audience"), "private")})
 		denied(t, err, "audience")
 	})
 	t.Run("authored-auth-secrets-and-framework-credentials", func(t *testing.T) {
@@ -213,7 +213,7 @@ func configuration() ridu.Config {
 				field.Blocks("lockedLayout", field.Block{Slug: "hero", Fields: field.Fields{field.Text("value")}}).Access(deny),
 				richtext.Field("body", richtext.Config{Blocks: []field.Block{{Slug: "hero", Fields: field.Fields{field.Text("secret").Access(deny), field.Group("vault", field.Fields{field.Text("value")}).Access(deny)}}}}),
 			}, Access: ridu.CollectionAccess{Read: func(ridu.AccessContext) (ridu.AccessDecision, error) {
-				return ridu.Where(query.Equal(path("audience"), query.String("public"))), nil
+				return ridu.Where(query.Equal(path("audience"), "public")), nil
 			}}},
 			{Slug: "windows", Fields: field.Fields{field.Text("privateKey").Unique().Index().Access(deny)}},
 			{Slug: "users", Auth: true, Fields: field.Fields{field.Email("email").Required().Unique(), field.Text("privateToken").Access(deny)}},

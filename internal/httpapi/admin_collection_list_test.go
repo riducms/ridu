@@ -29,7 +29,7 @@ func TestAdminInitialListReadPartsPreserveAccessAndIndependentLifecycles(t *test
 	collection := schema.Collection{ID: "posts", Slug: "posts", Fields: []schema.Field{title, secret, status}, Admin: schema.CollectionAdmin{UseAsTitle: "title"}}
 	reads, sessions, preferences, audits := 0, 0, 0, 0
 	fail := false
-	predicate := query.Equal(title.Path, query.String("visible")).Node()
+	predicate := query.Equal(title.Path, "visible").Node()
 	engine, err := operationengine.New(operationengine.Config{Store: teststore.New(), Collections: []operationengine.Collection{{
 		Schema: collection,
 		Access: map[operation.Kind]operationengine.Access{operation.Read: func(operationengine.Context) (operationengine.Decision, error) {

@@ -8965,7 +8965,7 @@
 					"kind": "constant",
 					"group": "Runtime",
 					"summary": "The semantic Ridu framework version used by the CLI and project-command compatibility handshake.",
-					"signature": "const FrameworkVersion = \"0.5.0\"",
+					"signature": "const FrameworkVersion = \"0.6.0\"",
 					"parameters": [],
 					"parametersLabel": "",
 					"details": [
@@ -15593,7 +15593,7 @@
 					],
 					"source": {
 						"path": "core/typed_local.go",
-						"line": 22
+						"line": 23
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -15630,7 +15630,7 @@
 					],
 					"source": {
 						"path": "core/typed_local.go",
-						"line": 17
+						"line": 18
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -15689,7 +15689,7 @@
 					],
 					"source": {
 						"path": "core/typed_local.go",
-						"line": 35
+						"line": 36
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -15738,7 +15738,7 @@
 					],
 					"source": {
 						"path": "core/typed_local.go",
-						"line": 41
+						"line": 42
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -22571,7 +22571,7 @@
 					],
 					"source": {
 						"path": "core/typed_local.go",
-						"line": 48
+						"line": 49
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -22617,7 +22617,7 @@
 					],
 					"source": {
 						"path": "core/typed_local.go",
-						"line": 87
+						"line": 88
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -22665,7 +22665,7 @@
 					],
 					"source": {
 						"path": "core/typed_local.go",
-						"line": 67
+						"line": 68
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -22711,7 +22711,7 @@
 					],
 					"source": {
 						"path": "core/typed_local.go",
-						"line": 57
+						"line": 58
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -22752,7 +22752,7 @@
 					],
 					"source": {
 						"path": "core/typed_local.go",
-						"line": 74
+						"line": 75
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -22803,7 +22803,7 @@
 					],
 					"source": {
 						"path": "core/typed_local.go",
-						"line": 78
+						"line": 79
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -23476,7 +23476,7 @@
 					],
 					"source": {
 						"path": "core/typed_local.go",
-						"line": 27
+						"line": 28
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -23512,7 +23512,7 @@
 					],
 					"source": {
 						"path": "core/typed_local.go",
-						"line": 30
+						"line": 31
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -24260,7 +24260,7 @@
 					],
 					"source": {
 						"path": "core/upload_grants.go",
-						"line": 128
+						"line": 124
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -25429,7 +25429,7 @@
 					],
 					"source": {
 						"path": "core/typed_local.go",
-						"line": 142
+						"line": 139
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -26092,14 +26092,8 @@
 					"kind": "interface",
 					"group": "Interfaces",
 					"summary": "ConditionScalar is the finite scalar vocabulary accepted by condition predicates.",
-					"signature": "type ConditionScalar interface {\n\t// contains filtered or unexported methods\n}",
-					"parameters": [
-						{
-							"name": "~string | ~bool | ~int | ~int8 | ~int16 | ~int32 | ~int64 | ~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~float32 | ~float64",
-							"type": "~string | ~bool | ~int | ~int8 | ~int16 | ~int32 | ~int64 | ~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~float32 | ~float64",
-							"description": "The ~string | ~bool | ~int | ~int8 | ~int16 | ~int32 | ~int64 | ~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~float32 | ~float64 value."
-						}
-					],
+					"signature": "type ConditionScalar interface {\n\t~string | ~bool | ~int | ~int8 | ~int16 | ~int32 | ~int64 |\n\t\t~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~float32 | ~float64\n}",
+					"parameters": [],
 					"parametersLabel": "",
 					"details": [],
 					"example": "",
@@ -60279,7 +60273,7 @@
 					],
 					"source": {
 						"path": "query/path.go",
-						"line": 29
+						"line": 45
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -60291,7 +60285,7 @@
 					"slug": "new-path",
 					"kind": "function",
 					"group": "Paths",
-					"summary": "Validate and build a path from segments.",
+					"summary": "Validate and build a path from segments computed at run time.",
 					"signature": "func NewPath(segments ...string) (Path, error)",
 					"parameters": [
 						{
@@ -60305,7 +60299,9 @@
 						"type": "(Path, error)",
 						"description": "The declared result."
 					},
-					"details": [],
+					"details": [
+						"For a name written in your code, pass the string, such as \"seo.title\", to a filter helper instead."
+					],
 					"example": "authorEmail, err := query.NewPath(\"author\", \"email\")\nif err != nil {\n\treturn err\n}",
 					"language": "go",
 					"typeLinks": {
@@ -60317,7 +60313,7 @@
 					],
 					"source": {
 						"path": "query/path.go",
-						"line": 34
+						"line": 59
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -60355,7 +60351,37 @@
 					],
 					"source": {
 						"path": "query/path.go",
-						"line": 72
+						"line": 98
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
+					"id": "go:github.com/riducms/ridu/query#FieldPath",
+					"name": "FieldPath",
+					"slug": "field-path",
+					"kind": "interface",
+					"group": "Paths",
+					"summary": "A field name in a filter or sort: a string such as \"seo.title\", or a Path.",
+					"signature": "type FieldPath interface {\n\t~string | Path\n}",
+					"parameters": [],
+					"parametersLabel": "",
+					"details": [
+						"A malformed name written in code panics. Use ParsePath for names from input."
+					],
+					"example": "query.Equal(\"seo.title\", \"Home\")",
+					"language": "go",
+					"typeLinks": {
+						"Path": "/reference/query/path/"
+					},
+					"aliases": [
+						"query.FieldPath",
+						"FieldPath"
+					],
+					"source": {
+						"path": "query/path.go",
+						"line": 52
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -60648,7 +60674,7 @@
 						"description": "The declared result."
 					},
 					"details": [
-						"Prefer this form when the operator is dynamic. Convenience comparison functions panic only if called with an incompatible Value kind; with their documented inputs they are safe."
+						"Use it when the operator or value comes from input. The comparison helpers such as Equal panic on a malformed name or incompatible value instead."
 					],
 					"example": "",
 					"language": "go",
@@ -60664,7 +60690,7 @@
 					],
 					"source": {
 						"path": "query/expression.go",
-						"line": 68
+						"line": 70
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -60677,17 +60703,17 @@
 					"kind": "function",
 					"group": "Comparisons",
 					"summary": "Match an equal scalar or null.",
-					"signature": "func Equal(path Path, value Value) Expression",
+					"signature": "func Equal[P FieldPath, V Operand](path P, value V) Expression",
 					"parameters": [
 						{
 							"name": "path",
-							"type": "Path",
-							"description": "The path value."
+							"type": "P",
+							"description": "The field, as a dot-separated name such as \"seo.title\" or a Path."
 						},
 						{
 							"name": "value",
-							"type": "Value",
-							"description": "The value value."
+							"type": "V",
+							"description": "A string, boolean, integer, float, named type of one, or a Value such as Null()."
 						}
 					],
 					"parametersLabel": "",
@@ -60696,11 +60722,11 @@
 						"description": "The declared result."
 					},
 					"details": [],
-					"example": "",
+					"example": "query.Equal(\"status\", \"published\")",
 					"language": "go",
 					"typeLinks": {
-						"Path": "/reference/query/path/",
-						"Value": "/reference/query/value/",
+						"FieldPath": "/reference/query/field-path/",
+						"Operand": "/reference/query/operand/",
 						"Expression": "/reference/query/expression/"
 					},
 					"aliases": [
@@ -60709,7 +60735,7 @@
 					],
 					"source": {
 						"path": "query/expression.go",
-						"line": 125
+						"line": 115
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -60722,17 +60748,17 @@
 					"kind": "function",
 					"group": "Comparisons",
 					"summary": "Exclude an equal scalar or null.",
-					"signature": "func NotEqual(path Path, value Value) Expression",
+					"signature": "func NotEqual[P FieldPath, V Operand](path P, value V) Expression",
 					"parameters": [
 						{
 							"name": "path",
-							"type": "Path",
-							"description": "The path value."
+							"type": "P",
+							"description": "The field, as a dot-separated name such as \"seo.title\" or a Path."
 						},
 						{
 							"name": "value",
-							"type": "Value",
-							"description": "The value value."
+							"type": "V",
+							"description": "A string, boolean, integer, float, named type of one, or a Value."
 						}
 					],
 					"parametersLabel": "",
@@ -60741,11 +60767,11 @@
 						"description": "The declared result."
 					},
 					"details": [],
-					"example": "",
+					"example": "query.NotEqual(\"status\", \"draft\")",
 					"language": "go",
 					"typeLinks": {
-						"Path": "/reference/query/path/",
-						"Value": "/reference/query/value/",
+						"FieldPath": "/reference/query/field-path/",
+						"Operand": "/reference/query/operand/",
 						"Expression": "/reference/query/expression/"
 					},
 					"aliases": [
@@ -60754,7 +60780,7 @@
 					],
 					"source": {
 						"path": "query/expression.go",
-						"line": 134
+						"line": 120
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -60767,17 +60793,17 @@
 					"kind": "function",
 					"group": "Comparisons",
 					"summary": "Match any supplied operand.",
-					"signature": "func In(path Path, values ...Value) Expression",
+					"signature": "func In[P FieldPath, V Operand](path P, values ...V) Expression",
 					"parameters": [
 						{
 							"name": "path",
-							"type": "Path",
-							"description": "The path value."
+							"type": "P",
+							"description": "The field, as a dot-separated name such as \"seo.title\" or a Path."
 						},
 						{
 							"name": "values",
-							"type": "[]Value",
-							"description": "The values value."
+							"type": "[]V",
+							"description": "The accepted values. Spread a slice with values.... With none, nothing matches."
 						}
 					],
 					"parametersLabel": "",
@@ -60786,11 +60812,11 @@
 						"description": "The declared result."
 					},
 					"details": [],
-					"example": "",
+					"example": "query.In(\"color\", \"red\", \"blue\")",
 					"language": "go",
 					"typeLinks": {
-						"Path": "/reference/query/path/",
-						"Value": "/reference/query/value/",
+						"FieldPath": "/reference/query/field-path/",
+						"Operand": "/reference/query/operand/",
 						"Expression": "/reference/query/expression/"
 					},
 					"aliases": [
@@ -60799,7 +60825,7 @@
 					],
 					"source": {
 						"path": "query/expression.go",
-						"line": 143
+						"line": 126
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -60812,17 +60838,17 @@
 					"kind": "function",
 					"group": "Comparisons",
 					"summary": "Match a string or number above the operand.",
-					"signature": "func GreaterThan(path Path, value Value) Expression",
+					"signature": "func GreaterThan[P FieldPath, V Ordered](path P, value V) Expression",
 					"parameters": [
 						{
 							"name": "path",
-							"type": "Path",
-							"description": "The path value."
+							"type": "P",
+							"description": "The field, as a dot-separated name such as \"seo.title\" or a Path."
 						},
 						{
 							"name": "value",
-							"type": "Value",
-							"description": "The value value."
+							"type": "V",
+							"description": "A string, integer, float, named type of one, or a Value holding one."
 						}
 					],
 					"parametersLabel": "",
@@ -60831,11 +60857,11 @@
 						"description": "The declared result."
 					},
 					"details": [],
-					"example": "",
+					"example": "query.GreaterThan(\"price\", 10)",
 					"language": "go",
 					"typeLinks": {
-						"Path": "/reference/query/path/",
-						"Value": "/reference/query/value/",
+						"FieldPath": "/reference/query/field-path/",
+						"Ordered": "/reference/query/ordered/",
 						"Expression": "/reference/query/expression/"
 					},
 					"aliases": [
@@ -60844,7 +60870,7 @@
 					],
 					"source": {
 						"path": "query/expression.go",
-						"line": 101
+						"line": 135
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -60857,17 +60883,17 @@
 					"kind": "function",
 					"group": "Comparisons",
 					"summary": "Match a string or number at or above the operand.",
-					"signature": "func GreaterThanEqual(path Path, value Value) Expression",
+					"signature": "func GreaterThanEqual[P FieldPath, V Ordered](path P, value V) Expression",
 					"parameters": [
 						{
 							"name": "path",
-							"type": "Path",
-							"description": "The path value."
+							"type": "P",
+							"description": "The field, as a dot-separated name such as \"seo.title\" or a Path."
 						},
 						{
 							"name": "value",
-							"type": "Value",
-							"description": "The value value."
+							"type": "V",
+							"description": "A string, integer, float, named type of one, or a Value holding one."
 						}
 					],
 					"parametersLabel": "",
@@ -60876,11 +60902,11 @@
 						"description": "The declared result."
 					},
 					"details": [],
-					"example": "",
+					"example": "query.GreaterThanEqual(\"price\", 10)",
 					"language": "go",
 					"typeLinks": {
-						"Path": "/reference/query/path/",
-						"Value": "/reference/query/value/",
+						"FieldPath": "/reference/query/field-path/",
+						"Ordered": "/reference/query/ordered/",
 						"Expression": "/reference/query/expression/"
 					},
 					"aliases": [
@@ -60889,7 +60915,7 @@
 					],
 					"source": {
 						"path": "query/expression.go",
-						"line": 104
+						"line": 140
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -60902,17 +60928,17 @@
 					"kind": "function",
 					"group": "Comparisons",
 					"summary": "Match a string or number below the operand.",
-					"signature": "func LessThan(path Path, value Value) Expression",
+					"signature": "func LessThan[P FieldPath, V Ordered](path P, value V) Expression",
 					"parameters": [
 						{
 							"name": "path",
-							"type": "Path",
-							"description": "The path value."
+							"type": "P",
+							"description": "The field, as a dot-separated name such as \"seo.title\" or a Path."
 						},
 						{
 							"name": "value",
-							"type": "Value",
-							"description": "The value value."
+							"type": "V",
+							"description": "A string, integer, float, named type of one, or a Value holding one."
 						}
 					],
 					"parametersLabel": "",
@@ -60921,11 +60947,11 @@
 						"description": "The declared result."
 					},
 					"details": [],
-					"example": "",
+					"example": "query.LessThan(\"price\", 50)",
 					"language": "go",
 					"typeLinks": {
-						"Path": "/reference/query/path/",
-						"Value": "/reference/query/value/",
+						"FieldPath": "/reference/query/field-path/",
+						"Ordered": "/reference/query/ordered/",
 						"Expression": "/reference/query/expression/"
 					},
 					"aliases": [
@@ -60934,7 +60960,7 @@
 					],
 					"source": {
 						"path": "query/expression.go",
-						"line": 107
+						"line": 145
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -60947,17 +60973,17 @@
 					"kind": "function",
 					"group": "Comparisons",
 					"summary": "Match a string or number at or below the operand.",
-					"signature": "func LessThanEqual(path Path, value Value) Expression",
+					"signature": "func LessThanEqual[P FieldPath, V Ordered](path P, value V) Expression",
 					"parameters": [
 						{
 							"name": "path",
-							"type": "Path",
-							"description": "The path value."
+							"type": "P",
+							"description": "The field, as a dot-separated name such as \"seo.title\" or a Path."
 						},
 						{
 							"name": "value",
-							"type": "Value",
-							"description": "The value value."
+							"type": "V",
+							"description": "A string, integer, float, named type of one, or a Value holding one."
 						}
 					],
 					"parametersLabel": "",
@@ -60966,11 +60992,11 @@
 						"description": "The declared result."
 					},
 					"details": [],
-					"example": "",
+					"example": "query.LessThanEqual(\"price\", 50)",
 					"language": "go",
 					"typeLinks": {
-						"Path": "/reference/query/path/",
-						"Value": "/reference/query/value/",
+						"FieldPath": "/reference/query/field-path/",
+						"Ordered": "/reference/query/ordered/",
 						"Expression": "/reference/query/expression/"
 					},
 					"aliases": [
@@ -60979,7 +61005,7 @@
 					],
 					"source": {
 						"path": "query/expression.go",
-						"line": 108
+						"line": 150
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -60992,17 +61018,17 @@
 					"kind": "function",
 					"group": "Comparisons",
 					"summary": "Match a string containing the supplied text.",
-					"signature": "func Contains(path Path, value string) Expression",
+					"signature": "func Contains[P FieldPath](path P, value string) Expression",
 					"parameters": [
 						{
 							"name": "path",
-							"type": "Path",
-							"description": "The path value."
+							"type": "P",
+							"description": "The field, as a dot-separated name such as \"seo.title\" or a Path."
 						},
 						{
 							"name": "value",
 							"type": "string",
-							"description": "The value value."
+							"description": "The text to find, ignoring case."
 						}
 					],
 					"parametersLabel": "",
@@ -61011,11 +61037,10 @@
 						"description": "The declared result."
 					},
 					"details": [],
-					"example": "",
+					"example": "query.Contains(\"title\", \"ridu\")",
 					"language": "go",
 					"typeLinks": {
-						"Path": "/reference/query/path/",
-						"Value": "/reference/query/value/",
+						"FieldPath": "/reference/query/field-path/",
 						"Expression": "/reference/query/expression/"
 					},
 					"aliases": [
@@ -61024,7 +61049,7 @@
 					],
 					"source": {
 						"path": "query/expression.go",
-						"line": 111
+						"line": 155
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -61037,17 +61062,17 @@
 					"kind": "function",
 					"group": "Comparisons",
 					"summary": "Match using the store-supported string pattern operator.",
-					"signature": "func Like(path Path, value string) Expression",
+					"signature": "func Like[P FieldPath](path P, value string) Expression",
 					"parameters": [
 						{
 							"name": "path",
-							"type": "Path",
-							"description": "The path value."
+							"type": "P",
+							"description": "The field, as a dot-separated name such as \"seo.title\" or a Path."
 						},
 						{
 							"name": "value",
 							"type": "string",
-							"description": "The value value."
+							"description": "Words that must all appear, ignoring case and order."
 						}
 					],
 					"parametersLabel": "",
@@ -61056,11 +61081,10 @@
 						"description": "The declared result."
 					},
 					"details": [],
-					"example": "",
+					"example": "query.Like(\"title\", \"go cms\")",
 					"language": "go",
 					"typeLinks": {
-						"Path": "/reference/query/path/",
-						"Value": "/reference/query/value/",
+						"FieldPath": "/reference/query/field-path/",
 						"Expression": "/reference/query/expression/"
 					},
 					"aliases": [
@@ -61069,7 +61093,51 @@
 					],
 					"source": {
 						"path": "query/expression.go",
-						"line": 114
+						"line": 161
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
+					"id": "go:github.com/riducms/ridu/query#Exists",
+					"name": "Exists",
+					"slug": "exists",
+					"kind": "function",
+					"group": "Comparisons",
+					"summary": "Match documents that have a value for a field, or that have none.",
+					"signature": "func Exists[P FieldPath](path P, exists bool) Expression",
+					"parameters": [
+						{
+							"name": "path",
+							"type": "P",
+							"description": "The field, as a dot-separated name such as \"seo.title\" or a Path."
+						},
+						{
+							"name": "exists",
+							"type": "bool",
+							"description": "true matches documents with a value; false matches documents without one."
+						}
+					],
+					"parametersLabel": "",
+					"returns": {
+						"type": "Expression",
+						"description": "The comparison."
+					},
+					"details": [],
+					"example": "query.Exists(\"image\", true)",
+					"language": "go",
+					"typeLinks": {
+						"FieldPath": "/reference/query/field-path/",
+						"Expression": "/reference/query/expression/"
+					},
+					"aliases": [
+						"query.Exists",
+						"Exists"
+					],
+					"source": {
+						"path": "query/expression.go",
+						"line": 167
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -61109,7 +61177,7 @@
 					],
 					"source": {
 						"path": "query/expression.go",
-						"line": 154
+						"line": 174
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -61149,7 +61217,7 @@
 					],
 					"source": {
 						"path": "query/expression.go",
-						"line": 160
+						"line": 180
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -61187,7 +61255,7 @@
 					],
 					"source": {
 						"path": "query/expression.go",
-						"line": 166
+						"line": 186
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -61241,7 +61309,7 @@
 					],
 					"source": {
 						"path": "query/value.go",
-						"line": 21
+						"line": 24
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -61293,7 +61361,7 @@
 					],
 					"source": {
 						"path": "query/value.go",
-						"line": 9
+						"line": 12
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -61331,7 +61399,7 @@
 					],
 					"source": {
 						"path": "query/value.go",
-						"line": 30
+						"line": 100
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -61369,7 +61437,7 @@
 					],
 					"source": {
 						"path": "query/value.go",
-						"line": 33
+						"line": 103
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -61407,7 +61475,7 @@
 					],
 					"source": {
 						"path": "query/value.go",
-						"line": 36
+						"line": 106
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -61439,7 +61507,7 @@
 					],
 					"source": {
 						"path": "query/value.go",
-						"line": 39
+						"line": 109
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -61477,7 +61545,107 @@
 					],
 					"source": {
 						"path": "query/value.go",
-						"line": 42
+						"line": 112
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
+					"id": "go:github.com/riducms/ridu/query#DateTime",
+					"name": "DateTime",
+					"slug": "date-time",
+					"kind": "function",
+					"group": "Values",
+					"summary": "Convert a time to the text a date-and-time field stores.",
+					"signature": "func DateTime(t time.Time) Value",
+					"parameters": [
+						{
+							"name": "t",
+							"type": "time.Time",
+							"description": "The moment to compare with. It is converted to UTC with milliseconds."
+						}
+					],
+					"parametersLabel": "",
+					"returns": {
+						"type": "Value",
+						"description": "A string value such as 2026-09-29T14:05:00.000Z."
+					},
+					"details": [
+						"Use it for date-and-time fields, createdAt, and updatedAt. Compare a date-only field with a \"2006-01-02\" string instead."
+					],
+					"example": "query.GreaterThan(\"publishedAt\", query.DateTime(time.Now()))",
+					"language": "go",
+					"typeLinks": {
+						"Value": "/reference/query/value/"
+					},
+					"aliases": [
+						"query.DateTime",
+						"DateTime"
+					],
+					"source": {
+						"path": "query/value.go",
+						"line": 124
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
+					"id": "go:github.com/riducms/ridu/query#Operand",
+					"name": "Operand",
+					"slug": "operand",
+					"kind": "interface",
+					"group": "Values",
+					"summary": "A value that Equal, NotEqual, and In compare with a field.",
+					"signature": "type Operand interface {\n\t~string | ~bool | ~int | ~int8 | ~int16 | ~int32 | ~int64 | ~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~float32 | ~float64 | Value\n}",
+					"parameters": [],
+					"parametersLabel": "",
+					"details": [
+						"Strings, booleans, integers, floats, named types of those, and Value. Integers beyond ±2^53 and non-finite floats panic, because a number is stored as a 64-bit float."
+					],
+					"example": "query.Equal(\"featured\", true)",
+					"language": "go",
+					"typeLinks": {
+						"Value": "/reference/query/value/"
+					},
+					"aliases": [
+						"query.Operand",
+						"Operand"
+					],
+					"source": {
+						"path": "query/value.go",
+						"line": 35
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
+					"id": "go:github.com/riducms/ridu/query#Ordered",
+					"name": "Ordered",
+					"slug": "ordered",
+					"kind": "interface",
+					"group": "Values",
+					"summary": "A value that greater-than and less-than comparisons accept.",
+					"signature": "type Ordered interface {\n\t~string | ~int | ~int8 | ~int16 | ~int32 | ~int64 | ~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~float32 | ~float64 | Value\n}",
+					"parameters": [],
+					"parametersLabel": "",
+					"details": [
+						"Strings, integers, floats, named types of those, and a Value holding a string or number."
+					],
+					"example": "query.GreaterThan(\"price\", 10)",
+					"language": "go",
+					"typeLinks": {
+						"Value": "/reference/query/value/"
+					},
+					"aliases": [
+						"query.Ordered",
+						"Ordered"
+					],
+					"source": {
+						"path": "query/value.go",
+						"line": 41
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -61542,7 +61710,7 @@
 					],
 					"parametersLabel": "",
 					"details": [
-						"Stores append document ID as a stable tiebreaker when it is not supplied explicitly. Construct with NewSort when direction is not a compile-time constant."
+						"Stores append document ID as a stable tiebreaker when it is not supplied explicitly. Build one with Asc or Desc, or with NewSort when the direction comes from input."
 					],
 					"example": "",
 					"language": "go",
@@ -61563,12 +61731,90 @@
 					"overloads": []
 				},
 				{
+					"id": "go:github.com/riducms/ridu/query#Asc",
+					"name": "Asc",
+					"slug": "asc",
+					"kind": "function",
+					"group": "Result controls",
+					"summary": "Sort by a field from lowest to highest.",
+					"signature": "func Asc[P FieldPath](path P) Sort",
+					"parameters": [
+						{
+							"name": "path",
+							"type": "P",
+							"description": "The field, as a dot-separated name such as \"seo.title\" or a Path."
+						}
+					],
+					"parametersLabel": "",
+					"returns": {
+						"type": "Sort",
+						"description": "The sort term."
+					},
+					"details": [],
+					"example": "Sort: []query.Sort{query.Asc(\"title\")}",
+					"language": "go",
+					"typeLinks": {
+						"FieldPath": "/reference/query/field-path/",
+						"Sort": "/reference/query/sort/"
+					},
+					"aliases": [
+						"query.Asc",
+						"Asc"
+					],
+					"source": {
+						"path": "query/controls.go",
+						"line": 21
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
+					"id": "go:github.com/riducms/ridu/query#Desc",
+					"name": "Desc",
+					"slug": "desc",
+					"kind": "function",
+					"group": "Result controls",
+					"summary": "Sort by a field from highest to lowest.",
+					"signature": "func Desc[P FieldPath](path P) Sort",
+					"parameters": [
+						{
+							"name": "path",
+							"type": "P",
+							"description": "The field, as a dot-separated name such as \"seo.title\" or a Path."
+						}
+					],
+					"parametersLabel": "",
+					"returns": {
+						"type": "Sort",
+						"description": "The sort term."
+					},
+					"details": [],
+					"example": "Sort: []query.Sort{query.Desc(\"createdAt\")}",
+					"language": "go",
+					"typeLinks": {
+						"FieldPath": "/reference/query/field-path/",
+						"Sort": "/reference/query/sort/"
+					},
+					"aliases": [
+						"query.Desc",
+						"Desc"
+					],
+					"source": {
+						"path": "query/controls.go",
+						"line": 26
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
 					"id": "go:github.com/riducms/ridu/query#NewSort",
 					"name": "NewSort",
 					"slug": "new-sort",
 					"kind": "function",
 					"group": "Result controls",
-					"summary": "Validate a path and asc/desc direction.",
+					"summary": "Validate a sort term whose direction is chosen at run time.",
 					"signature": "func NewSort(path Path, direction Direction) (Sort, error)",
 					"parameters": [
 						{
@@ -61587,7 +61833,9 @@
 						"type": "(Sort, error)",
 						"description": "The declared result."
 					},
-					"details": [],
+					"details": [
+						"Use Asc or Desc for a sort written in your code."
+					],
 					"example": "",
 					"language": "go",
 					"typeLinks": {
@@ -61601,7 +61849,7 @@
 					],
 					"source": {
 						"path": "query/controls.go",
-						"line": 20
+						"line": 32
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -61647,7 +61895,7 @@
 					],
 					"source": {
 						"path": "query/controls.go",
-						"line": 32
+						"line": 44
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -61829,7 +62077,7 @@
 					],
 					"source": {
 						"path": "query/path.go",
-						"line": 21
+						"line": 37
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -61855,7 +62103,7 @@
 					],
 					"source": {
 						"path": "query/path.go",
-						"line": 19
+						"line": 35
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -62145,7 +62393,7 @@
 					],
 					"source": {
 						"path": "query/path.go",
-						"line": 89
+						"line": 115
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -62175,7 +62423,7 @@
 					],
 					"source": {
 						"path": "query/path.go",
-						"line": 80
+						"line": 106
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -62205,7 +62453,7 @@
 					],
 					"source": {
 						"path": "query/path.go",
-						"line": 84
+						"line": 110
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -62241,7 +62489,7 @@
 					],
 					"source": {
 						"path": "query/path.go",
-						"line": 97
+						"line": 123
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -62271,7 +62519,7 @@
 					],
 					"source": {
 						"path": "query/value.go",
-						"line": 60
+						"line": 142
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -62301,7 +62549,7 @@
 					],
 					"source": {
 						"path": "query/value.go",
-						"line": 47
+						"line": 129
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -62331,7 +62579,7 @@
 					],
 					"source": {
 						"path": "query/value.go",
-						"line": 69
+						"line": 151
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -62361,7 +62609,7 @@
 					],
 					"source": {
 						"path": "query/value.go",
-						"line": 55
+						"line": 137
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -62391,7 +62639,7 @@
 					],
 					"source": {
 						"path": "query/value.go",
-						"line": 50
+						"line": 132
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -62421,7 +62669,7 @@
 					],
 					"source": {
 						"path": "query/value.go",
-						"line": 65
+						"line": 147
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -62447,7 +62695,7 @@
 					],
 					"source": {
 						"path": "query/value.go",
-						"line": 14
+						"line": 17
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -62473,7 +62721,7 @@
 					],
 					"source": {
 						"path": "query/value.go",
-						"line": 16
+						"line": 19
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -62499,7 +62747,7 @@
 					],
 					"source": {
 						"path": "query/value.go",
-						"line": 15
+						"line": 18
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -62525,7 +62773,7 @@
 					],
 					"source": {
 						"path": "query/value.go",
-						"line": 13
+						"line": 16
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -62551,7 +62799,7 @@
 					],
 					"source": {
 						"path": "query/value.go",
-						"line": 12
+						"line": 15
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -62563,7 +62811,7 @@
 					"slug": "field",
 					"kind": "function",
 					"group": "Functions",
-					"summary": "Field names a field in a filter or sort written in your code, such as Field(\"price\") or Field(\"seo\", \"title\"). Like regexp.MustCompile, it panics when a name is malformed. Use ParsePath or NewPath for paths from user input, which return an error instead.",
+					"summary": "Field names a field by its segments, such as Field(\"seo\", \"title\"). Like regexp.MustCompile, it panics when a name is malformed. Filter helpers also accept the dot-separated string \"seo.title\" directly; use Field when you need a Path value, such as for ListOptions.Select.",
 					"signature": "func Field(segments ...string) Path",
 					"parameters": [
 						{
@@ -62587,7 +62835,7 @@
 					],
 					"source": {
 						"path": "query/path.go",
-						"line": 63
+						"line": 88
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -70167,7 +70415,7 @@
 					],
 					"source": {
 						"path": "store/value.go",
-						"line": 31
+						"line": 51
 					},
 					"relatedDocs": [
 						"/docs/go-packages/store/#nested-values"
@@ -70181,48 +70429,14 @@
 					"slug": "value-kind",
 					"kind": "type",
 					"group": "Values",
-					"summary": "The adapter-neutral stored value discriminant.",
-					"signature": "type ValueKind string",
-					"parameters": [
-						{
-							"name": "ValueNull",
-							"type": "\"null\"",
-							"description": "Null value."
-						},
-						{
-							"name": "ValueString",
-							"type": "\"string\"",
-							"description": "String value."
-						},
-						{
-							"name": "ValueObject",
-							"type": "\"object\"",
-							"description": "Nested Values object."
-						},
-						{
-							"name": "ValueDocument",
-							"type": "\"document\"",
-							"description": "Populated document."
-						},
-						{
-							"name": "ValueNumber",
-							"type": "\"number\"",
-							"description": "Finite numeric value."
-						},
-						{
-							"name": "ValueBoolean",
-							"type": "\"boolean\"",
-							"description": "Boolean value."
-						},
-						{
-							"name": "ValueList",
-							"type": "\"list\"",
-							"description": "Ordered value list."
-						}
-					],
+					"summary": "What a Value holds: null, string, number, boolean, object, list, or a populated document.",
+					"signature": "type ValueKind uint8",
+					"parameters": [],
 					"parametersLabel": "",
-					"details": [],
-					"example": "",
+					"details": [
+						"Compare with the ValueNull, ValueString, ValueNumber, ValueBoolean, ValueObject, ValueList, and ValueDocument constants. Use String() for the kind's name in messages; a plain string conversion does not produce it."
+					],
+					"example": "if value.Kind() == store.ValueList {\n\t// Read items with value.Elements().\n}",
 					"language": "go",
 					"typeLinks": {},
 					"aliases": [
@@ -70231,7 +70445,7 @@
 					],
 					"source": {
 						"path": "store/value.go",
-						"line": 13
+						"line": 12
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -70269,7 +70483,7 @@
 					],
 					"source": {
 						"path": "store/value.go",
-						"line": 196
+						"line": 220
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -70307,7 +70521,7 @@
 					],
 					"source": {
 						"path": "store/value.go",
-						"line": 207
+						"line": 231
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -70345,7 +70559,7 @@
 					],
 					"source": {
 						"path": "store/value.go",
-						"line": 42
+						"line": 62
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -70383,7 +70597,7 @@
 					],
 					"source": {
 						"path": "store/value.go",
-						"line": 48
+						"line": 68
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -70421,7 +70635,7 @@
 					],
 					"source": {
 						"path": "store/value.go",
-						"line": 49
+						"line": 69
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -70453,7 +70667,7 @@
 					],
 					"source": {
 						"path": "store/value.go",
-						"line": 41
+						"line": 61
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -70492,7 +70706,7 @@
 					],
 					"source": {
 						"path": "store/value.go",
-						"line": 43
+						"line": 63
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -70530,7 +70744,7 @@
 					],
 					"source": {
 						"path": "store/value.go",
-						"line": 50
+						"line": 70
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -70571,7 +70785,7 @@
 					],
 					"source": {
 						"path": "store/value.go",
-						"line": 44
+						"line": 64
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -70603,7 +70817,7 @@
 					],
 					"source": {
 						"path": "store/value.go",
-						"line": 85
+						"line": 109
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -74935,7 +75149,7 @@
 					],
 					"source": {
 						"path": "store/value.go",
-						"line": 105
+						"line": 129
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -74971,7 +75185,7 @@
 					],
 					"source": {
 						"path": "store/value.go",
-						"line": 98
+						"line": 122
 					},
 					"relatedDocs": [
 						"/docs/go-packages/store/#nested-values"
@@ -74987,25 +75201,28 @@
 					"slug": "value-kind-method",
 					"kind": "method",
 					"group": "Methods",
-					"summary": "Public method Value.Kind from github.com/riducms/ridu/store.",
+					"summary": "Report what the value holds.",
 					"signature": "func (value Value) Kind() ValueKind",
 					"parameters": [],
 					"parametersLabel": "",
 					"returns": {
 						"type": "ValueKind",
-						"description": "The declared result."
+						"description": "The kind, or the zero kind for the zero Value."
 					},
 					"details": [],
-					"example": "",
+					"example": "if value.Kind() == store.ValueNull {\n\t// The field was explicitly cleared.\n}",
 					"language": "go",
-					"typeLinks": {},
+					"typeLinks": {
+						"ValueKind": "/reference/store/value-kind/"
+					},
 					"aliases": [
 						"store.Value.Kind",
+						"Kind",
 						"Value.Kind"
 					],
 					"source": {
 						"path": "store/value.go",
-						"line": 52
+						"line": 72
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -75017,25 +75234,28 @@
 					"slug": "value-marshal-json-method",
 					"kind": "method",
 					"group": "Methods",
-					"summary": "Public method Value.MarshalJSON from github.com/riducms/ridu/store.",
+					"summary": "Encode the value as JSON.",
 					"signature": "func (value Value) MarshalJSON() ([]byte, error)",
 					"parameters": [],
 					"parametersLabel": "",
 					"returns": {
 						"type": "([]byte, error)",
-						"description": "The declared result."
+						"description": "The JSON encoding."
 					},
-					"details": [],
-					"example": "",
+					"details": [
+						"Output matches encoding/json for the same data: object keys are sorted and strings use HTML-safe escapes. Non-finite numbers and the zero Value return an error."
+					],
+					"example": "encoded, err := value.MarshalJSON()",
 					"language": "go",
 					"typeLinks": {},
 					"aliases": [
 						"store.Value.MarshalJSON",
+						"MarshalJSON",
 						"Value.MarshalJSON"
 					],
 					"source": {
-						"path": "store/value.go",
-						"line": 223
+						"path": "store/value_json.go",
+						"line": 65
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -75065,7 +75285,7 @@
 					],
 					"source": {
 						"path": "store/value.go",
-						"line": 104
+						"line": 128
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -75101,7 +75321,7 @@
 					],
 					"source": {
 						"path": "store/value.go",
-						"line": 92
+						"line": 116
 					},
 					"relatedDocs": [
 						"/docs/go-packages/store/#nested-values"
@@ -75117,31 +75337,34 @@
 					"slug": "value-unmarshal-json-method",
 					"kind": "method",
 					"group": "Methods",
-					"summary": "Public method Value.UnmarshalJSON from github.com/riducms/ridu/store.",
-					"signature": "func (value *Value) UnmarshalJSON(encoded []byte) error",
+					"summary": "Decode any JSON value into a Value.",
+					"signature": "func (value *Value) UnmarshalJSON(data []byte) error",
 					"parameters": [
 						{
-							"name": "encoded",
+							"name": "data",
 							"type": "[]byte",
-							"description": "The encoded value."
+							"description": "One complete JSON value."
 						}
 					],
 					"parametersLabel": "",
 					"returns": {
 						"type": "error",
-						"description": "The declared result."
+						"description": "An error for invalid JSON or a number outside the float64 range."
 					},
-					"details": [],
-					"example": "",
+					"details": [
+						"Objects become ValueObject, arrays ValueList, and numbers float64 ValueNumber. Input is accepted and decoded exactly as encoding/json would, including replacing invalid UTF-8 with U+FFFD."
+					],
+					"example": "var value store.Value\nerr := value.UnmarshalJSON(data)",
 					"language": "go",
 					"typeLinks": {},
 					"aliases": [
 						"store.Value.UnmarshalJSON",
+						"UnmarshalJSON",
 						"Value.UnmarshalJSON"
 					],
 					"source": {
-						"path": "store/value.go",
-						"line": 263
+						"path": "store/value_json.go",
+						"line": 113
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -75177,7 +75400,7 @@
 					],
 					"source": {
 						"path": "store/value.go",
-						"line": 109
+						"line": 133
 					},
 					"relatedDocs": [
 						"/docs/go-packages/store/#nested-values"
@@ -75194,7 +75417,7 @@
 					"kind": "constant",
 					"group": "Constants",
 					"summary": "Public constant ValueBoolean from github.com/riducms/ridu/store.",
-					"signature": "const ValueBoolean ValueKind = \"boolean\"",
+					"signature": "const ValueBoolean",
 					"parameters": [],
 					"parametersLabel": "",
 					"details": [],
@@ -75220,7 +75443,7 @@
 					"kind": "constant",
 					"group": "Constants",
 					"summary": "Public constant ValueDocument from github.com/riducms/ridu/store.",
-					"signature": "const ValueDocument ValueKind = \"document\"",
+					"signature": "const ValueDocument",
 					"parameters": [],
 					"parametersLabel": "",
 					"details": [],
@@ -75246,7 +75469,7 @@
 					"kind": "constant",
 					"group": "Constants",
 					"summary": "Public constant ValueList from github.com/riducms/ridu/store.",
-					"signature": "const ValueList ValueKind = \"list\"",
+					"signature": "const ValueList",
 					"parameters": [],
 					"parametersLabel": "",
 					"details": [],
@@ -75272,7 +75495,7 @@
 					"kind": "constant",
 					"group": "Constants",
 					"summary": "Public constant ValueNull from github.com/riducms/ridu/store.",
-					"signature": "const ValueNull ValueKind = \"null\"",
+					"signature": "const ValueNull",
 					"parameters": [],
 					"parametersLabel": "",
 					"details": [],
@@ -75298,7 +75521,7 @@
 					"kind": "constant",
 					"group": "Constants",
 					"summary": "Public constant ValueNumber from github.com/riducms/ridu/store.",
-					"signature": "const ValueNumber ValueKind = \"number\"",
+					"signature": "const ValueNumber",
 					"parameters": [],
 					"parametersLabel": "",
 					"details": [],
@@ -75324,7 +75547,7 @@
 					"kind": "constant",
 					"group": "Constants",
 					"summary": "Public constant ValueObject from github.com/riducms/ridu/store.",
-					"signature": "const ValueObject ValueKind = \"object\"",
+					"signature": "const ValueObject",
 					"parameters": [],
 					"parametersLabel": "",
 					"details": [],
@@ -75350,7 +75573,7 @@
 					"kind": "constant",
 					"group": "Constants",
 					"summary": "Public constant ValueString from github.com/riducms/ridu/store.",
-					"signature": "const ValueString ValueKind = \"string\"",
+					"signature": "const ValueString",
 					"parameters": [],
 					"parametersLabel": "",
 					"details": [],
@@ -75563,7 +75786,7 @@
 					],
 					"source": {
 						"path": "store/value.go",
-						"line": 167
+						"line": 191
 					},
 					"relatedDocs": [
 						"/docs/go-packages/store/#nested-values"
@@ -75603,7 +75826,7 @@
 					],
 					"source": {
 						"path": "store/value.go",
-						"line": 151
+						"line": 175
 					},
 					"relatedDocs": [
 						"/docs/go-packages/store/#nested-values"
@@ -75649,7 +75872,7 @@
 					],
 					"source": {
 						"path": "store/value.go",
-						"line": 128
+						"line": 152
 					},
 					"relatedDocs": [
 						"/docs/go-packages/store/#nested-values"
@@ -75657,6 +75880,39 @@
 					"relatedSymbols": [
 						"go:github.com/riducms/ridu/store#Value"
 					],
+					"overloads": []
+				},
+				{
+					"id": "go:github.com/riducms/ridu/store#Value.IsZero",
+					"name": "Value.IsZero",
+					"slug": "value-is-zero-method",
+					"kind": "method",
+					"group": "Methods",
+					"summary": "Report whether the value is the zero Value, which holds no data.",
+					"signature": "func (value Value) IsZero() bool",
+					"parameters": [],
+					"parametersLabel": "",
+					"returns": {
+						"type": "bool",
+						"description": "true for the zero Value."
+					},
+					"details": [
+						"A missing map entry and store.Value{} are zero. Null is not zero: it is an explicit value."
+					],
+					"example": "if values[\"title\"].IsZero() {\n\t// The map has no title entry.\n}",
+					"language": "go",
+					"typeLinks": {},
+					"aliases": [
+						"store.Value.IsZero",
+						"IsZero",
+						"Value.IsZero"
+					],
+					"source": {
+						"path": "store/value.go",
+						"line": 76
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
 					"overloads": []
 				},
 				{
@@ -75689,7 +75945,7 @@
 					],
 					"source": {
 						"path": "store/value.go",
-						"line": 137
+						"line": 161
 					},
 					"relatedDocs": [
 						"/docs/go-packages/store/#nested-values"
@@ -75733,7 +75989,7 @@
 					],
 					"source": {
 						"path": "store/value.go",
-						"line": 177
+						"line": 201
 					},
 					"relatedDocs": [
 						"/docs/go-packages/store/#nested-values"
@@ -75777,7 +76033,7 @@
 					],
 					"source": {
 						"path": "store/value.go",
-						"line": 118
+						"line": 142
 					},
 					"relatedDocs": [
 						"/docs/go-packages/store/#nested-values"
@@ -75824,7 +76080,7 @@
 					],
 					"source": {
 						"path": "store/value.go",
-						"line": 59
+						"line": 83
 					},
 					"relatedDocs": [
 						"/docs/go-packages/store/#nested-values"
@@ -75875,7 +76131,7 @@
 					],
 					"source": {
 						"path": "store/value.go",
-						"line": 188
+						"line": 212
 					},
 					"relatedDocs": [
 						"/docs/go-packages/store/#nested-values"
@@ -75883,6 +76139,111 @@
 					"relatedSymbols": [
 						"go:github.com/riducms/ridu/store#Value"
 					],
+					"overloads": []
+				},
+				{
+					"id": "go:github.com/riducms/ridu/store#ValueKind.String",
+					"name": "ValueKind.String",
+					"slug": "value-kind-string-method",
+					"kind": "method",
+					"group": "Methods",
+					"summary": "The kind's name, such as \"list\", or \"\" for the zero Value.",
+					"signature": "func (kind ValueKind) String() string",
+					"parameters": [],
+					"parametersLabel": "",
+					"returns": {
+						"type": "string",
+						"description": "The name used in error messages and logs."
+					},
+					"details": [],
+					"example": "fmt.Printf(\"%s\\n\", value.Kind())",
+					"language": "go",
+					"typeLinks": {},
+					"aliases": [
+						"store.ValueKind.String",
+						"String",
+						"ValueKind.String"
+					],
+					"source": {
+						"path": "store/value.go",
+						"line": 38
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
+					"id": "go:github.com/riducms/ridu/store#Values.MarshalJSON",
+					"name": "Values.MarshalJSON",
+					"slug": "values-marshal-json-method",
+					"kind": "method",
+					"group": "Methods",
+					"summary": "Encode the field map as a JSON object.",
+					"signature": "func (values Values) MarshalJSON() ([]byte, error)",
+					"parameters": [],
+					"parametersLabel": "",
+					"returns": {
+						"type": "([]byte, error)",
+						"description": "The JSON object."
+					},
+					"details": [
+						"A nil map encodes as null. Calling it directly skips the extra validation pass encoding/json performs on a marshaler's output."
+					],
+					"example": "encoded, err := values.MarshalJSON()",
+					"language": "go",
+					"typeLinks": {},
+					"aliases": [
+						"store.Values.MarshalJSON",
+						"MarshalJSON",
+						"Values.MarshalJSON"
+					],
+					"source": {
+						"path": "store/value_json.go",
+						"line": 29
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
+					"id": "go:github.com/riducms/ridu/store#Values.UnmarshalJSON",
+					"name": "Values.UnmarshalJSON",
+					"slug": "values-unmarshal-json-method",
+					"kind": "method",
+					"group": "Methods",
+					"summary": "Decode a JSON object into the field map.",
+					"signature": "func (values *Values) UnmarshalJSON(data []byte) error",
+					"parameters": [
+						{
+							"name": "data",
+							"type": "[]byte",
+							"description": "A JSON object or null."
+						}
+					],
+					"parametersLabel": "",
+					"returns": {
+						"type": "error",
+						"description": "An error for invalid JSON or a non-object value."
+					},
+					"details": [
+						"Like encoding/json for maps, it adds to existing entries and JSON null sets the map to nil. Other JSON values return an error."
+					],
+					"example": "var values store.Values\nerr := values.UnmarshalJSON(data)",
+					"language": "go",
+					"typeLinks": {
+						"Value": "/reference/store/value/"
+					},
+					"aliases": [
+						"store.Values.UnmarshalJSON",
+						"UnmarshalJSON",
+						"Values.UnmarshalJSON"
+					],
+					"source": {
+						"path": "store/value_json.go",
+						"line": 43
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
 					"overloads": []
 				}
 			]

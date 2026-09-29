@@ -747,8 +747,7 @@ func sortClause(request store.Request) (string, error) {
 		hasID = hasID || term.Path.String() == "id"
 	}
 	if !hasID {
-		id, _ := query.NewPath("id")
-		terms = append(terms, query.Sort{Path: id, Direction: query.Ascending})
+		terms = append(terms, query.Asc("id"))
 	}
 	compiler := predicateCompiler{collection: request.Collection, localeChain: request.LocaleChain}
 	parts := make([]string, len(terms))
@@ -1262,7 +1261,7 @@ func scanReferenceRootValue(row pgx.Row, field schema.Field) (store.Value, bool,
 			return store.Null(), true, nil
 		}
 		var value store.Value
-		if err := json.Unmarshal(encoded, &value); err != nil {
+		if err := value.UnmarshalJSON(encoded); err != nil {
 			return store.Value{}, false, fmt.Errorf("decode reference root %s: %w", field.Path, err)
 		}
 		return value, true, nil
@@ -1583,7 +1582,7 @@ func documentDestinations(document *store.Document, collection schema.Collection
 					document.Values[field.Name] = store.Null()
 				} else {
 					var decoded store.Value
-					if err := json.Unmarshal(*value, &decoded); err != nil {
+					if err := decoded.UnmarshalJSON(*value); err != nil {
 						return fmt.Errorf("decode JSON field %s: %w", field.Name, err)
 					}
 					document.Values[field.Name] = decoded
@@ -2730,7 +2729,7 @@ func databaseValue(field schema.Field, value store.Value) (any, error) {
 		if value.Kind() == store.ValueNull {
 			return nil, nil
 		}
-		return json.Marshal(value)
+		return value.MarshalJSON()
 	}
 	switch value.Kind() {
 	case store.ValueNull:

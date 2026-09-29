@@ -46,7 +46,7 @@ func TestMongoListWindowPredicateRejectsAnythingOutsideTheBoundedContract(t *tes
 		Limit: 10,
 	}
 
-	filter := query.Equal(mongoWindowPath(t, "title"), query.String("hidden")).Node()
+	filter := query.Equal(mongoWindowPath(t, "title"), "hidden").Node()
 	withFilter := base
 	withFilter.Filter = &filter
 	if _, _, _, err := mongoListWindowPredicate(withFilter); err == nil || !strings.Contains(err.Error(), "does not support") {

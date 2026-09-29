@@ -230,7 +230,7 @@ func TestSQLiteIndexedNestedLocalizedAndReferenceQueriesStayNative(t *testing.T)
 	}
 	filename := path("filename")
 	filesize := path("filesize")
-	filenameFilter := query.Equal(filename, query.String("media-a.jpg")).Node()
+	filenameFilter := query.Equal(filename, "media-a.jpg").Node()
 	mediaRequest := store.Request{
 		Collection: media, Filter: &filenameFilter, Page: 1, Limit: 10,
 		Sort: []query.Sort{{Path: filesize, Direction: query.Ascending}},
@@ -252,7 +252,7 @@ func TestSQLiteIndexedNestedLocalizedAndReferenceQueriesStayNative(t *testing.T)
 
 	tenant := path("tenant")
 	slug := path("seo.slug")
-	tenantFilter := query.Equal(tenant, query.String("acme")).Node()
+	tenantFilter := query.Equal(tenant, "acme").Node()
 	request := store.Request{
 		Collection: posts, Filter: &tenantFilter, Page: 1, Limit: 10,
 		Sort: []query.Sort{{Path: slug, Direction: query.Ascending}},

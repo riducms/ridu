@@ -53,14 +53,14 @@ func variantIsolation(t *testing.T, factory Factory, options Options) {
 	}
 	_, err = app.Local().List(t.Context(), "pages", ridu.ListOptions{Where: query.Contains(path("layout.quote.hero.secret"), "hidden-token")})
 	denied(t, err, "layout.quote.hero.secret")
-	_, err = app.Local().List(t.Context(), "pages", ridu.ListOptions{Where: query.Equal(path("layout.quote.hero.metadata.tag"), query.String("hidden-json-token"))})
+	_, err = app.Local().List(t.Context(), "pages", ridu.ListOptions{Where: query.Equal(path("layout.quote.hero.metadata.tag"), "hidden-json-token")})
 	denied(t, err, "layout.quote.hero.metadata.tag")
 	if !options.OpaqueJSONDescendants {
 		return
 	}
 	// Opaque JSON has no authored child permissions or variant discriminator;
 	// its existing Local API descendant queries must remain usable.
-	page, err = app.Local().List(t.Context(), "pages", ridu.ListOptions{Where: query.Equal(path("metadata.tag"), query.String("visible"))})
+	page, err = app.Local().List(t.Context(), "pages", ridu.ListOptions{Where: query.Equal(path("metadata.tag"), "visible")})
 	if err != nil || page.Total != 1 || len(page.Documents) != 1 {
 		t.Fatalf("opaque JSON descendant query: %#v, %v", page, err)
 	}
@@ -68,7 +68,7 @@ func variantIsolation(t *testing.T, factory Factory, options Options) {
 	// looking inside opaque JSON. Falling back to the full raw path here would
 	// make the quote variant's private hero.metadata look like public content.
 	for token, total := range map[string]int{"hidden-json-token": 0, "public-json-token": 1} {
-		page, err = app.Local().List(t.Context(), "pages", ridu.ListOptions{Where: query.Equal(path("layout.hero.metadata.tag"), query.String(token))})
+		page, err = app.Local().List(t.Context(), "pages", ridu.ListOptions{Where: query.Equal(path("layout.hero.metadata.tag"), token)})
 		if err != nil || page.Total != total || len(page.Documents) != total {
 			t.Fatalf("variant opaque JSON descendant %q: %#v, %v", token, page, err)
 		}

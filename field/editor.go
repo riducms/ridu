@@ -25,7 +25,7 @@ func (d View) LocalRowLabel() (string, json.RawMessage) {
 	return c.Key, componentConfig(c)
 }
 func componentConfig(c ComponentRef) json.RawMessage {
-	if c.Config.Kind() == "" {
+	if c.Config.IsZero() {
 		return nil
 	}
 	raw, _ := json.Marshal(c.Config)

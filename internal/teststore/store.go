@@ -1567,8 +1567,7 @@ func stableSort(sorts []query.Sort) []query.Sort {
 			return result
 		}
 	}
-	id, _ := query.NewPath("id")
-	result = append(result, query.Sort{Path: id, Direction: query.Ascending})
+	result = append(result, query.Asc("id"))
 	return result
 }
 

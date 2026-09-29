@@ -38,6 +38,32 @@ type Definition struct {
 	}
 }
 
+func TestConstraintSignatureKeepsItsTypeSet(t *testing.T) {
+	set := token.NewFileSet()
+	file, err := parser.ParseFile(set, "example.go", `package example
+type Path struct{ segments []string }
+type FieldPath interface {
+	~string | Path
+}
+`, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	group := file.Decls[1].(*ast.GenDecl)
+	loaded := &packages.Package{
+		PkgPath: "example", Name: "example",
+		Types:     types.NewPackage("example", "example"),
+		TypesInfo: &types.Info{Types: map[ast.Expr]types.TypeAndValue{}},
+	}
+	result := typeDeclaration(".", set, loaded, group, group.Specs[0].(*ast.TypeSpec))
+	if !strings.Contains(result.Signature, "~string | Path") || strings.Contains(result.Signature, "unexported") {
+		t.Fatalf("constraint signature lost its type set: %s", result.Signature)
+	}
+	if len(result.Members) != 0 {
+		t.Fatalf("constraint members = %#v, want none", result.Members)
+	}
+}
+
 func TestExtractUsesStableIDsAndReceiverNames(t *testing.T) {
 	result, err := extract("../../../..", []string{"./field", "./migration/payload"})
 	if err != nil {

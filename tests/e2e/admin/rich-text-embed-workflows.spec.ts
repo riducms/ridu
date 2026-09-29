@@ -50,6 +50,7 @@ test("upload insertion, editing, swap, and removal keep one usable paragraph", a
 		"Warm orange Ridu cover"
 	);
 	await documentDrawer.getByRole("button", { name: "Close relationship browser" }).click();
+	await expect(documentDrawer).toBeHidden();
 
 	await card.hover();
 	await card.getByRole("button", { name: "Replace ridu-cover.png" }).click();
@@ -104,6 +105,7 @@ test("relationship insertion, editing, swap, and removal keep one usable paragra
 	await expect(documentDrawer).toBeVisible();
 	await expect(documentDrawer.getByRole("textbox", { name: "Content" })).toBeVisible();
 	await documentDrawer.getByRole("button", { name: "Close relationship browser" }).click();
+	await expect(documentDrawer).toBeHidden();
 
 	await card.getByRole("button", { name: "Replace" }).click();
 	await browser.getByRole("searchbox").fill("Welcome to Ridu");

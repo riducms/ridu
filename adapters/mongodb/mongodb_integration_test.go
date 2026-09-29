@@ -230,7 +230,7 @@ func TestMongoDBOperationEngineNestedGroupsRejectArrayAncestorMatches(t *testing
 	}
 
 	summaryPath := mongoMustPath(t, "seo.details.summary")
-	where := query.Equal(summaryPath, query.String("safe"))
+	where := query.Equal(summaryPath, "safe")
 	page, err := application.Local().List(t.Context(), "posts", ridu.ListOptions{Where: where, Limit: 10})
 	if err != nil {
 		t.Fatalf("operation-engine nested list: %v", err)
@@ -349,14 +349,14 @@ func TestMongoDBRepeatedRootsWriteProjectAndFailClosedOnCorruptBSON(t *testing.T
 		id       string
 		repeated query.Expression
 	}{
-		{id: "corrupt-array-root", repeated: query.Equal(mongoMustPath(t, "rows.kind"), query.String("never"))},
-		{id: "corrupt-array-item", repeated: query.Equal(mongoMustPath(t, "rows.kind"), query.String("never"))},
-		{id: "corrupt-array-group", repeated: query.Equal(mongoMustPath(t, "rows.details.note"), query.String("never"))},
-		{id: "corrupt-block", repeated: query.Equal(mongoMustPath(t, "layout.hero.heading"), query.String("never"))},
+		{id: "corrupt-array-root", repeated: query.Equal(mongoMustPath(t, "rows.kind"), "never")},
+		{id: "corrupt-array-item", repeated: query.Equal(mongoMustPath(t, "rows.kind"), "never")},
+		{id: "corrupt-array-group", repeated: query.Equal(mongoMustPath(t, "rows.details.note"), "never")},
+		{id: "corrupt-block", repeated: query.Equal(mongoMustPath(t, "layout.hero.heading"), "never")},
 	} {
 		predicate := query.Or(
 			fixture.repeated,
-			query.Equal(mongoMustPath(t, "title"), query.String(fixture.id)),
+			query.Equal(mongoMustPath(t, "title"), fixture.id),
 		)
 		filter := predicate.Node()
 		page, err := read.List(t.Context(), store.Request{Collection: collection, Filter: &filter, Limit: 10})
@@ -373,9 +373,9 @@ func TestMongoDBRepeatedRootsWriteProjectAndFailClosedOnCorruptBSON(t *testing.T
 			t.Fatalf("direct corrupt repeated read %q was accepted", fixture.id)
 		}
 	}
-	negated := query.Not(query.Equal(mongoMustPath(t, "rows.kind"), query.String("never")))
+	negated := query.Not(query.Equal(mongoMustPath(t, "rows.kind"), "never"))
 	corruptOnly := query.And(
-		query.Equal(mongoMustPath(t, "title"), query.String("corrupt-array-root")),
+		query.Equal(mongoMustPath(t, "title"), "corrupt-array-root"),
 		negated,
 	)
 	filter := corruptOnly.Node()
@@ -446,8 +446,8 @@ func TestMongoDBRepeatedRootGuardsExcludeCorruptionFromAccessTotalsAndDistinct(t
 	tags := mongoMustPath(t, "tags")
 	heroHeading := mongoMustPath(t, "layout.hero.heading")
 	quoteHeading := mongoMustPath(t, "layout.quote.heading")
-	kindMatches := query.Equal(rowKind, query.String("primary"))
-	noteMatches := query.Equal(rowNote, query.String("nested"))
+	kindMatches := query.Equal(rowKind, "primary")
+	noteMatches := query.Equal(rowNote, "nested")
 	forward := query.And(kindMatches, noteMatches)
 	reverse := query.And(noteMatches, kindMatches)
 	forwardNot := query.Not(forward)
@@ -458,20 +458,20 @@ func TestMongoDBRepeatedRootGuardsExcludeCorruptionFromAccessTotalsAndDistinct(t
 		id     string
 		access query.Expression
 	}{
-		{name: "wrong-type queried leaf not-equal", id: "wrong-type-leaf", access: query.NotEqual(rowKind, query.String("blocked"))},
-		{name: "missing required queried leaf not-equal", id: "missing-required-leaf", access: query.NotEqual(rowKind, query.String("blocked"))},
-		{name: "incomplete row not-equal", id: "incomplete-row", access: query.NotEqual(rowKind, query.String("blocked"))},
-		{name: "unknown row key not-equal", id: "unknown-row-key", access: query.NotEqual(rowKind, query.String("blocked"))},
-		{name: "invalid row key not-equal", id: "invalid-row-key", access: query.NotEqual(rowKind, query.String("blocked"))},
-		{name: "duplicate row key not-equal", id: "duplicate-row-key", access: query.NotEqual(rowKind, query.String("blocked"))},
-		{name: "invalid row select choice not-equal", id: "invalid-row-choice", access: query.NotEqual(rowKind, query.String("blocked"))},
-		{name: "invalid select choice not-equal", id: "invalid-select-choice", access: query.NotEqual(tags, query.String("blocked"))},
-		{name: "duplicate select choice not-equal", id: "duplicate-select-choice", access: query.NotEqual(tags, query.String("blocked"))},
+		{name: "wrong-type queried leaf not-equal", id: "wrong-type-leaf", access: query.NotEqual(rowKind, "blocked")},
+		{name: "missing required queried leaf not-equal", id: "missing-required-leaf", access: query.NotEqual(rowKind, "blocked")},
+		{name: "incomplete row not-equal", id: "incomplete-row", access: query.NotEqual(rowKind, "blocked")},
+		{name: "unknown row key not-equal", id: "unknown-row-key", access: query.NotEqual(rowKind, "blocked")},
+		{name: "invalid row key not-equal", id: "invalid-row-key", access: query.NotEqual(rowKind, "blocked")},
+		{name: "duplicate row key not-equal", id: "duplicate-row-key", access: query.NotEqual(rowKind, "blocked")},
+		{name: "invalid row select choice not-equal", id: "invalid-row-choice", access: query.NotEqual(rowKind, "blocked")},
+		{name: "invalid select choice not-equal", id: "invalid-select-choice", access: query.NotEqual(tags, "blocked")},
+		{name: "duplicate select choice not-equal", id: "duplicate-select-choice", access: query.NotEqual(tags, "blocked")},
 		{name: "nested group scalar not first", id: "nested-group-scalar", access: forwardNot},
 		{name: "nested group scalar first", id: "nested-group-scalar", access: reverseNot},
-		{name: "missing block required not-equal", id: "missing-block-required", access: query.NotEqual(heroHeading, query.String("blocked"))},
-		{name: "invalid block type not-equal", id: "invalid-block-type", access: query.NotEqual(heroHeading, query.String("blocked"))},
-		{name: "unknown block key not-equal", id: "unknown-block-key", access: query.NotEqual(quoteHeading, query.String("blocked"))},
+		{name: "missing block required not-equal", id: "missing-block-required", access: query.NotEqual(heroHeading, "blocked")},
+		{name: "invalid block type not-equal", id: "invalid-block-type", access: query.NotEqual(heroHeading, "blocked")},
+		{name: "unknown block key not-equal", id: "unknown-block-key", access: query.NotEqual(quoteHeading, "blocked")},
 	}
 
 	read := mongoBegin(t, backend, true)
@@ -483,7 +483,7 @@ func TestMongoDBRepeatedRootGuardsExcludeCorruptionFromAccessTotalsAndDistinct(t
 	title := mongoMustPath(t, "title")
 	for _, assertion := range assertions {
 		t.Run(assertion.name, func(t *testing.T) {
-			filter := query.Equal(title, query.String(assertion.id)).Node()
+			filter := query.Equal(title, assertion.id).Node()
 			access := assertion.access.Node()
 			page, err := read.List(t.Context(), store.Request{
 				Collection: collection, Filter: &filter, Access: &access,
@@ -568,8 +568,8 @@ func TestMongoDBDecoderFreeReadsExcludeCorruptUntouchedAuthoredFields(t *testing
 	}
 
 	rank := mongoMustPath(t, "rank")
-	filter := query.GreaterThanEqual(rank, query.Number(0)).Node()
-	access := query.LessThan(rank, query.Number(10)).Node()
+	filter := query.GreaterThanEqual(rank, 0).Node()
+	access := query.LessThan(rank, 10).Node()
 	read := mongoBegin(t, backend, true)
 	page, err := read.List(t.Context(), store.Request{
 		Collection: collection, Filter: &filter, Access: &access,
@@ -872,8 +872,8 @@ func TestMongoDBTransactionalScalarVerticalSlice(t *testing.T) {
 
 	rank := mongoMustPath(t, "rank")
 	title := mongoMustPath(t, "title")
-	filter := query.GreaterThan(rank, query.Number(1)).Node()
-	access := query.NotEqual(title, query.String("secret")).Node()
+	filter := query.GreaterThan(rank, 1).Node()
+	access := query.NotEqual(title, "secret").Node()
 	rankDescending, err := query.NewSort(rank, query.Descending)
 	if err != nil {
 		t.Fatal(err)
@@ -891,7 +891,7 @@ func TestMongoDBTransactionalScalarVerticalSlice(t *testing.T) {
 		mongoRollback(t, snapshot)
 		t.Fatalf("access-filtered stable page = %#v", page)
 	}
-	nonnegative := query.GreaterThanEqual(rank, query.Number(0)).Node()
+	nonnegative := query.GreaterThanEqual(rank, 0).Node()
 	distinctTransaction, ok := snapshot.(store.DistinctTransaction)
 	if !ok {
 		mongoRollback(t, snapshot)
@@ -939,7 +939,7 @@ func TestMongoDBTransactionalScalarVerticalSlice(t *testing.T) {
 	mongoCommit(t, snapshot)
 
 	mutation := mongoBegin(t, backend, false)
-	equalRank := query.Equal(rank, query.Number(2)).Node()
+	equalRank := query.Equal(rank, 2).Node()
 	updated, err := mutation.Update(t.Context(), store.UpdateRequest{
 		Request: store.Request{
 			Collection: collection, ID: "post-b", Filter: &equalRank, Access: &access,

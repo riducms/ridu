@@ -55,7 +55,7 @@ func initializeDynamicDefaults(collection Collection, ctx Context, values store.
 		retained := originalFieldLocations(ctx, path, options.previous)
 		prior := originalFieldLocations(ctx, path, originalFieldValues(ctx))
 		for _, location := range fieldLocationsAtPath(collection.Schema.Fields, candidate, path, false, true) {
-			if location.value.Kind() != "" || location.parentPath == "" && !options.requireMissing {
+			if !location.value.IsZero() || location.parentPath == "" && !options.requireMissing {
 				continue
 			}
 			if _, exists := retained[location.identity]; exists {

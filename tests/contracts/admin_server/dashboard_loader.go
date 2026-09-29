@@ -18,8 +18,7 @@ type editorialDashboardData struct {
 var editorialDashboard = ridu.NewAdminLoader("editorial-dashboard", func(ctx ridu.AdminLoadContext, input editorialDashboardInput) (editorialDashboardData, error) {
 	options := ridu.ListOptions{Limit: 1}
 	if input.Search != "" {
-		title, _ := query.NewPath("title")
-		options.Where = query.Contains(title, input.Search)
+		options.Where = query.Contains("title", input.Search)
 	}
 	posts, err := ctx.List("posts", options)
 	if err != nil {

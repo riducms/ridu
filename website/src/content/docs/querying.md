@@ -46,9 +46,9 @@ Ridu uses one query vocabulary across the local Go API, REST, SDK, access rules,
 `find` accepts the output, population, locale, and lifecycle options that apply to one document.
 `count` accepts filtering, locale, draft, and trash options but does not build document output.
 
-For Go examples, start with [Filters and paths](/docs/go-packages/query/) if `query.Path`,
-`query.Expression`, or `query.String(...)` is new to you. It explains how those pieces form a
-filter and how to use one in an access rule or local API call.
+For Go examples, start with [Filters and paths](/docs/go-packages/query/) if `query.Equal` or
+`query.Expression` is new to you. It explains how to build a filter and use it in an access rule
+or local API call.
 
 ## Filter with `where` {#where}
 
@@ -70,17 +70,17 @@ const page = await client.list('posts', {
 });
 ```
 
-| TypeScript operator               | Go operator                                                     | Meaning                                                           |
-| --------------------------------- | --------------------------------------------------------------- | ----------------------------------------------------------------- |
-| `equals`                          | `query.Equal`                                                   | exact scalar equality                                             |
-| `notEquals`                       | `query.NotEqual`                                                | scalar inequality                                                 |
-| `in`                              | `query.In`                                                      | value equals one member of a non-empty list                       |
-| `exists`                          | `query.Compare(path, query.OperatorExists, query.Boolean(...))` | field is present or absent                                        |
-| `greaterThan`, `greaterThanEqual` | `query.GreaterThan`, `query.GreaterThanEqual`                   | ordered string/number comparison                                  |
-| `lessThan`, `lessThanEqual`       | `query.LessThan`, `query.LessThanEqual`                         | ordered string/number comparison                                  |
-| `contains`                        | `query.Contains`                                                | case-insensitive substring match                                  |
-| `like`                            | `query.Like`                                                    | case-insensitive match for every whitespace-delimited search word |
-| `and`, `or`, `not`                | `query.And`, `query.Or`, `query.Not`                            | recursive logical composition                                     |
+| TypeScript operator               | Go operator                                   | Meaning                                                           |
+| --------------------------------- | --------------------------------------------- | ----------------------------------------------------------------- |
+| `equals`                          | `query.Equal`                                 | exact scalar equality                                             |
+| `notEquals`                       | `query.NotEqual`                              | scalar inequality                                                 |
+| `in`                              | `query.In`                                    | value equals one member of a non-empty list                       |
+| `exists`                          | `query.Exists`                                | field is present or absent                                        |
+| `greaterThan`, `greaterThanEqual` | `query.GreaterThan`, `query.GreaterThanEqual` | ordered string/number comparison                                  |
+| `lessThan`, `lessThanEqual`       | `query.LessThan`, `query.LessThanEqual`       | ordered string/number comparison                                  |
+| `contains`                        | `query.Contains`                              | case-insensitive substring match                                  |
+| `like`                            | `query.Like`                                  | case-insensitive match for every whitespace-delimited search word |
+| `and`, `or`, `not`                | `query.And`, `query.Or`, `query.Not`          | recursive logical composition                                     |
 
 `and` and `or` require at least two children; `not` requires exactly one. HTTP `where` accepts at
 most 100 comparison expressions, nesting depth 16, and 100 values in one `in` expression. A query
@@ -224,7 +224,7 @@ For the performance effect of indexes, selection, population, and pool sizing, s
 For [TextList and NumberList](/docs/fields/lists/), `in` matches a document when any item equals
 any candidate. This finds products with the tag `"sale"` or `"featured"`:
 
-```go title="content/find_tagged.go" focus={15-21}
+```go title="content/find_tagged.go" focus={15-20}
 package content
 
 import (
@@ -240,9 +240,8 @@ func FindTaggedProducts(
 	local *ridu.LocalAPI,
 ) (store.Page, error) {
 	// Match either tag anywhere in the list, using exact values.
-	tags := query.Field("tags")
 	return local.List(ctx, "products", ridu.ListOptions{
-		Where: query.In(tags, query.String("sale"), query.String("featured")),
+		Where: query.In("tags", "sale", "featured"),
 		Page:  1,
 		Limit: 20,
 	})

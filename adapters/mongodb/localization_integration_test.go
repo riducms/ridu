@@ -23,7 +23,7 @@ func TestMongoDBLocalizedScalarOperationEngineParity(t *testing.T) {
 	gatePath := mongoMustPath(t, "gate")
 	labelPath := mongoMustPath(t, "label")
 	authorPath := mongoMustPath(t, "author")
-	publicGate := query.Equal(gatePath, query.String("Public"))
+	publicGate := query.Equal(gatePath, "Public")
 	publicAccess := func(ridu.AccessContext) (ridu.AccessDecision, error) {
 		return ridu.Where(publicGate), nil
 	}
@@ -201,7 +201,7 @@ func TestMongoDBLocalizedScalarOperationEngineParity(t *testing.T) {
 		{path: headlinePath, want: "Accueil"},
 	} {
 		page, err := application.Local().List(t.Context(), "posts", ridu.ListOptions{
-			Locale: "fr", Where: query.Equal(test.path, query.String(test.want)), Limit: 10,
+			Locale: "fr", Where: query.Equal(test.path, test.want), Limit: 10,
 		})
 		if err != nil || page.Total != 1 || page.Documents[0].ID != primary.ID {
 			t.Fatalf("localized filter %s = %#v, %v", test.path.String(), page, err)
@@ -236,7 +236,7 @@ func TestMongoDBLocalizedScalarOperationEngineParity(t *testing.T) {
 		t.Fatal(err)
 	}
 	sorted, err := application.Local().List(t.Context(), "posts", ridu.ListOptions{
-		Locale: "fr", Where: query.Equal(kindPath, query.String("sort")), Sort: []query.Sort{ascendingTitle}, Limit: 10,
+		Locale: "fr", Where: query.Equal(kindPath, "sort"), Sort: []query.Sort{ascendingTitle}, Limit: 10,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -249,7 +249,7 @@ func TestMongoDBLocalizedScalarOperationEngineParity(t *testing.T) {
 		t.Fatalf("localized stable sort = %#v, want %#v", ids, want)
 	}
 	distinct, err := application.Local().Distinct(t.Context(), "posts", ridu.DistinctOptions{
-		Field: titlePath, Where: query.Equal(kindPath, query.String("sort")), Locale: "fr", Limit: 10,
+		Field: titlePath, Where: query.Equal(kindPath, "sort"), Locale: "fr", Limit: 10,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -291,7 +291,7 @@ func TestMongoDBLocalizedScalarOperationEngineParity(t *testing.T) {
 		t.Fatalf("all-locales public access: %v", err)
 	}
 	securedPage, err := application.Local().List(t.Context(), "secured", ridu.ListOptions{
-		Locale: "fr", Where: query.Equal(labelPath, query.String("Correspond")), Limit: 10,
+		Locale: "fr", Where: query.Equal(labelPath, "Correspond"), Limit: 10,
 	})
 	if err != nil || securedPage.Total != 1 || securedPage.Documents[0].ID != allowed.ID {
 		t.Fatalf("atomic localized filter plus access = %#v, %v", securedPage, err)
@@ -393,7 +393,7 @@ func TestMongoDBLocalizedScalarOperationEngineParity(t *testing.T) {
 		t.Fatal("operation-engine Find exposed an unconfigured stored locale")
 	}
 	closedPage, err := application.Local().List(t.Context(), "posts", ridu.ListOptions{
-		AllLocales: true, Where: query.Equal(kindPath, query.String("unconfigured")), Limit: 10,
+		AllLocales: true, Where: query.Equal(kindPath, "unconfigured"), Limit: 10,
 	})
 	if err != nil || closedPage.Total != 0 || len(closedPage.Documents) != 0 {
 		t.Fatalf("operation-engine List did not fail closed over an unconfigured stored locale: %#v, %v", closedPage, err)
@@ -423,7 +423,7 @@ func TestMongoDBLocalizedScalarOperationEngineParity(t *testing.T) {
 		t.Fatal(err)
 	}
 	closed, err := application.Local().List(t.Context(), "posts", ridu.ListOptions{
-		Where: query.Equal(titlePath, query.String("Safe")), Limit: 10,
+		Where: query.Equal(titlePath, "Safe"), Limit: 10,
 	})
 	if err != nil || closed.Total != 0 || len(closed.Documents) != 0 {
 		t.Fatalf("malformed localized scalar satisfied a typed filter: %#v, %v", closed, err)
@@ -480,7 +480,7 @@ func TestMongoDBDecoderFreeSparseLocaleEnvelopeRejectsNonCanonicalKeys(t *testin
 		}
 	}
 
-	filter := query.GreaterThanEqual(rank, query.Number(0)).Node()
+	filter := query.GreaterThanEqual(rank, 0).Node()
 	read := mongoBegin(t, backend, true)
 	page, err := read.List(t.Context(), store.Request{
 		Collection: collection, Filter: &filter, Page: math.MaxInt, Limit: 1, Locales: locales,

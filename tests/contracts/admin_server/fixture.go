@@ -936,20 +936,20 @@ func allowOwnedOrRoles(path string, roles ...string) ridu.AccessRule {
 		if ctx.Actor == nil {
 			return ridu.Deny(), nil
 		}
-		return ridu.Where(query.Equal(ownerPath, query.String(ctx.Actor.ID))), nil
+		return ridu.Where(query.Equal(ownerPath, ctx.Actor.ID)), nil
 	}
 }
 
 func postReadAccess(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
 	statusPath := mustPath("status")
-	published := query.Equal(statusPath, query.String("published"))
+	published := query.Equal(statusPath, "published")
 	if ctx.Actor == nil {
 		return ridu.Where(published), nil
 	}
 	if actorHasRole(ctx.Actor, roleAdministrator, roleEditor) {
 		return ridu.Allow(), nil
 	}
-	owned := query.Equal(mustPath("author"), query.String(ctx.Actor.ID))
+	owned := query.Equal(mustPath("author"), ctx.Actor.ID)
 	visible := query.Or(published, owned)
 	return ridu.Where(visible), nil
 }

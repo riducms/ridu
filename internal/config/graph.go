@@ -432,7 +432,7 @@ func (r *fieldResolver) validateLayoutDefinition(d field.View, path string) {
 		r.resolver.issue(issue.Code, joinConfigPath(path, issue.Path), issue.Message)
 	}
 	a := d.AdminPolicy()
-	componentSet := func(c field.ComponentRef) bool { return c.Key != "" || c.PluginKey != "" || c.Config.Kind() != "" }
+	componentSet := func(c field.ComponentRef) bool { return c.Key != "" || c.PluginKey != "" || !c.Config.IsZero() }
 	checks := []struct {
 		name string
 		set  bool

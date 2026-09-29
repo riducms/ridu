@@ -54,8 +54,7 @@ var editorialView = ridu.NewAdminLoader("editorial-view", func(ctx ridu.AdminLoa
 	}
 	options := ridu.ListOptions{Limit: 20}
 	if input.Search != "" {
-		title, _ := query.NewPath("title")
-		options.Where = query.Contains(title, input.Search)
+		options.Where = query.Contains("title", input.Search)
 	}
 	page, err := ctx.List("loader-records", options)
 	if err != nil {

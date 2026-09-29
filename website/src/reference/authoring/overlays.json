@@ -14409,7 +14409,7 @@
 			"typeLinkIDs": {}
 		},
 		"go:github.com/riducms/ridu/query#NewPath": {
-			"summary": "Validate and build a path from segments.",
+			"summary": "Validate and build a path from segments computed at run time.",
 			"group": "Paths",
 			"parametersLabel": "",
 			"parameters": [
@@ -14423,7 +14423,9 @@
 				"type": "(Path, error)",
 				"description": "The declared result."
 			},
-			"details": [],
+			"details": [
+				"For a name written in your code, pass the string, such as \"seo.title\", to a filter helper instead."
+			],
 			"example": "authorEmail, err := query.NewPath(\"author\", \"email\")\nif err != nil {\n\treturn err\n}",
 			"keywords": ["query.NewPath", "NewPath"],
 			"relatedDocs": [],
@@ -14668,7 +14670,7 @@
 				"description": "The declared result."
 			},
 			"details": [
-				"Prefer this form when the operator is dynamic. Convenience comparison functions panic only if called with an incompatible Value kind; with their documented inputs they are safe."
+				"Use it when the operator or value comes from input. The comparison helpers such as Equal panic on a malformed name or incompatible value instead."
 			],
 			"example": "",
 			"keywords": ["query.Compare", "Compare"],
@@ -14688,13 +14690,13 @@
 			"parameters": [
 				{
 					"name": "path",
-					"type": "Path",
-					"description": "The path value."
+					"type": "P FieldPath",
+					"description": "The field, as a dot-separated name such as \"seo.title\" or a Path."
 				},
 				{
 					"name": "value",
-					"type": "Value",
-					"description": "The value value."
+					"type": "V Operand",
+					"description": "A string, boolean, integer, float, named type of one, or a Value such as Null()."
 				}
 			],
 			"returns": {
@@ -14702,13 +14704,13 @@
 				"description": "The declared result."
 			},
 			"details": [],
-			"example": "",
+			"example": "query.Equal(\"status\", \"published\")",
 			"keywords": ["query.Equal", "Equal"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {
-				"Path": "go:github.com/riducms/ridu/query#Path",
-				"Value": "go:github.com/riducms/ridu/query#Value",
+				"FieldPath": "go:github.com/riducms/ridu/query#FieldPath",
+				"Operand": "go:github.com/riducms/ridu/query#Operand",
 				"Expression": "go:github.com/riducms/ridu/query#Expression"
 			}
 		},
@@ -14719,13 +14721,13 @@
 			"parameters": [
 				{
 					"name": "path",
-					"type": "Path",
-					"description": "The path value."
+					"type": "P FieldPath",
+					"description": "The field, as a dot-separated name such as \"seo.title\" or a Path."
 				},
 				{
 					"name": "value",
-					"type": "Value",
-					"description": "The value value."
+					"type": "V Operand",
+					"description": "A string, boolean, integer, float, named type of one, or a Value."
 				}
 			],
 			"returns": {
@@ -14733,13 +14735,13 @@
 				"description": "The declared result."
 			},
 			"details": [],
-			"example": "",
+			"example": "query.NotEqual(\"status\", \"draft\")",
 			"keywords": ["query.NotEqual", "NotEqual"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {
-				"Path": "go:github.com/riducms/ridu/query#Path",
-				"Value": "go:github.com/riducms/ridu/query#Value",
+				"FieldPath": "go:github.com/riducms/ridu/query#FieldPath",
+				"Operand": "go:github.com/riducms/ridu/query#Operand",
 				"Expression": "go:github.com/riducms/ridu/query#Expression"
 			}
 		},
@@ -14750,13 +14752,13 @@
 			"parameters": [
 				{
 					"name": "path",
-					"type": "Path",
-					"description": "The path value."
+					"type": "P FieldPath",
+					"description": "The field, as a dot-separated name such as \"seo.title\" or a Path."
 				},
 				{
 					"name": "values",
-					"type": "[]Value",
-					"description": "The values value."
+					"type": "...V Operand",
+					"description": "The accepted values. Spread a slice with values.... With none, nothing matches."
 				}
 			],
 			"returns": {
@@ -14764,13 +14766,13 @@
 				"description": "The declared result."
 			},
 			"details": [],
-			"example": "",
+			"example": "query.In(\"color\", \"red\", \"blue\")",
 			"keywords": ["query.In", "In"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {
-				"Path": "go:github.com/riducms/ridu/query#Path",
-				"Value": "go:github.com/riducms/ridu/query#Value",
+				"FieldPath": "go:github.com/riducms/ridu/query#FieldPath",
+				"Operand": "go:github.com/riducms/ridu/query#Operand",
 				"Expression": "go:github.com/riducms/ridu/query#Expression"
 			}
 		},
@@ -14781,13 +14783,13 @@
 			"parameters": [
 				{
 					"name": "path",
-					"type": "Path",
-					"description": "The path value."
+					"type": "P FieldPath",
+					"description": "The field, as a dot-separated name such as \"seo.title\" or a Path."
 				},
 				{
 					"name": "value",
-					"type": "Value",
-					"description": "The value value."
+					"type": "V Ordered",
+					"description": "A string, integer, float, named type of one, or a Value holding one."
 				}
 			],
 			"returns": {
@@ -14795,13 +14797,13 @@
 				"description": "The declared result."
 			},
 			"details": [],
-			"example": "",
+			"example": "query.GreaterThan(\"price\", 10)",
 			"keywords": ["query.GreaterThan", "GreaterThan"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {
-				"Path": "go:github.com/riducms/ridu/query#Path",
-				"Value": "go:github.com/riducms/ridu/query#Value",
+				"FieldPath": "go:github.com/riducms/ridu/query#FieldPath",
+				"Ordered": "go:github.com/riducms/ridu/query#Ordered",
 				"Expression": "go:github.com/riducms/ridu/query#Expression"
 			}
 		},
@@ -14812,13 +14814,13 @@
 			"parameters": [
 				{
 					"name": "path",
-					"type": "Path",
-					"description": "The path value."
+					"type": "P FieldPath",
+					"description": "The field, as a dot-separated name such as \"seo.title\" or a Path."
 				},
 				{
 					"name": "value",
-					"type": "Value",
-					"description": "The value value."
+					"type": "V Ordered",
+					"description": "A string, integer, float, named type of one, or a Value holding one."
 				}
 			],
 			"returns": {
@@ -14826,13 +14828,13 @@
 				"description": "The declared result."
 			},
 			"details": [],
-			"example": "",
+			"example": "query.GreaterThanEqual(\"price\", 10)",
 			"keywords": ["query.GreaterThanEqual", "GreaterThanEqual"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {
-				"Path": "go:github.com/riducms/ridu/query#Path",
-				"Value": "go:github.com/riducms/ridu/query#Value",
+				"FieldPath": "go:github.com/riducms/ridu/query#FieldPath",
+				"Ordered": "go:github.com/riducms/ridu/query#Ordered",
 				"Expression": "go:github.com/riducms/ridu/query#Expression"
 			}
 		},
@@ -14843,13 +14845,13 @@
 			"parameters": [
 				{
 					"name": "path",
-					"type": "Path",
-					"description": "The path value."
+					"type": "P FieldPath",
+					"description": "The field, as a dot-separated name such as \"seo.title\" or a Path."
 				},
 				{
 					"name": "value",
-					"type": "Value",
-					"description": "The value value."
+					"type": "V Ordered",
+					"description": "A string, integer, float, named type of one, or a Value holding one."
 				}
 			],
 			"returns": {
@@ -14857,13 +14859,13 @@
 				"description": "The declared result."
 			},
 			"details": [],
-			"example": "",
+			"example": "query.LessThan(\"price\", 50)",
 			"keywords": ["query.LessThan", "LessThan"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {
-				"Path": "go:github.com/riducms/ridu/query#Path",
-				"Value": "go:github.com/riducms/ridu/query#Value",
+				"FieldPath": "go:github.com/riducms/ridu/query#FieldPath",
+				"Ordered": "go:github.com/riducms/ridu/query#Ordered",
 				"Expression": "go:github.com/riducms/ridu/query#Expression"
 			}
 		},
@@ -14874,13 +14876,13 @@
 			"parameters": [
 				{
 					"name": "path",
-					"type": "Path",
-					"description": "The path value."
+					"type": "P FieldPath",
+					"description": "The field, as a dot-separated name such as \"seo.title\" or a Path."
 				},
 				{
 					"name": "value",
-					"type": "Value",
-					"description": "The value value."
+					"type": "V Ordered",
+					"description": "A string, integer, float, named type of one, or a Value holding one."
 				}
 			],
 			"returns": {
@@ -14888,13 +14890,13 @@
 				"description": "The declared result."
 			},
 			"details": [],
-			"example": "",
+			"example": "query.LessThanEqual(\"price\", 50)",
 			"keywords": ["query.LessThanEqual", "LessThanEqual"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {
-				"Path": "go:github.com/riducms/ridu/query#Path",
-				"Value": "go:github.com/riducms/ridu/query#Value",
+				"FieldPath": "go:github.com/riducms/ridu/query#FieldPath",
+				"Ordered": "go:github.com/riducms/ridu/query#Ordered",
 				"Expression": "go:github.com/riducms/ridu/query#Expression"
 			}
 		},
@@ -14905,13 +14907,13 @@
 			"parameters": [
 				{
 					"name": "path",
-					"type": "Path",
-					"description": "The path value."
+					"type": "P FieldPath",
+					"description": "The field, as a dot-separated name such as \"seo.title\" or a Path."
 				},
 				{
 					"name": "value",
 					"type": "string",
-					"description": "The value value."
+					"description": "The text to find, ignoring case."
 				}
 			],
 			"returns": {
@@ -14919,13 +14921,12 @@
 				"description": "The declared result."
 			},
 			"details": [],
-			"example": "",
+			"example": "query.Contains(\"title\", \"ridu\")",
 			"keywords": ["query.Contains", "Contains"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {
-				"Path": "go:github.com/riducms/ridu/query#Path",
-				"Value": "go:github.com/riducms/ridu/query#Value",
+				"FieldPath": "go:github.com/riducms/ridu/query#FieldPath",
 				"Expression": "go:github.com/riducms/ridu/query#Expression"
 			}
 		},
@@ -14936,13 +14937,13 @@
 			"parameters": [
 				{
 					"name": "path",
-					"type": "Path",
-					"description": "The path value."
+					"type": "P FieldPath",
+					"description": "The field, as a dot-separated name such as \"seo.title\" or a Path."
 				},
 				{
 					"name": "value",
 					"type": "string",
-					"description": "The value value."
+					"description": "Words that must all appear, ignoring case and order."
 				}
 			],
 			"returns": {
@@ -14950,13 +14951,12 @@
 				"description": "The declared result."
 			},
 			"details": [],
-			"example": "",
+			"example": "query.Like(\"title\", \"go cms\")",
 			"keywords": ["query.Like", "Like"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {
-				"Path": "go:github.com/riducms/ridu/query#Path",
-				"Value": "go:github.com/riducms/ridu/query#Value",
+				"FieldPath": "go:github.com/riducms/ridu/query#FieldPath",
 				"Expression": "go:github.com/riducms/ridu/query#Expression"
 			}
 		},
@@ -15264,7 +15264,7 @@
 				}
 			],
 			"details": [
-				"Stores append document ID as a stable tiebreaker when it is not supplied explicitly. Construct with NewSort when direction is not a compile-time constant."
+				"Stores append document ID as a stable tiebreaker when it is not supplied explicitly. Build one with Asc or Desc, or with NewSort when the direction comes from input."
 			],
 			"example": "",
 			"keywords": ["query.Sort", "Sort"],
@@ -15276,7 +15276,7 @@
 			}
 		},
 		"go:github.com/riducms/ridu/query#NewSort": {
-			"summary": "Validate a path and asc/desc direction.",
+			"summary": "Validate a sort term whose direction is chosen at run time.",
 			"group": "Result controls",
 			"parametersLabel": "",
 			"parameters": [
@@ -15295,7 +15295,7 @@
 				"type": "(Sort, error)",
 				"description": "The declared result."
 			},
-			"details": [],
+			"details": ["Use Asc or Desc for a sort written in your code."],
 			"example": "",
 			"keywords": ["query.NewSort", "NewSort"],
 			"relatedDocs": [],
@@ -19721,48 +19721,14 @@
 			"typeLinkIDs": {}
 		},
 		"go:github.com/riducms/ridu/store#ValueKind": {
-			"summary": "The adapter-neutral stored value discriminant.",
+			"summary": "What a Value holds: null, string, number, boolean, object, list, or a populated document.",
 			"group": "Values",
 			"parametersLabel": "",
-			"parameters": [
-				{
-					"name": "ValueNull",
-					"type": "\"null\"",
-					"description": "Null value."
-				},
-				{
-					"name": "ValueString",
-					"type": "\"string\"",
-					"description": "String value."
-				},
-				{
-					"name": "ValueObject",
-					"type": "\"object\"",
-					"description": "Nested Values object."
-				},
-				{
-					"name": "ValueDocument",
-					"type": "\"document\"",
-					"description": "Populated document."
-				},
-				{
-					"name": "ValueNumber",
-					"type": "\"number\"",
-					"description": "Finite numeric value."
-				},
-				{
-					"name": "ValueBoolean",
-					"type": "\"boolean\"",
-					"description": "Boolean value."
-				},
-				{
-					"name": "ValueList",
-					"type": "\"list\"",
-					"description": "Ordered value list."
-				}
+			"parameters": [],
+			"details": [
+				"Compare with the ValueNull, ValueString, ValueNumber, ValueBoolean, ValueObject, ValueList, and ValueDocument constants. Use String() for the kind's name in messages; a plain string conversion does not produce it."
 			],
-			"details": [],
-			"example": "",
+			"example": "if value.Kind() == store.ValueList {\n\t// Read items with value.Elements().\n}",
 			"keywords": ["store.ValueKind", "ValueKind"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
@@ -22739,33 +22705,37 @@
 			"typeLinkIDs": {}
 		},
 		"go:github.com/riducms/ridu/store#Value.Kind": {
-			"summary": "Public method Value.Kind from github.com/riducms/ridu/store.",
+			"summary": "Report what the value holds.",
 			"group": "Methods",
 			"parametersLabel": "",
 			"parameters": [],
 			"returns": {
 				"type": "ValueKind",
-				"description": "The declared result."
+				"description": "The kind, or the zero kind for the zero Value."
 			},
 			"details": [],
-			"example": "",
-			"keywords": ["store.Value.Kind", "Value.Kind"],
+			"example": "if value.Kind() == store.ValueNull {\n\t// The field was explicitly cleared.\n}",
+			"keywords": ["store.Value.Kind", "Kind"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
-			"typeLinkIDs": {}
+			"typeLinkIDs": {
+				"ValueKind": "go:github.com/riducms/ridu/store#ValueKind"
+			}
 		},
 		"go:github.com/riducms/ridu/store#Value.MarshalJSON": {
-			"summary": "Public method Value.MarshalJSON from github.com/riducms/ridu/store.",
+			"summary": "Encode the value as JSON.",
 			"group": "Methods",
 			"parametersLabel": "",
 			"parameters": [],
 			"returns": {
 				"type": "([]byte, error)",
-				"description": "The declared result."
+				"description": "The JSON encoding."
 			},
-			"details": [],
-			"example": "",
-			"keywords": ["store.Value.MarshalJSON", "Value.MarshalJSON"],
+			"details": [
+				"Output matches encoding/json for the same data: object keys are sorted and strings use HTML-safe escapes. Non-finite numbers and the zero Value return an error."
+			],
+			"example": "encoded, err := value.MarshalJSON()",
+			"keywords": ["store.Value.MarshalJSON", "MarshalJSON"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {}
@@ -22787,23 +22757,25 @@
 			"typeLinkIDs": {}
 		},
 		"go:github.com/riducms/ridu/store#Value.UnmarshalJSON": {
-			"summary": "Public method Value.UnmarshalJSON from github.com/riducms/ridu/store.",
+			"summary": "Decode any JSON value into a Value.",
 			"group": "Methods",
 			"parametersLabel": "",
 			"parameters": [
 				{
-					"name": "encoded",
+					"name": "data",
 					"type": "[]byte",
-					"description": "The encoded value."
+					"description": "One complete JSON value."
 				}
 			],
 			"returns": {
 				"type": "error",
-				"description": "The declared result."
+				"description": "An error for invalid JSON or a number outside the float64 range."
 			},
-			"details": [],
-			"example": "",
-			"keywords": ["store.Value.UnmarshalJSON", "Value.UnmarshalJSON"],
+			"details": [
+				"Objects become ValueObject, arrays ValueList, and numbers float64 ValueNumber. Input is accepted and decoded exactly as encoding/json would, including replacing invalid UTF-8 with U+FFFD."
+			],
+			"example": "var value store.Value\nerr := value.UnmarshalJSON(data)",
+			"keywords": ["store.Value.UnmarshalJSON", "UnmarshalJSON"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {}
@@ -68672,6 +68644,236 @@
 			"relatedDocs": ["/docs/fields/blocks/#give-each-block-an-editorial-name"],
 			"relatedSymbols": ["go:github.com/riducms/ridu/field#Block"],
 			"typeLinkIDs": {}
+		},
+		"go:github.com/riducms/ridu/query#Exists": {
+			"summary": "Match documents that have a value for a field, or that have none.",
+			"group": "Comparisons",
+			"parametersLabel": "",
+			"parameters": [
+				{
+					"name": "path",
+					"type": "P FieldPath",
+					"description": "The field, as a dot-separated name such as \"seo.title\" or a Path."
+				},
+				{
+					"name": "exists",
+					"type": "bool",
+					"description": "true matches documents with a value; false matches documents without one."
+				}
+			],
+			"returns": {
+				"type": "Expression",
+				"description": "The comparison."
+			},
+			"details": [],
+			"example": "query.Exists(\"image\", true)",
+			"keywords": ["query.Exists", "Exists"],
+			"relatedDocs": [],
+			"relatedSymbols": [],
+			"typeLinkIDs": {
+				"FieldPath": "go:github.com/riducms/ridu/query#FieldPath",
+				"Expression": "go:github.com/riducms/ridu/query#Expression"
+			}
+		},
+		"go:github.com/riducms/ridu/query#Asc": {
+			"summary": "Sort by a field from lowest to highest.",
+			"group": "Result controls",
+			"parametersLabel": "",
+			"parameters": [
+				{
+					"name": "path",
+					"type": "P FieldPath",
+					"description": "The field, as a dot-separated name such as \"seo.title\" or a Path."
+				}
+			],
+			"returns": {
+				"type": "Sort",
+				"description": "The sort term."
+			},
+			"details": [],
+			"example": "Sort: []query.Sort{query.Asc(\"title\")}",
+			"keywords": ["query.Asc", "Asc"],
+			"relatedDocs": [],
+			"relatedSymbols": [],
+			"typeLinkIDs": {
+				"FieldPath": "go:github.com/riducms/ridu/query#FieldPath",
+				"Sort": "go:github.com/riducms/ridu/query#Sort"
+			}
+		},
+		"go:github.com/riducms/ridu/query#Desc": {
+			"summary": "Sort by a field from highest to lowest.",
+			"group": "Result controls",
+			"parametersLabel": "",
+			"parameters": [
+				{
+					"name": "path",
+					"type": "P FieldPath",
+					"description": "The field, as a dot-separated name such as \"seo.title\" or a Path."
+				}
+			],
+			"returns": {
+				"type": "Sort",
+				"description": "The sort term."
+			},
+			"details": [],
+			"example": "Sort: []query.Sort{query.Desc(\"createdAt\")}",
+			"keywords": ["query.Desc", "Desc"],
+			"relatedDocs": [],
+			"relatedSymbols": [],
+			"typeLinkIDs": {
+				"FieldPath": "go:github.com/riducms/ridu/query#FieldPath",
+				"Sort": "go:github.com/riducms/ridu/query#Sort"
+			}
+		},
+		"go:github.com/riducms/ridu/query#DateTime": {
+			"summary": "Convert a time to the text a date-and-time field stores.",
+			"group": "Values",
+			"parametersLabel": "",
+			"parameters": [
+				{
+					"name": "t",
+					"type": "time.Time",
+					"description": "The moment to compare with. It is converted to UTC with milliseconds."
+				}
+			],
+			"returns": {
+				"type": "Value",
+				"description": "A string value such as 2026-09-29T14:05:00.000Z."
+			},
+			"details": [
+				"Use it for date-and-time fields, createdAt, and updatedAt. Compare a date-only field with a \"2006-01-02\" string instead."
+			],
+			"example": "query.GreaterThan(\"publishedAt\", query.DateTime(time.Now()))",
+			"keywords": ["query.DateTime", "DateTime"],
+			"relatedDocs": [],
+			"relatedSymbols": [],
+			"typeLinkIDs": {
+				"Value": "go:github.com/riducms/ridu/query#Value"
+			}
+		},
+		"go:github.com/riducms/ridu/query#FieldPath": {
+			"summary": "A field name in a filter or sort: a string such as \"seo.title\", or a Path.",
+			"group": "Paths",
+			"parametersLabel": "",
+			"parameters": [],
+			"details": ["A malformed name written in code panics. Use ParsePath for names from input."],
+			"example": "query.Equal(\"seo.title\", \"Home\")",
+			"keywords": ["query.FieldPath", "FieldPath"],
+			"relatedDocs": [],
+			"relatedSymbols": [],
+			"typeLinkIDs": {
+				"Path": "go:github.com/riducms/ridu/query#Path"
+			}
+		},
+		"go:github.com/riducms/ridu/query#Operand": {
+			"summary": "A value that Equal, NotEqual, and In compare with a field.",
+			"group": "Values",
+			"parametersLabel": "",
+			"parameters": [],
+			"details": [
+				"Strings, booleans, integers, floats, named types of those, and Value. Integers beyond ±2^53 and non-finite floats panic, because a number is stored as a 64-bit float."
+			],
+			"example": "query.Equal(\"featured\", true)",
+			"keywords": ["query.Operand", "Operand"],
+			"relatedDocs": [],
+			"relatedSymbols": [],
+			"typeLinkIDs": {
+				"Value": "go:github.com/riducms/ridu/query#Value"
+			}
+		},
+		"go:github.com/riducms/ridu/query#Ordered": {
+			"summary": "A value that greater-than and less-than comparisons accept.",
+			"group": "Values",
+			"parametersLabel": "",
+			"parameters": [],
+			"details": [
+				"Strings, integers, floats, named types of those, and a Value holding a string or number."
+			],
+			"example": "query.GreaterThan(\"price\", 10)",
+			"keywords": ["query.Ordered", "Ordered"],
+			"relatedDocs": [],
+			"relatedSymbols": [],
+			"typeLinkIDs": {
+				"Value": "go:github.com/riducms/ridu/query#Value"
+			}
+		},
+		"go:github.com/riducms/ridu/store#ValueKind.String": {
+			"summary": "The kind's name, such as \"list\", or \"\" for the zero Value.",
+			"group": "Methods",
+			"parametersLabel": "",
+			"parameters": [],
+			"details": [],
+			"example": "fmt.Printf(\"%s\\n\", value.Kind())",
+			"keywords": ["store.ValueKind.String", "String"],
+			"relatedDocs": [],
+			"relatedSymbols": [],
+			"typeLinkIDs": {},
+			"returns": {
+				"type": "string",
+				"description": "The name used in error messages and logs."
+			}
+		},
+		"go:github.com/riducms/ridu/store#Value.IsZero": {
+			"summary": "Report whether the value is the zero Value, which holds no data.",
+			"group": "Methods",
+			"parametersLabel": "",
+			"parameters": [],
+			"details": [
+				"A missing map entry and store.Value{} are zero. Null is not zero: it is an explicit value."
+			],
+			"example": "if values[\"title\"].IsZero() {\n\t// The map has no title entry.\n}",
+			"keywords": ["store.Value.IsZero", "IsZero"],
+			"relatedDocs": [],
+			"relatedSymbols": [],
+			"typeLinkIDs": {},
+			"returns": {
+				"type": "bool",
+				"description": "true for the zero Value."
+			}
+		},
+		"go:github.com/riducms/ridu/store#Values.MarshalJSON": {
+			"summary": "Encode the field map as a JSON object.",
+			"group": "Methods",
+			"parametersLabel": "",
+			"parameters": [],
+			"details": [
+				"A nil map encodes as null. Calling it directly skips the extra validation pass encoding/json performs on a marshaler's output."
+			],
+			"example": "encoded, err := values.MarshalJSON()",
+			"keywords": ["store.Values.MarshalJSON", "MarshalJSON"],
+			"relatedDocs": [],
+			"relatedSymbols": [],
+			"typeLinkIDs": {},
+			"returns": {
+				"type": "([]byte, error)",
+				"description": "The JSON object."
+			}
+		},
+		"go:github.com/riducms/ridu/store#Values.UnmarshalJSON": {
+			"summary": "Decode a JSON object into the field map.",
+			"group": "Methods",
+			"parametersLabel": "",
+			"parameters": [
+				{
+					"name": "data",
+					"type": "[]byte",
+					"description": "A JSON object or null."
+				}
+			],
+			"details": [
+				"Like encoding/json for maps, it adds to existing entries and JSON null sets the map to nil. Other JSON values return an error."
+			],
+			"example": "var values store.Values\nerr := values.UnmarshalJSON(data)",
+			"keywords": ["store.Values.UnmarshalJSON", "UnmarshalJSON"],
+			"relatedDocs": [],
+			"relatedSymbols": [],
+			"typeLinkIDs": {
+				"Value": "go:github.com/riducms/ridu/store#Value"
+			},
+			"returns": {
+				"type": "error",
+				"description": "An error for invalid JSON or a non-object value."
+			}
 		}
 	}
 }

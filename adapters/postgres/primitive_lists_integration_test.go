@@ -92,7 +92,7 @@ func TestPrimitiveListsPostgresRepeatedQueryBoundary(t *testing.T) {
 		}
 	}
 	path, _ := query.ParsePath("sections.links.labels")
-	_, err = app.Local().List(t.Context(), "primitive-products", core.ListOptions{Where: query.In(path, query.String("nested"))})
+	_, err = app.Local().List(t.Context(), "primitive-products", core.ListOptions{Where: query.In(path, "nested")})
 	var failure *core.OperationError
 	if !errors.As(err, &failure) || failure.Code != "bad_query" || failure.Status != 400 || len(failure.Issues) != 1 || failure.Issues[0].Code != "unsupported_path" || failure.Issues[0].Path != path.String() || !strings.Contains(err.Error(), "unsupported repeated fields") {
 		t.Fatalf("nested repeated query must reject explicitly: %v", err)

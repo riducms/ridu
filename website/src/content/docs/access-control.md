@@ -50,7 +50,7 @@ the requested operation, document ID, submitted values, and locale. Return one o
 Keep reusable rules beside your content model. These helpers allow public reads, require a
 signed-in user, or limit access to documents belonging to that user:
 
-```go title="content/access.go" focus={13-17,26-29}
+```go title="content/access.go" focus={13-17,26-27}
 package content
 
 import (
@@ -70,16 +70,14 @@ func signedIn(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
 	return ridu.Allow(), nil
 }
 
-func ownDocuments(path query.Path) ridu.AccessRule {
+func ownDocuments(field string) ridu.AccessRule {
 	// Return a rule that remembers this collection's owner field.
 	return func(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
 		if ctx.Actor == nil {
 			return ridu.Deny(), nil
 		}
 		// Check ownership as part of the database operation.
-		return ridu.Where(
-			query.Equal(path, query.String(ctx.Actor.ID)),
-		), nil
+		return ridu.Where(query.Equal(field, ctx.Actor.ID)), nil
 	}
 }
 ```
@@ -90,13 +88,12 @@ Add the rules to `Access` on your collection. This example lets anyone read post
 users create them, and lets authors update or delete their own posts. The `author` relationship
 stores the user ID checked by `ownDocuments`. The `internalNotes` helper is defined below.
 
-```go title="content/posts.go" focus={16-21}
+```go title="content/posts.go" focus={15-20}
 package content
 
 import (
 	"github.com/riducms/ridu"
 	"github.com/riducms/ridu/field"
-	"github.com/riducms/ridu/query"
 )
 
 var Posts = ridu.Collection{
@@ -109,8 +106,8 @@ var Posts = ridu.Collection{
 	Access: ridu.CollectionAccess{
 		Create: signedIn,
 		Read:   publicRead,
-		Update: ownDocuments(query.Field("author")),
-		Delete: ownDocuments(query.Field("author")),
+		Update: ownDocuments("author"),
+		Delete: ownDocuments("author"),
 	},
 }
 ```

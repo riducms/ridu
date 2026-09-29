@@ -38,7 +38,7 @@ func TestUploadReferencesRequireReadableTargetsAcrossShapesAndMutations(t *testi
 					if !restrictUploads {
 						return ridu.Allow(), nil
 					}
-					return ridu.Where(query.Equal(visiblePath, query.Boolean(true))), nil
+					return ridu.Where(query.Equal(visiblePath, true)), nil
 				}},
 			},
 			{
