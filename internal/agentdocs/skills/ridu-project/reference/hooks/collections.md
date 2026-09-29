@@ -71,10 +71,12 @@ below lists what its hook receives.
 | --------------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | `ctx.Operation`       | What is happening, such as `operation.Create`, `operation.Update`, or `operation.Read`.                                    |
 | `ctx.Data`            | The values being saved. Change its entries to change what is saved. On an update, it holds only the fields that were sent. |
+| `ctx.Candidate()`     | The values the document will have once saved: `ctx.Original` with each field in `ctx.Data` on top. A detached copy.        |
 | `ctx.Original`        | The saved document before an update, duplicate, or delete. `nil` on create and on reads.                                   |
 | `ctx.Document`        | The document Ridu returns, once it exists. Changes to its values affect the response only.                                 |
 | `ctx.Actor`           | The signed-in user's document, or `nil` for an anonymous request.                                                          |
 | `ctx.ActorCollection` | The auth collection that the signed-in user belongs to.                                                                    |
+| `ctx.System`          | `true` when trusted server code started the operation with [`System`](../local-api.md#system), so no access rule ran.     |
 | `ctx.Local`           | The [local API](../local-api.md), for reading or writing other documents.                                                 |
 | `ctx.Context`         | Cancellation, deadline, and the active transaction. Pass it to `ctx.Local` and network calls.                              |
 | `ctx.Locale`          | The content locale, or empty without [localization](../localization.md).                                                  |
@@ -109,7 +111,7 @@ duplicated, updated, published, or unpublished. Use it to fill in or clean up su
 that must pass those checks.
 
 **Receives:** `ctx.Data` with the submitted values. `ctx.Original` holds the saved document on
-an update.
+an update, and `ctx.Candidate()` combines the two.
 
 This hook fills a missing excerpt from the first 30 words of the body. It must run before
 validation: in `BeforeChange`, the required `excerpt` would already have been rejected.
@@ -154,6 +156,18 @@ Runs after the built-in checks and before the document is saved. It runs for cre
 update, publish, and unpublish. Use it to calculate values or record who made a change.
 
 **Receives:** `ctx.Data` with the values to save, `ctx.Original` on an update, and `ctx.Actor`.
+On an update, `ctx.Data` holds only the fields that were sent. Read `ctx.Candidate()` when a rule
+needs a field whether or not it changed:
+
+```go
+// A partial update may send only one of the two dates.
+values := ctx.Candidate()
+start, _ := values["startsAt"].StringValue()
+end, _ := values["endsAt"].StringValue()
+if end != "" && end < start {
+	return ridu.Reject("The event must end after it starts")
+}
+```
 
 ```go title="content/last_editor.go" focus={19-20}
 package content

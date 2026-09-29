@@ -11,53 +11,55 @@ import (
 // authorizeQuery checks only caller-owned query inputs. Collection access
 // predicates and framework-derived constraints must remain separate: they are
 // trusted authorization, not a caller's opportunity to probe redacted values.
-func authorizeQuery(collection Collection, filter query.Expression, sorts []query.Sort, paths ...query.Path) error {
+// A trusted (system) caller may query fields with read rules; path shape and
+// operator validation still apply.
+func authorizeQuery(collection Collection, trusted bool, filter query.Expression, sorts []query.Sort, paths ...query.Path) error {
 	if filter != nil {
-		if err := authorizeQueryNode(collection, filter.Node()); err != nil {
+		if err := authorizeQueryNode(collection, trusted, filter.Node()); err != nil {
 			return err
 		}
 	}
 	for _, sort := range sorts {
-		if err := authorizeQueryPath(collection, sort.Path); err != nil {
+		if err := authorizeQueryPath(collection, trusted, sort.Path); err != nil {
 			return err
 		}
 		if field, found := population.FieldAtPath(collection.Schema.Fields, sort.Path); found {
 			if primitivefield.IsList(field) {
 				return primitiveListQueryError(sort.Path, "primitive lists cannot be sorted; choose a singular scalar field")
 			}
-			if queryDescendantsRequireRead(collection, schema.ChildFields(field)) {
+			if !trusted && queryDescendantsRequireRead(collection, schema.ChildFields(field)) {
 				return queryFieldAccessError(sort.Path)
 			}
 		}
 	}
 	for _, path := range paths {
-		if err := authorizeQueryPath(collection, path); err != nil {
+		if err := authorizeQueryPath(collection, trusted, path); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func authorizeQueryNode(collection Collection, node query.Node) error {
+func authorizeQueryNode(collection Collection, trusted bool, node query.Node) error {
 	if node.Comparison != nil {
 		if field, found := population.FieldAtPath(collection.Schema.Fields, node.Comparison.Path); found {
 			if err := primitivefield.ValidateComparison(field, *node.Comparison); err != nil {
 				return primitiveListQueryError(node.Comparison.Path, err.Error())
 			}
 		}
-		if err := authorizeQueryPath(collection, node.Comparison.Path); err != nil {
+		if err := authorizeQueryPath(collection, trusted, node.Comparison.Path); err != nil {
 			return err
 		}
 	}
 	for _, child := range node.Children {
-		if err := authorizeQueryNode(collection, child); err != nil {
+		if err := authorizeQueryNode(collection, trusted, child); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func authorizeQueryPath(collection Collection, path query.Path) error {
+func authorizeQueryPath(collection Collection, trusted bool, path query.Path) error {
 	switch path.String() {
 	case "id", "createdAt", "updatedAt", "_status", "_revision":
 		return nil
@@ -79,7 +81,7 @@ func authorizeQueryPath(collection Collection, path query.Path) error {
 		// payloads require canonical variant paths, otherwise raw wire aliases
 		// could reach a different field than the one whose rule was checked.
 		opaque = field.Type == schema.FieldTypeJSON || field.Type == schema.FieldTypePlugin && !embedded.HasFields(field)
-		if field.QueryRestricted {
+		if field.QueryRestricted && !trusted {
 			// Rules may depend on each document, value, siblings, or locale. A
 			// request-only evaluation cannot prove that all queried rows are
 			// readable; checking after filtering/counting/sorting is too late.

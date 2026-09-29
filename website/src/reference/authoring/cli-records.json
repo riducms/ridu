@@ -183,13 +183,13 @@
 			"id": "cli:ridu#ridu migrate create",
 			"name": "ridu migrate create",
 			"kind": "command",
-			"signature": "ridu migrate create --name <kebab-name> [--accept-renames | --transform <name>] [--allow-destructive]",
+			"signature": "ridu migrate create (<kebab-name> | --name <kebab-name>) [--accept-renames | --transform <name>] [--allow-destructive]",
 			"members": [],
 			"parameters": [
 				{
 					"name": "--name",
 					"type": "string",
-					"description": "Required lowercase kebab-case migration name."
+					"description": "Required lowercase kebab-case migration name. It may instead be the first argument, as in `ridu migrate create add-post-summary`."
 				},
 				{
 					"name": "--accept-renames",

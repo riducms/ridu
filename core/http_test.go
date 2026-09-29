@@ -907,7 +907,7 @@ func TestRESTScheduledPublicationBindsExactAuthCollectionAndRechecksRequester(t 
 		t.Fatalf("scheduled task after staff revocation = %#v", failed)
 	}
 	draft := true
-	stored, err := application.Local().Find(ctx, "books", document.ID, ridu.FindOptions{Actor: &usersActor, Draft: &draft})
+	stored, err := application.Local().Find(ctx, "books", document.ID, ridu.FindOptions{Actor: &usersActor, ActorCollection: "users", Draft: &draft})
 	if err != nil || stored.Status != store.StatusDraft {
 		t.Fatalf("document after denied scheduled publish = %#v, %v", stored, err)
 	}
@@ -936,15 +936,8 @@ func TestRESTPreviewTokensAreShortLivedReadOnlyAndTargetScoped(t *testing.T) {
 				Slug: "posts", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true},
 				Admin:  ridu.CollectionAdmin{LivePreview: ridu.LivePreviewConfig{URL: "https://preview.example.test/posts/{id}"}},
 				Fields: field.Fields{field.Text("title").Required()},
-				Access: ridu.CollectionAccess{Read: func(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
-					if ctx.Actor != nil {
-						role, _ := ctx.Actor.Values["role"].StringValue()
-						if role == "staff" {
-							return ridu.Allow(), nil
-						}
-					}
-					return ridu.Deny(), nil
-				}},
+				// Staff sign in through a non-admin collection and preview drafts.
+				Access: ridu.CollectionAccess{Read: staffOnlyRole, ReadDrafts: staffOnlyRole},
 			},
 			{
 				Slug: "pages", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true},
@@ -1661,4 +1654,13 @@ func handlerClient(handler http.Handler) *http.Client {
 		handler.ServeHTTP(recorder, request)
 		return recorder.Result(), nil
 	})}
+}
+
+func staffOnlyRole(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
+	if ctx.Actor != nil {
+		if role, _ := ctx.Actor.Values["role"].StringValue(); role == "staff" {
+			return ridu.Allow(), nil
+		}
+	}
+	return ridu.Deny(), nil
 }

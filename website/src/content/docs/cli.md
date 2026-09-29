@@ -195,11 +195,13 @@ ridu migrate create --name add-post-summary
 ridu migrate verify
 ```
 
-`create` writes an artifact without connecting to a database. `plan` and `status` inspect a
+`create` writes an artifact without connecting to a database; its name may also be the first
+argument, as in `ridu migrate create add-post-summary`. `plan` and `status` inspect a
 selected database without changing it. `verify` replays the complete history in an isolated target,
 and `up` applies pending migrations. Select the database with `DATABASE_URL` for PostgreSQL or
-MongoDB, or `RIDU_SQLITE_PATH` for SQLite. For a local PostgreSQL or MongoDB database without TLS,
-set `RIDU_ALLOW_INSECURE_DATABASE=true`, as the scaffolded `.env` does, or pass
+MongoDB, or `RIDU_SQLITE_PATH` for SQLite. A PostgreSQL or MongoDB database on `localhost`, a
+loopback address, or a Unix socket needs no TLS, so the local database `ridu dev` uses works as is.
+Plaintext to any other host needs `RIDU_ALLOW_INSECURE_DATABASE=true` or
 `--allow-insecure-database`. SQLite `verify` is the exception: it uses a temporary
 database and needs no path. SQLite also provides the explicitly destructive `down`, `reset`,
 `refresh`, and `fresh` commands for its reversible local artifacts.
@@ -270,7 +272,10 @@ select `postgres`, `sqlite`, or `mongodb` because the CLI does not infer an adap
 `package_manager` selects npm, Bun, pnpm, or Yarn for frontend operations. Existing version-1 files
 that omit it retain Bun for compatibility, while new scaffolds always write the selection.
 `admin`, `client`, `migrations`, `openapi`, and `assets` may be empty when the project omits those
-outputs. Other paths are relative to the project root and may not escape it. The file is structural CLI
+outputs. Paths are relative to the project root. Only `client` and `openapi` may point outside it,
+for example `client = "../mobile/lib/ridu.generated.ts"` in a monorepo. There, Ridu checks the
+nearest `package.json` above the client for its npm dependencies but never installs into that
+package. The file is structural CLI
 configuration, not the CMS schema—application behavior remains in executable Go config. See
 [Configuration](/docs/configuration/) and [Project structure](/guides/project-structure/).
 

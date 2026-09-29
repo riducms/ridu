@@ -37,6 +37,10 @@ If `operation.Context`, `store.Document`, or `query.Path` is unfamiliar, start w
 | `ctx.Actor` / `ctx.ActorCollection`        | Every access callback                                                    | Identifies the signed-in document and the auth collection that owns it.                   |
 | `ctx.Data`, `ctx.Document`, `ctx.Siblings` | Phase-specific callbacks                                                 | Exposes current candidate or saved values; see each context before assuming availability. |
 
+Rules never run for a Local API call made with `System: true`. Keep server-owned writes in such
+calls rather than teaching every rule about a context flag; see
+[Trusted server work](/docs/local-api/#system).
+
 ## Write an access rule {#decisions}
 
 A collection rule receives `ridu.AccessContext`, which includes the signed-in user (`Actor`),

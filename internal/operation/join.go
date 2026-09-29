@@ -25,6 +25,8 @@ type JoinMutationRequest struct {
 	Removals        []string
 	Actor           *store.Document
 	ActorCollection schema.CollectionSlug
+	// System skips access rules for trusted server code; see Request.System.
+	System          bool
 	Locale          string
 	FallbackLocales []schema.LocaleCode
 	DisableFallback bool
@@ -49,8 +51,9 @@ type joinTargetMutation struct {
 }
 
 type joinMutationRead struct {
-	document store.Document
-	access   *query.Node
+	document      store.Document
+	access        *query.Node
+	publishedOnly bool
 }
 
 type joinMutationLock struct {
@@ -113,7 +116,7 @@ func (engine *Engine) MutateJoin(ctx context.Context, request JoinMutationReques
 	}
 
 	visibleSource, readError := engine.Execute(transactionContext, Request{
-		Operation: operation.Read, Collection: request.Collection, ID: request.ID, Actor: request.Actor, ActorCollection: request.ActorCollection,
+		Operation: operation.Read, Collection: request.Collection, ID: request.ID, Actor: request.Actor, ActorCollection: request.ActorCollection, System: request.System,
 		Locale: request.Locale, FallbackLocales: request.FallbackLocales, DisableFallback: request.DisableFallback, AllLocales: request.AllLocales,
 	})
 	if readError != nil {
@@ -125,17 +128,17 @@ func (engine *Engine) MutateJoin(ctx context.Context, request JoinMutationReques
 	if _, visible := valueAtPath(source.Schema.Fields, visibleSource.Document.Values, request.Field, selection.All); !visible {
 		return JoinMutationResult{}, &Error{Code: "field_access_denied", Status: 403, Message: "join field may not be read"}
 	}
-	sourceRead, findError := engine.findJoinMutationDocument(transactionContext, state.transaction, source, request.ID, request.Actor, request.ActorCollection, selection)
+	sourceRead, findError := engine.findJoinMutationDocument(transactionContext, state.transaction, source, request.ID, request.Actor, request.ActorCollection, request.System, selection)
 	if findError != nil {
 		return JoinMutationResult{}, findError
 	}
 	locks := []joinMutationLock{{
 		collection: source, id: request.ID, access: sourceRead.access,
-		publishedOnly: request.Actor == nil && source.Schema.Versions != nil,
+		publishedOnly: sourceRead.publishedOnly,
 	}}
 	for index := range mutations {
 		mutation := &mutations[index]
-		targetRead, findError := engine.findJoinMutationDocument(transactionContext, state.transaction, target, mutation.id, request.Actor, request.ActorCollection, selection)
+		targetRead, findError := engine.findJoinMutationDocument(transactionContext, state.transaction, target, mutation.id, request.Actor, request.ActorCollection, request.System, selection)
 		if findError != nil {
 			return JoinMutationResult{}, findError
 		}
@@ -158,7 +161,7 @@ func (engine *Engine) MutateJoin(ctx context.Context, request JoinMutationReques
 		mutation.values = valuesAtJoinPath(joinField.Join.On, value)
 		locks = append(locks, joinMutationLock{
 			collection: target, id: mutation.id, access: mutation.readAccess,
-			filter: mutation.observedFilter, publishedOnly: request.Actor == nil && target.Schema.Versions != nil, conflict: true,
+			filter: mutation.observedFilter, publishedOnly: targetRead.publishedOnly, conflict: true,
 		})
 	}
 	if lockError := engine.lockJoinMutationDocuments(transactionContext, state.transaction, locks, selection); lockError != nil {
@@ -168,7 +171,7 @@ func (engine *Engine) MutateJoin(ctx context.Context, request JoinMutationReques
 		if mutation.skip {
 			continue
 		}
-		if accessError := engine.preflightJoinTargetUpdate(transactionContext, state.transaction, target, mutation.current, mutation.values, request.Actor, request.ActorCollection, selection); accessError != nil {
+		if accessError := engine.preflightJoinTargetUpdate(transactionContext, state.transaction, target, mutation.current, mutation.values, request.Actor, request.ActorCollection, request.System, selection); accessError != nil {
 			return JoinMutationResult{}, accessError
 		}
 		operationKind := operation.Update
@@ -178,7 +181,7 @@ func (engine *Engine) MutateJoin(ctx context.Context, request JoinMutationReques
 		observedFilter := mutation.observedFilter.Node()
 		update, updateError := engine.Execute(transactionContext, Request{
 			Operation: operationKind, Collection: string(target.Schema.Slug), ID: mutation.id,
-			Data: mutation.values, internalFilter: &observedFilter, Actor: request.Actor, ActorCollection: request.ActorCollection,
+			Data: mutation.values, internalFilter: &observedFilter, Actor: request.Actor, ActorCollection: request.ActorCollection, System: request.System,
 			Locale: request.Locale, FallbackLocales: request.FallbackLocales, DisableFallback: request.DisableFallback, AllLocales: request.AllLocales,
 		})
 		if updateError != nil {
@@ -207,7 +210,7 @@ func (engine *Engine) MutateJoin(ctx context.Context, request JoinMutationReques
 		}
 	}
 	refreshed, readError := engine.Execute(transactionContext, Request{
-		Operation: operation.Read, Collection: request.Collection, ID: request.ID, Actor: request.Actor, ActorCollection: request.ActorCollection,
+		Operation: operation.Read, Collection: request.Collection, ID: request.ID, Actor: request.Actor, ActorCollection: request.ActorCollection, System: request.System,
 		Locale: request.Locale, FallbackLocales: request.FallbackLocales, DisableFallback: request.DisableFallback, AllLocales: request.AllLocales,
 	})
 	if readError != nil {
@@ -264,8 +267,8 @@ func normalizedJoinMutations(additions, removals []string) ([]joinTargetMutation
 	return mutations, nil
 }
 
-func (engine *Engine) findJoinMutationDocument(ctx context.Context, transaction store.Transaction, collection Collection, id string, actor *store.Document, actorCollection schema.CollectionSlug, selection localization.Selection) (joinMutationRead, error) {
-	operationContext := Context{Context: ctx, Operation: operation.Read, Collection: collection.Schema, ID: id, Actor: cloneDocumentPointer(actor), ActorCollection: actorCollection, Data: store.Values{}, Locale: selection.Locale, AllLocales: selection.All, Locales: append([]schema.LocaleCode(nil), selection.Configured...)}
+func (engine *Engine) findJoinMutationDocument(ctx context.Context, transaction store.Transaction, collection Collection, id string, actor *store.Document, actorCollection schema.CollectionSlug, system bool, selection localization.Selection) (joinMutationRead, error) {
+	operationContext := Context{Context: ctx, Operation: operation.Read, Collection: collection.Schema, ID: id, Actor: cloneDocumentPointer(actor), ActorCollection: actorCollection, System: system, Data: store.Values{}, Locale: selection.Locale, AllLocales: selection.All, Locales: append([]schema.LocaleCode(nil), selection.Configured...)}
 	decision, err := authorize(collection, operationContext)
 	if err != nil {
 		return joinMutationRead{}, &Error{Code: "access_failed", Status: 500, Message: "join document access rule failed", Cause: err}
@@ -273,15 +276,19 @@ func (engine *Engine) findJoinMutationDocument(ctx context.Context, transaction 
 	if decision.Kind == Deny {
 		return joinMutationRead{}, &Error{Code: "access_denied", Status: 403, Message: "join document may not be read"}
 	}
+	readsDrafts, err := engine.readsDrafts(collection, operationContext)
+	if err != nil {
+		return joinMutationRead{}, err
+	}
 	document, err := transaction.Find(ctx, store.Request{
 		Collection: collection.Schema, Collections: engine.schemas, ID: id,
-		Access: decision.Access, PublishedOnly: actor == nil && collection.Schema.Versions != nil,
+		Access: decision.Access, PublishedOnly: !readsDrafts,
 		Locales: append([]schema.LocaleCode(nil), selection.Configured...), LocaleChain: append([]schema.LocaleCode(nil), selection.Chain...), AllLocales: selection.All,
 	})
 	if err != nil {
 		return joinMutationRead{}, translateStoreError(err)
 	}
-	return joinMutationRead{document: document, access: decision.Access}, nil
+	return joinMutationRead{document: document, access: decision.Access, publishedOnly: !readsDrafts}, nil
 }
 
 func (engine *Engine) lockJoinMutationDocuments(ctx context.Context, transaction store.Transaction, locks []joinMutationLock, selection localization.Selection) error {
@@ -310,11 +317,11 @@ func (engine *Engine) lockJoinMutationDocuments(ctx context.Context, transaction
 	return nil
 }
 
-func (engine *Engine) preflightJoinTargetUpdate(ctx context.Context, transaction store.Transaction, collection Collection, document store.Document, values store.Values, actor *store.Document, actorCollection schema.CollectionSlug, selection localization.Selection) error {
+func (engine *Engine) preflightJoinTargetUpdate(ctx context.Context, transaction store.Transaction, collection Collection, document store.Document, values store.Values, actor *store.Document, actorCollection schema.CollectionSlug, system bool, selection localization.Selection) error {
 	projected := localization.ProjectDocument(document, collection.Schema.Fields, selection)
 	operationContext := Context{
 		Context: ctx, Operation: operation.Update, Collection: collection.Schema, ID: document.ID,
-		Actor: cloneDocumentPointer(actor), ActorCollection: actorCollection, Data: store.CloneValues(values),
+		Actor: cloneDocumentPointer(actor), ActorCollection: actorCollection, System: system, Data: store.CloneValues(values),
 		Original: cloneDocumentPointer(&projected), Locale: selection.Locale, AllLocales: selection.All,
 		Locales: append([]schema.LocaleCode(nil), selection.Configured...),
 	}

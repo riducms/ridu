@@ -19,6 +19,8 @@ const (
 	Admin           Kind = "admin"
 	Read            Kind = "read"
 	ReadVersions    Kind = "read-versions"
+	ReadDrafts      Kind = "read-drafts"
+	Reference       Kind = "reference"
 	Update          Kind = "update"
 	Delete          Kind = "delete"
 	RestoreDeleted  Kind = "restore-deleted"
@@ -75,6 +77,9 @@ type Context struct {
 	// Actor identifies the authenticated document and owning auth collection.
 	// Actor.ID is empty for an anonymous operation.
 	Actor Actor
+	// System reports that trusted server code started this operation with
+	// System set. Field access rules do not run for it; Local reads inherit it.
+	System bool
 	// Locale is the selected content locale, or the exact translation when an
 	// all-locales operation visits a localized value. It is empty without localization.
 	// On ordinary reads it does not identify a fallback value's source locale.

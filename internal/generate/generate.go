@@ -137,10 +137,10 @@ func runResolved(definition projectfile.File, resolved ResolvedProject, check, d
 	}
 	artifacts = append(artifacts, artifact{path: filepath.Join(filepath.Dir(definition.Absolute(definition.Schema)), "ridu.generated.go"), content: goContent})
 	if definition.OpenAPI != "" {
-		artifacts = append(artifacts, artifact{path: definition.Absolute(definition.OpenAPI), content: openAPIContent})
+		artifacts = append(artifacts, artifact{path: definition.Absolute(definition.OpenAPI), content: openAPIContent, outside: true})
 	}
 	if definition.Client != "" {
-		artifacts = append(artifacts, artifact{path: definition.Absolute(definition.Client), content: clientContent})
+		artifacts = append(artifacts, artifact{path: definition.Absolute(definition.Client), content: clientContent, outside: true})
 	}
 	for _, destination := range definition.GeneratedArtifacts {
 		content, exists := generatedPluginArtifact(resolved.PluginArtifacts, destination.Plugin, destination.Name)
@@ -173,7 +173,7 @@ func validateArtifactDestinations(root string, artifacts []artifact) error {
 	type destination struct{ canonical, configured string }
 	seen := make([]destination, 0, len(artifacts))
 	for _, item := range artifacts {
-		canonical, err := canonicalArtifactDestination(root, item.path)
+		canonical, err := canonicalArtifactDestination(root, item.path, item.outside)
 		if err != nil {
 			return fmt.Errorf("validate generated artifact %s: %w", item.path, err)
 		}
@@ -202,7 +202,7 @@ func pathDescends(relative string) bool {
 	return relative != "." && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator))
 }
 
-func canonicalArtifactDestination(root, target string) (string, error) {
+func canonicalArtifactDestination(root, target string, allowOutside bool) (string, error) {
 	rootAbsolute, err := filepath.Abs(root)
 	if err != nil {
 		return "", fmt.Errorf("resolve project root: %w", err)
@@ -215,7 +215,7 @@ func canonicalArtifactDestination(root, target string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("resolve destination: %w", err)
 	}
-	if !pathWithin(rootAbsolute, targetAbsolute) {
+	if !allowOutside && !pathWithin(rootAbsolute, targetAbsolute) {
 		return "", fmt.Errorf("destination is outside the project root")
 	}
 
@@ -227,7 +227,7 @@ func canonicalArtifactDestination(root, target string) (string, error) {
 			for index := len(suffix) - 1; index >= 0; index-- {
 				resolved = filepath.Join(resolved, suffix[index])
 			}
-			if !pathWithin(rootCanonical, resolved) {
+			if !allowOutside && !pathWithin(rootCanonical, resolved) {
 				return "", fmt.Errorf("destination resolves outside the project root through a symlink")
 			}
 			return filepath.Clean(resolved), nil
@@ -750,6 +750,9 @@ func installWithRename(path string, content []byte, check bool, rename func(stri
 type artifact struct {
 	path    string
 	content []byte
+	// outside admits a consumer contract that ridu.toml places beyond the
+	// project root, such as a client generated into a sibling frontend.
+	outside bool
 }
 
 type preparedArtifact struct {

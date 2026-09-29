@@ -37,7 +37,9 @@ const (
 )
 
 // File is a validated project definition rooted at the directory containing
-// ridu.toml. Structural paths are always relative and cannot escape Root.
+// ridu.toml. Paths are always relative. Structural paths cannot escape Root;
+// only the consumer contracts Client and OpenAPI may, so a monorepo can
+// generate them straight into a sibling frontend.
 type File struct {
 	Path               string
 	Root               string
@@ -194,31 +196,32 @@ func Load(path string) (File, error) {
 		}
 	}
 	paths := []struct {
-		key   string
-		value *string
+		key     string
+		value   *string
+		outside bool
 	}{
-		{"entry", &project.Entry},
-		{"admin", &project.Admin},
-		{"client", &project.Client},
-		{"schema", &project.Schema},
-		{"openapi", &project.OpenAPI},
-		{"migrations", &project.Migrations},
-		{"assets", &project.Assets},
-		{"plugins", &project.Plugins},
-		{"plugin_go", &project.PluginGo},
+		{"entry", &project.Entry, false},
+		{"admin", &project.Admin, false},
+		{"client", &project.Client, true},
+		{"schema", &project.Schema, false},
+		{"openapi", &project.OpenAPI, true},
+		{"migrations", &project.Migrations, false},
+		{"assets", &project.Assets, false},
+		{"plugins", &project.Plugins, false},
+		{"plugin_go", &project.PluginGo, false},
 	}
 	for _, path := range paths {
 		if *path.value == "" {
 			continue
 		}
-		cleaned, err := cleanRelativePath(*path.value, path.key == "entry")
+		cleaned, err := cleanRelativePath(*path.value, path.key == "entry", path.outside)
 		if err != nil {
 			return File{}, fmt.Errorf("%s: %s: %w", absolute, path.key, err)
 		}
 		*path.value = cleaned
 	}
 	for index := range project.GeneratedArtifacts {
-		cleaned, err := cleanRelativePath(project.GeneratedArtifacts[index].Path, false)
+		cleaned, err := cleanRelativePath(project.GeneratedArtifacts[index].Path, false, false)
 		if err != nil {
 			return File{}, fmt.Errorf("%s: generated.%s.%s: %w", absolute, project.GeneratedArtifacts[index].Plugin, project.GeneratedArtifacts[index].Name, err)
 		}
@@ -304,6 +307,13 @@ func isArtifactIdentifier(value string) bool {
 	return !previousHyphen
 }
 
+// WithinRoot reports whether a validated project-relative path stays inside
+// Root. Only Client and OpenAPI may leave it.
+func WithinRoot(relative string) bool {
+	cleaned := filepath.Clean(filepath.FromSlash(relative))
+	return cleaned != ".." && !strings.HasPrefix(cleaned, ".."+string(filepath.Separator))
+}
+
 // Absolute resolves a validated project-relative path against Root.
 func (project File) Absolute(relative string) string {
 	return filepath.Join(project.Root, filepath.FromSlash(relative))
@@ -320,7 +330,7 @@ func parseString(raw string) (string, error) {
 	return value, nil
 }
 
-func cleanRelativePath(value string, allowRoot bool) (string, error) {
+func cleanRelativePath(value string, allowRoot, allowOutside bool) (string, error) {
 	if filepath.IsAbs(value) {
 		return "", fmt.Errorf("path %q must be relative to the project root", value)
 	}
@@ -331,7 +341,10 @@ func cleanRelativePath(value string, allowRoot bool) (string, error) {
 	if cleaned == "." && allowRoot {
 		return ".", nil
 	}
-	if cleaned == "." || cleaned == ".." || strings.HasPrefix(cleaned, ".."+string(filepath.Separator)) {
+	if cleaned == "." || cleaned == ".." {
+		return "", fmt.Errorf("path %q must name a location inside the project root", value)
+	}
+	if !allowOutside && strings.HasPrefix(cleaned, ".."+string(filepath.Separator)) {
 		return "", fmt.Errorf("path %q must name a location inside the project root", value)
 	}
 	return filepath.ToSlash(cleaned), nil

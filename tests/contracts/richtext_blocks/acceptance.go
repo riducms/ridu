@@ -277,7 +277,7 @@ func localesAndReferences(t *testing.T, factory Factory) {
 	if stringValue(translations["fr"]) != "Bonjour" {
 		t.Fatal("nullification destroyed another locale")
 	}
-	copied, err := app.Local().CopyLocale(ctx, "articles", created.ID, "en", "fr", ridu.MutationOptions{Actor: &store.Document{ID: "editor"}, ExpectedRevision: all.Revision})
+	copied, err := app.Local().CopyLocale(ctx, "articles", created.ID, "en", "fr", ridu.MutationOptions{Actor: &store.Document{ID: "editor"}, ActorCollection: "users", ExpectedRevision: all.Revision})
 	if err != nil {
 		t.Fatalf("locale copy: %#v", err)
 	}

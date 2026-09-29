@@ -89,8 +89,13 @@ func (engine *Engine) validateDocumentReferences(ctx Context, transaction store.
 		}
 		targetContext := Context{
 			Context: ctx.Context, Operation: operation.Read, Collection: target.Schema, ID: reference.id,
-			Actor: cloneDocumentPointer(ctx.Actor), ActorCollection: ctx.ActorCollection, Data: store.Values{}, Locale: referenceSelection.Locale, AllLocales: referenceSelection.All,
+			Actor: cloneDocumentPointer(ctx.Actor), ActorCollection: ctx.ActorCollection, System: ctx.System, Data: store.Values{}, Locale: referenceSelection.Locale, AllLocales: referenceSelection.All,
 			Locales: append([]schema.LocaleCode(nil), referenceSelection.Configured...),
+		}
+		// The target's Reference rule decides what may be linked to; without
+		// one, an actor can link only to documents they may read.
+		if target.Access[operation.Reference] != nil {
+			targetContext.Operation = operation.Reference
 		}
 		decision, err := authorize(target, targetContext)
 		if err != nil {
@@ -100,9 +105,14 @@ func (engine *Engine) validateDocumentReferences(ctx Context, transaction store.
 		if decision.Kind == Deny {
 			access = denyAllAccessPredicate()
 		}
+		// A reference can only point at a draft the actor may read.
+		access, err = engine.publishedTargetAccess(target, targetContext, access)
+		if err != nil {
+			return nil, err
+		}
 		_, err = transaction.Find(ctx.Context, store.Request{
 			Collection: target.Schema, Collections: engine.schemas, ID: reference.id,
-			Filter: check.filter, Access: access, PublishedOnly: ctx.Actor == nil && target.Schema.Versions != nil,
+			Filter: check.filter, Access: access,
 			Lock: store.LockReference, Locales: referenceSelection.Configured,
 			LocaleChain: referenceSelection.Chain, AllLocales: referenceSelection.All,
 		})

@@ -72,7 +72,7 @@ func (engine *Engine) ResolveFilteredSelection(ctx context.Context, request Filt
 	if readDecision.Kind == Deny {
 		return FilteredSelectionResult{Items: []FilteredSelectionItem{}}, nil
 	}
-	if err := authorizeQuery(collection, request.Filter, nil); err != nil {
+	if err := authorizeQuery(collection, false, request.Filter, nil); err != nil {
 		return FilteredSelectionResult{}, err
 	}
 	var filter *query.Node

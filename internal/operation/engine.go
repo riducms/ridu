@@ -31,6 +31,8 @@ type LocalizationOptions struct {
 	// ActorCollection identifies the exact auth collection that owns Actor on
 	// specialized version and locale operations.
 	ActorCollection schema.CollectionSlug
+	// System skips access rules for trusted server code; see Request.System.
+	System bool
 }
 
 const MaxBatchDocuments = store.MaxListWindowDocuments
@@ -49,12 +51,15 @@ type Decision struct {
 }
 
 type Context struct {
-	Context             context.Context
-	Operation           operation.Kind
-	Collection          schema.Collection
-	ID                  string
-	Actor               *store.Document
-	ActorCollection     schema.CollectionSlug
+	Context         context.Context
+	Operation       operation.Kind
+	Collection      schema.Collection
+	ID              string
+	Actor           *store.Document
+	ActorCollection schema.CollectionSlug
+	// System marks trusted server code that skips collection and field access
+	// rules. Only the Local API sets it; transports never do.
+	System              bool
 	Data                store.Values
 	Value               store.Value
 	SiblingData         store.Values
@@ -128,6 +133,9 @@ type Config struct {
 	ValidateUploadImport      func(context.Context, schema.Collection, store.Values) error
 	RootAfterError            []Hook
 	Localization              *schema.LocalizationSettings
+	// EditorCollection is the auth collection whose members see drafts by
+	// default: the admin's user collection. Empty means no actor does.
+	EditorCollection schema.StableID
 }
 
 type Request struct {
@@ -140,12 +148,16 @@ type Request struct {
 	internalFilter  *query.Node
 	Actor           *store.Document
 	ActorCollection schema.CollectionSlug
-	Page            int
-	Limit           int
-	IndexWindow     *store.IndexWindow
-	Sort            []query.Sort
-	Select          []query.Path
-	Populate        []query.Population
+	// System runs the request as trusted server code: collection, field, draft
+	// and reference access rules are skipped, while validation, hooks, versions
+	// and reference integrity still apply. Only the Local API sets it.
+	System      bool
+	Page        int
+	Limit       int
+	IndexWindow *store.IndexWindow
+	Sort        []query.Sort
+	Select      []query.Path
+	Populate    []query.Population
 	// IncludeAccess enriches an ordinary collection list with collection and
 	// per-document capabilities evaluated in the list's read transaction.
 	IncludeAccess bool
@@ -245,19 +257,108 @@ type Error struct {
 func (operationError *Error) Error() string { return operationError.Message }
 func (operationError *Error) Unwrap() error { return operationError.Cause }
 
-func publishedOnly(request Request, collection schema.Collection) bool {
-	if request.Operation != operation.Read {
-		return false
+// trustedDraftRead reports an explicit draft read without an actor: server
+// code such as a job or a renderer that chose to include drafts. Read access
+// still applies; the actor-facing ReadDrafts rule does not.
+// publishRequired names the operation a caller needs instead of an ordinary
+// update, which never silently changes live content or status.
+func publishRequired(collection schema.Collection, statusChange bool) *Error {
+	route := "/api/collections/" + string(collection.Slug) + "/{id}"
+	if collection.Capabilities.Global {
+		route = "/api/globals/" + string(collection.Slug)
 	}
-	if collection.Versions == nil {
-		// Draft selection has no meaning for an unversioned root, but anonymous
-		// population can still reach versioned targets that must stay published.
-		return request.Actor == nil
+	if statusChange {
+		return &Error{Code: "publish_required", Status: 409, Message: "an update cannot change a versioned document's status; use Publish or Unpublish (REST POST " + route + "/publish or " + route + "/unpublish)"}
 	}
-	if request.Draft != nil {
-		return !*request.Draft
+	message := "a published " + string(collection.Slug) + " document changes only through the publish lifecycle; apply these edits live with PublishChanges (REST POST " + route + "/publish with the changed fields, SDK publishChanges)"
+	if collection.Versions.Drafts {
+		message += ", or Unpublish it first to edit a draft"
 	}
-	return request.Actor == nil
+	return &Error{Code: "publish_required", Status: 409, Message: message}
+}
+
+func trustedDraftRead(request Request) bool {
+	return request.Draft != nil && *request.Draft && request.Actor == nil
+}
+
+// publishedOnly decides whether a read of collection excludes drafts. A read
+// that does not choose sees drafts only when readsDrafts allows it, and so does
+// an actor's explicit draft read, which fails rather than silently narrowing.
+func (engine *Engine) publishedOnly(request Request, collection Collection, ctx Context) (bool, error) {
+	if request.Operation != operation.Read || collection.Schema.Versions == nil {
+		return false, nil
+	}
+	if request.Draft != nil && !*request.Draft {
+		return true, nil
+	}
+	// Judge trust from ctx, which always carries the caller: a request built
+	// only to carry Draft must not pass for anonymous server code.
+	if request.Draft != nil && *request.Draft && ctx.Actor == nil {
+		return false, nil
+	}
+	reads, err := engine.readsDrafts(collection, ctx)
+	if err != nil {
+		return false, err
+	}
+	if request.Draft != nil && !reads {
+		return false, &Error{Code: "access_denied", Status: 403, Message: "drafts may not be read"}
+	}
+	return !reads, nil
+}
+
+// readsDrafts reports whether ctx's actor sees draft documents of a versioned
+// collection. Its ReadDrafts rule decides; without one only editors do: users of
+// the admin's user collection whose Admin rule lets them in. Anonymous callers
+// and an app's other auth collections read published content, so a permissive
+// Read rule never shows an app's own users unpublished work.
+func (engine *Engine) readsDrafts(collection Collection, ctx Context) (bool, error) {
+	if collection.Schema.Versions == nil || ctx.System {
+		return true, nil
+	}
+	ctx.Operation, ctx.Collection = operation.ReadDrafts, collection.Schema
+	if collection.Access[operation.ReadDrafts] != nil {
+		decision, err := authorize(collection, ctx)
+		if err != nil {
+			return false, &Error{Code: "access_failed", Status: 500, Message: "draft read access rule failed", Cause: err}
+		}
+		switch decision.Kind {
+		case Allow:
+			return true, nil
+		case Deny:
+			return false, nil
+		default:
+			return false, &Error{Code: "access_failed", Status: 500, Message: "ReadDrafts must return Allow or Deny"}
+		}
+	}
+	if ctx.Actor == nil || engine.editorCollection == "" {
+		return false, nil
+	}
+	editors, exists := engine.collections[string(engine.editorCollection)]
+	actorCollection, known := engine.collections[string(ctx.ActorCollection)]
+	if !exists || !known || actorCollection.Schema.ID != editors.Schema.ID {
+		return false, nil
+	}
+	ctx.Operation, ctx.Collection = operation.Admin, editors.Schema
+	decision, err := authorize(editors, ctx)
+	if err != nil {
+		return false, &Error{Code: "access_failed", Status: 500, Message: "admin access rule failed", Cause: err}
+	}
+	return decision.Kind == Allow, nil
+}
+
+// publishedTargetAccess narrows a populated or referenced versioned target to
+// published documents when the actor may not read its drafts.
+func (engine *Engine) publishedTargetAccess(target Collection, ctx Context, access *query.Node) (*query.Node, error) {
+	reads, err := engine.readsDrafts(target, ctx)
+	if err != nil || reads {
+		return access, err
+	}
+	published := query.Equal("_status", "published").Node()
+	if access == nil {
+		return &published, nil
+	}
+	combined := query.Node{Kind: query.ExpressionAnd, Children: []query.Node{*access, published}}
+	return &combined, nil
 }
 
 type Engine struct {
@@ -273,6 +374,7 @@ type Engine struct {
 	validateUploadImport      func(context.Context, schema.Collection, store.Values) error
 	rootAfterError            []Hook
 	localization              *schema.LocalizationSettings
+	editorCollection          schema.StableID
 }
 
 func New(config Config) (*Engine, error) {
@@ -294,6 +396,7 @@ func New(config Config) (*Engine, error) {
 		validateUploadImport:      config.ValidateUploadImport,
 		rootAfterError:            append([]Hook(nil), config.RootAfterError...),
 		localization:              cloneLocalization(config.Localization),
+		editorCollection:          config.EditorCollection,
 	}
 	for _, collection := range config.Collections {
 		key := collection.Key
@@ -315,7 +418,7 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 	hasSubmittedChanges := len(submittedData) != 0
 	failureContext := Context{
 		Context: context.WithoutCancel(ctx), Operation: request.Operation, ID: request.ID,
-		Actor: cloneDocumentPointer(request.Actor), ActorCollection: request.ActorCollection, Data: store.CloneValues(request.Data),
+		Actor: cloneDocumentPointer(request.Actor), ActorCollection: request.ActorCollection, System: request.System, Data: store.CloneValues(request.Data),
 	}
 	var resourceAfterError []Hook
 	defer func() {
@@ -479,6 +582,7 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 		ID:              request.ID,
 		Actor:           cloneDocumentPointer(request.Actor),
 		ActorCollection: request.ActorCollection,
+		System:          request.System,
 		Data:            store.CloneValues(request.Data),
 		Locale:          selection.Locale,
 		AllLocales:      selection.All,
@@ -530,11 +634,11 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 			}
 		}
 	}
-	if err := authorizeQuery(collection, request.Filter, request.Sort); err != nil {
+	if err := authorizeQuery(collection, request.System, request.Filter, request.Sort); err != nil {
 		return Result{}, err
 	}
 	if request.IndexWindow != nil {
-		if err := authorizeQueryPath(collection, request.IndexWindow.Path); err != nil {
+		if err := authorizeQueryPath(collection, request.System, request.IndexWindow.Path); err != nil {
 			return Result{}, err
 		}
 	}
@@ -588,7 +692,7 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 			}
 			if request.Operation == operation.Update && collection.Schema.Versions != nil &&
 				(original.Status == store.StatusPublished || request.Status != nil) {
-				return Result{}, &Error{Code: "publish_required", Status: 409, Message: "published documents and status transitions require the publish lifecycle"}
+				return Result{}, publishRequired(collection.Schema, request.Status != nil)
 			}
 			if submittedUpdateDecision != nil {
 				if _, accessError := state.transaction.Find(transactionContext, store.Request{
@@ -882,6 +986,10 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 		// immediately after output resolution.
 		storeSelection = nil
 	}
+	readPublishedOnly, draftError := engine.publishedOnly(request, collection, operationContext)
+	if draftError != nil {
+		return Result{}, draftError
+	}
 	storeRequest := store.Request{
 		Collection:       collection.Schema,
 		Collections:      engine.schemas,
@@ -894,7 +1002,7 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 		Select:           storeSelection,
 		Populate:         append([]query.Population(nil), request.Populate...),
 		PopulationAccess: make(map[schema.StableID]*query.Node),
-		PublishedOnly:    publishedOnly(request, collection.Schema),
+		PublishedOnly:    readPublishedOnly,
 		ExpectedRevision: request.ExpectedRevision,
 		Locales:          append([]schema.LocaleCode(nil), selection.Configured...),
 		LocaleChain:      append([]schema.LocaleCode(nil), selection.Chain...),
@@ -903,7 +1011,10 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 	if request.TrashOnly {
 		storeRequest.Deletion = store.DeletionTrash
 	}
-	if populationError := engine.preparePopulations(collection, operationContext, selection, &storeRequest); populationError != nil {
+	// Only a versioned root's trusted draft read carries drafts into its
+	// targets; draft selection means nothing on an unversioned root.
+	includeTargetDrafts := trustedDraftRead(request) && collection.Schema.Versions != nil
+	if populationError := engine.preparePopulations(collection, operationContext, selection, &storeRequest, includeTargetDrafts); populationError != nil {
 		return Result{}, populationError
 	}
 	if len(storeRequest.Populate) != 0 {
@@ -1752,7 +1863,7 @@ func (engine *Engine) readVersions(ctx context.Context, collectionName, document
 			}
 		}()
 	}
-	operationContext := Context{Context: transactionContext, Operation: operation.ReadVersions, Collection: collection.Schema, ID: documentID, Actor: cloneDocumentPointer(actor), ActorCollection: options.ActorCollection, Data: store.Values{}, Locale: selection.Locale, AllLocales: selection.All, Locales: append([]schema.LocaleCode(nil), selection.Configured...)}
+	operationContext := Context{Context: transactionContext, Operation: operation.ReadVersions, Collection: collection.Schema, ID: documentID, Actor: cloneDocumentPointer(actor), ActorCollection: options.ActorCollection, System: options.System, Data: store.Values{}, Locale: selection.Locale, AllLocales: selection.All, Locales: append([]schema.LocaleCode(nil), selection.Configured...)}
 	defer func() {
 		if err == nil {
 			return
@@ -1910,7 +2021,7 @@ func (engine *Engine) RestorePopulated(ctx context.Context, collectionName, docu
 	transactionContext := context.WithValue(ctx, transactionKey{}, state)
 	versionContext := Context{
 		Context: transactionContext, Operation: operation.ReadVersions, Collection: collection.Schema,
-		ID: documentID, Actor: cloneDocumentPointer(actor), ActorCollection: options.ActorCollection, Locale: versionSelection.Locale, AllLocales: versionSelection.All,
+		ID: documentID, Actor: cloneDocumentPointer(actor), ActorCollection: options.ActorCollection, System: options.System, Locale: versionSelection.Locale, AllLocales: versionSelection.All,
 		Locales: append([]schema.LocaleCode(nil), versionSelection.Configured...),
 	}
 	var decision Decision
@@ -1956,7 +2067,7 @@ func (engine *Engine) RestorePopulated(ctx context.Context, collectionName, docu
 	}
 	result, err = engine.Execute(transactionContext, Request{
 		Operation: operationKind, Collection: collectionName, ID: documentID, Data: version.Snapshot.Values,
-		Actor: actor, ActorCollection: options.ActorCollection, ExpectedRevision: expectedRevision, Status: &status,
+		Actor: actor, ActorCollection: options.ActorCollection, System: options.System, ExpectedRevision: expectedRevision, Status: &status,
 		Populate:        append([]query.Population(nil), populations...),
 		OutputFields:    appendOptionalPaths(outputFields),
 		StoragePrepared: collection.Schema.Capabilities.Upload, ValidateUploadObjects: collection.Schema.Capabilities.Upload, LocalizationPrepared: true,
@@ -2216,10 +2327,14 @@ func (engine *Engine) resolveOutputFields(transaction store.Transaction, collect
 					continue
 				}
 				filter := query.Equal(candidate.Join.On, document.ID).Node()
+				targetReadsDrafts, draftError := engine.readsDrafts(target, joinContext)
+				if draftError != nil {
+					return draftError
+				}
 				page, err := transaction.List(operationContext.Context, store.Request{
 					Collection: target.Schema, Collections: engine.schemas, Filter: &filter, Access: decision.Access,
 					Page: 1, Limit: candidate.Join.Limit, Sort: joinDefaultSort(candidate.Join.DefaultSort),
-					PublishedOnly: operationContext.Actor == nil && target.Schema.Versions != nil,
+					PublishedOnly: !targetReadsDrafts,
 					Locales:       append([]schema.LocaleCode(nil), selection.Configured...), LocaleChain: append([]schema.LocaleCode(nil), selection.Chain...), AllLocales: selection.All,
 				})
 				if err != nil {
@@ -2931,6 +3046,9 @@ func requireWritableTransactionContext(ctx context.Context) error {
 }
 
 func authorize(collection Collection, ctx Context) (Decision, error) {
+	if ctx.System {
+		return Decision{Kind: Allow}, nil
+	}
 	kind := ctx.Operation
 	if kind == operation.Duplicate {
 		kind = operation.Create
@@ -2964,6 +3082,9 @@ func authorize(collection Collection, ctx Context) (Decision, error) {
 }
 
 func evaluateAccessRule(rule Access, ctx Context) (Decision, error) {
+	if ctx.System {
+		return Decision{Kind: Allow}, nil
+	}
 	decision, err := rule(ctx)
 	if err != nil {
 		return Decision{}, err

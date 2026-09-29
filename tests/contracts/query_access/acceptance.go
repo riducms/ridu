@@ -72,6 +72,9 @@ func Run(t *testing.T, factory Factory, options Options) {
 	t.Run("internal-upload-lookup-preserves-collection-access", func(t *testing.T) {
 		uploadLookup(t, factory)
 	})
+	t.Run("or-predicates-stay-grouped", func(t *testing.T) {
+		logicalGrouping(t, factory)
+	})
 	t.Run("binary-search-substrings-order-and-count", func(t *testing.T) {
 		for _, threshold := range []float64{0, 65536, 73728, 73500, 73501, 1000000} {
 			t.Run(fmt.Sprint(threshold), func(t *testing.T) {

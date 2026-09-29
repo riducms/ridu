@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/riducms/ridu/internal/jsonlimit"
@@ -269,4 +271,35 @@ func schemaFieldIn(
 		return nil, false, false
 	}
 	return nil, false, false
+}
+
+// bracketWhereExample rewrites qs-style where[field][operator]=value
+// parameters as the JSON Ridu expects, so a client ported from a
+// bracket-style API sees its own filter. Logical groups and list indexes do
+// not translate unambiguously and fall back to a generic example.
+func bracketWhereExample(values url.Values) string {
+	const generic = `{"status":{"equals":"published"}}`
+	example := map[string]map[string]string{}
+	for key, entries := range values {
+		if !strings.HasPrefix(key, "where[") {
+			continue
+		}
+		segments := strings.Split(strings.TrimSuffix(strings.TrimPrefix(key, "where["), "]"), "][")
+		if len(segments) != 2 || len(entries) != 1 || segments[0] == "" || segments[1] == "" {
+			return generic
+		}
+		field, operator := segments[0], segments[1]
+		if field == "and" || field == "or" || field == "not" {
+			return generic
+		}
+		if example[field] == nil {
+			example[field] = map[string]string{}
+		}
+		example[field][operator] = entries[0]
+	}
+	encoded, err := json.Marshal(example)
+	if err != nil || len(example) == 0 {
+		return generic
+	}
+	return string(encoded)
 }

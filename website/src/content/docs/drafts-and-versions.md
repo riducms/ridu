@@ -85,53 +85,44 @@ are driven by that setting.
 
 ## Draft read semantics {#draft-reads}
 
-The Local Go API’s `FindOptions.Draft` and `ListOptions.Draft` are also three-state:
+Drafts are editorial work. By default only editors see them: users of the admin's user collection
+(`Config.Admin.User`) whose `Admin` rule lets them in. Anonymous callers and your app's other auth
+collections read published content, even when the collection's `Read` rule allows them.
 
-| Read option                   | Result set                                                         |
-| ----------------------------- | ------------------------------------------------------------------ |
-| `Draft: &false`               | Published documents only                                           |
-| `Draft: &true`                | Published and draft documents; this is not “drafts only”           |
-| `Draft: nil`, anonymous actor | Published only                                                     |
-| `Draft: nil`, non-nil actor   | No status filter; collection/field access still decides visibility |
+The Local Go API's `FindOptions.Draft` and `ListOptions.Draft` are three-state:
 
-Ordinary REST and generated SDK reads use the actor-sensitive default above: anonymous reads see
-published documents, while authenticated reads may include drafts when access allows it. These
-read routes do not accept a `draft` option; REST rejects `?draft=true`. The SDK's `draft` option on
-supported writes does not enable draft reads.
+| Read option                   | Result set                                                                                            |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `Draft: nil`                  | Published and draft documents for actors that may read drafts; published only for everyone else       |
+| `Draft: &false`               | Published documents only                                                                              |
+| `Draft: &true`, with an actor | Published and draft documents; fails with `access_denied` when the actor may not read drafts          |
+| `Draft: &true`, no actor      | Published and draft documents, for server code such as a job or renderer; `Read` access still applies |
 
-For a published-only REST or SDK collection list, filter on the version metadata:
+`Draft: &true` means include drafts, not drafts only. REST and SDK reads do not accept a `draft`
+option; REST rejects `?draft=true`, so they always use the actor's default. The GraphQL plugin lets
+signed-in clients request drafts and refuses an anonymous `draft: true`.
 
-```ts
-const page = await client.list('posts', {
-	where: { _status: { equals: 'published' } }
-});
-```
-
-For Local Go reads, set `Draft` explicitly at public-rendering, preview, and background-job
-boundaries. The GraphQL plugin also exposes explicit draft selection. Requesting drafts through
-these surfaces can include them even for an anonymous actor if the authored Read rule allows it.
-To enforce published-only anonymous access across ordinary read surfaces, assign a predicate rule
-to `Posts.Access.Read`, for example:
+To choose who reads drafts yourself, set `ReadDrafts` on the collection or global. It returns
+`Allow` or `Deny` and replaces the editor default:
 
 ```go title="content/access.go"
 package content
 
-import (
-	"github.com/riducms/ridu"
-	"github.com/riducms/ridu/query"
-)
+import "github.com/riducms/ridu"
 
-func readPosts(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
-	if ctx.Actor != nil {
+// Authors sign in through their own collection and preview their drafts.
+func authorsReadDrafts(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
+	if ctx.Actor != nil && ctx.ActorCollection == "authors" {
 		return ridu.Allow(), nil
 	}
-	return ridu.Where(query.Equal("_status", "published")), nil
+	return ridu.Deny(), nil
 }
 ```
 
-Set `Access: ridu.CollectionAccess{Read: readPosts}` on the collection. This example treats every
-authenticated actor as an editor; replace that branch with your application's editorial access
-rule. See [Access control](/docs/access-control/) for role and ownership predicates.
+Set `Access: ridu.CollectionAccess{ReadDrafts: authorsReadDrafts}` on the collection. `Read` still
+applies on top, so combine the two for ownership rules such as "authors see their own drafts". The
+same rule decides whether a relationship may point at a draft and whether population returns one.
+See [Access control](/docs/access-control/) for role and ownership predicates.
 
 A draft is not a security boundary. Collection and field access always run, and requesting draft
 content does not grant permission. Preview tokens provide a separate, short-lived, target-scoped
@@ -147,8 +138,11 @@ snapshotting, and after-commit work. `PublishChanges` and the SDK's `publishChan
 apply edited values through that same publish lifecycle instead of performing an ordinary update.
 Body-bearing publish and unpublish operations require both `Update` and their dedicated lifecycle
 permission. Status-only transitions require only the dedicated permission. An ordinary update of a
-published versioned row returns `publish_required`; Ridu never silently turns a generic update into
-a live publication.
+published versioned row, or one that sets its status, returns `publish_required` (409); Ridu never
+silently turns a generic update into a live publication. Edit a published row with `PublishChanges`
+(REST `POST /api/collections/{collection}/{id}/publish` with the changed fields), or unpublish it and
+update the draft. A collection with versions but no drafts publishes every row, so it is edited
+only through `PublishChanges`.
 
 ```go
 published, err := app.Local().Publish(ctx, "posts", post.ID, ridu.MutationOptions{ExpectedRevision: post.Revision, Actor: actor})
@@ -156,7 +150,12 @@ if err != nil {
 	return err
 }
 
-draft, err := app.Local().Unpublish(ctx, "posts", post.ID, ridu.MutationOptions{ExpectedRevision: published.Revision, Actor: actor})
+edited, err := app.Local().PublishChanges(ctx, "posts", post.ID, store.Values{"title": store.String("Edited live")}, ridu.MutationOptions{ExpectedRevision: published.Revision, Actor: actor})
+if err != nil {
+	return err
+}
+
+draft, err := app.Local().Unpublish(ctx, "posts", post.ID, ridu.MutationOptions{ExpectedRevision: edited.Revision, Actor: actor})
 ```
 
 The generated TypeScript client exposes the same intent:
@@ -306,7 +305,7 @@ behaviour.
 
 | Symptom                                           | Explanation                                                                                                            |
 | ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| Anonymous `Find` cannot see a new document        | Draft-enabled creates default to draft; publish it or request authorized draft visibility.                             |
+| A signed-in user cannot see a new document        | Draft-enabled creates default to draft, and only editors read drafts; publish it or allow the user with `ReadDrafts`.  |
 | `Draft: &true` returns published documents too    | True means include drafts, not draft-only. Add an authored status field if the product needs another workflow filter.  |
 | Old snapshot has a redacted/missing field         | Current field access and after-read lifecycle apply to history reads.                                                  |
 | Restore returns `access_denied`                   | Restore needs both access to that snapshot and update access to the current document.                                  |

@@ -83,8 +83,15 @@ func TestPostgresMultiSelectAndPublishedOnlyRelationshipParity(t *testing.T) {
 
 func TestPostgresAnonymousPopulationDoesNotExposeDraftVersionedTargets(t *testing.T) {
 	ctx := context.Background()
+	// Signed-in staff read drafts; anonymous callers see published lessons only.
+	staffReadDrafts := func(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
+		if ctx.Actor == nil {
+			return ridu.Deny(), nil
+		}
+		return ridu.Allow(), nil
+	}
 	config := ridu.Config{Name: "Published population", Collections: []ridu.Collection{
-		{Slug: "lessons", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true}, Fields: field.Fields{field.Text("title").Required()}},
+		{Slug: "lessons", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true}, Fields: field.Fields{field.Text("title").Required()}, Access: ridu.CollectionAccess{ReadDrafts: staffReadDrafts}},
 		{Slug: "links", Fields: field.Fields{field.Relationship("lesson", "lessons").Required()}},
 	}}
 	backend, manifest := integrationBackend(t, ctx, config)

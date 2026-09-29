@@ -672,6 +672,7 @@ func runDev(ctx context.Context, args []string, stdout, stderr io.Writer, option
 		break
 	}
 	servedRevision := acceptedInitialRevision
+	servedManifest := preparation.manifest
 	if definition.Admin != "" {
 		if err := writeAdminSchemaReloadSignal(definition.Root, preparation.adminPluginRegistryChanged); err != nil {
 			_ = activeBinary.remove()
@@ -844,6 +845,7 @@ watchLoop:
 					output.Info("Newer Go change arrived; skipping the stale replacement")
 					continue
 				}
+				preparation = preparation.comparedWith(servedManifest)
 				preparation, prepareError = synchronizeDevelopmentSchema(ctx, definition.Database, database.databaseURL, database.databasePath, !*noSync, false, preparation, output)
 				if prepareError != nil {
 					_ = candidate.remove()
@@ -899,6 +901,7 @@ watchLoop:
 				server = candidateServer
 				activeBinary = candidate
 				servedRevision = changeRevision
+				servedManifest = preparation.manifest
 				printDevelopmentTiming(output, "Server reloaded", time.Since(changeStarted), candidateBuildDuration, serverDuration, preparation)
 				if preparation.schemaChanged && admin != nil {
 					if err := writeAdminSchemaReloadSignal(definition.Root, preparation.adminPluginRegistryChanged); err != nil {
@@ -1020,6 +1023,17 @@ func prepareDevelopment(ctx context.Context, definition projectfile.File, versio
 		contractDuration:           contractDuration,
 	}
 	return preparation, nil
+}
+
+// comparedWith marks the schema changed when the resolved manifest differs from
+// the one the running server uses. A changed schema file is not enough: a
+// checkout or merge can bring in contracts that are already current on disk
+// while the database and the admin still reflect the previous schema.
+func (preparation developmentPreparation) comparedWith(served schema.Manifest) developmentPreparation {
+	if !preparation.manifest.Equal(served) {
+		preparation.schemaChanged = true
+	}
+	return preparation
 }
 
 func developmentSchemaWarningError(adapter projectfile.DatabaseAdapter) error {
