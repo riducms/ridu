@@ -56,9 +56,9 @@ func Collection() core.Collection {
 			field.Text("privateNote").Access(field.Access{Read: func(operation.Context) (bool, error) { return false, nil }}),
 			field.Text("presentationHidden").Admin(field.Admin{Hidden: true}),
 			embedded,
-			field.Virtual("summary", field.ValueString, func(ctx operation.Context) (operation.Value[store.Value], error) {
+			field.Virtual("summary", func(ctx operation.Context) (operation.Value[string], error) {
 				title, _ := ctx.Root.Get("title").StringValue()
-				return operation.Present(store.String("Article: " + title)), nil
+				return operation.Present("Article: " + title), nil
 			}),
 		},
 	}

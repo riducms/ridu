@@ -84,9 +84,42 @@ func fromAny(decoded any) store.Value {
 	panic(fmt.Sprintf("unexpected %T", decoded))
 }
 
+// replacementEscape is how the store encoder writes each invalid UTF-8 byte,
+// matching encoding/json on Go 1.25. Newer encoding/json writes a raw U+FFFD.
+const replacementEscape = `\ufffd`
+
+// sameJSON compares encoder output byte for byte, except that the escape
+// \ufffd and a raw U+FFFD count as the same bytes. Go versions disagree on
+// which one encoding/json writes for invalid UTF-8; both decode identically.
+func sameJSON(got, want []byte) bool {
+	return bytes.Equal(unescapeReplacement(got), unescapeReplacement(want))
+}
+
+// unescapeReplacement rewrites each \ufffd escape as a raw U+FFFD. It reads
+// escapes in order, so an escaped backslash followed by "ufffd" is unchanged.
+func unescapeReplacement(encoded []byte) []byte {
+	result := make([]byte, 0, len(encoded))
+	for index := 0; index < len(encoded); index++ {
+		if encoded[index] != '\\' || index+1 >= len(encoded) {
+			result = append(result, encoded[index])
+			continue
+		}
+		if bytes.HasPrefix(encoded[index:], []byte(replacementEscape)) {
+			result = append(result, "\ufffd"...)
+			index += len(replacementEscape) - 1
+			continue
+		}
+		result = append(result, encoded[index], encoded[index+1])
+		index++
+	}
+	return result
+}
+
 func assertEncodesLikeEncodingJSON(t *testing.T, value store.Value) {
 	t.Helper()
-	got, err := json.Marshal(value)
+	// Call MarshalJSON directly, as adapters do: json.Marshal would re-escape
+	// the output and hide the encoder's own HTML escaping.
+	got, err := value.MarshalJSON()
 	if err != nil {
 		t.Fatalf("encode: %v", err)
 	}
@@ -94,7 +127,7 @@ func assertEncodesLikeEncodingJSON(t *testing.T, value store.Value) {
 	if err != nil {
 		t.Fatalf("reference encode: %v", err)
 	}
-	if !bytes.Equal(got, want) {
+	if !sameJSON(got, want) {
 		t.Fatalf("encoded\n%s\nwant\n%s", got, want)
 	}
 }
@@ -114,13 +147,13 @@ func assertDecodesLikeEncodingJSON(t *testing.T, data []byte) {
 	if err != nil {
 		return
 	}
-	got, err := json.Marshal(value)
+	got, err := value.MarshalJSON()
 	if err != nil {
 		// Only non-finite numbers fail to encode, and JSON cannot express them.
 		t.Fatalf("encode decoded %q: %v", data, err)
 	}
 	want, _ := json.Marshal(reference(fromAny(decoded)))
-	if !bytes.Equal(got, want) {
+	if !sameJSON(got, want) {
 		t.Fatalf("decode %q:\ngot  %s\nwant %s", data, got, want)
 	}
 }
@@ -161,6 +194,33 @@ func TestValueJSONMatchesEncodingJSONForEdgeCases(t *testing.T) {
 		`{"a" 1}`, ` { "a" : [ 1 , { "b" : null } ] } `, `[1]x`, `nul`, `truex`, `{"a":1}}`, ``, ` `,
 	} {
 		assertDecodesLikeEncodingJSON(t, []byte(data))
+	}
+}
+
+func TestInvalidUTF8EncodesAsTheReplacementEscape(t *testing.T) {
+	// The equivalence checks accept either form of U+FFFD, so pin the store's
+	// own output: an escape for each invalid byte, a valid U+FFFD unchanged.
+	for _, test := range []struct{ text, want string }{
+		{"bad \xff utf8 \xc3", `"bad \ufffd utf8 \ufffd"`},
+		{"\ufffd", "\"\ufffd\""},
+		{`\ufffd`, `"\\ufffd"`},
+	} {
+		encoded, err := store.String(test.text).MarshalJSON()
+		if err != nil || string(encoded) != test.want {
+			t.Errorf("encode %q = %s, error = %v; want %s", test.text, encoded, err, test.want)
+		}
+	}
+	for _, test := range []struct{ got, want string }{
+		{`"\ufffd"`, "\"\ufffd\""},
+		{`"\\ufffd"`, `"\\ufffd"`},
+		{`"\\\ufffd"`, "\"\\\\\ufffd\""},
+	} {
+		if got := string(unescapeReplacement([]byte(test.got))); got != test.want {
+			t.Errorf("unescapeReplacement(%s) = %s, want %s", test.got, got, test.want)
+		}
+	}
+	if sameJSON([]byte(`"\\ufffd"`), []byte("\"\\\ufffd\"")) {
+		t.Error("an escaped backslash compared equal to an unescaped replacement")
 	}
 }
 

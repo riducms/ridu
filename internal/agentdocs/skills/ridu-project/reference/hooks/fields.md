@@ -377,16 +377,17 @@ These hooks follow the same patterns as the examples above:
 The type of `value` depends on the field and on whether the hook works with the stored value or
 the returned one:
 
-| Field                                                            | Stored value in `field.Hooks[T]` | Returned value in `.AfterRead(...)` |
-| ---------------------------------------------------------------- | -------------------------------- | ----------------------------------- |
-| Text, Textarea, Email, Select, Date                              | `string`                         | `string`                            |
-| Number                                                           | `float64`                        | `float64`                           |
-| Checkbox                                                         | `bool`                           | `bool`                              |
-| TextList, NumberList                                             | `[]string`, `[]float64`          | `[]string`, `[]float64`             |
-| Relationship, Upload                                             | `operation.ID`                   | `operation.ReferenceOutput`         |
-| Relationships, Uploads                                           | `[]operation.ID`                 | `[]operation.ReferenceOutput`       |
-| Group, Array, Blocks, JSON, Point, and polymorphic relationships | `store.Value`                    | `store.Value`                       |
-| Join, Virtual                                                    | No stored value                  | `store.Value`                       |
+| Field                                                            | Stored value in `field.Hooks[T]` | Returned value in `.AfterRead(...)`   |
+| ---------------------------------------------------------------- | -------------------------------- | ------------------------------------- |
+| Text, Textarea, Email, Select, Date                              | `string`                         | `string`                              |
+| Number                                                           | `float64`                        | `float64`                             |
+| Checkbox                                                         | `bool`                           | `bool`                                |
+| TextList, NumberList                                             | `[]string`, `[]float64`          | `[]string`, `[]float64`               |
+| Relationship, Upload                                             | `operation.ID`                   | `operation.ReferenceOutput`           |
+| Relationships, Uploads                                           | `[]operation.ID`                 | `[]operation.ReferenceOutput`         |
+| Group, Array, Blocks, JSON, Point, and polymorphic relationships | `store.Value`                    | `store.Value`                         |
+| Join                                                             | No stored value                  | `store.Value`                         |
+| Virtual                                                          | No stored value                  | The resolver's type, such as `string` |
 
 `BeforeValidate` and `BeforeDuplicate` always receive a raw `store.Value`, because they run
 before Ridu has checked the type. A list field's hook receives the whole list at once, not one

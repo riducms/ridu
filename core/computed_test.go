@@ -23,13 +23,12 @@ func TestVirtualFieldsAndInverseJoinsResolveOnRead(t *testing.T) {
 	application, err := ridu.New(ridu.Config{Name: "Computed output", Collections: []ridu.Collection{
 		{
 			Slug: "categories",
-			Fields: field.Fields{field.Text("name").Required(), field.Virtual("displayName", field.ValueString, func(ctx operation.Context) (operation.Value[store.
-				Value],
+			Fields: field.Fields{field.Text("name").Required(), field.Virtual("displayName", func(ctx operation.Context) (operation.Value[string],
 
 				error) {
 				name, _ := ctx.Root.Get("name").
 					StringValue()
-				return operation.Present(store.String("Category: " + name)), nil
+				return operation.Present("Category: " + name), nil
 			}),
 
 				field.Join("posts", "posts", "category").Limit(2)},
@@ -109,17 +108,16 @@ func TestVirtualFieldsAndInverseJoinsResolveOnRead(t *testing.T) {
 }
 
 func TestComputedRuntimeRequiresResolversAndExactValues(t *testing.T) {
-	_, err := ridu.New(ridu.Config{Name: "Missing resolver", Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{field.Virtual("label", field.ValueString, nil)}}}}, teststore.New())
+	_, err := ridu.New(ridu.Config{Name: "Missing resolver", Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{field.Virtual[string]("label", nil)}}}}, teststore.New())
 	if err == nil {
 		t.Fatal("missing computed resolver succeeded")
 	}
 
 	application, err := ridu.New(ridu.Config{Name: "Bad resolver", Collections: []ridu.Collection{{
-		Slug: "posts", Fields: field.Fields{field.Text("title"), field.Virtual("label", field.ValueString, func(operation.Context) (operation.Value[store.
-			Value],
-
-			error) {
-			return operation.Present(store.Number(42)), nil
+		// Typed resolvers cannot return the wrong scalar kind; a JSON field can
+		// still return a value the response cannot carry.
+		Slug: "posts", Fields: field.Fields{field.Text("title"), field.Virtual("label", func(operation.Context) (operation.Value[store.Value], error) {
+			return operation.Present(store.Populated(store.Document{ID: "embedded"})), nil
 		})},
 	}}}, teststore.New())
 	if err != nil {
@@ -140,5 +138,41 @@ func TestGlobalsRejectInverseJoins(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("global inverse join succeeded")
+	}
+}
+
+func TestTypedVirtualFieldsReturnTheirScalarKinds(t *testing.T) {
+	application, err := ridu.New(ridu.Config{Name: "Typed virtuals", Collections: []ridu.Collection{{
+		Slug: "posts",
+		Fields: field.Fields{
+			field.Text("title"),
+			field.Virtual("titleLength", func(ctx operation.Context) (operation.Value[float64], error) {
+				title, _ := ctx.Root.String("title")
+				return operation.Present(float64(len(title))), nil
+			}),
+			field.Virtual("hasTitle", func(ctx operation.Context) (operation.Value[bool], error) {
+				title, _ := ctx.Root.String("title")
+				return operation.Present(title != ""), nil
+			}),
+			field.Virtual("subtitle", func(operation.Context) (operation.Value[string], error) {
+				return operation.Empty[string](), nil
+			}),
+		},
+	}}}, teststore.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	post, err := application.Local().Create(context.Background(), "posts", store.Values{"title": store.String("Hello")}, ridu.MutationOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if length, ok := post.Values["titleLength"].NumberValue(); !ok || length != 5 {
+		t.Fatalf("titleLength = %#v", post.Values["titleLength"])
+	}
+	if present, ok := post.Values["hasTitle"].BooleanValue(); !ok || !present {
+		t.Fatalf("hasTitle = %#v", post.Values["hasTitle"])
+	}
+	if kind := post.Values["subtitle"].Kind(); kind != store.ValueNull {
+		t.Fatalf("empty resolver produced %s, want null", kind)
 	}
 }

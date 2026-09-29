@@ -1,0 +1,33 @@
+---
+// A framed, copyable command. Reuses the site's copy script via data-copy-code.
+interface Props {
+	command: string;
+}
+const { command } = Astro.props;
+---
+
+<div
+	class="inline-flex h-11 items-center gap-3 rounded-4px border border-line-strong bg-surface pl-4 pr-1.5 font-mono text-13px"
+>
+	<span class="text-ink-faint" aria-hidden="true">$</span>
+	<code class="text-ink">{command}</code>
+	<button
+		type="button"
+		class="grid size-8 place-items-center rounded-3px border-0 bg-transparent text-ink-faint hover:(bg-surface-raised text-ink)"
+		data-copy-code
+		data-code={command}
+		aria-label="Copy command"
+	>
+		<svg
+			viewBox="0 0 24 24"
+			class="size-4"
+			fill="none"
+			stroke="currentColor"
+			stroke-width="1.6"
+			aria-hidden="true"
+		>
+			<rect x="8" y="8" width="11" height="11" rx="1"></rect>
+			<path d="M16 8V5H5v11h3"></path>
+		</svg>
+	</button>
+</div>

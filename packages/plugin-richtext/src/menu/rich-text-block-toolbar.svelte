@@ -88,6 +88,11 @@
 		richTextBlockTypes(getRichTextField().field)
 	);
 	const options = $derived(filterRichTextOptions(baseOptions, query, i18n.language));
+	// Keyboard block movement stays available when both handle controls are hidden.
+	const shown = $derived(
+		draggableElement !== null &&
+			!(config.admin.hideDraggableBlockElement && config.admin.hideAddBlockButton)
+	);
 	const dragDataFormat = "application/x-ridu-richtext-block";
 
 	function isOnToolbar(element: HTMLElement) {
@@ -579,47 +584,51 @@
 <PopoverRoot open={pickerOpen} onOpenChange={handlePickerOpenChange}>
 	<Portal to={anchorElement}>
 		<ToolbarRoot
-			class={["ridu-richtext-block-toolbar", draggableElement !== null && "is-visible"]}
-			inert={draggableElement === null}
-			aria-hidden={draggableElement === null ? true : undefined}
+			class={["ridu-richtext-block-toolbar", shown && "is-visible"]}
+			inert={!shown}
+			aria-hidden={shown ? undefined : true}
 			aria-label={i18n.t("plugin.richtext:editor.blockActions")}
 			{@attach attachMenuElement}
 		>
-			<ToolbarButton
-				class="ridu-richtext-block-grip"
-				type="button"
-				draggable="true"
-				title={i18n.t("plugin.richtext:editor.dragToMoveBlock")}
-				aria-label={i18n.t("plugin.richtext:editor.dragToMoveBlock")}
-				ondragstart={handleDragStart}
-				ondragend={handleDragEnd}
-			>
-				<span aria-hidden="true"></span>
-				<span aria-hidden="true"></span>
-				<span aria-hidden="true"></span>
-				<span aria-hidden="true"></span>
-				<span aria-hidden="true"></span>
-				<span aria-hidden="true"></span>
-			</ToolbarButton>
-			<TooltipRoot>
-				<TooltipTrigger>
-					{#snippet child({ props })}
-						<ToolbarButton
-							{...props}
-							class="ridu-richtext-block-add"
-							type="button"
-							aria-label={i18n.t("plugin.richtext:editor.addBlock")}
-							aria-haspopup="dialog"
-							aria-expanded={pickerOpen}
-							aria-controls={pickerOpen ? pickerID : undefined}
-							onclick={openPicker}
-						>
-							<span aria-hidden="true">+</span>
-						</ToolbarButton>
-					{/snippet}
-				</TooltipTrigger>
-				<TooltipContent>{i18n.t("plugin.richtext:editor.addBlock")}</TooltipContent>
-			</TooltipRoot>
+			{#if !config.admin.hideDraggableBlockElement}
+				<ToolbarButton
+					class="ridu-richtext-block-grip"
+					type="button"
+					draggable="true"
+					title={i18n.t("plugin.richtext:editor.dragToMoveBlock")}
+					aria-label={i18n.t("plugin.richtext:editor.dragToMoveBlock")}
+					ondragstart={handleDragStart}
+					ondragend={handleDragEnd}
+				>
+					<span aria-hidden="true"></span>
+					<span aria-hidden="true"></span>
+					<span aria-hidden="true"></span>
+					<span aria-hidden="true"></span>
+					<span aria-hidden="true"></span>
+					<span aria-hidden="true"></span>
+				</ToolbarButton>
+			{/if}
+			{#if !config.admin.hideAddBlockButton}
+				<TooltipRoot>
+					<TooltipTrigger>
+						{#snippet child({ props })}
+							<ToolbarButton
+								{...props}
+								class="ridu-richtext-block-add"
+								type="button"
+								aria-label={i18n.t("plugin.richtext:editor.addBlock")}
+								aria-haspopup="dialog"
+								aria-expanded={pickerOpen}
+								aria-controls={pickerOpen ? pickerID : undefined}
+								onclick={openPicker}
+							>
+								<span aria-hidden="true">+</span>
+							</ToolbarButton>
+						{/snippet}
+					</TooltipTrigger>
+					<TooltipContent>{i18n.t("plugin.richtext:editor.addBlock")}</TooltipContent>
+				</TooltipRoot>
+			{/if}
 		</ToolbarRoot>
 		<div class="ridu-richtext-drop-line" {@attach attachTargetLine}></div>
 		<div class="ridu-richtext-drop-highlight" aria-hidden="true" {@attach attachHighlight}></div>

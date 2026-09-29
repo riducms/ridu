@@ -7,26 +7,12 @@
 		BulkUploadController,
 		BulkUploadStatus,
 	} from "@admin/features/uploads/bulk-upload-controller.svelte";
+	import { formatFileSize } from "@admin/core/i18n/format-file-size";
 	import BulkUploadFilePicker from "@admin/features/uploads/bulk-upload-file-picker.svelte";
 	import UploadThumbnail from "@admin/features/uploads/upload-thumbnail.svelte";
 
 	let { controller }: { controller: BulkUploadController } = $props();
 	const i18n = getAdminI18n();
-
-	function formatBytes(value: number) {
-		if (value < 1_024) return i18n.formatNumber(value, { style: "unit", unit: "byte" });
-		if (value < 1_048_576)
-			return i18n.formatNumber(value / 1_024, {
-				maximumFractionDigits: 0,
-				style: "unit",
-				unit: "kilobyte",
-			});
-		return i18n.formatNumber(value / 1_048_576, {
-			maximumFractionDigits: 1,
-			style: "unit",
-			unit: "megabyte",
-		});
-	}
 
 	function statusLabel(status: BulkUploadStatus) {
 		const labels = {
@@ -100,7 +86,7 @@
 					</span>
 					<span class="ridu-bulk-upload-file__details">
 						<span class="ridu-bulk-upload-file__name">{item.sourceFile.name}</span>
-						<span>{formatBytes(item.sourceFile.size)}</span>
+						<span>{formatFileSize(item.sourceFile.size, i18n)}</span>
 					</span>
 					{#if item.issueCount > 0}
 						<span class="ridu-bulk-upload-file__issues" aria-label={item.issueLabels.join(", ")}>

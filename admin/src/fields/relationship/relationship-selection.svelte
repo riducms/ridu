@@ -2,6 +2,7 @@
 	import { useSortable } from "@dnd-kit-svelte/svelte/sortable";
 	import { getAdminI18n } from "@riducms/plugin";
 	import type { AdminDocument } from "@admin/core/api/admin-client";
+	import { formatFileSize } from "@admin/core/i18n/format-file-size";
 	import FileIcon from "~icons/lucide/file";
 	import PencilIcon from "~icons/lucide/pencil";
 	import XIcon from "~icons/lucide/x";
@@ -38,11 +39,16 @@
 		index: () => index,
 		disabled: () => !sortable || readOnly || blocked,
 	});
+	const imageURL = $derived(
+		typeof document?.mimeType === "string" &&
+			document.mimeType.startsWith("image/") &&
+			typeof document.url === "string"
+			? document.url
+			: undefined
+	);
 	const metadata = $derived(
 		[
-			typeof document?.filesize === "number"
-				? i18n.formatNumber(document.filesize, { style: "unit", unit: "byte", unitDisplay: "long" })
-				: undefined,
+			typeof document?.filesize === "number" ? formatFileSize(document.filesize, i18n) : undefined,
 			typeof document?.width === "number" && typeof document?.height === "number"
 				? `${document.width} × ${document.height}`
 				: undefined,
@@ -78,9 +84,14 @@
 			</button>
 		{/if}
 		{#if upload}
-			<div class="ridu-upload-reference__thumbnail">
-				{#if typeof document?.mimeType === "string" && document.mimeType.startsWith("image/") && typeof document.url === "string"}
-					<img src={document.url} alt="" />
+			<div
+				class={[
+					"ridu-upload-reference__thumbnail",
+					imageURL !== undefined && "ridu-upload-reference__thumbnail--image",
+				]}
+			>
+				{#if imageURL !== undefined}
+					<img src={imageURL} alt="" />
 				{:else}
 					<FileIcon />
 				{/if}

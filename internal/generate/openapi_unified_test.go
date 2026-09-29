@@ -29,8 +29,8 @@ func TestOpenAPIUnifiedRequestsWithoutBlocksMatchRuntime(t *testing.T) {
 		field.Text("optional"),
 		field.Group("meta", field.Fields{field.Text("required").Required()}),
 		field.Array("rows", field.Fields{field.Text("title").Required()}),
-		field.Virtual("summary", field.ValueString, func(operation.Context) (operation.Value[store.Value], error) {
-			return operation.Present(store.String("computed")), nil
+		field.Virtual("summary", func(operation.Context) (operation.Value[string], error) {
+			return operation.Present("computed"), nil
 		}),
 	}}}, Globals: []core.Global{{Slug: "settings", Fields: field.Fields{field.Text("name").Required()}}}}, teststore.New())
 	if err != nil {

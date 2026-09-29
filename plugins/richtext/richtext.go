@@ -43,6 +43,29 @@ type Config struct {
 	Features                []Feature `json:"features"`
 	UploadCollections       []string  `json:"uploadCollections,omitempty"`
 	RelationshipCollections []string  `json:"relationshipCollections,omitempty"`
+	// Admin changes how the editor looks and behaves in the admin. It never
+	// changes what a document can store.
+	Admin Admin `json:"admin,omitzero"`
+}
+
+// Admin controls the editor's presentation in the admin, matching Payload's
+// lexicalEditor admin options. The zero value keeps every default.
+type Admin struct {
+	// FixedToolbar pins formatting controls above the editor. The toolbar that
+	// floats over selected text is still shown.
+	FixedToolbar bool `json:"fixedToolbar,omitempty"`
+	// HideGutter removes the vertical line and indent along the editor's
+	// starting edge. Block handles move outside the text.
+	HideGutter bool `json:"hideGutter,omitempty"`
+	// HideDraggableBlockElement hides the handle that drags a block to a new
+	// position. Editors can still move blocks with Alt+Shift+Arrow keys.
+	HideDraggableBlockElement bool `json:"hideDraggableBlockElement,omitempty"`
+	// HideAddBlockButton hides the + button beside the hovered block. The /
+	// menu still inserts blocks.
+	HideAddBlockButton bool `json:"hideAddBlockButton,omitempty"`
+	// HideInsertParagraphAtEnd hides the control below the last block that
+	// adds an empty paragraph.
+	HideInsertParagraphAtEnd bool `json:"hideInsertParagraphAtEnd,omitempty"`
 }
 
 var defaultFeatures = []Feature{

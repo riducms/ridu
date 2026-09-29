@@ -695,7 +695,7 @@
 				}
 			],
 			"details": ["Use the root alias in application configuration."],
-			"example": "func ownerOnly(ctx ridu.AccessContext) (ridu.AccessDecision, error) {\n\tif ctx.Actor == nil {\n\t\treturn ridu.Deny(), nil\n\t}\n\tauthor, err := query.NewPath(\"author\")\n\tif err != nil {\n\t\treturn ridu.Deny(), err\n\t}\n\treturn ridu.Where(\n\t\tquery.Equal(author, query.String(ctx.Actor.ID)),\n\t), nil\n}",
+			"example": "func ownerOnly(ctx ridu.AccessContext) (ridu.AccessDecision, error) {\n\tif ctx.Actor == nil {\n\t\treturn ridu.Deny(), nil\n\t}\n\treturn ridu.Where(query.Equal(\"author\", ctx.Actor.ID)), nil\n}",
 			"keywords": ["ridu.AccessContext", "AccessContext"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
@@ -6720,7 +6720,7 @@
 				"description": "One authorized page and total count, or an operation error."
 			},
 			"details": [],
-			"example": "page, err := app.Local().List(ctx, \"posts\", ridu.ListOptions{\n\tWhere: query.Equal(statusPath, query.String(\"published\")),\n\tPage:  1,\n\tLimit: 20,\n\tActor: actor,\n})",
+			"example": "page, err := app.Local().List(ctx, \"posts\", ridu.ListOptions{\n\tWhere: query.Equal(\"status\", \"published\"),\n\tPage:  1,\n\tLimit: 20,\n\tActor: actor,\n})",
 			"keywords": ["core.LocalAPI.List", "LocalAPI.List"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
@@ -9810,7 +9810,7 @@
 				}
 			],
 			"details": [],
-			"example": "func ownerOnly(ctx ridu.AccessContext) (ridu.AccessDecision, error) {\n\tif ctx.Actor == nil {\n\t\treturn ridu.Deny(), nil\n\t}\n\tauthor, err := query.NewPath(\"author\")\n\tif err != nil {\n\t\treturn ridu.Deny(), err\n\t}\n\treturn ridu.Where(\n\t\tquery.Equal(author, query.String(ctx.Actor.ID)),\n\t), nil\n}",
+			"example": "func ownerOnly(ctx ridu.AccessContext) (ridu.AccessDecision, error) {\n\tif ctx.Actor == nil {\n\t\treturn ridu.Deny(), nil\n\t}\n\treturn ridu.Where(query.Equal(\"author\", ctx.Actor.ID)), nil\n}",
 			"keywords": ["core.AccessContext", "AccessContext"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
@@ -14976,7 +14976,7 @@
 				"description": "The declared result."
 			},
 			"details": ["Requires at least two non-nil children."],
-			"example": "where, err := query.And(\n\tquery.Equal(status, query.String(\"published\")),\n\tquery.GreaterThan(score, query.Number(10)),\n)",
+			"example": "where := query.And(\n\tquery.Equal(\"status\", \"published\"),\n\tquery.GreaterThan(\"score\", 10),\n)",
 			"keywords": ["query.And", "And"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
@@ -34736,34 +34736,56 @@
 			"typeLinkIDs": {}
 		},
 		"go:github.com/riducms/ridu/plugins/richtext#Config": {
-			"summary": "Enabled features and optional allowlists for relationship and upload nodes.",
+			"summary": "Choose a rich-text field's editing tools, allowed collections, blocks, and admin presentation.",
 			"group": "Types",
 			"parametersLabel": "",
 			"parameters": [
 				{
 					"name": "Features",
 					"type": "[]Feature",
-					"description": "The Features value."
+					"description": "Optional editing tools. Nil keeps the defaults; an empty slice disables every optional tool."
 				},
 				{
 					"name": "UploadCollections",
 					"type": "[]string",
-					"description": "The UploadCollections value."
+					"description": "Upload collections the media picker and validation allow. Empty allows every compatible collection."
 				},
 				{
 					"name": "RelationshipCollections",
 					"type": "[]string",
-					"description": "The RelationshipCollections value."
+					"description": "Collections the relationship picker and validation allow. Empty allows every compatible collection."
+				},
+				{
+					"name": "Blocks",
+					"type": "[]field.Block",
+					"description": "Block definitions owned by this field. Enables the block tools."
+				},
+				{
+					"name": "BlockReferences",
+					"type": "[]string",
+					"description": "Slugs of blocks registered in the root Config.Blocks. Use this or Blocks, not both."
+				},
+				{
+					"name": "Admin",
+					"type": "Admin",
+					"description": "Toolbar and layout options for the admin editor. The zero value keeps every default."
 				}
 			],
 			"details": [
 				"A nil Features slice inherits defaults; an explicit empty slice disables every optional feature. Empty collection allowlists permit every compatible collection, while non-empty lists restrict node targets."
 			],
-			"example": "",
+			"example": "richtext.Field(\"content\", richtext.Config{\n\tUploadCollections: []string{\"media\"},\n\tAdmin: richtext.Admin{FixedToolbar: true},\n}).Required()",
 			"keywords": ["richtext.Config", "Config"],
-			"relatedDocs": [],
+			"relatedDocs": [
+				"/docs/rich-text/blocks/",
+				"/docs/rich-text/features/",
+				"/docs/rich-text/toolbar-and-layout/"
+			],
 			"relatedSymbols": [],
-			"typeLinkIDs": {}
+			"typeLinkIDs": {
+				"Admin": "go:github.com/riducms/ridu/plugins/richtext#Admin",
+				"Feature": "go:github.com/riducms/ridu/plugins/richtext#Feature"
+			}
 		},
 		"go:github.com/riducms/ridu/plugins/richtext#Feature": {
 			"summary": "One optional authoring and validation capability.",
@@ -68874,6 +68896,46 @@
 				"type": "error",
 				"description": "An error for invalid JSON or a non-object value."
 			}
+		},
+		"go:github.com/riducms/ridu/plugins/richtext#Admin": {
+			"summary": "Change how a rich-text editor looks in the admin without changing what it stores.",
+			"group": "Types",
+			"parametersLabel": "",
+			"parameters": [
+				{
+					"name": "FixedToolbar",
+					"type": "bool",
+					"description": "Pins formatting controls above the editor. The toolbar over selected text still appears."
+				},
+				{
+					"name": "HideGutter",
+					"type": "bool",
+					"description": "Removes the line and indent along the editor's edge; block handles move outside the text."
+				},
+				{
+					"name": "HideDraggableBlockElement",
+					"type": "bool",
+					"description": "Hides the handle for dragging a block. Alt+Shift+Arrow keys still move blocks."
+				},
+				{
+					"name": "HideAddBlockButton",
+					"type": "bool",
+					"description": "Hides the + button beside the hovered block. The / menu still inserts blocks."
+				},
+				{
+					"name": "HideInsertParagraphAtEnd",
+					"type": "bool",
+					"description": "Hides the control below the last block that adds an empty paragraph."
+				}
+			],
+			"details": [
+				"Each option matches a Payload lexicalEditor admin option or FixedToolbarFeature. Options are presentation only: validation, stored JSON, and generated types are unchanged."
+			],
+			"example": "richtext.Field(\"content\", richtext.Config{\n\tAdmin: richtext.Admin{\n\t\tFixedToolbar: true,\n\t\tHideGutter:   true,\n\t},\n})",
+			"keywords": ["richtext.Admin", "FixedToolbar", "HideGutter", "fixed toolbar", "hideGutter"],
+			"relatedDocs": ["/docs/rich-text/toolbar-and-layout/"],
+			"relatedSymbols": ["go:github.com/riducms/ridu/plugins/richtext#Config"],
+			"typeLinkIDs": {}
 		}
 	}
 }

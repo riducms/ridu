@@ -24,10 +24,13 @@
 	.ridu-breadcrumbs__link,
 	.ridu-breadcrumbs__current {
 		min-width: 0;
-		max-width: 160px;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+	/* Ancestors stay short so the current page can use the rest of the row. */
+	.ridu-breadcrumbs__link {
+		max-width: 160px;
 	}
 	.ridu-breadcrumbs__link {
 		font-weight: 600;

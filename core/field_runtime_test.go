@@ -17,14 +17,13 @@ import (
 func TestOutputFieldAfterReadHookReceivesResolvedValue(t *testing.T) {
 	observed := make(map[operation.Kind]string)
 	var occurrence operation.OccurrenceID
-	output := field.Virtual("summary", field.ValueString, func(ctx operation.Context) (operation.Value[store.Value], error) {
+	output := field.Virtual("summary", func(ctx operation.Context) (operation.Value[string], error) {
 		title, _ := ctx.Root.String("title")
-		return operation.Present(store.String(title + " summary")), nil
-	}).ReplaceAfterRead(func(ctx operation.Context, input operation.Value[store.Value]) (operation.Change[store.Value], error) {
+		return operation.Present(title + " summary"), nil
+	}).ReplaceAfterRead(func(ctx operation.Context, input operation.Value[string]) (operation.Change[string], error) {
 		occurrence = ctx.OccurrenceID
-		value, _ := input.Get()
-		observed[ctx.Operation], _ = value.StringValue()
-		return operation.Keep[store.Value](), nil
+		observed[ctx.Operation], _ = input.Get()
+		return operation.Keep[string](), nil
 	})
 	application, err := ridu.New(ridu.Config{Name: "Output field hook", Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{field.Text("title").Required(), output}}}}, teststore.New())
 	if err != nil {

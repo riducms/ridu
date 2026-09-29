@@ -139,8 +139,7 @@ func TestRESTSelectionSeparatesStoredAndComputedOutputs(t *testing.T) {
 		Collections: []ridu.Collection{
 			{
 				Slug: "categories",
-				Fields: field.Fields{field.Text("title").Required(), field.Text("privateNote").Required(), field.Virtual("summary", field.ValueString, func(ctx operation.Context) (operation.Value[store.
-					Value],
+				Fields: field.Fields{field.Text("title").Required(), field.Text("privateNote").Required(), field.Virtual("summary", func(ctx operation.Context) (operation.Value[string],
 
 					error) {
 					computedCalls.Add(1)
@@ -148,7 +147,7 @@ func TestRESTSelectionSeparatesStoredAndComputedOutputs(t *testing.T) {
 						StringValue()
 					privateNote, _ := ctx.Root.Get("privateNote").
 						StringValue()
-					return operation.Present(store.String(title + ": " + privateNote)), nil
+					return operation.Present(title + ": " + privateNote), nil
 				}),
 
 					field.Join("posts", "posts", "category")},
@@ -164,14 +163,13 @@ func TestRESTSelectionSeparatesStoredAndComputedOutputs(t *testing.T) {
 		},
 		Globals: []ridu.Global{{
 			Slug: "settings",
-			Fields: field.Fields{field.Text("privateNote").Default("global dependency"), field.Text("otherDefault").Default("must not leak"), field.Virtual("summary", field.ValueString, func(ctx operation.Context) (operation.Value[store.
-				Value],
+			Fields: field.Fields{field.Text("privateNote").Default("global dependency"), field.Text("otherDefault").Default("must not leak"), field.Virtual("summary", func(ctx operation.Context) (operation.Value[string],
 
 				error) {
 				globalComputedCalls.Add(1)
 				privateNote, _ := ctx.Root.Get("privateNote").
 					StringValue()
-				return operation.Present(store.String("Global: " + privateNote)), nil
+				return operation.Present("Global: " + privateNote), nil
 			})},
 		}},
 	}, teststore.New())

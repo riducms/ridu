@@ -91,7 +91,7 @@ func TestDynamicDefaultMethodSetDoesNotExpandDefaultSupport(t *testing.T) {
 		field.Row(nil), field.Collapsible("Details", nil),
 		field.Join("comments", "comments", "post"),
 		field.Plugin("body", "example:richtext", nil),
-		field.Virtual("summary", field.ValueString, nil),
+		field.Virtual[string]("summary", nil),
 	}) {
 		for _, method := range []string{"DefaultFrom", "DefaultCallback"} {
 			if _, found := reflect.TypeOf(node).MethodByName(method); found {

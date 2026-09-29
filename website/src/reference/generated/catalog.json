@@ -440,7 +440,7 @@
 					"details": [
 						"Use the root alias in application configuration."
 					],
-					"example": "func ownerOnly(ctx ridu.AccessContext) (ridu.AccessDecision, error) {\n\tif ctx.Actor == nil {\n\t\treturn ridu.Deny(), nil\n\t}\n\tauthor, err := query.NewPath(\"author\")\n\tif err != nil {\n\t\treturn ridu.Deny(), err\n\t}\n\treturn ridu.Where(\n\t\tquery.Equal(author, query.String(ctx.Actor.ID)),\n\t), nil\n}",
+					"example": "func ownerOnly(ctx ridu.AccessContext) (ridu.AccessDecision, error) {\n\tif ctx.Actor == nil {\n\t\treturn ridu.Deny(), nil\n\t}\n\treturn ridu.Where(query.Equal(\"author\", ctx.Actor.ID)), nil\n}",
 					"language": "go",
 					"typeLinks": {
 						"core.AccessContext": "/reference/core/access-context/",
@@ -8965,7 +8965,7 @@
 					"kind": "constant",
 					"group": "Runtime",
 					"summary": "The semantic Ridu framework version used by the CLI and project-command compatibility handshake.",
-					"signature": "const FrameworkVersion = \"0.6.0\"",
+					"signature": "const FrameworkVersion = \"0.7.0\"",
 					"parameters": [],
 					"parametersLabel": "",
 					"details": [
@@ -10116,7 +10116,7 @@
 						"description": "One authorized page and total count, or an operation error."
 					},
 					"details": [],
-					"example": "page, err := app.Local().List(ctx, \"posts\", ridu.ListOptions{\n\tWhere: query.Equal(statusPath, query.String(\"published\")),\n\tPage:  1,\n\tLimit: 20,\n\tActor: actor,\n})",
+					"example": "page, err := app.Local().List(ctx, \"posts\", ridu.ListOptions{\n\tWhere: query.Equal(\"status\", \"published\"),\n\tPage:  1,\n\tLimit: 20,\n\tActor: actor,\n})",
 					"language": "go",
 					"typeLinks": {
 						"LocalAPI": "/reference/core/local-api/",
@@ -16232,7 +16232,7 @@
 					],
 					"parametersLabel": "",
 					"details": [],
-					"example": "func ownerOnly(ctx ridu.AccessContext) (ridu.AccessDecision, error) {\n\tif ctx.Actor == nil {\n\t\treturn ridu.Deny(), nil\n\t}\n\tauthor, err := query.NewPath(\"author\")\n\tif err != nil {\n\t\treturn ridu.Deny(), err\n\t}\n\treturn ridu.Where(\n\t\tquery.Equal(author, query.String(ctx.Actor.ID)),\n\t), nil\n}",
+					"example": "func ownerOnly(ctx ridu.AccessContext) (ridu.AccessDecision, error) {\n\tif ctx.Actor == nil {\n\t\treturn ridu.Deny(), nil\n\t}\n\treturn ridu.Where(query.Equal(\"author\", ctx.Actor.ID)), nil\n}",
 					"language": "go",
 					"typeLinks": {
 						"schema.StableID": "/reference/schema/stable-id/",
@@ -26917,7 +26917,7 @@
 					],
 					"source": {
 						"path": "field/fluent.go",
-						"line": 2451
+						"line": 2478
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -26958,7 +26958,7 @@
 					],
 					"source": {
 						"path": "field/fluent.go",
-						"line": 2458
+						"line": 2485
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -26994,7 +26994,7 @@
 					],
 					"source": {
 						"path": "field/fluent.go",
-						"line": 2474
+						"line": 2501
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -27035,7 +27035,7 @@
 					],
 					"source": {
 						"path": "field/fluent.go",
-						"line": 2481
+						"line": 2508
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -27071,7 +27071,7 @@
 					],
 					"source": {
 						"path": "field/fluent.go",
-						"line": 2488
+						"line": 2515
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -27117,7 +27117,7 @@
 					],
 					"source": {
 						"path": "field/fluent.go",
-						"line": 2409
+						"line": 2436
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -27129,8 +27129,8 @@
 					"slug": "virtual",
 					"kind": "function",
 					"group": "Functions",
-					"summary": "Virtual adds a computed field at the document root, using resolver to return its value.",
-					"signature": "func Virtual(name string, kind ValueType, resolver Resolver[store.Value]) OutputField",
+					"summary": "Virtual adds a computed field at the document root. The resolver's type sets the field's value type: string, float64, bool, or store.Value for any JSON value. Return operation.Present(value), or operation.Empty[T]() for null.",
+					"signature": "func Virtual[T VirtualValue](name string, resolver Resolver[T]) VirtualField[T]",
 					"parameters": [
 						{
 							"name": "name",
@@ -27138,19 +27138,14 @@
 							"description": "The name value."
 						},
 						{
-							"name": "kind",
-							"type": "ValueType",
-							"description": "The kind value."
-						},
-						{
 							"name": "resolver",
-							"type": "Resolver[store.Value]",
+							"type": "Resolver[T]",
 							"description": "The resolver value."
 						}
 					],
 					"parametersLabel": "",
 					"returns": {
-						"type": "OutputField",
+						"type": "VirtualField[T]",
 						"description": "The declared result."
 					},
 					"details": [],
@@ -27163,7 +27158,7 @@
 					],
 					"source": {
 						"path": "field/fluent.go",
-						"line": 2491
+						"line": 2520
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -30589,7 +30584,7 @@
 					],
 					"source": {
 						"path": "field/facade_view.go",
-						"line": 184
+						"line": 197
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -30733,43 +30728,7 @@
 					],
 					"source": {
 						"path": "field/facade_view.go",
-						"line": 202
-					},
-					"relatedDocs": [],
-					"relatedSymbols": [],
-					"overloads": []
-				},
-				{
-					"id": "go:github.com/riducms/ridu/field#AsOutput",
-					"name": "AsOutput",
-					"slug": "as-output",
-					"kind": "function",
-					"group": "Functions",
-					"summary": "AsOutput provides a checked concrete view of an immutable node.",
-					"signature": "func AsOutput(node Node) (OutputField, error)",
-					"parameters": [
-						{
-							"name": "node",
-							"type": "Node",
-							"description": "The node value."
-						}
-					],
-					"parametersLabel": "",
-					"returns": {
-						"type": "(OutputField, error)",
-						"description": "The declared result."
-					},
-					"details": [],
-					"example": "",
-					"language": "go",
-					"typeLinks": {},
-					"aliases": [
-						"field.AsOutput",
-						"AsOutput"
-					],
-					"source": {
-						"path": "field/facade_view.go",
-						"line": 175
+						"line": 215
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -31093,7 +31052,7 @@
 					],
 					"source": {
 						"path": "field/facade_view.go",
-						"line": 193
+						"line": 206
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -31166,6 +31125,42 @@
 					"source": {
 						"path": "field/facade_view.go",
 						"line": 112
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
+					"id": "go:github.com/riducms/ridu/field#AsVirtual",
+					"name": "AsVirtual",
+					"slug": "as-virtual",
+					"kind": "function",
+					"group": "Functions",
+					"summary": "AsVirtual provides a checked view of a virtual field whose value type is T.",
+					"signature": "func AsVirtual[T VirtualValue](node Node) (VirtualField[T], error)",
+					"parameters": [
+						{
+							"name": "node",
+							"type": "Node",
+							"description": "The node value."
+						}
+					],
+					"parametersLabel": "",
+					"returns": {
+						"type": "(VirtualField[T], error)",
+						"description": "The declared result."
+					},
+					"details": [],
+					"example": "",
+					"language": "go",
+					"typeLinks": {},
+					"aliases": [
+						"field.AsVirtual",
+						"AsVirtual"
+					],
+					"source": {
+						"path": "field/facade_view.go",
+						"line": 175
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -31748,7 +31743,7 @@
 					],
 					"source": {
 						"path": "field/fluent.go",
-						"line": 2532
+						"line": 2561
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -33703,7 +33698,7 @@
 					],
 					"source": {
 						"path": "field/graph_edit.go",
-						"line": 266
+						"line": 275
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -33749,7 +33744,7 @@
 					],
 					"source": {
 						"path": "field/graph_edit.go",
-						"line": 424
+						"line": 433
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -33795,7 +33790,7 @@
 					],
 					"source": {
 						"path": "field/graph_edit.go",
-						"line": 378
+						"line": 387
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -33841,7 +33836,7 @@
 					],
 					"source": {
 						"path": "field/graph_edit.go",
-						"line": 388
+						"line": 397
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -33882,7 +33877,7 @@
 					],
 					"source": {
 						"path": "field/graph_edit.go",
-						"line": 411
+						"line": 420
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -33923,7 +33918,7 @@
 					],
 					"source": {
 						"path": "field/graph_edit.go",
-						"line": 360
+						"line": 369
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -33964,7 +33959,7 @@
 					],
 					"source": {
 						"path": "field/graph_edit.go",
-						"line": 574
+						"line": 583
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -34005,7 +34000,7 @@
 					],
 					"source": {
 						"path": "field/graph_edit.go",
-						"line": 342
+						"line": 351
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -34046,7 +34041,7 @@
 					],
 					"source": {
 						"path": "field/graph_edit.go",
-						"line": 553
+						"line": 562
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -34076,7 +34071,7 @@
 					],
 					"source": {
 						"path": "field/graph_edit.go",
-						"line": 324
+						"line": 333
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -34117,7 +34112,7 @@
 					],
 					"source": {
 						"path": "field/graph_edit.go",
-						"line": 427
+						"line": 436
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -34153,7 +34148,7 @@
 					],
 					"source": {
 						"path": "field/graph_edit.go",
-						"line": 463
+						"line": 472
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -34194,7 +34189,7 @@
 					],
 					"source": {
 						"path": "field/graph_edit.go",
-						"line": 475
+						"line": 484
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -34235,7 +34230,7 @@
 					],
 					"source": {
 						"path": "field/graph_edit.go",
-						"line": 481
+						"line": 490
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -34276,7 +34271,7 @@
 					],
 					"source": {
 						"path": "field/graph_edit.go",
-						"line": 441
+						"line": 450
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -34317,7 +34312,7 @@
 					],
 					"source": {
 						"path": "field/graph_edit.go",
-						"line": 451
+						"line": 460
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -37216,7 +37211,7 @@
 					],
 					"source": {
 						"path": "field/graph_edit.go",
-						"line": 272
+						"line": 281
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -38319,7 +38314,7 @@
 					],
 					"source": {
 						"path": "field/fluent.go",
-						"line": 2406
+						"line": 2433
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -38355,7 +38350,7 @@
 					],
 					"source": {
 						"path": "field/fluent.go",
-						"line": 2499
+						"line": 2528
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -38391,7 +38386,7 @@
 					],
 					"source": {
 						"path": "field/fluent.go",
-						"line": 2425
+						"line": 2452
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -38427,7 +38422,7 @@
 					],
 					"source": {
 						"path": "field/fluent.go",
-						"line": 2517
+						"line": 2546
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -38457,7 +38452,7 @@
 					],
 					"source": {
 						"path": "field/fluent.go",
-						"line": 2526
+						"line": 2555
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -38493,7 +38488,7 @@
 					],
 					"source": {
 						"path": "field/fluent.go",
-						"line": 2448
+						"line": 2475
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -38529,7 +38524,7 @@
 					],
 					"source": {
 						"path": "field/fluent.go",
-						"line": 2440
+						"line": 2467
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -38565,7 +38560,7 @@
 					],
 					"source": {
 						"path": "field/fluent.go",
-						"line": 2444
+						"line": 2471
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -38601,7 +38596,7 @@
 					],
 					"source": {
 						"path": "field/fluent.go",
-						"line": 2431
+						"line": 2458
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -38637,7 +38632,7 @@
 					],
 					"source": {
 						"path": "field/fluent.go",
-						"line": 2418
+						"line": 2445
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -38673,7 +38668,7 @@
 					],
 					"source": {
 						"path": "field/fluent.go",
-						"line": 2419
+						"line": 2446
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -38709,7 +38704,7 @@
 					],
 					"source": {
 						"path": "field/fluent.go",
-						"line": 2439
+						"line": 2466
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -38750,7 +38745,7 @@
 					],
 					"source": {
 						"path": "field/fluent.go",
-						"line": 2435
+						"line": 2462
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -38786,7 +38781,7 @@
 					],
 					"source": {
 						"path": "field/fluent.go",
-						"line": 2417
+						"line": 2444
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -38822,7 +38817,7 @@
 					],
 					"source": {
 						"path": "field/fluent.go",
-						"line": 2511
+						"line": 2540
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -38858,7 +38853,7 @@
 					],
 					"source": {
 						"path": "field/fluent.go",
-						"line": 2505
+						"line": 2534
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -43856,457 +43851,6 @@
 					"source": {
 						"path": "field/graph_edit.go",
 						"line": 23
-					},
-					"relatedDocs": [],
-					"relatedSymbols": [],
-					"overloads": []
-				},
-				{
-					"id": "go:github.com/riducms/ridu/field#OutputField",
-					"name": "OutputField",
-					"slug": "output-field",
-					"kind": "type",
-					"group": "Types",
-					"summary": "OutputField configures a computed response value that cannot be set by a write request.",
-					"signature": "type OutputField struct {\n\t// contains filtered or unexported fields\n}",
-					"parameters": [],
-					"parametersLabel": "",
-					"details": [],
-					"example": "",
-					"language": "go",
-					"typeLinks": {},
-					"aliases": [
-						"field.OutputField",
-						"OutputField"
-					],
-					"source": {
-						"path": "field/fluent.go",
-						"line": 2346
-					},
-					"relatedDocs": [],
-					"relatedSymbols": [],
-					"overloads": []
-				},
-				{
-					"id": "go:github.com/riducms/ridu/field#OutputField.Access",
-					"name": "OutputField.Access",
-					"slug": "output-field-access-method",
-					"kind": "method",
-					"group": "Methods",
-					"summary": "Access replaces the complete field access policy.",
-					"signature": "func (f OutputField) Access(value Access) OutputField",
-					"parameters": [
-						{
-							"name": "value",
-							"type": "Access",
-							"description": "The value value."
-						}
-					],
-					"parametersLabel": "",
-					"returns": {
-						"type": "OutputField",
-						"description": "The declared result."
-					},
-					"details": [],
-					"example": "",
-					"language": "go",
-					"typeLinks": {},
-					"aliases": [
-						"field.OutputField.Access",
-						"OutputField.Access"
-					],
-					"source": {
-						"path": "field/fluent.go",
-						"line": 2372
-					},
-					"relatedDocs": [],
-					"relatedSymbols": [],
-					"overloads": []
-				},
-				{
-					"id": "go:github.com/riducms/ridu/field#OutputField.Admin",
-					"name": "OutputField.Admin",
-					"slug": "output-field-admin-method",
-					"kind": "method",
-					"group": "Methods",
-					"summary": "Admin replaces the complete admin presentation policy.",
-					"signature": "func (f OutputField) Admin(value Admin) OutputField",
-					"parameters": [
-						{
-							"name": "value",
-							"type": "Admin",
-							"description": "The value value."
-						}
-					],
-					"parametersLabel": "",
-					"returns": {
-						"type": "OutputField",
-						"description": "The declared result."
-					},
-					"details": [],
-					"example": "",
-					"language": "go",
-					"typeLinks": {},
-					"aliases": [
-						"field.OutputField.Admin",
-						"OutputField.Admin"
-					],
-					"source": {
-						"path": "field/fluent.go",
-						"line": 2356
-					},
-					"relatedDocs": [],
-					"relatedSymbols": [],
-					"overloads": []
-				},
-				{
-					"id": "go:github.com/riducms/ridu/field#OutputField.AfterRead",
-					"name": "OutputField.AfterRead",
-					"slug": "output-field-after-read-method",
-					"kind": "method",
-					"group": "Methods",
-					"summary": "AfterRead appends response transforms in order; no callbacks does nothing.",
-					"signature": "func (f OutputField) AfterRead(callbacks ...OutputTransform[store.Value]) OutputField",
-					"parameters": [
-						{
-							"name": "callbacks",
-							"type": "[]OutputTransform[store.Value]",
-							"description": "The callbacks value."
-						}
-					],
-					"parametersLabel": "",
-					"returns": {
-						"type": "OutputField",
-						"description": "The declared result."
-					},
-					"details": [],
-					"example": "",
-					"language": "go",
-					"typeLinks": {},
-					"aliases": [
-						"field.OutputField.AfterRead",
-						"OutputField.AfterRead"
-					],
-					"source": {
-						"path": "field/fluent.go",
-						"line": 2390
-					},
-					"relatedDocs": [],
-					"relatedSymbols": [],
-					"overloads": []
-				},
-				{
-					"id": "go:github.com/riducms/ridu/field#OutputField.AfterReadHooks",
-					"name": "OutputField.AfterReadHooks",
-					"slug": "output-field-after-read-hooks-method",
-					"kind": "method",
-					"group": "Methods",
-					"summary": "AfterReadHooks returns a detached response-transform slice.",
-					"signature": "func (f OutputField) AfterReadHooks() []OutputTransform[store.Value]",
-					"parameters": [],
-					"parametersLabel": "",
-					"returns": {
-						"type": "[]OutputTransform[store.Value]",
-						"description": "The declared result."
-					},
-					"details": [],
-					"example": "",
-					"language": "go",
-					"typeLinks": {},
-					"aliases": [
-						"field.OutputField.AfterReadHooks",
-						"OutputField.AfterReadHooks"
-					],
-					"source": {
-						"path": "field/fluent.go",
-						"line": 2398
-					},
-					"relatedDocs": [],
-					"relatedSymbols": [],
-					"overloads": []
-				},
-				{
-					"id": "go:github.com/riducms/ridu/field#OutputField.EditAdmin",
-					"name": "OutputField.EditAdmin",
-					"slug": "output-field-edit-admin-method",
-					"kind": "method",
-					"group": "Methods",
-					"summary": "EditAdmin updates selected admin settings while preserving the rest.",
-					"signature": "func (f OutputField) EditAdmin(edit func(*Admin)) OutputField",
-					"parameters": [
-						{
-							"name": "edit",
-							"type": "func(*Admin)",
-							"description": "The edit value."
-						}
-					],
-					"parametersLabel": "",
-					"returns": {
-						"type": "OutputField",
-						"description": "The declared result."
-					},
-					"details": [],
-					"example": "",
-					"language": "go",
-					"typeLinks": {},
-					"aliases": [
-						"field.OutputField.EditAdmin",
-						"OutputField.EditAdmin"
-					],
-					"source": {
-						"path": "field/fluent.go",
-						"line": 2362
-					},
-					"relatedDocs": [],
-					"relatedSymbols": [],
-					"overloads": []
-				},
-				{
-					"id": "go:github.com/riducms/ridu/field#OutputField.Label",
-					"name": "OutputField.Label",
-					"slug": "output-field-label-method",
-					"kind": "method",
-					"group": "Methods",
-					"summary": "Public method OutputField.Label from github.com/riducms/ridu/field.",
-					"signature": "func (f OutputField) Label(value string) OutputField",
-					"parameters": [
-						{
-							"name": "value",
-							"type": "string",
-							"description": "The value value."
-						}
-					],
-					"parametersLabel": "",
-					"returns": {
-						"type": "OutputField",
-						"description": "The declared result."
-					},
-					"details": [],
-					"example": "",
-					"language": "go",
-					"typeLinks": {},
-					"aliases": [
-						"field.OutputField.Label",
-						"OutputField.Label"
-					],
-					"source": {
-						"path": "field/fluent.go",
-						"line": 2349
-					},
-					"relatedDocs": [],
-					"relatedSymbols": [],
-					"overloads": []
-				},
-				{
-					"id": "go:github.com/riducms/ridu/field#OutputField.LabelTranslations",
-					"name": "OutputField.LabelTranslations",
-					"slug": "output-field-label-translations-method",
-					"kind": "method",
-					"group": "Methods",
-					"summary": "Public method OutputField.LabelTranslations from github.com/riducms/ridu/field.",
-					"signature": "func (f OutputField) LabelTranslations(values map[string]string) OutputField",
-					"parameters": [
-						{
-							"name": "values",
-							"type": "map[string]string",
-							"description": "The values value."
-						}
-					],
-					"parametersLabel": "",
-					"returns": {
-						"type": "OutputField",
-						"description": "The declared result."
-					},
-					"details": [],
-					"example": "",
-					"language": "go",
-					"typeLinks": {},
-					"aliases": [
-						"field.OutputField.LabelTranslations",
-						"OutputField.LabelTranslations"
-					],
-					"source": {
-						"path": "field/fluent.go",
-						"line": 2350
-					},
-					"relatedDocs": [],
-					"relatedSymbols": [],
-					"overloads": []
-				},
-				{
-					"id": "go:github.com/riducms/ridu/field#OutputField.Private",
-					"name": "OutputField.Private",
-					"slug": "output-field-private-method",
-					"kind": "method",
-					"group": "Methods",
-					"summary": "Public method OutputField.Private from github.com/riducms/ridu/field.",
-					"signature": "func (f OutputField) Private(namespace string, value store.Value) OutputField",
-					"parameters": [
-						{
-							"name": "namespace",
-							"type": "string",
-							"description": "The namespace value."
-						},
-						{
-							"name": "value",
-							"type": "store.Value",
-							"description": "The value value."
-						}
-					],
-					"parametersLabel": "",
-					"returns": {
-						"type": "OutputField",
-						"description": "The declared result."
-					},
-					"details": [],
-					"example": "",
-					"language": "go",
-					"typeLinks": {},
-					"aliases": [
-						"field.OutputField.Private",
-						"OutputField.Private"
-					],
-					"source": {
-						"path": "field/fluent.go",
-						"line": 2366
-					},
-					"relatedDocs": [],
-					"relatedSymbols": [],
-					"overloads": []
-				},
-				{
-					"id": "go:github.com/riducms/ridu/field#OutputField.Rename",
-					"name": "OutputField.Rename",
-					"slug": "output-field-rename-method",
-					"kind": "method",
-					"group": "Methods",
-					"summary": "Public method OutputField.Rename from github.com/riducms/ridu/field.",
-					"signature": "func (f OutputField) Rename(name string) OutputField",
-					"parameters": [
-						{
-							"name": "name",
-							"type": "string",
-							"description": "The name value."
-						}
-					],
-					"parametersLabel": "",
-					"returns": {
-						"type": "OutputField",
-						"description": "The declared result."
-					},
-					"details": [],
-					"example": "",
-					"language": "go",
-					"typeLinks": {},
-					"aliases": [
-						"field.OutputField.Rename",
-						"OutputField.Rename"
-					],
-					"source": {
-						"path": "field/fluent.go",
-						"line": 2348
-					},
-					"relatedDocs": [],
-					"relatedSymbols": [],
-					"overloads": []
-				},
-				{
-					"id": "go:github.com/riducms/ridu/field#OutputField.ReplaceAfterRead",
-					"name": "OutputField.ReplaceAfterRead",
-					"slug": "output-field-replace-after-read-method",
-					"kind": "method",
-					"group": "Methods",
-					"summary": "ReplaceAfterRead replaces response transforms; no callbacks clears them.",
-					"signature": "func (f OutputField) ReplaceAfterRead(callbacks ...OutputTransform[store.Value]) OutputField",
-					"parameters": [
-						{
-							"name": "callbacks",
-							"type": "[]OutputTransform[store.Value]",
-							"description": "The callbacks value."
-						}
-					],
-					"parametersLabel": "",
-					"returns": {
-						"type": "OutputField",
-						"description": "The declared result."
-					},
-					"details": [],
-					"example": "",
-					"language": "go",
-					"typeLinks": {},
-					"aliases": [
-						"field.OutputField.ReplaceAfterRead",
-						"OutputField.ReplaceAfterRead"
-					],
-					"source": {
-						"path": "field/fluent.go",
-						"line": 2384
-					},
-					"relatedDocs": [],
-					"relatedSymbols": [],
-					"overloads": []
-				},
-				{
-					"id": "go:github.com/riducms/ridu/field#OutputField.Resolver",
-					"name": "OutputField.Resolver",
-					"slug": "output-field-resolver-method",
-					"kind": "method",
-					"group": "Methods",
-					"summary": "Public method OutputField.Resolver from github.com/riducms/ridu/field.",
-					"signature": "func (f OutputField) Resolver() Resolver[store.Value]",
-					"parameters": [],
-					"parametersLabel": "",
-					"returns": {
-						"type": "Resolver[store.Value]",
-						"description": "The declared result."
-					},
-					"details": [],
-					"example": "",
-					"language": "go",
-					"typeLinks": {},
-					"aliases": [
-						"field.OutputField.Resolver",
-						"OutputField.Resolver"
-					],
-					"source": {
-						"path": "field/fluent.go",
-						"line": 2401
-					},
-					"relatedDocs": [],
-					"relatedSymbols": [],
-					"overloads": []
-				},
-				{
-					"id": "go:github.com/riducms/ridu/field#OutputField.RestrictAccess",
-					"name": "OutputField.RestrictAccess",
-					"slug": "output-field-restrict-access-method",
-					"kind": "method",
-					"group": "Methods",
-					"summary": "RestrictAccess combines supplied rules with existing access rules; both must allow.",
-					"signature": "func (f OutputField) RestrictAccess(value Access) OutputField",
-					"parameters": [
-						{
-							"name": "value",
-							"type": "Access",
-							"description": "The value value."
-						}
-					],
-					"parametersLabel": "",
-					"returns": {
-						"type": "OutputField",
-						"description": "The declared result."
-					},
-					"details": [],
-					"example": "",
-					"language": "go",
-					"typeLinks": {},
-					"aliases": [
-						"field.OutputField.RestrictAccess",
-						"OutputField.RestrictAccess"
-					],
-					"source": {
-						"path": "field/fluent.go",
-						"line": 2378
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -51893,7 +51437,7 @@
 					],
 					"source": {
 						"path": "field/fluent.go",
-						"line": 2467
+						"line": 2494
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -58505,6 +58049,483 @@
 					"overloads": []
 				},
 				{
+					"id": "go:github.com/riducms/ridu/field#VirtualField",
+					"name": "VirtualField",
+					"slug": "virtual-field",
+					"kind": "type",
+					"group": "Types",
+					"summary": "VirtualField configures a computed response value that cannot be set by a write request. T is the value its resolver and response transforms use.",
+					"signature": "type VirtualField[T VirtualValue] struct {\n\t// contains filtered or unexported fields\n}",
+					"parameters": [],
+					"parametersLabel": "",
+					"details": [],
+					"example": "",
+					"language": "go",
+					"typeLinks": {},
+					"aliases": [
+						"field.VirtualField",
+						"VirtualField"
+					],
+					"source": {
+						"path": "field/fluent.go",
+						"line": 2354
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
+					"id": "go:github.com/riducms/ridu/field#VirtualField.Access",
+					"name": "VirtualField.Access",
+					"slug": "virtual-field-access-method",
+					"kind": "method",
+					"group": "Methods",
+					"summary": "Access replaces the complete field access policy.",
+					"signature": "func (f VirtualField[T]) Access(value Access) VirtualField[T]",
+					"parameters": [
+						{
+							"name": "value",
+							"type": "Access",
+							"description": "The value value."
+						}
+					],
+					"parametersLabel": "",
+					"returns": {
+						"type": "VirtualField[T]",
+						"description": "The declared result."
+					},
+					"details": [],
+					"example": "",
+					"language": "go",
+					"typeLinks": {},
+					"aliases": [
+						"field.VirtualField.Access",
+						"VirtualField.Access"
+					],
+					"source": {
+						"path": "field/fluent.go",
+						"line": 2383
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
+					"id": "go:github.com/riducms/ridu/field#VirtualField.Admin",
+					"name": "VirtualField.Admin",
+					"slug": "virtual-field-admin-method",
+					"kind": "method",
+					"group": "Methods",
+					"summary": "Admin replaces the complete admin presentation policy.",
+					"signature": "func (f VirtualField[T]) Admin(value Admin) VirtualField[T]",
+					"parameters": [
+						{
+							"name": "value",
+							"type": "Admin",
+							"description": "The value value."
+						}
+					],
+					"parametersLabel": "",
+					"returns": {
+						"type": "VirtualField[T]",
+						"description": "The declared result."
+					},
+					"details": [],
+					"example": "",
+					"language": "go",
+					"typeLinks": {},
+					"aliases": [
+						"field.VirtualField.Admin",
+						"VirtualField.Admin"
+					],
+					"source": {
+						"path": "field/fluent.go",
+						"line": 2367
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
+					"id": "go:github.com/riducms/ridu/field#VirtualField.AfterRead",
+					"name": "VirtualField.AfterRead",
+					"slug": "virtual-field-after-read-method",
+					"kind": "method",
+					"group": "Methods",
+					"summary": "AfterRead appends response transforms in order; no callbacks does nothing.",
+					"signature": "func (f VirtualField[T]) AfterRead(callbacks ...OutputTransform[T]) VirtualField[T]",
+					"parameters": [
+						{
+							"name": "callbacks",
+							"type": "[]OutputTransform[T]",
+							"description": "The callbacks value."
+						}
+					],
+					"parametersLabel": "",
+					"returns": {
+						"type": "VirtualField[T]",
+						"description": "The declared result."
+					},
+					"details": [],
+					"example": "",
+					"language": "go",
+					"typeLinks": {},
+					"aliases": [
+						"field.VirtualField.AfterRead",
+						"VirtualField.AfterRead"
+					],
+					"source": {
+						"path": "field/fluent.go",
+						"line": 2401
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
+					"id": "go:github.com/riducms/ridu/field#VirtualField.AfterReadHooks",
+					"name": "VirtualField.AfterReadHooks",
+					"slug": "virtual-field-after-read-hooks-method",
+					"kind": "method",
+					"group": "Methods",
+					"summary": "AfterReadHooks returns a detached response-transform slice.",
+					"signature": "func (f VirtualField[T]) AfterReadHooks() []OutputTransform[T]",
+					"parameters": [],
+					"parametersLabel": "",
+					"returns": {
+						"type": "[]OutputTransform[T]",
+						"description": "The declared result."
+					},
+					"details": [],
+					"example": "",
+					"language": "go",
+					"typeLinks": {},
+					"aliases": [
+						"field.VirtualField.AfterReadHooks",
+						"VirtualField.AfterReadHooks"
+					],
+					"source": {
+						"path": "field/fluent.go",
+						"line": 2409
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
+					"id": "go:github.com/riducms/ridu/field#VirtualField.EditAdmin",
+					"name": "VirtualField.EditAdmin",
+					"slug": "virtual-field-edit-admin-method",
+					"kind": "method",
+					"group": "Methods",
+					"summary": "EditAdmin updates selected admin settings while preserving the rest.",
+					"signature": "func (f VirtualField[T]) EditAdmin(edit func(*Admin)) VirtualField[T]",
+					"parameters": [
+						{
+							"name": "edit",
+							"type": "func(*Admin)",
+							"description": "The edit value."
+						}
+					],
+					"parametersLabel": "",
+					"returns": {
+						"type": "VirtualField[T]",
+						"description": "The declared result."
+					},
+					"details": [],
+					"example": "",
+					"language": "go",
+					"typeLinks": {},
+					"aliases": [
+						"field.VirtualField.EditAdmin",
+						"VirtualField.EditAdmin"
+					],
+					"source": {
+						"path": "field/fluent.go",
+						"line": 2373
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
+					"id": "go:github.com/riducms/ridu/field#VirtualField.Label",
+					"name": "VirtualField.Label",
+					"slug": "virtual-field-label-method",
+					"kind": "method",
+					"group": "Methods",
+					"summary": "Public method VirtualField.Label from github.com/riducms/ridu/field.",
+					"signature": "func (f VirtualField[T]) Label(value string) VirtualField[T]",
+					"parameters": [
+						{
+							"name": "value",
+							"type": "string",
+							"description": "The value value."
+						}
+					],
+					"parametersLabel": "",
+					"returns": {
+						"type": "VirtualField[T]",
+						"description": "The declared result."
+					},
+					"details": [],
+					"example": "",
+					"language": "go",
+					"typeLinks": {},
+					"aliases": [
+						"field.VirtualField.Label",
+						"VirtualField.Label"
+					],
+					"source": {
+						"path": "field/fluent.go",
+						"line": 2357
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
+					"id": "go:github.com/riducms/ridu/field#VirtualField.LabelTranslations",
+					"name": "VirtualField.LabelTranslations",
+					"slug": "virtual-field-label-translations-method",
+					"kind": "method",
+					"group": "Methods",
+					"summary": "Public method VirtualField.LabelTranslations from github.com/riducms/ridu/field.",
+					"signature": "func (f VirtualField[T]) LabelTranslations(values map[string]string) VirtualField[T]",
+					"parameters": [
+						{
+							"name": "values",
+							"type": "map[string]string",
+							"description": "The values value."
+						}
+					],
+					"parametersLabel": "",
+					"returns": {
+						"type": "VirtualField[T]",
+						"description": "The declared result."
+					},
+					"details": [],
+					"example": "",
+					"language": "go",
+					"typeLinks": {},
+					"aliases": [
+						"field.VirtualField.LabelTranslations",
+						"VirtualField.LabelTranslations"
+					],
+					"source": {
+						"path": "field/fluent.go",
+						"line": 2361
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
+					"id": "go:github.com/riducms/ridu/field#VirtualField.Private",
+					"name": "VirtualField.Private",
+					"slug": "virtual-field-private-method",
+					"kind": "method",
+					"group": "Methods",
+					"summary": "Public method VirtualField.Private from github.com/riducms/ridu/field.",
+					"signature": "func (f VirtualField[T]) Private(namespace string, value store.Value) VirtualField[T]",
+					"parameters": [
+						{
+							"name": "namespace",
+							"type": "string",
+							"description": "The namespace value."
+						},
+						{
+							"name": "value",
+							"type": "store.Value",
+							"description": "The value value."
+						}
+					],
+					"parametersLabel": "",
+					"returns": {
+						"type": "VirtualField[T]",
+						"description": "The declared result."
+					},
+					"details": [],
+					"example": "",
+					"language": "go",
+					"typeLinks": {},
+					"aliases": [
+						"field.VirtualField.Private",
+						"VirtualField.Private"
+					],
+					"source": {
+						"path": "field/fluent.go",
+						"line": 2377
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
+					"id": "go:github.com/riducms/ridu/field#VirtualField.Rename",
+					"name": "VirtualField.Rename",
+					"slug": "virtual-field-rename-method",
+					"kind": "method",
+					"group": "Methods",
+					"summary": "Public method VirtualField.Rename from github.com/riducms/ridu/field.",
+					"signature": "func (f VirtualField[T]) Rename(name string) VirtualField[T]",
+					"parameters": [
+						{
+							"name": "name",
+							"type": "string",
+							"description": "The name value."
+						}
+					],
+					"parametersLabel": "",
+					"returns": {
+						"type": "VirtualField[T]",
+						"description": "The declared result."
+					},
+					"details": [],
+					"example": "",
+					"language": "go",
+					"typeLinks": {},
+					"aliases": [
+						"field.VirtualField.Rename",
+						"VirtualField.Rename"
+					],
+					"source": {
+						"path": "field/fluent.go",
+						"line": 2356
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
+					"id": "go:github.com/riducms/ridu/field#VirtualField.ReplaceAfterRead",
+					"name": "VirtualField.ReplaceAfterRead",
+					"slug": "virtual-field-replace-after-read-method",
+					"kind": "method",
+					"group": "Methods",
+					"summary": "ReplaceAfterRead replaces response transforms; no callbacks clears them.",
+					"signature": "func (f VirtualField[T]) ReplaceAfterRead(callbacks ...OutputTransform[T]) VirtualField[T]",
+					"parameters": [
+						{
+							"name": "callbacks",
+							"type": "[]OutputTransform[T]",
+							"description": "The callbacks value."
+						}
+					],
+					"parametersLabel": "",
+					"returns": {
+						"type": "VirtualField[T]",
+						"description": "The declared result."
+					},
+					"details": [],
+					"example": "",
+					"language": "go",
+					"typeLinks": {},
+					"aliases": [
+						"field.VirtualField.ReplaceAfterRead",
+						"VirtualField.ReplaceAfterRead"
+					],
+					"source": {
+						"path": "field/fluent.go",
+						"line": 2395
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
+					"id": "go:github.com/riducms/ridu/field#VirtualField.Resolver",
+					"name": "VirtualField.Resolver",
+					"slug": "virtual-field-resolver-method",
+					"kind": "method",
+					"group": "Methods",
+					"summary": "Resolver returns the callback that computes the field.",
+					"signature": "func (f VirtualField[T]) Resolver() Resolver[T]",
+					"parameters": [],
+					"parametersLabel": "",
+					"returns": {
+						"type": "Resolver[T]",
+						"description": "The declared result."
+					},
+					"details": [],
+					"example": "",
+					"language": "go",
+					"typeLinks": {},
+					"aliases": [
+						"field.VirtualField.Resolver",
+						"VirtualField.Resolver"
+					],
+					"source": {
+						"path": "field/fluent.go",
+						"line": 2414
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
+					"id": "go:github.com/riducms/ridu/field#VirtualField.RestrictAccess",
+					"name": "VirtualField.RestrictAccess",
+					"slug": "virtual-field-restrict-access-method",
+					"kind": "method",
+					"group": "Methods",
+					"summary": "RestrictAccess combines supplied rules with existing access rules; both must allow.",
+					"signature": "func (f VirtualField[T]) RestrictAccess(value Access) VirtualField[T]",
+					"parameters": [
+						{
+							"name": "value",
+							"type": "Access",
+							"description": "The value value."
+						}
+					],
+					"parametersLabel": "",
+					"returns": {
+						"type": "VirtualField[T]",
+						"description": "The declared result."
+					},
+					"details": [],
+					"example": "",
+					"language": "go",
+					"typeLinks": {},
+					"aliases": [
+						"field.VirtualField.RestrictAccess",
+						"VirtualField.RestrictAccess"
+					],
+					"source": {
+						"path": "field/fluent.go",
+						"line": 2389
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
+					"id": "go:github.com/riducms/ridu/field#VirtualValue",
+					"name": "VirtualValue",
+					"slug": "virtual-value",
+					"kind": "interface",
+					"group": "Interfaces",
+					"summary": "VirtualValue is a type a virtual field can compute: text as a string, a number as a float64, a checkbox value as a bool, or any JSON value as a store.Value.",
+					"signature": "type VirtualValue interface {\n\tstring | float64 | bool | store.Value\n}",
+					"parameters": [],
+					"parametersLabel": "",
+					"details": [],
+					"example": "",
+					"language": "go",
+					"typeLinks": {},
+					"aliases": [
+						"field.VirtualValue",
+						"VirtualValue"
+					],
+					"source": {
+						"path": "field/fluent.go",
+						"line": 2348
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
 					"id": "go:github.com/riducms/ridu/field#Visit",
 					"name": "Visit",
 					"slug": "visit",
@@ -61166,7 +61187,7 @@
 					"details": [
 						"Requires at least two non-nil children."
 					],
-					"example": "where, err := query.And(\n\tquery.Equal(status, query.String(\"published\")),\n\tquery.GreaterThan(score, query.Number(10)),\n)",
+					"example": "where := query.And(\n\tquery.Equal(\"status\", \"published\"),\n\tquery.GreaterThan(\"score\", 10),\n)",
 					"language": "go",
 					"typeLinks": {
 						"Expression": "/reference/query/expression/"
@@ -96448,7 +96469,7 @@
 					],
 					"source": {
 						"path": "plugins/richtext/richtext.go",
-						"line": 62
+						"line": 85
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -96489,7 +96510,7 @@
 					],
 					"source": {
 						"path": "plugins/richtext/richtext.go",
-						"line": 98
+						"line": 121
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -96521,7 +96542,7 @@
 					],
 					"source": {
 						"path": "plugins/richtext/richtext.go",
-						"line": 89
+						"line": 112
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -96533,42 +96554,50 @@
 					"slug": "config",
 					"kind": "type",
 					"group": "Types",
-					"summary": "Enabled features and optional allowlists for relationship and upload nodes.",
-					"signature": "type Config struct {\n\t// Blocks is the fixed executable schema allowlist. Fields are resolved\n\t// through the public embedded-fields contract, never serialized as settings.\n\tBlocks []field.Block `json:\"-\"`\n\t// BlockReferences selects Config.Blocks definitions; it is exclusive with Blocks.\n\tBlockReferences         []string  `json:\"-\"`\n\tFeatures                []Feature `json:\"features\"`\n\tUploadCollections       []string  `json:\"uploadCollections,omitempty\"`\n\tRelationshipCollections []string  `json:\"relationshipCollections,omitempty\"`\n}",
+					"summary": "Choose a rich-text field's editing tools, allowed collections, blocks, and admin presentation.",
+					"signature": "type Config struct {\n\t// Blocks is the fixed executable schema allowlist. Fields are resolved\n\t// through the public embedded-fields contract, never serialized as settings.\n\tBlocks []field.Block `json:\"-\"`\n\t// BlockReferences selects Config.Blocks definitions; it is exclusive with Blocks.\n\tBlockReferences         []string  `json:\"-\"`\n\tFeatures                []Feature `json:\"features\"`\n\tUploadCollections       []string  `json:\"uploadCollections,omitempty\"`\n\tRelationshipCollections []string  `json:\"relationshipCollections,omitempty\"`\n\t// Admin changes how the editor looks and behaves in the admin. It never\n\t// changes what a document can store.\n\tAdmin Admin `json:\"admin,omitzero\"`\n}",
 					"parameters": [
 						{
 							"name": "Blocks",
 							"type": "[]field.Block",
-							"description": "Blocks is the fixed executable schema allowlist. Fields are resolved\nthrough the public embedded-fields contract, never serialized as settings."
+							"description": "Block definitions owned by this field. Enables the block tools."
 						},
 						{
 							"name": "BlockReferences",
 							"type": "[]string",
-							"description": "BlockReferences selects Config.Blocks definitions; it is exclusive with Blocks."
+							"description": "Slugs of blocks registered in the root Config.Blocks. Use this or Blocks, not both."
 						},
 						{
 							"name": "Features",
 							"type": "[]Feature",
-							"description": "The Features value."
+							"description": "Optional editing tools. Nil keeps the defaults; an empty slice disables every optional tool."
 						},
 						{
 							"name": "UploadCollections",
 							"type": "[]string",
-							"description": "The UploadCollections value."
+							"description": "Upload collections the media picker and validation allow. Empty allows every compatible collection."
 						},
 						{
 							"name": "RelationshipCollections",
 							"type": "[]string",
-							"description": "The RelationshipCollections value."
+							"description": "Collections the relationship picker and validation allow. Empty allows every compatible collection."
+						},
+						{
+							"name": "Admin",
+							"type": "Admin",
+							"description": "Toolbar and layout options for the admin editor. The zero value keeps every default."
 						}
 					],
 					"parametersLabel": "",
 					"details": [
 						"A nil Features slice inherits defaults; an explicit empty slice disables every optional feature. Empty collection allowlists permit every compatible collection, while non-empty lists restrict node targets."
 					],
-					"example": "",
+					"example": "richtext.Field(\"content\", richtext.Config{\n\tUploadCollections: []string{\"media\"},\n\tAdmin: richtext.Admin{FixedToolbar: true},\n}).Required()",
 					"language": "go",
-					"typeLinks": {},
+					"typeLinks": {
+						"Admin": "/reference/richtext/admin/",
+						"Feature": "/reference/richtext/feature/"
+					},
 					"aliases": [
 						"richtext.Config",
 						"Config"
@@ -96577,7 +96606,11 @@
 						"path": "plugins/richtext/richtext.go",
 						"line": 37
 					},
-					"relatedDocs": [],
+					"relatedDocs": [
+						"/docs/rich-text/blocks/",
+						"/docs/rich-text/features/",
+						"/docs/rich-text/toolbar-and-layout/"
+					],
 					"relatedSymbols": [],
 					"overloads": []
 				},
@@ -96686,7 +96719,7 @@
 					],
 					"source": {
 						"path": "plugins/richtext/richtext.go",
-						"line": 420
+						"line": 443
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -96872,6 +96905,68 @@
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
+					"id": "go:github.com/riducms/ridu/plugins/richtext#Admin",
+					"name": "Admin",
+					"slug": "admin",
+					"kind": "type",
+					"group": "Types",
+					"summary": "Change how a rich-text editor looks in the admin without changing what it stores.",
+					"signature": "type Admin struct {\n\t// FixedToolbar pins formatting controls above the editor. The toolbar that\n\t// floats over selected text is still shown.\n\tFixedToolbar bool `json:\"fixedToolbar,omitempty\"`\n\t// HideGutter removes the vertical line and indent along the editor's\n\t// starting edge. Block handles move outside the text.\n\tHideGutter bool `json:\"hideGutter,omitempty\"`\n\t// HideDraggableBlockElement hides the handle that drags a block to a new\n\t// position. Editors can still move blocks with Alt+Shift+Arrow keys.\n\tHideDraggableBlockElement bool `json:\"hideDraggableBlockElement,omitempty\"`\n\t// HideAddBlockButton hides the + button beside the hovered block. The /\n\t// menu still inserts blocks.\n\tHideAddBlockButton bool `json:\"hideAddBlockButton,omitempty\"`\n\t// HideInsertParagraphAtEnd hides the control below the last block that\n\t// adds an empty paragraph.\n\tHideInsertParagraphAtEnd bool `json:\"hideInsertParagraphAtEnd,omitempty\"`\n}",
+					"parameters": [
+						{
+							"name": "FixedToolbar",
+							"type": "bool",
+							"description": "Pins formatting controls above the editor. The toolbar over selected text still appears."
+						},
+						{
+							"name": "HideGutter",
+							"type": "bool",
+							"description": "Removes the line and indent along the editor's edge; block handles move outside the text."
+						},
+						{
+							"name": "HideDraggableBlockElement",
+							"type": "bool",
+							"description": "Hides the handle for dragging a block. Alt+Shift+Arrow keys still move blocks."
+						},
+						{
+							"name": "HideAddBlockButton",
+							"type": "bool",
+							"description": "Hides the + button beside the hovered block. The / menu still inserts blocks."
+						},
+						{
+							"name": "HideInsertParagraphAtEnd",
+							"type": "bool",
+							"description": "Hides the control below the last block that adds an empty paragraph."
+						}
+					],
+					"parametersLabel": "",
+					"details": [
+						"Each option matches a Payload lexicalEditor admin option or FixedToolbarFeature. Options are presentation only: validation, stored JSON, and generated types are unchanged."
+					],
+					"example": "richtext.Field(\"content\", richtext.Config{\n\tAdmin: richtext.Admin{\n\t\tFixedToolbar: true,\n\t\tHideGutter:   true,\n\t},\n})",
+					"language": "go",
+					"typeLinks": {},
+					"aliases": [
+						"richtext.Admin",
+						"FixedToolbar",
+						"HideGutter",
+						"fixed toolbar",
+						"hideGutter",
+						"Admin"
+					],
+					"source": {
+						"path": "plugins/richtext/richtext.go",
+						"line": 53
+					},
+					"relatedDocs": [
+						"/docs/rich-text/toolbar-and-layout/"
+					],
+					"relatedSymbols": [
+						"go:github.com/riducms/ridu/plugins/richtext#Config"
+					],
 					"overloads": []
 				},
 				{
@@ -128224,6 +128319,11 @@
 							"name": "relationshipCollections",
 							"type": "readonly string[]",
 							"description": "The relationshipCollections value."
+						},
+						{
+							"name": "admin",
+							"type": "Readonly<RichTextAdminConfig>",
+							"description": "The admin value."
 						}
 					],
 					"parametersLabel": "",

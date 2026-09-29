@@ -117,6 +117,7 @@ func fixtureConfig(uploadStorage storage.Backend) ridu.Config {
 			outlineCollection,
 			richTextBlocksCollection(),
 			richTextBlockPagesCollection(),
+			richTextEditorOptionsCollection(),
 			blockNamesCollection(),
 			eventsCollection,
 			editorialNotesCollection,
@@ -371,10 +372,10 @@ var categoriesCollection = ridu.Collection{
 		field.Slug("slug", "name").Admin(field.Admin{
 			Description: "Generated from the category name until an author supplies a manual route slug.",
 		}),
-		field.Virtual("displayLabel", field.ValueString, func(
-			ctx operation.Context) (operation.Value[store.Value], error) {
+		field.Virtual("displayLabel", func(
+			ctx operation.Context) (operation.Value[string], error) {
 			name, _ := ctx.Root.Get("name").StringValue()
-			return operation.Present(store.String("Category · " + name)), nil
+			return operation.Present("Category · " + name), nil
 		}).
 			Label("Computed label").
 			Admin(field.Admin{Description: "Resolved by executable Go configuration and never stored."}),
@@ -823,11 +824,11 @@ var payloadOnlyCapabilitiesCollection = ridu.Collection{
 				field.Option{Value: "reviewer", Label: "reviewer"}).
 				Default("reviewer"),
 		}).MinRows(1).MaxRows(3).Admin(field.Admin{RowLabelPath: "displayName"}),
-		field.Virtual("fieldSummary", field.ValueString, func(
-			ctx operation.Context) (operation.Value[store.Value], error) {
+		field.Virtual("fieldSummary", func(
+			ctx operation.Context) (operation.Value[string], error) {
 			title, _ := ctx.Root.Get("title").StringValue()
 			priority, _ := ctx.Root.Get("priority").StringValue()
-			return operation.Present(store.String(title + " · " + priority)), nil
+			return operation.Present(title + " · " + priority), nil
 		}).
 			Label("Computed summary").
 			Admin(field.Admin{

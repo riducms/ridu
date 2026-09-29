@@ -64,6 +64,10 @@ the reference needed for the change:
   [reference/rich-text.md](reference/rich-text.md), [reference/seo.md](reference/seo.md),
   [reference/form-builder.md](reference/form-builder.md),
   [reference/graphql.md](reference/graphql.md), and [reference/mcp.md](reference/mcp.md)
+- Rich-text editing tools, toolbar and layout, custom blocks, and rendering:
+  [features](reference/rich-text/features.md),
+  [toolbar and layout](reference/rich-text/toolbar-and-layout.md),
+  [blocks](reference/rich-text/blocks.md), and [display](reference/rich-text/display.md)
 - Custom Svelte inputs, row labels, table cells, dashboards, pages, document screens, and branding:
   [reference/custom-components.md](reference/custom-components.md)
 - Admin colors, typography, component classes, and Sass utilities:

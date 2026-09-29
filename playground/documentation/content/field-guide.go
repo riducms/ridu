@@ -5,7 +5,6 @@ import (
 	"github.com/riducms/ridu/field"
 	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/plugins/richtext"
-	"github.com/riducms/ridu/store"
 )
 
 func managedByAuthenticatedUsers() ridu.CollectionAccess {
@@ -48,11 +47,10 @@ var Categories = ridu.Collection{
 	Fields: field.Fields{
 		field.Text("name").Required(),
 		field.Slug("slug", "name").Admin(field.Admin{Description: "Generated from the category name."}),
-		field.Virtual("displayLabel", field.ValueString,
-			func(ctx operation.Context) (operation.Value[store.Value], error) {
-				name, _ := ctx.Root.Get("name").StringValue()
-				return operation.Present(store.String("Category · " + name)), nil
-			}).Label("Computed label").Admin(field.Admin{Description: "Computed by trusted Go code and never stored."}),
+		field.Virtual("displayLabel", func(ctx operation.Context) (operation.Value[string], error) {
+			name, _ := ctx.Root.Get("name").StringValue()
+			return operation.Present("Category · " + name), nil
+		}).Label("Computed label").Admin(field.Admin{Description: "Computed by trusted Go code and never stored."}),
 		field.Join("articles", "articles", "category").Label("Articles in this category").DefaultColumns("title", "status", "updatedAt").DefaultSort("title"),
 	},
 	Access: managedByAuthenticatedUsers(),
@@ -160,11 +158,10 @@ var FieldGuide = ridu.Collection{
 			}),
 		}),
 		field.UI("guidance").Label("Author guidance").Admin(field.Admin{Description: "Presentation-only help never enters storage or generated document types."}),
-		field.Virtual("displayLabel", field.ValueString,
-			func(ctx operation.Context) (operation.Value[store.Value], error) {
-				title, _ := ctx.Root.Get("title").StringValue()
-				return operation.Present(store.String("Field example · " + title)), nil
-			}).Label("Computed label").Admin(field.Admin{Description: "A read-only value resolved by the application."}),
+		field.Virtual("displayLabel", func(ctx operation.Context) (operation.Value[string], error) {
+			title, _ := ctx.Root.Get("title").StringValue()
+			return operation.Present("Field example · " + title), nil
+		}).Label("Computed label").Admin(field.Admin{Description: "A read-only value resolved by the application."}),
 		richtext.Field("content").Label("Rich text").Admin(field.Admin{Description: "The official paired field-plugin example."}),
 	},
 	Access: managedByAuthenticatedUsers(),

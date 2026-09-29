@@ -174,7 +174,10 @@ const measurements = {
 // keep the entry budget fixed and preserve interaction-only chunk closure checks.
 // The GraphQL playground route adds 1,329 bytes of lazy CSS (54,578 total); its editor and
 // language tools load in one route chunk. Allow 1.5 KiB CSS; both JS caps remain unchanged.
-const budgets = { entryJS: 215 * 1024, largestAsyncJS: 130 * 1024, totalCSS: 54 * 1024 };
+// The fixed rich-text toolbar, its shared selection state and the editor layout options add
+// 832 gzip bytes to the lazy editor (133,284 total). Allow 1 KiB async JS; the entry and CSS
+// caps remain unchanged.
+const budgets = { entryJS: 215 * 1024, largestAsyncJS: 131 * 1024, totalCSS: 54 * 1024 };
 
 for (const [name, size] of Object.entries(measurements)) {
 	console.log(

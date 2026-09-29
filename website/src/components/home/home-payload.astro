@@ -1,0 +1,50 @@
+---
+import CodeBlock from '@/components/code/code-block.astro';
+
+const payload = `fields: [
+  { name: 'title', type: 'text', required: true },
+  { name: 'slug', type: 'text', unique: true },
+  { name: 'summary', type: 'textarea' },
+  { name: 'author', type: 'relationship',
+    relationTo: 'users' },
+],`;
+
+const ridu = `Fields: field.Fields{
+	field.Text("title").Required(),
+	field.Text("slug").Unique(),
+	field.Textarea("summary"),
+	field.Relationship("author", "users"),
+},`;
+---
+
+<section
+	class="relative overflow-hidden rounded-10px border border-line bg-surface px-6 py-12 sm:px-12 sm:py-14"
+	aria-labelledby="home-payload-title"
+>
+	<div
+		aria-hidden="true"
+		class="pointer-events-none absolute -right-24 -top-32 size-[420px] rounded-full bg-accent/12 blur-[100px]"
+	>
+	</div>
+	<div class="relative grid items-end gap-6 lg:grid-cols-[minmax(0,1fr)_auto]">
+		<div class="max-w-640px">
+			<p class="eyebrow">Coming from Payload?</p>
+			<h2 id="home-payload-title" class="mt-4 mb-0 text-34px leading-[1.08] sm:text-42px">
+				The model you know, written in Go.
+			</h2>
+			<p class="mt-4 mb-0 text-15px leading-[1.65] text-ink-soft sm:text-16px">
+				Collections, fields, access rules, hooks, versions, and live preview carry over. The
+				migration guide maps each Payload concept to its Ridu equivalent, side by side.
+			</p>
+		</div>
+		<a
+			class="inline-flex text-14px text-ink no-underline hover:text-accent"
+			href="/guides/from-payload/"
+			>Read the migration guide <span aria-hidden="true" class="ml-1.5">→</span></a
+		>
+	</div>
+	<div class="relative mt-9 grid gap-3 lg:grid-cols-2">
+		<CodeBlock code={payload} lang="ts" label="Payload · Posts.ts" compact />
+		<CodeBlock code={ridu} lang="go" label="Ridu · posts.go" compact />
+	</div>
+</section>

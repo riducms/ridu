@@ -20,7 +20,14 @@ ridu.Config{
 
 `richtext.Field("content")` uses the current defaults. Pass one optional `richtext.Config`
 to customize the field; an explicit empty config keeps the same defaults. Supplying more than
-one configuration value panics immediately.
+one configuration value panics immediately. `Config.Admin` changes only the admin editor, such as
+pinning a toolbar above it or hiding its gutter:
+
+```go
+richtext.Field("content", richtext.Config{
+	Admin: richtext.Admin{FixedToolbar: true, HideGutter: true},
+})
+```
 
 In an existing project, add both packages:
 
@@ -33,8 +40,11 @@ ridu add richtext \
 Then generate and create the selected adapter's migration. The generated registry imports the admin
 pair and rejects incompatible pairing metadata.
 
-See the [Rich text guide](../../website/src/content/docs/rich-text.md) for installation, features,
-constraints, verification, SDK values, and server rendering.
+See the [Rich text guide](../../website/src/content/docs/rich-text.md) and its pages on
+[features](../../website/src/content/docs/rich-text/features.md),
+[toolbar and layout](../../website/src/content/docs/rich-text/toolbar-and-layout.md),
+[blocks](../../website/src/content/docs/rich-text/blocks.md), and
+[display](../../website/src/content/docs/rich-text/display.md).
 
 ## Schema-backed block embeds
 

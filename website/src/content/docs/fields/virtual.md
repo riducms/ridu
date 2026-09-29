@@ -9,7 +9,7 @@ aliases:
     'field.Virtual',
     'computed field',
     'operation.Context',
-    'ValueString',
+    'VirtualField',
     'ctx.Root',
     'sibling values'
   ]
@@ -44,7 +44,6 @@ import (
 	"github.com/riducms/ridu"
 	"github.com/riducms/ridu/field"
 	"github.com/riducms/ridu/operation"
-	"github.com/riducms/ridu/store"
 )
 
 var People = ridu.Collection{
@@ -52,13 +51,14 @@ var People = ridu.Collection{
 	Fields: field.Fields{
 		field.Text("firstName").Required(),
 		field.Text("lastName").Required(),
-		field.Virtual("displayName", field.ValueString,
+		// The resolver returns a string, so displayName is a text value.
+		field.Virtual("displayName",
 			func(
 				ctx operation.Context,
-			) (operation.Value[store.Value], error) {
+			) (operation.Value[string], error) {
 				first, _ := ctx.Root.String("firstName")
 				last, _ := ctx.Root.String("lastName")
-				return operation.Present(store.String(first + " " + last)), nil
+				return operation.Present(first + " " + last), nil
 			}),
 	},
 }
@@ -77,27 +77,36 @@ and iterate an Array or Blocks list with `Elements()`. These reads share immutab
 without copying the containers. A Relationship or Upload contains its saved ID or reference. Use
 `ctx.Local` to read the related document with the current user’s access rules.
 
-Choose `ValueString`, `ValueNumber`, `ValueBoolean`, or `ValueJSON`. The resolver must return the
-matching `operation.Value[store.Value]`. Missing resolvers fail startup; a mismatched runtime value fails the
-operation.
-
 Virtual fields must live at a collection or global root. Resolvers receive the operation, actor and
 auth collection, current document, locale selection, context, and access-controlled Local API. Use
 that Local API for additional reads.
 
+## Choose the value type {#value-types}
+
+The resolver's return type sets the field's type in API responses and generated types:
+
+| Resolver returns               | Response value                    |
+| ------------------------------ | --------------------------------- |
+| `operation.Value[string]`      | Text                              |
+| `operation.Value[float64]`     | A number                          |
+| `operation.Value[bool]`        | `true` or `false`                 |
+| `operation.Value[store.Value]` | Any JSON value, such as an object |
+
+Return `operation.Present(value)`, or `operation.Empty[T]()` for null. The compiler checks that a
+scalar resolver returns its declared type. A resolver is required; a missing one fails startup.
+
 ## Configuration {#configuration}
 
-| Constructor or method                                                     | What it controls                                                                          |
-| ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `field.Virtual(name, valueType, resolver)`                                | Declares the response key, finite output type, and Go callback that calculates it.        |
-| `field.ValueString`, `ValueNumber`, `ValueBoolean`, and other value types | Tell generation and runtime validation which `store.Value` kind the resolver must return. |
-| `.Access(...)` / `.RestrictAccess(...)`                                   | Controls whether the computed output is visible to the caller.                            |
-| `.AfterRead(...)`                                                         | Transforms the resolved response value before final redaction.                            |
-| `.Admin(...)`                                                             | Sets label, description, position, width, and read-only presentation.                     |
+| Constructor or method                   | What it controls                                                                                |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `field.Virtual(name, resolver)`         | Declares the response key and the Go callback that calculates it; its type sets the value type. |
+| `.Access(...)` / `.RestrictAccess(...)` | Controls whether the computed output is visible to the caller.                                  |
+| `.AfterRead(...)`                       | Transforms the resolved response value before final redaction.                                  |
+| `.Admin(...)`                           | Sets label, description, position, width, and read-only presentation.                           |
 
 Virtual has no default, requiredness, write validator, write hook, localization setting, or stored
-column. Its resolver returns `operation.Empty[store.Value]()` for no output or
-`operation.Present(...)` with a value of the declared type.
+column. `.AfterRead` transforms receive and return the resolver's type, such as
+`operation.Value[string]`.
 
 ## Avoid unnecessary work when reading lists {#behavior}
 
@@ -114,4 +123,5 @@ handle failures. Field read access rules still apply to the calculated value.
 - A Virtual is not an admin-only UI element; use [UI](/docs/fields/ui/) for presentation with no
   response value.
 
-See [`field.Virtual`](/reference/field/virtual/) and [`field.Resolver`](/reference/field/resolver/).
+See [`field.Virtual`](/reference/field/virtual/), [`field.VirtualField`](/reference/field/virtual-field/),
+and [`field.Resolver`](/reference/field/resolver/).

@@ -9,6 +9,7 @@ import (
 	"github.com/riducms/ridu/adapters/postgres"
 	"github.com/riducms/ridu/adapters/sqlite"
 	"github.com/riducms/ridu/field"
+	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/plugins/formbuilder"
 	graphqlplugin "github.com/riducms/ridu/plugins/graphql"
 	"github.com/riducms/ridu/plugins/mcp"
@@ -43,6 +44,8 @@ func Fields() field.Fields {
 		field.Code("source"),
 		field.Date("publishedAt"), field.Number("priority"), field.Checkbox("featured"),
 		field.JSON("metadata"), field.Select("status", "draft", "published"), field.Radio("tone", "neutral", "urgent"), field.Point("location"), field.Relationship("author", "users"), field.Upload("cover", "media"), field.Group("seo", field.Fields{field.Text("title")}), field.Array("links", field.Fields{field.Text("label")}), field.Blocks("layout", field.Block{Slug: "copy", Fields: field.Fields{field.Textarea("body")}}), field.Tabs(field.Fields{field.NamedTab("settings", "Settings", field.Fields{field.Text("theme")})}), field.Row(field.Fields{field.Text("firstName"), field.Text("lastName")}), field.Collapsible("advanced", field.Fields{field.Text("internalName")}).Admin(field.Admin{InitiallyCollapsed: true}), field.Join("related", "posts", "category"),
-		field.Slug("slug", "title"), field.Virtual("displayLabel", field.ValueString, nil), field.UI("fieldHelp"), field.Plugin("color", "example/color", json.RawMessage(`{"format":"hex"}`)),
+		field.Slug("slug", "title"), field.Virtual("displayLabel", func(operation.Context) (operation.Value[string], error) {
+			return operation.Empty[string](), nil
+		}), field.UI("fieldHelp"), field.Plugin("color", "example/color", json.RawMessage(`{"format":"hex"}`)),
 	}
 }

@@ -289,9 +289,9 @@ func TestFieldGraphFunctionsDoNotChangeSchemaIdentityOrExecute(t *testing.T) {
 
 func TestFieldGraphComputedOwnershipAndUnsupportedPolicies(t *testing.T) {
 	calls := 0
-	computed := field.Virtual("summary", field.ValueString, func(operation.Context) (operation.Value[store.Value], error) {
+	computed := field.Virtual("summary", func(operation.Context) (operation.Value[string], error) {
 		calls++
-		return operation.Present(store.String("computed")), nil
+		return operation.Present("computed"), nil
 	}).Access(field.Access{Read: graphAllow})
 	config := Config{Name: "Computed", Collections: []Collection{{Slug: "pages", Fields: field.Fields{field.Text("title"), computed}}}}
 	r, err := resolveTestFieldGraph(config)
