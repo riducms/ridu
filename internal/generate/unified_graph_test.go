@@ -37,8 +37,8 @@ func TestUnifiedGraphGenerationExpectedContractAndDeterminism(t *testing.T) {
 			field.Array("sections", field.Fields{field.Text("label").Required(), field.Text("translation").Localized()}),
 			field.Blocks("content", field.Block{Slug: "hero", TypeName: "Hero", Fields: field.Fields{field.Text("heading").Required()}}),
 			field.Relationship("author", "users"), field.Relationships("reviewers", "users"), field.Upload("image", "media"), field.Text("localized").Localized(),
-			field.Virtual("summary", field.ValueString, func(operation.Context) (operation.Value[store.Value], error) {
-				return operation.Present(store.String("summary")), nil
+			field.Virtual("summary", func(operation.Context) (operation.Value[string], error) {
+				return operation.Present("summary"), nil
 			}),
 		}
 		return config

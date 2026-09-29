@@ -1,0 +1,32 @@
+---
+import HomeCommand from '@/components/home/home-command.astro';
+---
+
+<section class="relative overflow-x-clip py-28 text-center" aria-labelledby="home-closing-title">
+	<div
+		aria-hidden="true"
+		class="pointer-events-none absolute left-1/2 top-1/2 h-[260px] w-[620px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent/14 blur-[110px]"
+	>
+	</div>
+	<div class="relative">
+		<h2 id="home-closing-title" class="m-0 text-40px leading-[1.05] sm:text-56px">
+			Running in five minutes.
+		</h2>
+		<p class="mx-auto mt-4 mb-0 max-w-560px text-16px leading-[1.65] text-ink-soft sm:text-18px">
+			Pick the starter and SQLite: no Docker, no database service. Create a post in the admin, then
+			read it from the generated SDK.
+		</p>
+		<div class="mt-8">
+			<HomeCommand command="npm create ridu@latest my-app" />
+		</div>
+		<div class="mt-6 flex flex-wrap items-center justify-center gap-5">
+			<a
+				class="inline-flex-s-center h-11 rounded-2px border border-ink bg-ink px-5 text-14px font-700 text-canvas no-underline hover:bg-white"
+				href="/docs/quickstart/">Follow the quickstart</a
+			>
+			<a class="muted-link text-14px" href="/docs/status/"
+				>See what’s ready <span aria-hidden="true">→</span></a
+			>
+		</div>
+	</div>
+</section>

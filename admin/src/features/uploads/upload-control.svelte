@@ -6,6 +6,7 @@
 	import XIcon from "~icons/lucide/x";
 	import CopyIcon from "~icons/lucide/copy";
 	import FileIcon from "~icons/lucide/file";
+	import { formatFileSize } from "@admin/core/i18n/format-file-size";
 	import type { UploadDraft } from "@admin/features/uploads/upload-draft.svelte";
 	import RenditionPreview from "@admin/features/uploads/rendition-preview.svelte";
 	import UploadThumbnail from "@admin/features/uploads/upload-thumbnail.svelte";
@@ -151,9 +152,7 @@
 				{/if}
 			</div>
 			<p>
-				{i18n.formatNumber(bytes / 1024, {
-					maximumFractionDigits: 0,
-				})}KB
+				{formatFileSize(bytes, i18n)}
 				{#if draft.mimeType.startsWith("image/")}
 					· {dimensions}
 				{/if}

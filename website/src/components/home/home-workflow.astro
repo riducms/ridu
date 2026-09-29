@@ -1,0 +1,447 @@
+---
+import { Image } from 'astro:assets';
+import postEditor from '../../../../docs/assets/ridu-admin-post-editor.png';
+import CodeBlock from '@/components/code/code-block.astro';
+
+const model = `var Posts = ridu.Collection{
+	Slug: "posts",
+	Fields: field.Fields{
+		field.Text("title").Required(),
+		field.Textarea("summary").MaxLength(280),
+		field.Select("status", "draft", "published"),
+	},
+}`;
+
+const client = `const page = await ridu.list('posts', {
+	where: { status: { equals: 'published' } }
+});`;
+
+const response = `{
+  "docs": [
+    {
+      "id": "posts_7514213d859111e0",
+      "title": "Hello from Ridu",
+      "status": "published"
+    }
+  ],
+  "totalDocs": 1
+}`;
+
+// Real output from building the application in the hero screenshot.
+const build = `$ npm run build
+[ridu] Verified migration artifact history
+Built dist/app
+
+$ ls -lh dist/app
+-rwxr-xr-x  1 you  staff   28M  dist/app`;
+
+// Each step plays for its duration before the next one starts. The build step
+// is longer so its terminal output can finish printing.
+const steps = [
+	{
+		id: 'model',
+		title: 'Define the model',
+		note: 'content/posts.go',
+		description: 'Fields, access rules, and hooks in Go.',
+		duration: 6500
+	},
+	{
+		id: 'edit',
+		title: 'Edit in the admin',
+		note: 'npm run dev',
+		description: 'The admin form comes from the model. No UI code.',
+		duration: 5500
+	},
+	{
+		id: 'read',
+		title: 'Read it anywhere',
+		note: 'generated SDK',
+		description: 'Typed queries from your app, with the same access rules.',
+		duration: 6500
+	},
+	{
+		id: 'ship',
+		title: 'Ship one binary',
+		note: 'npm run build',
+		description: 'Admin, API, and jobs in a single executable.',
+		duration: 7500
+	}
+] as const;
+---
+
+<section
+	class="py-24"
+	aria-labelledby="home-workflow-title"
+	data-home-workflow
+	data-autoplay="true"
+	data-playing="false"
+>
+	<div class="mx-auto max-w-860px text-center">
+		<p class="eyebrow">How it works</p>
+		<h2 id="home-workflow-title" class="mt-4 mb-0 text-38px leading-[1.05] sm:text-48px">
+			From a Go struct to a running CMS.
+		</h2>
+		<div class="mt-5 flex items-center justify-center gap-3 text-13px text-ink-faint">
+			<span>Pick a step, or let it play.</span>
+			<button
+				type="button"
+				class="toggle inline-flex h-7 items-center gap-1.5 rounded-full border border-line bg-transparent px-2.5 text-12px text-ink-soft hover:(border-line-strong text-ink)"
+				data-home-toggle
+				aria-label="Pause the walkthrough"
+			>
+				<svg class="icon-pause size-3" viewBox="0 0 12 12" aria-hidden="true">
+					<rect x="2.5" y="2" width="2.2" height="8" rx="0.6" fill="currentColor"></rect>
+					<rect x="7.3" y="2" width="2.2" height="8" rx="0.6" fill="currentColor"></rect>
+				</svg>
+				<svg class="icon-play size-3" viewBox="0 0 12 12" aria-hidden="true">
+					<path
+						d="M3.5 2.2v7.6a.5.5 0 0 0 .76.43l6.1-3.8a.5.5 0 0 0 0-.86l-6.1-3.8a.5.5 0 0 0-.76.43Z"
+						fill="currentColor"></path>
+				</svg>
+				<span class="label-pause">Pause</span>
+				<span class="label-play">Play</span>
+			</button>
+		</div>
+	</div>
+
+	<div
+		class="mt-10 grid gap-2 sm:grid-cols-2 lg:grid-cols-4"
+		role="tablist"
+		aria-label="Ridu workflow"
+	>
+		{
+			steps.map((step, index) => (
+				<button
+					id={`home-tab-${step.id}`}
+					class="step group relative flex cursor-pointer flex-col items-start justify-start overflow-hidden rounded-6px border border-line bg-transparent px-4 pt-6 pb-4 text-left text-ink-soft transition-[background-color,border-color,color,transform] duration-200 hover:(border-line-strong bg-surface text-ink) aria-[selected=true]:(border-line-strong bg-surface-raised text-ink)"
+					type="button"
+					role="tab"
+					aria-selected={index === 0 ? 'true' : 'false'}
+					aria-controls={`home-panel-${step.id}`}
+					tabindex={index === 0 ? 0 : -1}
+					data-home-tab={step.id}
+					style={`--step-duration: ${step.duration}ms`}
+				>
+					<span aria-hidden="true" class="track absolute inset-x-0 top-0 h-0.5 bg-line">
+						<span class="fill block h-full w-full bg-accent" />
+					</span>
+					<span class="font-mono text-10.5px tracking-[0.1em] text-ink-faint">0{index + 1}</span>
+					<strong class="mt-1.5 block font-heading text-19px font-400 text-ink">
+						{step.title}
+					</strong>
+					<span class="mt-1.5 block text-13.5px leading-[1.5]">{step.description}</span>
+					<code class="mt-3 block font-mono text-10.5px text-ink-faint group-aria-[selected=true]:text-accent">
+						{step.note}
+					</code>
+				</button>
+			))
+		}
+	</div>
+
+	<div class="panels mt-4 min-w-0">
+		<div
+			id="home-panel-model"
+			role="tabpanel"
+			aria-labelledby="home-tab-model"
+			data-home-panel="model"
+			data-active
+		>
+			<div
+				class="grid grid-cols-[minmax(0,1fr)] items-stretch gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"
+			>
+				<CodeBlock code={model} lang="go" label="content/posts.go" />
+				<div
+					class="flex flex-col justify-center gap-3 rounded-6px border border-line bg-surface px-7 py-8"
+				>
+					<p class="eyebrow">You get</p>
+					<ul class="reveal-list m-0 grid list-none gap-2.5 p-0 text-15px text-ink-soft">
+						<li><span class="mr-2 text-accent">→</span>An admin list and edit form</li>
+						<li><span class="mr-2 text-accent">→</span>REST endpoints and an OpenAPI spec</li>
+						<li><span class="mr-2 text-accent">→</span>A typed TypeScript SDK</li>
+						<li><span class="mr-2 text-accent">→</span>A reviewed database migration</li>
+					</ul>
+				</div>
+			</div>
+		</div>
+		<div
+			id="home-panel-edit"
+			role="tabpanel"
+			aria-labelledby="home-tab-edit"
+			data-home-panel="edit"
+			inert
+		>
+			<div class="screenshot overflow-hidden rounded-6px border border-line-strong">
+				<Image
+					class="block aspect-[2.5] h-auto w-full object-cover object-top"
+					src={postEditor}
+					alt="The generated Ridu admin form for a post, with title, status, author, and content."
+				/>
+			</div>
+		</div>
+		<div
+			id="home-panel-read"
+			role="tabpanel"
+			aria-labelledby="home-tab-read"
+			data-home-panel="read"
+			inert
+		>
+			<div class="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+				<div class="request"><CodeBlock code={client} lang="ts" label="app/posts.ts" /></div>
+				<div class="response"><CodeBlock code={response} lang="json" label="response · 200" /></div>
+			</div>
+		</div>
+		<div
+			id="home-panel-ship"
+			role="tabpanel"
+			aria-labelledby="home-tab-ship"
+			data-home-panel="ship"
+			inert
+		>
+			<div class="terminal"><CodeBlock code={build} lang="text" label="terminal" /></div>
+		</div>
+	</div>
+</section>
+
+<style>
+	/* Progress: the active step's fill grows for its duration, then the next step starts. */
+	.fill {
+		transform: scaleX(0);
+		transform-origin: left;
+	}
+	[data-home-tab][aria-selected='true'] .fill {
+		animation: home-step-progress var(--step-duration, 6s) linear forwards;
+	}
+	[data-home-workflow][data-playing='false'] .fill {
+		animation-play-state: paused;
+	}
+	/* Once the reader picks a step, show it as complete instead of a stalled timer. */
+	[data-home-workflow][data-autoplay='false'] [aria-selected='true'] .fill {
+		animation: none;
+		transform: scaleX(1);
+	}
+	@keyframes home-step-progress {
+		to {
+			transform: scaleX(1);
+		}
+	}
+
+	.toggle .icon-play,
+	.toggle .label-play,
+	[data-home-workflow][data-autoplay='false'] .toggle .icon-pause,
+	[data-home-workflow][data-autoplay='false'] .toggle .label-pause {
+		display: none;
+	}
+	[data-home-workflow][data-autoplay='false'] .toggle .icon-play,
+	[data-home-workflow][data-autoplay='false'] .toggle .label-play {
+		display: inline;
+	}
+
+	/* Panels share one grid cell, so switching never changes the section's height. */
+	.panels {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr);
+	}
+	.panels > [data-home-panel] {
+		grid-area: 1 / 1;
+		opacity: 0;
+		transform: translateY(12px);
+		visibility: hidden;
+		transition:
+			opacity 0.35s ease,
+			transform 0.45s cubic-bezier(0.2, 0.7, 0.2, 1),
+			visibility 0s linear 0.45s;
+	}
+	.panels > [data-active] {
+		opacity: 1;
+		transform: none;
+		visibility: visible;
+		transition-delay: 0.08s, 0.08s, 0s;
+	}
+
+	/* Each panel plays a short scene when it becomes active. */
+	[data-active] .reveal-list > li {
+		animation: home-rise 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+	}
+	[data-active] .reveal-list > li:nth-child(1) {
+		animation-delay: 0.35s;
+	}
+	[data-active] .reveal-list > li:nth-child(2) {
+		animation-delay: 0.55s;
+	}
+	[data-active] .reveal-list > li:nth-child(3) {
+		animation-delay: 0.75s;
+	}
+	[data-active] .reveal-list > li:nth-child(4) {
+		animation-delay: 0.95s;
+	}
+	[data-active] .screenshot :global(img) {
+		animation: home-settle 1.4s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+	}
+	[data-active] .response {
+		animation: home-rise 0.55s cubic-bezier(0.2, 0.7, 0.2, 1) 0.7s both;
+	}
+	[data-active] .terminal :global(.line) {
+		animation: home-print 0.01s linear both;
+	}
+	[data-active] .terminal :global(.line:nth-child(1)) {
+		animation-delay: 0.3s;
+	}
+	[data-active] .terminal :global(.line:nth-child(2)) {
+		animation-delay: 1.2s;
+	}
+	[data-active] .terminal :global(.line:nth-child(3)) {
+		animation-delay: 2.2s;
+	}
+	[data-active] .terminal :global(.line:nth-child(5)) {
+		animation-delay: 3.2s;
+	}
+	[data-active] .terminal :global(.line:nth-child(6)) {
+		animation-delay: 3.8s;
+	}
+	@keyframes home-rise {
+		from {
+			opacity: 0;
+			transform: translateY(8px);
+		}
+	}
+	@keyframes home-settle {
+		from {
+			transform: scale(1.03);
+		}
+	}
+	@keyframes home-print {
+		from {
+			opacity: 0;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.panels > [data-home-panel],
+		.panels > [data-active] {
+			transform: none;
+			transition: none;
+		}
+		[data-active] .reveal-list > li,
+		[data-active] .screenshot :global(img),
+		[data-active] .response,
+		[data-active] .terminal :global(.line) {
+			animation: none;
+		}
+	}
+</style>
+
+<script>
+	// Autoplay advances when the active step's progress animation ends. It pauses
+	// while the reader hovers or focuses the section, while the section is off
+	// screen, and while the tab is hidden. Picking a step stops it for good.
+	function initializeHomeWorkflow() {
+		for (const workflow of document.querySelectorAll<HTMLElement>('[data-home-workflow]')) {
+			if (workflow.dataset.homeWorkflowReady !== undefined) continue;
+			workflow.dataset.homeWorkflowReady = '';
+			const tabs = [...workflow.querySelectorAll<HTMLButtonElement>('[data-home-tab]')];
+			const panels = [...workflow.querySelectorAll<HTMLElement>('[data-home-panel]')];
+			const toggle = workflow.querySelector<HTMLButtonElement>('[data-home-toggle]');
+			const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+			let autoplay = !reducedMotion.matches;
+			let hovered = false;
+			let focused = false;
+			let visible = false;
+
+			const render = () => {
+				const playing = autoplay && !hovered && !focused && visible && !document.hidden;
+				workflow.dataset.autoplay = String(autoplay);
+				workflow.dataset.playing = String(playing);
+				toggle?.setAttribute(
+					'aria-label',
+					autoplay ? 'Pause the walkthrough' : 'Play the walkthrough'
+				);
+			};
+
+			const select = (tab: HTMLButtonElement) => {
+				for (const candidate of tabs) {
+					const selected = candidate === tab;
+					candidate.setAttribute('aria-selected', String(selected));
+					candidate.tabIndex = selected ? 0 : -1;
+					// Restart the progress animation for the newly selected step.
+					const fill = candidate.querySelector<HTMLElement>('.fill');
+					if (fill && selected) {
+						fill.style.animation = 'none';
+						void fill.offsetWidth;
+						fill.style.animation = '';
+					}
+				}
+				for (const panel of panels) {
+					const active = panel.dataset.homePanel === tab.dataset.homeTab;
+					panel.toggleAttribute('data-active', active);
+					panel.inert = !active;
+				}
+			};
+
+			const stopAutoplay = () => {
+				autoplay = false;
+				render();
+			};
+
+			for (const tab of tabs) {
+				tab.querySelector('.fill')?.addEventListener('animationend', () => {
+					if (!autoplay || tab.getAttribute('aria-selected') !== 'true') return;
+					select(tabs[(tabs.indexOf(tab) + 1) % tabs.length]);
+				});
+				tab.addEventListener('click', () => {
+					stopAutoplay();
+					select(tab);
+				});
+				tab.addEventListener('keydown', (event) => {
+					if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
+					event.preventDefault();
+					const direction = event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 1;
+					const next = tabs[(tabs.indexOf(tab) + direction + tabs.length) % tabs.length];
+					next.focus();
+					stopAutoplay();
+					select(next);
+				});
+			}
+
+			toggle?.addEventListener('click', () => {
+				autoplay = !autoplay;
+				if (autoplay) {
+					// Resume from the current step with a fresh timer.
+					const current = tabs.find((tab) => tab.getAttribute('aria-selected') === 'true');
+					if (current) select(current);
+				}
+				render();
+			});
+
+			workflow.addEventListener('pointerenter', () => {
+				hovered = true;
+				render();
+			});
+			workflow.addEventListener('pointerleave', () => {
+				hovered = false;
+				render();
+			});
+			workflow.addEventListener('focusin', (event) => {
+				// The play button itself should not hold the walkthrough paused.
+				focused = event.target !== toggle;
+				render();
+			});
+			workflow.addEventListener('focusout', (event) => {
+				if (!workflow.contains(event.relatedTarget as Node | null)) {
+					focused = false;
+					render();
+				}
+			});
+			document.addEventListener('visibilitychange', render);
+			new IntersectionObserver(
+				([entry]) => {
+					visible = entry.isIntersecting;
+					render();
+				},
+				{ threshold: 0.35 }
+			).observe(workflow);
+			render();
+		}
+	}
+	initializeHomeWorkflow();
+	document.addEventListener('astro:page-load', initializeHomeWorkflow);
+</script>

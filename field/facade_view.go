@@ -171,13 +171,26 @@ func AsPlugin(node Node) (PluginField, error) {
 	return PluginField{nodeView{d}}, nil
 }
 
-// AsOutput provides a checked concrete view of an immutable node.
-func AsOutput(node Node) (OutputField, error) {
+// AsVirtual provides a checked view of a virtual field whose value type is T.
+func AsVirtual[T VirtualValue](node Node) (VirtualField[T], error) {
 	d := Snapshot(node)
-	if d.kind != KindVirtual {
-		return OutputField{}, incompatibleEdit("OutputField", d)
+	if d.kind != KindVirtual || d.valueType != virtualValueType[T]() {
+		return VirtualField[T]{}, incompatibleEdit("VirtualField["+virtualGoType[T]()+"]", d)
 	}
-	return OutputField{nodeView{d}}, nil
+	return VirtualField[T]{nodeView{d}}, nil
+}
+
+func virtualGoType[T VirtualValue]() string {
+	switch virtualValueType[T]() {
+	case ValueString:
+		return "string"
+	case ValueNumber:
+		return "float64"
+	case ValueBoolean:
+		return "bool"
+	default:
+		return "store.Value"
+	}
 }
 
 // AsJoin provides a checked inverse join output facade.

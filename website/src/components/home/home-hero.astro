@@ -1,0 +1,68 @@
+---
+import { Image } from 'astro:assets';
+import livePreview from '@/assets/home/ridu-live-preview.png';
+import { frameworkVersion } from '@/llms';
+import HomeCommand from '@/components/home/home-command.astro';
+---
+
+<section class="relative pt-16 pb-6 text-center sm:pt-24">
+	<a
+		class="inline-flex items-center gap-2 rounded-full border border-line bg-surface/70 px-3.5 py-1.5 text-12.5px text-ink-soft no-underline hover:(border-line-strong text-ink)"
+		href="/docs/status/"
+	>
+		<span class="size-1.5 rounded-full bg-accent shadow-[0_0_10px_2px_rgba(243,71,148,0.6)]"></span>
+		Open source · MIT · Ridu {frameworkVersion}
+		<span aria-hidden="true" class="text-ink-faint">→</span>
+	</a>
+
+	<h1
+		class="mx-auto mt-7 mb-0 max-w-1040px text-[clamp(42px,6.2vw,80px)] leading-[1] tracking-[-0.01em]"
+	>
+		Your content model in Go.
+		<span class="block text-ink-soft">Your CMS in one binary.</span>
+	</h1>
+
+	<p class="mx-auto mt-7 mb-0 max-w-640px text-16px leading-[1.65] text-ink-soft sm:text-18px">
+		Collections, access rules, hooks, and a polished admin, defined in Go config you can review and
+		test. Ship the API, admin, and jobs as a single binary, with no Node in production.
+	</p>
+
+	<div class="mt-9 flex flex-wrap items-center justify-center gap-4">
+		<a
+			class="inline-flex-s-center h-11 rounded-2px border border-ink bg-ink px-5 text-14px font-700 text-canvas no-underline hover:bg-white"
+			href="/docs/quickstart/">Start with Ridu</a
+		>
+		<HomeCommand command="npm create ridu@latest" />
+	</div>
+
+	<figure class="relative mx-auto mt-16 mb-0 max-w-1120px sm:mt-20">
+		<!-- A soft accent glow gives the product a focal point without new colours. -->
+		<div
+			aria-hidden="true"
+			class="pointer-events-none absolute left-1/2 top-[-8%] h-[116%] w-[min(112%,calc(100vw-24px))] -translate-x-1/2 rounded-[50%] bg-[radial-gradient(closest-side,rgba(243,71,148,0.34),rgba(243,71,148,0.1)_55%,transparent)] blur-[40px]"
+		>
+		</div>
+		<div
+			class="relative overflow-hidden rounded-8px border border-line-strong bg-surface shadow-[0_40px_120px_rgba(0,0,0,0.55)]"
+		>
+			<Image
+				class="block h-auto w-full"
+				src={livePreview}
+				alt="The Ridu admin editing a journal post, with the live preview of the designed journal page beside the form."
+				loading="eager"
+			/>
+		</div>
+
+		<div
+			class="absolute -right-3 -top-6 hidden items-center xl:-right-6 gap-3 rounded-6px border border-line-strong bg-surface-raised px-4 py-3 text-left font-mono text-12px shadow-[0_18px_50px_rgba(0,0,0,0.55)] lg:flex"
+		>
+			<span class="text-green">✓</span>
+			<span class="text-ink-soft">Built <span class="text-ink">dist/app</span></span>
+			<span class="rounded-3px bg-accent-soft px-2 py-0.5 text-accent">28 MB</span>
+		</div>
+
+		<figcaption class="mt-5 text-13px text-ink-faint">
+			Edit on the left, see your site update on the right. The admin comes from your Go config.
+		</figcaption>
+	</figure>
+</section>

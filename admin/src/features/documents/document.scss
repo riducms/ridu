@@ -231,6 +231,8 @@
 			> .ridu-document-editor {
 				flex: 0 0 40%;
 				overflow-y: auto;
+				/* This pane scrolls on its own, below the action bar. */
+				--admin-sticky-offset: 0px;
 			}
 		}
 	}

@@ -82,7 +82,7 @@ func lowerFieldGraph(graph configresolver.Graph, resourceKind, resource string, 
 			lowerDefault(&binding, facade.DefaultCallback(), stringCodec(), local)
 		case field.KindCheckbox:
 			facade, _ := field.AsCheckbox(definition)
-			codec := graphCodec[bool]{decode: store.Value.BooleanValue, encode: store.Boolean, code: "invalid_type", expected: "a boolean"}
+			codec := booleanCodec()
 			lowerTypedPolicies(&binding, facade.HookPolicy(), facade.AfterReadHooks(), facade.Validators(), facade.LiveValidators(), codec, codec, local)
 			lowerDefault(&binding, facade.DefaultCallback(), codec, local)
 		case field.KindSelect, field.KindRadio:
@@ -153,21 +153,20 @@ func lowerFieldGraph(graph configresolver.Graph, resourceKind, resource string, 
 			codec := graphCodec[store.Value]{decode: func(value store.Value) (store.Value, bool) { return value, value.Kind() == store.ValueList }, encode: func(value store.Value) store.Value { return value }, code: "invalid_type", expected: "a joined document list"}
 			lowerTypedPolicies(&binding, field.Hooks[store.Value]{}, facade.AfterReadHooks(), nil, nil, codec, codec, local)
 		case field.KindVirtual:
-			facade, _ := field.AsOutput(definition)
-			resolver := facade.Resolver()
-			if resolver == nil {
-				return nil, unsupported("computed output requires an attached resolver")
+			var err error
+			switch definition.ValueType() {
+			case field.ValueString:
+				err = lowerVirtual(&binding, definition, stringCodec(), local)
+			case field.ValueNumber:
+				err = lowerVirtual(&binding, definition, numberCodec(), local)
+			case field.ValueBoolean:
+				err = lowerVirtual(&binding, definition, booleanCodec(), local)
+			default:
+				err = lowerVirtual(&binding, definition, finiteCodec(anyValueKind, "a finite output value"), local)
 			}
-			binding.Computed = func(ctx operationengine.Context, document store.Document) (store.Value, error) {
-				ctx.ID, ctx.Document = document.ID, &document
-				value, err := resolver(operation.Context(graphCallbackContext(ctx, occurrence.ID, local)))
-				if result, present := value.Get(); present {
-					return result, err
-				}
-				return store.Null(), err
+			if err != nil {
+				return nil, unsupported(err.Error())
 			}
-			codec := finiteCodec(anyValueKind, "a finite output value")
-			lowerTypedPolicies(&binding, field.Hooks[store.Value]{}, facade.AfterReadHooks(), nil, nil, codec, codec, local)
 		default:
 			return nil, unsupported("this field kind does not support attached callbacks")
 		}
@@ -193,6 +192,34 @@ func (codec graphCodec[T]) value(ctx operationengine.Context, f schema.Field) (o
 		return operation.Empty[T](), schema.NewValidationError([]schema.Issue{{Code: codec.code, Path: ctx.RuntimePath, Message: fmt.Sprintf("%s must be %s", f.Admin.Label, codec.expected)}})
 	}
 	return operation.Present(value), nil
+}
+
+// lowerVirtual binds a virtual field's resolver and response transforms,
+// converting between its Go type and stored values with codec.
+func lowerVirtual[T field.VirtualValue](binding *operationengine.FieldBinding, definition field.Node, codec graphCodec[T], local **LocalAPI) error {
+	facade, err := field.AsVirtual[T](definition)
+	if err != nil {
+		return err
+	}
+	resolver := facade.Resolver()
+	if resolver == nil {
+		return fmt.Errorf("computed output requires an attached resolver")
+	}
+	id := binding.ID
+	binding.Computed = func(ctx operationengine.Context, document store.Document) (store.Value, error) {
+		ctx.ID, ctx.Document = document.ID, &document
+		value, err := resolver(operation.Context(graphCallbackContext(ctx, id, local)))
+		if result, present := value.Get(); present {
+			return codec.encode(result), err
+		}
+		return store.Null(), err
+	}
+	lowerTypedPolicies(binding, field.Hooks[T]{}, facade.AfterReadHooks(), nil, nil, codec, codec, local)
+	return nil
+}
+
+func booleanCodec() graphCodec[bool] {
+	return graphCodec[bool]{decode: store.Value.BooleanValue, encode: store.Boolean, code: "invalid_type", expected: "a boolean"}
 }
 
 func stringCodec() graphCodec[string] {

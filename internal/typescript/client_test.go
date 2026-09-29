@@ -12,7 +12,6 @@ import (
 	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
-	"github.com/riducms/ridu/store"
 )
 
 func TestGeneratedClientIsCurrent(t *testing.T) {
@@ -465,13 +464,11 @@ func clientFixtureConfig() ridu.Config {
 		Collections: []ridu.Collection{
 			{
 				Slug: "authors", Versions: true, Trash: true,
-				Fields: field.Fields{field.Text("name").Required().Localized(), field.Text("bio"), field.Virtual("displayName", field.ValueString,
+				Fields: field.Fields{field.Text("name").Required().Localized(), field.Text("bio"), field.Virtual("displayName", func(operation.Context) (operation.Value[string],
 
-					func(operation.Context) (operation.Value[store.Value],
-
-						error) {
-						return operation.Present(store.String("Ada")), nil
-					}), field.Join("posts", "posts", "author")},
+					error) {
+					return operation.Present("Ada"), nil
+				}), field.Join("posts", "posts", "author")},
 			},
 			{
 				Slug: "history", Versions: true,

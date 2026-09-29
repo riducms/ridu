@@ -187,6 +187,10 @@ be unreadable in one theme. Check both from the account settings.
     <dt><code>--admin-gutter</code></dt>
     <dd>Page gutters. Defaults to <code>60px</code> on desktop, <code>40px</code> at 1024px, and <code>16px</code> at 768px.</dd>
   </div>
+  <div>
+    <dt><code>--admin-sticky-offset</code></dt>
+    <dd>Set by the document editor to the height of its sticky action bar. Use it as <code>top</code> for your own sticky content so it stays below the bar. It is <code>0px</code> in the live-preview editor pane, which scrolls on its own.</dd>
+  </div>
 </dl>
 
 The installed `@riducms/ui/src/theme.css` contains the complete theme. Feature styles can set more local values:

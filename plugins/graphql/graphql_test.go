@@ -582,11 +582,11 @@ func TestGraphQLSelectionSkipsUnrequestedComputedOutput(t *testing.T) {
 		Collections: []ridu.Collection{{
 			Slug: "posts", Fields: field.Fields{
 				field.Text("title"),
-				field.Virtual("label", field.ValueString, func(ctx operation.Context) (operation.Value[store.Value], error) {
+				field.Virtual("label", func(ctx operation.Context) (operation.Value[string], error) {
 					computedCalls++
 					titleValue := ctx.Root.Get("title")
 					title, _ := titleValue.StringValue()
-					return operation.Present(store.String("Label: " + title)), nil
+					return operation.Present("Label: " + title), nil
 				}),
 			},
 		}},

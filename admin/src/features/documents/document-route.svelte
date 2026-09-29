@@ -168,6 +168,8 @@
 	let credentials = $state<AuthCreateCredentials>({ password: "", passwordConfirmation: "" });
 	let credentialIssue = $state<string>();
 	let livePreviewOpen = $state(false);
+	// Sticky content inside the document, such as a rich-text toolbar, stays below the action bar.
+	let actionBarHeight = $state(0);
 	let viewport: HTMLElement | null = null;
 	let fieldsViewport: HTMLElement | null = null;
 	const attachViewport: Attachment<HTMLElement> = (element) => {
@@ -352,6 +354,7 @@
 	{@attach attachViewport}
 	data-slot="document-viewport"
 	class={["ridu-document", documentView === "api" && "ridu-document--api"]}
+	style:--admin-sticky-offset={`${actionBarHeight}px`}
 >
 	<header class="ridu-document-header">
 		<div class="ridu-document-heading">
@@ -421,6 +424,7 @@
 				onTogglePreview={toggleLivePreview}
 				onSave={handleSave}
 				onPublish={handlePublish}
+				bind:height={actionBarHeight}
 			/>
 		{/key}
 	{/if}

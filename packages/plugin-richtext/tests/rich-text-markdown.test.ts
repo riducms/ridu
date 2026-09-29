@@ -7,7 +7,7 @@ import { HeadingNode, QuoteNode } from "@lexical/rich-text";
 import { createEditor } from "lexical";
 
 import { richTextMarkdownTransformers } from "../src/field/rich-text-markdown";
-import type { RichTextFeature } from "../src/field/rich-text-config";
+import { decodeRichTextConfig, type RichTextFeature } from "../src/field/rich-text-config";
 import { decodeRichTextDocument } from "../src/document-validation";
 
 function convert(markdown: string, features: RichTextFeature[] = []) {
@@ -22,11 +22,7 @@ function convert(markdown: string, features: RichTextFeature[] = []) {
 		() => {
 			$convertFromMarkdownString(
 				markdown,
-				richTextMarkdownTransformers({
-					features,
-					uploadCollections: [],
-					relationshipCollections: [],
-				})
+				richTextMarkdownTransformers(decodeRichTextConfig({ features }))
 			);
 		},
 		{ discrete: true }

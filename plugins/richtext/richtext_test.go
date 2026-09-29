@@ -130,6 +130,40 @@ func TestFieldInheritsDefaultsOnlyWhenFeaturesAreOmitted(t *testing.T) {
 	}
 }
 
+func TestAdminOptionsReachTheAdminWithoutChangingDefaults(t *testing.T) {
+	plain := field.Snapshot(richtext.Field("content")).PluginConfig()
+	if strings.Contains(string(plain), `"admin"`) {
+		t.Fatalf("default config carries admin options: %s", plain)
+	}
+	configured := richtext.Field("content", richtext.Config{Admin: richtext.Admin{
+		FixedToolbar: true,
+		HideGutter:   true,
+	}})
+	encoded := field.Snapshot(configured).PluginConfig()
+	var raw struct {
+		Admin map[string]bool `json:"admin"`
+	}
+	if err := json.Unmarshal(encoded, &raw); err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]bool{"fixedToolbar": true, "hideGutter": true}
+	if len(raw.Admin) != len(want) || raw.Admin["fixedToolbar"] != true || raw.Admin["hideGutter"] != true {
+		t.Fatalf("admin options = %v, want %v", raw.Admin, want)
+	}
+	// Presentation options leave the content model, and so the defaults, alone.
+	settings := decodeConfig(t, configured)
+	if !hasFeature(settings.Features, richtext.FeatureLinks) || hasFeature(settings.Features, richtext.FeatureBlocks) {
+		t.Fatalf("admin options changed features: %v", settings.Features)
+	}
+	if _, err := ridu.New(ridu.Config{
+		Name:        "Fixed toolbar",
+		Plugins:     []ridu.Plugin{richtext.New()},
+		Collections: []ridu.Collection{{Slug: "pages", Fields: field.Fields{configured}}},
+	}, teststore.New()); err != nil {
+		t.Fatalf("configured field rejected: %v", err)
+	}
+}
+
 func TestVersionedDocumentValidationAndRendering(t *testing.T) {
 	application, err := ridu.New(ridu.Config{
 		Name:    "Rich text",

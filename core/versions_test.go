@@ -495,11 +495,10 @@ func TestVersionReadsRunComputedAndAfterReadLifecycleBeforeRedaction(t *testing.
 			return operation.Keep[string](), nil
 		}), field.Text("secret").Access(field.Access{Read: func(operation.Context) (bool, error) {
 			return false, nil
-		}}), field.Virtual("summary", field.ValueString, func(operation.Context) (operation.Value[store.
-			Value],
+		}}), field.Virtual("summary", func(operation.Context) (operation.Value[string],
 
 			error) {
-			return operation.Present(store.String("computed")), nil
+			return operation.Present("computed"), nil
 		})},
 
 		Hooks: ridu.CollectionHooks{AfterRead: []ridu.Hook{func(ctx ridu.HookContext) error {
