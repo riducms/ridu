@@ -2,9 +2,12 @@ package store_test
 
 import (
 	"encoding/json"
+	"fmt"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
@@ -122,4 +125,35 @@ func encodedValue(t *testing.T, value store.Value) string {
 		t.Fatal(err)
 	}
 	return string(encoded)
+}
+
+func TestValueKindNamesAndZeroValue(t *testing.T) {
+	for _, test := range []struct {
+		value store.Value
+		name  string
+	}{
+		{store.Null(), "null"}, {store.String(""), "string"}, {store.Number(0), "number"},
+		{store.Boolean(false), "boolean"}, {store.Object(store.Values{}), "object"},
+		{store.List(), "list"}, {store.Populated(store.Document{}), "document"}, {store.Value{}, ""},
+	} {
+		if got := test.value.Kind().String(); got != test.name {
+			t.Errorf("kind name = %q, want %q", got, test.name)
+		}
+		if got := fmt.Sprintf("%q", test.value.Kind()); got != strconv.Quote(test.name) {
+			t.Errorf("formatted kind = %s, want %q", got, test.name)
+		}
+		if test.value.IsZero() != (test.name == "") {
+			t.Errorf("%q IsZero = %v", test.name, test.value.IsZero())
+		}
+	}
+	if missing := (store.Values{})["missing"]; !missing.IsZero() {
+		t.Fatal("a missing map entry is not the zero value")
+	}
+}
+
+func TestValueStaysCompact(t *testing.T) {
+	// Documents hold many values in maps and lists; keep the struct small.
+	if size := unsafe.Sizeof(store.Value{}); size > 56 {
+		t.Fatalf("store.Value is %d bytes, want at most 56", size)
+	}
 }

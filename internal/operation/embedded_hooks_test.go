@@ -27,7 +27,7 @@ func TestEmbeddedHookOriginalScopeCannotCrossVariantReplacement(t *testing.T) {
 	calls := 0
 	binding := FieldBinding{ID: "note-title", Field: fields[0].Plugin.EmbeddedTrees[0].Cases[0].ResolvedTypes()[1].ResolvedFields()[0], Hooks: Hooks{BeforeChange: []Hook{func(ctx Context) error {
 		calls++
-		if ctx.OriginalSiblingData != nil || ctx.OriginalValue.Kind() != "" {
+		if ctx.OriginalSiblingData != nil || !ctx.OriginalValue.IsZero() {
 			t.Fatal("new variant inherited previous variant payload")
 		}
 		return nil

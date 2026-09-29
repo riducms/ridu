@@ -71,7 +71,7 @@ func (application *App) CreateUploadGrants(ctx context.Context, token, collectio
 	if err != nil {
 		return nil, err
 	}
-	ids := make([]query.Value, 0, len(requests))
+	ids := make([]string, 0, len(requests))
 	seen := make(map[string]struct{}, len(requests))
 	for _, request := range requests {
 		if request.ID == "" {
@@ -79,16 +79,12 @@ func (application *App) CreateUploadGrants(ctx context.Context, token, collectio
 		}
 		if _, duplicate := seen[request.ID]; !duplicate {
 			seen[request.ID] = struct{}{}
-			ids = append(ids, query.String(request.ID))
+			ids = append(ids, request.ID)
 		}
-	}
-	idPath, err := query.NewPath("id")
-	if err != nil {
-		return nil, err
 	}
 	// One read applies the owner's current collection access to every item.
 	page, err := application.local.List(ctx, collection, ListOptions{
-		Where: query.In(idPath, ids...), Limit: len(ids),
+		Where: query.In("id", ids...), Limit: len(ids),
 		Actor: &session.User, ActorCollection: session.Collection,
 	})
 	if err != nil {

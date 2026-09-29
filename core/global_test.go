@@ -181,7 +181,7 @@ func TestGlobalVersionHistoryAppliesFilteredAccessToSnapshots(t *testing.T) {
 		if ctx.Operation != operation.ReadVersions {
 			t.Fatalf("version access operation = %q", ctx.Operation)
 		}
-		return ridu.Where(query.Equal(siteName, query.String("Ridu"))), nil
+		return ridu.Where(query.Equal(siteName, "Ridu")), nil
 	}
 	allow := func(ridu.AccessContext) (ridu.AccessDecision, error) { return ridu.Allow(), nil }
 	tests := []struct {
@@ -256,7 +256,7 @@ func TestGlobalFilteredAccessUsesPersistedSingletonAndCannotCreateIt(t *testing.
 		t.Fatal(err)
 	}
 	filtered := func(ridu.AccessContext) (ridu.AccessDecision, error) {
-		return ridu.Where(query.Equal(siteName, query.String("Ridu"))), nil
+		return ridu.Where(query.Equal(siteName, "Ridu")), nil
 	}
 	allowInitialization := false
 	afterChange, afterCommit := 0, 0
@@ -321,7 +321,7 @@ func TestGlobalCapabilitiesMatchFilteredSingletonAndVersionState(t *testing.T) {
 	}
 	allowInitialization := false
 	filtered := func(ridu.AccessContext) (ridu.AccessDecision, error) {
-		return ridu.Where(query.Equal(siteName, query.String("Ridu"))), nil
+		return ridu.Where(query.Equal(siteName, "Ridu")), nil
 	}
 	application, err := ridu.New(ridu.Config{
 		Name:        "Filtered global capabilities",
@@ -399,7 +399,7 @@ func TestMissingGlobalReadCapabilitiesMatchSyntheticReadPolicy(t *testing.T) {
 			{
 				Slug: "filtered", Fields: field.Fields{field.Text("title").Default("Default")},
 				Access: ridu.GlobalAccess{Read: func(ridu.AccessContext) (ridu.AccessDecision, error) {
-					return ridu.Where(query.Equal(titlePath, query.String("Default"))), nil
+					return ridu.Where(query.Equal(titlePath, "Default")), nil
 				}},
 			},
 			{
@@ -489,7 +489,7 @@ func TestGlobalAllLocalesFilteredAccessRequiresEveryLocale(t *testing.T) {
 		t.Fatal(err)
 	}
 	filtered := func(ridu.AccessContext) (ridu.AccessDecision, error) {
-		return ridu.Where(query.Equal(title, query.String("Public"))), nil
+		return ridu.Where(query.Equal(title, "Public")), nil
 	}
 	application, err := ridu.New(ridu.Config{
 		Name: "All-locales global access",

@@ -55,7 +55,7 @@ func TestLocalCRUDUsesValidationAccessAndOnePipeline(t *testing.T) {
 			Access: ridu.CollectionAccess{
 				Create: func(ridu.AccessContext) (ridu.AccessDecision, error) { return ridu.Allow(), nil },
 				Read: func(ridu.AccessContext) (ridu.AccessDecision, error) {
-					return ridu.Where(query.Equal(title, query.String("public"))), nil
+					return ridu.Where(query.Equal(title, "public")), nil
 				},
 				Update: func(ridu.AccessContext) (ridu.AccessDecision, error) { return ridu.Allow(), nil },
 				Delete: func(ridu.AccessContext) (ridu.AccessDecision, error) { return ridu.Allow(), nil },
@@ -307,7 +307,7 @@ func TestDuplicateHooksAndAtomicBulkRollback(t *testing.T) {
 				return ridu.Allow(), nil
 			},
 			Update: func(ridu.AccessContext) (ridu.AccessDecision, error) {
-				return ridu.Where(query.Equal(titlePath, query.String("First"))), nil
+				return ridu.Where(query.Equal(titlePath, "First")), nil
 			},
 		},
 		Hooks: ridu.CollectionHooks{BeforeValidate: []ridu.Hook{func(ctx ridu.HookContext) error {
@@ -726,7 +726,7 @@ func TestHasManyPolymorphicPopulationHonorsTargetAccessAndRedaction(t *testing.T
 		{Slug: "people", Fields: field.Fields{field.Text("name").Required(), field.Checkbox("public").Required(), field.Text("secret").Access(field.Access{Read: func(operation.Context) (bool, error) {
 			return false, nil
 		}})}, Access: ridu.CollectionAccess{Read: func(ridu.AccessContext) (ridu.AccessDecision, error) {
-			return ridu.Where(query.Equal(publicPath, query.Boolean(true))), nil
+			return ridu.Where(query.Equal(publicPath, true)), nil
 		}}},
 		{Slug: "teams", Fields: field.Fields{field.Text("name").Required(), field.Relationship("owner", "people")}},
 		{Slug: "feeds", Fields: field.Fields{field.Relationships("watchers", "people"), field.PolymorphicRelationship("subject", "people", "teams")}},
@@ -788,7 +788,7 @@ func TestRelationshipWritesRejectMissingFilteredAndNestedTargets(t *testing.T) {
 			if ctx.ID == deniedID {
 				return ridu.Deny(), nil
 			}
-			return ridu.Where(query.Equal(visiblePath, query.Boolean(true))), nil
+			return ridu.Where(query.Equal(visiblePath, true)), nil
 		}}},
 		{Slug: "teams", Fields: field.Fields{field.Text("name").Required()}},
 		{Slug: "entries", Fields: field.Fields{field.Relationship("owner", "people"), field.Relationships("watchers", "people"), field.PolymorphicRelationship("subject", "people", "teams"), field.Group("meta", field.Fields{field.Relationship("reviewer", "people")}), field.Array("sections", field.Fields{field.Relationship("editor", "people")}), field.Blocks("content", field.Block{Slug: "quote", Fields: field.Fields{field.Relationship("source", "people")}})}},

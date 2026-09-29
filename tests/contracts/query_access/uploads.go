@@ -76,9 +76,9 @@ func uploadLookup(t *testing.T, factory Factory) {
 			t.Fatalf("download bytes=%d, read=%v, close=%v", len(data), readErr, closeErr)
 		}
 	}
-	_, err = app.Local().List(t.Context(), "media", ridu.ListOptions{Where: query.Equal(path("objectKey"), query.String(original))})
+	_, err = app.Local().List(t.Context(), "media", ridu.ListOptions{Where: query.Equal(path("objectKey"), original)})
 	denied(t, err, "objectKey")
-	_, err = app.Local().List(t.Context(), "media", ridu.ListOptions{Where: query.Equal(path("sizes.thumb.objectKey"), query.String(thumbnail))})
+	_, err = app.Local().List(t.Context(), "media", ridu.ListOptions{Where: query.Equal(path("sizes.thumb.objectKey"), thumbnail)})
 	denied(t, err, "sizes.thumb.objectKey")
 	allow = false
 	for _, key := range []string{original, thumbnail} {

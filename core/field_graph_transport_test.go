@@ -95,7 +95,7 @@ func TestUnifiedFieldsRESTLocalAgreement(t *testing.T) {
 	// Attached query restriction is visible in the canonical schema, and both
 	// transports reject probes before evaluating field read access.
 	path, _ := query.NewPath("privateNote")
-	_, err = app.Local().List(t.Context(), "unified-articles", ridu.ListOptions{Where: query.Equal(path, query.String("must be redacted"))})
+	_, err = app.Local().List(t.Context(), "unified-articles", ridu.ListOptions{Where: query.Equal(path, "must be redacted")})
 	var failure *ridu.OperationError
 	if !errors.As(err, &failure) || failure.Code != "field_access_denied" {
 		t.Fatalf("local protected query: %v", err)

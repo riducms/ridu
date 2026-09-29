@@ -31,7 +31,7 @@ func TestUploadMetadataReadIntersectsReadAndUpdatePredicates(t *testing.T) {
 	collection.Schema.Upload = &schema.UploadSettings{}
 	collection.Access = map[operation.Kind]Access{
 		operation.Update: func(Context) (Decision, error) {
-			node := query.Equal(owner.Path, query.String("editor-a")).Node()
+			node := query.Equal(owner.Path, "editor-a").Node()
 			return Decision{Kind: Where, Access: &node}, nil
 		},
 	}

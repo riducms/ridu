@@ -121,7 +121,7 @@ func TestGraphQLCollectionAccessRemainsAnAtomicStorePredicate(t *testing.T) {
 				field.Checkbox("published"),
 			},
 			Access: ridu.CollectionAccess{Read: func(ridu.AccessContext) (ridu.AccessDecision, error) {
-				return ridu.Where(query.Equal(publishedPath, query.Boolean(true))), nil
+				return ridu.Where(query.Equal(publishedPath, true)), nil
 			}},
 		}},
 	}, teststore.New())
@@ -194,7 +194,7 @@ func TestGraphQLGlobalAccessFiltersCurrentAndVersionSnapshots(t *testing.T) {
 		t.Fatal(err)
 	}
 	filtered := func(ridu.AccessContext) (ridu.AccessDecision, error) {
-		return ridu.Where(query.Equal(siteName, query.String("Ridu"))), nil
+		return ridu.Where(query.Equal(siteName, "Ridu")), nil
 	}
 	application, err := ridu.New(ridu.Config{
 		Name: "GraphQL filtered globals", Plugins: []ridu.Plugin{graphqlplugin.New()},

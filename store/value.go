@@ -1,8 +1,6 @@
 package store
 
 import (
-	"encoding/json"
-	"fmt"
 	"iter"
 	"math"
 	"reflect"
@@ -10,17 +8,39 @@ import (
 	"github.com/riducms/ridu/schema"
 )
 
-type ValueKind string
+// ValueKind identifies what a Value holds. The zero Value has no valid kind.
+type ValueKind uint8
 
 const (
-	ValueNull     ValueKind = "null"
-	ValueString   ValueKind = "string"
-	ValueObject   ValueKind = "object"
-	ValueDocument ValueKind = "document"
-	ValueNumber   ValueKind = "number"
-	ValueBoolean  ValueKind = "boolean"
-	ValueList     ValueKind = "list"
+	valueInvalid ValueKind = iota
+	ValueNull
+	ValueString
+	ValueObject
+	ValueDocument
+	ValueNumber
+	ValueBoolean
+	ValueList
 )
+
+var valueKindNames = [...]string{
+	valueInvalid:  "",
+	ValueNull:     "null",
+	ValueString:   "string",
+	ValueObject:   "object",
+	ValueDocument: "document",
+	ValueNumber:   "number",
+	ValueBoolean:  "boolean",
+	ValueList:     "list",
+}
+
+// String returns the kind's name, such as "string" or "list", and "" for the
+// zero Value's kind.
+func (kind ValueKind) String() string {
+	if int(kind) < len(valueKindNames) {
+		return valueKindNames[kind]
+	}
+	return ""
+}
 
 // Value is the finite application-value vocabulary. Its private backing data is
 // immutable. Lookup, Get, Entries and Elements read shared child values without
@@ -30,11 +50,11 @@ const (
 // unchanged list branches. All these operations preserve retained values.
 type Value struct {
 	kind     ValueKind
+	boolean  bool
+	number   float64
 	text     string
 	object   Values
 	document *Document
-	number   float64
-	boolean  bool
 	list     *valueList
 }
 
@@ -50,6 +70,10 @@ func Boolean(value bool) Value   { return Value{kind: ValueBoolean, boolean: val
 func List(values ...Value) Value { return Value{kind: ValueList, list: newValueList(values)} }
 
 func (value Value) Kind() ValueKind { return value.kind }
+
+// IsZero reports whether value is the zero Value, which holds no data and is
+// not valid document content. Indexing a missing map key returns one.
+func (value Value) IsZero() bool { return value.kind == valueInvalid }
 
 // SameBacking reports whether values share immutable container backing or have
 // exactly equal scalar values. It does not compare container contents: separately
@@ -218,79 +242,6 @@ func CloneDocument(document Document) Document {
 		}
 	}
 	return cloned
-}
-
-func (value Value) MarshalJSON() ([]byte, error) {
-	switch value.kind {
-	case ValueNull:
-		return []byte("null"), nil
-	case ValueString:
-		return json.Marshal(value.text)
-	case ValueObject:
-		return json.Marshal(value.object)
-	case ValueDocument:
-		if value.document == nil {
-			return []byte("null"), nil
-		}
-		return json.Marshal(documentMap(*value.document))
-	case ValueNumber:
-		return json.Marshal(value.number)
-	case ValueBoolean:
-		return json.Marshal(value.boolean)
-	case ValueList:
-		return value.list.marshalJSON()
-	default:
-		return nil, fmt.Errorf("unknown store value kind %q", value.kind)
-	}
-}
-
-func documentMap(document Document) map[string]any {
-	result := map[string]any{
-		"id": document.ID, "createdAt": document.CreatedAt, "updatedAt": document.UpdatedAt,
-	}
-	if document.Status != "" {
-		result["_status"] = document.Status
-	}
-	if document.Revision > 0 {
-		result["_revision"] = document.Revision
-	}
-	for name, value := range document.Values {
-		result[name] = value
-	}
-	return result
-}
-
-func (value *Value) UnmarshalJSON(encoded []byte) error {
-	if string(encoded) == "null" {
-		*value = Null()
-		return nil
-	}
-	var text string
-	if err := json.Unmarshal(encoded, &text); err == nil {
-		*value = String(text)
-		return nil
-	}
-	var boolean bool
-	if err := json.Unmarshal(encoded, &boolean); err == nil {
-		*value = Boolean(boolean)
-		return nil
-	}
-	var number float64
-	if err := json.Unmarshal(encoded, &number); err == nil {
-		*value = Number(number)
-		return nil
-	}
-	var list []Value
-	if err := json.Unmarshal(encoded, &list); err == nil && list != nil {
-		*value = List(list...)
-		return nil
-	}
-	var object Values
-	if err := json.Unmarshal(encoded, &object); err == nil && object != nil {
-		*value = Object(object)
-		return nil
-	}
-	return fmt.Errorf("value must be JSON data")
 }
 
 func cloneValueList(values []Value) []Value {

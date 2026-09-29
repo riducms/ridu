@@ -43,7 +43,7 @@ func TestVirtualFieldsAndInverseJoinsResolveOnRead(t *testing.T) {
 				if ctx.Actor == nil {
 					return ridu.Deny(), nil
 				}
-				return ridu.Where(query.Equal(visiblePath, query.Boolean(true))), nil
+				return ridu.Where(query.Equal(visiblePath, true)), nil
 			}},
 
 			Hooks: ridu.CollectionHooks{AfterRead: []ridu.Hook{func(ctx ridu.HookContext) error {

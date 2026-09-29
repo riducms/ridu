@@ -19,14 +19,13 @@ func (engine *Engine) ReadUploadOwner(ctx context.Context, key string, request R
 	if !exists || collection.Schema.Upload == nil {
 		return Result{}, &Error{Code: "not_found", Status: 404, Message: "upload collection was not found"}
 	}
-	objectKey, _ := query.NewPath("objectKey")
-	predicates := []query.Expression{query.Equal(objectKey, query.String(key))}
+	predicates := []query.Expression{query.Equal("objectKey", key)}
 	for _, size := range collection.Schema.Upload.ImageSizes {
 		sizeKey, err := query.NewPath("sizes", size.Name, "objectKey")
 		if err != nil {
 			return Result{}, err
 		}
-		predicates = append(predicates, query.Equal(sizeKey, query.String(key)))
+		predicates = append(predicates, query.Equal(sizeKey, key))
 	}
 	filter := query.Or(predicates...).Node()
 	request.Operation, request.ID, request.Limit = operation.Read, "", 1

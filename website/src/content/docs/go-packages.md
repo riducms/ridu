@@ -55,11 +55,11 @@ building an adapter. Upload file bytes use the separate `storage` package; see
 
 These types answer different questions:
 
-| Type                 | Question it answers                          | Example                                                  |
-| -------------------- | -------------------------------------------- | -------------------------------------------------------- |
-| `store.Value`        | What kind of document data is this?          | `store.String("Hello")` is a string value                |
-| `operation.Value[T]` | Does this callback have a value of type `T`? | `operation.Present("Hello")` carries a present Go string |
-| `query.Value`        | What should this filter compare against?     | `query.String("Hello")` is the filter's comparison value |
+| Type                 | Question it answers                          | Example                                                   |
+| -------------------- | -------------------------------------------- | --------------------------------------------------------- |
+| `store.Value`        | What kind of document data is this?          | `store.String("Hello")` is a string value                 |
+| `operation.Value[T]` | Does this callback have a value of type `T`? | `operation.Present("Hello")` carries a present Go string  |
+| `query.Value`        | What should this filter compare against?     | In `query.Equal("title", "Hello")`, `"Hello"` becomes one |
 
 In `operation.Value[string]`, the square brackets mean the callback works with a Go `string`.
 `operation.Value[store.Value]` carries an optional document value, which can hold an object,

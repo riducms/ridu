@@ -278,7 +278,7 @@ func TestRESTEvaluatesSafeDocumentAndFieldCapabilities(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	editable := query.Equal(titlePath, query.String("editable"))
+	editable := query.Equal(titlePath, "editable")
 	application, err := ridu.New(ridu.Config{
 		Name: "Access fixture", Admin: ridu.AdminConfig{User: "users"},
 		Collections: []ridu.Collection{{
@@ -362,10 +362,10 @@ func TestRESTResolvesOneBoundedFilteredSelectionWithExactCapabilities(t *testing
 		}})},
 		Access: ridu.CollectionAccess{
 			Read: func(ridu.AccessContext) (ridu.AccessDecision, error) {
-				return ridu.Where(query.Equal(visibilityPath, query.String("public"))), nil
+				return ridu.Where(query.Equal(visibilityPath, "public")), nil
 			},
 			Update: func(ridu.AccessContext) (ridu.AccessDecision, error) {
-				return ridu.Where(query.Equal(titlePath, query.String("editable"))), nil
+				return ridu.Where(query.Equal(titlePath, "editable")), nil
 			},
 		},
 	}}}, teststore.New())

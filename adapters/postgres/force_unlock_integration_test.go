@@ -50,7 +50,7 @@ func TestPostgresForceUnlockAuthorizationAndCredentialResetAreAtomic(t *testing.
 						return ridu.Deny(), access.Context.Err()
 					}
 				}
-				return ridu.Where(query.Equal(mayUnlockPath, query.Boolean(true))), nil
+				return ridu.Where(query.Equal(mayUnlockPath, true)), nil
 			}},
 		}},
 	}

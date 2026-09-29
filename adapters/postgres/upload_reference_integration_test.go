@@ -39,7 +39,7 @@ func TestPostgresUploadReferenceAdmissionAndLockBoundary(t *testing.T) {
 				UploadConfig: ridu.UploadConfig{MaxFileSize: 1024, MimeTypes: []string{"text/plain"}},
 				Fields:       field.Fields{field.Checkbox("visible").Required()},
 				Access: ridu.CollectionAccess{Read: func(ridu.AccessContext) (ridu.AccessDecision, error) {
-					return ridu.Where(query.Equal(visiblePath, query.Boolean(true))), nil
+					return ridu.Where(query.Equal(visiblePath, true)), nil
 				}},
 			},
 			{

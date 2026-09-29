@@ -668,7 +668,7 @@ func TestVersionHistoryAppliesFilteredAccessToEverySnapshot(t *testing.T) {
 		if ctx.Actor == nil {
 			return ridu.Deny(), nil
 		}
-		return ridu.Where(query.Equal(ownerPath, query.String(ctx.Actor.ID))), nil
+		return ridu.Where(query.Equal(ownerPath, ctx.Actor.ID)), nil
 	}
 	application, err := ridu.New(ridu.Config{Name: "version snapshot access", Collections: []ridu.Collection{{
 		Slug: "posts", Versions: true,
@@ -853,7 +853,7 @@ func TestScheduledPublicationDoesNotRequireReadAccess(t *testing.T) {
 		t.Fatal(err)
 	}
 	allowScheduledTitle := func(ridu.AccessContext) (ridu.AccessDecision, error) {
-		return ridu.Where(query.Equal(titlePath, query.String("Scheduled"))), nil
+		return ridu.Where(query.Equal(titlePath, "Scheduled")), nil
 	}
 	application, err := ridu.New(ridu.Config{Name: "scheduled without read", Collections: []ridu.Collection{{
 		Slug: "books", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true},

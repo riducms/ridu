@@ -148,11 +148,7 @@ func TestReviewerExampleSeparatesStoredAndReturnedValues(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	path, err := query.NewPath("reviewer")
-	if err != nil {
-		t.Fatal(err)
-	}
-	read, err := local.Find(t.Context(), "reviews", review.ID, ridu.FindOptions{Populate: []query.Population{{Path: path, Depth: 1}}})
+	read, err := local.Find(t.Context(), "reviews", review.ID, ridu.FindOptions{Populate: []query.Population{{Path: query.Field("reviewer"), Depth: 1}}})
 	if err != nil {
 		t.Fatal(err)
 	}

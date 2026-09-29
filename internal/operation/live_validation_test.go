@@ -79,7 +79,7 @@ func TestLiveValidationResourceAdmissionAndAtomicPredicates(t *testing.T) {
 		t.Run("filtered "+string(kind), func(t *testing.T) {
 			collection := liveTestCollection(title)
 			calls := 0
-			predicate := query.Equal(title.Path, query.String("not persisted")).Node()
+			predicate := query.Equal(title.Path, "not persisted").Node()
 			collection.Access = map[operation.Kind]Access{kind: func(Context) (Decision, error) { return Decision{Kind: Where, Access: &predicate}, nil }}
 			collection.Bindings = []FieldBinding{{Field: title, LiveValidators: []FieldLiveValidator{func(Context) ([]schema.Issue, bool, error) { calls++; return nil, true, nil }}}}
 			engine, id := liveTestEngine(t, collection, store.Values{"title": store.String("persisted")})
@@ -159,7 +159,7 @@ func TestLiveValidationMissingMalformedAndOperationalResults(t *testing.T) {
 	collection := liveTestCollection(parent)
 	calls := 0
 	collection.Bindings = []FieldBinding{{Field: parent}, {Field: child, LiveValidators: []FieldLiveValidator{func(ctx Context) ([]schema.Issue, bool, error) {
-		if ctx.Value.Kind() != "" && ctx.Value.Kind() != store.ValueNull && ctx.Value.Kind() != store.ValueString {
+		if !ctx.Value.IsZero() && ctx.Value.Kind() != store.ValueNull && ctx.Value.Kind() != store.ValueString {
 			return nil, false, nil
 		}
 		calls++
@@ -173,7 +173,7 @@ func TestLiveValidationMissingMalformedAndOperationalResults(t *testing.T) {
 	for name, value := range map[string]store.Value{"missing": {}, "null": store.Null(), "malformed": store.Number(3), "missing scalar": store.Object(store.Values{}), "bad scalar": store.Object(store.Values{"sku": store.Number(3)}), "string": store.Object(store.Values{"sku": store.String("ok")})} {
 		t.Run(name, func(t *testing.T) {
 			data := store.Values{}
-			if value.Kind() != "" {
+			if !value.IsZero() {
 				data["meta"] = value
 			}
 			result, err := engine.LiveValidate(t.Context(), LiveValidationRequest{Collection: "products", Data: data, Fields: []string{"meta.sku"}})
@@ -368,7 +368,7 @@ func TestLiveValidationResourceLocalQueriesDoNotRunLifecycle(t *testing.T) {
 	collection.Hooks = Hooks{BeforeRead: []Hook{hook}, AfterRead: []Hook{hook}, BeforeOperation: []Hook{hook}, AfterError: []Hook{hook}}
 	var engine *Engine
 	collection.Access = map[operation.Kind]Access{operation.Create: func(ctx Context) (Decision, error) {
-		result, err := engine.Execute(ctx.Context, Request{Operation: operation.Read, Collection: "products", Filter: query.Equal(sku.Path, query.String("known")), Limit: 10, Select: []query.Path{sku.Path}, Actor: ctx.Actor})
+		result, err := engine.Execute(ctx.Context, Request{Operation: operation.Read, Collection: "products", Filter: query.Equal(sku.Path, "known"), Limit: 10, Select: []query.Path{sku.Path}, Actor: ctx.Actor})
 		if err != nil {
 			return Decision{}, err
 		}

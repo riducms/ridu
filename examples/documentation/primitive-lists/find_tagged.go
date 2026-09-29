@@ -13,9 +13,8 @@ func FindTaggedProducts(
 	local *ridu.LocalAPI,
 ) (store.Page, error) {
 	// Match either tag anywhere in the list, using exact values.
-	tags := query.Field("tags")
 	return local.List(ctx, "products", ridu.ListOptions{
-		Where: query.In(tags, query.String("sale"), query.String("featured")),
+		Where: query.In("tags", "sale", "featured"),
 		Page:  1,
 		Limit: 20,
 	})

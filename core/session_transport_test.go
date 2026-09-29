@@ -45,7 +45,7 @@ func newTransportFixture(t *testing.T) transportFixture {
 		if ctx.Actor == nil || ctx.ActorCollection != "users" {
 			return ridu.Deny(), nil
 		}
-		return ridu.Where(query.Equal(ownerPath, query.String(ctx.Actor.ID))), nil
+		return ridu.Where(query.Equal(ownerPath, ctx.Actor.ID)), nil
 	}
 	signedIn := func(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
 		if ctx.Actor == nil {

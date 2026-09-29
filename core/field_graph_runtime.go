@@ -100,7 +100,7 @@ func lowerFieldGraph(graph configresolver.Graph, resourceKind, resource string, 
 			}
 		case field.KindJSON:
 			facade, _ := field.AsJSON(definition)
-			codec := finiteCodec("", "a finite JSON value")
+			codec := finiteCodec(anyValueKind, "a finite JSON value")
 			lowerTypedPolicies(&binding, facade.HookPolicy(), facade.AfterReadHooks(), facade.Validators(), facade.LiveValidators(), codec, codec, local)
 		case field.KindPoint:
 			facade, _ := field.AsPoint(definition)
@@ -146,7 +146,7 @@ func lowerFieldGraph(graph configresolver.Graph, resourceKind, resource string, 
 			lowerTypedPolicies(&binding, facade.HookPolicy(), facade.AfterReadHooks(), facade.Validators(), facade.LiveValidators(), codec, codec, local)
 		case field.KindPlugin:
 			facade, _ := field.AsPlugin(definition)
-			codec := finiteCodec("", "a finite plugin value")
+			codec := finiteCodec(anyValueKind, "a finite plugin value")
 			lowerTypedPolicies(&binding, facade.HookPolicy(), facade.AfterReadHooks(), facade.Validators(), facade.LiveValidators(), codec, codec, local)
 		case field.KindJoin:
 			facade, _ := field.AsJoin(definition)
@@ -166,7 +166,7 @@ func lowerFieldGraph(graph configresolver.Graph, resourceKind, resource string, 
 				}
 				return store.Null(), err
 			}
-			codec := finiteCodec("", "a finite output value")
+			codec := finiteCodec(anyValueKind, "a finite output value")
 			lowerTypedPolicies(&binding, field.Hooks[store.Value]{}, facade.AfterReadHooks(), nil, nil, codec, codec, local)
 		default:
 			return nil, unsupported("this field kind does not support attached callbacks")
@@ -234,12 +234,15 @@ func referenceOutputCodec() graphCodec[operation.ReferenceOutput] {
 	}, code: "invalid_type", expected: "a relationship ID or populated document"}
 }
 
+// anyValueKind makes finiteCodec accept every valid kind.
+const anyValueKind store.ValueKind = 0
+
 func finiteCodec(kind store.ValueKind, expected string) graphCodec[store.Value] {
 	return graphCodec[store.Value]{decode: func(value store.Value) (store.Value, bool) {
-		if kind != "" {
+		if kind != anyValueKind {
 			return value, value.Kind() == kind
 		}
-		return value, value.Kind() != "" && value.Kind() != store.ValueDocument
+		return value, !value.IsZero() && value.Kind() != store.ValueDocument
 	}, encode: func(value store.Value) store.Value { return value }, code: "invalid_type", expected: expected}
 }
 

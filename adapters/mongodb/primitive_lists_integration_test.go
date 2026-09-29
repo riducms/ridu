@@ -120,7 +120,7 @@ func TestPrimitiveListMongoDBNegativePredicatesExcludeCorruptShapes(t *testing.T
 			path, _ := query.ParsePath("items")
 			title, _ := query.ParsePath("title")
 			negated := query.Not(query.In(path, operand))
-			either := query.Or(query.Equal(title, query.String("x")), query.In(path, operand))
+			either := query.Or(query.Equal(title, "x"), query.In(path, operand))
 			for _, expression := range []query.Expression{negated, either} {
 				node := expression.Node()
 				request := store.Request{Collection: collection, Filter: &node}

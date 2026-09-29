@@ -192,20 +192,28 @@ func typeDeclaration(root string, set *token.FileSet, loaded *packages.Package, 
 		kind = "interface"
 	}
 	members := []declarationMember{}
+	constraint := false
 	switch typed := spec.Type.(type) {
 	case *ast.StructType:
 		members = fieldListMembers(set, loaded.TypesInfo, loaded.Types, typed.Fields, true)
 	case *ast.InterfaceType:
-		members = fieldListMembers(set, loaded.TypesInfo, loaded.Types, typed.Methods, true)
+		constraint = isTypeConstraint(typed)
+		if !constraint {
+			members = fieldListMembers(set, loaded.TypesInfo, loaded.Types, typed.Methods, true)
+		}
 	}
 	docs := spec.Doc
 	if docs == nil {
 		docs = group.Doc
 	}
 	// Match Go documentation: show the exported type surface, not private runtime state.
-	ast.FileExports(&ast.File{Decls: []ast.Decl{
-		&ast.GenDecl{Tok: token.TYPE, Specs: []ast.Spec{spec}},
-	}})
+	// A constraint's type set, such as ~string | Path, is its public contract, and
+	// filtering exports would remove it.
+	if !constraint {
+		ast.FileExports(&ast.File{Decls: []ast.Decl{
+			&ast.GenDecl{Tok: token.TYPE, Specs: []ast.Spec{spec}},
+		}})
+	}
 	return declaration{
 		ID:          "go:" + loaded.PkgPath + "#" + spec.Name.Name,
 		Name:        spec.Name.Name,
@@ -218,6 +226,21 @@ func typeDeclaration(root string, set *token.FileSet, loaded *packages.Package, 
 		Aliases:     []string{loaded.Name + "." + spec.Name.Name},
 		Declaration: spec.Name.Name,
 	}
+}
+
+// isTypeConstraint reports whether an interface lists a type set, such as
+// ~string | Path, and can therefore only constrain type parameters.
+func isTypeConstraint(typed *ast.InterfaceType) bool {
+	for _, element := range typed.Methods.List {
+		if len(element.Names) != 0 {
+			continue
+		}
+		switch element.Type.(type) {
+		case *ast.BinaryExpr, *ast.UnaryExpr:
+			return true
+		}
+	}
+	return false
 }
 
 func valueDeclaration(root string, set *token.FileSet, loaded *packages.Package, group *ast.GenDecl, spec *ast.ValueSpec, index int) declaration {

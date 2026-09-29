@@ -16,8 +16,8 @@ import (
 func TestMongoRequestPredicateCombinesRequestAndAuthorizationRestrictions(t *testing.T) {
 	title := mongoMustPath(t, "title")
 	score := mongoMustPath(t, "score")
-	filter := query.Equal(title, query.String("public")).Node()
-	access := query.GreaterThan(score, query.Number(5)).Node()
+	filter := query.Equal(title, "public").Node()
+	access := query.GreaterThan(score, 5).Node()
 
 	compiled, err := requestPredicate(store.Request{
 		Collection:       mongoPredicateCollection(),
@@ -57,7 +57,7 @@ func TestMongoRequestPredicateCombinesRequestAndAuthorizationRestrictions(t *tes
 func TestMongoRegexPredicatesQuoteUserInput(t *testing.T) {
 	title := mongoMustPath(t, "title")
 	injected := `{$where:"return true",$gt:""}`
-	equality, err := compileMongoNode(mongoPredicateCollection(), query.Equal(title, query.String(injected)).Node(), "filter", mongoPredicateScope{})
+	equality, err := compileMongoNode(mongoPredicateCollection(), query.Equal(title, injected).Node(), "filter", mongoPredicateScope{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -261,16 +261,16 @@ func TestMongoNestedPredicatesGuardEveryObjectAncestor(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	negated := query.Not(query.Equal(path, query.String("safe")))
+	negated := query.Not(query.Equal(path, "safe"))
 	tests := []struct {
 		name string
 		node query.Node
 	}{
-		{name: "equal", node: query.Equal(path, query.String("safe")).Node()},
+		{name: "equal", node: query.Equal(path, "safe").Node()},
 		{name: "equal null", node: query.Equal(path, query.Null()).Node()},
-		{name: "not equal", node: query.NotEqual(path, query.String("safe")).Node()},
+		{name: "not equal", node: query.NotEqual(path, "safe").Node()},
 		{name: "contains", node: query.Contains(path, "safe").Node()},
-		{name: "range", node: query.GreaterThan(path, query.String("a")).Node()},
+		{name: "range", node: query.GreaterThan(path, "a").Node()},
 		{name: "exists", node: exists.Node()},
 		{name: "in including null", node: in.Node()},
 		{name: "logical not", node: negated.Node()},
@@ -313,7 +313,7 @@ func TestMongoInvalidTimestampNotEqualMatchesNoDocuments(t *testing.T) {
 	title := mongoMustPath(t, "title")
 	compiled, err := compileMongoNode(
 		mongoPredicateCollection(),
-		query.NotEqual(title, query.Number(0)).Node(),
+		query.NotEqual(title, 0).Node(),
 		"access",
 		mongoPredicateScope{},
 	)
@@ -451,7 +451,7 @@ func TestMongoProjectionCoalescesAncestorAndDescendantPaths(t *testing.T) {
 
 func TestMongoMalformedNodesFailClosed(t *testing.T) {
 	title := mongoMustPath(t, "title")
-	comparison := query.Equal(title, query.String("safe")).Node().Comparison
+	comparison := query.Equal(title, "safe").Node().Comparison
 	tests := []struct {
 		name string
 		node query.Node
@@ -491,7 +491,7 @@ func TestMongoUnsupportedSchemaPathsFailClosed(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			path := mongoMustPath(t, test.path)
-			node := query.Equal(path, query.String("value")).Node()
+			node := query.Equal(path, "value").Node()
 			if _, err := compileMongoNode(mongoPredicateCollection(), node, "filter", mongoPredicateScope{}); err == nil || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("compile error = %v, want containing %q", err, test.want)
 			}
@@ -499,14 +499,14 @@ func TestMongoUnsupportedSchemaPathsFailClosed(t *testing.T) {
 	}
 
 	localized := mongoMustPath(t, "localizedTitle")
-	access := query.Equal(localized, query.String("visible")).Node()
+	access := query.Equal(localized, "visible").Node()
 	if _, err := requestPredicate(store.Request{
 		Collection: mongoPredicateCollection(), Access: &access, AllLocales: true,
 		Locales: []schema.LocaleCode{"en", "fr"}, LocaleChain: []schema.LocaleCode{"en"},
 	}, false); err != nil {
 		t.Fatalf("localized all-locales access was rejected: %v", err)
 	}
-	nonLocalized := query.Equal(mongoMustPath(t, "title"), query.String("visible")).Node()
+	nonLocalized := query.Equal(mongoMustPath(t, "title"), "visible").Node()
 	if _, err := requestPredicate(store.Request{
 		Collection: mongoPredicateCollection(), Access: &nonLocalized, AllLocales: true,
 	}, false); err != nil {
@@ -542,8 +542,8 @@ func TestMongoRepeatedPredicatesPreserveDocumentScopedBooleanSemantics(t *testin
 	rowsLabel := mongoMustPath(t, "rows.label")
 
 	splitRows := query.And(
-		query.Equal(rowsKind, query.String("primary")),
-		query.Equal(rowsLabel, query.String("visible")),
+		query.Equal(rowsKind, "primary"),
+		query.Equal(rowsLabel, "visible"),
 	)
 	compiled, err := compileMongoNode(collection, splitRows.Node(), "filter", mongoPredicateScope{})
 	if err != nil {
@@ -556,7 +556,7 @@ func TestMongoRepeatedPredicatesPreserveDocumentScopedBooleanSemantics(t *testin
 		t.Fatalf("array predicate is not valid BSON: %v", err)
 	}
 
-	block := query.Equal(mongoMustPath(t, "layout.hero.heading"), query.String("Welcome"))
+	block := query.Equal(mongoMustPath(t, "layout.hero.heading"), "Welcome")
 	compiled, err = compileMongoNode(collection, block.Node(), "access", mongoPredicateScope{})
 	if err != nil {
 		t.Fatal(err)
@@ -586,8 +586,8 @@ func TestMongoRepeatedSelectUsesWholeListTruthTable(t *testing.T) {
 		t.Fatalf("has-many select contains = %#v, want exact scalar membership", contains)
 	}
 	for _, expression := range []query.Expression{
-		query.Equal(tags, query.String("alpha")),
-		query.In(tags, query.String("alpha")),
+		query.Equal(tags, "alpha"),
+		query.In(tags, "alpha"),
 	} {
 		compiled, err := compileMongoNode(collection, expression.Node(), "filter", mongoPredicateScope{})
 		if err != nil {
@@ -601,7 +601,7 @@ func TestMongoRepeatedSelectUsesWholeListTruthTable(t *testing.T) {
 
 func TestMongoRepeatedNegationAndDisjunctionKeepShapeGuardsOutside(t *testing.T) {
 	collection := mongoRepeatedCollection()
-	repeated := query.Equal(mongoMustPath(t, "rows.kind"), query.String("primary"))
+	repeated := query.Equal(mongoMustPath(t, "rows.kind"), "primary")
 
 	negated := query.Not(repeated)
 	compiled, err := compileMongoNode(collection, negated.Node(), "filter", mongoPredicateScope{})
@@ -613,7 +613,7 @@ func TestMongoRepeatedNegationAndDisjunctionKeepShapeGuardsOutside(t *testing.T)
 		t.Fatalf("repeated NOT lacks an outer shape guard: %#v", compiled)
 	}
 
-	disjunction := query.Or(repeated, query.Equal(mongoMustPath(t, "title"), query.String("visible")))
+	disjunction := query.Or(repeated, query.Equal(mongoMustPath(t, "title"), "visible"))
 	compiled, err = compileMongoNode(collection, disjunction.Node(), "access", mongoPredicateScope{})
 	if err != nil {
 		t.Fatal(err)
@@ -663,7 +663,7 @@ func TestMongoRepeatedRootShapeGuardCoversTheStrictStorageEnvelope(t *testing.T)
 
 	notEqual, err := compileMongoNode(
 		collection,
-		query.NotEqual(mongoMustPath(t, "rows.kind"), query.String("blocked")).Node(),
+		query.NotEqual(mongoMustPath(t, "rows.kind"), "blocked").Node(),
 		"access",
 		mongoPredicateScope{},
 	)
@@ -677,7 +677,7 @@ func TestMongoRepeatedRootShapeGuardCoversTheStrictStorageEnvelope(t *testing.T)
 
 func TestMongoDecoderFreePredicateGuardsTheCompleteAuthoredEnvelope(t *testing.T) {
 	collection := mongoRepeatedCollection()
-	titleFilter := query.Equal(mongoMustPath(t, "title"), query.String("visible")).Node()
+	titleFilter := query.Equal(mongoMustPath(t, "title"), "visible").Node()
 	compiled, err := decoderFreeRequestPredicate(store.Request{
 		Collection: collection,
 		Filter:     &titleFilter,
@@ -759,8 +759,8 @@ func TestMongoDecoderFreePredicateGuardsTheCompleteAuthoredEnvelope(t *testing.T
 
 func TestMongoRepeatedShapeGuardDedupUsesTheCompleteResolvedShape(t *testing.T) {
 	collection := mongoRepeatedCollection()
-	kind := query.Equal(mongoMustPath(t, "rows.kind"), query.String("primary"))
-	note := query.Equal(mongoMustPath(t, "rows.details.note"), query.String("nested"))
+	kind := query.Equal(mongoMustPath(t, "rows.kind"), "primary")
+	note := query.Equal(mongoMustPath(t, "rows.details.note"), "nested")
 
 	for _, expressions := range [][]query.Expression{{kind, note}, {note, kind}} {
 		conjunction := query.And(expressions...)
@@ -784,7 +784,7 @@ func TestMongoRepeatedPathsAreScopedForVersionsAndBoundedByRole(t *testing.T) {
 	path := mongoMustPath(t, "rows.label")
 	compiled, err := compileMongoNode(
 		collection,
-		query.Equal(path, query.String("visible")).Node(),
+		query.Equal(path, "visible").Node(),
 		"version access",
 		mongoPredicateScope{storagePrefix: mongoVersionSnapshotPath + "."},
 	)

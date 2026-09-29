@@ -18,8 +18,8 @@ import (
 func TestQueryAdmissionPrecedesStoreReadsAndFieldRuleEvaluation(t *testing.T) {
 	private, _ := query.NewPath("privateKey")
 	public, _ := query.NewPath("title")
-	filter := query.Equal(private, query.String("fixture-value"))
-	publicFilter := query.Equal(public, query.String("fixture-title"))
+	filter := query.Equal(private, "fixture-value")
+	publicFilter := query.Equal(public, "fixture-title")
 	and := query.And(publicFilter, filter)
 	or := query.Or(publicFilter, filter)
 	not := query.Not(filter)
@@ -79,7 +79,7 @@ func TestQueryAdmissionPreservesTrustedPredicatesAndPageScopedReadRules(t *testi
 	collection := queryAdmissionCollection()
 	private, _ := query.NewPath("privateKey")
 	title, _ := query.NewPath("title")
-	access := query.Equal(private, query.String("included")).Node()
+	access := query.Equal(private, "included").Node()
 	collection.Access = map[operation.Kind]Access{operation.Read: func(Context) (Decision, error) { return Decision{Kind: Where, Access: &access}, nil }}
 	var evaluated []string
 	collection.Schema.Fields[1].QueryRestricted = true

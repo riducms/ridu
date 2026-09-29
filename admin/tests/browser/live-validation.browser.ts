@@ -4,6 +4,7 @@ import { svelte } from "@hvniel/vite-plugin-svelte-inline-component";
 import { createAdminClient } from "@admin/core/api/admin-client";
 import { AdminRuntime } from "@admin/core/runtime/admin-runtime.svelte";
 import { afterEach, expect, it, vi } from "vitest";
+import { userEvent } from "vitest/browser";
 import type { LiveValidationEnvelope, LiveValidationRequest, SchemaField } from "@riducms/protocol";
 import { RiduError } from "@riducms/sdk";
 import { FormController } from "@admin/core/forms/form-controller.svelte";
@@ -730,9 +731,16 @@ for (const kind of ["array", "blocks"] as const)
 			field: json,
 			runtime: new AdminRuntime(createAdminClient()),
 		});
+		const editor = screen.getByRole("textbox", { name: "Details A" });
+		async function replaceJSONInput(text: string) {
+			// Clear through CodeMirror's keymap before pasting the exact JSON text.
+			await editor.click();
+			await userEvent.keyboard("{ControlOrMeta>}a{/ControlOrMeta}{Backspace}");
+			await editor.fill(text);
+		}
 		form.set("sku", "bad");
 		form.liveValidation.flush("sku");
-		await screen.getByRole("textbox", { name: "Details A" }).fill('{"unfinished":');
+		await replaceJSONInput('{"unfinished":');
 		expect(requests[0]!.signal.aborted).toBe(true);
 		await expect
 			.element(screen.getByRole("textbox", { name: "Details A" }))
@@ -745,7 +753,7 @@ for (const kind of ["array", "blocks"] as const)
 		expect(form.liveValidation.forField("sku").status).toBe("skipped");
 		form.liveValidation.flush("sku");
 		expect(requests).toHaveLength(1);
-		await screen.getByRole("textbox", { name: "Details A" }).fill('{"valid":true}');
+		await replaceJSONInput('{"valid":true}');
 		// CodeMirror reconciles contenteditable mutations before committing parsed input.
 		await expect.poll(() => form.get("rows.1.details")).toEqual({ valid: true });
 		form.liveValidation.flush("sku");
@@ -753,7 +761,7 @@ for (const kind of ["array", "blocks"] as const)
 		expect((requests[1]!.input.data.rows as Record<string, unknown>[])[1]!.details).toEqual({
 			valid: true,
 		});
-		await screen.getByRole("textbox", { name: "Details A" }).fill('{"unfinished":');
+		await replaceJSONInput('{"unfinished":');
 		expect(form.liveValidation.forField("sku").status).toBe("skipped");
 		await screen.unmount();
 		form.liveValidation.flush("sku");

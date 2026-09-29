@@ -47,7 +47,7 @@ func TestMongoDBReferenceShapeLifecycle(t *testing.T) {
 					return false, nil
 				}})},
 				Access: ridu.CollectionAccess{Read: func(ridu.AccessContext) (ridu.AccessDecision, error) {
-					return ridu.Where(query.Equal(public, query.Boolean(true))), nil
+					return ridu.Where(query.Equal(public, true)), nil
 				}},
 			},
 			{Slug: "teams", Fields: field.Fields{field.Text("name").Required()}},

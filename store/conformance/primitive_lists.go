@@ -73,21 +73,21 @@ func runPrimitiveLists(t *testing.T, factory Factory) {
 		chain      []schema.LocaleCode
 		ids        []string
 	}{
-		{"membership", query.In(textPath, query.String("oak")), nil, []string{id(1)}},
-		{"duplicate membership", query.In(textPath, query.String("oak"), query.String("oak")), nil, []string{id(1)}},
-		{"empty string", query.In(textPath, query.String("")), nil, []string{id(1)}},
-		{"literal query string", query.In(textPath, query.String("$literal")), nil, []string{id(1)}},
-		{"number zero", query.In(mustPath("numbers"), query.Number(0)), nil, []string{id(1)}},
-		{"number exact", query.In(mustPath("numbers"), query.Number(8.5)), nil, []string{id(1)}},
-		{"negative membership", listNot(query.In(textPath, query.String("oak"))), nil, []string{id(2), id(3), id(4)}},
-		{"empty operands", query.In(textPath), nil, nil},
+		{"membership", query.In(textPath, "oak"), nil, []string{id(1)}},
+		{"duplicate membership", query.In(textPath, "oak", "oak"), nil, []string{id(1)}},
+		{"empty string", query.In(textPath, ""), nil, []string{id(1)}},
+		{"literal query string", query.In(textPath, "$literal"), nil, []string{id(1)}},
+		{"number zero", query.In(mustPath("numbers"), 0), nil, []string{id(1)}},
+		{"number exact", query.In(mustPath("numbers"), 8.5), nil, []string{id(1)}},
+		{"negative membership", listNot(query.In(textPath, "oak")), nil, []string{id(2), id(3), id(4)}},
+		{"empty operands", query.In(textPath, []string{}...), nil, nil},
 		{"exists includes empty", listExists(textPath, true), nil, []string{id(1), id(2)}},
 		{"absent", listExists(textPath, false), nil, []string{id(3), id(4)}},
 		{"null equality", query.Equal(textPath, query.Null()), nil, []string{id(3), id(4)}},
 		{"null inequality", query.NotEqual(textPath, query.Null()), nil, []string{id(1), id(2)}},
-		{"group membership", query.In(mustPath("details.texts"), query.String("nested")), nil, []string{id(1)}},
-		{"locale exact", query.In(mustPath("localizedList"), query.String("English")), []schema.LocaleCode{"en"}, []string{id(1)}},
-		{"empty locale blocks fallback", query.In(mustPath("localizedList"), query.String("English")), []schema.LocaleCode{"fr", "en"}, nil},
+		{"group membership", query.In(mustPath("details.texts"), "nested"), nil, []string{id(1)}},
+		{"locale exact", query.In(mustPath("localizedList"), "English"), []schema.LocaleCode{"en"}, []string{id(1)}},
+		{"empty locale blocks fallback", query.In(mustPath("localizedList"), "English"), []schema.LocaleCode{"fr", "en"}, nil},
 	}
 	for _, test := range cases {
 		t.Run(test.name, func(t *testing.T) {
@@ -114,7 +114,7 @@ func runPrimitiveLists(t *testing.T, factory Factory) {
 			assertDocumentIDs(t, page.Documents, test.ids...)
 		})
 	}
-	for _, expression := range []query.Expression{query.Equal(textPath, query.String("oak")), query.NotEqual(textPath, query.String("oak")), query.Contains(textPath, "oak"), query.Like(textPath, "oak"), query.GreaterThan(mustPath("numbers"), query.Number(0)), query.In(textPath, query.Number(1)), query.In(textPath, query.Null())} {
+	for _, expression := range []query.Expression{query.Equal(textPath, "oak"), query.NotEqual(textPath, "oak"), query.Contains(textPath, "oak"), query.Like(textPath, "oak"), query.GreaterThan(mustPath("numbers"), 0), query.In(textPath, 1), query.In(textPath, query.Null())} {
 		node := expression.Node()
 		read := begin(t, fixture.backend)
 		_, err := read.List(t.Context(), fixture.request(store.Request{Collection: fixture.records, Filter: &node}))

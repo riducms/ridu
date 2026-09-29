@@ -52,7 +52,7 @@ func scopedBindingContext(ctx Context, binding FieldBinding, location fieldLocat
 	values := boundValues(ctx)
 	ctx.Data = store.CloneValues(values)
 	ctx.FieldPath, ctx.RuntimePath = binding.Field.Path.String(), location.runtimePath
-	ctx.Value, ctx.ValuePresent = location.value, location.value.Kind() != ""
+	ctx.Value, ctx.ValuePresent = location.value, !location.value.IsZero()
 	ctx.SiblingData, _ = location.siblings.CopyObject()
 	// Leaf hooks refresh their own cached value without copying the immutable
 	// sibling snapshot. Apply that value to this callback's detached map. Exact-

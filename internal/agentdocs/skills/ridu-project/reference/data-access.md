@@ -53,7 +53,7 @@ Inside the Go process:
 page, err := app.Local().List(ctx, "posts", ridu.ListOptions{
 	Page:  1,
 	Limit: 20,
-	Where: query.Equal(query.Field("status"), query.String("published")),
+	Where: query.Equal("status", "published"),
 	Actor: currentUser,
 })
 if err != nil {

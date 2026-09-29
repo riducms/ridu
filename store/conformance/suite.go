@@ -42,8 +42,8 @@ func Run(t *testing.T, factory Factory) {
 		})
 		rank := mustPath("rank")
 		state := mustPath("state")
-		filter := query.GreaterThanEqual(rank, query.Number(2)).Node()
-		access := query.Equal(state, query.String("public")).Node()
+		filter := query.GreaterThanEqual(rank, 2).Node()
+		access := query.Equal(state, "public").Node()
 		transaction := begin(t, fixture.backend)
 		page, err := transaction.List(t.Context(), fixture.request(store.Request{
 			Collection: fixture.records, Collections: fixture.collections,
@@ -123,8 +123,8 @@ func Run(t *testing.T, factory Factory) {
 		})
 		rank := mustPath("rank")
 		state := mustPath("state")
-		filter := query.GreaterThanEqual(rank, query.Number(0)).Node()
-		access := query.Equal(state, query.String("public")).Node()
+		filter := query.GreaterThanEqual(rank, 0).Node()
+		access := query.Equal(state, "public").Node()
 		for pageNumber, want := range [][]float64{{0, 1}, {2, 3}} {
 			transaction := begin(t, fixture.backend)
 			distinct, ok := transaction.(store.DistinctTransaction)
@@ -255,7 +255,7 @@ func Run(t *testing.T, factory Factory) {
 			{name: "equal-false", value: false, want: id(2)},
 		} {
 			t.Run(test.name, func(t *testing.T) {
-				filter := query.Equal(flag, query.Boolean(test.value)).Node()
+				filter := query.Equal(flag, test.value).Node()
 				read := begin(t, fixture.backend)
 				page, err := read.List(t.Context(), fixture.request(store.Request{
 					Collection: fixture.records, Collections: fixture.collections,
@@ -362,17 +362,17 @@ func Run(t *testing.T, factory Factory) {
 		rowKind := mustPath("rows.kind")
 		rowLabel := mustPath("rows.label")
 		rowAnd := query.And(
-			query.Equal(rowKind, query.String("target")),
-			query.Equal(rowLabel, query.String("target")),
+			query.Equal(rowKind, "target"),
+			query.Equal(rowLabel, "target"),
 		)
 		rowOr := query.Or(
-			query.Equal(rowKind, query.String("target")),
-			query.Equal(rowLabel, query.String("target")),
+			query.Equal(rowKind, "target"),
+			query.Equal(rowLabel, "target"),
 		)
 		rowNot := query.Not(rowAnd)
 		blockAnd := query.And(
-			query.Equal(mustPath("layout.hero.heading"), query.String("target")),
-			query.Equal(mustPath("layout.hero.tone"), query.String("target")),
+			query.Equal(mustPath("layout.hero.heading"), "target"),
+			query.Equal(mustPath("layout.hero.tone"), "target"),
 		)
 		tags := mustPath("tags")
 		tagsExist, err := query.Compare(tags, query.OperatorExists, query.Boolean(true))
@@ -395,13 +395,13 @@ func Run(t *testing.T, factory Factory) {
 			{name: "not-negates-the-document-result", filter: nodePointer(rowNot.Node()), want: []string{id(3), id(4)}},
 			{name: "access-uses-the-same-cross-row-semantics", access: nodePointer(rowAnd.Node()), want: []string{id(1), id(2)}},
 			{name: "block-siblings-may-match-different-blocks", filter: nodePointer(blockAnd.Node()), want: []string{id(1), id(2)}},
-			{name: "block-discriminator-stays-on-the-comparison-row", filter: nodePointer(query.Equal(mustPath("layout.hero.heading"), query.String("decoy")).Node()), want: []string{}},
+			{name: "block-discriminator-stays-on-the-comparison-row", filter: nodePointer(query.Equal(mustPath("layout.hero.heading"), "decoy").Node()), want: []string{}},
 			{name: "has-many-select-contains-is-membership", filter: nodePointer(query.Contains(tags, "alpha").Node()), want: []string{id(1), id(3)}},
-			{name: "has-many-select-equal-is-not-membership", filter: nodePointer(query.Equal(tags, query.String("alpha")).Node()), want: []string{}},
-			{name: "has-many-select-in-is-not-membership", filter: nodePointer(query.In(tags, query.String("alpha")).Node()), want: []string{}},
+			{name: "has-many-select-equal-is-not-membership", filter: nodePointer(query.Equal(tags, "alpha").Node()), want: []string{}},
+			{name: "has-many-select-in-is-not-membership", filter: nodePointer(query.In(tags, "alpha").Node()), want: []string{}},
 			{name: "has-many-select-null-equality-matches-missing", filter: nodePointer(query.Equal(tags, query.Null()).Node()), want: []string{id(4)}},
 			{name: "has-many-select-including-null-matches-missing", filter: nodePointer(query.In(tags, query.String("alpha"), query.Null()).Node()), want: []string{id(4)}},
-			{name: "has-many-select-not-equal-compares-the-list-value", filter: nodePointer(query.NotEqual(tags, query.String("alpha")).Node()), want: []string{id(1), id(2), id(3), id(4)}},
+			{name: "has-many-select-not-equal-compares-the-list-value", filter: nodePointer(query.NotEqual(tags, "alpha").Node()), want: []string{id(1), id(2), id(3), id(4)}},
 			{name: "has-many-select-not-equal-null-requires-a-list", filter: nodePointer(query.NotEqual(tags, query.Null()).Node()), want: []string{id(1), id(2), id(3)}},
 			{name: "has-many-select-exists-requires-a-list", filter: nodePointer(tagsExist.Node()), want: []string{id(1), id(2), id(3)}},
 			{name: "has-many-select-exists-false-matches-missing", filter: nodePointer(tagsMissing.Node()), want: []string{id(4)}},
@@ -919,8 +919,8 @@ func Run(t *testing.T, factory Factory) {
 
 		createdAt := mustPath("createdAt")
 		updatedAt := mustPath("updatedAt")
-		filter := query.GreaterThanEqual(createdAt, query.String("2026-01-02T13:00:00+01:00")).Node()
-		access := query.GreaterThanEqual(updatedAt, query.String(base.Add(24*time.Hour).Format(time.RFC3339Nano))).Node()
+		filter := query.GreaterThanEqual(createdAt, "2026-01-02T13:00:00+01:00").Node()
+		access := query.GreaterThanEqual(updatedAt, base.Add(24*time.Hour).Format(time.RFC3339Nano)).Node()
 		read := begin(t, fixture.backend)
 		page, err := read.List(t.Context(), fixture.request(store.Request{
 			Collection: fixture.records, Collections: fixture.collections,
@@ -932,7 +932,7 @@ func Run(t *testing.T, factory Factory) {
 		}
 		assertDocumentIDs(t, page.Documents, id(2))
 
-		invalidAccess := query.NotEqual(createdAt, query.Number(0)).Node()
+		invalidAccess := query.NotEqual(createdAt, 0).Node()
 		read = begin(t, fixture.backend)
 		page, err = read.List(t.Context(), fixture.request(store.Request{
 			Collection: fixture.records, Collections: fixture.collections,

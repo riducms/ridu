@@ -1179,7 +1179,7 @@ func TestAuthOwnerFilteredReadDoesNotRevokePhysicalCredentials(t *testing.T) {
 		t.Fatal(err)
 	}
 	filtered := authReadFixture(t, backend, auth, func(ridu.AccessContext) (ridu.AccessDecision, error) {
-		return ridu.Where(query.Equal(emailPath, query.String("another-owner@example.test"))), nil
+		return ridu.Where(query.Equal(emailPath, "another-owner@example.test")), nil
 	})
 	if _, err := filtered.Session(context.Background(), session.Token); !operationCode(err, "access_denied") {
 		t.Fatalf("filtered session authentication = %v", err)
@@ -1216,7 +1216,7 @@ func TestAuthOwnerPhysicalProbeFailuresPreserveCredentials(t *testing.T) {
 		t.Fatal(err)
 	}
 	filtered := authReadFixture(t, backend, auth, func(ridu.AccessContext) (ridu.AccessDecision, error) {
-		return ridu.Where(query.Equal(emailPath, query.String("not-the-owner@example.test"))), nil
+		return ridu.Where(query.Equal(emailPath, "not-the-owner@example.test")), nil
 	})
 
 	for _, test := range []struct {

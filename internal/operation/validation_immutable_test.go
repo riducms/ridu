@@ -101,7 +101,7 @@ func TestImmutableValidationPreservesRejectedRowsAndUnknownNames(t *testing.T) {
 		t.Fatalf("rejected-row issues = %#v", issues)
 	}
 	first, _ := validated["items"].ListItem(0)
-	if first.Kind() != "" {
+	if !first.IsZero() {
 		t.Fatal("invalid row result lost its zero-value representation")
 	}
 	original, _ := input["items"].ListItem(0)

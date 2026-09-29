@@ -62,7 +62,7 @@ func TestPrimitiveListMongoDBUnsupportedQueryMarkerIsCallerOnly(t *testing.T) {
 	}
 	for _, name := range []string{"rows.points", "rows.nested.title"} {
 		path, _ := query.ParsePath(name)
-		node := query.In(path, query.String("value")).Node()
+		node := query.In(path, "value").Node()
 		for _, caller := range []bool{false, true} {
 			request := store.Request{Collection: manifest.Snapshot().Collections[0]}
 			if caller {
@@ -83,8 +83,8 @@ func TestPrimitiveListShapeGuardsSurviveNotAndOr(t *testing.T) {
 	path, _ := query.ParsePath("points")
 	title, _ := query.ParsePath("title")
 	collection := schema.Collection{ID: "products", Slug: "products", Fields: []schema.Field{{ID: "points", Name: "points", Path: path, Type: schema.FieldTypeTextList, Category: schema.FieldCategoryScalar, List: &schema.PrimitiveListField{}, Text: &schema.TextField{}}, {ID: "title", Name: "title", Path: title, Type: schema.FieldTypeText, Category: schema.FieldCategoryScalar, Text: &schema.TextField{}}}}
-	negated := query.Not(query.In(path, query.String("oak")))
-	either := query.Or(query.Equal(title, query.String("x")), query.In(path, query.String("oak")))
+	negated := query.Not(query.In(path, "oak"))
+	either := query.Or(query.Equal(title, "x"), query.In(path, "oak"))
 	for _, expression := range []query.Expression{negated, either} {
 		node := expression.Node()
 		guards, err := mongoNodeRepeatedShapeGuards(collection, node, "filter", mongoPredicateScope{})

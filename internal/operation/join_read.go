@@ -54,7 +54,7 @@ func (engine *Engine) ListJoin(ctx context.Context, collection, id, field string
 		request.Limit = join.Join.Limit
 	}
 	request.Operation, request.Collection, request.ID = operation.Read, string(join.Join.CollectionID), ""
-	filter := query.Equal(join.Join.On, query.String(id)).Node()
+	filter := query.Equal(join.Join.On, id).Node()
 	request.internalFilter = &filter
 	return engine.Execute(ctx, request)
 }

@@ -12859,6 +12859,50 @@
 		"go:github.com/riducms/ridu/core#AdminLoadContext.Manifest": {
 			"module": "core",
 			"symbol": "admin-load-context-manifest-method"
+		},
+		"go:github.com/riducms/ridu/query#Asc": {
+			"module": "query",
+			"symbol": "asc"
+		},
+		"go:github.com/riducms/ridu/query#DateTime": {
+			"module": "query",
+			"symbol": "date-time"
+		},
+		"go:github.com/riducms/ridu/query#Desc": {
+			"module": "query",
+			"symbol": "desc"
+		},
+		"go:github.com/riducms/ridu/query#Exists": {
+			"module": "query",
+			"symbol": "exists"
+		},
+		"go:github.com/riducms/ridu/query#FieldPath": {
+			"module": "query",
+			"symbol": "field-path"
+		},
+		"go:github.com/riducms/ridu/query#Operand": {
+			"module": "query",
+			"symbol": "operand"
+		},
+		"go:github.com/riducms/ridu/query#Ordered": {
+			"module": "query",
+			"symbol": "ordered"
+		},
+		"go:github.com/riducms/ridu/store#Value.IsZero": {
+			"module": "store",
+			"symbol": "value-is-zero-method"
+		},
+		"go:github.com/riducms/ridu/store#ValueKind.String": {
+			"module": "store",
+			"symbol": "value-kind-string-method"
+		},
+		"go:github.com/riducms/ridu/store#Values.MarshalJSON": {
+			"module": "store",
+			"symbol": "values-marshal-json-method"
+		},
+		"go:github.com/riducms/ridu/store#Values.UnmarshalJSON": {
+			"module": "store",
+			"symbol": "values-unmarshal-json-method"
 		}
 	}
 }

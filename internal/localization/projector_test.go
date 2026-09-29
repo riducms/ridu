@@ -152,7 +152,7 @@ func TestProjectorOwnsSelectionKeysAndEvictsOldVariants(t *testing.T) {
 	projector.Clear()
 	for _, root := range projector.roots {
 		for _, entry := range root.entries {
-			if entry.valid || entry.source.Kind() != "" || entry.value.Kind() != "" || entry.sources != nil || entry.selection.Chain != nil || entry.selection.Configured != nil {
+			if entry.valid || !entry.source.IsZero() || !entry.value.IsZero() || entry.sources != nil || entry.selection.Chain != nil || entry.selection.Configured != nil {
 				t.Fatal("Clear retained cached values, metadata or selection slices")
 			}
 		}

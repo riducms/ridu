@@ -376,9 +376,9 @@ func TestSQLiteNativeNumberPredicatesCompareInFloat64Space(t *testing.T) {
 		name       string
 		expression query.Expression
 	}{
-		{name: "equal", expression: query.Equal(score, query.Number(large))},
-		{name: "less than or equal", expression: query.LessThanEqual(score, query.Number(large))},
-		{name: "greater than or equal", expression: query.GreaterThanEqual(score, query.Number(large))},
+		{name: "equal", expression: query.Equal(score, large)},
+		{name: "less than or equal", expression: query.LessThanEqual(score, large)},
+		{name: "greater than or equal", expression: query.GreaterThanEqual(score, large)},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			node := test.expression.Node()
@@ -466,13 +466,13 @@ func TestComplexAccessRemainsAnAtomicSQLitePredicate(t *testing.T) {
 	title, _ := query.NewPath("title")
 	note, _ := query.NewPath("note")
 	accessExpression := query.And(
-		query.Equal(rowsLabel, query.String("team")),
+		query.Equal(rowsLabel, "team"),
 		query.Contains(title, "PER"),
 		query.Equal(note, query.Null()),
 	)
 	access := accessExpression.Node()
 	createdAt, _ := query.NewPath("createdAt")
-	filter := query.GreaterThanEqual(createdAt, query.String("2026-01-02T13:00:00+01:00")).Node()
+	filter := query.GreaterThanEqual(createdAt, "2026-01-02T13:00:00+01:00").Node()
 	request := store.Request{
 		Collection: collection, Filter: &filter, Access: &access, Page: 1, Limit: 10,
 		Locales: []schema.LocaleCode{"en", "fr"}, LocaleChain: []schema.LocaleCode{"fr"},
@@ -628,9 +628,9 @@ func TestNativePredicateNullTruthTableMatchesFunctionalOracle(t *testing.T) {
 	}
 
 	valuePath, _ := query.NewPath("value")
-	notEqual := query.NotEqual(valuePath, query.String("equal"))
-	notEqualExpression := query.Not(query.Equal(valuePath, query.String("equal")))
-	notOrderedExpression := query.Not(query.GreaterThan(valuePath, query.String("m")))
+	notEqual := query.NotEqual(valuePath, "equal")
+	notEqualExpression := query.Not(query.Equal(valuePath, "equal"))
+	notOrderedExpression := query.Not(query.GreaterThan(valuePath, "m"))
 	tests := []struct {
 		name string
 		node query.Node

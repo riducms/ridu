@@ -125,9 +125,7 @@ func readPosts(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
 	if ctx.Actor != nil {
 		return ridu.Allow(), nil
 	}
-	return ridu.Where(
-		query.Equal(query.Field("_status"), query.String("published")),
-	), nil
+	return ridu.Where(query.Equal("_status", "published")), nil
 }
 ```
 

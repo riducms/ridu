@@ -88,7 +88,7 @@ func TestCancelScheduledPublicationKeepsFilteredAccessAtomicWithDismissal(t *tes
 		t.Fatal(err)
 	}
 	publishScheduled := func(AccessContext) (AccessDecision, error) {
-		return Where(query.Equal(title, query.String("Scheduled"))), nil
+		return Where(query.Equal(title, "Scheduled")), nil
 	}
 	backend := &publicationCancellationRaceStore{Store: teststore.New()}
 	application, err := New(Config{Name: "atomic scheduled cancellation", Collections: []Collection{{

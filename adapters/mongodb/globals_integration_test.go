@@ -17,7 +17,7 @@ func TestMongoDBGlobalUsesResourceStorePathAndSnapshotPredicates(t *testing.T) {
 		t.Fatal(err)
 	}
 	filtered := func(ridu.AccessContext) (ridu.AccessDecision, error) {
-		return ridu.Where(query.Equal(siteName, query.String("Ridu"))), nil
+		return ridu.Where(query.Equal(siteName, "Ridu")), nil
 	}
 	allowMissingRead := true
 	allowInitialization := false

@@ -185,7 +185,7 @@ func TestMongoUploadValuesPreserveRelationshipSemantics(t *testing.T) {
 	}
 	galleryPath, _ := query.NewPath("content", "gallery")
 	for _, role := range []string{"filter", "access"} {
-		if _, err := compileMongoNode(posts, query.Equal(galleryPath, query.String("asset-a")).Node(), role, mongoPredicateScope{}); err == nil || !strings.Contains(err.Error(), "unsupported nested or reference repeated field") {
+		if _, err := compileMongoNode(posts, query.Equal(galleryPath, "asset-a").Node(), role, mongoPredicateScope{}); err == nil || !strings.Contains(err.Error(), "unsupported nested or reference repeated field") {
 			t.Fatalf("has-many upload %s error = %v", role, err)
 		}
 	}
@@ -200,7 +200,7 @@ func TestMongoUploadValuesPreserveRelationshipSemantics(t *testing.T) {
 			!reflect.DeepEqual(resolved.objectAncestors, []string{"values.sizes", "values.sizes.thumb"}) {
 			t.Fatalf("configured upload size %s path = %#v", role, resolved)
 		}
-		if _, err := compileMongoNode(media, query.Equal(thumbObjectKey, query.String("variant-key")).Node(), role, mongoPredicateScope{}); err != nil {
+		if _, err := compileMongoNode(media, query.Equal(thumbObjectKey, "variant-key").Node(), role, mongoPredicateScope{}); err != nil {
 			t.Fatalf("configured upload size %s predicate: %v", role, err)
 		}
 	}
@@ -454,7 +454,7 @@ func mongoUploadTestConfig() ridu.Config {
 				Slug:   "posts",
 				Fields: field.Fields{field.Text("visibility").Required(), field.Upload("hero", "media").OnDelete(field.ReferenceDeleteNullify), field.Group("content", field.Fields{field.Uploads("gallery", "media").OnDelete(field.ReferenceDeleteNullify)})},
 				Access: ridu.CollectionAccess{Read: func(ridu.AccessContext) (ridu.AccessDecision, error) {
-					return ridu.Where(query.Equal(visibilityPath, query.String("public"))), nil
+					return ridu.Where(query.Equal(visibilityPath, "public")), nil
 				}},
 			},
 		},

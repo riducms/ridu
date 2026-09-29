@@ -96,7 +96,7 @@ func TestSQLitePayloadBaselineWorkflow(t *testing.T) {
 	categoryPath, _ := query.ParsePath("category")
 	titlePath, _ := query.ParsePath("title")
 	page, err := application.Local().List(ctx, "posts", ridu.ListOptions{
-		Draft: &includeDrafts, Where: query.Equal(titlePath, query.String("Pinned Payload SQLite")),
+		Draft: &includeDrafts, Where: query.Equal(titlePath, "Pinned Payload SQLite"),
 		Populate: []query.Population{
 			{Path: authorPath}, {Path: categoryPath},
 		},

@@ -32,7 +32,7 @@ func TestReferenceOptionFiltersAreServerEnforcedAcrossRelationshipsUploadsAndNes
 			{
 				Slug: "people", Fields: field.Fields{field.Text("category"), field.Text("region"), field.Checkbox("visible").Required()},
 				Access: ridu.CollectionAccess{Read: func(ridu.AccessContext) (ridu.AccessDecision, error) {
-					return ridu.Where(query.Equal(visiblePath, query.Boolean(true))), nil
+					return ridu.Where(query.Equal(visiblePath, true)), nil
 				}},
 			},
 			{Slug: "teams", Fields: field.Fields{field.Text("category")}},
@@ -40,7 +40,7 @@ func TestReferenceOptionFiltersAreServerEnforcedAcrossRelationshipsUploadsAndNes
 				Slug: "media", Upload: true, UploadConfig: ridu.UploadConfig{MaxFileSize: 1024, MimeTypes: []string{"text/plain"}},
 				Fields: field.Fields{field.Text("assetType"), field.Checkbox("visible").Required()},
 				Access: ridu.CollectionAccess{Read: func(ridu.AccessContext) (ridu.AccessDecision, error) {
-					return ridu.Where(query.Equal(visiblePath, query.Boolean(true))), nil
+					return ridu.Where(query.Equal(visiblePath, true)), nil
 				}},
 			},
 			{

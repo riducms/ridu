@@ -45,10 +45,10 @@ Several packages have a type named `Value`. They serve different purposes:
 | `store.Values`       | A Go map from field names to `store.Value`.                                                              | `store.Values{"title": store.String("Home")}` supplies fields to a write.                                       |
 | `store.Document`     | One document's ID, timestamps, other metadata, and its `Values` map.                                     | A local API create or read returns this.                                                                        |
 | `operation.Value[T]` | A callback value of a known Go type, plus whether a value is present.                                    | A text validator receives `operation.Value[string]`. Calling `Get()` returns the string and a presence boolean. |
-| `query.Value`        | A value to compare with a field in a filter.                                                             | `query.String("Home")` is the comparison value in an equality filter.                                           |
+| `query.Value`        | A value to compare with a field in a filter.                                                             | In `query.Equal("title", "Home")`, `"Home"` becomes the comparison value.                                       |
 
-`store.String("Home")` and `query.String("Home")` are different Go types: use the former for
-content and the latter for filters. `operation.Present("Home")` wraps a typed callback value;
+`store.String("Home")` is a document value for content; a filter takes the plain `"Home"`, which
+becomes a `query.Value`. `operation.Present("Home")` wraps a typed callback value;
 it does not construct a document field. The [callback guide](/docs/go-packages/operation/) and
 [query guide](/docs/go-packages/query/) show those types in context.
 
@@ -144,7 +144,7 @@ When preparing data for the local API, choose the state you mean:
 
 There is no `store.Missing()` constructor: missing means the map has no entry. Do not substitute
 `store.Value{}` for null. Its zero value has no valid kind and cannot be JSON-encoded. Indexing a
-missing key without checking membership also gives you this zero value.
+missing key without checking membership also gives you this zero value; `IsZero()` reports it.
 
 These are input distinctions, not a promise that every later callback preserves them. In a raw
 field hook, an empty `operation.Value[store.Value]` means omitted input, while

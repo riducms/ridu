@@ -3,14 +3,30 @@ package query
 import (
 	"encoding/json"
 	"fmt"
-	"regexp"
+	"reflect"
 	"strings"
 )
 
 // Path segments include authored field names and canonical block discriminators.
 // Field names use letters, numbers, and underscores, while block keys are
 // lowercase kebab-case and therefore require hyphens here.
-var pathSegmentPattern = regexp.MustCompile(`^[a-z][A-Za-z0-9_-]*$`)
+const pathSegmentPattern = `^[a-z][A-Za-z0-9_-]*$`
+
+// validPathSegment reports whether segment matches pathSegmentPattern. It is
+// hand-written because every string field name in a filter is checked.
+func validPathSegment(segment string) bool {
+	if segment == "" || segment[0] < 'a' || segment[0] > 'z' {
+		return false
+	}
+	for index := 1; index < len(segment); index++ {
+		character := segment[index]
+		if (character < 'a' || character > 'z') && (character < 'A' || character > 'Z') &&
+			(character < '0' || character > '9') && character != '_' && character != '-' {
+			return false
+		}
+	}
+	return true
+}
 
 const (
 	// MaxPathSegments bounds recursive query compilation and schema traversal.
@@ -30,7 +46,16 @@ type Path struct {
 	segments []string
 }
 
-// NewPath validates and constructs a field path from individual segments.
+// FieldPath is a field in a filter or sort: a dot-separated name written in
+// your code, such as "title" or "seo.title", or a Path. A malformed name
+// panics, like regexp.MustCompile; use ParsePath for names from user input.
+type FieldPath interface {
+	~string | Path
+}
+
+// NewPath validates and constructs a field path from segments computed at run
+// time, such as names read from a schema. For a name written in your code, pass
+// the string to a filter helper instead.
 func NewPath(segments ...string) (Path, error) {
 	if len(segments) == 0 {
 		return Path{}, fmt.Errorf("query path requires at least one segment")
@@ -45,7 +70,7 @@ func NewPath(segments ...string) (Path, error) {
 	}
 	totalBytes := len(cloned) - 1
 	for index, segment := range cloned {
-		if !pathSegmentPattern.MatchString(segment) {
+		if !validPathSegment(segment) {
 			return Path{}, fmt.Errorf("query path segment %d %q must match %s", index, segment, pathSegmentPattern)
 		}
 		totalBytes += len(segment)
@@ -56,10 +81,10 @@ func NewPath(segments ...string) (Path, error) {
 	return Path{segments: cloned}, nil
 }
 
-// Field names a field in a filter or sort written in your code, such as
-// Field("price") or Field("seo", "title"). Like regexp.MustCompile, it panics
-// when a name is malformed. Use ParsePath or NewPath for paths from user input,
-// which return an error instead.
+// Field names a field by its segments, such as Field("seo", "title"). Like
+// regexp.MustCompile, it panics when a name is malformed. Filter helpers also
+// accept the dot-separated string "seo.title" directly; use Field when you need
+// a Path value, such as for ListOptions.Select.
 func Field(segments ...string) Path {
 	path, err := NewPath(segments...)
 	if err != nil {
@@ -68,7 +93,8 @@ func Field(segments ...string) Path {
 	return path
 }
 
-// ParsePath validates and constructs a path from its dot-separated form.
+// ParsePath validates and constructs a path from its dot-separated form. Use
+// it for names that come from user input, where a malformed name is an error.
 func ParsePath(value string) (Path, error) {
 	if value == "" {
 		return Path{}, fmt.Errorf("query path must not be empty")
@@ -105,4 +131,20 @@ func (path *Path) UnmarshalJSON(encoded []byte) error {
 	}
 	*path = parsed
 	return nil
+}
+
+// pathOf converts a FieldPath, panicking on a malformed name written in code.
+func pathOf[P FieldPath](path P) Path {
+	if typed, ok := any(path).(Path); ok {
+		return typed
+	}
+	name, ok := any(path).(string)
+	if !ok {
+		name = reflect.ValueOf(path).String()
+	}
+	parsed, err := ParsePath(name)
+	if err != nil {
+		panic(err)
+	}
+	return parsed
 }

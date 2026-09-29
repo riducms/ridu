@@ -10,7 +10,5 @@ func ownPosts(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
 		return ridu.Deny(), nil
 	}
 	// Check ownership in the database operation, without a prior read.
-	return ridu.Where(
-		query.Equal(query.Field("author"), query.String(ctx.Actor.ID)),
-	), nil
+	return ridu.Where(query.Equal("author", ctx.Actor.ID)), nil
 }

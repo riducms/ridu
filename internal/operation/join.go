@@ -338,7 +338,7 @@ func (engine *Engine) preflightJoinTargetUpdate(ctx context.Context, transaction
 func joinObservedValueFilter(path query.Path, value store.Value, present bool) query.Expression {
 	if present {
 		if current, valid := value.StringValue(); valid {
-			return query.Equal(path, query.String(current))
+			return query.Equal(path, current)
 		}
 	}
 	return query.Equal(path, query.Null())

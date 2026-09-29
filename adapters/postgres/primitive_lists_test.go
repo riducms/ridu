@@ -69,7 +69,7 @@ func TestPrimitiveListPostgresUnsupportedQueryMarkerIsCallerOnly(t *testing.T) {
 	}
 	for _, name := range []string{"labels", "title"} {
 		path, _ := query.ParsePath("sections.links." + name)
-		node := query.In(path, query.String("value")).Node()
+		node := query.In(path, "value").Node()
 		for _, caller := range []bool{false, true} {
 			request := store.Request{Collection: manifest.Snapshot().Collections[0]}
 			if caller {

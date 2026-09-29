@@ -667,7 +667,7 @@ func TestRenamedUploadURLFallbackCannotBypassActualOwnerAccess(t *testing.T) {
 					if ctx.Actor == nil {
 						return ridu.Deny(), nil
 					}
-					return ridu.Where(query.Equal(ownerPath, query.String(ctx.Actor.ID))), nil
+					return ridu.Where(query.Equal(ownerPath, ctx.Actor.ID)), nil
 				}},
 				Fields: field.Fields{field.Text("owner")},
 			},

@@ -75,7 +75,7 @@ func TestSQLiteAuthOwnerPhysicalProbeOverlapsHeldWriter(t *testing.T) {
 		t.Fatal(err)
 	}
 	filtered, err := ridu.New(sqliteAuthSnapshotConfig(func(ridu.AccessContext) (ridu.AccessDecision, error) {
-		return ridu.Where(query.Equal(emailPath, query.String("someone-else@example.test"))), nil
+		return ridu.Where(query.Equal(emailPath, "someone-else@example.test")), nil
 	}), backend)
 	if err != nil {
 		t.Fatal(err)

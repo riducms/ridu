@@ -337,7 +337,7 @@ func referenceQueryValue(value store.Value) (query.Value, string, bool) {
 		boolean, _ := value.BooleanValue()
 		return query.Boolean(boolean), "boolean:" + strconv.FormatBool(boolean), true
 	default:
-		return query.Value{}, "non-scalar:" + string(value.Kind()), false
+		return query.Value{}, "non-scalar:" + value.Kind().String(), false
 	}
 }
 

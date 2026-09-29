@@ -2215,7 +2215,7 @@ func (engine *Engine) resolveOutputFields(transaction store.Transaction, collect
 					document.Values[candidate.Name] = store.List()
 					continue
 				}
-				filter := query.Equal(candidate.Join.On, query.String(document.ID)).Node()
+				filter := query.Equal(candidate.Join.On, document.ID).Node()
 				page, err := transaction.List(operationContext.Context, store.Request{
 					Collection: target.Schema, Collections: engine.schemas, Filter: &filter, Access: decision.Access,
 					Page: 1, Limit: candidate.Join.Limit, Sort: joinDefaultSort(candidate.Join.DefaultSort),
@@ -3005,10 +3005,9 @@ func authorizePreparedLocalization(collection Collection, base Context, canonica
 }
 
 func denyAllAccessPredicate() *query.Node {
-	id, _ := query.NewPath("id")
 	expression := query.And(
-		query.Equal(id, query.String("__ridu_access_denied_a__")),
-		query.Equal(id, query.String("__ridu_access_denied_b__")),
+		query.Equal("id", "__ridu_access_denied_a__"),
+		query.Equal("id", "__ridu_access_denied_b__"),
 	)
 	node := expression.Node()
 	return &node
