@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/mail"
 	"reflect"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -16,6 +17,7 @@ import (
 	"github.com/riducms/ridu/internal/localization"
 	"github.com/riducms/ridu/internal/population"
 	"github.com/riducms/ridu/internal/primitivefield"
+	"github.com/riducms/ridu/internal/referenceindex"
 	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
@@ -192,6 +194,10 @@ type Request struct {
 	// locale copy. Independent whole-field translations may reuse the same key
 	// for different variants; that is not an in-place schema change.
 	copyLocaleSource schema.LocaleCode
+	// cascadeDelete marks the engine's own delete of a cascade owner: it finds
+	// the owner whether active or trashed and removes it permanently, so no
+	// reference to the deleted target survives in the trash.
+	cascadeDelete bool
 	// SkipFieldAccess is reserved for framework-owned initialization that must
 	// author the first administrator before an actor exists. Collection access,
 	// validation, hooks, and the transaction remain active.
@@ -375,6 +381,9 @@ type Engine struct {
 	rootAfterError            []Hook
 	localization              *schema.LocalizationSettings
 	editorCollection          schema.StableID
+	// cascadeTargets holds the collections some cascade field points at, so
+	// deleting anything else skips the owner lookup.
+	cascadeTargets map[schema.StableID]bool
 }
 
 func New(config Config) (*Engine, error) {
@@ -407,7 +416,113 @@ func New(config Config) (*Engine, error) {
 		engine.collections[key] = collection
 		engine.schemas[collection.Schema.ID] = collection.Schema
 	}
+	engine.cascadeTargets = cascadeTargets(engine.schemas)
 	return engine, nil
+}
+
+// referenceDeleteError keeps a restricted delete's transport error stable and
+// free of schema names, so it cannot serve as an existence oracle, while its
+// cause names each blocking collection field for server code and logs.
+func (engine *Engine) referenceDeleteError(err error) error {
+	var restricted *store.DeleteRestrictedError
+	if !errors.As(err, &restricted) {
+		return translateStoreError(err)
+	}
+	var paths []string
+	for _, constraint := range restricted.Constraints {
+		owner, exists := engine.schemas[constraint.OwnerCollectionID]
+		if !exists {
+			continue
+		}
+		if field, _, found := referenceindex.FindReferenceField(owner, constraint.FieldID); found {
+			paths = append(paths, string(owner.Slug)+"."+field.Path.String())
+		}
+	}
+	cause := err
+	if len(paths) != 0 {
+		cause = fmt.Errorf("restricted by %s: %w", strings.Join(paths, ", "), err)
+	}
+	return &Error{Code: "delete_restricted", Status: 409, Message: "document deletion is restricted by current references", Cause: cause}
+}
+
+// cascadeTargets lists every collection a cascade reference can point at.
+// Cascade fields are singular and never inside repeated rows, so root and
+// group fields are the only places to look.
+func cascadeTargets(collections map[schema.StableID]schema.Collection) map[schema.StableID]bool {
+	targets := map[schema.StableID]bool{}
+	var visit func([]schema.Field)
+	visit = func(fields []schema.Field) {
+		for _, field := range fields {
+			switch {
+			case field.Relationship != nil && field.Relationship.OnDelete == schema.ReferenceDeleteCascade:
+				if field.Relationship.CollectionID != "" {
+					targets[field.Relationship.CollectionID] = true
+				}
+				for _, target := range field.Relationship.Targets {
+					targets[target.CollectionID] = true
+				}
+			case field.Upload != nil && field.Upload.OnDelete == schema.ReferenceDeleteCascade:
+				targets[field.Upload.CollectionID] = true
+			}
+			if field.Nested != nil && field.Type != schema.FieldTypeArray {
+				visit(field.Nested.ResolvedFields())
+			}
+		}
+	}
+	for _, collection := range collections {
+		visit(collection.Fields)
+	}
+	return targets
+}
+
+// deleteCascadeOwners permanently deletes, before target, every current
+// document that references it through a cascade field. Each owner goes through
+// the ordinary delete lifecycle in this transaction as a system operation:
+// the delete of target was already authorized, and the schema declared that
+// its owned documents go with it. Hooks, versions and each owner's own
+// restrict, nullify and cascade policies still apply.
+func (engine *Engine) deleteCascadeOwners(ctx context.Context, state *transactionState, request Request, target store.DocumentReference, ignore []store.DocumentReference) error {
+	if !engine.cascadeTargets[target.CollectionID] {
+		return nil
+	}
+	lister, supported := state.transaction.(store.CascadeTransaction)
+	if !supported {
+		return &Error{Code: "store_failed", Status: 500, Message: "the configured store does not support cascade delete policies"}
+	}
+	owners, err := lister.CascadeOwners(ctx, store.ReferenceDeleteRequest{
+		Target: target, Collections: engine.schemas, IgnoreOwners: ignore, PendingOwners: state.pendingDeleteOwners(),
+	})
+	if err != nil {
+		return translateStoreError(err)
+	}
+	for _, owner := range owners {
+		// An earlier owner's cascade may already have deleted or started this one.
+		if state.pendingDeletes[owner] || slices.Contains(state.referenceDeleteDeletedOwners, owner) {
+			continue
+		}
+		collection, exists := engine.collections[string(owner.CollectionID)]
+		if !exists {
+			return &Error{Code: "store_failed", Status: 500, Message: "cascade owner collection is unavailable"}
+		}
+		kind := operation.Delete
+		if collection.Schema.Capabilities.Trash {
+			kind = operation.DeletePermanent
+		}
+		if _, err := engine.Execute(ctx, Request{
+			Operation: kind, Collection: string(owner.CollectionID), ID: owner.DocumentID,
+			Actor: request.Actor, ActorCollection: request.ActorCollection, System: true,
+			Locale: request.Locale, cascadeDelete: true,
+		}); err != nil {
+			// A stale index row can name an owner that no longer exists; the
+			// reference delete below clears such rows.
+			var failure *Error
+			if errors.As(err, &failure) && failure.Code == "not_found" {
+				continue
+			}
+			return err
+		}
+	}
+	return nil
 }
 
 func (engine *Engine) Execute(ctx context.Context, request Request) (result Result, err error) {
@@ -654,6 +769,9 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 		deletion := store.DeletionActive
 		if request.Operation == operation.RestoreDeleted || request.Operation == operation.DeletePermanent {
 			deletion = store.DeletionTrash
+		}
+		if request.cascadeDelete && collection.Schema.Capabilities.Trash {
+			deletion = store.DeletionAll
 		}
 		findAccess := decision.Access
 		if request.Operation == operation.Duplicate {
@@ -1239,12 +1357,22 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 		if !ignoresTarget {
 			ignoreOwners = append(ignoreOwners, target)
 		}
+		if state.pendingDeletes == nil {
+			state.pendingDeletes = map[store.DocumentReference]bool{}
+		}
+		state.pendingDeletes[target] = true
+		defer delete(state.pendingDeletes, target)
+		if err := engine.deleteCascadeOwners(transactionContext, state, request, target, ignoreOwners); err != nil {
+			return Result{}, err
+		}
+		ignoreOwners = append(ignoreOwners, state.referenceDeleteDeletedOwners...)
 		if err := state.transaction.ApplyReferenceDelete(transactionContext, store.ReferenceDeleteRequest{
-			Target:       target,
-			Collections:  engine.schemas,
-			IgnoreOwners: ignoreOwners,
+			Target:        target,
+			Collections:   engine.schemas,
+			IgnoreOwners:  ignoreOwners,
+			PendingOwners: state.pendingDeleteOwners(),
 		}); err != nil {
-			return Result{}, translateStoreError(err)
+			return Result{}, engine.referenceDeleteError(err)
 		}
 	}
 	switch request.Operation {
@@ -1379,6 +1507,9 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 			return Result{}, &Error{Code: "bad_operation", Status: 400, Message: "collection does not support trash"}
 		}
 		storeRequest.Deletion = store.DeletionTrash
+		if request.cascadeDelete {
+			storeRequest.Deletion = store.DeletionAll
+		}
 		document, storeError := state.transaction.Delete(transactionContext, storeRequest)
 		result.Document, err = documentResult(document, storeError)
 	}
@@ -2815,11 +2946,22 @@ type transactionState struct {
 	afterCommit                  []deferredHook
 	permanentDeletes             []PermanentDelete
 	referenceDeleteDeletedOwners []store.DocumentReference
-	transactionResources         []*TransactionResource
-	uploadObjectLockReleases     []func()
-	uploadObjectLockedKeys       map[string]struct{}
-	rollbackOnly                 error
-	finished                     bool
+	// pendingDeletes holds the documents whose hard delete has started in this
+	// transaction but not finished, so cascade cycles stop instead of recursing.
+	pendingDeletes           map[store.DocumentReference]bool
+	transactionResources     []*TransactionResource
+	uploadObjectLockReleases []func()
+	uploadObjectLockedKeys   map[string]struct{}
+	rollbackOnly             error
+	finished                 bool
+}
+
+func (state *transactionState) pendingDeleteOwners() []store.DocumentReference {
+	owners := make([]store.DocumentReference, 0, len(state.pendingDeletes))
+	for owner := range state.pendingDeletes {
+		owners = append(owners, owner)
+	}
+	return owners
 }
 
 // PermanentDelete identifies one document whose durable deletion must be

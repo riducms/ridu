@@ -78,7 +78,9 @@ type adminSchemaUpdateSignal struct {
 // developmentProxy owns the stable public development address while server
 // candidates bind private loopback addresses. A replacement is promoted only
 // after its own runtime Store and /readyz check succeed, so the previous
-// process remains available throughout every rejected reload.
+// process remains available throughout every rejected reload. The exception
+// is a rename, which stops the previous process before it moves stored
+// content.
 type developmentProxy struct {
 	listener net.Listener
 	server   *http.Server
@@ -86,6 +88,12 @@ type developmentProxy struct {
 	done     chan error
 	stopOnce sync.Once
 	stopErr  error
+	// unused holds the connections that have not carried a request yet, such
+	// as a browser preconnect. http.Server.Shutdown waits five seconds before
+	// it treats one as idle, so stop closes them itself.
+	unusedMutex sync.Mutex
+	unused      map[net.Conn]struct{}
+	stopping    bool
 }
 
 func startDevelopmentProxy(address string) (*developmentProxy, error) {
@@ -93,7 +101,7 @@ func startDevelopmentProxy(address string) (*developmentProxy, error) {
 	if err != nil {
 		return nil, fmt.Errorf("listen on %s: %w", address, err)
 	}
-	proxy := &developmentProxy{listener: listener, done: make(chan error, 1)}
+	proxy := &developmentProxy{listener: listener, done: make(chan error, 1), unused: make(map[net.Conn]struct{})}
 	reverse := &httputil.ReverseProxy{
 		Rewrite: func(request *httputil.ProxyRequest) {
 			target := proxy.target.Load()
@@ -117,6 +125,7 @@ func startDevelopmentProxy(address string) (*developmentProxy, error) {
 			reverse.ServeHTTP(writer, request)
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
+		ConnState:         proxy.trackConnection,
 	}
 	go func() {
 		err := proxy.server.Serve(listener)
@@ -141,11 +150,37 @@ func (proxy *developmentProxy) setTarget(rawURL string) error {
 	return nil
 }
 
+// trackConnection remembers a connection until its first request arrives.
+// One accepted while the proxy is stopping is closed at once, since nothing
+// will serve it.
+func (proxy *developmentProxy) trackConnection(connection net.Conn, state http.ConnState) {
+	proxy.unusedMutex.Lock()
+	defer proxy.unusedMutex.Unlock()
+	if state != http.StateNew {
+		delete(proxy.unused, connection)
+		return
+	}
+	if proxy.stopping {
+		_ = connection.Close()
+		return
+	}
+	proxy.unused[connection] = struct{}{}
+}
+
 func (proxy *developmentProxy) stop() error {
 	if proxy == nil {
 		return nil
 	}
 	proxy.stopOnce.Do(func() {
+		// Shutdown drains requests in flight. Connections that never carried
+		// one have nothing to drain and would hold it for its whole deadline.
+		proxy.unusedMutex.Lock()
+		proxy.stopping = true
+		for connection := range proxy.unused {
+			_ = connection.Close()
+		}
+		clear(proxy.unused)
+		proxy.unusedMutex.Unlock()
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		shutdownError := proxy.server.Shutdown(ctx)
@@ -627,6 +662,17 @@ func runDev(ctx context.Context, args []string, stdout, stderr io.Writer, option
 		}
 	}
 	version := frameworkVersion(options)
+	renames := newDevelopmentRenames(definition, options, database.databaseURL, database.databasePath, stdout, output)
+	// Rename detection compares a saved config with the schema the database
+	// was last brought to, so every successful schema sync records it.
+	recordSynchronized := func(preparation developmentPreparation) {
+		if *noSync {
+			return
+		}
+		if err := renames.recordSynchronized(definition, preparation.manifest); err != nil {
+			output.Warn("record the synchronized development schema", err)
+		}
+	}
 	watcher, err := newGoSourceWatcher(definition.Root)
 	if err != nil {
 		output.Error("watch Go configuration", err)
@@ -645,7 +691,7 @@ func runDev(ctx context.Context, args []string, stdout, stderr io.Writer, option
 			return developmentFailure(ctx, output, "prepare development runtime", err)
 		}
 		fresh := func() bool { return watcher.Revision() == initialRevision }
-		activeBinary, buildDuration, preparation, err = stabilizeDevelopmentCandidate(ctx, definition, version, activeBinary, buildDuration, !*noSync, fresh, stdout, stderr, output)
+		activeBinary, buildDuration, preparation, err = stabilizeDevelopmentCandidate(ctx, definition, version, activeBinary, buildDuration, !*noSync, fresh, renames, stdout, stderr, output)
 		if errors.Is(err, errDevelopmentSourceChanged) {
 			_ = activeBinary.remove()
 			output.Info("Go changed during initial preparation; rebuilding the latest source")
@@ -660,6 +706,7 @@ func runDev(ctx context.Context, args []string, stdout, stderr io.Writer, option
 			_ = activeBinary.remove()
 			return developmentFailure(ctx, output, "prepare development runtime", err)
 		}
+		recordSynchronized(preparation)
 		if !fresh() && canDiscardStaleDevelopmentCandidate(definition.Database, preparation) {
 			_ = activeBinary.remove()
 			output.Info("Go changed during initial schema synchronization; rebuilding the latest source")
@@ -774,9 +821,38 @@ func runDev(ctx context.Context, args []string, stdout, stderr io.Writer, option
 	}
 	output.DevelopmentReady(version, developmentDuration(time.Since(developmentStarted)), adminURL, serverURL)
 	output.Info("Watching Go configuration; press Ctrl+C to stop")
+	renames.stopServer = func() { server.stop() }
+	// A rename stops the server before it moves content, so a rejected reload
+	// after that point leaves nothing serving until a later change reloads.
+	rejectedReload := func() string {
+		if server.stopping.Load() {
+			return "Reload rejected after the server was stopped for a rename"
+		}
+		return "Reload rejected; the previous server is still running"
+	}
+	rejectedSuffix := func(preparation developmentPreparation) string {
+		if server.stopping.Load() {
+			return ""
+		}
+		return rejectedDevelopmentCandidateSuffix(preparation)
+	}
+	waitingWithoutServer := false
 
 watchLoop:
 	for {
+		// A server stopped for a rename has a closed done channel. It is not an
+		// unexpected exit, and watching it would spin, so wait on the other
+		// events until a later change brings up a replacement.
+		serverDone := server.done
+		if server.stopping.Load() && ctx.Err() == nil {
+			serverDone = nil
+			if !waitingWithoutServer {
+				waitingWithoutServer = true
+				output.Warn("The development server is stopped for the rename; fix the problem reported above and save to reload", nil)
+			}
+		} else {
+			waitingWithoutServer = false
+		}
 		select {
 		case <-ctx.Done():
 			server.stop()
@@ -784,7 +860,7 @@ watchLoop:
 				admin.stop()
 			}
 			return developmentFailure(ctx, output, "development stopped", ctx.Err())
-		case <-server.done:
+		case <-serverDone:
 			if ctx.Err() == nil && !server.stopping.Load() {
 				if admin != nil {
 					admin.stop()
@@ -819,7 +895,7 @@ watchLoop:
 				output.Info("Go configuration changed")
 				candidate, candidateBuildDuration, buildError := buildDevelopmentBinary(ctx, definition, stdout, stderr)
 				if buildError != nil {
-					developmentFailure(ctx, output, "Reload rejected; the previous server is still running", buildError)
+					developmentFailure(ctx, output, rejectedReload(), buildError)
 					continue watchLoop
 				}
 				if watcher.Revision() != changeRevision {
@@ -829,7 +905,7 @@ watchLoop:
 				}
 				fresh := func() bool { return watcher.Revision() == changeRevision }
 				candidate, candidateBuildDuration, preparation, prepareError := stabilizeDevelopmentCandidate(
-					ctx, definition, version, candidate, candidateBuildDuration, !*noSync, fresh, stdout, stderr, output,
+					ctx, definition, version, candidate, candidateBuildDuration, !*noSync, fresh, renames, stdout, stderr, output,
 				)
 				if prepareError != nil {
 					_ = candidate.remove()
@@ -837,7 +913,7 @@ watchLoop:
 						output.Info("Newer Go change arrived; skipping the stale replacement")
 						continue
 					}
-					developmentFailure(ctx, output, "Reload rejected; the previous server is still running", prepareError)
+					developmentFailure(ctx, output, rejectedReload(), prepareError)
 					continue watchLoop
 				}
 				if watcher.Revision() != changeRevision {
@@ -849,9 +925,10 @@ watchLoop:
 				preparation, prepareError = synchronizeDevelopmentSchema(ctx, definition.Database, database.databaseURL, database.databasePath, !*noSync, false, preparation, output)
 				if prepareError != nil {
 					_ = candidate.remove()
-					developmentFailure(ctx, output, "Reload rejected; the previous server is still running", prepareError)
+					developmentFailure(ctx, output, rejectedReload(), prepareError)
 					continue watchLoop
 				}
+				recordSynchronized(preparation)
 				if watcher.Revision() != changeRevision && canDiscardStaleDevelopmentCandidate(definition.Database, preparation) {
 					_ = candidate.remove()
 					output.Info("Newer Go change arrived during database synchronization; skipping the stale replacement")
@@ -862,7 +939,7 @@ watchLoop:
 				candidateAddress, addressError := availableDevelopmentServerAddress()
 				if addressError != nil {
 					_ = candidate.remove()
-					output.Error("Reload rejected; the previous server is still running", fmt.Errorf("%w%s", addressError, rejectedDevelopmentCandidateSuffix(preparation)))
+					output.Error(rejectedReload(), fmt.Errorf("%w%s", addressError, rejectedSuffix(preparation)))
 					continue watchLoop
 				}
 				candidateURL := developmentServerURL(candidateAddress)
@@ -870,19 +947,23 @@ watchLoop:
 				candidateServer, startError := startManagedProcess(ctx, "server", definition.Root, candidateEnvironment, output, candidate.path, serverArguments...)
 				if startError != nil {
 					_ = candidate.remove()
-					developmentFailure(ctx, output, "replacement failed to start", fmt.Errorf("%w%s", startError, rejectedDevelopmentCandidateSuffix(preparation)))
+					developmentFailure(ctx, output, "replacement failed to start", fmt.Errorf("%w%s", startError, rejectedSuffix(preparation)))
 					continue watchLoop
 				}
 				if readyError := waitForDevelopmentURLWithHost(ctx, candidateURL+"/readyz", publicServerHost, candidateServer); readyError != nil {
 					candidateServer.stop()
 					_ = candidate.remove()
-					developmentFailure(ctx, output, "replacement server was unhealthy", fmt.Errorf("%w%s", readyError, rejectedDevelopmentCandidateSuffix(preparation)))
+					developmentFailure(ctx, output, "replacement server was unhealthy", fmt.Errorf("%w%s", readyError, rejectedSuffix(preparation)))
 					continue watchLoop
 				}
 				if watcher.Revision() != changeRevision && canDiscardStaleDevelopmentCandidate(definition.Database, preparation) {
 					candidateServer.stop()
 					_ = candidate.remove()
-					output.Info("Newer Go change arrived during replacement startup; kept the previous server")
+					if server.stopping.Load() {
+						output.Info("Newer Go change arrived during replacement startup; building it instead")
+					} else {
+						output.Info("Newer Go change arrived during replacement startup; kept the previous server")
+					}
 					continue
 				}
 				if watcher.Revision() != changeRevision {
@@ -891,7 +972,7 @@ watchLoop:
 				if proxyError := handoffProxy.setTarget(candidateURL); proxyError != nil {
 					candidateServer.stop()
 					_ = candidate.remove()
-					output.Error("replacement proxy handoff failed", fmt.Errorf("%w%s", proxyError, rejectedDevelopmentCandidateSuffix(preparation)))
+					output.Error("replacement proxy handoff failed", fmt.Errorf("%w%s", proxyError, rejectedSuffix(preparation)))
 					continue watchLoop
 				}
 				serverDuration := time.Since(serverStarted)
@@ -965,7 +1046,7 @@ func waitForDevelopmentURLWithHost(ctx context.Context, url, host string, proces
 	}
 }
 
-func prepareDevelopment(ctx context.Context, definition projectfile.File, version, executable string, syncSchema bool, fresh func() bool, output *cliOutput) (developmentPreparation, error) {
+func prepareDevelopment(ctx context.Context, definition projectfile.File, version, executable string, syncSchema bool, fresh func() bool, renames *developmentRenames, output *cliOutput) (developmentPreparation, error) {
 	manifestStarted := time.Now()
 	resolved, err := generate.ResolveProjectExecutable(ctx, definition, version, executable)
 	if err != nil {
@@ -975,12 +1056,35 @@ func prepareDevelopment(ctx context.Context, definition projectfile.File, versio
 	if fresh != nil && !fresh() {
 		return developmentPreparation{}, errDevelopmentSourceChanged
 	}
+	// A possible rename is settled before anything is generated or
+	// synchronized, and a reload it rejects changes nothing: the next save
+	// meets the same rename again.
+	if syncSchema && renames != nil {
+		if _, renameError := renames.resolve(ctx, definition, resolved.Manifest, fresh); renameError != nil {
+			if ctx.Err() != nil {
+				return developmentPreparation{}, ctx.Err()
+			}
+			if errors.Is(renameError, errDevelopmentSourceChanged) {
+				return developmentPreparation{}, errDevelopmentSourceChanged
+			}
+			var held developmentRenameHeldError
+			if errors.As(renameError, &held) {
+				return developmentPreparation{}, held.err
+			}
+			return developmentPreparation{}, fmt.Errorf("rename not applied: %w", renameError)
+		}
+	}
 	contractStarted := time.Now()
 	result, err := generate.RunResolvedProjectDevelopment(definition, resolved)
 	if err != nil {
 		return developmentPreparation{}, fmt.Errorf("generate contracts: %w", err)
 	}
 	contractDuration := time.Since(contractStarted)
+	if syncSchema && renames != nil {
+		// The only generation warnings are possible renames against the schema
+		// file. Those were settled above against the schema the database has.
+		result.Warnings = nil
+	}
 	printGenerationWarnings(output, definition, result, version)
 	if syncSchema && len(result.Warnings) != 0 {
 		return developmentPreparation{}, developmentSchemaWarningError(definition.Database)
@@ -1038,9 +1142,13 @@ func (preparation developmentPreparation) comparedWith(served schema.Manifest) d
 
 func developmentSchemaWarningError(adapter projectfile.DatabaseAdapter) error {
 	if adapter == projectfile.DatabaseMongoDB {
-		return fmt.Errorf("automatic MongoDB development index sync paused for a possible rename; restore the last accepted config, or create and review an immutable artifact with ridu migrate create --name <name>, explicitly confirm each rename or bind a registered transform, drain every application process and writer, run ridu migrate verify, capture a matched database-and-upload recovery point, apply with ridu migrate up --allow-maintenance, require ridu migrate status to be current, then restart so exact readiness can admit the new manifest")
+		return fmt.Errorf("automatic MongoDB development index sync paused for a possible rename; restore the last accepted config, or create and review an immutable artifact with ridu migrate create --name <name>, explicitly confirm each rename or bind a registered transform, run ridu migrate baseline to record the migrations this database already has, drain every application process and writer, run ridu migrate verify, capture a matched database-and-upload recovery point, apply with ridu migrate up --allow-maintenance, require ridu migrate status to be current, then restart so exact readiness can admit the new manifest")
 	}
-	return fmt.Errorf("automatic development schema sync paused for a possible rename; run ridu migrate create --name <name>, review the migration, then run ridu migrate up")
+	apply := "ridu migrate up"
+	if adapter == projectfile.DatabasePostgres {
+		apply += " --allow-maintenance"
+	}
+	return fmt.Errorf("automatic development schema sync paused for a possible rename; restore the old name, or run ridu migrate create --name <name> and review the migration, run ridu migrate baseline to record the migrations this database already has, then run %s", apply)
 }
 
 func synchronizeDevelopmentSchema(ctx context.Context, adapter projectfile.DatabaseAdapter, databaseURL, databasePath string, syncSchema, forceSchemaSync bool, preparation developmentPreparation, output *cliOutput) (developmentPreparation, error) {
@@ -1054,6 +1162,20 @@ func synchronizeDevelopmentSchema(ctx context.Context, adapter projectfile.Datab
 			return developmentPreparation{}, fmt.Errorf("connect to development SQLite: %w", err)
 		}
 		defer backend.Close()
+		managed, err := backend.HasMigrationHistory(ctx)
+		if err != nil {
+			return developmentPreparation{}, fmt.Errorf("inspect SQLite migration history: %w", err)
+		}
+		if managed {
+			// ridu migrate owns a database with history; schema sync must not
+			// change it behind the ledger.
+			if err := backend.Ready(ctx, preparation.manifest); err != nil {
+				return developmentPreparation{}, fmt.Errorf("this SQLite database is managed by ridu migrate and does not match the current config; create a migration with ridu migrate create <name> and apply it with ridu migrate up, or point ridu dev at another database: %w", err)
+			}
+			output.Info("Skipped schema sync for a SQLite database managed by ridu migrate")
+			preparation.schemaSyncDuration = time.Since(schemaSyncStarted)
+			return preparation, nil
+		}
 		if err := backend.Migrate(ctx, preparation.manifest); err != nil {
 			return developmentPreparation{}, fmt.Errorf("apply SQLite development schema: %w", err)
 		}
@@ -1100,10 +1222,13 @@ func synchronizeDevelopmentSchema(ctx context.Context, adapter projectfile.Datab
 	return preparation, nil
 }
 
-func stabilizeDevelopmentCandidate(ctx context.Context, definition projectfile.File, version string, candidate developmentBinary, buildDuration time.Duration, syncSchema bool, fresh func() bool, stdout, stderr io.Writer, output *cliOutput) (developmentBinary, time.Duration, developmentPreparation, error) {
+func stabilizeDevelopmentCandidate(ctx context.Context, definition projectfile.File, version string, candidate developmentBinary, buildDuration time.Duration, syncSchema bool, fresh func() bool, renames *developmentRenames, stdout, stderr io.Writer, output *cliOutput) (developmentBinary, time.Duration, developmentPreparation, error) {
 	var combined developmentPreparation
+	if renames != nil {
+		renames.beginReload()
+	}
 	for round := 0; round < 4; round++ {
-		preparation, err := prepareDevelopment(ctx, definition, version, candidate.path, syncSchema, fresh, output)
+		preparation, err := prepareDevelopment(ctx, definition, version, candidate.path, syncSchema, fresh, renames, output)
 		if err != nil {
 			return candidate, buildDuration, combined, err
 		}

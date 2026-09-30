@@ -986,7 +986,7 @@ export interface SchemaRelationshipField {
 	onDelete: SchemaReferenceDeleteAction;
 }
 
-export type SchemaReferenceDeleteAction = "nullify" | "restrict";
+export type SchemaReferenceDeleteAction = "nullify" | "restrict" | "cascade";
 
 export interface SchemaRelationshipFilter {
 	collectionSlug?: string;

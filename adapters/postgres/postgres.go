@@ -1161,20 +1161,15 @@ FOR UPDATE`, string(request.Target.CollectionID), request.Target.DocumentID)
 	}
 	rows.Close()
 
+	pending := referenceindex.PendingSet(request.PendingOwners)
 	constraintSet := make(map[store.ReferenceConstraint]struct{})
 	for _, match := range matches {
-		action := schema.ReferenceDeleteNullify
-		if match.field.Relationship != nil {
-			action = match.field.Relationship.OnDelete
-		} else if match.field.Upload != nil {
-			action = match.field.Upload.OnDelete
+		blocks, err := referenceindex.BlocksDelete(referenceindex.DeleteAction(match.field), match.entry.Owner, pending)
+		if err != nil {
+			return fmt.Errorf("reference owner field %q: %w", match.entry.FieldID, err)
 		}
-		switch action {
-		case schema.ReferenceDeleteNullify:
-		case schema.ReferenceDeleteRestrict:
+		if blocks {
 			constraintSet[store.ReferenceConstraint{OwnerCollectionID: match.entry.Owner.CollectionID, FieldID: match.entry.FieldID}] = struct{}{}
-		default:
-			return fmt.Errorf("reference owner field %q has unsupported delete action %q", match.entry.FieldID, action)
 		}
 	}
 	if len(constraintSet) != 0 {
@@ -1252,6 +1247,38 @@ FOR UPDATE`, string(request.Target.CollectionID), request.Target.DocumentID)
 		}
 	}
 	return nil
+}
+
+// CascadeOwners lists current owners that reference the target through a
+// cascade field, locking their index rows like ApplyReferenceDelete.
+func (transaction *documentTransaction) CascadeOwners(ctx context.Context, request store.ReferenceDeleteRequest) ([]store.DocumentReference, error) {
+	if request.Target.CollectionID == "" || request.Target.DocumentID == "" {
+		return nil, fmt.Errorf("cascade lookup requires a target collection and document ID")
+	}
+	rows, err := transaction.transaction.Query(ctx, `SELECT
+  owner_collection_id, owner_document_id, field_id, locale, occurrence
+FROM ridu_document_references
+WHERE target_collection_id = $1 AND target_document_id = $2
+ORDER BY owner_collection_id, owner_document_id, field_id, locale, occurrence
+FOR UPDATE`, string(request.Target.CollectionID), request.Target.DocumentID)
+	if err != nil {
+		return nil, translateError(err)
+	}
+	var entries []referenceindex.Entry
+	for rows.Next() {
+		entry := referenceindex.Entry{Target: request.Target}
+		if err := rows.Scan(&entry.Owner.CollectionID, &entry.Owner.DocumentID, &entry.FieldID, &entry.Locale, &entry.Occurrence); err != nil {
+			rows.Close()
+			return nil, translateError(err)
+		}
+		entries = append(entries, entry)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, translateError(err)
+	}
+	rows.Close()
+	return referenceindex.CascadeOwners(entries, request.Collections, referenceindex.PendingSet(request.PendingOwners))
 }
 
 func scanReferenceRootValue(row pgx.Row, field schema.Field) (store.Value, bool, error) {

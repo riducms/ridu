@@ -326,11 +326,18 @@ hostname-verified three-member profile below and follow the full release cutover
 During `ridu dev`, an additive manifest change creates only missing collections and indexes. A
 separate serving Store then non-mutatingly verifies the exact physical index plan and passes
 development readiness before the stable proxy promotes the candidate. A failed build, incompatible
-index, unhealthy candidate, or rejected rename leaves the last working process in place.
+index, or unhealthy candidate leaves the last working process in place.
 
 Development synchronization never drops state or guesses how stored content should move. For a
-rename, compiled transform, index replacement, or reviewed retirement, create and apply an
-immutable production migration instead of repairing MongoDB by hand.
+compiled transform, index replacement, or reviewed retirement, create and apply an immutable
+production migration instead of repairing MongoDB by hand.
+
+A change that looks like a rename is the exception in an interactive terminal: `ridu dev` asks
+whether to preserve the data. Answer `y` and it writes the rename migration, records the
+migrations the database already has, stops the running server, applies the rename with maintenance
+admitted, and starts the replacement. See [Renames in `ridu dev`](/docs/migrations/#renames-in-dev).
+Without a terminal it rejects every reload until you restore the old name or create and apply the
+migration yourself.
 
 `--no-sync` skips additive mutation, but it does not weaken verification: the candidate starts only
 when another owner has already prepared the selected database.
@@ -383,10 +390,9 @@ transform, reference-index rebuild, or resource retirement. Run that work only a
 application process and worker is drained.
 
 `verify` creates a random isolated database, replays the complete history with the adapter's
-migration runner, checks the final ledger and index state, and drops that database. Because the
-temporary database starts empty, `verify` requires `--allow-maintenance` whenever any artifact in
-the complete history contains semantic work, including work already applied to the live database.
-`status` is non-mutating.
+migration runner, checks the final ledger and index state, and drops that database. No application
+can reach that database, so `verify` admits semantic work without `--allow-maintenance`. `status`
+is non-mutating.
 `ridu build` embeds a fingerprint of the exact ordered migration filenames and artifact digests.
 Application readiness requires the live ledger to match that fingerprint, its head to match the
 executable manifest, and every required Ridu index to pass non-mutating verification.
@@ -409,8 +415,7 @@ additive or same-manifest data-only one—use the coordinated sequence:
 2. Drain every old application process and worker.
 3. Run `migrate verify` through the project-local CLI with
    `DATABASE_URL="$MONGODB_OPERATIONAL_URL"` so the shadow-database authority exists only for that
-   command. Append `--allow-maintenance` whenever the complete committed history contains semantic
-   work.
+   command. The shadow database has no traffic, so verification needs no `--allow-maintenance`.
 4. After verification succeeds, capture one recovery point containing a database-scoped
    `mongodump` and the upload store. Use a separately scoped `$MONGODB_BACKUP_URL`.
 5. Run `migrate up` through the project-local CLI with `DATABASE_URL="$MONGODB_MIGRATION_URL"`, using

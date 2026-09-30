@@ -23,6 +23,15 @@ import (
 // Open never calls it and production callers should apply reviewed immutable
 // artifacts once the SQLite artifact runner is configured.
 func (backend *Store) Migrate(ctx context.Context, manifest schema.Manifest) error {
+	return backend.withImmediate(ctx, func(connection *sql.Conn) error {
+		return backend.migrateDevelopmentSchema(ctx, connection, manifest)
+	})
+}
+
+// migrateDevelopmentSchema synchronizes a database without migration history
+// to manifest inside the caller's write transaction and records it as the
+// manifest the database has.
+func (backend *Store) migrateDevelopmentSchema(ctx context.Context, connection *sql.Conn, manifest schema.Manifest) error {
 	digest, err := manifestDigest(manifest)
 	if err != nil {
 		return fmt.Errorf("digest SQLite manifest: %w", err)
@@ -32,30 +41,29 @@ func (backend *Store) Migrate(ctx context.Context, manifest schema.Manifest) err
 		return fmt.Errorf("encode SQLite manifest: %w", err)
 	}
 	contract := currentSQLitePlannerContract()
-	return backend.withImmediate(ctx, func(connection *sql.Conn) error {
-		immutable, err := sqliteArtifactLedgerExists(ctx, connection)
-		if err != nil {
-			return err
-		}
-		if immutable {
-			return fmt.Errorf("SQLite development migration cannot modify a database with immutable migration history")
-		}
-		if err := installSchema(ctx, connection); err != nil {
-			return err
-		}
-		if err := contract.reconcileIndexes(ctx, connection, manifest); err != nil {
-			return err
-		}
-		if err := rebuildDocumentReferences(ctx, connection, manifest); err != nil {
-			return err
-		}
-		if err := contract.rebuildUniqueness(ctx, connection, manifest); err != nil {
-			return err
-		}
-		if err := assertSQLitePhysicalSchema(ctx, connection, manifest, false, contract); err != nil {
-			return fmt.Errorf("verify SQLite development schema: %w", err)
-		}
-		_, err = connection.ExecContext(ctx, `INSERT INTO ridu_sqlite_schema
+	immutable, err := sqliteArtifactLedgerExists(ctx, connection)
+	if err != nil {
+		return err
+	}
+	if immutable {
+		return fmt.Errorf("SQLite development migration cannot modify a database with immutable migration history")
+	}
+	if err := installSchema(ctx, connection); err != nil {
+		return err
+	}
+	if err := contract.reconcileIndexes(ctx, connection, manifest); err != nil {
+		return err
+	}
+	if err := rebuildDocumentReferences(ctx, connection, manifest); err != nil {
+		return err
+	}
+	if err := contract.rebuildUniqueness(ctx, connection, manifest); err != nil {
+		return err
+	}
+	if err := assertSQLitePhysicalSchema(ctx, connection, manifest, false, contract); err != nil {
+		return fmt.Errorf("verify SQLite development schema: %w", err)
+	}
+	_, err = connection.ExecContext(ctx, `INSERT INTO ridu_sqlite_schema
 	  (singleton, manifest_digest, expected_artifact_digest, manifest_json, applied_at)
 	VALUES (1, ?, '', ?, ?)
 	ON CONFLICT(singleton) DO UPDATE SET
@@ -63,8 +71,7 @@ func (backend *Store) Migrate(ctx context.Context, manifest schema.Manifest) err
 	  expected_artifact_digest = excluded.expected_artifact_digest,
 	  manifest_json = excluded.manifest_json,
 	  applied_at = excluded.applied_at`, digest, string(encoded), encodeTime(backend.now().UTC()))
-		return translateError(err)
-	})
+	return translateError(err)
 }
 
 const documentIndexPrefix = "ridu_json_"

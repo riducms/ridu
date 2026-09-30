@@ -1954,6 +1954,42 @@ WHERE owner_collection_id = ? AND owner_document_id = ?`, string(owner.Collectio
 	return translateError(err)
 }
 
+// CascadeOwners lists current owners that reference the target through a
+// cascade field.
+func (transaction *documentTransaction) CascadeOwners(ctx context.Context, request store.ReferenceDeleteRequest) ([]store.DocumentReference, error) {
+	leave, err := transaction.enter(ctx, true)
+	if err != nil {
+		return nil, err
+	}
+	defer leave()
+	if request.Target.CollectionID == "" || request.Target.DocumentID == "" {
+		return nil, fmt.Errorf("cascade lookup requires a target collection and document ID")
+	}
+	rows, err := transaction.connection.QueryContext(ctx, `SELECT
+  owner_collection_id, owner_document_id, field_id, locale, occurrence
+FROM ridu_document_references
+WHERE target_collection_id = ? AND target_document_id = ?
+ORDER BY owner_collection_id, owner_document_id, field_id, locale, occurrence`, string(request.Target.CollectionID), request.Target.DocumentID)
+	if err != nil {
+		return nil, translateError(err)
+	}
+	var entries []referenceindex.Entry
+	for rows.Next() {
+		entry := referenceindex.Entry{Target: request.Target}
+		if err := rows.Scan(&entry.Owner.CollectionID, &entry.Owner.DocumentID, &entry.FieldID, &entry.Locale, &entry.Occurrence); err != nil {
+			rows.Close()
+			return nil, translateError(err)
+		}
+		entries = append(entries, entry)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, translateError(err)
+	}
+	rows.Close()
+	return referenceindex.CascadeOwners(entries, request.Collections, referenceindex.PendingSet(request.PendingOwners))
+}
+
 func (transaction *documentTransaction) ApplyReferenceDelete(ctx context.Context, request store.ReferenceDeleteRequest) error {
 	leave, err := transaction.enter(ctx, true)
 	if err != nil {
@@ -2004,6 +2040,7 @@ ORDER BY owner_collection_id, owner_document_id, field_id, locale, occurrence`, 
 	}
 	rows.Close()
 
+	pending := referenceindex.PendingSet(request.PendingOwners)
 	constraints := make(map[store.ReferenceConstraint]struct{})
 	for _, entry := range entries {
 		collection, exists := request.Collections[entry.Owner.CollectionID]
@@ -2014,18 +2051,12 @@ ORDER BY owner_collection_id, owner_document_id, field_id, locale, occurrence`, 
 		if !exists {
 			return fmt.Errorf("reference owner field %q is unavailable", entry.FieldID)
 		}
-		action := schema.ReferenceDeleteNullify
-		if field.Relationship != nil {
-			action = field.Relationship.OnDelete
-		} else if field.Upload != nil {
-			action = field.Upload.OnDelete
+		blocks, err := referenceindex.BlocksDelete(referenceindex.DeleteAction(field), entry.Owner, pending)
+		if err != nil {
+			return fmt.Errorf("reference owner field %q: %w", entry.FieldID, err)
 		}
-		switch action {
-		case schema.ReferenceDeleteNullify:
-		case schema.ReferenceDeleteRestrict:
+		if blocks {
 			constraints[store.ReferenceConstraint{OwnerCollectionID: entry.Owner.CollectionID, FieldID: entry.FieldID}] = struct{}{}
-		default:
-			return fmt.Errorf("reference owner field %q has unsupported delete action %q", entry.FieldID, action)
 		}
 	}
 	if len(constraints) != 0 {

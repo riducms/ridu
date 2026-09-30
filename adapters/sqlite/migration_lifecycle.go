@@ -250,6 +250,11 @@ func (backend *Store) rollbackSQLiteArtifact(ctx context.Context, connection *sq
 		return err
 	}
 	if !sqlitePresentationOnlyArtifact(file.Artifact, &target, current) {
+		// Move renamed content back first: the scrub below deletes every value
+		// stored under a name the earlier schema does not have.
+		if err := applySQLiteArtifactRenames(ctx, connection, file.Artifact, &target, current, true); err != nil {
+			return fmt.Errorf("roll back SQLite migration %s renames: %w", file.Name, err)
+		}
 		if err := backend.scrubSQLiteRollbackFields(ctx, connection, current, target); err != nil {
 			return fmt.Errorf("roll back SQLite migration %s fields: %w", file.Name, err)
 		}

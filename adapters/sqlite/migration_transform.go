@@ -49,12 +49,12 @@ func buildSQLiteArtifactWithTransitionValidation(ctx context.Context, name strin
 			return bindSQLiteDataTransforms(artifact, transforms)
 		}
 	}
-	artifact, err := buildSQLiteArtifactWithValidation(ctx, name, before, after, previousPlannerVersion, contract, validateAdditive)
+	artifact, err := buildSQLiteArtifactWithValidation(ctx, name, before, after, previousPlannerVersion, contract, validateAdditive, nil)
 	if err != nil {
 		if len(transforms) == 0 || !allowTransformedSchema {
 			return ridumigration.Artifact{}, err
 		}
-		artifact, err = buildSQLiteArtifactWithValidation(ctx, name, before, after, previousPlannerVersion, contract, validateTransformed)
+		artifact, err = buildSQLiteArtifactWithValidation(ctx, name, before, after, previousPlannerVersion, contract, validateTransformed, nil)
 		if err != nil {
 			return ridumigration.Artifact{}, err
 		}

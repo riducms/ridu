@@ -65,9 +65,36 @@ random MongoDB database, replays every migration, checks the result, and removes
 target. It cannot reproduce production data volume, lock timing, or content-specific collisions.
 
 Every command except `create` requires a non-empty artifact history whose newest manifest matches
-the executable config. Database-backed commands use `DATABASE_URL` for PostgreSQL and MongoDB, or
-`RIDU_SQLITE_PATH` for SQLite. `verify` is the one SQLite exception because it uses a temporary
-database.
+the executable config. A database `ridu dev` synchronized has no history of its own; see [Record a
+`ridu dev` database's history](#baseline). Database-backed commands use `DATABASE_URL` for
+PostgreSQL and MongoDB, or `RIDU_SQLITE_PATH` for SQLite. `verify` is the one SQLite exception
+because it uses a temporary database.
+
+## Record a `ridu dev` database's history {#baseline}
+
+`ridu dev` synchronizes its database straight from config and records no migrations, so `ridu migrate
+status` and `up` report that database as unmanaged. When it already has the schema of your committed
+migrations, record them instead of recreating it:
+
+```sh title="terminal"
+ridu migrate create add-post-summary
+ridu migrate baseline
+ridu migrate status
+```
+
+`baseline` runs no migration step. It records pending migrations as applied through the newest one
+whose schema the database already has, and leaves later ones pending for `up`. It stops before a
+migration with a step schema sync never runs, such as a rename's content rewrite, a data transform,
+or a reference-index rebuild. That is how `ridu dev`'s rename pause resolves: `baseline` records
+the history before the rename, then `up` runs it. `baseline` refuses a database whose schema
+matches no committed migration and a migration that is partly applied, and it changes nothing
+when the history is already current.
+
+PostgreSQL and MongoDB keep synchronizing under `ridu dev` after a baseline; run `baseline` again
+after each `ridu migrate create`. A SQLite database with history is managed by `ridu migrate` from
+then on: `ridu dev` still serves it but skips schema sync, so a config change needs `ridu migrate
+create` and `ridu migrate up`. Production databases never need `baseline`: they are created and
+changed only by `up`.
 
 ## What is in an artifact {#artifact}
 
@@ -110,6 +137,81 @@ then preserve physical tables, columns, indexes, constraints, nested stored valu
 state, task references, polymorphic relationships, and declared plugin reference keys as the
 specific transition requires.
 
+Ridu proposes renames for collections and their fields, not for the fields of a global.
+
+A field rename changes the field's name and nothing else. `create` refuses one that also renames
+the children of a group, array, or blocks field, or changes whether the field is localized,
+because the stored values would move to the new name with their old inner shape. Rename the field
+in one migration and make the other change in the next.
+
+### Renames in `ridu dev` {#renames-in-dev}
+
+`ridu dev` compares each saved config with the schema it last brought the development database
+to. When the difference looks like a rename, it generates and synchronizes nothing until the
+rename is settled, because ordinary schema sync would leave the stored values under the old name.
+A database that no longer has that schema, because you migrated it by hand or replaced it, is not
+held.
+
+#### With a terminal
+
+`ridu dev` asks the same question as `create`. It needs an explicit `y` or `n`; an empty line is
+not an answer.
+
+Answer `y` and it writes the rename migration, stops the running server, applies the rename to the
+development database, and brings up the new server. You decide once, and production gets the same
+rename from the committed migration. When `ridu dev` had already synchronized changes that no
+migration covers, it first writes a `changes-before-<name>` migration for them.
+
+The server stops first because it still runs the old config, and a write from it would store
+content under the old name again. How the rename is then applied depends on the adapter:
+
+- PostgreSQL and MongoDB record the migrations the database already has, then apply the rename
+  through the migration runner.
+- SQLite moves the stored values directly, so the database stays under development schema sync. A
+  SQLite database that `ridu migrate` already manages takes the rename through the migration
+  runner instead. SQLite renames fields, not collections.
+
+Answer `n` and nothing is written. The old values stay where they are, and the adapter's ordinary
+development sync decides what happens next:
+
+- SQLite carries on. Documents keep the old values under the old name, where the new config does
+  not read them.
+- PostgreSQL never drops a column in development, so schema sync stays paused, and the question
+  comes back on each save, until a reviewed migration removes the old column or you restore the
+  old name.
+- MongoDB carries on unless the removed field was indexed, which needs a reviewed migration.
+
+To take back an `n` on SQLite or MongoDB, restore the old name, answer `n` to the reverse rename
+`ridu dev` then detects, and rename again. Declining only some of several renames would drop the
+declined fields' data in the same migration, so `ridu dev` refuses that combination; write it as a
+reviewed migration, or make the changes in separate saves.
+
+#### Without a terminal
+
+Under a task runner or a coding agent `ridu dev` cannot ask. It rejects the reload, and every
+later save, with the commands to run. Running `ridu generate` does not release it. It carries on
+once either of these is true:
+
+- The old name is restored.
+- The rename has been migrated by hand: `ridu migrate create`, `ridu migrate baseline`, then
+  `ridu migrate up`, with `--allow-maintenance` on PostgreSQL and MongoDB. The next save reloads.
+
+If the removed and the added field really are unrelated, make the two changes in separate saves.
+
+#### What `ridu dev` leaves to `ridu migrate`
+
+Even with a terminal, these cases go through `ridu migrate create` and `ridu migrate up`:
+
+- The project's migrations run compiled data transforms, which only the project binary can replay.
+- A pending migration removes data, or the newest migration already reaches the new config
+  without recording the rename.
+
+If applying the rename fails, the migration files it wrote stay and the message says how to
+continue. If the reload fails after the rename was applied, for example because application code
+still uses the old generated field name, `ridu dev` keeps watching with no server running and
+reloads on the save that fixes it. Deleting the migration afterwards does not undo a rename that
+was applied.
+
 Ambiguous mappings are rejected rather than guessed. Collection slug swaps and chains must be split
 into separate artifacts with a temporary slug so a value cannot be rewritten twice. Application
 task input and arbitrary JSON remain opaque; the generic runner never searches them heuristically.
@@ -133,9 +235,10 @@ Safety flags have narrow scopes:
 
 - **`--allow-destructive` on `create`** records a planner-confirmed destructive finding in the
   artifact after review. It does not connect to or change a database.
-- **`--allow-maintenance` on `verify` or `up`** admits a traffic-sensitive phase after every old
+- **`--allow-maintenance` on `up`** admits a traffic-sensitive phase after every old
   application process, writer, and worker has stopped. Keep them stopped through retries until
-  `status` completes.
+  `status` completes. `verify` never needs it: it replays into a private shadow schema or database
+  that no application can reach, so it admits those phases itself.
 - **`--allow-insecure-database` on database-backed commands** permits plaintext or bypassed
   certificate verification to a remote PostgreSQL or MongoDB development host. A loopback or
   Unix-socket database never needs it. The offline
@@ -219,8 +322,8 @@ sequence:
 
 1. Drain every old application replica and worker.
 2. Run `DATABASE_URL="$MONGODB_OPERATIONAL_URL" ridu migrate verify` so shadow-database authority
-   is scoped to that command. Append `--allow-maintenance` whenever the complete committed history
-   contains semantic work, because clean-shadow verification replays every artifact.
+   is scoped to that command. The shadow database has no traffic, so verification needs no
+   `--allow-maintenance`.
 3. After verification succeeds, capture the matched selected-database and upload recovery point
    with a separate least-privilege credential such as `$MONGODB_BACKUP_URL`.
 4. Run `DATABASE_URL="$MONGODB_MIGRATION_URL" ridu migrate up` with the selected database-scoped

@@ -48,16 +48,16 @@ Use `field.Uploads("gallery", "media")` to let authors select several files.
 
 ## Configuration {#configuration}
 
-| Constructor or method                                                                  | What it controls                                                               |
-| -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `field.Upload(name, collection)`                                                       | Stores one ID from an upload-enabled collection.                               |
-| `field.Uploads(name, collection)`                                                      | Stores an ordered list of upload document IDs.                                 |
-| `.Required()`                                                                          | Requires one selected file, or a non-empty list for `Uploads`.                 |
-| `.FilterOptionRules(rules...)`                                                         | Narrows picker choices and server admission with finite query predicates.      |
-| `.OnDelete(field.ReferenceDeleteRestrict)` / `.OnDelete(field.ReferenceDeleteNullify)` | Rejects a hard delete while referenced, or clears/removes matching references. |
-| `.Index()` / `.Unique()`                                                               | Available on a singular Upload reference.                                      |
-| `.Localized()`                                                                         | Stores the selected reference or list separately for each locale.              |
-| `.Validate(...)`, `.LiveValidate(...)`, `.Access(...)`, `.Hooks(...)`                  | Adds application rules and lifecycle behavior.                                 |
+| Constructor or method                                                                            | What it controls                                                                                                        |
+| ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `field.Upload(name, collection)`                                                                 | Stores one ID from an upload-enabled collection.                                                                        |
+| `field.Uploads(name, collection)`                                                                | Stores an ordered list of upload document IDs.                                                                          |
+| `.Required()`                                                                                    | Requires one selected file, or a non-empty list for `Uploads`.                                                          |
+| `.FilterOptionRules(rules...)`                                                                   | Narrows picker choices and server admission with finite query predicates.                                               |
+| `.OnDelete(field.ReferenceDeleteRestrict)` / `ReferenceDeleteNullify` / `ReferenceDeleteCascade` | Rejects a hard delete while referenced, clears or removes matching references, or deletes the referencing document too. |
+| `.Index()` / `.Unique()`                                                                         | Available on a singular Upload reference.                                                                               |
+| `.Localized()`                                                                                   | Stores the selected reference or list separately for each locale.                                                       |
+| `.Validate(...)`, `.LiveValidate(...)`, `.Access(...)`, `.Hooks(...)`                            | Adds application rules and lifecycle behavior.                                                                          |
 
 ## Filter the available files {#options}
 

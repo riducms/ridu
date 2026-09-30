@@ -33,9 +33,10 @@ export interface GenerateReferenceOptions {
 	seedRoutes?: boolean;
 }
 
-// Includes the live-validation methods and their authored callback contracts.
+// Includes the live-validation methods and their authored callback contracts,
+// and the cascade delete, system-call and migration-baseline APIs.
 export const REFERENCE_CATALOG_MAX_BYTES = 4.25 * 1024 * 1024;
-export const REFERENCE_CATALOG_MAX_GZIP_BYTES = 440 * 1024;
+export const REFERENCE_CATALOG_MAX_GZIP_BYTES = 448 * 1024;
 
 export function generateReferenceCatalog(options: GenerateReferenceOptions): ReferenceCatalogFile {
 	const go = extractGo(options.repositoryRoot);

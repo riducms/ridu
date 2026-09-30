@@ -276,18 +276,13 @@ yarn --cwd admin add @riducms/translations
 ```
 
 ```ts title="admin/src/main.ts"
-import { mountAdmin } from '@riducms/admin';
+import { createAdminClient, mountAdmin } from '@riducms/admin';
 import { ar, en, fr } from '@riducms/translations';
-import {
-	createClient,
-	type RiduConfig
-} from '../../generated/ridu.generated';
 import { adminPlugins } from '@/plugins';
 
-mountAdmin<RiduConfig>({
+mountAdmin({
 	target: document.getElementById('app')!,
-	clientFactory: () =>
-		createClient({ baseURL: window.location.origin }),
+	clientFactory: createAdminClient,
 	plugins: adminPlugins,
 	languages: [en, fr, ar]
 });

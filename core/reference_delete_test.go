@@ -51,7 +51,7 @@ func TestReferenceDeleteActionsRejectUnsafeRequiredNullifyAndInvalidValues(t *te
 	_, err := ridu.Resolve(ridu.Config{Name: "Reference deletes", Collections: []ridu.Collection{
 		{Slug: "users", Fields: field.Fields{field.Text("name")}},
 		{Slug: "media", Upload: true, Fields: field.Fields{field.Text("alt")}},
-		{Slug: "posts", Fields: field.Fields{field.Relationship("owner", "users").Required().OnDelete(field.ReferenceDeleteNullify), field.Upload("asset", "media").Required().OnDelete(field.ReferenceDeleteNullify), field.Relationships("related", "users").Required().OnDelete(field.ReferenceDeleteNullify), field.PolymorphicRelationship("subject", "users", "media").Required().OnDelete(field.ReferenceDeleteNullify), field.Uploads("assets", "media").Required().OnDelete(field.ReferenceDeleteNullify), field.Relationship("invalid", "users").OnDelete(field.ReferenceDeleteAction("cascade"))}},
+		{Slug: "posts", Fields: field.Fields{field.Relationship("owner", "users").Required().OnDelete(field.ReferenceDeleteNullify), field.Upload("asset", "media").Required().OnDelete(field.ReferenceDeleteNullify), field.Relationships("related", "users").Required().OnDelete(field.ReferenceDeleteNullify), field.PolymorphicRelationship("subject", "users", "media").Required().OnDelete(field.ReferenceDeleteNullify), field.Uploads("assets", "media").Required().OnDelete(field.ReferenceDeleteNullify), field.Relationship("invalid", "users").OnDelete(field.ReferenceDeleteAction("delete"))}},
 	}})
 	var validation *schema.ValidationError
 	if !errors.As(err, &validation) {

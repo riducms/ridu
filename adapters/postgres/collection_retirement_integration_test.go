@@ -239,6 +239,11 @@ WHERE (owner_collection_id = $1 AND owner_document_id = $2 AND target_collection
 	if _, err := migrationartifact.Create(directory, "remove-resources", removal, time.Unix(2, 0)); err != nil {
 		t.Fatal(err)
 	}
+	// Verification replays into a private shadow schema, so the same history
+	// needs no maintenance admission there.
+	if err := VerifyArtifactsWithOptions(ctx, baseURL, directory, RunnerOptions{AllowInsecureDatabase: true}); err != nil {
+		t.Fatalf("shadow verification of a maintenance migration = %v", err)
+	}
 	if err := backend.ApplyArtifacts(ctx, directory); !errors.Is(err, ErrMaintenanceRequired) {
 		t.Fatalf("resource removal without maintenance admission = %v", err)
 	}

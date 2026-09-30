@@ -134,11 +134,10 @@ func TestCreateRendersProjectWithoutAbsoluteFrameworkPaths(t *testing.T) {
 	if strings.Contains(string(adminMain), "unknown as") {
 		t.Fatalf("generated admin contains an unsafe integration cast:\n%s", adminMain)
 	}
-	if !strings.Contains(string(adminMain), `from "../../generated/ridu.generated"`) {
-		t.Fatalf("generated admin does not import the direct generated client:\n%s", adminMain)
-	}
-	if !strings.Contains(string(adminMain), "mountAdmin<RiduConfig>") {
-		t.Fatalf("generated admin does not bind the exact generated config type:\n%s", adminMain)
+	// The admin reads its schema at run time, so it must not depend on where
+	// ridu.toml generates the client: that path may be a sibling app.
+	if strings.Contains(string(adminMain), "ridu.generated") || !strings.Contains(string(adminMain), "mountAdmin({ target, clientFactory: createAdminClient, ...adminConfig })") {
+		t.Fatalf("generated admin depends on the configurable client path:\n%s", adminMain)
 	}
 	adminVite, err := os.ReadFile(filepath.Join(target, "admin", "vite.config.ts"))
 	if err != nil {

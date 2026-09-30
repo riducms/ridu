@@ -247,7 +247,7 @@ func (transaction *documentTransaction) incomingReferenceEntries(ctx context.Con
 	return entries, nil
 }
 
-func mongoReferenceConstraints(entries []mongoReferenceEntry, collections map[schema.StableID]schema.Collection, ignored map[store.DocumentReference]struct{}) ([]store.ReferenceConstraint, error) {
+func mongoReferenceConstraints(entries []mongoReferenceEntry, collections map[schema.StableID]schema.Collection, ignored map[store.DocumentReference]struct{}, pending map[store.DocumentReference]bool) ([]store.ReferenceConstraint, error) {
 	constraints := make(map[store.ReferenceConstraint]struct{})
 	for _, entry := range entries {
 		if _, skip := ignored[entry.Owner]; skip {
@@ -262,12 +262,12 @@ func mongoReferenceConstraints(entries []mongoReferenceEntry, collections map[sc
 		if !exists || reference == nil {
 			return nil, fmt.Errorf("reference owner field %q is unavailable", entry.FieldID)
 		}
-		switch reference.OnDelete {
-		case schema.ReferenceDeleteNullify:
-		case schema.ReferenceDeleteRestrict:
+		blocks, err := referenceindex.BlocksDelete(reference.OnDelete, entry.Owner, pending)
+		if err != nil {
+			return nil, fmt.Errorf("reference owner field %q: %w", entry.FieldID, err)
+		}
+		if blocks {
 			constraints[store.ReferenceConstraint{OwnerCollectionID: entry.Owner.CollectionID, FieldID: entry.FieldID}] = struct{}{}
-		default:
-			return nil, fmt.Errorf("reference owner field %q has unsupported delete action %q", entry.FieldID, reference.OnDelete)
 		}
 	}
 	ordered := make([]store.ReferenceConstraint, 0, len(constraints))
@@ -281,6 +281,23 @@ func mongoReferenceConstraints(entries []mongoReferenceEntry, collections map[sc
 		return ordered[left].FieldID < ordered[right].FieldID
 	})
 	return ordered, nil
+}
+
+// cascadeOwners lists current owners that reference the target through a
+// cascade field.
+func (transaction *documentTransaction) cascadeOwners(ctx context.Context, request store.ReferenceDeleteRequest) ([]store.DocumentReference, error) {
+	if err := validateMongoReferenceIdentity(request.Target, "cascade target"); err != nil {
+		return nil, err
+	}
+	stored, err := transaction.incomingReferenceEntries(ctx, request.Target)
+	if err != nil {
+		return nil, err
+	}
+	entries := make([]referenceindex.Entry, 0, len(stored))
+	for _, entry := range stored {
+		entries = append(entries, referenceindex.Entry{Owner: entry.Owner, FieldID: entry.FieldID, Target: entry.Target, Locale: entry.Locale, Occurrence: entry.Occurrence})
+	}
+	return referenceindex.CascadeOwners(entries, request.Collections, referenceindex.PendingSet(request.PendingOwners))
 }
 
 func (transaction *documentTransaction) applyReferenceDelete(ctx context.Context, request store.ReferenceDeleteRequest) error {
@@ -331,7 +348,7 @@ func (transaction *documentTransaction) applyReferenceDelete(ctx context.Context
 	if err != nil {
 		return err
 	}
-	constraints, err := mongoReferenceConstraints(entries, request.Collections, ignored)
+	constraints, err := mongoReferenceConstraints(entries, request.Collections, ignored, referenceindex.PendingSet(request.PendingOwners))
 	if err != nil {
 		return err
 	}

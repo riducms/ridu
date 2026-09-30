@@ -209,10 +209,10 @@ decisions are applied atomically to the row or each snapshot.
 
 ## Renames and migrations {#renames}
 
-Rename the authored slug or field name, regenerate, then run `ridu migrate create`. PostgreSQL
-migration creation presents compatible remove/add pairs for confirmation and records accepted
-continuity in the immutable artifact. SQLite requires a named compiled transform to rewrite stored
-canonical JSON. Do not maintain hand-authored public schema IDs or edit generated manifests to
+Rename the authored slug or field name, regenerate, then run `ridu migrate create`. Migration
+creation presents compatible remove/add pairs for confirmation and records accepted continuity in
+the immutable artifact. SQLite does this for fields; renaming a SQLite collection needs a named
+compiled transform. Do not maintain hand-authored public schema IDs or edit generated manifests to
 force a rename.
 
 This changes the public field from `title` to `headline`; the migration must preserve the stored

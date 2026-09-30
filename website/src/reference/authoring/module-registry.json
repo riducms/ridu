@@ -2867,6 +2867,7 @@
 				"cli:ridu#ridu migrate status",
 				"cli:ridu#ridu migrate verify",
 				"cli:ridu#ridu migrate up",
+				"cli:ridu#ridu migrate baseline",
 				"cli:ridu#ridu migrate down",
 				"cli:ridu#ridu migrate reset",
 				"cli:ridu#ridu migrate refresh",

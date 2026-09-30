@@ -101,7 +101,9 @@ func VerifyArtifacts(ctx context.Context, databaseURL, directory string) (result
 }
 
 // VerifyArtifactsWithOptions replays history with the same operational
-// admissions as ApplyArtifactsWithOptions.
+// admissions as ApplyArtifactsWithOptions, except maintenance: the replay runs
+// in a private shadow schema that no application can reach, so
+// traffic-sensitive steps are admitted without AllowMaintenance.
 func VerifyArtifactsWithOptions(ctx context.Context, databaseURL, directory string, options RunnerOptions) (resultError error) {
 	files, err := migrationartifact.ReadAll(directory)
 	if err != nil {
@@ -119,6 +121,7 @@ func verifyPostgresArtifactFiles(ctx context.Context, databaseURL string, files 
 	if options.StopAfterPhase != "" || options.StopAfterStep != "" {
 		return fmt.Errorf("migration verification requires a complete shadow replay and does not accept stop boundaries")
 	}
+	options.AllowMaintenance = true
 	if len(files) == 0 {
 		return fmt.Errorf("migration artifact history is empty; create and commit an initial migration before verification")
 	}
