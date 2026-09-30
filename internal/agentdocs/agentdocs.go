@@ -109,10 +109,15 @@ func layoutsFor(selection Selection) ([]layout, error) {
 }
 
 type manifest struct {
-	SchemaVersion    int               `json:"schemaVersion"`
-	FrameworkVersion string            `json:"frameworkVersion"`
-	Selections       []Selection       `json:"selections"`
-	Files            map[string]string `json:"files"`
+	SchemaVersion    int         `json:"schemaVersion"`
+	FrameworkVersion string      `json:"frameworkVersion"`
+	Selections       []Selection `json:"selections"`
+	// ExcludedSkills names bundled skills, such as payload-to-ridu, that the
+	// project opted out of. Install and sync never write them. Deleting every
+	// file of a skill records it here, and removing a name restores the skill
+	// on the next sync.
+	ExcludedSkills []string          `json:"excludedSkills,omitempty"`
+	Files          map[string]string `json:"files"`
 }
 
 // Result describes an installation or synchronization without exposing
@@ -120,8 +125,10 @@ type manifest struct {
 type Result struct {
 	Written             []string
 	PreservedEntrypoint []string
-	FrameworkVersion    string
-	ManagedFiles        int
+	// Excluded lists skills a sync found deleted and recorded as opted out.
+	Excluded         []string
+	FrameworkVersion string
+	ManagedFiles     int
 }
 
 // InstallNewProject installs agent docs into a new scaffold staging directory.
@@ -134,7 +141,7 @@ func InstallNewProject(root string, selection Selection, frameworkVersion string
 	if len(layouts) == 0 {
 		return Result{FrameworkVersion: frameworkVersion}, nil
 	}
-	desired, err := desiredFiles(layouts)
+	desired, err := desiredFiles(layouts, nil)
 	if err != nil {
 		return Result{}, err
 	}
@@ -184,7 +191,7 @@ func Install(root string, selection Selection, frameworkVersion string) (Result,
 			return Result{}, err
 		}
 	}
-	desired, err := desiredFiles(layouts)
+	desired, err := desiredFiles(layouts, current.ExcludedSkills)
 	if err != nil {
 		return Result{}, err
 	}
@@ -267,6 +274,7 @@ func Sync(root, frameworkVersion string) (Result, error) {
 		return Result{}, fmt.Errorf("unsupported agent documentation manifest schema %d", current.SchemaVersion)
 	}
 	original := make(map[string][]byte, len(current.Files))
+	missing := map[string]bool{}
 	for path, expected := range current.Files {
 		absolute, err := managedPath(root, path)
 		if err != nil {
@@ -276,6 +284,10 @@ func Sync(root, frameworkVersion string) (Result, error) {
 			return Result{}, fmt.Errorf("managed agent documentation %s must not be a symbolic link", path)
 		}
 		content, err := os.ReadFile(absolute)
+		if errors.Is(err, fs.ErrNotExist) {
+			missing[path] = true
+			continue
+		}
 		if err != nil {
 			return Result{}, fmt.Errorf("read managed agent documentation %s: %w", path, err)
 		}
@@ -284,11 +296,16 @@ func Sync(root, frameworkVersion string) (Result, error) {
 		}
 		original[path] = content
 	}
+	// A skill whose every managed file is gone was removed on purpose: record
+	// the opt-out instead of reinstalling it. A partly deleted skill is still
+	// wanted, so its missing framework-owned files are restored.
+	removed := removedSkills(current.Files, missing)
+	current.ExcludedSkills = mergeSkills(current.ExcludedSkills, removed)
 	layouts, err := layoutsForSelections(current.Selections)
 	if err != nil {
 		return Result{}, err
 	}
-	desired, err := desiredFiles(layouts)
+	desired, err := desiredFiles(layouts, current.ExcludedSkills)
 	if err != nil {
 		return Result{}, err
 	}
@@ -306,7 +323,7 @@ func Sync(root, frameworkVersion string) (Result, error) {
 			return Result{}, fmt.Errorf("inspect agent documentation %s: %w", path, err)
 		}
 	}
-	result := Result{FrameworkVersion: frameworkVersion, ManagedFiles: len(desired)}
+	result := Result{FrameworkVersion: frameworkVersion, ManagedFiles: len(desired), Excluded: removed}
 	newPaths := []string{}
 	fail := func(cause error) (Result, error) {
 		rollbackErr := rollbackSync(root, original, newPaths, manifestContent)
@@ -323,7 +340,7 @@ func Sync(root, frameworkVersion string) (Result, error) {
 		if err != nil {
 			return fail(err)
 		}
-		if _, existed := current.Files[path]; !existed {
+		if _, existed := current.Files[path]; !existed || missing[path] {
 			newPaths = append(newPaths, path)
 		}
 		if err := writeAtomicFile(absolute, content, 0o644); err != nil {
@@ -372,17 +389,24 @@ func layoutsForSelections(selections []Selection) ([]layout, error) {
 	return combined, nil
 }
 
-func desiredFiles(layouts []layout) (map[string][]byte, error) {
+func desiredFiles(layouts []layout, excludedSkills []string) (map[string][]byte, error) {
+	excluded := make(map[string]bool, len(excludedSkills))
+	for _, skill := range excludedSkills {
+		excluded[skill] = true
+	}
 	files := map[string][]byte{}
 	err := fs.WalkDir(bundle, "skills", func(path string, entry fs.DirEntry, err error) error {
 		if err != nil || entry.IsDir() {
 			return err
 		}
+		relative := strings.TrimPrefix(path, "skills/")
+		if skill, _, _ := strings.Cut(relative, "/"); excluded[skill] {
+			return nil
+		}
 		content, err := bundle.ReadFile(path)
 		if err != nil {
 			return err
 		}
-		relative := strings.TrimPrefix(path, "skills/")
 		for _, item := range layouts {
 			target := filepath.ToSlash(filepath.Join(item.SkillRoot, filepath.FromSlash(relative)))
 			files[target] = content
@@ -390,6 +414,54 @@ func desiredFiles(layouts []layout) (map[string][]byte, error) {
 		return nil
 	})
 	return files, err
+}
+
+// skillOf names the bundled skill that owns a managed path such as
+// .agents/skills/payload-to-ridu/SKILL.md.
+func skillOf(path string) string {
+	for _, item := range agentLayouts {
+		if rest, found := strings.CutPrefix(path, item.SkillRoot+"/"); found {
+			skill, _, _ := strings.Cut(rest, "/")
+			return skill
+		}
+	}
+	return ""
+}
+
+// removedSkills lists skills none of whose managed files remain, across every
+// installed layout.
+func removedSkills(files map[string]string, missing map[string]bool) []string {
+	present := map[string]bool{}
+	absent := map[string]bool{}
+	for path := range files {
+		skill := skillOf(path)
+		if missing[path] {
+			absent[skill] = true
+		} else {
+			present[skill] = true
+		}
+	}
+	var removed []string
+	for skill := range absent {
+		if skill != "" && !present[skill] {
+			removed = append(removed, skill)
+		}
+	}
+	sort.Strings(removed)
+	return removed
+}
+
+func mergeSkills(existing, added []string) []string {
+	seen := map[string]bool{}
+	var merged []string
+	for _, skill := range append(append([]string(nil), existing...), added...) {
+		if skill != "" && !seen[skill] {
+			seen[skill] = true
+			merged = append(merged, skill)
+		}
+	}
+	sort.Strings(merged)
+	return merged
 }
 
 func entrypoint(item layout) []byte {

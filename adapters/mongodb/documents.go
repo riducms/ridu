@@ -533,6 +533,17 @@ func (transaction *documentTransaction) ApplyReferenceDelete(ctx context.Context
 	return transaction.applyReferenceDelete(sessionContext, request)
 }
 
+// CascadeOwners lists current owners that reference the target through a
+// cascade field.
+func (transaction *documentTransaction) CascadeOwners(ctx context.Context, request store.ReferenceDeleteRequest) ([]store.DocumentReference, error) {
+	sessionContext, leave, err := transaction.enter(ctx, true)
+	if err != nil {
+		return nil, err
+	}
+	defer leave()
+	return transaction.cascadeOwners(sessionContext, request)
+}
+
 func (transaction *documentTransaction) DeleteDocumentState(ctx context.Context, reference store.DocumentReference) error {
 	sessionContext, leave, err := transaction.enter(ctx, true)
 	if err != nil {

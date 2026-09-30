@@ -1893,6 +1893,7 @@ func (transaction *transaction) ApplyReferenceDelete(ctx context.Context, reques
 		return referenceEntryKey(entries[left]) < referenceEntryKey(entries[right])
 	})
 
+	pending := referenceindex.PendingSet(request.PendingOwners)
 	constraints := make(map[store.ReferenceConstraint]struct{})
 	for _, entry := range entries {
 		collection, exists := request.Collections[entry.Owner.CollectionID]
@@ -1903,16 +1904,12 @@ func (transaction *transaction) ApplyReferenceDelete(ctx context.Context, reques
 		if !exists {
 			return fmt.Errorf("reference owner field %q is unavailable", entry.FieldID)
 		}
-		action := schema.ReferenceDeleteNullify
-		if field.Relationship != nil {
-			action = field.Relationship.OnDelete
-		} else if field.Upload != nil {
-			action = field.Upload.OnDelete
+		blocks, err := referenceindex.BlocksDelete(referenceindex.DeleteAction(field), entry.Owner, pending)
+		if err != nil {
+			return fmt.Errorf("reference owner field %q: %w", entry.FieldID, err)
 		}
-		if action == schema.ReferenceDeleteRestrict {
+		if blocks {
 			constraints[store.ReferenceConstraint{OwnerCollectionID: entry.Owner.CollectionID, FieldID: entry.FieldID}] = struct{}{}
-		} else if action != schema.ReferenceDeleteNullify {
-			return fmt.Errorf("reference owner field %q has unsupported delete action %q", entry.FieldID, action)
 		}
 	}
 	if len(constraints) != 0 {
@@ -1967,6 +1964,24 @@ func (transaction *transaction) ApplyReferenceDelete(ctx context.Context, reques
 	}
 	transaction.event("apply-reference-delete")
 	return nil
+}
+
+// CascadeOwners lists current owners that reference the target through a
+// cascade field.
+func (transaction *transaction) CascadeOwners(ctx context.Context, request store.ReferenceDeleteRequest) ([]store.DocumentReference, error) {
+	if err := transaction.writable(ctx); err != nil {
+		return nil, err
+	}
+	var entries []referenceindex.Entry
+	for _, entry := range transaction.references {
+		if entry.Target != request.Target {
+			continue
+		}
+		if _, exists := transaction.collection(string(entry.Owner.CollectionID))[entry.Owner.DocumentID]; exists {
+			entries = append(entries, entry)
+		}
+	}
+	return referenceindex.CascadeOwners(entries, request.Collections, referenceindex.PendingSet(request.PendingOwners))
 }
 
 func (transaction *transaction) replaceReferenceEntries(collection schema.Collection, document store.Document) error {

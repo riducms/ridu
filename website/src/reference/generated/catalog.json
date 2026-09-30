@@ -9025,7 +9025,7 @@
 					"kind": "constant",
 					"group": "Runtime",
 					"summary": "The semantic Ridu framework version used by the CLI and project-command compatibility handshake.",
-					"signature": "const FrameworkVersion = \"0.8.0\"",
+					"signature": "const FrameworkVersion = \"0.9.0\"",
 					"parameters": [],
 					"parametersLabel": "",
 					"details": [
@@ -26161,7 +26161,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 216
+						"line": 222
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -26291,7 +26291,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 236
+						"line": 242
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -26317,7 +26317,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 226
+						"line": 232
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -28212,7 +28212,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 232
+						"line": 238
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -28238,7 +28238,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 231
+						"line": 237
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -28264,7 +28264,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 230
+						"line": 236
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -28294,7 +28294,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 252
+						"line": 258
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -28324,7 +28324,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 255
+						"line": 261
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -35862,7 +35862,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 243
+						"line": 249
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -35888,7 +35888,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 246
+						"line": 252
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -35914,7 +35914,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 247
+						"line": 253
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -35966,7 +35966,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 229
+						"line": 235
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -48150,6 +48150,32 @@
 					"overloads": []
 				},
 				{
+					"id": "go:github.com/riducms/ridu/field#ReferenceDeleteCascade",
+					"name": "ReferenceDeleteCascade",
+					"slug": "reference-delete-cascade",
+					"kind": "constant",
+					"group": "Constants",
+					"summary": "ReferenceDeleteCascade permanently deletes each document that references the target, in the same transaction and through the normal delete lifecycle: hooks run and each owner's own delete policies apply. Use it for owned data, such as a user's profile. It applies to a singular, unlocalized relationship or upload outside arrays and blocks.",
+					"signature": "const ReferenceDeleteCascade ReferenceDeleteAction = \"cascade\"",
+					"parameters": [],
+					"parametersLabel": "",
+					"details": [],
+					"example": "",
+					"language": "go",
+					"typeLinks": {},
+					"aliases": [
+						"field.ReferenceDeleteCascade",
+						"ReferenceDeleteCascade"
+					],
+					"source": {
+						"path": "field/field.go",
+						"line": 217
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
 					"id": "go:github.com/riducms/ridu/field#ReferenceScope",
 					"name": "ReferenceScope",
 					"slug": "reference-scope",
@@ -54027,7 +54053,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 248
+						"line": 254
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -56096,7 +56122,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 259
+						"line": 265
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -56156,7 +56182,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 411
+						"line": 417
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -56276,7 +56302,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 403
+						"line": 409
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -56366,7 +56392,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 362
+						"line": 368
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -56396,7 +56422,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 454
+						"line": 460
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -56426,7 +56452,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 445
+						"line": 451
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -56456,7 +56482,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 498
+						"line": 504
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -56486,7 +56512,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 381
+						"line": 387
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -56516,7 +56542,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 420
+						"line": 426
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -56546,7 +56572,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 423
+						"line": 429
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -56636,7 +56662,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 398
+						"line": 404
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -56696,7 +56722,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 439
+						"line": 445
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -56726,7 +56752,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 332
+						"line": 338
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -56756,7 +56782,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 529
+						"line": 535
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -56816,7 +56842,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 579
+						"line": 585
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -56876,7 +56902,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 549
+						"line": 555
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -56906,7 +56932,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 532
+						"line": 538
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -56936,7 +56962,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 541
+						"line": 547
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -56966,7 +56992,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 546
+						"line": 552
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -56996,7 +57022,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 538
+						"line": 544
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -57026,7 +57052,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 535
+						"line": 541
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -57056,7 +57082,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 314
+						"line": 320
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -57086,7 +57112,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 317
+						"line": 323
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -57116,7 +57142,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 320
+						"line": 326
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -57146,7 +57172,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 336
+						"line": 342
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -57206,7 +57232,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 481
+						"line": 487
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -57236,7 +57262,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 465
+						"line": 471
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -57266,7 +57292,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 509
+						"line": 515
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -57296,7 +57322,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 473
+						"line": 479
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -57326,7 +57352,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 457
+						"line": 463
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -57356,7 +57382,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 506
+						"line": 512
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -57386,7 +57412,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 311
+						"line": 317
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -57416,7 +57442,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 393
+						"line": 399
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -57446,7 +57472,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 428
+						"line": 434
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -57476,7 +57502,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 431
+						"line": 437
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -57506,7 +57532,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 567
+						"line": 573
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -57536,7 +57562,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 406
+						"line": 412
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -57566,7 +57592,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 574
+						"line": 580
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -57662,7 +57688,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 436
+						"line": 442
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -57692,7 +57718,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 562
+						"line": 568
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -57722,7 +57748,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 555
+						"line": 561
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -57752,7 +57778,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 350
+						"line": 356
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -57782,7 +57808,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 339
+						"line": 345
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -57812,7 +57838,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 347
+						"line": 353
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -57842,7 +57868,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 325
+						"line": 331
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -57872,7 +57898,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 512
+						"line": 518
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -57902,7 +57928,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 517
+						"line": 523
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -57932,7 +57958,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 526
+						"line": 532
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -57962,7 +57988,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 357
+						"line": 363
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -57992,7 +58018,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 353
+						"line": 359
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -58022,7 +58048,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 442
+						"line": 448
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -58052,7 +58078,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 390
+						"line": 396
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -58082,7 +58108,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 490
+						"line": 496
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -58112,7 +58138,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 448
+						"line": 454
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -58142,7 +58168,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 451
+						"line": 457
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -58172,7 +58198,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 328
+						"line": 334
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -58202,7 +58228,7 @@
 					],
 					"source": {
 						"path": "field/field.go",
-						"line": 552
+						"line": 558
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -63141,7 +63167,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 682
+						"line": 685
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -63180,7 +63206,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 687
+						"line": 690
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -63218,7 +63244,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 693
+						"line": 696
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -66014,7 +66040,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 664
+						"line": 667
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -66201,7 +66227,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 624
+						"line": 627
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -66248,7 +66274,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 635
+						"line": 638
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -66295,7 +66321,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 642
+						"line": 645
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -66342,7 +66368,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 673
+						"line": 676
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -68344,7 +68370,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 2431
+						"line": 2482
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -68380,7 +68406,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 2440
+						"line": 2491
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -68410,7 +68436,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 2414
+						"line": 2465
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -68440,7 +68466,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 2409
+						"line": 2460
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -68476,7 +68502,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 2420
+						"line": 2471
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -68829,7 +68855,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 651
+						"line": 654
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -68876,7 +68902,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 657
+						"line": 660
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -68983,6 +69009,42 @@
 					"source": {
 						"path": "schema/block_registry.go",
 						"line": 36
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
+					"id": "go:github.com/riducms/ridu/schema#CascadeReferenceIssues",
+					"name": "CascadeReferenceIssues",
+					"slug": "cascade-reference-issues",
+					"kind": "function",
+					"group": "Functions",
+					"summary": "CascadeReferenceIssues reports each cascade delete policy placed where it would delete a whole owner for one of several references: a has-many, localized or repeated field, or any field of a global, which cannot be deleted.",
+					"signature": "func CascadeReferenceIssues(snapshot Snapshot) []Issue",
+					"parameters": [
+						{
+							"name": "snapshot",
+							"type": "Snapshot",
+							"description": "The snapshot value."
+						}
+					],
+					"parametersLabel": "",
+					"returns": {
+						"type": "[]Issue",
+						"description": "The declared result."
+					},
+					"details": [],
+					"example": "",
+					"language": "go",
+					"typeLinks": {},
+					"aliases": [
+						"schema.CascadeReferenceIssues",
+						"CascadeReferenceIssues"
+					],
+					"source": {
+						"path": "schema/manifest.go",
+						"line": 1321
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -69504,7 +69566,7 @@
 					],
 					"source": {
 						"path": "schema/manifest.go",
-						"line": 1904
+						"line": 1955
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -69664,6 +69726,32 @@
 					"source": {
 						"path": "schema/block_registry.go",
 						"line": 392
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
+					"id": "go:github.com/riducms/ridu/schema#ReferenceDeleteCascade",
+					"name": "ReferenceDeleteCascade",
+					"slug": "reference-delete-cascade",
+					"kind": "constant",
+					"group": "Constants",
+					"summary": "ReferenceDeleteCascade deletes the owning document with its target. It applies to singular, unlocalized references outside repeated rows.",
+					"signature": "const ReferenceDeleteCascade ReferenceDeleteAction = \"cascade\"",
+					"parameters": [],
+					"parametersLabel": "",
+					"details": [],
+					"example": "",
+					"language": "go",
+					"typeLinks": {},
+					"aliases": [
+						"schema.ReferenceDeleteCascade",
+						"ReferenceDeleteCascade"
+					],
+					"source": {
+						"path": "schema/manifest.go",
+						"line": 623
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -70160,7 +70248,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 497
+						"line": 513
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -71954,7 +72042,7 @@
 					"kind": "type",
 					"group": "Reference integrity",
 					"summary": "One permanent-delete reconciliation request.",
-					"signature": "type ReferenceDeleteRequest struct {\n\tTarget       DocumentReference\n\tCollections  map[schema.StableID]schema.Collection\n\tIgnoreOwners []DocumentReference\n}",
+					"signature": "type ReferenceDeleteRequest struct {\n\tTarget       DocumentReference\n\tCollections  map[schema.StableID]schema.Collection\n\tIgnoreOwners []DocumentReference\n\t// PendingOwners are owners whose own hard delete is already in progress in\n\t// this transaction, as in a cascade cycle. Their cascade references are\n\t// cleared like nullify ones. A cascade reference from any other owner\n\t// restricts the delete: the engine deletes cascade owners first, so one\n\t// that remains appeared concurrently.\n\tPendingOwners []DocumentReference\n}",
 					"parameters": [
 						{
 							"name": "Target",
@@ -71970,6 +72058,11 @@
 							"name": "IgnoreOwners",
 							"type": "[]DocumentReference",
 							"description": "The IgnoreOwners value."
+						},
+						{
+							"name": "PendingOwners",
+							"type": "[]DocumentReference",
+							"description": "PendingOwners are owners whose own hard delete is already in progress in\nthis transaction, as in a cascade cycle. Their cascade references are\ncleared like nullify ones. A cascade reference from any other owner\nrestricts the delete: the engine deletes cascade owners first, so one\nthat remains appeared concurrently."
 						}
 					],
 					"parametersLabel": "",
@@ -72021,7 +72114,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 486
+						"line": 502
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -72165,7 +72258,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 581
+						"line": 597
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -72353,7 +72446,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 703
+						"line": 719
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -72437,7 +72530,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 769
+						"line": 785
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -72489,7 +72582,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 679
+						"line": 695
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -72543,7 +72636,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 523
+						"line": 539
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -72600,7 +72693,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 541
+						"line": 557
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -72672,7 +72765,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 553
+						"line": 569
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -72739,7 +72832,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 567
+						"line": 583
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -72771,7 +72864,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 625
+						"line": 641
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -72805,7 +72898,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 635
+						"line": 651
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -72837,7 +72930,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 641
+						"line": 657
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -72869,7 +72962,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 647
+						"line": 663
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -72995,7 +73088,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 651
+						"line": 667
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -73037,7 +73130,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 692
+						"line": 708
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -73084,7 +73177,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 735
+						"line": 751
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -73131,7 +73224,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 744
+						"line": 760
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -73185,7 +73278,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 753
+						"line": 769
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -73482,7 +73575,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 479
+						"line": 495
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -74221,7 +74314,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 533
+						"line": 549
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -74631,7 +74724,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 536
+						"line": 552
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -74657,7 +74750,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 537
+						"line": 553
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -74687,7 +74780,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 490
+						"line": 506
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -74723,7 +74816,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 491
+						"line": 507
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -75175,7 +75268,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 697
+						"line": 713
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -75201,7 +75294,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 695
+						"line": 711
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -75227,7 +75320,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 696
+						"line": 712
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -75253,7 +75346,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 686
+						"line": 702
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -75279,7 +75372,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 685
+						"line": 701
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -75305,7 +75398,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 682
+						"line": 698
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -75331,7 +75424,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 683
+						"line": 699
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -75357,7 +75450,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 684
+						"line": 700
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -75831,6 +75924,38 @@
 					"overloads": []
 				},
 				{
+					"id": "go:github.com/riducms/ridu/store#CascadeTransaction",
+					"name": "CascadeTransaction",
+					"slug": "cascade-transaction",
+					"kind": "interface",
+					"group": "Interfaces",
+					"summary": "CascadeTransaction lists the documents a hard delete must also delete. Stores that support cascade delete policies implement it.",
+					"signature": "type CascadeTransaction interface {\n\t// CascadeOwners returns, in a stable order, each distinct current owner\n\t// that references Target through a cascade field, excluding Target, the\n\t// owners in IgnoreOwners that no longer exist, and PendingOwners. Adapters\n\t// read their reference index and lock the rows as ApplyReferenceDelete does.\n\tCascadeOwners(context.Context, ReferenceDeleteRequest) ([]DocumentReference, error)\n}",
+					"parameters": [
+						{
+							"name": "CascadeOwners",
+							"type": "func(context.Context, ReferenceDeleteRequest) ([]DocumentReference, error)",
+							"description": "CascadeOwners returns, in a stable order, each distinct current owner\nthat references Target through a cascade field, excluding Target, the\nowners in IgnoreOwners that no longer exist, and PendingOwners. Adapters\nread their reference index and lock the rows as ApplyReferenceDelete does."
+						}
+					],
+					"parametersLabel": "",
+					"details": [],
+					"example": "",
+					"language": "go",
+					"typeLinks": {},
+					"aliases": [
+						"store.CascadeTransaction",
+						"CascadeTransaction"
+					],
+					"source": {
+						"path": "store/store.go",
+						"line": 484
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
 					"id": "go:github.com/riducms/ridu/store#PublicationAction",
 					"name": "PublicationAction",
 					"slug": "publication-action",
@@ -75850,7 +75975,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 668
+						"line": 684
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -75876,7 +76001,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 671
+						"line": 687
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -75902,7 +76027,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 672
+						"line": 688
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -85529,7 +85654,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/atlas_migration.go",
-						"line": 39
+						"line": 40
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -85600,7 +85725,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/atlas_migration.go",
-						"line": 48
+						"line": 52
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -85810,7 +85935,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/atlas_migration.go",
-						"line": 25
+						"line": 26
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -85911,7 +86036,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/artifact_runner.go",
-						"line": 105
+						"line": 107
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -85952,7 +86077,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/artifact_runner.go",
-						"line": 220
+						"line": 223
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -86000,7 +86125,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/artifact_runner.go",
-						"line": 226
+						"line": 229
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -86043,7 +86168,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/artifact_runner.go",
-						"line": 1715
+						"line": 1718
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -86084,7 +86209,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/artifact_runner.go",
-						"line": 1832
+						"line": 1835
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -86637,7 +86762,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/atlas_migration.go",
-						"line": 29
+						"line": 30
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -88749,6 +88874,47 @@
 					"overloads": []
 				},
 				{
+					"id": "go:github.com/riducms/ridu/adapters/postgres#Store.AdoptArtifacts",
+					"name": "Store.AdoptArtifacts",
+					"slug": "store-adopt-artifacts-method",
+					"kind": "method",
+					"group": "Methods",
+					"summary": "AdoptArtifacts records pending migrations as applied, without running them, through the newest one whose schema the database already has, such as a database ridu dev synchronized. See ridu migrate baseline.",
+					"signature": "func (backend *Store) AdoptArtifacts(ctx context.Context, directory string) ([]string, error)",
+					"parameters": [
+						{
+							"name": "ctx",
+							"type": "context.Context",
+							"description": "The ctx value."
+						},
+						{
+							"name": "directory",
+							"type": "string",
+							"description": "The directory value."
+						}
+					],
+					"parametersLabel": "",
+					"returns": {
+						"type": "([]string, error)",
+						"description": "The declared result."
+					},
+					"details": [],
+					"example": "",
+					"language": "go",
+					"typeLinks": {},
+					"aliases": [
+						"postgres.Store.AdoptArtifacts",
+						"Store.AdoptArtifacts"
+					],
+					"source": {
+						"path": "adapters/postgres/artifact_adopt.go",
+						"line": 15
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
 					"id": "go:github.com/riducms/ridu/adapters/postgres#Store.FindSessionByID",
 					"name": "Store.FindSessionByID",
 					"slug": "store-find-session-by-id-method",
@@ -89392,7 +89558,7 @@
 					],
 					"source": {
 						"path": "adapters/sqlite/migrations.go",
-						"line": 118
+						"line": 119
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -89448,7 +89614,7 @@
 					],
 					"source": {
 						"path": "adapters/sqlite/migrations.go",
-						"line": 982
+						"line": 1161
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -89494,7 +89660,7 @@
 					],
 					"source": {
 						"path": "adapters/sqlite/migrations.go",
-						"line": 1131
+						"line": 1310
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -89577,7 +89743,7 @@
 					],
 					"source": {
 						"path": "adapters/sqlite/migrations.go",
-						"line": 106
+						"line": 107
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -89629,7 +89795,7 @@
 					],
 					"source": {
 						"path": "adapters/sqlite/migrations.go",
-						"line": 66
+						"line": 67
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -89676,7 +89842,7 @@
 					],
 					"source": {
 						"path": "adapters/sqlite/migrations.go",
-						"line": 75
+						"line": 76
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -89718,7 +89884,7 @@
 					],
 					"source": {
 						"path": "adapters/sqlite/migrations.go",
-						"line": 83
+						"line": 84
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -89750,7 +89916,7 @@
 					],
 					"source": {
 						"path": "adapters/sqlite/migrations.go",
-						"line": 91
+						"line": 92
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -89796,7 +89962,7 @@
 					],
 					"source": {
 						"path": "adapters/sqlite/migrations.go",
-						"line": 492
+						"line": 648
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -89842,7 +90008,7 @@
 					],
 					"source": {
 						"path": "adapters/sqlite/migrations.go",
-						"line": 1125
+						"line": 1304
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -89888,7 +90054,7 @@
 					],
 					"source": {
 						"path": "adapters/sqlite/migrations.go",
-						"line": 971
+						"line": 1150
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -90102,7 +90268,7 @@
 					],
 					"source": {
 						"path": "adapters/sqlite/migrations.go",
-						"line": 95
+						"line": 96
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -92192,6 +92358,108 @@
 					"overloads": []
 				},
 				{
+					"id": "go:github.com/riducms/ridu/adapters/sqlite#CreateArtifactWithRenames",
+					"name": "CreateArtifactWithRenames",
+					"slug": "create-artifact-with-renames",
+					"kind": "function",
+					"group": "Functions",
+					"summary": "CreateArtifactWithRenames plans and atomically creates one immutable SQLite migration that preserves content across reviewed field renames. Apart from those renames the transition must be additive, as CreateArtifact requires.",
+					"signature": "func CreateArtifactWithRenames(ctx context.Context, directory, name string, after schema.Manifest, now time.Time, renames []ridumigration.Rename) (CreatedArtifact, error)",
+					"parameters": [
+						{
+							"name": "ctx",
+							"type": "context.Context",
+							"description": "The ctx value."
+						},
+						{
+							"name": "directory",
+							"type": "string",
+							"description": "The directory value."
+						},
+						{
+							"name": "name",
+							"type": "string",
+							"description": "The name value."
+						},
+						{
+							"name": "after",
+							"type": "schema.Manifest",
+							"description": "The after value."
+						},
+						{
+							"name": "now",
+							"type": "time.Time",
+							"description": "The now value."
+						},
+						{
+							"name": "renames",
+							"type": "[]migration.Rename",
+							"description": "The renames value."
+						}
+					],
+					"parametersLabel": "",
+					"returns": {
+						"type": "(CreatedArtifact, error)",
+						"description": "The declared result."
+					},
+					"details": [],
+					"example": "",
+					"language": "go",
+					"typeLinks": {},
+					"aliases": [
+						"sqlite.CreateArtifactWithRenames",
+						"CreateArtifactWithRenames"
+					],
+					"source": {
+						"path": "adapters/sqlite/migration_rename.go",
+						"line": 125
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
+					"id": "go:github.com/riducms/ridu/adapters/sqlite#Store.AdoptArtifacts",
+					"name": "Store.AdoptArtifacts",
+					"slug": "store-adopt-artifacts-method",
+					"kind": "method",
+					"group": "Methods",
+					"summary": "AdoptArtifacts records pending migrations as applied, without running them, through the newest one whose schema the database already has, such as a database ridu dev synchronized. See ridu migrate baseline.",
+					"signature": "func (backend *Store) AdoptArtifacts(ctx context.Context, directory string) ([]string, error)",
+					"parameters": [
+						{
+							"name": "ctx",
+							"type": "context.Context",
+							"description": "The ctx value."
+						},
+						{
+							"name": "directory",
+							"type": "string",
+							"description": "The directory value."
+						}
+					],
+					"parametersLabel": "",
+					"returns": {
+						"type": "([]string, error)",
+						"description": "The declared result."
+					},
+					"details": [],
+					"example": "",
+					"language": "go",
+					"typeLinks": {},
+					"aliases": [
+						"sqlite.Store.AdoptArtifacts",
+						"Store.AdoptArtifacts"
+					],
+					"source": {
+						"path": "adapters/sqlite/artifact_adopt.go",
+						"line": 15
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
 					"id": "go:github.com/riducms/ridu/adapters/sqlite#Store.FindSessionByID",
 					"name": "Store.FindSessionByID",
 					"slug": "store-find-session-by-id-method",
@@ -92232,6 +92500,93 @@
 					"source": {
 						"path": "adapters/sqlite/auth.go",
 						"line": 316
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
+					"id": "go:github.com/riducms/ridu/adapters/sqlite#Store.HasMigrationHistory",
+					"name": "Store.HasMigrationHistory",
+					"slug": "store-has-migration-history-method",
+					"kind": "method",
+					"group": "Methods",
+					"summary": "HasMigrationHistory reports whether ridu migrate manages this database.",
+					"signature": "func (backend *Store) HasMigrationHistory(ctx context.Context) (bool, error)",
+					"parameters": [
+						{
+							"name": "ctx",
+							"type": "context.Context",
+							"description": "The ctx value."
+						}
+					],
+					"parametersLabel": "",
+					"returns": {
+						"type": "(bool, error)",
+						"description": "The declared result."
+					},
+					"details": [],
+					"example": "",
+					"language": "go",
+					"typeLinks": {},
+					"aliases": [
+						"sqlite.Store.HasMigrationHistory",
+						"Store.HasMigrationHistory"
+					],
+					"source": {
+						"path": "adapters/sqlite/artifact_adopt.go",
+						"line": 119
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
+					"id": "go:github.com/riducms/ridu/adapters/sqlite#Store.RenameDevelopmentFields",
+					"name": "Store.RenameDevelopmentFields",
+					"slug": "store-rename-development-fields-method",
+					"kind": "method",
+					"group": "Methods",
+					"summary": "RenameDevelopmentFields moves content across reviewed field renames in a database that `ridu dev` synchronizes, using the executor migrations use, and synchronizes the database to the resulting schema in the same transaction. The database then records that schema as the one it has, so a rename that was applied is never mistaken for one still waiting. It refuses a database with migration history, which only ridu migrate may change.",
+					"signature": "func (backend *Store) RenameDevelopmentFields(ctx context.Context, before, after schema.Manifest, renames []ridumigration.Rename) error",
+					"parameters": [
+						{
+							"name": "ctx",
+							"type": "context.Context",
+							"description": "The ctx value."
+						},
+						{
+							"name": "before",
+							"type": "schema.Manifest",
+							"description": "The before value."
+						},
+						{
+							"name": "after",
+							"type": "schema.Manifest",
+							"description": "The after value."
+						},
+						{
+							"name": "renames",
+							"type": "[]migration.Rename",
+							"description": "The renames value."
+						}
+					],
+					"parametersLabel": "",
+					"returns": {
+						"type": "error",
+						"description": "The declared result."
+					},
+					"details": [],
+					"example": "",
+					"language": "go",
+					"typeLinks": {},
+					"aliases": [
+						"sqlite.Store.RenameDevelopmentFields",
+						"Store.RenameDevelopmentFields"
+					],
+					"source": {
+						"path": "adapters/sqlite/migration_rename.go",
+						"line": 161
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -92632,7 +92987,7 @@
 					],
 					"source": {
 						"path": "adapters/mongodb/migration_runner.go",
-						"line": 656
+						"line": 663
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -92680,7 +93035,7 @@
 					],
 					"source": {
 						"path": "adapters/mongodb/migration_runner.go",
-						"line": 663
+						"line": 670
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -93021,7 +93376,7 @@
 					],
 					"source": {
 						"path": "adapters/mongodb/migration_runner.go",
-						"line": 447
+						"line": 455
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -93076,7 +93431,7 @@
 					],
 					"source": {
 						"path": "adapters/mongodb/migration_runner.go",
-						"line": 586
+						"line": 594
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -93135,7 +93490,7 @@
 					],
 					"source": {
 						"path": "adapters/mongodb/migration_runner.go",
-						"line": 592
+						"line": 600
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -93637,7 +93992,7 @@
 					],
 					"source": {
 						"path": "adapters/mongodb/migration_runner.go",
-						"line": 423
+						"line": 431
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -93680,7 +94035,7 @@
 					],
 					"source": {
 						"path": "adapters/mongodb/migration_runner.go",
-						"line": 440
+						"line": 448
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -95794,6 +96149,47 @@
 					"source": {
 						"path": "adapters/mongodb/auth_tokens.go",
 						"line": 107
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
+					"id": "go:github.com/riducms/ridu/adapters/mongodb#Store.AdoptArtifacts",
+					"name": "Store.AdoptArtifacts",
+					"slug": "store-adopt-artifacts-method",
+					"kind": "method",
+					"group": "Methods",
+					"summary": "AdoptArtifacts records pending migrations as applied, without running them, through the newest one whose schema the database already has, such as a database ridu dev synchronized. See ridu migrate baseline.",
+					"signature": "func (backend *Store) AdoptArtifacts(ctx context.Context, directory string) ([]string, error)",
+					"parameters": [
+						{
+							"name": "ctx",
+							"type": "context.Context",
+							"description": "The ctx value."
+						},
+						{
+							"name": "directory",
+							"type": "string",
+							"description": "The directory value."
+						}
+					],
+					"parametersLabel": "",
+					"returns": {
+						"type": "([]string, error)",
+						"description": "The declared result."
+					},
+					"details": [],
+					"example": "",
+					"language": "go",
+					"typeLinks": {},
+					"aliases": [
+						"mongodb.Store.AdoptArtifacts",
+						"Store.AdoptArtifacts"
+					],
+					"source": {
+						"path": "adapters/mongodb/migration_adopt.go",
+						"line": 14
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -115336,7 +115732,7 @@
 					"kind": "type",
 					"group": "Types",
 					"summary": "The behavior when a referenced target is permanently deleted.",
-					"signature": "type SchemaReferenceDeleteAction = \"nullify\" | \"restrict\"",
+					"signature": "type SchemaReferenceDeleteAction = \"nullify\" | \"restrict\" | \"cascade\"",
 					"parameters": [],
 					"parametersLabel": "",
 					"details": [],
@@ -133972,6 +134368,44 @@
 					"relatedDocs": [],
 					"relatedSymbols": [],
 					"overloads": []
+				},
+				{
+					"id": "ts:@riducms/admin#createAdminClient",
+					"name": "createAdminClient",
+					"slug": "create-admin-client",
+					"kind": "function",
+					"group": "Functions",
+					"summary": "Creates the admin's own client for the API at `baseURL`, the page's origin by default. The admin reads its schema at run time, so this needs no generated application types; pass it as `clientFactory` unless the admin must reach another origin or add request middleware.",
+					"signature": "function createAdminClient(baseURL?: string): AdminClient",
+					"parameters": [
+						{
+							"name": "baseURL",
+							"type": "string",
+							"description": "The baseURL value."
+						}
+					],
+					"parametersLabel": "",
+					"returns": {
+						"type": "AdminClient",
+						"description": "The declared result."
+					},
+					"details": [],
+					"example": "",
+					"language": "ts",
+					"typeLinks": {},
+					"aliases": [
+						"createAdminClient",
+						"@riducms/admin.createAdminClient"
+					],
+					"source": {
+						"path": "admin/src/index.ts",
+						"line": 41
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": [
+						"function createAdminClient(baseURL?: string): AdminClient"
+					]
 				}
 			]
 		},
@@ -135534,7 +135968,7 @@
 						{
 							"name": "--accept-renames",
 							"type": "boolean",
-							"description": "PostgreSQL or MongoDB: accept every unambiguous detected rename without an interactive prompt."
+							"description": "Accept every unambiguous detected rename without an interactive prompt. PostgreSQL and MongoDB accept collection and field renames; SQLite accepts field renames only."
 						},
 						{
 							"name": "--transform",
@@ -135549,7 +135983,7 @@
 					],
 					"parametersLabel": "",
 					"details": [
-						"PostgreSQL and MongoDB rename candidates require confirmation or --accept-renames. SQLite rejects --accept-renames and uses --transform instead for stored canonical JSON rewrites. MongoDB transforms run through the compiled project migration driver. Destructive approval does not bypass semantic transitions Ridu cannot safely automate."
+						"Rename candidates require confirmation or --accept-renames. SQLite confirms field renames this way and uses --transform for any other rewrite of stored canonical JSON; one SQLite migration takes either renames or a transform. MongoDB transforms run through the compiled project migration driver. Destructive approval does not bypass semantic transitions Ridu cannot safely automate."
 					],
 					"example": "ridu migrate create --name rename-post-title\ngit diff -- migrations/",
 					"language": "shell",
@@ -135648,6 +136082,27 @@
 					"typeLinks": {},
 					"aliases": [
 						"ridu migrate up"
+					],
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
+					"id": "cli:ridu#ridu migrate baseline",
+					"name": "ridu migrate baseline",
+					"slug": "ridu-migrate-baseline",
+					"kind": "command",
+					"group": "Migrations",
+					"summary": "Record migrations a ridu dev database already has as applied, without running them.",
+					"signature": "ridu migrate baseline [--database-url <url> | --database-path <path>] [--allow-insecure-database (PostgreSQL or MongoDB)]",
+					"parameters": [],
+					"parametersLabel": "",
+					"details": [],
+					"example": "",
+					"language": "shell",
+					"typeLinks": {},
+					"aliases": [
+						"ridu migrate baseline"
 					],
 					"relatedDocs": [],
 					"relatedSymbols": [],

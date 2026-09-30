@@ -186,3 +186,97 @@ func TestInstalledMarkdownLinksResolveInsideProjectOrUseHTTPS(t *testing.T) {
 		}
 	}
 }
+
+// A project without Payload may delete the payload-to-ridu skill. Sync and
+// ridu upgrade then record the opt-out instead of failing or reinstalling it.
+func TestSyncRecordsADeletedSkillAsExcluded(t *testing.T) {
+	root := t.TempDir()
+	if _, err := InstallNewProject(root, SelectionAll, "v1.2.3"); err != nil {
+		t.Fatal(err)
+	}
+	for _, skillRoot := range []string{".agents/skills", ".claude/skills"} {
+		if err := os.RemoveAll(filepath.Join(root, filepath.FromSlash(skillRoot), "payload-to-ridu")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// A partly deleted skill is still wanted: its framework files come back.
+	partial := filepath.Join(root, ".agents", "skills", "ridu-project", "reference", "fields.md")
+	if err := os.Remove(partial); err != nil {
+		t.Fatal(err)
+	}
+	result, err := Sync(root, "v2.0.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Excluded) != 1 || result.Excluded[0] != "payload-to-ridu" {
+		t.Fatalf("excluded = %v, want payload-to-ridu", result.Excluded)
+	}
+	if _, err := os.Stat(partial); err != nil {
+		t.Fatalf("a partly deleted skill was not restored: %v", err)
+	}
+	for _, skillRoot := range []string{".agents", ".claude"} {
+		if _, err := os.Stat(filepath.Join(root, skillRoot, "skills", "payload-to-ridu")); !os.IsNotExist(err) {
+			t.Fatalf("sync reinstalled the deleted skill under %s: %v", skillRoot, err)
+		}
+	}
+	installed, err := readManifest(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(installed.ExcludedSkills, ",") != "payload-to-ridu" || installed.FrameworkVersion != "v2.0.0" {
+		t.Fatalf("manifest = %#v", installed)
+	}
+	for path := range installed.Files {
+		if strings.Contains(path, "/payload-to-ridu/") {
+			t.Fatalf("manifest still tracks %s", path)
+		}
+	}
+	// A second sync is quiet, and so is installing another layout.
+	if again, err := Sync(root, "v2.0.1"); err != nil || len(again.Excluded) != 0 {
+		t.Fatalf("second sync = %#v, %v", again, err)
+	}
+}
+
+// excludedSkills in the manifest is the explicit opt-out: sync removes the
+// skill's managed files, and removing the name brings them back.
+func TestExcludedSkillsCanBeEditedInTheManifest(t *testing.T) {
+	root := t.TempDir()
+	if _, err := InstallNewProject(root, SelectionCodex, "v1.2.3"); err != nil {
+		t.Fatal(err)
+	}
+	installed, err := readManifest(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	installed.ExcludedSkills = []string{"payload-to-ridu"}
+	if err := writeManifest(root, installed); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Sync(root, "v1.2.3"); err != nil {
+		t.Fatal(err)
+	}
+	skill := filepath.Join(root, ".agents", "skills", "payload-to-ridu", "SKILL.md")
+	if _, err := os.Stat(skill); !os.IsNotExist(err) {
+		t.Fatalf("an excluded skill stayed installed: %v", err)
+	}
+	if _, err := Install(root, SelectionClaude, "v1.2.3"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(root, ".claude", "skills", "payload-to-ridu", "SKILL.md")); !os.IsNotExist(err) {
+		t.Fatalf("installing another layout ignored the exclusion: %v", err)
+	}
+	installed, err = readManifest(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	installed.ExcludedSkills = nil
+	if err := writeManifest(root, installed); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Sync(root, "v1.2.3"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(skill); err != nil {
+		t.Fatalf("removing the exclusion did not restore the skill: %v", err)
+	}
+}

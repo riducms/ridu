@@ -90,8 +90,8 @@ Cut over in this order:
 1. **Drain writers.** Stop every application process, worker, and other writer, and keep them
    drained through completion and retries.
 2. **Verify history.** Run `{{.RiduCommand}} migrate verify` with the operator's scoped verification
-   credential. Append `--allow-maintenance` whenever the complete committed history contains
-   semantic work, because the clean shadow replays every artifact. Grant it only after the drain.
+   credential. It replays every artifact into a private shadow database, so semantic work needs no
+   `--allow-maintenance` there.
 3. **Capture the recovery point.** Use the operator's controlled backup credential for a
    database-scoped `mongodump` and copy the matching upload objects while writers remain drained.
    Restore that scope with `mongorestore` and the matching uploads if recovery is required.
@@ -115,7 +115,7 @@ Before release:
 {{.RiduCommand}} generate --check
 {{.RiduCommand}} check
 {{.RiduCommand}} build
-# Append --allow-maintenance whenever the complete history contains semantic work.
+# Verification replays into a private shadow database and needs no --allow-maintenance.
 DATABASE_URL="$MONGODB_VERIFY_URL" {{.RiduCommand}} migrate verify
 # Capture a database-scoped mongodump and the matching upload objects here.
 # Append --allow-maintenance only when the pending or incomplete suffix contains semantic work.

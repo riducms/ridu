@@ -172,7 +172,9 @@ func TestMongoDBV2SemanticMigrationLifecycleOnAuthenticatedReplicaSet(t *testing
 	}
 
 	verificationConfig := productionMongoDBStoreConfig(fixture.seedURL(fixture.caPath, true), "ridu-semantic-shadow-proof")
-	if err := VerifyArtifactsWithOptions(ctx, verificationConfig, directory, ordinary, transform); err == nil || !strings.Contains(err.Error(), "semantic migrations require explicit maintenance admission before verification") {
+	// The shadow database has no traffic, so verification admits semantic
+	// work without an explicit maintenance flag.
+	if err := VerifyArtifactsWithOptions(ctx, verificationConfig, directory, ordinary, transform); err != nil {
 		t.Fatalf("clean-shadow MongoDB semantic verification without maintenance admission = %v", err)
 	}
 	if err := VerifyArtifactsWithOptions(ctx, verificationConfig, directory, maintenance, transform); err != nil {

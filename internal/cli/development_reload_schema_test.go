@@ -5,7 +5,9 @@ import (
 	"context"
 	"io"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/riducms/ridu/adapters/sqlite"
 	"github.com/riducms/ridu/core"
@@ -57,5 +59,53 @@ func TestReloadSynchronizesAManifestWhoseContractsWereAlreadyCurrent(t *testing.
 	defer backend.Close()
 	if err := backend.Ready(ctx, merged); err != nil {
 		t.Fatalf("the reload left the database behind the merged schema: %v", err)
+	}
+}
+
+// Once ridu migrate manages a SQLite development database, for example after
+// ridu migrate baseline, ridu dev still starts over it but never changes its
+// schema behind the ledger.
+func TestDevelopmentSkipsSchemaSyncForAMigrationsManagedSQLiteDatabase(t *testing.T) {
+	ctx := context.Background()
+	manifestFor := func(collections ...core.Collection) schema.Manifest {
+		t.Helper()
+		app, err := core.New(core.Config{Name: "Managed", Collections: collections}, teststore.New())
+		if err != nil {
+			t.Fatal(err)
+		}
+		return app.Manifest()
+	}
+	posts := core.Collection{Slug: "posts", Fields: field.Fields{field.Text("title")}}
+	initial := manifestFor(posts)
+	changed := manifestFor(posts, core.Collection{Slug: "comments", Fields: field.Fields{field.Text("body")}})
+	root := t.TempDir()
+	databasePath := filepath.Join(root, "development.sqlite")
+	directory := filepath.Join(root, "migrations")
+	var logs bytes.Buffer
+	reporter := newCLIOutput(&logs, io.Discard, cliOutputOptions{})
+	if _, err := synchronizeDevelopmentSchema(ctx, projectfile.DatabaseSQLite, "", databasePath, true, true, developmentPreparation{manifest: initial}, reporter); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sqlite.CreateArtifact(ctx, directory, "initial", initial, time.Unix(1, 0), false); err != nil {
+		t.Fatal(err)
+	}
+	backend, err := sqlite.Open(ctx, databasePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if adopted, err := backend.AdoptArtifacts(ctx, directory); err != nil || len(adopted) != 1 {
+		t.Fatalf("baseline = %v, %v", adopted, err)
+	}
+	backend.Close()
+
+	if _, err := synchronizeDevelopmentSchema(ctx, projectfile.DatabaseSQLite, "", databasePath, true, true, developmentPreparation{manifest: initial}, reporter); err != nil {
+		t.Fatalf("ridu dev over a current managed database: %v", err)
+	}
+	if !strings.Contains(logs.String(), "managed by ridu migrate") {
+		t.Fatalf("ridu dev did not say it skipped schema sync: %s", logs.String())
+	}
+	_, err = synchronizeDevelopmentSchema(ctx, projectfile.DatabaseSQLite, "", databasePath, true, false, developmentPreparation{manifest: changed, schemaChanged: true}, reporter)
+	if err == nil || !strings.Contains(err.Error(), "ridu migrate create") {
+		t.Fatalf("ridu dev over a managed database behind the config = %v", err)
 	}
 }

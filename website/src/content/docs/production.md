@@ -333,9 +333,8 @@ after the replacement stays ready.
 For a MongoDB release with any new migration artifact:
 
 1. Rehearse the exact sequence in staging, then drain every old process and worker in production.
-2. Run `DATABASE_URL="$MONGODB_OPERATIONAL_URL" ridu migrate verify`. Append
-   `--allow-maintenance` whenever the complete committed history contains semantic work, because
-   clean-shadow verification replays every artifact.
+2. Run `DATABASE_URL="$MONGODB_OPERATIONAL_URL" ridu migrate verify`. It replays every artifact
+   into a private shadow database, so semantic work needs no `--allow-maintenance` there.
 3. After verification, capture the matched database/upload snapshot with a separately scoped backup
    identity.
 4. Run `DATABASE_URL="$MONGODB_MIGRATION_URL" ridu migrate up`, where the selected URL is the

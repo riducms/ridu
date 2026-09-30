@@ -1,9 +1,15 @@
 package schemadiff_test
 
 import (
+	"os"
+	"path/filepath"
+	"reflect"
 	"testing"
 
+	"github.com/riducms/ridu"
+	"github.com/riducms/ridu/field"
 	"github.com/riducms/ridu/internal/schemadiff"
+	"github.com/riducms/ridu/plugins/richtext"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 )
@@ -147,4 +153,40 @@ func collection(id schema.StableID, slug schema.CollectionSlug, fields ...schema
 func textField(id schema.StableID, name string) schema.Field {
 	path, _ := query.NewPath(name)
 	return schema.Field{ID: id, Name: name, Path: path, Type: schema.FieldTypeText, Category: schema.FieldCategoryScalar, Text: &schema.TextField{}}
+}
+
+// The schema file is indented. A rich text field's raw configuration must
+// read the same from that file as from a resolved config, or its rename would
+// look like two unrelated fields and go undetected.
+func TestReadManifestComparesLikeAResolvedManifest(t *testing.T) {
+	resolve := func(name string) schema.Manifest {
+		resolved, err := ridu.Resolve(ridu.Config{Name: "Schema file", Plugins: []ridu.Plugin{richtext.New()}, Collections: []ridu.Collection{{
+			Slug: "posts", Fields: field.Fields{richtext.Field(name), field.Number("views")},
+		}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return resolved
+	}
+	previous, current := resolve("body"), resolve("article")
+	encoded, err := previous.Bytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "ridu.schema.json")
+	if err := os.WriteFile(path, encoded, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	read, exists, err := schemadiff.ReadManifest(path)
+	if err != nil || !exists {
+		t.Fatalf("read schema file = %t, %v", exists, err)
+	}
+	stored, resolved := read.Snapshot().Collections[0].Fields[0].Plugin, previous.Snapshot().Collections[0].Fields[0].Plugin
+	if !reflect.DeepEqual(stored.Config, resolved.Config) {
+		t.Fatalf("plugin configuration read from the schema file = %s, resolved = %s", stored.Config, resolved.Config)
+	}
+	candidates := schemadiff.RenameCandidates(read, current)
+	if len(candidates) != 1 || candidates[0].BeforeField.Name != "body" || candidates[0].AfterField.Name != "article" {
+		t.Fatalf("rename candidates from the schema file = %#v", candidates)
+	}
 }

@@ -298,8 +298,12 @@ prefixes are validated as part of descriptor resolution.
 
 ## Development and production migrations {#migrations}
 
-`ridu dev` can apply additive, non-destructive development synchronization. It pauses when a
-possible rename needs explicit intent. Production uses committed immutable artifacts:
+`ridu dev` can apply additive, non-destructive development synchronization. When a change looks
+like a rename, it asks in an interactive terminal and can create and apply the rename migration for
+you; otherwise it rejects every reload until you restore the old name or run the commands
+yourself. See
+[Renames in `ridu dev`](/docs/migrations/#renames-in-dev). Production uses committed immutable
+artifacts:
 
 ```sh title="terminal"
 ridu migrate create --name rename-post-title

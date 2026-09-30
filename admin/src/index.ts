@@ -38,3 +38,4 @@ export function mountAdmin<Config extends RiduConfigShape>(
 }
 
 export type { AdminClient } from "@admin/core/api/admin-client";
+export { createAdminClient } from "@admin/core/api/admin-client";

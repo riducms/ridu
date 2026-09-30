@@ -34,12 +34,8 @@ the login form wider:
 
 Import it from the admin entry:
 
-```ts title="admin/src/main.ts" add={8}
-import { mountAdmin } from '@riducms/admin';
-import {
-	createClient,
-	type RiduConfig
-} from '../../generated/ridu.generated';
+```ts title="admin/src/main.ts" add={4}
+import { createAdminClient, mountAdmin } from '@riducms/admin';
 
 import adminConfig from '@/admin.config';
 import './custom.css';
@@ -47,10 +43,9 @@ import './custom.css';
 const target = document.getElementById('app');
 if (target === null) throw new Error('Missing admin mount element.');
 
-mountAdmin<RiduConfig>({
+mountAdmin({
 	target,
-	clientFactory: () =>
-		createClient({ baseURL: window.location.origin }),
+	clientFactory: createAdminClient,
 	...adminConfig
 });
 ```

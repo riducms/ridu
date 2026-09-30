@@ -36,7 +36,7 @@
     },
     "admin": {
       "name": "@riducms/admin",
-      "version": "0.8.0",
+      "version": "0.9.0",
       "dependencies": {
         "@codemirror/autocomplete": "^6.20.3",
         "@codemirror/commands": "^6.11.1",
@@ -78,7 +78,7 @@
     },
     "packages/build": {
       "name": "@riducms/build",
-      "version": "0.8.0",
+      "version": "0.9.0",
       "dependencies": {
         "@sveltejs/vite-plugin-svelte": "^7.2.0",
         "@unocss/preset-wind4": "^66.7.5",
@@ -95,14 +95,14 @@
     },
     "packages/cli": {
       "name": "@riducms/cli",
-      "version": "0.8.0",
+      "version": "0.9.0",
       "bin": {
         "ridu": "./src/cli.js",
       },
     },
     "packages/create-ridu": {
       "name": "create-ridu",
-      "version": "0.8.0",
+      "version": "0.9.0",
       "bin": {
         "create-ridu": "./src/cli.js",
       },
@@ -112,7 +112,7 @@
     },
     "packages/plugin": {
       "name": "@riducms/plugin",
-      "version": "0.8.0",
+      "version": "0.9.0",
       "dependencies": {
         "@riducms/protocol": "workspace:*",
         "@riducms/sdk": "workspace:*",
@@ -125,7 +125,7 @@
     },
     "packages/plugin-form-builder": {
       "name": "@riducms/plugin-form-builder",
-      "version": "0.8.0",
+      "version": "0.9.0",
       "devDependencies": {
         "@riducms/plugin": "workspace:*",
         "typescript": "~6.0.2",
@@ -139,7 +139,7 @@
     },
     "packages/plugin-graphql": {
       "name": "@riducms/plugin-graphql",
-      "version": "0.8.0",
+      "version": "0.9.0",
       "dependencies": {
         "@codemirror/autocomplete": "^6.20.3",
         "@codemirror/commands": "^6.11.1",
@@ -163,7 +163,7 @@
     },
     "packages/plugin-richtext": {
       "name": "@riducms/plugin-richtext",
-      "version": "0.8.0",
+      "version": "0.9.0",
       "dependencies": {
         "@hvniel/lexical-svelte": "^0.1.1",
         "@lexical/clipboard": "0.49.0",
@@ -189,7 +189,7 @@
     },
     "packages/plugin-seo": {
       "name": "@riducms/plugin-seo",
-      "version": "0.8.0",
+      "version": "0.9.0",
       "dependencies": {
         "@riducms/plugin": "workspace:*",
         "@riducms/protocol": "workspace:*",
@@ -202,18 +202,18 @@
     },
     "packages/protocol": {
       "name": "@riducms/protocol",
-      "version": "0.8.0",
+      "version": "0.9.0",
     },
     "packages/sdk": {
       "name": "@riducms/sdk",
-      "version": "0.8.0",
+      "version": "0.9.0",
       "dependencies": {
         "@riducms/protocol": "workspace:*",
       },
     },
     "packages/sveltekit": {
       "name": "@riducms/sveltekit",
-      "version": "0.8.0",
+      "version": "0.9.0",
       "devDependencies": {
         "@riducms/sdk": "workspace:*",
         "@sveltejs/kit": "^2.48.0",
@@ -226,11 +226,11 @@
     },
     "packages/translations": {
       "name": "@riducms/translations",
-      "version": "0.8.0",
+      "version": "0.9.0",
     },
     "packages/ui": {
       "name": "@riducms/ui",
-      "version": "0.8.0",
+      "version": "0.9.0",
       "dependencies": {
         "bits-ui": "^2.18.1",
       },

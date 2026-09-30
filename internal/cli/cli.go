@@ -169,6 +169,9 @@ func runAgent(args []string, stdout, stderr io.Writer, options Options) int {
 	for _, path := range result.PreservedEntrypoint {
 		fmt.Fprintf(stdout, "Preserved existing project instructions: %s\n", path)
 	}
+	for _, skill := range result.Excluded {
+		fmt.Fprintf(stdout, "Skill %s was deleted, so it is now excluded; remove it from excludedSkills in .ridu-agent-docs.json to restore it.\n", skill)
+	}
 	fmt.Fprintf(stdout, "Ridu agent documentation matches %s.\n", result.FrameworkVersion)
 	return 0
 }
@@ -647,7 +650,7 @@ func manifestRequiresTypeScriptPackage(manifest schema.Manifest, name string) bo
 func runMigrate(ctx context.Context, args []string, stdout, stderr io.Writer, options Options) int {
 	output := outputFor(stdout, stderr, options)
 	if len(args) == 0 {
-		fmt.Fprintln(stderr, "usage: ridu migrate <create|plan|status|up|down|reset|refresh|fresh|verify> [options]")
+		fmt.Fprintln(stderr, "usage: ridu migrate <create|plan|status|up|baseline|down|reset|refresh|fresh|verify> [options]")
 		return 2
 	}
 	command := args[0]
@@ -660,7 +663,7 @@ func runMigrate(ctx context.Context, args []string, stdout, stderr io.Writer, op
 	transformName := flags.String("transform", "", "compiled data-transform name to bind to the immutable migration artifact")
 	acceptRenames := flags.Bool("accept-renames", false, "accept every unambiguous detected rename without prompting")
 	allowDestructive := flags.Bool("allow-destructive", false, "approve reviewed destructive planning or lifecycle work")
-	allowMaintenance := flags.Bool("allow-maintenance", false, "admit traffic-sensitive steps after stopping every application process and worker through completion and retries")
+	allowMaintenance := flags.Bool("allow-maintenance", false, "admit traffic-sensitive steps after stopping every application process and worker through completion and retries (up only; verify's private shadow needs none)")
 	jsonOutput := flags.Bool("json", false, "emit machine-readable JSON for plan or status")
 	allowUnbounded := flags.Bool("allow-unbounded", false, "explicitly admit zero migration timeouts")
 	advisoryLockWait := flags.Duration("advisory-lock-wait", 0, "maximum wait for the adapter migration lock")
@@ -695,8 +698,8 @@ func runMigrate(ctx context.Context, args []string, stdout, stderr io.Writer, op
 		fmt.Fprintf(stderr, "ridu migrate %s does not accept positional arguments\n", command)
 		return 2
 	}
-	if command != "create" && command != "plan" && command != "status" && command != "up" && command != "down" && command != "reset" && command != "refresh" && command != "fresh" && command != "verify" {
-		fmt.Fprintf(stderr, "unknown migrate command %q; expected create, plan, status, up, down, reset, refresh, fresh, or verify\n", command)
+	if command != "create" && command != "plan" && command != "status" && command != "up" && command != "baseline" && command != "down" && command != "reset" && command != "refresh" && command != "fresh" && command != "verify" {
+		fmt.Fprintf(stderr, "unknown migrate command %q; expected create, plan, status, up, baseline, down, reset, refresh, fresh, or verify\n", command)
 		return 2
 	}
 	lifecycleCommand := command == "down" || command == "reset" || command == "refresh" || command == "fresh"
@@ -1053,8 +1056,39 @@ func runMigrate(ctx context.Context, args []string, stdout, stderr io.Writer, op
 			return 1
 		}
 		fmt.Fprintln(stdout, "Migration history replays cleanly in an isolated shadow schema.")
+	case "baseline":
+		backend, err := postgres.OpenWithConfig(ctx, postgres.PoolConfig{
+			DatabaseURL: *databaseURL, AllowInsecureTransport: *allowInsecureDatabase, ApplicationName: "ridu-migration-baseline",
+		})
+		if err != nil {
+			output.Error("open PostgreSQL", err)
+			return 1
+		}
+		defer backend.Close()
+		adopted, err := backend.AdoptArtifacts(ctx, directory)
+		if err != nil {
+			output.Error("record migrations", err)
+			return 1
+		}
+		printBaseline(stdout, adopted)
 	}
 	return 0
+}
+
+// printBaseline reports what ridu migrate baseline recorded.
+func printBaseline(stdout io.Writer, adopted []string) {
+	if len(adopted) == 0 {
+		fmt.Fprintln(stdout, "Nothing to record: the migration history already reaches this database's schema. Run ridu migrate status to see any pending migrations.")
+		return
+	}
+	for _, name := range adopted {
+		fmt.Fprintf(stdout, "recorded\t%s\n", name)
+	}
+	noun := "migrations"
+	if len(adopted) == 1 {
+		noun = "migration"
+	}
+	fmt.Fprintf(stdout, "Recorded %d %s as applied without running them, because this database already has their schema. Run ridu migrate status to see any still pending.\n", len(adopted), noun)
 }
 
 func runMongoDBMigrateCreate(
@@ -1108,7 +1142,7 @@ func runMongoDBMigrateCreate(
 	}
 	created, err := mongodb.CreateArtifactWithOptions(ctx, directory, name, resolved.Manifest, time.Now(), mongodb.ArtifactOptions{
 		AllowDestructive: allowDestructive,
-		Renames:          mongoDBRenames(accepted),
+		Renames:          contentRenames(accepted),
 		DataTransforms:   transforms,
 	})
 	if err != nil {
@@ -1210,11 +1244,47 @@ func runMongoDBMigrate(ctx context.Context, request mongoDBMigrationCLIOptions, 
 			return 1
 		}
 		fmt.Fprintln(stdout, "Migration history replays cleanly in an isolated shadow database.")
+	case "baseline":
+		backend, err := mongodb.OpenWithConfig(ctx, config)
+		if err != nil {
+			output.Error("open MongoDB", err)
+			return 1
+		}
+		defer backend.Close()
+		adopted, err := backend.AdoptArtifacts(ctx, request.directory)
+		if err != nil {
+			output.Error("record migrations", err)
+			return 1
+		}
+		printBaseline(stdout, adopted)
 	default:
 		fmt.Fprintf(stderr, "ridu migrate %s is not implemented for MongoDB\n", request.command)
 		return 2
 	}
 	return 0
+}
+
+// sqliteRenameCandidates keeps the renames SQLite can carry out: a field moves
+// one key in its stored document, while a collection rename has no executor.
+func sqliteRenameCandidates(before, after schema.Manifest) []schemadiff.RenameCandidate {
+	var fields []schemadiff.RenameCandidate
+	for _, candidate := range schemadiff.RenameCandidates(before, after) {
+		if candidate.Kind == schemadiff.RenameField {
+			fields = append(fields, candidate)
+		}
+	}
+	return fields
+}
+
+func printCreatedSQLiteMigration(stdout io.Writer, request sqliteMigrationCLIOptions, created sqlite.CreatedArtifact) {
+	files, err := migrationartifact.ReadAll(request.directory)
+	if err == nil && len(files) != 0 {
+		for _, risk := range files[len(files)-1].Artifact.Risks {
+			fmt.Fprintf(stdout, "%s\t%s\t%s\n", risk.Level, risk.Code, risk.Message)
+		}
+	}
+	relative, _ := filepath.Rel(request.definition.Root, created.Path)
+	fmt.Fprintf(stdout, "Created migration %s; review it before running ridu migrate up.\n", filepath.ToSlash(relative))
 }
 
 type sqliteMigrationCLIOptions struct {
@@ -1239,14 +1309,41 @@ func runSQLiteMigrate(ctx context.Context, request sqliteMigrationCLIOptions, st
 			fmt.Fprintln(stderr, "ridu migrate create requires --name")
 			return 2
 		}
-		if request.acceptRenames {
-			fmt.Fprintln(stderr, "SQLite rename intent requires a registered transaction-bound data transform; --accept-renames alone cannot rewrite stored canonical JSON")
+		if request.acceptRenames && request.transformName != "" {
+			fmt.Fprintln(stderr, "a SQLite migration either renames fields or runs a data transform; create them as separate migrations")
 			return 2
 		}
 		resolved, err := generate.ResolveProjectMetadata(ctx, request.definition, frameworkVersion(options))
 		if err != nil {
 			output.Error("resolve project schema", err)
 			return 1
+		}
+		if request.transformName == "" {
+			// A bound transform moves the content itself, so only a migration
+			// without one asks whether a removed and an added field are a rename.
+			previous, previousExists, err := migrationRenameBase(request.directory)
+			if err != nil {
+				output.Error("read migration artifact history", err)
+				return 1
+			}
+			var candidates []schemadiff.RenameCandidate
+			if previousExists {
+				candidates = sqliteRenameCandidates(previous, resolved.Manifest)
+			}
+			accepted, err := confirmRenameCandidates(candidates, options.Stdin, stdout, request.acceptRenames)
+			if err != nil {
+				output.Error("confirm schema renames", err)
+				return 1
+			}
+			if len(accepted) != 0 {
+				created, err := sqlite.CreateArtifactWithRenames(ctx, request.directory, request.name, resolved.Manifest, time.Now(), contentRenames(accepted))
+				if err != nil {
+					output.Error("plan migration", err)
+					return 1
+				}
+				printCreatedSQLiteMigration(stdout, request, created)
+				return 0
+			}
 		}
 		var descriptors []migration.DataTransformDescriptor
 		if request.transformName != "" {
@@ -1266,14 +1363,7 @@ func runSQLiteMigrate(ctx context.Context, request sqliteMigrationCLIOptions, st
 			output.Error("plan migration", err)
 			return 1
 		}
-		files, err := migrationartifact.ReadAll(request.directory)
-		if err == nil && len(files) != 0 {
-			for _, risk := range files[len(files)-1].Artifact.Risks {
-				fmt.Fprintf(stdout, "%s\t%s\t%s\n", risk.Level, risk.Code, risk.Message)
-			}
-		}
-		relative, _ := filepath.Rel(request.definition.Root, created.Path)
-		fmt.Fprintf(stdout, "Created migration %s; review it before running ridu migrate up.\n", filepath.ToSlash(relative))
+		printCreatedSQLiteMigration(stdout, request, created)
 		return 0
 	}
 
@@ -1338,6 +1428,19 @@ func runSQLiteMigrate(ctx context.Context, request sqliteMigrationCLIOptions, st
 	}
 
 	switch request.command {
+	case "baseline":
+		backend, err := sqlite.Open(ctx, databasePath)
+		if err != nil {
+			output.Error("open SQLite", err)
+			return 1
+		}
+		defer backend.Close()
+		adopted, err := backend.AdoptArtifacts(ctx, request.directory)
+		if err != nil {
+			output.Error("record migrations", err)
+			return 1
+		}
+		printBaseline(stdout, adopted)
 	case "plan", "status":
 		statuses, err := sqlite.InspectArtifacts(ctx, databasePath, request.directory, request.executableManifest)
 		if err != nil {
@@ -1573,7 +1676,9 @@ func buildPostgresArtifactWithDataTransforms(
 	return postgresmigration.BindDataTransforms(artifact, transforms)
 }
 
-func mongoDBRenames(candidates []schemadiff.RenameCandidate) []migration.Rename {
+// contentRenames encodes confirmed renames as the intent MongoDB and SQLite
+// migrations record.
+func contentRenames(candidates []schemadiff.RenameCandidate) []migration.Rename {
 	renamed := make([]migration.Rename, len(candidates))
 	for index, candidate := range candidates {
 		renamed[index] = migration.Rename{

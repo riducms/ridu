@@ -101,6 +101,7 @@ func (resolver *resolver) resolve() (schema.Manifest, error) {
 	if err := schema.ValidateEmbeddedMetadata(schema.Snapshot{Collections: collections, Globals: globals, Plugins: plugins}); err != nil {
 		resolver.issue("invalid_embedded_schema", "fields", err.Error())
 	}
+	resolver.issues = append(resolver.issues, schema.CascadeReferenceIssues(schema.Snapshot{Collections: collections, Globals: globals})...)
 	if _, err := blocktypes.Build(schema.Snapshot{Collections: collections, Globals: globals}); err != nil {
 		if validation, ok := err.(*schema.ValidationError); ok {
 			resolver.issues = append(resolver.issues, validation.Issues...)

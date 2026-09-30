@@ -1,13 +1,10 @@
-import { mountAdmin } from "@riducms/admin";
-import { createClient, type RiduConfig } from "../../generated/ridu.generated";
+import { createAdminClient, mountAdmin } from "@riducms/admin";
 
 import adminConfig from "@/admin.config";
 
 const target = document.getElementById("app");
 if (target === null) throw new Error('Ridu admin requires an element with id "app".');
 
-mountAdmin<RiduConfig>({
-	target,
-	clientFactory: () => createClient({ baseURL: window.location.origin }),
-	...adminConfig,
-});
+// The admin reads the schema at run time, so it uses its own client instead of the generated
+// one; ridu.toml can generate that client anywhere, including a sibling app.
+mountAdmin({ target, clientFactory: createAdminClient, ...adminConfig });

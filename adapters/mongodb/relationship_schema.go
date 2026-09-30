@@ -15,7 +15,7 @@ func validateMongoRelationshipEnvelope(field schema.Field, path string) error {
 	}
 	relationship := field.Relationship
 	switch relationship.OnDelete {
-	case schema.ReferenceDeleteNullify, schema.ReferenceDeleteRestrict:
+	case schema.ReferenceDeleteNullify, schema.ReferenceDeleteRestrict, schema.ReferenceDeleteCascade:
 	default:
 		return fmt.Errorf("MongoDB relationship field %q has unsupported delete action %q", path, relationship.OnDelete)
 	}

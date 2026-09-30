@@ -618,6 +618,9 @@ type ReferenceDeleteAction string
 const (
 	ReferenceDeleteNullify  ReferenceDeleteAction = "nullify"
 	ReferenceDeleteRestrict ReferenceDeleteAction = "restrict"
+	// ReferenceDeleteCascade deletes the owning document with its target. It
+	// applies to singular, unlocalized references outside repeated rows.
+	ReferenceDeleteCascade ReferenceDeleteAction = "cascade"
 )
 
 // NestedField contains recursively resolved child fields.
@@ -1311,7 +1314,55 @@ func manifestSupportsIndexField(candidate Field) bool {
 	}
 }
 
+// CascadeReferenceIssues reports each cascade delete policy placed where it
+// would delete a whole owner for one of several references: a has-many,
+// localized or repeated field, or any field of a global, which cannot be
+// deleted.
+func CascadeReferenceIssues(snapshot Snapshot) []Issue {
+	var issues []Issue
+	var inspect func([]Field, string, bool, bool)
+	inspect = func(candidates []Field, path string, repeated, global bool) {
+		for index, candidate := range candidates {
+			fieldPath := fmt.Sprintf("%s[%d]", path, index)
+			action, hasMany := ReferenceDeleteAction(""), false
+			switch {
+			case candidate.Relationship != nil:
+				action, hasMany = candidate.Relationship.OnDelete, candidate.Relationship.HasMany
+			case candidate.Upload != nil:
+				action, hasMany = candidate.Upload.OnDelete, candidate.Upload.HasMany
+			}
+			if action == ReferenceDeleteCascade {
+				switch {
+				case global:
+					issues = append(issues, Issue{Code: "invalid_reference_delete_action", Path: fieldPath + ".onDelete", Message: "a global cannot be deleted, so its references cannot cascade"})
+				case hasMany || repeated || candidate.Localized:
+					issues = append(issues, Issue{Code: "invalid_reference_delete_action", Path: fieldPath + ".onDelete", Message: "cascade applies only to a singular, unlocalized reference outside arrays and blocks"})
+				}
+			}
+			inspect(EmbeddedBlocks(candidate), fieldPath+".plugin.embeddedTrees", true, global)
+			if candidate.Nested != nil {
+				inspect(candidate.Nested.ResolvedFields(), fieldPath+".nested.fields", repeated || candidate.Type == FieldTypeArray || candidate.Localized, global)
+			}
+			if candidate.Blocks != nil {
+				for blockIndex, block := range candidate.Blocks.ResolvedTypes() {
+					inspect(block.ResolvedFields(), fmt.Sprintf("%s.blocks.types[%d].fields", fieldPath, blockIndex), true, global)
+				}
+			}
+		}
+	}
+	for index, collection := range snapshot.Collections {
+		inspect(collection.Fields, fmt.Sprintf("collections[%d].fields", index), false, false)
+	}
+	for index, global := range snapshot.Globals {
+		inspect(global.Fields, fmt.Sprintf("globals[%d].fields", index), false, true)
+	}
+	return issues
+}
+
 func validateReferenceDeleteMetadata(snapshot Snapshot) error {
+	if issues := CascadeReferenceIssues(snapshot); len(issues) != 0 {
+		return fmt.Errorf("invalid reference delete action at %s: %s", issues[0].Path, issues[0].Message)
+	}
 	validate := func(fields []Field, fieldsPath string) error {
 		var inspect func([]Field, string) error
 		inspect = func(candidates []Field, path string) error {
@@ -1325,8 +1376,8 @@ func validateReferenceDeleteMetadata(snapshot Snapshot) error {
 					action = candidate.Upload.OnDelete
 				}
 				if candidate.Relationship != nil || candidate.Upload != nil {
-					if action != ReferenceDeleteNullify && action != ReferenceDeleteRestrict {
-						return fmt.Errorf("invalid reference delete action at %s.onDelete: expected nullify or restrict", fieldPath)
+					if action != ReferenceDeleteNullify && action != ReferenceDeleteRestrict && action != ReferenceDeleteCascade {
+						return fmt.Errorf("invalid reference delete action at %s.onDelete: expected nullify, restrict, or cascade", fieldPath)
 					}
 					if candidate.Required && action == ReferenceDeleteNullify {
 						return fmt.Errorf("invalid reference delete action at %s.onDelete: required references cannot be nullified", fieldPath)

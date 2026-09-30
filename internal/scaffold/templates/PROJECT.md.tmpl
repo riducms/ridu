@@ -291,9 +291,8 @@ Cut over in this order:
 1. **Drain writers.** Stop every old application process, task worker, and other writer, and keep
    them drained through completion and retries.
 2. **Verify history.** Run `{{.RiduCommand}} migrate verify` with the operator's scoped verification
-   credential. Append `--allow-maintenance` whenever the complete committed history contains
-   semantic work, because the clean shadow replays every artifact. Grant it only after the drain;
-   it is not a general safety bypass.
+   credential. It replays every artifact into a private shadow database, so semantic work needs no
+   `--allow-maintenance` there.
 3. **Capture the recovery point.** Use the operator's controlled backup credential for a
    database-scoped `mongodump` and copy the matching upload objects while writers remain drained.
    Restore that exact scope with `mongorestore` and the matching uploads if recovery is required.
@@ -380,7 +379,7 @@ only proves that a process is alive and never admits mixed manifests or migratio
 | `{{.RiduCommand}} migrate create --name …` | Create a reviewable immutable migration artifact without opening the database. |
 {{if .MongoDB}}
 | `{{.RiduCommand}} migrate plan --json` | Inspect immutable applied/pending artifact, phase, step, and durable checkpoint state without applying it. |
-| `DATABASE_URL="$MONGODB_VERIFY_URL" {{.RiduCommand}} migrate verify` | Replay committed history and registered compiled transforms in an isolated database. Supply an operator-scoped verification credential allowed to create and drop that shadow scope without exposing its URL in process arguments. Append `--allow-maintenance` whenever the complete history contains semantic work. |
+| `DATABASE_URL="$MONGODB_VERIFY_URL" {{.RiduCommand}} migrate verify` | Replay committed history and registered compiled transforms in an isolated database. Supply an operator-scoped verification credential allowed to create and drop that shadow scope without exposing its URL in process arguments. The shadow scope has no traffic, so semantic work needs no `--allow-maintenance` here. |
 | `{{.RiduCommand}} migrate up` | Apply reviewed artifacts under the bounded distributed lease, resuming committed steps after interruption. Append `--allow-maintenance` only after every writer is drained and only when the pending or incomplete history suffix contains semantic work. |
 | `{{.RiduCommand}} migrate status --json` | Require every committed artifact and step to be complete before the new binary starts. |
 | `{{.RiduCommand}} migrate down`, `reset`, `refresh`, or `fresh` | Unsupported for MongoDB immutable artifacts. Use a reviewed forward migration or restore the complete matched database-and-upload recovery point. |

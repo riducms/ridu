@@ -32,7 +32,7 @@ type ArtifactIdentity struct {
 // expected an empty database. `ridu dev` leaves exactly this behind: it
 // synchronizes a schema directly and never records migration history.
 func UnmanagedSchemaError(engine string, objects []string) error {
-	return fmt.Errorf("unmanaged %s Ridu schema exists without migration history: %s; `ridu dev` synchronizes its schema without recording migrations, so run `ridu migrate` against a database that migrations manage or an empty one", engine, strings.Join(objects, ", "))
+	return fmt.Errorf("unmanaged %s Ridu schema exists without migration history: %s; `ridu dev` synchronizes its schema without recording migrations. If this database matches the committed migrations, record them with `ridu migrate baseline`; otherwise run `ridu migrate` against a database that migrations manage or an empty one", engine, strings.Join(objects, ", "))
 }
 
 // DigestArtifactHistory returns the SHA-256 identity of one complete ordered
