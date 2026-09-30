@@ -10,7 +10,10 @@ import (
 	"time"
 
 	enginegraphql "github.com/graphql-go/graphql"
+	"github.com/graphql-go/graphql/gqlerrors"
 	"github.com/graphql-go/graphql/language/ast"
+	"github.com/graphql-go/graphql/language/kinds"
+	"github.com/graphql-go/graphql/language/visitor"
 	"github.com/riducms/ridu"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
@@ -461,6 +464,60 @@ func parseJSONLiteral(value ast.Value) interface{} {
 		}
 		return result
 	default:
+		// jsonLiteralVariablesRule rejects variables nested in a literal before
+		// execution; graphql-go does not pass their values to ParseLiteral.
 		return nil
 	}
+}
+
+// jsonLiteralVariablesRule rejects a variable nested inside a JSON literal, such
+// as layout: [{caption: $caption}]. graphql-go parses scalar literals without
+// variable values, so the value would otherwise be stored as null. A variable
+// that supplies the whole JSON value is resolved normally.
+func jsonLiteralVariablesRule(jsonType *enginegraphql.Scalar) enginegraphql.ValidationRuleFn {
+	return func(context *enginegraphql.ValidationContext) *enginegraphql.ValidationRuleInstance {
+		// TypeInfo has entered the argument or field, so InputType is its type.
+		check := func(p visitor.VisitFuncParams) (string, interface{}) {
+			var value ast.Value
+			switch node := p.Node.(type) {
+			case *ast.Argument:
+				value = node.Value
+			case *ast.ObjectField:
+				value = node.Value
+			}
+			if named, ok := enginegraphql.GetNamed(context.InputType()).(*enginegraphql.Scalar); !ok || named != jsonType {
+				return visitor.ActionNoChange, nil
+			}
+			if _, whole := value.(*ast.Variable); whole {
+				return visitor.ActionNoChange, nil
+			}
+			for _, variable := range nestedVariables(value) {
+				context.ReportError(gqlerrors.NewError(
+					fmt.Sprintf(`Variable "$%s" cannot be used inside a JSON value; pass the whole JSON value as a variable instead.`, variable.Name.Value),
+					[]ast.Node{variable}, "", nil, []int{}, nil,
+				))
+			}
+			return visitor.ActionNoChange, nil
+		}
+		return &enginegraphql.ValidationRuleInstance{VisitorOpts: &visitor.VisitorOptions{KindFuncMap: map[string]visitor.NamedVisitFuncs{
+			kinds.Argument: {Kind: check}, kinds.ObjectField: {Kind: check},
+		}}}
+	}
+}
+
+func nestedVariables(value ast.Value) []*ast.Variable {
+	var result []*ast.Variable
+	switch current := value.(type) {
+	case *ast.Variable:
+		result = append(result, current)
+	case *ast.ListValue:
+		for _, item := range current.Values {
+			result = append(result, nestedVariables(item)...)
+		}
+	case *ast.ObjectValue:
+		for _, field := range current.Fields {
+			result = append(result, nestedVariables(field.Value)...)
+		}
+	}
+	return result
 }

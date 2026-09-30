@@ -112,7 +112,7 @@ func (api *API) saveUpload(writer http.ResponseWriter, request *http.Request, re
 		api.writeError(writer, requestID, err)
 		return
 	}
-	writeJSON(writer, status, protocol.DocumentEnvelope[map[string]any]{Doc: documentJSON(document)})
+	writeJSON(writer, status, protocol.DocumentEnvelope[json.RawMessage]{Doc: documentJSON(document)})
 	api.audit(request, requestID, identityActor(identity), "upload", string(collection.Slug), document.ID)
 }
 
@@ -144,7 +144,7 @@ func (api *API) createRemoteUpload(writer http.ResponseWriter, request *http.Req
 		api.writeError(writer, requestID, err)
 		return
 	}
-	writeJSON(writer, http.StatusCreated, protocol.DocumentEnvelope[map[string]any]{Doc: documentJSON(document)})
+	writeJSON(writer, http.StatusCreated, protocol.DocumentEnvelope[json.RawMessage]{Doc: documentJSON(document)})
 	api.audit(request, requestID, identityActor(identity), "remote-upload", string(collection.Slug), document.ID)
 }
 

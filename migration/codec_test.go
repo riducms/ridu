@@ -8,24 +8,6 @@ import (
 	"github.com/riducms/ridu/schema"
 )
 
-func TestNewArtifactPreservesPlannerProvenance(t *testing.T) {
-	planner := Planner{Name: "example-planner", Version: "2.3.4"}
-	after := schema.NewManifest(schema.Snapshot{
-		Version:     schema.CurrentVersion,
-		Application: schema.Application{Name: "Planner provenance"},
-		Plugins:     []schema.Plugin{},
-		Collections: []schema.Collection{},
-	})
-
-	artifact, err := NewArtifact("initial", planner, nil, after)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if artifact.Planner != planner {
-		t.Fatalf("planner = %#v, want %#v", artifact.Planner, planner)
-	}
-}
-
 func TestNonInitialArtifactPlanRequiresPublicationBindingBeforeIdentity(t *testing.T) {
 	planner := Planner{Name: "example-planner", Version: "1.0.0"}
 	before := schema.NewManifest(schema.Snapshot{

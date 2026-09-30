@@ -1,6 +1,7 @@
 package richtext_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -10,47 +11,52 @@ import (
 	"github.com/riducms/ridu/internal/teststore"
 	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/plugins/richtext"
+	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
 )
 
 func TestUnifiedRichTextConfigurationChecksEveryGraphHost(t *testing.T) {
 	invalid := richtext.Field("body", richtext.Config{Features: []richtext.Feature{richtext.FeatureBlocks}})
 	for _, test := range []struct {
-		name  string
-		graph field.Fields
-		path  string
+		name   string
+		graph  field.Fields
+		path   string
+		blocks []field.Block
 	}{
 		{"root", field.Fields{
 			invalid,
-		}, "pages.body"},
+		}, "pages.body", nil},
 		{"group", field.Fields{
 			field.Group("meta", field.Fields{
 				invalid,
 			}),
-		}, "pages.meta.body"},
+		}, "pages.meta.body", nil},
 		{"array", field.Fields{
 			field.Array("sections", field.Fields{
 				invalid,
 			}),
-		}, "pages.sections.body"},
+		}, "pages.sections.body", nil},
 		{"blocks", field.Fields{
 			field.Blocks("content", field.Block{Slug: "quote", Fields: field.Fields{
 				invalid,
 			}}),
-		}, "pages.content.quote.body"},
+		}, "pages.content.quote.body", nil},
+		{"registered", field.Fields{
+			field.Blocks("content").References("quote"),
+		}, "pages.content.quote.body", []field.Block{{Slug: "quote", Fields: field.Fields{invalid}}}},
 		{"tab", field.Fields{
 			field.NamedTab("meta", "Meta", field.Fields{
 				invalid,
 			}),
-		}, "pages.meta.body"},
+		}, "pages.meta.body", nil},
 		{"embedded", field.Fields{
 			richtext.Field("outer", richtext.Config{Blocks: []field.Block{field.Block{Slug: "quote", Fields: field.Fields{
 				invalid,
 			}}}}),
-		}, "pages.outer.blocks.block.quote.body"},
+		}, "pages.outer.blocks.block.quote.body", nil},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := ridu.Resolve(ridu.Config{Name: "Graph rich text", Plugins: []ridu.Plugin{richtext.New()}, Collections: []ridu.Collection{{Slug: "pages", Fields: test.graph}}})
+			_, err := ridu.Resolve(ridu.Config{Name: "Graph rich text", Plugins: []ridu.Plugin{richtext.New()}, Blocks: test.blocks, Collections: []ridu.Collection{{Slug: "pages", Fields: test.graph}}})
 			if err == nil || !strings.Contains(err.Error(), test.path) || !strings.Contains(err.Error(), "requires explicit") {
 				t.Fatalf("unified host bypassed feature/allowlist validation: %v", err)
 			}
@@ -61,6 +67,34 @@ func TestUnifiedRichTextConfigurationChecksEveryGraphHost(t *testing.T) {
 	}}}})
 	if err == nil || !strings.Contains(err.Error(), "site.body") {
 		t.Fatalf("global graph bypassed rich text validation: %v", err)
+	}
+}
+
+// Registered blocks are checked once per definition, so references may expand
+// past the per-walk budget that every placement used to consume.
+func TestRegisteredBlockReferencesResolveBeyondTheValidationWalkBudget(t *testing.T) {
+	fields := field.Fields{richtext.Field("body")}
+	for index := range 40 {
+		fields = append(fields, field.Text(fmt.Sprintf("text%d", index)))
+	}
+	var layouts field.Fields
+	for index := range 260 {
+		layouts = append(layouts, field.Blocks(fmt.Sprintf("layout%d", index)).References("wide"))
+	}
+	manifest, err := ridu.Resolve(ridu.Config{
+		Name: "Wide references", Plugins: []ridu.Plugin{richtext.New()},
+		Blocks:      []field.Block{{Slug: "wide", Fields: fields}},
+		Collections: []ridu.Collection{{Slug: "pages", Fields: layouts}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	placements := 0
+	for _, layout := range manifest.Snapshot().Collections[0].Fields {
+		placements += 1 + len(layout.Blocks.ResolvedTypes()[0].ResolvedFields())
+	}
+	if placements <= 10000 || placements > schema.MaxFieldPlacements {
+		t.Fatalf("fixture has %d field placements, want more than the former 10000 budget", placements)
 	}
 }
 

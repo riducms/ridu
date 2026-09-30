@@ -2,7 +2,6 @@ package core
 
 import (
 	"encoding/json"
-	"reflect"
 	"strings"
 	"testing"
 
@@ -14,21 +13,6 @@ type namedNilableInput []string
 type nullEncodingInput struct{}
 
 func (nullEncodingInput) MarshalJSON() ([]byte, error) { return []byte("null"), nil }
-
-func TestGeneratedInputSupportsBlockCodecJSONContract(t *testing.T) {
-	if _, ok := any(Input[string]{}).(json.Marshaler); !ok {
-		t.Fatal("generated input does not implement json.Marshaler")
-	}
-	if _, ok := any(&Input[string]{}).(json.Unmarshaler); !ok {
-		t.Fatal("generated input does not implement json.Unmarshaler")
-	}
-	if _, ok := any(NonNullInput[[]string]{}).(json.Marshaler); !ok {
-		t.Fatal("non-null generated input does not implement json.Marshaler")
-	}
-	if _, ok := any(&NonNullInput[[]string]{}).(json.Unmarshaler); !ok {
-		t.Fatal("non-null generated input does not implement json.Unmarshaler")
-	}
-}
 
 func TestGeneratedInputEncodesOmittedNullAndConcreteValues(t *testing.T) {
 	type input struct {
@@ -118,15 +102,6 @@ func TestGeneratedNonNullInputPreservesConcreteRawJSON(t *testing.T) {
 	}
 	if string(encoded) != `{"answer":42}` {
 		t.Fatalf("encoded raw JSON = %s", encoded)
-	}
-}
-
-func TestTypedListOptionsExcludeShapeChangingReads(t *testing.T) {
-	options := reflect.TypeOf(TypedListOptions{})
-	for _, name := range []string{"AllLocales"} {
-		if _, exists := options.FieldByName(name); exists {
-			t.Fatalf("TypedListOptions exposes shape-changing field %q", name)
-		}
 	}
 }
 

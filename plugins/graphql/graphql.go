@@ -114,7 +114,7 @@ func (plugin *plugin) GeneratedArtifacts(ctx ridu.PluginGenerationContext) ([]ri
 }
 
 func (plugin *plugin) BindTransports(ctx ridu.PluginTransportContext) ([]ridu.Endpoint, error) {
-	executable, err := buildExecutable(ctx.Manifest.Snapshot(), ctx.Local, ctx.App, plugin.options)
+	executable, err := buildExecutable(ctx.Snapshot, ctx.Local, ctx.App, plugin.options)
 	if err != nil {
 		return nil, err
 	}
@@ -180,6 +180,7 @@ func cloneExtensionFields(fields []ExtensionField) []ExtensionField {
 
 type executable struct {
 	schema  enginegraphql.Schema
+	json    *enginegraphql.Scalar
 	local   *ridu.LocalAPI
 	app     *ridu.App
 	options Options
@@ -194,7 +195,7 @@ func buildExecutable(snapshot riduschema.Snapshot, local *ridu.LocalAPI, app *ri
 	if err != nil {
 		return nil, err
 	}
-	return &executable{schema: schema, local: local, app: app, options: options}, nil
+	return &executable{schema: schema, json: builder.json, local: local, app: app, options: options}, nil
 }
 
 var _ ridu.DescriptorProvider = (*plugin)(nil)

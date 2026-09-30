@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"encoding/json"
 
 	operationengine "github.com/riducms/ridu/internal/operation"
 	"github.com/riducms/ridu/operation"
@@ -11,7 +12,7 @@ import (
 
 // readDocument is shared by ordinary REST reads and prepared admin documents.
 // Each invocation retains its own operation-engine lifecycle.
-func (api *API) readDocument(ctx context.Context, collection, id string, identity *AuthIdentity, options listQuery) (map[string]any, error) {
+func (api *API) readDocument(ctx context.Context, collection, id string, identity *AuthIdentity, options listQuery) (json.RawMessage, error) {
 	result, err := api.config.Engine.Execute(ctx, operationengine.Request{
 		Operation: operation.Read, Collection: collection, ID: id,
 		Actor: identityActor(identity), ActorCollection: identityCollection(identity),

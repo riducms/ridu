@@ -18,8 +18,12 @@ import (
 
 // App is a resolved Ridu application bound to one document store.
 type App struct {
-	adminLoaders           []AdminLoaderDefinition
-	manifest               schema.Manifest
+	adminLoaders []AdminLoaderDefinition
+	manifest     schema.Manifest
+	// runtime is the resolved schema the engine runs on. HTTP and plugin
+	// transports read it instead of copying the manifest, so every consumer
+	// shares one set of materialized placement views.
+	runtime                schema.Snapshot
 	local                  *LocalAPI
 	auth                   store.AuthStore
 	authMaintenance        store.AuthMaintenanceStore
@@ -142,13 +146,14 @@ func New(applicationConfig Config, backend store.Store) (*App, error) {
 	var application *App
 	previewTokens := &previewTokenRegistry{grants: make(map[string]previewTokenGrant)}
 	engineCollections := make([]operationengine.Collection, 0, len(snapshot.Collections)+len(snapshot.Globals))
+	occurrences := applicationConfig.fieldGraph.Occurrences()
 	for _, resolved := range snapshot.Collections {
 		authored, exists := authoredBySlug[resolved.Slug]
 		if !exists {
 			return nil, fmt.Errorf("resolved collection %q has no authored runtime configuration", resolved.ID)
 		}
 		adapted := adaptCollection(authored, resolved, &local)
-		adapted.Bindings, err = lowerFieldGraph(applicationConfig.fieldGraph, "collection", string(resolved.Slug), resolved.Fields, &local)
+		adapted.Bindings, err = lowerFieldGraph(applicationConfig.fieldGraph, occurrences, "collection", string(resolved.Slug), resolved.Fields, &local)
 		if err != nil {
 			return nil, err
 		}
@@ -160,7 +165,7 @@ func New(applicationConfig Config, backend store.Store) (*App, error) {
 			return nil, fmt.Errorf("resolved global %q has no authored runtime configuration", resolved.ID)
 		}
 		adapted := adaptGlobal(authored, resolved, &local)
-		adapted.Bindings, err = lowerFieldGraph(applicationConfig.fieldGraph, "global", string(resolved.Slug), resolved.Fields, &local)
+		adapted.Bindings, err = lowerFieldGraph(applicationConfig.fieldGraph, occurrences, "global", string(resolved.Slug), resolved.Fields, &local)
 		if err != nil {
 			return nil, err
 		}
@@ -216,6 +221,7 @@ func New(applicationConfig Config, backend store.Store) (*App, error) {
 
 	application = &App{
 		manifest:               manifest,
+		runtime:                snapshot,
 		local:                  local,
 		auth:                   authBackend,
 		authMaintenance:        authMaintenance,
@@ -268,7 +274,7 @@ func bindPluginTransports(plugins []Plugin, application *App) ([]runtimePluginTr
 		if !ok {
 			continue
 		}
-		transports, err := provider.BindTransports(PluginTransportContext{Manifest: application.manifest, Local: application.local, App: application})
+		transports, err := provider.BindTransports(PluginTransportContext{Manifest: application.manifest, Snapshot: application.runtime, Local: application.local, App: application})
 		if err != nil {
 			return nil, fmt.Errorf("bind plugin %q transports: %w", plugin.Key(), err)
 		}

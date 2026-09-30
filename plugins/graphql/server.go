@@ -92,6 +92,7 @@ func (executable *executable) serve(endpoint ridu.EndpointContext) {
 		return
 	}
 	rules := append([]enginegraphql.ValidationRuleFn(nil), enginegraphql.SpecifiedRules...)
+	rules = append(rules, jsonLiteralVariablesRule(executable.json))
 	rules = append(rules, executable.options.ValidationRules...)
 	validation := enginegraphql.ValidateDocument(&executable.schema, document, rules)
 	if !validation.IsValid {

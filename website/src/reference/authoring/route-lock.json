@@ -13045,6 +13045,14 @@
 		"go:github.com/riducms/ridu/adapters/sqlite#Store.RenameDevelopmentFields": {
 			"module": "sqlite",
 			"symbol": "store-rename-development-fields-method"
+		},
+		"go:github.com/riducms/ridu/store#Value.AppendJSON": {
+			"module": "store",
+			"symbol": "value-append-json-method"
+		},
+		"go:github.com/riducms/ridu/schema#MaxFieldPlacements": {
+			"module": "schema",
+			"symbol": "max-field-placements"
 		}
 	}
 }

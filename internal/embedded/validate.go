@@ -1,7 +1,8 @@
 package embedded
 
 import (
-	"fmt"
+	"strconv"
+
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
 )
@@ -18,11 +19,23 @@ func ValidateValues(fields []schema.Field, values store.Values, prefix string, a
 		if !exists {
 			continue
 		}
-		if err := ValidateValue(field, value, join(prefix, field.Name), allLocales, budget); err != nil {
+		if err := validateMember(field, value, prefix, allLocales, budget); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// validateMember is ValidateValue for a named member of prefix. Leaf values
+// consume the same budget without building a path that only a failure reports.
+func validateMember(field schema.Field, value store.Value, prefix string, allLocales bool, budget *Budget) error {
+	if value.Kind() == store.ValueNull {
+		return nil
+	}
+	if (field.Localized && allLocales) || HasFields(field) || field.Type == schema.FieldTypeGroup || field.Type == schema.FieldTypeArray || field.Type == schema.FieldTypeBlocks {
+		return ValidateValue(field, value, join(prefix, field.Name), allLocales, budget)
+	}
+	return budget.visitLeaf(prefix, field.Name)
 }
 
 // ValidateValue is the field-root counterpart of ValidateValues.
@@ -81,7 +94,7 @@ func ValidateValue(field schema.Field, value store.Value, path string, allLocale
 					}
 				}
 			}
-			if err := validateObject(fields, row, fmt.Sprintf("%s.%d", path, i), allLocales, budget); err != nil {
+			if err := validateObject(fields, row, path+"."+strconv.Itoa(i), allLocales, budget); err != nil {
 				return err
 			}
 		}
@@ -95,7 +108,7 @@ func validateObject(fields []schema.Field, object store.Value, prefix string, al
 	for _, field := range fields {
 		value, exists := object.Lookup(field.Name)
 		if exists {
-			if err := ValidateValue(field, value, join(prefix, field.Name), allLocales, budget); err != nil {
+			if err := validateMember(field, value, prefix, allLocales, budget); err != nil {
 				return err
 			}
 		}

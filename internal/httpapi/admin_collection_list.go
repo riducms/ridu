@@ -109,7 +109,7 @@ func (api *API) loadAdminCollectionList(request *http.Request, snapshot schema.S
 			parameters.Set("populate", string(encoded))
 		}
 		options, err := decodeListQuery(parameters, *collection, true)
-		var result protocol.CollectionPageEnvelope[map[string]any]
+		var result protocol.CollectionPageEnvelope[json.RawMessage]
 		if err == nil {
 			result, err = api.readCollectionPage(request.Context(), slug, identity, options)
 		}
@@ -179,7 +179,7 @@ func (api *API) adminReadError(request *http.Request, err error) *protocol.Error
 	return &payload
 }
 
-func (api *API) readCollectionPage(ctx context.Context, slug string, identity *AuthIdentity, options listQuery) (protocol.CollectionPageEnvelope[map[string]any], error) {
+func (api *API) readCollectionPage(ctx context.Context, slug string, identity *AuthIdentity, options listQuery) (protocol.CollectionPageEnvelope[json.RawMessage], error) {
 	result, err := api.config.Engine.Execute(ctx, operationengine.Request{
 		Operation: operation.Read, Collection: slug, Filter: options.filter,
 		Page: options.page, Limit: options.limit, Actor: identityActor(identity), ActorCollection: identityCollection(identity), Sort: options.sort,
@@ -188,18 +188,18 @@ func (api *API) readCollectionPage(ctx context.Context, slug string, identity *A
 		DisableFallback: options.disableFallback, AllLocales: options.allLocales,
 	})
 	if err != nil {
-		return protocol.CollectionPageEnvelope[map[string]any]{}, err
+		return protocol.CollectionPageEnvelope[json.RawMessage]{}, err
 	}
 	page := result.Page
 	totalPages := 0
 	if page.Total > 0 {
 		totalPages = (page.Total + page.Limit - 1) / page.Limit
 	}
-	docs := make([]map[string]any, len(page.Documents))
+	docs := make([]json.RawMessage, len(page.Documents))
 	for index, document := range page.Documents {
 		docs[index] = documentJSON(document)
 	}
-	value := protocol.CollectionPageEnvelope[map[string]any]{Docs: docs, Pagination: protocol.Pagination{
+	value := protocol.CollectionPageEnvelope[json.RawMessage]{Docs: docs, Pagination: protocol.Pagination{
 		Page: page.Page, Limit: page.Limit, TotalDocs: page.Total, TotalPages: totalPages, HasNextPage: page.Page < totalPages, HasPrevPage: page.Page > 1,
 	}}
 	if options.includeAccess {

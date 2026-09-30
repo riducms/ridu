@@ -107,8 +107,11 @@ type LocaleOptions struct {
 }
 
 type Config struct {
-	AdminLoad                    func(context.Context, AdminLoaderRequest) (json.RawMessage, error)
-	Manifest                     schema.Manifest
+	AdminLoad func(context.Context, AdminLoaderRequest) (json.RawMessage, error)
+	Manifest  schema.Manifest
+	// Snapshot is the engine's resolved schema, shared read-only so requests
+	// reuse its placement views. Without one, New reads a copy of Manifest.
+	Snapshot                     schema.Snapshot
 	ManifestForRequest           func(context.Context, *AuthIdentity) (schema.Snapshot, error)
 	Engine                       *operationengine.Engine
 	AdminAssets                  fs.FS
@@ -311,7 +314,10 @@ func New(config Config) http.Handler {
 			api.allowedHosts = append(api.allowedHosts, parsed)
 		}
 	}
-	snapshot := config.Manifest.Snapshot()
+	snapshot := config.Snapshot
+	if snapshot.Version == 0 {
+		snapshot = config.Manifest.Snapshot()
+	}
 	for _, collection := range snapshot.Collections {
 		api.collections[string(collection.Slug)] = collection
 	}
@@ -717,7 +723,7 @@ func (api *API) preview(writer http.ResponseWriter, request *http.Request, reque
 		return
 	}
 	writer.Header().Set("Cache-Control", "private, no-store")
-	writeJSON(writer, http.StatusOK, protocol.DocumentEnvelope[map[string]any]{Doc: documentJSON(document)})
+	writeJSON(writer, http.StatusOK, protocol.DocumentEnvelope[json.RawMessage]{Doc: documentJSON(document)})
 }
 
 func bearerCredential(request *http.Request) string {
@@ -936,7 +942,7 @@ func (api *API) global(writer http.ResponseWriter, request *http.Request, reques
 				api.writeError(writer, requestID, err)
 				return
 			}
-			writeJSON(writer, http.StatusOK, protocol.DocumentEnvelope[map[string]any]{Doc: document})
+			writeJSON(writer, http.StatusOK, protocol.DocumentEnvelope[json.RawMessage]{Doc: document})
 		case http.MethodPatch:
 			values, err := api.decodeValues(writer, request)
 			if err != nil {
@@ -955,7 +961,7 @@ func (api *API) global(writer http.ResponseWriter, request *http.Request, reques
 				api.writeError(writer, requestID, err)
 				return
 			}
-			writeJSON(writer, http.StatusOK, protocol.DocumentEnvelope[map[string]any]{Doc: documentJSON(*result.Document)})
+			writeJSON(writer, http.StatusOK, protocol.DocumentEnvelope[json.RawMessage]{Doc: documentJSON(*result.Document)})
 			api.audit(request, requestID, actor, "update-global", slug, slug)
 		default:
 			api.methodNotAllowed(writer, requestID, http.MethodGet, http.MethodPatch)
@@ -1032,7 +1038,7 @@ func (api *API) global(writer http.ResponseWriter, request *http.Request, reques
 			api.writeError(writer, requestID, err)
 			return
 		}
-		writeJSON(writer, http.StatusOK, protocol.DocumentEnvelope[map[string]any]{Doc: documentJSON(*result.Document)})
+		writeJSON(writer, http.StatusOK, protocol.DocumentEnvelope[json.RawMessage]{Doc: documentJSON(*result.Document)})
 		api.audit(request, requestID, actor, action+"-global", slug, slug)
 	case "restore":
 		if request.Method != http.MethodPost || len(segments) != 3 {
@@ -1062,7 +1068,7 @@ func (api *API) global(writer http.ResponseWriter, request *http.Request, reques
 			api.writeError(writer, requestID, err)
 			return
 		}
-		writeJSON(writer, http.StatusOK, protocol.DocumentEnvelope[map[string]any]{Doc: documentJSON(*result.Document)})
+		writeJSON(writer, http.StatusOK, protocol.DocumentEnvelope[json.RawMessage]{Doc: documentJSON(*result.Document)})
 		action := "restore-global"
 		if draft {
 			action = "restore-global-as-draft"
@@ -1373,7 +1379,7 @@ func (api *API) collection(writer http.ResponseWriter, request *http.Request, re
 			if options.includeAccess {
 				writeJSON(writer, http.StatusOK, page)
 			} else {
-				writeJSON(writer, http.StatusOK, protocol.PageEnvelope[map[string]any]{Docs: page.Docs, Pagination: page.Pagination})
+				writeJSON(writer, http.StatusOK, protocol.PageEnvelope[json.RawMessage]{Docs: page.Docs, Pagination: page.Pagination})
 			}
 		case http.MethodPost:
 			if collection.Auth != nil {
@@ -1410,7 +1416,7 @@ func (api *API) collection(writer http.ResponseWriter, request *http.Request, re
 				api.writeError(writer, requestID, err)
 				return
 			}
-			writeJSON(writer, http.StatusCreated, protocol.DocumentEnvelope[map[string]any]{Doc: documentJSON(*result.Document)})
+			writeJSON(writer, http.StatusCreated, protocol.DocumentEnvelope[json.RawMessage]{Doc: documentJSON(*result.Document)})
 			api.audit(request, requestID, actor, "create", segments[0], result.Document.ID)
 		case http.MethodDelete:
 			trashValues := request.URL.Query()["trash"]
@@ -1463,7 +1469,7 @@ func (api *API) collection(writer http.ResponseWriter, request *http.Request, re
 			api.writeError(writer, requestID, err)
 			return
 		}
-		writeJSON(writer, http.StatusOK, protocol.DocumentEnvelope[map[string]any]{Doc: document})
+		writeJSON(writer, http.StatusOK, protocol.DocumentEnvelope[json.RawMessage]{Doc: document})
 		api.audit(request, requestID, actor, "read", segments[0], id, actorCollection)
 	case http.MethodPatch:
 		values, err := api.decodeValues(writer, request)
@@ -1483,7 +1489,7 @@ func (api *API) collection(writer http.ResponseWriter, request *http.Request, re
 			api.writeError(writer, requestID, err)
 			return
 		}
-		writeJSON(writer, http.StatusOK, protocol.DocumentEnvelope[map[string]any]{Doc: documentJSON(*result.Document)})
+		writeJSON(writer, http.StatusOK, protocol.DocumentEnvelope[json.RawMessage]{Doc: documentJSON(*result.Document)})
 	case http.MethodDelete:
 		localeOptions, err := decodeLocaleQuery(request.URL.Query())
 		if err != nil {
@@ -1534,7 +1540,7 @@ func (api *API) emptyCollectionTrash(writer http.ResponseWriter, request *http.R
 		return
 	}
 	if result.Page.Total == 0 {
-		writeJSON(writer, http.StatusOK, protocol.BulkEnvelope[map[string]any]{Docs: []map[string]any{}})
+		writeJSON(writer, http.StatusOK, protocol.BulkEnvelope[json.RawMessage]{Docs: []json.RawMessage{}})
 		return
 	}
 	requests := make([]operationengine.Request, len(result.Page.Documents))
@@ -1547,12 +1553,12 @@ func (api *API) emptyCollectionTrash(writer http.ResponseWriter, request *http.R
 		api.writeError(writer, requestID, err)
 		return
 	}
-	documents := make([]map[string]any, len(results))
+	documents := make([]json.RawMessage, len(results))
 	for index, item := range results {
 		documents[index] = documentJSON(*item.Document)
 		api.audit(request, requestID, actor, "empty-trash", string(collection.Slug), item.Document.ID)
 	}
-	writeJSON(writer, http.StatusOK, protocol.BulkEnvelope[map[string]any]{Docs: documents})
+	writeJSON(writer, http.StatusOK, protocol.BulkEnvelope[json.RawMessage]{Docs: documents})
 }
 
 func (api *API) documentAction(writer http.ResponseWriter, request *http.Request, requestID string, collection schema.Collection, segments []string, actor *store.Document, identity *AuthIdentity) {
@@ -1601,7 +1607,7 @@ func (api *API) documentAction(writer http.ResponseWriter, request *http.Request
 			api.writeError(writer, requestID, err)
 			return
 		}
-		writeJSON(writer, http.StatusCreated, protocol.DocumentEnvelope[map[string]any]{Doc: documentJSON(duplicated)})
+		writeJSON(writer, http.StatusCreated, protocol.DocumentEnvelope[json.RawMessage]{Doc: documentJSON(duplicated)})
 		api.audit(request, requestID, actor, "duplicate", collectionName, duplicated.ID)
 		return
 	}
@@ -1633,7 +1639,7 @@ func (api *API) documentAction(writer http.ResponseWriter, request *http.Request
 		if action == "permanent" {
 			writeJSON(writer, http.StatusOK, protocol.DeleteEnvelope{ID: result.Document.ID, Deleted: true})
 		} else {
-			writeJSON(writer, http.StatusOK, protocol.DocumentEnvelope[map[string]any]{Doc: documentJSON(*result.Document)})
+			writeJSON(writer, http.StatusOK, protocol.DocumentEnvelope[json.RawMessage]{Doc: documentJSON(*result.Document)})
 		}
 		api.audit(request, requestID, actor, action, collectionName, id)
 		return
@@ -1667,7 +1673,7 @@ func (api *API) documentAction(writer http.ResponseWriter, request *http.Request
 			api.writeError(writer, requestID, err)
 			return
 		}
-		writeJSON(writer, http.StatusOK, protocol.JoinMutationEnvelope[map[string]any]{
+		writeJSON(writer, http.StatusOK, protocol.JoinMutationEnvelope[json.RawMessage]{
 			Doc: documentJSON(result.Document), Added: result.Added, Removed: result.Removed,
 		})
 		api.audit(request, requestID, actor, "mutate-join", collectionName, id)
@@ -1740,7 +1746,7 @@ func (api *API) documentAction(writer http.ResponseWriter, request *http.Request
 			api.writeError(writer, requestID, err)
 			return
 		}
-		writeJSON(writer, http.StatusOK, protocol.DocumentEnvelope[map[string]any]{Doc: documentJSON(*result.Document)})
+		writeJSON(writer, http.StatusOK, protocol.DocumentEnvelope[json.RawMessage]{Doc: documentJSON(*result.Document)})
 		api.audit(request, requestID, actor, action, collectionName, id)
 	case "restore":
 		if request.Method != http.MethodPost || len(segments) != 4 {
@@ -1770,7 +1776,7 @@ func (api *API) documentAction(writer http.ResponseWriter, request *http.Request
 			api.writeError(writer, requestID, err)
 			return
 		}
-		writeJSON(writer, http.StatusOK, protocol.DocumentEnvelope[map[string]any]{Doc: documentJSON(*result.Document)})
+		writeJSON(writer, http.StatusOK, protocol.DocumentEnvelope[json.RawMessage]{Doc: documentJSON(*result.Document)})
 		action := "restore"
 		if draft {
 			action = "restore-as-draft"
@@ -1799,7 +1805,7 @@ func (api *API) copyLocale(writer http.ResponseWriter, request *http.Request, re
 		api.writeError(writer, requestID, err)
 		return
 	}
-	writeJSON(writer, http.StatusOK, protocol.DocumentEnvelope[map[string]any]{Doc: documentJSON(document)})
+	writeJSON(writer, http.StatusOK, protocol.DocumentEnvelope[json.RawMessage]{Doc: documentJSON(document)})
 	api.audit(request, requestID, actor, auditAction, collection, id)
 }
 
@@ -2007,12 +2013,12 @@ func (api *API) bulkCollection(writer http.ResponseWriter, request *http.Request
 		api.writeError(writer, requestID, err)
 		return
 	}
-	documents := make([]map[string]any, len(results))
+	documents := make([]json.RawMessage, len(results))
 	for index, result := range results {
 		documents[index] = documentJSON(*result.Document)
 		api.audit(request, requestID, actor, "bulk-"+input.Action, string(collection.Slug), result.Document.ID)
 	}
-	writeJSON(writer, http.StatusOK, protocol.BulkEnvelope[map[string]any]{Docs: documents})
+	writeJSON(writer, http.StatusOK, protocol.BulkEnvelope[json.RawMessage]{Docs: documents})
 }
 
 func revisionHeader(request *http.Request) int {
@@ -2430,7 +2436,7 @@ func (api *API) createAuthUser(writer http.ResponseWriter, request *http.Request
 		api.writeError(writer, requestID, err)
 		return
 	}
-	writeJSON(writer, http.StatusCreated, protocol.DocumentEnvelope[map[string]any]{Doc: documentJSON(document)})
+	writeJSON(writer, http.StatusCreated, protocol.DocumentEnvelope[json.RawMessage]{Doc: documentJSON(document)})
 	api.audit(request, requestID, actor, "create-auth-user", collection, document.ID)
 }
 
@@ -2665,8 +2671,8 @@ func (api *API) authActionRateLimited(writer http.ResponseWriter, request *http.
 	return false
 }
 
-func sessionEnvelope(session AuthSession) protocol.SessionEnvelope[map[string]any] {
-	return protocol.SessionEnvelope[map[string]any]{Session: protocol.AuthSession[map[string]any]{
+func sessionEnvelope(session AuthSession) protocol.SessionEnvelope[json.RawMessage] {
+	return protocol.SessionEnvelope[json.RawMessage]{Session: protocol.AuthSession[json.RawMessage]{
 		ID: session.ID, Collection: string(session.Collection), User: documentJSON(session.User),
 		ExpiresAt: session.ExpiresAt.Format(time.RFC3339Nano),
 	}}
@@ -2678,7 +2684,7 @@ func sessionEnvelope(session AuthSession) protocol.SessionEnvelope[map[string]an
 func (api *API) writeIssuedSession(writer http.ResponseWriter, session AuthSession, transport sessionTransport) {
 	writer.Header().Set("Cache-Control", "no-store")
 	if transport == transportHeader {
-		writeJSON(writer, http.StatusOK, protocol.SessionTokenEnvelope[map[string]any]{
+		writeJSON(writer, http.StatusOK, protocol.SessionTokenEnvelope[json.RawMessage]{
 			Session: sessionEnvelope(session).Session, Token: session.Token,
 		})
 		return
@@ -3628,80 +3634,20 @@ func wireErrorCode(code string, status int) protocol.ErrorCode {
 	return protocol.ErrorInternal
 }
 
-func documentJSON(document store.Document) map[string]any {
-	result := make(map[string]any, len(document.Values)+4)
-	result["id"] = document.ID
-	result["createdAt"] = document.CreatedAt.UTC().Format(time.RFC3339Nano)
-	result["updatedAt"] = document.UpdatedAt.UTC().Format(time.RFC3339Nano)
-	if document.DeletedAt != nil {
-		result["deletedAt"] = document.DeletedAt.UTC().Format(time.RFC3339Nano)
-	}
-	if document.Status != "" {
-		result["_status"] = document.Status
-	}
-	if document.Revision > 0 {
-		result["_revision"] = document.Revision
-	}
-	if len(document.LocalizationSources) > 0 {
-		sources := make(map[string]string, len(document.LocalizationSources))
-		for path, locale := range document.LocalizationSources {
-			sources[path] = string(locale)
-		}
-		result["_localization"] = map[string]any{"sources": sources}
-	}
-	for name, value := range document.Values {
-		result[name] = valueJSON(value)
-	}
-	return result
-}
-
-func versionJSON(version store.Version) protocol.DocumentVersion[map[string]any] {
-	return protocol.DocumentVersion[map[string]any]{
+func versionJSON(version store.Version) protocol.DocumentVersion[json.RawMessage] {
+	return protocol.DocumentVersion[json.RawMessage]{
 		ID: version.ID, DocumentID: version.DocumentID, Revision: version.Revision,
 		Status: string(version.Status), Snapshot: documentJSON(version.Snapshot),
 		CreatedAt: version.CreatedAt.UTC().Format(time.RFC3339Nano),
 	}
 }
 
-func versionsJSON(versions []store.Version) []protocol.DocumentVersion[map[string]any] {
-	result := make([]protocol.DocumentVersion[map[string]any], len(versions))
+func versionsJSON(versions []store.Version) []protocol.DocumentVersion[json.RawMessage] {
+	result := make([]protocol.DocumentVersion[json.RawMessage], len(versions))
 	for index, version := range versions {
 		result[index] = versionJSON(version)
 	}
 	return result
-}
-
-func valueJSON(value store.Value) any {
-	switch value.Kind() {
-	case store.ValueNull:
-		return nil
-	case store.ValueString:
-		text, _ := value.StringValue()
-		return text
-	case store.ValueObject:
-		result := make(map[string]any, value.Len())
-		for name, child := range value.Entries() {
-			result[name] = valueJSON(child)
-		}
-		return result
-	case store.ValueDocument:
-		document, _ := value.CopyDocument()
-		return documentJSON(document)
-	case store.ValueNumber:
-		number, _ := value.NumberValue()
-		return number
-	case store.ValueBoolean:
-		boolean, _ := value.BooleanValue()
-		return boolean
-	case store.ValueList:
-		result := make([]any, 0, value.Len())
-		for child := range value.Elements() {
-			result = append(result, valueJSON(child))
-		}
-		return result
-	default:
-		return nil
-	}
 }
 
 func writeJSON(writer http.ResponseWriter, status int, value any) {
