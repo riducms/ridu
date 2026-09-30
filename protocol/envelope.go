@@ -65,7 +65,7 @@ type AdminReadResultV1[Value any] struct {
 }
 
 type AdminDocumentDataV1 struct {
-	Document AdminReadResultV1[map[string]any]             `json:"document"`
+	Document AdminReadResultV1[json.RawMessage]            `json:"document"`
 	Access   AdminReadResultV1[AccessCapabilitiesEnvelope] `json:"access"`
 }
 
@@ -84,9 +84,9 @@ type DocumentVersion[Document any] struct {
 }
 
 type AdminVersionsDataV1 struct {
-	History  AdminReadResultV1[[]DocumentVersion[map[string]any]] `json:"history"`
-	Detail   *AdminReadResultV1[DocumentVersion[map[string]any]]  `json:"detail,omitempty"`
-	Document AdminDocumentDataV1                                  `json:"document"`
+	History  AdminReadResultV1[[]DocumentVersion[json.RawMessage]] `json:"history"`
+	Detail   *AdminReadResultV1[DocumentVersion[json.RawMessage]]  `json:"detail,omitempty"`
+	Document AdminDocumentDataV1                                   `json:"document"`
 }
 
 type AdminSecurityDataV1 struct {
@@ -111,8 +111,8 @@ type AdminCollectionListQueryV1 struct {
 }
 
 type AdminCollectionListPageV1 struct {
-	Value *CollectionPageEnvelope[map[string]any] `json:"value,omitempty"`
-	Error *ErrorPayload                           `json:"error,omitempty"`
+	Value *CollectionPageEnvelope[json.RawMessage] `json:"value,omitempty"`
+	Error *ErrorPayload                            `json:"error,omitempty"`
 }
 
 type AdminCollectionListCountV1 struct {
@@ -142,13 +142,13 @@ type AdminPreparedNavigationV1 struct {
 // contains credentials, access predicates, executable hooks, or lock state.
 type AdminPreparedRuntimeV1 struct {
 	AdminPreparedNavigationV1
-	Manifest      schema.Snapshot              `json:"manifest"`
-	Session       *AuthSession[map[string]any] `json:"session,omitempty"`
-	AuthBootstrap bool                         `json:"authBootstrapAvailable"`
-	Theme         string                       `json:"theme"`
-	AdminLanguage string                       `json:"adminLanguage,omitempty"`
-	AdminTimeZone string                       `json:"adminTimeZone,omitempty"`
-	Preferences   map[string]json.RawMessage   `json:"preferences"`
+	Manifest      schema.Snapshot               `json:"manifest"`
+	Session       *AuthSession[json.RawMessage] `json:"session,omitempty"`
+	AuthBootstrap bool                          `json:"authBootstrapAvailable"`
+	Theme         string                        `json:"theme"`
+	AdminLanguage string                        `json:"adminLanguage,omitempty"`
+	AdminTimeZone string                        `json:"adminTimeZone,omitempty"`
+	Preferences   map[string]json.RawMessage    `json:"preferences"`
 }
 
 type AdminPreparedRouteDiagnosticV1 struct {

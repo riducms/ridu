@@ -30,6 +30,14 @@ func Resolve(input Input) (schema.Manifest, error) {
 }
 
 func resolveBound(input Input) (schema.Manifest, error) {
+	manifest, _, err := resolveBoundSnapshot(input)
+	return manifest, err
+}
+
+// resolveBoundSnapshot also returns the snapshot the manifest was frozen from.
+// Its placement views were materialized during resolution, so reading it does
+// not rebuild every view the way a Manifest.Snapshot copy would.
+func resolveBoundSnapshot(input Input) (schema.Manifest, schema.Snapshot, error) {
 	resolver := &resolver{
 		input:           input,
 		blockTemplates:  make(map[string]schema.BlockType),
@@ -67,7 +75,7 @@ type resolver struct {
 	adminLanguages  map[string]struct{}
 }
 
-func (resolver *resolver) resolve() (schema.Manifest, error) {
+func (resolver *resolver) resolve() (schema.Manifest, schema.Snapshot, error) {
 	applicationName := strings.TrimSpace(resolver.input.Name)
 	if applicationName == "" {
 		resolver.issue("missing_application_name", "name", "application name must not be empty")
@@ -109,10 +117,10 @@ func (resolver *resolver) resolve() (schema.Manifest, error) {
 	}
 
 	if len(resolver.issues) != 0 {
-		return schema.Manifest{}, schema.NewValidationError(resolver.issues)
+		return schema.Manifest{}, schema.Snapshot{}, schema.NewValidationError(resolver.issues)
 	}
 
-	return schema.NewManifest(schema.Snapshot{
+	snapshot := schema.Snapshot{
 		Version: schema.CurrentVersion,
 		Application: schema.Application{
 			AdminLoaders: resolver.input.AdminLoaders,
@@ -125,7 +133,8 @@ func (resolver *resolver) resolve() (schema.Manifest, error) {
 		Collections: collections,
 		Globals:     globals,
 		Plugins:     plugins,
-	}), nil
+	}
+	return schema.NewManifest(snapshot), snapshot, nil
 }
 
 func (resolver *resolver) resolveAdminLocalization() *schema.AdminLocalizationSettings {

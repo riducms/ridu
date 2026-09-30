@@ -14,3 +14,29 @@ func TestAdminPluginRoutesAreLiteralAndCannotShadowFrameworkRoutes(t *testing.T)
 		}
 	}
 }
+
+// Placement IDs are persisted field identities; their spelling must not change.
+func TestPlacementFieldIDIsStable(t *testing.T) {
+	for _, test := range []struct {
+		path []string
+		want StableID
+	}{
+		{[]string{"title"}, "pages-title"},
+		{[]string{"seo", "metaTitle"}, "pages-seo-meta-title"},
+		{[]string{"SEOTitle"}, "pages-s-e-o-title"},
+		{[]string{"HTML5Parser"}, "pages-h-t-m-l5-parser"},
+		{[]string{"snake_case_name"}, "pages-snake-case-name"},
+		{[]string{"__lead", "trail__"}, "pages-lead-trail-"},
+		{[]string{"a--b", "a_-_b"}, "pages-a-b-a-b"},
+		{[]string{"_Upper"}, "pages-upper"},
+		{[]string{"Ärger", "fooÄr"}, "pages-ärger-foo-är"},
+		{[]string{"x\xffy"}, "pages-x�y"},
+		{[]string{"", "a"}, "pages--a"},
+		{[]string{"layout", "content-3", "links", "url"}, "pages-layout-content-3-links-url"},
+		{nil, "pages"},
+	} {
+		if got := PlacementFieldID("pages", test.path); got != test.want {
+			t.Errorf("PlacementFieldID(%q) = %q, want %q", test.path, got, test.want)
+		}
+	}
+}

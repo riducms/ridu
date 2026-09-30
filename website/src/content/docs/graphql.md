@@ -193,6 +193,16 @@ Groups and arrays have typed nested output/input objects. Select/radio choices u
 Blocks return typed output unions selected with inline fragments; mutation input uses JSON because
 GraphQL has no input union. Polymorphic references use `{ relationTo, value }`.
 
+Write a JSON input as a literal or pass the whole value as one variable, such as `layout: $layout`.
+Ridu rejects a variable nested inside a JSON literal, such as `layout: [{ caption: $caption }]`,
+because that value cannot be applied.
+
+A block registered in `Config.Blocks` has one output type, named from its type name, wherever it is
+referenced: `... on HeroBlock` selects a `hero` block in every collection and nested block. Filters
+share one operator input per value type, such as `RiduStringWhere` and `RiduNumberWhere`, and select
+filters reuse the field's output enum. The schema therefore grows with block definitions rather than
+with every place a block is used.
+
 ## Create and mutate {#mutations}
 
 Collections add generated create, update, delete, and duplicate fields when mutations are enabled:

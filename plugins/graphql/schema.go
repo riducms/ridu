@@ -37,6 +37,9 @@ type schemaBuilder struct {
 	unions     map[string]*enginegraphql.Union
 	enums      map[string]*enginegraphql.Enum
 	where      map[schema.StableID]*enginegraphql.InputObject
+	wherePaths map[schema.StableID]map[string]string
+	blocks     map[string]*enginegraphql.Object
+	operators  map[string]*enginegraphql.InputObject
 	types      map[string]struct{}
 	permission *enginegraphql.Object
 	adminSlug  schema.CollectionSlug
@@ -45,7 +48,8 @@ type schemaBuilder struct {
 func newSchemaBuilder(snapshot schema.Snapshot, local *ridu.LocalAPI, app *ridu.App, options Options) *schemaBuilder {
 	return &schemaBuilder{
 		snapshot: snapshot, local: local, app: app, options: options, json: jsonScalar(),
-		objects: make(map[schema.StableID]*enginegraphql.Object), resources: make(map[schema.StableID]resource), unions: make(map[string]*enginegraphql.Union), enums: make(map[string]*enginegraphql.Enum), where: make(map[schema.StableID]*enginegraphql.InputObject), types: make(map[string]struct{}),
+		objects: make(map[schema.StableID]*enginegraphql.Object), resources: make(map[schema.StableID]resource), unions: make(map[string]*enginegraphql.Union), enums: make(map[string]*enginegraphql.Enum), where: make(map[schema.StableID]*enginegraphql.InputObject), wherePaths: make(map[schema.StableID]map[string]string),
+		blocks: make(map[string]*enginegraphql.Object), operators: make(map[string]*enginegraphql.InputObject), types: make(map[string]struct{}),
 	}
 }
 
@@ -92,6 +96,16 @@ func (builder *schemaBuilder) build() (enginegraphql.Schema, error) {
 			values[name] = &enginegraphql.EnumValueConfig{Value: string(locale.Code), Description: locale.Label}
 		}
 		builder.locale = enginegraphql.NewEnum(enginegraphql.EnumConfig{Name: "RiduLocale", Values: values})
+	}
+	for _, name := range sharedOperatorTypeNames {
+		if err := builder.reserveType(name, "Ridu filter operators"); err != nil {
+			return enginegraphql.Schema{}, err
+		}
+	}
+	for _, block := range builder.snapshot.Blocks {
+		if err := builder.reserveType(registeredBlockTypeName(block), "block "+block.Slug); err != nil {
+			return enginegraphql.Schema{}, err
+		}
 	}
 	for index := range resources {
 		current := resources[index]
@@ -469,7 +483,7 @@ func (builder *schemaBuilder) addCollection(current resource, queries, mutations
 	}, builder.readLocaleArgs())
 	if err := addRootField(queries, current.plural, &enginegraphql.Field{Type: enginegraphql.NewNonNull(page), Args: listArgs, Resolve: func(params enginegraphql.ResolveParams) (interface{}, error) {
 		request := requestFromContext(params)
-		whereExpression, err := whereExpression(current, params.Args["where"])
+		whereExpression, err := builder.whereExpression(current, params.Args["where"])
 		if err != nil {
 			return nil, clientError(err)
 		}
@@ -498,7 +512,7 @@ func (builder *schemaBuilder) addCollection(current resource, queries, mutations
 	countArgs := mergeArgs(enginegraphql.FieldConfigArgument{"where": &enginegraphql.ArgumentConfig{Type: where}}, builder.readLocaleArgs())
 	if err := addRootField(queries, "count"+current.plural, &enginegraphql.Field{Type: enginegraphql.NewNonNull(count), Args: countArgs, Resolve: func(params enginegraphql.ResolveParams) (interface{}, error) {
 		request := requestFromContext(params)
-		whereExpression, err := whereExpression(current, params.Args["where"])
+		whereExpression, err := builder.whereExpression(current, params.Args["where"])
 		if err != nil {
 			return nil, clientError(err)
 		}
@@ -1066,7 +1080,7 @@ func (builder *schemaBuilder) joinOutputField(sourceResource resource, parent st
 		if id == "" {
 			return map[string]interface{}{"docs": []interface{}{}, "hasNextPage": false}, nil
 		}
-		where, err := whereExpression(target, params.Args["where"])
+		where, err := builder.whereExpression(target, params.Args["where"])
 		if err != nil {
 			return nil, clientError(err)
 		}
@@ -1248,15 +1262,14 @@ func (builder *schemaBuilder) blockUnion(current resource, parent string, field 
 	}
 	objects := make([]*enginegraphql.Object, 0, len(field.Blocks.ResolvedTypes()))
 	bySlug := make(map[string]*enginegraphql.Object, len(field.Blocks.ResolvedTypes()))
+	registered := len(field.Blocks.BlockReferences) > 0
 	for _, block := range field.Blocks.ResolvedTypes() {
-		blockCopy := block
-		objectName := name + typeName(block.Slug)
-		object := enginegraphql.NewObject(enginegraphql.ObjectConfig{Name: objectName, Fields: enginegraphql.FieldsThunk(func() enginegraphql.Fields {
-			fields := builder.outputFields(current, objectName, blockCopy.ResolvedFields(), false)
-			fields["_key"] = &enginegraphql.Field{Type: enginegraphql.NewNonNull(enginegraphql.String)}
-			fields["blockType"] = &enginegraphql.Field{Type: enginegraphql.NewNonNull(enginegraphql.String)}
-			return fields
-		})})
+		var object *enginegraphql.Object
+		if registered {
+			object = builder.registeredBlockObject(current, block)
+		} else {
+			object = builder.blockObject(current, name+typeName(block.Slug), block)
+		}
 		objects = append(objects, object)
 		bySlug[block.Slug] = object
 	}
@@ -1267,6 +1280,36 @@ func (builder *schemaBuilder) blockUnion(current resource, parent string, field 
 	}})
 	builder.unions[name] = union
 	return union
+}
+
+// registeredBlockObject shares one output type for each registered block. Its
+// fields are the same at every placement, and blocks cannot contain joins, the
+// only output that depends on the owning resource.
+func (builder *schemaBuilder) registeredBlockObject(current resource, block schema.BlockType) *enginegraphql.Object {
+	if existing := builder.blocks[block.Slug]; existing != nil {
+		return existing
+	}
+	object := builder.blockObject(current, registeredBlockTypeName(block), block)
+	builder.blocks[block.Slug] = object
+	return object
+}
+
+func (builder *schemaBuilder) blockObject(current resource, name string, block schema.BlockType) *enginegraphql.Object {
+	return enginegraphql.NewObject(enginegraphql.ObjectConfig{Name: name, Fields: enginegraphql.FieldsThunk(func() enginegraphql.Fields {
+		fields := builder.outputFields(current, name, block.ResolvedFields(), false)
+		fields["_key"] = &enginegraphql.Field{Type: enginegraphql.NewNonNull(enginegraphql.String)}
+		fields["blockType"] = &enginegraphql.Field{Type: enginegraphql.NewNonNull(enginegraphql.String)}
+		return fields
+	})})
+}
+
+// registeredBlockTypeName names the output type a registered block shares.
+func registeredBlockTypeName(block schema.BlockType) string {
+	name := block.TypeName
+	if name == "" {
+		name = typeName(block.Slug)
+	}
+	return name + "Block"
 }
 
 func (builder *schemaBuilder) dataInput(current resource, create bool) *enginegraphql.InputObject {
@@ -1437,6 +1480,8 @@ func (builder *schemaBuilder) whereInput(current resource) *enginegraphql.InputO
 	if existing := builder.where[current.ID]; existing != nil {
 		return existing
 	}
+	candidates := flattenWhereFields(current.Fields, current.name)
+	builder.wherePaths[current.ID] = wherePaths(candidates)
 	name := current.name + "Where"
 	var input *enginegraphql.InputObject
 	input = enginegraphql.NewInputObject(enginegraphql.InputObjectConfig{Name: name, Fields: enginegraphql.InputObjectConfigFieldMapThunk(func() enginegraphql.InputObjectConfigFieldMap {
@@ -1447,89 +1492,116 @@ func (builder *schemaBuilder) whereInput(current resource) *enginegraphql.InputO
 			"AND": &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.NewList(enginegraphql.NewNonNull(input))},
 			"OR":  &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.NewList(enginegraphql.NewNonNull(input))},
 			"NOT": &enginegraphql.InputObjectFieldConfig{Type: input},
-			"id":  &enginegraphql.InputObjectFieldConfig{Type: builder.stringOperators(current.name + "IDWhere")},
+			"id":  &enginegraphql.InputObjectFieldConfig{Type: builder.stringOperators()},
 		}
-		for _, candidate := range flattenWhereFields(current.Fields) {
+		for _, candidate := range candidates {
 			field := candidate.field
 			var fieldType enginegraphql.Input
-			typeBase := current.name + typeName(strings.ReplaceAll(candidate.path, ".", " ")) + "Where"
 			switch field.Type {
 			case schema.FieldTypeNumber:
-				fieldType = builder.numberOperators(typeBase)
+				fieldType = builder.numberOperators()
 			case schema.FieldTypeTextList:
-				fieldType = builder.primitiveListOperators(typeBase, enginegraphql.String)
+				fieldType = builder.primitiveListOperators("RiduStringListWhere", enginegraphql.String)
 			case schema.FieldTypeNumberList:
-				fieldType = builder.primitiveListOperators(typeBase, enginegraphql.Float)
+				fieldType = builder.primitiveListOperators("RiduNumberListWhere", enginegraphql.Float)
 			case schema.FieldTypeCheckbox:
-				fieldType = builder.booleanOperators(typeBase)
+				fieldType = builder.booleanOperators()
 			case schema.FieldTypeSelect, schema.FieldTypeRadio:
-				option := builder.selectEnum(current.name+typeName(strings.Join(field.Path.Segments()[:len(field.Path.Segments())-1], " ")), field)
+				option := builder.selectEnum(candidate.owner, field)
 				if field.Type == schema.FieldTypeSelect && field.Select != nil && field.Select.HasMany {
-					fieldType = builder.multiSelectOperators(typeBase, option)
+					fieldType = builder.multiSelectOperators(option)
 				} else {
-					fieldType = builder.enumOperators(typeBase, option)
+					fieldType = builder.enumOperators(option)
 				}
 			case schema.FieldTypeText, schema.FieldTypeTextarea, schema.FieldTypeEmail, schema.FieldTypeCode, schema.FieldTypeDate, schema.FieldTypeRelationship, schema.FieldTypeUpload:
-				fieldType = builder.stringOperators(typeBase)
+				fieldType = builder.stringOperators()
 			}
 			if fieldType != nil {
 				result[candidate.name] = &enginegraphql.InputObjectFieldConfig{Type: fieldType}
 			}
 		}
+		// graphql-go evaluates this once; the schema must not retain every
+		// flattened field for the life of the process.
+		candidates = nil
 		return result
 	})})
 	builder.where[current.ID] = input
 	return input
 }
 
-func (builder *schemaBuilder) enumOperators(name string, value *enginegraphql.Enum) *enginegraphql.InputObject {
-	return enginegraphql.NewInputObject(enginegraphql.InputObjectConfig{Name: name, Fields: enginegraphql.InputObjectConfigFieldMap{
-		"equals": &enginegraphql.InputObjectFieldConfig{Type: value}, "not_equals": &enginegraphql.InputObjectFieldConfig{Type: value},
-		"in": &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.NewList(enginegraphql.NewNonNull(value))}, "not_in": &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.NewList(enginegraphql.NewNonNull(value))},
-		"exists": &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.Boolean},
-	}})
+// Filter operators depend only on the value type, so every filterable field of
+// one type shares an input rather than each field path defining its own.
+var sharedOperatorTypeNames = []string{"RiduStringWhere", "RiduNumberWhere", "RiduBooleanWhere", "RiduStringListWhere", "RiduNumberListWhere"}
+
+func (builder *schemaBuilder) operatorInput(name string, fields func() enginegraphql.InputObjectConfigFieldMap) *enginegraphql.InputObject {
+	if existing := builder.operators[name]; existing != nil {
+		return existing
+	}
+	input := enginegraphql.NewInputObject(enginegraphql.InputObjectConfig{Name: name, Fields: fields()})
+	builder.operators[name] = input
+	return input
 }
 
-func (builder *schemaBuilder) multiSelectOperators(name string, value *enginegraphql.Enum) *enginegraphql.InputObject {
-	return enginegraphql.NewInputObject(enginegraphql.InputObjectConfig{Name: name, Fields: enginegraphql.InputObjectConfigFieldMap{
-		"contains": &enginegraphql.InputObjectFieldConfig{Type: value},
-		"exists":   &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.Boolean},
-	}})
+func (builder *schemaBuilder) enumOperators(value *enginegraphql.Enum) *enginegraphql.InputObject {
+	return builder.operatorInput(value.Name()+"Where", func() enginegraphql.InputObjectConfigFieldMap {
+		return enginegraphql.InputObjectConfigFieldMap{
+			"equals": &enginegraphql.InputObjectFieldConfig{Type: value}, "not_equals": &enginegraphql.InputObjectFieldConfig{Type: value},
+			"in": &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.NewList(enginegraphql.NewNonNull(value))}, "not_in": &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.NewList(enginegraphql.NewNonNull(value))},
+			"exists": &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.Boolean},
+		}
+	})
+}
+
+func (builder *schemaBuilder) multiSelectOperators(value *enginegraphql.Enum) *enginegraphql.InputObject {
+	return builder.operatorInput(value.Name()+"ManyWhere", func() enginegraphql.InputObjectConfigFieldMap {
+		return enginegraphql.InputObjectConfigFieldMap{
+			"contains": &enginegraphql.InputObjectFieldConfig{Type: value},
+			"exists":   &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.Boolean},
+		}
+	})
 }
 
 func (builder *schemaBuilder) primitiveListOperators(name string, value enginegraphql.Input) *enginegraphql.InputObject {
-	return enginegraphql.NewInputObject(enginegraphql.InputObjectConfig{Name: name, Fields: enginegraphql.InputObjectConfigFieldMap{
-		"in":     {Type: enginegraphql.NewList(enginegraphql.NewNonNull(value))},
-		"not_in": {Type: enginegraphql.NewList(enginegraphql.NewNonNull(value))},
-		"exists": {Type: enginegraphql.Boolean},
-	}})
+	return builder.operatorInput(name, func() enginegraphql.InputObjectConfigFieldMap {
+		return enginegraphql.InputObjectConfigFieldMap{
+			"in":     {Type: enginegraphql.NewList(enginegraphql.NewNonNull(value))},
+			"not_in": {Type: enginegraphql.NewList(enginegraphql.NewNonNull(value))},
+			"exists": {Type: enginegraphql.Boolean},
+		}
+	})
 }
 
-func (builder *schemaBuilder) stringOperators(name string) *enginegraphql.InputObject {
-	return enginegraphql.NewInputObject(enginegraphql.InputObjectConfig{Name: name, Fields: enginegraphql.InputObjectConfigFieldMap{
-		"equals": &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.String}, "not_equals": &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.String},
-		"in": &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.NewList(enginegraphql.NewNonNull(enginegraphql.String))}, "not_in": &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.NewList(enginegraphql.NewNonNull(enginegraphql.String))},
-		"contains": &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.String}, "like": &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.String},
-		"greater_than": &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.String}, "greater_than_equal": &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.String},
-		"less_than": &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.String}, "less_than_equal": &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.String},
-		"exists": &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.Boolean},
-	}})
+func (builder *schemaBuilder) stringOperators() *enginegraphql.InputObject {
+	return builder.operatorInput("RiduStringWhere", func() enginegraphql.InputObjectConfigFieldMap {
+		return enginegraphql.InputObjectConfigFieldMap{
+			"equals": &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.String}, "not_equals": &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.String},
+			"in": &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.NewList(enginegraphql.NewNonNull(enginegraphql.String))}, "not_in": &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.NewList(enginegraphql.NewNonNull(enginegraphql.String))},
+			"contains": &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.String}, "like": &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.String},
+			"greater_than": &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.String}, "greater_than_equal": &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.String},
+			"less_than": &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.String}, "less_than_equal": &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.String},
+			"exists": &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.Boolean},
+		}
+	})
 }
 
-func (builder *schemaBuilder) numberOperators(name string) *enginegraphql.InputObject {
-	return enginegraphql.NewInputObject(enginegraphql.InputObjectConfig{Name: name, Fields: enginegraphql.InputObjectConfigFieldMap{
-		"equals": &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.Float}, "not_equals": &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.Float},
-		"in": &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.NewList(enginegraphql.NewNonNull(enginegraphql.Float))}, "not_in": &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.NewList(enginegraphql.NewNonNull(enginegraphql.Float))},
-		"greater_than": &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.Float}, "greater_than_equal": &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.Float},
-		"less_than": &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.Float}, "less_than_equal": &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.Float},
-		"exists": &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.Boolean},
-	}})
+func (builder *schemaBuilder) numberOperators() *enginegraphql.InputObject {
+	return builder.operatorInput("RiduNumberWhere", func() enginegraphql.InputObjectConfigFieldMap {
+		return enginegraphql.InputObjectConfigFieldMap{
+			"equals": &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.Float}, "not_equals": &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.Float},
+			"in": &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.NewList(enginegraphql.NewNonNull(enginegraphql.Float))}, "not_in": &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.NewList(enginegraphql.NewNonNull(enginegraphql.Float))},
+			"greater_than": &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.Float}, "greater_than_equal": &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.Float},
+			"less_than": &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.Float}, "less_than_equal": &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.Float},
+			"exists": &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.Boolean},
+		}
+	})
 }
 
-func (builder *schemaBuilder) booleanOperators(name string) *enginegraphql.InputObject {
-	return enginegraphql.NewInputObject(enginegraphql.InputObjectConfig{Name: name, Fields: enginegraphql.InputObjectConfigFieldMap{
-		"equals": &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.Boolean}, "not_equals": &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.Boolean}, "exists": &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.Boolean},
-	}})
+func (builder *schemaBuilder) booleanOperators() *enginegraphql.InputObject {
+	return builder.operatorInput("RiduBooleanWhere", func() enginegraphql.InputObjectConfigFieldMap {
+		return enginegraphql.InputObjectConfigFieldMap{
+			"equals": &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.Boolean}, "not_equals": &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.Boolean}, "exists": &enginegraphql.InputObjectFieldConfig{Type: enginegraphql.Boolean},
+		}
+	})
 }
 
 func (builder *schemaBuilder) pageType(current resource, object *enginegraphql.Object) *enginegraphql.Object {

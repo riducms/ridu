@@ -16,8 +16,13 @@ import (
 // Graph is the private companion to a manifest. Authoring nodes retain their
 // executable attachments and placement metadata here; both remain private.
 // Application construction lowers the companion once; requests never query it.
+// A block case whose fields have no executable behavior or visibility condition
+// has no occurrences: nothing lowers them, and conditions cannot traverse a
+// repeated field to reference them from outside the block.
 type Graph struct {
-	occurrences []Occurrence
+	// occurrences are allocated individually: a doubling []Occurrence would
+	// hold up to twice their size while resolution builds a large schema.
+	occurrences []*Occurrence
 	bindings    map[string]field.View
 }
 
@@ -60,8 +65,9 @@ type ReferenceBinding struct {
 }
 
 func (g Graph) Occurrences() []Occurrence {
-	result := slices.Clone(g.occurrences)
-	for i := range result {
+	result := make([]Occurrence, len(g.occurrences))
+	for i, occurrence := range g.occurrences {
+		result[i] = *occurrence
 		result[i].Repeated = slices.Clone(result[i].Repeated)
 		result[i].Provenance = slices.Clone(result[i].Provenance)
 		result[i].References = slices.Clone(result[i].References)
@@ -70,7 +76,9 @@ func (g Graph) Occurrences() []Occurrence {
 	return result
 }
 
-// Binding returns an immutable view, never an executable dispatch table.
+// Binding returns an immutable view, never an executable dispatch table. Only
+// placements with executable behavior, a visibility condition, or a reference
+// target retain a view; the Occurrence alone describes every other placement.
 func (g Graph) Binding(id string) (field.View, bool) { d, ok := g.bindings[id]; return d, ok }
 
 // ResolveGraph binds field-owned selectors before lowering the manifest and
@@ -81,7 +89,7 @@ func ResolveGraph(input Input) (schema.Manifest, Graph, error) {
 	if bindErr != nil {
 		return schema.Manifest{}, Graph{}, bindErr
 	}
-	b := graphBuilder{graph: Graph{bindings: make(map[string]field.View)}, scopes: make(map[string]map[string]string), byID: make(map[string]int), byPath: make(map[string]int)}
+	b := graphBuilder{graph: Graph{bindings: make(map[string]field.View)}, scopes: make(map[string]map[string]string), byID: make(map[string]int), byPath: make(map[graphPathKey]int)}
 	for i, collection := range input.Collections {
 		if collection.Upload {
 			fields, err := UploadFields(collection.Fields, fmt.Sprintf("collections[%d].fields", i))
@@ -108,18 +116,17 @@ func ResolveGraph(input Input) (schema.Manifest, Graph, error) {
 	if len(graphIssues) != 0 {
 		return schema.Manifest{}, Graph{}, schema.NewValidationError(graphIssues)
 	}
-	manifest, err := resolveBound(input)
+	manifest, resolved, err := resolveBoundSnapshot(input)
 	if err != nil {
 		return schema.Manifest{}, Graph{}, err
 	}
 	if len(b.issues) != 0 {
 		return schema.Manifest{}, Graph{}, schema.NewValidationError(b.issues)
 	}
-	snapshot := manifest.Snapshot()
-	for _, collection := range snapshot.Collections {
+	for _, collection := range resolved.Collections {
 		b.schemaIDs("collection", string(collection.Slug), collection.Fields)
 	}
-	for _, global := range snapshot.Globals {
+	for _, global := range resolved.Globals {
 		b.schemaIDs("global", string(global.Slug), global.Fields)
 	}
 	return manifest, b.graph, nil
@@ -130,12 +137,16 @@ type graphPosition struct {
 	repeated                                                            []RepeatedAxis
 }
 
+type graphPathKey struct{ kind, resource, path string }
+
 type graphBuilder struct {
 	graph  Graph
 	scopes map[string]map[string]string
-	byID   map[string]int
-	byPath map[string]int
-	issues []schema.Issue
+	// registeredNeeds memoizes blockNeedsGraph for registered block slugs.
+	registeredNeeds map[string]bool
+	byID            map[string]int
+	byPath          map[graphPathKey]int
+	issues          []schema.Issue
 }
 
 func occurrenceID(kind, resource, boundary, path string) string {
@@ -191,9 +202,11 @@ func (b *graphBuilder) add(name string, kind field.Kind, boundary string, stored
 	}
 	b.byID[id] = len(b.graph.occurrences)
 	if stored || boundary == "output" {
-		b.byPath[p.resourceKind+"\x00"+p.resource+"\x00"+path] = len(b.graph.occurrences)
+		b.byPath[graphPathKey{p.resourceKind, p.resource, path}] = len(b.graph.occurrences)
 	}
-	b.graph.occurrences = append(b.graph.occurrences, Occurrence{ID: id, ResourceKind: p.resourceKind, Resource: p.resource, Name: name, Kind: kind, Boundary: boundary, Stored: stored, AuthoredPath: authored, ResolvedPath: path, ParentID: p.parent, ScopeID: p.scope, LocaleOwner: p.localeOwner, Repeated: slices.Clone(p.repeated), Provenance: slices.Clone(provenance)})
+	// Sibling occurrences share their scope's repeated axes; the builder only
+	// extends copies, and Occurrences detaches every slice for callers.
+	b.graph.occurrences = append(b.graph.occurrences, &Occurrence{ID: id, ResourceKind: p.resourceKind, Resource: p.resource, Name: name, Kind: kind, Boundary: boundary, Stored: stored, AuthoredPath: authored, ResolvedPath: path, ParentID: p.parent, ScopeID: p.scope, LocaleOwner: p.localeOwner, Repeated: p.repeated, Provenance: provenance})
 	if stored || boundary == "output" {
 		if b.scopes[p.scope] == nil {
 			b.scopes[p.scope] = make(map[string]string)
@@ -221,8 +234,13 @@ func (b *graphBuilder) node(d field.View, authored string, p graphPosition) {
 		path = appendGraphPath(path, d.Name())
 	}
 	id := b.add(d.Name(), d.Kind(), boundary, stored, authored, path, p, d.Provenance())
-	b.graph.bindings[id] = d
-	b.graph.occurrences[b.byID[id]].Extensions = d.AdminPolicy().Extensions
+	admin := d.AdminPolicy()
+	// A view copies the whole definition; registered blocks repeat it at every
+	// placement, so keep only those that lowering or reference binding reads.
+	if d.HasBehavior() || !admin.VisibleWhen.IsZero() || boundary == "stored_reference" {
+		b.graph.bindings[id] = d
+	}
+	b.graph.occurrences[b.byID[id]].Extensions = admin.Extensions
 	b.validatePolicies(d, authored, path, boundary, p)
 	if d.Localized() && p.localeOwner == "" {
 		p.localeOwner = id
@@ -242,7 +260,7 @@ func (b *graphBuilder) node(d field.View, authored string, p graphPosition) {
 		b.fields(d.Fields(), authored+".fields", p)
 	case field.KindBlocks:
 		p.repeated = append(slices.Clone(p.repeated), RepeatedAxis{OccurrenceID: id, Identity: "_key"})
-		b.blocks(d.Blocks(), authored+".blocks", p)
+		b.blocks(d.Blocks(), len(d.BlockReferences()) > 0, authored+".blocks", p)
 	case field.KindTabs:
 		if d.IsUnnamedTab() {
 			b.fields(d.Fields(), authored+".fields", p)
@@ -265,14 +283,17 @@ func (b *graphBuilder) node(d field.View, authored string, p graphPosition) {
 				r.path = appendGraphPath(q.path, c.TagValue)
 				r.parent = b.add(c.TagValue, "", "embedded_case", false, casePath, r.path, q, d.Provenance())
 				r.repeated = append(slices.Clone(q.repeated), RepeatedAxis{OccurrenceID: r.parent, Identity: c.Identity, Case: c.TagValue})
-				b.blocks(c.Types, casePath+".types", r)
+				b.blocks(c.Types, len(c.BlockReferences) > 0, casePath+".types", r)
 			}
 		}
 	}
 }
 
-func (b *graphBuilder) blocks(blocks []field.Block, authored string, p graphPosition) {
+func (b *graphBuilder) blocks(blocks []field.Block, registered bool, authored string, p graphPosition) {
 	for i, block := range blocks {
+		if !b.blockNeedsGraph(block, registered) {
+			continue
+		}
 		q := p
 		q.path = appendGraphPath(p.path, block.Slug)
 		blockPath := fmt.Sprintf("%s[%d]", authored, i)
@@ -287,9 +308,49 @@ func (b *graphBuilder) blocks(blocks []field.Block, authored string, p graphPosi
 	}
 }
 
+// blockNeedsGraph reports whether a block's fields, at any depth, carry
+// executable behavior or a visibility condition. A registered block has the
+// same fields wherever it is referenced.
+func (b *graphBuilder) blockNeedsGraph(block field.Block, registered bool) bool {
+	if needs, known := b.registeredNeeds[block.Slug]; registered && known {
+		return needs
+	}
+	needs := fieldsNeedGraph(block.Fields)
+	if registered {
+		if b.registeredNeeds == nil {
+			b.registeredNeeds = make(map[string]bool)
+		}
+		b.registeredNeeds[block.Slug] = needs
+	}
+	return needs
+}
+
+func fieldsNeedGraph(fields field.Fields) bool {
+	for _, node := range fields {
+		d := field.Snapshot(node)
+		if d.HasBehavior() || !d.AdminPolicy().VisibleWhen.IsZero() || fieldsNeedGraph(d.Fields()) {
+			return true
+		}
+		for _, block := range d.Blocks() {
+			if fieldsNeedGraph(block.Fields) {
+				return true
+			}
+		}
+		for _, tree := range d.EmbeddedTrees() {
+			for _, c := range tree.Cases {
+				for _, block := range c.Types {
+					if fieldsNeedGraph(block.Fields) {
+						return true
+					}
+				}
+			}
+		}
+	}
+	return false
+}
+
 func (b *graphBuilder) bindReferences() {
-	for i := range b.graph.occurrences {
-		o := &b.graph.occurrences[i]
+	for _, o := range b.graph.occurrences {
 		d, ok := b.graph.bindings[o.ID]
 		if !ok {
 			continue
@@ -347,7 +408,7 @@ func (b *graphBuilder) bindReferences() {
 
 func (b *graphBuilder) schemaIDs(kind, resource string, fields []schema.Field) {
 	for _, candidate := range fields {
-		if i, ok := b.byPath[kind+"\x00"+resource+"\x00"+candidate.Path.String()]; ok {
+		if i, ok := b.byPath[graphPathKey{kind, resource, candidate.Path.String()}]; ok {
 			b.graph.occurrences[i].SchemaID = candidate.ID
 		}
 		b.schemaIDs(kind, resource, schema.ChildFields(candidate))

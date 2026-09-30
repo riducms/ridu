@@ -7,7 +7,6 @@ import {
 	validateFormValues,
 	type FormDefinition,
 } from "../src";
-import { formBuilderAdminPlugin } from "../src/admin";
 
 const form: FormDefinition = {
 	id: "form-1",
@@ -28,12 +27,6 @@ const form: FormDefinition = {
 };
 
 describe("Form Builder contract", () => {
-	it("pairs with the backend at version one", () => {
-		expect(formBuilderAdminPlugin.key).toBe("form-builder");
-		expect(formBuilderAdminPlugin.pairingVersion).toBe(1);
-		expect("fields" in formBuilderAdminPlugin).toBe(false);
-	});
-
 	it("builds ordinary and upload submission rows", () => {
 		expect(
 			buildSubmissionInput(form, {

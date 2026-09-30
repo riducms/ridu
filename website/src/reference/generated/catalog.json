@@ -7096,6 +7096,11 @@
 							"description": "The immutable resolved schema manifest."
 						},
 						{
+							"name": "Snapshot",
+							"type": "schema.Snapshot",
+							"description": "Snapshot is the resolved schema the operation engine runs on. It is shared,\nread-only state: a transport must not modify it, and reading it reuses the\nengine's placement views instead of materializing another copy."
+						},
+						{
 							"name": "Local",
 							"type": "*LocalAPI",
 							"description": "The ordinary access-controlled local operation API."
@@ -9025,7 +9030,7 @@
 					"kind": "constant",
 					"group": "Runtime",
 					"summary": "The semantic Ridu framework version used by the CLI and project-command compatibility handshake.",
-					"signature": "const FrameworkVersion = \"0.9.0\"",
+					"signature": "const FrameworkVersion = \"0.10.0\"",
 					"parameters": [],
 					"parametersLabel": "",
 					"details": [
@@ -12030,7 +12035,7 @@
 					],
 					"source": {
 						"path": "core/app.go",
-						"line": 313
+						"line": 319
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -12062,7 +12067,7 @@
 					],
 					"source": {
 						"path": "core/app.go",
-						"line": 314
+						"line": 320
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -17180,7 +17185,7 @@
 					],
 					"source": {
 						"path": "core/plugin.go",
-						"line": 177
+						"line": 181
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -17258,7 +17263,7 @@
 					],
 					"source": {
 						"path": "core/plugin.go",
-						"line": 198
+						"line": 202
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -17336,7 +17341,7 @@
 					],
 					"source": {
 						"path": "core/plugin.go",
-						"line": 168
+						"line": 172
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -19309,7 +19314,7 @@
 					],
 					"source": {
 						"path": "core/plugin.go",
-						"line": 183
+						"line": 187
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -19345,7 +19350,7 @@
 					],
 					"source": {
 						"path": "core/plugin.go",
-						"line": 194
+						"line": 198
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -19532,12 +19537,17 @@
 					"kind": "type",
 					"group": "Descriptors",
 					"summary": "Initialized application state supplied while a plugin binds transports.",
-					"signature": "type PluginTransportContext struct {\n\tManifest schema.Manifest\n\tLocal    *LocalAPI\n\t// App exposes public authentication and other application-owned operations\n\t// that do not belong to LocalAPI. It is fully initialized before binding.\n\tApp *App\n}",
+					"signature": "type PluginTransportContext struct {\n\tManifest schema.Manifest\n\t// Snapshot is the resolved schema the operation engine runs on. It is shared,\n\t// read-only state: a transport must not modify it, and reading it reuses the\n\t// engine's placement views instead of materializing another copy.\n\tSnapshot schema.Snapshot\n\tLocal    *LocalAPI\n\t// App exposes public authentication and other application-owned operations\n\t// that do not belong to LocalAPI. It is fully initialized before binding.\n\tApp *App\n}",
 					"parameters": [
 						{
 							"name": "Manifest",
 							"type": "schema.Manifest",
 							"description": "The immutable resolved schema manifest."
+						},
+						{
+							"name": "Snapshot",
+							"type": "schema.Snapshot",
+							"description": "Snapshot is the resolved schema the operation engine runs on. It is shared,\nread-only state: a transport must not modify it, and reading it reuses the\nengine's placement views instead of materializing another copy."
 						},
 						{
 							"name": "Local",
@@ -21512,7 +21522,7 @@
 					],
 					"source": {
 						"path": "core/app.go",
-						"line": 58
+						"line": 62
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -68818,7 +68828,7 @@
 					],
 					"source": {
 						"path": "schema/block_registry.go",
-						"line": 196
+						"line": 211
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -68932,7 +68942,7 @@
 					],
 					"source": {
 						"path": "schema/block_registry.go",
-						"line": 48
+						"line": 57
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -68978,7 +68988,7 @@
 					],
 					"source": {
 						"path": "schema/block_registry.go",
-						"line": 347
+						"line": 362
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -69008,7 +69018,7 @@
 					],
 					"source": {
 						"path": "schema/block_registry.go",
-						"line": 36
+						"line": 37
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -69338,7 +69348,7 @@
 					],
 					"source": {
 						"path": "schema/block_registry.go",
-						"line": 54
+						"line": 63
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -69405,7 +69415,7 @@
 					],
 					"source": {
 						"path": "schema/embedded.go",
-						"line": 237
+						"line": 288
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -69573,6 +69583,32 @@
 					"overloads": []
 				},
 				{
+					"id": "go:github.com/riducms/ridu/schema#MaxFieldPlacements",
+					"name": "MaxFieldPlacements",
+					"slug": "max-field-placements",
+					"kind": "constant",
+					"group": "Constants",
+					"summary": "Count the logical placement graph without materializing any placement fields. Definition costs are memoized; only schema structure, never policy results, is reused. MaxFieldPlacements bounds a resolved schema's fields, counting a registered block's fields once for every place it is used. Schema validators share it as their work budget.",
+					"signature": "const MaxFieldPlacements = 100000",
+					"parameters": [],
+					"parametersLabel": "",
+					"details": [],
+					"example": "",
+					"language": "go",
+					"typeLinks": {},
+					"aliases": [
+						"schema.MaxFieldPlacements",
+						"MaxFieldPlacements"
+					],
+					"source": {
+						"path": "schema/block_registry.go",
+						"line": 450
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
 					"id": "go:github.com/riducms/ridu/schema#NestedField.ResolvedFields",
 					"name": "NestedField.ResolvedFields",
 					"slug": "nested-field-resolved-fields-method",
@@ -69596,7 +69632,7 @@
 					],
 					"source": {
 						"path": "schema/block_registry.go",
-						"line": 42
+						"line": 51
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -69637,7 +69673,7 @@
 					],
 					"source": {
 						"path": "schema/block_registry.go",
-						"line": 170
+						"line": 179
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -69725,7 +69761,7 @@
 					],
 					"source": {
 						"path": "schema/block_registry.go",
-						"line": 392
+						"line": 407
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -69802,7 +69838,7 @@
 					],
 					"source": {
 						"path": "schema/block_registry.go",
-						"line": 389
+						"line": 404
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -69943,7 +69979,7 @@
 					"slug": "validate-embedded-metadata",
 					"kind": "function",
 					"group": "Functions",
-					"summary": "ValidateEmbeddedMetadata validates descriptor structure before consumers can interpret it. Finite schema depth also rejects recursive/cyclic schema graphs.",
+					"summary": "ValidateEmbeddedMetadata validates descriptor structure before consumers can interpret it. Finite schema depth also rejects recursive/cyclic schema graphs. A registered block's fields are the same at every placement, so each block is checked at its first placement only; issue paths name that placement.",
 					"signature": "func ValidateEmbeddedMetadata(snapshot Snapshot) error",
 					"parameters": [
 						{
@@ -69967,7 +70003,7 @@
 					],
 					"source": {
 						"path": "schema/embedded.go",
-						"line": 103
+						"line": 105
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -70008,7 +70044,7 @@
 					],
 					"source": {
 						"path": "schema/embedded.go",
-						"line": 165
+						"line": 216
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -75695,7 +75731,7 @@
 					],
 					"source": {
 						"path": "store/value_json.go",
-						"line": 113
+						"line": 120
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -76115,6 +76151,42 @@
 						"store.Store errors",
 						"Store errors"
 					],
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
+					"id": "go:github.com/riducms/ridu/store#Value.AppendJSON",
+					"name": "Value.AppendJSON",
+					"slug": "value-append-json-method",
+					"kind": "method",
+					"group": "Methods",
+					"summary": "AppendJSON appends the encoding MarshalJSON returns to dst, so a caller can encode many values into one buffer. It returns nil and the encoding/json error when value contains a non-finite number or an unencodable time.",
+					"signature": "func (value Value) AppendJSON(dst []byte) ([]byte, error)",
+					"parameters": [
+						{
+							"name": "dst",
+							"type": "[]byte",
+							"description": "The dst value."
+						}
+					],
+					"parametersLabel": "",
+					"returns": {
+						"type": "([]byte, error)",
+						"description": "The declared result."
+					},
+					"details": [],
+					"example": "",
+					"language": "go",
+					"typeLinks": {},
+					"aliases": [
+						"store.Value.AppendJSON",
+						"Value.AppendJSON"
+					],
+					"source": {
+						"path": "store/value_json.go",
+						"line": 72
+					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
 					"overloads": []
@@ -82712,11 +82784,11 @@
 					"kind": "type",
 					"group": "Types",
 					"summary": "Public type AdminCollectionListPageV1 from github.com/riducms/ridu/protocol.",
-					"signature": "type AdminCollectionListPageV1 struct {\n\tValue *CollectionPageEnvelope[map[string]any] `json:\"value,omitempty\"`\n\tError *ErrorPayload                           `json:\"error,omitempty\"`\n}",
+					"signature": "type AdminCollectionListPageV1 struct {\n\tValue *CollectionPageEnvelope[json.RawMessage] `json:\"value,omitempty\"`\n\tError *ErrorPayload                            `json:\"error,omitempty\"`\n}",
 					"parameters": [
 						{
 							"name": "Value",
-							"type": "*CollectionPageEnvelope[map[string]any]",
+							"type": "*CollectionPageEnvelope[json.RawMessage]",
 							"description": "The Value value."
 						},
 						{
@@ -82907,11 +82979,11 @@
 					"kind": "type",
 					"group": "Types",
 					"summary": "Public type AdminDocumentDataV1 from github.com/riducms/ridu/protocol.",
-					"signature": "type AdminDocumentDataV1 struct {\n\tDocument AdminReadResultV1[map[string]any]             `json:\"document\"`\n\tAccess   AdminReadResultV1[AccessCapabilitiesEnvelope] `json:\"access\"`\n}",
+					"signature": "type AdminDocumentDataV1 struct {\n\tDocument AdminReadResultV1[json.RawMessage]            `json:\"document\"`\n\tAccess   AdminReadResultV1[AccessCapabilitiesEnvelope] `json:\"access\"`\n}",
 					"parameters": [
 						{
 							"name": "Document",
-							"type": "AdminReadResultV1[map[string]any]",
+							"type": "AdminReadResultV1[json.RawMessage]",
 							"description": "The Document value."
 						},
 						{
@@ -83858,7 +83930,7 @@
 					"kind": "type",
 					"group": "Types",
 					"summary": "AdminPreparedRuntimeV1 is the complete safe global admin bootstrap. It never contains credentials, access predicates, executable hooks, or lock state.",
-					"signature": "type AdminPreparedRuntimeV1 struct {\n\tAdminPreparedNavigationV1\n\tManifest      schema.Snapshot              `json:\"manifest\"`\n\tSession       *AuthSession[map[string]any] `json:\"session,omitempty\"`\n\tAuthBootstrap bool                         `json:\"authBootstrapAvailable\"`\n\tTheme         string                       `json:\"theme\"`\n\tAdminLanguage string                       `json:\"adminLanguage,omitempty\"`\n\tAdminTimeZone string                       `json:\"adminTimeZone,omitempty\"`\n\tPreferences   map[string]json.RawMessage   `json:\"preferences\"`\n}",
+					"signature": "type AdminPreparedRuntimeV1 struct {\n\tAdminPreparedNavigationV1\n\tManifest      schema.Snapshot               `json:\"manifest\"`\n\tSession       *AuthSession[json.RawMessage] `json:\"session,omitempty\"`\n\tAuthBootstrap bool                          `json:\"authBootstrapAvailable\"`\n\tTheme         string                        `json:\"theme\"`\n\tAdminLanguage string                        `json:\"adminLanguage,omitempty\"`\n\tAdminTimeZone string                        `json:\"adminTimeZone,omitempty\"`\n\tPreferences   map[string]json.RawMessage    `json:\"preferences\"`\n}",
 					"parameters": [
 						{
 							"name": "AdminPreparedNavigationV1",
@@ -83872,7 +83944,7 @@
 						},
 						{
 							"name": "Session",
-							"type": "*AuthSession[map[string]any]",
+							"type": "*AuthSession[json.RawMessage]",
 							"description": "The Session value."
 						},
 						{
@@ -83999,16 +84071,16 @@
 					"kind": "type",
 					"group": "Types",
 					"summary": "Public type AdminVersionsDataV1 from github.com/riducms/ridu/protocol.",
-					"signature": "type AdminVersionsDataV1 struct {\n\tHistory  AdminReadResultV1[[]DocumentVersion[map[string]any]] `json:\"history\"`\n\tDetail   *AdminReadResultV1[DocumentVersion[map[string]any]]  `json:\"detail,omitempty\"`\n\tDocument AdminDocumentDataV1                                  `json:\"document\"`\n}",
+					"signature": "type AdminVersionsDataV1 struct {\n\tHistory  AdminReadResultV1[[]DocumentVersion[json.RawMessage]] `json:\"history\"`\n\tDetail   *AdminReadResultV1[DocumentVersion[json.RawMessage]]  `json:\"detail,omitempty\"`\n\tDocument AdminDocumentDataV1                                   `json:\"document\"`\n}",
 					"parameters": [
 						{
 							"name": "History",
-							"type": "AdminReadResultV1[[]DocumentVersion[map[string]any]]",
+							"type": "AdminReadResultV1[[]DocumentVersion[json.RawMessage]]",
 							"description": "The History value."
 						},
 						{
 							"name": "Detail",
-							"type": "*AdminReadResultV1[DocumentVersion[map[string]any]]",
+							"type": "*AdminReadResultV1[DocumentVersion[json.RawMessage]]",
 							"description": "The Detail value."
 						},
 						{

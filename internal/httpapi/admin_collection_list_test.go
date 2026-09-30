@@ -86,7 +86,7 @@ func TestAdminInitialListReadPartsPreserveAccessAndIndependentLifecycles(t *test
 			if (data.Page != nil) != tc.page || (len(data.Counts) != 0) != tc.counts || data.Preferences != nil {
 				t.Fatalf("wrong parts: %#v", data)
 			}
-			if tc.page && (data.Page.Value == nil || len(data.Page.Value.Docs) != 1 || data.Page.Value.Docs[0]["id"] != "visible" || data.Page.Value.Docs[0]["secret"] != nil || data.Page.Value.Pagination.Limit != 10) {
+			if tc.page && (data.Page.Value == nil || len(data.Page.Value.Docs) != 1 || decodedDocument(t, data.Page.Value.Docs[0])["id"] != "visible" || decodedDocument(t, data.Page.Value.Docs[0])["secret"] != nil || data.Page.Value.Pagination.Limit != 10) {
 				t.Fatalf("page: %#v", data.Page)
 			}
 			if tc.counts && (*data.Counts[""].Value != 1 || *data.Counts["draft"].Value != 1 || *data.Counts["published"].Value != 0) {
@@ -175,7 +175,7 @@ func TestAdminInitialListFallbackReadIsIndependentOfMetadataAndSnapshotLimit(t *
 	if err := json.Unmarshal(response.Body.Bytes(), &data); err != nil {
 		t.Fatal(err)
 	}
-	if response.Code != 200 || data.Page.Value == nil || data.Page.Value.Docs[0]["title"] != large {
+	if response.Code != 200 || data.Page.Value == nil || decodedDocument(t, data.Page.Value.Docs[0])["title"] != large {
 		t.Fatal("ordinary fallback read was capped")
 	}
 	state := protocol.AdminPreparedRouteStateV1{Outcome: protocol.AdminPreparedRoutePrepared, Route: &protocol.AdminPreparedRouteDataV1{Kind: protocol.AdminPreparedRouteCollectionList, Data: &data}}

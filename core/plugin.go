@@ -156,6 +156,10 @@ type EndpointProvider interface {
 // access-controlled operation engine as REST and jobs.
 type PluginTransportContext struct {
 	Manifest schema.Manifest
+	// Snapshot is the resolved schema the operation engine runs on. It is shared,
+	// read-only state: a transport must not modify it, and reading it reuses the
+	// engine's placement views instead of materializing another copy.
+	Snapshot schema.Snapshot
 	Local    *LocalAPI
 	// App exposes public authentication and other application-owned operations
 	// that do not belong to LocalAPI. It is fully initialized before binding.

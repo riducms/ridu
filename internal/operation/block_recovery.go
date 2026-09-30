@@ -1,8 +1,8 @@
 package operation
 
 import (
-	"fmt"
 	"sort"
+	"strconv"
 
 	"github.com/riducms/ridu/internal/embedded"
 	"github.com/riducms/ridu/internal/population"
@@ -26,7 +26,7 @@ func unknownBlockRecoveryError(fields []schema.Field, values store.Values, canon
 			if issues.full() {
 				return
 			}
-			if value, exists := values[field.Name]; exists {
+			if value, exists := values[field.Name]; exists && fieldContainsRowIdentities(field) {
 				visit(field, value, joinFieldPath(prefix, field.Name))
 			}
 		}
@@ -36,7 +36,7 @@ func unknownBlockRecoveryError(fields []schema.Field, values store.Values, canon
 			if issues.full() {
 				return
 			}
-			if value, exists := object.Lookup(field.Name); exists {
+			if value, exists := object.Lookup(field.Name); exists && fieldContainsRowIdentities(field) {
 				visit(field, value, joinFieldPath(prefix, field.Name))
 			}
 		}
@@ -86,7 +86,7 @@ func unknownBlockRecoveryError(fields []schema.Field, values store.Values, canon
 					return
 				}
 				valid := row.Kind() == store.ValueObject
-				rowPath := fmt.Sprintf("%s.%d", path, index)
+				rowPath := path + "." + strconv.Itoa(index)
 				if field.Type == schema.FieldTypeArray {
 					if valid && field.Nested != nil {
 						walkObject(field.Nested.ResolvedFields(), row, rowPath)

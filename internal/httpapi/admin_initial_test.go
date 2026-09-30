@@ -564,7 +564,7 @@ func TestAdminInitialDocumentUsesOneSessionAndPreservesRedactionHooksAndAudit(t 
 	if len(audits) != 1 || audits[0].Action != "read" || strings.Contains(audits[0].Action, "lock") {
 		t.Fatalf("audits = %#v", audits)
 	}
-	document := *state.Route.Document.Document.Value
+	document := decodedDocument(t, *state.Route.Document.Document.Value)
 	if document["title"] != "Visible" || document["secret"] != nil {
 		t.Fatalf("redacted prepared document = %#v", document)
 	}
@@ -598,7 +598,7 @@ func TestAdminInitialDocumentUsesOneSessionAndPreservesRedactionHooksAndAudit(t 
 	if sessions != 1 || afterRead != 1 || len(audits) != 1 || apiState.Route == nil || apiState.Route.Document == nil || apiState.Route.Document.Document.Value == nil {
 		t.Fatalf("API lifecycle: sessions=%d afterRead=%d audits=%#v state=%s", sessions, afterRead, audits, response.Body.String())
 	}
-	apiDocument := *apiState.Route.Document.Document.Value
+	apiDocument := decodedDocument(t, *apiState.Route.Document.Document.Value)
 	if apiDocument["title"] != "Visible" || apiDocument["secret"] != nil || strings.Count(response.Body.String(), `"title":"Visible"`) != 1 {
 		t.Fatalf("API view must reuse the authorized document read and ignore arbitrary admin projection: %#v", apiState.Route)
 	}
@@ -728,14 +728,14 @@ func TestAdminInitialVersionsKeepHistoryLightAndDetailExact(t *testing.T) {
 	if data.History.Value == nil || data.Detail == nil || data.Detail.Value == nil {
 		t.Fatalf("versions = %s", response.Body.String())
 	}
-	if title := (*data.History.Value)[0].Snapshot["title"]; title != "English only" {
-		t.Fatalf("history should retain only the route locale: %#v", (*data.History.Value)[0].Snapshot)
+	if title := decodedDocument(t, (*data.History.Value)[0].Snapshot)["title"]; title != "English only" {
+		t.Fatalf("history should retain only the route locale: %s", (*data.History.Value)[0].Snapshot)
 	}
-	title, ok := data.Detail.Value.Snapshot["title"].(map[string]any)
+	title, ok := decodedDocument(t, data.Detail.Value.Snapshot)["title"].(map[string]any)
 	if !ok || title["en"] != "English only" || title["fr"] != nil {
-		t.Fatalf("exact comparison detail must preserve missing French independently: %#v", data.Detail.Value.Snapshot)
+		t.Fatalf("exact comparison detail must preserve missing French independently: %s", data.Detail.Value.Snapshot)
 	}
-	if data.Document.Document.Value == nil || (*data.Document.Document.Value)["title"] != "English only" {
+	if data.Document.Document.Value == nil || decodedDocument(t, *data.Document.Document.Value)["title"] != "English only" {
 		t.Fatalf("document heading must retain its ordinary localized read: %#v", data.Document)
 	}
 }

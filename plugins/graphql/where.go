@@ -12,24 +12,40 @@ type whereField struct {
 	field schema.Field
 	name  string
 	path  string
+	// owner names the output object that declares field, so a filter reuses
+	// that object's select enum.
+	owner string
 }
 
-func whereExpression(current resource, raw interface{}) (query.Expression, error) {
+// whereExpression reads filter names through the paths computed with the
+// resource's where input rather than flattening its schema on every request.
+func (builder *schemaBuilder) whereExpression(current resource, raw interface{}) (query.Expression, error) {
 	values, _ := raw.(map[string]interface{})
 	if len(values) == 0 {
 		return nil, nil
 	}
-	paths := map[string]string{"id": "id"}
-	for _, field := range flattenWhereFields(current.Fields) {
-		paths[field.name] = field.path
+	paths := builder.wherePaths[current.ID]
+	if paths == nil {
+		paths = wherePaths(flattenWhereFields(current.Fields, current.name))
 	}
 	return parseWhere(values, paths)
 }
 
-func flattenWhereFields(fields []schema.Field) []whereField {
+func wherePaths(fields []whereField) map[string]string {
+	paths := make(map[string]string, len(fields)+1)
+	paths["id"] = "id"
+	for _, field := range fields {
+		paths[field.name] = field.path
+	}
+	return paths
+}
+
+// flattenWhereFields lists filterable leaves under their double-underscore
+// names. owner is the output type name of the object declaring fields.
+func flattenWhereFields(fields []schema.Field, owner string) []whereField {
 	result := make([]whereField, 0, len(fields))
-	var walk func([]schema.Field, []string)
-	walk = func(current []schema.Field, prefix []string) {
+	var walk func([]schema.Field, []string, string)
+	walk = func(current []schema.Field, prefix []string, owner string) {
 		for _, field := range current {
 			if field.QueryRestricted {
 				continue
@@ -38,13 +54,18 @@ func flattenWhereFields(fields []schema.Field) []whereField {
 			switch field.Type {
 			case schema.FieldTypeGroup, schema.FieldTypeArray:
 				if field.Nested != nil {
-					walk(field.Nested.ResolvedFields(), path)
+					walk(field.Nested.ResolvedFields(), path, owner+typeName(field.Name))
 				}
 				continue
 			case schema.FieldTypeBlocks:
 				if field.Blocks != nil {
+					registered := len(field.Blocks.BlockReferences) > 0
 					for _, block := range field.Blocks.ResolvedTypes() {
-						walk(block.ResolvedFields(), append(path, block.Slug))
+						blockOwner := owner + typeName(field.Name) + "Block" + typeName(block.Slug)
+						if registered {
+							blockOwner = registeredBlockTypeName(block)
+						}
+						walk(block.ResolvedFields(), append(path, block.Slug), blockOwner)
 					}
 				}
 				continue
@@ -61,11 +82,10 @@ func flattenWhereFields(fields []schema.Field) []whereField {
 			default:
 				continue
 			}
-			pathName := strings.Join(path, ".")
-			result = append(result, whereField{field: field, name: fieldName(strings.Join(path, "__")), path: pathName})
+			result = append(result, whereField{field: field, name: fieldName(strings.Join(path, "__")), path: strings.Join(path, "."), owner: owner})
 		}
 	}
-	walk(fields, nil)
+	walk(fields, nil, owner)
 	return result
 }
 

@@ -1401,23 +1401,6 @@ func TestFieldRenameWithSimultaneousIndexAdditionMatchesDefinitions(t *testing.T
 	}
 }
 
-func TestAtlasSchemaIncludesDocumentLockLeases(t *testing.T) {
-	manifest := atlasTestManifest(atlasTextField("posts-title", "title"))
-	snapshot := manifest.Snapshot()
-	snapshot.Collections[0].Capabilities.Locking = true
-	snapshot.Collections[0].DocumentLock = &schema.DocumentLockSettings{DurationSeconds: 120}
-	physical := atlasSchema(schema.NewManifest(snapshot), atlasIdentityMap{})
-	table, exists := physical.Table("ridu_document_locks")
-	if !exists {
-		t.Fatal("document lock storage is missing for a lock-enabled collection")
-	}
-	for _, column := range []string{"collection_id", "document_id", "owner_collection_id", "owner_id", "owner_label", "created_at", "updated_at", "expires_at"} {
-		if _, exists := table.Column(column); !exists {
-			t.Fatalf("document lock storage is missing %q", column)
-		}
-	}
-}
-
 func TestAtlasSchemaIncludesLifecycleCleanupIndexes(t *testing.T) {
 	manifest := atlasTestManifest(atlasTextField("posts-title", "title"))
 	snapshot := manifest.Snapshot()

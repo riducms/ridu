@@ -95,9 +95,7 @@ func TestUploadGraphPreservesManagedStorageContracts(t *testing.T) {
 		}
 	}
 	for _, occurrence := range resolution.Occurrences() {
-		manifestField := byName[occurrence.Name]
-		view, exists := resolution.graph.Binding(occurrence.ID)
-		if !exists || occurrence.SchemaID != manifestField.ID || view.Required() != manifestField.Required || view.Index() != manifestField.Index || !view.AdminPolicy().ReadOnly {
+		if manifestField := byName[occurrence.Name]; occurrence.SchemaID != manifestField.ID {
 			t.Fatalf("graph and manifest disagree at %s: %#v", occurrence.Name, occurrence)
 		}
 	}

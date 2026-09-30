@@ -41,6 +41,16 @@ func (b *Budget) Enter(path string) error {
 	return nil
 }
 func (b *Budget) Leave() { b.depth-- }
+
+// visitLeaf is Enter followed by Leave for a value without nested traversal.
+// It joins the member path only when the budget rejects the visit.
+func (b *Budget) visitLeaf(prefix, name string) error {
+	if b.depth >= MaxDepth || b.work >= b.limit() {
+		return b.Enter(join(prefix, name))
+	}
+	b.work++
+	return nil
+}
 func (b *Budget) node(path string) error {
 	b.nodes++
 	b.work++

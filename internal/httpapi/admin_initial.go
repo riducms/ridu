@@ -47,7 +47,7 @@ type adminPreparedRequestIDContextKey struct{}
 
 type adminPreparedIdentity struct {
 	identity        *AuthIdentity
-	session         *protocol.AuthSession[map[string]any]
+	session         *protocol.AuthSession[json.RawMessage]
 	resolvedSession *AuthSession
 }
 
@@ -460,12 +460,12 @@ func adminContextKey(snapshot schema.Snapshot, runtime *protocol.AdminPreparedRu
 	// Only the digest crosses the reuse boundary. Including both the safe session
 	// payload and ID invalidates cached runtime state when identity metadata changes.
 	encoded, _ := json.Marshal(struct {
-		BuildID       string                                `json:"buildId"`
-		Manifest      schema.Snapshot                       `json:"manifest"`
-		Actor         string                                `json:"actor"`
-		SessionID     string                                `json:"sessionId"`
-		Session       *protocol.AuthSession[map[string]any] `json:"session,omitempty"`
-		AuthBootstrap bool                                  `json:"authBootstrap"`
+		BuildID       string                                 `json:"buildId"`
+		Manifest      schema.Snapshot                        `json:"manifest"`
+		Actor         string                                 `json:"actor"`
+		SessionID     string                                 `json:"sessionId"`
+		Session       *protocol.AuthSession[json.RawMessage] `json:"session,omitempty"`
+		AuthBootstrap bool                                   `json:"authBootstrap"`
 	}{buildID, snapshot, actor, sessionID, runtime.Session, runtime.AuthBootstrap})
 	digest := sha256.Sum256(encoded)
 	return hex.EncodeToString(digest[:16])

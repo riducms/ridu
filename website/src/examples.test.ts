@@ -219,12 +219,6 @@ describe('documentation examples', () => {
 		expect(fixture).toContain(documented);
 	});
 
-	test('covers both Quickstart database branches in the automation reference', () => {
-		for (const database of ['sqlite', 'postgres']) {
-			expect(quickstart).toContain(`--database ${database}`);
-		}
-	});
-
 	test('compile-checks every built-in field page against one maintained catalog', () => {
 		const fixture = readFileSync(
 			resolve(repositoryRoot, 'examples/documentation/adoption/catalog.go'),

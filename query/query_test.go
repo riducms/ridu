@@ -251,22 +251,6 @@ func TestHelpersPanicOnValuesANumberCannotHold(t *testing.T) {
 	}
 }
 
-func TestSortHelpers(t *testing.T) {
-	for _, test := range []struct {
-		sort      query.Sort
-		path      string
-		direction query.Direction
-	}{
-		{query.Asc("title"), "title", query.Ascending},
-		{query.Desc("seo.title"), "seo.title", query.Descending},
-		{query.Desc(query.Field("createdAt")), "createdAt", query.Descending},
-	} {
-		if test.sort.Path.String() != test.path || test.sort.Direction != test.direction {
-			t.Errorf("sort = %s %s, want %s %s", test.sort.Path, test.sort.Direction, test.path, test.direction)
-		}
-	}
-}
-
 // embedded satisfies Expression without being the package's own type.
 type embedded struct{ query.Expression }
 

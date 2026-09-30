@@ -6,6 +6,7 @@ import (
 
 	"github.com/riducms/ridu/core"
 	"github.com/riducms/ridu/field"
+	"github.com/riducms/ridu/schema"
 )
 
 // ValidateFields checks every declared rich-text host after all resource and
@@ -13,6 +14,8 @@ import (
 // ownership; only the plugin envelope and finite feature configuration are checked.
 func (plugin) ValidateFields(context core.FieldGraphContext, graph field.Fields) error {
 	work := 0
+	// A registered block has the same fields wherever it is referenced.
+	checkedBlocks := map[string]bool{}
 	var walk func(field.Fields, string, int) error
 	walk = func(fields field.Fields, path string, depth int) error {
 		if depth > 64 {
@@ -22,7 +25,7 @@ func (plugin) ValidateFields(context core.FieldGraphContext, graph field.Fields)
 			definition := field.Snapshot(node)
 			work++
 			at := path + "." + definition.Name()
-			if work > 10000 {
+			if work > schema.MaxFieldPlacements {
 				return fmt.Errorf("%s: schema work budget exceeded", at)
 			}
 			if definition.PluginKey() == Key {
@@ -56,6 +59,9 @@ func (plugin) ValidateFields(context core.FieldGraphContext, graph field.Fields)
 				}
 			}
 			for _, branch := range definition.Branches() {
+				if branch.Referenced && checkedBlocks[branch.Selector.Slug] {
+					continue
+				}
 				branchPath := at
 				if branch.Selector.Boundary == field.EmbeddedCase {
 					branchPath += "." + branch.Selector.Tree + "." + branch.Selector.Case
@@ -65,6 +71,9 @@ func (plugin) ValidateFields(context core.FieldGraphContext, graph field.Fields)
 				}
 				if err := walk(branch.Fields, branchPath, depth+1); err != nil {
 					return err
+				}
+				if branch.Referenced {
+					checkedBlocks[branch.Selector.Slug] = true
 				}
 			}
 		}

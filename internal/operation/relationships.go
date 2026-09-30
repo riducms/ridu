@@ -386,8 +386,10 @@ type documentReferenceCollector struct {
 	traversalError error
 }
 
+// newDocumentReferenceCollector grows with the document's references. append
+// enforces MaxDocumentReferences, so most documents never allocate the bound.
 func newDocumentReferenceCollector() *documentReferenceCollector {
-	return &documentReferenceCollector{references: make([]documentReference, 0, MaxDocumentReferences)}
+	return &documentReferenceCollector{}
 }
 
 func (collector *documentReferenceCollector) append(reference documentReference) bool {

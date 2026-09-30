@@ -63,7 +63,14 @@ func (values *Values) UnmarshalJSON(data []byte) error {
 }
 
 func (value Value) MarshalJSON() ([]byte, error) {
-	encoded, err := appendValueJSON(make([]byte, 0, 64), value)
+	return value.AppendJSON(make([]byte, 0, 64))
+}
+
+// AppendJSON appends the encoding MarshalJSON returns to dst, so a caller can
+// encode many values into one buffer. It returns nil and the encoding/json error
+// when value contains a non-finite number or an unencodable time.
+func (value Value) AppendJSON(dst []byte) ([]byte, error) {
+	encoded, err := appendValueJSON(dst, value)
 	if err != nil {
 		return nil, value.encodingError()
 	}

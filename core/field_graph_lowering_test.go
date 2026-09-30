@@ -24,7 +24,7 @@ func graphRuntimeBindings(t *testing.T, nodes field.Fields) []operationengine.Fi
 		t.Fatal(err)
 	}
 	var local *LocalAPI
-	bindings, err := lowerFieldGraph(config.fieldGraph, "collection", "pages", manifest.Snapshot().Collections[0].Fields, &local)
+	bindings, err := lowerFieldGraph(config.fieldGraph, config.fieldGraph.Occurrences(), "collection", "pages", manifest.Snapshot().Collections[0].Fields, &local)
 	if err != nil {
 		t.Fatal(err)
 	}
