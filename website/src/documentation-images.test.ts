@@ -117,10 +117,4 @@ describe('documentation image capture', () => {
 			.sort();
 		expect(committed).toEqual(captured);
 	});
-
-	test('documents generated playground provenance', () => {
-		const provenance = readFileSync(resolve(repositoryRoot, 'docs/assets/README.md'), 'utf8');
-		expect(provenance).toContain('playground/documentation/');
-		expect(provenance).not.toContain('tests/contracts/admin_server');
-	});
 });

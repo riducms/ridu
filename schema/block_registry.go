@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/riducms/ridu/query"
 )
@@ -38,6 +39,14 @@ func (b BlockType) ResolvedFields() []Field {
 		return b.bound.get()
 	}
 	return b.Fields
+}
+
+// fieldCount is len(ResolvedFields()) without materializing a placement view.
+func (b BlockType) fieldCount() int {
+	if b.Fields == nil && b.bound != nil {
+		return len(b.bound.source)
+	}
+	return len(b.Fields)
 }
 func (n NestedField) ResolvedFields() []Field {
 	if n.Fields == nil && n.bound != nil {
@@ -168,27 +177,33 @@ func (s blockScope) field(template Field) Field {
 
 // PlacementFieldID keeps inline and referenced field persistence identities equal.
 func PlacementFieldID(resource StableID, path []string) StableID {
-	parts := []string{string(resource)}
+	// Build in a stack buffer so the retained ID is allocated at its exact size.
+	var buffer [128]byte
+	id := append(buffer[:0], resource...)
 	for _, part := range path {
-		var out []rune
-		for i, c := range []rune(part) {
+		id = append(id, '-')
+		// Each segment is kebab-cased independently: '_' and '-' collapse to one
+		// separator, and an upper-case letter after the first starts a word.
+		start, dash := len(id), false
+		for index, c := range part {
 			if c == '_' || c == '-' {
-				if len(out) > 0 && out[len(out)-1] != '-' {
-					out = append(out, '-')
+				if len(id) > start && !dash {
+					id = append(id, '-')
+					dash = true
 				}
 				continue
 			}
 			if unicode.IsUpper(c) {
-				if i > 0 && len(out) > 0 && out[len(out)-1] != '-' {
-					out = append(out, '-')
+				if index > 0 && len(id) > start && !dash {
+					id = append(id, '-')
 				}
 				c = unicode.ToLower(c)
 			}
-			out = append(out, c)
+			id = utf8.AppendRune(id, c)
+			dash = false
 		}
-		parts = append(parts, string(out))
 	}
-	return StableID(strings.Join(parts, "-"))
+	return StableID(id)
 }
 
 // BindBlockReferences validates the registry and attaches lazy placement views.
@@ -429,6 +444,11 @@ func rebasePresentation(f *Field, from, to string) {
 
 // Count the logical placement graph without materializing any placement fields.
 // Definition costs are memoized; only schema structure, never policy results, is reused.
+// MaxFieldPlacements bounds a resolved schema's fields, counting a registered
+// block's fields once for every place it is used. Schema validators share it as
+// their work budget.
+const MaxFieldPlacements = 100000
+
 func validateBlockGraphBudget(snapshot *Snapshot, definitions map[string]BlockType) error {
 	type cost struct{ nodes, height int }
 	cache := map[string]cost{}
@@ -488,8 +508,8 @@ func validateBlockGraphBudget(snapshot *Snapshot, definitions map[string]BlockTy
 			}
 			total.nodes += 1 + child.nodes
 			total.height = max(total.height, 1+child.height)
-			if total.nodes > 100000 || total.height > 48 {
-				return cost{}, fmt.Errorf("%s: resolved block graph exceeds 100000 fields or 48 levels", f.Path.String())
+			if total.nodes > MaxFieldPlacements || total.height > 48 {
+				return cost{}, fmt.Errorf("%s: resolved block graph exceeds %d fields or 48 levels", f.Path.String(), MaxFieldPlacements)
 			}
 		}
 		return total, nil
@@ -507,8 +527,8 @@ func validateBlockGraphBudget(snapshot *Snapshot, definitions map[string]BlockTy
 				return err
 			}
 			nodes += c.nodes
-			if nodes > 100000 {
-				return fmt.Errorf("%s: resolved schema exceeds 100000 field placements", r.Slug)
+			if nodes > MaxFieldPlacements {
+				return fmt.Errorf("%s: resolved schema exceeds %d field placements", r.Slug, MaxFieldPlacements)
 			}
 		}
 	}

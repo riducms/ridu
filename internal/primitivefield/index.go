@@ -8,14 +8,50 @@ import (
 )
 
 func ValidateIndexes(collection schema.Collection) error {
+	return validateIndexes(collection, map[string]bool{})
+}
+
+// checked holds registered block slugs already validated; a registered block
+// has the same fields wherever it is referenced.
+func validateIndexes(collection schema.Collection, checked map[string]bool) error {
 	var walk func([]schema.Field) error
+	walkBlocks := func(types []schema.BlockType, registered bool) error {
+		for _, block := range types {
+			if registered && checked[block.Slug] {
+				continue
+			}
+			if err := walk(block.ResolvedFields()); err != nil {
+				return err
+			}
+			if registered {
+				checked[block.Slug] = true
+			}
+		}
+		return nil
+	}
 	walk = func(fields []schema.Field) error {
 		for _, field := range fields {
 			if IsList(field) && (field.Index || field.Unique) {
 				return fmt.Errorf("primitive list %q does not support indexes or uniqueness", field.Path.String())
 			}
-			if err := walk(schema.ChildFields(field)); err != nil {
-				return err
+			if field.Nested != nil {
+				if err := walk(field.Nested.ResolvedFields()); err != nil {
+					return err
+				}
+			}
+			if field.Blocks != nil {
+				if err := walkBlocks(field.Blocks.ResolvedTypes(), len(field.Blocks.BlockReferences) > 0); err != nil {
+					return err
+				}
+			}
+			if field.Plugin != nil {
+				for _, tree := range field.Plugin.EmbeddedTrees {
+					for _, c := range tree.Cases {
+						if err := walkBlocks(c.ResolvedTypes(), len(c.BlockReferences) > 0); err != nil {
+							return err
+						}
+					}
+				}
 			}
 		}
 		return nil
@@ -35,8 +71,9 @@ func ValidateIndexes(collection schema.Collection) error {
 
 func ValidateManifestIndexes(manifest schema.Manifest) error {
 	snapshot := manifest.Snapshot()
+	checked := map[string]bool{}
 	for _, resource := range append(snapshot.Collections, snapshot.Globals...) {
-		if err := ValidateIndexes(resource); err != nil {
+		if err := validateIndexes(resource, checked); err != nil {
 			return err
 		}
 	}

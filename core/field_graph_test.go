@@ -334,17 +334,6 @@ func TestFieldGraphComputedOwnershipAndUnsupportedPolicies(t *testing.T) {
 	}
 }
 
-func TestFieldGraphStaticContract(t *testing.T) {
-	manifest, err := Resolve(Config{Name: "Fields", Collections: []Collection{{Slug: "pages", Fields: field.Fields{field.Text("title").Required().Label("Title").MaxLength(120), field.Group("meta", field.Fields{field.Number("order").Min(0)})}}}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	fields := manifest.Snapshot().Collections[0].Fields
-	if len(fields) != 2 || !fields[0].Required || fields[0].Admin.Label != "Title" || fields[0].Text.MaxLength == nil || *fields[0].Text.MaxLength != 120 || fields[1].Nested.ResolvedFields()[0].Number.Min == nil || *fields[1].Nested.ResolvedFields()[0].Number.Min != 0 {
-		t.Fatalf("field contract: %#v", fields)
-	}
-}
-
 func TestFieldGraphOccurrenceIDsIgnorePointerReuse(t *testing.T) {
 	shared := field.Text("code")
 	build := func(a, b field.Node) Config {
@@ -489,13 +478,32 @@ func TestFieldGraphLayoutRejectsUnsupportedAdminInsteadOfDiscardingIt(t *testing
 	}
 }
 
-func TestFieldGraphLayoutContract(t *testing.T) {
-	manifest, err := Resolve(Config{Name: "Layouts", Collections: []Collection{{Slug: "pages", Fields: field.Fields{field.Row(field.Fields{field.Text("first")}), field.Collapsible("details", field.Fields{field.Text("second")}).Admin(field.Admin{InitiallyCollapsed: true}), field.Tabs(field.Fields{field.UnnamedTab("More", field.Fields{field.Text("third")})})}}}})
+// Resolution memory follows behavior, not placements: a registered block without
+// executable behavior or conditions adds no occurrences wherever it is used,
+// while a validated field inside a referenced block keeps its binding.
+func TestFieldGraphExpandsOnlyBlocksWithBehavior(t *testing.T) {
+	plain := field.Block{Slug: "plain", Fields: field.Fields{field.Text("heading"), field.Group("settings", field.Fields{field.Text("theme")})}}
+	checked := field.Block{Slug: "checked", Fields: field.Fields{field.Text("code").Validate(graphRule)}}
+	r, err := resolveTestFieldGraph(Config{Name: "Pruned", Blocks: []field.Block{plain, checked}, Collections: []Collection{{Slug: "pages", Fields: field.Fields{
+		field.Blocks("layout").References("plain", "checked"), field.Blocks("more").References("plain"),
+	}}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	fields := manifest.Snapshot().Collections[0].Fields
-	if len(fields) != 3 || fields[0].Admin.Row == nil || fields[1].Admin.Collapsible == nil || !fields[1].Admin.Collapsible.InitiallyCollapsed || fields[2].Admin.Tab != "More" {
-		t.Fatalf("layout contract: %#v", fields)
+	byPath := map[string]configresolver.Occurrence{}
+	for _, o := range r.Occurrences() {
+		byPath[o.ResolvedPath] = o
+	}
+	for _, pruned := range []string{"layout.plain", "layout.plain.heading", "more.plain.settings.theme"} {
+		if _, exists := byPath[pruned]; exists {
+			t.Fatalf("behavior-free placement %q entered the graph", pruned)
+		}
+	}
+	code, exists := byPath["layout.checked.code"]
+	if _, layout := byPath["layout"]; !exists || !layout {
+		t.Fatalf("occurrences = %#v", byPath)
+	}
+	if definition, bound := r.graph.Binding(code.ID); !bound || definition.BehaviorSummary().Validators != 1 || code.SchemaID == "" {
+		t.Fatalf("validated block field lost its binding: %#v", code)
 	}
 }

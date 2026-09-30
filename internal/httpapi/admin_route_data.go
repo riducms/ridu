@@ -3,7 +3,6 @@ package httpapi
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -47,10 +46,10 @@ func (api *API) prepareAdminRouteData(request *http.Request, runtime *protocol.A
 	case protocol.AdminPreparedRouteCollectionDocument, protocol.AdminPreparedRouteCollectionAPI, protocol.AdminPreparedRouteGlobalDocument, protocol.AdminPreparedRouteGlobalAPI, protocol.AdminPreparedRouteAccount:
 		key, id := "", ""
 		if route.kind == protocol.AdminPreparedRouteAccount {
-			if runtime.Session == nil {
+			if runtime.Session == nil || identity.resolvedSession == nil {
 				return nil
 			}
-			key, id = runtime.Session.Collection, fmt.Sprint(runtime.Session.User["id"])
+			key, id = runtime.Session.Collection, identity.resolvedSession.User.ID
 		} else if strings.HasPrefix(string(route.kind), "global-") {
 			key, id = "global:"+segments[1], segments[1]
 		} else {
@@ -118,7 +117,7 @@ func (api *API) prepareAdminAccess(request *http.Request, identity *AuthIdentity
 	return adminReadResult(api, request, access, err)
 }
 
-func (api *API) prepareAdminDocumentRead(request *http.Request, identity *AuthIdentity, key, id, locale string, apiView bool) protocol.AdminReadResultV1[map[string]any] {
+func (api *API) prepareAdminDocumentRead(request *http.Request, identity *AuthIdentity, key, id, locale string, apiView bool) protocol.AdminReadResultV1[json.RawMessage] {
 	query := url.Values{}
 	if locale != "" {
 		query.Set("locale", locale)
@@ -131,7 +130,7 @@ func (api *API) prepareAdminDocumentRead(request *http.Request, identity *AuthId
 		collection = api.globals[slug]
 	}
 	options, err := decodeListQuery(query, collection, false)
-	var document map[string]any
+	var document json.RawMessage
 	if err == nil {
 		document, err = api.readDocument(request.Context(), key, id, identity, options)
 	}

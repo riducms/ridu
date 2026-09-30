@@ -100,6 +100,8 @@ func cloneEmbeddedTrees(trees []EmbeddedTree) []EmbeddedTree {
 
 // ValidateEmbeddedMetadata validates descriptor structure before consumers can
 // interpret it. Finite schema depth also rejects recursive/cyclic schema graphs.
+// A registered block's fields are the same at every placement, so each block is
+// checked at its first placement only; issue paths name that placement.
 func ValidateEmbeddedMetadata(snapshot Snapshot) error {
 	fieldTypes := map[string]PluginFieldType{}
 	for _, p := range snapshot.Plugins {
@@ -108,17 +110,19 @@ func ValidateEmbeddedMetadata(snapshot Snapshot) error {
 		}
 	}
 	count := 0
-	var walk func([]Field, string, int) error
-	walk = func(fields []Field, path string, depth int) error {
+	checkedBlocks := map[string]bool{}
+	var walk func([]Field, string, int, int) error
+	var walkChildren func(Field, string, int) error
+	walk = func(fields []Field, path string, depth, offset int) error {
 		if depth > 64 {
 			return fmt.Errorf("embedded schema depth exceeds 64 at %s (recursive schemas are unsupported)", path)
 		}
 		for i, f := range fields {
 			count++
-			if count > 10000 {
+			if count > MaxFieldPlacements {
 				return fmt.Errorf("schema work budget exceeded at %s", path)
 			}
-			p := fmt.Sprintf("%s[%d]", path, i)
+			p := fmt.Sprintf("%s[%d]", path, offset+i)
 			if f.Plugin != nil {
 				if mapping, exists := fieldTypes[f.Plugin.Key]; exists {
 					seen := map[string]bool{}
@@ -141,19 +145,66 @@ func ValidateEmbeddedMetadata(snapshot Snapshot) error {
 					return err
 				}
 			}
-			if err := walk(ChildFields(f), p+".children", depth+1); err != nil {
+			if err := walkChildren(f, p+".children", depth+1); err != nil {
 				return err
 			}
 		}
 		return nil
 	}
+	// walkChildren visits ChildFields in order, keeping its child indexes while
+	// skipping the fields of registered blocks that were already checked.
+	walkChildren = func(f Field, path string, depth int) error {
+		if depth > 64 {
+			return fmt.Errorf("embedded schema depth exceeds 64 at %s (recursive schemas are unsupported)", path)
+		}
+		offset := 0
+		walkBlocks := func(types []BlockType, referenced bool) error {
+			for _, block := range types {
+				if referenced && checkedBlocks[block.Slug] {
+					offset += block.fieldCount()
+					continue
+				}
+				fields := block.ResolvedFields()
+				if err := walk(fields, path, depth, offset); err != nil {
+					return err
+				}
+				if referenced {
+					checkedBlocks[block.Slug] = true
+				}
+				offset += len(fields)
+			}
+			return nil
+		}
+		if f.Nested != nil {
+			fields := f.Nested.ResolvedFields()
+			if err := walk(fields, path, depth, offset); err != nil {
+				return err
+			}
+			offset += len(fields)
+		}
+		if f.Blocks != nil {
+			if err := walkBlocks(f.Blocks.ResolvedTypes(), len(f.Blocks.BlockReferences) > 0); err != nil {
+				return err
+			}
+		}
+		if f.Plugin != nil {
+			for _, tree := range f.Plugin.EmbeddedTrees {
+				for _, c := range tree.Cases {
+					if err := walkBlocks(c.ResolvedTypes(), len(c.BlockReferences) > 0); err != nil {
+						return err
+					}
+				}
+			}
+		}
+		return nil
+	}
 	for i, r := range snapshot.Collections {
-		if err := walk(r.Fields, fmt.Sprintf("collections[%d].fields", i), 0); err != nil {
+		if err := walk(r.Fields, fmt.Sprintf("collections[%d].fields", i), 0, 0); err != nil {
 			return err
 		}
 	}
 	for i, r := range snapshot.Globals {
-		if err := walk(r.Fields, fmt.Sprintf("globals[%d].fields", i), 0); err != nil {
+		if err := walk(r.Fields, fmt.Sprintf("globals[%d].fields", i), 0, 0); err != nil {
 			return err
 		}
 	}

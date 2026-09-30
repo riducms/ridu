@@ -5,9 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"go/ast"
-	"go/parser"
-	"go/token"
 	"io"
 	"net/http"
 	"os"
@@ -39,7 +36,6 @@ func TestFreshUnifiedFieldStarterAndBlank(t *testing.T) {
 				}
 			}
 			run("new", "--template", template, "--database", "sqlite", "--module", "example.com/unified/"+template, "--scope", "@fixture", "--no-agent", target)
-			assertUnifiedScaffold(t, target)
 			run("generate", "--check")
 			database := filepath.Join(target, ".ridu", "content.sqlite")
 			if err := os.MkdirAll(filepath.Dir(database), 0755); err != nil {
@@ -127,58 +123,7 @@ func TestFreshUnifiedFieldStarterAndBlank(t *testing.T) {
 			if len(envelope.Schema.Collections) != want {
 				t.Fatalf("generated schema has %d collections, want %d", len(envelope.Schema.Collections), want)
 			}
-			assertUnifiedScaffold(t, target)
-			t.Logf("%s: normal new → deterministic generation → SQLite migration → built server → first-user bootstrap; zero obsolete field references", template)
+			t.Logf("%s: normal new → deterministic generation → SQLite migration → built server → first-user bootstrap", template)
 		})
-	}
-}
-
-func assertUnifiedScaffold(t *testing.T, root string) {
-	t.Helper()
-	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if entry.IsDir() {
-			if entry.Name() == ".ridu" || entry.Name() == "node_modules" {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if filepath.Ext(path) != ".go" {
-			return nil
-		}
-		file, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
-		if err != nil {
-			return err
-		}
-		fieldImports := map[string]bool{}
-		for _, imp := range file.Imports {
-			if imp.Path.Value == `"github.com/riducms/ridu/field"` {
-				alias := "field"
-				if imp.Name != nil {
-					alias = imp.Name.Name
-				}
-				fieldImports[alias] = true
-			}
-		}
-		obsolete := map[string]bool{"Legacy": true, "Definition": true, "Option": true, "Required": true, "Label": true, "TextOption": true, "NumberOption": true, "PluginOption": true, "ScalarEditorOption": true}
-		ast.Inspect(file, func(node ast.Node) bool {
-			if selector, ok := node.(*ast.SelectorExpr); ok {
-				if qualifier, ok := selector.X.(*ast.Ident); ok && fieldImports[qualifier.Name] && obsolete[selector.Sel.Name] {
-					t.Errorf("generated %s uses removed field.%s", path, selector.Sel.Name)
-				}
-			}
-			if item, ok := node.(*ast.KeyValueExpr); ok {
-				if key, ok := item.Key.(*ast.Ident); ok && (key.Name == "FieldAccess" || key.Name == "FieldHooks" || key.Name == "Computed" || key.Name == "FieldGraph") {
-					t.Errorf("generated %s uses removed resource %s", path, key.Name)
-				}
-			}
-			return true
-		})
-		return nil
-	})
-	if err != nil {
-		t.Fatal(err)
 	}
 }

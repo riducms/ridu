@@ -17,8 +17,9 @@ import (
 // lowerFieldGraph runs exactly once during application construction. Its output
 // owns callback closures and resolved schema metadata, never authoring nodes or
 // a request-time graph lookup. The engine owns concrete value traversal.
-func lowerFieldGraph(graph configresolver.Graph, resourceKind, resource string, fields []schema.Field, local **LocalAPI) ([]operationengine.FieldBinding, error) {
-	byID := make(map[schema.StableID]schema.Field)
+// occurrences is graph.Occurrences(), copied once for every resource.
+func lowerFieldGraph(graph configresolver.Graph, occurrences []configresolver.Occurrence, resourceKind, resource string, fields []schema.Field, local **LocalAPI) ([]operationengine.FieldBinding, error) {
+	var byID map[schema.StableID]schema.Field
 	var index func([]schema.Field)
 	index = func(fields []schema.Field) {
 		for _, f := range fields {
@@ -34,15 +35,18 @@ func lowerFieldGraph(graph configresolver.Graph, resourceKind, resource string, 
 			embedded.SchemaFields(f, index)
 		}
 	}
-	index(fields)
 	var bindings []operationengine.FieldBinding
-	for _, occurrence := range graph.Occurrences() {
+	for _, occurrence := range occurrences {
 		if occurrence.ResourceKind != resourceKind || occurrence.Resource != resource {
 			continue
 		}
 		definition, found := graph.Binding(occurrence.ID)
 		if !found || !definition.HasBehavior() {
 			continue
+		}
+		if byID == nil {
+			byID = make(map[schema.StableID]schema.Field)
+			index(fields)
 		}
 		unsupported := func(message string) error {
 			return schema.NewValidationError([]schema.Issue{{Code: "unsupported_field_policy", Path: occurrence.AuthoredPath, Message: fmt.Sprintf("field %q: %s", occurrence.ResolvedPath, message)}})

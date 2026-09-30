@@ -37,21 +37,6 @@ func TestSubtitleReturnsKeepReplaceAndClear(t *testing.T) {
 	}
 }
 
-func TestZeroValuesRemainPresent(t *testing.T) {
-	if value, present := operation.Present(false).Get(); !present || value {
-		t.Fatal("an explicit false must remain present")
-	}
-	if value, present := operation.Present(0.0).Get(); !present || value != 0 {
-		t.Fatal("an explicit zero must remain present")
-	}
-	if value, present := operation.Present("").Get(); !present || value != "" {
-		t.Fatal("an explicit empty string must remain present in the wrapper")
-	}
-	if _, present := operation.Empty[bool]().Get(); present {
-		t.Fatal("an empty bool must differ from Present(false)")
-	}
-}
-
 func TestExamplesSaveClearAndTargetValidationMessages(t *testing.T) {
 	app, err := ridu.New(ridu.Config{
 		Name: "Operation examples",

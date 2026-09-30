@@ -105,7 +105,7 @@ func TestGraphQLPrimitiveListQueriesExposeMembershipOnly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"ProductPointsWhere", "ProductSizesWhere"} {
+	for _, name := range []string{"RiduStringListWhere", "RiduNumberListWhere"} {
 		start := strings.Index(sdl, "input "+name+" {")
 		if start < 0 {
 			t.Fatal(name)

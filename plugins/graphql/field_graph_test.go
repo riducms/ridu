@@ -69,8 +69,11 @@ func testUnifiedGraphQLContractsAndOccurrenceRuntime(t *testing.T, references bo
 			}},
 		},
 	}
+	// Registered blocks share one output type across placements.
+	quoteType := "PostContentBlockQuote"
 	if references {
 		config.Blocks = []field.Block{quote}
+		quoteType = "QuoteBlock"
 	}
 	manifest, err := ridu.Resolve(config)
 	if err != nil {
@@ -85,8 +88,9 @@ func testUnifiedGraphQLContractsAndOccurrenceRuntime(t *testing.T, references bo
 			t.Fatalf("missing %q in graph SDL:\n%s", expected, sdl)
 		}
 	}
-	if strings.Contains(sdl, "secret: PostSecretWhere") {
-		t.Fatal("attached protected field was exposed as a query capability")
+	postWhere := sdl[strings.Index(sdl, "input PostWhere {"):]
+	if postWhere = postWhere[:strings.Index(postWhere, "}")]; !strings.Contains(postWhere, "title: RiduStringWhere") || strings.Contains(postWhere, "secret:") {
+		t.Fatalf("attached protected field was exposed as a query capability:\n%s", postWhere)
 	}
 	application, err := ridu.New(config, teststore.New())
 	if err != nil {
@@ -98,14 +102,17 @@ func testUnifiedGraphQLContractsAndOccurrenceRuntime(t *testing.T, references bo
 	if err != nil {
 		t.Fatal(err)
 	}
-	created := graphQL(t, server.URL, `mutation($author: ID!) {
-		createPost(data: {title: "Story", secret: "private", author: $author, translation: "Hello", meta: {score: 2, caption: "English"}, sections: [{_key: "A", sku: "one", note: "retained A"}, {_key: "B", sku: "two", note: "retained B"}], content: [{_key: "C", blockType: "quote", text: "Quotation", source: $author}]}) {
-			id title defaulted slug secret author { id name privateNote } sections { _key sku note } content { ... on PostContentBlockQuote { _key blockType text source { name } } }
+	created := graphQL(t, server.URL, `mutation($author: ID!, $content: JSON) {
+		createPost(data: {title: "Story", secret: "private", author: $author, translation: "Hello", meta: {score: 2, caption: "English"}, sections: [{_key: "A", sku: "one", note: "retained A"}, {_key: "B", sku: "two", note: "retained B"}], content: $content}) {
+			id title defaulted slug secret author { id name privateNote } sections { _key sku note } content { ... on `+quoteType+` { _key blockType text source { name } } }
 		}
-	}`, map[string]interface{}{"author": user.ID})
+	}`, map[string]interface{}{"author": user.ID, "content": []interface{}{map[string]interface{}{"_key": "C", "blockType": "quote", "text": "Quotation", "source": user.ID}}})
 	post := objectAt(t, created, "data", "createPost")
 	if post["defaulted"] != "Default" || post["slug"] != "story" || post["secret"] != nil || objectAt(t, post, "author")["privateNote"] != nil {
 		t.Fatalf("graph create projection = %#v", post)
+	}
+	if blocks, _ := post["content"].([]interface{}); len(blocks) != 1 || objectAt(t, blocks[0].(map[string]interface{}), "source")["name"] != "Ada" {
+		t.Fatalf("graph block relationship = %#v", post["content"])
 	}
 	id := post["id"].(string)
 	updated := graphQL(t, server.URL, `mutation($id: ID!) { updatePost(id: $id, data: {sections: [{_key: "B", sku: "second"}, {_key: "A", sku: "first"}]}) { sections { _key sku note } } }`, map[string]interface{}{"id": id})

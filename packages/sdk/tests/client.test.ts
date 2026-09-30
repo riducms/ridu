@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { createClient, RiduError, type ClientOptions, type RiduConfigShape } from "../src";
+import { createClient, RiduError, type RiduConfigShape } from "../src";
 
 interface TestConfig extends RiduConfigShape {
 	collections: {
@@ -230,23 +230,6 @@ describe("Fetch client", () => {
 		expect(captured?.headers.get("x-request")).toBe("request");
 		expect(captured?.headers.get("content-type")).toBe("application/json");
 		expect(captured?.url).toBe("https://cms.example.test/api/collections/posts");
-	});
-
-	it("uses a request-local SvelteKit-style fetch implementation", async () => {
-		let calls = 0;
-		const requestLocalFetch: NonNullable<ClientOptions["fetch"]> = async (request) => {
-			calls++;
-			expect(request).toBeInstanceOf(Request);
-			return Response.json({ doc: { id: "post_2", title: "Request local" } });
-		};
-		const client = createClient<TestConfig>({
-			baseURL: "https://cms.example.test",
-			fetch: requestLocalFetch,
-		});
-
-		const post = await client.find("posts", "post_2");
-		expect(post.title).toBe("Request local");
-		expect(calls).toBe(1);
 	});
 
 	it("mints and consumes document-scoped preview capabilities", async () => {

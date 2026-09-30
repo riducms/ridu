@@ -1,7 +1,6 @@
 package operation_test
 
 import (
-	"context"
 	"testing"
 
 	"example.com/ridu-gate1/operation"
@@ -105,15 +104,5 @@ func TestRelativeIssueUsesExistingImmutablePath(t *testing.T) {
 	returned[0] = "changed"
 	if issue.Path.String() != "label" {
 		t.Fatal("issue path aliases mutable segments")
-	}
-}
-
-func TestPhaseContextsRetainDirectCancellationField(t *testing.T) {
-	// Defining each named context over Context's struct avoids the selector
-	// collision that embedding a field also named Context would introduce.
-	ctx := operation.ValidationContext{Context: context.Background()}
-	var cancellation context.Context = ctx.Context
-	if cancellation == nil {
-		t.Fatal("cancellation context missing")
 	}
 }

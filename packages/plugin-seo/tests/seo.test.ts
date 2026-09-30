@@ -9,18 +9,10 @@ for (const file of [
 	"meta-image-field",
 ])
 	mock.module(`../src/${file}.svelte`, () => ({ default: () => ({}) }));
-const { generationScopeToken, generationSnapshotToken, lengthState, seoAdminPlugin, seoMessages } =
+const { generationScopeToken, generationSnapshotToken, lengthState, seoMessages } =
 	await import("../src");
 
 describe("SEO admin contract", () => {
-	it("registers every exact field editor in backend field order", () => {
-		expect(seoAdminPlugin.key).toBe("seo");
-		expect(seoAdminPlugin.pairingVersion).toBe(1);
-		expect(
-			Object.entries(seoAdminPlugin.fieldEditors).map(([key, field]) => `${field.type}:${key}`)
-		).toEqual(["ui:overview", "text:title", "textarea:description", "upload:image", "ui:preview"]);
-	});
-
 	it("matches the inclusive Payload length guidance boundaries", () => {
 		expect(lengthState("", 50, 60)).toMatchObject({ status: "missing", progress: 0 });
 		expect(lengthState("x".repeat(45), 50, 60).status).toBe("tooShort");

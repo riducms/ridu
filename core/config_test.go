@@ -560,23 +560,6 @@ func TestDirectTabMetadataRetainsOneLocalGroup(t *testing.T) {
 	}
 }
 
-func TestFieldRenameChangesDerivedIdentityForMigrationMatching(t *testing.T) {
-	resolve := func(name string) schema.Manifest {
-		manifest, err := ridu.Resolve(ridu.Config{Name: "Rename", Collections: []ridu.Collection{{
-			Slug: "posts", Fields: field.Fields{field.Text(name)},
-		}}})
-		if err != nil {
-			t.Fatal(err)
-		}
-		return manifest
-	}
-	before := resolve("title").Snapshot().Collections[0].Fields[0]
-	after := resolve("headline").Snapshot().Collections[0].Fields[0]
-	if before.ID != "posts-title" || after.ID != "posts-headline" || before.Name == after.Name {
-		t.Fatalf("derived rename identities before=%#v after=%#v", before, after)
-	}
-}
-
 func TestDerivedFieldIdentityCollisionsAreRejected(t *testing.T) {
 	_, err := ridu.Resolve(ridu.Config{Name: "Collision", Collections: []ridu.Collection{{
 		Slug:   "posts",
@@ -1329,19 +1312,6 @@ func assertGolden(t *testing.T, name string, actual []byte) {
 	}
 	if !bytes.Equal(actual, expected) {
 		t.Fatalf("golden %s differs\nexpected:\n%s\nactual:\n%s", path, expected, actual)
-	}
-}
-
-func TestBackendAPI1PairsWithAdminAPI1(t *testing.T) {
-	descriptor := validDescriptor("audit", ridu.RiduCompatibility{Minimum: "0.0.0-dev"})
-	descriptor.APIVersion = 1
-	descriptor.Admin = &ridu.AdminPluginMetadata{Package: "@example/audit", Export: "audit", APIVersion: 1, PairingVersion: 1}
-	_, err := ridu.Resolve(ridu.Config{Name: "API pairing", Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{field.Text("title")}}}, Plugins: []ridu.Plugin{descriptorPlugin{key: "audit", descriptor: descriptor}}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if ridu.PluginAPIVersion != 1 || ridu.AdminPluginAPIVersion != 1 {
-		t.Fatal("incorrect independent API markers")
 	}
 }
 

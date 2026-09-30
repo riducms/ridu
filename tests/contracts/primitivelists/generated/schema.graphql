@@ -36,12 +36,6 @@ type PrimitiveProduct {
   variants: [PrimitiveProductVariants]
 }
 
-input PrimitiveProductAvailableSizesWhere {
-  exists: Boolean
-  in: [Float!]
-  not_in: [Float!]
-}
-
 union PrimitiveProductContentBlock = PrimitiveProductContentBlockCard | PrimitiveProductContentBlockNote
 
 type PrimitiveProductContentBlockCard {
@@ -56,30 +50,6 @@ type PrimitiveProductContentBlockNote {
   blockType: String!
   points: [String!]
   sizes: [Float!]
-}
-
-input PrimitiveProductContentCardPointsWhere {
-  exists: Boolean
-  in: [String!]
-  not_in: [String!]
-}
-
-input PrimitiveProductContentCardSizesWhere {
-  exists: Boolean
-  in: [Float!]
-  not_in: [Float!]
-}
-
-input PrimitiveProductContentNotePointsWhere {
-  exists: Boolean
-  in: [String!]
-  not_in: [String!]
-}
-
-input PrimitiveProductContentNoteSizesWhere {
-  exists: Boolean
-  in: [Float!]
-  not_in: [Float!]
 }
 
 type PrimitiveProductCount {
@@ -113,18 +83,6 @@ input PrimitiveProductCreateInputVariants {
 type PrimitiveProductDetails {
   points: [String!]
   sizes: [Float!]
-}
-
-input PrimitiveProductDetailsPointsWhere {
-  exists: Boolean
-  in: [String!]
-  not_in: [String!]
-}
-
-input PrimitiveProductDetailsSizesWhere {
-  exists: Boolean
-  in: [Float!]
-  not_in: [Float!]
 }
 
 type PrimitiveProductDocAccess {
@@ -246,52 +204,6 @@ type PrimitiveProductDocAccessFieldsVariantsFieldsSizes {
   update: RiduPermission
 }
 
-input PrimitiveProductIDWhere {
-  contains: String
-  equals: String
-  exists: Boolean
-  greater_than: String
-  greater_than_equal: String
-  in: [String!]
-  less_than: String
-  less_than_equal: String
-  like: String
-  not_equals: String
-  not_in: [String!]
-}
-
-input PrimitiveProductLocalizedPointsWhere {
-  exists: Boolean
-  in: [String!]
-  not_in: [String!]
-}
-
-input PrimitiveProductLocalizedSizesWhere {
-  exists: Boolean
-  in: [Float!]
-  not_in: [Float!]
-}
-
-input PrimitiveProductSellingPointsWhere {
-  exists: Boolean
-  in: [String!]
-  not_in: [String!]
-}
-
-input PrimitiveProductTitleWhere {
-  contains: String
-  equals: String
-  exists: Boolean
-  greater_than: String
-  greater_than_equal: String
-  in: [String!]
-  less_than: String
-  less_than_equal: String
-  like: String
-  not_equals: String
-  not_in: [String!]
-}
-
 input PrimitiveProductUpdateInput {
   availableSizes: [Float!]
   body: JSON
@@ -322,18 +234,6 @@ type PrimitiveProductVariants {
   sizes: [Float!]
 }
 
-input PrimitiveProductVariantsPointsWhere {
-  exists: Boolean
-  in: [String!]
-  not_in: [String!]
-}
-
-input PrimitiveProductVariantsSizesWhere {
-  exists: Boolean
-  in: [Float!]
-  not_in: [Float!]
-}
-
 type PrimitiveProductVersion {
   createdAt: String!
   documentID: ID!
@@ -348,22 +248,22 @@ input PrimitiveProductWhere {
   NOT: PrimitiveProductWhere
   OR: [PrimitiveProductWhere!]
   and: [PrimitiveProductWhere!]
-  availableSizes: PrimitiveProductAvailableSizesWhere
-  content__card__points: PrimitiveProductContentCardPointsWhere
-  content__card__sizes: PrimitiveProductContentCardSizesWhere
-  content__note__points: PrimitiveProductContentNotePointsWhere
-  content__note__sizes: PrimitiveProductContentNoteSizesWhere
-  details__points: PrimitiveProductDetailsPointsWhere
-  details__sizes: PrimitiveProductDetailsSizesWhere
-  id: PrimitiveProductIDWhere
-  localizedPoints: PrimitiveProductLocalizedPointsWhere
-  localizedSizes: PrimitiveProductLocalizedSizesWhere
+  availableSizes: RiduNumberListWhere
+  content__card__points: RiduStringListWhere
+  content__card__sizes: RiduNumberListWhere
+  content__note__points: RiduStringListWhere
+  content__note__sizes: RiduNumberListWhere
+  details__points: RiduStringListWhere
+  details__sizes: RiduNumberListWhere
+  id: RiduStringWhere
+  localizedPoints: RiduStringListWhere
+  localizedSizes: RiduNumberListWhere
   not: PrimitiveProductWhere
   or: [PrimitiveProductWhere!]
-  sellingPoints: PrimitiveProductSellingPointsWhere
-  title: PrimitiveProductTitleWhere
-  variants__points: PrimitiveProductVariantsPointsWhere
-  variants__sizes: PrimitiveProductVariantsSizesWhere
+  sellingPoints: RiduStringListWhere
+  title: RiduStringWhere
+  variants__points: RiduStringListWhere
+  variants__sizes: RiduNumberListWhere
 }
 
 type PrimitiveProductsPage {
@@ -394,6 +294,32 @@ enum RiduLocale {
   FR
 }
 
+input RiduNumberListWhere {
+  exists: Boolean
+  in: [Float!]
+  not_in: [Float!]
+}
+
 type RiduPermission {
   permission: Boolean!
+}
+
+input RiduStringListWhere {
+  exists: Boolean
+  in: [String!]
+  not_in: [String!]
+}
+
+input RiduStringWhere {
+  contains: String
+  equals: String
+  exists: Boolean
+  greater_than: String
+  greater_than_equal: String
+  in: [String!]
+  less_than: String
+  less_than_equal: String
+  like: String
+  not_equals: String
+  not_in: [String!]
 }
