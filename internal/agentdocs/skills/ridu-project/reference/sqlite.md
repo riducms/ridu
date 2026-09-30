@@ -240,10 +240,22 @@ ledger to match the migration filename/digest fingerprint embedded by `ridu buil
 the head manifest and physical schema in that same snapshot. This rejects missing, altered,
 renamed, reordered, or rolled-back data-only artifacts even when the final schema is unchanged.
 
-SQLite stores canonical document values as JSON. A field rename or other stored-data rewrite must
-therefore use a compiled transaction-bound transform registered by the project and selected with
-`ridu migrate create --transform <name>`. The PostgreSQL-only `--accept-renames` shortcut is not a
-substitute for that transform.
+SQLite stores document values as JSON keyed by field name. `ridu migrate create` detects an
+unambiguous field rename, and once you confirm it or pass `--accept-renames`, the migration moves
+the stored values to the new name. It covers current documents and retained versions at any depth:
+root fields, localized fields, groups, array rows, and blocks. A collection index or a join that
+names the field follows the rename, and `down` moves the values back.
+
+Apart from the renames, that migration must be additive, and a renamed field may change only its
+name: a field that also becomes localized, or a group whose children are renamed in the same save,
+is refused. The migration stops before changing anything when a document already stores a value
+under the new name. A collection rename, or any other rewrite of
+stored data, still needs a compiled transaction-bound transform registered by the project and
+selected with `ridu migrate create --transform <name>`. One migration either renames fields or runs
+a transform, not both.
+
+`ridu dev` offers the same rename in an interactive terminal. See
+[Renames](./migrations.md#renames).
 
 Presentation changes also belong in immutable history. After changing the application display name,
 resource labels or admin presentation, or field labels and presentation metadata (including nested

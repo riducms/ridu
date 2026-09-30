@@ -16,12 +16,15 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/riducms/ridu"
+	"github.com/riducms/ridu/adapters/sqlite"
+	"github.com/riducms/ridu/field"
 	"github.com/riducms/ridu/internal/cli"
 	"github.com/riducms/ridu/internal/frameworkpackages"
 	"github.com/riducms/ridu/internal/frameworkproxy"
 	"github.com/riducms/ridu/internal/migrationartifact"
 	ridumigration "github.com/riducms/ridu/migration"
 	"github.com/riducms/ridu/schema"
+	"github.com/riducms/ridu/store"
 )
 
 var testReleaseVersion = "v0.0.0-test.3"
@@ -117,6 +120,9 @@ func TestMigrateCreateTakesItsNameOnce(t *testing.T) {
 		{[]string{"migrate", "create", "--name", "other", "add-summary"}, "pass it as an argument or with --name, not both"},
 		{[]string{"migrate", "create", "add-summary", "extra"}, "does not accept positional arguments"},
 		{[]string{"migrate", "status", "add-summary"}, "does not accept positional arguments"},
+		{[]string{"migrate", "baseline", "add-summary"}, "does not accept positional arguments"},
+		{[]string{"migrate", "baseline", "--json"}, "does not accept --json"},
+		{[]string{"migrate", "baseline", "--allow-maintenance"}, "does not accept --allow-maintenance"},
 	} {
 		var stdout, stderr bytes.Buffer
 		if code := cli.Run(t.Context(), test.args, &stdout, &stderr, cli.Options{WorkingDirectory: t.TempDir()}); code != 2 || !strings.Contains(stderr.String(), test.want) {
@@ -1179,6 +1185,139 @@ func TestSQLiteCanonicalAuthUpgradeCLIRequiresDestructiveCreationApproval(t *tes
 	stderr.Reset()
 	if exitCode := cli.Run(ctx, []string{"migrate", "create", "--name", "unchanged"}, &stdout, &stderr, options); exitCode != 1 || !strings.Contains(stderr.String(), "schema is current") || strings.Contains(stderr.String(), "explicit safety resolution") {
 		t.Fatalf("unchanged current-planner creation = exit %d, stdout %q, stderr %q", exitCode, stdout.String(), stderr.String())
+	}
+}
+
+// A SQLite field rename is confirmed like any other adapter's: the migration
+// records it, moves the stored values when it runs, and moves them back on
+// the way down.
+func TestSQLiteMigrateCreatePreservesAConfirmedFieldRename(t *testing.T) {
+	ctx := context.Background()
+	frameworkRoot := moduleRoot(t)
+	target := newProjectTarget(t, "sqlite-rename")
+	setFrameworkProxy(t, frameworkRoot)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	options := cli.Options{WorkingDirectory: target, Version: testReleaseVersion, FrameworkVersion: ridu.FrameworkVersion}
+	run := func(arguments ...string) int {
+		stdout.Reset()
+		stderr.Reset()
+		return cli.Run(ctx, arguments, &stdout, &stderr, options)
+	}
+	if exitCode := run("new", "--database", "sqlite", "--module", "example.com/sqlite/rename", target); exitCode != 0 {
+		t.Fatalf("ridu new: %s", stderr.String())
+	}
+	if exitCode := run("generate"); exitCode != 0 {
+		t.Fatalf("ridu generate: %s", stderr.String())
+	}
+	databasePath := filepath.Join(target, ".ridu", "rename.sqlite")
+	if err := os.MkdirAll(filepath.Dir(databasePath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if exitCode := run("migrate", "up", "--database-path", databasePath); exitCode != 0 {
+		t.Fatalf("apply the initial migration: %s", stderr.String())
+	}
+	// A stored post whose title the migration has to carry. The config below
+	// names only the field under test; the collection and field IDs match the
+	// project's.
+	postsConfig := func(name string) ridu.Config {
+		return ridu.Config{Name: "SQLite rename", Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{field.Text(name)}}}}
+	}
+	stored := func(name string) string {
+		t.Helper()
+		backend, err := sqlite.Open(ctx, databasePath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer backend.Close()
+		application, err := ridu.New(postsConfig(name), backend)
+		if err != nil {
+			t.Fatal(err)
+		}
+		page, err := application.Local().List(ctx, "posts", ridu.ListOptions{})
+		if err != nil || len(page.Documents) != 1 {
+			t.Fatalf("stored posts = %#v, %v", page, err)
+		}
+		value, _ := page.Documents[0].Values[name].StringValue()
+		return value
+	}
+	func() {
+		backend, err := sqlite.Open(ctx, databasePath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer backend.Close()
+		application, err := ridu.New(postsConfig("title"), backend)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := application.Local().Create(ctx, "posts", store.Values{"title": store.String("Hello")}, ridu.MutationOptions{}); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	postsPath := filepath.Join(target, "content", "posts.go")
+	posts, err := os.ReadFile(postsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	changedPosts := strings.Replace(string(posts), `field.Text("title")`, `field.Text("headline")`, 1)
+	if changedPosts == string(posts) {
+		t.Fatal("generated posts field was not found")
+	}
+	if err := os.WriteFile(postsPath, []byte(changedPosts), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if exitCode := run("generate"); exitCode != 0 {
+		t.Fatalf("ridu generate changed manifest: %s", stderr.String())
+	}
+
+	if exitCode := run("migrate", "create", "--name", "rename-title"); exitCode != 1 || !strings.Contains(stderr.String(), "--accept-renames") {
+		t.Fatalf("unconfirmed rename = exit %d, stderr %q", exitCode, stderr.String())
+	}
+	if exitCode := run("migrate", "create", "--name", "rename-title", "--accept-renames", "--transform", "move-title"); exitCode != 2 || !strings.Contains(stderr.String(), "separate migrations") {
+		t.Fatalf("rename with a transform = exit %d, stderr %q", exitCode, stderr.String())
+	}
+	directory := filepath.Join(target, "migrations")
+	if files, err := migrationartifact.ReadAll(directory); err != nil || len(files) != 1 {
+		t.Fatalf("refused rename migrations published history = %d files, %v", len(files), err)
+	}
+	if exitCode := run("migrate", "create", "--name", "rename-title", "--accept-renames"); exitCode != 0 {
+		t.Fatalf("confirmed rename: %s", stderr.String())
+	}
+	if !strings.Contains(stdout.String(), `Accepted field rename "posts".title -> "posts".headline`) || !strings.Contains(stdout.String(), "warning\tRIDU_SQLITE_FIELD_RENAME") {
+		t.Fatalf("confirmed rename output = %q", stdout.String())
+	}
+	files, err := migrationartifact.ReadAll(directory)
+	if err != nil || len(files) != 2 {
+		t.Fatalf("confirmed rename history = %d files, %v", len(files), err)
+	}
+	renameSteps := 0
+	for _, step := range files[1].Artifact.Phases[0].Steps {
+		if step.Kind == ridumigration.StepRenameContent {
+			renameSteps++
+		}
+	}
+	if renameSteps != 1 {
+		t.Fatalf("rename migration steps = %#v", files[1].Artifact.Phases[0].Steps)
+	}
+	for _, step := range []struct {
+		invocation []string
+		// field holds the stored title once the invocation has run.
+		field string
+	}{
+		{[]string{"migrate", "verify"}, "title"},
+		{[]string{"migrate", "up", "--database-path", databasePath}, "headline"},
+		{[]string{"migrate", "down", "--database-path", databasePath, "--allow-destructive"}, "title"},
+		{[]string{"migrate", "up", "--database-path", databasePath}, "headline"},
+		{[]string{"migrate", "status", "--database-path", databasePath}, "headline"},
+	} {
+		if exitCode := run(step.invocation...); exitCode != 0 {
+			t.Fatalf("ridu %v: %s", step.invocation, stderr.String())
+		}
+		if value := stored(step.field); value != "Hello" {
+			t.Fatalf("after ridu %v the post's %s = %q", step.invocation, step.field, value)
+		}
 	}
 }
 

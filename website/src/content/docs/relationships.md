@@ -84,17 +84,37 @@ option predicate; hiding a picker is not security.
 
 `OnDelete` controls current documents when a target is permanently deleted:
 
-| Action                    | Behavior                                                      |
-| ------------------------- | ------------------------------------------------------------- |
-| `ReferenceDeleteNullify`  | Clear a singular value or remove matching members from a list |
-| `ReferenceDeleteRestrict` | Reject the target deletion while a surviving reference exists |
+| Action                    | Behavior                                                        |
+| ------------------------- | --------------------------------------------------------------- |
+| `ReferenceDeleteNullify`  | Clear a singular value or remove matching members from a list   |
+| `ReferenceDeleteRestrict` | Reject the target deletion while a surviving reference exists   |
+| `ReferenceDeleteCascade`  | Permanently delete each document that references the target too |
 
-Cascade is not supported. Required references resolve to restrict. Version snapshots are immutable
-and are not rewritten when a current target is deleted; restoring old content can therefore expose
-a historical reference that must still pass current validation and access rules.
+Required references default to restrict and cannot use nullify. A restricted delete fails with
+`delete_restricted`, and its message and issues name each blocking field, such as
+`invoices.profile`, without disclosing document IDs.
+
+Cascade is for owned data. Deleting a user with `profiles.learner` set to cascade deletes their
+profiles in the same transaction:
+
+```go
+field.Relationship("learner", "learners").Required().OnDelete(field.ReferenceDeleteCascade)
+```
+
+Each cascaded document goes through the ordinary delete lifecycle as a
+[system operation](/docs/local-api/#system): the target's delete was already authorized, so the
+owner's access rules do not run, but its hooks, versions, and its own delete policies do. Owners
+cascade in turn, a restrict anywhere in the tree rejects the whole delete, and cycles stop. An
+owner in a trash-enabled collection is deleted permanently, including one already in the trash, so
+no reference to the deleted target survives. Cascade applies to a singular, unlocalized
+relationship or upload outside arrays and blocks, and not to globals, which cannot be deleted.
+
+Version snapshots are immutable and are not rewritten when a current target is deleted; restoring
+old content can therefore expose a historical reference that must still pass current validation and
+access rules.
 
 Soft deletion moves the target into trash rather than applying permanent-delete cleanup. Plan
-retention and restore behavior before choosing nullify versus restrict.
+retention and restore behavior before choosing a delete action.
 
 ## Add an inverse join {#inverse-join}
 

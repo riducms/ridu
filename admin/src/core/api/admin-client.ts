@@ -42,6 +42,11 @@ export type AdminScheduledPublication = ScheduledPublication;
 
 export type AdminClient = RiduClient<AdminConfig>;
 
+/**
+ * Creates the admin's own client for the API at `baseURL`, the page's origin by default. The admin
+ * reads its schema at run time, so this needs no generated application types; pass it as
+ * `clientFactory` unless the admin must reach another origin or add request middleware.
+ */
 export function createAdminClient(baseURL = window.location.origin): AdminClient {
 	return createClient<AdminConfig>({ baseURL });
 }

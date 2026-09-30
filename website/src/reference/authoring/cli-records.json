@@ -194,7 +194,7 @@
 				{
 					"name": "--accept-renames",
 					"type": "boolean",
-					"description": "PostgreSQL or MongoDB: accept every unambiguous detected rename without an interactive prompt."
+					"description": "Accept every unambiguous detected rename without an interactive prompt. PostgreSQL and MongoDB accept collection and field renames; SQLite accepts field renames only."
 				},
 				{
 					"name": "--transform",
@@ -252,6 +252,17 @@
 			"members": [],
 			"parameters": [],
 			"aliases": ["ridu migrate up"],
+			"overloads": []
+		},
+		{
+			"module": "cli",
+			"id": "cli:ridu#ridu migrate baseline",
+			"name": "ridu migrate baseline",
+			"kind": "command",
+			"signature": "ridu migrate baseline [--database-url <url> | --database-path <path>] [--allow-insecure-database (PostgreSQL or MongoDB)]",
+			"members": [],
+			"parameters": [],
+			"aliases": ["ridu migrate baseline"],
 			"overloads": []
 		},
 		{

@@ -4,6 +4,7 @@
 package referenceindex
 
 import (
+	"fmt"
 	"sort"
 
 	"github.com/riducms/ridu/internal/embedded"
@@ -684,7 +685,7 @@ func nullifyFieldValue(field schema.Field, value store.Value, target store.Docum
 
 func nullifyRelationship(field schema.Field, value store.Value, target store.DocumentReference) (store.Value, bool) {
 	relationship := field.Relationship
-	if relationship == nil || relationship.OnDelete != schema.ReferenceDeleteNullify {
+	if relationship == nil || !clearedOnDelete(relationship.OnDelete) {
 		return value, false
 	}
 	if relationship.HasMany {
@@ -709,6 +710,24 @@ func nullifyRelationship(field schema.Field, value store.Value, target store.Doc
 	return value, false
 }
 
+// clearedOnDelete reports whether a delete clears the value in place. A
+// cascade value is cleared only when its owner is already being deleted, as
+// part of a reference cycle.
+func clearedOnDelete(action schema.ReferenceDeleteAction) bool {
+	return action == schema.ReferenceDeleteNullify || action == schema.ReferenceDeleteCascade
+}
+
+// DeleteAction returns the hard-delete policy of a relationship or upload field.
+func DeleteAction(field schema.Field) schema.ReferenceDeleteAction {
+	switch {
+	case field.Relationship != nil:
+		return field.Relationship.OnDelete
+	case field.Upload != nil:
+		return field.Upload.OnDelete
+	}
+	return schema.ReferenceDeleteNullify
+}
+
 func relationshipValueMatches(relationship schema.RelationshipField, value store.Value, target store.DocumentReference) bool {
 	if !relationship.Polymorphic {
 		id, valid := value.StringValue()
@@ -729,7 +748,7 @@ func relationshipValueMatches(relationship schema.RelationshipField, value store
 
 func nullifyUpload(field schema.Field, value store.Value, target store.DocumentReference) (store.Value, bool) {
 	upload := field.Upload
-	if upload == nil || upload.OnDelete != schema.ReferenceDeleteNullify || upload.CollectionID != target.CollectionID {
+	if upload == nil || !clearedOnDelete(upload.OnDelete) || upload.CollectionID != target.CollectionID {
 		return value, false
 	}
 	if upload.HasMany {
@@ -754,4 +773,61 @@ func nullifyUpload(field schema.Field, value store.Value, target store.DocumentR
 		return store.Null(), true
 	}
 	return value, false
+}
+
+// PendingSet indexes the owners whose hard delete is already in progress.
+func PendingSet(owners []store.DocumentReference) map[store.DocumentReference]bool {
+	pending := make(map[store.DocumentReference]bool, len(owners))
+	for _, owner := range owners {
+		pending[owner] = true
+	}
+	return pending
+}
+
+// BlocksDelete reports whether a current reference prevents a hard delete of
+// its target. Restrict always does. Cascade does too unless the owner's own
+// delete is pending: the engine deletes cascade owners before the target, so
+// a remaining one appeared concurrently and must not be silently cleared.
+func BlocksDelete(action schema.ReferenceDeleteAction, owner store.DocumentReference, pending map[store.DocumentReference]bool) (bool, error) {
+	switch action {
+	case schema.ReferenceDeleteNullify:
+		return false, nil
+	case schema.ReferenceDeleteRestrict:
+		return true, nil
+	case schema.ReferenceDeleteCascade:
+		return !pending[owner], nil
+	}
+	return false, fmt.Errorf("unsupported reference delete action %q", action)
+}
+
+// CascadeOwners returns the distinct owners, in a stable order, whose entries
+// reference their target through a cascade field. Callers pass entries that
+// already exclude ignored owners; entries from pending owners are skipped.
+func CascadeOwners(entries []Entry, collections map[schema.StableID]schema.Collection, pending map[store.DocumentReference]bool) ([]store.DocumentReference, error) {
+	seen := map[store.DocumentReference]bool{}
+	var owners []store.DocumentReference
+	for _, entry := range entries {
+		if pending[entry.Owner] || seen[entry.Owner] || entry.Owner == entry.Target {
+			continue
+		}
+		collection, exists := collections[entry.Owner.CollectionID]
+		if !exists {
+			return nil, fmt.Errorf("reference owner collection %q is unavailable", entry.Owner.CollectionID)
+		}
+		field, _, exists := FindReferenceField(collection, entry.FieldID)
+		if !exists {
+			return nil, fmt.Errorf("reference owner field %q is unavailable", entry.FieldID)
+		}
+		if DeleteAction(field) == schema.ReferenceDeleteCascade {
+			seen[entry.Owner] = true
+			owners = append(owners, entry.Owner)
+		}
+	}
+	sort.Slice(owners, func(left, right int) bool {
+		if owners[left].CollectionID != owners[right].CollectionID {
+			return owners[left].CollectionID < owners[right].CollectionID
+		}
+		return owners[left].DocumentID < owners[right].DocumentID
+	})
+	return owners, nil
 }

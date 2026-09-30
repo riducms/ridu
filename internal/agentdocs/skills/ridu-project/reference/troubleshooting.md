@@ -127,11 +127,10 @@ Use the migration command that answers the question you have:
   lease and durable step ledger.
 
 If creation finds a destructive change, review the machine-readable finding and pass
-`--allow-destructive` only when data loss is intentional and rehearsed. PostgreSQL and MongoDB can
-confirm an unambiguous detected rename to preserve semantic continuity. SQLite requires a
-registered compiled transform; `--accept-renames` alone is intentionally rejected because it
-cannot rewrite canonical JSON. MongoDB can bind a named compiled transform to its immutable
-artifact when explicit schema-driven rewriting is required.
+`--allow-destructive` only when data loss is intentional and rehearsed. Every adapter can confirm
+an unambiguous detected rename to preserve its data. SQLite does this for fields; renaming a
+SQLite collection requires a registered compiled transform. MongoDB can bind a named compiled
+transform to its immutable artifact when explicit schema-driven rewriting is required.
 
 If status reports a digest mismatch, missing history, or changed applied artifact, restore the
 committed artifact that was actually applied. Migration files are immutable; do not edit applied

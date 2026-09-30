@@ -63555,7 +63555,7 @@
 				{
 					"name": "--accept-renames",
 					"type": "boolean",
-					"description": "PostgreSQL or MongoDB: accept every unambiguous detected rename without an interactive prompt."
+					"description": "Accept every unambiguous detected rename without an interactive prompt. PostgreSQL and MongoDB accept collection and field renames; SQLite accepts field renames only."
 				},
 				{
 					"name": "--transform",
@@ -63569,7 +63569,7 @@
 				}
 			],
 			"details": [
-				"PostgreSQL and MongoDB rename candidates require confirmation or --accept-renames. SQLite rejects --accept-renames and uses --transform instead for stored canonical JSON rewrites. MongoDB transforms run through the compiled project migration driver. Destructive approval does not bypass semantic transitions Ridu cannot safely automate."
+				"Rename candidates require confirmation or --accept-renames. SQLite confirms field renames this way and uses --transform for any other rewrite of stored canonical JSON; one SQLite migration takes either renames or a transform. MongoDB transforms run through the compiled project migration driver. Destructive approval does not bypass semantic transitions Ridu cannot safely automate."
 			],
 			"example": "ridu migrate create --name rename-post-title\ngit diff -- migrations/",
 			"keywords": ["ridu migrate create"],
@@ -63629,6 +63629,18 @@
 			],
 			"example": "DATABASE_URL=\"$MONGODB_MIGRATION_URL\" ridu migrate plan --json\n# Drain every old application process, worker, and other writer.\nDATABASE_URL=\"$MONGODB_OPERATIONAL_URL\" ridu migrate verify\n# Capture the matched database/upload snapshot.\nDATABASE_URL=\"$MONGODB_MIGRATION_URL\" ridu migrate up\nDATABASE_URL=\"$MONGODB_MIGRATION_URL\" ridu migrate status\n# Start only the new digest; require /readyz before admitting traffic.\nDATABASE_URL=\"$MONGODB_APP_URL\" ./dist/content",
 			"keywords": ["ridu migrate up"],
+			"relatedDocs": [],
+			"relatedSymbols": [],
+			"typeLinkIDs": {}
+		},
+		"cli:ridu#ridu migrate baseline": {
+			"summary": "Record migrations a ridu dev database already has as applied, without running them.",
+			"group": "Migrations",
+			"parametersLabel": "",
+			"parameters": [],
+			"details": [],
+			"example": "",
+			"keywords": ["ridu migrate baseline"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {}

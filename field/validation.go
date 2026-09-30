@@ -124,8 +124,8 @@ func (d View) shapeIssues() []Issue {
 			add("invalid_date_format", "format", "date format must be date, date-time, or time")
 		}
 	}
-	if d.referenceDeleteAction != "" && d.referenceDeleteAction != ReferenceDeleteNullify && d.referenceDeleteAction != ReferenceDeleteRestrict {
-		add("invalid_reference_delete_action", "onDelete", "reference delete action must be nullify or restrict")
+	if d.referenceDeleteAction != "" && d.referenceDeleteAction != ReferenceDeleteNullify && d.referenceDeleteAction != ReferenceDeleteRestrict && d.referenceDeleteAction != ReferenceDeleteCascade {
+		add("invalid_reference_delete_action", "onDelete", "reference delete action must be nullify, restrict, or cascade")
 	}
 	seen := map[string]bool{}
 	for i, rule := range d.relationshipFilters {

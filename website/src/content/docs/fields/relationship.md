@@ -51,18 +51,18 @@ collection and document. Use `field.PolymorphicRelationships` to select several 
 
 ## Configuration {#configuration}
 
-| Constructor or method                                                                  | What it controls                                                               |
-| -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `field.Relationship(name, collection)`                                                 | Stores one document ID from one target collection.                             |
-| `field.Relationships(name, collection)`                                                | Stores an ordered list of IDs from one target collection.                      |
-| `field.PolymorphicRelationship(name, collections...)`                                  | Stores one `{ relationTo, value }` reference from several allowed collections. |
-| `field.PolymorphicRelationships(name, collections...)`                                 | Stores an ordered list of polymorphic references.                              |
-| `.Required()`                                                                          | Requires one reference, or a non-empty list for plural fields.                 |
-| `.FilterOptionRules(rules...)`                                                         | Narrows picker choices and server admission with finite query predicates.      |
-| `.OnDelete(field.ReferenceDeleteRestrict)` / `.OnDelete(field.ReferenceDeleteNullify)` | Rejects a hard delete while referenced, or clears/removes matching references. |
-| `.Index()` / `.Unique()`                                                               | Available on a singular, single-target relationship.                           |
-| `.Localized()`                                                                         | Stores the reference or list separately for each content locale.               |
-| `.Validate(...)`, `.LiveValidate(...)`, `.Access(...)`, `.Hooks(...)`                  | Adds application rules and lifecycle behavior.                                 |
+| Constructor or method                                                                            | What it controls                                                                                                        |
+| ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `field.Relationship(name, collection)`                                                           | Stores one document ID from one target collection.                                                                      |
+| `field.Relationships(name, collection)`                                                          | Stores an ordered list of IDs from one target collection.                                                               |
+| `field.PolymorphicRelationship(name, collections...)`                                            | Stores one `{ relationTo, value }` reference from several allowed collections.                                          |
+| `field.PolymorphicRelationships(name, collections...)`                                           | Stores an ordered list of polymorphic references.                                                                       |
+| `.Required()`                                                                                    | Requires one reference, or a non-empty list for plural fields.                                                          |
+| `.FilterOptionRules(rules...)`                                                                   | Narrows picker choices and server admission with finite query predicates.                                               |
+| `.OnDelete(field.ReferenceDeleteRestrict)` / `ReferenceDeleteNullify` / `ReferenceDeleteCascade` | Rejects a hard delete while referenced, clears or removes matching references, or deletes the referencing document too. |
+| `.Index()` / `.Unique()`                                                                         | Available on a singular, single-target relationship.                                                                    |
+| `.Localized()`                                                                                   | Stores the reference or list separately for each content locale.                                                        |
+| `.Validate(...)`, `.LiveValidate(...)`, `.Access(...)`, `.Hooks(...)`                            | Adds application rules and lifecycle behavior.                                                                          |
 
 ## Filter the available choices {#option-filters}
 
@@ -83,7 +83,9 @@ a specific collection in a relationship that supports several collection types.
 
 `ReferenceDeleteNullify` clears an optional singular value or removes list members when the target
 is permanently deleted. `ReferenceDeleteRestrict` blocks that deletion while a current reference
-exists. Required references always restrict. Version snapshots remain immutable.
+exists. `ReferenceDeleteCascade` deletes the referencing document as well, for owned data on a
+singular relationship. Required references default to restrict and cannot nullify. Version
+snapshots remain immutable. See [delete behavior](/docs/relationships/#delete-behavior).
 
 ## Read and translate relationships
 

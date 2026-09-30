@@ -390,16 +390,14 @@ func (driver *mongoDBProjectMigrationDriver) runProjectMigrationFiles(
 	if err != nil {
 		return err
 	}
-	if request.Action == ridumigration.ProjectVerify && mongoDBReplayRequiresMaintenance(replay) && !options.AllowMaintenance {
-		return fmt.Errorf("MongoDB semantic migrations require explicit maintenance admission before opening the database")
-	}
 	config := Config{
 		DatabaseURL: request.DatabaseURL, AllowInsecureTransport: request.AllowInsecureDatabase,
 		ApplicationName: "ridu-project-migrations",
 	}
 	switch request.Action {
 	case ridumigration.ProjectVerify:
-		return verifyPreparedMongoDBArtifactReplay(ctx, config, files, replay, normalized, registry, options.AllowMaintenance)
+		// Verification replays into a dropped shadow database with no traffic.
+		return verifyPreparedMongoDBArtifactReplay(ctx, config, files, replay, normalized, registry, true)
 	case ridumigration.ProjectApply:
 		backend, err := OpenWithConfig(ctx, config)
 		if err != nil {

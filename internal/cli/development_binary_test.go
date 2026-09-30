@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"os"
 	"os/exec"
@@ -13,7 +14,10 @@ import (
 
 	"github.com/riducms/ridu/core"
 	"github.com/riducms/ridu/internal/generate"
+	"github.com/riducms/ridu/internal/migrationartifact"
 	"github.com/riducms/ridu/internal/projectfile"
+	"github.com/riducms/ridu/internal/schemadiff"
+	"github.com/riducms/ridu/schema"
 )
 
 func TestBuildDevelopmentBinaryCreatesOneDisposableExecutable(t *testing.T) {
@@ -272,7 +276,7 @@ func main() {
 		t.Fatalf("%v\n%s", err, stderr.String())
 	}
 	stable, _, preparation, err := stabilizeDevelopmentCandidate(
-		context.Background(), definition, core.FrameworkVersion, candidate, buildDuration, false, nil, io.Discard, &stderr,
+		context.Background(), definition, core.FrameworkVersion, candidate, buildDuration, false, nil, nil, io.Discard, &stderr,
 		newCLIOutput(io.Discard, &stderr, cliOutputOptions{}),
 	)
 	if err != nil {
@@ -291,5 +295,113 @@ func main() {
 	}
 	if !resolved.Manifest.Equal(preparation.manifest) {
 		t.Fatal("served executable manifest differs from stabilized generated contracts")
+	}
+
+	// A renamed field is detected against the schema file generated above.
+	renamed := strings.Replace(source, `field.Text("title"), field.Text("summary")`, `field.Text("headline"), field.Text("summary")`, 1)
+	if err := os.WriteFile(filepath.Join(root, "main.go"), []byte(renamed), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	renamedBinary, _, err := buildDevelopmentBinary(context.Background(), definition, io.Discard, &stderr)
+	if err != nil {
+		t.Fatalf("%v\n%s", err, stderr.String())
+	}
+	t.Cleanup(func() { _ = renamedBinary.remove() })
+	schemaPath := definition.Absolute(definition.Schema)
+	generatedSchema, err := os.ReadFile(schemaPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reporter := newCLIOutput(io.Discard, io.Discard, cliOutputOptions{})
+	current := true
+	prepare := func(project projectfile.File, renames *developmentRenames) error {
+		_, err := prepareDevelopment(context.Background(), project, core.FrameworkVersion, renamedBinary.path, true, func() bool { return current }, renames, reporter)
+		return err
+	}
+	// Without a terminal, ridu dev rejects the reload before it generates
+	// anything, so the next save meets the same rename instead of slipping
+	// through against a rewritten schema file.
+	waiting := func(answer bool) *developmentRenames {
+		renames, _ := devRenameWithoutTerminal("", "")
+		renames.stillHas = func(context.Context, schema.Manifest, schema.Manifest) (bool, error) { return answer, nil }
+		return renames
+	}
+	for _, save := range []string{"first", "second"} {
+		if err := prepare(definition, waiting(true)); err == nil || !strings.Contains(err.Error(), "paused for a possible rename") {
+			t.Fatalf("the %s save of a rename without a terminal = %v", save, err)
+		}
+		if unchanged, err := os.ReadFile(schemaPath); err != nil || !bytes.Equal(unchanged, generatedSchema) {
+			t.Fatalf("the %s rejected save regenerated the schema file: %v", save, err)
+		}
+	}
+	// Once the database no longer has the old schema, because the rename was
+	// migrated by hand, the same save goes through and the stale schema file
+	// does not raise the question again.
+	if err := prepare(definition, waiting(false)); err != nil {
+		t.Fatalf("a save after the rename was migrated by hand = %v", err)
+	}
+	if regenerated, err := os.ReadFile(schemaPath); err != nil || bytes.Equal(regenerated, generatedSchema) {
+		t.Fatalf("the released save did not regenerate the schema file: %v", err)
+	}
+	if err := os.WriteFile(schemaPath, generatedSchema, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// A caller that supplies no rename handling still never syncs past one.
+	if err := prepare(definition, nil); err == nil || !strings.Contains(err.Error(), "paused for a possible rename") {
+		t.Fatalf("rename without rename handling = %v", err)
+	}
+	if err := os.WriteFile(schemaPath, generatedSchema, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// A prompt that cannot finish rejects the reload before generation replaces
+	// the schema file, so the next save asks again. It reports its own reason
+	// rather than the generic pause.
+	unreadable := definition
+	unreadable.Migrations = "main.go"
+	accepted, _ := devRenamePrompt("y\n\n", "")
+	if err := prepare(unreadable, accepted); err == nil || !strings.Contains(err.Error(), "rename not applied: read migration history") || strings.Contains(err.Error(), "paused for a possible rename") {
+		t.Fatalf("rename the prompt could not apply = %v", err)
+	}
+	if unchanged, err := os.ReadFile(schemaPath); err != nil || !bytes.Equal(unchanged, generatedSchema) {
+		t.Fatalf("a paused rename prompt regenerated the schema file: %v", err)
+	}
+	// An answer given after the config changed again is about a change that
+	// may no longer exist. It is discarded and the newest source is built.
+	current = false
+	stale, _ := devRenamePrompt("y\n\n", "")
+	if err := prepare(definition, stale); !errors.Is(err, errDevelopmentSourceChanged) {
+		t.Fatalf("an answer to a stale config = %v", err)
+	}
+	if unchanged, err := os.ReadFile(schemaPath); err != nil || !bytes.Equal(unchanged, generatedSchema) {
+		t.Fatalf("a stale answer regenerated the schema file: %v", err)
+	}
+	if files, err := migrationartifact.ReadAll(definition.Absolute(definition.Migrations)); err != nil || len(files) != 0 {
+		t.Fatalf("a stale answer wrote %d migrations, %v", len(files), err)
+	}
+	current = true
+	// Declining every rename lets the reload continue as an additive change.
+	// The database keeps the old schema until schema sync runs, and a reload
+	// prepares the config again after generated Go changes; that second pass
+	// must not repeat a question already answered. A later save asks again.
+	declined, _ := devRenamePrompt("n\n", "")
+	previousManifest, exists, err := schemadiff.ReadManifest(schemaPath)
+	if err != nil || !exists {
+		t.Fatalf("read the generated schema: %t, %v", exists, err)
+	}
+	if err := declined.recordSynchronized(definition, previousManifest); err != nil {
+		t.Fatal(err)
+	}
+	declined.beginReload()
+	for _, pass := range []string{"first", "second"} {
+		if err := prepare(definition, declined); err != nil {
+			t.Fatalf("the %s preparation of declined renames = %v", pass, err)
+		}
+	}
+	if regenerated, err := os.ReadFile(schemaPath); err != nil || bytes.Equal(regenerated, generatedSchema) {
+		t.Fatalf("declined renames did not regenerate the schema file: %v", err)
+	}
+	declined.beginReload()
+	if err := prepare(definition, declined); err == nil || !strings.Contains(err.Error(), "read rename answer") {
+		t.Fatalf("a later save of the declined rename = %v", err)
 	}
 }

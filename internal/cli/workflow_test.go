@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -174,6 +175,56 @@ func TestDevelopmentProxyPromotesOnlyAnAcceptedLoopbackTarget(t *testing.T) {
 	_ = response.Body.Close()
 	if backendName := response.Header.Get("X-Ridu-Backend"); backendName != "candidate" {
 		t.Fatalf("accepted candidate backend = %q", backendName)
+	}
+}
+
+// A client can open a connection and never send a request on it: Go's HTTP
+// transport dials a spare one when two requests overlap, and browsers
+// preconnect. http.Server.Shutdown waits five seconds before it treats such a
+// connection as idle, which is the whole of the proxy's stop deadline, so
+// stop closes them itself.
+func TestDevelopmentProxyStopsPromptlyWithAnUnusedConnection(t *testing.T) {
+	proxy, err := startDevelopmentProxy("127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	unused, err := net.Dial("tcp", proxy.listener.Addr().String())
+	if err != nil {
+		_ = proxy.stop()
+		t.Fatal(err)
+	}
+	defer unused.Close()
+	// Wait until the proxy has accepted the connection, so the stop below
+	// meets it in the state that used to stall.
+	accepted := time.Now().Add(5 * time.Second)
+	for {
+		proxy.unusedMutex.Lock()
+		tracked := len(proxy.unused)
+		proxy.unusedMutex.Unlock()
+		if tracked == 1 {
+			break
+		}
+		if time.Now().After(accepted) {
+			_ = proxy.stop()
+			t.Fatalf("the proxy tracked %d unused connections", tracked)
+		}
+		time.Sleep(time.Millisecond)
+	}
+
+	started := time.Now()
+	if err := proxy.stop(); err != nil {
+		t.Fatalf("stop with an unused connection: %v", err)
+	}
+	if elapsed := time.Since(started); elapsed > 2*time.Second {
+		t.Fatalf("stop with an unused connection took %s", elapsed)
+	}
+	_ = unused.SetReadDeadline(time.Now().Add(2 * time.Second))
+	// A read that times out means the proxy left the connection open; a
+	// closed one ends with EOF or a reset.
+	_, err = unused.Read(make([]byte, 1))
+	var timeout net.Error
+	if err == nil || errors.As(err, &timeout) && timeout.Timeout() {
+		t.Fatalf("the unused connection was left open: %v", err)
 	}
 }
 

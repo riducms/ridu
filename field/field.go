@@ -209,6 +209,12 @@ const (
 	// ReferenceDeleteRestrict rejects the target hard delete while a current
 	// document still references it.
 	ReferenceDeleteRestrict ReferenceDeleteAction = "restrict"
+	// ReferenceDeleteCascade permanently deletes each document that references
+	// the target, in the same transaction and through the normal delete
+	// lifecycle: hooks run and each owner's own delete policies apply. Use it
+	// for owned data, such as a user's profile. It applies to a singular,
+	// unlocalized relationship or upload outside arrays and blocks.
+	ReferenceDeleteCascade ReferenceDeleteAction = "cascade"
 )
 
 // Issue records a definition problem relative to the field. Config resolution

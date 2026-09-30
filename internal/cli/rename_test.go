@@ -155,7 +155,7 @@ func TestMongoDBRenamesFreezeOnlyConfirmedSchemaAddresses(t *testing.T) {
 		BeforeField:      &schema.Field{ID: "pages-title", Name: "title", Path: titlePath},
 		AfterField:       &schema.Field{ID: "pages-headline", Name: "headline", Path: headlinePath},
 	}
-	renamed := mongoDBRenames([]schemadiff.RenameCandidate{collection, field})
+	renamed := contentRenames([]schemadiff.RenameCandidate{collection, field})
 	if len(renamed) != 2 || renamed[0].CollectionBefore != "posts" || renamed[0].CollectionAfter != "articles" ||
 		len(renamed[0].Fields) != 1 || renamed[0].Fields[0] != (ridumigration.FieldRename{Before: "title", After: "headline"}) ||
 		renamed[1].CollectionBefore != "pages" || renamed[1].CollectionAfter != "pages" ||

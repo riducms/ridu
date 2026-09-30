@@ -45,10 +45,9 @@ Declare languages/timezones in `Admin.Localization` and pass matching static cat
 ```ts title="admin/src/main.ts"
 import { ar, en, fr } from '@riducms/translations';
 
-mountAdmin<RiduConfig>({
+mountAdmin({
 	target,
-	clientFactory: () =>
-		createClient({ baseURL: window.location.origin }),
+	clientFactory: createAdminClient,
 	plugins: adminPlugins,
 	languages: [en, fr, ar]
 });

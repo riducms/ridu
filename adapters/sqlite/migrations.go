@@ -17,6 +17,7 @@ import (
 	"github.com/riducms/ridu/internal/migrationartifact"
 	"github.com/riducms/ridu/internal/primitivefield"
 	ridumigration "github.com/riducms/ridu/migration"
+	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 )
 
@@ -193,10 +194,10 @@ func requireSQLiteDestructiveApproval(risks []ridumigration.Risk, allowDestructi
 }
 
 func buildSQLiteArtifact(ctx context.Context, name string, before *schema.Manifest, after schema.Manifest, previousPlannerVersion string, contract sqlitePlannerContract) (ridumigration.Artifact, error) {
-	return buildSQLiteArtifactWithValidation(ctx, name, before, after, previousPlannerVersion, contract, validateSQLiteAdditiveTransition)
+	return buildSQLiteArtifactWithValidation(ctx, name, before, after, previousPlannerVersion, contract, validateSQLiteAdditiveTransition, nil)
 }
 
-func buildSQLiteArtifactWithValidation(ctx context.Context, name string, before *schema.Manifest, after schema.Manifest, previousPlannerVersion string, contract sqlitePlannerContract, validateTransition func(schema.Snapshot, schema.Snapshot) error) (ridumigration.Artifact, error) {
+func buildSQLiteArtifactWithValidation(ctx context.Context, name string, before *schema.Manifest, after schema.Manifest, previousPlannerVersion string, contract sqlitePlannerContract, validateTransition func(schema.Snapshot, schema.Snapshot) error, renames []ridumigration.Rename) (ridumigration.Artifact, error) {
 	if err := ctx.Err(); err != nil {
 		return ridumigration.Artifact{}, err
 	}
@@ -270,6 +271,20 @@ func buildSQLiteArtifactWithValidation(ctx context.Context, name string, before 
 			Message: "irreversibly rewrite authored authentication identities to the shared lowercase-and-trimmed key after a collision preflight; coordinate the migration with application writers",
 		})
 	}
+	for _, rename := range renames {
+		payload, err := ridumigration.MarshalStepPayload(ridumigration.RenamePayload{Rename: rename})
+		if err != nil {
+			return ridumigration.Artifact{}, err
+		}
+		steps = append(steps, ridumigration.Step{
+			ID: fmt.Sprintf("step-%04d", len(steps)+1), Kind: ridumigration.StepRenameContent,
+			ExecutorVersion: 1, Name: fmt.Sprintf("rename %s.%s to %s", rename.CollectionBefore, rename.FieldBefore, rename.FieldAfter), Payload: payload,
+		})
+		artifact.Risks = append(artifact.Risks, ridumigration.Risk{
+			Code: "RIDU_SQLITE_FIELD_RENAME", Level: ridumigration.RiskWarning,
+			Message: fmt.Sprintf("move stored %s.%s content to %s in current documents and retained versions; stop application writers while the migration runs", rename.CollectionBefore, rename.FieldBefore, rename.FieldAfter),
+		})
+	}
 	assertion, err := ridumigration.MarshalStepPayload(ridumigration.AssertSchemaPayload{})
 	if err != nil {
 		return ridumigration.Artifact{}, err
@@ -309,6 +324,114 @@ func validateSQLiteAdditiveTransition(before, after schema.Snapshot) error {
 // validateSQLiteAdditiveSnapshotTransition also preserves the original planner
 // comparison for reconstructing artifacts created before presentation projection.
 func validateSQLiteAdditiveSnapshotTransition(before, after schema.Snapshot) error {
+	return sqliteAdditiveRules{}.snapshot(before, after)
+}
+
+// sqliteAdditiveRules validates an additive transition. renames maps, for each
+// collection, a before field ID to the after field that carries its content
+// under a new name. That pair is neither a removal nor an added field, and
+// apart from its name it must pass the same rules as a field that stayed.
+// paths maps the same renames by collection and dotted path, so a collection
+// index or a join that names a renamed field is unchanged when it follows the
+// rename. Every other rule is unchanged.
+type sqliteAdditiveRules struct {
+	renames map[schema.StableID]map[schema.StableID]schema.Field
+	paths   map[schema.StableID]map[string]string
+	// renamed is the renames entry of the collection being validated.
+	renamed map[schema.StableID]schema.Field
+}
+
+// sqliteFieldUnderIdentity returns target as it would be declared under
+// another field's name: its own ID, name and path replaced, and every
+// descendant's ID and path re-rooted beneath them. Validating the result
+// against the earlier field then checks the renamed pair like any other.
+func sqliteFieldUnderIdentity(target, identity schema.Field) schema.Field {
+	restored := sqliteRerootedField(target, string(target.ID), string(identity.ID), len(target.Path.Segments()), identity.Path.Segments())
+	restored.Name = identity.Name
+	return restored
+}
+
+func sqliteRerootedField(field schema.Field, oldID, newID string, oldDepth int, newRoot []string) schema.Field {
+	if rest, beneath := strings.CutPrefix(string(field.ID), oldID); beneath {
+		field.ID = schema.StableID(newID + rest)
+	}
+	if segments := field.Path.Segments(); len(segments) >= oldDepth {
+		if path, err := query.NewPath(append(append([]string(nil), newRoot...), segments[oldDepth:]...)...); err == nil {
+			field.Path = path
+		}
+	}
+	reroot := func(fields []schema.Field) []schema.Field {
+		rerooted := make([]schema.Field, len(fields))
+		for index, child := range fields {
+			rerooted[index] = sqliteRerootedField(child, oldID, newID, oldDepth, newRoot)
+		}
+		return rerooted
+	}
+	rerootTypes := func(types []schema.BlockType) []schema.BlockType {
+		rerooted := make([]schema.BlockType, len(types))
+		for index, block := range types {
+			block.Fields = reroot(block.ResolvedFields())
+			rerooted[index] = block
+		}
+		return rerooted
+	}
+	if field.Nested != nil {
+		nested := *field.Nested
+		nested.Fields = reroot(nested.ResolvedFields())
+		field.Nested = &nested
+	}
+	if field.Blocks != nil {
+		blocks := *field.Blocks
+		blocks.Types = rerootTypes(blocks.ResolvedTypes())
+		field.Blocks = &blocks
+	}
+	if field.Plugin != nil {
+		plugin := *field.Plugin
+		plugin.EmbeddedTrees = append([]schema.EmbeddedTree(nil), plugin.EmbeddedTrees...)
+		for tree := range plugin.EmbeddedTrees {
+			cases := append([]schema.EmbeddedTreeCase(nil), plugin.EmbeddedTrees[tree].Cases...)
+			for index := range cases {
+				cases[index].Types = rerootTypes(cases[index].ResolvedTypes())
+			}
+			plugin.EmbeddedTrees[tree].Cases = cases
+		}
+		field.Plugin = &plugin
+	}
+	return field
+}
+
+// renamedPath follows a path in one collection through the reviewed renames:
+// the renamed field itself and anything stored beneath it.
+func (rules sqliteAdditiveRules) renamedPath(collection schema.StableID, path query.Path) query.Path {
+	value := path.String()
+	for before, after := range rules.paths[collection] {
+		if value != before && !strings.HasPrefix(value, before+".") {
+			continue
+		}
+		if renamed, err := query.ParsePath(after + value[len(before):]); err == nil {
+			return renamed
+		}
+	}
+	return path
+}
+
+func validateSQLiteAdditiveCollections(before, after []schema.Collection) error {
+	return sqliteAdditiveRules{}.collections(before, after)
+}
+
+func validateSQLiteAdditiveResources(kind string, before, after []schema.Collection) error {
+	return sqliteAdditiveRules{}.resources(kind, before, after)
+}
+
+func validateSQLiteAdditiveFields(location string, before, after []schema.Field) error {
+	return sqliteAdditiveRules{}.fields(location, before, after)
+}
+
+func validateSQLiteAdditiveBlockTypes(location string, before, after []schema.BlockType) error {
+	return sqliteAdditiveRules{}.blockTypes(location, before, after)
+}
+
+func (rules sqliteAdditiveRules) snapshot(before, after schema.Snapshot) error {
 	// Caller-supplied ID admission is an operation-layer policy flag. It has no
 	// SQLite storage representation, so changing only this setting must not
 	// manufacture a physical migration incompatibility.
@@ -317,13 +440,13 @@ func validateSQLiteAdditiveSnapshotTransition(before, after schema.Snapshot) err
 	if !reflect.DeepEqual(before.Application, currentApplication) {
 		return fmt.Errorf("SQLite artifact planner supports only additive transitions; application settings changed")
 	}
-	if err := validateSQLiteAdditiveCollections(before.Collections, after.Collections); err != nil {
+	if err := rules.collections(before.Collections, after.Collections); err != nil {
 		return err
 	}
-	return validateSQLiteAdditiveResources("global", before.Globals, after.Globals)
+	return rules.resources("global", before.Globals, after.Globals)
 }
 
-func validateSQLiteAdditiveCollections(before, after []schema.Collection) error {
+func (rules sqliteAdditiveRules) collections(before, after []schema.Collection) error {
 	afterByID := make(map[schema.StableID]schema.Collection, len(after))
 	for _, resource := range after {
 		afterByID[resource.ID] = resource
@@ -339,17 +462,28 @@ func validateSQLiteAdditiveCollections(before, after []schema.Collection) error 
 		if !reflect.DeepEqual(previous, currentWithoutFieldsAndIndexes) {
 			return fmt.Errorf("SQLite artifact planner supports only additive transitions; collection %q changed outside its fields and indexes", previous.ID)
 		}
-		if len(current.Indexes) < len(previous.Indexes) || !reflect.DeepEqual(previous.Indexes, current.Indexes[:len(previous.Indexes)]) {
+		previousIndexes := previous.Indexes
+		if len(rules.paths[previous.ID]) != 0 {
+			previousIndexes = make([]schema.CollectionIndex, len(previous.Indexes))
+			for index, existing := range previous.Indexes {
+				previousIndexes[index] = schema.CollectionIndex{Fields: make([]query.Path, len(existing.Fields)), Unique: existing.Unique}
+				for position, path := range existing.Fields {
+					previousIndexes[index].Fields[position] = rules.renamedPath(previous.ID, path)
+				}
+			}
+		}
+		if len(current.Indexes) < len(previous.Indexes) || !reflect.DeepEqual(previousIndexes, current.Indexes[:len(previous.Indexes)]) {
 			return fmt.Errorf("SQLite artifact planner supports only additive transitions; collection %q changed or removed an existing index", previous.ID)
 		}
-		if err := validateSQLiteAdditiveFields(fmt.Sprintf("collection %q", previous.ID), previous.Fields, current.Fields); err != nil {
+		rules.renamed = rules.renames[previous.ID]
+		if err := rules.fields(fmt.Sprintf("collection %q", previous.ID), previous.Fields, current.Fields); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func validateSQLiteAdditiveResources(kind string, before, after []schema.Collection) error {
+func (rules sqliteAdditiveRules) resources(kind string, before, after []schema.Collection) error {
 	afterByID := make(map[schema.StableID]schema.Collection, len(after))
 	for _, resource := range after {
 		afterByID[resource.ID] = resource
@@ -365,14 +499,15 @@ func validateSQLiteAdditiveResources(kind string, before, after []schema.Collect
 			return fmt.Errorf("SQLite artifact planner supports only additive transitions; %s %q changed outside its fields", kind, previous.ID)
 		}
 		location := fmt.Sprintf("%s %q", kind, previous.ID)
-		if err := validateSQLiteAdditiveFields(location, previous.Fields, current.Fields); err != nil {
+		rules.renamed = nil
+		if err := rules.fields(location, previous.Fields, current.Fields); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func validateSQLiteAdditiveFields(location string, before, after []schema.Field) error {
+func (rules sqliteAdditiveRules) fields(location string, before, after []schema.Field) error {
 	afterByID := make(map[schema.StableID]schema.Field, len(after))
 	for _, field := range after {
 		afterByID[field.ID] = field
@@ -380,6 +515,21 @@ func validateSQLiteAdditiveFields(location string, before, after []schema.Field)
 	for _, previous := range before {
 		current, exists := afterByID[previous.ID]
 		if !exists {
+			if intended, renamed := rules.renamed[previous.ID]; renamed {
+				target, declared := afterByID[intended.ID]
+				if !declared {
+					return fmt.Errorf("SQLite artifact planner supports only additive transitions; field %q in %s was removed", previous.ID, location)
+				}
+				// Only the name may differ: a rename that also changed how the
+				// field or its children are stored would leave values where the
+				// new config does not read them.
+				unrenamed := sqliteAdditiveRules{paths: rules.paths}
+				if err := unrenamed.fields(location, []schema.Field{previous}, []schema.Field{sqliteFieldUnderIdentity(target, previous)}); err != nil {
+					return fmt.Errorf("field %q cannot become %q as a rename because more than its name changes: %w", previous.Path.String(), target.Path.String(), err)
+				}
+				delete(afterByID, target.ID)
+				continue
+			}
 			return fmt.Errorf("SQLite artifact planner supports only additive transitions; field %q in %s was removed", previous.ID, location)
 		}
 
@@ -394,7 +544,7 @@ func validateSQLiteAdditiveFields(location string, before, after []schema.Field)
 			comparison.Unique = false
 		}
 		var embeddedErr error
-		comparison, embeddedErr = embedded.CompareEvolution(previous, comparison, validateSQLiteAdditiveBlockTypes)
+		comparison, embeddedErr = embedded.CompareEvolution(previous, comparison, rules.blockTypes)
 		if embeddedErr != nil {
 			return embeddedErr
 		}
@@ -402,16 +552,22 @@ func validateSQLiteAdditiveFields(location string, before, after []schema.Field)
 		if previous.Type != comparison.Type && (primitivefield.IsList(previous) || primitivefield.IsList(comparison)) {
 			return fmt.Errorf("field %q changes value shape from %q to %q; add a new field and migrate existing values explicitly, or register a supported compiled data transform; automatic list conversion is not available", previous.Path.String(), previous.Type, comparison.Type)
 		}
-		if !reflect.DeepEqual(sqliteFieldComparisonMetadata(previous), sqliteFieldComparisonMetadata(comparison)) {
+		expected := previous
+		if previous.Join != nil && len(rules.paths[previous.Join.CollectionID]) != 0 {
+			join := *previous.Join
+			join.On = rules.renamedPath(join.CollectionID, join.On)
+			expected.Join = &join
+		}
+		if !reflect.DeepEqual(sqliteFieldComparisonMetadata(expected), sqliteFieldComparisonMetadata(comparison)) {
 			return fmt.Errorf("SQLite artifact planner supports only additive transitions; field %q in %s changed", previous.ID, location)
 		}
 		if previous.Nested != nil {
-			if err := validateSQLiteAdditiveFields(fmt.Sprintf("field %q in %s", previous.ID, location), previous.Nested.ResolvedFields(), current.Nested.ResolvedFields()); err != nil {
+			if err := rules.fields(fmt.Sprintf("field %q in %s", previous.ID, location), previous.Nested.ResolvedFields(), current.Nested.ResolvedFields()); err != nil {
 				return err
 			}
 		}
 		if previous.Blocks != nil {
-			if err := validateSQLiteAdditiveBlockTypes(fmt.Sprintf("field %q in %s", previous.ID, location), previous.Blocks.ResolvedTypes(), current.Blocks.ResolvedTypes()); err != nil {
+			if err := rules.blockTypes(fmt.Sprintf("field %q in %s", previous.ID, location), previous.Blocks.ResolvedTypes(), current.Blocks.ResolvedTypes()); err != nil {
 				return err
 			}
 		}
@@ -440,7 +596,7 @@ func sqliteFieldComparisonMetadata(value schema.Field) schema.Field {
 	return value
 }
 
-func validateSQLiteAdditiveBlockTypes(location string, before, after []schema.BlockType) error {
+func (rules sqliteAdditiveRules) blockTypes(location string, before, after []schema.BlockType) error {
 	afterByKey := make(map[string]schema.BlockType, len(after))
 	for _, block := range after {
 		afterByKey[block.Slug] = block
@@ -455,7 +611,7 @@ func validateSQLiteAdditiveBlockTypes(location string, before, after []schema.Bl
 		if !reflect.DeepEqual(previous.Labels, current.Labels) {
 			return fmt.Errorf("SQLite artifact planner supports only additive transitions; block type %q in %s changed", previous.Slug, location)
 		}
-		if err := validateSQLiteAdditiveFields(fmt.Sprintf("block type %q in %s", previous.Slug, location), previous.ResolvedFields(), current.ResolvedFields()); err != nil {
+		if err := rules.fields(fmt.Sprintf("block type %q in %s", previous.Slug, location), previous.ResolvedFields(), current.ResolvedFields()); err != nil {
 			return err
 		}
 		delete(afterByKey, previous.Slug)
@@ -625,7 +781,7 @@ func preflightSQLiteArtifactsWithResolver(ctx context.Context, files []migration
 				return fmt.Errorf("SQLite migration %s uses unsupported phase mode %q", file.Name, phase.Mode)
 			}
 			for _, step := range phase.Steps {
-				if step.Kind != ridumigration.StepSQL && step.Kind != ridumigration.StepDataTransform && step.Kind != ridumigration.StepCanonicalizeAuthIdentities && step.Kind != ridumigration.StepAssertSchema {
+				if step.Kind != ridumigration.StepSQL && step.Kind != ridumigration.StepDataTransform && step.Kind != ridumigration.StepCanonicalizeAuthIdentities && step.Kind != ridumigration.StepRenameContent && step.Kind != ridumigration.StepAssertSchema {
 					return fmt.Errorf("SQLite migration %s uses unsupported step kind %q", file.Name, step.Kind)
 				}
 			}
@@ -646,7 +802,19 @@ func preflightSQLiteArtifactsWithResolver(ctx context.Context, files []migration
 		if err != nil {
 			return err
 		}
-		expected, err := rebuildSQLiteArtifactWithDataTransformDescriptors(ctx, file.Artifact.Name, before, after, previousPlannerVersion, contract, descriptors, sqliteArtifactAllowsTransformedSchema(file.Artifact))
+		renames, err := sqliteArtifactRenames(file.Artifact)
+		if err != nil {
+			return err
+		}
+		var expected ridumigration.Artifact
+		switch {
+		case len(renames) != 0 && len(descriptors) != 0:
+			err = fmt.Errorf("content renames and data transforms cannot share one SQLite migration")
+		case len(renames) != 0:
+			expected, err = buildSQLiteArtifactWithRenames(ctx, file.Artifact.Name, before, after, previousPlannerVersion, contract, renames)
+		default:
+			expected, err = rebuildSQLiteArtifactWithDataTransformDescriptors(ctx, file.Artifact.Name, before, after, previousPlannerVersion, contract, descriptors, sqliteArtifactAllowsTransformedSchema(file.Artifact))
+		}
 		if err != nil {
 			return fmt.Errorf("validate SQLite migration %s against planner: %w", file.Name, err)
 		}
@@ -677,9 +845,20 @@ func (backend *Store) applySQLiteArtifact(ctx context.Context, connection *sql.C
 		before = &manifest
 	}
 	presentationOnly := sqlitePresentationOnlyArtifact(file.Artifact, before, after)
+	renamed := false
 	for _, phase := range file.Artifact.Phases {
 		for _, step := range phase.Steps {
 			switch step.Kind {
+			case ridumigration.StepRenameContent:
+				// The first rename step moves every rename in the artifact in one
+				// pass over its documents; the rest are already done.
+				if renamed {
+					continue
+				}
+				if err := applySQLiteArtifactRenames(ctx, connection, file.Artifact, before, after, false); err != nil {
+					return fmt.Errorf("apply SQLite migration %s content renames: %w", file.Name, err)
+				}
+				renamed = true
 			case ridumigration.StepSQL:
 				var payload ridumigration.SQLPayload
 				if err := json.Unmarshal(step.Payload, &payload); err != nil {

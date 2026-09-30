@@ -107,7 +107,12 @@ the installed guidance.
 After upgrading the CLI, run `ridu agent sync`. Sync updates only files recorded in that manifest,
 writes each file atomically, and leaves root project instructions alone. If a managed reference was
 edited, sync stops before changing anything so you can move the project-specific note into
-`AGENTS.md`, `CLAUDE.md`, or `PROJECT.md` first. The same public documentation is available at
+`AGENTS.md`, `CLAUDE.md`, or `PROJECT.md` first.
+
+To leave out a skill you do not need, such as `payload-to-ridu` in a project that never used
+Payload, list it under `excludedSkills` in `.ridu-agent-docs.json`, or delete its directory: the
+next sync records the deletion there instead of failing or reinstalling it. Remove the name to get
+the skill back. The same public documentation is available at
 [`/llms.txt`](/llms.txt), [`/llms-full.txt`](/llms-full.txt), and release-pinned
 `/v/<version>/llms-full.txt` URLs for tools that consume HTTP documentation feeds.
 
@@ -133,8 +138,13 @@ scaffold's local development database. `--no-docker`, `--no-install`, and `--no-
 corresponding setup step. The [CLI reference for `ridu dev`](/reference/cli/dev/) lists every option
 and default.
 
-If schema sync finds an ambiguous rename or destructive transition, `dev` stops and asks for a
-reviewed migration. See the selected [database adapter](/docs/adapters/) for its development rules.
+If a saved change looks like a rename, `dev` asks in an interactive terminal whether to preserve
+the data and can write and apply the migration for you. See
+[Renames in `ridu dev`](/docs/migrations/#renames-in-dev). For an ambiguous rename or a destructive
+transition `dev` rejects the reload and asks for a reviewed migration. Without a terminal it
+rejects every reload for a possible rename until the old name is restored or the rename is
+migrated. See the selected [database adapter](/docs/adapters/) for
+its development rules.
 
 ## Generate and check contracts {#generated-contracts}
 
@@ -196,7 +206,9 @@ ridu migrate verify
 ```
 
 `create` writes an artifact without connecting to a database; its name may also be the first
-argument, as in `ridu migrate create add-post-summary`. `plan` and `status` inspect a
+argument, as in `ridu migrate create add-post-summary`. `baseline` records the committed migrations a
+database synchronized by `ridu dev` already has, without running them; see
+[Migrations](/docs/migrations/#baseline). `plan` and `status` inspect a
 selected database without changing it. `verify` replays the complete history in an isolated target,
 and `up` applies pending migrations. Select the database with `DATABASE_URL` for PostgreSQL or
 MongoDB, or `RIDU_SQLITE_PATH` for SQLite. A PostgreSQL or MongoDB database on `localhost`, a
@@ -275,7 +287,9 @@ that omit it retain Bun for compatibility, while new scaffolds always write the 
 outputs. Paths are relative to the project root. Only `client` and `openapi` may point outside it,
 for example `client = "../mobile/lib/ridu.generated.ts"` in a monorepo. There, Ridu checks the
 nearest `package.json` above the client for its npm dependencies but never installs into that
-package. The file is structural CLI
+package. The admin reads its schema at run time and does not need the generated client. An older
+scaffolded admin entry that imports `../../generated/ridu.generated` can import `createAdminClient`
+from `@riducms/admin` instead and pass it as `clientFactory`. The file is structural CLI
 configuration, not the CMS schema—application behavior remains in executable Go config. See
 [Configuration](/docs/configuration/) and [Project structure](/guides/project-structure/).
 

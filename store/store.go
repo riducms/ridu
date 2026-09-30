@@ -471,6 +471,22 @@ type ReferenceDeleteRequest struct {
 	Target       DocumentReference
 	Collections  map[schema.StableID]schema.Collection
 	IgnoreOwners []DocumentReference
+	// PendingOwners are owners whose own hard delete is already in progress in
+	// this transaction, as in a cascade cycle. Their cascade references are
+	// cleared like nullify ones. A cascade reference from any other owner
+	// restricts the delete: the engine deletes cascade owners first, so one
+	// that remains appeared concurrently.
+	PendingOwners []DocumentReference
+}
+
+// CascadeTransaction lists the documents a hard delete must also delete.
+// Stores that support cascade delete policies implement it.
+type CascadeTransaction interface {
+	// CascadeOwners returns, in a stable order, each distinct current owner
+	// that references Target through a cascade field, excluding Target, the
+	// owners in IgnoreOwners that no longer exist, and PendingOwners. Adapters
+	// read their reference index and lock the rows as ApplyReferenceDelete does.
+	CascadeOwners(context.Context, ReferenceDeleteRequest) ([]DocumentReference, error)
 }
 
 // ReferenceConstraint identifies the schema boundary that restricted a hard

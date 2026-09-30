@@ -16,6 +16,7 @@ import (
 	"ariga.io/atlas/sql/sqlcheck"
 	"github.com/riducms/ridu/internal/postgresmigration"
 	"github.com/riducms/ridu/internal/primitivefield"
+	"github.com/riducms/ridu/internal/schemadiff"
 	ridumigration "github.com/riducms/ridu/migration"
 	"github.com/riducms/ridu/schema"
 )
@@ -37,6 +38,9 @@ func (err *SafetyError) Error() string {
 // BuildArtifact uses Atlas to plan all physical PostgreSQL changes and adds
 // ordered Ridu semantic steps for explicitly confirmed rename intent.
 func BuildArtifact(ctx context.Context, name string, before *schema.Manifest, after schema.Manifest, renames []Rename, allowDestructive bool) (ridumigration.Artifact, error) {
+	if err := validateFieldRenamesOnlyRename(renames); err != nil {
+		return ridumigration.Artifact{}, err
+	}
 	contract := currentAtlasPlannerContract()
 	return buildArtifactWithPlannerContracts(ctx, name, before, after, renames, allowDestructive, contract, contract)
 }
@@ -46,6 +50,9 @@ func BuildArtifact(ctx context.Context, name string, before *schema.Manifest, af
 // BuildArtifact; migration-history creation uses this entry point when a
 // reviewed planner upgrade must emit semantic data work.
 func BuildArtifactWithPreviousPlanner(ctx context.Context, name string, before *schema.Manifest, after schema.Manifest, renames []Rename, allowDestructive bool, previousPlannerVersion string) (ridumigration.Artifact, error) {
+	if err := validateFieldRenamesOnlyRename(renames); err != nil {
+		return ridumigration.Artifact{}, err
+	}
 	target := currentAtlasPlannerContract()
 	if before == nil {
 		if previousPlannerVersion != "" {
@@ -61,6 +68,26 @@ func BuildArtifactWithPreviousPlanner(ctx context.Context, name string, before *
 		return ridumigration.Artifact{}, fmt.Errorf("unsupported PostgreSQL planner transition %q -> %q", source.version, target.version)
 	}
 	return buildArtifactWithPlannerContracts(ctx, name, before, after, renames, allowDestructive, source, target)
+}
+
+// validateFieldRenamesOnlyRename refuses a confirmed field rename that changes
+// more than the field's name; see schemadiff.ValidateFieldRenameOnly. A
+// change of the field's own localization would replace its columns and drop
+// the values the rename was confirmed to keep.
+//
+// The rule is applied when a migration is created and not in the planner that
+// replays committed history, so an artifact applied before it existed still
+// verifies.
+func validateFieldRenamesOnlyRename(renames []Rename) error {
+	for _, rename := range renames {
+		if rename.Kind != RenameField || rename.BeforeField == nil || rename.AfterField == nil {
+			continue
+		}
+		if err := schemadiff.ValidateFieldRenameOnly(*rename.BeforeField, *rename.AfterField); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func buildArtifactWithPlannerContracts(ctx context.Context, name string, before *schema.Manifest, after schema.Manifest, renames []Rename, allowDestructive bool, source, target atlasPlannerContract, transforms ...ridumigration.DataTransformDescriptor) (ridumigration.Artifact, error) {

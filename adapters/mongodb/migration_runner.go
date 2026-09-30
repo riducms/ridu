@@ -59,6 +59,14 @@ func (backend *Store) applyPreparedMongoDBArtifactReplay(
 	registry mongoDBDataTransformRegistry,
 	allowMaintenance bool,
 ) error {
+	return backend.withMongoMigrationLease(ctx, normalized, func(runContext context.Context, lease *mongoMigrationLease) error {
+		return backend.applyMongoMigrationReplay(runContext, lease, files, replay, registry, allowMaintenance)
+	})
+}
+
+// withMongoMigrationLease runs one ledger-changing migration operation while
+// holding the lifecycle lock and a heartbeating migration lease.
+func (backend *Store) withMongoMigrationLease(ctx context.Context, normalized normalizedMongoMigrationRunnerOptions, run func(context.Context, *mongoMigrationLease) error) error {
 	if err := backend.prepareIndexOperation(ctx); err != nil {
 		return err
 	}
@@ -89,7 +97,7 @@ func (backend *Store) applyPreparedMongoDBArtifactReplay(
 	heartbeat := make(chan error, 1)
 	go lease.heartbeat(runContext, cancelRun, heartbeat)
 
-	applyErr := backend.applyMongoMigrationReplay(runContext, lease, files, replay, registry, allowMaintenance)
+	applyErr := run(runContext, lease)
 	cancelRun()
 	heartbeatErr := <-heartbeat
 	if applyErr != nil || heartbeatErr != nil {
@@ -544,7 +552,7 @@ func (backend *Store) requireMongoMigrationNamespacesAbsent(ctx context.Context,
 			return fmt.Errorf("inspect initial MongoDB migration namespace: %w", translateMongoError(ctx, err))
 		}
 		if len(names) != 0 {
-			return fmt.Errorf("initial MongoDB migration requires an empty managed namespace; %s already exists", planned.description)
+			return fmt.Errorf("initial MongoDB migration requires an empty managed namespace; %s already exists. If `ridu dev` synchronized this database and it matches the committed migrations, record them with `ridu migrate baseline`", planned.description)
 		}
 	}
 	return nil
@@ -615,10 +623,9 @@ func VerifyArtifactsWithOptions(ctx context.Context, config Config, directory st
 	if err := requireMongoDBDataTransformRegistry(files, registry); err != nil {
 		return err
 	}
-	if mongoDBReplayRequiresMaintenance(replay) && !options.AllowMaintenance {
-		return fmt.Errorf("MongoDB semantic migrations require explicit maintenance admission before verification")
-	}
-	return verifyPreparedMongoDBArtifactReplay(ctx, config, files, replay, normalized, registry, options.AllowMaintenance)
+	// The shadow database is private and always dropped, so its replay needs
+	// no maintenance admission.
+	return verifyPreparedMongoDBArtifactReplay(ctx, config, files, replay, normalized, registry, true)
 }
 
 func verifyPreparedMongoDBArtifactReplay(

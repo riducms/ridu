@@ -26,6 +26,9 @@ type mongoDBSemanticRenamePlan struct {
 	intents           []ridumigration.Rename
 	collectionMapping map[schema.StableID]schema.StableID
 	fieldMapping      map[string]schema.Field
+	// fieldRenames are the standalone field renames, as the fields before and
+	// after. A collection rename pairs every descendant itself.
+	fieldRenames []schemadiff.FieldPair
 }
 
 type mongoDBIndexDelta struct {
@@ -86,7 +89,21 @@ func buildMongoDBSemanticArtifact(
 		if err != nil {
 			return ridumigration.Artifact{}, err
 		}
-		normalizedBefore, retired, err = normalizeMongoDBSemanticBefore(before.Snapshot(), after.Snapshot(), renamePlan)
+		// A renamed group, array or blocks field carries its children with it,
+		// so their identities follow the new name and an unchanged child is not
+		// a removal. An artifact that binds a data transform keeps the earlier
+		// reading, in which those children look removed and the transform
+		// answers for them: committed history replays against this planner and
+		// must keep producing the same risks.
+		carryChildren := len(options.DataTransforms) == 0
+		if carryChildren {
+			for _, pair := range renamePlan.fieldRenames {
+				if err := schemadiff.ValidateFieldRenameOnly(pair.Before, pair.After); err != nil {
+					return ridumigration.Artifact{}, err
+				}
+			}
+		}
+		normalizedBefore, retired, err = normalizeMongoDBSemanticBefore(before.Snapshot(), after.Snapshot(), renamePlan, carryChildren)
 		if err != nil {
 			return ridumigration.Artifact{}, err
 		}
@@ -304,6 +321,7 @@ func compileMongoDBRenamePlan(before, after schema.Manifest, intents []ridumigra
 				return plan, fmt.Errorf("MongoDB field rename source %s.%s is ambiguous", previous.ID, intent.FieldBefore)
 			}
 			plan.fieldMapping[key] = *candidate.AfterField
+			plan.fieldRenames = append(plan.fieldRenames, schemadiff.FieldPair{Before: *candidate.BeforeField, After: *candidate.AfterField})
 		}
 		plan.intents = append(plan.intents, intent)
 	}
@@ -396,7 +414,11 @@ func mongoRenameIntentKey(intent ridumigration.Rename) string {
 	return string(intent.CollectionBefore) + "\x00" + intent.FieldBefore + "\x00" + string(intent.CollectionAfter) + "\x00" + intent.FieldAfter
 }
 
-func normalizeMongoDBSemanticBefore(before, after schema.Snapshot, plan mongoDBSemanticRenamePlan) (schema.Snapshot, []schema.StableID, error) {
+// normalizeMongoDBSemanticBefore gives the before-schema the identities its
+// resources and fields have after the confirmed renames, so the transition can
+// be validated as additive. carryChildren also moves the descendants of a
+// renamed field under its new identity.
+func normalizeMongoDBSemanticBefore(before, after schema.Snapshot, plan mongoDBSemanticRenamePlan, carryChildren bool) (schema.Snapshot, []schema.StableID, error) {
 	normalized := schema.NewManifest(before).Snapshot()
 	afterCollections := make(map[schema.StableID]schema.Collection, len(after.Collections))
 	for _, collection := range after.Collections {
@@ -423,7 +445,7 @@ func normalizeMongoDBSemanticBefore(before, after schema.Snapshot, plan mongoDBS
 		if mappedID != "" {
 			collection.ID, collection.Slug = target.ID, target.Slug
 		}
-		if err := normalizeMongoDBResourceFields(&collection, beforeID, target, plan); err != nil {
+		if err := normalizeMongoDBResourceFields(&collection, beforeID, target, plan, carryChildren); err != nil {
 			return schema.Snapshot{}, nil, err
 		}
 		collections = append(collections, collection)
@@ -442,18 +464,50 @@ func normalizeMongoDBSemanticBefore(before, after schema.Snapshot, plan mongoDBS
 	return normalized, retired, nil
 }
 
-func normalizeMongoDBResourceFields(resource *schema.Collection, beforeID schema.StableID, target schema.Collection, plan mongoDBSemanticRenamePlan) error {
-	var rewrite func([]schema.Field) ([]schema.Field, error)
-	rewrite = func(fields []schema.Field) ([]schema.Field, error) {
+// mongoDBRenamedAncestor is the nearest ancestor whose identity a rename
+// changed. Field IDs and paths are derived from the path, so every descendant
+// takes the ancestor's new ID prefix and leading path segments.
+type mongoDBRenamedAncestor struct {
+	beforeID, afterID string
+	beforeDepth       int
+	afterPath         []string
+}
+
+func (ancestor *mongoDBRenamedAncestor) carry(field *schema.Field) {
+	if rest, beneath := strings.CutPrefix(string(field.ID), ancestor.beforeID); beneath {
+		field.ID = schema.StableID(ancestor.afterID + rest)
+	}
+	if segments := field.Path.Segments(); len(segments) >= ancestor.beforeDepth {
+		if path, err := query.NewPath(append(append([]string(nil), ancestor.afterPath...), segments[ancestor.beforeDepth:]...)...); err == nil {
+			field.Path = path
+		}
+	}
+}
+
+func normalizeMongoDBResourceFields(resource *schema.Collection, beforeID schema.StableID, target schema.Collection, plan mongoDBSemanticRenamePlan, carryChildren bool) error {
+	var rewrite func([]schema.Field, *mongoDBRenamedAncestor) ([]schema.Field, error)
+	rewrite = func(fields []schema.Field, ancestor *mongoDBRenamedAncestor) ([]schema.Field, error) {
 		result := append([]schema.Field(nil), fields...)
 		for index := range result {
-			originalPath := result[index].Path.String()
+			original := result[index]
+			originalPath := original.Path.String()
 			if mapped, exists := plan.fieldMapping[mongoFieldRenameKey(beforeID, originalPath)]; exists {
 				result[index].ID, result[index].Name, result[index].Path = mapped.ID, mapped.Name, mapped.Path
+			} else if ancestor != nil {
+				ancestor.carry(&result[index])
+			}
+			// Descendants are looked up by their original paths above; one with
+			// no mapping of its own follows this field.
+			below := ancestor
+			if carryChildren && result[index].ID != original.ID {
+				below = &mongoDBRenamedAncestor{
+					beforeID: string(original.ID), afterID: string(result[index].ID),
+					beforeDepth: len(original.Path.Segments()), afterPath: result[index].Path.Segments(),
+				}
 			}
 			if result[index].Nested != nil {
 				nested := *result[index].Nested
-				children, err := rewrite(nested.ResolvedFields())
+				children, err := rewrite(nested.ResolvedFields(), below)
 				if err != nil {
 					return nil, err
 				}
@@ -463,7 +517,7 @@ func normalizeMongoDBResourceFields(resource *schema.Collection, beforeID schema
 				blocks := *result[index].Blocks
 				blocks.Types = append([]schema.BlockType(nil), blocks.ResolvedTypes()...)
 				for blockIndex := range blocks.ResolvedTypes() {
-					children, err := rewrite(blocks.ResolvedTypes()[blockIndex].ResolvedFields())
+					children, err := rewrite(blocks.ResolvedTypes()[blockIndex].ResolvedFields(), below)
 					if err != nil {
 						return nil, err
 					}
@@ -481,7 +535,7 @@ func normalizeMongoDBResourceFields(resource *schema.Collection, beforeID schema
 						c := &tree.Cases[ci]
 						c.Types = append([]schema.BlockType(nil), c.ResolvedTypes()...)
 						for vi := range c.ResolvedTypes() {
-							children, err := rewrite(c.ResolvedTypes()[vi].ResolvedFields())
+							children, err := rewrite(c.ResolvedTypes()[vi].ResolvedFields(), below)
 							if err != nil {
 								return nil, err
 							}
@@ -495,7 +549,7 @@ func normalizeMongoDBResourceFields(resource *schema.Collection, beforeID schema
 		}
 		return result, nil
 	}
-	fields, err := rewrite(resource.Fields)
+	fields, err := rewrite(resource.Fields, nil)
 	if err != nil {
 		return err
 	}
@@ -509,7 +563,17 @@ func normalizeMongoDBResourceFields(resource *schema.Collection, beforeID schema
 	for index := range resource.Indexes {
 		paths := append([]query.Path(nil), resource.Indexes[index].Fields...)
 		for pathIndex, path := range paths {
-			if mapped := pathMapping[path.String()]; mapped != "" {
+			mapped := pathMapping[path.String()]
+			if mapped == "" && carryChildren {
+				// An index on a child of a renamed field follows it.
+				for before, after := range pathMapping {
+					if rest, beneath := strings.CutPrefix(path.String(), before+"."); beneath {
+						mapped = after + "." + rest
+						break
+					}
+				}
+			}
+			if mapped != "" {
 				parsed, parseErr := query.ParsePath(mapped)
 				if parseErr != nil {
 					return parseErr

@@ -12997,6 +12997,54 @@
 		"go:github.com/riducms/ridu/migration#UnmanagedSchemaError": {
 			"module": "migration",
 			"symbol": "unmanaged-schema-error"
+		},
+		"go:github.com/riducms/ridu/field#ReferenceDeleteCascade": {
+			"module": "field",
+			"symbol": "reference-delete-cascade"
+		},
+		"go:github.com/riducms/ridu/schema#ReferenceDeleteCascade": {
+			"module": "schema",
+			"symbol": "reference-delete-cascade"
+		},
+		"go:github.com/riducms/ridu/store#CascadeTransaction": {
+			"module": "store",
+			"symbol": "cascade-transaction"
+		},
+		"ts:@riducms/admin#createAdminClient": {
+			"module": "admin",
+			"symbol": "create-admin-client"
+		},
+		"go:github.com/riducms/ridu/schema#CascadeReferenceIssues": {
+			"module": "schema",
+			"symbol": "cascade-reference-issues"
+		},
+		"go:github.com/riducms/ridu/adapters/postgres#Store.AdoptArtifacts": {
+			"module": "postgres",
+			"symbol": "store-adopt-artifacts-method"
+		},
+		"go:github.com/riducms/ridu/adapters/sqlite#Store.AdoptArtifacts": {
+			"module": "sqlite",
+			"symbol": "store-adopt-artifacts-method"
+		},
+		"go:github.com/riducms/ridu/adapters/sqlite#Store.HasMigrationHistory": {
+			"module": "sqlite",
+			"symbol": "store-has-migration-history-method"
+		},
+		"go:github.com/riducms/ridu/adapters/mongodb#Store.AdoptArtifacts": {
+			"module": "mongodb",
+			"symbol": "store-adopt-artifacts-method"
+		},
+		"cli:ridu#ridu migrate baseline": {
+			"module": "cli",
+			"symbol": "ridu-migrate-baseline"
+		},
+		"go:github.com/riducms/ridu/adapters/sqlite#CreateArtifactWithRenames": {
+			"module": "sqlite",
+			"symbol": "create-artifact-with-renames"
+		},
+		"go:github.com/riducms/ridu/adapters/sqlite#Store.RenameDevelopmentFields": {
+			"module": "sqlite",
+			"symbol": "store-rename-development-fields-method"
 		}
 	}
 }

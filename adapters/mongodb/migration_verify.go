@@ -114,7 +114,7 @@ func prepareMongoDBArtifactReplay(ctx context.Context, files []migrationartifact
 				if err != nil {
 					return nil, err
 				}
-				_, retired, err = normalizeMongoDBSemanticBefore(before.Snapshot(), after.Snapshot(), renamePlan)
+				_, retired, err = normalizeMongoDBSemanticBefore(before.Snapshot(), after.Snapshot(), renamePlan, false)
 				if err != nil {
 					return nil, err
 				}
