@@ -14,6 +14,7 @@ import (
 	_ "ariga.io/atlas/sql/postgres/postgrescheck"
 	atlasschema "ariga.io/atlas/sql/schema"
 	"ariga.io/atlas/sql/sqlcheck"
+	"github.com/riducms/ridu/internal/migrationartifact"
 	"github.com/riducms/ridu/internal/postgresmigration"
 	"github.com/riducms/ridu/internal/primitivefield"
 	"github.com/riducms/ridu/internal/schemadiff"
@@ -245,7 +246,7 @@ func buildArtifactWithPlannerContracts(ctx context.Context, name string, before 
 		})
 	}
 	if before != nil && artifact.FromDigest == artifact.ToDigest && !postgresAuthIdentityUpgradeRequired(source, target, before.Snapshot(), after.Snapshot()) && len(transforms) == 0 {
-		return ridumigration.Artifact{}, fmt.Errorf("schema is current; no migration steps were planned")
+		return ridumigration.Artifact{}, fmt.Errorf("%w; no migration steps were planned", migrationartifact.ErrSchemaCurrent)
 	}
 	artifact.Risks = normalizeRisks(artifact.Risks)
 	if !allowDestructive {

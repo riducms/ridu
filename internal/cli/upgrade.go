@@ -281,10 +281,10 @@ func createUpgradeMigration(ctx context.Context, definition projectfile.File, na
 	}
 	printed, err := commandOutput(ctx, definition.Root, nil, command, arguments...)
 	if err != nil {
-		if strings.Contains(printed, "schema is current") {
-			return false, nil
-		}
 		return false, fmt.Errorf("%w\n%s", err, strings.TrimSpace(printed))
+	}
+	if strings.Contains(printed, noMigrationNeeded) {
+		return false, nil
 	}
 	fmt.Fprint(stdout, printed)
 	return true, nil

@@ -965,13 +965,11 @@ func runMigrate(ctx context.Context, args []string, stdout, stderr io.Writer, op
 		}
 		artifact, err := buildPostgresArtifactWithDataTransforms(ctx, *name, previousPointer, manifest, postgresRenames(accepted), *allowDestructive, previousPlannerVersion, transforms)
 		if err != nil {
-			output.Error("plan migration", err)
-			return 1
+			return reportMigrateCreateError(stdout, output, "plan migration", err)
 		}
 		created, err := migrationartifact.Create(directory, *name, artifact, time.Now())
 		if err != nil {
-			output.Error("create migration", err)
-			return 1
+			return reportMigrateCreateError(stdout, output, "create migration", err)
 		}
 		for _, risk := range artifact.Risks {
 			fmt.Fprintf(stdout, "%s\t%s\t%s\n", risk.Level, risk.Code, risk.Message)
@@ -1091,6 +1089,26 @@ func printBaseline(stdout io.Writer, adopted []string) {
 	fmt.Fprintf(stdout, "Recorded %d %s as applied without running them, because this database already has their schema. Run ridu migrate status to see any still pending.\n", len(adopted), noun)
 }
 
+// noMigrationNeeded begins what ridu migrate create prints when the schema
+// needs no migration. ridu upgrade reads it from the upgraded CLI.
+const noMigrationNeeded = "No migration needed"
+
+// reportMigrateCreateError reports why ridu migrate create wrote no migration
+// and returns its exit code. A schema the latest migration already records is
+// not a failure: there is nothing to migrate.
+func reportMigrateCreateError(stdout io.Writer, output *cliOutput, action string, err error) int {
+	switch {
+	case errors.Is(err, migrationartifact.ErrOnlyAdminChanges):
+		fmt.Fprintln(stdout, noMigrationNeeded+": only admin settings changed since the latest migration, and history ignores them.")
+	case errors.Is(err, migrationartifact.ErrSchemaCurrent):
+		fmt.Fprintln(stdout, noMigrationNeeded+": the schema has not changed since the latest migration.")
+	default:
+		output.Error(action, err)
+		return 1
+	}
+	return 0
+}
+
 func runMongoDBMigrateCreate(
 	ctx context.Context,
 	name string,
@@ -1146,8 +1164,7 @@ func runMongoDBMigrateCreate(
 		DataTransforms:   transforms,
 	})
 	if err != nil {
-		output.Error("plan migration", err)
-		return 1
+		return reportMigrateCreateError(stdout, output, "plan migration", err)
 	}
 	if files, readError := migrationartifact.ReadAll(directory); readError == nil {
 		for _, file := range files {
@@ -1338,8 +1355,7 @@ func runSQLiteMigrate(ctx context.Context, request sqliteMigrationCLIOptions, st
 			if len(accepted) != 0 {
 				created, err := sqlite.CreateArtifactWithRenames(ctx, request.directory, request.name, resolved.Manifest, time.Now(), contentRenames(accepted))
 				if err != nil {
-					output.Error("plan migration", err)
-					return 1
+					return reportMigrateCreateError(stdout, output, "plan migration", err)
 				}
 				printCreatedSQLiteMigration(stdout, request, created)
 				return 0
@@ -1360,8 +1376,7 @@ func runSQLiteMigrate(ctx context.Context, request sqliteMigrationCLIOptions, st
 		}
 		created, err := sqlite.CreateArtifact(ctx, request.directory, request.name, resolved.Manifest, time.Now(), request.allowDestructive, descriptors...)
 		if err != nil {
-			output.Error("plan migration", err)
-			return 1
+			return reportMigrateCreateError(stdout, output, "plan migration", err)
 		}
 		printCreatedSQLiteMigration(stdout, request, created)
 		return 0
@@ -1654,7 +1669,7 @@ func buildPostgresArtifactWithDataTransforms(
 	}
 	artifact, err := postgres.BuildArtifactWithPreviousPlanner(ctx, name, before, after, renames, allowDestructive, previousPlannerVersion)
 	if err != nil {
-		if len(transforms) == 0 || before == nil || !strings.Contains(err.Error(), "schema is current; no migration steps were planned") {
+		if len(transforms) == 0 || before == nil || !errors.Is(err, migrationartifact.ErrSchemaCurrent) {
 			return migration.Artifact{}, err
 		}
 		fromDigest, digestError := migration.DigestManifest(*before)

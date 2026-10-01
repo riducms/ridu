@@ -117,13 +117,11 @@ func Config() ridu.Config { return ridu.Config{Name: "Audit",
 		run("generate", "--check")
 		if name == "field-label" {
 			// A field label is an admin setting, which never needs a migration,
-			// so create writes none. The production build below runs with it
-			// absent from every artifact.
+			// so create succeeds without writing one. The production build
+			// below runs with it absent from every artifact.
 			run("migrate", "status", "--database-path", database)
-			var stdout, stderr bytes.Buffer
-			code := cli.Run(ctx, []string{"migrate", "create", name}, &stdout, &stderr, options)
-			if code == 0 || !strings.Contains(stdout.String()+stderr.String(), "only admin settings changed, so no migration is needed") {
-				t.Fatalf("admin-only create = %d: %s\n%s", code, stdout.String(), stderr.String())
+			if printed := run("migrate", "create", name); !strings.Contains(printed, "No migration needed: only admin settings changed") {
+				t.Fatalf("admin-only create printed %q", printed)
 			}
 			if written, err := filepath.Glob(filepath.Join(target, "migrations", "*_"+name+"*")); err != nil || len(written) != 0 {
 				t.Fatalf("admin-only create wrote %v, %v", written, err)

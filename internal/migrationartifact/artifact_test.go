@@ -3,6 +3,7 @@ package migrationartifact_test
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -303,8 +304,9 @@ func TestRequireCurrentHistoryIgnoresAdminPresentation(t *testing.T) {
 
 // Because history is compared without admin settings, a migration that only
 // changes them would record nothing anything reads. Creating one is refused
-// with the message ridu upgrade reads as "no migration is needed", and no
-// file is written. A change beside it, or a step of its own, still migrates.
+// with ErrOnlyAdminChanges, which ridu migrate create reports as nothing to
+// migrate, and no file is written. A change beside it, or a step of its own,
+// still migrates.
 func TestCreateRefusesAnAdminOnlyChange(t *testing.T) {
 	directory := t.TempDir()
 	committed := testManifest("posts")
@@ -315,7 +317,7 @@ func TestCreateRefusesAnAdminOnlyChange(t *testing.T) {
 	snapshot.Collections[0].Admin = schema.CollectionAdmin{Hidden: true, Group: "Plumbing"}
 	hidden := schema.NewManifest(snapshot)
 	adminOnly := testArtifact(t, "hide-posts", &committed, hidden)
-	if _, err := migrationartifact.Create(directory, "hide-posts", adminOnly, time.Unix(2, 0)); err == nil || !strings.Contains(err.Error(), "schema is current; only admin settings changed") {
+	if _, err := migrationartifact.Create(directory, "hide-posts", adminOnly, time.Unix(2, 0)); !errors.Is(err, migrationartifact.ErrOnlyAdminChanges) || !errors.Is(err, migrationartifact.ErrSchemaCurrent) {
 		t.Fatalf("admin-only migration = %v", err)
 	}
 	if files, err := migrationartifact.ReadAll(directory); err != nil || len(files) != 1 {
