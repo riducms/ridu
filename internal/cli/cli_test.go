@@ -1188,8 +1188,12 @@ func TestSQLiteCanonicalAuthUpgradeCLIRequiresDestructiveCreationApproval(t *tes
 
 	stdout.Reset()
 	stderr.Reset()
-	if exitCode := cli.Run(ctx, []string{"migrate", "create", "--name", "unchanged"}, &stdout, &stderr, options); exitCode != 1 || !strings.Contains(stderr.String(), "schema is current") || strings.Contains(stderr.String(), "explicit safety resolution") {
+	// Nothing to migrate is not a failure: create succeeds without a file.
+	if exitCode := cli.Run(ctx, []string{"migrate", "create", "--name", "unchanged"}, &stdout, &stderr, options); exitCode != 0 || !strings.Contains(stdout.String(), "No migration needed: the schema has not changed") || stderr.Len() != 0 {
 		t.Fatalf("unchanged current-planner creation = exit %d, stdout %q, stderr %q", exitCode, stdout.String(), stderr.String())
+	}
+	if unchanged, err := filepath.Glob(filepath.Join(target, "migrations", "*_unchanged*")); err != nil || len(unchanged) != 0 {
+		t.Fatalf("unchanged creation wrote %v, %v", unchanged, err)
 	}
 }
 

@@ -9040,7 +9040,7 @@
 					"kind": "constant",
 					"group": "Runtime",
 					"summary": "The semantic Ridu framework version used by the CLI and project-command compatibility handshake.",
-					"signature": "const FrameworkVersion = \"0.11.1\"",
+					"signature": "const FrameworkVersion = \"0.11.2\"",
 					"parameters": [],
 					"parametersLabel": "",
 					"details": [
@@ -85827,7 +85827,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/atlas_migration.go",
-						"line": 40
+						"line": 41
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -85898,7 +85898,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/atlas_migration.go",
-						"line": 52
+						"line": 53
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -86108,7 +86108,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/atlas_migration.go",
-						"line": 26
+						"line": 27
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -86935,7 +86935,7 @@
 					],
 					"source": {
 						"path": "adapters/postgres/atlas_migration.go",
-						"line": 30
+						"line": 31
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],

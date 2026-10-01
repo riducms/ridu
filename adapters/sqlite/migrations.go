@@ -221,7 +221,7 @@ func buildSQLiteArtifactWithValidation(ctx context.Context, name string, before 
 		}
 		canonicalUpgrade := sqliteAuthIdentityUpgradeRequired(previousPlannerVersion, contract.version, before.Snapshot(), after.Snapshot())
 		if fromDigest == toDigest && !canonicalUpgrade {
-			return ridumigration.Artifact{}, fmt.Errorf("schema is current; no SQLite migration steps were planned")
+			return ridumigration.Artifact{}, fmt.Errorf("%w; no SQLite migration steps were planned", migrationartifact.ErrSchemaCurrent)
 		}
 		if fromDigest != toDigest {
 			if err := validateTransition(before.Snapshot(), after.Snapshot()); err != nil {
