@@ -23,11 +23,7 @@ func TestPostgresBaselineAdoptsADevelopmentSynchronizedDatabase(t *testing.T) {
 	directory := t.TempDir()
 	synchronize := func(manifest schema.Manifest) {
 		t.Helper()
-		plan, err := backend.Plan(ctx, manifest)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := backend.ApplyPlan(ctx, plan); err != nil {
+		if err := backend.SyncDevelopmentSchema(ctx, manifest); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -122,11 +118,7 @@ func TestPostgresBaselineLeavesARenameForMigrateUp(t *testing.T) {
 	if _, err := migrationartifact.Create(directory, "rename-title", rename, time.Unix(2, 0)); err != nil {
 		t.Fatal(err)
 	}
-	plan, err := backend.Plan(ctx, before)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := backend.ApplyPlan(ctx, plan); err != nil {
+	if err := backend.SyncDevelopmentSchema(ctx, before); err != nil {
 		t.Fatal(err)
 	}
 	adopted, err := backend.AdoptArtifacts(ctx, directory)
@@ -154,11 +146,7 @@ func TestPostgresBaselineRefusesASchemaNoMigrationDescribes(t *testing.T) {
 	if _, err := migrationartifact.Create(directory, "initial", artifact, time.Unix(1, 0)); err != nil {
 		t.Fatal(err)
 	}
-	plan, err := backend.Plan(ctx, atlasTestManifest(title, atlasTextField("posts-summary", "summary")))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := backend.ApplyPlan(ctx, plan); err != nil {
+	if err := backend.SyncDevelopmentSchema(ctx, atlasTestManifest(title, atlasTextField("posts-summary", "summary"))); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := backend.AdoptArtifacts(ctx, directory); err == nil || !strings.Contains(err.Error(), "matches no committed migration") {

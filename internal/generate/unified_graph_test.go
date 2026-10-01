@@ -102,7 +102,7 @@ func TestUnifiedGraphGenerationExpectedContractAndDeterminism(t *testing.T) {
 					}
 					path = artifact.Path
 				} else {
-					artifact, err := mongodb.CreateArtifact(t.Context(), t.TempDir(), "initial", manifest, time.Unix(1, 0))
+					artifact, err := mongodb.CreateArtifact(t.Context(), t.TempDir(), "initial", manifest, time.Unix(1, 0), mongodb.ArtifactOptions{})
 					if err != nil {
 						t.Fatal(err)
 					}

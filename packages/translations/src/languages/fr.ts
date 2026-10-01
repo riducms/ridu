@@ -616,6 +616,18 @@ export const frMessages = {
 		other:
 			"Les modifications non enregistrées de {count} champs ont été restaurées après le rechargement.",
 	},
+	"documents:recoveryConflictTitle": "Examiner les modifications non enregistrées",
+	"documents:recoveryConflictDescription":
+		"Ce document a changé depuis vos modifications non enregistrées. Comparez les copies, puis conservez les vôtres ou chargez le dernier document enregistré.",
+	"documents:reviewUnsavedChanges": "Comparer les modifications non enregistrées",
+	"documents:recoveryBase": "Avant vos modifications",
+	"documents:recoveryYours": "Vos modifications non enregistrées",
+	"documents:recoveryLatest": "Dernier document enregistré",
+	"documents:recoveryKeepYours": "Conserver les vôtres",
+	"documents:recoveryLoadLatest": "Charger la dernière version",
+	"documents:recoveryMissingValue": "Aucune valeur",
+	"documents:recoveryNoVisibleChanges":
+		"Le document enregistré a changé, mais aucune différence de champ n’est actuellement visible pour vous.",
 	"documents:duplicateFailed": "Impossible de dupliquer le document.",
 	"documents:duplicatedLabel": "{label} dupliqué",
 	"documents:duplicating": "Duplication…",
@@ -625,8 +637,8 @@ export const frMessages = {
 	"documents:globals": "Globaux",
 	"documents:goBack": "Retour",
 	"documents:incompatibleDraftValues": {
-		one: "{count} valeur non enregistrée incompatible a été conservée pour récupération",
-		other: "{count} valeurs non enregistrées incompatibles ont été conservées pour récupération",
+		one: "{count} valeur non enregistrée incompatible n’a pas pu être restaurée",
+		other: "{count} valeurs non enregistrées incompatibles n’ont pas pu être restaurées",
 	},
 	"documents:lastModifiedLabel": "Dernière modification",
 	"documents:lastSavedAgo": "Dernier enregistrement {distance}",

@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 
@@ -101,6 +102,10 @@ func (backend *Store) Plan(ctx context.Context, manifest schema.Manifest) ([]Sta
 		return nil, err
 	}
 	defer transaction.Rollback()
+	return planPostgresDevelopmentSchema(ctx, transaction, manifest)
+}
+
+func planPostgresDevelopmentSchema(ctx context.Context, transaction *sql.Tx, manifest schema.Manifest) ([]Statement, error) {
 	driver, err := atlaspostgres.Open(transaction)
 	if err != nil {
 		return nil, fmt.Errorf("open Atlas development inspector: %w", err)
@@ -110,7 +115,7 @@ func (backend *Store) Plan(ctx context.Context, manifest schema.Manifest) ([]Sta
 		return nil, fmt.Errorf("inspect development schema: %w", err)
 	}
 	for index := len(actual.Tables) - 1; index >= 0; index-- {
-		if actual.Tables[index].Name == "ridu_migrations" || actual.Tables[index].Name == "ridu_migration_steps" {
+		if postgresSchemaMetadataTable(actual.Tables[index].Name) {
 			actual.Tables = append(actual.Tables[:index], actual.Tables[index+1:]...)
 		}
 	}

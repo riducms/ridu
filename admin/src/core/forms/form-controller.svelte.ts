@@ -10,6 +10,8 @@ import {
 	correlateFormIssues,
 	indexFieldValues,
 	canonicalIssueTarget,
+	rebaseFieldAccess,
+	type FieldValueLocation,
 } from "@admin/core/forms/form-issue-correlation";
 import type { AccessCapabilitiesEnvelope, ValidationIssue } from "@riducms/protocol";
 import type { SchemaField } from "@riducms/protocol";
@@ -26,6 +28,7 @@ import {
 	recoverFormDraft,
 	shouldSubmitLocalizedPath,
 	type DetachedDraftValue,
+	type FormSchemaReconciliation,
 	type FormValues,
 	submissionFormValues,
 } from "@admin/core/forms/form-schema";
@@ -184,6 +187,9 @@ export class FormController {
 	#listEdits = new Map<string, number>();
 	#nextListEdit = 0;
 	#fields: readonly SchemaField[] = [];
+	// Retained edits may remove an occurrence; Discard still needs its latest evaluated denial.
+	#retainedAccess:
+		{ access: AccessCapabilitiesEnvelope; locations: FieldValueLocation[] } | undefined;
 	#i18n: AdminI18n;
 	#readContext: Pick<FormController, "get" | "snapshot"> | undefined;
 	#pendingEdits = $state.raw<ReadonlyMap<symbol, () => readonly ValidationIssue[]>>(new Map());
@@ -191,7 +197,8 @@ export class FormController {
 	constructor(
 		values: FormValues = {},
 		i18n: AdminI18n = createAdminI18n(),
-		readContext?: Pick<FormController, "get" | "snapshot">
+		readContext?: Pick<FormController, "get" | "snapshot">,
+		private readonly writeAllowed: () => boolean = () => true
 	) {
 		this.#i18n = i18n;
 		this.#readContext = readContext;
@@ -461,19 +468,41 @@ export class FormController {
 		return [...issues.values()];
 	}
 
-	setAccess(access: AccessCapabilitiesEnvelope | undefined, mode: "create" | "update") {
-		this.access = access;
+	setAccess(
+		access: AccessCapabilitiesEnvelope | undefined,
+		mode: "create" | "update",
+		evaluatedValues?: FormValues
+	) {
+		this.#retainedAccess = undefined;
+		if (access !== undefined && evaluatedValues !== undefined) {
+			const before = indexFieldValues(this.#fields, cloneFormValues(evaluatedValues));
+			this.#retainedAccess = { access, locations: before };
+			this.access = {
+				...access,
+				fields: rebaseFieldAccess(
+					before,
+					indexFieldValues(this.#fields, this.values),
+					access.fields
+				),
+			};
+		} else this.access = access;
 		this.accessMode = mode;
 		this.refreshLiveValidation();
 	}
 
 	setResource(resource: FormResource | undefined) {
-		if (JSON.stringify(this.resource) !== JSON.stringify(resource)) this.#invalidateEditors();
+		if (JSON.stringify(this.resource) !== JSON.stringify(resource)) {
+			this.#retainedAccess = undefined;
+			this.#invalidateEditors();
+		}
 		this.resource = resource;
 	}
 
 	setLocalization(locale: string | undefined, sources: Readonly<Record<string, string>> = {}) {
-		if (this.contentLocale !== locale) this.#invalidateEditors();
+		if (this.contentLocale !== locale) {
+			this.#retainedAccess = undefined;
+			this.#invalidateEditors();
+		}
 		this.contentLocale = locale;
 		this.localizationSources = sources;
 	}
@@ -504,7 +533,11 @@ export class FormController {
 	}
 
 	canWrite(path: string, canonicalPath?: string) {
-		if (this.writeBlocked) return false;
+		return !this.writeBlocked && this.writeAllowed() && this.hasWriteAccess(path, canonicalPath);
+	}
+
+	/** Evaluated field access, independent of temporary editing locks. */
+	hasWriteAccess(path: string, canonicalPath?: string) {
 		const access = this.access;
 		if (access === undefined) return true;
 		const field = this.fieldCapabilities(path, canonicalPath);
@@ -608,6 +641,7 @@ export class FormController {
 	}
 
 	reset(values: FormValues, fields: readonly SchemaField[] = this.#fields) {
+		this.#retainedAccess = undefined;
 		this.#fields = fields;
 		this.#invalidateEditors();
 		this.#clearDerivedTextBindings();
@@ -621,11 +655,29 @@ export class FormController {
 		this.revision = ++this.#revision;
 	}
 
+	discard() {
+		const values = cloneFormValues(this.original);
+		if (this.access !== undefined) {
+			const saved = this.#retainedAccess;
+			const access = saved?.access ?? this.access;
+			this.access = {
+				...access,
+				fields: rebaseFieldAccess(
+					saved?.locations ?? indexFieldValues(this.#fields, this.values),
+					indexFieldValues(this.#fields, values),
+					access.fields
+				),
+			};
+		}
+		this.reset(values);
+	}
+
 	reconcile(
 		previousFields: readonly SchemaField[],
 		nextFields: readonly SchemaField[],
 		initializeDefaults = false
 	) {
+		this.#retainedAccess = undefined;
 		this.#invalidateEditors();
 		this.#clearDerivedTextBindings();
 		this.#fields = nextFields;
@@ -640,15 +692,27 @@ export class FormController {
 		return { detached: result.detached, restoredFields: 0 };
 	}
 
-	recover(
-		draft: { values: FormValues; original: FormValues },
-		previousFields: readonly SchemaField[],
-		nextFields: readonly SchemaField[]
-	) {
+	recover(draft: FormSchemaReconciliation, nextFields: readonly SchemaField[]) {
+		// Create access was evaluated against the recovered candidate, not the empty form.
+		const before =
+			this.access !== undefined && this.accessMode === "update"
+				? indexFieldValues(this.#fields, cloneFormValues(this.values))
+				: undefined;
 		this.#invalidateEditors();
 		this.#clearDerivedTextBindings();
+		const result = recoverFormDraft(this, draft, nextFields);
+		if (this.access !== undefined && before !== undefined) {
+			this.#retainedAccess ??= { access: this.access, locations: before };
+			this.access = {
+				...this.access,
+				fields: rebaseFieldAccess(
+					before,
+					indexFieldValues(nextFields, result.values),
+					this.access.fields
+				),
+			};
+		}
 		this.#fields = nextFields;
-		const result = recoverFormDraft(this, draft, previousFields, nextFields);
 		this.values = result.values;
 		this.#invalidateValueIndexes();
 		this.original = result.original;

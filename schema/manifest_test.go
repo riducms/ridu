@@ -726,8 +726,8 @@ func TestManifestRowLabelComponentSnapshotIsImmutable(t *testing.T) {
 				Plugin: "curriculum", Component: "questionOption", Config: config,
 			}},
 		}}}},
-		Plugins: []schema.Plugin{{Key: "curriculum", Version: "1.0.0", GoPackage: "example.com/plugins/curriculum",
-			APIVersion: schema.CurrentPluginAPIVersion, Ridu: &schema.PluginCompatibility{Minimum: "0.1.0", MaximumExclusive: "0.2.0"}, Admin: &schema.PluginAdmin{
+		Plugins: []schema.Plugin{{Key: "curriculum", GoPackage: "example.com/plugins/curriculum",
+			APIVersion: schema.CurrentPluginAPIVersion, Admin: &schema.PluginAdmin{
 				Package: "@example/curriculum-admin", Export: "curriculumAdminPlugin",
 				APIVersion: schema.CurrentAdminPluginAPIVersion, PairingVersion: 1,
 			}}},
@@ -763,8 +763,8 @@ func TestManifestParseValidatesRowLabelComponents(t *testing.T) {
 				Plugin: "curriculum", Component: "questionOption", Config: json.RawMessage(`{"key":"optionKey"}`),
 			}},
 		}}}},
-		Plugins: []schema.Plugin{{Key: "curriculum", Version: "1.0.0", GoPackage: "example.com/plugins/curriculum",
-			APIVersion: schema.CurrentPluginAPIVersion, Ridu: &schema.PluginCompatibility{Minimum: "0.1.0", MaximumExclusive: "0.2.0"}, Admin: &schema.PluginAdmin{
+		Plugins: []schema.Plugin{{Key: "curriculum", GoPackage: "example.com/plugins/curriculum",
+			APIVersion: schema.CurrentPluginAPIVersion, Admin: &schema.PluginAdmin{
 				Package: "@example/curriculum-admin", Export: "curriculumAdminPlugin",
 				APIVersion: schema.CurrentAdminPluginAPIVersion, PairingVersion: 1,
 			}}},
@@ -865,8 +865,7 @@ func TestManifestParseRejectsUnsafeAdminPluginImports(t *testing.T) {
 	base := schema.Snapshot{
 		Version: schema.CurrentVersion, Application: schema.Application{Name: "Example"}, Collections: []schema.Collection{},
 		Plugins: []schema.Plugin{{
-			Key: "editor", Version: "1.0.0", GoPackage: "example.com/editor", APIVersion: schema.CurrentPluginAPIVersion,
-			Ridu:  &schema.PluginCompatibility{Minimum: "0.0.0-dev"},
+			Key: "editor", GoPackage: "example.com/editor", APIVersion: schema.CurrentPluginAPIVersion,
 			Admin: &schema.PluginAdmin{Package: "@example/editor", Export: "editorAdminPlugin", APIVersion: schema.CurrentAdminPluginAPIVersion, PairingVersion: 1},
 		}},
 	}

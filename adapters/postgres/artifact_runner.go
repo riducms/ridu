@@ -54,26 +54,12 @@ type RunnerOptions struct {
 	// rollout boundaries. A transaction phase can stop only at its final step.
 	StopAfterPhase string
 	StopAfterStep  string
-	// Notice receives non-blocking execution provenance after the complete
-	// pending history has passed preflight.
-	Notice func(MigrationNotice)
 
 	// afterBatch is an internal deterministic interruption seam used to prove
 	// that committed data and checkpoints resume together. Production callers
 	// cannot configure it.
 	afterBatch func(artifact, phase, step string, checkpoint json.RawMessage) error
 }
-
-// MigrationNotice is stable, machine-readable runner context.
-type MigrationNotice struct {
-	Code     string
-	Artifact string
-	Message  string
-}
-
-// NoticeAtlasProvenance identifies replay by an Atlas runner version other
-// than the one that planned the frozen artifact SQL.
-const NoticeAtlasProvenance = "RIDU_ATLAS_PROVENANCE"
 
 // ErrMaintenanceRequired identifies pending whole-dataset work that requires
 // an explicit maintenance window admission.
@@ -128,8 +114,7 @@ func verifyPostgresArtifactFiles(ctx context.Context, databaseURL string, files 
 	if err := requirePostgresDataTransformRegistry(files, registry); err != nil {
 		return err
 	}
-	notices, err := preflightArtifactExecution(ctx, files, 0, options)
-	if err != nil {
+	if err := preflightArtifactExecution(ctx, files, 0, options); err != nil {
 		return err
 	}
 	identifier := make([]byte, 12)
@@ -162,9 +147,7 @@ func verifyPostgresArtifactFiles(ctx context.Context, databaseURL string, files 
 		return err
 	}
 	defer shadow.Close()
-	shadowOptions := options
-	shadowOptions.Notice = nil
-	if err := shadow.applyArtifactFilesWithRegistry(ctx, files, shadowOptions, registry); err != nil {
+	if err := shadow.applyArtifactFilesWithRegistry(ctx, files, options, registry); err != nil {
 		return fmt.Errorf("verify migrations in shadow schema: %w", err)
 	}
 	statuses, err := shadow.artifactStatusFiles(ctx, files)
@@ -174,7 +157,6 @@ func verifyPostgresArtifactFiles(ctx context.Context, databaseURL string, files 
 	if err := requireCompleteShadowReplay(files, statuses); err != nil {
 		return fmt.Errorf("verify completed shadow migration state: %w", err)
 	}
-	emitMigrationNotices(options, notices)
 	return nil
 }
 
@@ -297,23 +279,24 @@ func (backend *Store) applyArtifactFilesWithRegistry(ctx context.Context, files 
 	if err != nil {
 		return err
 	}
-	notices, err := preflightArtifactExecution(ctx, files, len(applied), options)
-	if err != nil {
+	if err := preflightArtifactExecution(ctx, files, len(applied), options); err != nil {
 		return err
 	}
 	if !inProgress {
 		var manifest *schema.Manifest
-		contract := currentAtlasPlannerContract()
 		if len(applied) != 0 {
-			last := files[len(applied)-1]
-			appliedManifest := schema.NewManifest(last.Artifact.After)
+			appliedManifest := schema.NewManifest(files[len(applied)-1].Artifact.After)
 			manifest = &appliedManifest
-			contract = postgresArtifactTargetContract(last.Artifact)
 		}
-		if err := verifyPostgresPhysicalState(ctx, connection, manifest, contract); err != nil {
+		if err := verifyPostgresPhysicalState(ctx, connection, manifest); err != nil {
 			return fmt.Errorf("current migration state: %w", err)
 		}
-		if manifest != nil {
+		// Every applied artifact records its schema, so pending work starts
+		// from a recorded schema that must match the verified applied head.
+		if manifest != nil && len(applied) < len(files) {
+			if err := requirePostgresDevelopmentManifest(ctx, connection, *manifest); err != nil {
+				return err
+			}
 		}
 	}
 	if !exists {
@@ -324,7 +307,6 @@ func (backend *Store) applyArtifactFilesWithRegistry(ctx context.Context, files 
 	if err := ensureArtifactStepLedger(ctx, connection); err != nil {
 		return err
 	}
-	emitMigrationNotices(options, notices)
 	for index, file := range files {
 		if index < len(applied) {
 			continue
@@ -340,48 +322,41 @@ func (backend *Store) applyArtifactFilesWithRegistry(ctx context.Context, files 
 	if len(files) != 0 {
 		last := files[len(files)-1]
 		manifest := schema.NewManifest(last.Artifact.After)
-		if err := verifyPostgresPhysicalState(ctx, connection, &manifest, postgresArtifactTargetContract(last.Artifact)); err != nil {
+		if err := verifyPostgresPhysicalState(ctx, connection, &manifest); err != nil {
 			return fmt.Errorf("current migration state: %w", err)
 		}
 	}
 	return nil
 }
 
-func preflightPendingArtifacts(ctx context.Context, files []migrationartifact.File, options RunnerOptions) ([]MigrationNotice, error) {
+func preflightPendingArtifacts(ctx context.Context, files []migrationartifact.File, options RunnerOptions) error {
 	return preflightArtifactExecution(ctx, files, 0, options)
 }
 
-func preflightArtifactExecution(ctx context.Context, history []migrationartifact.File, pendingStart int, options RunnerOptions) ([]MigrationNotice, error) {
+func preflightArtifactExecution(ctx context.Context, history []migrationartifact.File, pendingStart int, options RunnerOptions) error {
 	if pendingStart < 0 || pendingStart > len(history) {
-		return nil, fmt.Errorf("pending boundary %d is outside history of %d artifacts", pendingStart, len(history))
+		return fmt.Errorf("pending boundary %d is outside history of %d artifacts", pendingStart, len(history))
 	}
 	if err := validatePostgresSemanticHistory(history); err != nil {
-		return nil, err
+		return err
 	}
 	files := history[pendingStart:]
 	if err := validatePendingArtifactInspection(ctx, files); err != nil {
-		return nil, err
+		return err
 	}
 	if err := validateStopBoundary(files, options); err != nil {
-		return nil, err
+		return err
 	}
-	var notices []MigrationNotice
 	var maintenance []string
 	for _, file := range files {
-		if file.Artifact.Planner.Version != AtlasVersion {
-			notices = append(notices, MigrationNotice{
-				Code: NoticeAtlasProvenance, Artifact: file.Name,
-				Message: fmt.Sprintf("artifact %s was planned by Atlas %s; runner Atlas %s independently regenerated and exactly matched the complete execution contract before execution", file.Name, file.Artifact.Planner.Version, AtlasVersion),
-			})
-		}
 		if artifactRequiresMaintenance(file.Artifact) && !options.AllowMaintenance {
 			maintenance = append(maintenance, file.Name)
 		}
 	}
 	if len(maintenance) != 0 {
-		return nil, &MaintenanceRequiredError{Artifacts: maintenance}
+		return &MaintenanceRequiredError{Artifacts: maintenance}
 	}
-	return notices, nil
+	return nil
 }
 
 func validatePostgresResourceRetirementTopology(artifact ridumigration.Artifact) error {
@@ -723,16 +698,7 @@ func snapshotHasAuthCollections(snapshot schema.Snapshot) bool {
 }
 
 func migrationStepRequiresMaintenance(kind ridumigration.StepKind) bool {
-	return kind == ridumigration.StepRenameContent || kind == ridumigration.StepBackfillReferences || kind == ridumigration.StepRetireResources || kind == ridumigration.StepCanonicalizeAuthIdentities || kind == ridumigration.StepDataTransform
-}
-
-func emitMigrationNotices(options RunnerOptions, notices []MigrationNotice) {
-	if options.Notice == nil {
-		return
-	}
-	for _, notice := range notices {
-		options.Notice(notice)
-	}
+	return kind == ridumigration.StepRenameContent || kind == ridumigration.StepBackfillReferences || kind == ridumigration.StepRetireResources || kind == ridumigration.StepDataTransform
 }
 
 type artifactLedgerRow struct {
@@ -852,11 +818,7 @@ func artifactExecutionInProgress(ctx context.Context, queryer interface {
 }
 
 func assertPhysicalSchema(ctx context.Context, transaction *sql.Tx, expectedManifest schema.Manifest) error {
-	return assertPhysicalSchemaForContract(ctx, transaction, expectedManifest, currentAtlasPlannerContract())
-}
-
-func assertPhysicalSchemaForContract(ctx context.Context, transaction *sql.Tx, expectedManifest schema.Manifest, contract atlasPlannerContract) error {
-	return assertPhysicalSchemaShape(ctx, transaction, expectedManifest, atlasSchemaForContract(expectedManifest, atlasIdentityMap{}, contract))
+	return assertPhysicalSchemaShape(ctx, transaction, expectedManifest, atlasSchema(expectedManifest, atlasIdentityMap{}))
 }
 
 func assertEmptyPhysicalSchema(ctx context.Context, transaction *sql.Tx) error {
@@ -878,7 +840,7 @@ func assertEmptyPhysicalSchema(ctx context.Context, transaction *sql.Tx) error {
 // the migration ledgers, which a database without applied history must not
 // have.
 func unmanagedPostgresTables(ctx context.Context, transaction *sql.Tx) ([]string, error) {
-	rows, err := transaction.QueryContext(ctx, `SELECT table_name FROM information_schema.tables WHERE table_schema = current_schema() AND table_name NOT IN ('ridu_migrations', 'ridu_migration_steps') ORDER BY table_name`)
+	rows, err := transaction.QueryContext(ctx, `SELECT table_name FROM information_schema.tables WHERE table_schema = current_schema() AND table_name NOT IN ('ridu_migrations', 'ridu_migration_steps', 'ridu_postgres_schema') ORDER BY table_name`)
 	if err != nil {
 		return nil, fmt.Errorf("list PostgreSQL tables: %w", err)
 	}
@@ -904,7 +866,7 @@ func assertPhysicalSchemaShape(ctx context.Context, transaction *sql.Tx, expecte
 		return fmt.Errorf("inspect PostgreSQL schema: %w", err)
 	}
 	for index := len(actual.Tables) - 1; index >= 0; index-- {
-		if actual.Tables[index].Name == "ridu_migrations" || actual.Tables[index].Name == "ridu_migration_steps" {
+		if postgresSchemaMetadataTable(actual.Tables[index].Name) {
 			actual.Tables = append(actual.Tables[:index], actual.Tables[index+1:]...)
 			continue
 		}
@@ -1815,15 +1777,11 @@ func (backend *Store) artifactStatusFiles(ctx context.Context, files []migration
 	}
 	if !inProgress {
 		var manifest *schema.Manifest
-		contract := currentAtlasPlannerContract()
-		if len(applied) == 0 {
-		} else {
-			last := files[len(applied)-1]
-			appliedManifest := schema.NewManifest(last.Artifact.After)
+		if len(applied) != 0 {
+			appliedManifest := schema.NewManifest(files[len(applied)-1].Artifact.After)
 			manifest = &appliedManifest
-			contract = postgresArtifactTargetContract(last.Artifact)
 		}
-		if err := verifyPostgresPhysicalState(ctx, connection, manifest, contract); err != nil {
+		if err := verifyPostgresPhysicalState(ctx, connection, manifest); err != nil {
 			return nil, fmt.Errorf("migration status physical schema: %w", err)
 		}
 	}

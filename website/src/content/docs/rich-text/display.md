@@ -90,13 +90,14 @@ Fetch the document through your generated SDK, then pass its rich-text field to 
 For JavaScript or TypeScript, use `renderRichTextHTML`:
 
 ```ts
-import { renderRichTextHTML } from '@riducms/plugin-richtext/render';
+import { renderRichTextHTML } from '@riducms/sdk/richtext';
 
 const html = renderRichTextHTML(article.content);
 ```
 
 Here, `article.content` is a saved rich-text value. Check it is present before rendering an optional
-field. This renderer works without Svelte or a browser and does not include the admin editor.
+field. Install only `@riducms/sdk` in a content consumer: it includes the document types and this
+renderer without Svelte, Lexical, or a browser.
 
 For Svelte, import `RichText` from `@riducms/plugin-richtext/svelte` and render
 `<RichText value={article.content} />`. To display custom blocks, pass a `blocks` object that maps

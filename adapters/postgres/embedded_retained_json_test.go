@@ -65,7 +65,7 @@ func TestPostgresEmbeddedRetainedJSONRequiresTransform(t *testing.T) {
 
 			// This is a valid, correctly digested artifact of exactly the unsafe
 			// assert_schema-only shape. Runner admission must independently reject it.
-			manifestOnly, err := ridumigration.NewArtifact("retained-json-change", atlasPlannerForContract(currentAtlasPlannerContract()), &before, after)
+			manifestOnly, err := ridumigration.NewArtifact("retained-json-change", atlasPlanner(), &before, after)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -77,7 +77,7 @@ func TestPostgresEmbeddedRetainedJSONRequiresTransform(t *testing.T) {
 				t.Fatalf("invalid runner fixture: %v", err)
 			}
 			file := migrationartifact.File{Name: manifestOnly.Name, Artifact: manifestOnly}
-			if _, err := preflightPendingArtifacts(t.Context(), []migrationartifact.File{file}, RunnerOptions{AllowMaintenance: true}); err == nil || !strings.Contains(err.Error(), "compiled data transform") {
+			if err := preflightPendingArtifacts(t.Context(), []migrationartifact.File{file}, RunnerOptions{AllowMaintenance: true}); err == nil || !strings.Contains(err.Error(), "compiled data transform") {
 				t.Errorf("runner admitted an assert_schema-only artifact: %v", err)
 			}
 

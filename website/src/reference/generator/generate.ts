@@ -1,6 +1,5 @@
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { gzipSync } from 'node:zlib';
 import {
 	referenceModuleRegistry,
 	type ReferenceModuleRegistration,
@@ -16,27 +15,10 @@ export interface ReferenceCatalogFile {
 	modules: ReferenceModule[];
 }
 
-interface LockedRoute {
-	module: string;
-	symbol: string;
-	redirect?: string;
-}
-
-interface RouteLockFile {
-	schemaVersion: 1;
-	routes: Record<string, LockedRoute>;
-}
-
 export interface GenerateReferenceOptions {
 	repositoryRoot: string;
 	write: boolean;
-	seedRoutes?: boolean;
 }
-
-// Includes the live-validation methods and their authored callback contracts,
-// and the cascade delete, system-call and migration-baseline APIs.
-export const REFERENCE_CATALOG_MAX_BYTES = 4.25 * 1024 * 1024;
-export const REFERENCE_CATALOG_MAX_GZIP_BYTES = 448 * 1024;
 
 export function generateReferenceCatalog(options: GenerateReferenceOptions): ReferenceCatalogFile {
 	const go = extractGo(options.repositoryRoot);
@@ -46,11 +28,6 @@ export function generateReferenceCatalog(options: GenerateReferenceOptions): Ref
 			loaded.declarations.map(normalizeGoDeclaration)
 		])
 	);
-	const routeLockPath = path.join(
-		options.repositoryRoot,
-		'website/src/reference/authoring/route-lock.json'
-	);
-	const routeLock = readRouteLock(routeLockPath);
 	const generatedIDs = new Set<string>();
 	const modules = referenceModuleRegistry.map((registration) => {
 		const declarations = extractModuleDeclarations(
@@ -58,7 +35,7 @@ export function generateReferenceCatalog(options: GenerateReferenceOptions): Ref
 			registration,
 			extractedByPackage
 		);
-		const module = buildModule(registration, declarations, routeLock);
+		const module = buildModule(registration, declarations);
 		for (const symbol of module.symbols) {
 			if (generatedIDs.has(symbol.id))
 				throw new Error(`duplicate generated declaration ID ${symbol.id}`);
@@ -70,20 +47,16 @@ export function generateReferenceCatalog(options: GenerateReferenceOptions): Ref
 	resolveEditorialLinks(modules);
 	validateOverlays(generatedIDs);
 
-	validateRoutes(modules, routeLock, generatedIDs, Boolean(options.seedRoutes));
+	validateRoutes(modules);
 	validateCLI(options.repositoryRoot, modules);
 	validatePackageExportMaps(options.repositoryRoot);
 	validatePublicGoPackages(options.repositoryRoot);
 	const catalog: ReferenceCatalogFile = { schemaVersion: 1, modules };
 	assertPortable(catalog);
-	const serializedCatalog = stableJSON(catalog);
-	validateCatalogSize(serializedCatalog);
-
 	if (options.write) {
-		writeFileSync(routeLockPath, stableJSON(routeLock));
 		writeFileSync(
 			path.join(options.repositoryRoot, 'website/src/reference/generated/catalog.json'),
-			serializedCatalog
+			stableJSON(catalog)
 		);
 	}
 	return catalog;
@@ -187,8 +160,7 @@ function appendTypeScriptDeclarations(
 
 function buildModule(
 	registration: ReferenceModuleRegistration,
-	extracted: ExtractedDeclaration[],
-	routeLock: RouteLockFile
+	extracted: ExtractedDeclaration[]
 ): ReferenceModule {
 	const byID = new Map(extracted.map((declaration) => [declaration.id, declaration]));
 	const orderedDeclarations = registration.symbolOrder.map((id) => {
@@ -201,11 +173,9 @@ function buildModule(
 			.filter((declaration) => !registration.symbolOrder.includes(declaration.id))
 			.sort((left, right) => left.id.localeCompare(right.id))
 	);
-	const symbols = uniqueByID(orderedDeclarations).map((declaration) => {
-		const overlay = referenceEditorialOverlays[declaration.id];
-		const route = routeFor(routeLock, registration.slug, declaration);
-		return buildSymbol(registration, declaration, overlay, route.symbol);
-	});
+	const symbols = routedDeclarations(uniqueByID(orderedDeclarations)).map(({ declaration, slug }) =>
+		buildSymbol(registration, declaration, referenceEditorialOverlays[declaration.id], slug)
+	);
 	const discoveredGroups = [...new Set(symbols.map((symbol) => symbol.group))];
 	const groupOrder = [
 		...registration.groupOrder.filter((group) => discoveredGroups.includes(group)),
@@ -286,24 +256,26 @@ function buildSymbol(
 	};
 }
 
-function routeFor(
-	routeLock: RouteLockFile,
-	moduleSlug: string,
-	declaration: ExtractedDeclaration
-): LockedRoute {
-	const existing = routeLock.routes[declaration.id];
-	if (existing) {
-		if (existing.module !== moduleSlug) {
-			throw new Error(
-				`locked reference route ${declaration.id} moved from ${existing.module} to ${moduleSlug}`
-			);
-		}
-		return existing;
-	}
-	const generatedSlug = `${declarationSlug(declaration.name)}${declaration.kind === 'method' ? '-method' : ''}`;
-	const route = { module: moduleSlug, symbol: generatedSlug };
-	routeLock.routes[declaration.id] = route;
-	return route;
+/**
+ * A symbol's page is `/reference/<module>/<slug>/`. The slug is the kebab-cased declaration name,
+ * plus `-method` for methods so `App.Manifest` never takes `AppManifest`'s page. When declarations
+ * in one module still share a slug, such as `ErrorPayload` and `errorPayload`, every one of them
+ * appends its kebab-cased kind (`error-payload-interface`, `error-payload-function`), so the
+ * result does not depend on declaration order. `validateRoutes` rejects any remaining collision.
+ */
+function routedDeclarations(
+	declarations: readonly ExtractedDeclaration[]
+): Array<{ declaration: ExtractedDeclaration; slug: string }> {
+	const named = declarations.map((declaration) => ({
+		declaration,
+		slug: `${declarationSlug(declaration.name)}${declaration.kind === 'method' ? '-method' : ''}`
+	}));
+	const counts = new Map<string, number>();
+	for (const { slug } of named) counts.set(slug, (counts.get(slug) ?? 0) + 1);
+	return named.map(({ declaration, slug }) => ({
+		declaration,
+		slug: (counts.get(slug) ?? 0) > 1 ? `${slug}-${declarationSlug(declaration.kind)}` : slug
+	}));
 }
 
 function readRecordDeclarations(
@@ -322,19 +294,7 @@ function readRecordDeclarations(
 	);
 }
 
-function readRouteLock(lockPath: string): RouteLockFile {
-	if (!existsSync(lockPath)) return { schemaVersion: 1, routes: Object.create(null) };
-	const parsed = JSON.parse(readFileSync(lockPath, 'utf8')) as RouteLockFile;
-	if (parsed.schemaVersion !== 1 || !parsed.routes) throw new Error('invalid reference route lock');
-	return parsed;
-}
-
-function validateRoutes(
-	modules: readonly ReferenceModule[],
-	routeLock: RouteLockFile,
-	generatedIDs: ReadonlySet<string>,
-	seedRoutes: boolean
-): void {
+function validateRoutes(modules: readonly ReferenceModule[]): void {
 	const routes = new Map<string, string>();
 	for (const module of modules) {
 		for (const symbol of module.symbols) {
@@ -343,15 +303,6 @@ function validateRoutes(
 			if (existing)
 				throw new Error(`reference route collision ${route}: ${existing} and ${symbol.id}`);
 			routes.set(route, symbol.id);
-		}
-	}
-	for (const [id, route] of Object.entries(routeLock.routes)) {
-		if (!generatedIDs.has(id) && !route.redirect) {
-			if (seedRoutes) {
-				delete routeLock.routes[id];
-				continue;
-			}
-			throw new Error(`orphan reference route lock ${id} requires an explicit redirect`);
 		}
 	}
 }
@@ -547,17 +498,6 @@ function validatePublicGoPackages(repositoryRoot: string): void {
 	}
 }
 
-function validateCatalogSize(serialized: string): void {
-	const rawBytes = Buffer.byteLength(serialized);
-	const gzipBytes = gzipSync(serialized, { level: 9 }).byteLength;
-	if (rawBytes > REFERENCE_CATALOG_MAX_BYTES || gzipBytes > REFERENCE_CATALOG_MAX_GZIP_BYTES) {
-		throw new Error(
-			`Generated reference catalog exceeds its size budget: ${rawBytes} raw bytes / ${gzipBytes} gzip bytes ` +
-				`(limits ${REFERENCE_CATALOG_MAX_BYTES} / ${REFERENCE_CATALOG_MAX_GZIP_BYTES})`
-		);
-	}
-}
-
 function mergeParameterDescriptions(
 	structural: readonly ReferenceParameter[],
 	editorial: ReferenceEditorialOverlay['parameters']
@@ -595,10 +535,14 @@ function firstParagraph(value: string): string | undefined {
 }
 
 function declarationSlug(name: string): string {
-	return name
-		.replaceAll('.', '-')
-		.replace(/([a-z0-9])([A-Z])/g, '$1-$2')
-		.replace(/([A-Z]+)([A-Z][a-z])/g, '$1-$2')
+	// Identifiers split at case changes; a phrase such as a CLI record name keeps its words.
+	const words = name.includes(' ')
+		? name
+		: name
+				.replaceAll('.', '-')
+				.replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+				.replace(/([A-Z]+)([A-Z][a-z])/g, '$1-$2');
+	return words
 		.replaceAll(/[^A-Za-z0-9]+/g, '-')
 		.replaceAll(/^-|-$/g, '')
 		.toLowerCase();

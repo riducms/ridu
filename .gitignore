@@ -35,6 +35,3 @@ go.work.sum
 
 # Ridu-generated disposable state
 .ridu/
-
-# Legacy pre-rename disposable state. Keep local Zeno caches out of the worktree.
-.zeno/

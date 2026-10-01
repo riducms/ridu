@@ -356,10 +356,7 @@ plaintext to another development host only. They do not expand the production su
 ## Immutable migration lifecycle {#migrations}
 
 Artifacts created by `ridu migrate create` use MongoDB planner contract `2.0.0` inside shared
-artifact-envelope format `1`.
-Authenticated planner-`1.0.0` artifacts remain a supported immutable prefix: the runner validates
-and replays that committed history before applying v2 artifacts rather than rewriting or rejecting
-it. Create and inspect the plan before the cutover:
+artifact-envelope format `1`. Create and inspect the plan before the cutover:
 
 ```bash title="terminal"
 ridu migrate create --name add-post-summary
@@ -378,10 +375,10 @@ migration runner, checks the final ledger and index state, and drops that databa
 can reach that database, so `verify` admits semantic work without `--allow-maintenance`. `status`
 is non-mutating.
 `ridu build` embeds a fingerprint of the exact ordered migration filenames, artifact digests,
-recorded head, and schema without Admin presentation settings. Application readiness requires the
-live ledger and executable schema to match that fingerprint, and every required Ridu index to pass
-non-mutating verification. Admin-only changes do not require another migration; other schema
-changes and a mismatched recorded head still fail readiness.
+recorded head, and storage schema, which omits presentation settings. Application readiness
+requires the live ledger and executable schema to match that fingerprint, and every required Ridu
+index to pass non-mutating verification. Presentation changes do not require another migration;
+other schema changes and a mismatched recorded head still fail readiness.
 `ridu check` and `ridu build` remain offline and fail when committed history does not end at
 executable config.
 A direct `go build` has no fingerprint and fails closed in ordinary production startup. Deployment

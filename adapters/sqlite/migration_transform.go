@@ -14,25 +14,8 @@ import (
 	"github.com/riducms/ridu/store"
 )
 
-func buildSQLiteArtifactWithDataTransformDescriptors(ctx context.Context, name string, before *schema.Manifest, after schema.Manifest, previousPlannerVersion string, contract sqlitePlannerContract, transforms []ridumigration.DataTransformDescriptor, allowTransformedSchema bool) (ridumigration.Artifact, error) {
-	return buildSQLiteArtifactWithTransitionValidation(ctx, name, before, after, previousPlannerVersion, contract, transforms, allowTransformedSchema, validateSQLiteAdditiveTransition, validateSQLiteTransformedTransition)
-}
-
-// rebuildSQLiteArtifactWithDataTransformDescriptors preserves the exact risk
-// classification of historical transformed artifacts. Earlier planners compared
-// presentation metadata too, so an otherwise additive edit could require a
-// transform. Reconstruct that original plan rather than altering its recorded
-// risks or relaxing the caller's full artifact digest comparison.
-func rebuildSQLiteArtifactWithDataTransformDescriptors(ctx context.Context, name string, before *schema.Manifest, after schema.Manifest, previousPlannerVersion string, contract sqlitePlannerContract, transforms []ridumigration.DataTransformDescriptor, transformedSchema bool) (ridumigration.Artifact, error) {
-	artifact, err := buildSQLiteArtifactWithDataTransformDescriptors(ctx, name, before, after, previousPlannerVersion, contract, transforms, transformedSchema)
-	if err != nil || !transformedSchema || sqliteArtifactAllowsTransformedSchema(artifact) {
-		return artifact, err
-	}
-	return buildSQLiteArtifactWithTransitionValidation(ctx, name, before, after, previousPlannerVersion, contract, transforms, true, validateSQLiteAdditiveSnapshotTransition, validateSQLiteTransformedSnapshotTransition)
-}
-
-func buildSQLiteArtifactWithTransitionValidation(ctx context.Context, name string, before *schema.Manifest, after schema.Manifest, previousPlannerVersion string, contract sqlitePlannerContract, transforms []ridumigration.DataTransformDescriptor, allowTransformedSchema bool, validateAdditive, validateTransformed func(schema.Snapshot, schema.Snapshot) error) (ridumigration.Artifact, error) {
-	if len(transforms) != 0 && before != nil && previousPlannerVersion == contract.version {
+func buildSQLiteArtifactWithDataTransformDescriptors(ctx context.Context, name string, before *schema.Manifest, after schema.Manifest, transforms []ridumigration.DataTransformDescriptor, allowTransformedSchema bool) (ridumigration.Artifact, error) {
+	if len(transforms) != 0 && before != nil {
 		fromDigest, err := ridumigration.DigestManifest(*before)
 		if err != nil {
 			return ridumigration.Artifact{}, err
@@ -42,19 +25,19 @@ func buildSQLiteArtifactWithTransitionValidation(ctx context.Context, name strin
 			return ridumigration.Artifact{}, err
 		}
 		if fromDigest == toDigest {
-			artifact, err := buildSQLiteDataOnlyArtifact(name, *before, after, contract)
+			artifact, err := buildSQLiteDataOnlyArtifact(name, *before, after)
 			if err != nil {
 				return ridumigration.Artifact{}, err
 			}
 			return bindSQLiteDataTransforms(artifact, transforms)
 		}
 	}
-	artifact, err := buildSQLiteArtifactWithValidation(ctx, name, before, after, previousPlannerVersion, contract, validateAdditive, nil)
+	artifact, err := buildSQLiteArtifactWithValidation(ctx, name, before, after, validateSQLiteAdditiveTransition, nil)
 	if err != nil {
 		if len(transforms) == 0 || !allowTransformedSchema {
 			return ridumigration.Artifact{}, err
 		}
-		artifact, err = buildSQLiteArtifactWithValidation(ctx, name, before, after, previousPlannerVersion, contract, validateTransformed, nil)
+		artifact, err = buildSQLiteArtifactWithValidation(ctx, name, before, after, validateSQLiteTransformedTransition, nil)
 		if err != nil {
 			return ridumigration.Artifact{}, err
 		}
@@ -76,10 +59,7 @@ func buildSQLiteArtifactWithTransitionValidation(ctx context.Context, name strin
 // preference state. Versioned field changes remain unsupported until callbacks
 // can rewrite retained snapshots atomically as well as current documents.
 func validateSQLiteTransformedTransition(before, after schema.Snapshot) error {
-	return validateSQLiteTransformedSnapshotTransition(sqliteWithoutPresentation(before), sqliteWithoutPresentation(after))
-}
-
-func validateSQLiteTransformedSnapshotTransition(before, after schema.Snapshot) error {
+	before, after = sqliteStorageSchema(before), sqliteStorageSchema(after)
 	currentApplication := after.Application
 	currentApplication.AllowIDOnCreate = before.Application.AllowIDOnCreate
 	if !reflect.DeepEqual(before.Application, currentApplication) {
@@ -148,8 +128,8 @@ func sqliteArtifactAllowsTransformedSchema(artifact ridumigration.Artifact) bool
 	return false
 }
 
-func buildSQLiteDataOnlyArtifact(name string, before, after schema.Manifest, contract sqlitePlannerContract) (ridumigration.Artifact, error) {
-	artifact, err := ridumigration.NewArtifact(name, ridumigration.Planner{Name: sqlitePlannerName, Version: contract.version}, &before, after)
+func buildSQLiteDataOnlyArtifact(name string, before, after schema.Manifest) (ridumigration.Artifact, error) {
+	artifact, err := ridumigration.NewArtifact(name, ridumigration.Planner{Name: sqlitePlannerName, Version: sqlitePlannerVersion}, &before, after)
 	if err != nil {
 		return ridumigration.Artifact{}, err
 	}
@@ -637,7 +617,7 @@ func (driver *sqliteProjectMigrationDriver) runProjectMigrationFiles(ctx context
 	defer backend.Close()
 	switch request.Action {
 	case ridumigration.ProjectApply:
-		return backend.applySQLiteArtifacts(ctx, files, sqlitePlannerContractFor, registry)
+		return backend.applySQLiteArtifacts(ctx, files, registry)
 	case ridumigration.ProjectDown:
 		return backend.downSQLiteArtifacts(ctx, files, registry)
 	case ridumigration.ProjectReset:

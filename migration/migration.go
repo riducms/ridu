@@ -36,8 +36,8 @@ func UnmanagedSchemaError(engine string, objects []string) error {
 }
 
 // DigestArtifactHistory binds one complete ordered migration history to its
-// recorded head manifest and the executable's storage schema. Admin presentation
-// may differ from the head without changing this identity. Names must be unique
+// recorded head manifest and the executable's storage schema. Settings outside
+// the storage schema may differ from the head without changing this identity. Names must be unique
 // and strictly increasing because committed filenames define execution order.
 func DigestArtifactHistory(identities []ArtifactIdentity, headDigest string, manifest schema.Manifest) (string, error) {
 	if len(identities) == 0 {
@@ -64,7 +64,7 @@ func DigestArtifactHistory(identities []ArtifactIdentity, headDigest string, man
 	if !validDigest(headDigest) {
 		return "", fmt.Errorf("migration artifact history has an invalid head manifest digest")
 	}
-	storageDigest, err := DigestManifest(manifest.WithoutAdminPresentation())
+	storageDigest, err := DigestManifest(manifest.StorageSchema())
 	if err != nil {
 		return "", fmt.Errorf("digest migration artifact storage manifest: %w", err)
 	}
@@ -100,10 +100,6 @@ const (
 	// StepDataTransform invokes one application-compiled, checksum-bound
 	// callback inside the adapter's migration transaction.
 	StepDataTransform StepKind = "data_transform"
-	// StepCanonicalizeAuthIdentities rewrites authored authentication identity
-	// values to store.CanonicalAuthIdentity before an adapter replaces its
-	// legacy uniqueness contract.
-	StepCanonicalizeAuthIdentities StepKind = "canonicalize_auth_identities"
 )
 
 // DataTransformDescriptor is the immutable artifact identity of one compiled
@@ -230,18 +226,6 @@ type Operation struct {
 	// historical version rows could otherwise restore references to a retired
 	// resource. It is present only while planning StepRetireResources.
 	PurgeVersionOwnerIDs []schema.StableID `json:"purgeVersionOwnerIds,omitempty"`
-	// AuthIdentities is present only while planning a
-	// StepCanonicalizeAuthIdentities step.
-	AuthIdentities []AuthIdentityResource `json:"authIdentities,omitempty"`
-}
-
-// AuthIdentityResource freezes one authored identity field addressed by a
-// canonicalization migration. Names are needed by JSON-document adapters;
-// stable IDs bind physical-column adapters to the same manifest field.
-type AuthIdentityResource struct {
-	CollectionID schema.StableID `json:"collectionId"`
-	FieldID      schema.StableID `json:"fieldId"`
-	FieldName    string          `json:"fieldName"`
 }
 
 // Artifact is the immutable source of truth for one migration. It embeds both
@@ -271,8 +255,6 @@ type Artifact struct {
 	Phases []Phase `json:"phases"`
 	// Risks retains machine-readable planner and linter findings for review.
 	Risks []Risk `json:"risks"`
-
-	codec *artifactCodecState
 }
 
 // DigestManifest returns the SHA-256 digest of a canonical manifest.
@@ -308,7 +290,7 @@ func (artifact Artifact) Validate() error {
 	if strings.TrimSpace(artifact.Planner.Name) == "" || strings.TrimSpace(artifact.Planner.Version) == "" {
 		return fmt.Errorf("migration %s planner provenance is malformed", artifact.Name)
 	}
-	after, err := artifact.validatedAfterManifest()
+	after, err := artifact.AfterManifest()
 	if err != nil {
 		return fmt.Errorf("migration %s after manifest: %w", artifact.Name, err)
 	}
@@ -330,7 +312,7 @@ func (artifact Artifact) Validate() error {
 		if artifact.PreviousArtifactDigest != "" && !validDigest(artifact.PreviousArtifactDigest) {
 			return fmt.Errorf("migration %s previous artifact digest is malformed", artifact.Name)
 		}
-		before, err := artifact.validatedBeforeManifest()
+		before, err := artifact.BeforeManifest()
 		if err != nil {
 			return fmt.Errorf("migration %s before manifest: %w", artifact.Name, err)
 		}

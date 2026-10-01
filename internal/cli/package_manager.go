@@ -74,7 +74,7 @@ func packageManagerRemoveCommand(manager projectfile.PackageManager, dependency 
 }
 
 func packageManagerInstallCommand(ctx context.Context, definition projectfile.File) (string, []string) {
-	manager := definition.FrontendPackageManager()
+	manager := definition.PackageManager
 	switch manager {
 	case projectfile.PackageManagerNPM:
 		if fileExists(filepath.Join(definition.Root, "package-lock.json")) {
@@ -122,7 +122,7 @@ func packageManagerLockfiles(definition projectfile.File) []string {
 }
 
 func packageManagerInstallHint(definition projectfile.File) string {
-	install, _ := packageManagerUserCommands(definition.FrontendPackageManager())
+	install, _ := packageManagerUserCommands(definition.PackageManager)
 	return install
 }
 
@@ -132,7 +132,7 @@ func fileExists(path string) bool {
 }
 
 func runPackageManagerScript(ctx context.Context, definition projectfile.File, directory, script string, arguments []string, stdout, stderr io.Writer) error {
-	command, commandArguments := packageManagerRunCommand(definition.FrontendPackageManager(), script, arguments...)
+	command, commandArguments := packageManagerRunCommand(definition.PackageManager, script, arguments...)
 	if err := runForeground(ctx, directory, nil, stdout, stderr, command, commandArguments...); err != nil {
 		return fmt.Errorf("%s: %w", strings.Join(append([]string{command}, commandArguments...), " "), err)
 	}

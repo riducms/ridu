@@ -2,7 +2,7 @@ import { isRecord } from "@riducms/protocol";
 import type { FieldAuthoringHost } from "@riducms/plugin";
 import type { SchemaBlockType } from "@riducms/protocol";
 import type { SerializedLexicalNode } from "lexical";
-import { documentRecoveryIssue } from "@plugin-richtext/document-validation";
+import { documentRecoveryIssue } from "@riducms/sdk/richtext";
 
 /** Validates first, then copies only declared payloads through the generic schema host. */
 export function copyBlockClipboardNodes(

@@ -1,7 +1,6 @@
 # Raycast File Search exclusions, including build output intentionally tracked by Git.
 # Keep source, documentation and authored test fixtures searchable.
 .ridu/
-.zeno/
 node_modules/
 dist/
 .svelte-kit/
@@ -14,7 +13,6 @@ test-results/
 # Committed generated contracts and reference artifacts.
 /packages/protocol/src/generated.ts
 /website/src/reference/generated/
-/website/src/reference/authoring/route-lock.json
 /examples/blocks/generated/
 /testdata/generated/
 /tests/contracts/unifiedfields/generated/

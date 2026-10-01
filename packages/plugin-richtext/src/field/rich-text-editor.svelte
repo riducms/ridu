@@ -1,6 +1,5 @@
 <script lang="ts">
-	import type { RichTextDocument } from "@plugin-richtext/document";
-	import { decodeRichTextDocument } from "@plugin-richtext/document-validation";
+	import type { RichTextDocument } from "@riducms/sdk/richtext";
 	import type { RichTextConfig } from "@plugin-richtext/field/rich-text-config";
 	import type { PluginFieldProps } from "@riducms/plugin";
 	import { CodeNode } from "@lexical/code";
@@ -50,6 +49,7 @@
 		editorRecoveryIssue,
 		initialEditorState,
 	} from "@plugin-richtext/field/rich-text-document";
+	import { decodeRichTextDocument } from "@plugin-richtext/field/rich-text-value";
 	import { UploadNode } from "@plugin-richtext/upload/rich-text-upload-node";
 	import RichTextUploadPlugin from "@plugin-richtext/upload/rich-text-upload-plugin.svelte";
 	import { RelationshipNode } from "@plugin-richtext/relationship/rich-text-relationship-node";

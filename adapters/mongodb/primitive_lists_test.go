@@ -25,16 +25,16 @@ func TestPrimitiveListsMongoDBMigrationAndIndexes(t *testing.T) {
 	}
 	before := resolve(field.Fields{field.Text("title")})
 	after := resolve(field.Fields{field.Text("title"), field.TextList("points").Default("oak", "oak"), field.NumberList("sizes").Default(0, 0)})
-	if _, err := buildMongoDBArtifact(t.Context(), "add-lists", &before, after, mongoDBPlannerVersion, currentMongoDBPlannerContract()); err != nil {
+	if _, err := buildMongoDBArtifact(t.Context(), "add-lists", &before, after, ArtifactOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	scalar := resolve(field.Fields{field.Text("value")})
 	list := resolve(field.Fields{field.TextList("value")})
-	if _, err := buildMongoDBArtifact(t.Context(), "scalar-to-list", &scalar, list, mongoDBPlannerVersion, currentMongoDBPlannerContract()); err == nil || !strings.Contains(err.Error(), "changes value shape") {
+	if _, err := buildMongoDBArtifact(t.Context(), "scalar-to-list", &scalar, list, ArtifactOptions{}); err == nil || !strings.Contains(err.Error(), "changes value shape") {
 		t.Fatalf("automatic conversion: %v", err)
 	}
 	descriptor := ridumigration.DataTransformDescriptor{Name: "convert-list", Checksum: ridumigration.DataTransformChecksum([]byte("explicit-list-conversion"))}
-	if _, err := buildMongoDBArtifactWithOptions(t.Context(), "convert", &scalar, list, mongoDBPlannerVersion, currentMongoDBPlannerContract(), ArtifactOptions{AllowDestructive: true, DataTransforms: []ridumigration.DataTransformDescriptor{descriptor}}); err != nil {
+	if _, err := buildMongoDBArtifact(t.Context(), "convert", &scalar, list, ArtifactOptions{AllowDestructive: true, DataTransforms: []ridumigration.DataTransformDescriptor{descriptor}}); err != nil {
 		t.Fatalf("explicit transform rejected: %v", err)
 	}
 	for _, unique := range []bool{false, true} {

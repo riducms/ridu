@@ -135,8 +135,8 @@ ridu dev --address 127.0.0.1:3000 --admin-port 5174
 Pass `--database-url <url>` for PostgreSQL or MongoDB, or `--database-path <path>` for SQLite.
 Without those flags, Ridu reads `DATABASE_URL` or `RIDU_SQLITE_PATH`, then falls back to the
 scaffold's local development database. `--no-docker`, `--no-install`, and `--no-sync` skip their
-corresponding setup step. The [CLI reference for `ridu dev`](/reference/cli/dev/) lists every option
-and default.
+corresponding setup step. The [CLI reference for `ridu dev`](/reference/cli/ridu-dev/) lists every
+option and default.
 
 If a saved change looks like a rename, `dev` asks in an interactive terminal whether to preserve
 the data and can write and apply the migration for you. See
@@ -220,8 +220,8 @@ database and needs no path. SQLite also provides the explicitly destructive `dow
 `refresh`, and `fresh` commands for its reversible local artifacts.
 
 Follow [Migrations](/docs/migrations/) for the complete authoring and deployment workflow. The
-[migration command reference](/reference/cli/migrate-up/) lists every runner option, while each
-[database adapter](/docs/adapters/) explains its own connection and recovery rules.
+[migration command reference](/reference/cli/ridu-migrate-up/) lists every runner option, while
+each [database adapter](/docs/adapters/) explains its own connection and recovery rules.
 
 ## Upgrade Ridu {#upgrade}
 
@@ -280,10 +280,9 @@ plugin_go = "./content/ridu_plugins.generated.go"
 ```
 
 Version 1 accepts these structural keys plus generic `generated.<plugin>.<artifact>` destinations.
-`database`, `entry`, `schema`, `plugins`, and `plugin_go` are required; `database` must explicitly
-select `postgres`, `sqlite`, or `mongodb` because the CLI does not infer an adapter;
-`package_manager` selects npm, Bun, pnpm, or Yarn for frontend operations. Existing version-1 files
-that omit it retain Bun for compatibility, while new scaffolds always write the selection.
+`database`, `package_manager`, `entry`, `schema`, `plugins`, and `plugin_go` are required;
+`database` must explicitly select `postgres`, `sqlite`, or `mongodb` because the CLI does not infer
+an adapter, and `package_manager` selects npm, Bun, pnpm, or Yarn for frontend operations.
 `admin`, `client`, `migrations`, `openapi`, and `assets` may be empty when the project omits those
 outputs. Paths are relative to the project root. Only `client` and `openapi` may point outside it,
 for example `client = "../mobile/lib/ridu.generated.ts"` in a monorepo. There, Ridu checks the

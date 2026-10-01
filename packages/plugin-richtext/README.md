@@ -29,10 +29,11 @@ Configure block-level embeds with executable `richtext.Config.Blocks` definition
 editor uses the resolved allowlist for slash/toolbar insertion and an atomic card with a scoped
 Apply/Cancel drawer. The parent form owns saving; Lexical owns selection and history.
 
-Portable types are available from `@riducms/plugin-richtext/document`, HTML rendering from
-`@riducms/plugin-richtext/render`, and optional typed Svelte rendering from
-`@riducms/plugin-richtext/svelte`. These entries do not load the admin editor. See the rich-text
-guide for strict payloads, localization, typed renderers and experimental-content migration.
+Content consumers import portable document types and HTML rendering from `@riducms/sdk/richtext`;
+installing `@riducms/sdk` is sufficient and does not install Svelte or Lexical.
+Optional typed Svelte rendering is available from `@riducms/plugin-richtext/svelte`, which does not
+load the admin editor. See the rich-text guide for strict payloads, localization, typed renderers
+and experimental-content migration.
 
 The supported authoring UI uses semantic SCSS, compact grouped insertion menus, six heading levels,
 Markdown shortcuts, interactive checklists, custom-URL link drawers and intrinsic-ratio media cards.

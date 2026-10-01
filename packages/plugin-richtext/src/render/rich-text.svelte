@@ -1,12 +1,13 @@
 <script lang="ts" generics="Payload extends { blockType: string } = never">
 	import type { Component, Snippet } from "svelte";
-	import type { RichTextDocument, RichTextNode } from "#richtext/document";
 	import {
 		documentRecoveryIssue,
 		renderRichTextText,
 		richTextElementTag,
 		safeRichTextURL,
-	} from "#richtext/render";
+		type RichTextDocument,
+		type RichTextNode,
+	} from "@riducms/sdk/richtext";
 	import type { RichTextBlockComponents } from "#richtext/svelte";
 
 	let {

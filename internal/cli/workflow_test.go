@@ -660,6 +660,7 @@ func TestDoctorDoesNotRequireDockerForSQLite(t *testing.T) {
 	root := t.TempDir()
 	project := `version = 1
 database = "sqlite"
+package_manager = "bun"
 entry = "./cmd/server"
 schema = "./generated/ridu.schema.json"
 plugins = "./ridu.plugins.json"
@@ -701,6 +702,7 @@ func TestDoctorRequiresMongoDBURLWithoutFallingThroughToPostgreSQLDocker(t *test
 	root := t.TempDir()
 	project := `version = 1
 database = "mongodb"
+package_manager = "bun"
 entry = "./cmd/server"
 schema = "./generated/ridu.schema.json"
 plugins = "./ridu.plugins.json"
@@ -756,6 +758,7 @@ func TestMongoDBMigrateCreateIsOfflineAndCredentialFree(t *testing.T) {
 	root := t.TempDir()
 	projectFile := `version = 1
 database = "mongodb"
+package_manager = "bun"
 entry = "./cmd/server"
 schema = "./generated/ridu.schema.json"
 migrations = "./migrations"
@@ -854,6 +857,7 @@ func TestMongoDBMigrateCreateOmitsDatabaseEnvironmentFromFailingProject(t *testi
 	root := t.TempDir()
 	project := `version = 1
 database = "mongodb"
+package_manager = "bun"
 entry = "./cmd/server"
 schema = "./generated/ridu.schema.json"
 migrations = "./migrations"
@@ -908,6 +912,7 @@ func TestMongoDBMigrateCreateRejectsLiveDatabaseSelectorsBeforeProjectResolution
 	root := t.TempDir()
 	project := `version = 1
 database = "mongodb"
+package_manager = "bun"
 entry = "./cmd/server"
 schema = "./generated/ridu.schema.json"
 migrations = "./migrations"
@@ -948,6 +953,7 @@ func TestMongoDBLiveMigrationCommandsRequireURLBeforeProjectResolution(t *testin
 	root := t.TempDir()
 	project := `version = 1
 database = "mongodb"
+package_manager = "bun"
 entry = "./cmd/server"
 schema = "./generated/ridu.schema.json"
 migrations = "./migrations"
@@ -976,6 +982,7 @@ func TestMongoDBDestructiveMigrationLifecycleFailsClosedBeforeDispatch(t *testin
 	root := t.TempDir()
 	project := `version = 1
 database = "mongodb"
+package_manager = "bun"
 entry = "./cmd/server"
 schema = "./generated/ridu.schema.json"
 migrations = "./migrations"

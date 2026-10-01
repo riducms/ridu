@@ -666,18 +666,11 @@ export interface SchemaAdminSettings {
 
 export interface SchemaPlugin {
 	key: string;
-	version?: string;
 	goPackage?: string;
 	apiVersion?: number;
-	ridu?: SchemaPluginCompatibility;
 	admin?: SchemaPluginAdmin;
 	fieldTypes?: SchemaPluginFieldType[];
 	endpoints?: SchemaPluginEndpoint[];
-}
-
-export interface SchemaPluginCompatibility {
-	minimum: string;
-	maximumExclusive?: string;
 }
 
 export interface SchemaPluginAdmin {

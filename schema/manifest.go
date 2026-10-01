@@ -172,25 +172,16 @@ type AdminSettings struct {
 }
 
 // Plugin records one compiled plugin that participated in config resolution.
+// A plugin's package version and Ridu compatibility range are checked when
+// config is resolved but are not schema, so upgrading a plugin is never a
+// data-model change.
 type Plugin struct {
-	Key string `json:"key"`
-	// Version and Ridu are empty in manifests Ridu writes today. Manifests from
-	// Ridu 0.4 and earlier recorded the plugin's package version and supported
-	// Ridu range here; the fields remain so their migration artifacts keep the
-	// same digests. Plugin compatibility is checked when config is resolved.
-	Version    string               `json:"version,omitempty"`
-	GoPackage  string               `json:"goPackage,omitempty"`
-	APIVersion uint32               `json:"apiVersion,omitempty"`
-	Ridu       *PluginCompatibility `json:"ridu,omitempty"`
-	Admin      *PluginAdmin         `json:"admin,omitempty"`
-	FieldTypes []PluginFieldType    `json:"fieldTypes,omitempty"`
-	Endpoints  []PluginEndpoint     `json:"endpoints,omitempty"`
-}
-
-// PluginCompatibility is a half-open semantic-version interval.
-type PluginCompatibility struct {
-	Minimum          string `json:"minimum"`
-	MaximumExclusive string `json:"maximumExclusive,omitempty"`
+	Key        string            `json:"key"`
+	GoPackage  string            `json:"goPackage,omitempty"`
+	APIVersion uint32            `json:"apiVersion,omitempty"`
+	Admin      *PluginAdmin      `json:"admin,omitempty"`
+	FieldTypes []PluginFieldType `json:"fieldTypes,omitempty"`
+	Endpoints  []PluginEndpoint  `json:"endpoints,omitempty"`
 }
 
 // PluginAdmin describes one statically imported admin package paired with a
@@ -2102,7 +2093,7 @@ func validatePluginBuildMetadata(plugins []Plugin) error {
 			return fmt.Errorf("duplicate schema plugin key %q", plugin.Key)
 		}
 		keys[plugin.Key] = struct{}{}
-		hasDescriptor := plugin.Version != "" || plugin.GoPackage != "" || plugin.APIVersion != 0 || plugin.Ridu != nil || len(plugin.FieldTypes) != 0 || plugin.Admin != nil || len(plugin.Endpoints) != 0
+		hasDescriptor := plugin.GoPackage != "" || plugin.APIVersion != 0 || len(plugin.FieldTypes) != 0 || plugin.Admin != nil || len(plugin.Endpoints) != 0
 		if !hasDescriptor {
 			if owner, exists := fieldOwners[plugin.Key]; exists {
 				return fmt.Errorf("plugin field type %q is already owned by %s", plugin.Key, owner)
@@ -2110,8 +2101,7 @@ func validatePluginBuildMetadata(plugins []Plugin) error {
 			fieldOwners[plugin.Key] = plugin.Key
 		}
 		if hasDescriptor {
-			legacyVersionInvalid := plugin.Version != "" && !IsValidSemanticVersion(plugin.Version) || plugin.Ridu != nil && !IsValidSemanticVersionRange(plugin.Ridu.Minimum, plugin.Ridu.MaximumExclusive)
-			if legacyVersionInvalid || !IsValidGoPackage(plugin.GoPackage) || plugin.APIVersion != CurrentPluginAPIVersion {
+			if !IsValidGoPackage(plugin.GoPackage) || plugin.APIVersion != CurrentPluginAPIVersion {
 				return fmt.Errorf("invalid versioned plugin descriptor at plugins[%d]", index)
 			}
 			fieldKeys := make(map[string]struct{}, len(plugin.FieldTypes))
@@ -2586,10 +2576,6 @@ func cloneSnapshot(snapshot Snapshot) Snapshot {
 			admin.Routes = append([]string(nil), plugin.Admin.Routes...)
 			admin.Assets = append([]string(nil), plugin.Admin.Assets...)
 			cloned.Plugins[index].Admin = &admin
-		}
-		if plugin.Ridu != nil {
-			compatibility := *plugin.Ridu
-			cloned.Plugins[index].Ridu = &compatibility
 		}
 		cloned.Plugins[index].FieldTypes = make([]PluginFieldType, len(plugin.FieldTypes))
 		for fieldIndex, fieldType := range plugin.FieldTypes {

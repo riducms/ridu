@@ -78,7 +78,7 @@ func TestRichTextConfiguredGeneratedContracts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, expected := range []string{".RichTextDocument<PagesBodyBlocksBlock[number]>", ".RichTextDocumentInput<PagesBodyBlocksBlockInput[number]>", "export type PagesPlainBlocksBlockBlock = never;", "blockType: \"callout\""} {
+	for _, expected := range []string{`import("@riducms/sdk/richtext").RichTextDocument<`, ".RichTextDocument<PagesBodyBlocksBlock[number]>", ".RichTextDocumentInput<PagesBodyBlocksBlockInput[number]>", "export type PagesPlainBlocksBlockBlock = never;", "blockType: \"callout\""} {
 		if !strings.Contains(string(ts), expected) {
 			t.Fatalf("missing %s:\n%s", expected, ts)
 		}
@@ -128,26 +128,54 @@ func compileRichTextTSConsumer(t *testing.T, generated []byte) {
 	compileRichTextTSConsumerSource(t, generated, richTextGeneratedTSConsumer)
 }
 
+// The consumer lives outside the repository and receives only published SDK/protocol
+// artifacts. Workspace hoisting must not conceal an accidental editor dependency.
 func compileRichTextTSConsumerSource(t *testing.T, generated []byte, consumer string) {
 	t.Helper()
-	root, _ := filepath.Abs("../..")
-	if err := os.MkdirAll(filepath.Join(root, ".ridu"), 0755); err != nil {
-		t.Fatal(err)
-	}
-	dir, err := os.MkdirTemp(filepath.Join(root, ".ridu"), "richtext-types-")
+	root, err := filepath.Abs("../..")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(dir)
-	for name, content := range map[string]string{"generated.ts": string(generated), "tsconfig.json": `{"extends":"../../tsconfig.base.json","include":["*.ts"]}`, "consumer.ts": consumer} {
+	dir := t.TempDir()
+	for _, name := range []string{"sdk", "protocol"} {
+		source := filepath.Join(root, "packages", name)
+		installed := filepath.Join(dir, "node_modules", "@riducms", name)
+		if err := os.CopyFS(filepath.Join(installed, "dist"), os.DirFS(filepath.Join(source, "dist"))); err != nil {
+			t.Fatalf("copy published %s output (build runtime packages first): %v", name, err)
+		}
+		manifest, err := os.ReadFile(filepath.Join(source, "package.json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(installed, "package.json"), manifest, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for name, content := range map[string]string{
+		"generated.ts":  string(generated),
+		"tsconfig.json": `{"compilerOptions":{"target":"ES2023","module":"NodeNext","moduleResolution":"NodeNext","lib":["ES2023","DOM","DOM.Iterable"],"strict":true,"noEmit":true,"verbatimModuleSyntax":true,"exactOptionalPropertyTypes":true,"noUncheckedIndexedAccess":true,"skipLibCheck":false,"types":[]},"include":["*.ts"]}`,
+		"package.json":  `{"type":"module","dependencies":{"@riducms/sdk":"*"}}`,
+		"consumer.ts":   consumer,
+	} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0600); err != nil {
 			t.Fatal(err)
 		}
 	}
 	cmd := exec.CommandContext(t.Context(), "bun", filepath.Join(root, "node_modules/typescript/bin/tsc"), "-p", filepath.Join(dir, "tsconfig.json"))
-	cmd.Dir = root
+	cmd.Dir = dir
 	if output, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("typed rich-text TS consumer: %v\n%s", err, output)
+		t.Fatalf("SDK-only typed rich-text TS consumer: %v\n%s", err, output)
+	}
+	if consumer == "" {
+		return
+	}
+	if err := os.WriteFile(filepath.Join(dir, "render.mjs"), []byte(richTextSDKOnlyRenderConsumer), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cmd = exec.CommandContext(t.Context(), "bun", "run", "render.mjs")
+	cmd.Dir = dir
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("SDK-only rich-text HTML renderer: %v\n%s", err, output)
 	}
 }
 
@@ -156,9 +184,9 @@ import("encoding/json";"testing";g "example.com/richtext-consumer";richtext "git
 func TestTyped(t *testing.T){payload:=g.PagesBodyBlocksBlockInputPayload{Value:&g.ArticleCalloutInput{Title:"Hello"}};value:=richtext.Document[g.PagesBodyBlocksBlockInputPayload]{Version:1,Root:richtext.Node[g.PagesBodyBlocksBlockInputPayload]{Type:"root",Children:[]richtext.Node[g.PagesBodyBlocksBlockInputPayload]{{Type:"block",Version:1,Fields:&payload}}}};data,err:=json.Marshal(value);if err!=nil{t.Fatal(err)};var decoded richtext.Document[g.PagesBodyBlocksBlockInputPayload];if err:=json.Unmarshal(data,&decoded);err!=nil{t.Fatal(err)};if _,ok:=decoded.Root.Children[0].Fields.Value.(*g.ArticleCalloutInput);!ok{t.Fatalf("untyped payload %T",decoded.Root.Children[0].Fields.Value)};var output richtext.Document[g.PagesBodyBlocksBlockPayload];if err:=json.Unmarshal([]byte("{\"version\":1,\"root\":{\"type\":\"root\",\"children\":[{\"type\":\"block\",\"version\":1,\"fields\":{\"blockType\":\"callout\",\"_key\":\"one\"}}]}}"),&output);err!=nil{t.Fatal(err)};if _,err:=richtext.RenderDocument(output,func(payload g.PagesBodyBlocksBlockPayload)(string,error){switch payload.Value.(type){case *g.ArticleCallout:return "callout",nil;case *g.ArticleCTA:return "CTA",nil;default:t.Fatal("unknown variant");return "",nil}},nil);err!=nil{t.Fatal(err)}}
 `
 const richTextGeneratedTSConsumer = `
-import type { PagesCreate, Pages, ArticleCalloutInput } from "./generated";
-import type { RichTextBlockRenderers } from "@riducms/plugin-richtext/document";
-import {renderRichTextHTML} from "@riducms/plugin-richtext/render";
+import type { PagesCreate, Pages, ArticleCalloutInput } from "./generated.js";
+import type { RichTextBlockRenderers } from "@riducms/sdk/richtext";
+import {renderRichTextHTML} from "@riducms/sdk/richtext";
 const input: PagesCreate={body:{version:1,root:{type:"root",children:[{type:"block",version:1,fields:{blockType:"callout",title:"Hello",target:"id"}}]}}};
 function output(page: Pages){for(const node of page.body?.root.children??[]){if(node.type==="block"&&node.fields.blockType==="callout"){node.fields.title?.toUpperCase();node.fields.target;}}}
 const renderers:RichTextBlockRenderers<NonNullable<Pages["body"]>["root"]["children"][number] extends infer Node ? Node extends {fields:infer Payload} ? Payload extends {blockType:string} ? Payload : never : never : never,string>={callout:(block)=>block.title??"",cta:(block)=>block.label??""};
@@ -169,4 +197,18 @@ const missing:ArticleCalloutInput={blockType:"callout"};
 const unknown:ArticleCalloutInput={blockType:"unknown",title:"Hello"};
 // @ts-expect-error blocks are not permitted in plain rich text
 const arbitrary:PagesCreate={plain:{version:1,root:{type:"root",children:[{type:"block",version:1,fields:{blockType:"anything"}}]}}};
+`
+
+const richTextSDKOnlyRenderConsumer = `
+import { renderRichTextHTML } from "@riducms/sdk/richtext";
+const value = {version: 1, root: {type: "root", children: [
+    {type: "paragraph", children: [{type: "text", text: "<Hello>&"}]},
+    {type: "block", version: 1, fields: {blockType: "callout", _key: "one", title: "Read me"}},
+]}};
+const actual = renderRichTextHTML(value, {blocks: {callout: block => "<aside>" + block.title + "</aside>"}});
+if (actual !== "<p>&lt;Hello&gt;&amp;</p><aside>Read me</aside>") throw new Error(actual);
+for (const dependency of ["svelte", "lexical", "@riducms/plugin-richtext"]) {
+    try { import.meta.resolve(dependency); } catch { continue; }
+    throw new Error("SDK-only consumer unexpectedly resolves " + dependency);
+}
 `

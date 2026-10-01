@@ -16,7 +16,7 @@ func TestDigestArtifactHistoryAuthenticatesHistoryHeadAndStorageSchema(t *testin
 	headDigest := strings.Repeat("f", 64)
 	// The CLI links this digest into the executable and the runtime recomputes
 	// it at startup, so its encoding must only change deliberately.
-	const want = "79cc699da1ad5df099158aee63edd23a3bd99b468c94f4e7dcdec1ca61c33e7a"
+	const want = "5ada7316b071eba5f25f14e17b8e3573af96583efee94e19a302d6cce68bacc5"
 	if got, err := DigestArtifactHistory(history, headDigest, manifest); err != nil || got != want {
 		t.Fatalf("history digest = %q, %v; want %q", got, err, want)
 	}

@@ -109,6 +109,11 @@ func (backend *Store) SyncIndexes(ctx context.Context, manifest schema.Manifest)
 		backend.indexLifecycleMu.Lock()
 		defer backend.indexLifecycleMu.Unlock()
 	}
+	return backend.syncMongoIndexes(ctx, manifest)
+}
+
+// syncMongoIndexes requires the caller to own the index lifecycle lock.
+func (backend *Store) syncMongoIndexes(ctx context.Context, manifest schema.Manifest) error {
 	planSet, err := mongoPhysicalIndexPlans(manifest)
 	if err != nil {
 		if backend != nil {
@@ -1231,6 +1236,7 @@ func (backend *Store) verifyMongoMigrationLedgerPhysicalContract(ctx context.Con
 		{name: mongoMigrationArtifactCollectionName, description: "migration artifact ledger"},
 		{name: mongoMigrationStepCollectionName, description: "migration step ledger"},
 		{name: mongoMigrationLeaseCollectionName, description: "migration lease"},
+		{name: mongoDevelopmentSchemaCollection, description: "last synchronized schema"},
 	} {
 		description := fmt.Sprintf("%s namespace %q", ledger.description, ledger.name)
 		actual, err := backend.readNamedCollectionIndexes(ctx, ledger.name, description)

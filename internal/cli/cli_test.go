@@ -123,6 +123,9 @@ func TestMigrateCreateTakesItsNameOnce(t *testing.T) {
 		{[]string{"migrate", "baseline", "add-summary"}, "does not accept positional arguments"},
 		{[]string{"migrate", "baseline", "--json"}, "does not accept --json"},
 		{[]string{"migrate", "baseline", "--allow-maintenance"}, "does not accept --allow-maintenance"},
+		{[]string{"migrate", "up", "--replace"}, "does not accept baseline replacement options"},
+		{[]string{"migrate", "baseline", "--allow-production"}, "require ridu migrate baseline --replace"},
+		{[]string{"migrate", "baseline", "--previous-history", "old"}, "require ridu migrate baseline --replace"},
 	} {
 		var stdout, stderr bytes.Buffer
 		if code := cli.Run(t.Context(), test.args, &stdout, &stderr, cli.Options{WorkingDirectory: t.TempDir()}); code != 2 || !strings.Contains(stderr.String(), test.want) {
@@ -183,7 +186,6 @@ func TestNewReleaseOverrideWorksThroughRealBinary(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !strings.Contains(string(rootPackage), `"@riducms/sdk": "`+strings.TrimPrefix(testReleaseVersion, "v")+`"`) ||
-		!strings.Contains(string(rootPackage), `"@riducms/plugin-richtext": "`+strings.TrimPrefix(testReleaseVersion, "v")+`"`) ||
 		!strings.Contains(string(rootPackage), `"@riducms/plugin-form-builder": "`+strings.TrimPrefix(testReleaseVersion, "v")+`"`) {
 		t.Fatalf("real CLI did not make the generated contract dependency root-resolvable:\n%s", rootPackage)
 	}
@@ -1115,15 +1117,16 @@ func TestGeneratedProjectUsesSQLiteMigrationLifecycle(t *testing.T) {
 	}
 }
 
-func TestSQLiteCanonicalAuthUpgradeCLIRequiresDestructiveCreationApproval(t *testing.T) {
+// Nothing to migrate is not a failure: create succeeds without a file.
+func TestSQLiteMigrateCreateWithoutChangesSucceedsWithoutArtifact(t *testing.T) {
 	ctx := context.Background()
 	frameworkRoot := moduleRoot(t)
-	target := newProjectTarget(t, "sqlite-canonical-auth")
+	target := newProjectTarget(t, "sqlite-unchanged")
 	setFrameworkProxy(t, frameworkRoot)
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	options := cli.Options{WorkingDirectory: target, Version: testReleaseVersion, FrameworkVersion: ridu.FrameworkVersion}
-	if exitCode := cli.Run(ctx, []string{"new", "--database", "sqlite", "--module", "example.com/sqlite/canonical-auth", target}, &stdout, &stderr, options); exitCode != 0 {
+	if exitCode := cli.Run(ctx, []string{"new", "--database", "sqlite", "--module", "example.com/sqlite/unchanged", target}, &stdout, &stderr, options); exitCode != 0 {
 		t.Fatalf("ridu new: %s", stderr.String())
 	}
 	stdout.Reset()
@@ -1131,66 +1134,10 @@ func TestSQLiteCanonicalAuthUpgradeCLIRequiresDestructiveCreationApproval(t *tes
 	if exitCode := cli.Run(ctx, []string{"generate"}, &stdout, &stderr, options); exitCode != 0 {
 		t.Fatalf("ridu generate: %s", stderr.String())
 	}
-
-	directory := filepath.Join(target, "migrations")
-	files, err := migrationartifact.ReadAll(directory)
-	if err != nil || len(files) != 1 {
-		t.Fatalf("read ordinary SQLite initial migration = %d files, %v", len(files), err)
-	}
-	legacy := files[0].Artifact
-	if err := os.Remove(files[0].Path); err != nil {
-		t.Fatal(err)
-	}
-	legacy.Planner.Version = "1.0.0"
-	if _, err := migrationartifact.Create(directory, legacy.Name, legacy, time.Unix(1, 0)); err != nil {
-		t.Fatalf("publish frozen SQLite v1 fixture: %v", err)
-	}
-
 	stdout.Reset()
 	stderr.Reset()
-	if exitCode := cli.Run(ctx, []string{"migrate", "create", "--name", "canonical-auth"}, &stdout, &stderr, options); exitCode != 1 || !strings.Contains(stderr.String(), "explicit safety resolution") {
-		t.Fatalf("unapproved canonical auth migration = exit %d, stdout %q, stderr %q", exitCode, stdout.String(), stderr.String())
-	}
-	files, err = migrationartifact.ReadAll(directory)
-	if err != nil || len(files) != 1 {
-		t.Fatalf("unapproved canonical auth migration published history = %d files, %v", len(files), err)
-	}
-
-	stdout.Reset()
-	stderr.Reset()
-	if exitCode := cli.Run(ctx, []string{"migrate", "create", "--name", "canonical-auth", "--allow-destructive"}, &stdout, &stderr, options); exitCode != 0 {
-		t.Fatalf("approved canonical auth migration = exit %d, stderr %q", exitCode, stderr.String())
-	}
-	if !strings.Contains(stdout.String(), "destructive\tRIDU_AUTH_IDENTITY_CANONICALIZATION") {
-		t.Fatalf("approved canonical auth migration output = %q", stdout.String())
-	}
-	files, err = migrationartifact.ReadAll(directory)
-	if err != nil || len(files) != 2 {
-		t.Fatalf("approved canonical auth migration history = %d files, %v", len(files), err)
-	}
-	foundDestructive := false
-	for _, risk := range files[1].Artifact.Risks {
-		foundDestructive = foundDestructive || risk.Code == "RIDU_AUTH_IDENTITY_CANONICALIZATION" && risk.Level == ridumigration.RiskDestructive
-	}
-	if !foundDestructive {
-		t.Fatalf("approved canonical auth migration risks = %#v", files[1].Artifact.Risks)
-	}
-
-	databasePath := filepath.Join(target, ".ridu", "canonical-auth.sqlite")
-	if err := os.MkdirAll(filepath.Dir(databasePath), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	stdout.Reset()
-	stderr.Reset()
-	if exitCode := cli.Run(ctx, []string{"migrate", "up", "--database-path", databasePath}, &stdout, &stderr, options); exitCode != 0 {
-		t.Fatalf("apply approved canonical auth migration without a second approval = exit %d, stderr %q", exitCode, stderr.String())
-	}
-
-	stdout.Reset()
-	stderr.Reset()
-	// Nothing to migrate is not a failure: create succeeds without a file.
 	if exitCode := cli.Run(ctx, []string{"migrate", "create", "--name", "unchanged"}, &stdout, &stderr, options); exitCode != 0 || !strings.Contains(stdout.String(), "No migration needed: the schema has not changed") || stderr.Len() != 0 {
-		t.Fatalf("unchanged current-planner creation = exit %d, stdout %q, stderr %q", exitCode, stdout.String(), stderr.String())
+		t.Fatalf("unchanged creation = exit %d, stdout %q, stderr %q", exitCode, stdout.String(), stderr.String())
 	}
 	if unchanged, err := filepath.Glob(filepath.Join(target, "migrations", "*_unchanged*")); err != nil || len(unchanged) != 0 {
 		t.Fatalf("unchanged creation wrote %v, %v", unchanged, err)
@@ -1335,6 +1282,7 @@ func TestMigrateMaintenanceAdmissionIsLimitedToUpAndVerify(t *testing.T) {
 	root := t.TempDir()
 	project := `version = 1
 database = "postgres"
+package_manager = "bun"
 entry = "./cmd/server"
 schema = "./generated/ridu.schema.json"
 migrations = "./migrations"

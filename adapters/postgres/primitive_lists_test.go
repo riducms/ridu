@@ -40,8 +40,7 @@ func TestPrimitiveListsPostgresMigrationAndIndexes(t *testing.T) {
 		}
 	}
 	descriptor := ridumigration.DataTransformDescriptor{Name: "convert-list", Checksum: ridumigration.DataTransformChecksum([]byte("explicit-list-conversion"))}
-	contract := currentAtlasPlannerContract()
-	if _, err := buildArtifactWithPlannerContracts(t.Context(), "convert", &list, resolve(field.Fields{field.NumberList("value")}), nil, false, contract, contract, descriptor); err != nil {
+	if _, err := planArtifact(t.Context(), "convert", &list, resolve(field.Fields{field.NumberList("value")}), nil, false, descriptor); err != nil {
 		t.Fatalf("explicit same-storage list transform rejected: %v", err)
 	}
 	for _, unique := range []bool{false, true} {

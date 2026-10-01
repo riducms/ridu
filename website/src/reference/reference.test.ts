@@ -145,7 +145,7 @@ const routeSegment = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const repositoryRoot = path.resolve(import.meta.dir, '../../..');
 
 const typescriptEntrypoints: Readonly<Record<string, readonly string[]>> = {
-	sdk: ['packages/sdk/src/index.ts'],
+	sdk: ['packages/sdk/src/index.ts', 'packages/sdk/src/richtext/index.ts'],
 	protocol: ['packages/protocol/src/index.ts'],
 	plugin: ['packages/plugin/src/index.ts'],
 	build: ['packages/build/src/index.ts', 'packages/build/src/vite/index.ts'],
@@ -278,7 +278,7 @@ describe('reference data', () => {
 			qualifier: '',
 			label: 'UpdateUploadInput'
 		});
-		expect(displayName('sdk', 'ridu-client-list')).toEqual({
+		expect(displayName('sdk', 'ridu-client-list-method')).toEqual({
 			qualifier: 'RiduClient.',
 			label: 'list'
 		});
@@ -295,7 +295,7 @@ describe('reference data', () => {
 			qualifier: 'local.',
 			label: 'Backend'
 		});
-		expect(displayName('cli', 'new')).toEqual({ qualifier: '', label: 'ridu new' });
+		expect(displayName('cli', 'ridu-new')).toEqual({ qualifier: '', label: 'ridu new' });
 	});
 
 	test('only links to registered reference symbols', () => {
@@ -334,7 +334,7 @@ describe('reference data', () => {
 			'sdk/client-options',
 			'sdk/ridu-client'
 		]);
-		expect(referencedRoutes('sdk', 'ridu-client-schema')).toEqual([
+		expect(referencedRoutes('sdk', 'ridu-client-schema-method')).toEqual([
 			'sdk/request-options',
 			'protocol/schema-manifest'
 		]);
@@ -482,7 +482,7 @@ describe('reference data', () => {
 			'/reference/core/task-enqueue-options/'
 		);
 		expect(typedTask && resolvedReferenceTypeLinks(typedTask).Input).toBeUndefined();
-		const pluginAdd = findReferenceSymbol('cli', 'plugin-add');
+		const pluginAdd = findReferenceSymbol('cli', 'ridu-plugin-add');
 		expect(pluginAdd).toBeDefined();
 		expect(pluginAdd && resolvedReferenceTypeLinks(pluginAdd).constructor).toBeUndefined();
 	});
@@ -690,15 +690,6 @@ describe('reference data', () => {
 				constants
 			);
 		}
-
-		const notice = findReferenceSymbol('postgres', 'migration-notice');
-		expect(notice?.parameters.map((parameter) => [parameter.name, parameter.type])).toEqual([
-			['Code', 'string'],
-			['Artifact', 'string'],
-			['Message', 'string']
-		]);
-		const provenance = findReferenceSymbol('postgres', 'notice-atlas-provenance');
-		expect(provenance?.signature).toContain('"RIDU_ATLAS_PROVENANCE"');
 	});
 
 	test('documents every public HandlerOptions field from the Go source', () => {
@@ -903,12 +894,27 @@ describe('reference data', () => {
 		const sdk = findReferenceModule('sdk');
 		expect(sdk).toBeDefined();
 		if (!sdk) return;
-		const exports = typescriptExports(path.join(repositoryRoot, typescriptEntrypoints.sdk[0]));
+		const entrypoints = new Map([
+			['@riducms/sdk', typescriptEntrypoints.sdk[0]],
+			['@riducms/sdk/richtext', typescriptEntrypoints.sdk[1]]
+		]);
+		const exportsBySpecifier = new Map(
+			[...entrypoints].map(([specifier, entrypoint]) => [
+				specifier,
+				typescriptExports(path.join(repositoryRoot, entrypoint))
+			])
+		);
 		for (const symbol of sdk.symbols) {
 			if (symbol.name.includes('.') || symbol.name === 'Live preview constants') continue;
+			const specifier = symbol.id.match(/^ts:([^#]+)#/)?.[1];
+			const exports = exportsBySpecifier.get(specifier ?? '');
 			expect(
-				exports.has(symbol.name),
-				`sdk/${symbol.slug} presents private ${symbol.name} as a public standalone export`
+				exports,
+				`sdk/${symbol.slug} names an unknown public SDK entrypoint in ${symbol.id}`
+			).toBeDefined();
+			expect(
+				exports?.has(symbol.name),
+				`sdk/${symbol.slug} presents private ${symbol.name} as a public standalone export from ${specifier}`
 			).toBeTrue();
 		}
 	});

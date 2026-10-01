@@ -399,11 +399,14 @@ describe("form schema reconciliation", () => {
 				values: { title: "Server title", status: "published" },
 				original: { title: "Server title", status: "published" },
 			},
-			{
-				values: { title: "Unsaved title", status: "draft" },
-				original: { title: "Old server title", status: "draft" },
-			},
-			fields,
+			reconcileFormSchema(
+				{
+					values: { title: "Unsaved title", status: "draft" },
+					original: { title: "Old server title", status: "draft" },
+				},
+				fields,
+				fields
+			),
 			fields
 		);
 

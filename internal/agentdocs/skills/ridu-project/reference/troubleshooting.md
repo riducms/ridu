@@ -134,8 +134,7 @@ transform to its immutable artifact when explicit schema-driven rewriting is req
 
 If status reports a digest mismatch, missing history, or changed applied artifact, restore the
 committed artifact that was actually applied. Migration files are immutable; do not edit applied
-PostgreSQL SQL, SQLite steps/transforms, or MongoDB plans/transforms. Authenticated MongoDB
-planner-`1.0.0` history remains a supported immutable prefix to v2; do not rewrite it. PostgreSQL and MongoDB
+PostgreSQL SQL, SQLite steps/transforms, or MongoDB plans/transforms. PostgreSQL and MongoDB
 recovery uses a forward corrective migration or a coordinated restore. SQLite's reviewed `down`,
 `reset`, `refresh`, and `fresh`
 commands require explicit destructive approval: `down`, `reset`, and `refresh` execute immutable

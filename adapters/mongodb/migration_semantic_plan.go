@@ -52,17 +52,18 @@ func requireMongoDBDestructiveApproval(risks []ridumigration.Risk, allowed bool)
 	return nil
 }
 
-func buildMongoDBSemanticArtifact(
+// buildMongoDBArtifact plans one artifact from the committed head, or from an
+// empty schema when before is nil, to the executable manifest. Planning is
+// deterministic: validation replans every committed artifact with it.
+func buildMongoDBArtifact(
 	ctx context.Context,
 	name string,
 	before *schema.Manifest,
 	after schema.Manifest,
-	previousPlannerVersion string,
-	contract mongoDBPlannerContract,
 	options ArtifactOptions,
 ) (ridumigration.Artifact, error) {
-	if !contract.semantic || contract.version != mongoDBPlannerVersionV2 {
-		return ridumigration.Artifact{}, fmt.Errorf("MongoDB planner %q does not implement semantic migrations", contract.version)
+	if ctx == nil {
+		return ridumigration.Artifact{}, fmt.Errorf("MongoDB migration context is required")
 	}
 	if err := ctx.Err(); err != nil {
 		return ridumigration.Artifact{}, err
@@ -70,14 +71,24 @@ func buildMongoDBSemanticArtifact(
 	if before == nil && (len(options.Renames) != 0 || len(options.DataTransforms) != 0) {
 		return ridumigration.Artifact{}, fmt.Errorf("initial MongoDB migration cannot contain renames or data transforms")
 	}
-	if before != nil && previousPlannerVersion != contract.version && previousPlannerVersion != mongoDBPlannerVersion {
-		return ridumigration.Artifact{}, fmt.Errorf("unsupported MongoDB planner transition %q -> %q", previousPlannerVersion, contract.version)
+	if before != nil {
+		fromDigest, err := ridumigration.DigestManifest(*before)
+		if err != nil {
+			return ridumigration.Artifact{}, err
+		}
+		toDigest, err := ridumigration.DigestManifest(after)
+		if err != nil {
+			return ridumigration.Artifact{}, err
+		}
+		if fromDigest == toDigest && len(options.DataTransforms) == 0 {
+			return ridumigration.Artifact{}, fmt.Errorf("%w; no MongoDB migration steps were planned", migrationartifact.ErrSchemaCurrent)
+		}
 	}
 	if err := validateMongoDBTransformDescriptors(options.DataTransforms); err != nil {
 		return ridumigration.Artifact{}, err
 	}
 
-	artifact, err := ridumigration.NewArtifact(name, ridumigration.Planner{Name: mongoDBPlannerName, Version: contract.version}, before, after)
+	artifact, err := ridumigration.NewArtifact(name, ridumigration.Planner{Name: mongoDBPlannerName, Version: mongoDBPlannerVersion}, before, after)
 	if err != nil {
 		return ridumigration.Artifact{}, err
 	}
@@ -172,7 +183,7 @@ func buildMongoDBSemanticArtifact(
 		return ridumigration.Artifact{}, err
 	}
 
-	artifact.Phases, err = mongoDBSemanticArtifactPhases(artifact.FromDigest, before, after, renamePlan, options.DataTransforms, retired, delta)
+	artifact.Phases, err = mongoDBArtifactPhases(artifact.FromDigest, before, after, renamePlan, options.DataTransforms, retired, delta)
 	if err != nil {
 		return ridumigration.Artifact{}, err
 	}
@@ -719,6 +730,7 @@ func mongoFieldsContainDeclaredPluginCollectionReferences(fields []schema.Field)
 }
 
 func validateMongoDBTransformedTransition(before, after schema.Snapshot) error {
+	before, after = mongoDBStorageSchema(before), mongoDBStorageSchema(after)
 	application := after.Application
 	application.AllowIDOnCreate = before.Application.AllowIDOnCreate
 	if !reflect.DeepEqual(before.Application, application) {
@@ -742,9 +754,8 @@ func validateMongoDBTransformedResources(kind string, before, after []schema.Col
 		}
 		comparison := current
 		comparison.Fields, comparison.Indexes = previous.Fields, previous.Indexes
-		comparison.Labels, comparison.Admin, comparison.Endpoints = previous.Labels, previous.Admin, previous.Endpoints
 		if !reflect.DeepEqual(previous, comparison) {
-			return fmt.Errorf("data transforms cannot change MongoDB %s %q outside fields, indexes, or presentation", kind, previous.ID)
+			return fmt.Errorf("data transforms cannot change MongoDB %s %q outside fields or indexes", kind, previous.ID)
 		}
 		if previous.Versions != nil && !reflect.DeepEqual(previous.Fields, current.Fields) {
 			return fmt.Errorf("data transforms cannot mutate versioned MongoDB %s %q; use explicit field renames that rewrite snapshots", kind, previous.ID)
@@ -811,7 +822,7 @@ func mongoDBSemanticIndexDelta(before, after mongoPhysicalIndexPlanSet, mapping 
 	return delta, nil
 }
 
-func mongoDBSemanticArtifactPhases(fromDigest string, before *schema.Manifest, after schema.Manifest, renames mongoDBSemanticRenamePlan, transforms []ridumigration.DataTransformDescriptor, retired []schema.StableID, delta mongoDBIndexDelta) ([]ridumigration.Phase, error) {
+func mongoDBArtifactPhases(fromDigest string, before *schema.Manifest, after schema.Manifest, renames mongoDBSemanticRenamePlan, transforms []ridumigration.DataTransformDescriptor, retired []schema.StableID, delta mongoDBIndexDelta) ([]ridumigration.Phase, error) {
 	physical := ridumigration.PhysicalDigestSeed(fromDigest)
 	var phases []ridumigration.Phase
 	stepNumber := 0

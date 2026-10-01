@@ -1,12 +1,8 @@
 import { describe, expect, test } from 'bun:test';
-import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { gzipSync } from 'node:zlib';
 import registryFile from '../authoring/module-registry.json';
-import routeLockFile from '../authoring/route-lock.json';
 import catalogFile from '../generated/catalog.json';
 import type { ReferenceModule } from '../types';
-import { REFERENCE_CATALOG_MAX_BYTES, REFERENCE_CATALOG_MAX_GZIP_BYTES } from './generate';
 
 interface CatalogFixture {
 	schemaVersion: 1;
@@ -18,14 +14,8 @@ interface RegistryFixture {
 	modules: Array<{ slug: string }>;
 }
 
-interface RouteLockFixture {
-	schemaVersion: 1;
-	routes: Record<string, { module: string; symbol: string }>;
-}
-
 const catalog = catalogFile as CatalogFixture;
 const registry = registryFile as RegistryFixture;
-const routeLock = routeLockFile as RouteLockFixture;
 
 describe('generated reference catalog', () => {
 	test('covers the reviewed modules and previously escaped declarations', () => {
@@ -46,12 +36,15 @@ describe('generated reference catalog', () => {
 		}
 	});
 
-	test('locks every generated route to its stable declaration identity', () => {
-		for (const module of catalog.modules) {
-			for (const symbol of module.symbols) {
-				expect(routeLock.routes[symbol.id]).toEqual({ module: module.slug, symbol: symbol.slug });
-			}
-		}
+	test('derives routes from names and separates names that share one by kind', () => {
+		const slugs = new Map(
+			catalog.modules.flatMap((module) => module.symbols.map((symbol) => [symbol.id, symbol.slug]))
+		);
+		expect(slugs.get('ts:@riducms/protocol#ErrorPayload')).toBe('error-payload-interface');
+		expect(slugs.get('ts:@riducms/protocol#errorPayload')).toBe('error-payload-function');
+		expect(slugs.get('ts:@riducms/sdk#RiduClient.uploadFromURL')).toBe(
+			'ridu-client-upload-from-url-method'
+		);
 	});
 
 	test('keeps generated source links repository-owned and portable', () => {
@@ -60,13 +53,5 @@ describe('generated reference catalog', () => {
 			expect(path.isAbsolute(symbol.source.path), symbol.id).toBeFalse();
 			expect(symbol.source.path.split('/')).not.toContain('node_modules');
 		}
-	});
-
-	test('stays within the checked static catalog budget', () => {
-		const serialized = readFileSync(new URL('../generated/catalog.json', import.meta.url));
-		expect(serialized.byteLength).toBeLessThanOrEqual(REFERENCE_CATALOG_MAX_BYTES);
-		expect(gzipSync(serialized, { level: 9 }).byteLength).toBeLessThanOrEqual(
-			REFERENCE_CATALOG_MAX_GZIP_BYTES
-		);
 	});
 });

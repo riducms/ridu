@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/riducms/ridu/core"
+	"github.com/riducms/ridu/field"
 	"github.com/riducms/ridu/internal/migrationartifact"
 	ridumigration "github.com/riducms/ridu/migration"
 	"github.com/riducms/ridu/schema"
@@ -159,6 +161,42 @@ func TestPostgresDataTransformRegistrationsFailBeforeDatabaseAccess(t *testing.T
 }
 
 func buildPostgresTransformTestArtifact(ctx context.Context, name string, before *schema.Manifest, after schema.Manifest, transforms ...ridumigration.DataTransformDescriptor) (ridumigration.Artifact, error) {
-	contract := currentAtlasPlannerContract()
-	return buildArtifactWithPlannerContracts(ctx, name, before, after, nil, false, contract, contract, transforms...)
+	return planArtifact(ctx, name, before, after, nil, false, transforms...)
+}
+
+// Creation binds a registered transform through the same planner the runner
+// regenerates, so a JSON-backed kind change and a data-only artifact both
+// verify. A cast PostgreSQL cannot apply in place is refused at creation.
+func TestPostgresTransformCreationMatchesRunnerRegeneration(t *testing.T) {
+	ctx := t.Context()
+	descriptor := ridumigration.DataTransformDescriptor{Name: "convert-body", Checksum: ridumigration.DataTransformChecksum([]byte("convert-body-v1"))}
+	resolve := func(body field.Node) schema.Manifest {
+		t.Helper()
+		manifest, err := core.Resolve(core.Config{Name: "Transforms", Collections: []core.Collection{{Slug: "posts", Fields: field.Fields{body}}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return manifest
+	}
+	for name, change := range map[string][2]schema.Manifest{
+		"json-backed kind change": {resolve(field.JSON("body")), resolve(field.Group("body", field.Fields{field.Text("note")}))},
+		"data only":               {resolve(field.Text("body")), resolve(field.Text("body"))},
+		"cast to text":            {resolve(field.Number("body")), resolve(field.Text("body"))},
+	} {
+		before, after := change[0], change[1]
+		if _, err := BuildArtifact(ctx, "convert", &before, after, nil, true); err == nil {
+			t.Fatalf("%s planned without a transform", name)
+		}
+		artifact, err := BuildArtifact(ctx, "convert", &before, after, nil, true, descriptor)
+		if err != nil {
+			t.Fatalf("%s with a transform = %v", name, err)
+		}
+		if err := validatePostgresPlannedSQL(ctx, artifact); err != nil {
+			t.Fatalf("%s creation differs from runner regeneration: %v", name, err)
+		}
+	}
+	before, after := resolve(field.Text("body")), resolve(field.Number("body"))
+	if _, err := BuildArtifact(ctx, "convert", &before, after, nil, true, descriptor); err == nil || !strings.Contains(err.Error(), "cannot convert posts.body from text to double precision in place") {
+		t.Fatalf("uncastable column change with a transform = %v", err)
+	}
 }

@@ -96,7 +96,7 @@ func (plugin) Descriptor() ridu.PluginDescriptor {
 		Ridu:       ridu.RiduCompatibility{Minimum: ridu.FrameworkVersion},
 		Admin:      &admin,
 		FieldTypes: []ridu.PluginFieldType{{
-			Key: Key, TypeScriptPackage: "@riducms/plugin-richtext/document",
+			Key: Key, TypeScriptPackage: "@riducms/sdk/richtext",
 			TypeScriptOutput: "RichTextDocument", TypeScriptInput: "RichTextDocumentInput",
 			EmbeddedTypes: []string{"blocks.block"},
 			GoPackage:     "github.com/riducms/ridu/plugins/richtext", GoType: "Document",

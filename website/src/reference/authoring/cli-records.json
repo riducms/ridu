@@ -259,7 +259,7 @@
 			"id": "cli:ridu#ridu migrate baseline",
 			"name": "ridu migrate baseline",
 			"kind": "command",
-			"signature": "ridu migrate baseline [--database-url <url> | --database-path <path>] [--allow-insecure-database (PostgreSQL or MongoDB)]",
+			"signature": "ridu migrate baseline [--database-url <url> | --database-path <path>] [--allow-insecure-database (PostgreSQL or MongoDB)] [--replace [--previous-history <directory>] [--allow-production]]",
 			"members": [],
 			"parameters": [],
 			"aliases": ["ridu migrate baseline"],

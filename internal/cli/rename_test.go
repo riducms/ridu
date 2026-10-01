@@ -48,10 +48,7 @@ func TestBuildPostgresArtifactWithDataTransformsRejectsVersionedFieldChanges(t *
 	descriptor := ridumigration.DataTransformDescriptor{
 		Name: "backfill-summary", Checksum: ridumigration.DataTransformChecksum([]byte("backfill-summary-v1")),
 	}
-	_, err := buildPostgresArtifactWithDataTransforms(
-		context.Background(), descriptor.Name, &before, after, nil, false, postgres.AtlasVersion,
-		[]ridumigration.DataTransformDescriptor{descriptor},
-	)
+	_, err := postgres.BuildArtifact(context.Background(), descriptor.Name, &before, after, nil, false, descriptor)
 	if err == nil || !strings.Contains(err.Error(), "retained snapshots") {
 		t.Fatalf("versioned CLI transform planning error = %v", err)
 	}
@@ -100,10 +97,6 @@ func TestMigrationRenameBaseUsesImmutableArtifactState(t *testing.T) {
 	base, exists, err := migrationRenameBase(directory)
 	if err != nil || !exists || !base.Equal(committed) {
 		t.Fatalf("base exists=%t err=%v snapshot=%#v", exists, err, base.Snapshot())
-	}
-	plannerVersion, err := migrationHeadPlannerVersion(directory)
-	if err != nil || plannerVersion != postgres.AtlasVersion {
-		t.Fatalf("head planner version = %q, %v", plannerVersion, err)
 	}
 }
 

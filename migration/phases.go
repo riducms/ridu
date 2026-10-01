@@ -118,13 +118,6 @@ type RetireResourcesPayload struct {
 	PurgeVersionOwnerIDs []schema.StableID `json:"purgeVersionOwnerIds,omitempty"`
 }
 
-// CanonicalizeAuthIdentitiesPayload identifies every auth identity field
-// whose authored values and derived uniqueness keys move to the shared
-// canonical-key contract.
-type CanonicalizeAuthIdentitiesPayload struct {
-	Resources []AuthIdentityResource `json:"resources"`
-}
-
 // AssertSchemaPayload is deliberately empty. The expected schema is the
 // artifact's immutable after manifest.
 type AssertSchemaPayload struct{}
@@ -227,8 +220,6 @@ func (artifact Artifact) validate() error {
 	mongoDBSteps := 0
 	retirementSteps := 0
 	mongoDBDropResourceSteps := 0
-	canonicalAuthSteps := 0
-	var canonicalAuthResources []AuthIdentityResource
 	var retiredResourceIDs []schema.StableID
 	var mongoDBDroppedResourceIDs []schema.StableID
 	var mongoDBResourceRenames []MongoDBRenameResourcePayload
@@ -311,14 +302,6 @@ func (artifact Artifact) validate() error {
 				}
 				mongoDBResourceRenames = append(mongoDBResourceRenames, payload)
 			}
-			if step.Kind == StepCanonicalizeAuthIdentities {
-				canonicalAuthSteps++
-				var payload CanonicalizeAuthIdentitiesPayload
-				if err := json.Unmarshal(step.Payload, &payload); err != nil {
-					return fmt.Errorf("migration %s step %s has malformed auth-identity canonicalization payload", artifact.Name, step.ID)
-				}
-				canonicalAuthResources = append(canonicalAuthResources, payload.Resources...)
-			}
 			if isSchemaAssertion(step.Kind) {
 				assertions++
 			}
@@ -380,18 +363,6 @@ func (artifact Artifact) validate() error {
 		}
 		if !foundRisk {
 			return fmt.Errorf("migration %s resource retirement lacks its destructive risk", artifact.Name)
-		}
-	}
-	if canonicalAuthSteps > 1 {
-		return fmt.Errorf("migration %s has more than one auth-identity canonicalization step", artifact.Name)
-	}
-	if canonicalAuthSteps == 1 {
-		if artifact.Before == nil {
-			return fmt.Errorf("migration %s initial artifact cannot canonicalize auth identities", artifact.Name)
-		}
-		expected := RetainedAuthIdentityResources(*artifact.Before, artifact.After)
-		if !sameAuthIdentityResources(canonicalAuthResources, expected) {
-			return fmt.Errorf("migration %s auth-identity canonicalization does not exactly match retained identity fields", artifact.Name)
 		}
 	}
 	return nil
@@ -604,14 +575,6 @@ func validateStepPayload(mode PhaseMode, step Step) error {
 		if err := decodeStrictJSON(step.Payload, &payload); err != nil || payload.Transform.Validate() != nil {
 			return fmt.Errorf("malformed data-transform payload")
 		}
-	case StepCanonicalizeAuthIdentities:
-		if mode != PhaseTransaction {
-			return fmt.Errorf("auth identity canonicalization is allowed only in a transaction phase")
-		}
-		var payload CanonicalizeAuthIdentitiesPayload
-		if err := decodeStrictJSON(step.Payload, &payload); err != nil || validateAuthIdentityResources(payload.Resources) != nil {
-			return fmt.Errorf("malformed auth-identity canonicalization payload")
-		}
 	case StepConcurrentIndex:
 		if mode != PhaseNoTransaction {
 			return fmt.Errorf("concurrent index operation is allowed only in a no-transaction phase")
@@ -672,76 +635,6 @@ func validateStepPayload(mode PhaseMode, step Step) error {
 		return fmt.Errorf("unknown kind %q", step.Kind)
 	}
 	return nil
-}
-
-func validateAuthIdentityResources(resources []AuthIdentityResource) error {
-	if len(resources) == 0 {
-		return fmt.Errorf("auth identity resources are required")
-	}
-	previous := ""
-	for _, resource := range resources {
-		key := string(resource.CollectionID) + "\x00" + string(resource.FieldID) + "\x00" + resource.FieldName
-		if !schema.IsValidStableID(string(resource.CollectionID)) || !schema.IsValidStableID(string(resource.FieldID)) || !schema.IsValidFieldName(resource.FieldName) || previous != "" && key <= previous {
-			return fmt.Errorf("auth identity resources must be valid, unique, and strictly sorted")
-		}
-		previous = key
-	}
-	return nil
-}
-
-// AuthIdentityResources returns the deterministic complete identity-field
-// scope for a manifest snapshot. Adapter planners use it to bind the typed
-// canonicalization step to immutable schema identities.
-func AuthIdentityResources(snapshot schema.Snapshot) []AuthIdentityResource {
-	resources := make([]AuthIdentityResource, 0)
-	for _, collection := range snapshot.Collections {
-		if collection.Auth == nil {
-			continue
-		}
-		for _, field := range collection.Fields {
-			if field.Name == collection.Auth.IdentityField {
-				resources = append(resources, AuthIdentityResource{CollectionID: collection.ID, FieldID: field.ID, FieldName: field.Name})
-				break
-			}
-		}
-	}
-	sort.Slice(resources, func(left, right int) bool {
-		leftKey := string(resources[left].CollectionID) + "\x00" + string(resources[left].FieldID) + "\x00" + resources[left].FieldName
-		rightKey := string(resources[right].CollectionID) + "\x00" + string(resources[right].FieldID) + "\x00" + resources[right].FieldName
-		return leftKey < rightKey
-	})
-	return resources
-}
-
-// RetainedAuthIdentityResources returns only identity fields whose collection,
-// field identity, and authored field name are unchanged across a transition.
-// A forward canonicalization must never inspect a newly introduced auth
-// resource before its adapter-owned physical storage exists.
-func RetainedAuthIdentityResources(before, after schema.Snapshot) []AuthIdentityResource {
-	legacy := AuthIdentityResources(before)
-	legacySet := make(map[AuthIdentityResource]struct{}, len(legacy))
-	for _, resource := range legacy {
-		legacySet[resource] = struct{}{}
-	}
-	retained := make([]AuthIdentityResource, 0, len(legacy))
-	for _, resource := range AuthIdentityResources(after) {
-		if _, exists := legacySet[resource]; exists {
-			retained = append(retained, resource)
-		}
-	}
-	return retained
-}
-
-func sameAuthIdentityResources(left, right []AuthIdentityResource) bool {
-	if len(left) != len(right) {
-		return false
-	}
-	for index := range left {
-		if left[index] != right[index] {
-			return false
-		}
-	}
-	return true
 }
 
 func validateRetireResources(payload RetireResourcesPayload) error {

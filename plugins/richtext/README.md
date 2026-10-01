@@ -88,7 +88,8 @@ payload properties are accepted. `_key` and `blockType` are reserved inside the 
 The server assigns an omitted key for a new occurrence and preserves valid existing keys.
 
 Generation instantiates `RichTextDocument<Payload>` and `RichTextDocumentInput<Payload>` with
-field-specific unions. The portable TypeScript entry is `@riducms/plugin-richtext/document`.
+field-specific unions. The portable TypeScript entry is `@riducms/sdk/richtext`, so consumer
+applications only need `@riducms/sdk` to typecheck generated clients.
 The Go equivalent is `richtext.Document[generated.PostsBodyBlocksBlockPayload]` (with `InputPayload`
 or `UpdatePayload` for writes). Its `Node[T].Fields` contains the generated scalar payload codec;
 switch on `Fields.Value` to access concrete generated variants. Unknown variants fail typed decoding;
@@ -114,7 +115,7 @@ populated read, localized children, nested rich text and revision-checked save w
 
 ## Read-only rendering
 
-`@riducms/plugin-richtext/render` exports `renderRichTextHTML` without editor, DOM or Svelte imports.
+`@riducms/sdk/richtext` exports `renderRichTextHTML` without editor, DOM or Svelte dependencies.
 Pass a `RichTextBlockRenderers<Payload, string>` map for application-owned block HTML. Ordinary
 text is escaped; renderer HTML is trusted application code. Missing node/block renderers throw by
 default. The explicit `fallback(node, error)` option supports an application-owned visible recovery

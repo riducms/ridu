@@ -79,9 +79,8 @@ when a data-only transform leaves the manifest unchanged. Confirm each detected 
 compiled transform with `--transform` when stored data needs an explicit rewrite. When
 planning reports reviewed transform or resource-retirement work as destructive, rerun the same
 create command with `--allow-destructive`; that flag publishes the reviewed intent but does not
-open or change the database. Checksum-authenticated planner `1.0.0` artifacts remain the supported
-v1-to-v2 immutable history prefix; planner `2.0.0` owns new semantic rename, transform, and
-retirement steps. Never rewrite the v1 prefix during an upgrade. `{{.RiduCommand}} check` and `{{.RiduCommand}} build` remain offline: they compare
+open or change the database. Committed artifacts are immutable MongoDB planner `2.0.0` plans; never
+rewrite one during an upgrade. `{{.RiduCommand}} check` and `{{.RiduCommand}} build` remain offline: they compare
 the exact committed history with the executable, but do not inspect the applied database ledger or
 indexes. Live `status` and startup/readiness own those checks.
 

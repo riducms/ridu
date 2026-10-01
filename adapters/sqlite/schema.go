@@ -10,8 +10,8 @@ import (
 	"sort"
 	"strings"
 	"time"
-	"unicode"
 
+	"github.com/riducms/ridu/internal/fieldchange"
 	"github.com/riducms/ridu/internal/primitivefield"
 	"github.com/riducms/ridu/internal/referenceindex"
 	"github.com/riducms/ridu/schema"
@@ -32,6 +32,20 @@ func (backend *Store) Migrate(ctx context.Context, manifest schema.Manifest) err
 // to manifest inside the caller's write transaction and records it as the
 // manifest the database has.
 func (backend *Store) migrateDevelopmentSchema(ctx context.Context, connection *sql.Conn, manifest schema.Manifest) error {
+	previous, recorded, err := sqliteDevelopmentManifest(ctx, connection)
+	if err != nil {
+		return err
+	}
+	if recorded {
+		changes := fieldchange.Detect(previous.Snapshot(), manifest.Snapshot())
+		reports := fieldchange.Reports(changes)
+		if err := scanSQLiteFieldKinds(ctx, connection, changes, reports, false); err != nil {
+			return err
+		}
+		if err := fieldchange.RequireEmpty(reports); err != nil {
+			return err
+		}
+	}
 	digest, err := manifestDigest(manifest)
 	if err != nil {
 		return fmt.Errorf("digest SQLite manifest: %w", err)
@@ -40,7 +54,6 @@ func (backend *Store) migrateDevelopmentSchema(ctx context.Context, connection *
 	if err != nil {
 		return fmt.Errorf("encode SQLite manifest: %w", err)
 	}
-	contract := currentSQLitePlannerContract()
 	immutable, err := sqliteArtifactLedgerExists(ctx, connection)
 	if err != nil {
 		return err
@@ -51,16 +64,16 @@ func (backend *Store) migrateDevelopmentSchema(ctx context.Context, connection *
 	if err := installSchema(ctx, connection); err != nil {
 		return err
 	}
-	if err := contract.reconcileIndexes(ctx, connection, manifest); err != nil {
+	if err := reconcileDocumentIndexes(ctx, connection, manifest); err != nil {
 		return err
 	}
 	if err := rebuildDocumentReferences(ctx, connection, manifest); err != nil {
 		return err
 	}
-	if err := contract.rebuildUniqueness(ctx, connection, manifest); err != nil {
+	if err := rebuildUniqueValues(ctx, connection, manifest); err != nil {
 		return err
 	}
-	if err := assertSQLitePhysicalSchema(ctx, connection, manifest, false, contract); err != nil {
+	if err := assertSQLitePhysicalSchema(ctx, connection, manifest, false); err != nil {
 		return fmt.Errorf("verify SQLite development schema: %w", err)
 	}
 	_, err = connection.ExecContext(ctx, `INSERT INTO ridu_sqlite_schema
@@ -483,8 +496,8 @@ func readSQLiteDevelopmentManifest(ctx context.Context, runner sqlRunner) (*sche
 	if tableCount == 0 {
 		return nil, nil
 	}
-	var encoded string
-	err := runner.QueryRowContext(ctx, `SELECT manifest_json FROM ridu_sqlite_schema WHERE singleton = 1`).Scan(&encoded)
+	var encoded, recordedDigest string
+	err := runner.QueryRowContext(ctx, `SELECT manifest_json, manifest_digest FROM ridu_sqlite_schema WHERE singleton = 1`).Scan(&encoded, &recordedDigest)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -495,11 +508,18 @@ func readSQLiteDevelopmentManifest(ctx context.Context, runner sqlRunner) (*sche
 	if err != nil {
 		return nil, fmt.Errorf("decode previous SQLite development manifest: %w", err)
 	}
+	digest, err := manifestDigest(manifest)
+	if err != nil {
+		return nil, err
+	}
+	if digest != recordedDigest {
+		return nil, fmt.Errorf("recorded SQLite development manifest digest does not match its manifest")
+	}
 	return &manifest, nil
 }
 
 func installSchema(ctx context.Context, runner sqlRunner) error {
-	for _, statement := range currentSQLitePlannerContract().freshSchemaStatements {
+	for _, statement := range sqliteSchemaStatements {
 		if _, err := runner.ExecContext(ctx, statement); err != nil {
 			return fmt.Errorf("install SQLite schema: %w", translateError(err))
 		}
@@ -730,17 +750,6 @@ func timePointer(encoded sql.NullInt64) *time.Time {
 }
 
 func rebuildUniqueValues(ctx context.Context, runner sqlRunner, manifest schema.Manifest) error {
-	return rebuildUniqueValuesWithAuthKey(ctx, runner, manifest, store.CanonicalAuthIdentity)
-}
-
-// rebuildLegacyAuthUniqueValues freezes planner v1's strings.EqualFold-style
-// SimpleFold key. Pending immutable v1 artifacts must replay their published
-// uniqueness semantics; only the v1.1 transition may adopt the canonical key.
-func rebuildLegacyAuthUniqueValues(ctx context.Context, runner sqlRunner, manifest schema.Manifest) error {
-	return rebuildUniqueValuesWithAuthKey(ctx, runner, manifest, legacyAuthIdentityKey)
-}
-
-func rebuildUniqueValuesWithAuthKey(ctx context.Context, runner sqlRunner, manifest schema.Manifest, authIdentityKey func(string) string) error {
 	if _, err := runner.ExecContext(ctx, `DELETE FROM ridu_unique_values`); err != nil {
 		return translateError(err)
 	}
@@ -762,7 +771,7 @@ WHERE collection_id = ? AND deleted_at IS NULL`, string(collection.ID))
 				rows.Close()
 				return fmt.Errorf("decode stored values for uniqueness: %w", err)
 			}
-			if err := insertRawUniqueValuesWithAuthKey(ctx, runner, collection, id, values, authIdentityKey); err != nil {
+			if err := insertRawUniqueValues(ctx, runner, collection, id, values); err != nil {
 				rows.Close()
 				return err
 			}
@@ -828,10 +837,6 @@ func rebuildDocumentReferences(ctx context.Context, runner sqlRunner, manifest s
 }
 
 func insertRawUniqueValues(ctx context.Context, runner sqlRunner, collection schema.Collection, documentID string, values map[string]json.RawMessage) error {
-	return insertRawUniqueValuesWithAuthKey(ctx, runner, collection, documentID, values, store.CanonicalAuthIdentity)
-}
-
-func insertRawUniqueValuesWithAuthKey(ctx context.Context, runner sqlRunner, collection schema.Collection, documentID string, values map[string]json.RawMessage, authIdentityKey func(string) string) error {
 	for _, field := range collection.Fields {
 		if !field.Unique {
 			continue
@@ -861,7 +866,7 @@ func insertRawUniqueValuesWithAuthKey(ctx context.Context, runner sqlRunner, col
 			if err := json.Unmarshal(raw, &identity); err != nil {
 				return fmt.Errorf("decode auth identity field %q: %w", field.Path.String(), err)
 			}
-			normalized, _ := json.Marshal(authIdentityKey(identity))
+			normalized, _ := json.Marshal(store.CanonicalAuthIdentity(identity))
 			valueKey = string(normalized)
 		}
 		if err := insertUniqueValue(ctx, runner, collection.ID, "field:"+string(field.ID), valueKey, documentID); err != nil {
@@ -920,21 +925,6 @@ func insertRawUniqueValuesWithAuthKey(ctx context.Context, runner sqlRunner, col
 		}
 	}
 	return nil
-}
-
-func legacyAuthIdentityKey(value string) string {
-	var folded strings.Builder
-	folded.Grow(len(value))
-	for _, current := range value {
-		canonical := current
-		for candidate := unicode.SimpleFold(current); candidate != current; candidate = unicode.SimpleFold(candidate) {
-			if candidate < canonical {
-				canonical = candidate
-			}
-		}
-		folded.WriteRune(canonical)
-	}
-	return folded.String()
 }
 
 func sqliteIndexedFieldChain(fields []schema.Field, segments []string) []schema.Field {

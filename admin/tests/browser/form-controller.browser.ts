@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { AccessCapabilitiesEnvelope, SchemaField } from "@riducms/protocol";
 
 import { normalizeSlug, slugFollowsSource } from "@admin/fields/text/slug";
+import { reconcileFormSchema } from "@admin/core/forms/form-schema";
 
 const { FormController } = await import("@admin/core/forms/form-controller.svelte");
 
@@ -91,6 +92,68 @@ describe("form controller field access", () => {
 		submitted = await form.submit([blocksField()], false, async (values) => values);
 		expect(submitted.layout).toEqual([{ _key: "new", blockType: "quote" }]);
 	});
+
+	it("recovery cannot transfer removed occurrence grants to new rows and Discard restores removed denials", () => {
+		const fields = [blocksField()];
+		const original = {
+			layout: [
+				{ _key: "allowed", blockType: "quote", secret: "Public copy" },
+				{ _key: "removed", blockType: "quote" },
+			],
+		};
+		const form = new FormController();
+		form.reset(original, fields);
+		const access = accessEnvelope();
+		access.fields["layout.1.secret"] = { read: false, create: false, update: false };
+		form.setAccess(access, "update");
+		const values = {
+			layout: [{ _key: "new", blockType: "quote" }, original.layout[0]],
+		};
+		form.recover(reconcileFormSchema({ values, original }, fields, fields), fields);
+		expect(form.access?.fields["layout.0.secret"]).toBeUndefined();
+		expect(form.canRead("layout.0.secret", "layout.quote.secret")).toBe(false);
+		expect(form.hasWriteAccess("layout.0.secret", "layout.quote.secret")).toBe(false);
+		expect(form.canRead("layout.1.secret", "layout.quote.secret")).toBe(true);
+		expect(form.hasWriteAccess("layout.1.secret", "layout.quote.secret")).toBe(true);
+		form.discard();
+		expect(form.snapshot()).toEqual(original);
+		expect(form.access?.fields).toEqual(access.fields);
+		expect(form.canRead("layout.1.secret", "layout.quote.secret")).toBe(false);
+		expect(form.hasWriteAccess("layout.1.secret", "layout.quote.secret")).toBe(false);
+	});
+
+	it.each(["access", "schema", "resource", "locale", "reset"])(
+		"Discard cannot reinstate pre-recovery grants after a new %s boundary",
+		(boundary) => {
+			const fields = [blocksField()];
+			const original = {
+				layout: [
+					{ _key: "allowed", blockType: "quote", secret: "Public copy" },
+					{ _key: "protected", blockType: "quote" },
+				],
+			};
+			const form = new FormController();
+			form.reset(original, fields);
+			form.setAccess(accessEnvelope(), "update");
+			const values = { layout: [...original.layout].reverse() };
+			form.recover(reconcileFormSchema({ values, original }, fields, fields), fields);
+			const access = accessEnvelope();
+			delete access.fields["layout.0.secret"];
+			if (boundary === "access") form.setAccess(access, "update");
+			else {
+				if (boundary === "schema") form.reconcile(fields, fields);
+				if (boundary === "resource") form.setResource({ collection: "other" });
+				if (boundary === "locale") form.setLocalization("fr");
+				if (boundary === "reset") form.reset(form.snapshot(), fields);
+				form.access = access;
+			}
+			form.discard();
+			expect(form.canRead("layout.0.secret", "layout.quote.secret")).toBe(false);
+			expect(form.hasWriteAccess("layout.0.secret", "layout.quote.secret")).toBe(false);
+			expect(form.canRead("layout.1.secret", "layout.quote.secret")).toBe(false);
+			expect(form.hasWriteAccess("layout.1.secret", "layout.quote.secret")).toBe(false);
+		}
+	);
 });
 
 describe("form controller derived text bindings", () => {

@@ -70,6 +70,9 @@ func (backend *Store) withMongoMigrationLease(ctx context.Context, normalized no
 	if err := backend.prepareIndexOperation(ctx); err != nil {
 		return err
 	}
+	if err := backend.verifyMongoMigrationLedgerPhysicalContract(ctx); err != nil {
+		return err
+	}
 	operationContext := ctx
 	cancelOperation := func() {}
 	if normalized.operationTimeout > 0 {
@@ -127,14 +130,19 @@ func (backend *Store) lockMongoMigrationLifecycle(ctx context.Context) error {
 func mongoDBReplayRequiresMaintenance(replay []mongoDBArtifactReplayPlan) bool {
 	for _, plan := range replay {
 		for _, step := range plan.steps {
-			switch step.kind {
-			case ridumigration.StepMongoDBCreateIndex, ridumigration.StepMongoDBAssertSchema:
-			default:
+			if mongoDBMaintenanceStep(step.kind) {
 				return true
 			}
 		}
 	}
 	return false
+}
+
+// mongoDBMaintenanceStep reports a step that changes documents or other
+// semantic state rather than only building or asserting indexes. Only the
+// migration runner performs one; baseline adoption and replacement never do.
+func mongoDBMaintenanceStep(kind ridumigration.StepKind) bool {
+	return kind != ridumigration.StepMongoDBCreateIndex && kind != ridumigration.StepMongoDBAssertSchema
 }
 
 func (lease *mongoMigrationLease) heartbeat(ctx context.Context, cancel context.CancelFunc, result chan<- error) {
@@ -202,6 +210,19 @@ func (backend *Store) applyMongoMigrationReplay(
 	if err := backend.verifyMongoMigrationPhysicalProgress(ctx, replay, state); err != nil {
 		return err
 	}
+	if len(state.artifacts) != 0 && len(state.artifacts) < len(files) {
+		hasPendingSteps := false
+		for _, step := range state.steps {
+			hasPendingSteps = hasPendingSteps || step.ArtifactName == files[len(state.artifacts)].Name
+		}
+		// Every applied artifact records its schema, so pending work starts
+		// from a recorded schema that must match the verified applied head.
+		if !hasPendingSteps {
+			if err := backend.requireMongoDevelopmentManifest(ctx, replay[len(state.artifacts)-1].after); err != nil {
+				return err
+			}
+		}
+	}
 	if mongoDBReplayRequiresMaintenance(replay[len(state.artifacts):]) && !allowMaintenance {
 		return fmt.Errorf("pending MongoDB semantic migrations require explicit maintenance admission before any migration phase runs")
 	}
@@ -252,7 +273,7 @@ func (backend *Store) applyMongoMigrationReplay(
 				}
 			}
 		}
-		if err := backend.completeMongoMigrationArtifact(ctx, lease, artifactIndex, file); err != nil {
+		if err := backend.completeMongoMigrationArtifact(ctx, lease, artifactIndex, file, true); err != nil {
 			return err
 		}
 	}
@@ -388,6 +409,7 @@ func (backend *Store) completeMongoMigrationArtifact(
 	lease *mongoMigrationLease,
 	position int,
 	file migrationartifact.File,
+	publishManifest bool,
 ) error {
 	return lease.transaction(ctx, func(sessionContext context.Context) error {
 		for _, phase := range file.Artifact.Phases {
@@ -422,6 +444,9 @@ func (backend *Store) completeMongoMigrationArtifact(
 		_, err = backend.mongoMigrationCollection(mongoMigrationArtifactCollectionName).InsertOne(sessionContext, document)
 		if err != nil {
 			return fmt.Errorf("complete MongoDB migration %s: %w", file.Name, translateMongoError(sessionContext, err))
+		}
+		if publishManifest {
+			return backend.writeMongoDevelopmentManifest(sessionContext, schema.NewManifest(file.Artifact.After))
 		}
 		return nil
 	})
@@ -512,37 +537,12 @@ func (backend *Store) verifyMongoMigrationPhysicalProgress(ctx context.Context, 
 		previous := replay[current-1].physical
 		return backend.verifyIndexPlansWithoutAuthorization(ctx, previous.collections, previous.system)
 	}
-	if replay[current].semantic {
-		// Every v2 physical executor is exact and idempotent. A crash can occur
-		// after a no-transaction catalog mutation but before its running ledger
-		// row becomes complete, so neither the full source nor target catalog is
-		// necessarily true here. The executor revalidates its one closed identity
-		// on resume and the artifact's final assertion proves the complete target.
-		return nil
-	}
-	requiredIndexes := mongoMigrationRequiredIndexes(replay, current, state)
-	return backend.verifyMongoMigrationTargetSubset(ctx, replay[current].physical, requiredIndexes)
-}
-
-func mongoMigrationRequiredIndexes(replay []mongoDBArtifactReplayPlan, current int, state mongoMigrationLedgerState) []mongoDBPlannedIndex {
-	requiredIndexes := mongoDBFlattenedIndexPlans(currentPhysicalPlan(replay, current))
-	for _, step := range replay[current].steps {
-		if step.kind != ridumigration.StepMongoDBCreateIndex {
-			continue
-		}
-		row := state.stepByID[mongoMigrationStepLedgerID(replay[current].fileName, step.phaseID, step.stepID)]
-		if row.State == mongoMigrationStepComplete {
-			requiredIndexes = append(requiredIndexes, step.index)
-		}
-	}
-	return requiredIndexes
-}
-
-func currentPhysicalPlan(replay []mongoDBArtifactReplayPlan, current int) mongoPhysicalIndexPlanSet {
-	if current == 0 {
-		return mongoPhysicalIndexPlanSet{}
-	}
-	return replay[current-1].physical
+	// Every physical executor is exact and idempotent. A crash can occur after a
+	// no-transaction catalog mutation but before its running ledger row becomes
+	// complete, so neither the full source nor target catalog is necessarily true
+	// here. The executor revalidates its one closed identity on resume and the
+	// artifact's final assertion proves the complete target.
+	return nil
 }
 
 func (backend *Store) requireMongoMigrationNamespacesAbsent(ctx context.Context, plan mongoPhysicalIndexPlanSet) error {
@@ -553,38 +553,6 @@ func (backend *Store) requireMongoMigrationNamespacesAbsent(ctx context.Context,
 		}
 		if len(names) != 0 {
 			return fmt.Errorf("initial MongoDB migration requires an empty managed namespace; %s already exists. If `ridu dev` synchronized this database and it matches the committed migrations, record them with `ridu migrate baseline`", planned.description)
-		}
-	}
-	return nil
-}
-
-func (backend *Store) verifyMongoMigrationTargetSubset(ctx context.Context, target mongoPhysicalIndexPlanSet, required []mongoDBPlannedIndex) error {
-	actualByCollection := make(map[string]map[string]mongoActualIndex)
-	for _, planned := range mongoDBFlattenedIndexPlans(target) {
-		if _, exists := actualByCollection[planned.collection]; exists {
-			continue
-		}
-		actual, err := backend.readNamedCollectionIndexes(ctx, planned.collection, planned.description)
-		if err != nil {
-			return err
-		}
-		actualByCollection[planned.collection] = actual
-	}
-	for _, collection := range target.collections {
-		actual := actualByCollection[collection.physicalName]
-		if err := compareMongoIndexSets(collection.collection, collection.definitions, actual, true); err != nil {
-			return err
-		}
-	}
-	for _, collection := range target.system {
-		actual := actualByCollection[collection.physicalName]
-		if err := compareMongoNamedIndexSets(collection.description, collection.definitions, actual, true); err != nil {
-			return err
-		}
-	}
-	for _, planned := range required {
-		if _, exists := actualByCollection[planned.collection][planned.name]; !exists {
-			return fmt.Errorf("MongoDB migration source drift for %s: required index %q is missing", planned.description, planned.name)
 		}
 	}
 	return nil

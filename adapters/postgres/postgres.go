@@ -237,11 +237,11 @@ func (backend *Store) ready(ctx context.Context, manifest schema.Manifest, expec
 	if !ledgerExists {
 		return fmt.Errorf("immutable migration ledger is missing")
 	}
-	var actual, plannerVersion string
+	var actual, plannerName, plannerVersion string
 	// Artifact names begin with a fixed-width UTC timestamp and are the immutable
 	// history order. Database clocks can move backwards, so applied_at must not
 	// decide which manifest is current.
-	if err := backend.pool.QueryRow(ctx, `SELECT to_digest, planner_version FROM ridu_migrations ORDER BY name DESC LIMIT 1`).Scan(&actual, &plannerVersion); err != nil {
+	if err := backend.pool.QueryRow(ctx, `SELECT to_digest, planner_name, planner_version FROM ridu_migrations ORDER BY name DESC LIMIT 1`).Scan(&actual, &plannerName, &plannerVersion); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return fmt.Errorf("immutable migration ledger has no applied migration")
 		}
@@ -260,8 +260,8 @@ func (backend *Store) ready(ctx context.Context, manifest schema.Manifest, expec
 			return fmt.Errorf("database manifest digest %s does not match executable digest %s", actual, expected)
 		}
 	}
-	if plannerVersion == atlasVersionV1 && len(ridumigration.AuthIdentityResources(manifest.Snapshot())) != 0 {
-		return fmt.Errorf("database authentication identities require the PostgreSQL planner %s canonicalization artifact", AtlasVersion)
+	if plannerName != atlasPlannerName || plannerVersion != AtlasVersion {
+		return fmt.Errorf("database migration ledger head uses unsupported PostgreSQL planner %s %q; this Ridu release supports only %s %q, so create a new migration history with ridu migrate create and apply it to a new database", plannerName, plannerVersion, atlasPlannerName, AtlasVersion)
 	}
 	var stepsExist bool
 	if err := backend.pool.QueryRow(ctx, `SELECT to_regclass(current_schema() || '.ridu_migration_steps') IS NOT NULL`).Scan(&stepsExist); err != nil {
@@ -286,7 +286,7 @@ WHERE NOT EXISTS (SELECT 1 FROM ridu_migrations migrations WHERE migrations.name
 		return fmt.Errorf("inspect PostgreSQL physical state: %w", err)
 	}
 	defer connection.Close()
-	if err := verifyPostgresPhysicalState(ctx, connection, &manifest, postgresPlannerTargetContract(plannerVersion)); err != nil {
+	if err := verifyPostgresPhysicalState(ctx, connection, &manifest); err != nil {
 		return fmt.Errorf("database physical state: %w", err)
 	}
 	return nil

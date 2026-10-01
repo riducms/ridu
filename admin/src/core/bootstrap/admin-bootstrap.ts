@@ -11,7 +11,7 @@ import { createContext } from "svelte";
 
 import type { AdminRuntime } from "@admin/core/runtime/admin-runtime.svelte";
 import { peekFormDraft } from "@admin/core/forms/form-draft-recovery";
-import { recoverFormDraft } from "@admin/core/forms/form-schema";
+import { reconcileFormSchema, recoverFormDraft } from "@admin/core/forms/form-schema";
 import { preparedCustomView } from "@admin/core/routing/admin-view-selection";
 import { adminPathResource } from "@admin/core/routing/admin-paths";
 
@@ -234,14 +234,14 @@ export class AdminBootstrapCoordinator {
 		const slug = decodeURIComponent(match[1]);
 		const collection = manifest.collections.find((candidate) => candidate.slug === slug);
 		if (collection === undefined) return state;
-		const checkpoint = peekFormDraft(collection.id, undefined);
+		const locale = navigation?.contentLocale ?? manifest.application.localization?.defaultLocale;
+		const checkpoint = peekFormDraft(collection.id, undefined, locale);
 		if (checkpoint === undefined) return state;
 
 		const defaults = state.route.create.values;
 		const recovered = recoverFormDraft(
 			{ values: defaults, original: defaults },
-			{ values: checkpoint.values, original: checkpoint.original },
-			checkpoint.collection.fields,
+			reconcileFormSchema(checkpoint, checkpoint.collection.fields, collection.fields),
 			collection.fields
 		);
 		if (samePreparedCreateValues(recovered.values, defaults)) {

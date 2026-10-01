@@ -5,7 +5,6 @@ import { gzipSync } from 'node:zlib';
 import { referenceModules } from '../src/reference';
 import { frameworkVersion } from '../src/llms';
 import { rankSearchCatalog } from '../src/search/rank';
-import referenceRouteLock from '../src/reference/authoring/route-lock.json';
 
 const websiteRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const distRoot = resolve(websiteRoot, 'dist');
@@ -16,18 +15,10 @@ const sourceRoot = resolve(websiteRoot, 'src');
 // payloads copied into every page without penalizing legitimately large reference indexes.
 const htmlBaseSizeAllowance = 2 * 1024 * 1024;
 const htmlPerRouteSizeAllowance = 34 * 1024;
-// Includes the complete authored descriptions for all 3,130 public declarations.
-// Keep the compressed transfer budget unchanged as the authored reference grows.
-const searchIndexRawCeiling = 10 * 1024 * 1024;
+// The search index is the reference's one per-visitor payload: the site fetches it on first search.
+// Budget what that transfer costs, gzipped, rather than the raw text the generator emits.
 const searchIndexGzipCeiling = 1536 * 1024;
 const diagnosticLimit = 30;
-const referenceRedirectRoutes = new Map<string, string>(
-	Object.values(referenceRouteLock.routes).flatMap((route) =>
-		'redirect' in route && typeof route.redirect === 'string'
-			? [[`/reference/${route.module}/${route.symbol}/`, route.redirect] as const]
-			: []
-	)
-);
 
 class Diagnostics {
 	readonly groups = new Map<string, Set<string>>();
@@ -359,12 +350,6 @@ function expectedRoutes(): Map<string, string> {
 			);
 		}
 	}
-	for (const [route, target] of referenceRedirectRoutes) {
-		addExpectedRoute(expected, route, `reference redirect to ${target}`);
-		if (!expected.has(target)) {
-			diagnostics.add('Expected route definition', `${route} redirects to missing route ${target}`);
-		}
-	}
 	return expected;
 }
 
@@ -390,12 +375,6 @@ function validateSearchIndex(expected: Map<string, string>, fallbackSource: stri
 	}
 	const raw = readFileSync(searchIndexFile);
 	const compressedBytes = gzipSync(raw).byteLength;
-	if (raw.byteLength > searchIndexRawCeiling) {
-		diagnostics.add(
-			'Search size',
-			`dist/search-index.json is ${formatBytes(raw.byteLength)}, above the ${formatBytes(searchIndexRawCeiling)} raw ceiling`
-		);
-	}
 	if (compressedBytes > searchIndexGzipCeiling) {
 		diagnostics.add(
 			'Search size',
@@ -470,13 +449,7 @@ function validateSearchIndex(expected: Map<string, string>, fallbackSource: stri
 	}
 
 	for (const route of expected.keys()) {
-		if (
-			route === '/' ||
-			route === '/404.html' ||
-			route === '/reference/' ||
-			route === '/search/' ||
-			referenceRedirectRoutes.has(route)
-		)
+		if (route === '/' || route === '/404.html' || route === '/reference/' || route === '/search/')
 			continue;
 		if (!pageTargets.has(route)) {
 			diagnostics.add('Search index', `No page-level search entry targets ${route}`);

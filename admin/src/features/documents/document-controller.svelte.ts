@@ -8,13 +8,20 @@ import type { AdminDocument } from "@admin/core/api/admin-client";
 import { FormController, FormValidationError } from "@admin/core/forms/form-controller.svelte";
 import {
 	clearFormDraft,
+	formDraftAccessPath,
+	formDraftBase,
+	peekFormDraft,
 	saveFormDraft,
-	takeFormDraft,
+	sameFormDraftBase,
+	type FormDraftCheckpoint,
 } from "@admin/core/forms/form-draft-recovery";
 import {
 	changedFormValues,
 	documentFormValues,
 	initialFormValues,
+	reconcileFormSchema,
+	recoverFormDraft,
+	submissionFormValues,
 } from "@admin/core/forms/form-schema";
 import { invalidFieldLabels } from "@admin/core/forms/form-validation";
 import type { NotificationCenter } from "@admin/core/notifications/notification-center.svelte";
@@ -31,6 +38,7 @@ import { DocumentLockController } from "@admin/features/documents/document-lock-
 import { documentTitleField } from "@admin/features/documents/document-title";
 import { isUploadMetadataField } from "@admin/features/uploads/upload-document-contracts";
 import { UploadDraft } from "@admin/features/uploads/upload-draft.svelte";
+import { sameValue } from "@admin/features/versions/version-diff";
 
 type Navigate = (to: string, options?: { replace?: boolean }) => void;
 
@@ -72,6 +80,8 @@ export class DocumentController {
 	lastSavedAt = $state<number>();
 	unlockOperation = $state(false);
 	copyLocaleOperation = $state(false);
+	recoveryConflict = $state.raw<FormDraftCheckpoint>();
+	#recoveryNotificationID?: number | string;
 	#activeRouteKey = "";
 	#routeGeneration = 0;
 	#activeContentLocale?: string;
@@ -90,7 +100,12 @@ export class DocumentController {
 			() => this.collectionSlug,
 			options.runtime.i18n
 		);
-		this.form = new FormController({}, options.runtime.i18n);
+		this.form = new FormController(
+			{},
+			options.runtime.i18n,
+			undefined,
+			() => this.recoveryConflict === undefined
+		);
 		this.lock = new DocumentLockController({
 			runtime: options.runtime,
 			notifications: options.notifications,
@@ -102,16 +117,7 @@ export class DocumentController {
 		connectDocumentLiveValidation(this.form, options.runtime.client);
 		this.#scheduleRouteSync(this.#routeSnapshot());
 		$effect.pre(() => {
-			const global = this.options.global;
-			this.#scheduleRouteSync({
-				slug: this.options.slug,
-				documentID: global ? this.options.slug : this.options.documentID,
-				locale: this.options.locale,
-				manifestRevision: this.options.runtime.manifestRevision,
-				global,
-				editable: this.options.editable,
-				prepared: this.options.prepared,
-			});
+			this.#scheduleRouteSync(this.#routeSnapshot());
 		});
 
 		$effect(() => {
@@ -127,6 +133,7 @@ export class DocumentController {
 				window.removeEventListener("pagehide", leavePage);
 				hot?.off("vite:beforeFullReload", checkpoint);
 				this.#routeGeneration += 1;
+				this.#dismissRecoveryNotification();
 				this.#cancelRouteRequests();
 				this.#loadRequest?.abort();
 				this.#stopObservingFormChanges();
@@ -235,7 +242,7 @@ export class DocumentController {
 	}
 
 	get hasUnsavedChanges() {
-		return this.form.dirty || this.upload.dirty;
+		return this.form.dirty || this.upload.dirty || this.recoveryConflict !== undefined;
 	}
 
 	get creatingAuthUser() {
@@ -263,6 +270,7 @@ export class DocumentController {
 			: this.hasUnsavedChanges;
 		return (
 			this.collectionAvailable &&
+			this.recoveryConflict === undefined &&
 			!this.saveOutcomeUncertain &&
 			!this.upload.busy &&
 			!this.upload.editingImage &&
@@ -300,6 +308,7 @@ export class DocumentController {
 
 	get canPublish() {
 		return (
+			this.recoveryConflict === undefined &&
 			!this.lock.lockedByAnotherEditor &&
 			!this.form.writeBlocked &&
 			this.form.access?.operations.publish === true
@@ -308,6 +317,7 @@ export class DocumentController {
 
 	get canUnpublish() {
 		return (
+			this.recoveryConflict === undefined &&
 			!this.lock.lockedByAnotherEditor &&
 			!this.form.writeBlocked &&
 			this.form.access?.operations.unpublish === true
@@ -320,6 +330,7 @@ export class DocumentController {
 
 	get canEditUpload() {
 		return (
+			this.recoveryConflict === undefined &&
 			this.uploadCollection &&
 			!this.lock.lockedByAnotherEditor &&
 			!this.form.submitting &&
@@ -374,21 +385,91 @@ export class DocumentController {
 	checkpointDraft = () => {
 		const collection = this.collection;
 		if (collection === undefined) return;
+		// An unresolved checkpoint stays in storage even though the saved form is clean.
+		if (this.recoveryConflict !== undefined) return;
 		if (this.form.dirty) {
+			// Edits survive a failed refresh or a pending access check; only a missing
+			// base document makes them unrecoverable.
+			if (!this.creating && this.currentDocument === undefined) return;
 			saveFormDraft(
 				collection,
 				this.documentID,
 				$state.snapshot(this.form.values),
-				$state.snapshot(this.form.original)
+				$state.snapshot(this.form.original),
+				formDraftBase(this.currentDocument),
+				this.#draftLocale,
+				this.options.runtime.manifest?.blocks
 			);
-		} else clearFormDraft(collection.id, this.documentID);
+			return;
+		}
+		const access = this.form.access;
+		if (access === undefined || this.error !== undefined) return;
+		if (this.creating ? access.operations.create === true : access.operations.update === true)
+			clearFormDraft(collection.id, this.documentID, this.#draftLocale);
 	};
 
 	discardChanges = () => {
 		const collection = this.collection;
-		if (collection !== undefined) clearFormDraft(collection.id, this.documentID);
-		this.form.reset($state.snapshot(this.form.original));
+		if (collection !== undefined) clearFormDraft(collection.id, this.documentID, this.#draftLocale);
+		this.recoveryConflict = undefined;
+		this.#dismissRecoveryNotification();
+		this.form.discard();
+		this.form.setLocalization(this.contentLocale, this.currentDocument?._localization?.sources);
 		this.upload.reset(this.currentDocument);
+	};
+
+	get canKeepRecoveredChanges() {
+		return (
+			this.recoveryConflict !== undefined &&
+			!this.loading &&
+			this.error === undefined &&
+			!this.form.writeBlocked &&
+			!this.form.submitting &&
+			!this.lock.lockedByAnotherEditor &&
+			this.form.access?.operations.read === true &&
+			this.form.access?.operations.update === true
+		);
+	}
+
+	get recoveryComparison() {
+		const checkpoint = this.recoveryConflict;
+		const fields = this.collection?.fields ?? [];
+		if (checkpoint === undefined || this.form.access?.operations.read !== true) return [];
+		const reconciled = reconcileFormSchema(checkpoint, checkpoint.collection.fields, fields);
+		const readable = (values: Record<string, unknown>) =>
+			submissionFormValues(fields, values, this.#draftAllowed(values, false));
+		const original = readable(reconciled.original);
+		const yours = readable(reconciled.values);
+		const canRead = (path: string, canonicalPath: string) => this.form.canRead(path, canonicalPath);
+		const latest = submissionFormValues(fields, $state.snapshot(this.form.original), canRead);
+		return fields
+			.filter(
+				(field) =>
+					this.form.canRead(field.path) &&
+					(!sameValue(original[field.name], yours[field.name]) ||
+						!sameValue(original[field.name], latest[field.name]))
+			)
+			.map((field) => ({
+				id: field.id,
+				path: field.path,
+				field,
+				label: this.options.runtime.i18n.text(
+					field.admin.label ?? field.name,
+					field.admin.labelTranslations
+				),
+				original: original[field.name],
+				yours: yours[field.name],
+				latest: latest[field.name],
+			}));
+	}
+
+	keepRecoveredChanges = () => {
+		if (!this.canKeepRecoveredChanges) return;
+		const checkpoint = this.recoveryConflict;
+		if (checkpoint === undefined) return;
+		this.recoveryConflict = undefined;
+		clearFormDraft(checkpoint.collection.id, this.documentID, this.#draftLocale);
+		this.#applyDraft(checkpoint);
 	};
 
 	forceUnlock = async () => {
@@ -422,6 +503,7 @@ export class DocumentController {
 	copyFromLocale = async (source: string) => {
 		const { runtime, notifications } = this.options;
 		if (
+			this.recoveryConflict !== undefined ||
 			this.contentLocale === undefined ||
 			source === this.contentLocale ||
 			this.currentDocument === undefined ||
@@ -496,6 +578,7 @@ export class DocumentController {
 		if (!this.canSave) return false;
 		const publishingChanges = publish && !this.creating && this.versionedCollection;
 		if (publishingChanges && !this.canPublish) return false;
+		this.#dismissRecoveryNotification();
 		const collectionSlug = this.collectionSlug;
 		const documentID = this.documentID;
 		const request = new AbortController();
@@ -584,7 +667,11 @@ export class DocumentController {
 			this.#applyDocument(saved);
 			this.lastSavedAt = Date.now();
 			this.options.runtime.documentsChanged();
-			clearFormDraft(this.collection?.id ?? this.collectionSlug, this.documentID);
+			clearFormDraft(
+				this.collection?.id ?? this.collectionSlug,
+				this.documentID,
+				this.#draftLocale
+			);
 			if (!silent) {
 				this.options.notifications.success({
 					title: wasCreating
@@ -843,6 +930,8 @@ export class DocumentController {
 		if (this.#activeRouteKey !== routeKey && !sameOwner) {
 			// A later visit to the same URL is a different owner for mutation completions.
 			this.#routeGeneration += 1;
+			this.#dismissRecoveryNotification();
+			this.recoveryConflict = undefined;
 			this.#cancelRouteRequests();
 			this.publicationOperation = false;
 			this.duplicateOperation = false;
@@ -891,7 +980,6 @@ export class DocumentController {
 			this.form.setLocalization(locale);
 			this.currentDocument = undefined;
 			this.lock.release();
-			this.#restoreDraft();
 			this.#load(collection.slug, undefined, false, prepared);
 			return;
 		}
@@ -908,6 +996,7 @@ export class DocumentController {
 		)?.find((item) => item.id === previous.id);
 		this.#cancelLoad();
 		this.#routeGeneration += 1;
+		this.#dismissRecoveryNotification();
 		this.#cancelRouteRequests();
 		this.#saveRequest?.abort();
 		this.publicationOperation = false;
@@ -972,16 +1061,100 @@ export class DocumentController {
 		);
 	}
 
+	get #draftLocale() {
+		return (
+			this.contentLocale ?? this.options.runtime.manifest?.application.localization?.defaultLocale
+		);
+	}
+
+	#createAccessValues() {
+		const values = $state.snapshot(this.form.values);
+		const collection = this.collection;
+		if (collection === undefined) return values;
+		const checkpoint = peekFormDraft(collection.id, undefined, this.#draftLocale);
+		return checkpoint === undefined
+			? values
+			: recoverFormDraft(
+					{ values, original: $state.snapshot(this.form.original) },
+					reconcileFormSchema(checkpoint, checkpoint.collection.fields, collection.fields),
+					collection.fields
+				).values;
+	}
+
+	#draftAllowed(values: Record<string, unknown>, writable: boolean) {
+		const fields = this.collection?.fields ?? [];
+		const current = this.creating ? values : this.form.original;
+		const scopedRules = new Set<string>();
+		submissionFormValues(fields, current, (path, canonicalPath) => {
+			if (this.form.fieldCapabilities(path, canonicalPath) !== undefined)
+				scopedRules.add(canonicalPath);
+			return true;
+		});
+		return (path: string, canonicalPath: string) => {
+			let currentPath = formDraftAccessPath(fields, values, current, path);
+			// New occurrences can use the ordinary unrestricted field contract. A
+			// scoped rule needs an existing identity; another row cannot prove access.
+			if (currentPath === undefined) {
+				if (
+					scopedRules.has(canonicalPath) ||
+					this.form.fieldCapabilities(canonicalPath) !== undefined
+				)
+					return false;
+				currentPath = canonicalPath;
+			}
+			// Recovery filters evaluated permissions. Temporary locks and the pending
+			// recovery choice still gate editing through FormController.canWrite.
+			return (
+				this.form.canRead(currentPath, canonicalPath) &&
+				(!writable || this.form.hasWriteAccess(currentPath, canonicalPath))
+			);
+		};
+	}
+
 	#restoreDraft() {
 		const collection = this.collection;
 		if (collection === undefined) return false;
-		const checkpoint = takeFormDraft(collection.id, this.documentID);
+		if (
+			this.form.access === undefined ||
+			(this.creating
+				? this.form.access.operations.create !== true
+				: this.form.access.operations.read !== true)
+		)
+			return false;
+		const checkpoint = peekFormDraft(collection.id, this.documentID, this.#draftLocale);
 		if (checkpoint === undefined) return false;
-		const result = this.form.recover(
-			{ values: checkpoint.values, original: checkpoint.original },
+		if (
+			this.currentDocument !== undefined &&
+			!sameFormDraftBase(checkpoint, this.currentDocument)
+		) {
+			this.recoveryConflict = checkpoint;
+			return false;
+		}
+		if (!this.creating && this.form.access.operations.update !== true) return false;
+		clearFormDraft(collection.id, this.documentID, this.#draftLocale);
+		return this.#applyDraft(checkpoint);
+	}
+
+	#applyDraft(checkpoint: FormDraftCheckpoint) {
+		const collection = this.collection;
+		if (collection === undefined) return false;
+		const reconciled = reconcileFormSchema(
+			checkpoint,
 			checkpoint.collection.fields,
 			collection.fields
 		);
+		const allowed = this.#draftAllowed(reconciled.values, true);
+		const readable = submissionFormValues(collection.fields, reconciled.values, allowed);
+		const all = submissionFormValues(collection.fields, reconciled.values);
+		// A partially denied container cannot replace its latest saved children. Retain
+		// only complete authorized fields; the server still rechecks every mutation.
+		for (const field of collection.fields) {
+			if (allowed(field.path, field.path) && sameValue(readable[field.name], all[field.name]))
+				continue;
+			delete reconciled.values[field.name];
+			delete reconciled.original[field.name];
+		}
+		const result = this.form.recover(reconciled, collection.fields);
 		const title =
 			result.restoredFields === 0
 				? this.options.runtime.i18n.t("documents:noDraftFieldsRestored")
@@ -994,10 +1167,35 @@ export class DocumentController {
 				: this.options.runtime.i18n.t("documents:incompatibleDraftValues", {
 						count: result.detached.length,
 					});
-		if (result.restoredFields === 0 || result.detached.length > 0)
-			this.options.notifications.warning({ title, message });
-		else this.options.notifications.success({ title });
+		this.#dismissRecoveryNotification();
+		const generation = this.#routeGeneration;
+		// The restored edits stay discardable until the editor saves, discards or leaves.
+		const notification =
+			result.restoredFields === 0
+				? { title, message }
+				: {
+						title,
+						message,
+						duration: Number.POSITIVE_INFINITY,
+						action: {
+							label: this.options.runtime.i18n.t("documents:discard"),
+							onClick: () => {
+								if (generation === this.#routeGeneration && !this.form.submitting)
+									this.discardChanges();
+							},
+						},
+					};
+		this.#recoveryNotificationID =
+			result.restoredFields === 0 || result.detached.length > 0
+				? this.options.notifications.warning(notification)
+				: this.options.notifications.success(notification);
 		return result.restoredFields > 0;
+	}
+
+	#dismissRecoveryNotification() {
+		if (this.#recoveryNotificationID === undefined) return;
+		this.options.notifications.dismiss(this.#recoveryNotificationID);
+		this.#recoveryNotificationID = undefined;
 	}
 
 	#cancelLoad() {
@@ -1020,6 +1218,8 @@ export class DocumentController {
 		const { signal } = request;
 		const global = this.globalResource;
 		const locale = this.contentLocale;
+		if (this.recoveryConflict !== undefined)
+			this.form.setAccess(undefined, documentID === undefined ? "create" : "update");
 		// A refresh may replace the draft it started with, never edits made while it was pending.
 		const revision = this.form.revision;
 		const uploadRevision = this.upload.revision;
@@ -1027,6 +1227,8 @@ export class DocumentController {
 		this.loading = true;
 		this.error = undefined;
 		try {
+			const accessValues =
+				documentID === undefined ? this.#createAccessValues() : $state.snapshot(this.form.original);
 			const [document, access] = await Promise.all([
 				documentID === undefined || preserveDocument
 					? undefined
@@ -1037,7 +1239,7 @@ export class DocumentController {
 					? this.options.runtime.client.globalAccess(slug, { signal, locale })
 					: this.options.runtime.client.collectionAccess(slug, {
 							id: documentID,
-							...(documentID === undefined ? { data: $state.snapshot(this.form.values) } : {}),
+							...(documentID === undefined ? { data: accessValues } : {}),
 							signal,
 							locale,
 						}),
@@ -1047,12 +1249,23 @@ export class DocumentController {
 				this.form.revision === revision &&
 				this.upload.revision === uploadRevision &&
 				this.#formChangeGeneration === changeGeneration;
-			this.form.setAccess(access, documentID === undefined ? "create" : "update");
+			// Retained edits may have changed occurrence order since access was evaluated.
+			const retainForm = !formUnchanged || (documentID !== undefined && preserveDocument);
+			this.form.setAccess(
+				access,
+				documentID === undefined ? "create" : "update",
+				retainForm
+					? document === undefined
+						? accessValues
+						: documentFormValues(this.collection?.fields ?? [], document)
+					: undefined
+			);
 			if (document !== undefined && formUnchanged) {
 				const uncertain = this.saveOutcomeUncertain;
-				if (uncertain) clearFormDraft(this.collection?.id ?? slug, documentID);
+				if (uncertain) clearFormDraft(this.collection?.id ?? slug, documentID, this.#draftLocale);
 				this.#applyDocument(document, !uncertain);
 			}
+			if (documentID === undefined && formUnchanged) this.#restoreDraft();
 			if (
 				documentID !== undefined &&
 				!global &&
@@ -1075,6 +1288,7 @@ export class DocumentController {
 			}
 		} catch (cause) {
 			if (signal.aborted) return;
+			this.form.setAccess(undefined, documentID === undefined ? "create" : "update");
 			this.error =
 				cause instanceof Error
 					? cause.message
@@ -1094,7 +1308,7 @@ export class DocumentController {
 	) {
 		if (
 			"values" in prepared &&
-			!samePreparedCreateValues(prepared.values, $state.snapshot(this.form.values))
+			!samePreparedCreateValues(prepared.values, this.#createAccessValues())
 		)
 			return false;
 		const document = "document" in prepared ? prepared.document : undefined;
@@ -1107,6 +1321,7 @@ export class DocumentController {
 		}
 		this.form.setAccess(access.value, documentID === undefined ? "create" : "update");
 		if (document?.value !== undefined) this.#applyDocument(document.value, true);
+		if (documentID === undefined) this.#restoreDraft();
 		if (
 			documentID !== undefined &&
 			!this.globalResource &&
@@ -1141,6 +1356,7 @@ export class DocumentController {
 		const collectionSlug = this.collectionSlug;
 		const global = this.globalResource;
 		const locale = this.contentLocale;
+		const accessValues = $state.snapshot(this.form.original);
 		try {
 			const access = global
 				? await this.options.runtime.client.globalAccess(collectionSlug, { locale })
@@ -1149,7 +1365,7 @@ export class DocumentController {
 						locale,
 					});
 			if (generation !== this.#routeGeneration) return;
-			this.form.setAccess(access, "update");
+			this.form.setAccess(access, "update", accessValues);
 			this.error = undefined;
 		} catch (cause) {
 			if (generation !== this.#routeGeneration) return;
@@ -1162,6 +1378,8 @@ export class DocumentController {
 	}
 
 	#applyDocument(document: AdminDocument, recoverDraft = false) {
+		this.#dismissRecoveryNotification();
+		this.recoveryConflict = undefined;
 		this.saveOutcomeUncertain = false;
 		this.currentDocument = document;
 		this.upload.reset(document);

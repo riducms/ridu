@@ -24,9 +24,9 @@ var (
 	// ErrSchemaCurrent reports that a new migration would record nothing:
 	// the schema is the one the latest migration records.
 	ErrSchemaCurrent = errors.New("schema is current")
-	// ErrOnlyAdminChanges reports that the schema differs from the latest
-	// migration only in admin settings, which history ignores.
-	ErrOnlyAdminChanges = fmt.Errorf("%w; only admin settings changed, so no migration is needed", ErrSchemaCurrent)
+	// ErrOnlyPresentationChanges reports that the schema differs from the
+	// latest migration only outside its storage schema, which history ignores.
+	ErrOnlyPresentationChanges = fmt.Errorf("%w; only presentation settings changed, so no migration is needed", ErrSchemaCurrent)
 )
 
 var (
@@ -55,10 +55,10 @@ func Create(directory, name string, artifact migration.Artifact, now time.Time) 
 	if err := artifact.Validate(); err != nil {
 		return File{}, err
 	}
-	// History is compared without admin settings, so this file would record
-	// nothing that ridu build, ridu migrate status or readiness reads.
-	if onlyAdminPresentationChanges(artifact) {
-		return File{}, ErrOnlyAdminChanges
+	// History is compared through the storage schema, so this file would
+	// record nothing that ridu build, ridu migrate status or readiness reads.
+	if onlyPresentationChanges(artifact) {
+		return File{}, ErrOnlyPresentationChanges
 	}
 	if err := os.MkdirAll(directory, 0o755); err != nil {
 		return File{}, err
@@ -112,11 +112,11 @@ func Create(directory, name string, artifact migration.Artifact, now time.Time) 
 	return File{Path: path, Name: base, Digest: digest, Artifact: artifact}, nil
 }
 
-// onlyAdminPresentationChanges reports whether an artifact changes nothing but
-// admin presentation: its manifests differ only in admin settings, and its
-// steps only assert the resulting schema. A planner upgrade or a data
-// transform adds steps of its own.
-func onlyAdminPresentationChanges(artifact migration.Artifact) bool {
+// onlyPresentationChanges reports whether an artifact changes nothing but
+// presentation: its manifests have the same storage schema, and its steps only
+// assert the resulting schema. A planner upgrade or a data transform adds
+// steps of its own.
+func onlyPresentationChanges(artifact migration.Artifact) bool {
 	if artifact.Before == nil || artifact.FromDigest == artifact.ToDigest {
 		return false
 	}
@@ -285,8 +285,8 @@ func RequireCurrentHistory(directory string, executable schema.Manifest) ([]File
 	if err != nil {
 		return nil, fmt.Errorf("read latest migration artifact %s: %w", latest.Name, err)
 	}
-	// Admin presentation never changes stored data, so hiding, regrouping or
-	// relabelling in the admin needs no migration.
+	// Presentation never changes stored data, so hiding, regrouping or
+	// relabelling needs no migration.
 	if !executable.SameStorage(head) {
 		digest, err := migration.DigestManifest(executable)
 		if err != nil {

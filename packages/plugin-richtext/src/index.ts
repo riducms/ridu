@@ -1,6 +1,6 @@
 import { defineAdminPlugin, definePluginField } from "@riducms/plugin/authoring/v1";
-import { decodeRichTextDocument } from "@plugin-richtext/document-validation";
 import { decodeRichTextConfig } from "@plugin-richtext/field/rich-text-config";
+import { decodeRichTextDocument } from "@plugin-richtext/field/rich-text-value";
 import Prism from "prismjs";
 
 import { richTextMessages } from "@plugin-richtext/messages";
@@ -22,15 +22,6 @@ export const richTextAdminPlugin = defineAdminPlugin({
 	},
 	messages: richTextMessages,
 });
-
-export type {
-	RichTextDocument,
-	RichTextDocumentInput,
-	RichTextNode,
-	RichTextRootNode,
-	RichTextBlockNode,
-	RichTextBlockRenderers,
-} from "#richtext/document";
 
 export { richTextMessages } from "@plugin-richtext/messages";
 export type { RichTextConfig, RichTextFeature } from "@plugin-richtext/field/rich-text-config";

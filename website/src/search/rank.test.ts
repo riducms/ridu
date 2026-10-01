@@ -3,7 +3,7 @@
 import { expect, test } from 'bun:test';
 import { referenceModules } from '@/reference';
 import type { SiteSearchEntry } from './index';
-import { rankSearchCatalog } from './rank';
+import { normalizeSearchQuery, rankSearchCatalog } from './rank';
 import { buildReferenceSearchText, searchableText } from './text';
 
 function referenceCatalog(): SiteSearchEntry[] {
@@ -90,6 +90,43 @@ test('deduplicates contained variants while preserving phrases and qualified ide
 	expect(text).toContain(description.toLocaleLowerCase());
 	expect(text).toContain('field.textfield.maxlength');
 	expect(text).toContain('field text field max length');
+});
+
+test('normalizes source whitespace while preserving qualified query matches', () => {
+	const fragments = [
+		'Store.ReplaceBaseline(ctx context.Context,\n\tpreviousHistory string)',
+		'@riducms/sdk/richtext',
+		'--previous-history'
+	];
+	const compact = searchableText(fragments);
+	expect(compact).toContain(normalizeSearchQuery(fragments[0]));
+	expect(compact).not.toMatch(/[\n\t\r]| {2,}/);
+	const catalog = (searchText: string): SiteSearchEntry[] => [
+		{
+			label: 'Store.ReplaceBaseline',
+			href: '/reference/sqlite/store-replace-baseline-method/',
+			type: 'method',
+			searchText
+		}
+	];
+	const raw = fragments.join(' ').normalize('NFKC').toLocaleLowerCase();
+	for (const query of [
+		'Store.ReplaceBaseline',
+		'context.Context',
+		'@riducms/sdk/richtext',
+		'--previous-history',
+		'ctx context.Context,',
+		'previousHistory string)',
+		fragments[0],
+		'context.Unknown'
+	]) {
+		const matches = (text: string) =>
+			rankSearchCatalog(catalog(text), query).map(({ entry, score }) => ({
+				href: entry.href,
+				score
+			}));
+		expect(matches(compact), query).toEqual(matches(raw));
+	}
 });
 
 test('compacts overlapping phrases without dropping variants or changing searchable tokens', () => {

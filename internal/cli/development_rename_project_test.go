@@ -160,7 +160,7 @@ func (session *developmentSession) acceptTitleRename(t *testing.T) {
 	}
 	session.waitFor(t, "Applied rename and preserved existing data")
 	printed := session.printed()
-	stopped := strings.Index(printed, "Stopping the development server while the rename moves stored content")
+	stopped := strings.Index(printed, "Stopping the development server before changing its stored schema")
 	if stopped < 0 || strings.Index(printed, "Applied rename and preserved existing data") < stopped {
 		t.Fatalf("the server was not stopped before the content moved:\n%s", printed)
 	}
@@ -370,8 +370,8 @@ func TestDevelopmentRenameWaitsForAFixWhenTheRenamedCodeDoesNotBuild(t *testing.
 	}
 
 	session.acceptTitleRename(t)
-	session.waitFor(t, "Reload rejected after the server was stopped for a rename")
-	session.waitFor(t, "The development server is stopped for the rename")
+	session.waitFor(t, "Reload rejected after the server was stopped for a schema change")
+	session.waitFor(t, "The development server is stopped for the schema change")
 	select {
 	case <-session.exited:
 		t.Fatalf("ridu dev exited instead of waiting for a fix:\n%s", session.printed())

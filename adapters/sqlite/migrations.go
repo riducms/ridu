@@ -21,45 +21,11 @@ import (
 	"github.com/riducms/ridu/schema"
 )
 
+// The SQLite planner accepts only artifacts recorded by this exact planner.
 const (
-	sqlitePlannerName      = "ridu-sqlite"
-	sqlitePlannerVersionV1 = "1.0.0"
-	sqlitePlannerVersion   = "1.1.0"
+	sqlitePlannerName    = "ridu-sqlite"
+	sqlitePlannerVersion = "1.1.0"
 )
-
-type sqlitePlannerContract struct {
-	version               string
-	freshSchemaStatements []string
-	reconcileIndexes      func(context.Context, sqlRunner, schema.Manifest) error
-	rebuildUniqueness     func(context.Context, sqlRunner, schema.Manifest) error
-}
-
-type sqlitePlannerContractResolver func(string) (sqlitePlannerContract, bool)
-
-func currentSQLitePlannerContract() sqlitePlannerContract {
-	return sqlitePlannerContract{
-		version:               sqlitePlannerVersion,
-		freshSchemaStatements: append([]string(nil), sqliteSchemaStatements...),
-		reconcileIndexes:      reconcileDocumentIndexes,
-		rebuildUniqueness:     rebuildUniqueValues,
-	}
-}
-
-func sqlitePlannerContractFor(version string) (sqlitePlannerContract, bool) {
-	switch version {
-	case sqlitePlannerVersionV1:
-		return sqlitePlannerContract{
-			version:               version,
-			freshSchemaStatements: append([]string(nil), sqliteSchemaStatements...),
-			reconcileIndexes:      reconcileDocumentIndexes,
-			rebuildUniqueness:     rebuildLegacyAuthUniqueValues,
-		}, true
-	case sqlitePlannerVersion:
-		return currentSQLitePlannerContract(), true
-	default:
-		return sqlitePlannerContract{}, false
-	}
-}
 
 // MigrationStatus describes one immutable SQLite artifact relative to the
 // database ledger. SQLite artifacts are atomic, so phases and steps are either
@@ -128,17 +94,14 @@ func CreateArtifact(ctx context.Context, directory, name string, after schema.Ma
 		return CreatedArtifact{}, err
 	}
 	var before *schema.Manifest
-	previousPlannerVersion := ""
 	if len(files) != 0 {
-		head := files[len(files)-1].Artifact
-		latest, err := head.AfterManifest()
+		latest, err := files[len(files)-1].Artifact.AfterManifest()
 		if err != nil {
 			return CreatedArtifact{}, err
 		}
 		before = &latest
-		previousPlannerVersion = head.Planner.Version
 	}
-	artifact, err := buildSQLiteArtifactWithDataTransformDescriptors(ctx, name, before, after, previousPlannerVersion, currentSQLitePlannerContract(), transforms, len(transforms) != 0)
+	artifact, err := buildSQLiteArtifactWithDataTransformDescriptors(ctx, name, before, after, transforms, len(transforms) != 0)
 	if err != nil {
 		return CreatedArtifact{}, err
 	}
@@ -158,16 +121,11 @@ func CreateArtifact(ctx context.Context, directory, name string, after schema.Ma
 // The generic JSON document layout makes adding resources and optional fields
 // manifest-only changes. Initial history installs the fixed adapter schema.
 // Transitions that need content rewrites or destructive interpretation are
-// rejected until SQLite has a typed executor for them. A non-nil before value
-// is assumed to have been produced by the current planner contract; ordinary
-// CreateArtifact is the author-facing API: it derives adapter history and
-// binds the plan to the exact predecessor before publishing it.
+// rejected until SQLite has a typed executor for them. Ordinary CreateArtifact
+// is the author-facing API: it derives adapter history and binds the plan to
+// the exact predecessor before publishing it.
 func planArtifact(ctx context.Context, name string, before *schema.Manifest, after schema.Manifest, allowDestructive bool, transforms ...ridumigration.DataTransformDescriptor) (ridumigration.Artifact, error) {
-	previousPlannerVersion := ""
-	if before != nil {
-		previousPlannerVersion = sqlitePlannerVersion
-	}
-	artifact, err := buildSQLiteArtifactWithDataTransformDescriptors(ctx, name, before, after, previousPlannerVersion, currentSQLitePlannerContract(), transforms, len(transforms) != 0)
+	artifact, err := buildSQLiteArtifactWithDataTransformDescriptors(ctx, name, before, after, transforms, len(transforms) != 0)
 	if err != nil {
 		return ridumigration.Artifact{}, err
 	}
@@ -193,21 +151,11 @@ func requireSQLiteDestructiveApproval(risks []ridumigration.Risk, allowDestructi
 	return nil
 }
 
-func buildSQLiteArtifact(ctx context.Context, name string, before *schema.Manifest, after schema.Manifest, previousPlannerVersion string, contract sqlitePlannerContract) (ridumigration.Artifact, error) {
-	return buildSQLiteArtifactWithValidation(ctx, name, before, after, previousPlannerVersion, contract, validateSQLiteAdditiveTransition, nil)
-}
-
-func buildSQLiteArtifactWithValidation(ctx context.Context, name string, before *schema.Manifest, after schema.Manifest, previousPlannerVersion string, contract sqlitePlannerContract, validateTransition func(schema.Snapshot, schema.Snapshot) error, renames []ridumigration.Rename) (ridumigration.Artifact, error) {
+func buildSQLiteArtifactWithValidation(ctx context.Context, name string, before *schema.Manifest, after schema.Manifest, validateTransition func(schema.Snapshot, schema.Snapshot) error, renames []ridumigration.Rename) (ridumigration.Artifact, error) {
 	if err := ctx.Err(); err != nil {
 		return ridumigration.Artifact{}, err
 	}
-	if strings.TrimSpace(contract.version) == "" || len(contract.freshSchemaStatements) == 0 || contract.reconcileIndexes == nil || contract.rebuildUniqueness == nil {
-		return ridumigration.Artifact{}, fmt.Errorf("SQLite planner contract is incomplete")
-	}
 	if before != nil {
-		if previousPlannerVersion == "" {
-			return ridumigration.Artifact{}, fmt.Errorf("previous SQLite planner version is required for a non-initial artifact")
-		}
 		fromDigest, err := ridumigration.DigestManifest(*before)
 		if err != nil {
 			return ridumigration.Artifact{}, err
@@ -216,24 +164,16 @@ func buildSQLiteArtifactWithValidation(ctx context.Context, name string, before 
 		if err != nil {
 			return ridumigration.Artifact{}, err
 		}
-		if previousPlannerVersion != contract.version && !sqlitePlannerUpgradeSupported(previousPlannerVersion, contract.version) {
-			return ridumigration.Artifact{}, fmt.Errorf("SQLite planner version %q does not match current version %q", previousPlannerVersion, contract.version)
-		}
-		canonicalUpgrade := sqliteAuthIdentityUpgradeRequired(previousPlannerVersion, contract.version, before.Snapshot(), after.Snapshot())
-		if fromDigest == toDigest && !canonicalUpgrade {
+		if fromDigest == toDigest {
 			return ridumigration.Artifact{}, fmt.Errorf("%w; no SQLite migration steps were planned", migrationartifact.ErrSchemaCurrent)
 		}
-		if fromDigest != toDigest {
-			if err := validateTransition(before.Snapshot(), after.Snapshot()); err != nil {
-				return ridumigration.Artifact{}, err
-			}
+		if err := validateTransition(before.Snapshot(), after.Snapshot()); err != nil {
+			return ridumigration.Artifact{}, err
 		}
-	} else if previousPlannerVersion != "" {
-		return ridumigration.Artifact{}, fmt.Errorf("initial SQLite artifact cannot have previous planner version %s", previousPlannerVersion)
 	}
 
 	artifact, err := ridumigration.NewArtifact(name, ridumigration.Planner{
-		Name: sqlitePlannerName, Version: contract.version,
+		Name: sqlitePlannerName, Version: sqlitePlannerVersion,
 	}, before, after)
 	if err != nil {
 		return ridumigration.Artifact{}, err
@@ -242,7 +182,7 @@ func buildSQLiteArtifactWithValidation(ctx context.Context, name string, before 
 	var statements []string
 	stepName := "install SQLite schema object"
 	if before == nil {
-		statements = contract.freshSchemaStatements
+		statements = sqliteSchemaStatements
 	}
 	steps := make([]ridumigration.Step, 0, len(statements)+1)
 	for index, statement := range statements {
@@ -253,22 +193,6 @@ func buildSQLiteArtifactWithValidation(ctx context.Context, name string, before 
 		steps = append(steps, ridumigration.Step{
 			ID: fmt.Sprintf("step-%04d", len(steps)+1), Kind: ridumigration.StepSQL,
 			ExecutorVersion: 1, Name: fmt.Sprintf("%s %03d", stepName, index+1), Payload: payload,
-		})
-	}
-	if before != nil && sqliteAuthIdentityUpgradeRequired(previousPlannerVersion, contract.version, before.Snapshot(), after.Snapshot()) {
-		payload, err := ridumigration.MarshalStepPayload(ridumigration.CanonicalizeAuthIdentitiesPayload{
-			Resources: ridumigration.RetainedAuthIdentityResources(before.Snapshot(), after.Snapshot()),
-		})
-		if err != nil {
-			return ridumigration.Artifact{}, err
-		}
-		steps = append(steps, ridumigration.Step{
-			ID: fmt.Sprintf("step-%04d", len(steps)+1), Kind: ridumigration.StepCanonicalizeAuthIdentities,
-			ExecutorVersion: 1, Name: "canonicalize authored authentication identities", Payload: payload,
-		})
-		artifact.Risks = append(artifact.Risks, ridumigration.Risk{
-			Code: "RIDU_AUTH_IDENTITY_CANONICALIZATION", Level: ridumigration.RiskDestructive,
-			Message: "irreversibly rewrite authored authentication identities to the shared lowercase-and-trimmed key after a collision preflight; coordinate the migration with application writers",
 		})
 	}
 	for _, rename := range renames {
@@ -309,22 +233,8 @@ func buildSQLiteArtifactWithValidation(ctx context.Context, name string, before 
 	return artifact, nil
 }
 
-func sqlitePlannerUpgradeSupported(previous, next string) bool {
-	return previous == sqlitePlannerVersionV1 && next == sqlitePlannerVersion
-}
-
-func sqliteAuthIdentityUpgradeRequired(previous, next string, before, after schema.Snapshot) bool {
-	return sqlitePlannerUpgradeSupported(previous, next) && len(ridumigration.RetainedAuthIdentityResources(before, after)) != 0
-}
-
 func validateSQLiteAdditiveTransition(before, after schema.Snapshot) error {
-	return validateSQLiteAdditiveSnapshotTransition(sqliteWithoutPresentation(before), sqliteWithoutPresentation(after))
-}
-
-// validateSQLiteAdditiveSnapshotTransition also preserves the original planner
-// comparison for reconstructing artifacts created before presentation projection.
-func validateSQLiteAdditiveSnapshotTransition(before, after schema.Snapshot) error {
-	return sqliteAdditiveRules{}.snapshot(before, after)
+	return sqliteAdditiveRules{}.snapshot(sqliteStorageSchema(before), sqliteStorageSchema(after))
 }
 
 // sqliteAdditiveRules validates an additive transition. renames maps, for each
@@ -654,14 +564,14 @@ func (backend *Store) ApplyArtifacts(ctx context.Context, directory string, tran
 	if err != nil {
 		return err
 	}
-	return backend.applySQLiteArtifacts(ctx, files, sqlitePlannerContractFor, registry)
+	return backend.applySQLiteArtifacts(ctx, files, registry)
 }
 
-func (backend *Store) applySQLiteArtifacts(ctx context.Context, files []migrationartifact.File, resolve sqlitePlannerContractResolver, transforms sqliteDataTransformRegistry) error {
+func (backend *Store) applySQLiteArtifacts(ctx context.Context, files []migrationartifact.File, transforms sqliteDataTransformRegistry) error {
 	if len(files) == 0 {
 		return fmt.Errorf("migration artifact history is empty; create and commit an initial migration before apply")
 	}
-	if err := preflightSQLiteArtifactsWithResolver(ctx, files, resolve); err != nil {
+	if err := preflightSQLiteArtifacts(ctx, files); err != nil {
 		return err
 	}
 	if err := requireSQLiteDataTransformRegistry(files, transforms); err != nil {
@@ -700,11 +610,7 @@ func (backend *Store) applySQLiteArtifacts(ctx context.Context, files []migratio
 			if err != nil {
 				return err
 			}
-			contract, err := resolveSQLitePlannerContract(files[len(applied)-1], resolve)
-			if err != nil {
-				return err
-			}
-			if err := assertSQLitePhysicalSchema(ctx, connection, appliedManifest, true, contract); err != nil {
+			if err := assertSQLitePhysicalSchema(ctx, connection, appliedManifest, true); err != nil {
 				return fmt.Errorf("current SQLite migration state: %w", err)
 			}
 			if err := assertSQLiteManifestDigest(ctx, connection, files[len(applied)-1].Artifact.ToDigest); err != nil {
@@ -722,11 +628,7 @@ func (backend *Store) applySQLiteArtifacts(ctx context.Context, files []migratio
 			return fmt.Errorf("create SQLite migration ledger: %w", translateError(err))
 		}
 		for index := len(applied); index < len(files); index++ {
-			contract, err := resolveSQLitePlannerContract(files[index], resolve)
-			if err != nil {
-				return err
-			}
-			if err := backend.applySQLiteArtifact(ctx, connection, files[index], index+1, expectedHead, contract, transforms); err != nil {
+			if err := backend.applySQLiteArtifact(ctx, connection, files[index], index+1, expectedHead, transforms); err != nil {
 				return err
 			}
 		}
@@ -734,11 +636,7 @@ func (backend *Store) applySQLiteArtifacts(ctx context.Context, files []migratio
 		if err != nil {
 			return err
 		}
-		latestContract, err := resolveSQLitePlannerContract(files[len(files)-1], resolve)
-		if err != nil {
-			return err
-		}
-		if err := assertSQLitePhysicalSchema(ctx, connection, latestManifest, true, latestContract); err != nil {
+		if err := assertSQLitePhysicalSchema(ctx, connection, latestManifest, true); err != nil {
 			return fmt.Errorf("completed SQLite migration state: %w", err)
 		}
 		if err := assertSQLiteManifestDigest(ctx, connection, files[len(files)-1].Artifact.ToDigest); err != nil {
@@ -748,23 +646,12 @@ func (backend *Store) applySQLiteArtifacts(ctx context.Context, files []migratio
 	})
 }
 
-func resolveSQLitePlannerContract(file migrationartifact.File, resolve sqlitePlannerContractResolver) (sqlitePlannerContract, error) {
-	contract, supported := resolve(file.Artifact.Planner.Version)
-	if !supported {
-		return sqlitePlannerContract{}, fmt.Errorf("SQLite migration %s uses unsupported planner version %q", file.Name, file.Artifact.Planner.Version)
-	}
-	return contract, nil
-}
-
+// preflightSQLiteArtifacts proves that every artifact is exactly what the
+// current planner produces from its recorded manifests and intent.
 func preflightSQLiteArtifacts(ctx context.Context, files []migrationartifact.File) error {
-	return preflightSQLiteArtifactsWithResolver(ctx, files, sqlitePlannerContractFor)
-}
-
-func preflightSQLiteArtifactsWithResolver(ctx context.Context, files []migrationartifact.File, resolve sqlitePlannerContractResolver) error {
 	if err := validateSQLiteDataTransformIdentities(files, nil); err != nil {
 		return err
 	}
-	previousPlannerVersion := ""
 	for _, file := range files {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -772,8 +659,7 @@ func preflightSQLiteArtifactsWithResolver(ctx context.Context, files []migration
 		if file.Artifact.Planner.Name != sqlitePlannerName {
 			return fmt.Errorf("SQLite migration %s uses planner %q instead of %q", file.Name, file.Artifact.Planner.Name, sqlitePlannerName)
 		}
-		contract, supported := resolve(file.Artifact.Planner.Version)
-		if !supported {
+		if file.Artifact.Planner.Version != sqlitePlannerVersion {
 			return fmt.Errorf("SQLite migration %s uses unsupported planner version %q", file.Name, file.Artifact.Planner.Version)
 		}
 		for _, phase := range file.Artifact.Phases {
@@ -781,7 +667,7 @@ func preflightSQLiteArtifactsWithResolver(ctx context.Context, files []migration
 				return fmt.Errorf("SQLite migration %s uses unsupported phase mode %q", file.Name, phase.Mode)
 			}
 			for _, step := range phase.Steps {
-				if step.Kind != ridumigration.StepSQL && step.Kind != ridumigration.StepDataTransform && step.Kind != ridumigration.StepCanonicalizeAuthIdentities && step.Kind != ridumigration.StepRenameContent && step.Kind != ridumigration.StepAssertSchema {
+				if step.Kind != ridumigration.StepSQL && step.Kind != ridumigration.StepDataTransform && step.Kind != ridumigration.StepRenameContent && step.Kind != ridumigration.StepAssertSchema {
 					return fmt.Errorf("SQLite migration %s uses unsupported step kind %q", file.Name, step.Kind)
 				}
 			}
@@ -811,9 +697,9 @@ func preflightSQLiteArtifactsWithResolver(ctx context.Context, files []migration
 		case len(renames) != 0 && len(descriptors) != 0:
 			err = fmt.Errorf("content renames and data transforms cannot share one SQLite migration")
 		case len(renames) != 0:
-			expected, err = buildSQLiteArtifactWithRenames(ctx, file.Artifact.Name, before, after, previousPlannerVersion, contract, renames)
+			expected, err = buildSQLiteArtifactWithRenames(ctx, file.Artifact.Name, before, after, renames)
 		default:
-			expected, err = rebuildSQLiteArtifactWithDataTransformDescriptors(ctx, file.Artifact.Name, before, after, previousPlannerVersion, contract, descriptors, sqliteArtifactAllowsTransformedSchema(file.Artifact))
+			expected, err = buildSQLiteArtifactWithDataTransformDescriptors(ctx, file.Artifact.Name, before, after, descriptors, sqliteArtifactAllowsTransformedSchema(file.Artifact))
 		}
 		if err != nil {
 			return fmt.Errorf("validate SQLite migration %s against planner: %w", file.Name, err)
@@ -824,14 +710,13 @@ func preflightSQLiteArtifactsWithResolver(ctx context.Context, files []migration
 			return err
 		}
 		if digest != file.Digest {
-			return fmt.Errorf("SQLite migration %s does not match planner %s %s", file.Name, sqlitePlannerName, contract.version)
+			return fmt.Errorf("SQLite migration %s does not match planner %s %s", file.Name, sqlitePlannerName, sqlitePlannerVersion)
 		}
-		previousPlannerVersion = contract.version
 	}
 	return nil
 }
 
-func (backend *Store) applySQLiteArtifact(ctx context.Context, connection *sql.Conn, file migrationartifact.File, position int, expectedHead string, contract sqlitePlannerContract, transforms sqliteDataTransformRegistry) error {
+func (backend *Store) applySQLiteArtifact(ctx context.Context, connection *sql.Conn, file migrationartifact.File, position int, expectedHead string, transforms sqliteDataTransformRegistry) error {
 	after, err := file.Artifact.AfterManifest()
 	if err != nil {
 		return err
@@ -844,7 +729,6 @@ func (backend *Store) applySQLiteArtifact(ctx context.Context, connection *sql.C
 		}
 		before = &manifest
 	}
-	presentationOnly := sqlitePresentationOnlyArtifact(file.Artifact, before, after)
 	renamed := false
 	for _, phase := range file.Artifact.Phases {
 		for _, step := range phase.Steps {
@@ -875,31 +759,17 @@ func (backend *Store) applySQLiteArtifact(ctx context.Context, connection *sql.C
 				if err := backend.executeSQLiteDataTransform(ctx, connection, file, payload.Transform, transforms, false); err != nil {
 					return fmt.Errorf("apply SQLite migration %s step %s (%s): %w", file.Name, step.ID, step.Name, err)
 				}
-			case ridumigration.StepCanonicalizeAuthIdentities:
-				var payload ridumigration.CanonicalizeAuthIdentitiesPayload
-				if err := json.Unmarshal(step.Payload, &payload); err != nil {
-					return fmt.Errorf("decode SQLite migration %s step %s: %w", file.Name, step.ID, err)
-				}
-				before, err := file.Artifact.BeforeManifest()
-				if err != nil {
-					return fmt.Errorf("decode SQLite migration %s before manifest: %w", file.Name, err)
-				}
-				if err := canonicalizeSQLiteAuthIdentities(ctx, connection, before, after, payload.Resources); err != nil {
+			case ridumigration.StepAssertSchema:
+				if err := reconcileDocumentIndexes(ctx, connection, after); err != nil {
 					return fmt.Errorf("apply SQLite migration %s step %s (%s): %w", file.Name, step.ID, step.Name, err)
 				}
-			case ridumigration.StepAssertSchema:
-				if !presentationOnly {
-					if err := contract.reconcileIndexes(ctx, connection, after); err != nil {
-						return fmt.Errorf("apply SQLite migration %s step %s (%s): %w", file.Name, step.ID, step.Name, err)
-					}
-					if err := rebuildDocumentReferences(ctx, connection, after); err != nil {
-						return fmt.Errorf("apply SQLite migration %s step %s (%s): rebuild references: %w", file.Name, step.ID, step.Name, err)
-					}
-					if err := contract.rebuildUniqueness(ctx, connection, after); err != nil {
-						return fmt.Errorf("apply SQLite migration %s step %s (%s): rebuild uniqueness: %w", file.Name, step.ID, step.Name, err)
-					}
+				if err := rebuildDocumentReferences(ctx, connection, after); err != nil {
+					return fmt.Errorf("apply SQLite migration %s step %s (%s): rebuild references: %w", file.Name, step.ID, step.Name, err)
 				}
-				if err := assertSQLitePhysicalSchema(ctx, connection, after, true, contract); err != nil {
+				if err := rebuildUniqueValues(ctx, connection, after); err != nil {
+					return fmt.Errorf("apply SQLite migration %s step %s (%s): rebuild uniqueness: %w", file.Name, step.ID, step.Name, err)
+				}
+				if err := assertSQLitePhysicalSchema(ctx, connection, after, true); err != nil {
 					return fmt.Errorf("apply SQLite migration %s step %s (%s): %w", file.Name, step.ID, step.Name, err)
 				}
 			default:
@@ -1034,25 +904,9 @@ func validateSQLiteArtifactLedgerContinuity(applied []sqliteArtifactLedgerRow) e
 
 // verifyImmutableReadyState checks the schema ledger digest and physical shape
 // in one read transaction. Immutable databases additionally verify artifact
-// history; development databases intentionally have no ridu_migrations table.
-func (backend *Store) verifyImmutableReadyState(ctx context.Context, manifest schema.Manifest) error {
-	return backend.verifyImmutableReadyStateWithResolver(ctx, manifest, sqlitePlannerContractFor)
-}
-
-func (backend *Store) verifyImmutableReadyStateWithHistory(ctx context.Context, manifest schema.Manifest, expectedHistoryDigest string) error {
-	return backend.verifyImmutableReadyStateWithResolverAndHistory(ctx, manifest, sqlitePlannerContractFor, &expectedHistoryDigest)
-}
-
-func (backend *Store) verifyImmutableReadyStateWithResolver(ctx context.Context, manifest schema.Manifest, resolve sqlitePlannerContractResolver) error {
-	return backend.verifyImmutableReadyStateWithResolverAndHistory(ctx, manifest, resolve, nil)
-}
-
-func (backend *Store) verifyImmutableReadyStateWithResolverAndHistory(
-	ctx context.Context,
-	manifest schema.Manifest,
-	resolve sqlitePlannerContractResolver,
-	expectedHistoryDigest *string,
-) error {
+// history, and its digest when expectedHistoryDigest is set; development
+// databases intentionally have no ridu_migrations table.
+func (backend *Store) verifyImmutableReadyState(ctx context.Context, manifest schema.Manifest, expectedHistoryDigest *string) error {
 	connection, err := backend.db.Conn(ctx)
 	if err != nil {
 		return translateError(err)
@@ -1101,7 +955,7 @@ func (backend *Store) verifyImmutableReadyStateWithResolverAndHistory(
 		if expectedArtifactDigest != "" {
 			return fmt.Errorf("SQLite schema ledger expects artifact digest %s but the migration ledger is missing", expectedArtifactDigest)
 		}
-		if err := assertSQLitePhysicalSchema(ctx, connection, manifest, false, currentSQLitePlannerContract()); err != nil {
+		if err := assertSQLitePhysicalSchema(ctx, connection, manifest, false); err != nil {
 			return fmt.Errorf("SQLite development readiness physical schema: %w", err)
 		}
 		return nil
@@ -1134,14 +988,10 @@ func (backend *Store) verifyImmutableReadyStateWithResolverAndHistory(
 	if head.plannerName != sqlitePlannerName {
 		return fmt.Errorf("SQLite migration ledger head %s uses planner %q instead of %q", head.name, head.plannerName, sqlitePlannerName)
 	}
-	if head.plannerVersion == sqlitePlannerVersionV1 && len(ridumigration.AuthIdentityResources(manifest.Snapshot())) != 0 {
-		return fmt.Errorf("SQLite authentication identities require the planner %s canonicalization artifact", sqlitePlannerVersion)
-	}
-	contract, supported := resolve(head.plannerVersion)
-	if !supported {
+	if head.plannerVersion != sqlitePlannerVersion {
 		return fmt.Errorf("SQLite migration ledger head %s uses unsupported planner version %q", head.name, head.plannerVersion)
 	}
-	if err := assertSQLitePhysicalSchema(ctx, connection, manifest, true, contract); err != nil {
+	if err := assertSQLitePhysicalSchema(ctx, connection, manifest, true); err != nil {
 		return fmt.Errorf("SQLite migration readiness physical schema: %w", err)
 	}
 	return nil
@@ -1170,7 +1020,7 @@ func (backend *Store) ArtifactStatus(ctx context.Context, directory string, exec
 	if err != nil {
 		return nil, err
 	}
-	return backend.artifactStatusWithResolver(ctx, files, sqlitePlannerContractFor)
+	return backend.artifactStatus(ctx, files)
 }
 
 // InspectArtifacts reports immutable migration state without creating or
@@ -1184,7 +1034,7 @@ func InspectArtifacts(ctx context.Context, path, directory string, executableMan
 	if len(files) == 0 {
 		return nil, fmt.Errorf("migration artifact history is empty; create and commit an initial migration before status")
 	}
-	if err := preflightSQLiteArtifactsWithResolver(ctx, files, sqlitePlannerContractFor); err != nil {
+	if err := preflightSQLiteArtifacts(ctx, files); err != nil {
 		return nil, err
 	}
 	backend, exists, err := openSQLiteArtifactInspection(ctx, path)
@@ -1195,7 +1045,7 @@ func InspectArtifacts(ctx context.Context, path, directory string, executableMan
 		return sqliteMigrationStatuses(files, 0), nil
 	}
 	defer backend.Close()
-	return backend.artifactStatusWithResolver(ctx, files, sqlitePlannerContractFor)
+	return backend.artifactStatus(ctx, files)
 }
 
 func openSQLiteArtifactInspection(ctx context.Context, path string) (*Store, bool, error) {
@@ -1236,11 +1086,11 @@ func openSQLiteArtifactInspection(ctx context.Context, path string) (*Store, boo
 	return &Store{db: database}, true, nil
 }
 
-func (backend *Store) artifactStatusWithResolver(ctx context.Context, files []migrationartifact.File, resolve sqlitePlannerContractResolver) ([]MigrationStatus, error) {
+func (backend *Store) artifactStatus(ctx context.Context, files []migrationartifact.File) ([]MigrationStatus, error) {
 	if len(files) == 0 {
 		return nil, fmt.Errorf("migration artifact history is empty; create and commit an initial migration before status")
 	}
-	if err := preflightSQLiteArtifactsWithResolver(ctx, files, resolve); err != nil {
+	if err := preflightSQLiteArtifacts(ctx, files); err != nil {
 		return nil, err
 	}
 	connection, err := backend.db.Conn(ctx)
@@ -1284,11 +1134,7 @@ func (backend *Store) artifactStatusWithResolver(ctx context.Context, files []mi
 		if err != nil {
 			return nil, err
 		}
-		contract, err := resolveSQLitePlannerContract(files[len(applied)-1], resolve)
-		if err != nil {
-			return nil, err
-		}
-		if err := assertSQLitePhysicalSchema(ctx, connection, appliedManifest, true, contract); err != nil {
+		if err := assertSQLitePhysicalSchema(ctx, connection, appliedManifest, true); err != nil {
 			return nil, fmt.Errorf("SQLite migration status physical schema: %w", err)
 		}
 		if err := assertSQLiteManifestDigest(ctx, connection, files[len(applied)-1].Artifact.ToDigest); err != nil {
@@ -1354,10 +1200,10 @@ func verifySQLiteArtifacts(ctx context.Context, files []migrationartifact.File, 
 		return fmt.Errorf("open SQLite shadow database: %w", err)
 	}
 	defer shadow.Close()
-	if err := shadow.applySQLiteArtifacts(ctx, files, sqlitePlannerContractFor, transforms); err != nil {
+	if err := shadow.applySQLiteArtifacts(ctx, files, transforms); err != nil {
 		return fmt.Errorf("verify SQLite migrations in shadow database: %w", err)
 	}
-	statuses, err := shadow.artifactStatusWithResolver(ctx, files, sqlitePlannerContractFor)
+	statuses, err := shadow.artifactStatus(ctx, files)
 	if err != nil {
 		return fmt.Errorf("verify completed SQLite shadow migration state: %w", err)
 	}
@@ -1388,7 +1234,7 @@ func withSQLiteMigrationShadow(ctx context.Context, action func(*sql.Conn) error
 	return shadow.withImmediate(ctx, action)
 }
 
-func expectedSQLiteObjects(ctx context.Context, manifest *schema.Manifest, includeArtifactLedger bool, contract sqlitePlannerContract) (map[string]string, error) {
+func expectedSQLiteObjects(ctx context.Context, manifest *schema.Manifest, includeArtifactLedger bool) (map[string]string, error) {
 	var objects map[string]string
 	err := withSQLiteMigrationShadow(ctx, func(database *sql.Conn) error {
 		if includeArtifactLedger {
@@ -1396,16 +1242,11 @@ func expectedSQLiteObjects(ctx context.Context, manifest *schema.Manifest, inclu
 				return err
 			}
 		}
-		for _, statement := range contract.freshSchemaStatements {
-			if _, err := database.ExecContext(ctx, statement); err != nil {
-				return err
-			}
+		if err := installSchema(ctx, database); err != nil {
+			return err
 		}
 		if manifest != nil {
-			if contract.reconcileIndexes == nil {
-				return fmt.Errorf("SQLite planner contract %q has no index reconciler", contract.version)
-			}
-			if err := contract.reconcileIndexes(ctx, database, *manifest); err != nil {
+			if err := reconcileDocumentIndexes(ctx, database, *manifest); err != nil {
 				return err
 			}
 		}
@@ -1538,7 +1379,7 @@ func isSQLiteSchemaSpace(value byte) bool {
 }
 
 func validateSQLiteArtifactLedgerShape(ctx context.Context, runner sqlRunner) error {
-	expected, err := expectedSQLiteObjects(ctx, nil, true, currentSQLitePlannerContract())
+	expected, err := expectedSQLiteObjects(ctx, nil, true)
 	if err != nil {
 		return err
 	}
@@ -1575,8 +1416,8 @@ func assertNoSQLiteManagedSchema(ctx context.Context, runner sqlRunner) error {
 	return nil
 }
 
-func assertSQLitePhysicalSchema(ctx context.Context, runner sqlRunner, manifest schema.Manifest, includeArtifactLedger bool, contract sqlitePlannerContract) error {
-	expected, err := expectedSQLiteObjects(ctx, &manifest, includeArtifactLedger, contract)
+func assertSQLitePhysicalSchema(ctx context.Context, runner sqlRunner, manifest schema.Manifest, includeArtifactLedger bool) error {
+	expected, err := expectedSQLiteObjects(ctx, &manifest, includeArtifactLedger)
 	if err != nil {
 		return err
 	}

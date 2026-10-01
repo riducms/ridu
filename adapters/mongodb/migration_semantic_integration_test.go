@@ -49,7 +49,7 @@ func TestMongoDBV2SemanticMigrationLifecycleOnAuthenticatedReplicaSet(t *testing
 
 	directory := filepath.Join(t.TempDir(), "migrations")
 	before := mongoDBSemanticLiveBeforeManifest(t)
-	if _, err := CreateArtifact(ctx, directory, "initial", before, time.Unix(1, 0)); err != nil {
+	if _, err := CreateArtifact(ctx, directory, "initial", before, time.Unix(1, 0), ArtifactOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if err := backend.ApplyArtifacts(ctx, directory); err != nil {
@@ -62,7 +62,7 @@ func TestMongoDBV2SemanticMigrationLifecycleOnAuthenticatedReplicaSet(t *testing
 		{CollectionBefore: "authors", CollectionAfter: "members", Fields: []ridumigration.FieldRename{{Before: "name", After: "displayName"}}},
 		{CollectionBefore: "empty-drafts", CollectionAfter: "empty-archive"},
 	}
-	if _, err := CreateArtifactWithOptions(ctx, directory, "rename-and-retire", after, time.Unix(2, 0), ArtifactOptions{
+	if _, err := CreateArtifact(ctx, directory, "rename-and-retire", after, time.Unix(2, 0), ArtifactOptions{
 		AllowDestructive: true,
 		Renames:          renames,
 	}); err != nil {
@@ -118,7 +118,7 @@ func TestMongoDBV2SemanticMigrationLifecycleOnAuthenticatedReplicaSet(t *testing
 		},
 		Down: func(context.Context, ridumigration.DataTransaction) error { return nil },
 	}
-	if _, err := CreateArtifactWithOptions(ctx, directory, "normalize-settings", after, time.Unix(3, 0), ArtifactOptions{
+	if _, err := CreateArtifact(ctx, directory, "normalize-settings", after, time.Unix(3, 0), ArtifactOptions{
 		DataTransforms: []ridumigration.DataTransformDescriptor{descriptor},
 	}); err != nil {
 		t.Fatal(err)
@@ -161,7 +161,7 @@ func TestMongoDBV2SemanticMigrationLifecycleOnAuthenticatedReplicaSet(t *testing
 		}
 	}
 	additive := schema.NewManifest(additiveSnapshot)
-	if _, err := CreateArtifactWithOptions(ctx, directory, "add-settings-index", additive, time.Unix(4, 0), ArtifactOptions{}); err != nil {
+	if _, err := CreateArtifact(ctx, directory, "add-settings-index", additive, time.Unix(4, 0), ArtifactOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if err := backend.ApplyArtifactsWithOptions(ctx, directory, ordinary, transform); err != nil {
@@ -178,7 +178,7 @@ func TestMongoDBV2SemanticMigrationLifecycleOnAuthenticatedReplicaSet(t *testing
 		t.Fatalf("clean-shadow MongoDB semantic verification without maintenance admission = %v", err)
 	}
 	if err := VerifyArtifactsWithOptions(ctx, verificationConfig, directory, maintenance, transform); err != nil {
-		t.Fatalf("verify MongoDB v2 history in authenticated shadow database: %v", err)
+		t.Fatalf("verify MongoDB semantic history in authenticated shadow database: %v", err)
 	}
 }
 

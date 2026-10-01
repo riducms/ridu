@@ -131,7 +131,7 @@ func captureModule(frameworkRoot string) ([]moduleFile, error) {
 
 func skipDirectory(name string) bool {
 	switch name {
-	case ".git", ".ridu", ".zeno", "node_modules", "playground":
+	case ".git", ".ridu", "node_modules", "playground":
 		return true
 	default:
 		return false
