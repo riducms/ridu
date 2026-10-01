@@ -541,24 +541,11 @@ test("an irrelevant query navigation cannot leave a seed for a later API refresh
 test("a restored create draft is access-checked before its complete form is revealed", async ({
 	page,
 }) => {
-	const manifest = (await (await page.request.get("/api/schema")).json()).schema as {
-		collections: { id: string; slug: string }[];
-	};
-	const events = manifest.collections.find((collection) => collection.slug === "events");
-	expect(events).toBeDefined();
+	await page.goto("/admin/collections/events/create?locale=en");
+	await page.getByLabel("Name", { exact: true }).fill("Recovered event");
+	await expect(page.getByRole("heading", { name: "Recovered event", exact: true })).toBeVisible();
+	page.once("dialog", (dialog) => dialog.accept());
 	await page.goto("/admin");
-	await page.evaluate((collection) => {
-		sessionStorage.setItem(
-			`ridu:form-recovery:${collection.id}:new`,
-			JSON.stringify({
-				version: 1,
-				collection,
-				values: { name: "Recovered event" },
-				original: {},
-				createdAt: new Date().toISOString(),
-			})
-		);
-	}, events!);
 	const accessReads: string[] = [];
 	page.on("request", (request) => {
 		const url = new URL(request.url());

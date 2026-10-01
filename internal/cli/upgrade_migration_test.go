@@ -26,7 +26,7 @@ func TestCreateUpgradeMigrationReadsTheUpgradedCLIOutcome(t *testing.T) {
 	}{
 		"created":             {script: "echo 'Created migration migrations/x_ridu-0-12-0.ridu.json; review it before running ridu migrate up.'", created: true},
 		"no migration needed": {script: "echo '" + noMigrationNeeded + ": the schema has not changed since the latest migration.'"},
-		"admin settings only": {script: "echo '" + noMigrationNeeded + ": only admin settings changed since the latest migration, and history ignores them.'"},
+		"presentation only":   {script: "echo '" + noMigrationNeeded + ": only presentation settings, such as labels, admin settings or the application name, changed since the latest migration, and history ignores them.'"},
 		"failure":             {script: "echo '[ERROR] plan migration: migration requires explicit safety resolution' >&2; exit 1", failure: "explicit safety resolution"},
 	} {
 		t.Run(name, func(t *testing.T) {

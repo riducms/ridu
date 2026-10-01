@@ -18093,29 +18093,6 @@
 			"relatedSymbols": [],
 			"typeLinkIDs": {}
 		},
-		"go:github.com/riducms/ridu/schema#PluginCompatibility": {
-			"summary": "A half-open supported Ridu semantic-version interval.",
-			"group": "Plugin manifest",
-			"parametersLabel": "",
-			"parameters": [
-				{
-					"name": "Minimum",
-					"type": "string",
-					"description": "The Minimum value."
-				},
-				{
-					"name": "MaximumExclusive",
-					"type": "string",
-					"description": "The MaximumExclusive value."
-				}
-			],
-			"details": [],
-			"example": "",
-			"keywords": ["schema.PluginCompatibility", "PluginCompatibility"],
-			"relatedDocs": [],
-			"relatedSymbols": [],
-			"typeLinkIDs": {}
-		},
 		"go:github.com/riducms/ridu/schema#PluginFieldType": {
 			"summary": "Generated Go, TypeScript, and JSON Schema contracts for a plugin field.",
 			"group": "Plugin manifest",
@@ -23377,11 +23354,6 @@
 					"description": "Invoke one checksum-bound application-compiled callback."
 				},
 				{
-					"name": "StepCanonicalizeAuthIdentities",
-					"type": "\"canonicalize_auth_identities\"",
-					"description": "Rewrite authored authentication identities to their canonical values."
-				},
-				{
 					"name": "StepConcurrentIndex",
 					"type": "\"concurrent_index\"",
 					"description": "Create or drop one index outside a transaction."
@@ -23516,11 +23488,6 @@
 					"name": "PurgeVersionOwnerIDs",
 					"type": "[]schema.StableID",
 					"description": "PurgeVersionOwnerIDs identifies surviving resources whose complete\nhistorical version rows could otherwise restore references to a retired\nresource. It is present only while planning StepRetireResources."
-				},
-				{
-					"name": "AuthIdentities",
-					"type": "[]AuthIdentityResource",
-					"description": "AuthIdentities is present only while planning a\nStepCanonicalizeAuthIdentities step."
 				}
 			],
 			"details": [
@@ -23534,36 +23501,6 @@
 				"StepKind": "go:github.com/riducms/ridu/migration#StepKind",
 				"Rename": "go:github.com/riducms/ridu/migration#Rename"
 			}
-		},
-		"go:github.com/riducms/ridu/migration#AuthIdentityResource": {
-			"summary": "One authored authentication identity field bound to immutable schema identity.",
-			"group": "Review model",
-			"parametersLabel": "",
-			"parameters": [
-				{
-					"name": "CollectionID",
-					"type": "schema.StableID",
-					"description": "The CollectionID value."
-				},
-				{
-					"name": "FieldID",
-					"type": "schema.StableID",
-					"description": "The FieldID value."
-				},
-				{
-					"name": "FieldName",
-					"type": "string",
-					"description": "The FieldName value."
-				}
-			],
-			"details": [
-				"Collection and field IDs keep the migration bound to the same resource while FieldName addresses JSON-document adapters."
-			],
-			"example": "",
-			"keywords": ["migration.AuthIdentityResource", "AuthIdentityResource"],
-			"relatedDocs": [],
-			"relatedSymbols": [],
-			"typeLinkIDs": {}
 		},
 		"go:github.com/riducms/ridu/migration#DataTransformDescriptor": {
 			"summary": "Immutable artifact identity for one compiled migration callback.",
@@ -24063,29 +24000,6 @@
 			"relatedSymbols": [],
 			"typeLinkIDs": {}
 		},
-		"go:github.com/riducms/ridu/migration#CanonicalizeAuthIdentitiesPayload": {
-			"summary": "Auth identity fields moved to the shared canonical-key contract.",
-			"group": "Payloads",
-			"parametersLabel": "",
-			"parameters": [
-				{
-					"name": "Resources",
-					"type": "[]AuthIdentityResource",
-					"description": "Every authored authentication identity field to rewrite."
-				}
-			],
-			"details": [],
-			"example": "",
-			"keywords": [
-				"migration.CanonicalizeAuthIdentitiesPayload",
-				"CanonicalizeAuthIdentitiesPayload"
-			],
-			"relatedDocs": [],
-			"relatedSymbols": [],
-			"typeLinkIDs": {
-				"AuthIdentityResource": "go:github.com/riducms/ridu/migration#AuthIdentityResource"
-			}
-		},
 		"go:github.com/riducms/ridu/migration#AssertSchemaPayload": {
 			"summary": "The closed marker payload for a reviewed physical-schema assertion.",
 			"group": "Payloads",
@@ -24386,61 +24300,6 @@
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {}
-		},
-		"go:github.com/riducms/ridu/migration#AuthIdentityResources": {
-			"summary": "Return the deterministic complete authentication-identity field scope for a manifest snapshot.",
-			"group": "Execution",
-			"parametersLabel": "",
-			"parameters": [
-				{
-					"name": "snapshot",
-					"type": "schema.Snapshot",
-					"description": "The snapshot value."
-				}
-			],
-			"returns": {
-				"type": "[]AuthIdentityResource",
-				"description": "The declared result."
-			},
-			"details": [],
-			"example": "",
-			"keywords": ["migration.AuthIdentityResources", "AuthIdentityResources"],
-			"relatedDocs": [],
-			"relatedSymbols": [],
-			"typeLinkIDs": {
-				"AuthIdentityResource": "go:github.com/riducms/ridu/migration#AuthIdentityResource"
-			}
-		},
-		"go:github.com/riducms/ridu/migration#RetainedAuthIdentityResources": {
-			"summary": "Return identity fields unchanged across two manifest snapshots.",
-			"group": "Execution",
-			"parametersLabel": "",
-			"parameters": [
-				{
-					"name": "before",
-					"type": "schema.Snapshot",
-					"description": "The before value."
-				},
-				{
-					"name": "after",
-					"type": "schema.Snapshot",
-					"description": "The after value."
-				}
-			],
-			"returns": {
-				"type": "[]AuthIdentityResource",
-				"description": "The declared result."
-			},
-			"details": [
-				"Forward canonicalization excludes newly introduced authentication resources until adapter-owned physical storage exists."
-			],
-			"example": "",
-			"keywords": ["migration.RetainedAuthIdentityResources", "RetainedAuthIdentityResources"],
-			"relatedDocs": [],
-			"relatedSymbols": [],
-			"typeLinkIDs": {
-				"AuthIdentityResource": "go:github.com/riducms/ridu/migration#AuthIdentityResource"
-			}
 		},
 		"go:github.com/riducms/ridu/migration#Artifact.AfterManifest": {
 			"summary": "AfterManifest returns the validated immutable after snapshot.",
@@ -24807,18 +24666,6 @@
 			"details": [],
 			"example": "",
 			"keywords": ["migration.StepBackfillReferences", "StepBackfillReferences"],
-			"relatedDocs": [],
-			"relatedSymbols": [],
-			"typeLinkIDs": {}
-		},
-		"go:github.com/riducms/ridu/migration#StepCanonicalizeAuthIdentities": {
-			"summary": "StepCanonicalizeAuthIdentities rewrites authored authentication identity values to store.CanonicalAuthIdentity before an adapter replaces its legacy uniqueness contract.",
-			"group": "Constants",
-			"parametersLabel": "",
-			"parameters": [],
-			"details": [],
-			"example": "",
-			"keywords": ["migration.StepCanonicalizeAuthIdentities", "StepCanonicalizeAuthIdentities"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {}
@@ -27073,6 +26920,11 @@
 					"name": "allowDestructive",
 					"type": "bool",
 					"description": "The allowDestructive value."
+				},
+				{
+					"name": "transforms",
+					"type": "...migration.DataTransformDescriptor",
+					"description": "Compiled data transforms the migration runs; required for a field-kind change that has stored values."
 				}
 			],
 			"returns": {
@@ -27084,63 +26936,6 @@
 			],
 			"example": "",
 			"keywords": ["postgres.BuildArtifact", "BuildArtifact"],
-			"relatedDocs": [],
-			"relatedSymbols": [],
-			"typeLinkIDs": {
-				"schema.Manifest": "go:github.com/riducms/ridu/schema#Manifest",
-				"Rename": "go:github.com/riducms/ridu/adapters/postgres#Rename"
-			}
-		},
-		"go:github.com/riducms/ridu/adapters/postgres#BuildArtifactWithPreviousPlanner": {
-			"summary": "Plan a reviewed migration against the exact physical planner contract recorded by its predecessor.",
-			"group": "Production migrations",
-			"parametersLabel": "",
-			"parameters": [
-				{
-					"name": "ctx",
-					"type": "context.Context",
-					"description": "The ctx value."
-				},
-				{
-					"name": "name",
-					"type": "string",
-					"description": "The name value."
-				},
-				{
-					"name": "before",
-					"type": "*schema.Manifest",
-					"description": "The before value."
-				},
-				{
-					"name": "after",
-					"type": "schema.Manifest",
-					"description": "The after value."
-				},
-				{
-					"name": "renames",
-					"type": "[]Rename",
-					"description": "The renames value."
-				},
-				{
-					"name": "allowDestructive",
-					"type": "bool",
-					"description": "The allowDestructive value."
-				},
-				{
-					"name": "previousPlannerVersion",
-					"type": "string",
-					"description": "The previousPlannerVersion value."
-				}
-			],
-			"returns": {
-				"type": "(migration.Artifact, error)",
-				"description": "The declared result."
-			},
-			"details": [
-				"Ordinary callers should use BuildArtifact. Migration-history creation uses this entry point only when a reviewed planner upgrade must emit semantic data work."
-			],
-			"example": "",
-			"keywords": ["postgres.BuildArtifactWithPreviousPlanner", "BuildArtifactWithPreviousPlanner"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {
@@ -27535,11 +27330,6 @@
 					"name": "StopAfterStep",
 					"type": "string",
 					"description": "The StopAfterStep value."
-				},
-				{
-					"name": "Notice",
-					"type": "func(MigrationNotice)",
-					"description": "Notice reports the migration runner identity after pending history passes preflight."
 				}
 			],
 			"details": [
@@ -27640,40 +27430,6 @@
 			"relatedSymbols": [],
 			"typeLinkIDs": {}
 		},
-		"go:github.com/riducms/ridu/adapters/postgres#MigrationNotice": {
-			"summary": "Machine-readable non-blocking runner context.",
-			"group": "Production migrations",
-			"parametersLabel": "Notice codes",
-			"parameters": [
-				{
-					"name": "Code",
-					"type": "string",
-					"description": "The Code value."
-				},
-				{
-					"name": "Artifact",
-					"type": "string",
-					"description": "The Artifact value."
-				},
-				{
-					"name": "Message",
-					"type": "string",
-					"description": "The Message value."
-				}
-			],
-			"details": [],
-			"example": "",
-			"keywords": [
-				"postgres.MigrationNotice",
-				"MigrationNotice",
-				"NoticeAtlasProvenance",
-				"RIDU_ATLAS_PROVENANCE",
-				"\"RIDU_ATLAS_PROVENANCE\""
-			],
-			"relatedDocs": [],
-			"relatedSymbols": [],
-			"typeLinkIDs": {}
-		},
 		"go:github.com/riducms/ridu/adapters/postgres#AtlasVersion": {
 			"summary": "The embedded Atlas planner version persisted into migration artifacts.",
 			"group": "Production migrations",
@@ -27744,18 +27500,6 @@
 			"details": [],
 			"example": "",
 			"keywords": ["postgres.MaintenanceRequiredError.Is", "MaintenanceRequiredError.Is"],
-			"relatedDocs": [],
-			"relatedSymbols": [],
-			"typeLinkIDs": {}
-		},
-		"go:github.com/riducms/ridu/adapters/postgres#NoticeAtlasProvenance": {
-			"summary": "NoticeAtlasProvenance identifies replay by an Atlas runner version other than the one that planned the frozen artifact SQL.",
-			"group": "Constants",
-			"parametersLabel": "",
-			"parameters": [],
-			"details": [],
-			"example": "",
-			"keywords": ["postgres.NoticeAtlasProvenance", "NoticeAtlasProvenance"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {}
@@ -32088,54 +31832,7 @@
 			"typeLinkIDs": {}
 		},
 		"go:github.com/riducms/ridu/adapters/mongodb#CreateArtifact": {
-			"summary": "Publish an artifact with the frozen legacy MongoDB planner 1.0.0 creator.",
-			"group": "Migrations",
-			"parametersLabel": "",
-			"parameters": [
-				{
-					"name": "ctx",
-					"type": "context.Context",
-					"description": "The ctx value."
-				},
-				{
-					"name": "directory",
-					"type": "string",
-					"description": "The directory value."
-				},
-				{
-					"name": "name",
-					"type": "string",
-					"description": "The name value."
-				},
-				{
-					"name": "after",
-					"type": "schema.Manifest",
-					"description": "The after value."
-				},
-				{
-					"name": "now",
-					"type": "time.Time",
-					"description": "The now value."
-				}
-			],
-			"returns": {
-				"type": "(CreatedArtifact, error)",
-				"description": "The declared result."
-			},
-			"details": [
-				"This legacy-v1 entry point remains only for existing direct callers and immutable-history compatibility. New application and CLI-facing migrations use CreateArtifactWithOptions and planner 2.0.0.",
-				"Planning is offline and never receives a database URL, secret, or live MongoDB state."
-			],
-			"example": "",
-			"keywords": ["mongodb.CreateArtifact", "CreateArtifact"],
-			"relatedDocs": [],
-			"relatedSymbols": [],
-			"typeLinkIDs": {
-				"CreatedArtifact": "go:github.com/riducms/ridu/adapters/mongodb#CreatedArtifact"
-			}
-		},
-		"go:github.com/riducms/ridu/adapters/mongodb#CreateArtifactWithOptions": {
-			"summary": "Publish the current MongoDB planner 2.0.0 artifact with reviewed semantic intent.",
+			"summary": "Publish a MongoDB migration artifact with reviewed semantic intent.",
 			"group": "Migrations",
 			"parametersLabel": "",
 			"parameters": [
@@ -32178,7 +31875,7 @@
 				"This is the creator used by ridu migrate create. It validates the immutable prefix, freezes confirmed renames and transform descriptors, records reviewed retirement/destructive findings, and never opens MongoDB."
 			],
 			"example": "",
-			"keywords": ["mongodb.CreateArtifactWithOptions", "CreateArtifactWithOptions"],
+			"keywords": ["mongodb.CreateArtifact", "CreateArtifact"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {
@@ -46642,11 +46339,6 @@
 					"description": "The key value."
 				},
 				{
-					"name": "version",
-					"type": "string",
-					"description": "The version value."
-				},
-				{
 					"name": "goPackage",
 					"type": "string",
 					"description": "The goPackage value."
@@ -46655,11 +46347,6 @@
 					"name": "apiVersion",
 					"type": "number",
 					"description": "The apiVersion value."
-				},
-				{
-					"name": "ridu",
-					"type": "SchemaPluginCompatibility",
-					"description": "The ridu value."
 				},
 				{
 					"name": "admin",
@@ -46680,29 +46367,6 @@
 			"details": [],
 			"example": "",
 			"keywords": ["SchemaPlugin", "@riducms/protocol.SchemaPlugin"],
-			"relatedDocs": [],
-			"relatedSymbols": [],
-			"typeLinkIDs": {}
-		},
-		"ts:@riducms/protocol#SchemaPluginCompatibility": {
-			"summary": "The supported Ridu version range declared by a plugin.",
-			"group": "Interfaces",
-			"parametersLabel": "",
-			"parameters": [
-				{
-					"name": "minimum",
-					"type": "string",
-					"description": "The minimum value."
-				},
-				{
-					"name": "maximumExclusive",
-					"type": "string",
-					"description": "The maximumExclusive value."
-				}
-			],
-			"details": [],
-			"example": "",
-			"keywords": ["SchemaPluginCompatibility", "@riducms/protocol.SchemaPluginCompatibility"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {}
@@ -54857,8 +54521,8 @@
 				"PluginMessageCatalog": "ts:@riducms/plugin#PluginMessageCatalog"
 			}
 		},
-		"ts:@riducms/plugin-richtext#RichTextDocument": {
-			"summary": "The generated TypeScript input/output contract for stored version-1 content.",
+		"ts:@riducms/sdk/richtext#RichTextDocument": {
+			"summary": "The portable TypeScript contract for stored version-1 rich text.",
 			"group": "Interfaces",
 			"parametersLabel": "",
 			"parameters": [
@@ -54869,16 +54533,20 @@
 				},
 				{
 					"name": "root",
-					"type": "Record<string, unknown>",
+					"type": "RichTextRootNode<Payload>",
 					"description": "The root value."
 				}
 			],
-			"details": [],
+			"details": [
+				"Generated fields instantiate Payload with their configured block variants. Use RichTextDocumentInput with the generated input variants when writing content."
+			],
 			"example": "",
-			"keywords": ["RichTextDocument", "@riducms/plugin-richtext.RichTextDocument"],
+			"keywords": ["RichTextDocument", "@riducms/sdk/richtext.RichTextDocument"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
-			"typeLinkIDs": {}
+			"typeLinkIDs": {
+				"RichTextRootNode": "ts:@riducms/sdk/richtext#RichTextRootNode"
+			}
 		},
 		"ts:@riducms/plugin-richtext#RichTextFeature": {
 			"summary": "A rich-text authoring capability supported by the current editor.",
@@ -57252,11 +56920,6 @@
 					"name": "plugins",
 					"type": "readonly AdminPlugin[] | undefined",
 					"description": "Statically paired packaged plugins, including fields and routes."
-				},
-				{
-					"name": "fieldPlugins",
-					"type": "readonly FieldPlugin[] | undefined",
-					"description": "Application-local field renderers that have no packaged backend pair."
 				},
 				{
 					"name": "languages",
@@ -63638,10 +63301,13 @@
 			"group": "Migrations",
 			"parametersLabel": "",
 			"parameters": [],
-			"details": [],
-			"example": "",
-			"keywords": ["ridu migrate baseline"],
-			"relatedDocs": [],
+			"details": [
+				"After squashing schema history before deployment, --replace atomically adopts the committed history on PostgreSQL, SQLite, or MongoDB without changing content. The database must already have its schema, and the schema record that ridu dev or a migration wrote must match it. Supply --previous-history with the original recorded artifacts when they differ from the committed files.",
+				"Replacement refuses partial migrations, discarded data or semantic steps, and dropped collections or globals; a new data step stays pending for ridu migrate up. When the database is exactly at its recorded head, binaries built from the old history may be serving it, so the command asks before replacing; stop every application process and writer first, or pass --allow-production without a terminal."
+			],
+			"example": "ridu migrate baseline --replace \\\n  --previous-history .ridu/previous-migrations",
+			"keywords": ["ridu migrate baseline", "rebaseline", "squash migration history"],
+			"relatedDocs": ["/docs/migrations/"],
 			"relatedSymbols": [],
 			"typeLinkIDs": {}
 		},

@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/riducms/ridu/internal/migrationartifact"
-	ridumigration "github.com/riducms/ridu/migration"
 )
 
 // AdoptArtifacts records pending migrations as applied, without running them,
@@ -48,6 +47,9 @@ func (backend *Store) adoptMongoMigrationReplay(ctx context.Context, lease *mong
 	}
 	applied := len(state.artifacts)
 	if applied == len(files) {
+		if err := backend.requireMongoDevelopmentManifest(ctx, replay[applied-1].after); err != nil {
+			return nil, err
+		}
 		return nil, nil
 	}
 	for _, row := range state.steps {
@@ -61,7 +63,7 @@ func (backend *Store) adoptMongoMigrationReplay(ctx context.Context, lease *mong
 	}
 	blockingStep := func(file migrationartifact.File) string {
 		for _, step := range replay[positions[file.Name]].steps {
-			if step.kind != ridumigration.StepMongoDBCreateIndex && step.kind != ridumigration.StepMongoDBAssertSchema {
+			if mongoDBMaintenanceStep(step.kind) {
 				return string(step.kind)
 			}
 		}
@@ -76,6 +78,9 @@ func (backend *Store) adoptMongoMigrationReplay(ctx context.Context, lease *mong
 		return true, nil
 	})
 	if err != nil {
+		return nil, err
+	}
+	if err := backend.requireMongoDevelopmentManifest(ctx, replay[end-1].after); err != nil {
 		return nil, err
 	}
 	adopted := make([]string, 0, end-applied)
@@ -93,7 +98,7 @@ func (backend *Store) adoptMongoMigrationReplay(ctx context.Context, lease *mong
 				return nil, err
 			}
 		}
-		if err := backend.completeMongoMigrationArtifact(ctx, lease, index, file); err != nil {
+		if err := backend.completeMongoMigrationArtifact(ctx, lease, index, file, false); err != nil {
 			return nil, err
 		}
 		adopted = append(adopted, file.Name)
@@ -104,6 +109,9 @@ func (backend *Store) adoptMongoMigrationReplay(ctx context.Context, lease *mong
 		if err := backend.verifyIndexPlans(ctx, physical.collections, physical.system); err != nil {
 			return nil, fmt.Errorf("adopted MongoDB migration state: %w", err)
 		}
+		// The accepted record already equals this head. Keep it unchanged while
+		// earlier physical-only artifacts are adopted; publishing each prefix
+		// would temporarily claim a schema the database no longer has.
 	}
 	return adopted, nil
 }

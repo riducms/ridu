@@ -1,5 +1,5 @@
 import { isRecord } from "@riducms/protocol";
-import { documentRecoveryIssue } from "@plugin-richtext/document-validation";
+import { documentRecoveryIssue } from "@riducms/sdk/richtext";
 import type { RichTextConfig } from "@plugin-richtext/field/rich-text-config";
 
 export function editorRecoveryIssue(value: unknown, config: RichTextConfig) {

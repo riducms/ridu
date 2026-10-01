@@ -21,18 +21,18 @@ import (
 
 func TestMongoDBArtifactPlansInitialIndexesDeterministically(t *testing.T) {
 	manifest := mongoDBMigrationTestManifest(t, true, false)
-	first, err := buildMongoDBArtifact(context.Background(), "initial", nil, manifest, "", currentMongoDBPlannerContract())
+	first, err := buildMongoDBArtifact(context.Background(), "initial", nil, manifest, ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := buildMongoDBArtifact(context.Background(), "initial", nil, manifest, "", currentMongoDBPlannerContract())
+	second, err := buildMongoDBArtifact(context.Background(), "initial", nil, manifest, ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(first, second) {
 		t.Fatal("identical MongoDB inputs produced different artifacts")
 	}
-	if first.Version != 1 || first.MinimumRunnerContract != 1 || first.Planner.Name != mongoDBPlannerName || first.Planner.Version != mongoDBPlannerVersionV2 {
+	if first.Version != 1 || first.MinimumRunnerContract != 1 || first.Planner.Name != mongoDBPlannerName || first.Planner.Version != mongoDBPlannerVersion {
 		t.Fatalf("artifact contract = version %d runner %d planner %#v", first.Version, first.MinimumRunnerContract, first.Planner)
 	}
 
@@ -92,7 +92,7 @@ func mongoDBMigrationHasRisk(artifact ridumigration.Artifact, code string) bool 
 func TestMongoDBArtifactPlansAdditiveAndManifestOnlyTransitions(t *testing.T) {
 	before := mongoDBMigrationTestManifest(t, false, false)
 	after := mongoDBMigrationTestManifest(t, true, false)
-	additive, err := buildMongoDBArtifact(context.Background(), "add-title-index", &before, after, mongoDBPlannerVersion, currentMongoDBPlannerContract())
+	additive, err := buildMongoDBArtifact(context.Background(), "add-title-index", &before, after, ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +104,7 @@ func TestMongoDBArtifactPlansAdditiveAndManifestOnlyTransitions(t *testing.T) {
 	}
 
 	unique := mongoDBMigrationTestManifest(t, false, true)
-	uniqueArtifact, err := buildMongoDBArtifact(context.Background(), "add-title-unique", &before, unique, mongoDBPlannerVersion, currentMongoDBPlannerContract())
+	uniqueArtifact, err := buildMongoDBArtifact(context.Background(), "add-title-unique", &before, unique, ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,16 +116,18 @@ func TestMongoDBArtifactPlansAdditiveAndManifestOnlyTransitions(t *testing.T) {
 	manifestOnlySnapshot.Application.Name = "Renamed application"
 	manifestOnlySnapshot.Application.AllowIDOnCreate = true
 	manifestOnlySnapshot.Application.Endpoints = []schema.Endpoint{{Method: "GET", Path: "/health", Summary: "Health"}}
+	manifestOnlySnapshot.Application.AdminLoaders = []schema.AdminLoader{{Key: "stats", Input: schema.AdminDataType{Kind: "object"}, Output: schema.AdminDataType{Kind: "object"}}}
+	manifestOnlySnapshot.Collections[0].Labels = schema.CollectionLabels{Singular: "Article", Plural: "Articles"}
 	manifestOnlySnapshot.Collections[0].Fields = append(manifestOnlySnapshot.Collections[0].Fields, mongoDBMigrationTextField(t, "posts-summary", "summary", false, false, false))
 	manifestOnly := schema.NewManifest(manifestOnlySnapshot)
-	metadataArtifact, err := buildMongoDBArtifact(context.Background(), "metadata", &before, manifestOnly, mongoDBPlannerVersion, currentMongoDBPlannerContract())
+	metadataArtifact, err := buildMongoDBArtifact(context.Background(), "metadata", &before, manifestOnly, ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(metadataArtifact.Phases) != 1 || metadataArtifact.Phases[0].Steps[0].Kind != ridumigration.StepMongoDBAssertSchema || len(metadataArtifact.Risks) != 0 {
 		t.Fatalf("manifest-only artifact = %#v", metadataArtifact)
 	}
-	if _, err := buildMongoDBArtifact(context.Background(), "no-op", &manifestOnly, manifestOnly, mongoDBPlannerVersion, currentMongoDBPlannerContract()); err == nil || !strings.Contains(err.Error(), "schema is current") {
+	if _, err := buildMongoDBArtifact(context.Background(), "no-op", &manifestOnly, manifestOnly, ArtifactOptions{}); err == nil || !strings.Contains(err.Error(), "schema is current") {
 		t.Fatalf("unchanged manifest error = %v", err)
 	}
 }
@@ -177,23 +179,10 @@ func TestMongoDBArtifactRejectsNonAdditiveTransitions(t *testing.T) {
 	for name, mutate := range tests {
 		t.Run(name, func(t *testing.T) {
 			after := schema.NewManifest(mutate(before.Snapshot()))
-			if _, err := buildMongoDBArtifact(context.Background(), "unsupported", &before, after, mongoDBPlannerVersion, currentMongoDBPlannerContract()); err == nil {
+			if _, err := buildMongoDBArtifact(context.Background(), "unsupported", &before, after, ArtifactOptions{}); err == nil {
 				t.Fatal("unsupported MongoDB transition was planned")
 			}
 		})
-	}
-}
-
-func TestMongoDBArtifactRejectsInvalidPlannerLineage(t *testing.T) {
-	manifest := mongoDBMigrationTestManifest(t, false, false)
-	if _, err := buildMongoDBArtifact(context.Background(), "bad-initial", nil, manifest, mongoDBPlannerVersion, currentMongoDBPlannerContract()); err == nil {
-		t.Fatal("initial artifact accepted previous planner lineage")
-	}
-	if _, err := buildMongoDBArtifact(context.Background(), "missing-lineage", &manifest, mongoDBMigrationRenamedApplication(manifest), "", currentMongoDBPlannerContract()); err == nil {
-		t.Fatal("non-initial artifact accepted missing planner lineage")
-	}
-	if _, err := buildMongoDBArtifact(context.Background(), "changed-lineage", &manifest, mongoDBMigrationRenamedApplication(manifest), "0.9.0", currentMongoDBPlannerContract()); err == nil {
-		t.Fatal("non-initial artifact accepted unsupported predecessor planner")
 	}
 }
 
@@ -215,14 +204,14 @@ func TestMongoDBArtifactUnionRejectsHistoricalPhysicalCollisionsDeterministicall
 	invalid := mongoPhysicalIndexPlanSet{collections: []mongoCollectionIndexPlan{{
 		collection: schema.Collection{ID: "invalid"}, physicalName: "z_c_invalid", definitions: []mongoIndexDefinition{invalidDefinition},
 	}}}
-	if _, _, err := mongoDBAddedIndexPlans(invalid, invalid); err == nil || !strings.Contains(err.Error(), "fingerprint previous MongoDB index") {
+	if _, err := mongoDBSemanticIndexDelta(invalid, invalid, nil, nil); err == nil || !strings.Contains(err.Error(), "fingerprint MongoDB semantic index transition") {
 		t.Fatalf("unencodable definition error = %v", err)
 	}
 }
 
 func TestMongoDBArtifactExactReplanRejectsSelfConsistentTampering(t *testing.T) {
 	manifest := mongoDBMigrationTestManifest(t, true, false)
-	artifact, err := buildMongoDBArtifact(context.Background(), "initial", nil, manifest, "", currentMongoDBPlannerContract())
+	artifact, err := buildMongoDBArtifact(context.Background(), "initial", nil, manifest, ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -233,7 +222,7 @@ func TestMongoDBArtifactExactReplanRejectsSelfConsistentTampering(t *testing.T) 
 	if err := stepTampered.Validate(); err != nil {
 		t.Fatalf("self-consistent step tamper is not a valid adversarial fixture: %v", err)
 	}
-	if err := validateMongoDBArtifactPlan(context.Background(), stepTampered, "tampered-step", ""); err == nil || !strings.Contains(err.Error(), "does not match planner") {
+	if err := validateMongoDBArtifactPlan(context.Background(), stepTampered, "tampered-step"); err == nil || !strings.Contains(err.Error(), "does not match planner") {
 		t.Fatalf("step tamper exact-replan error = %v", err)
 	}
 
@@ -244,18 +233,18 @@ func TestMongoDBArtifactExactReplanRejectsSelfConsistentTampering(t *testing.T) 
 	if err := riskTampered.Validate(); err != nil {
 		t.Fatalf("self-consistent risk tamper is not a valid adversarial fixture: %v", err)
 	}
-	if err := validateMongoDBArtifactPlan(context.Background(), riskTampered, "tampered-risk", ""); err == nil || !strings.Contains(err.Error(), "does not match planner") {
+	if err := validateMongoDBArtifactPlan(context.Background(), riskTampered, "tampered-risk"); err == nil || !strings.Contains(err.Error(), "does not match planner") {
 		t.Fatalf("risk tamper exact-replan error = %v", err)
 	}
 
 	wrongPlanner := mongoDBMigrationCloneArtifact(t, artifact)
 	wrongPlanner.Planner.Name = "atlas"
-	if err := validateMongoDBArtifactPlan(context.Background(), wrongPlanner, "wrong-planner", ""); err == nil || !strings.Contains(err.Error(), `uses planner "atlas"`) {
+	if err := validateMongoDBArtifactPlan(context.Background(), wrongPlanner, "wrong-planner"); err == nil || !strings.Contains(err.Error(), `uses planner "atlas"`) {
 		t.Fatalf("wrong planner error = %v", err)
 	}
 	unsupported := mongoDBMigrationCloneArtifact(t, artifact)
 	unsupported.Planner.Version = "9.0.0"
-	if err := validateMongoDBArtifactPlan(context.Background(), unsupported, "unsupported", ""); err == nil || !strings.Contains(err.Error(), "unsupported planner version") {
+	if err := validateMongoDBArtifactPlan(context.Background(), unsupported, "unsupported"); err == nil || !strings.Contains(err.Error(), "unsupported planner version") {
 		t.Fatalf("unsupported planner error = %v", err)
 	}
 }
@@ -267,7 +256,7 @@ func TestMongoDBCreateArtifactIsOfflineAtomicAndLineageBound(t *testing.T) {
 	t.Setenv("DATABASE_URL", secret)
 	initialManifest := mongoDBMigrationTestManifest(t, false, false)
 	now := time.Date(2026, 8, 31, 12, 0, 0, 0, time.UTC)
-	initial, err := CreateArtifact(context.Background(), directory, "initial", initialManifest, now)
+	initial, err := CreateArtifact(context.Background(), directory, "initial", initialManifest, now, ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -282,8 +271,8 @@ func TestMongoDBCreateArtifactIsOfflineAtomicAndLineageBound(t *testing.T) {
 		t.Fatal("MongoDB migration artifact contains an environment credential")
 	}
 
-	after := mongoDBMigrationRenamedApplication(initialManifest)
-	second, err := CreateArtifact(context.Background(), directory, "metadata", after, now.Add(time.Second))
+	after := mongoDBMigrationNextManifest(t, initialManifest)
+	second, err := CreateArtifact(context.Background(), directory, "metadata", after, now.Add(time.Second), ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -294,13 +283,13 @@ func TestMongoDBCreateArtifactIsOfflineAtomicAndLineageBound(t *testing.T) {
 	if files[0].Digest != initial.Checksum || files[1].Digest != second.Checksum || files[1].Artifact.PreviousArtifactDigest != files[0].Digest {
 		t.Fatalf("published MongoDB lineage = %#v", files)
 	}
-	if _, err := CreateArtifact(context.Background(), directory, "no-op", after, now.Add(2*time.Second)); err == nil || !strings.Contains(err.Error(), "schema is current") || strings.Contains(err.Error(), "offline-secret") {
+	if _, err := CreateArtifact(context.Background(), directory, "no-op", after, now.Add(2*time.Second), ArtifactOptions{}); err == nil || !strings.Contains(err.Error(), "schema is current") || strings.Contains(err.Error(), "offline-secret") {
 		t.Fatalf("no-op creation error = %v", err)
 	}
 
 	cancelled, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err := CreateArtifact(cancelled, directory, "cancelled", mongoDBMigrationRenamedApplication(after), now.Add(3*time.Second)); err != context.Canceled {
+	if _, err := CreateArtifact(cancelled, directory, "cancelled", mongoDBMigrationNextManifest(t, after), now.Add(3*time.Second), ArtifactOptions{}); err != context.Canceled {
 		t.Fatalf("cancelled creation error = %v", err)
 	}
 	files, err = migrationartifact.ReadAll(directory)
@@ -314,7 +303,7 @@ func TestMongoDBCreateArtifactRejectsEditedHistoryBeforePublishing(t *testing.T)
 	secret := "mongodb://history-secret:do-not-leak@127.0.0.1:1/ridu"
 	t.Setenv("RIDU_MONGODB_URL", secret)
 	manifest := mongoDBMigrationTestManifest(t, false, false)
-	created, err := CreateArtifact(context.Background(), directory, "initial", manifest, time.Unix(1, 0))
+	created, err := CreateArtifact(context.Background(), directory, "initial", manifest, time.Unix(1, 0), ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -331,8 +320,8 @@ func TestMongoDBCreateArtifactRejectsEditedHistoryBeforePublishing(t *testing.T)
 	if err := os.WriteFile(created.Path, append(encoded, '\n'), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	after := mongoDBMigrationRenamedApplication(manifest)
-	_, err = CreateArtifact(context.Background(), directory, "metadata", after, time.Unix(2, 0))
+	after := mongoDBMigrationNextManifest(t, manifest)
+	_, err = CreateArtifact(context.Background(), directory, "metadata", after, time.Unix(2, 0), ArtifactOptions{})
 	if err == nil || !strings.Contains(err.Error(), "does not match planner") || strings.Contains(err.Error(), "history-secret") {
 		t.Fatalf("edited history error = %v", err)
 	}
@@ -345,16 +334,16 @@ func TestMongoDBCreateArtifactRejectsEditedHistoryBeforePublishing(t *testing.T)
 func TestMongoDBArtifactPublicationRejectsAHeadInsertedAfterExactValidation(t *testing.T) {
 	directory := t.TempDir()
 	manifest := mongoDBMigrationTestManifest(t, false, false)
-	if _, err := CreateArtifact(context.Background(), directory, "initial", manifest, time.Unix(1, 0)); err != nil {
+	if _, err := CreateArtifact(context.Background(), directory, "initial", manifest, time.Unix(1, 0), ArtifactOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	validatedHistory, err := migrationartifact.ReadAll(directory)
 	if err != nil || len(validatedHistory) != 1 {
 		t.Fatalf("validated history = %d files, %v", len(validatedHistory), err)
 	}
-	after := mongoDBMigrationRenamedApplication(manifest)
+	after := mongoDBMigrationNextManifest(t, manifest)
 	planned, err := buildMongoDBArtifact(
-		context.Background(), "metadata", &manifest, after, mongoDBPlannerVersion, currentMongoDBPlannerContract(),
+		context.Background(), "metadata", &manifest, after, ArtifactOptions{},
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -366,7 +355,7 @@ func TestMongoDBArtifactPublicationRejectsAHeadInsertedAfterExactValidation(t *t
 	if err != nil {
 		t.Fatal(err)
 	}
-	intervening.Phases, err = mongoDBArtifactPhases(intervening.FromDigest, nil)
+	intervening.Phases, err = mongoDBArtifactPhases(intervening.FromDigest, &manifest, manifest, mongoDBSemanticRenamePlan{}, nil, nil, mongoDBIndexDelta{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -386,7 +375,7 @@ func TestMongoDBArtifactPublicationRejectsAHeadInsertedAfterExactValidation(t *t
 func TestMongoDBCreateArtifactConcurrentPublicationHasOneWinner(t *testing.T) {
 	directory := t.TempDir()
 	firstManifest := mongoDBMigrationTestManifest(t, false, false)
-	secondManifest := mongoDBMigrationRenamedApplication(firstManifest)
+	secondManifest := mongoDBMigrationNextManifest(t, firstManifest)
 	now := time.Date(2026, 8, 31, 12, 0, 0, 0, time.UTC)
 	inputs := []struct {
 		name     string
@@ -404,7 +393,7 @@ func TestMongoDBCreateArtifactConcurrentPublicationHasOneWinner(t *testing.T) {
 		go func() {
 			defer workers.Done()
 			<-start
-			_, err := CreateArtifact(context.Background(), directory, input.name, input.manifest, input.now)
+			_, err := CreateArtifact(context.Background(), directory, input.name, input.manifest, input.now, ArtifactOptions{})
 			errors <- err
 		}()
 	}
@@ -462,9 +451,13 @@ func mongoDBMigrationPath(t *testing.T, segments ...string) query.Path {
 	return path
 }
 
-func mongoDBMigrationRenamedApplication(manifest schema.Manifest) schema.Manifest {
+// mongoDBMigrationNextManifest adds one optional unindexed field: the smallest
+// schema change that still needs a migration.
+func mongoDBMigrationNextManifest(t *testing.T, manifest schema.Manifest) schema.Manifest {
+	t.Helper()
 	snapshot := manifest.Snapshot()
-	snapshot.Application.Name += " renamed"
+	name := fmt.Sprintf("note%d", len(snapshot.Collections[0].Fields))
+	snapshot.Collections[0].Fields = append(snapshot.Collections[0].Fields, mongoDBMigrationTextField(t, schema.StableID("posts-"+name), name, false, false, false))
 	return schema.NewManifest(snapshot)
 }
 

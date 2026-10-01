@@ -278,9 +278,8 @@ including any destructive/resource-retirement risk, before continuing. When plan
 transform or resource retirement as destructive, inspect the exact affected data and then rerun the
 reviewed create command with `--allow-destructive`, preserving its `--transform` and accepted rename
 inputs. This completes artifact creation only; it does not connect to or mutate MongoDB.
-Checksum-authenticated planner `1.0.0` artifacts remain the supported v1-to-v2 immutable history
-prefix; planner `2.0.0` owns new semantic rename, transform, and retirement steps. Preserve the v1
-prefix rather than rewriting it during an upgrade.
+Committed artifacts are immutable MongoDB planner `2.0.0` plans; never rewrite one during an
+upgrade.
 
 `{{.RiduCommand}} check` and `{{.RiduCommand}} build` are offline gates. They require committed history to end at executable
 config, but they do not inspect the applied MongoDB ledger or physical indexes. `{{.RiduCommand}} migrate status`

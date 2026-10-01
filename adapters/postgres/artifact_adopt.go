@@ -79,6 +79,13 @@ func (backend *Store) AdoptArtifacts(ctx context.Context, directory string) ([]s
 		return nil, fmt.Errorf("a migration is partly applied; finish it with ridu migrate up before adopting")
 	}
 	if len(applied) == len(files) {
+		manifest := schema.NewManifest(files[len(files)-1].Artifact.After)
+		if err := verifyPostgresPhysicalState(ctx, connection, &manifest); err != nil {
+			return nil, err
+		}
+		if err := requirePostgresDevelopmentManifest(ctx, connection, manifest); err != nil {
+			return nil, err
+		}
 		return nil, nil
 	}
 	if err := validatePendingArtifactInspection(ctx, files[len(applied):]); err != nil {
@@ -86,7 +93,7 @@ func (backend *Store) AdoptArtifacts(ctx context.Context, directory string) ([]s
 	}
 	adoptEnd, err := migrationartifact.AdoptionEnd(files, len(applied), postgresBlockingStep, func(index int) (bool, error) {
 		manifest := schema.NewManifest(files[index].Artifact.After)
-		if err := verifyPostgresPhysicalState(ctx, connection, &manifest, postgresArtifactTargetContract(files[index].Artifact)); err != nil {
+		if err := verifyPostgresPhysicalState(ctx, connection, &manifest); err != nil {
 			return false, ctx.Err()
 		}
 		return true, nil
@@ -97,6 +104,10 @@ func (backend *Store) AdoptArtifacts(ctx context.Context, directory string) ([]s
 	pending := files[len(applied):adoptEnd]
 	if len(pending) == 0 {
 		return nil, nil
+	}
+	after := schema.NewManifest(files[adoptEnd-1].Artifact.After)
+	if err := requirePostgresDevelopmentManifest(ctx, connection, after); err != nil {
+		return nil, err
 	}
 
 	if err := ensureArtifactLedger(ctx, connection); err != nil {
@@ -126,6 +137,9 @@ VALUES ($1, $2, $3, $4, $5, 'complete', '{}'::jsonb, 1, now())`, file.Name, file
 			return nil, fmt.Errorf("record adopted migration %s: %w", file.Name, err)
 		}
 		adopted = append(adopted, file.Name)
+	}
+	if err := writePostgresDevelopmentManifest(ctx, transaction, after); err != nil {
+		return nil, err
 	}
 	if err := transaction.Commit(); err != nil {
 		return nil, fmt.Errorf("commit adopted migrations: %w", err)

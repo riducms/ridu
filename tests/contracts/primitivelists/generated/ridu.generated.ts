@@ -213,8 +213,8 @@ export interface PrimitiveProducts {
 		"sizes"?: number[] | null;
 	}> | null;
 	"content"?: PrimitiveProductsContent | null;
-	"body"?: import("@riducms/plugin-richtext/document").RichTextDocument<PrimitiveProductsBodyBlocksBlock[number]> | null;
-	"localizedBody"?: import("@riducms/plugin-richtext/document").RichTextDocument<PrimitiveProductsLocalizedBodyBlocksBlock[number]> | null;
+	"body"?: import("@riducms/sdk/richtext").RichTextDocument<PrimitiveProductsBodyBlocksBlock[number]> | null;
+	"localizedBody"?: import("@riducms/sdk/richtext").RichTextDocument<PrimitiveProductsLocalizedBodyBlocksBlock[number]> | null;
 }
 
 export interface PrimitiveProductsAllLocales {
@@ -238,8 +238,8 @@ export interface PrimitiveProductsAllLocales {
 		"sizes"?: number[] | null;
 	}> | null;
 	"content"?: PrimitiveProductsContentAllLocales | null;
-	"body"?: import("@riducms/plugin-richtext/document").RichTextDocument<PrimitiveProductsBodyBlocksBlockAllLocales[number]> | null;
-	"localizedBody"?: RiduLocalizedValues<import("@riducms/plugin-richtext/document").RichTextDocument<PrimitiveProductsLocalizedBodyBlocksBlockAllLocalesValue[number]> | null>;
+	"body"?: import("@riducms/sdk/richtext").RichTextDocument<PrimitiveProductsBodyBlocksBlockAllLocales[number]> | null;
+	"localizedBody"?: RiduLocalizedValues<import("@riducms/sdk/richtext").RichTextDocument<PrimitiveProductsLocalizedBodyBlocksBlockAllLocalesValue[number]> | null>;
 }
 
 export interface PrimitiveProductsCreate {
@@ -258,8 +258,8 @@ export interface PrimitiveProductsCreate {
 		"sizes"?: number[] | null;
 	}> | null;
 	"content"?: PrimitiveProductsContentInput | null;
-	"body"?: import("@riducms/plugin-richtext/document").RichTextDocumentInput<PrimitiveProductsBodyBlocksBlockInput[number]> | null;
-	"localizedBody"?: import("@riducms/plugin-richtext/document").RichTextDocumentInput<PrimitiveProductsLocalizedBodyBlocksBlockInput[number]> | null;
+	"body"?: import("@riducms/sdk/richtext").RichTextDocumentInput<PrimitiveProductsBodyBlocksBlockInput[number]> | null;
+	"localizedBody"?: import("@riducms/sdk/richtext").RichTextDocumentInput<PrimitiveProductsLocalizedBodyBlocksBlockInput[number]> | null;
 }
 
 export interface PrimitiveProductsUpdate {
@@ -282,8 +282,8 @@ export interface PrimitiveProductsUpdate {
 		"sizes"?: number[] | null;
 	}> | null;
 	"content"?: PrimitiveProductsContentUpdate | null;
-	"body"?: import("@riducms/plugin-richtext/document").RichTextDocumentInput<PrimitiveProductsBodyBlocksBlockUpdate[number]> | null;
-	"localizedBody"?: import("@riducms/plugin-richtext/document").RichTextDocumentInput<PrimitiveProductsLocalizedBodyBlocksBlockUpdate[number]> | null;
+	"body"?: import("@riducms/sdk/richtext").RichTextDocumentInput<PrimitiveProductsBodyBlocksBlockUpdate[number]> | null;
+	"localizedBody"?: import("@riducms/sdk/richtext").RichTextDocumentInput<PrimitiveProductsLocalizedBodyBlocksBlockUpdate[number]> | null;
 }
 
 export interface PrimitiveProductsWhere {
@@ -310,8 +310,8 @@ export interface PrimitiveProductsWhere {
 	"content.card.sizes"?: PrimitiveListWhere<number>;
 	"content.note.points"?: PrimitiveListWhere<string>;
 	"content.note.sizes"?: PrimitiveListWhere<number>;
-	"body"?: ScalarWhere<import("@riducms/plugin-richtext/document").RichTextDocument<PrimitiveProductsBodyBlocksBlock[number]>>;
-	"localizedBody"?: ScalarWhere<import("@riducms/plugin-richtext/document").RichTextDocument<PrimitiveProductsLocalizedBodyBlocksBlock[number]>>;
+	"body"?: ScalarWhere<import("@riducms/sdk/richtext").RichTextDocument<PrimitiveProductsBodyBlocksBlock[number]>>;
+	"localizedBody"?: ScalarWhere<import("@riducms/sdk/richtext").RichTextDocument<PrimitiveProductsLocalizedBodyBlocksBlock[number]>>;
 }
 
 export interface PrimitiveProductsSelect {

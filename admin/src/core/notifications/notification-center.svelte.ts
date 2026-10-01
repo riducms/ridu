@@ -9,6 +9,7 @@ export interface NotificationInput {
 	title: string;
 	message?: string;
 	duration?: number;
+	action?: { label: string; onClick: () => void };
 }
 
 export interface ValidationNotificationInput {
@@ -54,6 +55,7 @@ export class NotificationCenter {
 		const options = {
 			description: input.message,
 			duration: input.duration ?? (tone === "success" ? 4_500 : 7_000),
+			action: input.action,
 			important: tone === "error",
 			onDismiss: () => this.#ids.delete(id),
 			onAutoClose: () => this.#ids.delete(id),

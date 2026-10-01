@@ -104,6 +104,46 @@ then on: `ridu dev` still serves it but skips schema sync, so a config change ne
 create` and `ridu migrate up`. Production databases never need `baseline`: they are created and
 changed only by `up`.
 
+### Squash history before the first deployment
+
+Before the first deployment you can replace your schema history with one new initial migration.
+Each squash produces new artifact names and digests, so a development database that recorded the
+old history needs `baseline --replace` to record the new one. Keep the old artifacts as evidence:
+
+```sh title="terminal"
+mv migrations .ridu/previous-migrations
+ridu migrate create initial
+ridu migrate baseline --replace --previous-history .ridu/previous-migrations
+ridu migrate status
+```
+
+The database must already have the new initial's schema. On PostgreSQL and MongoDB, `ridu dev`
+keeps a baselined database synchronized, so let it apply your current config first; the changes it
+accepted, such as an added field or a field kind changed while empty, fold into the new initial. On
+SQLite, `ridu dev` does not synchronize a database with history: run `ridu migrate up` on the old
+history before squashing, so the new initial describes the schema the database already has.
+
+The old artifacts must match the recorded filenames and checksums. If they are gone, recover them
+from Git or a backup: Ridu cannot infer from a checksum whether an old artifact ran a data
+transform. Replacement refuses schema drift and partial migrations. It also refuses dropping a
+collection or global, because only a migration removes its stored documents and versions: recreate
+the development database with `ridu migrate up`, or remove it with a migration instead.
+
+A data transform or other semantic step that already ran must stay. Keep the artifact that ran it,
+and every earlier artifact, unchanged, and squash only the artifacts after it. A new data transform
+after the squash stays pending: the replacement records the history before it, and `ridu migrate
+up` runs it. The replacement changes only the migration ledger and the database's schema record,
+never documents or version snapshots.
+
+When the database is exactly at its recorded head, an application built from the old history may
+still be serving it, and after the replacement that build fails readiness until you rebuild it from
+the new history. `baseline --replace` explains this and asks
+`Replace the recorded history anyway? [y/N]`; stop every application process and writer before
+answering `y`. This always happens on SQLite, and on a PostgreSQL or MongoDB database whose
+`ridu dev` changes left its tables and indexes unchanged. Without a terminal, pass
+`--allow-production` instead of answering. Keep immutable history after deployment whenever
+possible.
+
 ## What is in an artifact {#artifact}
 
 An artifact records the information needed to identify and re-run the transition:
@@ -115,28 +155,103 @@ An artifact records the information needed to identify and re-run the transition
 - machine-readable safety findings with notice, warning, or destructive severity.
 
 PostgreSQL artifacts can use atomic transaction phases, checkpointed batch phases, and narrowly
-typed non-transactional concurrent-index phases. New MongoDB planner contract `2.0.0` artifacts emit only their
-typed physical index, confirmed rename, compiled-transform, retirement, and assertion steps; it
-does not embed arbitrary driver commands. Authenticated planner-`1.0.0` history remains a supported
-immutable prefix to v2 and is validated and replayed rather than rewritten. Arbitrary
-non-transactional SQL is not admitted.
+typed non-transactional concurrent-index phases. MongoDB planner contract `2.0.0` artifacts emit
+only typed physical index, confirmed rename, compiled-transform, retirement, and assertion steps;
+they do not embed arbitrary driver commands. Arbitrary non-transactional SQL is not admitted.
 Formatting-only JSON changes do not alter the canonical artifact digest, but renaming, reordering,
 removing, editing, or inserting applied history is detected by the database ledger.
 
 Never edit an applied artifact. If a deployment needs correction, restore the committed history and
 create a new forward migration.
 
-Admin settings are ignored when deciding whether another migration is required. Changing `CollectionAdmin`,
-`GlobalAdmin`, or a field's `Admin` settings, such as hiding a collection or moving it to another
-navigation group, needs no migration: `ridu build`, `ridu migrate status`, and readiness compare
-the schema without them. When nothing else changed, `ridu migrate create` reports that no migration
-is needed, writes no file, and exits successfully. The next migration that does change the schema records the new admin
-settings too.
+## Presentation changes need no migration {#presentation-changes}
 
-Plugin package versions are not part of the schema, so upgrading Ridu or a plugin does not require
-a migration by itself. Manifests written by Ridu 0.4 and earlier did record plugin versions. After
-upgrading such a project, create one migration to record the manifest without them; it contains
-only a schema assertion. [`ridu upgrade`](/docs/releases/#upgrade) creates it for you.
+Presentation settings are ignored when deciding whether another migration is required, on every
+database. They never shape stored data:
+
+- the application name, admin interface languages and timezones, admin loaders, and the method,
+  path and summary of custom endpoints;
+- `CollectionAdmin`, `GlobalAdmin` and field `Admin` settings, such as hiding a collection or moving
+  it to another navigation group;
+- the labels of collections, globals, blocks, select options and content locales, and a content
+  locale's text direction;
+- select option order, number input steps, code-editor languages, row labels and join default
+  columns.
+
+Changing them needs no migration: `ridu build`, `ridu migrate status`, and readiness compare the
+schema without them. When nothing else changed, `ridu migrate create` reports that no migration is
+needed, writes no file, and exits successfully. The next migration that does change the schema
+records the new settings too. Content locales, their default and fallbacks, select option values,
+validation rules and everything else that shapes stored data still need a migration.
+
+Plugin package versions and plugin build metadata, such as the package a plugin field's generated
+TypeScript types come from, are not part of the stored schema either, so upgrading Ridu or a plugin
+does not require a migration by itself.
+
+## Changing a field's kind {#field-kind-changes}
+
+Changing an existing field from blocks to rich text, text to number, relationship to upload, or
+scalar to multiple select (and the reverse) can
+leave stored values that the new schema cannot read. `ridu dev` checks current documents (including
+trash) and every retained version snapshot before generating contracts or reloading. It displays
+the affected counts and pauses when values exist. Under a task runner or coding agent, it rejects
+the reload and keeps the accepted server running.
+
+Kinds that store the same plain string need no review when every stored value stays valid. Text,
+textarea, code, email, date, select and radio values all fit text, textarea and code, and a select
+or radio fits another select or radio that keeps all of its options. The reverse is reviewed: an
+arbitrary text value may not be a valid option, email address or date.
+
+A kind change inside a plugin field's embedded payload, such as a rich-text block field changed
+from text to number, is reviewed at the plugin field. Ridu counts every document with a value in
+that field and offers no clearing, because clearing would remove the whole rich-text value. Restore
+the previous embedded field kind instead.
+
+The accepted manifest is recorded in the database only after successful synchronization or
+migration. Generated files and disposable `.ridu/` caches cannot establish the schema that wrote
+your content; deleting the cache or running `ridu generate` does not bypass review. A fresh database
+initializes normally.
+
+A database with application tables, collections, or migration history but no schema record stops
+with `RIDU_DEVELOPMENT_SCHEMA_UNKNOWN` in `ridu dev`. On PostgreSQL and MongoDB, `ridu migrate up`
+also refuses pending work when applied history has no schema record. Tables and indexes cannot tell
+apart kinds stored as the same JSON. Restore a backup
+including the schema record, or preserve your needed content and use a new, dedicated development
+database. `baseline` and `baseline --replace` cannot recover an unknown schema merely because its
+physical storage looks the same.
+
+`--no-sync` skips mutation, not field-kind safety. When an initial inspection finds no values,
+Ridu drains the old development server and checks again before generation. A late old-schema write,
+or a reload rejected later before anything changed the schema or content, restarts the accepted
+executable. Stop any other application processes using that database before an incompatible change
+too.
+
+In an interactive session you can clear, when available, or cancel. Cancel keeps the current
+schema and all stored values. Ridu has no built-in conversion and does not infer a mapping from
+your block definitions into a rich text plugin document. To keep the values, restore the previous
+field kind, then add a field with the new kind and copy the values into it with a [compiled data
+transform](#data-transforms). Transforms cannot yet change fields of versioned resources or weaken
+stored reference shapes, so those changes require an application-owned recovery that handles
+retained snapshots too. The prompt needs only a terminal, even in a project without a migrations
+directory.
+
+For a database without applied or incomplete immutable migration history, clear is available for
+ordinary stored fields. It asks for a second explicit confirmation, stops the old server, checks
+the displayed counts again inside the transaction, and removes that field's values from current
+documents and **every retained snapshot**. Other fields and version metadata remain. If clearing
+fails, nothing is removed and the old server restarts. A managed database, an auth/upload
+resource, a localization change, an embedded payload change, a save combining the change with a
+rename, or a top-level field that stays required does not offer clearing; `ridu dev` explains why
+and keeps the current schema. Make a required field optional for the clearing save and require it
+again after entering values. If a later build or synchronization fails after a confirmed clear,
+the values have already been removed and the server stays stopped while `ridu dev` waits for a
+corrective save.
+
+`ridu migrate create` refuses a schema-only kind change even with `--allow-destructive`. With
+`--transform`, PostgreSQL, SQLite and MongoDB admit a kind change of an unversioned resource; the
+versioned-resource and reference-shape safety rules still apply. PostgreSQL changes the column
+before the transform runs, so it also refuses a column type it cannot convert in place, such as
+text to number. Add a field with the new kind and copy the values into it instead.
 
 ## Renames preserve identity {#renames}
 
@@ -311,10 +426,10 @@ and step progress separately: an interrupted transaction leaves neither its data
 batch resumes after its last committed keyset checkpoint, and a concurrent index resumes from
 catalog state or removes an invalid interrupted build before retrying the reviewed definition.
 
-New MongoDB planner contract `2.0.0` artifacts use that same immutable format-`1` envelope. The
-runner authenticates and replays a committed planner-`1.0.0` prefix before v2 artifacts, takes a
-fenced, expiring lease, records completed steps durably, recognizes already-completed physical
-work, and resumes the same artifact after an interrupted process. It never treats process exit or
+MongoDB planner contract `2.0.0` artifacts use that same immutable format-`1` envelope. The
+runner authenticates every committed artifact against the planner, takes a fenced, expiring lease,
+records completed steps durably, recognizes already-completed physical work, and resumes the same
+artifact after an interrupted process. It never treats process exit or
 lease expiry alone as completion.
 
 Production defaults bound PostgreSQL advisory-lock, statement, batch, concurrent-index, and idle

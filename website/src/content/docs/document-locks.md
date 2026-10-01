@@ -140,5 +140,5 @@ change account state.
 
 See [Create and edit documents](/docs/editing-documents/), [Access control](/docs/access-control/),
 and the exact
-[`RiduClient.acquireDocumentLock`](/reference/sdk/ridu-client-acquire-document-lock/) and
-[`App.AcquireDocumentLock`](/reference/core/app-acquire-document-lock/) contracts.
+[`RiduClient.acquireDocumentLock`](/reference/sdk/ridu-client-acquire-document-lock-method/) and
+[`App.AcquireDocumentLock`](/reference/core/app-acquire-document-lock-method/) contracts.

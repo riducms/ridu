@@ -12,39 +12,16 @@ import (
 	"github.com/riducms/ridu/store"
 )
 
-const atlasVersionV1 = "1.0.0"
+// atlasPlannerName is the planner name persisted in every PostgreSQL artifact.
+const atlasPlannerName = "atlas"
 
 // AtlasVersion is Ridu's embedded PostgreSQL planning contract version. It is
-// persisted in every migration artifact so semantic planner upgrades are
-// explicit and reviewable.
+// persisted in every migration artifact; the runner accepts only artifacts
+// planned by this exact version.
 const AtlasVersion = "1.1.0"
 
-type atlasPlannerContract struct {
-	version               string
-	canonicalAuthIdentity bool
-}
-
-func currentAtlasPlannerContract() atlasPlannerContract {
-	return atlasPlannerContract{version: AtlasVersion, canonicalAuthIdentity: true}
-}
-
-func atlasPlannerContractFor(version string) (atlasPlannerContract, bool) {
-	switch version {
-	case atlasVersionV1:
-		return atlasPlannerContract{version: atlasVersionV1}, true
-	case AtlasVersion:
-		return currentAtlasPlannerContract(), true
-	default:
-		return atlasPlannerContract{}, false
-	}
-}
-
 func atlasPlanner() ridumigration.Planner {
-	return atlasPlannerForContract(currentAtlasPlannerContract())
-}
-
-func atlasPlannerForContract(contract atlasPlannerContract) ridumigration.Planner {
-	return ridumigration.Planner{Name: "atlas", Version: contract.version}
+	return ridumigration.Planner{Name: atlasPlannerName, Version: AtlasVersion}
 }
 
 type atlasIdentityMap struct {
@@ -71,10 +48,6 @@ func (mapping atlasIdentityMap) field(collectionID, fieldID schema.StableID) sch
 }
 
 func atlasSchema(manifest schema.Manifest, mapping atlasIdentityMap) *atlasschema.Schema {
-	return atlasSchemaForContract(manifest, mapping, currentAtlasPlannerContract())
-}
-
-func atlasSchemaForContract(manifest schema.Manifest, mapping atlasIdentityMap, contract atlasPlannerContract) *atlasschema.Schema {
 	physical := atlasschema.New("public")
 	snapshot := manifest.Snapshot()
 	var locales []schema.LocaleCode
@@ -85,7 +58,7 @@ func atlasSchemaForContract(manifest schema.Manifest, mapping atlasIdentityMap, 
 	collections := make(map[schema.StableID]*atlasschema.Table, len(resources))
 	for _, collection := range resources {
 		id := mapping.collection(collection.ID)
-		table := collectionAtlasTable(collection, id, mapping, locales, true, contract.canonicalAuthIdentity)
+		table := collectionAtlasTable(collection, id, mapping, locales)
 		collections[collection.ID] = table
 		physical.AddTables(table)
 	}
@@ -126,13 +99,13 @@ func atlasSchemaForContract(manifest schema.Manifest, mapping atlasIdentityMap, 
 		}
 	}
 	if hasAuthCollections(snapshot.Collections) {
-		physical.AddTables(authCredentialsAtlasTable(), authSessionsAtlasTable(true), authTokensAtlasTable(), authAPIKeysAtlasTable(true), authRateLimitsAtlasTable(), preferencesAtlasTable())
+		physical.AddTables(authCredentialsAtlasTable(), authSessionsAtlasTable(), authTokensAtlasTable(), authAPIKeysAtlasTable(), authRateLimitsAtlasTable(), preferencesAtlasTable())
 	}
 	if hasVersionCollections(resources) {
-		physical.AddTables(versionsAtlasTable(true))
+		physical.AddTables(versionsAtlasTable())
 	}
 	if hasDocumentLockCollections(snapshot.Collections) {
-		physical.AddTables(documentLocksAtlasTable(true))
+		physical.AddTables(documentLocksAtlasTable())
 	}
 	physical.AddTables(documentReferencesAtlasTable(), tasksAtlasTable())
 	return physical
@@ -171,7 +144,7 @@ func preferencesAtlasTable() *atlasschema.Table {
 	return table.SetPrimaryKey(atlasschema.NewPrimaryKey(collection, user, key))
 }
 
-func collectionAtlasTable(collection schema.Collection, id schema.StableID, mapping atlasIdentityMap, locales []schema.LocaleCode, uploadReferenceIndexes, canonicalAuthIdentity bool) *atlasschema.Table {
+func collectionAtlasTable(collection schema.Collection, id schema.StableID, mapping atlasIdentityMap, locales []schema.LocaleCode) *atlasschema.Table {
 	table := atlasschema.NewTable(collectionTable(id))
 	idColumn := atlasschema.NewStringColumn("id", atlaspostgres.TypeText)
 	table.AddColumns(
@@ -213,12 +186,7 @@ func collectionAtlasTable(collection schema.Collection, id schema.StableID, mapp
 					indexKey += ":" + string(locales[index])
 				}
 				indexName := "z_u_" + identifierHash(indexKey)
-				unique := atlasschema.NewUniqueIndex(indexName)
-				if collection.Auth != nil && field.Name == collection.Auth.IdentityField && !canonicalAuthIdentity {
-					unique.AddExprs(&atlasschema.RawExpr{X: fmt.Sprintf("lower(%s)", column.Name)})
-				} else {
-					unique.AddColumns(column)
-				}
+				unique := atlasschema.NewUniqueIndex(indexName).AddColumns(column)
 				if collection.Capabilities.Trash {
 					unique.AddAttrs(&atlaspostgres.IndexPredicate{P: "deleted_at IS NULL"})
 				}
@@ -267,7 +235,7 @@ func collectionAtlasTable(collection schema.Collection, id schema.StableID, mapp
 			table.AddIndexes(index)
 		}
 	}
-	if uploadReferenceIndexes && collection.Upload != nil {
+	if collection.Upload != nil {
 		for _, field := range collection.Fields {
 			if field.Name != "sizes" || field.Category != schema.FieldCategoryUpload {
 				continue
@@ -437,7 +405,7 @@ func hasDocumentLockCollections(collections []schema.Collection) bool {
 	return false
 }
 
-func documentLocksAtlasTable(lifecycleIndexes bool) *atlasschema.Table {
+func documentLocksAtlasTable() *atlasschema.Table {
 	table := atlasschema.NewTable("ridu_document_locks")
 	collection := atlasschema.NewStringColumn("collection_id", atlaspostgres.TypeText)
 	document := atlasschema.NewStringColumn("document_id", atlaspostgres.TypeText)
@@ -454,13 +422,10 @@ func documentLocksAtlasTable(lifecycleIndexes bool) *atlasschema.Table {
 		atlasschema.NewTimeColumn("updated_at", atlaspostgres.TypeTimestampTZ),
 		expires,
 	)
-	table.SetPrimaryKey(atlasschema.NewPrimaryKey(collection, document)).AddIndexes(
+	return table.SetPrimaryKey(atlasschema.NewPrimaryKey(collection, document)).AddIndexes(
 		atlasschema.NewIndex("ridu_document_locks_expires_idx").AddColumns(expires),
+		atlasschema.NewIndex("ridu_document_locks_owner_idx").AddColumns(ownerCollection, owner),
 	)
-	if lifecycleIndexes {
-		table.AddIndexes(atlasschema.NewIndex("ridu_document_locks_owner_idx").AddColumns(ownerCollection, owner))
-	}
-	return table
 }
 
 func authCredentialsAtlasTable() *atlasschema.Table {
@@ -498,7 +463,7 @@ func authTokensAtlasTable() *atlasschema.Table {
 	return table.SetPrimaryKey(atlasschema.NewPrimaryKey(token))
 }
 
-func authAPIKeysAtlasTable(lifecycleIndex bool) *atlasschema.Table {
+func authAPIKeysAtlasTable() *atlasschema.Table {
 	table := atlasschema.NewTable("ridu_auth_api_keys")
 	id := atlasschema.NewStringColumn("id", atlaspostgres.TypeText)
 	token := atlasschema.NewStringColumn("token_hash", atlaspostgres.TypeText)
@@ -515,13 +480,9 @@ func authAPIKeysAtlasTable(lifecycleIndex bool) *atlasschema.Table {
 	table.AddIndexes(
 		atlasschema.NewUniqueIndex("ridu_auth_api_keys_token_unique").AddColumns(token),
 		atlasschema.NewIndex("ridu_auth_api_keys_user_idx").AddColumns(collection, user),
+		atlasschema.NewIndex("ridu_auth_api_keys_expiry_idx").AddColumns(expires, id).
+			AddAttrs(&atlaspostgres.IndexPredicate{P: "expires_at IS NOT NULL"}),
 	)
-	if lifecycleIndex {
-		table.AddIndexes(
-			atlasschema.NewIndex("ridu_auth_api_keys_expiry_idx").AddColumns(expires, id).
-				AddAttrs(&atlaspostgres.IndexPredicate{P: "expires_at IS NOT NULL"}),
-		)
-	}
 	return table.SetPrimaryKey(atlasschema.NewPrimaryKey(id))
 }
 
@@ -539,7 +500,7 @@ func authRateLimitsAtlasTable() *atlasschema.Table {
 	return table.SetPrimaryKey(atlasschema.NewPrimaryKey(key))
 }
 
-func authSessionsAtlasTable(lifecycleIndex bool) *atlasschema.Table {
+func authSessionsAtlasTable() *atlasschema.Table {
 	table := atlasschema.NewTable("ridu_auth_sessions")
 	// The default is required for a safe in-place migration of installations
 	// that already have active sessions. New sessions always provide a stronger
@@ -564,14 +525,12 @@ func authSessionsAtlasTable(lifecycleIndex bool) *atlasschema.Table {
 	table.AddIndexes(
 		atlasschema.NewUniqueIndex("ridu_auth_sessions_id_unique").AddColumns(id),
 		atlasschema.NewIndex("ridu_auth_sessions_user_idx").AddColumns(collection, user),
+		atlasschema.NewIndex("ridu_auth_sessions_expiry_idx").AddColumns(expires, token),
 	)
-	if lifecycleIndex {
-		table.AddIndexes(atlasschema.NewIndex("ridu_auth_sessions_expiry_idx").AddColumns(expires, token))
-	}
 	return table.SetPrimaryKey(atlasschema.NewPrimaryKey(token))
 }
 
-func versionsAtlasTable(uploadReferenceIndexes bool) *atlasschema.Table {
+func versionsAtlasTable() *atlasschema.Table {
 	table := atlasschema.NewTable("ridu_versions")
 	collection := atlasschema.NewStringColumn("collection_id", atlaspostgres.TypeText)
 	document := atlasschema.NewStringColumn("document_id", atlaspostgres.TypeText)
@@ -584,9 +543,6 @@ func versionsAtlasTable(uploadReferenceIndexes bool) *atlasschema.Table {
 		atlasschema.NewTimeColumn("created_at", atlaspostgres.TypeTimestampTZ).SetDefault(&atlasschema.RawExpr{X: "now()"}),
 	)
 	table.SetPrimaryKey(atlasschema.NewPrimaryKey(collection, document, revision))
-	if !uploadReferenceIndexes {
-		return table
-	}
 	objectKey := atlasschema.NewIndex("ridu_versions_upload_object_key_idx").AddColumns(collection)
 	objectKey.AddExprs(&atlasschema.RawExpr{X: "((snapshot #>> '{Values,objectKey}'::text[]))"})
 	objectKey.AddAttrs(&atlaspostgres.IndexPredicate{P: "((snapshot #>> '{Values,objectKey}'::text[]) IS NOT NULL)"})

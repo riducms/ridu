@@ -307,10 +307,6 @@ async function createPage(browser: Browser, baseURL: string) {
 	});
 	const page = await context.newPage();
 	await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
-	await page.addInitScript(() => {
-		localStorage.setItem("ridu-theme", "dark");
-		localStorage.setItem("ridu-sidebar-open", "true");
-	});
 	return page;
 }
 

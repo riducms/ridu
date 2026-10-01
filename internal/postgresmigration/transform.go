@@ -1,5 +1,5 @@
-// Package postgresmigration owns private deterministic artifact assembly that
-// is shared by the PostgreSQL planner and the portable CLI.
+// Package postgresmigration owns private deterministic artifact assembly for
+// the PostgreSQL planner, which artifact creation and the runner share.
 package postgresmigration
 
 import (
@@ -37,34 +37,6 @@ func validateVersionedResources(kind string, before, after []schema.Collection) 
 		}
 	}
 	return nil
-}
-
-// DataOnlyArtifact creates the ordinary assertion-only PostgreSQL phase that
-// receives a compiled transform when the manifest itself is unchanged.
-func DataOnlyArtifact(name string, planner migration.Planner, before, after schema.Manifest) (migration.Artifact, error) {
-	artifact, err := migration.NewArtifact(name, planner, &before, after)
-	if err != nil {
-		return migration.Artifact{}, err
-	}
-	payload, err := migration.MarshalStepPayload(migration.AssertSchemaPayload{})
-	if err != nil {
-		return migration.Artifact{}, err
-	}
-	steps := []migration.Step{{
-		ID: "step-0001", Kind: migration.StepAssertSchema, ExecutorVersion: 1,
-		Name: "verify resulting PostgreSQL schema", Payload: payload,
-	}}
-	physicalBefore := migration.PhysicalDigestSeed(artifact.FromDigest)
-	physicalAfter, err := migration.PhasePhysicalDigest(physicalBefore, migration.PhaseTransaction, steps)
-	if err != nil {
-		return migration.Artifact{}, err
-	}
-	artifact.Phases = []migration.Phase{{
-		ID: "phase-001", Mode: migration.PhaseTransaction,
-		PhysicalContractVersion: migration.PhysicalContractVersion,
-		BeforePhysicalDigest:    physicalBefore, AfterPhysicalDigest: physicalAfter, Steps: steps,
-	}}
-	return artifact, nil
 }
 
 // BindDataTransforms inserts checksum-only callback identities immediately

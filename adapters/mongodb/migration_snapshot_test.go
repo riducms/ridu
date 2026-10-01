@@ -15,7 +15,7 @@ func TestMongoDBProjectMigrationDriverExecutesValidatedArtifactSnapshot(t *testi
 	ctx := context.Background()
 	directory := t.TempDir()
 	manifest := mongoDBMigrationTestManifest(t, false, false)
-	created, err := CreateArtifact(ctx, directory, "initial", manifest, time.Unix(1, 0))
+	created, err := CreateArtifact(ctx, directory, "initial", manifest, time.Unix(1, 0), ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

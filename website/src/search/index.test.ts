@@ -2,6 +2,7 @@
 
 import { expect, test } from 'bun:test';
 import { referenceModules } from '@/reference';
+import { normalizeSearchQuery } from './rank';
 import { buildReferenceSearchText } from './text';
 
 test('compacted reference records retain every declaration and authored search fragment', () => {
@@ -44,9 +45,7 @@ test('compacted reference records retain every declaration and authored search f
 	);
 	for (const record of records) {
 		for (const fragment of record.fragments) {
-			expect(record.text, `${record.id}: ${fragment}`).toContain(
-				fragment.normalize('NFKC').toLocaleLowerCase()
-			);
+			expect(record.text, `${record.id}: ${fragment}`).toContain(normalizeSearchQuery(fragment));
 		}
 	}
 });

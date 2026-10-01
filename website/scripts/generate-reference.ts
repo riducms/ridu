@@ -4,25 +4,15 @@ import { generateReferenceCatalog, stableJSON } from '../src/reference/generator
 
 const repositoryRoot = path.resolve(import.meta.dir, '../..');
 const check = process.argv.includes('--check');
-const seedRoutes = process.argv.includes('--seed-routes');
-const generated = generateReferenceCatalog({
-	repositoryRoot,
-	write: !check,
-	seedRoutes
-});
+const catalog = generateReferenceCatalog({ repositoryRoot, write: !check });
 
 if (check) {
 	const catalogPath = path.join(repositoryRoot, 'website/src/reference/generated/catalog.json');
-	const routeLockPath = path.join(
-		repositoryRoot,
-		'website/src/reference/authoring/route-lock.json'
-	);
-	if (!existsSync(catalogPath) || readFileSync(catalogPath, 'utf8') !== stableJSON(generated)) {
+	if (!existsSync(catalogPath) || readFileSync(catalogPath, 'utf8') !== stableJSON(catalog)) {
 		throw new Error('generated API reference drifted; run `bun run reference:generate`');
 	}
-	if (!existsSync(routeLockPath)) throw new Error('generated API reference route lock is missing');
 }
 
 console.log(
-	`${check ? 'Verified' : 'Generated'} ${generated.modules.length} reference modules and ${generated.modules.reduce((total, module) => total + module.symbols.length, 0)} declarations.`
+	`${check ? 'Verified' : 'Generated'} ${catalog.modules.length} reference modules and ${catalog.modules.reduce((total, module) => total + module.symbols.length, 0)} declarations.`
 );

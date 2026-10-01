@@ -318,7 +318,7 @@ func (backend *Store) Ready(ctx context.Context, manifest schema.Manifest) error
 	if err := backend.Ping(ctx); err != nil {
 		return err
 	}
-	return backend.verifyImmutableReadyState(ctx, manifest)
+	return backend.verifyImmutableReadyState(ctx, manifest, nil)
 }
 
 // ReadyWithMigrationHistory verifies the complete ordered migration history,
@@ -327,7 +327,7 @@ func (backend *Store) ReadyWithMigrationHistory(ctx context.Context, manifest sc
 	if err := backend.Ping(ctx); err != nil {
 		return err
 	}
-	return backend.verifyImmutableReadyStateWithHistory(ctx, manifest, expectedHistoryDigest)
+	return backend.verifyImmutableReadyState(ctx, manifest, &expectedHistoryDigest)
 }
 
 // Begin opens a write-capable operation transaction. BEGIN IMMEDIATE obtains

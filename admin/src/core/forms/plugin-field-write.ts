@@ -1,6 +1,6 @@
 import type { SchemaField } from "@riducms/protocol";
 import type { FormController } from "@admin/core/forms/form-controller.svelte";
-import { canRebaseIndexedSuffix, indexFieldValues } from "@admin/core/forms/form-issue-correlation";
+import { indexFieldValues, rebaseFieldAccess } from "@admin/core/forms/form-issue-correlation";
 import { fieldAccessPath } from "@admin/fields/nested/scoped-field";
 import { evaluateFieldCondition } from "@admin/core/forms/field-condition";
 
@@ -25,28 +25,7 @@ export function writePluginField(form: FormController, field: SchemaField, value
 			throw new Error(`Field ${source.path} is read-only.`);
 	}
 	if (form.access !== undefined) {
-		const previous = new Map(before.map((location) => [location.path, location]));
-		const fields: typeof form.access.fields = {};
-		for (const [path, access] of Object.entries(form.access.fields)) {
-			if (path !== field.path && !path.startsWith(`${field.path}.`)) {
-				fields[path] = access;
-				continue;
-			}
-			let prefix = path;
-			while (!previous.has(prefix) && prefix.includes("."))
-				prefix = prefix.slice(0, prefix.lastIndexOf("."));
-			const source = previous.get(prefix);
-			if (!source) {
-				fields[path] = access;
-				continue;
-			}
-			const target = current.get(source.token);
-			if (!target) continue;
-			const suffix = path.slice(source.path.length);
-			if (!canRebaseIndexedSuffix(suffix, source.value, target.value)) continue;
-			fields[target.path + suffix] = access;
-		}
-		form.access = { ...form.access, fields };
+		form.access = { ...form.access, fields: rebaseFieldAccess(before, after, form.access.fields) };
 	}
 	if (field.plugin?.embeddedTrees !== undefined) form.setEmbedded(field, value, false);
 	else form.set(field.path, value);

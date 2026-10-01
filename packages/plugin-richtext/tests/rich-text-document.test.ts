@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { createEditor } from "lexical";
 
 import { initialEditorState } from "../src/field/rich-text-document";
-import { decodeRichTextDocument, documentRecoveryIssue } from "../src/document-validation";
+import { decodeRichTextDocument } from "../src/field/rich-text-value";
 
 describe("rich-text document hydration", () => {
 	it("supplies Lexical element defaults without mutating stored documents", () => {
@@ -70,65 +70,23 @@ describe("rich-text document hydration", () => {
 		expect(initialEditorState({ version: 2, root: {} })).toBeNull();
 		expect(initialEditorState(null)).toBeNull();
 	});
-	it("keeps unsupported historical properties out of the editor and leaves payloads opaque", () => {
-		const value = {
-			version: 1,
-			root: { type: "root", children: [{ type: "text", text: "Keep", extension: "historical" }] },
-		};
-		expect(documentRecoveryIssue(value)).toBe("root.children.0.extension");
-		expect(initialEditorState(value)).toBeNull();
-		expect(documentRecoveryIssue({ ...value, extra: true })).toBe("extra");
+	it("keeps unsupported historical properties out of the editor", () => {
 		expect(
-			documentRecoveryIssue({ version: 1, root: { type: "root", version: 2, children: [] } })
-		).toBe("root.version");
-		expect(
-			documentRecoveryIssue({
-				version: 1,
-				root: { type: "root", children: [{ type: "text", text: "Keep", caption: "wrong node" }] },
-			})
-		).toBe("root.children.0.caption");
-		expect(
-			documentRecoveryIssue({
+			initialEditorState({
 				version: 1,
 				root: {
 					type: "root",
-					children: [
-						{
-							type: "block",
-							version: 1,
-							fields: {
-								_key: "historical",
-								blockType: "removed",
-								arbitrary: { type: "nonsense", children: true },
-							},
-						},
-					],
+					children: [{ type: "text", text: "Keep", extension: "historical" }],
 				},
 			})
-		).toBeUndefined();
-	});
-	it("rejects modes and alignment values that Lexical would silently normalize", () => {
-		for (const [node, path] of [
-			[{ type: "text", text: "Keep", mode: "historical-mode" }, "mode"],
-			[{ type: "paragraph", children: [], format: "historical-alignment" }, "format"],
-			[{ type: "paragraph", children: [], direction: "historical-direction" }, "direction"],
-		] as const) {
-			expect(documentRecoveryIssue({ version: 1, root: { type: "root", children: [node] } })).toBe(
-				`root.children.0.${path}`
-			);
-		}
+		).toBeNull();
 	});
 
-	it("rejects links that portable renderers cannot expose", () => {
-		for (const url of ["javascript:alert(1)", "sms:+447700900123", "//example.com/path"])
-			expect(() =>
-				decodeRichTextDocument({
-					version: 1,
-					root: {
-						type: "root",
-						children: [{ type: "link", url, children: [] }],
-					},
-				})
-			).toThrow("root.children.0.url");
+	it("decodes admitted documents and reports the unsupported path", () => {
+		const value: unknown = { version: 1, root: { type: "root", children: [] } };
+		expect<unknown>(decodeRichTextDocument(value)).toBe(value);
+		expect(() =>
+			decodeRichTextDocument({ version: 2, root: { type: "root", children: [] } })
+		).toThrow("Invalid rich-text document at version.");
 	});
 });

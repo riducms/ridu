@@ -4,7 +4,6 @@ import { $createParagraphNode, $createTextNode, $getRoot, createEditor } from "l
 
 import { normalizeLinkURL } from "../src/link/link-url";
 import { registerSafeLinkTransform } from "../src/link/safe-link-transform";
-import { safeRichTextURL } from "../src/render";
 
 function transformedLink(url: string) {
 	const editor = createEditor({
@@ -38,8 +37,6 @@ describe("rich-text link URLs", () => {
 		expect(normalizeLinkURL("editor@ridu.dev")).toBe("mailto:editor@ridu.dev");
 		expect(normalizeLinkURL("/docs/getting-started#install")).toBe("/docs/getting-started#install");
 		expect(normalizeLinkURL("#overview")).toBe("#overview");
-		for (const value of ["https://ridu.dev", "/docs", "#overview", "mailto:editor@ridu.dev"])
-			expect(safeRichTextURL(value)).toBe(value);
 	});
 
 	it("rejects executable, malformed, and control-character-obfuscated schemes", () => {
@@ -50,8 +47,6 @@ describe("rich-text link URLs", () => {
 		expect(normalizeLinkURL("sms:+447700900123")).toBeUndefined();
 		expect(normalizeLinkURL("//example.com/path")).toBeUndefined();
 		expect(normalizeLinkURL(" ")).toBeUndefined();
-		expect(() => safeRichTextURL("sms:+447700900123")).toThrow("Unsafe");
-		expect(() => safeRichTextURL("//example.com/path")).toThrow("Unsafe");
 	});
 
 	it("unwraps imported unsafe links before serialization", () => {

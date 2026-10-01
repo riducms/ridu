@@ -31,7 +31,7 @@ func TestCollectionRenameArtifactsBindManifestIdentityAndPhysicalTopology(t *tes
 		if err := validatePostgresResourceRetirementTopology(artifact); err != nil {
 			t.Fatalf("stable identity slug preflight: %v", err)
 		}
-		if _, err := preflightPendingArtifacts(context.Background(), []migrationartifact.File{{Name: artifact.Name, Artifact: artifact}}, RunnerOptions{AllowMaintenance: true}); err != nil {
+		if err := preflightPendingArtifacts(context.Background(), []migrationartifact.File{{Name: artifact.Name, Artifact: artifact}}, RunnerOptions{AllowMaintenance: true}); err != nil {
 			t.Fatalf("stable identity slug deterministic preflight: %v", err)
 		}
 	})
@@ -53,7 +53,7 @@ func TestCollectionRenameArtifactsBindManifestIdentityAndPhysicalTopology(t *tes
 		if err := validatePostgresResourceRetirementTopology(artifact); err != nil {
 			t.Fatalf("confirmed rename preflight: %v", err)
 		}
-		if _, err := preflightPendingArtifacts(context.Background(), []migrationartifact.File{{Name: artifact.Name, Artifact: artifact}}, RunnerOptions{AllowMaintenance: true}); err != nil {
+		if err := preflightPendingArtifacts(context.Background(), []migrationartifact.File{{Name: artifact.Name, Artifact: artifact}}, RunnerOptions{AllowMaintenance: true}); err != nil {
 			t.Fatalf("confirmed rename deterministic planner preflight: %v", err)
 		}
 		if !artifactHasTableRename(artifact, beforeCollection.ID, afterCollection.ID) {
@@ -108,11 +108,6 @@ func TestCollectionRenameOrdinarySQLIsBoundToDeterministicAtlasPlan(t *testing.T
 		t.Run(name, func(t *testing.T) {
 			artifact := cloneRetirementArtifact(original)
 			insertSQLBeforeCollectionRename(t, &artifact, beforeCollection.Slug, afterCollection.Slug, statement)
-			if name == "cte update" {
-				// Planner provenance is review metadata, not an escape hatch from
-				// exact regeneration. A forged older version must still fail closed.
-				artifact.Planner.Version = "0.0.0-hostile"
-			}
 			recomputeTestPhysicalDigests(t, &artifact)
 			if err := artifact.Validate(); err != nil {
 				t.Fatalf("generic hostile fixture validation: %v", err)
@@ -120,7 +115,7 @@ func TestCollectionRenameOrdinarySQLIsBoundToDeterministicAtlasPlan(t *testing.T
 			if err := validatePostgresResourceRetirementTopology(artifact); err != nil {
 				t.Fatalf("hostile fixture should exercise exact planner binding: %v", err)
 			}
-			_, err := preflightPendingArtifacts(context.Background(), []migrationartifact.File{{Name: artifact.Name, Artifact: artifact}}, RunnerOptions{AllowMaintenance: true})
+			err := preflightPendingArtifacts(context.Background(), []migrationartifact.File{{Name: artifact.Name, Artifact: artifact}}, RunnerOptions{AllowMaintenance: true})
 			if err == nil || !strings.Contains(err.Error(), CodeMigrationPlanMismatch) {
 				t.Fatalf("hostile SQL preflight = %v", err)
 			}
@@ -138,7 +133,7 @@ func TestInitialArtifactOrdinarySQLIsBoundToCompleteDeterministicAtlasPlan(t *te
 		t.Fatal("initial artifact unexpectedly has no ordinary Atlas SQL")
 	}
 	file := migrationartifact.File{Name: original.Name, Artifact: original}
-	if _, err := preflightPendingArtifacts(context.Background(), []migrationartifact.File{file}, RunnerOptions{}); err != nil {
+	if err := preflightPendingArtifacts(context.Background(), []migrationartifact.File{file}, RunnerOptions{}); err != nil {
 		t.Fatalf("initial deterministic planner preflight: %v", err)
 	}
 
@@ -169,27 +164,30 @@ func TestInitialArtifactOrdinarySQLIsBoundToCompleteDeterministicAtlasPlan(t *te
 		t.Fatalf("generic initial SQL tamper fixture: %v", err)
 	}
 	file.Artifact = tampered
-	if _, err := preflightPendingArtifacts(context.Background(), []migrationartifact.File{file}, RunnerOptions{}); err == nil || !strings.Contains(err.Error(), "execution phases do not exactly match deterministic Atlas plan") {
+	if err := preflightPendingArtifacts(context.Background(), []migrationartifact.File{file}, RunnerOptions{}); err == nil || !strings.Contains(err.Error(), "execution phases do not exactly match deterministic Atlas plan") {
 		t.Fatalf("initial SQL tamper preflight = %v", err)
 	}
 }
 
-func TestMatchingPlanFromDifferentAtlasVersionEmitsProvenanceNotice(t *testing.T) {
+// The runner plans and applies only its own planner contract. An artifact from
+// any other planner version is refused before regeneration, even when its
+// recorded execution contract would otherwise match.
+func TestArtifactFromAnotherPlannerVersionIsRejected(t *testing.T) {
 	manifest := renameBindingManifest(schema.Collection{ID: "articles", Slug: "articles", Fields: []schema.Field{}})
-	artifact, err := BuildArtifact(context.Background(), "atlas-provenance", nil, manifest, nil, false)
+	artifact, err := BuildArtifact(context.Background(), "other-planner", nil, manifest, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	artifact.Planner.Version = "0.99.0-reviewed"
-	if err := artifact.Validate(); err != nil {
-		t.Fatal(err)
-	}
-	notices, err := preflightPendingArtifacts(context.Background(), []migrationartifact.File{{Name: artifact.Name, Artifact: artifact}}, RunnerOptions{})
-	if err != nil {
-		t.Fatalf("matching cross-version plan was rejected: %v", err)
-	}
-	if len(notices) != 1 || notices[0].Code != NoticeAtlasProvenance {
-		t.Fatalf("provenance notices = %#v", notices)
+	for _, version := range []string{"1.0.0", "0.99.0-reviewed"} {
+		changed := artifact
+		changed.Planner.Version = version
+		if err := changed.Validate(); err != nil {
+			t.Fatal(err)
+		}
+		err := preflightPendingArtifacts(context.Background(), []migrationartifact.File{{Name: changed.Name, Artifact: changed}}, RunnerOptions{})
+		if err == nil || !strings.Contains(err.Error(), "unsupported planner atlas \""+version+"\"") || !strings.Contains(err.Error(), "create a new migration history") {
+			t.Fatalf("planner %s preflight = %v", version, err)
+		}
 	}
 }
 
@@ -198,8 +196,7 @@ func TestStructuredConcurrentIndexPlanIsExactlyBound(t *testing.T) {
 	indexed.Index = true
 	manifestSnapshot := atlasTestManifest(indexed).Snapshot()
 	manifestSnapshot.Plugins = []schema.Plugin{{
-		Key: "guard", Version: "1.0.0", GoPackage: "example.com/guard", APIVersion: schema.CurrentPluginAPIVersion,
-		Ridu: &schema.PluginCompatibility{Minimum: "0.0.0-dev"},
+		Key: "guard", GoPackage: "example.com/guard", APIVersion: schema.CurrentPluginAPIVersion,
 	}}
 	manifest := schema.NewManifest(manifestSnapshot)
 	original, err := BuildArtifact(context.Background(), "initial-concurrent-binding", nil, manifest, nil, false)
@@ -207,7 +204,7 @@ func TestStructuredConcurrentIndexPlanIsExactlyBound(t *testing.T) {
 		t.Fatal(err)
 	}
 	file := migrationartifact.File{Name: original.Name, Artifact: original}
-	if _, err := preflightPendingArtifacts(context.Background(), []migrationartifact.File{file}, RunnerOptions{}); err != nil {
+	if err := preflightPendingArtifacts(context.Background(), []migrationartifact.File{file}, RunnerOptions{}); err != nil {
 		t.Fatalf("untampered concurrent-index preflight: %v", err)
 	}
 
@@ -248,7 +245,7 @@ func TestStructuredConcurrentIndexPlanIsExactlyBound(t *testing.T) {
 			t.Fatalf("generic mutated concurrent-index fixture: %v", err)
 		}
 		file.Artifact = artifact
-		if _, err := preflightPendingArtifacts(context.Background(), []migrationartifact.File{file}, RunnerOptions{}); err == nil || !strings.Contains(err.Error(), "execution phases do not exactly match deterministic Atlas plan") {
+		if err := preflightPendingArtifacts(context.Background(), []migrationartifact.File{file}, RunnerOptions{}); err == nil || !strings.Contains(err.Error(), "execution phases do not exactly match deterministic Atlas plan") {
 			t.Fatalf("mutated concurrent-index preflight = %v", err)
 		}
 	})
@@ -279,7 +276,7 @@ func TestStructuredConcurrentIndexPlanIsExactlyBound(t *testing.T) {
 			t.Fatalf("generic extra concurrent-index fixture: %v", err)
 		}
 		file.Artifact = artifact
-		if _, err := preflightPendingArtifacts(context.Background(), []migrationartifact.File{file}, RunnerOptions{}); err == nil || !strings.Contains(err.Error(), "execution phases do not exactly match deterministic Atlas plan") {
+		if err := preflightPendingArtifacts(context.Background(), []migrationartifact.File{file}, RunnerOptions{}); err == nil || !strings.Contains(err.Error(), "execution phases do not exactly match deterministic Atlas plan") {
 			t.Fatalf("extra concurrent-index preflight = %v", err)
 		}
 	})
@@ -306,7 +303,7 @@ func TestPlannerRisksCannotBeRemovedOrDowngraded(t *testing.T) {
 		t.Fatalf("fixture lacks destructive unique-index risk: %#v", original.Risks)
 	}
 	file := migrationartifact.File{Name: original.Name, Artifact: original}
-	if _, err := preflightPendingArtifacts(context.Background(), []migrationartifact.File{file}, RunnerOptions{}); err != nil {
+	if err := preflightPendingArtifacts(context.Background(), []migrationartifact.File{file}, RunnerOptions{}); err != nil {
 		t.Fatalf("untampered risk preflight: %v", err)
 	}
 
@@ -322,7 +319,7 @@ func TestPlannerRisksCannotBeRemovedOrDowngraded(t *testing.T) {
 				t.Fatalf("generic risk-tamper fixture: %v", err)
 			}
 			file.Artifact = artifact
-			if _, err := preflightPendingArtifacts(context.Background(), []migrationartifact.File{file}, RunnerOptions{}); err == nil || !strings.Contains(err.Error(), "migration risks do not exactly match deterministic Atlas findings") {
+			if err := preflightPendingArtifacts(context.Background(), []migrationartifact.File{file}, RunnerOptions{}); err == nil || !strings.Contains(err.Error(), "migration risks do not exactly match deterministic Atlas findings") {
 				t.Fatalf("%s risk preflight = %v", variant, err)
 			}
 		})
@@ -433,7 +430,7 @@ func TestPlannerTargetNormalizationDoesNotAuthorizeMismatchedRename(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = preflightPendingArtifacts(context.Background(), []migrationartifact.File{{Name: artifact.Name, Artifact: artifact}}, RunnerOptions{AllowMaintenance: true})
+	err = preflightPendingArtifacts(context.Background(), []migrationartifact.File{{Name: artifact.Name, Artifact: artifact}}, RunnerOptions{AllowMaintenance: true})
 	if err == nil || !strings.Contains(err.Error(), CodeMigrationPlanMismatch) || !strings.Contains(err.Error(), "rename articles -> posts does not exactly match") {
 		t.Fatalf("mismatched mapped target preflight = %v", err)
 	}

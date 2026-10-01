@@ -374,7 +374,6 @@ func validateMembers(fields []schema.Field, object *validationObject, options va
 			for item := range value.Elements() {
 				index++
 				if issues.full() {
-					clearValidationTail(value, &validatedItems, index)
 					break
 				}
 				itemPath := fmt.Sprintf("%s.%d", path, index)
@@ -415,7 +414,6 @@ func validateMembers(fields []schema.Field, object *validationObject, options va
 			for item := range value.Elements() {
 				index++
 				if issues.full() {
-					clearValidationTail(value, &validatedItems, index)
 					break
 				}
 				itemPath := fmt.Sprintf("%s.%d", path, index)
@@ -465,14 +463,6 @@ func validateMembers(fields []schema.Field, object *validationObject, options va
 					// Envelope identity/discriminator are metadata, not authored children.
 					metadata := [2]string{occurrence.Case.Identity, occurrence.Case.Discriminator}
 					child, childChanged := validateObject(occurrence.Fields, occurrence.Payload, validationOptions{prefix: occurrence.RuntimePath, requireMissing: true, previousValue: previous[occurrence.Identity], budget: options.budget, embeddedMetadata: metadata}, pluginValidators, issues)
-					// Legacy validation restores both metadata entries even when absent.
-					for _, name := range metadata {
-						if _, present := occurrence.Payload.Lookup(name); !present {
-							members := validationObject{value: child}
-							members.set(name, store.Value{})
-							child, childChanged = members.result()
-						}
-					}
 					changed = changed || childChanged
 					return child, childChanged, nil
 				})
@@ -496,14 +486,6 @@ func replaceValidationItem(value store.Value, items *[]store.Value, index int, r
 		*items, _ = value.CopyList()
 	}
 	(*items)[index] = replacement
-}
-
-// Failed validation historically leaves unvisited result rows at the zero value.
-func clearValidationTail(value store.Value, items *[]store.Value, index int) {
-	if *items == nil {
-		*items, _ = value.CopyList()
-	}
-	clear((*items)[index:])
 }
 
 func validationRowsByKey(value store.Value) map[string]store.Value {

@@ -34,7 +34,7 @@ func TestMongoDBReadinessIgnoresAdminPresentationWithHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 	directory := t.TempDir()
-	created, err := CreateArtifact(ctx, directory, "initial", committed, time.Unix(1, 0))
+	created, err := CreateArtifact(ctx, directory, "initial", committed, time.Unix(1, 0), ArtifactOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

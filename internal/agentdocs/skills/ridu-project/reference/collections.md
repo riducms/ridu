@@ -115,8 +115,9 @@ from a visible collection still shows the related document's title, without a li
 To keep data from a user, deny access instead; `Hidden` only changes what the admin shows.
 `GlobalAdmin.Hidden` does the same for a global.
 
-Admin settings never change stored data, so changing `Hidden`, `Group`, or any other
-`CollectionAdmin` or field `Admin` setting needs no migration.
+Admin settings and labels never change stored data, so changing `Hidden`, `Group`, a label, or any
+other `CollectionAdmin` or field `Admin` setting needs no
+[migration](./migrations.md#presentation-changes).
 
 ## Index several fields together {#indexes}
 

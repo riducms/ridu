@@ -12,19 +12,44 @@ import (
 
 	"github.com/riducms/ridu/internal/migrationartifact"
 	ridumigration "github.com/riducms/ridu/migration"
+	"github.com/riducms/ridu/schema"
 )
 
-func TestMongoDBArtifactReplayPrecompilesEveryFrozenBoundary(t *testing.T) {
-	files, err := migrationartifact.ReadAll(filepath.Join("testdata", "historical-v1"))
+// createMongoDBTestHistory publishes a small current-planner history: an
+// initial collection, an added index, and an unindexed field addition.
+func createMongoDBTestHistory(t *testing.T) (string, []migrationartifact.File) {
+	t.Helper()
+	directory := t.TempDir()
+	indexed := mongoDBMigrationTestManifest(t, true, false)
+	summary := indexed.Snapshot()
+	summary.Collections[0].Fields = append(summary.Collections[0].Fields, mongoDBMigrationTextField(t, "posts-summary", "summary", false, false, false))
+	for index, input := range []struct {
+		name     string
+		manifest schema.Manifest
+	}{
+		{name: "initial", manifest: mongoDBMigrationTestManifest(t, false, false)},
+		{name: "add-title-index", manifest: indexed},
+		{name: "add-summary", manifest: schema.NewManifest(summary)},
+	} {
+		if _, err := CreateArtifact(context.Background(), directory, input.name, input.manifest, time.Unix(int64(index+1), 0), ArtifactOptions{}); err != nil {
+			t.Fatalf("create MongoDB test artifact %s: %v", input.name, err)
+		}
+	}
+	files, err := migrationartifact.ReadAll(directory)
 	if err != nil {
 		t.Fatal(err)
 	}
+	return directory, files
+}
+
+func TestMongoDBArtifactReplayPrecompilesEveryBoundary(t *testing.T) {
+	_, files := createMongoDBTestHistory(t)
 	replay, err := prepareMongoDBArtifactReplay(context.Background(), files)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(replay) != 3 || len(replay[0].steps) != 22 || len(replay[1].steps) != 2 || len(replay[2].steps) != 1 {
-		t.Fatalf("frozen MongoDB replay topology = %#v", replay)
+		t.Fatalf("MongoDB replay topology = %#v", replay)
 	}
 	for artifactIndex, artifact := range replay {
 		assertions := 0
@@ -48,7 +73,7 @@ func TestMongoDBArtifactReplayPrecompilesEveryFrozenBoundary(t *testing.T) {
 		}
 	}
 	if replay[1].steps[0].index.collection != "z_c_a44f1b9751711635" || replay[1].steps[0].index.name != "z_i_d96543b87c70b105" {
-		t.Fatalf("frozen additive index identity = %s/%s", replay[1].steps[0].index.collection, replay[1].steps[0].index.name)
+		t.Fatalf("additive index identity = %s/%s", replay[1].steps[0].index.collection, replay[1].steps[0].index.name)
 	}
 }
 
@@ -58,18 +83,15 @@ func TestMongoDBArtifactVerificationFailsBeforeConnectionForInvalidHistory(t *te
 		DatabaseURL: databaseURL, AllowInsecureTransport: true,
 		ConnectTimeout: time.Millisecond, ServerSelectionTimeout: time.Millisecond,
 	}
-	if err := verifyMongoDBArtifacts(context.Background(), config, t.TempDir()); err == nil ||
+	if err := VerifyArtifacts(context.Background(), config, t.TempDir()); err == nil ||
 		!strings.Contains(err.Error(), "history is empty") || strings.Contains(err.Error(), "offline-secret") {
 		t.Fatalf("empty-history verification error = %v", err)
 	}
 
-	files, err := migrationartifact.ReadAll(filepath.Join("testdata", "historical-v1"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	_, files := createMongoDBTestHistory(t)
 	tampered := files[0].Artifact
 	tampered.Risks = append(tampered.Risks, ridumigration.Risk{
-		Code: "RIDU_TAMPER", Level: ridumigration.RiskNotice, Message: "edited frozen history",
+		Code: "RIDU_TAMPER", Level: ridumigration.RiskNotice, Message: "edited committed history",
 	})
 	encoded, err := json.MarshalIndent(tampered, "", "  ")
 	if err != nil {
@@ -79,7 +101,7 @@ func TestMongoDBArtifactVerificationFailsBeforeConnectionForInvalidHistory(t *te
 	if err := os.WriteFile(filepath.Join(directory, files[0].Name), append(encoded, '\n'), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	err = verifyMongoDBArtifacts(context.Background(), config, directory)
+	err = VerifyArtifacts(context.Background(), config, directory)
 	if err == nil || !strings.Contains(err.Error(), "does not match planner") ||
 		strings.Contains(err.Error(), "offline-secret") || strings.Contains(err.Error(), "do-not-leak") ||
 		strings.Contains(err.Error(), "connection failed") {
@@ -90,7 +112,7 @@ func TestMongoDBArtifactVerificationFailsBeforeConnectionForInvalidHistory(t *te
 func TestMongoDBArtifactVerificationHonorsCancellationBeforeConnection(t *testing.T) {
 	canceled, cancel := context.WithCancel(context.Background())
 	cancel()
-	err := verifyMongoDBArtifacts(canceled, Config{DatabaseURL: "mongodb://offline-secret@127.0.0.1:1/ridu", AllowInsecureTransport: true}, t.TempDir())
+	err := VerifyArtifacts(canceled, Config{DatabaseURL: "mongodb://offline-secret@127.0.0.1:1/ridu", AllowInsecureTransport: true}, t.TempDir())
 	if !errors.Is(err, context.Canceled) || strings.Contains(err.Error(), "offline-secret") {
 		t.Fatalf("canceled MongoDB verification = %v", err)
 	}

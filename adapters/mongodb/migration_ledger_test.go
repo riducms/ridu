@@ -3,7 +3,6 @@ package mongodb
 import (
 	"context"
 	"errors"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -134,7 +133,7 @@ func TestMongoMigrationVerifierRejectsInvalidOptionsBeforeConnection(t *testing.
 			DatabaseURL: "mongodb://" + secret + "@127.0.0.1:1/ridu", AllowInsecureTransport: true,
 			ConnectTimeout: time.Millisecond, ServerSelectionTimeout: time.Millisecond,
 		},
-		filepath.Join("testdata", "historical-v1"),
+		t.TempDir(),
 		RunnerOptions{LeaseWait: -time.Second},
 	)
 	if err == nil || !strings.Contains(err.Error(), "negative") || strings.Contains(err.Error(), secret) || strings.Contains(err.Error(), "connection") {
@@ -199,28 +198,6 @@ func TestMongoVerifyIndexesHonorsContextWhileLifecycleIsBusy(t *testing.T) {
 	defer cancel()
 	if err := backend.VerifyIndexes(ctx, schema.Manifest{}); !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("bounded VerifyIndexes lifecycle error = %v", err)
-	}
-}
-
-func TestMongoMigrationCompletedCreateStepBecomesRequiredPhysicalState(t *testing.T) {
-	fileName := "001_initial"
-	step := mongoDBArtifactReplayStep{
-		phaseID: "add-indexes", stepID: "create-title", mode: ridumigration.PhaseNoTransaction,
-		kind:  ridumigration.StepMongoDBCreateIndex,
-		index: mongoDBPlannedIndex{collection: "z_content", name: "z_title"},
-	}
-	replay := []mongoDBArtifactReplayPlan{{fileName: fileName, steps: []mongoDBArtifactReplayStep{step}}}
-	id := mongoMigrationStepLedgerID(fileName, step.phaseID, step.stepID)
-	state := mongoMigrationLedgerState{stepByID: map[string]mongoMigrationStepLedgerRow{id: {State: mongoMigrationStepRunning}}}
-	if required := mongoMigrationRequiredIndexes(replay, 0, state); len(required) != 0 {
-		t.Fatalf("running step required physical indexes = %#v", required)
-	}
-	row := state.stepByID[id]
-	row.State = mongoMigrationStepComplete
-	state.stepByID[id] = row
-	required := mongoMigrationRequiredIndexes(replay, 0, state)
-	if len(required) != 1 || required[0].collection != step.index.collection || required[0].name != step.index.name {
-		t.Fatalf("completed step required physical indexes = %#v", required)
 	}
 }
 

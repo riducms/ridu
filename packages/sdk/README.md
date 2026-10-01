@@ -46,3 +46,16 @@ server clients, and reactive session state. `getUploadURLs` mints short-lived UR
 uploads displayed with `<img>`. Long-running service clients should use an expiring API key.
 `RiduError` carries stable codes, HTTP status, path-aware issues, and request context; do not reduce
 failures to an untyped string.
+
+Rich-text fields in generated clients use `@riducms/sdk/richtext`. That entry supplies portable
+`RichTextDocument` types and `renderRichTextHTML` without Svelte, Lexical, or a browser:
+
+```ts
+import { renderRichTextHTML } from "@riducms/sdk/richtext";
+
+const html = article.body ? renderRichTextHTML(article.body) : "";
+```
+
+Configured blocks require application-owned `RichTextBlockRenderers<Payload, string>` functions.
+Built-in text is escaped; HTML returned by your renderers must already be safe for display.
+See the [rich-text display guide](../../website/src/content/docs/rich-text/display.md).

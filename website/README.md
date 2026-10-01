@@ -66,8 +66,12 @@ without `NODE_PATH`, and validates the emitted routes, assets, and search catalo
 - `src/config/documentation.ts` derives routes, navigation, pagination, outlines, and search records
   from those collections. The interactive Project Structure guide is merged into the same model.
 - `src/reference/authoring/` contains the reviewed module registry, stable-ID editorial overlays,
-  CLI records, and route lock. `src/reference/generated/catalog.json` is deterministically extracted
-  from the public Go, TypeScript, and Svelte sources; `bun run reference:check` rejects drift.
+  and CLI records. `src/reference/generated/catalog.json` is deterministically extracted from the
+  public Go, TypeScript, and Svelte sources; `bun run reference:check` rejects drift. Each
+  declaration's page is `/reference/<module>/<name>/`, with the name kebab-cased and methods
+  suffixed `-method`. Declarations in one module that would share a page, such as `ErrorPayload`
+  and `errorPayload`, each add their kind (`error-payload-interface`, `error-payload-function`).
+  Renaming or moving a declaration changes its route; update links to it in the same change.
 - `src/features/project-structure/` owns the interactive guide's data, components, controllers,
   validation, and bespoke diagram CSS.
 - `src/components/` is grouped by owning surface: `chrome`, `code`, `docs`, and `reference`.

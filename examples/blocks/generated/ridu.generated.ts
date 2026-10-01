@@ -70,8 +70,8 @@ export type CalloutInput = {
 	"blockName"?: string | null;
 	"title": string;
 	"message"?: string | null;
-	"detail"?: import("@riducms/plugin-richtext/document").RichTextDocumentInput<CalloutDetailBlocksBlockInput[number]> | null;
-	"aside"?: import("@riducms/plugin-richtext/document").RichTextDocumentInput<never[][number]> | null;
+	"detail"?: import("@riducms/sdk/richtext").RichTextDocumentInput<CalloutDetailBlocksBlockInput[number]> | null;
+	"aside"?: import("@riducms/sdk/richtext").RichTextDocumentInput<never[][number]> | null;
 } & { blockType: "callout"; _key?: string };
 
 /** Patch a retained row by _key. New identities must satisfy the input contract at runtime. */
@@ -79,37 +79,37 @@ export type CalloutUpdate = {
 	"blockName"?: string | null;
 	"title"?: string;
 	"message"?: string | null;
-	"detail"?: import("@riducms/plugin-richtext/document").RichTextDocumentInput<CalloutDetailBlocksBlockUpdate[number]> | null;
-	"aside"?: import("@riducms/plugin-richtext/document").RichTextDocumentInput<never[][number]> | null;
+	"detail"?: import("@riducms/sdk/richtext").RichTextDocumentInput<CalloutDetailBlocksBlockUpdate[number]> | null;
+	"aside"?: import("@riducms/sdk/richtext").RichTextDocumentInput<never[][number]> | null;
 } & { blockType: "callout"; _key: string };
 
 export type Callout = {
 	"blockName"?: string | null;
 	"title"?: string;
 	"message"?: string | null;
-	"detail"?: import("@riducms/plugin-richtext/document").RichTextDocument<CalloutDetailBlocksBlock[number]> | null;
-	"aside"?: import("@riducms/plugin-richtext/document").RichTextDocument<never[][number]> | null;
+	"detail"?: import("@riducms/sdk/richtext").RichTextDocument<CalloutDetailBlocksBlock[number]> | null;
+	"aside"?: import("@riducms/sdk/richtext").RichTextDocument<never[][number]> | null;
 } & { blockType: "callout"; _key: string };
 
 export type CalloutAllLocales = {
 	"blockName"?: string | null;
 	"title"?: string;
 	"message"?: RiduLocalizedValues<string | null>;
-	"detail"?: import("@riducms/plugin-richtext/document").RichTextDocument<CalloutDetailBlocksBlockAllLocales[number]> | null;
-	"aside"?: import("@riducms/plugin-richtext/document").RichTextDocument<never[][number]> | null;
+	"detail"?: import("@riducms/sdk/richtext").RichTextDocument<CalloutDetailBlocksBlockAllLocales[number]> | null;
+	"aside"?: import("@riducms/sdk/richtext").RichTextDocument<never[][number]> | null;
 } & { blockType: "callout"; _key: string };
 
 export type CalloutAllLocalesValue = {
 	"blockName"?: string | null;
 	"title"?: string;
 	"message"?: string | null;
-	"detail"?: import("@riducms/plugin-richtext/document").RichTextDocument<CalloutDetailBlocksBlockAllLocalesValue[number]> | null;
-	"aside"?: import("@riducms/plugin-richtext/document").RichTextDocument<never[][number]> | null;
+	"detail"?: import("@riducms/sdk/richtext").RichTextDocument<CalloutDetailBlocksBlockAllLocalesValue[number]> | null;
+	"aside"?: import("@riducms/sdk/richtext").RichTextDocument<never[][number]> | null;
 } & { blockType: "callout"; _key: string };
 
 export type ContentInput = {
 	"title"?: string | null;
-	"body"?: import("@riducms/plugin-richtext/document").RichTextDocumentInput<never[][number]> | null;
+	"body"?: import("@riducms/sdk/richtext").RichTextDocumentInput<never[][number]> | null;
 	"links"?: Array<{
 		_key?: string;
 		"label": string;
@@ -120,7 +120,7 @@ export type ContentInput = {
 /** Patch a retained row by _key. New identities must satisfy the input contract at runtime. */
 export type ContentUpdate = {
 	"title"?: string | null;
-	"body"?: import("@riducms/plugin-richtext/document").RichTextDocumentInput<never[][number]> | null;
+	"body"?: import("@riducms/sdk/richtext").RichTextDocumentInput<never[][number]> | null;
 	"links"?: Array<{
 		_key?: string;
 		"label": string;
@@ -134,7 +134,7 @@ export type ContentUpdate = {
 
 export type Content = {
 	"title"?: string | null;
-	"body"?: import("@riducms/plugin-richtext/document").RichTextDocument<never[][number]> | null;
+	"body"?: import("@riducms/sdk/richtext").RichTextDocument<never[][number]> | null;
 	"links"?: Array<{
 		_key: string;
 		"label"?: string;
@@ -144,7 +144,7 @@ export type Content = {
 
 export type ContentAllLocales = {
 	"title"?: RiduLocalizedValues<string | null>;
-	"body"?: import("@riducms/plugin-richtext/document").RichTextDocument<never[][number]> | null;
+	"body"?: import("@riducms/sdk/richtext").RichTextDocument<never[][number]> | null;
 	"links"?: Array<{
 		_key: string;
 		"label"?: string;
@@ -154,7 +154,7 @@ export type ContentAllLocales = {
 
 export type ContentAllLocalesValue = {
 	"title"?: string | null;
-	"body"?: import("@riducms/plugin-richtext/document").RichTextDocument<never[][number]> | null;
+	"body"?: import("@riducms/sdk/richtext").RichTextDocument<never[][number]> | null;
 	"links"?: Array<{
 		_key: string;
 		"label"?: string;
@@ -436,7 +436,7 @@ export interface PagesWhere {
 	"layout.hero.appearance"?: ExistsWhere;
 	"layout.hero.appearance.tone"?: ScalarWhere<"light" | "dark">;
 	"layout.content.title"?: ScalarWhere<string>;
-	"layout.content.body"?: ScalarWhere<import("@riducms/plugin-richtext/document").RichTextDocument<never[][number]>>;
+	"layout.content.body"?: ScalarWhere<import("@riducms/sdk/richtext").RichTextDocument<never[][number]>>;
 	"layout.content.links"?: ExistsWhere;
 	"layout.content.links.label"?: ScalarWhere<string>;
 	"layout.content.links.href"?: ScalarWhere<string>;
@@ -566,8 +566,8 @@ export interface Articles {
 	_revision: number;
 	_localization?: { sources: Partial<Record<string, Locale>> };
 	"title"?: string;
-	"body"?: import("@riducms/plugin-richtext/document").RichTextDocument<ArticlesBodyBlocksBlock[number]> | null;
-	"localizedBody"?: import("@riducms/plugin-richtext/document").RichTextDocument<ArticlesLocalizedBodyBlocksBlock[number]> | null;
+	"body"?: import("@riducms/sdk/richtext").RichTextDocument<ArticlesBodyBlocksBlock[number]> | null;
+	"localizedBody"?: import("@riducms/sdk/richtext").RichTextDocument<ArticlesLocalizedBodyBlocksBlock[number]> | null;
 }
 
 export interface ArticlesAllLocales {
@@ -577,20 +577,20 @@ export interface ArticlesAllLocales {
 	_status: "draft" | "published";
 	_revision: number;
 	"title"?: string;
-	"body"?: import("@riducms/plugin-richtext/document").RichTextDocument<ArticlesBodyBlocksBlockAllLocales[number]> | null;
-	"localizedBody"?: RiduLocalizedValues<import("@riducms/plugin-richtext/document").RichTextDocument<ArticlesLocalizedBodyBlocksBlockAllLocalesValue[number]> | null>;
+	"body"?: import("@riducms/sdk/richtext").RichTextDocument<ArticlesBodyBlocksBlockAllLocales[number]> | null;
+	"localizedBody"?: RiduLocalizedValues<import("@riducms/sdk/richtext").RichTextDocument<ArticlesLocalizedBodyBlocksBlockAllLocalesValue[number]> | null>;
 }
 
 export interface ArticlesCreate {
 	"title": string;
-	"body"?: import("@riducms/plugin-richtext/document").RichTextDocumentInput<ArticlesBodyBlocksBlockInput[number]> | null;
-	"localizedBody"?: import("@riducms/plugin-richtext/document").RichTextDocumentInput<ArticlesLocalizedBodyBlocksBlockInput[number]> | null;
+	"body"?: import("@riducms/sdk/richtext").RichTextDocumentInput<ArticlesBodyBlocksBlockInput[number]> | null;
+	"localizedBody"?: import("@riducms/sdk/richtext").RichTextDocumentInput<ArticlesLocalizedBodyBlocksBlockInput[number]> | null;
 }
 
 export interface ArticlesUpdate {
 	"title"?: string;
-	"body"?: import("@riducms/plugin-richtext/document").RichTextDocumentInput<ArticlesBodyBlocksBlockUpdate[number]> | null;
-	"localizedBody"?: import("@riducms/plugin-richtext/document").RichTextDocumentInput<ArticlesLocalizedBodyBlocksBlockUpdate[number]> | null;
+	"body"?: import("@riducms/sdk/richtext").RichTextDocumentInput<ArticlesBodyBlocksBlockUpdate[number]> | null;
+	"localizedBody"?: import("@riducms/sdk/richtext").RichTextDocumentInput<ArticlesLocalizedBodyBlocksBlockUpdate[number]> | null;
 }
 
 export interface ArticlesWhere {
@@ -602,8 +602,8 @@ export interface ArticlesWhere {
 	updatedAt?: TimestampWhere;
 	_status?: ScalarWhere<"draft" | "published">;
 	"title"?: ScalarWhere<string>;
-	"body"?: ScalarWhere<import("@riducms/plugin-richtext/document").RichTextDocument<ArticlesBodyBlocksBlock[number]>>;
-	"localizedBody"?: ScalarWhere<import("@riducms/plugin-richtext/document").RichTextDocument<ArticlesLocalizedBodyBlocksBlock[number]>>;
+	"body"?: ScalarWhere<import("@riducms/sdk/richtext").RichTextDocument<ArticlesBodyBlocksBlock[number]>>;
+	"localizedBody"?: ScalarWhere<import("@riducms/sdk/richtext").RichTextDocument<ArticlesLocalizedBodyBlocksBlock[number]>>;
 }
 
 export interface ArticlesSelect {

@@ -2,15 +2,11 @@ package cli
 
 import (
 	"bufio"
-	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -32,8 +28,8 @@ import (
 // name restored, or the rename migrated with ridu migrate.
 type developmentRenames struct {
 	// input is nil when ridu dev cannot ask: without a terminal it must never
-	// block on input that cannot arrive, and without a migrations directory
-	// there is nowhere to record the decision.
+	// block on input that cannot arrive. A rename also needs a migrations
+	// directory to record the decision; a field-kind review does not.
 	input        *bufio.Reader
 	prompt       io.Writer
 	databaseURL  string
@@ -43,14 +39,24 @@ type developmentRenames struct {
 	// stopServer stops the development server that is still running the
 	// previous config. Every adapter stores some content under field names, so
 	// a write from that server during or after the rename would put content
-	// back under the old name. It is nil until a server is running.
-	stopServer func()
+	// back under the old name. It is nil until a server is running. The return
+	// value says whether this call actually drained a running process.
+	stopServer func() bool
+	// resumeServer restarts the accepted executable when field-kind review
+	// rejects a candidate after draining it, before any schema mutation.
+	resumeServer func() error
+	// fieldKindDrained records that the field-kind review stopped the accepted
+	// server and nothing has changed its schema or stored content since, so a
+	// rejected reload, even of a newer save, can restart that server.
+	fieldKindDrained bool
 	// declined is the config whose renames the developer declined during the
 	// current reload. One reload prepares the config more than once when
 	// generated Go changes, and must not ask again each time.
 	declined *schema.Manifest
 	// stillHas replaces the database check in tests that have no database.
 	stillHas func(ctx context.Context, baseline, current schema.Manifest) (bool, error)
+	// readBaseline replaces database metadata reads in prompt-only tests.
+	readBaseline func(context.Context, projectfile.File) (schema.Manifest, bool, error)
 }
 
 // beginReload forgets the answers given during the previous reload, so a
@@ -62,7 +68,7 @@ func (renames *developmentRenames) beginReload() {
 
 func newDevelopmentRenames(definition projectfile.File, options Options, databaseURL, databasePath string, prompt io.Writer, output *cliOutput) *developmentRenames {
 	renames := &developmentRenames{prompt: prompt, databaseURL: databaseURL, databasePath: databasePath, output: output, now: time.Now}
-	if options.Interactive && options.Stdin != nil && definition.Migrations != "" {
+	if options.Interactive && options.Stdin != nil {
 		renames.input = bufio.NewReader(options.Stdin)
 	}
 	return renames
@@ -75,52 +81,33 @@ type developmentRenameHeldError struct{ err error }
 func (held developmentRenameHeldError) Error() string { return held.err.Error() }
 func (held developmentRenameHeldError) Unwrap() error { return held.err }
 
-// baselinePath is where ridu dev records the schema it last brought this
-// development database to. The generated schema file cannot serve: ridu
-// generate rewrites it whenever the config changes, which would forget a
-// rename the database has not been through.
-func (renames *developmentRenames) baselinePath(definition projectfile.File) string {
-	identity := sha256.Sum256([]byte(string(definition.Database) + "\x00" + renames.databaseURL + "\x00" + renames.databasePath))
-	return definition.Absolute(filepath.Join(".ridu", "development", hex.EncodeToString(identity[:8])+".schema.json"))
-}
-
-// baseline returns the schema the development database is believed to have:
-// the one ridu dev last synchronized it to or, before any was recorded, the
-// generated schema file.
-func (renames *developmentRenames) baseline(definition projectfile.File) (schema.Manifest, bool) {
-	if manifest, exists, err := schemadiff.ReadManifest(renames.baselinePath(definition)); err == nil && exists {
-		return manifest, true
+// baseline reads the database's accepted schema record, never generated
+// output, a disposable CLI cache or the physical schema. A database with
+// application data or migration history but no record is an error.
+func (renames *developmentRenames) baseline(ctx context.Context, definition projectfile.File) (schema.Manifest, bool, error) {
+	if renames.readBaseline != nil {
+		return renames.readBaseline(ctx, definition)
 	}
-	manifest, exists, err := schemadiff.ReadManifest(definition.Absolute(definition.Schema))
-	return manifest, err == nil && exists
-}
-
-// recordSynchronized notes that the development database now has manifest.
-func (renames *developmentRenames) recordSynchronized(definition projectfile.File, manifest schema.Manifest) error {
-	encoded, err := manifest.Bytes()
+	target, err := renames.openTarget(ctx, definition.Database)
 	if err != nil {
-		return err
+		return schema.Manifest{}, false, err
 	}
-	path := renames.baselinePath(definition)
-	if existing, err := os.ReadFile(path); err == nil && bytes.Equal(existing, encoded) {
-		return nil
+	defer target.close()
+	var manifest schema.Manifest
+	var exists bool
+	switch {
+	case target.sqlite != nil:
+		manifest, exists, err = target.sqlite.DevelopmentManifest(ctx)
+	case target.mongodb != nil:
+		manifest, exists, err = target.mongodb.DevelopmentManifest(ctx)
+	default:
+		manifest, exists, err = target.postgres.DevelopmentManifest(ctx)
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
+	if err != nil || !exists {
+		return manifest, exists, err
 	}
-	temporary, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".*")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(temporary.Name())
-	if _, err := temporary.Write(encoded); err != nil {
-		_ = temporary.Close()
-		return err
-	}
-	if err := temporary.Close(); err != nil {
-		return err
-	}
-	return os.Rename(temporary.Name(), path)
+	manifest, err = schemadiff.CompactManifest(manifest)
+	return manifest, err == nil, err
 }
 
 // waiting reports whether the development database still has baseline's
@@ -157,7 +144,10 @@ func (renames *developmentRenames) waiting(ctx context.Context, definition proje
 // error rejects the reload before generation, and the same question comes up
 // again on the next save.
 func (renames *developmentRenames) resolve(ctx context.Context, definition projectfile.File, current schema.Manifest, fresh func() bool) (bool, error) {
-	previous, exists := renames.baseline(definition)
+	previous, exists, err := renames.baseline(ctx, definition)
+	if err != nil {
+		return false, fmt.Errorf("read accepted development schema: %w", err)
+	}
 	if !exists {
 		return false, nil
 	}
@@ -172,7 +162,7 @@ func (renames *developmentRenames) resolve(ctx context.Context, definition proje
 	if err != nil || !waiting {
 		return false, err
 	}
-	if renames.input == nil {
+	if renames.input == nil || definition.Migrations == "" {
 		for _, candidate := range candidates {
 			renames.output.Warn("possible "+renameDescription(candidate), nil)
 		}
@@ -221,10 +211,6 @@ func (renames *developmentRenames) resolve(ctx context.Context, definition proje
 	}
 	if err := renames.migrate(ctx, definition, previous, current, accepted, name); err != nil {
 		return false, err
-	}
-	// The content is under the new names now, whatever happens to this reload.
-	if err := renames.recordSynchronized(definition, current); err != nil {
-		renames.output.Warn("record the renamed development schema", err)
 	}
 	return true, nil
 }
@@ -395,6 +381,8 @@ func (renames *developmentRenames) migrate(ctx context.Context, definition proje
 		}
 	}
 	renames.stopRunningServer()
+	// The rename moves stored content, so the old server must stay stopped.
+	renames.fieldKindDrained = false
 	if err := target.apply(ctx, directory, previous, current, contentRenames(detected)); err != nil {
 		if target.mongodb != nil {
 			// MongoDB records each finished step, so a failed run can leave the
@@ -436,14 +424,10 @@ func (renames *developmentRenames) createMigration(ctx context.Context, adapter 
 		created, err := sqlite.CreateArtifactWithRenames(ctx, directory, name, after, renames.now(), contentRenames(candidates))
 		return created.Path, err
 	case projectfile.DatabaseMongoDB:
-		created, err := mongodb.CreateArtifactWithOptions(ctx, directory, name, after, renames.now(), mongodb.ArtifactOptions{Renames: contentRenames(candidates)})
+		created, err := mongodb.CreateArtifact(ctx, directory, name, after, renames.now(), mongodb.ArtifactOptions{Renames: contentRenames(candidates)})
 		return created.Path, err
 	}
-	plannerVersion, err := migrationHeadPlannerVersion(directory)
-	if err != nil {
-		return "", err
-	}
-	artifact, err := buildPostgresArtifactWithDataTransforms(ctx, name, before, after, postgresRenames(candidates), false, plannerVersion, nil)
+	artifact, err := postgres.BuildArtifact(ctx, name, before, after, postgresRenames(candidates), false)
 	if err != nil {
 		return "", err
 	}
@@ -648,12 +632,12 @@ func (target *developmentRenameTarget) apply(ctx context.Context, directory stri
 	return target.postgres.ApplyArtifactsWithOptions(ctx, directory, postgres.RunnerOptions{AllowMaintenance: true, AllowInsecureDatabase: true})
 }
 
-func (renames *developmentRenames) stopRunningServer() {
+func (renames *developmentRenames) stopRunningServer() bool {
 	if renames.stopServer == nil {
-		return
+		return false
 	}
-	renames.output.Info("Stopping the development server while the rename moves stored content")
-	renames.stopServer()
+	renames.output.Info("Stopping the development server before changing its stored schema")
+	return renames.stopServer()
 }
 
 // developmentRenameManualFinish says how to apply already written migrations

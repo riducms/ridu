@@ -8,15 +8,9 @@ import { riduCodeLineTransformer } from './src/plugins/code-line-transformer.ts'
 import { riduHeadingPermalinks } from './src/plugins/heading-permalinks.ts';
 import { riduMarkdownCodeMetadata, riduMarkdownComponents } from './src/plugins/ridu-markdown.ts';
 import { site } from './src/config/site.ts';
-import referenceRouteLock from './src/reference/authoring/route-lock.json';
 
 export default defineConfig({
 	site: process.env.SITE_URL ?? site.url,
-	redirects: Object.fromEntries(
-		Object.values(referenceRouteLock.routes)
-			.filter((route) => route.redirect)
-			.map((route) => [`/reference/${route.module}/${route.symbol}/`, route.redirect])
-	),
 	integrations: [
 		UnoCSS(),
 		sitemap({

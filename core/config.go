@@ -490,7 +490,8 @@ func resolveConfig(applicationConfig Config) (Config, schema.Manifest, error) {
 func validatePluginValidatorOwnership(plugins []Plugin, manifest schema.Manifest) error {
 	owners := make(map[string]string)
 	for _, plugin := range manifest.Snapshot().Plugins {
-		if plugin.Version == "" {
+		// A plugin without a versioned descriptor owns the field type named by its key.
+		if plugin.APIVersion == 0 {
 			owners[plugin.Key] = plugin.Key
 		}
 		for _, fieldType := range plugin.FieldTypes {

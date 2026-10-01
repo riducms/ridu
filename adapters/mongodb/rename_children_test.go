@@ -52,7 +52,7 @@ func renameChildrenIntent(t *testing.T, before, after schema.Manifest) []ridumig
 func renameChildrenHistory(t *testing.T, before schema.Manifest) string {
 	t.Helper()
 	directory := t.TempDir()
-	if _, err := CreateArtifact(context.Background(), directory, "initial", before, time.Unix(1, 0)); err != nil {
+	if _, err := CreateArtifact(context.Background(), directory, "initial", before, time.Unix(1, 0), ArtifactOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	return directory
@@ -127,7 +127,7 @@ func TestMongoDBFieldRenameCarriesUnchangedChildrenAndRefusesChangedOnes(t *test
 			continue
 		}
 		directory := renameChildrenHistory(t, before)
-		_, err := CreateArtifactWithOptions(ctx, directory, "rename", after, time.Unix(2, 0), ArtifactOptions{Renames: renames})
+		_, err := CreateArtifact(ctx, directory, "rename", after, time.Unix(2, 0), ArtifactOptions{Renames: renames})
 		switch {
 		case candidate.refusal == "" && err != nil:
 			t.Errorf("%s was refused: %v", name, err)
@@ -171,11 +171,11 @@ func TestMongoDBContainerRenameWithATransformKeepsItsRecordedRisk(t *testing.T) 
 	directory := renameChildrenHistory(t, before)
 	transform := ridumigration.DataTransformDescriptor{Name: "move-meta", Checksum: ridumigration.DataTransformChecksum([]byte("move-meta-v1"))}
 	options := ArtifactOptions{Renames: renameChildrenIntent(t, before, after), DataTransforms: []ridumigration.DataTransformDescriptor{transform}}
-	if _, err := CreateArtifactWithOptions(ctx, directory, "rename", after, time.Unix(2, 0), options); err == nil || !strings.Contains(err.Error(), "safety resolution") {
+	if _, err := CreateArtifact(ctx, directory, "rename", after, time.Unix(2, 0), options); err == nil || !strings.Contains(err.Error(), "safety resolution") {
 		t.Fatalf("a container rename with a transform, without destructive approval = %v", err)
 	}
 	options.AllowDestructive = true
-	if _, err := CreateArtifactWithOptions(ctx, directory, "rename", after, time.Unix(2, 0), options); err != nil {
+	if _, err := CreateArtifact(ctx, directory, "rename", after, time.Unix(2, 0), options); err != nil {
 		t.Fatal(err)
 	}
 	files, err := migrationartifact.ReadAll(directory)
@@ -239,7 +239,7 @@ func TestMongoDBFieldRenameMovesContainersWithTheirChildren(t *testing.T) {
 	if len(renames) != 3 {
 		t.Fatalf("rename candidates = %d, want the group, the array and the blocks field", len(renames))
 	}
-	if _, err := CreateArtifactWithOptions(ctx, directory, "rename", after, time.Unix(2, 0), ArtifactOptions{Renames: renames}); err != nil {
+	if _, err := CreateArtifact(ctx, directory, "rename", after, time.Unix(2, 0), ArtifactOptions{Renames: renames}); err != nil {
 		t.Fatalf("a rename with unchanged children was refused: %v", err)
 	}
 	// ridu migrate verify replays the history in a shadow database.
@@ -332,7 +332,7 @@ func TestMongoDBFieldRenameCarriesACollectionIndexOnAChild(t *testing.T) {
 	if len(renames) != 1 {
 		t.Fatalf("rename candidates = %d", len(renames))
 	}
-	if _, err := CreateArtifactWithOptions(ctx, directory, "rename", after, time.Unix(2, 0), ArtifactOptions{Renames: renames}); err != nil {
+	if _, err := CreateArtifact(ctx, directory, "rename", after, time.Unix(2, 0), ArtifactOptions{Renames: renames}); err != nil {
 		t.Fatalf("a rename whose child is in a collection index was refused: %v", err)
 	}
 	files, err := migrationartifact.ReadAll(directory)

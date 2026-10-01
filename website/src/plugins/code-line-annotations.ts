@@ -9,13 +9,12 @@ export interface CodeLineAnnotation {
 	marker: CodeLineMarker;
 }
 
-type AnnotationKind = 'add' | 'remove' | 'highlight';
-type AnnotationDirective = AnnotationKind | 'focus';
+type AnnotationKind = 'add' | 'remove' | 'focus';
 
 const annotationClasses: Record<AnnotationKind, string> = {
 	add: 'is-added',
 	remove: 'is-removed',
-	highlight: 'is-highlighted'
+	focus: 'is-highlighted'
 };
 
 interface ParsedAnnotationDirectives {
@@ -96,8 +95,7 @@ function readAnnotationDirectives(meta: string): ParsedAnnotationDirectives {
 			continue;
 		}
 
-		const annotationName =
-			name === 'add' || name === 'remove' || name === 'highlight' || name === 'focus';
+		const annotationName = name === 'add' || name === 'remove' || name === 'focus';
 		if (meta[index] !== '{') {
 			if (annotationName) diagnostics.push(`${name} must use a braced line selector`);
 			while (index < meta.length && !/[\s,]/.test(meta[index])) index += 1;
@@ -111,11 +109,7 @@ function readAnnotationDirectives(meta: string): ParsedAnnotationDirectives {
 		}
 		index = bracedValue.next;
 
-		if (annotationName) {
-			const directive = name as AnnotationDirective;
-			const kind: AnnotationKind = directive === 'focus' ? 'highlight' : directive;
-			directives.push({ kind, value: bracedValue.value });
-		}
+		if (annotationName) directives.push({ kind: name, value: bracedValue.value });
 	}
 
 	return { diagnostics, directives };
@@ -160,7 +154,7 @@ function selectedAnnotationLines(meta: string, lineCount: number) {
 	const selected: Record<AnnotationKind, Set<number>> = {
 		add: new Set<number>(),
 		remove: new Set<number>(),
-		highlight: new Set<number>()
+		focus: new Set<number>()
 	};
 
 	for (const directive of parsed.directives) {
@@ -194,8 +188,7 @@ export function validateCodeLineAnnotations(
 /**
  * Converts fenced-code metadata such as `add={1,8-11} remove={4} focus={3-5}` into
  * presentation data for every source line. Selectors are one-based and ranges
- * are inclusive. `highlight` remains an alias for `focus`. Invalid selectors
- * and lines outside the source are ignored.
+ * are inclusive. Invalid selectors and lines outside the source are ignored.
  */
 export function parseCodeLineAnnotations(
 	meta: string | null | undefined,

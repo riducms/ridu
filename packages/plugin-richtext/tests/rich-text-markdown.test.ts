@@ -8,7 +8,7 @@ import { createEditor } from "lexical";
 
 import { richTextMarkdownTransformers } from "../src/field/rich-text-markdown";
 import { decodeRichTextConfig, type RichTextFeature } from "../src/field/rich-text-config";
-import { decodeRichTextDocument } from "../src/document-validation";
+import { decodeRichTextDocument } from "../src/field/rich-text-value";
 
 function convert(markdown: string, features: RichTextFeature[] = []) {
 	const editor = createEditor({

@@ -94,12 +94,12 @@ func runUpgrade(ctx context.Context, args []string, stdout, stderr io.Writer, op
 
 	migrationName := "ridu-" + strings.NewReplacer(".", "-", "+", "-").Replace(version)
 	if *noInstall {
-		install, run := packageManagerUserCommands(definition.FrontendPackageManager())
+		install, run := packageManagerUserCommands(definition.PackageManager)
 		fmt.Fprintf(stdout, "\nNext:\n  go mod tidy\n  %s\n  %s ridu generate\n  %s ridu agent sync\n  %s ridu migrate create --name %s\n", install, run, run, run, migrationName)
 		return 0
 	}
 
-	manager := definition.FrontendPackageManager()
+	manager := definition.PackageManager
 	if err := runForeground(ctx, definition.Root, nil, stdout, stderr, string(manager), "install"); err != nil {
 		output.Error("install the upgraded packages", err)
 		return 1

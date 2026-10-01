@@ -27,7 +27,6 @@ import (
 	"github.com/riducms/ridu/internal/migrationartifact"
 	"github.com/riducms/ridu/internal/pluginregistry"
 	"github.com/riducms/ridu/internal/pluginscaffold"
-	"github.com/riducms/ridu/internal/postgresmigration"
 	"github.com/riducms/ridu/internal/project"
 	"github.com/riducms/ridu/internal/projectfile"
 	"github.com/riducms/ridu/internal/scaffold"
@@ -278,7 +277,7 @@ func runPluginAdd(ctx context.Context, args []string, stdout, stderr io.Writer, 
 				return 1
 			}
 			output.Info("Installing admin dependency", "package", entry.AdminPackage, "version", entry.AdminVersion)
-			command, arguments := packageManagerAddCommand(definition.FrontendPackageManager(), entry.AdminPackage+"@"+entry.AdminVersion)
+			command, arguments := packageManagerAddCommand(definition.PackageManager, entry.AdminPackage+"@"+entry.AdminVersion)
 			if err := runForeground(ctx, definition.Absolute(definition.Admin), nil, stdout, stderr, command, arguments...); err != nil {
 				output.Error("install admin plugin dependency", err)
 				return 1
@@ -300,7 +299,7 @@ func runPluginAdd(ctx context.Context, args []string, stdout, stderr io.Writer, 
 		contractManifest := generatedContractPackageManifest(definition)
 		if contractRoot != "" && !packageDeclaresDependency(contractManifest, entry.AdminPackage) {
 			output.Info("Installing generated-contract dependency", "package", entry.AdminPackage, "version", entry.AdminVersion)
-			command, arguments := packageManagerAddCommand(definition.FrontendPackageManager(), entry.AdminPackage+"@"+entry.AdminVersion)
+			command, arguments := packageManagerAddCommand(definition.PackageManager, entry.AdminPackage+"@"+entry.AdminVersion)
 			if err := runForeground(ctx, contractRoot, nil, stdout, stderr, command, arguments...); err != nil {
 				output.Error("install generated-contract plugin dependency", err)
 				return 1
@@ -381,7 +380,7 @@ func runPluginRemove(ctx context.Context, args []string, stdout, stderr io.Write
 	if !*noInstall {
 		if removed.AdminPackage != "" {
 			if definition.Admin != "" && !manifestRequiresAdminPackage(manifest, removed.AdminPackage) && packageDeclaresDependency(filepath.Join(definition.Absolute(definition.Admin), "package.json"), removed.AdminPackage) {
-				command, arguments := packageManagerRemoveCommand(definition.FrontendPackageManager(), removed.AdminPackage)
+				command, arguments := packageManagerRemoveCommand(definition.PackageManager, removed.AdminPackage)
 				if err := runForeground(ctx, definition.Absolute(definition.Admin), nil, stdout, stderr, command, arguments...); err != nil {
 					output.Error("plugin registration was removed, but removing the admin dependency failed", err)
 					return 1
@@ -390,7 +389,7 @@ func runPluginRemove(ctx context.Context, args []string, stdout, stderr io.Write
 			contractRoot := generatedContractPackageRoot(definition)
 			contractManifest := generatedContractPackageManifest(definition)
 			if contractRoot != "" && !manifestRequiresTypeScriptPackage(manifest, removed.AdminPackage) && packageDeclaresDependency(contractManifest, removed.AdminPackage) {
-				command, arguments := packageManagerRemoveCommand(definition.FrontendPackageManager(), removed.AdminPackage)
+				command, arguments := packageManagerRemoveCommand(definition.PackageManager, removed.AdminPackage)
 				if err := runForeground(ctx, contractRoot, nil, stdout, stderr, command, arguments...); err != nil {
 					output.Error("plugin registration was removed, but removing the generated-contract dependency failed", err)
 					return 1
@@ -665,6 +664,9 @@ func runMigrate(ctx context.Context, args []string, stdout, stderr io.Writer, op
 	allowDestructive := flags.Bool("allow-destructive", false, "approve reviewed destructive planning or lifecycle work")
 	allowMaintenance := flags.Bool("allow-maintenance", false, "admit traffic-sensitive steps after stopping every application process and worker through completion and retries (up only; verify's private shadow needs none)")
 	jsonOutput := flags.Bool("json", false, "emit machine-readable JSON for plan or status")
+	replaceBaseline := flags.Bool("replace", false, "replace recorded baseline history after verifying the physical schema and previous immutable artifacts")
+	previousHistory := flags.String("previous-history", "", "directory containing the original recorded artifacts for baseline --replace")
+	allowProduction := flags.Bool("allow-production", false, "with baseline --replace, rewrite the history of a database exactly at its recorded head without asking; stop every application process and writer first")
 	allowUnbounded := flags.Bool("allow-unbounded", false, "explicitly admit zero migration timeouts")
 	advisoryLockWait := flags.Duration("advisory-lock-wait", 0, "maximum wait for the adapter migration lock")
 	lockTimeout := flags.Duration("lock-timeout", 0, "maximum PostgreSQL lock wait per phase")
@@ -703,6 +705,14 @@ func runMigrate(ctx context.Context, args []string, stdout, stderr io.Writer, op
 		return 2
 	}
 	lifecycleCommand := command == "down" || command == "reset" || command == "refresh" || command == "fresh"
+	if command != "baseline" && (*replaceBaseline || *previousHistory != "" || *allowProduction) {
+		fmt.Fprintf(stderr, "ridu migrate %s does not accept baseline replacement options\n", command)
+		return 2
+	}
+	if !*replaceBaseline && (*previousHistory != "" || *allowProduction) {
+		fmt.Fprintln(stderr, "--previous-history and --allow-production require ridu migrate baseline --replace")
+		return 2
+	}
 	if command != "create" && (*name != "" || *transformName != "" || *acceptRenames) || command != "create" && !lifecycleCommand && *allowDestructive {
 		fmt.Fprintf(stderr, "ridu migrate %s does not accept create-only migration options\n", command)
 		return 2
@@ -809,6 +819,14 @@ func runMigrate(ctx context.Context, args []string, stdout, stderr io.Writer, op
 		*allowInsecureDatabase = true
 	}
 	directory := definition.Absolute(definition.Migrations)
+	replacementOptions := migration.BaselineReplacementOptions{AllowProduction: *allowProduction}
+	if *previousHistory != "" {
+		if filepath.IsAbs(*previousHistory) {
+			replacementOptions.PreviousDirectory = filepath.Clean(*previousHistory)
+		} else {
+			replacementOptions.PreviousDirectory = definition.Absolute(*previousHistory)
+		}
+	}
 	if definition.Database == projectfile.DatabaseMongoDB && command == "create" {
 		if databaseURLFlag || databasePathFlag {
 			fmt.Fprintln(stderr, "ridu migrate create for MongoDB is offline and does not accept --database-url or --database-path")
@@ -862,6 +880,7 @@ func runMigrate(ctx context.Context, args []string, stdout, stderr io.Writer, op
 		}
 		return runMongoDBMigrate(ctx, mongoDBMigrationCLIOptions{
 			command: command, databaseURL: *databaseURL, allowInsecureDatabase: *allowInsecureDatabase,
+			replaceBaseline: *replaceBaseline, replacementOptions: replacementOptions, confirmationInput: interactiveInput(options),
 			jsonOutput: *jsonOutput, directory: directory, executableManifest: executableManifest,
 			runnerOptions: mongodb.RunnerOptions{
 				AllowMaintenance: *allowMaintenance, AllowUnbounded: *allowUnbounded,
@@ -877,13 +896,11 @@ func runMigrate(ctx context.Context, args []string, stdout, stderr io.Writer, op
 		BatchTimeout: *batchTimeout, ConcurrentIndexTimeout: *concurrentIndexTimeout,
 		IdleInTransactionTimeout: *idleTransactionTimeout,
 		StopAfterPhase:           *stopAfterPhase, StopAfterStep: *stopAfterStep,
-		Notice: func(notice postgres.MigrationNotice) {
-			fmt.Fprintf(stdout, "NOTICE\t%s\t%s\t%s\n", notice.Code, notice.Artifact, notice.Message)
-		},
 	}
 	if definition.Database == projectfile.DatabaseSQLite {
 		return runSQLiteMigrate(ctx, sqliteMigrationCLIOptions{
 			command: command, databasePath: *databasePath, name: *name, transformName: *transformName,
+			replaceBaseline: *replaceBaseline, replacementOptions: replacementOptions,
 			databasePathFlag: databasePathFlag,
 			acceptRenames:    *acceptRenames, allowDestructive: *allowDestructive, jsonOutput: *jsonOutput,
 			directory: directory, definition: definition, dataTransforms: sqliteDataTransforms, executableManifest: executableManifest,
@@ -954,16 +971,10 @@ func runMigrate(ctx context.Context, args []string, stdout, stderr io.Writer, op
 			return 1
 		}
 		var previousPointer *schema.Manifest
-		previousPlannerVersion := ""
 		if previousExists {
 			previousPointer = &previous
-			previousPlannerVersion, err = migrationHeadPlannerVersion(directory)
-			if err != nil {
-				output.Error("read migration planner history", err)
-				return 1
-			}
 		}
-		artifact, err := buildPostgresArtifactWithDataTransforms(ctx, *name, previousPointer, manifest, postgresRenames(accepted), *allowDestructive, previousPlannerVersion, transforms)
+		artifact, err := postgres.BuildArtifact(ctx, *name, previousPointer, manifest, postgresRenames(accepted), *allowDestructive, transforms...)
 		if err != nil {
 			return reportMigrateCreateError(stdout, output, "plan migration", err)
 		}
@@ -1063,7 +1074,12 @@ func runMigrate(ctx context.Context, args []string, stdout, stderr io.Writer, op
 			return 1
 		}
 		defer backend.Close()
-		adopted, err := backend.AdoptArtifacts(ctx, directory)
+		var adopted []string
+		if *replaceBaseline {
+			adopted, err = replaceBaselineWithConfirmation(ctx, backend.ReplaceBaseline, directory, replacementOptions, interactiveInput(options), stdout)
+		} else {
+			adopted, err = backend.AdoptArtifacts(ctx, directory)
+		}
 		if err != nil {
 			output.Error("record migrations", err)
 			return 1
@@ -1098,8 +1114,8 @@ const noMigrationNeeded = "No migration needed"
 // not a failure: there is nothing to migrate.
 func reportMigrateCreateError(stdout io.Writer, output *cliOutput, action string, err error) int {
 	switch {
-	case errors.Is(err, migrationartifact.ErrOnlyAdminChanges):
-		fmt.Fprintln(stdout, noMigrationNeeded+": only admin settings changed since the latest migration, and history ignores them.")
+	case errors.Is(err, migrationartifact.ErrOnlyPresentationChanges):
+		fmt.Fprintln(stdout, noMigrationNeeded+": only presentation settings, such as labels, admin settings or the application name, changed since the latest migration, and history ignores them.")
 	case errors.Is(err, migrationartifact.ErrSchemaCurrent):
 		fmt.Fprintln(stdout, noMigrationNeeded+": the schema has not changed since the latest migration.")
 	default:
@@ -1158,7 +1174,7 @@ func runMongoDBMigrateCreate(
 			return 1
 		}
 	}
-	created, err := mongodb.CreateArtifactWithOptions(ctx, directory, name, resolved.Manifest, time.Now(), mongodb.ArtifactOptions{
+	created, err := mongodb.CreateArtifact(ctx, directory, name, resolved.Manifest, time.Now(), mongodb.ArtifactOptions{
 		AllowDestructive: allowDestructive,
 		Renames:          contentRenames(accepted),
 		DataTransforms:   transforms,
@@ -1184,6 +1200,9 @@ func runMongoDBMigrateCreate(
 
 type mongoDBMigrationCLIOptions struct {
 	command               string
+	replaceBaseline       bool
+	replacementOptions    migration.BaselineReplacementOptions
+	confirmationInput     io.Reader
 	databaseURL           string
 	allowInsecureDatabase bool
 	jsonOutput            bool
@@ -1268,7 +1287,12 @@ func runMongoDBMigrate(ctx context.Context, request mongoDBMigrationCLIOptions, 
 			return 1
 		}
 		defer backend.Close()
-		adopted, err := backend.AdoptArtifacts(ctx, request.directory)
+		var adopted []string
+		if request.replaceBaseline {
+			adopted, err = replaceBaselineWithConfirmation(ctx, backend.ReplaceBaseline, request.directory, request.replacementOptions, request.confirmationInput, stdout)
+		} else {
+			adopted, err = backend.AdoptArtifacts(ctx, request.directory)
+		}
 		if err != nil {
 			output.Error("record migrations", err)
 			return 1
@@ -1306,6 +1330,8 @@ func printCreatedSQLiteMigration(stdout io.Writer, request sqliteMigrationCLIOpt
 
 type sqliteMigrationCLIOptions struct {
 	command            string
+	replaceBaseline    bool
+	replacementOptions migration.BaselineReplacementOptions
 	databasePath       string
 	databasePathFlag   bool
 	name               string
@@ -1444,13 +1470,24 @@ func runSQLiteMigrate(ctx context.Context, request sqliteMigrationCLIOptions, st
 
 	switch request.command {
 	case "baseline":
+		if request.replaceBaseline {
+			if _, err := migrationartifact.RequireCurrentHistory(request.directory, request.executableManifest); err != nil {
+				output.Error("validate replacement migration artifact history", err)
+				return 1
+			}
+		}
 		backend, err := sqlite.Open(ctx, databasePath)
 		if err != nil {
 			output.Error("open SQLite", err)
 			return 1
 		}
 		defer backend.Close()
-		adopted, err := backend.AdoptArtifacts(ctx, request.directory)
+		var adopted []string
+		if request.replaceBaseline {
+			adopted, err = replaceBaselineWithConfirmation(ctx, backend.ReplaceBaseline, request.directory, request.replacementOptions, interactiveInput(options), stdout)
+		} else {
+			adopted, err = backend.AdoptArtifacts(ctx, request.directory)
+		}
 		if err != nil {
 			output.Error("record migrations", err)
 			return 1
@@ -1585,17 +1622,6 @@ func migrationRenameBase(directory string) (schema.Manifest, bool, error) {
 	return previous, exists, nil
 }
 
-func migrationHeadPlannerVersion(directory string) (string, error) {
-	files, err := migrationartifact.ReadAll(directory)
-	if err != nil {
-		return "", err
-	}
-	if len(files) == 0 {
-		return "", nil
-	}
-	return files[len(files)-1].Artifact.Planner.Version, nil
-}
-
 func confirmRenameCandidates(candidates []schemadiff.RenameCandidate, input io.Reader, output io.Writer, acceptAll bool) ([]schemadiff.RenameCandidate, error) {
 	if len(candidates) == 0 {
 		return nil, nil
@@ -1650,45 +1676,6 @@ func postgresRenames(candidates []schemadiff.RenameCandidate) []postgres.Rename 
 		}
 	}
 	return renamed
-}
-
-func buildPostgresArtifactWithDataTransforms(
-	ctx context.Context,
-	name string,
-	before *schema.Manifest,
-	after schema.Manifest,
-	renames []postgres.Rename,
-	allowDestructive bool,
-	previousPlannerVersion string,
-	transforms []migration.DataTransformDescriptor,
-) (migration.Artifact, error) {
-	if before != nil {
-		if err := postgresmigration.ValidateVersionedTransition(before.Snapshot(), after.Snapshot(), transforms); err != nil {
-			return migration.Artifact{}, err
-		}
-	}
-	artifact, err := postgres.BuildArtifactWithPreviousPlanner(ctx, name, before, after, renames, allowDestructive, previousPlannerVersion)
-	if err != nil {
-		if len(transforms) == 0 || before == nil || !errors.Is(err, migrationartifact.ErrSchemaCurrent) {
-			return migration.Artifact{}, err
-		}
-		fromDigest, digestError := migration.DigestManifest(*before)
-		if digestError != nil {
-			return migration.Artifact{}, digestError
-		}
-		toDigest, digestError := migration.DigestManifest(after)
-		if digestError != nil {
-			return migration.Artifact{}, digestError
-		}
-		if fromDigest != toDigest {
-			return migration.Artifact{}, err
-		}
-		artifact, err = postgresmigration.DataOnlyArtifact(name, migration.Planner{Name: "atlas", Version: postgres.AtlasVersion}, *before, after)
-		if err != nil {
-			return migration.Artifact{}, err
-		}
-	}
-	return postgresmigration.BindDataTransforms(artifact, transforms)
 }
 
 // contentRenames encodes confirmed renames as the intent MongoDB and SQLite

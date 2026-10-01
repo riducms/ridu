@@ -3,6 +3,7 @@
 	import LoaderCircleIcon from "~icons/lucide/loader-circle";
 	import { Toaster as Sonner, type ToasterProps } from "svelte-sonner";
 	import { getAdminI18n } from "@riducms/plugin";
+	import { buttonVariants } from "@riducms/ui";
 
 	const i18n = getAdminI18n();
 
@@ -32,6 +33,7 @@
 			description: "ridu-toast__description",
 			icon: "ridu-toast__icon",
 			closeButton: "ridu-toast__close",
+			actionButton: `${buttonVariants({ variant: "outline", size: "xs" })} ridu-toast__action`,
 			...toastOptions?.classes,
 		},
 	});

@@ -25,6 +25,10 @@ func (backend *Store) AdoptArtifacts(ctx context.Context, directory string) ([]s
 	}
 	var adopted []string
 	err = backend.withImmediate(ctx, func(connection *sql.Conn) error {
+		recorded, recordedExists, err := sqliteDevelopmentManifest(ctx, connection)
+		if err != nil {
+			return err
+		}
 		exists, err := sqliteArtifactLedgerExists(ctx, connection)
 		if err != nil {
 			return err
@@ -52,12 +56,11 @@ func (backend *Store) AdoptArtifacts(ctx context.Context, directory string) ([]s
 			if err != nil {
 				return false, err
 			}
-			contract, err := resolveSQLitePlannerContract(files[index], sqlitePlannerContractFor)
-			if err != nil {
-				return false, err
-			}
-			if err := assertSQLitePhysicalSchema(ctx, connection, after, exists, contract); err != nil {
+			if err := assertSQLitePhysicalSchema(ctx, connection, after, exists); err != nil {
 				return false, ctx.Err()
+			}
+			if recordedExists {
+				return recorded.SameStorage(after), nil
 			}
 			return true, nil
 		})
@@ -73,19 +76,15 @@ func (backend *Store) AdoptArtifacts(ctx context.Context, directory string) ([]s
 		if err != nil {
 			return err
 		}
-		contract, err := resolveSQLitePlannerContract(head, sqlitePlannerContractFor)
-		if err != nil {
-			return err
-		}
 		// Rebuild derived state as the runner's final schema step does, so an
 		// adopted database is as consistent as a migrated one.
-		if err := contract.reconcileIndexes(ctx, connection, after); err != nil {
+		if err := reconcileDocumentIndexes(ctx, connection, after); err != nil {
 			return err
 		}
 		if err := rebuildDocumentReferences(ctx, connection, after); err != nil {
 			return fmt.Errorf("rebuild references: %w", err)
 		}
-		if err := contract.rebuildUniqueness(ctx, connection, after); err != nil {
+		if err := rebuildUniqueValues(ctx, connection, after); err != nil {
 			return fmt.Errorf("rebuild uniqueness: %w", err)
 		}
 		if _, err := connection.ExecContext(ctx, sqliteArtifactLedgerSQL); err != nil {
@@ -104,7 +103,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, len(applied)+offset+1, file.Name, file.Dige
 		if err := writeSQLiteManifest(ctx, connection, after, files[len(files)-1].Digest, now); err != nil {
 			return fmt.Errorf("record SQLite manifest for migration %s: %w", head.Name, err)
 		}
-		if err := assertSQLitePhysicalSchema(ctx, connection, after, true, contract); err != nil {
+		if err := assertSQLitePhysicalSchema(ctx, connection, after, true); err != nil {
 			return fmt.Errorf("adopted SQLite migration state: %w", err)
 		}
 		return assertSQLiteManifestDigest(ctx, connection, head.Artifact.ToDigest)

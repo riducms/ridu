@@ -216,7 +216,11 @@ function compareField(
 	return row;
 }
 
-export function formatVersionValue(value: unknown, i18n: AdminI18n, row?: VersionDiffRow): string {
+export function formatVersionValue(
+	value: unknown,
+	i18n: AdminI18n,
+	row?: Pick<VersionDiffRow, "path" | "field">
+): string {
 	if (value === undefined || value === null || value === "") return "";
 	if (row?.path === "_status")
 		return i18n.t(value === "published" ? "documents:published" : "documents:draft");

@@ -530,10 +530,10 @@ func TestMongoDBRenamePlanRejectsOverlappingSlugRewrites(t *testing.T) {
 	}
 }
 
-func TestMongoDBV2PlansAndReplaysConfirmedFieldRenameDeterministically(t *testing.T) {
+func TestMongoDBPlansAndReplaysConfirmedFieldRenameDeterministically(t *testing.T) {
 	directory := t.TempDir()
 	before := mongoDBMigrationTestManifest(t, true, false)
-	if _, err := CreateArtifact(context.Background(), directory, "initial", before, time.Unix(1, 0)); err != nil {
+	if _, err := CreateArtifact(context.Background(), directory, "initial", before, time.Unix(1, 0), ArtifactOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	afterSnapshot := before.Snapshot()
@@ -543,7 +543,7 @@ func TestMongoDBV2PlansAndReplaysConfirmedFieldRenameDeterministically(t *testin
 		CollectionBefore: "posts", CollectionAfter: "posts",
 		FieldBefore: "title", FieldAfter: "heading",
 	}
-	first, err := CreateArtifactWithOptions(context.Background(), directory, "rename-title", after, time.Unix(2, 0), ArtifactOptions{Renames: []ridumigration.Rename{intent}})
+	first, err := CreateArtifact(context.Background(), directory, "rename-title", after, time.Unix(2, 0), ArtifactOptions{Renames: []ridumigration.Rename{intent}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -551,7 +551,7 @@ func TestMongoDBV2PlansAndReplaysConfirmedFieldRenameDeterministically(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	if files[1].Artifact.Planner.Version != mongoDBPlannerVersionV2 {
+	if files[1].Artifact.Planner.Version != mongoDBPlannerVersion {
 		t.Fatalf("semantic planner = %q", files[1].Artifact.Planner.Version)
 	}
 	kinds := mongoDBMigrationStepKinds(files[1].Artifact)
@@ -576,22 +576,22 @@ func TestMongoDBV2PlansAndReplaysConfirmedFieldRenameDeterministically(t *testin
 	}
 
 	secondDirectory := t.TempDir()
-	if _, err := CreateArtifact(context.Background(), secondDirectory, "initial", before, time.Unix(1, 0)); err != nil {
+	if _, err := CreateArtifact(context.Background(), secondDirectory, "initial", before, time.Unix(1, 0), ArtifactOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	second, err := CreateArtifactWithOptions(context.Background(), secondDirectory, "rename-title", after, time.Unix(2, 0), ArtifactOptions{Renames: []ridumigration.Rename{intent}})
+	second, err := CreateArtifact(context.Background(), secondDirectory, "rename-title", after, time.Unix(2, 0), ArtifactOptions{Renames: []ridumigration.Rename{intent}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if first.Name != second.Name || first.Checksum != second.Checksum {
-		t.Fatalf("deterministic v1 -> v2 artifact = %s/%s and %s/%s", first.Name, first.Checksum, second.Name, second.Checksum)
+		t.Fatalf("deterministic field rename artifact = %s/%s and %s/%s", first.Name, first.Checksum, second.Name, second.Checksum)
 	}
 }
 
-func TestMongoDBV2PlansTypedCollectionRenameAndBindsPhysicalIdentity(t *testing.T) {
+func TestMongoDBPlansTypedCollectionRenameAndBindsPhysicalIdentity(t *testing.T) {
 	directory := t.TempDir()
 	before := mongoDBMigrationTestManifest(t, false, false)
-	if _, err := CreateArtifact(context.Background(), directory, "initial", before, time.Unix(1, 0)); err != nil {
+	if _, err := CreateArtifact(context.Background(), directory, "initial", before, time.Unix(1, 0), ArtifactOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	afterSnapshot := before.Snapshot()
@@ -599,7 +599,7 @@ func TestMongoDBV2PlansTypedCollectionRenameAndBindsPhysicalIdentity(t *testing.
 	afterSnapshot.Collections[0].Slug = "articles"
 	after := schema.NewManifest(afterSnapshot)
 	intent := ridumigration.Rename{CollectionBefore: "posts", CollectionAfter: "articles"}
-	if _, err := CreateArtifactWithOptions(context.Background(), directory, "rename-posts", after, time.Unix(2, 0), ArtifactOptions{Renames: []ridumigration.Rename{intent}}); err != nil {
+	if _, err := CreateArtifact(context.Background(), directory, "rename-posts", after, time.Unix(2, 0), ArtifactOptions{Renames: []ridumigration.Rename{intent}}); err != nil {
 		t.Fatal(err)
 	}
 	files, err := migrationartifact.ReadAll(directory)
@@ -690,14 +690,14 @@ func TestMongoDBSemanticPhaseSchedulesOneReferenceRebuildForMultipleRenames(t *t
 	}
 }
 
-func TestMongoDBV2DataOnlyTransformAndNoOpAdmission(t *testing.T) {
+func TestMongoDBDataOnlyTransformAndNoOpAdmission(t *testing.T) {
 	directory := t.TempDir()
 	manifest := mongoDBMigrationTestManifest(t, false, false)
-	if _, err := CreateArtifact(context.Background(), directory, "initial", manifest, time.Unix(1, 0)); err != nil {
+	if _, err := CreateArtifact(context.Background(), directory, "initial", manifest, time.Unix(1, 0), ArtifactOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	descriptor := ridumigration.DataTransformDescriptor{Name: "normalize-titles", Checksum: strings.Repeat("a", 64)}
-	if _, err := CreateArtifactWithOptions(context.Background(), directory, "normalize", manifest, time.Unix(2, 0), ArtifactOptions{DataTransforms: []ridumigration.DataTransformDescriptor{descriptor}}); err != nil {
+	if _, err := CreateArtifact(context.Background(), directory, "normalize", manifest, time.Unix(2, 0), ArtifactOptions{DataTransforms: []ridumigration.DataTransformDescriptor{descriptor}}); err != nil {
 		t.Fatal(err)
 	}
 	files, err := migrationartifact.ReadAll(directory)
@@ -713,18 +713,18 @@ func TestMongoDBV2DataOnlyTransformAndNoOpAdmission(t *testing.T) {
 	}
 
 	noOpDirectory := t.TempDir()
-	if _, err := CreateArtifact(context.Background(), noOpDirectory, "initial", manifest, time.Unix(1, 0)); err != nil {
+	if _, err := CreateArtifact(context.Background(), noOpDirectory, "initial", manifest, time.Unix(1, 0), ArtifactOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := CreateArtifactWithOptions(context.Background(), noOpDirectory, "noop", manifest, time.Unix(2, 0), ArtifactOptions{}); err == nil || !strings.Contains(err.Error(), "schema is current") {
+	if _, err := CreateArtifact(context.Background(), noOpDirectory, "noop", manifest, time.Unix(2, 0), ArtifactOptions{}); err == nil || !strings.Contains(err.Error(), "schema is current") {
 		t.Fatalf("unbound no-op error = %v", err)
 	}
 }
 
-func TestMongoDBV2TransformRequiresChecksumRegistrationAndDestructiveReview(t *testing.T) {
+func TestMongoDBTransformRequiresChecksumRegistrationAndDestructiveReview(t *testing.T) {
 	directory := t.TempDir()
 	before := mongoDBMigrationTestManifest(t, false, false)
-	if _, err := CreateArtifact(context.Background(), directory, "initial", before, time.Unix(1, 0)); err != nil {
+	if _, err := CreateArtifact(context.Background(), directory, "initial", before, time.Unix(1, 0), ArtifactOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	afterSnapshot := before.Snapshot()
@@ -733,7 +733,7 @@ func TestMongoDBV2TransformRequiresChecksumRegistrationAndDestructiveReview(t *t
 	after := schema.NewManifest(afterSnapshot)
 	descriptor := ridumigration.DataTransformDescriptor{Name: "backfill-title", Checksum: strings.Repeat("b", 64)}
 	options := ArtifactOptions{DataTransforms: []ridumigration.DataTransformDescriptor{descriptor}}
-	if _, err := CreateArtifactWithOptions(context.Background(), directory, "backfill", after, time.Unix(2, 0), options); err == nil {
+	if _, err := CreateArtifact(context.Background(), directory, "backfill", after, time.Unix(2, 0), options); err == nil {
 		t.Fatal("transformed schema change bypassed destructive review")
 	} else {
 		var safety *SafetyError
@@ -742,7 +742,7 @@ func TestMongoDBV2TransformRequiresChecksumRegistrationAndDestructiveReview(t *t
 		}
 	}
 	options.AllowDestructive = true
-	if _, err := CreateArtifactWithOptions(context.Background(), directory, "backfill", after, time.Unix(2, 0), options); err != nil {
+	if _, err := CreateArtifact(context.Background(), directory, "backfill", after, time.Unix(2, 0), options); err != nil {
 		t.Fatal(err)
 	}
 	files, err := migrationartifact.ReadAll(directory)
@@ -769,24 +769,19 @@ func TestMongoDBPlanAndStatusRejectTransformNameChecksumReuseAcrossHistory(t *te
 	ctx := context.Background()
 	directory := t.TempDir()
 	manifest := mongoDBMigrationTestManifest(t, false, false)
-	if _, err := CreateArtifact(ctx, directory, "initial", manifest, time.Unix(1, 0)); err != nil {
+	if _, err := CreateArtifact(ctx, directory, "initial", manifest, time.Unix(1, 0), ArtifactOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	initial := ridumigration.DataTransformDescriptor{Name: "normalize-titles", Checksum: strings.Repeat("a", 64)}
-	if _, err := CreateArtifactWithOptions(ctx, directory, "initial-transform", manifest, time.Unix(2, 0), ArtifactOptions{
+	if _, err := CreateArtifact(ctx, directory, "initial-transform", manifest, time.Unix(2, 0), ArtifactOptions{
 		DataTransforms: []ridumigration.DataTransformDescriptor{initial},
 	}); err != nil {
 		t.Fatal(err)
 	}
 
-	files, err := migrationartifact.ReadAll(directory)
-	if err != nil {
-		t.Fatal(err)
-	}
 	changed := ridumigration.DataTransformDescriptor{Name: initial.Name, Checksum: strings.Repeat("b", 64)}
-	second, err := buildMongoDBArtifactWithOptions(
-		ctx, "changed-transform", &manifest, manifest, files[len(files)-1].Artifact.Planner.Version,
-		currentMongoDBPlannerContract(), ArtifactOptions{DataTransforms: []ridumigration.DataTransformDescriptor{changed}},
+	second, err := buildMongoDBArtifact(
+		ctx, "changed-transform", &manifest, manifest, ArtifactOptions{DataTransforms: []ridumigration.DataTransformDescriptor{changed}},
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -818,10 +813,10 @@ func TestMongoDBPlanAndStatusRejectTransformNameChecksumReuseAcrossHistory(t *te
 	}
 }
 
-func TestMongoDBV2RetirementDropsNamespacesBeforeCreatingTargetIndexes(t *testing.T) {
+func TestMongoDBRetirementDropsNamespacesBeforeCreatingTargetIndexes(t *testing.T) {
 	directory := t.TempDir()
 	before := mongoDBMigrationTestManifest(t, false, false)
-	if _, err := CreateArtifact(context.Background(), directory, "initial", before, time.Unix(1, 0)); err != nil {
+	if _, err := CreateArtifact(context.Background(), directory, "initial", before, time.Unix(1, 0), ArtifactOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	afterSnapshot := before.Snapshot()
@@ -830,7 +825,7 @@ func TestMongoDBV2RetirementDropsNamespacesBeforeCreatingTargetIndexes(t *testin
 		Fields: []schema.Field{mongoDBMigrationTextField(t, "pages-title", "title", false, true, false)},
 	}}
 	after := schema.NewManifest(afterSnapshot)
-	if _, err := CreateArtifactWithOptions(context.Background(), directory, "replace-posts", after, time.Unix(2, 0), ArtifactOptions{AllowDestructive: true}); err != nil {
+	if _, err := CreateArtifact(context.Background(), directory, "replace-posts", after, time.Unix(2, 0), ArtifactOptions{AllowDestructive: true}); err != nil {
 		t.Fatal(err)
 	}
 	files, err := migrationartifact.ReadAll(directory)

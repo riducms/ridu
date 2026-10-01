@@ -263,19 +263,18 @@ export function reconcileFormSchema(
 	return { ...reconciled, detached };
 }
 
+/** Merge schema-reconciled local edits into the latest saved baseline. */
 export function recoverFormDraft(
 	latest: FormSchemaState,
-	draft: FormSchemaState,
-	previousFields: readonly SchemaField[],
-	nextFields: readonly SchemaField[]
+	draft: FormSchemaReconciliation,
+	fields: readonly SchemaField[]
 ): FormDraftRecovery {
-	const reconciled = reconcileFormSchema(draft, previousFields, nextFields);
 	const values = cloneFormValues(latest.values);
 	let restoredFields = 0;
 
-	for (const field of nextFields) {
-		const local = reconciled.values[field.name];
-		const original = reconciled.original[field.name];
+	for (const field of fields) {
+		const local = draft.values[field.name];
+		const original = draft.original[field.name];
 		if (deepEqual(local, original)) continue;
 		values[field.name] = cloneFormValue(local);
 		restoredFields += 1;
@@ -284,7 +283,7 @@ export function recoverFormDraft(
 	return {
 		values,
 		original: cloneFormValues(latest.original),
-		detached: reconciled.detached,
+		detached: draft.detached,
 		restoredFields,
 	};
 }

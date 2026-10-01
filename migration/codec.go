@@ -2,7 +2,6 @@ package migration
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,17 +9,6 @@ import (
 
 	"github.com/riducms/ridu/schema"
 )
-
-// artifactCodecState keeps the exact embedded manifest encodings that were
-// validated by a versioned artifact decoder. Migration history must not be
-// re-encoded through whatever schema structs happen to exist in a later build.
-type artifactCodecState struct {
-	version           uint32
-	before            json.RawMessage
-	after             json.RawMessage
-	beforeFingerprint [sha256.Size]byte
-	afterFingerprint  [sha256.Size]byte
-}
 
 // artifactWire is frozen independently from Artifact so later public API
 // additions cannot silently change committed migration identity.
@@ -88,31 +76,7 @@ func NewArtifact(name string, planner Planner, before *schema.Manifest, after sc
 		snapshot := before.Snapshot()
 		artifact.FromDigest, artifact.Before = fromDigest, &snapshot
 	}
-	if err := artifact.bindManifestEncodings(before, after); err != nil {
-		return Artifact{}, err
-	}
 	return artifact, nil
-}
-
-func (artifact *Artifact) bindManifestEncodings(before *schema.Manifest, after schema.Manifest) error {
-	afterJSON, err := json.Marshal(after)
-	if err != nil {
-		return err
-	}
-	state := &artifactCodecState{
-		version: artifact.Version, after: append(json.RawMessage(nil), afterJSON...),
-		afterFingerprint: snapshotFingerprint(artifact.After),
-	}
-	if before != nil {
-		beforeJSON, err := json.Marshal(*before)
-		if err != nil {
-			return err
-		}
-		state.before = append(json.RawMessage(nil), beforeJSON...)
-		state.beforeFingerprint = snapshotFingerprint(*artifact.Before)
-	}
-	artifact.codec = state
-	return nil
 }
 
 // DecodeArtifact strictly decodes one frozen Ridu artifact format. Future
@@ -145,7 +109,7 @@ func DecodeArtifact(encoded []byte) (Artifact, error) {
 		return Artifact{}, err
 	}
 	artifact := artifactFromWire(wire)
-	if err := artifact.captureDecodedManifests(); err != nil {
+	if err := artifact.decodeManifests(wire.Before, wire.After); err != nil {
 		return Artifact{}, err
 	}
 	if err := artifact.Validate(); err != nil {
@@ -189,77 +153,46 @@ func (artifact Artifact) canonicalBytes() ([]byte, error) {
 func (artifact Artifact) manifestEncodings() (json.RawMessage, json.RawMessage, error) {
 	var before json.RawMessage
 	if artifact.Before != nil {
-		if artifact.codec != nil && artifact.codec.version == artifact.Version && artifact.codec.beforeFingerprint == snapshotFingerprint(*artifact.Before) {
-			before = append(json.RawMessage(nil), artifact.codec.before...)
-		} else {
-			if artifact.Before.Version != schema.CurrentVersion {
-				return nil, nil, fmt.Errorf("migration %s before manifest uses unsupported schema version %d", artifact.Name, artifact.Before.Version)
-			}
-			encoded, err := json.Marshal(*artifact.Before)
-			if err != nil {
-				return nil, nil, err
-			}
-			before = encoded
+		if artifact.Before.Version != schema.CurrentVersion {
+			return nil, nil, fmt.Errorf("migration %s before manifest uses unsupported schema version %d", artifact.Name, artifact.Before.Version)
 		}
-	}
-	var after json.RawMessage
-	if artifact.codec != nil && artifact.codec.version == artifact.Version && artifact.codec.afterFingerprint == snapshotFingerprint(artifact.After) {
-		after = append(json.RawMessage(nil), artifact.codec.after...)
-	} else {
-		if artifact.After.Version != schema.CurrentVersion {
-			return nil, nil, fmt.Errorf("migration %s after manifest uses unsupported schema version %d", artifact.Name, artifact.After.Version)
-		}
-		encoded, err := json.Marshal(artifact.After)
+		encoded, err := json.Marshal(*artifact.Before)
 		if err != nil {
 			return nil, nil, err
 		}
-		after = encoded
+		before = encoded
+	}
+	if artifact.After.Version != schema.CurrentVersion {
+		return nil, nil, fmt.Errorf("migration %s after manifest uses unsupported schema version %d", artifact.Name, artifact.After.Version)
+	}
+	after, err := json.Marshal(artifact.After)
+	if err != nil {
+		return nil, nil, err
 	}
 	return before, after, nil
 }
 
-func (artifact Artifact) validatedAfterManifest() (schema.Manifest, error) {
-	if artifact.codec != nil && artifact.codec.version == artifact.Version && artifact.codec.afterFingerprint == snapshotFingerprint(artifact.After) {
-		return schema.Parse(artifact.codec.after)
-	}
-	return validatedManifest(artifact.After)
-}
-
 // AfterManifest returns the validated immutable after snapshot.
 func (artifact Artifact) AfterManifest() (schema.Manifest, error) {
-	return artifact.validatedAfterManifest()
-}
-
-func (artifact Artifact) validatedBeforeManifest() (schema.Manifest, error) {
-	if artifact.Before == nil {
-		return schema.Manifest{}, fmt.Errorf("before manifest is absent")
-	}
-	if artifact.codec != nil && artifact.codec.version == artifact.Version && artifact.codec.beforeFingerprint == snapshotFingerprint(*artifact.Before) {
-		return schema.Parse(artifact.codec.before)
-	}
-	return validatedManifest(*artifact.Before)
+	return validatedManifest(artifact.After)
 }
 
 // BeforeManifest returns the validated immutable before snapshot. Initial
 // artifacts return an error because they intentionally have no parent state.
 func (artifact Artifact) BeforeManifest() (schema.Manifest, error) {
-	return artifact.validatedBeforeManifest()
+	if artifact.Before == nil {
+		return schema.Manifest{}, fmt.Errorf("before manifest is absent")
+	}
+	return validatedManifest(*artifact.Before)
 }
 
-func (artifact *Artifact) captureDecodedManifests() error {
-	before, after, err := artifact.manifestEncodingsFromWire()
-	if err != nil {
-		return err
-	}
+// decodeManifests validates the embedded manifests of a decoded artifact.
+func (artifact *Artifact) decodeManifests(before, after json.RawMessage) error {
 	afterManifest, err := schema.Parse(after)
 	if err != nil {
 		return fmt.Errorf("migration %s after manifest: %w", artifact.Name, err)
 	}
 	artifact.After = afterManifest.Snapshot()
-	state := &artifactCodecState{
-		version: artifact.Version, after: after,
-		afterFingerprint: snapshotFingerprint(artifact.After),
-	}
 	if len(before) != 0 {
 		beforeManifest, err := schema.Parse(before)
 		if err != nil {
@@ -267,23 +200,8 @@ func (artifact *Artifact) captureDecodedManifests() error {
 		}
 		snapshot := beforeManifest.Snapshot()
 		artifact.Before = &snapshot
-		state.before = before
-		state.beforeFingerprint = snapshotFingerprint(snapshot)
 	}
-	artifact.codec = state
 	return validateArtifactManifestBoundary(*artifact)
-}
-
-func (artifact Artifact) manifestEncodingsFromWire() (json.RawMessage, json.RawMessage, error) {
-	if artifact.codec == nil {
-		return nil, nil, fmt.Errorf("migration artifact codec state is unavailable")
-	}
-	return artifact.codec.before, artifact.codec.after, nil
-}
-
-func snapshotFingerprint(snapshot schema.Snapshot) [sha256.Size]byte {
-	encoded, _ := json.Marshal(snapshot)
-	return sha256.Sum256(encoded)
 }
 
 func artifactFromWire(wire artifactWire) Artifact {
@@ -294,7 +212,6 @@ func artifactFromWire(wire artifactWire) Artifact {
 		FromDigest:             wire.FromDigest, ToDigest: wire.ToDigest,
 		Phases: phasesFromWire(wire.Phases), Risks: risksFromWire(wire.Risks),
 	}
-	artifact.codec = &artifactCodecState{version: wire.Version, before: compactRaw(wire.Before), after: compactRaw(wire.After)}
 	return artifact
 }
 

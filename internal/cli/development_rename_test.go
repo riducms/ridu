@@ -46,8 +46,7 @@ func devRenameManifest(t *testing.T, config core.Config) schema.Manifest {
 	return app.Manifest()
 }
 
-// devRenameProject writes the schema file ridu dev last generated, which is
-// what a rename is detected against.
+// devRenameProject supplies generated output independently of database state.
 func devRenameProject(t *testing.T, generated schema.Manifest) projectfile.File {
 	t.Helper()
 	return devRenameProjectOn(t, projectfile.DatabasePostgres, generated)
@@ -81,6 +80,17 @@ func devRenamePrompt(answers string, databaseURL string) (*developmentRenames, *
 	}
 	if databaseURL == "" {
 		renames.stillHas = func(context.Context, schema.Manifest, schema.Manifest) (bool, error) { return true, nil }
+		var captured *schema.Manifest
+		renames.readBaseline = func(_ context.Context, definition projectfile.File) (schema.Manifest, bool, error) {
+			if captured != nil {
+				return *captured, true, nil
+			}
+			manifest, exists, err := schemadiff.ReadManifest(definition.Absolute(definition.Schema))
+			if err == nil && exists {
+				captured = &manifest
+			}
+			return manifest, exists, err
+		}
 	}
 	return renames, &prompt
 }
@@ -89,6 +99,7 @@ func devRenamePrompt(answers string, databaseURL string) (*developmentRenames, *
 func devRenameSQLitePrompt(answers string, databasePath string) (*developmentRenames, *bytes.Buffer) {
 	renames, prompt := devRenamePrompt(answers, "")
 	renames.databasePath, renames.stillHas = databasePath, nil
+	renames.readBaseline = nil
 	return renames, prompt
 }
 
@@ -115,29 +126,38 @@ func migrationNames(t *testing.T, definition projectfile.File) []string {
 	return names
 }
 
-// ridu dev only asks when someone can answer and the answer can be recorded:
-// in a terminal, in a project with a migrations directory. Otherwise it holds
-// the rename instead of waiting for input that cannot arrive.
+// ridu dev only asks when someone can answer: in a terminal. A rename also
+// needs a migrations directory to record the answer, so without one it is
+// held instead, while a field-kind review still gets its prompt.
 func TestDevelopmentRenamePromptNeedsAnInteractiveSession(t *testing.T) {
 	reporter := newCLIOutput(io.Discard, io.Discard, cliOutputOptions{})
 	interactive := Options{Interactive: true, Stdin: strings.NewReader("")}
 	for _, database := range []projectfile.DatabaseAdapter{projectfile.DatabasePostgres, projectfile.DatabaseSQLite, projectfile.DatabaseMongoDB} {
-		project := projectfile.File{Database: database, Migrations: "migrations"}
-		if newDevelopmentRenames(project, interactive, "", "", io.Discard, reporter).input == nil {
-			t.Errorf("an interactive %s session did not get the rename prompt", database)
-		}
-		for name, candidate := range map[string]struct {
-			definition projectfile.File
-			options    Options
-		}{
-			"no terminal":   {project, Options{Stdin: strings.NewReader("")}},
-			"no input":      {project, Options{Interactive: true}},
-			"no migrations": {projectfile.File{Database: database}, interactive},
+		for name, definition := range map[string]projectfile.File{
+			"migrations":    {Database: database, Migrations: "migrations"},
+			"no migrations": {Database: database},
 		} {
-			if newDevelopmentRenames(candidate.definition, candidate.options, "", "", io.Discard, reporter).input != nil {
-				t.Errorf("%s with %s got the rename prompt", database, name)
+			if newDevelopmentRenames(definition, interactive, "", "", io.Discard, reporter).input == nil {
+				t.Errorf("an interactive %s session with %s got no prompt", database, name)
 			}
 		}
+		project := projectfile.File{Database: database, Migrations: "migrations"}
+		for name, options := range map[string]Options{
+			"no terminal": {Stdin: strings.NewReader("")},
+			"no input":    {Interactive: true},
+		} {
+			if newDevelopmentRenames(project, options, "", "", io.Discard, reporter).input != nil {
+				t.Errorf("%s with %s got a prompt", database, name)
+			}
+		}
+	}
+	previous, current := devRenameManifest(t, devRenameConfig(field.Text("title"))), devRenameManifest(t, devRenameConfig(field.Text("headline")))
+	definition := devRenameProject(t, previous)
+	definition.Migrations = ""
+	renames, prompt := devRenamePrompt("y\n", "")
+	var held developmentRenameHeldError
+	if _, err := renames.resolve(t.Context(), definition, current, nil); !errors.As(err, &held) || strings.Contains(prompt.String(), "Preserve its existing data") {
+		t.Fatalf("rename without a migrations directory = %v\n%s", err, prompt.String())
 	}
 }
 
@@ -173,7 +193,7 @@ func TestDevelopmentRenameDeclinedContinuesWithoutAMigration(t *testing.T) {
 
 	renames, prompt := devRenameSQLitePrompt("\nmaybe\nn\n", databasePath)
 	stops := 0
-	renames.stopServer = func() { stops++ }
+	renames.stopServer = func() bool { stops++; return true }
 	resolved, err := renames.resolve(ctx, definition, current, nil)
 	if err != nil || !resolved {
 		t.Fatalf("declined rename = %t, %v", resolved, err)
@@ -222,9 +242,6 @@ func TestDevelopmentRenameDeclinedContinuesWithoutAMigration(t *testing.T) {
 	// Taking the answer back: once schema sync recorded the new schema,
 	// restoring the old name is the reverse rename, and declining that one
 	// brings the old values back into view.
-	if err := again.recordSynchronized(definition, current); err != nil {
-		t.Fatal(err)
-	}
 	reverse, reversed := devRenameSQLitePrompt("n\n", databasePath)
 	if resolved, err := reverse.resolve(ctx, definition, previous, nil); err != nil || !resolved || !strings.Contains(reversed.String(), `field rename "posts".headline -> "posts".title`) {
 		t.Fatalf("restoring the old name = %t, %v, asked %q", resolved, err, reversed.String())
@@ -366,18 +383,14 @@ func TestDevelopmentRenameAcceptedMigratesTheDevelopmentDatabase(t *testing.T) {
 	definition := devRenameProject(t, previous)
 	directory := definition.Absolute(definition.Migrations)
 
-	initial, err := buildPostgresArtifactWithDataTransforms(ctx, "initial", nil, committed, nil, false, "", nil)
+	initial, err := postgres.BuildArtifact(ctx, "initial", nil, committed, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := migrationartifact.Create(directory, "initial", initial, time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	plan, err := backend.Plan(ctx, previous)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := backend.ApplyPlan(ctx, plan); err != nil {
+	if err := backend.SyncDevelopmentSchema(ctx, previous); err != nil {
 		t.Fatal(err)
 	}
 	before, err := core.New(synced, backend)
@@ -391,7 +404,7 @@ func TestDevelopmentRenameAcceptedMigratesTheDevelopmentDatabase(t *testing.T) {
 
 	renames, prompt := devRenamePrompt("y\n\n", databaseURL)
 	stops := 0
-	renames.stopServer = func() {
+	renames.stopServer = func() bool {
 		stops++
 		// The server running the old config stops before the content moves.
 		// It would otherwise keep writing group, array and block values under
@@ -400,6 +413,7 @@ func TestDevelopmentRenameAcceptedMigratesTheDevelopmentDatabase(t *testing.T) {
 		if title, _ := running.Values["title"].StringValue(); err != nil || title != "Hello" {
 			t.Errorf("content moved before the server stopped: %#v, %v", running.Values, err)
 		}
+		return true
 	}
 	resolved, err := renames.resolve(ctx, definition, current, nil)
 	if err != nil || !resolved {
@@ -452,7 +466,7 @@ func TestDevelopmentRenameLeavesADriftedDatabaseToSchemaSync(t *testing.T) {
 	current := devRenameManifest(t, devRenameConfig(field.Text("headline")))
 	definition := devRenameProject(t, previous)
 	directory := definition.Absolute(definition.Migrations)
-	initial, err := buildPostgresArtifactWithDataTransforms(ctx, "initial", nil, previous, nil, false, "", nil)
+	initial, err := postgres.BuildArtifact(ctx, "initial", nil, previous, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -463,6 +477,9 @@ func TestDevelopmentRenameLeavesADriftedDatabaseToSchemaSync(t *testing.T) {
 	// describes.
 	driftedConfig := devRenameConfig(field.Text("title"), field.Text("stray"))
 	drifted := devRenameManifest(t, driftedConfig)
+	if err := backend.SyncDevelopmentSchema(ctx, previous); err != nil {
+		t.Fatal(err)
+	}
 	plan, err := backend.Plan(ctx, drifted)
 	if err != nil {
 		t.Fatal(err)
@@ -480,7 +497,7 @@ func TestDevelopmentRenameLeavesADriftedDatabaseToSchemaSync(t *testing.T) {
 	}
 	renames, prompt := devRenamePrompt("y\n\n", databaseURL)
 	stops := 0
-	renames.stopServer = func() { stops++ }
+	renames.stopServer = func() bool { stops++; return true }
 	if resolved, err := renames.resolve(ctx, definition, current, nil); err != nil || resolved || prompt.Len() != 0 {
 		t.Fatalf("rename over a drifted database = %t, %v, asked %q", resolved, err, prompt.String())
 	}
@@ -519,26 +536,21 @@ func TestDevelopmentRenameRefusesAPendingRemovalThatReachesTheSameConfig(t *test
 	current := devRenameManifest(t, devRenameConfig(field.Text("headline"), field.Number("views")))
 	definition := devRenameProject(t, previous)
 	directory := definition.Absolute(definition.Migrations)
-	initial, err := buildPostgresArtifactWithDataTransforms(ctx, "initial", nil, previous, nil, false, "", nil)
+	initial, err := postgres.BuildArtifact(ctx, "initial", nil, previous, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	created, err := migrationartifact.Create(directory, "initial", initial, time.Now())
-	if err != nil {
+	if _, err := migrationartifact.Create(directory, "initial", initial, time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	removal, err := buildPostgresArtifactWithDataTransforms(ctx, "replace-title", &previous, current, nil, true, created.Artifact.Planner.Version, nil)
+	removal, err := postgres.BuildArtifact(ctx, "replace-title", &previous, current, nil, true)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := migrationartifact.Create(directory, "replace-title", removal, time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	plan, err := backend.Plan(ctx, previous)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := backend.ApplyPlan(ctx, plan); err != nil {
+	if err := backend.SyncDevelopmentSchema(ctx, previous); err != nil {
 		t.Fatal(err)
 	}
 	application, err := core.New(original, backend)
@@ -552,7 +564,7 @@ func TestDevelopmentRenameRefusesAPendingRemovalThatReachesTheSameConfig(t *test
 
 	renames, prompt := devRenamePrompt("y\n\n", databaseURL)
 	stops := 0
-	renames.stopServer = func() { stops++ }
+	renames.stopServer = func() bool { stops++; return true }
 	resolved, err := renames.resolve(ctx, definition, current, nil)
 	if err == nil || resolved || !strings.Contains(err.Error(), "without recording these renames") {
 		t.Fatalf("rename over a pending removal = %t, %v\n%s", resolved, err, prompt.String())
@@ -577,11 +589,7 @@ func TestDevelopmentRenameDeclinedOnPostgresSaysSyncStaysPaused(t *testing.T) {
 	previous := devRenameManifest(t, devRenameConfig(field.Text("title")))
 	current := devRenameManifest(t, devRenameConfig(field.Text("headline")))
 	definition := devRenameProject(t, previous)
-	plan, err := backend.Plan(ctx, previous)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := backend.ApplyPlan(ctx, plan); err != nil {
+	if err := backend.SyncDevelopmentSchema(ctx, previous); err != nil {
 		t.Fatal(err)
 	}
 	renames, prompt := devRenamePrompt("n\n", databaseURL)
@@ -650,13 +658,14 @@ func TestDevelopmentRenameAcceptedMovesSQLiteDevelopmentContent(t *testing.T) {
 
 	renames, prompt := devRenameSQLitePrompt("y\n\n", databasePath)
 	stops := 0
-	renames.stopServer = func() {
+	renames.stopServer = func() bool {
 		stops++
 		// The content has not moved while the old server could still write.
 		running, err := before.Local().Find(ctx, "posts", post.ID, core.FindOptions{})
 		if title, _ := running.Values["title"].StringValue(); err != nil || title != "Hello" {
 			t.Errorf("content moved before the server stopped: %#v, %v", running.Values, err)
 		}
+		return true
 	}
 	resolved, err := renames.resolve(ctx, definition, current, nil)
 	if err != nil || !resolved {
@@ -826,7 +835,7 @@ func TestDevelopmentRenameAcceptedMigratesTheMongoDBDevelopmentDatabase(t *testi
 	previous, current := devRenameManifest(t, synced), devRenameManifest(t, renamed)
 	definition := devRenameProjectOn(t, projectfile.DatabaseMongoDB, previous)
 	directory := definition.Absolute(definition.Migrations)
-	if _, err := mongodb.CreateArtifactWithOptions(ctx, directory, "initial", committed, time.Now(), mongodb.ArtifactOptions{}); err != nil {
+	if _, err := mongodb.CreateArtifact(ctx, directory, "initial", committed, time.Now(), mongodb.ArtifactOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	reporter := newCLIOutput(io.Discard, io.Discard, cliOutputOptions{})
@@ -848,12 +857,13 @@ func TestDevelopmentRenameAcceptedMigratesTheMongoDBDevelopmentDatabase(t *testi
 
 	renames, prompt := devRenamePrompt("y\n\n", databaseURL)
 	stops := 0
-	renames.stopServer = func() {
+	renames.stopServer = func() bool {
 		stops++
 		running, err := before.Local().Find(ctx, "posts", post.ID, core.FindOptions{})
 		if title, _ := running.Values["title"].StringValue(); err != nil || title != "Hello" {
 			t.Errorf("content moved before the server stopped: %#v, %v", running.Values, err)
 		}
+		return true
 	}
 	resolved, err := renames.resolve(ctx, definition, current, nil)
 	if err != nil || !resolved {
@@ -994,7 +1004,7 @@ func TestDevelopmentRenameLeavesTransformHistoriesToTheProjectBinary(t *testing.
 
 	renames, _ := devRenameSQLitePrompt("y\n\n", databasePath)
 	stops := 0
-	renames.stopServer = func() { stops++ }
+	renames.stopServer = func() bool { stops++; return true }
 	if _, err := renames.resolve(ctx, definition, current, nil); err == nil || !strings.Contains(err.Error(), "compiled data transforms") || !strings.Contains(err.Error(), "ridu migrate up") {
 		t.Fatalf("rename over a transform history = %v", err)
 	}
@@ -1052,11 +1062,7 @@ func TestDevelopmentRenameWithoutATerminalHoldsUntilResolved(t *testing.T) {
 		"postgres": func(t *testing.T, root string) devRenameHeldDatabase {
 			databaseURL, backend := devRenameDatabase(t)
 			return devRenameHeldDatabase{adapter: projectfile.DatabasePostgres, databaseURL: databaseURL, migrate: func(t *testing.T, directory string, previous, current schema.Manifest) {
-				plannerVersion, err := migrationHeadPlannerVersion(directory)
-				if err != nil {
-					t.Fatal(err)
-				}
-				artifact, err := buildPostgresArtifactWithDataTransforms(ctx, "rename-title", &previous, current, postgresRenames(accepted), false, plannerVersion, nil)
+				artifact, err := postgres.BuildArtifact(ctx, "rename-title", &previous, current, postgresRenames(accepted), false)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -1074,7 +1080,7 @@ func TestDevelopmentRenameWithoutATerminalHoldsUntilResolved(t *testing.T) {
 		"mongodb": func(t *testing.T, root string) devRenameHeldDatabase {
 			databaseURL := devRenameMongoDB(t)
 			return devRenameHeldDatabase{adapter: projectfile.DatabaseMongoDB, databaseURL: databaseURL, migrate: func(t *testing.T, directory string, previous, current schema.Manifest) {
-				if _, err := mongodb.CreateArtifactWithOptions(ctx, directory, "rename-title", current, time.Now(), mongodb.ArtifactOptions{Renames: contentRenames(accepted)}); err != nil {
+				if _, err := mongodb.CreateArtifact(ctx, directory, "rename-title", current, time.Now(), mongodb.ArtifactOptions{Renames: contentRenames(accepted)}); err != nil {
 					t.Fatal(err)
 				}
 				backend := devRenameMongoDBStore(t, databaseURL)
@@ -1105,9 +1111,6 @@ func TestDevelopmentRenameWithoutATerminalHoldsUntilResolved(t *testing.T) {
 				t.Fatal(err)
 			}
 			if err := synchronize(previous); err != nil {
-				t.Fatal(err)
-			}
-			if err := initial.recordSynchronized(definition, previous); err != nil {
 				t.Fatal(err)
 			}
 			before, err := core.New(original, devRenameStore(t, database, previous))
@@ -1200,9 +1203,6 @@ func TestDevelopmentRenameDoesNotHoldADatabaseThatNeverHadTheOldSchema(t *testin
 	definition := devRenameProjectOn(t, projectfile.DatabaseSQLite, previous)
 	databasePath := filepath.Join(definition.Root, "development.sqlite")
 	renames, printed := devRenameWithoutTerminal("", databasePath)
-	if err := renames.recordSynchronized(definition, previous); err != nil {
-		t.Fatal(err)
-	}
 	if resolved, err := renames.resolve(ctx, definition, current, nil); err != nil || resolved || printed.Len() != 0 {
 		t.Fatalf("a rename against an empty database = %t, %v, printed %q", resolved, err, printed.String())
 	}

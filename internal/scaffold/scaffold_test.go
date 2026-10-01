@@ -166,9 +166,6 @@ func TestCreateRendersProjectWithoutAbsoluteFrameworkPaths(t *testing.T) {
 	if !strings.Contains(string(rootPackage), `"@riducms/sdk": "1.2.3-beta.1"`) {
 		t.Fatalf("generated workspace does not own the SDK imported from generated/:\n%s", rootPackage)
 	}
-	if !strings.Contains(string(rootPackage), `"@riducms/plugin-richtext": "1.2.3-beta.1"`) {
-		t.Fatalf("generated workspace does not own plugin types imported from generated/:\n%s", rootPackage)
-	}
 	if !strings.Contains(string(rootPackage), `"@riducms/plugin-seo": "1.2.3-beta.1"`) {
 		t.Fatalf("generated workspace does not own the SEO admin package imported from generated/:\n%s", rootPackage)
 	}
@@ -224,6 +221,9 @@ func TestCreateRendersProjectWithoutAbsoluteFrameworkPaths(t *testing.T) {
 	}
 	if !strings.Contains(string(adminPackage), `"@riducms/ui": "1.2.3-beta.1"`) {
 		t.Fatalf("generated admin does not declare the source package used by its TypeScript aliases:\n%s", adminPackage)
+	}
+	if !strings.Contains(string(adminPackage), `"@riducms/plugin-richtext": "1.2.3-beta.1"`) {
+		t.Fatalf("generated admin does not own the rich-text editor imported by its plugin registry:\n%s", adminPackage)
 	}
 	if strings.Contains(string(adminPackage), `"@riducms/sdk"`) || strings.Contains(string(adminPackage), "ridu-client") {
 		t.Fatalf("generated admin duplicates the project-owned SDK or old client package:\n%s", adminPackage)
@@ -668,7 +668,6 @@ func TestCreateMongoDBRendersQualifiedReplicaSetGuidanceForStarterAndBlank(t *te
 					"Local ARM runs are preflight only",
 					"qualification run before publication",
 					"GitHub workflow publishes the qualified release",
-					"planner `1.0.0`",
 					"planner `2.0.0`",
 					"do not inspect",
 				} {
@@ -741,8 +740,6 @@ func TestCreateMongoDBRendersQualifiedReplicaSetGuidanceForStarterAndBlank(t *te
 				"Atlas",
 				"DocumentDB",
 				"Cosmos DB",
-				"planner-`1.0.0`",
-				"supported immutable prefix",
 				"planner contract `2.0.0`",
 				"`ridu check` and `ridu build` remain offline",
 			} {

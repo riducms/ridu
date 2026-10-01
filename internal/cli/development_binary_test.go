@@ -297,7 +297,7 @@ func main() {
 		t.Fatal("served executable manifest differs from stabilized generated contracts")
 	}
 
-	// A renamed field is detected against the schema file generated above.
+	// A renamed field is detected against the database's accepted schema.
 	renamed := strings.Replace(source, `field.Text("title"), field.Text("summary")`, `field.Text("headline"), field.Text("summary")`, 1)
 	if err := os.WriteFile(filepath.Join(root, "main.go"), []byte(renamed), 0o644); err != nil {
 		t.Fatal(err)
@@ -307,6 +307,10 @@ func main() {
 		t.Fatalf("%v\n%s", err, stderr.String())
 	}
 	t.Cleanup(func() { _ = renamedBinary.remove() })
+	renamedMetadata, err := generate.ResolveProjectMetadataExecutable(context.Background(), definition, core.FrameworkVersion, renamedBinary.path)
+	if err != nil {
+		t.Fatal(err)
+	}
 	schemaPath := definition.Absolute(definition.Schema)
 	generatedSchema, err := os.ReadFile(schemaPath)
 	if err != nil {
@@ -323,6 +327,12 @@ func main() {
 	// through against a rewritten schema file.
 	waiting := func(answer bool) *developmentRenames {
 		renames, _ := devRenameWithoutTerminal("", "")
+		renames.readBaseline = func(context.Context, projectfile.File) (schema.Manifest, bool, error) {
+			if answer {
+				return preparation.manifest, true, nil
+			}
+			return renamedMetadata.Manifest, true, nil
+		}
 		renames.stillHas = func(context.Context, schema.Manifest, schema.Manifest) (bool, error) { return answer, nil }
 		return renames
 	}
@@ -388,12 +398,15 @@ func main() {
 	if err != nil || !exists {
 		t.Fatalf("read the generated schema: %t, %v", exists, err)
 	}
-	if err := declined.recordSynchronized(definition, previousManifest); err != nil {
-		t.Fatal(err)
+	declined.readBaseline = func(context.Context, projectfile.File) (schema.Manifest, bool, error) {
+		return previousManifest, true, nil
 	}
+	// Only a project with a migrations directory can record a rename answer.
+	recording := definition
+	recording.Migrations = "migrations"
 	declined.beginReload()
 	for _, pass := range []string{"first", "second"} {
-		if err := prepare(definition, declined); err != nil {
+		if err := prepare(recording, declined); err != nil {
 			t.Fatalf("the %s preparation of declined renames = %v", pass, err)
 		}
 	}
@@ -401,7 +414,7 @@ func main() {
 		t.Fatalf("declined renames did not regenerate the schema file: %v", err)
 	}
 	declined.beginReload()
-	if err := prepare(definition, declined); err == nil || !strings.Contains(err.Error(), "read rename answer") {
+	if err := prepare(recording, declined); err == nil || !strings.Contains(err.Error(), "read rename answer") {
 		t.Fatalf("a later save of the declined rename = %v", err)
 	}
 }
