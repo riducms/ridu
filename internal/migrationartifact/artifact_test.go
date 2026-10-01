@@ -281,6 +281,26 @@ func TestRequireCurrentHistoryRejectsEmptyAndStaleExecutableManifest(t *testing.
 	}
 }
 
+// Admin presentation never changes stored data, so a project can hide,
+// regroup or relabel a collection without writing a migration. Any change to
+// what is stored still needs one.
+func TestRequireCurrentHistoryIgnoresAdminPresentation(t *testing.T) {
+	directory := t.TempDir()
+	committed := testManifest("posts")
+	if _, err := migrationartifact.Create(directory, "initial", testArtifact(t, "initial", nil, committed), time.Unix(1, 0)); err != nil {
+		t.Fatal(err)
+	}
+	snapshot := committed.Snapshot()
+	snapshot.Collections[0].Admin = schema.CollectionAdmin{Hidden: true, Group: "Plumbing", Description: "Server-maintained"}
+	if _, err := migrationartifact.RequireCurrentHistory(directory, schema.NewManifest(snapshot)); err != nil {
+		t.Fatalf("an admin-only change needed a migration: %v", err)
+	}
+	snapshot.Collections[0].Capabilities.Versions = true
+	if _, err := migrationartifact.RequireCurrentHistory(directory, schema.NewManifest(snapshot)); err == nil || !strings.Contains(err.Error(), "does not match latest migration artifact") {
+		t.Fatalf("a storage change beside an admin change = %v", err)
+	}
+}
+
 func testArtifact(t *testing.T, name string, before *schema.Manifest, after schema.Manifest) migration.Artifact {
 	t.Helper()
 	artifact, err := migration.NewArtifact(name, migration.Planner{Name: "atlas", Version: "1.0.0"}, before, after)

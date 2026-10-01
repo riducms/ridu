@@ -114,6 +114,8 @@ func fixtureConfig(uploadStorage storage.Backend) ridu.Config {
 			foldersCollection,
 			categoriesCollection,
 			pagesCollection,
+			usageStatsCollection,
+			statReportsCollection,
 			outlineCollection,
 			richTextBlocksCollection(),
 			richTextBlockPagesCollection(),
@@ -759,6 +761,35 @@ var editorialNotesCollection = ridu.Collection{
 		Read:   allowOwnedOrRoles("owner", roleAdministrator, roleEditor),
 		Update: allowOwnedOrRoles("owner", roleAdministrator, roleEditor),
 		Delete: allowOwnedOrRoles("owner", roleAdministrator),
+	},
+}
+
+// usageStatsCollection is server-maintained data that editors never browse.
+// It is hidden from the admin but stays reachable through the API and as a
+// relationship target of statReportsCollection.
+var usageStatsCollection = ridu.Collection{
+	Slug:   "usage-stats",
+	Labels: ridu.CollectionLabels{Singular: "Usage stat", Plural: "Usage stats"},
+	Admin:  ridu.CollectionAdmin{Hidden: true, Group: "Operations", UseAsTitle: "label"},
+	Fields: field.Fields{field.Text("label").Required()},
+	Access: ridu.CollectionAccess{
+		Create: allowRoles(roleAdministrator, roleEditor),
+		Read:   allowRoles(roleAdministrator, roleEditor),
+		Update: allowRoles(roleAdministrator, roleEditor),
+		Delete: allowRoles(roleAdministrator),
+	},
+}
+
+var statReportsCollection = ridu.Collection{
+	Slug:   "stat-reports",
+	Labels: ridu.CollectionLabels{Singular: "Stat report", Plural: "Stat reports"},
+	Admin:  ridu.CollectionAdmin{Group: "Operations", UseAsTitle: "title"},
+	Fields: field.Fields{field.Text("title").Required(), field.Relationship("stat", "usage-stats")},
+	Access: ridu.CollectionAccess{
+		Create: allowRoles(roleAdministrator, roleEditor),
+		Read:   allowRoles(roleAdministrator, roleEditor),
+		Update: allowRoles(roleAdministrator, roleEditor),
+		Delete: allowRoles(roleAdministrator),
 	},
 }
 

@@ -323,7 +323,7 @@ export class CollectionList {
 	}
 
 	get foldersHref() {
-		return this.#folderCollection
+		return this.#folderCollection && this.#folderCollection.admin.hidden !== true
 			? withContentLocale(collectionPath(this.#folderCollection.slug), this.contentLocale)
 			: undefined;
 	}

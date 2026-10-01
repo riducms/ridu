@@ -116,6 +116,22 @@ export class AdminRuntime {
 		);
 	}
 
+	// Navigable resources are the readable ones the config does not hide. A
+	// hidden resource stays in the manifest, so relationships and pickers that
+	// target it keep working; only the admin's own pages for it go away.
+	get navigableCollections() {
+		return this.visibleCollections.filter((collection) => collection.admin.hidden !== true);
+	}
+
+	get navigableGlobals() {
+		return this.visibleGlobals.filter((global) => global.admin.hidden !== true);
+	}
+
+	isHiddenResource(kind: "collection" | "global", slug: string): boolean {
+		const resources = kind === "collection" ? this.manifest?.collections : this.manifest?.globals;
+		return resources?.find((resource) => resource.slug === slug)?.admin.hidden === true;
+	}
+
 	get contentLocales() {
 		return this.manifest?.application.localization?.locales ?? [];
 	}

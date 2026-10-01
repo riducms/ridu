@@ -58,7 +58,7 @@ func TestPostgresBaselineAdoptsADevelopmentSynchronizedDatabase(t *testing.T) {
 		for index, file := range files {
 			identities[index] = ridumigration.ArtifactIdentity{Name: file.Name, Digest: file.Digest}
 		}
-		history, err := ridumigration.DigestArtifactHistory(identities)
+		history, err := ridumigration.DigestArtifactHistory(identities, files[len(files)-1].Artifact.ToDigest, manifest)
 		if err != nil {
 			t.Fatal(err)
 		}

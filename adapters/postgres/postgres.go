@@ -220,8 +220,8 @@ func (backend *Store) Ready(ctx context.Context, manifest schema.Manifest) error
 	return backend.ready(ctx, manifest, nil)
 }
 
-// ReadyWithMigrationHistory proves ordinary readiness and exact agreement
-// with the complete ordered migration history embedded in the executable.
+// ReadyWithMigrationHistory verifies the complete ordered migration history,
+// recorded head and executable storage schema. Admin presentation may differ.
 func (backend *Store) ReadyWithMigrationHistory(ctx context.Context, manifest schema.Manifest, expectedHistoryDigest string) error {
 	return backend.ready(ctx, manifest, &expectedHistoryDigest)
 }
@@ -229,10 +229,6 @@ func (backend *Store) ReadyWithMigrationHistory(ctx context.Context, manifest sc
 func (backend *Store) ready(ctx context.Context, manifest schema.Manifest, expectedHistoryDigest *string) error {
 	if err := backend.Ping(ctx); err != nil {
 		return err
-	}
-	expected, err := ridumigration.DigestManifest(manifest)
-	if err != nil {
-		return fmt.Errorf("digest expected manifest: %w", err)
 	}
 	var ledgerExists bool
 	if err := backend.pool.QueryRow(ctx, `SELECT to_regclass(current_schema() || '.ridu_migrations') IS NOT NULL`).Scan(&ledgerExists); err != nil {
@@ -251,12 +247,17 @@ func (backend *Store) ready(ctx context.Context, manifest schema.Manifest, expec
 		}
 		return fmt.Errorf("read migration ledger: %w", err)
 	}
-	if actual != expected {
-		return fmt.Errorf("database manifest digest %s does not match executable digest %s", actual, expected)
-	}
 	if expectedHistoryDigest != nil {
-		if err := backend.validateMigrationHistory(ctx, *expectedHistoryDigest); err != nil {
+		if err := backend.validateMigrationHistory(ctx, actual, manifest, *expectedHistoryDigest); err != nil {
 			return err
+		}
+	} else {
+		expected, err := ridumigration.DigestManifest(manifest)
+		if err != nil {
+			return fmt.Errorf("digest expected manifest: %w", err)
+		}
+		if actual != expected {
+			return fmt.Errorf("database manifest digest %s does not match executable digest %s", actual, expected)
 		}
 	}
 	if plannerVersion == atlasVersionV1 && len(ridumigration.AuthIdentityResources(manifest.Snapshot())) != 0 {
@@ -291,7 +292,7 @@ WHERE NOT EXISTS (SELECT 1 FROM ridu_migrations migrations WHERE migrations.name
 	return nil
 }
 
-func (backend *Store) validateMigrationHistory(ctx context.Context, expected string) error {
+func (backend *Store) validateMigrationHistory(ctx context.Context, headDigest string, manifest schema.Manifest, expected string) error {
 	rows, err := backend.pool.Query(ctx, `SELECT name, artifact_digest FROM ridu_migrations ORDER BY name`)
 	if err != nil {
 		return fmt.Errorf("read ordered PostgreSQL migration history: %w", err)
@@ -308,11 +309,11 @@ func (backend *Store) validateMigrationHistory(ctx context.Context, expected str
 	if err := rows.Err(); err != nil {
 		return fmt.Errorf("read ordered PostgreSQL migration history: %w", err)
 	}
-	return validatePostgresMigrationHistory(identities, expected)
+	return validatePostgresMigrationHistory(identities, headDigest, manifest, expected)
 }
 
-func validatePostgresMigrationHistory(identities []ridumigration.ArtifactIdentity, expected string) error {
-	actual, err := ridumigration.DigestArtifactHistory(identities)
+func validatePostgresMigrationHistory(identities []ridumigration.ArtifactIdentity, headDigest string, manifest schema.Manifest, expected string) error {
+	actual, err := ridumigration.DigestArtifactHistory(identities, headDigest, manifest)
 	if err != nil {
 		return fmt.Errorf("digest applied PostgreSQL migration history: %w", err)
 	}

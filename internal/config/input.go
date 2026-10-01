@@ -95,6 +95,7 @@ type CollectionIndex struct {
 }
 
 type CollectionAdmin struct {
+	Hidden                  bool
 	UseAsTitle              string
 	DefaultColumns          []string
 	Group                   string
@@ -131,6 +132,7 @@ type Global struct {
 }
 
 type GlobalAdmin struct {
+	Hidden                  bool
 	Group                   string
 	GroupTranslations       map[string]string
 	Description             string

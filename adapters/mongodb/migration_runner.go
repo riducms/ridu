@@ -664,9 +664,9 @@ func (backend *Store) Ready(ctx context.Context, manifest schema.Manifest) error
 	return backend.ready(ctx, manifest, "")
 }
 
-// ReadyWithMigrationHistory proves the executable manifest and exact ordered
-// artifact history are the complete ledger head, then non-mutatingly verifies
-// the physical index contract.
+// ReadyWithMigrationHistory verifies the complete ordered artifact history,
+// recorded head and executable storage schema, then the physical index contract.
+// Admin presentation may differ.
 func (backend *Store) ReadyWithMigrationHistory(ctx context.Context, manifest schema.Manifest, expectedHistoryDigest string) error {
 	if ctx == nil {
 		return fmt.Errorf("MongoDB readiness context is required")
@@ -684,15 +684,19 @@ func (backend *Store) ready(ctx context.Context, manifest schema.Manifest, expec
 	if err := backend.Ping(ctx); err != nil {
 		return err
 	}
-	digest, err := ridumigration.DigestManifest(manifest)
-	if err != nil {
-		return err
+	var digest string
+	if expectedHistoryDigest == "" {
+		var err error
+		digest, err = ridumigration.DigestManifest(manifest)
+		if err != nil {
+			return err
+		}
 	}
 	state, err := backend.readMongoMigrationLedgerState(ctx)
 	if err != nil {
 		return err
 	}
-	if err := validateMongoMigrationReadyStateWithHistory(state, digest, expectedHistoryDigest); err != nil {
+	if err := validateMongoMigrationReadyStateWithHistory(state, manifest, digest, expectedHistoryDigest); err != nil {
 		return err
 	}
 	if err := backend.VerifyIndexes(ctx, manifest); err != nil {
@@ -708,7 +712,7 @@ func (backend *Store) ready(ctx context.Context, manifest schema.Manifest, expec
 	if err != nil {
 		return err
 	}
-	if err := validateMongoMigrationReadyStateWithHistory(confirmed, digest, expectedHistoryDigest); err != nil {
+	if err := validateMongoMigrationReadyStateWithHistory(confirmed, manifest, digest, expectedHistoryDigest); err != nil {
 		return err
 	}
 	if !mongoMigrationReadyStatesEqual(state, confirmed) {
@@ -744,13 +748,18 @@ func validateMongoMigrationReadyState(state mongoMigrationLedgerState, manifestD
 		}
 	}
 	head := state.artifacts[len(state.artifacts)-1]
-	if head.ToDigest != manifestDigest {
+	if manifestDigest != "" && head.ToDigest != manifestDigest {
 		return fmt.Errorf("MongoDB migration ledger head does not match the executable manifest")
 	}
 	return nil
 }
 
-func validateMongoMigrationReadyStateWithHistory(state mongoMigrationLedgerState, manifestDigest, expectedHistoryDigest string) error {
+func validateMongoMigrationReadyStateWithHistory(state mongoMigrationLedgerState, manifest schema.Manifest, manifestDigest, expectedHistoryDigest string) error {
+	if expectedHistoryDigest != "" {
+		// The history digest below authenticates the recorded head and the
+		// executable's schema without admin presentation.
+		manifestDigest = ""
+	}
 	if err := validateMongoMigrationReadyState(state, manifestDigest); err != nil {
 		return err
 	}
@@ -761,7 +770,8 @@ func validateMongoMigrationReadyStateWithHistory(state mongoMigrationLedgerState
 	for index, artifact := range state.artifacts {
 		identities[index] = ridumigration.ArtifactIdentity{Name: artifact.Name, Digest: artifact.Digest}
 	}
-	actualHistoryDigest, err := ridumigration.DigestArtifactHistory(identities)
+	head := state.artifacts[len(state.artifacts)-1]
+	actualHistoryDigest, err := ridumigration.DigestArtifactHistory(identities, head.ToDigest, manifest)
 	if err != nil {
 		return fmt.Errorf("digest MongoDB migration ledger history: %w", err)
 	}

@@ -91,7 +91,7 @@ func Config() ridu.Config { return ridu.Config{Name: "Audit",
 		}
 	}
 	checkContent()
-	for _, name := range []string{"application-name", "field-label", "admin-language-default", "admin-timezone-default", "select-choice-order", "radio-choice-order", "admin-language-order", "admin-timezone-order", "content-locale-direction"} {
+	for _, name := range []string{"application-name", "admin-language-default", "admin-timezone-default", "select-choice-order", "radio-choice-order", "admin-language-order", "admin-timezone-order", "content-locale-direction", "field-label"} {
 		switch name {
 		case "application-name":
 			config = strings.Replace(config, `Name: "Audit"`, `Name: "Publication"`, 1)
@@ -115,6 +115,13 @@ func Config() ridu.Config { return ridu.Config{Name: "Audit",
 		writeConfig()
 		run("generate")
 		run("generate", "--check")
+		if name == "field-label" {
+			// A field label is an admin setting, which never needs a migration.
+			// The production build below runs with it absent from every artifact.
+			run("migrate", "status", "--database-path", database)
+			checkContent()
+			continue
+		}
 		var stdout, stderr bytes.Buffer
 		code := cli.Run(ctx, []string{"migrate", "status", "--database-path", database}, &stdout, &stderr, options)
 		if code == 0 || !strings.Contains(stderr.String(), "create") {

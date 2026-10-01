@@ -130,6 +130,69 @@ func TestAdminInitialClassifiesExactShapesAndPreservesEncodedDocumentIDs(t *test
 	}
 }
 
+func TestAdminInitialHiddenResourcesPrepareNotFoundWithoutPageReads(t *testing.T) {
+	collection := schema.Collection{ID: "internal", Slug: "internal", Admin: schema.CollectionAdmin{Hidden: true}}
+	global := schema.Global{ID: "sync-state", Slug: "sync-state", Admin: schema.CollectionAdmin{Hidden: true}}
+	reads := 0
+	hooks := operationengine.Hooks{BeforeRead: []operationengine.Hook{func(operationengine.Context) error {
+		reads++
+		return nil
+	}}}
+	engine, err := operationengine.New(operationengine.Config{Store: teststore.New(), Collections: []operationengine.Collection{
+		{Schema: collection, Hooks: hooks},
+		{Key: "global:sync-state", Schema: global, Hooks: hooks},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, request := range []operationengine.Request{
+		{Operation: operation.Create, Collection: "internal", ImportID: "one"},
+		{Operation: operation.Create, Collection: "global:sync-state", ImportID: "sync-state"},
+	} {
+		if _, err := engine.Execute(t.Context(), request); err != nil {
+			t.Fatal(err)
+		}
+	}
+	handler := New(Config{
+		AdminAssets: adminInitialAssets(t), Engine: engine,
+		Manifest: schema.NewManifest(schema.Snapshot{
+			Version: schema.CurrentVersion, Application: schema.Application{Name: "Hidden pages"},
+			Collections: []schema.Collection{collection}, Globals: []schema.Global{global},
+		}),
+	})
+	for _, path := range []string{
+		"/collections/internal", "/collections/internal/trash", "/collections/internal/upload",
+		"/collections/internal/create", "/collections/internal/create/api", "/collections/internal/one",
+		"/COLLECTIONS/internal/one/API", "/collections/internal/one/versions/1",
+		"/globals/sync-state", "/GLOBALS/sync-state/API", "/globals/sync-state/versions/1",
+	} {
+		t.Run(path, func(t *testing.T) {
+			contextKey := ""
+			for _, navigation := range []bool{false, true} {
+				request := httptest.NewRequest(http.MethodGet, "/admin"+path, nil)
+				if navigation {
+					request.Header.Set("Accept", protocol.AdminPreparedRouteStateMediaType)
+					request.Header.Set("Ridu-Admin-Context", contextKey)
+				}
+				response := httptest.NewRecorder()
+				handler.ServeHTTP(response, request)
+				var state protocol.AdminPreparedRouteStateV1
+				if navigation {
+					if err := json.Unmarshal(response.Body.Bytes(), &state); err != nil {
+						t.Fatal(err)
+					}
+				} else {
+					state = decodeAdminInitialTemplate(t, response.Body.String())
+					contextKey = state.ContextKey
+				}
+				if state.Outcome != protocol.AdminPreparedRoutePrepared || state.Route == nil || state.Route.Kind != protocol.AdminPreparedRouteNotFound || strings.Join(state.ModuleGroups, ",") != "entry" || reads != 0 {
+					t.Fatalf("reads=%d state=%#v", reads, state)
+				}
+			}
+		})
+	}
+}
+
 func TestAdminInitialRuntimeUsesValidatedURLLocaleForCapabilities(t *testing.T) {
 	collection := schema.Collection{ID: "posts", Slug: "posts", Labels: schema.CollectionLabels{Singular: "Post", Plural: "Posts"}}
 	var capabilityLocales []string

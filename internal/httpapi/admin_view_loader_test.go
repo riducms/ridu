@@ -23,12 +23,13 @@ func TestAdminInitialCustomLoaderSelection(t *testing.T) {
 		t.Fatal(err)
 	}
 	metadata.ExtensionRoutes = []string{"report", "reports/latest"}
+	metadata.DocumentViewRoutes = []string{"internal:insights", "sync-state:insights"}
 	metadata.RouteLoaders = map[string]string{"report": "report", "reports/latest": "report"}
-	metadata.ReplacedCoreViews = []string{"collectionCreate:posts", "collectionEdit:posts", "collectionList:*", "collectionList:pages", "collectionList:posts", "global:settings", "notFound:*"}
-	metadata.ViewLoaders = map[string]string{"collectionCreate:posts": "create", "collectionEdit:posts": "edit", "collectionList:*": "wildcard", "collectionList:posts": "specific", "global:settings": "global", "notFound:*": "missing"}
+	metadata.ReplacedCoreViews = []string{"collectionCreate:posts", "collectionEdit:internal", "collectionEdit:posts", "collectionList:*", "collectionList:pages", "collectionList:posts", "global:settings", "global:sync-state", "notFound:*"}
+	metadata.ViewLoaders = map[string]string{"collectionCreate:posts": "create", "collectionEdit:internal": "edit", "collectionEdit:posts": "edit", "collectionList:*": "wildcard", "collectionList:posts": "specific", "global:settings": "global", "global:sync-state": "global", "notFound:*": "missing"}
 	metadata.BuildID = adminBootstrapBuildID(metadata)
 	assets["ridu-admin-bootstrap.json"].Data, _ = json.Marshal(metadata)
-	snapshot := schema.Snapshot{Version: schema.CurrentVersion, Application: schema.Application{Name: "Views"}, Collections: []schema.Collection{{Slug: "posts"}, {Slug: "pages"}, {Slug: "articles"}}, Globals: []schema.Global{{Slug: "settings"}}}
+	snapshot := schema.Snapshot{Version: schema.CurrentVersion, Application: schema.Application{Name: "Views"}, Collections: []schema.Collection{{Slug: "posts"}, {Slug: "pages"}, {Slug: "articles"}, {Slug: "internal", Admin: schema.CollectionAdmin{Hidden: true}}}, Globals: []schema.Global{{Slug: "settings"}, {Slug: "sync-state", Admin: schema.CollectionAdmin{Hidden: true}}}}
 	for _, key := range []string{"report", "specific", "create", "edit", "global", "wildcard", "missing"} {
 		snapshot.Application.AdminLoaders = append(snapshot.Application.AdminLoaders, schema.AdminLoader{Key: key})
 	}
@@ -36,14 +37,18 @@ func TestAdminInitialCustomLoaderSelection(t *testing.T) {
 	for _, collection := range snapshot.Collections {
 		collections = append(collections, operationengine.Collection{Key: string(collection.Slug), Schema: collection})
 	}
-	collections = append(collections, operationengine.Collection{Key: "global:settings", Schema: schema.Collection{Slug: "settings"}})
+	for _, global := range snapshot.Globals {
+		collections = append(collections, operationengine.Collection{Key: "global:" + string(global.Slug), Schema: global})
+	}
 	backend := teststore.New()
 	tx, err := backend.Begin(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = tx.Create(t.Context(), store.CreateRequest{Collection: schema.Collection{Slug: "settings"}, ID: "settings"}); err != nil {
-		t.Fatal(err)
+	for _, global := range snapshot.Globals {
+		if _, err = tx.Create(t.Context(), store.CreateRequest{Collection: global, ID: string(global.Slug)}); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if err = tx.Commit(t.Context()); err != nil {
 		t.Fatal(err)
@@ -72,6 +77,12 @@ func TestAdminInitialCustomLoaderSelection(t *testing.T) {
 		{"/GLOBALS/settings/API", "global"}, {"/globals/settings/VERSIONS", ""},
 		{"/missing", "missing"}, {"/collections/inaccessible", ""}, {"/account", ""},
 		{"/COLLECTIONS/inaccessible", ""}, {"/ACCOUNT/SECURITY", ""},
+		{"/collections/internal", "missing"}, {"/collections/internal/create", "missing"},
+		{"/collections/internal/id", "missing"}, {"/COLLECTIONS/internal/id/API", "missing"},
+		{"/collections/internal/trash", "missing"}, {"/collections/internal/upload", "missing"},
+		{"/collections/internal/id/versions/2", "missing"}, {"/collections/internal/id/insights", "missing"},
+		{"/globals/sync-state", "missing"}, {"/GLOBALS/sync-state/API", "missing"},
+		{"/globals/sync-state/versions/2", "missing"}, {"/globals/sync-state/insights", "missing"},
 	} {
 		t.Run(tc.path, func(t *testing.T) {
 			for _, navigation := range []bool{false, true} {

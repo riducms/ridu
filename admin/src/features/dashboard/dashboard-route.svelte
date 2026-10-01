@@ -14,7 +14,7 @@
 
 	const manifest = $derived(runtime.manifest);
 	const resourceGroups = $derived(
-		groupAdminResources(runtime.visibleCollections, runtime.visibleGlobals, {
+		groupAdminResources(runtime.navigableCollections, runtime.navigableGlobals, {
 			collections: runtime.i18n.t("navigation:collections"),
 			globals: runtime.i18n.t("navigation:globals"),
 		})

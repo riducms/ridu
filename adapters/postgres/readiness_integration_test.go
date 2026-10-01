@@ -34,7 +34,7 @@ func TestPostgresReadinessRequiresExactAppliedManifest(t *testing.T) {
 	if err := backend.Ready(ctx, manifest); err != nil {
 		t.Fatalf("applied manifest readiness: %v", err)
 	}
-	firstHistory, err := migration.DigestArtifactHistory([]migration.ArtifactIdentity{{Name: first.Name, Digest: first.Digest}})
+	firstHistory, err := migration.DigestArtifactHistory([]migration.ArtifactIdentity{{Name: first.Name, Digest: first.Digest}}, initial.ToDigest, manifest)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +65,7 @@ func TestPostgresReadinessRequiresExactAppliedManifest(t *testing.T) {
 	completeHistory, err := migration.DigestArtifactHistory([]migration.ArtifactIdentity{
 		{Name: first.Name, Digest: first.Digest},
 		{Name: secondFile.Name, Digest: secondFile.Digest},
-	})
+	}, second.ToDigest, ahead)
 	if err != nil {
 		t.Fatal(err)
 	}

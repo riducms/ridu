@@ -250,6 +250,9 @@ type CollectionIndex struct {
 }
 
 type CollectionAdmin struct {
+	// Hidden keeps the resource out of the admin's navigation, dashboard,
+	// search and routes. It is presentation only.
+	Hidden                  bool              `json:"hidden,omitempty"`
 	UseAsTitle              string            `json:"useAsTitle,omitempty"`
 	DefaultColumns          []string          `json:"defaultColumns,omitempty"`
 	Group                   string            `json:"group,omitempty"`
