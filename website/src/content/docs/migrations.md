@@ -129,7 +129,9 @@ create a new forward migration.
 Admin settings are ignored when deciding whether another migration is required. Changing `CollectionAdmin`,
 `GlobalAdmin`, or a field's `Admin` settings, such as hiding a collection or moving it to another
 navigation group, needs no migration: `ridu build`, `ridu migrate status`, and readiness compare
-the schema without them.
+the schema without them. When nothing else changed, `ridu migrate create` reports that no migration
+is needed and writes no file. The next migration that does change the schema records the new admin
+settings too.
 
 Plugin package versions are not part of the schema, so upgrading Ridu or a plugin does not require
 a migration by itself. Manifests written by Ridu 0.4 and earlier did record plugin versions. After

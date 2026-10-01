@@ -301,6 +301,52 @@ func TestRequireCurrentHistoryIgnoresAdminPresentation(t *testing.T) {
 	}
 }
 
+// Because history is compared without admin settings, a migration that only
+// changes them would record nothing anything reads. Creating one is refused
+// with the message ridu upgrade reads as "no migration is needed", and no
+// file is written. A change beside it, or a step of its own, still migrates.
+func TestCreateRefusesAnAdminOnlyChange(t *testing.T) {
+	directory := t.TempDir()
+	committed := testManifest("posts")
+	if _, err := migrationartifact.Create(directory, "initial", testArtifact(t, "initial", nil, committed), time.Unix(1, 0)); err != nil {
+		t.Fatal(err)
+	}
+	snapshot := committed.Snapshot()
+	snapshot.Collections[0].Admin = schema.CollectionAdmin{Hidden: true, Group: "Plumbing"}
+	hidden := schema.NewManifest(snapshot)
+	adminOnly := testArtifact(t, "hide-posts", &committed, hidden)
+	if _, err := migrationartifact.Create(directory, "hide-posts", adminOnly, time.Unix(2, 0)); err == nil || !strings.Contains(err.Error(), "schema is current; only admin settings changed") {
+		t.Fatalf("admin-only migration = %v", err)
+	}
+	if files, err := migrationartifact.ReadAll(directory); err != nil || len(files) != 1 {
+		t.Fatalf("history after a refused admin-only migration = %d files, %v", len(files), err)
+	}
+
+	// A planner upgrade adds a step of its own beside the admin change.
+	withStep := testArtifact(t, "upgrade-planner", &committed, hidden)
+	statement, err := migration.MarshalStepPayload(migration.SQLPayload{SQL: "SELECT 1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	phase := &withStep.Phases[0]
+	phase.Steps = []migration.Step{
+		{ID: "step-0001", Kind: migration.StepSQL, ExecutorVersion: 1, Name: "upgrade", Payload: statement},
+		{ID: "step-0002", Kind: migration.StepAssertSchema, ExecutorVersion: 1, Name: "verify schema", Payload: phase.Steps[0].Payload},
+	}
+	if phase.AfterPhysicalDigest, err = migration.PhasePhysicalDigest(phase.BeforePhysicalDigest, phase.Mode, phase.Steps); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := migrationartifact.Create(directory, "upgrade-planner", withStep, time.Unix(3, 0)); err != nil {
+		t.Fatalf("an admin change with a step of its own was refused: %v", err)
+	}
+
+	snapshot.Collections[0].Labels = schema.CollectionLabels{Singular: "Article", Plural: "Articles"}
+	relabelled := schema.NewManifest(snapshot)
+	if _, err := migrationartifact.Create(directory, "relabel-posts", testArtifact(t, "relabel-posts", &hidden, relabelled), time.Unix(4, 0)); err != nil {
+		t.Fatalf("a schema change beside an admin change was refused: %v", err)
+	}
+}
+
 func testArtifact(t *testing.T, name string, before *schema.Manifest, after schema.Manifest) migration.Artifact {
 	t.Helper()
 	artifact, err := migration.NewArtifact(name, migration.Planner{Name: "atlas", Version: "1.0.0"}, before, after)

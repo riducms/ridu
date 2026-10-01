@@ -45,6 +45,7 @@ test("hidden collections stay out of the admin but keep their API and relationsh
 			page.getByRole("heading", { name: "This admin page does not exist." })
 		).toBeVisible();
 		await expect(page.getByText("Plugin notFound view", { exact: true })).toBeVisible();
+		await expect(page).toHaveTitle(/^Error 404 - /);
 		await expect(page.getByRole("main")).not.toHaveClass(/ridu-shell__main--contained/);
 		await expect(page.locator('a[href*="/collections/usage-stats"]')).toHaveCount(0);
 	}
