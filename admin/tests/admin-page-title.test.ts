@@ -29,6 +29,7 @@ const messages = {
 	"documents:apiFor": "API - {label}",
 	"documents:editing": "Editing - {label}",
 	"documents:versionsFor": "Versions - {label}",
+	"errors:notFoundCode": "Error 404",
 	"navigation:page": "Page",
 	"uploads:bulkUpload": "Bulk upload",
 	"app:insights": "Translated insights",
@@ -52,8 +53,14 @@ const manifest: SchemaManifest = {
 		name: "Studio",
 		nameTranslations: { fr: "Atelier" },
 	},
-	collections: [resource("articles", "Article", "Articles")],
-	globals: [resource("site-settings", "Site settings", "Site settings")],
+	collections: [
+		resource("articles", "Article", "Articles"),
+		{ ...resource("learner-events", "Learner event", "Learner events"), admin: { hidden: true } },
+	],
+	globals: [
+		resource("site-settings", "Site settings", "Site settings"),
+		{ ...resource("sync-state", "Sync state", "Sync state"), admin: { hidden: true } },
+	],
 	plugins: [],
 };
 
@@ -108,6 +115,22 @@ describe("admin page title labels", () => {
 
 	test("does not throw for malformed encoded fallback paths", () => {
 		expect(resolve("/unknown/%E0%A4%A")).toBe("%E0%A4%A");
+	});
+
+	// A hidden resource renders the not-found page; its title says so rather
+	// than naming the resource, whatever the path's case or depth.
+	test("does not name a hidden collection or global", () => {
+		for (const pathname of [
+			"/collections/learner-events",
+			"/Collections/learner-events",
+			"/collections/learner-events/create",
+			"/collections/learner-events/event-1/versions",
+			"/collections/learner-events/event-1/insights",
+			"/globals/sync-state",
+			"/globals/sync-state/api",
+		]) {
+			expect(resolve(pathname)).toBe("Error 404");
+		}
 	});
 
 	test("uses an extension view only for its configured resource", () => {
