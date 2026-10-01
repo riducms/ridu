@@ -26,6 +26,7 @@ import {
 	preferenceOwnerID,
 } from "@admin/core/preferences/preference-write-queue";
 import { AdminI18nController } from "@admin/core/i18n/admin-i18n.svelte";
+import { isHiddenAdminResource } from "@admin/core/schema/hidden-resource";
 
 export type ThemePreference = "system" | "light" | "dark";
 
@@ -128,8 +129,7 @@ export class AdminRuntime {
 	}
 
 	isHiddenResource(kind: "collection" | "global", slug: string): boolean {
-		const resources = kind === "collection" ? this.manifest?.collections : this.manifest?.globals;
-		return resources?.find((resource) => resource.slug === slug)?.admin.hidden === true;
+		return isHiddenAdminResource(this.manifest, kind, slug);
 	}
 
 	get contentLocales() {

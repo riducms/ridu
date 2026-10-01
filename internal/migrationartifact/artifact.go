@@ -45,6 +45,11 @@ func Create(directory, name string, artifact migration.Artifact, now time.Time) 
 	if err := artifact.Validate(); err != nil {
 		return File{}, err
 	}
+	// History is compared without admin settings, so this file would record
+	// nothing that ridu build, ridu migrate status or readiness reads.
+	if onlyAdminPresentationChanges(artifact) {
+		return File{}, fmt.Errorf("schema is current; only admin settings changed, so no migration is needed")
+	}
 	if err := os.MkdirAll(directory, 0o755); err != nil {
 		return File{}, err
 	}
@@ -95,6 +100,24 @@ func Create(directory, name string, artifact migration.Artifact, now time.Time) 
 		return File{}, err
 	}
 	return File{Path: path, Name: base, Digest: digest, Artifact: artifact}, nil
+}
+
+// onlyAdminPresentationChanges reports whether an artifact changes nothing but
+// admin presentation: its manifests differ only in admin settings, and its
+// steps only assert the resulting schema. A planner upgrade or a data
+// transform adds steps of its own.
+func onlyAdminPresentationChanges(artifact migration.Artifact) bool {
+	if artifact.Before == nil || artifact.FromDigest == artifact.ToDigest {
+		return false
+	}
+	for _, phase := range artifact.Phases {
+		for _, step := range phase.Steps {
+			if step.Kind != migration.StepAssertSchema && step.Kind != migration.StepMongoDBAssertSchema {
+				return false
+			}
+		}
+	}
+	return schema.NewManifest(*artifact.Before).SameStorage(schema.NewManifest(artifact.After))
 }
 
 // acquireCreateLock serializes the history-head check and immutable file link

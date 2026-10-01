@@ -2,7 +2,12 @@ import type { AdminDocumentView, AdminRoute } from "@riducms/plugin";
 import type { SchemaManifest } from "@riducms/protocol";
 import type { AdminI18n, ExtensionTranslationKey } from "@riducms/translations";
 
-import { adminPathSegments, humanizeAdminPathSegment } from "@admin/core/routing/admin-paths";
+import {
+	adminPathResource,
+	adminPathSegments,
+	humanizeAdminPathSegment,
+} from "@admin/core/routing/admin-paths";
+import { isHiddenAdminResource } from "@admin/core/schema/hidden-resource";
 
 type PageTitleI18n = Pick<AdminI18n, "language" | "t" | "text">;
 
@@ -15,6 +20,16 @@ interface AdminPageLabelOptions {
 }
 
 export function resolveAdminPageLabel(options: AdminPageLabelOptions): string {
+	// A hidden collection or global shows the not-found page, and its title
+	// must not name what the config hid.
+	const pathResource = adminPathResource(options.pathname);
+	if (
+		pathResource !== undefined &&
+		isHiddenAdminResource(options.manifest, pathResource.kind, pathResource.slug)
+	) {
+		return options.i18n.t("errors:notFoundCode");
+	}
+
 	const segments = adminPathSegments(options.pathname);
 	const [root, resource, action, view] = segments;
 
