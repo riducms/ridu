@@ -186,11 +186,7 @@ func validateSQLiteLifecycleState(ctx context.Context, connection *sql.Conn, fil
 	if err != nil {
 		return nil, err
 	}
-	contract, err := resolveSQLitePlannerContract(head, sqlitePlannerContractFor)
-	if err != nil {
-		return nil, err
-	}
-	if err := assertSQLitePhysicalSchema(ctx, connection, manifest, true, contract); err != nil {
+	if err := assertSQLitePhysicalSchema(ctx, connection, manifest, true); err != nil {
 		return nil, fmt.Errorf("current SQLite migration state: %w", err)
 	}
 	if err := assertSQLiteManifestDigest(ctx, connection, head.Artifact.ToDigest); err != nil {
@@ -201,13 +197,6 @@ func validateSQLiteLifecycleState(ctx context.Context, connection *sql.Conn, fil
 
 func (backend *Store) rollbackSQLiteArtifact(ctx context.Context, connection *sql.Conn, files []migrationartifact.File, index int, transforms sqliteDataTransformRegistry) error {
 	file := files[index]
-	for _, phase := range file.Artifact.Phases {
-		for _, step := range phase.Steps {
-			if step.Kind == ridumigration.StepCanonicalizeAuthIdentities {
-				return fmt.Errorf("SQLite migration %s contains an irreversible auth-identity canonicalization and cannot be rolled back", file.Name)
-			}
-		}
-	}
 	current, err := file.Artifact.AfterManifest()
 	if err != nil {
 		return err
@@ -215,13 +204,8 @@ func (backend *Store) rollbackSQLiteArtifact(ctx context.Context, connection *sq
 	if err := backend.executeSQLiteDataTransforms(ctx, connection, file, transforms, true); err != nil {
 		return err
 	}
-	currentContract, err := resolveSQLitePlannerContract(file, sqlitePlannerContractFor)
-	if err != nil {
-		return err
-	}
-
 	if index == 0 {
-		objects, err := expectedSQLiteObjects(ctx, &current, true, currentContract)
+		objects, err := expectedSQLiteObjects(ctx, &current, true)
 		if err != nil {
 			return err
 		}
@@ -245,33 +229,27 @@ func (backend *Store) rollbackSQLiteArtifact(ctx context.Context, connection *sq
 	if err != nil {
 		return err
 	}
-	targetContract, err := resolveSQLitePlannerContract(files[index-1], sqlitePlannerContractFor)
-	if err != nil {
-		return err
+	// Move renamed content back first: the scrub below deletes every value
+	// stored under a name the earlier schema does not have.
+	if err := applySQLiteArtifactRenames(ctx, connection, file.Artifact, &target, current, true); err != nil {
+		return fmt.Errorf("roll back SQLite migration %s renames: %w", file.Name, err)
 	}
-	if !sqlitePresentationOnlyArtifact(file.Artifact, &target, current) {
-		// Move renamed content back first: the scrub below deletes every value
-		// stored under a name the earlier schema does not have.
-		if err := applySQLiteArtifactRenames(ctx, connection, file.Artifact, &target, current, true); err != nil {
-			return fmt.Errorf("roll back SQLite migration %s renames: %w", file.Name, err)
-		}
-		if err := backend.scrubSQLiteRollbackFields(ctx, connection, current, target); err != nil {
-			return fmt.Errorf("roll back SQLite migration %s fields: %w", file.Name, err)
-		}
-		if err := backend.retireSQLiteRollbackResources(ctx, connection, current, target); err != nil {
-			return fmt.Errorf("roll back SQLite migration %s resources: %w", file.Name, err)
-		}
-		if err := targetContract.reconcileIndexes(ctx, connection, target); err != nil {
-			return fmt.Errorf("roll back SQLite migration %s indexes: %w", file.Name, err)
-		}
-		if err := rebuildDocumentReferences(ctx, connection, target); err != nil {
-			return fmt.Errorf("roll back SQLite migration %s references: %w", file.Name, err)
-		}
-		if err := targetContract.rebuildUniqueness(ctx, connection, target); err != nil {
-			return fmt.Errorf("roll back SQLite migration %s uniqueness: %w", file.Name, err)
-		}
+	if err := backend.scrubSQLiteRollbackFields(ctx, connection, current, target); err != nil {
+		return fmt.Errorf("roll back SQLite migration %s fields: %w", file.Name, err)
 	}
-	if err := assertSQLitePhysicalSchema(ctx, connection, target, true, targetContract); err != nil {
+	if err := backend.retireSQLiteRollbackResources(ctx, connection, current, target); err != nil {
+		return fmt.Errorf("roll back SQLite migration %s resources: %w", file.Name, err)
+	}
+	if err := reconcileDocumentIndexes(ctx, connection, target); err != nil {
+		return fmt.Errorf("roll back SQLite migration %s indexes: %w", file.Name, err)
+	}
+	if err := rebuildDocumentReferences(ctx, connection, target); err != nil {
+		return fmt.Errorf("roll back SQLite migration %s references: %w", file.Name, err)
+	}
+	if err := rebuildUniqueValues(ctx, connection, target); err != nil {
+		return fmt.Errorf("roll back SQLite migration %s uniqueness: %w", file.Name, err)
+	}
+	if err := assertSQLitePhysicalSchema(ctx, connection, target, true); err != nil {
 		return fmt.Errorf("roll back SQLite migration %s: %w", file.Name, err)
 	}
 	if err := writeSQLiteManifest(ctx, connection, target, files[len(files)-1].Digest, backend.now().UTC()); err != nil {
@@ -647,11 +625,7 @@ func (backend *Store) applySQLiteLifecycleFiles(ctx context.Context, connection 
 		return fmt.Errorf("create SQLite migration ledger: %w", translateError(err))
 	}
 	for index, file := range files {
-		contract, err := resolveSQLitePlannerContract(file, sqlitePlannerContractFor)
-		if err != nil {
-			return err
-		}
-		if err := backend.applySQLiteArtifact(ctx, connection, file, index+1, expectedHead, contract, transforms); err != nil {
+		if err := backend.applySQLiteArtifact(ctx, connection, file, index+1, expectedHead, transforms); err != nil {
 			return err
 		}
 	}
@@ -659,11 +633,7 @@ func (backend *Store) applySQLiteLifecycleFiles(ctx context.Context, connection 
 	if err != nil {
 		return err
 	}
-	contract, err := resolveSQLitePlannerContract(files[len(files)-1], sqlitePlannerContractFor)
-	if err != nil {
-		return err
-	}
-	if err := assertSQLitePhysicalSchema(ctx, connection, latest, true, contract); err != nil {
+	if err := assertSQLitePhysicalSchema(ctx, connection, latest, true); err != nil {
 		return fmt.Errorf("completed SQLite migration state: %w", err)
 	}
 	if err := assertSQLiteManifestDigest(ctx, connection, files[len(files)-1].Artifact.ToDigest); err != nil {

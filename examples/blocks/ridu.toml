@@ -1,5 +1,6 @@
 version = 1
 database = "sqlite"
+package_manager = "bun"
 entry = "./cmd/server"
 schema = "generated/ridu.schema.json"
 client = "generated/ridu.generated.ts"

@@ -49,15 +49,8 @@ type mongoDBArtifactReplayPlan struct {
 	after             schema.Manifest
 	physical          mongoPhysicalIndexPlanSet
 	collectionMapping map[schema.StableID]schema.StableID
-	semantic          bool
 	phases            []mongoDBArtifactReplayPhase
 	steps             []mongoDBArtifactReplayStep
-}
-
-// verifyMongoDBArtifacts retains the original private test boundary while the
-// exported verifier exercises the production runner and lifecycle.
-func verifyMongoDBArtifacts(ctx context.Context, config Config, directory string) error {
-	return VerifyArtifacts(ctx, config, directory)
 }
 
 // prepareMongoDBArtifactReplay reconstructs every private index definition and
@@ -99,37 +92,27 @@ func prepareMongoDBArtifactReplay(ctx context.Context, files []migrationartifact
 		if err != nil {
 			return nil, fmt.Errorf("reconstruct MongoDB migration indexes for %s: %w", file.Name, err)
 		}
-		var additions []mongoDBPlannedIndex
-		var drops []mongoDBPlannedIndex
 		var renamePlan mongoDBSemanticRenamePlan
 		var retired []schema.StableID
-		semantic := file.Artifact.Planner.Version == mongoDBPlannerVersionV2
-		if semantic {
-			options, optionsErr := mongoDBArtifactSemanticOptions(file.Artifact)
-			if optionsErr != nil {
-				return nil, optionsErr
-			}
-			if before != nil {
-				renamePlan, err = compileMongoDBRenamePlan(*before, after, options.Renames)
-				if err != nil {
-					return nil, err
-				}
-				_, retired, err = normalizeMongoDBSemanticBefore(before.Snapshot(), after.Snapshot(), renamePlan, false)
-				if err != nil {
-					return nil, err
-				}
-			}
-			delta, deltaErr := mongoDBSemanticIndexDelta(beforePlans, afterPlans, renamePlan.collectionMapping, retired)
-			if deltaErr != nil {
-				return nil, fmt.Errorf("reconstruct MongoDB semantic index transition for %s: %w", file.Name, deltaErr)
-			}
-			additions, drops = delta.creates, delta.drops
-		} else {
-			additions, _, err = mongoDBAddedIndexPlans(beforePlans, afterPlans)
+		semanticOptions, err := mongoDBArtifactSemanticOptions(file.Artifact)
+		if err != nil {
+			return nil, err
+		}
+		if before != nil {
+			renamePlan, err = compileMongoDBRenamePlan(*before, after, semanticOptions.Renames)
 			if err != nil {
-				return nil, fmt.Errorf("reconstruct MongoDB migration additions for %s: %w", file.Name, err)
+				return nil, err
+			}
+			_, retired, err = normalizeMongoDBSemanticBefore(before.Snapshot(), after.Snapshot(), renamePlan, false)
+			if err != nil {
+				return nil, err
 			}
 		}
+		delta, err := mongoDBSemanticIndexDelta(beforePlans, afterPlans, renamePlan.collectionMapping, retired)
+		if err != nil {
+			return nil, fmt.Errorf("reconstruct MongoDB semantic index transition for %s: %w", file.Name, err)
+		}
+		additions, drops := delta.creates, delta.drops
 		remaining := make(map[string]mongoDBPlannedIndex, len(additions))
 		for _, addition := range additions {
 			key := mongoDBReplayIndexKey(addition.collection, addition.name)
@@ -150,7 +133,7 @@ func prepareMongoDBArtifactReplay(ctx context.Context, files []migrationartifact
 
 		plan := mongoDBArtifactReplayPlan{
 			fileName: file.Name, artifact: file.Artifact, before: before, after: after, physical: afterPlans,
-			collectionMapping: renamePlan.collectionMapping, semantic: semantic,
+			collectionMapping: renamePlan.collectionMapping,
 		}
 		for _, phase := range file.Artifact.Phases {
 			compiledPhase := mongoDBArtifactReplayPhase{id: phase.ID, mode: phase.Mode}

@@ -115,30 +115,16 @@ func Config() ridu.Config { return ridu.Config{Name: "Audit",
 		writeConfig()
 		run("generate")
 		run("generate", "--check")
-		if name == "field-label" {
-			// A field label is an admin setting, which never needs a migration,
-			// so create succeeds without writing one. The production build
-			// below runs with it absent from every artifact.
-			run("migrate", "status", "--database-path", database)
-			if printed := run("migrate", "create", name); !strings.Contains(printed, "No migration needed: only admin settings changed") {
-				t.Fatalf("admin-only create printed %q", printed)
-			}
-			if written, err := filepath.Glob(filepath.Join(target, "migrations", "*_"+name+"*")); err != nil || len(written) != 0 {
-				t.Fatalf("admin-only create wrote %v, %v", written, err)
-			}
-			checkContent()
-			continue
-		}
-		var stdout, stderr bytes.Buffer
-		code := cli.Run(ctx, []string{"migrate", "status", "--database-path", database}, &stdout, &stderr, options)
-		if code == 0 || !strings.Contains(stderr.String(), "create") {
-			t.Fatalf("missing-artifact status = %d: %s\n%s", code, stdout.String(), stderr.String())
-		}
-		// The positional name is shorthand for --name.
-		run("migrate", "create", name)
-		run("migrate", "verify")
-		run("migrate", "up", "--database-path", database)
+		// None of these shapes stored data, so none needs a migration: create
+		// succeeds without writing one, and the production build below runs
+		// with every change absent from history.
 		run("migrate", "status", "--database-path", database)
+		if printed := run("migrate", "create", name); !strings.Contains(printed, "No migration needed: only presentation settings") {
+			t.Fatalf("%s create printed %q", name, printed)
+		}
+		if written, err := filepath.Glob(filepath.Join(target, "migrations", "*_"+name+"*")); err != nil || len(written) != 0 {
+			t.Fatalf("%s create wrote %v, %v", name, written, err)
+		}
 		checkContent()
 	}
 	run("build")

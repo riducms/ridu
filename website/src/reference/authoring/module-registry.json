@@ -882,7 +882,6 @@
 				"go:github.com/riducms/ridu/schema#CurrentAdminPluginAPIVersion",
 				"go:github.com/riducms/ridu/schema#Plugin",
 				"go:github.com/riducms/ridu/schema#PluginAdmin",
-				"go:github.com/riducms/ridu/schema#PluginCompatibility",
 				"go:github.com/riducms/ridu/schema#PluginFieldType",
 				"go:github.com/riducms/ridu/schema#PluginEndpoint",
 				"go:github.com/riducms/ridu/schema#StableID",
@@ -1190,7 +1189,6 @@
 				"go:github.com/riducms/ridu/migration#Rename",
 				"go:github.com/riducms/ridu/migration#FieldRename",
 				"go:github.com/riducms/ridu/migration#Operation",
-				"go:github.com/riducms/ridu/migration#AuthIdentityResource",
 				"go:github.com/riducms/ridu/migration#DataTransformDescriptor",
 				"go:github.com/riducms/ridu/migration#DataTransaction",
 				"go:github.com/riducms/ridu/migration#DataTransformCallback",
@@ -1207,7 +1205,6 @@
 				"go:github.com/riducms/ridu/migration#DataTransformPayload",
 				"go:github.com/riducms/ridu/migration#BackfillReferencesPayload",
 				"go:github.com/riducms/ridu/migration#RetireResourcesPayload",
-				"go:github.com/riducms/ridu/migration#CanonicalizeAuthIdentitiesPayload",
 				"go:github.com/riducms/ridu/migration#AssertSchemaPayload",
 				"go:github.com/riducms/ridu/migration#ConcurrentIndexAction",
 				"go:github.com/riducms/ridu/migration#ConcurrentIndexPayload",
@@ -1219,8 +1216,6 @@
 				"go:github.com/riducms/ridu/migration#MarshalStepPayload",
 				"go:github.com/riducms/ridu/migration#PhysicalDigestSeed",
 				"go:github.com/riducms/ridu/migration#PhasePhysicalDigest",
-				"go:github.com/riducms/ridu/migration#AuthIdentityResources",
-				"go:github.com/riducms/ridu/migration#RetainedAuthIdentityResources",
 				"go:github.com/riducms/ridu/migration#Artifact.AfterManifest",
 				"go:github.com/riducms/ridu/migration#Artifact.BeforeManifest",
 				"go:github.com/riducms/ridu/migration#Artifact.Digest",
@@ -1248,7 +1243,6 @@
 				"go:github.com/riducms/ridu/migration#RunnerContractVersion",
 				"go:github.com/riducms/ridu/migration#StepAssertSchema",
 				"go:github.com/riducms/ridu/migration#StepBackfillReferences",
-				"go:github.com/riducms/ridu/migration#StepCanonicalizeAuthIdentities",
 				"go:github.com/riducms/ridu/migration#StepConcurrentIndex",
 				"go:github.com/riducms/ridu/migration#StepDataTransform",
 				"go:github.com/riducms/ridu/migration#StepMongoDBAssertSchema",
@@ -1429,7 +1423,6 @@
 				"go:github.com/riducms/ridu/adapters/postgres#Store.ApplyPlan",
 				"go:github.com/riducms/ridu/adapters/postgres#Statement",
 				"go:github.com/riducms/ridu/adapters/postgres#BuildArtifact",
-				"go:github.com/riducms/ridu/adapters/postgres#BuildArtifactWithPreviousPlanner",
 				"go:github.com/riducms/ridu/adapters/postgres#Rename",
 				"go:github.com/riducms/ridu/adapters/postgres#FieldRename",
 				"go:github.com/riducms/ridu/adapters/postgres#MigrationStepStatus",
@@ -1445,13 +1438,11 @@
 				"go:github.com/riducms/ridu/adapters/postgres#MigrationStatus",
 				"go:github.com/riducms/ridu/adapters/postgres#MigrationPhaseStatus",
 				"go:github.com/riducms/ridu/adapters/postgres#MaintenanceRequiredError",
-				"go:github.com/riducms/ridu/adapters/postgres#MigrationNotice",
 				"go:github.com/riducms/ridu/adapters/postgres#AtlasVersion",
 				"go:github.com/riducms/ridu/adapters/postgres#CodeMigrationPlanMismatch",
 				"go:github.com/riducms/ridu/adapters/postgres#ErrMaintenanceRequired",
 				"go:github.com/riducms/ridu/adapters/postgres#MaintenanceRequiredError.Error",
 				"go:github.com/riducms/ridu/adapters/postgres#MaintenanceRequiredError.Is",
-				"go:github.com/riducms/ridu/adapters/postgres#NoticeAtlasProvenance",
 				"go:github.com/riducms/ridu/adapters/postgres#ProjectMigrations",
 				"go:github.com/riducms/ridu/adapters/postgres#RenameCollection",
 				"go:github.com/riducms/ridu/adapters/postgres#RenameField",
@@ -1619,7 +1610,6 @@
 				"go:github.com/riducms/ridu/adapters/mongodb#Store.SyncIndexes",
 				"go:github.com/riducms/ridu/adapters/mongodb#Store.VerifyIndexes",
 				"go:github.com/riducms/ridu/adapters/mongodb#CreateArtifact",
-				"go:github.com/riducms/ridu/adapters/mongodb#CreateArtifactWithOptions",
 				"go:github.com/riducms/ridu/adapters/mongodb#InspectArtifacts",
 				"go:github.com/riducms/ridu/adapters/mongodb#VerifyArtifacts",
 				"go:github.com/riducms/ridu/adapters/mongodb#VerifyArtifactsWithOptions",
@@ -1969,6 +1959,11 @@
 							"specifier": "@riducms/sdk",
 							"path": "packages/sdk/src/index.ts",
 							"tsconfig": "packages/sdk/tsconfig.json"
+						},
+						{
+							"specifier": "@riducms/sdk/richtext",
+							"path": "packages/sdk/src/richtext/index.ts",
+							"tsconfig": "packages/sdk/tsconfig.json"
 						}
 					]
 				}
@@ -2237,7 +2232,6 @@
 				"ts:@riducms/protocol#SchemaLocalizationSettings",
 				"ts:@riducms/protocol#SchemaLocale",
 				"ts:@riducms/protocol#SchemaPlugin",
-				"ts:@riducms/protocol#SchemaPluginCompatibility",
 				"ts:@riducms/protocol#SchemaPluginAdmin",
 				"ts:@riducms/protocol#SchemaPluginFieldType",
 				"ts:@riducms/protocol#SchemaPluginEndpoint",
@@ -2565,18 +2559,6 @@
 							"tsconfig": "packages/plugin-richtext/tsconfig.json"
 						},
 						{
-							"specifier": "@riducms/plugin-richtext/document",
-							"path": "packages/plugin-richtext/src/document.ts",
-							"tsconfig": "packages/plugin-richtext/tsconfig.json",
-							"aliasesOnly": true
-						},
-						{
-							"specifier": "@riducms/plugin-richtext/render",
-							"path": "packages/plugin-richtext/src/render.ts",
-							"tsconfig": "packages/plugin-richtext/tsconfig.json",
-							"aliasesOnly": true
-						},
-						{
 							"specifier": "@riducms/plugin-richtext/svelte",
 							"path": "packages/plugin-richtext/src/render/index.ts",
 							"tsconfig": "packages/plugin-richtext/tsconfig.json",
@@ -2588,7 +2570,6 @@
 			"symbolOrder": [
 				"ts:@riducms/plugin-richtext#richTextAdminPlugin",
 				"ts:@riducms/plugin-richtext#richTextMessages",
-				"ts:@riducms/plugin-richtext#RichTextDocument",
 				"ts:@riducms/plugin-richtext#RichTextFeature",
 				"ts:@riducms/plugin-richtext#RichTextConfig",
 				"ts:@riducms/plugin-richtext#SerializedUploadNode"

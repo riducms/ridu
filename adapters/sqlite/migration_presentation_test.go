@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"reflect"
@@ -97,9 +98,7 @@ func TestSQLitePresentationMigrationPreservesVersionedData(t *testing.T) {
 	if err := backend.db.QueryRowContext(ctx, `PRAGMA schema_version`).Scan(&originalSchemaVersion); err != nil {
 		t.Fatal(err)
 	}
-	previous := initial
-	// These change only admin settings, which never need a migration.
-	adminOnly := map[string]bool{"field-label": true, "collection-admin": true}
+	// None of these shape stored data, so none needs a migration.
 	changes := []struct {
 		name  string
 		apply func()
@@ -143,108 +142,55 @@ func TestSQLitePresentationMigrationPreservesVersionedData(t *testing.T) {
 			config.Collections[0].Fields[1] = field.Join("posts", "posts", "author").DefaultColumns("title", "author").AllowCreate(false)
 		}},
 		{"application-endpoint-summary", func() { config.Endpoints[0].Summary = "Application description" }},
+		{"application-endpoint-path", func() { config.Endpoints[0].Path = "/renamed" }},
+		{"collection-labels", func() { config.Collections[1].Labels = ridu.CollectionLabels{Singular: "Article", Plural: "Articles"} }},
+		{"admin-loader", func() {
+			type stats struct {
+				Count int `json:"count"`
+			}
+			config.Admin.Loaders = []ridu.AdminLoaderDefinition{ridu.NewAdminLoader("stats", func(ridu.AdminLoadContext, struct{}) (stats, error) {
+				return stats{}, nil
+			})}
+		}},
 		{"collection-endpoint-summary", func() { config.Collections[1].Endpoints[0].Summary = "Collection description" }},
 		{"global-endpoint-summary", func() { config.Globals[0].Endpoints[0].Summary = "Global description" }},
 	}
-	applied := 1
-	for i, change := range changes {
+	for _, change := range changes {
 		change.apply()
-		name := change.name
 		current := resolve()
-		if adminOnly[name] {
-			// The database already has everything this change describes.
-			if _, err := backend.ArtifactStatus(ctx, directory, current); err != nil {
-				t.Fatalf("%s needs a migration: %v", name, err)
-			}
-			if err := backend.Ready(ctx, current); err != nil {
-				t.Fatalf("%s is not ready without a migration: %v", name, err)
-			}
-			continue
+		if _, err := CreateArtifact(ctx, directory, change.name, current, time.Unix(2, 0), false); !errors.Is(err, migrationartifact.ErrOnlyPresentationChanges) {
+			t.Fatalf("create %s = %v", change.name, err)
 		}
-		// This is the status diagnostic from the original audit; creation must be
-		// able to supply exactly the artifact it recommends.
-		if _, err := backend.ArtifactStatus(ctx, directory, current); err == nil || !strings.Contains(err.Error(), "create") {
-			t.Fatalf("missing artifact status = %v", err)
+		// The database already has everything this change describes.
+		if _, err := backend.ArtifactStatus(ctx, directory, current); err != nil {
+			t.Fatalf("%s needs a migration: %v", change.name, err)
 		}
-		_, err := CreateArtifact(ctx, directory, name, current, time.Unix(int64(i+2), 0), false)
-		if err != nil {
-			t.Fatalf("create %s: %v", name, err)
-		}
-		applied++
-		files, err := migrationartifact.ReadAll(directory)
-		if err != nil {
-			t.Fatal(err)
-		}
-		file := files[len(files)-1]
-		if file.Artifact.Before == nil || !reflect.DeepEqual(*file.Artifact.Before, previous.Snapshot()) || !reflect.DeepEqual(file.Artifact.After, current.Snapshot()) {
-			t.Fatal("presentation migration did not retain the exact original manifests")
-		}
-		if len(file.Artifact.Phases) != 1 || len(file.Artifact.Phases[0].Steps) != 1 || file.Artifact.Phases[0].Steps[0].Kind != migration.StepAssertSchema {
-			t.Fatalf("metadata plan = %#v", file.Artifact.Phases)
-		}
-		if !sqlitePresentationOnlyArtifact(file.Artifact, &previous, current) {
-			t.Fatal("metadata migration requires data work")
-		}
-		// Replay the first transition and the complete metadata chain. Replaying
-		// every growing prefix repeats the same artifacts quadratically; the final
-		// replay still verifies every transition from an empty shadow database.
-		checkpoint := i == 0 || i == len(changes)-1
-		if checkpoint {
-			if err := VerifyArtifacts(ctx, directory); err != nil {
-				t.Fatalf("clean shadow replay at %s: %v", name, err)
-			}
-		}
-		if err := backend.Ready(ctx, previous); err != nil {
-			t.Fatalf("shadow advanced target: %v", err)
-		}
-		if err := backend.ApplyArtifacts(ctx, directory); err != nil {
-			t.Fatal(err)
-		}
-		if got := sqlitePresentationRows(t, backend, tables); !reflect.DeepEqual(originalRows, got) {
-			t.Fatalf("stored bytes changed:\nbefore: %v\nafter: %v", originalRows, got)
-		}
-		var schemaVersion int
-		if err := backend.db.QueryRowContext(ctx, `PRAGMA schema_version`).Scan(&schemaVersion); err != nil {
-			t.Fatal(err)
-		}
-		if schemaVersion != originalSchemaVersion {
-			t.Fatalf("physical schema mutated: %d -> %d", originalSchemaVersion, schemaVersion)
-		}
-		status, err := backend.ArtifactStatus(ctx, directory, current)
-		if err != nil || len(status) != applied || !status[len(status)-1].Applied {
-			t.Fatalf("applied status = %#v, %v", status, err)
+		if err := backend.Ready(ctx, current); err != nil {
+			t.Fatalf("%s is not ready without a migration: %v", change.name, err)
 		}
 		sqlitePresentationReady(t, backend, directory, current)
-		if err := backend.Ready(ctx, previous); err == nil {
-			t.Fatalf("%s became invisible to exact manifest readiness", name)
-		}
 		application, err = ridu.New(config, backend)
 		if err != nil {
 			t.Fatal(err)
 		}
 		gotDocument, err := application.Local().Find(ctx, "posts", document.ID, ridu.FindOptions{})
 		if err != nil || !reflect.DeepEqual(originalDocument, gotDocument) {
-			t.Fatalf("document changed: %#v, %v", gotDocument, err)
+			t.Fatalf("%s changed the document: %#v, %v", change.name, gotDocument, err)
 		}
 		gotVersions, err := application.Local().Versions(ctx, "posts", document.ID, ridu.FindOptions{})
 		if err != nil || !reflect.DeepEqual(originalVersions, gotVersions) {
-			t.Fatalf("revisions changed: %#v, %v", gotVersions, err)
+			t.Fatalf("%s changed revisions: %#v, %v", change.name, gotVersions, err)
 		}
-		// Check rollback/reapply at both a short and a long history, without
-		// replaying the same lifecycle after every presentation-only transition.
-		if checkpoint {
-			if err := backend.DownArtifacts(ctx, directory); err != nil {
-				t.Fatalf("metadata rollback: %v", err)
-			}
-			if got := sqlitePresentationRows(t, backend, tables); !reflect.DeepEqual(originalRows, got) {
-				t.Fatal("metadata rollback changed stored bytes")
-			}
-			if err := backend.ApplyArtifacts(ctx, directory); err != nil {
-				t.Fatalf("metadata reapply: %v", err)
-			}
-			sqlitePresentationReady(t, backend, directory, current)
-		}
-		previous = current
+	}
+	if got := sqlitePresentationRows(t, backend, tables); !reflect.DeepEqual(originalRows, got) {
+		t.Fatalf("stored bytes changed:\nbefore: %v\nafter: %v", originalRows, got)
+	}
+	var schemaVersion int
+	if err := backend.db.QueryRowContext(ctx, `PRAGMA schema_version`).Scan(&schemaVersion); err != nil {
+		t.Fatal(err)
+	}
+	if schemaVersion != originalSchemaVersion {
+		t.Fatalf("physical schema mutated: %d -> %d", originalSchemaVersion, schemaVersion)
 	}
 	for _, table := range tables {
 		for _, operation := range []string{"INSERT", "UPDATE", "DELETE"} {
@@ -258,14 +204,6 @@ func TestSQLitePresentationMigrationPreservesVersionedData(t *testing.T) {
 	_, err = CreateArtifact(ctx, directory, "add-summary", additive, time.Unix(int64(len(changes)+2), 0), false)
 	if err != nil {
 		t.Fatal(err)
-	}
-	files, err := migrationartifact.ReadAll(directory)
-	if err != nil {
-		t.Fatal(err)
-	}
-	file := files[len(files)-1]
-	if sqlitePresentationOnlyArtifact(file.Artifact, &previous, additive) {
-		t.Fatal("additive schema misclassified as presentation")
 	}
 	if err := VerifyArtifacts(ctx, directory); err != nil {
 		t.Fatal(err)
@@ -387,11 +325,8 @@ func TestSQLitePresentationMigrationNestedAndEmbeddedMetadata(t *testing.T) {
 	if _, err := CreateArtifact(context.Background(), directory, "initial", manifest, time.Unix(1, 0), false); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := CreateArtifact(context.Background(), directory, "presentation", frozen, time.Unix(2, 0), false); err != nil {
-		t.Fatal(err)
-	}
-	if err := VerifyArtifacts(context.Background(), directory); err != nil {
-		t.Fatal(err)
+	if _, err := CreateArtifact(context.Background(), directory, "presentation", frozen, time.Unix(2, 0), false); !errors.Is(err, migrationartifact.ErrOnlyPresentationChanges) {
+		t.Fatalf("presentation migration = %v", err)
 	}
 }
 
@@ -430,23 +365,31 @@ func TestSQLitePresentationMigrationStillRejectsStorageChanges(t *testing.T) {
 	}
 }
 
-func TestSQLitePresentationFastPathExcludesExecutableSteps(t *testing.T) {
-	before := sqliteMigrationManifest(t, false)
-	afterSnapshot := before.Snapshot()
-	afterSnapshot.Application.Name = "Renamed"
-	after := schema.NewManifest(afterSnapshot)
-	artifact, err := planArtifact(context.Background(), "rename", &before, after, false)
+func TestSQLitePresentationPreservesJoinOperations(t *testing.T) {
+	config := ridu.Config{Name: "Operational boundaries", Collections: []ridu.Collection{
+		{Slug: "authors", Versions: true, Fields: field.Fields{field.Text("name"), field.Join("posts", "posts", "author")}},
+		{Slug: "posts", Fields: field.Fields{field.Text("title"), field.Relationship("author", "authors")}},
+	}}
+	before, err := ridu.Resolve(config)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, kind := range []migration.StepKind{migration.StepDataTransform, migration.StepCanonicalizeAuthIdentities, migration.StepSQL} {
-		changed := artifact
-		changed.Phases = append([]migration.Phase(nil), artifact.Phases...)
-		changed.Phases[0].Steps = append([]migration.Step(nil), artifact.Phases[0].Steps...)
-		changed.Phases[0].Steps[0].Kind = kind
-		if sqlitePresentationOnlyArtifact(changed, &before, after) {
-			t.Fatalf("executable step %s skipped reconciliation", kind)
-		}
+	cases := map[string]func(*schema.Snapshot){
+		"join limit": func(s *schema.Snapshot) { s.Collections[0].Fields[1].Join.Limit++ },
+		"join sort":  func(s *schema.Snapshot) { s.Collections[0].Fields[1].Join.DefaultSort = "-title" },
+	}
+	for name, change := range cases {
+		t.Run(name, func(t *testing.T) {
+			snapshot := before.Snapshot()
+			snapshot.Collections[0].Fields[1].Join.DefaultColumns = []string{"title"}
+			change(&snapshot)
+			after := schema.NewManifest(snapshot)
+			for _, allow := range []bool{false, true} {
+				if _, err := planArtifact(context.Background(), "operational", &before, after, allow); err == nil {
+					t.Fatalf("operational transition accepted (allow-destructive=%v)", allow)
+				}
+			}
+		})
 	}
 }
 
@@ -515,20 +458,10 @@ func TestSQLitePresentationScalarEditorMetadata(t *testing.T) {
 		{field.Number("amount"), field.Code("source"), field.Date("date")},
 	} {
 		after := resolve(fields...)
-		artifact, err := planArtifact(context.Background(), "editor", &before, after, false)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !sqlitePresentationOnlyArtifact(artifact, &before, after) {
-			t.Fatal("editor metadata requires data work")
-		}
-		if _, err := CreateArtifact(context.Background(), directory, fmt.Sprintf("editor-%d", i), after, time.Unix(int64(i+2), 0), false); err != nil {
-			t.Fatal(err)
+		if _, err := CreateArtifact(context.Background(), directory, fmt.Sprintf("editor-%d", i), after, time.Unix(int64(i+2), 0), false); !errors.Is(err, migrationartifact.ErrSchemaCurrent) {
+			t.Fatalf("editor metadata migration = %v", err)
 		}
 		before = after
-	}
-	if err := VerifyArtifacts(context.Background(), directory); err != nil {
-		t.Fatal(err)
 	}
 	for name, fields := range map[string]field.Fields{
 		"number bounds":   {field.Number("amount").Step(2).Min(1), field.Code("source"), field.Date("date")},
@@ -546,7 +479,7 @@ func TestSQLitePresentationScalarEditorMetadata(t *testing.T) {
 	}
 }
 
-func TestSQLitePresentationPreservesOperationalLocaleSettings(t *testing.T) {
+func TestSQLitePresentationPreservesOperationalContentLocaleSettings(t *testing.T) {
 	config := ridu.Config{Name: "Locales",
 		Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{field.Text("title")}}},
 		Admin: ridu.AdminConfig{Localization: ridu.AdminLocalizationConfig{
@@ -559,16 +492,9 @@ func TestSQLitePresentationPreservesOperationalLocaleSettings(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Content locales key stored values; the admin interface's languages and
+	// timezones, changed beside them below, do not.
 	cases := map[string]func(*schema.Snapshot){
-		"language code": func(s *schema.Snapshot) { s.Application.AdminLocalization.Languages[1].Code = "de" },
-		"language RTL":  func(s *schema.Snapshot) { s.Application.AdminLocalization.Languages[1].RTL = true },
-		"remove language": func(s *schema.Snapshot) {
-			s.Application.AdminLocalization.Languages = s.Application.AdminLocalization.Languages[:1]
-		},
-		"timezone ID": func(s *schema.Snapshot) { s.Application.AdminLocalization.TimeZones[1].ID = "Europe/Paris" },
-		"remove timezone": func(s *schema.Snapshot) {
-			s.Application.AdminLocalization.TimeZones = s.Application.AdminLocalization.TimeZones[:1]
-		},
 		"locale code":     func(s *schema.Snapshot) { s.Application.Localization.Locales[1].Code = "de" },
 		"remove locale":   func(s *schema.Snapshot) { s.Application.Localization.Locales = s.Application.Localization.Locales[:1] },
 		"default locale":  func(s *schema.Snapshot) { s.Application.Localization.DefaultLocale = "fr" },
@@ -587,6 +513,8 @@ func TestSQLitePresentationPreservesOperationalLocaleSettings(t *testing.T) {
 			settings.Languages[0], settings.Languages[1] = settings.Languages[1], settings.Languages[0]
 			settings.TimeZones[0], settings.TimeZones[1] = settings.TimeZones[1], settings.TimeZones[0]
 			after.Application.Localization.Locales[1].RTL = true
+			settings.Languages = append(settings.Languages, schema.AdminLanguage{Code: "de", Label: "German"})
+			settings.TimeZones = settings.TimeZones[:1]
 			mutate(&after)
 			for _, validate := range []func(schema.Snapshot, schema.Snapshot) error{validateSQLiteAdditiveTransition, validateSQLiteTransformedTransition} {
 				if err := validate(before.Snapshot(), after); err == nil {

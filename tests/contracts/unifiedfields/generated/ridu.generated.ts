@@ -312,7 +312,7 @@ export interface UnifiedArticles {
 	} | null;
 	"privateNote"?: string | null;
 	"presentationHidden"?: string | null;
-	"body"?: import("@riducms/plugin-richtext/document").RichTextDocument<UnifiedArticlesBodyBlocksBlock[number]> | null;
+	"body"?: import("@riducms/sdk/richtext").RichTextDocument<UnifiedArticlesBodyBlocksBlock[number]> | null;
 	"summary"?: string | null;
 }
 
@@ -349,7 +349,7 @@ export interface UnifiedArticlesAllLocales {
 	} | null;
 	"privateNote"?: string | null;
 	"presentationHidden"?: string | null;
-	"body"?: import("@riducms/plugin-richtext/document").RichTextDocument<UnifiedArticlesBodyBlocksBlockAllLocales[number]> | null;
+	"body"?: import("@riducms/sdk/richtext").RichTextDocument<UnifiedArticlesBodyBlocksBlockAllLocales[number]> | null;
 	"summary"?: string | null;
 }
 
@@ -383,7 +383,7 @@ export interface UnifiedArticlesCreate {
 	} | null;
 	"privateNote"?: string | null;
 	"presentationHidden"?: string | null;
-	"body"?: import("@riducms/plugin-richtext/document").RichTextDocumentInput<UnifiedArticlesBodyBlocksBlockInput[number]> | null;
+	"body"?: import("@riducms/sdk/richtext").RichTextDocumentInput<UnifiedArticlesBodyBlocksBlockInput[number]> | null;
 }
 
 export interface UnifiedArticlesUpdate {
@@ -432,7 +432,7 @@ export interface UnifiedArticlesUpdate {
 	} | null;
 	"privateNote"?: string | null;
 	"presentationHidden"?: string | null;
-	"body"?: import("@riducms/plugin-richtext/document").RichTextDocumentInput<UnifiedArticlesBodyBlocksBlockUpdate[number]> | null;
+	"body"?: import("@riducms/sdk/richtext").RichTextDocumentInput<UnifiedArticlesBodyBlocksBlockUpdate[number]> | null;
 }
 
 export interface UnifiedArticlesWhere {
@@ -473,7 +473,7 @@ export interface UnifiedArticlesWhere {
 	"localizedMeta"?: ExistsWhere;
 	"localizedMeta.description"?: ScalarWhere<string>;
 	"presentationHidden"?: ScalarWhere<string>;
-	"body"?: ScalarWhere<import("@riducms/plugin-richtext/document").RichTextDocument<UnifiedArticlesBodyBlocksBlock[number]>>;
+	"body"?: ScalarWhere<import("@riducms/sdk/richtext").RichTextDocument<UnifiedArticlesBodyBlocksBlock[number]>>;
 }
 
 export interface UnifiedArticlesSelect {

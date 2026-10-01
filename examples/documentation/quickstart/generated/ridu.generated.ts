@@ -91,7 +91,7 @@ export interface Posts {
 	"summary"?: string | null;
 	"status"?: "draft" | "published" | null;
 	"author"?: ID | Users | null;
-	"content"?: import("@riducms/plugin-richtext/document").RichTextDocument<never[][number]> | null;
+	"content"?: import("@riducms/sdk/richtext").RichTextDocument<never[][number]> | null;
 }
 
 export interface PostsCreate {
@@ -99,7 +99,7 @@ export interface PostsCreate {
 	"summary"?: string | null;
 	"status"?: "draft" | "published" | null;
 	"author"?: ID | null;
-	"content"?: import("@riducms/plugin-richtext/document").RichTextDocumentInput<never[][number]> | null;
+	"content"?: import("@riducms/sdk/richtext").RichTextDocumentInput<never[][number]> | null;
 }
 
 export interface PostsUpdate {
@@ -107,7 +107,7 @@ export interface PostsUpdate {
 	"summary"?: string | null;
 	"status"?: "draft" | "published" | null;
 	"author"?: ID | null;
-	"content"?: import("@riducms/plugin-richtext/document").RichTextDocumentInput<never[][number]> | null;
+	"content"?: import("@riducms/sdk/richtext").RichTextDocumentInput<never[][number]> | null;
 }
 
 export interface PostsWhere {
@@ -121,7 +121,7 @@ export interface PostsWhere {
 	"summary"?: ScalarWhere<string>;
 	"status"?: ScalarWhere<"draft" | "published">;
 	"author"?: ScalarWhere<ID>;
-	"content"?: ScalarWhere<import("@riducms/plugin-richtext/document").RichTextDocument<never[][number]>>;
+	"content"?: ScalarWhere<import("@riducms/sdk/richtext").RichTextDocument<never[][number]>>;
 }
 
 export interface PostsSelect {

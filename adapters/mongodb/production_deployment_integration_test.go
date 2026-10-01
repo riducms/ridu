@@ -202,7 +202,7 @@ func proveGeneratedMongoDBStarterDeployment(
 	// Roll back to the matched pre-migration recovery point. The scoped restore
 	// must recover its application user and uploads without touching a separate
 	// database changed after the snapshot. The rollout is pending again, so the
-	// new binary must fail closed until the exact same v2 history is reapplied.
+	// new binary must fail closed until the exact same history is reapplied.
 	displacedUploads := project.uploadRoot + ".before-restore"
 	if err := os.Rename(project.uploadRoot, displacedUploads); err != nil {
 		t.Fatalf("displace generated MongoDB upload root before restore: %v", err)

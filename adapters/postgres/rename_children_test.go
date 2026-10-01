@@ -102,20 +102,11 @@ func TestPostgresFieldRenameRefusesRenamedChildren(t *testing.T) {
 			t.Errorf("%s: %d rename candidates, want the one this rule exists for", name, len(renames))
 			continue
 		}
-		for entry, build := range map[string]func() error{
-			"BuildArtifact": func() error {
-				// Destructive approval does not turn the change into a rename.
-				_, err := BuildArtifact(ctx, "rename", &before, after, renames, true)
-				return err
-			},
-			"BuildArtifactWithPreviousPlanner": func() error {
-				_, err := BuildArtifactWithPreviousPlanner(ctx, "rename", &before, after, renames, false, AtlasVersion)
-				return err
-			},
-		} {
-			err := build()
+		// Destructive approval does not turn the change into a rename.
+		for _, destructive := range []bool{false, true} {
+			_, err := BuildArtifact(ctx, "rename", &before, after, renames, destructive)
 			if err == nil || !strings.Contains(err.Error(), "separate migration") || !strings.Contains(err.Error(), candidate.child) || !strings.Contains(err.Error(), candidate.change) {
-				t.Errorf("%s through %s = %v", name, entry, err)
+				t.Errorf("%s (destructive=%t) = %v", name, destructive, err)
 			}
 		}
 	}
@@ -128,8 +119,7 @@ func TestPostgresFieldRenameRuleDoesNotInvalidateCommittedHistory(t *testing.T) 
 	ctx := context.Background()
 	_, before := renameChildrenManifest(t, field.Group("meta", field.Fields{field.Text("slug"), field.Number("rank")}), field.Number("views"))
 	_, after := renameChildrenManifest(t, field.Group("info", field.Fields{field.Text("handle"), field.Number("order")}), field.Number("views"))
-	contract := currentAtlasPlannerContract()
-	committed, err := buildArtifactWithPlannerContracts(ctx, "rename", &before, after, renameChildrenIntent(t, before, after), false, contract, contract)
+	committed, err := planArtifact(ctx, "rename", &before, after, renameChildrenIntent(t, before, after), false)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -61,7 +61,7 @@ func sqliteFieldRenames(before, after schema.Manifest, renames []ridumigration.R
 // changes are the reviewed field renames. It adds one content-rename step per
 // rename; the closing schema step then rebuilds indexes, references and
 // uniqueness from the renamed content.
-func buildSQLiteArtifactWithRenames(ctx context.Context, name string, before *schema.Manifest, after schema.Manifest, previousPlannerVersion string, contract sqlitePlannerContract, renames []ridumigration.Rename) (ridumigration.Artifact, error) {
+func buildSQLiteArtifactWithRenames(ctx context.Context, name string, before *schema.Manifest, after schema.Manifest, renames []ridumigration.Rename) (ridumigration.Artifact, error) {
 	if before == nil {
 		return ridumigration.Artifact{}, fmt.Errorf("an initial SQLite migration cannot rename fields")
 	}
@@ -79,9 +79,9 @@ func buildSQLiteArtifactWithRenames(ctx context.Context, name string, before *sc
 		rules.paths[rename.collectionID][rename.before.Path.String()] = rename.after.Path.String()
 	}
 	validate := func(before, after schema.Snapshot) error {
-		return rules.snapshot(sqliteWithoutPresentation(before), sqliteWithoutPresentation(after))
+		return rules.snapshot(sqliteStorageSchema(before), sqliteStorageSchema(after))
 	}
-	return buildSQLiteArtifactWithValidation(ctx, name, before, after, previousPlannerVersion, contract, validate, renames)
+	return buildSQLiteArtifactWithValidation(ctx, name, before, after, validate, renames)
 }
 
 // sqliteArtifactRenames returns the rename intent an artifact recorded.
@@ -133,12 +133,11 @@ func CreateArtifactWithRenames(ctx context.Context, directory, name string, afte
 	if err := preflightSQLiteArtifacts(ctx, files); err != nil {
 		return CreatedArtifact{}, err
 	}
-	head := files[len(files)-1].Artifact
-	before, err := head.AfterManifest()
+	before, err := files[len(files)-1].Artifact.AfterManifest()
 	if err != nil {
 		return CreatedArtifact{}, err
 	}
-	artifact, err := buildSQLiteArtifactWithRenames(ctx, name, &before, after, head.Planner.Version, currentSQLitePlannerContract(), renames)
+	artifact, err := buildSQLiteArtifactWithRenames(ctx, name, &before, after, renames)
 	if err != nil {
 		return CreatedArtifact{}, err
 	}

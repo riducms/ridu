@@ -28,10 +28,10 @@ func TestMongoDBBaselineAdoptsADevelopmentSynchronizedDatabase(t *testing.T) {
 	backend := mongoIntegrationStore(t)
 	directory := t.TempDir()
 
-	if _, err := CreateArtifact(ctx, directory, "initial", initial, time.Unix(1, 0)); err != nil {
+	if _, err := CreateArtifact(ctx, directory, "initial", initial, time.Unix(1, 0), ArtifactOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	if err := backend.SyncIndexes(ctx, initial); err != nil {
+	if err := backend.SyncDevelopmentSchema(ctx, initial); err != nil {
 		t.Fatal(err)
 	}
 	if err := backend.ApplyArtifacts(ctx, directory); err == nil || !strings.Contains(err.Error(), "ridu migrate baseline") {
@@ -46,10 +46,10 @@ func TestMongoDBBaselineAdoptsADevelopmentSynchronizedDatabase(t *testing.T) {
 	}
 
 	// ridu dev keeps synchronizing, runs ahead, and the next migration follows.
-	if err := backend.SyncIndexes(ctx, withSlug); err != nil {
+	if err := backend.SyncDevelopmentSchema(ctx, withSlug); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := CreateArtifact(ctx, directory, "slug", withSlug, time.Unix(2, 0)); err != nil {
+	if _, err := CreateArtifact(ctx, directory, "slug", withSlug, time.Unix(2, 0), ArtifactOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	adopted, err = backend.AdoptArtifacts(ctx, directory)

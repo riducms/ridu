@@ -302,9 +302,9 @@ func TestRequireCurrentHistoryIgnoresAdminPresentation(t *testing.T) {
 	}
 }
 
-// Because history is compared without admin settings, a migration that only
-// changes them would record nothing anything reads. Creating one is refused
-// with ErrOnlyAdminChanges, which ridu migrate create reports as nothing to
+// Because history is compared through the storage schema, a migration that
+// only changes admin settings would record nothing anything reads. Creating one
+// is refused with ErrOnlyPresentationChanges, which ridu migrate create reports as nothing to
 // migrate, and no file is written. A change beside it, or a step of its own,
 // still migrates.
 func TestCreateRefusesAnAdminOnlyChange(t *testing.T) {
@@ -317,7 +317,7 @@ func TestCreateRefusesAnAdminOnlyChange(t *testing.T) {
 	snapshot.Collections[0].Admin = schema.CollectionAdmin{Hidden: true, Group: "Plumbing"}
 	hidden := schema.NewManifest(snapshot)
 	adminOnly := testArtifact(t, "hide-posts", &committed, hidden)
-	if _, err := migrationartifact.Create(directory, "hide-posts", adminOnly, time.Unix(2, 0)); !errors.Is(err, migrationartifact.ErrOnlyAdminChanges) || !errors.Is(err, migrationartifact.ErrSchemaCurrent) {
+	if _, err := migrationartifact.Create(directory, "hide-posts", adminOnly, time.Unix(2, 0)); !errors.Is(err, migrationartifact.ErrOnlyPresentationChanges) || !errors.Is(err, migrationartifact.ErrSchemaCurrent) {
 		t.Fatalf("admin-only migration = %v", err)
 	}
 	if files, err := migrationartifact.ReadAll(directory); err != nil || len(files) != 1 {
@@ -342,9 +342,9 @@ func TestCreateRefusesAnAdminOnlyChange(t *testing.T) {
 		t.Fatalf("an admin change with a step of its own was refused: %v", err)
 	}
 
-	snapshot.Collections[0].Labels = schema.CollectionLabels{Singular: "Article", Plural: "Articles"}
-	relabelled := schema.NewManifest(snapshot)
-	if _, err := migrationartifact.Create(directory, "relabel-posts", testArtifact(t, "relabel-posts", &hidden, relabelled), time.Unix(4, 0)); err != nil {
+	snapshot.Collections[0].Capabilities.Versions = true
+	versioned := schema.NewManifest(snapshot)
+	if _, err := migrationartifact.Create(directory, "version-posts", testArtifact(t, "version-posts", &hidden, versioned), time.Unix(4, 0)); err != nil {
 		t.Fatalf("a schema change beside an admin change was refused: %v", err)
 	}
 }

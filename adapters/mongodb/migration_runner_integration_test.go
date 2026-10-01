@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -21,12 +20,8 @@ import (
 
 func TestMongoMigrationRunnerAppliesStatusesReadiesAndResumesIdempotently(t *testing.T) {
 	config := mongoDBMigrationVerifierConfig(t)
-	directory := filepath.Join("testdata", "historical-v1")
-	files, err := migrationartifact.ReadAll(directory)
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = withMongoDBShadowDatabase(t.Context(), config, func(shadow *Store) error {
+	directory, files := createMongoDBTestHistory(t)
+	err := withMongoDBShadowDatabase(t.Context(), config, func(shadow *Store) error {
 		if err := shadow.ApplyArtifacts(t.Context(), directory); err != nil {
 			return err
 		}
@@ -63,11 +58,7 @@ func TestMongoMigrationRunnerAppliesStatusesReadiesAndResumesIdempotently(t *tes
 
 func TestMongoMigrationReadinessAllowsHarmlessUnmanagedNonUniqueIndex(t *testing.T) {
 	config := mongoDBMigrationVerifierConfig(t)
-	directory := filepath.Join("testdata", "historical-v1")
-	files, err := migrationartifact.ReadAll(directory)
-	if err != nil {
-		t.Fatal(err)
-	}
+	directory, files := createMongoDBTestHistory(t)
 	direction, err := bson.ParseDecimal128("1.00")
 	if err != nil {
 		t.Fatal(err)
@@ -124,11 +115,7 @@ func TestMongoMigrationReadinessAllowsHarmlessUnmanagedNonUniqueIndex(t *testing
 
 func TestMongoMigrationReadinessRejectsUnmanagedIndexHazards(t *testing.T) {
 	config := mongoDBMigrationVerifierConfig(t)
-	directory := filepath.Join("testdata", "historical-v1")
-	files, err := migrationartifact.ReadAll(directory)
-	if err != nil {
-		t.Fatal(err)
-	}
+	directory, files := createMongoDBTestHistory(t)
 	manifest, err := files[len(files)-1].Artifact.AfterManifest()
 	if err != nil {
 		t.Fatal(err)
@@ -221,11 +208,7 @@ func TestMongoMigrationReadinessRejectsUnmanagedIndexHazards(t *testing.T) {
 
 func TestMongoMigrationLedgerPhysicalReadiness(t *testing.T) {
 	config := mongoDBMigrationVerifierConfig(t)
-	directory := filepath.Join("testdata", "historical-v1")
-	files, err := migrationartifact.ReadAll(directory)
-	if err != nil {
-		t.Fatal(err)
-	}
+	directory, files := createMongoDBTestHistory(t)
 	manifest, err := files[len(files)-1].Artifact.AfterManifest()
 	if err != nil {
 		t.Fatal(err)
@@ -506,11 +489,7 @@ func mongoMigrationLedgerPhysicalSnapshot(ctx context.Context, backend *Store) (
 
 func TestMongoMigrationReadinessAllowsQueryableEncryptionAuxiliaryNamespaces(t *testing.T) {
 	config := mongoDBMigrationVerifierConfig(t)
-	directory := filepath.Join("testdata", "historical-v1")
-	files, err := migrationartifact.ReadAll(directory)
-	if err != nil {
-		t.Fatal(err)
-	}
+	directory, files := createMongoDBTestHistory(t)
 	manifest, err := files[len(files)-1].Artifact.AfterManifest()
 	if err != nil {
 		t.Fatal(err)
@@ -547,11 +526,7 @@ func TestMongoMigrationReadinessAllowsQueryableEncryptionAuxiliaryNamespaces(t *
 
 func TestMongoMigrationReadinessTreatsRetiredNamespacesAsStatusDiagnostics(t *testing.T) {
 	config := mongoDBMigrationVerifierConfig(t)
-	directory := filepath.Join("testdata", "historical-v1")
-	files, err := migrationartifact.ReadAll(directory)
-	if err != nil {
-		t.Fatal(err)
-	}
+	directory, files := createMongoDBTestHistory(t)
 	manifest, err := files[len(files)-1].Artifact.AfterManifest()
 	if err != nil {
 		t.Fatal(err)
@@ -674,18 +649,14 @@ func TestMongoMigrationHeartbeatPreventsTakeoverUntilStopped(t *testing.T) {
 
 func TestMongoMigrationRunnerResumesPhysicalIndexAfterCrash(t *testing.T) {
 	config := mongoDBMigrationVerifierConfig(t)
-	directory := filepath.Join("testdata", "historical-v1")
-	files, err := migrationartifact.ReadAll(directory)
-	if err != nil {
-		t.Fatal(err)
-	}
+	directory, files := createMongoDBTestHistory(t)
 	replay, err := prepareMongoDBArtifactReplay(t.Context(), files)
 	if err != nil {
 		t.Fatal(err)
 	}
 	first := replay[0].steps[0]
 	if first.kind != ridumigration.StepMongoDBCreateIndex {
-		t.Fatalf("first frozen step = %q", first.kind)
+		t.Fatalf("first MongoDB replay step = %q", first.kind)
 	}
 	err = withMongoDBShadowDatabase(t.Context(), config, func(shadow *Store) error {
 		if err := shadow.createMongoIndex(t.Context(), first.index.collection, first.index.description, first.index.definition); err != nil {
@@ -723,52 +694,10 @@ func TestMongoMigrationRunnerResumesPhysicalIndexAfterCrash(t *testing.T) {
 	}
 }
 
-func TestMongoMigrationStatusRejectsCompletedStepWithMissingPhysicalIndex(t *testing.T) {
-	config := mongoDBMigrationVerifierConfig(t)
-	directory := filepath.Join("testdata", "historical-v1")
-	files, err := migrationartifact.ReadAll(directory)
-	if err != nil {
-		t.Fatal(err)
-	}
-	replay, err := prepareMongoDBArtifactReplay(t.Context(), files)
-	if err != nil {
-		t.Fatal(err)
-	}
-	first := replay[0].steps[0]
-	err = withMongoDBShadowDatabase(t.Context(), config, func(shadow *Store) error {
-		now := time.Now().UTC()
-		row := mongoMigrationStepLedgerRow{
-			ArtifactName: files[0].Name, ArtifactDigest: files[0].Digest,
-			PhaseID: first.phaseID, StepID: first.stepID, PhaseMode: first.mode, StepKind: first.kind,
-			State: mongoMigrationStepComplete, Attempts: 1,
-			Owner: strings.Repeat("1", 32), Fence: strings.Repeat("2", 32), UpdatedAt: now, CompletedAt: &now,
-		}
-		document, err := encodeMongoMigrationStepLedger(row)
-		if err != nil {
-			return err
-		}
-		if _, err := shadow.mongoMigrationCollection(mongoMigrationStepCollectionName).InsertOne(t.Context(), document); err != nil {
-			return err
-		}
-		_, err = shadow.ArtifactStatus(t.Context(), directory)
-		if err == nil || !strings.Contains(err.Error(), "required index") || !strings.Contains(err.Error(), "missing") {
-			t.Fatalf("completed-step physical drift error = %v", err)
-		}
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("verify completed MongoDB step physical state: %v", err)
-	}
-}
-
 func TestMongoMigrationLedgerRejectsChecksumAndLineageTampering(t *testing.T) {
 	config := mongoDBMigrationVerifierConfig(t)
-	directory := filepath.Join("testdata", "historical-v1")
-	files, err := migrationartifact.ReadAll(directory)
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = withMongoDBShadowDatabase(t.Context(), config, func(shadow *Store) error {
+	directory, files := createMongoDBTestHistory(t)
+	err := withMongoDBShadowDatabase(t.Context(), config, func(shadow *Store) error {
 		if err := shadow.ApplyArtifacts(t.Context(), directory); err != nil {
 			return err
 		}

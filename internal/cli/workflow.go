@@ -247,7 +247,7 @@ func runDoctor(ctx context.Context, args []string, stdout, stderr io.Writer, opt
 	definition, projectError := projectfile.Discover(options.WorkingDirectory)
 	manager := projectfile.PackageManagerNPM
 	if projectError == nil {
-		manager = definition.FrontendPackageManager()
+		manager = definition.PackageManager
 	}
 	for _, tool := range []struct {
 		name string
@@ -671,16 +671,6 @@ func runDev(ctx context.Context, args []string, stdout, stderr io.Writer, option
 	}
 	version := frameworkVersion(options)
 	renames := newDevelopmentRenames(definition, options, database.databaseURL, database.databasePath, stdout, output)
-	// Rename detection compares a saved config with the schema the database
-	// was last brought to, so every successful schema sync records it.
-	recordSynchronized := func(preparation developmentPreparation) {
-		if *noSync {
-			return
-		}
-		if err := renames.recordSynchronized(definition, preparation.manifest); err != nil {
-			output.Warn("record the synchronized development schema", err)
-		}
-	}
 	watcher, err := newGoSourceWatcher(definition.Root)
 	if err != nil {
 		output.Error("watch Go configuration", err)
@@ -714,7 +704,6 @@ func runDev(ctx context.Context, args []string, stdout, stderr io.Writer, option
 			_ = activeBinary.remove()
 			return developmentFailure(ctx, output, "prepare development runtime", err)
 		}
-		recordSynchronized(preparation)
 		if !fresh() && canDiscardStaleDevelopmentCandidate(definition.Database, preparation) {
 			_ = activeBinary.remove()
 			output.Info("Go changed during initial schema synchronization; rebuilding the latest source")
@@ -798,7 +787,7 @@ func runDev(ctx context.Context, args []string, stdout, stderr io.Writer, option
 	defer func() { _ = activeBinary.remove() }()
 	var admin *managedProcess
 	if definition.Admin != "" {
-		managerCommand, managerArguments := packageManagerRunCommand(definition.FrontendPackageManager(), "dev", "--host", "127.0.0.1", "--port", fmt.Sprint(*adminPort), "--strictPort", "--logLevel", "warn")
+		managerCommand, managerArguments := packageManagerRunCommand(definition.PackageManager, "dev", "--host", "127.0.0.1", "--port", fmt.Sprint(*adminPort), "--strictPort", "--logLevel", "warn")
 		admin, err = startManagedProcess(ctx, "admin", definition.Absolute(definition.Admin), adminEnvironment, output, managerCommand, managerArguments...)
 		if err != nil {
 			server.stop()
@@ -829,12 +818,40 @@ func runDev(ctx context.Context, args []string, stdout, stderr io.Writer, option
 	}
 	output.DevelopmentReady(version, developmentDuration(time.Since(developmentStarted)), adminURL, serverURL)
 	output.Info("Watching Go configuration; press Ctrl+C to stop")
-	renames.stopServer = func() { server.stop() }
-	// A rename stops the server before it moves content, so a rejected reload
-	// after that point leaves nothing serving until a later change reloads.
+	renames.stopServer = func() bool {
+		running := !server.stopping.Load()
+		server.stop()
+		return running
+	}
+	renames.resumeServer = func() error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		address, err := availableDevelopmentServerAddress()
+		if err != nil {
+			return err
+		}
+		url := developmentServerURL(address)
+		restarted, err := startManagedProcess(ctx, "server", definition.Root, developmentServerEnvironment(serverEnvironment, address), output, activeBinary.path, serverArguments...)
+		if err != nil {
+			return err
+		}
+		if err := waitForDevelopmentURLWithHost(ctx, url+"/readyz", publicServerHost, restarted); err != nil {
+			restarted.stop()
+			return err
+		}
+		if err := handoffProxy.setTarget(url); err != nil {
+			restarted.stop()
+			return err
+		}
+		server = restarted
+		return nil
+	}
+	// A schema change can stop the server before mutation, so a rejected reload
+	// after that point may leave nothing serving until a later change reloads.
 	rejectedReload := func() string {
 		if server.stopping.Load() {
-			return "Reload rejected after the server was stopped for a rename"
+			return "Reload rejected after the server was stopped for a schema change"
 		}
 		return "Reload rejected; the previous server is still running"
 	}
@@ -848,7 +865,7 @@ func runDev(ctx context.Context, args []string, stdout, stderr io.Writer, option
 
 watchLoop:
 	for {
-		// A server stopped for a rename has a closed done channel. It is not an
+		// A server stopped for a schema change has a closed done channel. It is not an
 		// unexpected exit, and watching it would spin, so wait on the other
 		// events until a later change brings up a replacement.
 		serverDone := server.done
@@ -856,7 +873,7 @@ watchLoop:
 			serverDone = nil
 			if !waitingWithoutServer {
 				waitingWithoutServer = true
-				output.Warn("The development server is stopped for the rename; fix the problem reported above and save to reload", nil)
+				output.Warn("The development server is stopped for the schema change; fix the problem reported above and save to reload", nil)
 			}
 		} else {
 			waitingWithoutServer = false
@@ -921,6 +938,7 @@ watchLoop:
 						output.Info("Newer Go change arrived; skipping the stale replacement")
 						continue
 					}
+					prepareError = renames.resumeAfterRejectedReload(prepareError)
 					developmentFailure(ctx, output, rejectedReload(), prepareError)
 					continue watchLoop
 				}
@@ -933,10 +951,15 @@ watchLoop:
 				preparation, prepareError = synchronizeDevelopmentSchema(ctx, definition.Database, database.databaseURL, database.databasePath, !*noSync, false, preparation, output)
 				if prepareError != nil {
 					_ = candidate.remove()
+					// A synchronization error rolls back its schema change, so a
+					// server drained only for empty field-kind changes resumes.
+					prepareError = renames.resumeAfterRejectedReload(prepareError)
 					developmentFailure(ctx, output, rejectedReload(), prepareError)
 					continue watchLoop
 				}
-				recordSynchronized(preparation)
+				// The database now has the candidate's schema; the old server
+				// must not restart against it.
+				renames.fieldKindDrained = false
 				if watcher.Revision() != changeRevision && canDiscardStaleDevelopmentCandidate(definition.Database, preparation) {
 					_ = candidate.remove()
 					output.Info("Newer Go change arrived during database synchronization; skipping the stale replacement")
@@ -1067,6 +1090,11 @@ func prepareDevelopment(ctx context.Context, definition projectfile.File, versio
 	// A possible rename is settled before anything is generated or
 	// synchronized, and a reload it rejects changes nothing: the next save
 	// meets the same rename again.
+	if renames != nil {
+		if err := renames.resolveFieldKinds(ctx, definition, resolved.Manifest, syncSchema, fresh); err != nil {
+			return developmentPreparation{}, err
+		}
+	}
 	if syncSchema && renames != nil {
 		if _, renameError := renames.resolve(ctx, definition, resolved.Manifest, fresh); renameError != nil {
 			if ctx.Err() != nil {
@@ -1200,7 +1228,7 @@ func synchronizeDevelopmentSchema(ctx context.Context, adapter projectfile.Datab
 			return developmentPreparation{}, err
 		}
 		defer backend.Close()
-		if err := backend.SyncIndexes(ctx, preparation.manifest); err != nil {
+		if err := backend.SyncDevelopmentSchema(ctx, preparation.manifest); err != nil {
 			return developmentPreparation{}, fmt.Errorf("synchronize MongoDB development indexes: %w", err)
 		}
 		output.Info("Synchronized MongoDB development indexes")
@@ -1216,16 +1244,10 @@ func synchronizeDevelopmentSchema(ctx context.Context, adapter projectfile.Datab
 		return developmentPreparation{}, err
 	}
 	defer backend.Close()
-	plan, err := backend.Plan(ctx, preparation.manifest)
-	if err != nil {
-		return developmentPreparation{}, fmt.Errorf("plan development schema: %w", err)
+	if err := backend.SyncDevelopmentSchema(ctx, preparation.manifest); err != nil {
+		return developmentPreparation{}, fmt.Errorf("synchronize PostgreSQL development schema: %w", err)
 	}
-	if len(plan) != 0 {
-		if err := backend.ApplyPlan(ctx, plan); err != nil {
-			return developmentPreparation{}, fmt.Errorf("apply development schema: %w", err)
-		}
-		output.Info("Applied non-destructive development schema changes", "count", len(plan))
-	}
+	output.Info("Synchronized PostgreSQL development schema")
 	preparation.schemaSyncDuration = time.Since(schemaSyncStarted)
 	return preparation, nil
 }
@@ -1667,7 +1689,7 @@ func printGenerationWarnings(output *cliOutput, definition projectfile.File, res
 	for _, name := range missingAdminPluginPackages(definition, result.Manifest) {
 		directory := relativePath(definition.Root, definition.Absolute(definition.Admin))
 		requirement := registeredAdminPackageRequirement(definition, name, version)
-		command, arguments := packageManagerAddToDirectoryCommand(definition.FrontendPackageManager(), directory, requirement)
+		command, arguments := packageManagerAddToDirectoryCommand(definition.PackageManager, directory, requirement)
 		output.Warn(fmt.Sprintf("a registered plugin needs its admin package %s; install it with `%s %s`", name, command, strings.Join(arguments, " ")), nil)
 	}
 }
@@ -1741,7 +1763,7 @@ func checkAdminRegistrations(ctx context.Context, definition projectfile.File, s
 	}
 	defer os.RemoveAll(temporary)
 	receipt := filepath.Join(temporary, "complete")
-	command, arguments := packageManagerRunCommand(definition.FrontendPackageManager(), "build")
+	command, arguments := packageManagerRunCommand(definition.PackageManager, "build")
 	if err := runForeground(ctx, definition.Absolute(definition.Admin), []string{
 		"RIDU_ADMIN_CHECK_SCHEMA=" + definition.Absolute(definition.Schema),
 		"RIDU_ADMIN_CHECK_RECEIPT=" + receipt,

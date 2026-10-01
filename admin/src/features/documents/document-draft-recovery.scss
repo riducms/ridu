@@ -1,0 +1,42 @@
+@use "@riducms/ui/styles.scss" as ui;
+
+@layer ridu.components {
+	.ridu-recovery-dialog {
+		inline-size: min(960px, calc(100vw - 32px));
+		max-block-size: calc(100dvh - 32px);
+		grid-template-rows: auto minmax(0, 1fr) auto;
+	}
+	.ridu-recovery-comparison {
+		min-block-size: 0;
+		overflow: auto;
+		&:focus-visible {
+			outline: var(--focus-outline);
+			outline-offset: var(--focus-outline-offset);
+		}
+	}
+	.ridu-recovery-table {
+		inline-size: 100%;
+		min-inline-size: 560px;
+		border-collapse: collapse;
+		th,
+		td {
+			padding: 12px 16px 12px 0;
+			border-block-end: 1px solid var(--control-border);
+			text-align: start;
+			vertical-align: top;
+		}
+		thead th {
+			color: var(--foreground-muted);
+			font-weight: 500;
+		}
+		tbody th {
+			inline-size: 20%;
+			font-weight: 600;
+		}
+		td {
+			inline-size: calc(80% / 3);
+			white-space: pre-wrap;
+			overflow-wrap: anywhere;
+		}
+	}
+}

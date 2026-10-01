@@ -63,8 +63,7 @@ func PackageManagers() []PackageManagerDefinition {
 }
 
 // ParsePackageManager validates a package-manager name. Empty selects npm for
-// new projects; legacy projects without the ridu.toml key are handled by
-// projectfile.File.FrontendPackageManager instead.
+// new projects.
 func ParsePackageManager(value string) (projectfile.PackageManager, error) {
 	manager := projectfile.PackageManager(strings.ToLower(strings.TrimSpace(value)))
 	if manager == "" {

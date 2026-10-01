@@ -1342,7 +1342,7 @@
             "blocks.block"
           ],
           "key": "richtext",
-          "typescriptPackage": "@riducms/plugin-richtext/document",
+          "typescriptPackage": "@riducms/sdk/richtext",
           "typescriptOutput": "RichTextDocument",
           "typescriptInput": "RichTextDocumentInput",
           "goPackage": "github.com/riducms/ridu/plugins/richtext",

@@ -9,6 +9,7 @@ import {
 } from "@riducms/protocol";
 
 import type { AdminClient } from "@admin/core/api/admin-client";
+import { saveFormDraft } from "@admin/core/forms/form-draft-recovery";
 import { createAdminLoader } from "@riducms/sdk";
 import { withAdminLoader, type AdminExtensionProps, type AdminLoaderProps } from "@riducms/plugin";
 import type { Component } from "svelte";
@@ -465,15 +466,13 @@ describe("admin bootstrap coordinator", () => {
 				capabilities: {},
 				labels: { singular: "Page", plural: "Pages" },
 			} as unknown as SchemaManifest["collections"][number];
-			sessionStorage.setItem(
-				"ridu:form-recovery:pages-id:new",
-				JSON.stringify({
-					version: 1,
-					collection,
-					values: { owner: "actor-2" },
-					original: {},
-					createdAt: new Date().toISOString(),
-				})
+			saveFormDraft(
+				collection,
+				undefined,
+				{ owner: "actor-2" },
+				{},
+				{},
+				mode === "cold" ? "en" : "fr"
 			);
 			const destination = {
 				...preparedState("/admin/collections/pages/create", ""),

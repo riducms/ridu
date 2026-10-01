@@ -138,6 +138,7 @@ deleted.
 
 Continue with [Browse and organize content](/docs/browsing-content/),
 [Drafts and versions](/docs/drafts-and-versions/), and [Uploads and media](/docs/uploads/). Exact
-methods are documented under [`RiduClient.bulkUpdate`](/reference/sdk/ridu-client-bulk-update/),
-[`RiduClient.bulkRestoreDeleted`](/reference/sdk/ridu-client-bulk-restore-deleted/), and
-[`LocalAPI.BulkDelete`](/reference/core/local-api-bulk-delete/).
+methods are documented under
+[`RiduClient.bulkUpdate`](/reference/sdk/ridu-client-bulk-update-method/),
+[`RiduClient.bulkRestoreDeleted`](/reference/sdk/ridu-client-bulk-restore-deleted-method/), and
+[`LocalAPI.BulkDelete`](/reference/core/local-api-bulk-delete-method/).

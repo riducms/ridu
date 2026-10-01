@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { PluginFieldProps, PluginFieldBinding } from "@riducms/plugin";
-	import type { RichTextDocument } from "@plugin-richtext/document";
+	import type { RichTextDocument } from "@riducms/sdk/richtext";
 	import type { RichTextConfig } from "@plugin-richtext/field/rich-text-config";
 	import RichTextEditor from "@plugin-richtext/field/rich-text-editor.svelte";
 

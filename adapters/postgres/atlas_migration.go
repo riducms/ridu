@@ -14,6 +14,7 @@ import (
 	_ "ariga.io/atlas/sql/postgres/postgrescheck"
 	atlasschema "ariga.io/atlas/sql/schema"
 	"ariga.io/atlas/sql/sqlcheck"
+	"github.com/riducms/ridu/internal/fieldchange"
 	"github.com/riducms/ridu/internal/migrationartifact"
 	"github.com/riducms/ridu/internal/postgresmigration"
 	"github.com/riducms/ridu/internal/primitivefield"
@@ -37,38 +38,54 @@ func (err *SafetyError) Error() string {
 }
 
 // BuildArtifact uses Atlas to plan all physical PostgreSQL changes and adds
-// ordered Ridu semantic steps for explicitly confirmed rename intent.
-func BuildArtifact(ctx context.Context, name string, before *schema.Manifest, after schema.Manifest, renames []Rename, allowDestructive bool) (ridumigration.Artifact, error) {
+// ordered Ridu semantic steps for explicitly confirmed rename intent. It binds
+// compiled data transforms exactly as the runner regenerates them.
+func BuildArtifact(ctx context.Context, name string, before *schema.Manifest, after schema.Manifest, renames []Rename, allowDestructive bool, transforms ...ridumigration.DataTransformDescriptor) (ridumigration.Artifact, error) {
 	if err := validateFieldRenamesOnlyRename(renames); err != nil {
 		return ridumigration.Artifact{}, err
 	}
-	contract := currentAtlasPlannerContract()
-	return buildArtifactWithPlannerContracts(ctx, name, before, after, renames, allowDestructive, contract, contract)
+	if before != nil && len(transforms) != 0 {
+		if err := validateTransformColumnCasts(before.Snapshot(), after.Snapshot()); err != nil {
+			return ridumigration.Artifact{}, err
+		}
+	}
+	return planArtifact(ctx, name, before, after, renames, allowDestructive, transforms...)
 }
 
-// BuildArtifactWithPreviousPlanner plans against the exact physical contract
-// recorded by the preceding immutable artifact. Ordinary callers should use
-// BuildArtifact; migration-history creation uses this entry point when a
-// reviewed planner upgrade must emit semantic data work.
-func BuildArtifactWithPreviousPlanner(ctx context.Context, name string, before *schema.Manifest, after schema.Manifest, renames []Rename, allowDestructive bool, previousPlannerVersion string) (ridumigration.Artifact, error) {
-	if err := validateFieldRenamesOnlyRename(renames); err != nil {
-		return ridumigration.Artifact{}, err
-	}
-	target := currentAtlasPlannerContract()
-	if before == nil {
-		if previousPlannerVersion != "" {
-			return ridumigration.Artifact{}, fmt.Errorf("initial PostgreSQL artifact cannot have previous planner version %q", previousPlannerVersion)
+// validateTransformColumnCasts refuses, at creation, a transform-backed
+// change of a column to a type PostgreSQL cannot cast to automatically. The
+// physical change runs before the transform, so such an artifact could never
+// apply. Every column type casts to text.
+func validateTransformColumnCasts(before, after schema.Snapshot) error {
+	targets := make(map[schema.StableID]schema.Collection)
+	for _, resources := range [][]schema.Collection{after.Collections, after.Globals} {
+		for _, resource := range resources {
+			targets[resource.ID] = resource
 		}
-		return buildArtifactWithPlannerContracts(ctx, name, before, after, renames, allowDestructive, target, target)
 	}
-	source, supported := atlasPlannerContractFor(previousPlannerVersion)
-	if !supported {
-		return ridumigration.Artifact{}, fmt.Errorf("unsupported previous PostgreSQL planner version %q", previousPlannerVersion)
+	for _, resources := range [][]schema.Collection{before.Collections, before.Globals} {
+		for _, previous := range resources {
+			current, exists := targets[previous.ID]
+			if !exists {
+				continue
+			}
+			fields := make(map[schema.StableID]schema.Field, len(current.Fields))
+			for _, field := range current.Fields {
+				fields[field.ID] = field
+			}
+			for _, field := range previous.Fields {
+				changed, exists := fields[field.ID]
+				if !exists || field.Localized != changed.Localized {
+					continue
+				}
+				from, to := columnType(field), columnType(changed)
+				if from != to && to != "text" {
+					return fmt.Errorf("RIDU_FIELD_KIND_CHANGE_REQUIRES_TRANSFORM: PostgreSQL cannot convert %s.%s from %s to %s in place, and a data transform runs after the column changes; add a field with the new kind, copy the values with the data transform, and remove the old field in a later migration", previous.Slug, field.Path.String(), from, to)
+				}
+			}
+		}
 	}
-	if source.version != target.version && !(source.version == atlasVersionV1 && target.version == AtlasVersion) {
-		return ridumigration.Artifact{}, fmt.Errorf("unsupported PostgreSQL planner transition %q -> %q", source.version, target.version)
-	}
-	return buildArtifactWithPlannerContracts(ctx, name, before, after, renames, allowDestructive, source, target)
+	return nil
 }
 
 // validateFieldRenamesOnlyRename refuses a confirmed field rename that changes
@@ -91,7 +108,9 @@ func validateFieldRenamesOnlyRename(renames []Rename) error {
 	return nil
 }
 
-func buildArtifactWithPlannerContracts(ctx context.Context, name string, before *schema.Manifest, after schema.Manifest, renames []Rename, allowDestructive bool, source, target atlasPlannerContract, transforms ...ridumigration.DataTransformDescriptor) (ridumigration.Artifact, error) {
+// planArtifact is the deterministic planner shared by artifact creation and
+// the runner's exact regeneration of committed artifacts.
+func planArtifact(ctx context.Context, name string, before *schema.Manifest, after schema.Manifest, renames []Rename, allowDestructive bool, transforms ...ridumigration.DataTransformDescriptor) (ridumigration.Artifact, error) {
 	if err := primitivefield.ValidateManifestIndexes(after); err != nil {
 		return ridumigration.Artifact{}, err
 	}
@@ -108,7 +127,7 @@ func buildArtifactWithPlannerContracts(ctx context.Context, name string, before 
 			return ridumigration.Artifact{}, err
 		}
 	}
-	artifact, err := ridumigration.NewArtifact(name, atlasPlannerForContract(target), before, after)
+	artifact, err := ridumigration.NewArtifact(name, atlasPlanner(), before, after)
 	if err != nil {
 		return ridumigration.Artifact{}, err
 	}
@@ -130,12 +149,9 @@ func buildArtifactWithPlannerContracts(ctx context.Context, name string, before 
 		if blocked := unsafeCapabilityDisables(before.Snapshot(), after.Snapshot(), renames); len(blocked) != 0 {
 			return ridumigration.Artifact{}, &SafetyError{Risks: blocked}
 		}
-		if source.version == atlasVersionV1 && target.version == AtlasVersion && len(ridumigration.AuthIdentityResources(before.Snapshot())) != 0 && len(ridumigration.RetainedAuthIdentityResources(before.Snapshot(), after.Snapshot())) == 0 {
-			return ridumigration.Artifact{}, fmt.Errorf("PostgreSQL planner upgrade cannot replace or remove every legacy auth identity field; create the canonical auth identity artifact before that schema transition")
-		}
 	}
 	if before == nil {
-		changes, err := atlaspostgres.DefaultDiff.SchemaDiff(emptyAtlasSchema(), atlasSchemaForContract(after, atlasIdentityMap{}, target))
+		changes, err := atlaspostgres.DefaultDiff.SchemaDiff(emptyAtlasSchema(), atlasSchema(after, atlasIdentityMap{}))
 		if err != nil {
 			return ridumigration.Artifact{}, fmt.Errorf("Atlas initial schema diff: %w", err)
 		}
@@ -163,10 +179,7 @@ func buildArtifactWithPlannerContracts(ctx context.Context, name string, before 
 				return ridumigration.Artifact{}, fmt.Errorf("PostgreSQL block bounds at %q were tightened; register a compiled data transform that validates or repairs existing values before adopting the new bounds", path)
 			}
 		}
-		if source.version != target.version && len(renames) != 0 {
-			return ridumigration.Artifact{}, fmt.Errorf("PostgreSQL planner upgrade cannot be combined with collection or field renames; create the canonical auth identity artifact first")
-		}
-		renameSteps, renameRisks, err := atlasRenameSteps(ctx, name, *before, mapping, renames, source)
+		renameSteps, renameRisks, err := atlasRenameSteps(ctx, name, *before, mapping, renames)
 		if err != nil {
 			return ridumigration.Artifact{}, err
 		}
@@ -177,7 +190,7 @@ func buildArtifactWithPlannerContracts(ctx context.Context, name string, before 
 			operations = append(operations, ridumigration.Operation{Kind: ridumigration.StepRenameContent, Name: renameStepName(rename), Rename: &intent})
 		}
 
-		changes, err := atlaspostgres.DefaultDiff.SchemaDiff(atlasSchemaForContract(*before, mapping, source), atlasSchemaForContract(after, atlasIdentityMap{}, target))
+		changes, err := atlaspostgres.DefaultDiff.SchemaDiff(atlasSchema(*before, mapping), atlasSchema(after, atlasIdentityMap{}))
 		if err != nil {
 			return ridumigration.Artifact{}, fmt.Errorf("Atlas schema diff: %w", err)
 		}
@@ -205,6 +218,13 @@ func buildArtifactWithPlannerContracts(ctx context.Context, name string, before 
 			// owner's complete version history is purged transactionally.
 			return ridumigration.Artifact{}, &SafetyError{Risks: blocked}
 		}
+		if len(transforms) == 0 {
+			if err := fieldchange.RequireTransform(before.Snapshot(), after.Snapshot()); err != nil {
+				return ridumigration.Artifact{}, &SafetyError{Risks: []ridumigration.Risk{{
+					Code: "RIDU_FIELD_KIND_CHANGE_REQUIRES_TRANSFORM", Level: ridumigration.RiskDestructive, Message: err.Error(),
+				}}}
+			}
+		}
 		if len(removed) != 0 {
 			steps, err = insertResourceRetirementBeforeDrop(steps, removed, purgeVersionOwners)
 			if err != nil {
@@ -221,16 +241,6 @@ func buildArtifactWithPlannerContracts(ctx context.Context, name string, before 
 				})
 			}
 		}
-		if postgresAuthIdentityUpgradeRequired(source, target, before.Snapshot(), after.Snapshot()) {
-			operations = append(operations, ridumigration.Operation{
-				Kind: ridumigration.StepCanonicalizeAuthIdentities, Name: "canonicalize authored authentication identities",
-				AuthIdentities: ridumigration.RetainedAuthIdentityResources(before.Snapshot(), after.Snapshot()),
-			})
-			artifact.Risks = append(artifact.Risks, ridumigration.Risk{
-				Code: "RIDU_AUTH_IDENTITY_CANONICALIZATION", Level: ridumigration.RiskWarning,
-				Message: "rewrite authored authentication identities to the shared lowercase-and-trimmed key after a collision preflight; coordinate the migration with application writers",
-			})
-		}
 		operations = append(operations, steps...)
 		artifact.Risks = append(artifact.Risks, physicalChangeRisks(changes)...)
 		artifact.Risks = append(artifact.Risks, risks...)
@@ -245,7 +255,7 @@ func buildArtifactWithPlannerContracts(ctx context.Context, name string, before 
 			Message: "rebuild the derived current-document reference index with a whole-dataset scan of active and trashed content; coordinate this migration with deployment traffic",
 		})
 	}
-	if before != nil && artifact.FromDigest == artifact.ToDigest && !postgresAuthIdentityUpgradeRequired(source, target, before.Snapshot(), after.Snapshot()) && len(transforms) == 0 {
+	if before != nil && artifact.FromDigest == artifact.ToDigest && len(transforms) == 0 {
 		return ridumigration.Artifact{}, fmt.Errorf("%w; no migration steps were planned", migrationartifact.ErrSchemaCurrent)
 	}
 	artifact.Risks = normalizeRisks(artifact.Risks)
@@ -273,10 +283,6 @@ func buildArtifactWithPlannerContracts(ctx context.Context, name string, before 
 		return ridumigration.Artifact{}, err
 	}
 	return artifact, nil
-}
-
-func postgresAuthIdentityUpgradeRequired(source, target atlasPlannerContract, before, after schema.Snapshot) bool {
-	return source.version == atlasVersionV1 && target.version == AtlasVersion && len(ridumigration.RetainedAuthIdentityResources(before, after)) != 0
 }
 
 // withStableCollectionSlugRenames makes a public slug change on an immutable
@@ -608,10 +614,6 @@ func payloadFromOperation(step ridumigration.Operation) (json.RawMessage, error)
 		return ridumigration.MarshalStepPayload(ridumigration.RetireResourcesPayload{
 			ResourceIDs:          append([]schema.StableID(nil), step.ResourceIDs...),
 			PurgeVersionOwnerIDs: append([]schema.StableID(nil), step.PurgeVersionOwnerIDs...),
-		})
-	case ridumigration.StepCanonicalizeAuthIdentities:
-		return ridumigration.MarshalStepPayload(ridumigration.CanonicalizeAuthIdentitiesPayload{
-			Resources: append([]ridumigration.AuthIdentityResource(nil), step.AuthIdentities...),
 		})
 	case ridumigration.StepAssertSchema:
 		return ridumigration.MarshalStepPayload(ridumigration.AssertSchemaPayload{})
@@ -1418,9 +1420,9 @@ func atlasRenameMapping(renames []Rename) (atlasIdentityMap, error) {
 	return mapping, nil
 }
 
-func atlasRenameSteps(ctx context.Context, name string, before schema.Manifest, mapping atlasIdentityMap, renames []Rename, contract atlasPlannerContract) ([]ridumigration.Operation, []ridumigration.Risk, error) {
-	original := atlasSchemaForContract(before, atlasIdentityMap{}, contract)
-	rebased := atlasSchemaForContract(before, mapping, contract)
+func atlasRenameSteps(ctx context.Context, name string, before schema.Manifest, mapping atlasIdentityMap, renames []Rename) ([]ridumigration.Operation, []ridumigration.Risk, error) {
+	original := atlasSchema(before, atlasIdentityMap{})
+	rebased := atlasSchema(before, mapping)
 	var locales []schema.LocaleCode
 	if localization := before.Snapshot().Application.Localization; localization != nil {
 		locales = localization.LocaleCodes()

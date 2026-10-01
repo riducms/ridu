@@ -5,9 +5,9 @@ import path from 'node:path';
 import { parseCodeLineAnnotations, validateCodeLineAnnotations } from './code-line-annotations';
 
 describe('parseCodeLineAnnotations', () => {
-	it('maps added and highlighted ranges to one-based source lines', () => {
+	it('maps added and focused ranges to one-based source lines', () => {
 		const annotations = parseCodeLineAnnotations(
-			'title="content/richtext.go" add={1,8-11} highlight={3-5}',
+			'title="content/richtext.go" add={1,8-11} focus={3-5}',
 			12
 		);
 
@@ -26,7 +26,7 @@ describe('parseCodeLineAnnotations', () => {
 	});
 
 	it('combines overlapping and repeated annotations deterministically', () => {
-		const annotations = parseCodeLineAnnotations('focus={2-4} add={3,4} add={3}, highlight={4}', 5);
+		const annotations = parseCodeLineAnnotations('focus={2-4} add={3,4} add={3}, focus={4}', 5);
 
 		expect(annotations).toEqual([
 			{ lineNumber: 1, classes: [], marker: null },
@@ -60,7 +60,7 @@ describe('parseCodeLineAnnotations', () => {
 
 	it('ignores quoted lookalikes, malformed selectors, and out-of-bounds lines', () => {
 		const annotations = parseCodeLineAnnotations(
-			`title="add={1}" label='highlight={2}' add={0,2-3,4-2,nope,8-10} highlight={3-99}`,
+			`title="add={1}" label='focus={2}' add={0,2-3,4-2,nope,8-10} focus={3-99}`,
 			5
 		);
 
@@ -90,7 +90,7 @@ describe('parseCodeLineAnnotations', () => {
 		for await (const relativePath of glob.scan({ cwd: contentRoot })) {
 			const source = readFileSync(path.join(contentRoot, relativePath), 'utf8');
 			const fences = source.matchAll(
-				/^[ \t]*```[^\n]*\b(?:add|remove|highlight|focus)=\{[^\n]+\}[^\n]*\n([\s\S]*?)^[ \t]*```/gm
+				/^[ \t]*```[^\n]*\b(?:add|remove|focus)=\{[^\n]+\}[^\n]*\n([\s\S]*?)^[ \t]*```/gm
 			);
 			for (const fence of fences) {
 				const code = fence[1]?.replace(/\n$/, '') ?? '';

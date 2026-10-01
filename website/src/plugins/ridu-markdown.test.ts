@@ -160,7 +160,7 @@ describe('riduMarkdownCodeMetadata', () => {
 		const node = {
 			type: 'code',
 			lang: 'go',
-			meta: 'title="content/example.go" add={2-3} highlight={4}',
+			meta: 'title="content/example.go" add={2-3} focus={4}',
 			value: 'package content\n\nfunc Example() {\n}\n'
 		};
 

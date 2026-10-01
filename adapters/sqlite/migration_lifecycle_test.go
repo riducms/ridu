@@ -188,7 +188,7 @@ func TestSQLiteProjectMigrationDriverExecutesValidatedArtifactSnapshot(t *testin
 				if err != nil {
 					t.Fatal(err)
 				}
-				if err := backend.applySQLiteArtifacts(ctx, files, sqlitePlannerContractFor, registry); err != nil {
+				if err := backend.applySQLiteArtifacts(ctx, files, registry); err != nil {
 					backend.Close()
 					t.Fatal(err)
 				}
@@ -213,7 +213,7 @@ func TestSQLiteProjectMigrationDriverExecutesValidatedArtifactSnapshot(t *testin
 				t.Fatal(err)
 			}
 			defer backend.Close()
-			statuses, err := backend.artifactStatusWithResolver(ctx, files, sqlitePlannerContractFor)
+			statuses, err := backend.artifactStatus(ctx, files)
 			if err != nil {
 				t.Fatal(err)
 			}

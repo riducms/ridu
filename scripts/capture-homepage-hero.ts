@@ -302,7 +302,6 @@ async function capture() {
 			locale: "en-US",
 			viewport: { width: 1600, height: 1000 },
 		});
-		await context.addInitScript(() => localStorage.setItem("ridu-theme", "dark"));
 		const page = await context.newPage();
 		await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
 		await page.goto("/admin/login");

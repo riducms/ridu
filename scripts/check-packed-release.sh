@@ -89,6 +89,9 @@ for package_directory in "$package_root"/*; do
 			exit 1
 		fi
 		compiled_files=(package/dist/index.js package/dist/index.d.ts)
+		if [[ "$package_target" == "ridu-framework-sdk" ]]; then
+			compiled_files+=(package/dist/richtext/index.js package/dist/richtext/index.d.ts)
+		fi
 		if [[ "$package_target" == "ridu-framework-build" ]]; then
 			compiled_files+=(
 				package/dist/uno/index.js
@@ -126,14 +129,20 @@ mkdir -p "$node_consumer"
 		import assert from "node:assert/strict";
 		import { PROTOCOL_VERSION } from "@riducms/protocol";
 		import { createClient, RiduError } from "@riducms/sdk";
+		import { renderRichTextHTML } from "@riducms/sdk/richtext";
 		assert.equal(typeof PROTOCOL_VERSION, "number");
 		assert.equal(typeof createClient, "function");
 		assert.equal(typeof RiduError, "function");
 		assert.equal(typeof createClient({ baseURL: "https://example.test" }).schema, "function");
+		assert.equal(
+			renderRichTextHTML({ version: 1, root: { type: "root", children: [{ type: "paragraph", children: [{ type: "text", text: "<Hi>" }] }] } }),
+			"<p>&lt;Hi&gt;</p>"
+		);
 	'
 	printf '%s\n' \
 		'import { PROTOCOL_VERSION } from "@riducms/protocol";' \
 		'import { createClient, type ClientOptions, type RequestOptions } from "@riducms/sdk";' \
+		'import { renderRichTextHTML, type RichTextDocument } from "@riducms/sdk/richtext";' \
 		'const options: ClientOptions = {' \
 		'  baseURL: "https://example.test",' \
 		'  headers: { authorization: "Bearer test" },' \
@@ -141,7 +150,9 @@ mkdir -p "$node_consumer"
 		'};' \
 		'const requestOptions: RequestOptions = { headers: [["x-ridu", "test"]] };' \
 		'void createClient(options).schema(requestOptions);' \
-		'void PROTOCOL_VERSION;' > consumer.ts
+		'void PROTOCOL_VERSION;' \
+		'const document: RichTextDocument = { version: 1, root: { type: "root", children: [] } };' \
+		'void renderRichTextHTML(document);' > consumer.ts
 	printf '%s\n' \
 		'{' \
 		'  "compilerOptions": {' \

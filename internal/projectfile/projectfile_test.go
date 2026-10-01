@@ -13,6 +13,7 @@ func TestDiscoverFromNestedDirectory(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, "ridu.toml"), `version = 1
 database = "postgres"
+package_manager = "bun"
 entry = "./cmd/server"
 schema = "./generated/ridu.schema.json"
 plugins = "./ridu.plugins.json"
@@ -41,9 +42,9 @@ func TestLoadSelectsAnOfficialDatabaseAdapter(t *testing.T) {
 		line     string
 		expected projectfile.DatabaseAdapter
 	}{
-		{name: "postgres", line: "database = \"postgres\"\n", expected: projectfile.DatabasePostgres},
-		{name: "sqlite", line: "database = \"sqlite\"\n", expected: projectfile.DatabaseSQLite},
-		{name: "mongodb", line: "database = \"mongodb\"\n", expected: projectfile.DatabaseMongoDB},
+		{name: "postgres", line: "database = \"postgres\"\npackage_manager = \"bun\"\n", expected: projectfile.DatabasePostgres},
+		{name: "sqlite", line: "database = \"sqlite\"\npackage_manager = \"bun\"\n", expected: projectfile.DatabaseSQLite},
+		{name: "mongodb", line: "database = \"mongodb\"\npackage_manager = \"bun\"\n", expected: projectfile.DatabaseMongoDB},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "ridu.toml")
@@ -73,20 +74,10 @@ func TestLoadSelectsAFrontendPackageManager(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if project.FrontendPackageManager() != manager {
-				t.Fatalf("package manager = %q, want %q", project.FrontendPackageManager(), manager)
+			if project.PackageManager != manager {
+				t.Fatalf("package manager = %q, want %q", project.PackageManager, manager)
 			}
 		})
-	}
-
-	path := filepath.Join(t.TempDir(), "ridu.toml")
-	writeFile(t, path, "version = 1\ndatabase = \"postgres\"\nentry = \"./cmd/server\"\nschema = \"./schema.json\"\nplugins = \"./plugins.json\"\nplugin_go = \"./content/plugins.go\"\n")
-	project, err := projectfile.Load(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if project.FrontendPackageManager() != projectfile.PackageManagerBun {
-		t.Fatalf("legacy package manager = %q, want bun", project.FrontendPackageManager())
 	}
 }
 
@@ -98,11 +89,12 @@ func TestLoadRejectsVersionAndEscapingPaths(t *testing.T) {
 	}{
 		{"version", "version = 99\nentry = \"./cmd/server\"\nschema = \"./schema.json\"\n", "incompatible"},
 		{"missing database", "version = 1\nentry = \"./cmd/server\"\nschema = \"./schema.json\"\nplugins = \"./plugins.json\"\nplugin_go = \"./content/plugins.go\"\n", "database is required"},
-		{"escape", "version = 1\ndatabase = \"postgres\"\nentry = \"../server\"\nschema = \"./schema.json\"\nplugins = \"./plugins.json\"\nplugin_go = \"./content/plugins.go\"\n", "inside the project root"},
-		{"unknown", "version = 1\ndatabase = \"postgres\"\nentry = \"./cmd/server\"\nschema = \"./schema.json\"\nplugins = \"./plugins.json\"\nplugin_go = \"./content/plugins.go\"\nsecret = \"no\"\n", "unknown project key"},
-		{"database", "version = 1\ndatabase = \"mysql\"\nentry = \"./cmd/server\"\nschema = \"./schema.json\"\nplugins = \"./plugins.json\"\nplugin_go = \"./content/plugins.go\"\n", "adapter \"mysql\" is unsupported; expected \"postgres\", \"sqlite\", or \"mongodb\""},
+		{"escape", "version = 1\ndatabase = \"postgres\"\npackage_manager = \"bun\"\nentry = \"../server\"\nschema = \"./schema.json\"\nplugins = \"./plugins.json\"\nplugin_go = \"./content/plugins.go\"\n", "inside the project root"},
+		{"unknown", "version = 1\ndatabase = \"postgres\"\npackage_manager = \"bun\"\nentry = \"./cmd/server\"\nschema = \"./schema.json\"\nplugins = \"./plugins.json\"\nplugin_go = \"./content/plugins.go\"\nsecret = \"no\"\n", "unknown project key"},
+		{"database", "version = 1\ndatabase = \"mysql\"\npackage_manager = \"bun\"\nentry = \"./cmd/server\"\nschema = \"./schema.json\"\nplugins = \"./plugins.json\"\nplugin_go = \"./content/plugins.go\"\n", "adapter \"mysql\" is unsupported; expected \"postgres\", \"sqlite\", or \"mongodb\""},
+		{"package manager required", "version = 1\ndatabase = \"postgres\"\nentry = \"./cmd/server\"\nschema = \"./schema.json\"\nplugins = \"./plugins.json\"\nplugin_go = \"./content/plugins.go\"\n", "package_manager is required"},
 		{"package manager", "version = 1\ndatabase = \"postgres\"\npackage_manager = \"deno\"\nentry = \"./cmd/server\"\nschema = \"./schema.json\"\nplugins = \"./plugins.json\"\nplugin_go = \"./content/plugins.go\"\n", "manager \"deno\" is unsupported"},
-		{"client directory", "version = 1\ndatabase = \"postgres\"\nentry = \"./cmd/server\"\nschema = \"./schema.json\"\nclient = \"./packages/ridu-client\"\nplugins = \"./plugins.json\"\nplugin_go = \"./content/plugins.go\"\n", "must name a TypeScript file"},
+		{"client directory", "version = 1\ndatabase = \"postgres\"\npackage_manager = \"bun\"\nentry = \"./cmd/server\"\nschema = \"./schema.json\"\nclient = \"./packages/ridu-client\"\nplugins = \"./plugins.json\"\nplugin_go = \"./content/plugins.go\"\n", "must name a TypeScript file"},
 	}
 
 	for _, test := range tests {
@@ -120,7 +112,7 @@ func TestLoadRejectsVersionAndEscapingPaths(t *testing.T) {
 func TestLoadAllowsAProjectRootServerEntry(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "ridu.toml")
-	writeFile(t, path, "version = 1\ndatabase = \"postgres\"\nentry = \".\"\nschema = \"./generated/schema.json\"\nplugins = \"./plugins.json\"\nplugin_go = \"./content/plugins.go\"\n")
+	writeFile(t, path, "version = 1\ndatabase = \"postgres\"\npackage_manager = \"bun\"\nentry = \".\"\nschema = \"./generated/schema.json\"\nplugins = \"./plugins.json\"\nplugin_go = \"./content/plugins.go\"\n")
 	project, err := projectfile.Load(path)
 	if err != nil {
 		t.Fatal(err)
@@ -133,7 +125,7 @@ func TestLoadAllowsAProjectRootServerEntry(t *testing.T) {
 func TestLoadAcceptsAProjectRelativeGeneratedArtifact(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "ridu.toml")
-	writeFile(t, path, "version = 1\ndatabase = \"postgres\"\nentry = \"./cmd/server\"\nschema = \"./generated/schema.json\"\ngenerated.graphql.schema = \"./apps/web/generated/ridu.graphql\"\nplugins = \"./plugins.json\"\nplugin_go = \"./content/plugins.go\"\n")
+	writeFile(t, path, "version = 1\ndatabase = \"postgres\"\npackage_manager = \"bun\"\nentry = \"./cmd/server\"\nschema = \"./generated/schema.json\"\ngenerated.graphql.schema = \"./apps/web/generated/ridu.graphql\"\nplugins = \"./plugins.json\"\nplugin_go = \"./content/plugins.go\"\n")
 	project, err := projectfile.Load(path)
 	if err != nil {
 		t.Fatal(err)
@@ -159,7 +151,7 @@ func TestLoadRejectsInvalidOrCollidingGeneratedArtifacts(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "ridu.toml")
-			writeFile(t, path, "version = 1\ndatabase = \"postgres\"\nentry = \"./cmd/server\"\nschema = \"./generated/schema.json\"\n"+test.key+" = \"./"+test.path+"\"\nplugins = \"./plugins.json\"\nplugin_go = \"./content/plugins.go\"\n")
+			writeFile(t, path, "version = 1\ndatabase = \"postgres\"\npackage_manager = \"bun\"\nentry = \"./cmd/server\"\nschema = \"./generated/schema.json\"\n"+test.key+" = \"./"+test.path+"\"\nplugins = \"./plugins.json\"\nplugin_go = \"./content/plugins.go\"\n")
 			_, err := projectfile.Load(path)
 			if err == nil || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("Load error = %v, want containing %q", err, test.want)
@@ -175,7 +167,7 @@ func TestLoadAdmitsConsumerContractsOutsideTheRoot(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	writeFile(t, path, "version = 1\ndatabase = \"postgres\"\nentry = \"./cmd/server\"\nschema = \"./generated/schema.json\"\nclient = \"../mobile/lib/ridu.generated.ts\"\nopenapi = \"../docs/ridu.openapi.json\"\nplugins = \"./plugins.json\"\nplugin_go = \"./content/plugins.go\"\n")
+	writeFile(t, path, "version = 1\ndatabase = \"postgres\"\npackage_manager = \"bun\"\nentry = \"./cmd/server\"\nschema = \"./generated/schema.json\"\nclient = \"../mobile/lib/ridu.generated.ts\"\nopenapi = \"../docs/ridu.openapi.json\"\nplugins = \"./plugins.json\"\nplugin_go = \"./content/plugins.go\"\n")
 	project, err := projectfile.Load(path)
 	if err != nil {
 		t.Fatal(err)
@@ -187,7 +179,7 @@ func TestLoadAdmitsConsumerContractsOutsideTheRoot(t *testing.T) {
 		t.Fatalf("WithinRoot misclassified %q or %q", project.Client, project.Schema)
 	}
 	for _, key := range []string{"migrations", "admin", "assets"} {
-		writeFile(t, path, "version = 1\ndatabase = \"postgres\"\nentry = \"./cmd/server\"\nschema = \"./generated/schema.json\"\nplugins = \"./plugins.json\"\nplugin_go = \"./content/plugins.go\"\n"+key+" = \"../outside\"\n")
+		writeFile(t, path, "version = 1\ndatabase = \"postgres\"\npackage_manager = \"bun\"\nentry = \"./cmd/server\"\nschema = \"./generated/schema.json\"\nplugins = \"./plugins.json\"\nplugin_go = \"./content/plugins.go\"\n"+key+" = \"../outside\"\n")
 		if _, err := projectfile.Load(path); err == nil || !strings.Contains(err.Error(), "inside the project root") {
 			t.Fatalf("%s outside the root: Load error = %v", key, err)
 		}

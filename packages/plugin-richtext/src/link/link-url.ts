@@ -1,5 +1,5 @@
 import { formatUrl } from "@lexical/link";
-import { renderableRichTextURL } from "@plugin-richtext/link-url-policy";
+import { safeRichTextURL } from "@riducms/sdk/richtext";
 
 const relativeURL = /^(?:\/|\.|#)/;
 
@@ -9,10 +9,8 @@ export function normalizeLinkURL(value: string): string | undefined {
 	if (trimmed === "" || /[\u0000-\u001f\u007f\s]/.test(trimmed)) return undefined;
 
 	const normalized = formatUrl(trimmed);
-	const safeURL = renderableRichTextURL(normalized);
-	if (safeURL === undefined) return undefined;
-
 	try {
+		const safeURL = safeRichTextURL(normalized);
 		const parsed = new URL(safeURL, "https://ridu.invalid");
 		if (
 			!relativeURL.test(safeURL) &&
@@ -22,9 +20,8 @@ export function normalizeLinkURL(value: string): string | undefined {
 			return undefined;
 		if ((parsed.protocol === "mailto:" || parsed.protocol === "tel:") && parsed.pathname === "")
 			return undefined;
+		return safeURL;
 	} catch {
 		return undefined;
 	}
-
-	return safeURL;
 }

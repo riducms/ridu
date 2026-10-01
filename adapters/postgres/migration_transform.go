@@ -573,7 +573,7 @@ func (driver *postgresProjectMigrationDriver) RunProjectMigration(ctx context.Co
 	if err != nil {
 		return err
 	}
-	files, err := migrationartifact.RequireCurrentHistoryForPlanner(request.Directory, executableManifest, "atlas")
+	files, err := migrationartifact.RequireCurrentHistoryForPlanner(request.Directory, executableManifest, atlasPlannerName)
 	if err != nil {
 		return err
 	}

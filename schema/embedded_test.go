@@ -15,8 +15,7 @@ func TestEmbeddedMetadataRejectsCyclicSchemaBeforeCloning(t *testing.T) {
 }
 
 func TestEmbeddedMappingsUseFieldTypeIdentityRegardlessOfPluginOrder(t *testing.T) {
-	owner := Plugin{Key: "shapes", Version: "1.0.0", GoPackage: "example.com/shapes", APIVersion: CurrentPluginAPIVersion,
-		Ridu:       &PluginCompatibility{Minimum: "0.1.0"},
+	owner := Plugin{Key: "shapes", GoPackage: "example.com/shapes", APIVersion: CurrentPluginAPIVersion,
 		FieldTypes: []PluginFieldType{{Key: "outline", TypeScriptPackage: "@example/shapes", TypeScriptOutput: "Value", TypeScriptInput: "Value", EmbeddedTypes: []string{"widgets.widget"}}},
 	}
 	unrelated := owner
@@ -42,8 +41,7 @@ func TestEmbeddedMappingsUseFieldTypeIdentityRegardlessOfPluginOrder(t *testing.
 }
 
 func TestMinimalPluginFieldClaimsCannotOverlapDescriptorClaims(t *testing.T) {
-	owner := Plugin{Key: "shapes", Version: "1.0.0", GoPackage: "example.com/shapes", APIVersion: CurrentPluginAPIVersion,
-		Ridu:       &PluginCompatibility{Minimum: "0.1.0"},
+	owner := Plugin{Key: "shapes", GoPackage: "example.com/shapes", APIVersion: CurrentPluginAPIVersion,
 		FieldTypes: []PluginFieldType{{Key: "outline", TypeScriptPackage: "@example/shapes", TypeScriptOutput: "Value", TypeScriptInput: "Value"}},
 	}
 	minimal := Plugin{Key: "outline"}

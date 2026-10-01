@@ -50,6 +50,7 @@
 	import { getBreadcrumbs } from "@admin/features/navigation/breadcrumb-context.svelte";
 	import DocumentActionBar from "@admin/features/documents/document-action-bar.svelte";
 	import DocumentOperationDialogs from "@admin/features/documents/document-operation-dialogs.svelte";
+	import DocumentDraftRecovery from "@admin/features/documents/document-draft-recovery.svelte";
 	import DocumentCredentials from "@admin/features/documents/document-credentials.svelte";
 
 	import "@admin/features/documents/document.scss";
@@ -170,6 +171,7 @@
 	let livePreviewOpen = $state(false);
 	// Sticky content inside the document, such as a rich-text toolbar, stays below the action bar.
 	let actionBarHeight = $state(0);
+	let documentTitle = $state<HTMLHeadingElement | null>(null);
 	let viewport: HTMLElement | null = null;
 	let fieldsViewport: HTMLElement | null = null;
 	const attachViewport: Attachment<HTMLElement> = (element) => {
@@ -359,7 +361,9 @@
 	<header class="ridu-document-header">
 		<div class="ridu-document-heading">
 			<h1
+				bind:this={documentTitle}
 				class="ridu-document-title"
+				tabindex="-1"
 				aria-busy={controller.loading &&
 					controller.currentDocument === undefined &&
 					!controller.creating}
@@ -441,6 +445,9 @@
 			class="ridu-document-editor"
 		>
 			<div class="ridu-document-fields">
+				{#if controller.recoveryConflict !== undefined}
+					<DocumentDraftRecovery {controller} onResolved={() => documentTitle?.focus()} />
+				{/if}
 				{#if controller.lock.error !== undefined}
 					<Banner class="ridu-document-notice" tone="destructive">
 						<span class="ridu-document-notice__message">{controller.lock.error}</span>
@@ -530,7 +537,10 @@
 						novalidate
 						onsubmit={handleSave}
 					>
-						<fieldset class="ridu-document-form__fieldset" disabled={form.submitting}>
+						<fieldset
+							class="ridu-document-form__fieldset"
+							disabled={form.submitting || controller.recoveryConflict !== undefined}
+						>
 							{#if controller.uploadCollection && controller.collection?.uploadSettings}
 								{#key JSON.stringify([globalResource, slug, routeDocumentID, activeLocale])}
 									<UploadDocumentPreview

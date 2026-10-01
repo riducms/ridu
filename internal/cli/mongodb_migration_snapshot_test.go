@@ -21,7 +21,7 @@ func TestMongoDBCLICommandsExecuteFinalValidatedHistorySnapshot(t *testing.T) {
 		t.Run(mutation, func(t *testing.T) {
 			directory := t.TempDir()
 			manifest := resolveMongoDBCLITestManifest(t, false)
-			created, err := mongodb.CreateArtifact(ctx, directory, "initial", manifest, time.Unix(1, 0))
+			created, err := mongodb.CreateArtifact(ctx, directory, "initial", manifest, time.Unix(1, 0), mongodb.ArtifactOptions{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -35,7 +35,7 @@ func TestMongoDBCLICommandsExecuteFinalValidatedHistorySnapshot(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			if _, err := mongodb.CreateArtifact(ctx, directory, mutation, changedManifest, time.Unix(2, 0)); err != nil {
+			if _, err := mongodb.CreateArtifact(ctx, directory, mutation, changedManifest, time.Unix(2, 0), mongodb.ArtifactOptions{}); err != nil {
 				t.Fatal(err)
 			}
 

@@ -13,7 +13,7 @@ import (
 // verifyPostgresPhysicalState runs the one non-mutating physical contract
 // check shared by readiness, status, and completed migration preflight. A nil
 // manifest represents the empty, pre-migration application schema.
-func verifyPostgresPhysicalState(ctx context.Context, connection *sql.Conn, manifest *schema.Manifest, contract atlasPlannerContract) error {
+func verifyPostgresPhysicalState(ctx context.Context, connection *sql.Conn, manifest *schema.Manifest) error {
 	transaction, err := connection.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
 		return err
@@ -21,7 +21,7 @@ func verifyPostgresPhysicalState(ctx context.Context, connection *sql.Conn, mani
 	if manifest == nil {
 		err = assertEmptyPhysicalSchema(ctx, transaction)
 	} else {
-		err = assertPhysicalSchemaForContract(ctx, transaction, *manifest, contract)
+		err = assertPhysicalSchema(ctx, transaction, *manifest)
 	}
 	if err != nil {
 		_ = transaction.Rollback()

@@ -40,18 +40,16 @@ func validatePostgresPlannedSQL(ctx context.Context, artifact ridumigration.Arti
 		manifest := schema.NewManifest(*artifact.Before)
 		before = &manifest
 	}
-	target := postgresArtifactTargetContract(artifact)
-	source := postgresArtifactSourceContract(artifact)
 	transforms, err := postgresArtifactDataTransformDescriptors(artifact)
 	if err != nil {
 		return migrationPlanMismatch("reconstruct compiled data transforms: %v", err)
 	}
-	expected, err := buildArtifactWithPlannerContracts(ctx, artifact.Name, before, after, renames, true, source, target, transforms...)
+	expected, err := planArtifact(ctx, artifact.Name, before, after, renames, true, transforms...)
 	if err != nil {
 		return migrationPlanMismatch("regenerate deterministic Atlas plan: %v", err)
 	}
-	if artifact.Planner.Name != expected.Planner.Name {
-		return migrationPlanMismatch("planner name does not match deterministic execution contract: got %q, want %q", artifact.Planner.Name, expected.Planner.Name)
+	if artifact.Planner != expected.Planner {
+		return migrationPlanMismatch("planner does not match deterministic execution contract: got %s %q, want %s %q", artifact.Planner.Name, artifact.Planner.Version, expected.Planner.Name, expected.Planner.Version)
 	}
 	if artifact.MinimumRunnerContract != expected.MinimumRunnerContract {
 		return migrationPlanMismatch("minimum runner contract does not match deterministic execution contract: got %d, want %d", artifact.MinimumRunnerContract, expected.MinimumRunnerContract)
@@ -63,42 +61,6 @@ func validatePostgresPlannedSQL(ctx context.Context, artifact ridumigration.Arti
 		return migrationPlanMismatch("migration risks do not exactly match deterministic Atlas findings: got %#v, want %#v", artifact.Risks, expected.Risks)
 	}
 	return nil
-}
-
-func postgresArtifactTargetContract(artifact ridumigration.Artifact) atlasPlannerContract {
-	return postgresPlannerTargetContract(artifact.Planner.Version)
-}
-
-func postgresPlannerTargetContract(version string) atlasPlannerContract {
-	target, supported := atlasPlannerContractFor(version)
-	if supported {
-		return target
-	}
-	// Atlas provenance may differ while the complete generated contract is
-	// identical. Unknown versions are therefore regenerated against the
-	// current semantic contract and retain their recorded provenance.
-	target = currentAtlasPlannerContract()
-	target.version = version
-	return target
-}
-
-func postgresArtifactSourceContract(artifact ridumigration.Artifact) atlasPlannerContract {
-	if artifactHasStep(artifact, ridumigration.StepCanonicalizeAuthIdentities) {
-		legacy, _ := atlasPlannerContractFor(atlasVersionV1)
-		return legacy
-	}
-	return postgresArtifactTargetContract(artifact)
-}
-
-func artifactHasStep(artifact ridumigration.Artifact, kind ridumigration.StepKind) bool {
-	for _, phase := range artifact.Phases {
-		for _, step := range phase.Steps {
-			if step.Kind == kind {
-				return true
-			}
-		}
-	}
-	return false
 }
 
 // CodeMigrationPlanMismatch is the stable boundary code for an artifact whose

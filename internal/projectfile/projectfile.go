@@ -25,8 +25,6 @@ const (
 )
 
 // PackageManager is the frontend dependency manager selected by a project.
-// Existing version-1 project files that omit the key retain Bun for backwards
-// compatibility; newly scaffolded projects always write the selection.
 type PackageManager string
 
 const (
@@ -184,7 +182,10 @@ func Load(path string) (File, error) {
 	if project.Database != DatabasePostgres && project.Database != DatabaseSQLite && project.Database != DatabaseMongoDB {
 		return File{}, fmt.Errorf("%s: database: adapter %q is unsupported; expected %q, %q, or %q", absolute, project.Database, DatabasePostgres, DatabaseSQLite, DatabaseMongoDB)
 	}
-	if project.PackageManager != "" && !project.PackageManager.Valid() {
+	if project.PackageManager == "" {
+		return File{}, fmt.Errorf("%s: package_manager is required; expected %q, %q, %q, or %q", absolute, PackageManagerNPM, PackageManagerBun, PackageManagerPNPM, PackageManagerYarn)
+	}
+	if !project.PackageManager.Valid() {
 		return File{}, fmt.Errorf("%s: package_manager: manager %q is unsupported; expected %q, %q, %q, or %q", absolute, project.PackageManager, PackageManagerNPM, PackageManagerBun, PackageManagerPNPM, PackageManagerYarn)
 	}
 	for _, required := range []struct {
@@ -271,15 +272,6 @@ func (manager PackageManager) Valid() bool {
 	default:
 		return false
 	}
-}
-
-// FrontendPackageManager returns the configured manager. Bun is the fallback
-// only for projects created before package_manager was added to version 1.
-func (project File) FrontendPackageManager() PackageManager {
-	if project.PackageManager.Valid() {
-		return project.PackageManager
-	}
-	return PackageManagerBun
 }
 
 func parseGeneratedArtifactKey(key string) (GeneratedArtifact, error) {

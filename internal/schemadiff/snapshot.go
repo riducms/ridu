@@ -23,13 +23,20 @@ func ReadManifest(path string) (schema.Manifest, bool, error) {
 	}
 	manifest, err := schema.Parse(encoded)
 	if err == nil {
-		var compact []byte
-		if compact, err = json.Marshal(manifest); err == nil {
-			manifest, err = schema.Parse(compact)
-		}
+		manifest, err = CompactManifest(manifest)
 	}
 	if err != nil {
 		return schema.Manifest{}, false, fmt.Errorf("parse schema manifest %s: %w", path, err)
 	}
 	return manifest, true, nil
+}
+
+// CompactManifest normalizes raw plugin configuration before structural
+// comparison, regardless of whether a snapshot came from a file or a database.
+func CompactManifest(manifest schema.Manifest) (schema.Manifest, error) {
+	compact, err := json.Marshal(manifest)
+	if err != nil {
+		return schema.Manifest{}, err
+	}
+	return schema.Parse(compact)
 }

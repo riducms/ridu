@@ -399,6 +399,15 @@ func applyArtifact(ctx context.Context, connection *sql.Conn, file migrationarti
 		_ = transaction.Rollback()
 		return false, err
 	}
+	after := schema.NewManifest(file.Artifact.After)
+	if err := assertPhysicalSchema(ctx, transaction, after); err != nil {
+		_ = transaction.Rollback()
+		return false, err
+	}
+	if err := writePostgresDevelopmentManifest(ctx, transaction, after); err != nil {
+		_ = transaction.Rollback()
+		return false, err
+	}
 	if err := transaction.Commit(); err != nil {
 		return false, fmt.Errorf("commit migration %s: %w", file.Name, err)
 	}
@@ -416,7 +425,7 @@ func assertArtifactPrecondition(ctx context.Context, transaction *sql.Tx, file m
 	if err != nil {
 		return err
 	}
-	if err := assertPhysicalSchemaForContract(ctx, transaction, before, postgresArtifactSourceContract(file.Artifact)); err != nil {
+	if err := assertPhysicalSchema(ctx, transaction, before); err != nil {
 		return fmt.Errorf("migration %s precondition: %w", file.Name, err)
 	}
 	return nil
@@ -622,20 +631,6 @@ func executeTransactionStep(ctx context.Context, connection *sql.Conn, transacti
 			return err
 		}
 		return retireFrameworkResourceState(ctx, transaction, payload.ResourceIDs, payload.PurgeVersionOwnerIDs)
-	case ridumigration.StepCanonicalizeAuthIdentities:
-		var payload ridumigration.CanonicalizeAuthIdentitiesPayload
-		if err := json.Unmarshal(step.Payload, &payload); err != nil {
-			return err
-		}
-		after, err := file.Artifact.AfterManifest()
-		if err != nil {
-			return err
-		}
-		before, err := file.Artifact.BeforeManifest()
-		if err != nil {
-			return err
-		}
-		return canonicalizePostgresAuthIdentities(ctx, transaction, before, after, payload.Resources)
 	case ridumigration.StepDataTransform:
 		var payload ridumigration.DataTransformPayload
 		if err := json.Unmarshal(step.Payload, &payload); err != nil {
@@ -651,7 +646,7 @@ func executeTransactionStep(ctx context.Context, connection *sql.Conn, transacti
 		if err != nil {
 			return err
 		}
-		return assertPhysicalSchemaForContract(ctx, transaction, after, postgresArtifactTargetContract(file.Artifact))
+		return assertPhysicalSchema(ctx, transaction, after)
 	default:
 		return fmt.Errorf("unsupported transaction executor %q", step.Kind)
 	}

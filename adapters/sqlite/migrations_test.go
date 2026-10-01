@@ -107,7 +107,7 @@ VALUES (?, ?, ?, ?, '', 0, ?)`, string(initial.Snapshot().Collections[0].ID), "e
 	if err := backend.Ready(ctx, additive); err != nil {
 		t.Fatal(err)
 	}
-	if err := backend.verifyImmutableReadyState(ctx, additive); err != nil {
+	if err := backend.verifyImmutableReadyState(ctx, additive, nil); err != nil {
 		t.Fatal(err)
 	}
 	var indexCount int
@@ -137,7 +137,7 @@ VALUES (?, ?, ?, ?, '', 0, ?)`, string(initial.Snapshot().Collections[0].ID), "e
 	if _, err := backend.ArtifactStatus(ctx, directory, additive); err == nil || !strings.Contains(err.Error(), "physical schema drift") {
 		t.Fatalf("manifest-owned index drift error = %v", err)
 	}
-	if err := backend.verifyImmutableReadyState(ctx, additive); err == nil || !strings.Contains(err.Error(), "physical schema drift") {
+	if err := backend.verifyImmutableReadyState(ctx, additive, nil); err == nil || !strings.Contains(err.Error(), "physical schema drift") {
 		t.Fatalf("manifest-owned index readiness error = %v", err)
 	}
 }
@@ -566,7 +566,7 @@ func TestSQLiteArtifactStatusRejectsEditedHistoryAndLedgerLineage(t *testing.T) 
 		if _, err := backend.ArtifactStatus(ctx, directory, manifest); err == nil || !strings.Contains(err.Error(), "manifest lineage differs") {
 			t.Fatalf("ledger lineage status error = %v", err)
 		}
-		if err := backend.verifyImmutableReadyState(ctx, manifest); err == nil || !strings.Contains(err.Error(), "does not match the recorded manifest digest") {
+		if err := backend.verifyImmutableReadyState(ctx, manifest, nil); err == nil || !strings.Contains(err.Error(), "does not match the recorded manifest digest") {
 			t.Fatalf("ledger lineage readiness error = %v", err)
 		}
 	})
@@ -590,7 +590,7 @@ func TestSQLiteArtifactStatusRejectsEditedHistoryAndLedgerLineage(t *testing.T) 
 		if _, err := backend.ArtifactStatus(ctx, directory, manifest); err == nil || !strings.Contains(err.Error(), "planner provenance differs") {
 			t.Fatalf("ledger planner status error = %v", err)
 		}
-		if err := backend.verifyImmutableReadyState(ctx, manifest); err == nil || !strings.Contains(err.Error(), "unsupported planner version") {
+		if err := backend.verifyImmutableReadyState(ctx, manifest, nil); err == nil || !strings.Contains(err.Error(), "unsupported planner version") {
 			t.Fatalf("ledger planner readiness error = %v", err)
 		}
 	})
@@ -709,7 +709,7 @@ func TestSQLitePhysicalSchemaClassifiesApplicationObjectsOnManagedTables(t *test
 				}
 			}
 			if !test.wantReject {
-				if err := assertSQLitePhysicalSchema(ctx, runner, manifest, false, currentSQLitePlannerContract()); err != nil {
+				if err := assertSQLitePhysicalSchema(ctx, runner, manifest, false); err != nil {
 					t.Fatalf("physical schema assertion rejected harmless index: %v", err)
 				}
 				if err := backend.Ready(ctx, manifest); err != nil {
@@ -718,7 +718,7 @@ func TestSQLitePhysicalSchemaClassifiesApplicationObjectsOnManagedTables(t *test
 				return
 			}
 			want := "unexpected behavior-changing object " + test.objectKey
-			if err := assertSQLitePhysicalSchema(ctx, runner, manifest, false, currentSQLitePlannerContract()); err == nil || !strings.Contains(err.Error(), want) {
+			if err := assertSQLitePhysicalSchema(ctx, runner, manifest, false); err == nil || !strings.Contains(err.Error(), want) {
 				t.Fatalf("physical schema assertion error = %v, want %q", err, want)
 			}
 			if err := backend.Ready(ctx, manifest); err == nil || !strings.Contains(err.Error(), want) {
@@ -735,7 +735,7 @@ func TestSQLiteDevelopmentMigrateReadinessDoesNotRequireArtifactLedger(t *testin
 	if err := backend.Migrate(ctx, manifest); err != nil {
 		t.Fatal(err)
 	}
-	if err := backend.verifyImmutableReadyState(ctx, manifest); err != nil {
+	if err := backend.verifyImmutableReadyState(ctx, manifest, nil); err != nil {
 		t.Fatalf("development migration readiness = %v", err)
 	}
 	expectedHistory, err := migration.DigestArtifactHistory([]migration.ArtifactIdentity{{
@@ -807,7 +807,7 @@ func TestSQLiteDevelopmentReadyRechecksDigestInsideVerificationSnapshot(t *testi
 	continueVerification <- struct{}{}
 	select {
 	case err := <-readyErrors:
-		if err == nil || !strings.Contains(err.Error(), "does not match executable digest") {
+		if err == nil || !strings.Contains(err.Error(), "recorded SQLite development manifest digest does not match its manifest") {
 			t.Fatalf("concurrently changed development digest readiness error = %v", err)
 		}
 	case <-time.After(5 * time.Second):

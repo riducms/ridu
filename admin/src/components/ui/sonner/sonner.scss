@@ -65,6 +65,9 @@
 		margin-top: 2px;
 		font-weight: 400;
 	}
+	.ridu-toast__action {
+		flex-shrink: 0;
+	}
 	.ridu-toast__icon {
 		display: flex;
 		align-items: center;

@@ -1,7 +1,8 @@
 import type { ReferenceModule, ReferenceSymbol } from '@/reference';
+import { normalizeSearchQuery } from './rank';
 
 function searchVariants(value: string): string[] {
-	const normalized = value.normalize('NFKC').toLocaleLowerCase();
+	const normalized = normalizeSearchQuery(value);
 	const identifierWords = value
 		.replaceAll(/([a-z0-9])([A-Z])/g, '$1 $2')
 		.replaceAll(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
