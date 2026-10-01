@@ -126,6 +126,11 @@ removing, editing, or inserting applied history is detected by the database ledg
 Never edit an applied artifact. If a deployment needs correction, restore the committed history and
 create a new forward migration.
 
+Admin settings are ignored when deciding whether another migration is required. Changing `CollectionAdmin`,
+`GlobalAdmin`, or a field's `Admin` settings, such as hiding a collection or moving it to another
+navigation group, needs no migration: `ridu build`, `ridu migrate status`, and readiness compare
+the schema without them.
+
 Plugin package versions are not part of the schema, so upgrading Ridu or a plugin does not require
 a migration by itself. Manifests written by Ridu 0.4 and earlier did record plugin versions. After
 upgrading such a project, create one migration to record the manifest without them; it contains

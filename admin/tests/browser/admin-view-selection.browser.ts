@@ -1,6 +1,7 @@
 import { expect, test } from "vitest";
 import { resolveAdminConfig } from "@riducms/plugin/admin";
 import { preparedCustomView } from "@admin/core/routing/admin-view-selection";
+import { SCHEMA_MANIFEST_VERSION, type SchemaCollection } from "@riducms/protocol";
 
 const component = () => ({});
 const config = resolveAdminConfig({
@@ -44,4 +45,31 @@ test("selects exact owners using router ranking, case-insensitive literals and d
 		"/globals/posts/insights",
 	])
 		expect(preparedCustomView(config, path)).toBeUndefined();
+});
+
+test("selects not-found for hidden resources before resource replacement or tab matching", () => {
+	const resource: SchemaCollection = {
+		id: "posts",
+		slug: "posts",
+		labels: { singular: "Post", plural: "Posts" },
+		admin: { hidden: true },
+		capabilities: { auth: false, upload: false, versions: false, trash: false, locking: false },
+		fields: [],
+	};
+	const manifest = {
+		version: SCHEMA_MANIFEST_VERSION,
+		application: { name: "Hidden resources" },
+		collections: [resource],
+		globals: [{ ...resource, id: "site", slug: "site" }],
+		plugins: [],
+	};
+	for (const path of [
+		"/Collections/posts",
+		"/collections/posts/create",
+		"/collections/posts/a/insights",
+		"/globals/site/api",
+		"/GLOBALS/site/versions/2",
+	]) {
+		expect(preparedCustomView(config, path, manifest)).toMatchObject({ key: "missing" });
+	}
 });

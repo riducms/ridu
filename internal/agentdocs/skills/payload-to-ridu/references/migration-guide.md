@@ -115,8 +115,12 @@ Payload's field objects become Go constructors followed by options:
 | `unique: true`                          | `.Unique()`                             |
 | `relationTo: 'users'`                   | `field.Relationship("author", "users")` |
 | `admin.useAsTitle`                      | `Admin.UseAsTitle`                      |
+| `admin.hidden: true`                    | `Admin.Hidden: true`                    |
 | `req.user` in a collection access rule  | `ctx.Actor`                             |
 | Return `true` or `false` from that rule | Return `ridu.Allow()` or `ridu.Deny()`  |
+
+Ridu's `Hidden` is a boolean. Where Payload hides a collection from some users with a function, deny
+those users access in Ridu instead.
 
 `slug` is ordinary text in both examples: the editor supplies it. Use Ridu's
 [Slug field](https://riducms.com/docs/fields/slug/) if you want to generate it from the title. The Payload example

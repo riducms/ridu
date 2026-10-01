@@ -10,6 +10,7 @@ import {
 	documentPath,
 	humanizeAdminPathSegment,
 	parseAdminVersionRevision,
+	adminPathResource,
 } from "@admin/core/routing/admin-paths";
 
 describe("admin authentication redirects", () => {
@@ -86,4 +87,39 @@ describe("admin layout route behavior", () => {
 			expect(adminLayoutRouteBehavior(pathname)).toEqual(expected);
 		});
 	}
+});
+
+describe("adminPathResource", () => {
+	test("names the collection or global a page belongs to", () => {
+		expect(adminPathResource("/collections/post-stats")).toEqual({
+			kind: "collection",
+			slug: "post-stats",
+		});
+		expect(adminPathResource("/collections/post-stats/abc/versions")).toEqual({
+			kind: "collection",
+			slug: "post-stats",
+		});
+		expect(adminPathResource("/globals/sync-state/api")).toEqual({
+			kind: "global",
+			slug: "sync-state",
+		});
+		expect(adminPathResource("/collections/a%20b")).toEqual({ kind: "collection", slug: "a b" });
+	});
+
+	test("matches the router's case-insensitive sections without changing resource slugs", () => {
+		expect(adminPathResource("/Collections/post-stats/abc")).toEqual({
+			kind: "collection",
+			slug: "post-stats",
+		});
+		expect(adminPathResource("/GLOBALS/Sync-State/api")).toEqual({
+			kind: "global",
+			slug: "Sync-State",
+		});
+	});
+
+	test("ignores pages that belong to no resource", () => {
+		expect(adminPathResource("/")).toBeUndefined();
+		expect(adminPathResource("/collections")).toBeUndefined();
+		expect(adminPathResource("/account/security")).toBeUndefined();
+	});
 });

@@ -23,8 +23,9 @@ import (
 )
 
 // executableMigrationHistoryDigest is set only by `ridu build`. It binds the
-// production binary to the exact ordered migration filenames and artifact
-// digests validated immediately before compilation. A direct `go build`
+// production binary to the exact ordered migration filenames, artifact digests,
+// recorded head and storage schema validated immediately before compilation.
+// Admin presentation may differ at runtime. A direct `go build`
 // deliberately leaves it empty so official adapters fail closed in production.
 var executableMigrationHistoryDigest string
 

@@ -296,7 +296,7 @@ func postgresPhysicalVerifierFixture(t *testing.T, ctx context.Context) (*Store,
 	if err := backend.ApplyArtifacts(ctx, directory); err != nil {
 		t.Fatal(err)
 	}
-	history, err := ridumigration.DigestArtifactHistory([]ridumigration.ArtifactIdentity{{Name: file.Name, Digest: file.Digest}})
+	history, err := ridumigration.DigestArtifactHistory([]ridumigration.ArtifactIdentity{{Name: file.Name, Digest: file.Digest}}, file.Artifact.ToDigest, manifest)
 	if err != nil {
 		t.Fatal(err)
 	}

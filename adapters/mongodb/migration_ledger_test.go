@@ -255,12 +255,13 @@ func TestMongoMigrationReadinessRejectsLedgerChangeAfterIndexVerification(t *tes
 
 func TestMongoMigrationReadinessBindsExactOrderedArtifactHistory(t *testing.T) {
 	manifestDigest := strings.Repeat("f", 64)
+	manifest := schema.NewManifest(schema.Snapshot{Version: schema.CurrentVersion, Application: schema.Application{Name: "Readiness"}})
 	identities := []ridumigration.ArtifactIdentity{
 		{Name: "001_initial", Digest: strings.Repeat("a", 64)},
 		{Name: "002_data_only", Digest: strings.Repeat("b", 64)},
 		{Name: "003_indexes", Digest: strings.Repeat("c", 64)},
 	}
-	expectedHistoryDigest, err := ridumigration.DigestArtifactHistory(identities)
+	expectedHistoryDigest, err := ridumigration.DigestArtifactHistory(identities, manifestDigest, manifest)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -275,7 +276,7 @@ func TestMongoMigrationReadinessBindsExactOrderedArtifactHistory(t *testing.T) {
 			State: mongoMigrationStepComplete, Attempts: 1,
 		})
 	}
-	if err := validateMongoMigrationReadyStateWithHistory(state, manifestDigest, expectedHistoryDigest); err != nil {
+	if err := validateMongoMigrationReadyStateWithHistory(state, manifest, manifestDigest, expectedHistoryDigest); err != nil {
 		t.Fatalf("exact MongoDB migration history readiness: %v", err)
 	}
 
@@ -306,14 +307,23 @@ func TestMongoMigrationReadinessBindsExactOrderedArtifactHistory(t *testing.T) {
 			candidate.steps[0], candidate.steps[1] = candidate.steps[1], candidate.steps[0]
 			return candidate
 		},
+		"corrupted head": func(candidate mongoMigrationLedgerState) mongoMigrationLedgerState {
+			candidate.artifacts[len(candidate.artifacts)-1].ToDigest = strings.Repeat("e", 64)
+			return candidate
+		},
 	}
 	for name, mutate := range tests {
 		t.Run(name, func(t *testing.T) {
 			candidate := mutate(clone(state))
-			if err := validateMongoMigrationReadyStateWithHistory(candidate, manifestDigest, expectedHistoryDigest); err == nil || !strings.Contains(err.Error(), "history") {
+			if err := validateMongoMigrationReadyStateWithHistory(candidate, manifest, manifestDigest, expectedHistoryDigest); err == nil || !strings.Contains(err.Error(), "history") {
 				t.Fatalf("MongoDB readiness accepted %s artifact history: %v", name, err)
 			}
 		})
+	}
+	snapshot := manifest.Snapshot()
+	snapshot.Application.AllowIDOnCreate = true
+	if err := validateMongoMigrationReadyStateWithHistory(state, schema.NewManifest(snapshot), manifestDigest, expectedHistoryDigest); err == nil {
+		t.Fatal("MongoDB readiness accepted a runtime schema change with unchanged indexes")
 	}
 }
 

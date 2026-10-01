@@ -21,7 +21,11 @@ func TestSQLiteReadyWithMigrationHistoryUsesAppliedLedger(t *testing.T) {
 	if err := backend.ApplyArtifacts(ctx, directory); err != nil {
 		t.Fatal(err)
 	}
-	expected, err := migration.DigestArtifactHistory([]migration.ArtifactIdentity{{Name: file.Name, Digest: file.Checksum}})
+	headDigest, err := migration.DigestManifest(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected, err := migration.DigestArtifactHistory([]migration.ArtifactIdentity{{Name: file.Name, Digest: file.Checksum}}, headDigest, manifest)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -31,7 +35,7 @@ func TestSQLiteReadyWithMigrationHistoryUsesAppliedLedger(t *testing.T) {
 	missing, err := migration.DigestArtifactHistory([]migration.ArtifactIdentity{
 		{Name: file.Name, Digest: file.Checksum},
 		{Name: "99999999999999.999999999_pending.ridu.json", Digest: strings.Repeat("d", 64)},
-	})
+	}, headDigest, manifest)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -98,6 +98,8 @@ func TestSQLitePresentationMigrationPreservesVersionedData(t *testing.T) {
 		t.Fatal(err)
 	}
 	previous := initial
+	// These change only admin settings, which never need a migration.
+	adminOnly := map[string]bool{"field-label": true, "collection-admin": true}
 	changes := []struct {
 		name  string
 		apply func()
@@ -105,6 +107,10 @@ func TestSQLitePresentationMigrationPreservesVersionedData(t *testing.T) {
 		{"application-name", func() { config.Name = "My publication" }},
 		{"field-label", func() {
 			config.Collections[1].Fields[0] = field.Text("title").Required().Unique().Index().Localized().Label("Headline").Admin(field.Admin{Description: "Public headline"})
+		}},
+		{"collection-admin", func() {
+			config.Collections[1].Admin.Hidden = true
+			config.Collections[1].Admin.Group = "Editorial"
 		}},
 		{"versioned-select-choice-order", func() {
 			config.Collections[1].Fields[2] = field.Select("tone", "dark", "light")
@@ -140,10 +146,21 @@ func TestSQLitePresentationMigrationPreservesVersionedData(t *testing.T) {
 		{"collection-endpoint-summary", func() { config.Collections[1].Endpoints[0].Summary = "Collection description" }},
 		{"global-endpoint-summary", func() { config.Globals[0].Endpoints[0].Summary = "Global description" }},
 	}
+	applied := 1
 	for i, change := range changes {
 		change.apply()
 		name := change.name
 		current := resolve()
+		if adminOnly[name] {
+			// The database already has everything this change describes.
+			if _, err := backend.ArtifactStatus(ctx, directory, current); err != nil {
+				t.Fatalf("%s needs a migration: %v", name, err)
+			}
+			if err := backend.Ready(ctx, current); err != nil {
+				t.Fatalf("%s is not ready without a migration: %v", name, err)
+			}
+			continue
+		}
 		// This is the status diagnostic from the original audit; creation must be
 		// able to supply exactly the artifact it recommends.
 		if _, err := backend.ArtifactStatus(ctx, directory, current); err == nil || !strings.Contains(err.Error(), "create") {
@@ -153,6 +170,7 @@ func TestSQLitePresentationMigrationPreservesVersionedData(t *testing.T) {
 		if err != nil {
 			t.Fatalf("create %s: %v", name, err)
 		}
+		applied++
 		files, err := migrationartifact.ReadAll(directory)
 		if err != nil {
 			t.Fatal(err)
@@ -193,7 +211,7 @@ func TestSQLitePresentationMigrationPreservesVersionedData(t *testing.T) {
 			t.Fatalf("physical schema mutated: %d -> %d", originalSchemaVersion, schemaVersion)
 		}
 		status, err := backend.ArtifactStatus(ctx, directory, current)
-		if err != nil || len(status) != i+2 || !status[len(status)-1].Applied {
+		if err != nil || len(status) != applied || !status[len(status)-1].Applied {
 			t.Fatalf("applied status = %#v, %v", status, err)
 		}
 		sqlitePresentationReady(t, backend, directory, current)
@@ -290,7 +308,7 @@ func sqlitePresentationReady(t *testing.T, backend *Store, directory string, man
 	for i, file := range files {
 		identities[i] = migration.ArtifactIdentity{Name: file.Name, Digest: file.Digest}
 	}
-	fingerprint, err := migration.DigestArtifactHistory(identities)
+	fingerprint, err := migration.DigestArtifactHistory(identities, files[len(files)-1].Artifact.ToDigest, manifest)
 	if err != nil {
 		t.Fatal(err)
 	}

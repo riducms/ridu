@@ -848,7 +848,12 @@ func TestCheckAndBuildOwnTheGeneratedGoWorkflow(t *testing.T) {
 	for index, file := range files {
 		identities[index] = ridumigration.ArtifactIdentity{Name: file.Name, Digest: file.Digest}
 	}
-	historyDigest, err := ridumigration.DigestArtifactHistory(identities)
+	head := files[len(files)-1].Artifact
+	headManifest, err := head.AfterManifest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	historyDigest, err := ridumigration.DigestArtifactHistory(identities, head.ToDigest, headManifest)
 	if err != nil {
 		t.Fatal(err)
 	}

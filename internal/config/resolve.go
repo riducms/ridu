@@ -647,6 +647,7 @@ func (resolver *resolver) resolveCollection(index int, collection Collection) sc
 	fieldResolver.validateSlugSources(fields)
 	fieldResolver.validateFieldConditions(fields)
 	admin := schema.CollectionAdmin{
+		Hidden:     collection.Admin.Hidden,
 		UseAsTitle: strings.TrimSpace(collection.Admin.UseAsTitle), Group: strings.TrimSpace(collection.Admin.Group),
 		GroupTranslations:       resolver.resolveTranslations(collection.Admin.GroupTranslations, path+".admin.groupTranslations"),
 		Description:             strings.TrimSpace(collection.Admin.Description),
@@ -925,7 +926,8 @@ func (resolver *resolver) resolveGlobal(index int, global Global) schema.Global 
 		ID: effectiveGlobalID(global), Slug: global.Slug,
 		Labels: schema.CollectionLabels{Singular: label, SingularTranslations: labelTranslations, Plural: label, PluralTranslations: cloneTranslations(labelTranslations)},
 		Admin: schema.CollectionAdmin{
-			Group: strings.TrimSpace(global.Admin.Group), GroupTranslations: resolver.resolveTranslations(global.Admin.GroupTranslations, path+".admin.groupTranslations"),
+			Hidden: global.Admin.Hidden,
+			Group:  strings.TrimSpace(global.Admin.Group), GroupTranslations: resolver.resolveTranslations(global.Admin.GroupTranslations, path+".admin.groupTranslations"),
 			Description: strings.TrimSpace(global.Admin.Description), DescriptionTranslations: resolver.resolveTranslations(global.Admin.DescriptionTranslations, path+".admin.descriptionTranslations"),
 			LivePreview: resolver.resolveLivePreview(global.Admin.LivePreview, fields, path+".admin.livePreview"),
 		},

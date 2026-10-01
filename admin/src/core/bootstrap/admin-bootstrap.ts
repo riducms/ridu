@@ -13,6 +13,7 @@ import type { AdminRuntime } from "@admin/core/runtime/admin-runtime.svelte";
 import { peekFormDraft } from "@admin/core/forms/form-draft-recovery";
 import { recoverFormDraft } from "@admin/core/forms/form-schema";
 import { preparedCustomView } from "@admin/core/routing/admin-view-selection";
+import { adminPathResource } from "@admin/core/routing/admin-paths";
 
 import {
 	readEmbeddedAdminState,
@@ -77,6 +78,12 @@ export class AdminBootstrapCoordinator {
 
 	loader = async ({ request }: { request: Request }) => {
 		const url = new URL(request.url);
+		const pathname = this.#relativePath(url.pathname);
+		const resource = adminPathResource(pathname);
+		const moduleGroups =
+			resource !== undefined && this.#runtime?.isHiddenResource(resource.kind, resource.slug)
+				? []
+				: moduleGroupsForRelativeURL(pathname);
 
 		try {
 			// Go marks its HTML even when the initial snapshot is missing or invalid.
@@ -85,9 +92,7 @@ export class AdminBootstrapCoordinator {
 				this.#contextKey === "" &&
 				document.querySelector('meta[name="ridu-admin-build-id"]') === null
 			) {
-				await preloadAdminModuleGroups(
-					moduleGroupsForRelativeURL(this.#relativePath(url.pathname))
-				);
+				await preloadAdminModuleGroups(moduleGroups);
 				return null;
 			}
 
@@ -95,7 +100,7 @@ export class AdminBootstrapCoordinator {
 			// additional chunks (such as an upload preview), which we await below.
 			const [state] = await Promise.all([
 				this.#fetchRouteState(url, request.signal),
-				preloadAdminModuleGroups(moduleGroupsForRelativeURL(this.#relativePath(url.pathname))),
+				preloadAdminModuleGroups(moduleGroups),
 			]);
 			if (request.signal.aborted) return null;
 

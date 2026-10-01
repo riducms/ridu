@@ -77,6 +77,7 @@ generated types; its label and description only change what authors see.
 
 | Property         | Current behaviour                                                                                                |
 | ---------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `Hidden`         | Leaves the collection out of admin navigation, the dashboard, and search; its admin pages show not-found.        |
 | `UseAsTitle`     | Names a direct field used as the document label in lists, relationships, and upload flows.                       |
 | `DefaultColumns` | Names unique direct fields shown by a fresh list workspace. Authors can persist their own workspace preferences. |
 | `Group`          | Groups the collection in admin navigation.                                                                       |
@@ -94,6 +95,28 @@ itself. Live-preview URL templates accept `{id}`, `{collection}`, and
 > [!IMPORTANT]
 > Admin visibility and capability responses are interface hints, never authorization. Every API
 > request independently evaluates collection and field access inside its store transaction.
+
+### Hide a collection from the admin {#hidden}
+
+Set `Hidden` for data the application maintains itself and editors never browse, such as event
+logs or computed state:
+
+```go
+{
+	Slug:   "learner-events",
+	Admin:  ridu.CollectionAdmin{Hidden: true},
+	Fields: field.Fields{ /* ... */ },
+}
+```
+
+A hidden collection is still a complete collection. The REST, GraphQL, and Local APIs serve it,
+its access rules and hooks run, and deletes cascade through it as usual. A relationship to it
+from a visible collection still shows the related document's title, without a link to open it.
+To keep data from a user, deny access instead; `Hidden` only changes what the admin shows.
+`GlobalAdmin.Hidden` does the same for a global.
+
+Admin settings never change stored data, so changing `Hidden`, `Group`, or any other
+`CollectionAdmin` or field `Admin` setting needs no migration.
 
 ## Index several fields together {#indexes}
 
@@ -186,14 +209,14 @@ Register it in `ridu.Config.Globals`. A global has no collection-style create, d
 delete/trash, auth, upload, document-lock, folder, hierarchy, or compound-index configuration.
 Its supported surface is smaller:
 
-| Concern               | Collection                                                      | Global                                                                                        |
-| --------------------- | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| Cardinality           | Many documents with generated IDs                               | One document whose ID is its slug                                                             |
-| Base operations       | Create, duplicate, find/list, update, delete, bulk              | Read and update                                                                               |
-| Access                | `CollectionAccess` per CRUD/version/draft/admin/lock operation  | `GlobalAccess.Read`, `ReadVersions`, `ReadDrafts`, `Update`, `Publish`, and `Unpublish`       |
-| Admin                 | Title, columns, folders, hierarchy, group, description, preview | Group, description, preview                                                                   |
-| Optional capabilities | Auth, upload, versions/drafts, trash, locks                     | Versions/drafts only                                                                          |
-| Versions              | Per-document history, publish/unpublish, restore, scheduling    | Singleton history, publish/unpublish, restore; scheduled global publishing is not implemented |
+| Concern               | Collection                                                              | Global                                                                                        |
+| --------------------- | ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Cardinality           | Many documents with generated IDs                                       | One document whose ID is its slug                                                             |
+| Base operations       | Create, duplicate, find/list, update, delete, bulk                      | Read and update                                                                               |
+| Access                | `CollectionAccess` per CRUD/version/draft/admin/lock operation          | `GlobalAccess.Read`, `ReadVersions`, `ReadDrafts`, `Update`, `Publish`, and `Unpublish`       |
+| Admin                 | Title, columns, folders, hierarchy, group, description, preview, hidden | Group, description, preview, hidden                                                           |
+| Optional capabilities | Auth, upload, versions/drafts, trash, locks                             | Versions/drafts only                                                                          |
+| Versions              | Per-document history, publish/unpublish, restore, scheduling            | Singleton history, publish/unpublish, restore; scheduled global publishing is not implemented |
 
 For a missing singleton, a filtered `GlobalAccess.Update` decision cannot match a row; the first
 update therefore requires an unconditional `Allow`. Once persisted, filtered read/update/version

@@ -1066,12 +1066,29 @@ func (backend *Store) verifyImmutableReadyStateWithResolverAndHistory(
 	if err != nil {
 		return err
 	}
-	expected, err := manifestDigest(manifest)
+	// The database records the manifest it was brought to. Admin
+	// presentation never changes stored data, so it may differ from the
+	// executable's without a migration.
+	stored, err := readSQLiteDevelopmentManifest(ctx, connection)
 	if err != nil {
-		return fmt.Errorf("digest executable SQLite manifest: %w", err)
-	}
-	if err := assertSQLiteManifestDigest(ctx, connection, expected); err != nil {
 		return err
+	}
+	if stored == nil {
+		return fmt.Errorf("SQLite schema ledger is missing")
+	}
+	storedDigest, err := manifestDigest(*stored)
+	if err != nil {
+		return fmt.Errorf("digest recorded SQLite manifest: %w", err)
+	}
+	if err := assertSQLiteManifestDigest(ctx, connection, storedDigest); err != nil {
+		return err
+	}
+	if !stored.SameStorage(manifest) {
+		expected, err := manifestDigest(manifest)
+		if err != nil {
+			return fmt.Errorf("digest executable SQLite manifest: %w", err)
+		}
+		return fmt.Errorf("database manifest digest %s does not match executable digest %s", storedDigest, expected)
 	}
 	if !exists {
 		if expectedHistoryDigest != nil {
@@ -1103,13 +1120,13 @@ func (backend *Store) verifyImmutableReadyStateWithResolverAndHistory(
 		return err
 	}
 	if expectedHistoryDigest != nil {
-		if err := validateSQLiteMigrationHistory(applied, *expectedHistoryDigest); err != nil {
+		if err := validateSQLiteMigrationHistory(applied, manifest, *expectedHistoryDigest); err != nil {
 			return err
 		}
 	}
 	head := applied[len(applied)-1]
-	if head.toDigest != expected {
-		return fmt.Errorf("SQLite migration ledger head %s digest %s does not match executable digest %s", head.name, head.toDigest, expected)
+	if head.toDigest != storedDigest {
+		return fmt.Errorf("SQLite migration ledger head %s digest %s does not match the recorded manifest digest %s", head.name, head.toDigest, storedDigest)
 	}
 	if err := assertSQLiteExpectedArtifactDigest(ctx, connection, head.digest); err != nil {
 		return fmt.Errorf("SQLite migration ledger head %s: %w", head.name, err)
@@ -1130,12 +1147,13 @@ func (backend *Store) verifyImmutableReadyStateWithResolverAndHistory(
 	return nil
 }
 
-func validateSQLiteMigrationHistory(applied []sqliteArtifactLedgerRow, expected string) error {
+func validateSQLiteMigrationHistory(applied []sqliteArtifactLedgerRow, manifest schema.Manifest, expected string) error {
 	identities := make([]ridumigration.ArtifactIdentity, len(applied))
 	for index, row := range applied {
 		identities[index] = ridumigration.ArtifactIdentity{Name: row.name, Digest: row.digest}
 	}
-	actual, err := ridumigration.DigestArtifactHistory(identities)
+	head := applied[len(applied)-1]
+	actual, err := ridumigration.DigestArtifactHistory(identities, head.toDigest, manifest)
 	if err != nil {
 		return fmt.Errorf("digest applied SQLite migration history: %w", err)
 	}

@@ -555,7 +555,12 @@ func (harness *mongoDBProductionDeploymentHarness) buildLinuxProject(
 		for index, file := range files {
 			identities[index] = ridumigration.ArtifactIdentity{Name: file.Name, Digest: file.Digest}
 		}
-		historyDigest, historyErr := ridumigration.DigestArtifactHistory(identities)
+		head := files[len(files)-1].Artifact
+		manifest, historyErr := head.AfterManifest()
+		if historyErr != nil {
+			t.Fatalf("read generated MongoDB migration history head for Linux build: %v", historyErr)
+		}
+		historyDigest, historyErr := ridumigration.DigestArtifactHistory(identities, head.ToDigest, manifest)
 		if historyErr != nil {
 			t.Fatalf("digest generated MongoDB migration history for Linux build: %v", historyErr)
 		}

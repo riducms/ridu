@@ -36,6 +36,17 @@ export function adminPathSegments(pathname: string): string[] {
 		});
 }
 
+// adminPathResource names the collection or global an admin path belongs to.
+export function adminPathResource(
+	pathname: string
+): { kind: "collection" | "global"; slug: string } | undefined {
+	const [section, slug] = adminPathSegments(pathname);
+	if (slug === undefined) return undefined;
+	if (section?.toLowerCase() === "collections") return { kind: "collection", slug };
+	if (section?.toLowerCase() === "globals") return { kind: "global", slug };
+	return undefined;
+}
+
 export function parseAdminVersionRevision(value: string | undefined): number | undefined {
 	const revision = Number(value);
 	return Number.isSafeInteger(revision) && revision > 0 ? revision : undefined;

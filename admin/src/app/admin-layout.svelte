@@ -8,7 +8,9 @@
 
 	import NavigationDrawer from "@admin/components/ui/navigation-drawer/navigation-drawer.svelte";
 	import "@admin/app/admin-layout.scss";
-	import { adminLayoutRouteBehavior } from "@admin/core/routing/admin-paths";
+	import AdminCoreViewRoute from "@admin/app/admin-core-view-route.svelte";
+	import NotFoundRoute from "@admin/app/not-found-route.svelte";
+	import { adminLayoutRouteBehavior, adminPathResource } from "@admin/core/routing/admin-paths";
 	import { useAdminScrollRestoration } from "@admin/core/routing/admin-scroll.svelte";
 	import { getAdminRuntime } from "@admin/core/runtime/admin-runtime.svelte";
 	import AccountMenu from "@admin/features/account/account-menu.svelte";
@@ -46,7 +48,16 @@
 
 	let viewport = $state<HTMLElement | null>(null);
 	const containedViewport = new MediaQuery("(min-width: 769px)");
-	const routeBehavior = $derived(adminLayoutRouteBehavior(location.current.pathname));
+	// A hidden collection or global has no pages of its own in the admin.
+	const hiddenResource = $derived.by(() => {
+		const resource = adminPathResource(location.current.pathname);
+		return resource !== undefined && runtime.isHiddenResource(resource.kind, resource.slug);
+	});
+	const routeBehavior = $derived(
+		hiddenResource
+			? { ownsViewport: false, waitsForPage: false }
+			: adminLayoutRouteBehavior(location.current.pathname)
+	);
 	useAdminScrollRestoration(
 		() => (containedViewport.current ? viewport : window),
 		() => routeBehavior.waitsForPage
@@ -183,9 +194,13 @@
 				</div>
 			</header>
 
-			<Outlet />
+			{#if hiddenResource}
+				<AdminCoreViewRoute surface="notFound" DefaultView={NotFoundRoute} />
+			{:else}
+				<Outlet />
+			{/if}
 		</main>
 	</div>
 </div>
 
-<AdminCommandMenu bind:open={commandOpen} collections={runtime.visibleCollections} />
+<AdminCommandMenu bind:open={commandOpen} collections={runtime.navigableCollections} />

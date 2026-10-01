@@ -183,6 +183,12 @@ type DocumentLockConfig struct {
 
 // CollectionAdmin is serializable presentation metadata consumed by the framework admin.
 type CollectionAdmin struct {
+	// Hidden leaves the collection out of the admin navigation, dashboard and
+	// search, and its admin routes show not-found. It is presentation, not
+	// security: the REST, GraphQL and Local APIs, access rules and cascades
+	// are unchanged, and relationships to it still render. Changing it needs
+	// no migration.
+	Hidden                  bool
 	UseAsTitle              string
 	DefaultColumns          []string
 	Group                   string
@@ -238,6 +244,10 @@ type Global struct {
 
 // GlobalAdmin customizes global presentation without affecting authorization.
 type GlobalAdmin struct {
+	// Hidden leaves the global out of the admin navigation, dashboard and
+	// search, and its admin route shows not-found. It is presentation, not
+	// security, and changing it needs no migration.
+	Hidden                  bool
 	Group                   string
 	GroupTranslations       map[string]string
 	Description             string
@@ -674,6 +684,7 @@ func resolverCollections(collections []Collection) []configresolver.Collection {
 				PluralTranslations:   cloneStringMap(collection.Labels.PluralTranslations),
 			},
 			Admin: configresolver.CollectionAdmin{
+				Hidden:     collection.Admin.Hidden,
 				UseAsTitle: collection.Admin.UseAsTitle, DefaultColumns: append([]string(nil), collection.Admin.DefaultColumns...),
 				Group: collection.Admin.Group, GroupTranslations: cloneStringMap(collection.Admin.GroupTranslations),
 				Description: collection.Admin.Description, DescriptionTranslations: cloneStringMap(collection.Admin.DescriptionTranslations),
@@ -726,7 +737,8 @@ func resolverGlobals(globals []Global) []configresolver.Global {
 		resolved[index] = configresolver.Global{
 			Slug: global.Slug, Label: global.Label, LabelTranslations: cloneStringMap(global.LabelTranslations),
 			Admin: configresolver.GlobalAdmin{
-				Group: global.Admin.Group, GroupTranslations: cloneStringMap(global.Admin.GroupTranslations),
+				Hidden: global.Admin.Hidden,
+				Group:  global.Admin.Group, GroupTranslations: cloneStringMap(global.Admin.GroupTranslations),
 				Description: global.Admin.Description, DescriptionTranslations: cloneStringMap(global.Admin.DescriptionTranslations),
 				LivePreview: resolverLivePreview(global.Admin.LivePreview),
 			},
