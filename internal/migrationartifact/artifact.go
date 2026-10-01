@@ -3,6 +3,7 @@ package migrationartifact
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -18,6 +19,15 @@ import (
 
 // Extension distinguishes Ridu artifacts from arbitrary JSON.
 const Extension = ".ridu.json"
+
+var (
+	// ErrSchemaCurrent reports that a new migration would record nothing:
+	// the schema is the one the latest migration records.
+	ErrSchemaCurrent = errors.New("schema is current")
+	// ErrOnlyAdminChanges reports that the schema differs from the latest
+	// migration only in admin settings, which history ignores.
+	ErrOnlyAdminChanges = fmt.Errorf("%w; only admin settings changed, so no migration is needed", ErrSchemaCurrent)
+)
 
 var (
 	namePattern         = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
@@ -48,7 +58,7 @@ func Create(directory, name string, artifact migration.Artifact, now time.Time) 
 	// History is compared without admin settings, so this file would record
 	// nothing that ridu build, ridu migrate status or readiness reads.
 	if onlyAdminPresentationChanges(artifact) {
-		return File{}, fmt.Errorf("schema is current; only admin settings changed, so no migration is needed")
+		return File{}, ErrOnlyAdminChanges
 	}
 	if err := os.MkdirAll(directory, 0o755); err != nil {
 		return File{}, err

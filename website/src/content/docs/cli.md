@@ -206,7 +206,8 @@ ridu migrate verify
 ```
 
 `create` writes an artifact without connecting to a database; its name may also be the first
-argument, as in `ridu migrate create add-post-summary`. `baseline` records the committed migrations a
+argument, as in `ridu migrate create add-post-summary`. When the schema needs no migration, it says
+so, writes nothing, and exits successfully. `baseline` records the committed migrations a
 database synchronized by `ridu dev` already has, without running them; see
 [Migrations](/docs/migrations/#baseline). `plan` and `status` inspect a
 selected database without changing it. `verify` replays the complete history in an isolated target,

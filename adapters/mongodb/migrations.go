@@ -270,7 +270,7 @@ func buildMongoDBArtifactWithOptions(
 			return ridumigration.Artifact{}, err
 		}
 		if fromDigest == toDigest && len(semanticOptions.DataTransforms) == 0 {
-			return ridumigration.Artifact{}, fmt.Errorf("schema is current; no MongoDB migration steps were planned")
+			return ridumigration.Artifact{}, fmt.Errorf("%w; no MongoDB migration steps were planned", migrationartifact.ErrSchemaCurrent)
 		}
 		if contract.semantic {
 			return buildMongoDBSemanticArtifact(ctx, name, before, after, previousPlannerVersion, contract, semanticOptions)

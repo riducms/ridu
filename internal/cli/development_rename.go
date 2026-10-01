@@ -366,7 +366,7 @@ func (renames *developmentRenames) migrate(ctx context.Context, definition proje
 		switch {
 		case err == nil:
 			base = &previous
-		case headExists && strings.Contains(err.Error(), "schema is current"):
+		case headExists && errors.Is(err, migrationartifact.ErrSchemaCurrent):
 			// Only presentation differs; the rename continues the head.
 			accepted = matchingRenameCandidates(schemadiff.RenameCandidates(head, current), accepted)
 			if len(accepted) == 0 {
