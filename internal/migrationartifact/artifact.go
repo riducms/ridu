@@ -247,12 +247,18 @@ func RequireCurrentHistory(directory string, executable schema.Manifest) ([]File
 	if len(files) == 0 {
 		return nil, fmt.Errorf("migration artifact history is empty\ncreate the initial migration with `ridu migrate create --name initial`, review and commit the generated file, then rerun this command")
 	}
-	digest, err := migration.DigestManifest(executable)
-	if err != nil {
-		return nil, fmt.Errorf("digest executable manifest: %w", err)
-	}
 	latest := files[len(files)-1]
-	if digest != latest.Artifact.ToDigest {
+	head, err := latest.Artifact.AfterManifest()
+	if err != nil {
+		return nil, fmt.Errorf("read latest migration artifact %s: %w", latest.Name, err)
+	}
+	// Admin presentation never changes stored data, so hiding, regrouping or
+	// relabelling in the admin needs no migration.
+	if !executable.SameStorage(head) {
+		digest, err := migration.DigestManifest(executable)
+		if err != nil {
+			return nil, fmt.Errorf("digest executable manifest: %w", err)
+		}
 		return nil, fmt.Errorf("executable manifest digest %s does not match latest migration artifact %s digest %s; create and commit the missing migration", digest, latest.Name, latest.Artifact.ToDigest)
 	}
 	return files, nil

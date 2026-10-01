@@ -13053,6 +13053,14 @@
 		"go:github.com/riducms/ridu/schema#MaxFieldPlacements": {
 			"module": "schema",
 			"symbol": "max-field-placements"
+		},
+		"go:github.com/riducms/ridu/schema#Manifest.SameStorage": {
+			"module": "schema",
+			"symbol": "manifest-same-storage-method"
+		},
+		"go:github.com/riducms/ridu/schema#Manifest.WithoutAdminPresentation": {
+			"module": "schema",
+			"symbol": "manifest-without-admin-presentation-method"
 		}
 	}
 }

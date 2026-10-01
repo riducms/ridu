@@ -413,8 +413,9 @@ type ReadinessStore interface {
 }
 
 // MigrationReadinessStore proves that the connected database's complete,
-// ordered migration ledger matches the history embedded in the executable in
-// addition to satisfying ordinary manifest readiness.
+// ordered migration ledger and recorded head match the history embedded in the
+// executable, and that its storage schema matches the executable manifest.
+// Admin presentation may differ without another migration.
 type MigrationReadinessStore interface {
 	ReadyWithMigrationHistory(context.Context, schema.Manifest, string) error
 }

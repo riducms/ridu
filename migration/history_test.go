@@ -3,15 +3,21 @@ package migration
 import (
 	"strings"
 	"testing"
+
+	"github.com/riducms/ridu/schema"
 )
 
-func TestDigestArtifactHistoryAuthenticatesExactOrderedPairs(t *testing.T) {
+func TestDigestArtifactHistoryAuthenticatesHistoryHeadAndStorageSchema(t *testing.T) {
 	history := []ArtifactIdentity{
 		{Name: "20260801000000.000000000_initial.ridu.json", Digest: strings.Repeat("a", 64)},
 		{Name: "20260802000000.000000000_data-only.ridu.json", Digest: strings.Repeat("b", 64)},
 	}
-	const want = "c9b4d94b5d017b830a48bb57cbefee53b751d2de0cdafa2b431291f50b19cf55"
-	if got, err := DigestArtifactHistory(history); err != nil || got != want {
+	manifest := schema.NewManifest(schema.Snapshot{Version: schema.CurrentVersion, Application: schema.Application{Name: "History"}, Collections: []schema.Collection{{ID: "posts", Slug: "posts"}}})
+	headDigest := strings.Repeat("f", 64)
+	// The CLI links this digest into the executable and the runtime recomputes
+	// it at startup, so its encoding must only change deliberately.
+	const want = "79cc699da1ad5df099158aee63edd23a3bd99b468c94f4e7dcdec1ca61c33e7a"
+	if got, err := DigestArtifactHistory(history, headDigest, manifest); err != nil || got != want {
 		t.Fatalf("history digest = %q, %v; want %q", got, err, want)
 	}
 
@@ -28,7 +34,7 @@ func TestDigestArtifactHistoryAuthenticatesExactOrderedPairs(t *testing.T) {
 	}
 	for name, variant := range variants {
 		t.Run(name, func(t *testing.T) {
-			got, err := DigestArtifactHistory(variant)
+			got, err := DigestArtifactHistory(variant, headDigest, manifest)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -39,8 +45,20 @@ func TestDigestArtifactHistoryAuthenticatesExactOrderedPairs(t *testing.T) {
 	}
 
 	reordered := []ArtifactIdentity{history[1], history[0]}
-	if _, err := DigestArtifactHistory(reordered); err == nil || !strings.Contains(err.Error(), "strictly ordered") {
+	if _, err := DigestArtifactHistory(reordered, headDigest, manifest); err == nil || !strings.Contains(err.Error(), "strictly ordered") {
 		t.Fatalf("reordered history error = %v", err)
+	}
+	if got, err := DigestArtifactHistory(history, strings.Repeat("e", 64), manifest); err != nil || got == want {
+		t.Fatalf("changed ledger head retained history identity: %q, %v", got, err)
+	}
+	snapshot := manifest.Snapshot()
+	snapshot.Collections[0].Admin = schema.CollectionAdmin{Hidden: true, Group: "Editorial"}
+	if got, err := DigestArtifactHistory(history, headDigest, schema.NewManifest(snapshot)); err != nil || got != want {
+		t.Fatalf("admin presentation changed history identity: %q, %v", got, err)
+	}
+	snapshot.Application.AllowIDOnCreate = true
+	if got, err := DigestArtifactHistory(history, headDigest, schema.NewManifest(snapshot)); err != nil || got == want {
+		t.Fatalf("runtime schema change retained history identity: %q, %v", got, err)
 	}
 }
 
@@ -56,9 +74,14 @@ func TestDigestArtifactHistoryRejectsMalformedIdentity(t *testing.T) {
 	}
 	for name, history := range tests {
 		t.Run(name, func(t *testing.T) {
-			if _, err := DigestArtifactHistory(history); err == nil {
+			if _, err := DigestArtifactHistory(history, strings.Repeat("f", 64), schema.Manifest{}); err == nil {
 				t.Fatal("malformed history was accepted")
 			}
 		})
+	}
+	for _, head := range []string{"", strings.Repeat("A", 64), "not-a-digest"} {
+		if _, err := DigestArtifactHistory([]ArtifactIdentity{valid}, head, schema.Manifest{}); err == nil {
+			t.Fatalf("malformed head digest %q was accepted", head)
+		}
 	}
 }

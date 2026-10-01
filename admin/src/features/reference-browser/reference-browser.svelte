@@ -181,16 +181,22 @@
 							documentPath(collection.slug, editorDocument.id),
 							locale
 						)}
-						{i18n.t("fields:id")}: <Link
-							to={destination}
-							onclick={(event) => {
-								if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-								event.preventDefault();
-								controller.requestNavigation(() => navigate(destination));
-							}}
-						>
+						{i18n.t("fields:id")}:
+						{#if collection.admin.hidden === true}
+							<!-- A hidden collection has no document page to open. -->
 							{editorDocument.id}
-						</Link>
+						{:else}
+							<Link
+								to={destination}
+								onclick={(event) => {
+									if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+									event.preventDefault();
+									controller.requestNavigation(() => navigate(destination));
+								}}
+							>
+								{editorDocument.id}
+							</Link>
+						{/if}
 					</div>
 				{/if}
 				<Dialog.Description class="sr-only">

@@ -499,6 +499,21 @@ func classifyAdminRoute(pathname, search string, runtime *protocol.AdminPrepared
 		if len(segments) == 1 && strings.EqualFold(segments[0], "create-first-user") {
 			return adminRouteClassification{kind: protocol.AdminPreparedRouteDashboard, location: "/admin/"}
 		}
+		// Hidden resources have no admin pages, including custom document views.
+		// Select not-found before any resource loader or core read is prepared.
+		if len(segments) > 1 {
+			if strings.EqualFold(segments[0], "collections") {
+				if collection := adminCollection(runtime.Manifest, segments[1]); collection != nil && collection.Admin.Hidden {
+					return adminRouteClassification{kind: protocol.AdminPreparedRouteNotFound, surface: "notFound", segments: segments}
+				}
+			} else if strings.EqualFold(segments[0], "globals") {
+				for _, global := range runtime.Manifest.Globals {
+					if string(global.Slug) == segments[1] && global.Admin.Hidden {
+						return adminRouteClassification{kind: protocol.AdminPreparedRouteNotFound, surface: "notFound", segments: segments}
+					}
+				}
+			}
+		}
 		if adminExtensionRoute(segments, runtime.Manifest, metadata) {
 			return adminRouteClassification{kind: protocol.AdminPreparedRouteNotFound, surface: "extension", segments: segments}
 		}

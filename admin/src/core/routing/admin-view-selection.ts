@@ -2,7 +2,7 @@ import type { AdminCoreView, AdminCoreViewSurface } from "@riducms/plugin";
 import type { ResolvedAdminConfig } from "@riducms/plugin/admin";
 import type { SchemaManifest } from "@riducms/protocol";
 import { matchRoutes } from "@hvniel/svelte-router";
-import { adminRoutePatterns } from "@admin/core/routing/admin-paths";
+import { adminPathResource, adminRoutePatterns } from "@admin/core/routing/admin-paths";
 
 /** Select the registration first: an un-loaded exact replacement suppresses a wildcard loader. */
 export function resolveCoreView(
@@ -40,6 +40,17 @@ export function preparedCustomView(
 	pathname: string,
 	manifest?: SchemaManifest
 ) {
+	const hiddenResource = adminPathResource(pathname);
+	if (hiddenResource !== undefined) {
+		const resources =
+			hiddenResource.kind === "collection" ? manifest?.collections : manifest?.globals;
+		if (
+			resources?.some((item) => item.slug === hiddenResource.slug && item.admin.hidden === true)
+		) {
+			return resolveCoreView(config.extensions.coreViews, "notFound");
+		}
+	}
+
 	const routes = [
 		...Object.entries(adminRoutePatterns).map(([key, path]) => ({
 			path,

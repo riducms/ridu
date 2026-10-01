@@ -5,6 +5,7 @@
 	import { getBreadcrumbs } from "@admin/features/navigation/breadcrumb-context.svelte";
 	import RiduLogo from "@admin/components/brand/ridu-logo.svelte";
 	import {
+		adminPathResource,
 		adminPathSegments,
 		collectionPath,
 		documentPath,
@@ -27,6 +28,11 @@
 	const location = useLocation();
 
 	const breadcrumbs = $derived.by<Breadcrumb[]>(() => {
+		const resource = adminPathResource(location.current.pathname);
+		if (resource !== undefined && runtime.isHiddenResource(resource.kind, resource.slug)) {
+			return [{ label: runtime.i18n.t("errors:notFoundHeading") }];
+		}
+
 		const segments = adminPathSegments(location.current.pathname);
 		if (segments.length === 0) return [{ label: runtime.i18n.t("dashboard:heading") }];
 

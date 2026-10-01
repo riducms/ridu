@@ -102,6 +102,10 @@ Use the separate `payload-to-ridu` skill for a Payload migration or parity asses
   machine-owned. Change executable config or plugin registration and regenerate.
 - Keep access rules and hooks executable in Go. Admin visibility is presentation, not
   authorization. Filtered access must remain part of the atomic store operation.
+- Keep server-maintained collections and globals, such as event logs or computed state, out of the
+  admin with `Admin: ridu.CollectionAdmin{Hidden: true}` (or `GlobalAdmin{Hidden: true}`), not by
+  denying administrators read access. Hidden resources keep their APIs, access rules, hooks and
+  cascades. Admin settings need no migration.
 - Use the Local API or generated typed handles for content operations. Do not call a store adapter
   directly or teach access rules about a context flag. Server-owned writes, such as stats a hook
   maintains, pass `System: true` on their Local API options; everything else passes the real caller.

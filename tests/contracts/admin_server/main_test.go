@@ -219,8 +219,8 @@ func TestFixtureResolvesEveryImplementedAdminFieldFamily(t *testing.T) {
 		t.Fatal(err)
 	}
 	snapshot := manifest.Snapshot()
-	if len(snapshot.Collections) != 29 {
-		t.Fatalf("collections = %d, want 29", len(snapshot.Collections))
+	if len(snapshot.Collections) != 31 {
+		t.Fatalf("collections = %d, want 31", len(snapshot.Collections))
 	}
 	if len(snapshot.Globals) != 3 || snapshot.Globals[0].Slug != "loader-summary" || snapshot.Globals[1].Slug != "site-settings" || !snapshot.Globals[1].Capabilities.Global || !snapshot.Globals[1].Capabilities.Versions || snapshot.Globals[2].Slug != "validation-settings" {
 		t.Fatalf("globals = %#v", snapshot.Globals)
@@ -235,6 +235,7 @@ func TestFixtureResolvesEveryImplementedAdminFieldFamily(t *testing.T) {
 		"live-validation":    false,
 		"users":              false, "media": false, "categories": false, "folders": false, "posts": false,
 		"pages": false, "events": false, "editorial-notes": false, "redirects": false,
+		"usage-stats": false, "stat-reports": false,
 		"payload-only-capabilities": false, "forms": false, "form-submissions": false, "outlines": false,
 		"block-articles": false,
 		"block-pages":    false,

@@ -802,7 +802,12 @@ func mongoMigrationHistoryDigest(t *testing.T, files []migrationartifact.File) s
 	for index, file := range files {
 		identities[index] = ridumigration.ArtifactIdentity{Name: file.Name, Digest: file.Digest}
 	}
-	digest, err := ridumigration.DigestArtifactHistory(identities)
+	head := files[len(files)-1].Artifact
+	manifest, err := head.AfterManifest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest, err := ridumigration.DigestArtifactHistory(identities, head.ToDigest, manifest)
 	if err != nil {
 		t.Fatal(err)
 	}

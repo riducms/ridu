@@ -41,7 +41,7 @@ func TestSQLiteAdoptsADevelopmentSynchronizedDatabase(t *testing.T) {
 	if err != nil || len(statuses) != 1 || !statuses[0].Applied {
 		t.Fatalf("status after adoption = %#v, %v", statuses, err)
 	}
-	history, err := ridumigration.DigestArtifactHistory([]ridumigration.ArtifactIdentity{{Name: first.Name, Digest: first.Digest}})
+	history, err := ridumigration.DigestArtifactHistory([]ridumigration.ArtifactIdentity{{Name: first.Name, Digest: first.Digest}}, first.Artifact.ToDigest, initial)
 	if err != nil {
 		t.Fatal(err)
 	}

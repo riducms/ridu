@@ -732,6 +732,7 @@ export interface SchemaDocumentLockSettings {
 }
 
 export interface SchemaCollectionAdmin {
+	hidden?: boolean;
 	useAsTitle?: string;
 	defaultColumns?: string[];
 	group?: string;

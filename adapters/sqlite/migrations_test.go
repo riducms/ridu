@@ -566,7 +566,7 @@ func TestSQLiteArtifactStatusRejectsEditedHistoryAndLedgerLineage(t *testing.T) 
 		if _, err := backend.ArtifactStatus(ctx, directory, manifest); err == nil || !strings.Contains(err.Error(), "manifest lineage differs") {
 			t.Fatalf("ledger lineage status error = %v", err)
 		}
-		if err := backend.verifyImmutableReadyState(ctx, manifest); err == nil || !strings.Contains(err.Error(), "does not match executable digest") {
+		if err := backend.verifyImmutableReadyState(ctx, manifest); err == nil || !strings.Contains(err.Error(), "does not match the recorded manifest digest") {
 			t.Fatalf("ledger lineage readiness error = %v", err)
 		}
 	})
@@ -740,7 +740,7 @@ func TestSQLiteDevelopmentMigrateReadinessDoesNotRequireArtifactLedger(t *testin
 	}
 	expectedHistory, err := migration.DigestArtifactHistory([]migration.ArtifactIdentity{{
 		Name: "20260901000000.000000000_initial.ridu.json", Digest: strings.Repeat("a", 64),
-	}})
+	}}, strings.Repeat("b", 64), manifest)
 	if err != nil {
 		t.Fatal(err)
 	}

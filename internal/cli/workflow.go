@@ -525,7 +525,15 @@ func migrationArtifactHistoryDigest(files []migrationartifact.File) (string, err
 	for index, file := range files {
 		identities[index] = migration.ArtifactIdentity{Name: file.Name, Digest: file.Digest}
 	}
-	return migration.DigestArtifactHistory(identities)
+	if len(files) == 0 {
+		return "", fmt.Errorf("migration artifact history is empty")
+	}
+	head := files[len(files)-1].Artifact
+	manifest, err := head.AfterManifest()
+	if err != nil {
+		return "", fmt.Errorf("read migration artifact history head: %w", err)
+	}
+	return migration.DigestArtifactHistory(identities, head.ToDigest, manifest)
 }
 
 func restoreAdminAssetsPlaceholder(definition projectfile.File) error {

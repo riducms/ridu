@@ -321,8 +321,8 @@ func (backend *Store) Ready(ctx context.Context, manifest schema.Manifest) error
 	return backend.verifyImmutableReadyState(ctx, manifest)
 }
 
-// ReadyWithMigrationHistory proves ordinary readiness and exact agreement
-// with the complete ordered migration history embedded in the executable.
+// ReadyWithMigrationHistory verifies the complete ordered migration history,
+// recorded head and executable storage schema. Admin presentation may differ.
 func (backend *Store) ReadyWithMigrationHistory(ctx context.Context, manifest schema.Manifest, expectedHistoryDigest string) error {
 	if err := backend.Ping(ctx); err != nil {
 		return err

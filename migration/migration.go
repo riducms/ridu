@@ -35,10 +35,11 @@ func UnmanagedSchemaError(engine string, objects []string) error {
 	return fmt.Errorf("unmanaged %s Ridu schema exists without migration history: %s; `ridu dev` synchronizes its schema without recording migrations. If this database matches the committed migrations, record them with `ridu migrate baseline`; otherwise run `ridu migrate` against a database that migrations manage or an empty one", engine, strings.Join(objects, ", "))
 }
 
-// DigestArtifactHistory returns the SHA-256 identity of one complete ordered
-// migration history. Names must be unique and strictly increasing because
-// committed artifact filenames define execution order.
-func DigestArtifactHistory(identities []ArtifactIdentity) (string, error) {
+// DigestArtifactHistory binds one complete ordered migration history to its
+// recorded head manifest and the executable's storage schema. Admin presentation
+// may differ from the head without changing this identity. Names must be unique
+// and strictly increasing because committed filenames define execution order.
+func DigestArtifactHistory(identities []ArtifactIdentity, headDigest string, manifest schema.Manifest) (string, error) {
 	if len(identities) == 0 {
 		return "", fmt.Errorf("migration artifact history is empty")
 	}
@@ -60,7 +61,18 @@ func DigestArtifactHistory(identities []ArtifactIdentity) (string, error) {
 		}
 		previous = identity.Name
 	}
-	encoded, err := json.Marshal(identities)
+	if !validDigest(headDigest) {
+		return "", fmt.Errorf("migration artifact history has an invalid head manifest digest")
+	}
+	storageDigest, err := DigestManifest(manifest.WithoutAdminPresentation())
+	if err != nil {
+		return "", fmt.Errorf("digest migration artifact storage manifest: %w", err)
+	}
+	encoded, err := json.Marshal(struct {
+		Artifacts     []ArtifactIdentity `json:"artifacts"`
+		HeadDigest    string             `json:"headDigest"`
+		StorageDigest string             `json:"storageDigest"`
+	}{Artifacts: identities, HeadDigest: headDigest, StorageDigest: storageDigest})
 	if err != nil {
 		return "", fmt.Errorf("encode migration artifact history: %w", err)
 	}
