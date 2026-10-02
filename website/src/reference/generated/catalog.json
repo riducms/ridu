@@ -9040,7 +9040,7 @@
 					"kind": "constant",
 					"group": "Runtime",
 					"summary": "The semantic Ridu framework version used by the CLI and project-command compatibility handshake.",
-					"signature": "const FrameworkVersion = \"0.12.0\"",
+					"signature": "const FrameworkVersion = \"0.13.0\"",
 					"parameters": [],
 					"parametersLabel": "",
 					"details": [
@@ -10445,7 +10445,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 565
+						"line": 570
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -10496,7 +10496,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 572
+						"line": 577
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -10547,7 +10547,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 579
+						"line": 584
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -10812,7 +10812,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 541
+						"line": 546
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -10868,7 +10868,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 545
+						"line": 550
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -10924,7 +10924,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 551
+						"line": 556
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -11214,7 +11214,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 587
+						"line": 592
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -11265,7 +11265,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 592
+						"line": 597
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -11316,7 +11316,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 597
+						"line": 602
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -11367,7 +11367,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 602
+						"line": 607
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -11418,7 +11418,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 607
+						"line": 612
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -11469,7 +11469,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 612
+						"line": 617
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -11515,7 +11515,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 618
+						"line": 623
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -11561,7 +11561,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 665
+						"line": 670
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -11612,7 +11612,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 678
+						"line": 683
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -11658,7 +11658,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 688
+						"line": 693
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -11709,7 +11709,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 697
+						"line": 702
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -11755,7 +11755,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 706
+						"line": 711
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -11814,7 +11814,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 715
+						"line": 720
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -11865,7 +11865,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 723
+						"line": 733
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -11916,7 +11916,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 728
+						"line": 738
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -11967,7 +11967,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 733
+						"line": 743
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -12013,7 +12013,7 @@
 					],
 					"source": {
 						"path": "core/local.go",
-						"line": 719
+						"line": 724
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -25019,6 +25019,103 @@
 					"source": {
 						"path": "core/input.go",
 						"line": 90
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
+					"id": "go:github.com/riducms/ridu/core#LocalAPI.CountGlobalVersions",
+					"name": "LocalAPI.CountGlobalVersions",
+					"slug": "local-api-count-global-versions-method",
+					"kind": "method",
+					"group": "Methods",
+					"summary": "CountGlobalVersions counts retained, authorized global snapshots without reading their values.",
+					"signature": "func (local *LocalAPI) CountGlobalVersions(ctx context.Context, slug string, options FindOptions) (int, error)",
+					"parameters": [
+						{
+							"name": "ctx",
+							"type": "context.Context",
+							"description": "The ctx value."
+						},
+						{
+							"name": "slug",
+							"type": "string",
+							"description": "The slug value."
+						},
+						{
+							"name": "options",
+							"type": "FindOptions",
+							"description": "The options value."
+						}
+					],
+					"parametersLabel": "",
+					"returns": {
+						"type": "(int, error)",
+						"description": "The declared result."
+					},
+					"details": [],
+					"example": "",
+					"language": "go",
+					"typeLinks": {},
+					"aliases": [
+						"core.LocalAPI.CountGlobalVersions",
+						"LocalAPI.CountGlobalVersions"
+					],
+					"source": {
+						"path": "core/local.go",
+						"line": 729
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
+					"id": "go:github.com/riducms/ridu/core#LocalAPI.CountVersions",
+					"name": "LocalAPI.CountVersions",
+					"slug": "local-api-count-versions-method",
+					"kind": "method",
+					"group": "Methods",
+					"summary": "CountVersions counts retained, authorized collection snapshots without reading their values.",
+					"signature": "func (local *LocalAPI) CountVersions(ctx context.Context, collection, id string, options FindOptions) (int, error)",
+					"parameters": [
+						{
+							"name": "ctx",
+							"type": "context.Context",
+							"description": "The ctx value."
+						},
+						{
+							"name": "collection",
+							"type": "string",
+							"description": "The collection value."
+						},
+						{
+							"name": "id",
+							"type": "string",
+							"description": "The id value."
+						},
+						{
+							"name": "options",
+							"type": "FindOptions",
+							"description": "The options value."
+						}
+					],
+					"parametersLabel": "",
+					"returns": {
+						"type": "(int, error)",
+						"description": "The declared result."
+					},
+					"details": [],
+					"example": "",
+					"language": "go",
+					"typeLinks": {},
+					"aliases": [
+						"core.LocalAPI.CountVersions",
+						"LocalAPI.CountVersions"
+					],
+					"source": {
+						"path": "core/local.go",
+						"line": 540
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -70229,7 +70326,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 359
+						"line": 363
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -70328,7 +70425,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 514
+						"line": 518
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -70694,7 +70791,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 461
+						"line": 465
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -71416,7 +71513,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 163
+						"line": 167
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -71499,7 +71596,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 173
+						"line": 177
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -71548,7 +71645,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 188
+						"line": 192
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -71594,7 +71691,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 268
+						"line": 272
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -71633,7 +71730,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 277
+						"line": 281
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -71705,7 +71802,7 @@
 					"kind": "interface",
 					"group": "Version adapter contracts",
 					"summary": "Same-transaction snapshot persistence and access-filtered history reads.",
-					"signature": "type VersionTransaction interface {\n\tSaveVersion(context.Context, schema.Collection, Document, int) (Version, error)\n\tListVersions(context.Context, VersionRequest) ([]Version, error)\n\tFindVersion(context.Context, schema.Collection, string, int) (Version, error)\n}",
+					"signature": "type VersionTransaction interface {\n\tSaveVersion(context.Context, schema.Collection, Document, int) (Version, error)\n\tListVersions(context.Context, VersionRequest) ([]Version, error)\n\t// CountVersions counts retained snapshots with the same access and locale\n\t// predicates as ListVersions, without reading snapshot values into the result.\n\tCountVersions(context.Context, VersionRequest) (int, error)\n\tFindVersion(context.Context, schema.Collection, string, int) (Version, error)\n}",
 					"parameters": [
 						{
 							"name": "SaveVersion",
@@ -71716,6 +71813,11 @@
 							"name": "ListVersions",
 							"type": "func(context.Context, VersionRequest) ([]Version, error)",
 							"description": "The ListVersions value."
+						},
+						{
+							"name": "CountVersions",
+							"type": "func(context.Context, VersionRequest) (int, error)",
+							"description": "CountVersions counts retained snapshots with the same access and locale\npredicates as ListVersions, without reading snapshot values into the result."
 						},
 						{
 							"name": "FindVersion",
@@ -71738,7 +71840,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 157
+						"line": 158
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -71774,7 +71876,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 367
+						"line": 371
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -71811,7 +71913,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 285
+						"line": 289
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -71848,7 +71950,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 197
+						"line": 201
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -71882,7 +71984,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 389
+						"line": 393
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -71916,7 +72018,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 399
+						"line": 403
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -71948,7 +72050,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 403
+						"line": 407
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -71982,7 +72084,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 411
+						"line": 415
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -72016,7 +72118,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 419
+						"line": 423
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -72065,7 +72167,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 433
+						"line": 437
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -72109,7 +72211,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 453
+						"line": 457
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -72160,7 +72262,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 471
+						"line": 475
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -72194,7 +72296,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 503
+						"line": 507
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -72338,7 +72440,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 598
+						"line": 602
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -72526,7 +72628,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 720
+						"line": 724
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -72610,7 +72712,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 786
+						"line": 790
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -72662,7 +72764,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 696
+						"line": 700
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -72716,7 +72818,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 540
+						"line": 544
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -72773,7 +72875,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 558
+						"line": 562
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -72845,7 +72947,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 570
+						"line": 574
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -72912,7 +73014,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 584
+						"line": 588
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -72944,7 +73046,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 642
+						"line": 646
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -72978,7 +73080,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 652
+						"line": 656
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -73010,7 +73112,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 658
+						"line": 662
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -73042,7 +73144,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 664
+						"line": 668
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -73168,7 +73270,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 668
+						"line": 672
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -73210,7 +73312,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 709
+						"line": 713
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -73257,7 +73359,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 752
+						"line": 756
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -73304,7 +73406,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 761
+						"line": 765
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -73358,7 +73460,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 770
+						"line": 774
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -73410,7 +73512,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 424
+						"line": 428
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -73477,7 +73579,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 441
+						"line": 445
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -73544,7 +73646,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 337
+						"line": 341
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -73581,7 +73683,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 351
+						"line": 355
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -73618,7 +73720,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 380
+						"line": 384
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -73655,7 +73757,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 496
+						"line": 500
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -73735,7 +73837,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 375
+						"line": 379
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -74199,7 +74301,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 295
+						"line": 299
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -74275,7 +74377,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 205
+						"line": 209
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -74321,7 +74423,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 240
+						"line": 244
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -74394,7 +74496,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 550
+						"line": 554
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -74804,7 +74906,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 553
+						"line": 557
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -74830,7 +74932,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 554
+						"line": 558
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -74860,7 +74962,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 507
+						"line": 511
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -74896,7 +74998,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 508
+						"line": 512
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -75348,7 +75450,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 714
+						"line": 718
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -75374,7 +75476,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 712
+						"line": 716
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -75400,7 +75502,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 713
+						"line": 717
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -75426,7 +75528,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 703
+						"line": 707
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -75452,7 +75554,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 702
+						"line": 706
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -75478,7 +75580,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 699
+						"line": 703
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -75504,7 +75606,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 700
+						"line": 704
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -75530,7 +75632,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 701
+						"line": 705
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -76029,7 +76131,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 485
+						"line": 489
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -76055,7 +76157,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 685
+						"line": 689
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -76081,7 +76183,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 688
+						"line": 692
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -76107,7 +76209,7 @@
 					],
 					"source": {
 						"path": "store/store.go",
-						"line": 689
+						"line": 693
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -101711,6 +101813,11 @@
 							"description": "The versions value."
 						},
 						{
+							"name": "countVersions",
+							"type": "<Slug extends VersionCollectionSlug<Config>>(collection: Slug, id: string, options?: LocaleOptions<LocaleFor<Config>>) => Promise<CountEnvelope>",
+							"description": "Count retained versions visible for one collection document."
+						},
+						{
 							"name": "version",
 							"type": "<Slug extends VersionCollectionSlug<Config>, const Options extends LocaleOptions<LocaleFor<Config>> | undefined = undefined>(collection: Slug, id: string, revision: number, options?: Options) => Promise<Version<LocaleResult<OutputFor<Config, Slug>, AllLocalesOutputFor<Config, Slug>, Options>>>",
 							"description": "The version value."
@@ -101774,6 +101881,11 @@
 							"name": "globalVersions",
 							"type": "<Slug extends VersionGlobalSlug<Config>, const Options extends LocaleOptions<LocaleFor<Config>> | undefined = undefined>(slug: Slug, options?: Options) => Promise<Version<LocaleResult<GlobalOutputFor<Config, Slug>, GlobalAllLocalesOutputFor<Config, Slug>, Options>>[]>",
 							"description": "The globalVersions value."
+						},
+						{
+							"name": "countGlobalVersions",
+							"type": "<Slug extends VersionGlobalSlug<Config>>(slug: Slug, options?: LocaleOptions<LocaleFor<Config>>) => Promise<CountEnvelope>",
+							"description": "Count retained versions visible for one global."
 						},
 						{
 							"name": "globalVersion",
@@ -104917,7 +105029,7 @@
 					],
 					"source": {
 						"path": "packages/sdk/src/types.ts",
-						"line": 1447
+						"line": 1460
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -104983,7 +105095,7 @@
 					],
 					"source": {
 						"path": "packages/sdk/src/types.ts",
-						"line": 1457
+						"line": 1470
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -105049,7 +105161,7 @@
 					],
 					"source": {
 						"path": "packages/sdk/src/types.ts",
-						"line": 1465
+						"line": 1478
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -105115,7 +105227,7 @@
 					],
 					"source": {
 						"path": "packages/sdk/src/types.ts",
-						"line": 1470
+						"line": 1483
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -105181,7 +105293,7 @@
 					],
 					"source": {
 						"path": "packages/sdk/src/types.ts",
-						"line": 1473
+						"line": 1486
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -105247,7 +105359,7 @@
 					],
 					"source": {
 						"path": "packages/sdk/src/types.ts",
-						"line": 1476
+						"line": 1489
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -105318,7 +105430,7 @@
 					],
 					"source": {
 						"path": "packages/sdk/src/types.ts",
-						"line": 1479
+						"line": 1492
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -105389,7 +105501,7 @@
 					],
 					"source": {
 						"path": "packages/sdk/src/types.ts",
-						"line": 1503
+						"line": 1516
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -105460,7 +105572,7 @@
 					],
 					"source": {
 						"path": "packages/sdk/src/types.ts",
-						"line": 1511
+						"line": 1524
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -105531,7 +105643,7 @@
 					],
 					"source": {
 						"path": "packages/sdk/src/types.ts",
-						"line": 1497
+						"line": 1510
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -105602,7 +105714,7 @@
 					],
 					"source": {
 						"path": "packages/sdk/src/types.ts",
-						"line": 1488
+						"line": 1501
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -105673,7 +105785,7 @@
 					],
 					"source": {
 						"path": "packages/sdk/src/types.ts",
-						"line": 1517
+						"line": 1530
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -105744,7 +105856,7 @@
 					],
 					"source": {
 						"path": "packages/sdk/src/types.ts",
-						"line": 1525
+						"line": 1538
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -105815,7 +105927,7 @@
 					],
 					"source": {
 						"path": "packages/sdk/src/types.ts",
-						"line": 1482
+						"line": 1495
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -105888,7 +106000,7 @@
 					],
 					"source": {
 						"path": "packages/sdk/src/types.ts",
-						"line": 1537
+						"line": 1550
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -105954,7 +106066,7 @@
 					],
 					"source": {
 						"path": "packages/sdk/src/types.ts",
-						"line": 1540
+						"line": 1553
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -106025,7 +106137,7 @@
 					],
 					"source": {
 						"path": "packages/sdk/src/types.ts",
-						"line": 1543
+						"line": 1556
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -106096,7 +106208,7 @@
 					],
 					"source": {
 						"path": "packages/sdk/src/types.ts",
-						"line": 1531
+						"line": 1544
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -108398,7 +108510,7 @@
 					],
 					"source": {
 						"path": "packages/sdk/src/types.ts",
-						"line": 1272
+						"line": 1279
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -108478,7 +108590,7 @@
 					],
 					"source": {
 						"path": "packages/sdk/src/types.ts",
-						"line": 1285
+						"line": 1292
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -108553,7 +108665,7 @@
 					],
 					"source": {
 						"path": "packages/sdk/src/types.ts",
-						"line": 1301
+						"line": 1308
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -108633,7 +108745,7 @@
 					],
 					"source": {
 						"path": "packages/sdk/src/types.ts",
-						"line": 1308
+						"line": 1315
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -108708,7 +108820,7 @@
 					],
 					"source": {
 						"path": "packages/sdk/src/types.ts",
-						"line": 1316
+						"line": 1323
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -108788,7 +108900,7 @@
 					],
 					"source": {
 						"path": "packages/sdk/src/types.ts",
-						"line": 1323
+						"line": 1330
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -108863,7 +108975,7 @@
 					],
 					"source": {
 						"path": "packages/sdk/src/types.ts",
-						"line": 1331
+						"line": 1338
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -108943,7 +109055,7 @@
 					],
 					"source": {
 						"path": "packages/sdk/src/types.ts",
-						"line": 1338
+						"line": 1345
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -109013,7 +109125,7 @@
 					],
 					"source": {
 						"path": "packages/sdk/src/types.ts",
-						"line": 1346
+						"line": 1353
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -109088,7 +109200,7 @@
 					],
 					"source": {
 						"path": "packages/sdk/src/types.ts",
-						"line": 1361
+						"line": 1368
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -109163,7 +109275,7 @@
 					],
 					"source": {
 						"path": "packages/sdk/src/types.ts",
-						"line": 1368
+						"line": 1375
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -109233,7 +109345,7 @@
 					],
 					"source": {
 						"path": "packages/sdk/src/types.ts",
-						"line": 1375
+						"line": 1382
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -109308,7 +109420,7 @@
 					],
 					"source": {
 						"path": "packages/sdk/src/types.ts",
-						"line": 1388
+						"line": 1401
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -109378,7 +109490,7 @@
 					],
 					"source": {
 						"path": "packages/sdk/src/types.ts",
-						"line": 1402
+						"line": 1415
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -109453,7 +109565,7 @@
 					],
 					"source": {
 						"path": "packages/sdk/src/types.ts",
-						"line": 1408
+						"line": 1421
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -109523,7 +109635,7 @@
 					],
 					"source": {
 						"path": "packages/sdk/src/types.ts",
-						"line": 1415
+						"line": 1428
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -109598,7 +109710,7 @@
 					],
 					"source": {
 						"path": "packages/sdk/src/types.ts",
-						"line": 1421
+						"line": 1434
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -111777,6 +111889,97 @@
 					]
 				},
 				{
+					"id": "ts:@riducms/sdk#RiduClient.countGlobalVersions",
+					"name": "RiduClient.countGlobalVersions",
+					"slug": "ridu-client-count-global-versions-method",
+					"kind": "method",
+					"group": "Methods",
+					"summary": "Count retained versions visible for one global.",
+					"signature": "RiduClient.countGlobalVersions<Slug extends VersionGlobalSlug<Config>>(slug: Slug, options?: LocaleOptions<LocaleFor<Config>>): Promise<CountEnvelope>",
+					"parameters": [
+						{
+							"name": "slug",
+							"type": "Slug",
+							"description": "The slug value."
+						},
+						{
+							"name": "options",
+							"type": "LocaleOptions<LocaleFor<Config>> | undefined",
+							"description": "The options value."
+						}
+					],
+					"parametersLabel": "",
+					"returns": {
+						"type": "Promise<CountEnvelope>",
+						"description": "The declared result."
+					},
+					"details": [],
+					"example": "",
+					"language": "ts",
+					"typeLinks": {},
+					"aliases": [
+						"RiduClient.countGlobalVersions",
+						"@riducms/sdk.RiduClient.countGlobalVersions"
+					],
+					"source": {
+						"path": "packages/sdk/src/types.ts",
+						"line": 1395
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": [
+						"RiduClient.countGlobalVersions<Slug extends VersionGlobalSlug<Config>>(slug: Slug, options?: LocaleOptions<LocaleFor<Config>>): Promise<CountEnvelope>"
+					]
+				},
+				{
+					"id": "ts:@riducms/sdk#RiduClient.countVersions",
+					"name": "RiduClient.countVersions",
+					"slug": "ridu-client-count-versions-method",
+					"kind": "method",
+					"group": "Methods",
+					"summary": "Count retained versions visible for one collection document.",
+					"signature": "RiduClient.countVersions<Slug extends VersionCollectionSlug<Config>>(collection: Slug, id: string, options?: LocaleOptions<LocaleFor<Config>>): Promise<CountEnvelope>",
+					"parameters": [
+						{
+							"name": "collection",
+							"type": "Slug",
+							"description": "The collection value."
+						},
+						{
+							"name": "id",
+							"type": "string",
+							"description": "The id value."
+						},
+						{
+							"name": "options",
+							"type": "LocaleOptions<LocaleFor<Config>> | undefined",
+							"description": "The options value."
+						}
+					],
+					"parametersLabel": "",
+					"returns": {
+						"type": "Promise<CountEnvelope>",
+						"description": "The declared result."
+					},
+					"details": [],
+					"example": "",
+					"language": "ts",
+					"typeLinks": {},
+					"aliases": [
+						"RiduClient.countVersions",
+						"@riducms/sdk.RiduClient.countVersions"
+					],
+					"source": {
+						"path": "packages/sdk/src/types.ts",
+						"line": 1272
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": [
+						"RiduClient.countVersions<Slug extends VersionCollectionSlug<Config>>(collection: Slug, id: string, options?: LocaleOptions<LocaleFor<Config>>): Promise<CountEnvelope>"
+					]
+				},
+				{
 					"id": "ts:@riducms/sdk#RiduClient.globalLiveValidation",
 					"name": "RiduClient.globalLiveValidation",
 					"slug": "ridu-client-global-live-validation-method",
@@ -111888,7 +112091,7 @@
 					],
 					"source": {
 						"path": "packages/sdk/src/types.ts",
-						"line": 1293
+						"line": 1300
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -112485,9 +112688,9 @@
 							"description": "Read the client provided by the root layout. Call it during component initialization."
 						},
 						{
-							"name": "__@definitionKey@1760",
+							"name": "__@definitionKey@1769",
 							"type": "RiduDefinition<Config, Slug>",
-							"description": "The __@definitionKey@1760 value."
+							"description": "The __@definitionKey@1769 value."
 						}
 					],
 					"parametersLabel": "",
@@ -119487,7 +119690,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 38
+						"line": 39
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -119525,7 +119728,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 20
+						"line": 21
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -119563,7 +119766,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 28
+						"line": 29
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -119606,7 +119809,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 31
+						"line": 32
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -119638,7 +119841,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 29
+						"line": 30
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -119670,7 +119873,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 30
+						"line": 31
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -119715,7 +119918,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 39
+						"line": 40
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -119877,7 +120080,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 41
+						"line": 42
 					},
 					"relatedDocs": [
 						"/guides/custom-fields/",
@@ -119951,7 +120154,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 87
+						"line": 88
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -119988,7 +120191,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 85
+						"line": 86
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120100,7 +120303,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 88
+						"line": 89
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120144,7 +120347,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 22
+						"line": 23
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120199,7 +120402,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 21
+						"line": 22
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120227,7 +120430,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 23
+						"line": 24
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120253,7 +120456,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 24
+						"line": 25
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120295,7 +120498,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 26
+						"line": 27
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120321,7 +120524,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 8
+						"line": 9
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120393,7 +120596,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 32
+						"line": 33
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120430,7 +120633,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 33
+						"line": 34
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120467,7 +120670,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 34
+						"line": 35
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120493,7 +120696,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 35
+						"line": 36
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120505,13 +120708,14 @@
 					"slug": "field-authoring-host",
 					"kind": "interface",
 					"group": "Interfaces",
-					"summary": "Optional authoring services for relationship-like field components.",
+					"summary": "Optional services supplied to a plugin field for embedded forms, related documents, and plugin requests.",
 					"signature": "interface FieldAuthoringHost { ... }",
 					"parameters": [
 						{
 							"name": "schemaForm",
-							"type": "Snippet<[EmbeddedSchemaFormScope]>",
-							"description": "Render the ordinary fields of an existing embedded item using\n`{@render authoring.schemaForm({ treeKey, identity })}`.\nEdits update the parent document's unsaved form immediately. Use a draft below\nif the user needs Apply/Cancel. Neither approach saves the document itself."
+							"type": "Snippet<[EmbeddedSchemaFormProps]>",
+							"description": "Render an existing item's ordinary fields in the parent form. Pass onChange when your editor needs to record each child edit in its own history and serialization.",
+							"href": "/reference/plugin/field-authoring-host-schema-form-method/"
 						},
 						{
 							"name": "schemaHeader",
@@ -120537,6 +120741,12 @@
 							"name": "copySchemaPayload",
 							"type": "(scope: EmbeddedSchemaVariantScope, payload: Readonly<Record<string, unknown>>) => Record<string, unknown>",
 							"description": "Copy an item's ordinary field data and give its schema-declared nested rows/items\nfresh IDs. Use when duplicating to avoid sharing identities. This does not insert\nthe copy or copy your outer plugin item; update that structure in your editor."
+						},
+						{
+							"name": "createSchemaPayload",
+							"type": "(scope: EmbeddedSchemaVariantScope) => Record<string, unknown>",
+							"description": "Create Go-declared default fields and fresh identity for inline insertion; your editor inserts and serializes the result.",
+							"href": "/reference/plugin/field-authoring-host-create-schema-payload-method/"
 						},
 						{
 							"name": "collections",
@@ -120576,18 +120786,166 @@
 					],
 					"parametersLabel": "",
 					"details": [
+						"Check an optional method before using it. Embedded forms edit the unsaved parent document; your plugin editor owns insertion, history, and serialization of its outer value.",
 						"requestPlugin is owner-scoped by the framework to the component’s paired backend plugin and routes through the configured SDK transport."
 					],
 					"example": "",
 					"language": "ts",
-					"typeLinks": {},
+					"typeLinks": {
+						"EmbeddedSchemaFormProps": "/reference/plugin/embedded-schema-form-props/",
+						"EmbeddedSchemaVariantScope": "/reference/plugin/embedded-schema-variant-scope/"
+					},
 					"aliases": [
 						"FieldAuthoringHost",
 						"@riducms/plugin.FieldAuthoringHost"
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 7
+						"line": 8
+					},
+					"relatedDocs": [
+						"/guides/custom-fields/"
+					],
+					"relatedSymbols": [
+						"ts:@riducms/plugin#EmbeddedSchemaFormProps",
+						"ts:@riducms/plugin#EmbeddedSchemaVariantScope"
+					],
+					"overloads": []
+				},
+				{
+					"id": "ts:@riducms/plugin#EmbeddedSchemaFormProps",
+					"name": "EmbeddedSchemaFormProps",
+					"slug": "embedded-schema-form-props",
+					"kind": "interface",
+					"group": "Interfaces",
+					"summary": "Props for rendering the ordinary fields of an existing embedded item inside the parent document form.",
+					"signature": "interface EmbeddedSchemaFormProps { ... }",
+					"parameters": [
+						{
+							"name": "onChange",
+							"type": "(payload: Record<string, unknown>) => void",
+							"description": "Receive detached field data after a child edit so your editor can record that edit in its own history and serialized value.",
+							"href": "/reference/plugin/embedded-schema-form-props-on-change-method/"
+						},
+						{
+							"name": "treeKey",
+							"type": "string",
+							"description": "The embedded tree key declared by the Go plugin field."
+						},
+						{
+							"name": "identity",
+							"type": "string",
+							"description": "The existing item's stable identity; it stays the same when the item moves."
+						},
+						{
+							"name": "readOnly",
+							"type": "boolean",
+							"description": "Display the fields without allowing edits. Access rules can also make them read-only."
+						}
+					],
+					"parametersLabel": "Props",
+					"details": [
+						"Pass these props to the authoring.schemaForm Svelte snippet. Ridu updates the unsaved parent form; onChange is optional for editors that also keep a separate history, such as rich text."
+					],
+					"example": "import type { EmbeddedSchemaFormProps } from '@riducms/plugin';\n\nfunction blockFormProps(\n  identity: string,\n  recordEdit: (fields: Record<string, unknown>) => void\n): EmbeddedSchemaFormProps {\n  return { treeKey: 'blocks', identity, onChange: recordEdit };\n}",
+					"language": "ts",
+					"typeLinks": {},
+					"aliases": [
+						"EmbeddedSchemaFormProps",
+						"@riducms/plugin.EmbeddedSchemaFormProps"
+					],
+					"source": {
+						"path": "packages/plugin/src/index.ts",
+						"line": 3
+					},
+					"relatedDocs": [
+						"/guides/custom-fields/"
+					],
+					"relatedSymbols": [
+						"ts:@riducms/plugin#FieldAuthoringHost.schemaForm",
+						"ts:@riducms/plugin#EmbeddedSchemaFormProps.onChange"
+					],
+					"overloads": []
+				},
+				{
+					"id": "ts:@riducms/plugin#EmbeddedSchemaFormScope",
+					"name": "EmbeddedSchemaFormScope",
+					"slug": "embedded-schema-form-scope",
+					"kind": "interface",
+					"group": "Interfaces",
+					"summary": "Select an existing group of ordinary fields inside a plugin value, such as the fields of one rich-text card. Go must declare the embedded tree and its schemas. Ridu locates the data by its stable identity, even when the card moves.",
+					"signature": "interface EmbeddedSchemaFormScope { ... }",
+					"parameters": [
+						{
+							"name": "treeKey",
+							"type": "string",
+							"description": "The embedded tree key declared by the Go field, for example `\"widgets\"`."
+						},
+						{
+							"name": "identity",
+							"type": "string",
+							"description": "The existing item's stable ID, as declared by that tree's identity configuration."
+						},
+						{
+							"name": "readOnly",
+							"type": "boolean",
+							"description": "Display without editing; false does not override document or field access rules."
+						}
+					],
+					"parametersLabel": "",
+					"details": [],
+					"example": "",
+					"language": "ts",
+					"typeLinks": {},
+					"aliases": [
+						"EmbeddedSchemaFormScope",
+						"@riducms/plugin.EmbeddedSchemaFormScope"
+					],
+					"source": {
+						"path": "packages/plugin/src/index.ts",
+						"line": 2
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": []
+				},
+				{
+					"id": "ts:@riducms/plugin#EmbeddedSchemaVariantScope",
+					"name": "EmbeddedSchemaVariantScope",
+					"slug": "embedded-schema-variant-scope",
+					"kind": "interface",
+					"group": "Interfaces",
+					"summary": "Select a Go-declared embedded variant when creating or copying an item's field data.",
+					"signature": "interface EmbeddedSchemaVariantScope { ... }",
+					"parameters": [
+						{
+							"name": "treeKey",
+							"type": "string",
+							"description": "The embedded tree key declared by the Go field."
+						},
+						{
+							"name": "caseTag",
+							"type": "string",
+							"description": "The tree case's configured tag value, not the name of the property holding the tag."
+						},
+						{
+							"name": "variantSlug",
+							"type": "string",
+							"description": "The variant key within that case, for example `\"hero\"`."
+						}
+					],
+					"parametersLabel": "",
+					"details": [],
+					"example": "",
+					"language": "ts",
+					"typeLinks": {},
+					"aliases": [
+						"EmbeddedSchemaVariantScope",
+						"@riducms/plugin.EmbeddedSchemaVariantScope"
+					],
+					"source": {
+						"path": "packages/plugin/src/index.ts",
+						"line": 5
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120699,7 +121057,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 9
+						"line": 10
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120741,7 +121099,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 10
+						"line": 11
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120769,7 +121127,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 86
+						"line": 87
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120811,7 +121169,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 84
+						"line": 85
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120837,7 +121195,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 43
+						"line": 44
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120879,7 +121237,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 44
+						"line": 45
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120921,7 +121279,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 49
+						"line": 50
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -120973,7 +121331,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 50
+						"line": 51
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121010,7 +121368,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 51
+						"line": 52
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121036,7 +121394,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 55
+						"line": 56
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121083,7 +121441,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 52
+						"line": 53
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121140,7 +121498,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 53
+						"line": 54
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121182,7 +121540,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 54
+						"line": 55
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121208,7 +121566,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 58
+						"line": 59
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121250,7 +121608,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 56
+						"line": 57
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121297,7 +121655,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 57
+						"line": 58
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121334,7 +121692,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 59
+						"line": 60
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121381,7 +121739,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 60
+						"line": 61
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121413,7 +121771,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 61
+						"line": 62
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121439,7 +121797,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 65
+						"line": 66
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121465,7 +121823,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 62
+						"line": 63
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121537,7 +121895,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 64
+						"line": 65
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121579,7 +121937,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 63
+						"line": 64
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121605,7 +121963,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 68
+						"line": 69
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121647,7 +122005,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 66
+						"line": 67
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121694,7 +122052,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 67
+						"line": 68
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121720,7 +122078,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 71
+						"line": 72
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121762,7 +122120,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 69
+						"line": 70
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121809,7 +122167,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 70
+						"line": 71
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121846,7 +122204,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 72
+						"line": 73
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121883,7 +122241,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 73
+						"line": 74
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121940,7 +122298,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 79
+						"line": 80
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -121992,7 +122350,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 80
+						"line": 81
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -122041,7 +122399,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 74
+						"line": 75
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -122093,7 +122451,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 77
+						"line": 78
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -122140,7 +122498,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 76
+						"line": 77
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -122166,7 +122524,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 78
+						"line": 79
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -122203,7 +122561,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 75
+						"line": 76
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -122245,7 +122603,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 48
+						"line": 49
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -123591,12 +123949,155 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/authoring.ts",
-						"line": 239
+						"line": 255
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
 					"overloads": [
 						"FieldAuthoringHost.findDocument(collection: string, id: string, signal?: AbortSignal): Promise<FieldDocument>"
+					]
+				},
+				{
+					"id": "ts:@riducms/plugin#FieldAuthoringHost.createSchemaPayload",
+					"name": "FieldAuthoringHost.createSchemaPayload",
+					"slug": "field-authoring-host-create-schema-payload-method",
+					"kind": "method",
+					"group": "Methods",
+					"summary": "Create a new embedded item's field payload with Go-declared defaults and a fresh identity.",
+					"signature": "FieldAuthoringHost.createSchemaPayload(scope: EmbeddedSchemaVariantScope): Record<string, unknown>",
+					"parameters": [
+						{
+							"name": "scope",
+							"type": "EmbeddedSchemaVariantScope",
+							"description": "Select the declared tree, case tag, and variant to insert.",
+							"href": "/reference/plugin/embedded-schema-variant-scope/"
+						}
+					],
+					"parametersLabel": "",
+					"returns": {
+						"type": "Record<string, unknown>",
+						"description": "New ordinary field data, including a fresh identity and configured defaults. Insert and serialize it through your plugin editor."
+					},
+					"details": [
+						"This method only creates data. It does not insert an outer plugin item, change the parent form, or open an Apply/Cancel draft. Check that the optional method exists before calling it."
+					],
+					"example": "import type { FieldAuthoringHost } from '@riducms/plugin';\n\nfunction insertCallout(\n  authoring: FieldAuthoringHost,\n  insert: (fields: Record<string, unknown>) => void\n) {\n  const fields = authoring.createSchemaPayload?.({\n    treeKey: 'blocks',\n    caseTag: 'block',\n    variantSlug: 'callout'\n  });\n  if (fields) insert(fields);\n}",
+					"language": "ts",
+					"typeLinks": {
+						"EmbeddedSchemaVariantScope": "/reference/plugin/embedded-schema-variant-scope/"
+					},
+					"aliases": [
+						"FieldAuthoringHost.createSchemaPayload",
+						"@riducms/plugin.FieldAuthoringHost.createSchemaPayload"
+					],
+					"source": {
+						"path": "packages/plugin/src/authoring.ts",
+						"line": 232
+					},
+					"relatedDocs": [
+						"/guides/custom-fields/",
+						"/docs/rich-text/blocks/"
+					],
+					"relatedSymbols": [
+						"ts:@riducms/plugin#EmbeddedSchemaVariantScope",
+						"ts:@riducms/plugin#FieldAuthoringHost.schemaForm"
+					],
+					"overloads": [
+						"FieldAuthoringHost.createSchemaPayload(scope: EmbeddedSchemaVariantScope): Record<string, unknown>"
+					]
+				},
+				{
+					"id": "ts:@riducms/plugin#FieldAuthoringHost.schemaForm",
+					"name": "FieldAuthoringHost.schemaForm",
+					"slug": "field-authoring-host-schema-form-method",
+					"kind": "method",
+					"group": "Methods",
+					"summary": "Render ordinary fields of an existing embedded item in the unsaved parent form.",
+					"signature": "FieldAuthoringHost.schemaForm(this: void, args_0: EmbeddedSchemaFormProps): { \"{@render ...} must be called with a Snippet\": \"import type { Snippet } from 'svelte'\"; } & typeof SnippetReturn",
+					"parameters": [
+						{
+							"name": "args",
+							"type": "[EmbeddedSchemaFormProps]",
+							"description": "The embedded tree key and stable item identity, with optional read-only mode and onChange callback.",
+							"href": "/reference/plugin/embedded-schema-form-props/"
+						}
+					],
+					"parametersLabel": "",
+					"returns": {
+						"type": "{ '{@render ...} must be called with a Snippet': \"import type { Snippet } from 'svelte'\"; } & unique symbol",
+						"description": "Rendered Svelte fields. Use this as a snippet in your component template."
+					},
+					"details": [
+						"Render with {@render authoring.schemaForm({ treeKey, identity, onChange })}. Child edits update the unsaved parent form. Pass onChange when your editor also needs to record them in its own history and serialized plugin value.",
+						"Use beginSchemaDraft and schemaDraftEditor when the item needs Apply/Cancel. The parent document is saved later through its ordinary Save action."
+					],
+					"example": "",
+					"language": "ts",
+					"typeLinks": {
+						"EmbeddedSchemaFormProps": "/reference/plugin/embedded-schema-form-props/"
+					},
+					"aliases": [
+						"FieldAuthoringHost.schemaForm",
+						"@riducms/plugin.FieldAuthoringHost.schemaForm"
+					],
+					"source": {
+						"path": "packages/plugin/src/authoring.ts",
+						"line": 199
+					},
+					"relatedDocs": [
+						"/guides/custom-fields/"
+					],
+					"relatedSymbols": [
+						"ts:@riducms/plugin#EmbeddedSchemaFormProps",
+						"ts:@riducms/plugin#EmbeddedSchemaFormProps.onChange"
+					],
+					"overloads": [
+						"FieldAuthoringHost.schemaForm(this: void, args_0: EmbeddedSchemaFormProps): { \"{@render ...} must be called with a Snippet\": \"import type { Snippet } from 'svelte'\"; } & typeof SnippetReturn"
+					]
+				},
+				{
+					"id": "ts:@riducms/plugin#EmbeddedSchemaFormProps.onChange",
+					"name": "EmbeddedSchemaFormProps.onChange",
+					"slug": "embedded-schema-form-props-on-change-method",
+					"kind": "method",
+					"group": "Methods",
+					"summary": "Record a child-field edit in the plugin editor's history and serialized value.",
+					"signature": "EmbeddedSchemaFormProps.onChange(payload: Record<string, unknown>): void",
+					"parameters": [
+						{
+							"name": "payload",
+							"type": "Record<string, unknown>",
+							"description": "Detached current ordinary field data for this embedded item after the edit."
+						}
+					],
+					"parametersLabel": "",
+					"returns": {
+						"type": "void",
+						"description": "No return value. Update the latest matching item through your editor."
+					},
+					"details": [
+						"Ridu calls this callback only when an ordinary field inside the specified item changes. Initial rendering, sibling edits, and a write of the whole plugin value do not call it. Ridu updates the unsaved parent form; your editor must record its own history and serialize its value."
+					],
+					"example": "function recordEmbeddedEdit(\n  identity: string,\n  commit: (identity: string, payload: Record<string, unknown>) => void\n) {\n  return (payload: Record<string, unknown>) =>\n    commit(identity, payload);\n}",
+					"language": "ts",
+					"typeLinks": {},
+					"aliases": [
+						"EmbeddedSchemaFormProps.onChange",
+						"@riducms/plugin.EmbeddedSchemaFormProps.onChange"
+					],
+					"source": {
+						"path": "packages/plugin/src/authoring.ts",
+						"line": 111
+					},
+					"relatedDocs": [
+						"/guides/custom-fields/"
+					],
+					"relatedSymbols": [
+						"ts:@riducms/plugin#EmbeddedSchemaFormProps",
+						"ts:@riducms/plugin#FieldAuthoringHost.schemaForm"
+					],
+					"overloads": [
+						"EmbeddedSchemaFormProps.onChange(payload: Record<string, unknown>): void"
 					]
 				},
 				{
@@ -123634,7 +124135,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/authoring.ts",
-						"line": 233
+						"line": 249
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -123682,7 +124183,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/authoring.ts",
-						"line": 250
+						"line": 266
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -124234,9 +124735,9 @@
 							"description": "The decode value."
 						},
 						{
-							"name": "__@registration@6714",
+							"name": "__@registration@6737",
 							"type": "true",
-							"description": "The __@registration@6714 value."
+							"description": "The __@registration@6737 value."
 						}
 					],
 					"parametersLabel": "",
@@ -125394,9 +125895,9 @@
 							"description": "The decode value."
 						},
 						{
-							"name": "__@registration@5853",
+							"name": "__@registration@5875",
 							"type": "true",
-							"description": "The __@registration@5853 value."
+							"description": "The __@registration@5875 value."
 						}
 					],
 					"parametersLabel": "",
@@ -125563,7 +126064,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 81
+						"line": 82
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -125840,7 +126341,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 42
+						"line": 43
 					},
 					"relatedDocs": [
 						"/docs/custom-components/"
@@ -125887,7 +126388,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 82
+						"line": 83
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -125975,7 +126476,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 83
+						"line": 84
 					},
 					"relatedDocs": [
 						"/docs/custom-components/list-results/"
@@ -126025,7 +126526,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 45
+						"line": 46
 					},
 					"relatedDocs": [
 						"/docs/custom-components/loading-data/"
@@ -126088,7 +126589,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 46
+						"line": 47
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -126124,7 +126625,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 40
+						"line": 41
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -126193,7 +126694,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 5
+						"line": 6
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -126223,7 +126724,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/authoring.ts",
-						"line": 154
+						"line": 164
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -126255,7 +126756,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/authoring.ts",
-						"line": 146
+						"line": 156
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -126287,7 +126788,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/authoring.ts",
-						"line": 152
+						"line": 162
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -126336,7 +126837,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 6
+						"line": 7
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -126372,7 +126873,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/authoring.ts",
-						"line": 169
+						"line": 179
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -126404,55 +126905,13 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/authoring.ts",
-						"line": 171
+						"line": 181
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
 					"overloads": [
 						"EmbeddedSchemaDraftEditorProps.onCancel(): void"
 					]
-				},
-				{
-					"id": "ts:@riducms/plugin#EmbeddedSchemaFormScope",
-					"name": "EmbeddedSchemaFormScope",
-					"slug": "embedded-schema-form-scope",
-					"kind": "interface",
-					"group": "Interfaces",
-					"summary": "Select an existing group of ordinary fields inside a plugin value, such as the fields of one rich-text card. Go must declare the embedded tree and its schemas. Ridu locates the data by its stable identity, even when the card moves.",
-					"signature": "interface EmbeddedSchemaFormScope { ... }",
-					"parameters": [
-						{
-							"name": "treeKey",
-							"type": "string",
-							"description": "The embedded tree key declared by the Go field, for example `\"widgets\"`."
-						},
-						{
-							"name": "identity",
-							"type": "string",
-							"description": "The existing item's stable ID, as declared by that tree's identity configuration."
-						},
-						{
-							"name": "readOnly",
-							"type": "boolean",
-							"description": "Display without editing; false does not override document or field access rules."
-						}
-					],
-					"parametersLabel": "",
-					"details": [],
-					"example": "",
-					"language": "ts",
-					"typeLinks": {},
-					"aliases": [
-						"EmbeddedSchemaFormScope",
-						"@riducms/plugin.EmbeddedSchemaFormScope"
-					],
-					"source": {
-						"path": "packages/plugin/src/index.ts",
-						"line": 2
-					},
-					"relatedDocs": [],
-					"relatedSymbols": [],
-					"overloads": []
 				},
 				{
 					"id": "ts:@riducms/plugin#EmbeddedSchemaHeaderProps",
@@ -126495,7 +126954,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 3
+						"line": 4
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -126531,55 +126990,13 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/authoring.ts",
-						"line": 111
+						"line": 121
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
 					"overloads": [
 						"EmbeddedSchemaHeaderProps.onChange(change: { field: string; value: string; }): void"
 					]
-				},
-				{
-					"id": "ts:@riducms/plugin#EmbeddedSchemaVariantScope",
-					"name": "EmbeddedSchemaVariantScope",
-					"slug": "embedded-schema-variant-scope",
-					"kind": "interface",
-					"group": "Interfaces",
-					"summary": "Select a Go-declared embedded variant when creating or copying an item's field data.",
-					"signature": "interface EmbeddedSchemaVariantScope { ... }",
-					"parameters": [
-						{
-							"name": "treeKey",
-							"type": "string",
-							"description": "The embedded tree key declared by the Go field."
-						},
-						{
-							"name": "caseTag",
-							"type": "string",
-							"description": "The tree case's configured tag value, not the name of the property holding the tag."
-						},
-						{
-							"name": "variantSlug",
-							"type": "string",
-							"description": "The variant key within that case, for example `\"hero\"`."
-						}
-					],
-					"parametersLabel": "",
-					"details": [],
-					"example": "",
-					"language": "ts",
-					"typeLinks": {},
-					"aliases": [
-						"EmbeddedSchemaVariantScope",
-						"@riducms/plugin.EmbeddedSchemaVariantScope"
-					],
-					"source": {
-						"path": "packages/plugin/src/index.ts",
-						"line": 4
-					},
-					"relatedDocs": [],
-					"relatedSymbols": [],
-					"overloads": []
 				},
 				{
 					"id": "ts:@riducms/plugin#FieldAuthoringHost.beginSchemaDraft",
@@ -126611,7 +127028,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/authoring.ts",
-						"line": 201
+						"line": 212
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -126649,7 +127066,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/authoring.ts",
-						"line": 231
+						"line": 247
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -126692,7 +127109,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/authoring.ts",
-						"line": 213
+						"line": 224
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -126730,50 +127147,12 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/authoring.ts",
-						"line": 205
+						"line": 216
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
 					"overloads": [
 						"FieldAuthoringHost.schemaDraftEditor(this: void, args_0: EmbeddedSchemaDraftEditorProps): { \"{@render ...} must be called with a Snippet\": \"import type { Snippet } from 'svelte'\"; } & typeof SnippetReturn"
-					]
-				},
-				{
-					"id": "ts:@riducms/plugin#FieldAuthoringHost.schemaForm",
-					"name": "FieldAuthoringHost.schemaForm",
-					"slug": "field-authoring-host-schema-form-method",
-					"kind": "method",
-					"group": "Methods",
-					"summary": "Render the ordinary fields of an existing embedded item using `{@render authoring.schemaForm({ treeKey, identity })}`. Edits update the parent document's unsaved form immediately. Use a draft below if the user needs Apply/Cancel. Neither approach saves the document itself.",
-					"signature": "FieldAuthoringHost.schemaForm(this: void, args_0: EmbeddedSchemaFormScope): { \"{@render ...} must be called with a Snippet\": \"import type { Snippet } from 'svelte'\"; } & typeof SnippetReturn",
-					"parameters": [
-						{
-							"name": "args",
-							"type": "[EmbeddedSchemaFormScope]",
-							"description": "The args value."
-						}
-					],
-					"parametersLabel": "",
-					"returns": {
-						"type": "{ '{@render ...} must be called with a Snippet': \"import type { Snippet } from 'svelte'\"; } & unique symbol",
-						"description": "The declared result."
-					},
-					"details": [],
-					"example": "",
-					"language": "ts",
-					"typeLinks": {},
-					"aliases": [
-						"FieldAuthoringHost.schemaForm",
-						"@riducms/plugin.FieldAuthoringHost.schemaForm"
-					],
-					"source": {
-						"path": "packages/plugin/src/authoring.ts",
-						"line": 188
-					},
-					"relatedDocs": [],
-					"relatedSymbols": [],
-					"overloads": [
-						"FieldAuthoringHost.schemaForm(this: void, args_0: EmbeddedSchemaFormScope): { \"{@render ...} must be called with a Snippet\": \"import type { Snippet } from 'svelte'\"; } & typeof SnippetReturn"
 					]
 				},
 				{
@@ -126806,7 +127185,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/authoring.ts",
-						"line": 194
+						"line": 205
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -126844,7 +127223,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/authoring.ts",
-						"line": 207
+						"line": 218
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -126898,7 +127277,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 26
+						"line": 27
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -127052,7 +127431,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 26
+						"line": 27
 					},
 					"relatedDocs": [
 						"/docs/fields/live-validation/"
@@ -127144,6 +127523,11 @@
 							"name": "set",
 							"type": "(value: Input | null) => void",
 							"description": "Replace the value in the unsaved form. Use `null` to clear it; `undefined` is\nrejected. Ridu copies and decodes the supplied value, checks editability, and\nupdates its normal form state. This does not send a save request to the server.\n\nThrows if the binding is stale, the field is read-only, the decoder rejects the\nvalue, or a structured edit changes a protected child field. Server validation\nstill runs when the document is saved."
+						},
+						{
+							"name": "reportPendingEdit",
+							"type": "(issues: readonly ValidationIssue[]) => void",
+							"description": "Report input this editor shows but cannot store in the field yet, such as\nunfinished text or an edit that fails its own value checks. While issues are\nreported, the document counts as changed, saving fails with these issues, and\nleaving the document asks for confirmation. Report an empty list once the input\ncan be stored again, normally just before calling `set`, or when the editor\ndiscards it, such as when the stored value is replaced. Issues outside this\nfield are attached to it, issues follow the field when its row moves, and\nreports end when the binding becomes stale."
 						}
 					],
 					"parametersLabel": "Properties and methods",
@@ -127163,7 +127547,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 13
+						"line": 14
 					},
 					"relatedDocs": [
 						"/docs/fields/live-validation/",
@@ -127173,6 +127557,45 @@
 						"ts:@riducms/plugin#FieldLiveValidation"
 					],
 					"overloads": []
+				},
+				{
+					"id": "ts:@riducms/plugin#PluginFieldBinding.reportPendingEdit",
+					"name": "PluginFieldBinding.reportPendingEdit",
+					"slug": "plugin-field-binding-report-pending-edit-method",
+					"kind": "method",
+					"group": "Methods",
+					"summary": "Report input this editor shows but cannot store in the field yet, such as unfinished text or an edit that fails its own value checks. While issues are reported, the document counts as changed, saving fails with these issues, and leaving the document asks for confirmation. Report an empty list once the input can be stored again, normally just before calling `set`, or when the editor discards it, such as when the stored value is replaced. Issues outside this field are attached to it, issues follow the field when its row moves, and reports end when the binding becomes stale.",
+					"signature": "PluginFieldBinding.reportPendingEdit(issues: readonly ValidationIssue[]): void",
+					"parameters": [
+						{
+							"name": "issues",
+							"type": "readonly ValidationIssue[]",
+							"description": "The issues value."
+						}
+					],
+					"parametersLabel": "",
+					"returns": {
+						"type": "void",
+						"description": "The declared result."
+					},
+					"details": [],
+					"example": "",
+					"language": "ts",
+					"typeLinks": {},
+					"aliases": [
+						"PluginFieldBinding.reportPendingEdit",
+						"@riducms/plugin.PluginFieldBinding.reportPendingEdit",
+						"@riducms/plugin/authoring/v1.PluginFieldBinding.reportPendingEdit"
+					],
+					"source": {
+						"path": "packages/plugin/src/field.ts",
+						"line": 74
+					},
+					"relatedDocs": [],
+					"relatedSymbols": [],
+					"overloads": [
+						"PluginFieldBinding.reportPendingEdit(issues: readonly ValidationIssue[]): void"
+					]
 				},
 				{
 					"id": "ts:@riducms/plugin#PluginFieldBinding.set",
@@ -127205,7 +127628,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/field.ts",
-						"line": 61
+						"line": 63
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -127275,7 +127698,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 14
+						"line": 15
 					},
 					"relatedDocs": [
 						"/guides/custom-fields/#svelte-field"
@@ -127303,9 +127726,9 @@
 							"description": "The type value."
 						},
 						{
-							"name": "__@valueContract@3881",
+							"name": "__@valueContract@3903",
 							"type": "{ value: (value: Value) => Value; input: (value: Input) => Input; }",
-							"description": "The __@valueContract@3881 value."
+							"description": "The __@valueContract@3903 value."
 						},
 						{
 							"name": "fieldType",
@@ -127338,9 +127761,9 @@
 							"description": "The decodeFormValue value."
 						},
 						{
-							"name": "__@registration@3860",
+							"name": "__@registration@3882",
 							"type": "true",
-							"description": "The __@registration@3860 value."
+							"description": "The __@registration@3882 value."
 						}
 					],
 					"parametersLabel": "",
@@ -127355,7 +127778,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 17
+						"line": 18
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -127397,7 +127820,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/field.ts",
-						"line": 156
+						"line": 169
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -127436,7 +127859,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/field.ts",
-						"line": 157
+						"line": 170
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -127475,7 +127898,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/field.ts",
-						"line": 160
+						"line": 173
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -127514,7 +127937,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/field.ts",
-						"line": 159
+						"line": 172
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -127553,7 +127976,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/field.ts",
-						"line": 158
+						"line": 171
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -127613,7 +128036,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 15
+						"line": 16
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -127650,7 +128073,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/field.ts",
-						"line": 95
+						"line": 108
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -127814,9 +128237,9 @@
 							"description": "The decodeFormValue value."
 						},
 						{
-							"name": "__@registration@3860",
+							"name": "__@registration@3882",
 							"type": "true",
-							"description": "The __@registration@3860 value."
+							"description": "The __@registration@3882 value."
 						}
 					],
 					"parametersLabel": "",
@@ -127830,7 +128253,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 16
+						"line": 17
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -127871,7 +128294,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/field.ts",
-						"line": 156
+						"line": 169
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -127909,7 +128332,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/field.ts",
-						"line": 157
+						"line": 170
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -127947,7 +128370,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/field.ts",
-						"line": 160
+						"line": 173
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -127985,7 +128408,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/field.ts",
-						"line": 159
+						"line": 172
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -128023,7 +128446,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/field.ts",
-						"line": 158
+						"line": 171
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -128072,7 +128495,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 91
+						"line": 92
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -128108,7 +128531,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 91
+						"line": 92
 					},
 					"relatedDocs": [],
 					"relatedSymbols": [],
@@ -128155,7 +128578,7 @@
 					],
 					"source": {
 						"path": "packages/plugin/src/index.ts",
-						"line": 47
+						"line": 48
 					},
 					"relatedDocs": [
 						"/docs/custom-components/loading-data/"

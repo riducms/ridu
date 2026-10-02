@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { isRecord } from "@riducms/protocol";
-	import { getAdminI18n, type EmbeddedSchemaDraft, type FieldAuthoringHost } from "@riducms/plugin";
+	import { type FieldAuthoringHost } from "@riducms/plugin";
 	import type { SchemaField } from "@riducms/protocol";
 	import { useLexicalComposerContext } from "@hvniel/lexical-svelte";
 	import {
@@ -21,7 +21,6 @@
 		$isNodeSelection,
 		$isParagraphNode,
 		$isRangeSelection,
-		$setSelection,
 		COMMAND_PRIORITY_HIGH,
 		COMMAND_PRIORITY_EDITOR,
 		HISTORY_PUSH_TAG,
@@ -30,7 +29,7 @@
 		KEY_BACKSPACE_COMMAND,
 		KEY_DELETE_COMMAND,
 		PASTE_COMMAND,
-		type BaseSelection,
+		SKIP_DOM_SELECTION_TAG,
 		type NodeKey,
 	} from "lexical";
 	import {
@@ -39,33 +38,20 @@
 		updateBlockName,
 	} from "@plugin-richtext/block/rich-text-block-node";
 	import { richTextBlockTypes } from "@plugin-richtext/field/rich-text-blocks";
+	import { BLOCK_FIELD_CHANGE_TAG } from "@plugin-richtext/block/rich-text-block-history";
 	import {
-		OPEN_BLOCK_EDITOR_COMMAND,
+		INSERT_BLOCK_COMMAND,
 		DUPLICATE_BLOCK_COMMAND,
 		REMOVE_BLOCK_COMMAND,
 		MOVE_BLOCK_COMMAND,
 		UPDATE_BLOCK_NAME_COMMAND,
 	} from "@plugin-richtext/menu/rich-text-commands";
-	import "@plugin-richtext/block/rich-text-block-card.scss";
+	import "@plugin-richtext/block/rich-text-block.scss";
 
 	let { authoring, field }: { authoring: FieldAuthoringHost | undefined; field: SchemaField } =
 		$props();
 	const editor = useLexicalComposerContext()[0];
-	const i18n = getAdminI18n();
-	let session = $state.raw<{
-		draft: EmbeddedSchemaDraft;
-		title: string;
-		nodeKey?: NodeKey;
-		selection: BaseSelection | null;
-		position?: { targetNodeKey: NodeKey; insertBefore: boolean };
-	}>();
 	let message = $state("");
-
-	function close() {
-		session?.draft.discard();
-		session = undefined;
-		queueMicrotask(() => editor.focus());
-	}
 
 	// @lexical-scope
 	function $removeBlock(nodeKey: NodeKey) {
@@ -86,49 +72,6 @@
 			paragraph.select();
 		}
 		return true;
-	}
-
-	function apply(payload: Record<string, unknown>) {
-		const active = session;
-		if (active === undefined || active.draft.stale || !editor.isEditable()) return;
-		editor.update(
-			() => {
-				if (active.nodeKey !== undefined) {
-					const node = $getNodeByKey(active.nodeKey);
-					if (!isBlockNode(node) || node.getFields()._key !== active.draft.identity) return;
-					node.setFields(payload);
-					return;
-				}
-				if (active.position !== undefined) {
-					const target = $getNodeByKey(active.position.targetNodeKey);
-					if (target !== null) {
-						const node = createBlockNode(payload);
-						if (active.position.insertBefore) target.insertBefore(node);
-						else target.insertAfter(node);
-						return;
-					}
-				}
-				const selection = active.selection;
-				if (
-					$isRangeSelection(selection) &&
-					$getNodeByKey(selection.anchor.key) !== null &&
-					$getNodeByKey(selection.focus.key) !== null
-				)
-					$setSelection(selection.clone());
-				else $getRoot().selectEnd();
-				const current = $getSelection();
-				const anchor = $isRangeSelection(current) ? current.anchor.getNode() : undefined;
-				const node = createBlockNode(payload);
-				$insertNodeToNearestRoot(node);
-				if ($isParagraphNode(anchor) && anchor.getChildrenSize() === 0) anchor.remove();
-				const paragraph = $createParagraphNode();
-				node.insertAfter(paragraph);
-				paragraph.select();
-			},
-			{ tag: HISTORY_PUSH_TAG, discrete: true }
-		);
-		session = undefined;
-		queueMicrotask(() => editor.focus());
 	}
 
 	$effect(() => {
@@ -206,38 +149,33 @@
 			),
 
 			editor.registerCommand(
-				OPEN_BLOCK_EDITOR_COMMAND,
-				({ nodeKey, blockType, position }) => {
-					if (authoring?.beginSchemaDraft === undefined || !editor.isEditable()) return false;
-					if (session !== undefined) {
-						message = i18n.t("plugin.richtext:block.pendingEdit");
-						return true;
+				INSERT_BLOCK_COMMAND,
+				({ blockType, position }) => {
+					if (authoring?.createSchemaPayload === undefined || !editor.isEditable()) return false;
+					const type = richTextBlockTypes(field).find((type) => type.slug === blockType);
+					if (type === undefined) return false;
+					const target = position === undefined ? undefined : $getNodeByKey(position.targetNodeKey);
+					if (position !== undefined && target == null) return false;
+					const payload = authoring.createSchemaPayload({
+						treeKey: "blocks",
+						caseTag: "block",
+						variantSlug: type.slug,
+					});
+					$addUpdateTag(HISTORY_PUSH_TAG);
+					const node = createBlockNode(payload);
+					if (target != null && position !== undefined) {
+						if (position.insertBefore) target.insertBefore(node);
+						else target.insertAfter(node);
+					} else {
+						const selection = $getSelection();
+						if (!$isRangeSelection(selection)) $getRoot().selectEnd();
+						const anchor = $isRangeSelection(selection) ? selection.anchor.getNode() : undefined;
+						$insertNodeToNearestRoot(node);
+						if ($isParagraphNode(anchor) && anchor.isEmpty()) anchor.remove();
+						const paragraph = $createParagraphNode();
+						node.insertAfter(paragraph);
+						paragraph.select();
 					}
-					const node = nodeKey === undefined ? undefined : $getNodeByKey(nodeKey);
-					const fields = isBlockNode(node) ? node.getFields() : undefined;
-					const variantSlug = fields?.blockType ?? blockType;
-					const type = richTextBlockTypes(field).find((type) => type.slug === variantSlug);
-					if (type === undefined || (nodeKey !== undefined && !isBlockNode(node))) return false;
-					const draft =
-						fields !== undefined && typeof fields._key === "string"
-							? authoring.beginSchemaDraft({ treeKey: "blocks", identity: fields._key })
-							: authoring.beginSchemaDraft({
-									treeKey: "blocks",
-									caseTag: "block",
-									variantSlug: type.slug,
-								});
-					session = {
-						draft,
-						title: i18n.t(
-							nodeKey === undefined
-								? "plugin.richtext:block.insertTitle"
-								: "plugin.richtext:block.editTitle",
-							{ label: type.labels.singular }
-						),
-						...(nodeKey === undefined ? {} : { nodeKey }),
-						selection: $getSelection()?.clone() ?? null,
-						...(position === undefined ? {} : { position }),
-					};
 					message = "";
 					return true;
 				},
@@ -295,6 +233,8 @@
 				(update) => {
 					if (!editor.isEditable() || !updateBlockName(update)) return false;
 					$addUpdateTag(update.historyTag);
+					$addUpdateTag(BLOCK_FIELD_CHANGE_TAG);
+					$addUpdateTag(SKIP_DOM_SELECTION_TAG);
 					return true;
 				},
 				COMMAND_PRIORITY_EDITOR
@@ -314,20 +254,11 @@
 					},
 					COMMAND_PRIORITY_HIGH
 				)
-			),
-			() => session?.draft.discard()
+			)
 		);
 	});
 </script>
 
 {#if message !== ""}
 	<p role="alert" class="ridu-richtext-block-message">{message}</p>
-{/if}
-{#if session !== undefined && authoring?.schemaDraftEditor !== undefined}
-	{@render authoring.schemaDraftEditor({
-		draft: session.draft,
-		title: session.title,
-		onApply: apply,
-		onCancel: close,
-	})}
 {/if}

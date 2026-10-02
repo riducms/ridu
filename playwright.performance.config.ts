@@ -8,5 +8,6 @@ export default defineConfig({
 	testIgnore: [],
 	fullyParallel: false,
 	workers: 1,
+	use: { ...application.use, trace: "off" },
 	outputDir: ".ridu/playwright/performance/results",
 });

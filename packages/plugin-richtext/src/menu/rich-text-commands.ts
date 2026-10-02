@@ -46,11 +46,10 @@ export const REMOVE_RELATIONSHIP_COMMAND: LexicalCommand<NodeKey> = createComman
 export const UPDATE_UPLOAD_CAPTION_COMMAND: LexicalCommand<UpdateUploadCaptionPayload> =
 	createCommand("UPDATE_UPLOAD_CAPTION_COMMAND");
 
-export const OPEN_BLOCK_EDITOR_COMMAND: LexicalCommand<{
-	blockType?: string;
-	nodeKey?: NodeKey;
+export const INSERT_BLOCK_COMMAND: LexicalCommand<{
+	blockType: string;
 	position?: { targetNodeKey: NodeKey; insertBefore: boolean };
-}> = createCommand("OPEN_BLOCK_EDITOR_COMMAND");
+}> = createCommand("INSERT_BLOCK_COMMAND");
 export const DUPLICATE_BLOCK_COMMAND: LexicalCommand<NodeKey> =
 	createCommand("DUPLICATE_BLOCK_COMMAND");
 export const REMOVE_BLOCK_COMMAND: LexicalCommand<NodeKey> = createCommand("REMOVE_BLOCK_COMMAND");

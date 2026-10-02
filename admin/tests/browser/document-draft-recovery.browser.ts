@@ -115,6 +115,7 @@ async function editor(
 	const client = {
 		find: options.find ?? vi.fn(async (_slug: string, id: string) => ({ ...document, id })),
 		collectionAccess: vi.fn(async () => resolvedAccess),
+		countVersions: vi.fn(async () => ({ totalDocs: 0 })),
 		unpublish: vi.fn(async () => ({ ...document, _status: "draft", _revision: 4 })),
 	} as unknown as AdminClient;
 	const runtime = new AdminRuntime(client);

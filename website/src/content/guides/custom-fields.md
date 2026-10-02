@@ -369,6 +369,67 @@ The selected color should remain. Sending `"purple"` through the API should retu
 Before deployment, review the generated types, create and check the database migration, and run
 `ridu check`.
 
+## Hold input that cannot be saved yet {#pending-edits}
+
+An editor may show input that is not a valid value yet. In a text-input version of `ColorField`,
+`#1a2` is not a `Color` until the user types the remaining digits. Report such input with
+`field.reportPendingEdit(issues)` instead of calling `field.set`. While issues are reported, Save
+fails with them, leaving the document asks for confirmation, and the issues move with the field
+when its row is reordered. Report an empty list once the input is valid again, or when the editor
+discards the input because another editor replaced the stored value. Compare the stored value
+rather than reacting to every update: moving the row also re-reads `field.value`, and unfinished
+input should survive that:
+
+```svelte title="admin/src/color-text-field.svelte"
+<script lang="ts">
+	import { untrack } from 'svelte';
+	import type { PluginFieldProps } from '@riducms/plugin';
+	import { decodeColor, type Color } from './value';
+	let { field }: PluginFieldProps<Color> = $props();
+
+	// Unfinished text and the stored value it was typed over.
+	let draft = $state<{ text: string; over: typeof field.value }>();
+
+	// Another editor replaced the stored value: drop the draft and its report.
+	$effect(() => {
+		const value = field.value;
+		untrack(() => {
+			if (draft === undefined || draft.over === value) return;
+			draft = undefined;
+			field.reportPendingEdit([]);
+		});
+	});
+
+	function edit(text: string) {
+		try {
+			const color = text === '' ? null : decodeColor(text);
+			draft = undefined;
+			field.reportPendingEdit([]);
+			field.set(color);
+		} catch {
+			draft = { text, over: field.value };
+			field.reportPendingEdit([
+				{
+					code: 'unfinished_color',
+					path: field.schema.path,
+					message: 'Enter six hexadecimal digits, such as #1a2b3c.'
+				}
+			]);
+		}
+	}
+</script>
+
+<input
+	aria-label={field.schema.admin.label}
+	value={draft?.text ?? field.value ?? ''}
+	disabled={field.readOnly}
+	oninput={(event) => edit(event.currentTarget.value)}
+/>
+```
+
+Only plugin field editors receive `reportPendingEdit`. Editors registered with
+[defineFieldEditor](/reference/plugin/define-field-editor/) do not.
+
 ## Fix common problems {#failure-modes}
 
 | Symptom                                               | What to check                                                                                     |

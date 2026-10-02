@@ -65,11 +65,13 @@ const client = createClient<CapabilityConfig>({ baseURL: "https://cms.example.te
 void client.auth.login({ collection: "users", email: "editor@example.test", password: "secret" });
 void client.upload("media", new Blob(), { data: { alt: "Diagram" } });
 void client.versions("posts", "post-1");
+void client.countVersions("posts", "post-1", { locale: "all", fallbackLocale: false });
 void client.publish("posts", "post-1");
 void client.create("posts", { id: "payload-42", title: "Imported" });
 void client.duplicate("posts", "post-1", { title: "Copy" });
 void client.restoreDeleted("media", "media-1");
 void client.globalVersions("site-settings");
+void client.countGlobalVersions("site-settings", { locale: "all" });
 void client.publishGlobal("site-settings");
 
 // @ts-expect-error only auth-enabled collections accept login.
@@ -92,11 +94,17 @@ void client.upload("posts", new Blob());
 // @ts-expect-error only version-enabled collections expose history.
 void client.versions("pages", "page-1");
 
+// @ts-expect-error only version-enabled collections expose history counts.
+void client.countVersions("pages", "page-1");
+
 // @ts-expect-error only trash-enabled collections can restore deleted documents.
 void client.restoreDeleted("posts", "post-1");
 
 // @ts-expect-error only version-enabled globals expose history.
 void client.globalVersions("navigation");
+
+// @ts-expect-error only version-enabled globals expose history counts.
+void client.countGlobalVersions("navigation");
 
 // @ts-expect-error generated create inputs remain exact with an explicit application contract.
 void client.create("posts", {});
@@ -105,7 +113,9 @@ void client.create("posts", {});
 void client.duplicate("posts", "post-1", { id: "copy-id" });
 
 void client.versions("history", "id");
+void client.countVersions("history", "id");
 void client.globalVersions("history");
+void client.countGlobalVersions("history");
 // @ts-expect-error historical versions do not enable collection draft publication.
 void client.unpublish("history", "id");
 // @ts-expect-error historical versions do not enable global draft publication.

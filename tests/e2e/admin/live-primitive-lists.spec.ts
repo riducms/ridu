@@ -297,7 +297,7 @@ test("localized list feedback belongs to the exact edited locale and expires whe
 });
 
 for (const owner of ["body", "localizedBody"] as const)
-	test(`${owner} list feedback uses the embedded host across Cancel, Apply and authoritative Save`, async ({
+	test(`${owner} list feedback follows inline card edits through collapse and authoritative Save`, async ({
 		page,
 	}) => {
 		await loginAsEditor(page);
@@ -326,16 +326,15 @@ for (const owner of ["body", "localizedBody"] as const)
 		});
 		await page.goto(`/admin/collections/${collection}/${product.id}`);
 		if (owner === "localizedBody") await chooseContentLocale(page, "French", "fr");
-		const card = list(page, owner).locator(".ridu-richtext-embedded-card").first();
-		await card.getByRole("button", { name: "Edit", exact: true }).click();
-		const drawer = page.getByRole("dialog", { name: "Edit Card", exact: true });
-		const codes = drawer.locator('[data-field-path$=".supplierCodes"]').first();
-		const sizes = drawer.locator('[data-field-path$=".packSizes"]').first();
-		const custom = drawer.locator('[data-local-editor="text-list"]');
+		const card = list(page, owner).locator('article[data-block-type="card"]').first();
+		const codes = card.locator('[data-field-path$=".supplierCodes"]').first();
+		const sizes = card.locator('[data-field-path$=".packSizes"]').first();
+		const custom = card.locator('[data-local-editor="text-list"]');
+		await expect(card).toHaveAttribute("data-collapsed", "false");
 		let check = nextCheck(page);
 		await codes.getByRole("textbox").first().fill("wrong");
 		let response = await check;
-		expect(response.request().postDataJSON().embedded).toHaveLength(1);
+		expect(response.request().postDataJSON().data).toHaveProperty(owner);
 		const result: LiveValidationEnvelope = await response.json();
 		expect(result.evaluations.flatMap((entry) => entry.issues)).toContainEqual(
 			expect.objectContaining({
@@ -345,28 +344,34 @@ for (const owner of ["body", "localizedBody"] as const)
 		);
 		await expect(codes).toContainText("code must start with A-");
 		await sizes.getByRole("textbox").nth(1).fill("1e-");
-		await expect(drawer.locator('[data-live-validation-path$=".packSizes"]')).toHaveAttribute(
+		await expect(card.locator('[data-live-validation-path$=".packSizes"]')).toHaveAttribute(
 			"data-live-validation",
 			"skipped"
 		);
-		await drawer.getByRole("button", { name: "Apply", exact: true }).click();
-		await expect(drawer).toBeVisible();
-		await expect(sizes).toContainText("item 2: enter a finite number");
-		await drawer.getByRole("button", { name: "Cancel", exact: true }).click();
-		await card.getByRole("button", { name: "Edit", exact: true }).click();
-		await expect(codes.getByRole("textbox").first()).toHaveValue("A-original");
-		await expect(codes.getByRole("textbox").first()).not.toHaveAttribute("aria-invalid", "true");
-		await expect(sizes.getByRole("textbox").nth(1)).toHaveValue("8");
-		check = nextCheck(page);
-		await custom.fill("wrong\nwrong");
-		await check;
-		await expect(custom).toHaveAttribute("aria-invalid", "true");
+		await card.getByRole("button", { name: "Collapse Card" }).click();
+		await expect(card).toHaveAttribute("data-collapsed", "true");
+		await expect(sizes.locator("[data-list-item]").nth(1)).toHaveValue("1e-");
+		let writes = 0;
+		page.on("request", (request) => {
+			if (
+				request.method() === "PATCH" &&
+				new URL(request.url()).pathname === `/api/collections/${collection}/${product.id}`
+			)
+				writes++;
+		});
+		await documentSaveButton(page).click();
+		await expect(card).toHaveAttribute("data-collapsed", "false");
+		await expect(sizes).toContainText(/item 2: enter a finite number/i);
+		expect(writes).toBe(0);
+		await expect(sizes.getByRole("textbox").nth(1)).toHaveValue("1e-");
 		check = nextCheck(page);
 		await sizes.getByRole("textbox").nth(1).fill("101");
 		await check;
 		await expect(sizes).toContainText("pack size must be between 0 and 100");
-		await drawer.getByRole("button", { name: "Apply", exact: true }).click();
-		await expect(drawer).toHaveCount(0);
+		check = nextCheck(page);
+		await custom.fill("wrong\nwrong");
+		await check;
+		await expect(custom).toHaveAttribute("aria-invalid", "true");
 		const write = page.waitForResponse(
 			(response) =>
 				response.request().method() === "PATCH" &&

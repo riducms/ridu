@@ -25,19 +25,18 @@ export const richTextMessages = defineAdminMessages({
 
 		"block.label": "{label} block",
 		"block.select": "Select {label} block",
-		"block.edit": "Edit",
 		"block.duplicate": "Duplicate",
 		"block.remove": "Remove",
-		"block.insertTitle": "Insert {label}",
-		"block.editTitle": "Edit {label}",
 		"block.description": "Structured block · {key}",
-		"block.noSummary": "No summary",
+		"block.untitled": "[Untitled]",
+		"block.expand": "Expand {label}",
+		"block.collapse": "Collapse {label}",
+		"block.error": "{count} Error",
+		"block.errors": "{count} Errors",
 		"block.unknown": "Unknown",
 		"block.recovery":
 			"This block type is no longer configured. Its content is preserved; export it before removing or migrating it.",
 		"block.export": "Export block JSON",
-		"block.issues": "{count} fields need attention. Edit this block to review.",
-		"block.pendingEdit": "Apply or cancel the open block before editing another.",
 		"asset.actions": "Asset actions",
 		"asset.addCaption": "Add a caption…",
 		"asset.captionFor": "Caption for {filename}",
@@ -61,6 +60,8 @@ export const richTextMessages = defineAdminMessages({
 		"editor.empty": "No content",
 		"editor.recovery":
 			"Unsupported historical content at {path}. The original JSON is preserved. Export and migrate it before editing this field.",
+		"editor.rejectedChange":
+			"This edit can't be saved: the editor produced unsupported content at {path}. Undo the edit or reload the document.",
 		"editor.exportDocument": "Export document JSON",
 		"editor.filterBlocks": "Filter blocks",
 		"editor.filterBlocksPlaceholder": "Filter blocks…",
@@ -138,21 +139,19 @@ export const richTextMessages = defineAdminMessages({
 
 			"block.label": "Bloc {label}",
 			"block.select": "Sélectionner le bloc {label}",
-			"block.edit": "Modifier",
 			"block.duplicate": "Dupliquer",
 			"block.remove": "Supprimer",
-			"block.insertTitle": "Insérer {label}",
-			"block.editTitle": "Modifier {label}",
 			"block.description": "Bloc structuré · {key}",
-			"block.noSummary": "Aucun résumé",
+			"block.untitled": "[Sans titre]",
+			"block.expand": "Développer {label}",
+			"block.collapse": "Réduire {label}",
+			"block.error": "{count} erreur",
+			"block.errors": "{count} erreurs",
 			"block.unknown": "Inconnu",
 			"block.recovery":
 				"Ce type de bloc n’est plus configuré. Son contenu est conservé ; exportez-le avant de le supprimer ou de le migrer.",
 			"block.export": "Exporter le JSON du bloc",
-			"block.issues":
-				"{count} champs nécessitent votre attention. Modifiez ce bloc pour les vérifier.",
-			"block.pendingEdit":
-				"Appliquez ou annulez la modification en cours avant de modifier un autre bloc.",
+
 			"asset.actions": "Actions sur le fichier",
 			"asset.addCaption": "Ajouter une légende…",
 			"asset.captionFor": "Légende de {filename}",
@@ -176,6 +175,8 @@ export const richTextMessages = defineAdminMessages({
 			"editor.empty": "Aucun contenu",
 			"editor.recovery":
 				"Contenu historique non pris en charge à {path}. Le JSON original est conservé. Exportez-le et migrez-le avant de modifier ce champ.",
+			"editor.rejectedChange":
+				"Cette modification ne peut pas être enregistrée : l’éditeur a produit un contenu non pris en charge à {path}. Annulez la modification ou rechargez le document.",
 			"editor.exportDocument": "Exporter le document JSON",
 			"editor.filterBlocks": "Filtrer les blocs",
 			"editor.filterBlocksPlaceholder": "Filtrer les blocs…",
@@ -252,19 +253,18 @@ export const richTextMessages = defineAdminMessages({
 
 			"block.label": "كتلة {label}",
 			"block.select": "تحديد كتلة {label}",
-			"block.edit": "تعديل",
 			"block.duplicate": "تكرار",
 			"block.remove": "إزالة",
-			"block.insertTitle": "إدراج {label}",
-			"block.editTitle": "تعديل {label}",
 			"block.description": "كتلة منظمة · {key}",
-			"block.noSummary": "لا يوجد ملخص",
+			"block.untitled": "[بلا عنوان]",
+			"block.expand": "توسيع {label}",
+			"block.collapse": "طي {label}",
+			"block.error": "{count} خطأ",
+			"block.errors": "{count} أخطاء",
 			"block.unknown": "غير معروف",
 			"block.recovery":
 				"لم يعد نوع الكتلة هذا معرّفًا. تم الاحتفاظ بمحتواه؛ صدّره قبل إزالته أو ترحيله.",
 			"block.export": "تصدير JSON للكتلة",
-			"block.issues": "هناك {count} حقول تحتاج إلى مراجعة. عدّل هذه الكتلة لمراجعتها.",
-			"block.pendingEdit": "طبّق التعديل المفتوح أو ألغِه قبل تعديل كتلة أخرى.",
 			"asset.actions": "إجراءات الملف",
 			"asset.addCaption": "إضافة وصف…",
 			"asset.captionFor": "وصف {filename}",
@@ -288,6 +288,8 @@ export const richTextMessages = defineAdminMessages({
 			"editor.empty": "لا يوجد محتوى",
 			"editor.recovery":
 				"محتوى سابق غير مدعوم في {path}. تم الاحتفاظ ببيانات JSON الأصلية. صدّرها ورحّلها قبل تعديل هذا الحقل.",
+			"editor.rejectedChange":
+				"لا يمكن حفظ هذا التعديل: أنتج المحرر محتوى غير مدعوم في {path}. تراجع عن التعديل أو أعد تحميل المستند.",
 			"editor.exportDocument": "تصدير مستند JSON",
 			"editor.filterBlocks": "تصفية الكتل",
 			"editor.filterBlocksPlaceholder": "تصفية الكتل…",

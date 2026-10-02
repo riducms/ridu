@@ -77,6 +77,7 @@ export class DocumentController {
 	duplicateOperation = $state(false);
 	deleteDialogOpen = $state(false);
 	currentDocument = $state.raw<AdminDocument>();
+	versionCount = $state<number>();
 	lastSavedAt = $state<number>();
 	unlockOperation = $state(false);
 	copyLocaleOperation = $state(false);
@@ -90,6 +91,7 @@ export class DocumentController {
 	#formChangeGeneration = 0;
 	#stopObservingFormChanges: () => void;
 	#loadRequest?: AbortController;
+	#versionCountRequest?: AbortController;
 	#saveRequest?: AbortController;
 	#forceUnlockRequest?: AbortController;
 	#copyLocaleRequest?: AbortController;
@@ -136,6 +138,7 @@ export class DocumentController {
 				this.#dismissRecoveryNotification();
 				this.#cancelRouteRequests();
 				this.#loadRequest?.abort();
+				this.#clearVersionCount();
 				this.#stopObservingFormChanges();
 				this.form.disposeBindings();
 				this.upload.dispose();
@@ -694,6 +697,7 @@ export class DocumentController {
 				);
 			} else {
 				await this.#refreshAccess(saved.id);
+				if (!request.signal.aborted) this.#loadVersionCount();
 			}
 			return !request.signal.aborted;
 		} catch (cause) {
@@ -786,6 +790,7 @@ export class DocumentController {
 			this.options.runtime.documentsChanged();
 			await this.#refreshAccess(this.documentID);
 			if (generation !== this.#routeGeneration) return;
+			this.#loadVersionCount();
 			this.options.notifications.success({
 				title: this.options.runtime.i18n.t(
 					next === "published" ? "documents:publishedTitle" : "documents:unpublishedTitle"
@@ -926,6 +931,7 @@ export class DocumentController {
 			}
 			return;
 		}
+		this.#clearVersionCount();
 		this.#appliedManifestRevision = manifestRevision;
 		if (this.#activeRouteKey !== routeKey && !sameOwner) {
 			// A later visit to the same URL is a different owner for mutation completions.
@@ -995,6 +1001,7 @@ export class DocumentController {
 				: this.options.runtime.manifest?.collections
 		)?.find((item) => item.id === previous.id);
 		this.#cancelLoad();
+		this.#clearVersionCount();
 		this.#routeGeneration += 1;
 		this.#dismissRecoveryNotification();
 		this.#cancelRouteRequests();
@@ -1204,6 +1211,54 @@ export class DocumentController {
 		this.loading = false;
 	}
 
+	#cancelVersionCount() {
+		this.#versionCountRequest?.abort();
+		this.#versionCountRequest = undefined;
+	}
+
+	#clearVersionCount() {
+		this.#cancelVersionCount();
+		this.versionCount = undefined;
+	}
+
+	async #loadVersionCount() {
+		this.#cancelVersionCount();
+		const slug = this.collection?.slug;
+		const id = this.documentID;
+		if (
+			!slug ||
+			id === undefined ||
+			this.currentDocument === undefined ||
+			!this.versionedCollection ||
+			!this.canReadVersions
+		) {
+			this.versionCount = undefined;
+			return;
+		}
+		const request = new AbortController();
+		this.#versionCountRequest = request;
+		try {
+			// This is a non-blocking header read. A history failure cannot fail the editor.
+			const count = this.globalResource
+				? await this.options.runtime.client.countGlobalVersions(slug, {
+						signal: request.signal,
+						locale: this.contentLocale,
+					})
+				: await this.options.runtime.client.countVersions(slug, id, {
+						signal: request.signal,
+						locale: this.contentLocale,
+					});
+			if (this.#versionCountRequest === request && !request.signal.aborted)
+				this.versionCount = count.totalDocs;
+		} catch {
+			// A count is optional; the history route presents its own actionable error.
+			if (this.#versionCountRequest === request && !request.signal.aborted)
+				this.versionCount = undefined;
+		} finally {
+			if (this.#versionCountRequest === request) this.#versionCountRequest = undefined;
+		}
+	}
+
 	async #load(
 		slug: string,
 		documentID?: string,
@@ -1212,6 +1267,7 @@ export class DocumentController {
 	) {
 		this.#loadRequest?.abort();
 		this.#loadRequest = undefined;
+		this.#clearVersionCount();
 		if (prepared !== undefined && this.#adoptPreparedLoad(prepared, slug, documentID)) return;
 		const request = new AbortController();
 		this.#loadRequest = request;
@@ -1265,6 +1321,7 @@ export class DocumentController {
 				if (uncertain) clearFormDraft(this.collection?.id ?? slug, documentID, this.#draftLocale);
 				this.#applyDocument(document, !uncertain);
 			}
+			this.#loadVersionCount();
 			if (documentID === undefined && formUnchanged) this.#restoreDraft();
 			if (
 				documentID !== undefined &&
@@ -1321,6 +1378,7 @@ export class DocumentController {
 		}
 		this.form.setAccess(access.value, documentID === undefined ? "create" : "update");
 		if (document?.value !== undefined) this.#applyDocument(document.value, true);
+		this.#loadVersionCount();
 		if (documentID === undefined) this.#restoreDraft();
 		if (
 			documentID !== undefined &&

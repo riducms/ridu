@@ -14,6 +14,7 @@ import (
 	"github.com/riducms/ridu/field"
 	"github.com/riducms/ridu/internal/migrationartifact"
 	"github.com/riducms/ridu/migration"
+	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
 )
@@ -367,6 +368,22 @@ VALUES (?, ?, ?, 1, 'draft', ?, 1)`, document.ID+":1", string(collection.ID), do
 		ID: "global", Status: store.StatusDraft, Revision: 1,
 		Values: store.Values{"title": store.String("Retired settings")},
 	})
+	read, err := backend.BeginSnapshot(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	title, err := query.NewPath("title")
+	if err != nil {
+		t.Fatal(err)
+	}
+	access := query.Equal(title, "Retired settings").Node()
+	count, err := read.(store.VersionTransaction).CountVersions(ctx, store.VersionRequest{
+		Collection: retiredGlobal, DocumentID: "global", Access: &access,
+	})
+	_ = read.Rollback(ctx)
+	if err != nil || count != 1 {
+		t.Fatalf("filtered SQLite global version count = %d, %v, want 1", count, err)
+	}
 	if _, err := backend.db.ExecContext(ctx, `INSERT INTO ridu_auth_credentials
   (collection_id, user_id, password_hash, verified) VALUES (?, 'retired-1', x'00', 1)`, string(retiredUser.ID)); err != nil {
 		t.Fatal(err)

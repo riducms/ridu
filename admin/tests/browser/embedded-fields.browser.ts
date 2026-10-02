@@ -113,6 +113,73 @@ async function draftRuntime() {
 }
 
 describe("public embedded draft host", () => {
+	it("reports only writes inside the mounted item and follows it through reorders", async () => {
+		const { FormController } = await draftRuntime();
+		const { observeEmbeddedSchemaForm } = await import("@admin/core/forms/embedded-schema-form");
+		const parent = new FormController({ body: envelope(card("one"), card("two", "Two")) });
+		parent.reset(parent.snapshot(), [field]);
+		const changes: Record<string, unknown>[] = [];
+		let writable = true;
+		const stop = observeEmbeddedSchemaForm(
+			parent,
+			field,
+			"widgets",
+			"one",
+			(payload) => changes.push(payload),
+			() => writable
+		);
+		expect(changes).toEqual([]);
+
+		parent.set("body.outline.0.items.1.content.title", "Sibling edit");
+		expect(changes).toEqual([]);
+		parent.set(`${path}.title`, "Inline edit");
+		expect(changes).toHaveLength(1);
+		expect(changes[0]?.title).toBe("Inline edit");
+		changes[0]!.title = "Mutated copy";
+		expect(parent.get(`${path}.title`)).toBe("Inline edit");
+
+		parent.set("body", envelope(card("two", "Sibling edit"), card("one", "External")));
+		expect(changes).toHaveLength(1);
+		parent.set("body.outline.0.items.1.content.title", "After reorder");
+		expect(changes[1]?.title).toBe("After reorder");
+		writable = false;
+		parent.set("body.outline.0.items.1.content.title", "Locked");
+		expect(changes).toHaveLength(2);
+		writable = true;
+		parent.set("body.outline.0.items.1.content.title", "Unlocked");
+		expect(changes[2]?.title).toBe("Unlocked");
+
+		parent.set("body", envelope(card("two")));
+		parent.set("body", envelope(card("two"), card("one", "Reinserted")));
+		const fresh: Record<string, unknown>[] = [];
+		const stopFresh = observeEmbeddedSchemaForm(
+			parent,
+			field,
+			"widgets",
+			"one",
+			(payload) => fresh.push(payload),
+			() => true
+		);
+		parent.set("body.outline.0.items.1.content.title", "New mount");
+		expect(changes).toHaveLength(3);
+		expect(fresh[0]?.title).toBe("New mount");
+		stopFresh();
+		parent.set("body.outline.0.items.1.content.title", "After cleanup");
+		expect(fresh).toHaveLength(1);
+		stop();
+	});
+
+	it("creates independent inline payloads with configured defaults", async () => {
+		const { createEmbeddedSchemaPayload } = await draftRuntime();
+		const scope = { treeKey: "widgets", caseTag: "widget", variantSlug: "card" };
+		const first = createEmbeddedSchemaPayload(field, scope);
+		const second = createEmbeddedSchemaPayload(field, scope);
+		expect(first.schema).toBe("card");
+		expect(typeof first.uid).toBe("string");
+		expect(first.uid).not.toBe(second.uid);
+		expect(first.settings).toEqual({ caption: "Default caption" });
+	});
+
 	it("retains live document context for conditions and reference filters while restricting writes to the draft", async () => {
 		const { FormController, createEmbeddedSchemaDraft } = await draftRuntime();
 		const parent = new FormController({ tenant: "a", body: envelope(card("one")) });

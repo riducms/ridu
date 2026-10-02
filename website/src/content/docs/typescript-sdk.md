@@ -302,12 +302,15 @@ save the form and handle their validation errors separately.
 
 ## Drafts, versions, and publishing {#versions}
 
-For versioned collections, use `versions` and `version` to inspect snapshots, then `publish`,
+For versioned collections, use `versions` and `version` to inspect snapshots. Use `countVersions`
+when a badge needs only the authorized retained count; it returns `{ totalDocs }` without loading
+snapshots. Then use `publish`,
 `publishChanges`, `unpublish`, or `restore`. `publishChanges` submits edited values and the status
 transition as one publish operation, so publish access and hooks cannot be bypassed by an ordinary
 update. `schedulePublish`, `scheduleUnpublish`, `scheduledPublications`, and
 `cancelScheduledPublication` manage durable collection publication jobs. Scheduled unpublish is
 limited to draft-capable collections. Versioned globals use `globalVersions`, `globalVersion`,
+and `countGlobalVersions` for the corresponding history reads and count,
 `publishGlobal`, `publishGlobalChanges`, `unpublishGlobal`, and `restoreGlobal`; scheduled
 publication changes are collection-only today.
 

@@ -116,6 +116,16 @@ export function guardPluginAuthoring(
 						return result;
 					},
 				}),
+		...(host.createSchemaPayload === undefined
+			? {}
+			: {
+					createSchemaPayload: (scope) => {
+						binding.assertEditable();
+						const result = host.createSchemaPayload!({ ...scope });
+						binding.assertEditable();
+						return cloneFormValue(result) as Record<string, unknown>;
+					},
+				}),
 		...(host.beginSchemaDraft === undefined
 			? {}
 			: {

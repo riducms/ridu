@@ -9,12 +9,12 @@ import {
 	type NodeKey,
 	type SerializedLexicalNode,
 } from "lexical";
-import RichTextBlockCard from "@plugin-richtext/block/rich-text-block-card.svelte";
+import RichTextBlock from "@plugin-richtext/block/rich-text-block.svelte";
 
 /** Retains the received envelope verbatim so historical content can be exported safely. */
 export type SerializedBlockNode = SerializedLexicalNode & Record<string, unknown>;
 
-export class BlockNode extends DecoratorNode<Decorator<typeof RichTextBlockCard>> {
+export class BlockNode extends DecoratorNode<Decorator<typeof RichTextBlock>> {
 	__envelope: SerializedBlockNode;
 
 	static getType(): string {
@@ -36,6 +36,7 @@ export class BlockNode extends DecoratorNode<Decorator<typeof RichTextBlockCard>
 	createDOM(): HTMLElement {
 		const element = $getDocument().createElement("div");
 		element.className = "ridu-richtext-embedded";
+		element.contentEditable = "false";
 		return element;
 	}
 	updateDOM(): false {
@@ -56,9 +57,9 @@ export class BlockNode extends DecoratorNode<Decorator<typeof RichTextBlockCard>
 		writable.__envelope = { type: "block", version: 1, fields: structuredClone(fields) };
 		return writable;
 	}
-	decorate(): Decorator<typeof RichTextBlockCard> {
+	decorate(): Decorator<typeof RichTextBlock> {
 		return {
-			component: RichTextBlockCard,
+			component: RichTextBlock,
 			props: {
 				nodeKey: this.getKey(),
 				fields: this.getFields(),

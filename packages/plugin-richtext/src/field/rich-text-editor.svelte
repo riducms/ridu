@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { RichTextDocument } from "@riducms/sdk/richtext";
+	import { documentRecoveryIssue, type RichTextDocument } from "@riducms/sdk/richtext";
 	import type { RichTextConfig } from "@plugin-richtext/field/rich-text-config";
 	import type { PluginFieldProps } from "@riducms/plugin";
 	import { CodeNode } from "@lexical/code";
@@ -25,6 +25,7 @@
 		$getSelection,
 		$isRangeSelection,
 		COMMAND_PRIORITY_EDITOR,
+		HISTORY_MERGE_TAG,
 		defineExtension,
 		mergeRegister,
 		type EditorState,
@@ -49,12 +50,13 @@
 		editorRecoveryIssue,
 		initialEditorState,
 	} from "@plugin-richtext/field/rich-text-document";
-	import { decodeRichTextDocument } from "@plugin-richtext/field/rich-text-value";
 	import { UploadNode } from "@plugin-richtext/upload/rich-text-upload-node";
 	import RichTextUploadPlugin from "@plugin-richtext/upload/rich-text-upload-plugin.svelte";
 	import { RelationshipNode } from "@plugin-richtext/relationship/rich-text-relationship-node";
 	import { BlockNode } from "@plugin-richtext/block/rich-text-block-node";
 	import RichTextBlocksPlugin from "@plugin-richtext/block/rich-text-blocks-plugin.svelte";
+	import { BLOCK_FIELD_CHANGE_TAG } from "@plugin-richtext/block/rich-text-block-history";
+	import { equalRichTextValues } from "@plugin-richtext/field/rich-text-value";
 	import RichTextRelationshipPlugin from "@plugin-richtext/relationship/rich-text-relationship-plugin.svelte";
 
 	let {
@@ -63,10 +65,22 @@
 		config,
 		authoring,
 		i18n,
-	}: PluginFieldProps<RichTextDocument<unknown>, RichTextConfig> = $props();
+		acceptEmbeddedChange,
+	}: PluginFieldProps<RichTextDocument<unknown>, RichTextConfig> & {
+		acceptEmbeddedChange: () => void;
+	} = $props();
 	const { schema: field, readOnly: editingBlocked, issues } = $derived(binding);
+	// An edit whose export the server would reject stays in the editor and is held by the
+	// form as a pending edit, so it can neither be saved nor left without a warning.
+	let rejectedChange = $state<string>();
+	const errors = $derived([
+		...new Set([
+			...issues.map((issue) => issue.message),
+			...(rejectedChange === undefined ? [] : [rejectedChange]),
+		]),
+	]);
 	const inputARIA = $derived(
-		fieldControlARIA(field.id, field.admin.description !== undefined, issues.length > 0)
+		fieldControlARIA(field.id, field.admin.description !== undefined, errors.length > 0)
 	);
 	const visiblePlaceholder = $derived(
 		editingBlocked
@@ -85,6 +99,7 @@
 	// svelte-ignore state_referenced_locally
 	setRichTextAuthoringHost(authoring);
 	setRichTextField({
+		acceptEmbeddedChange: () => acceptEmbeddedChange(),
 		get field() {
 			return field;
 		},
@@ -197,14 +212,33 @@
 		},
 	});
 
-	function changed(editorState: EditorState) {
+	function changed(editorState: EditorState, _editor: unknown, tags: Set<string>) {
+		// Lexical can finish a queued update while a save locks or replaces the binding.
+		if (binding.stale || binding.readOnly) return;
+		// Hydration merges belong to Lexical. Focused inline edits also merge their undo
+		// history, but carry an explicit tag because every keystroke must reach the form.
+		if (tags.has(HISTORY_MERGE_TAG) && !tags.has(BLOCK_FIELD_CHANGE_TAG)) return;
+
 		// Lexical can retain undefined optional properties after importing sparse server JSON.
-		// Decode its serialized wire value, where those properties are absent.
-		binding.set(
-			decodeRichTextDocument(
-				JSON.parse(JSON.stringify({ version: 1, root: editorState.toJSON().root }))
-			)
+		// Validate its serialized wire value, where those properties are absent.
+		const value: unknown = JSON.parse(
+			JSON.stringify({ version: 1, root: editorState.toJSON().root })
 		);
+		const issue = documentRecoveryIssue(value);
+		if (issue === undefined) {
+			rejectedChange = undefined;
+			binding.reportPendingEdit([]);
+			// Reconciliation and history updates can dirty nodes without changing the document.
+			if (equalRichTextValues(value, binding.rawValue)) return;
+			binding.set(value as RichTextDocument<unknown>);
+			return;
+		}
+		rejectedChange = i18n.t("plugin.richtext:editor.rejectedChange", {
+			path: `${field.path}.${issue}`,
+		});
+		binding.reportPendingEdit([
+			{ code: "rejected_rich_text_edit", path: field.path, message: rejectedChange },
+		]);
 	}
 
 	function exportDocument() {
@@ -226,13 +260,13 @@
 		required={field.required}
 		readOnly={field.admin.readOnly}
 		description={field.admin.description}
-		errors={issues.map((issue) => issue.message)}
+		{errors}
 		class="ridu-richtext-field"
 	>
 		<div
 			class={[
 				"ridu-richtext-editor",
-				issues.length > 0 && "has-error",
+				errors.length > 0 && "has-error",
 				editingBlocked && "is-read-only",
 				config.admin.hideGutter && "is-gutterless",
 			]}
@@ -296,7 +330,11 @@
 					{/if}
 					<RichTextEditabilityPlugin readOnly={editingBlocked} />
 					<RichTextBlocksPlugin {authoring} {field} />
-					<OnChangePlugin onChange={changed} ignoreSelectionChange />
+					<OnChangePlugin
+						onChange={changed}
+						ignoreSelectionChange
+						ignoreHistoryMergeTagChange={false}
+					/>
 					{#if !config.admin.hideInsertParagraphAtEnd}
 						<RichTextFooter readOnly={editingBlocked} />
 					{/if}

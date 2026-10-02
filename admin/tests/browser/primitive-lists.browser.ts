@@ -84,6 +84,20 @@ it("adds duplicate strings, reorders with Alt+Arrow, preserves focus, and remove
 	await screen.unmount();
 });
 
+it("restores a removed duplicate when an external editor replaces the list", async () => {
+	const props = fixture(list(), ["oak", "oak"]);
+	const screen = await render(Harness, props);
+	await screen.getByRole("button", { name: "Remove item 1", exact: true }).click();
+	expect(props.form.get("values")).toEqual(["oak"]);
+	props.form.set("values", ["oak", "oak"]);
+	await expect
+		.element(screen.getByRole("textbox", { name: "Values, item 2", exact: true }))
+		.toHaveValue("oak");
+	await screen.getByRole("textbox", { name: "Values, item 2", exact: true }).fill("warranty");
+	expect(props.form.get("values")).toEqual(["oak", "warranty"]);
+	await screen.unmount();
+});
+
 it("retains incomplete numeric input across unmount, blocks submit, and saves exact finite primitive values", async () => {
 	const props = fixture(list("number-list"), [0, 8]);
 	const screen = await render(Harness, props);

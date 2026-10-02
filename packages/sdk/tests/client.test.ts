@@ -653,6 +653,69 @@ describe("Fetch client", () => {
 		]);
 	});
 
+	it("counts only visible collection and global versions with locale and request controls", async () => {
+		const calls: Array<{ path: string; header: string | null; aborted: boolean }> = [];
+		const signal = new AbortController();
+		const client = createClient<TestConfig>({
+			baseURL: "https://cms.example.test",
+			fetch: async (input) => {
+				const request = input as Request;
+				const url = new URL(request.url);
+				calls.push({
+					path: `${request.method} ${url.pathname}${url.search}`,
+					header: request.headers.get("X-Count-Test"),
+					aborted: request.signal.aborted,
+				});
+				return Response.json({ totalDocs: calls.length });
+			},
+		});
+		expect(
+			await client.countVersions("posts", "post/1", {
+				locale: "fr",
+				fallbackLocale: false,
+				signal: signal.signal,
+				headers: { "X-Count-Test": "collection" },
+			})
+		).toEqual({ totalDocs: 1 });
+		expect(
+			await client.countGlobalVersions("site-settings", {
+				locale: "all",
+				fallbackLocale: ["en", "de"],
+				headers: { "X-Count-Test": "global" },
+			})
+		).toEqual({ totalDocs: 2 });
+		expect(calls).toEqual([
+			{
+				path: "GET /api/collections/posts/post%2F1/versions/count?locale=fr&fallback-locale=false",
+				header: "collection",
+				aborted: false,
+			},
+			{
+				path: "GET /api/globals/site-settings/versions/count?locale=all&fallback-locale=en%2Cde",
+				header: "global",
+				aborted: false,
+			},
+		]);
+	});
+
+	it.each([null, -1, 0.5, Number.MAX_SAFE_INTEGER + 1, "2"])(
+		"rejects an invalid version count envelope (%s)",
+		async (totalDocs) => {
+			const client = createClient<TestConfig>({
+				baseURL: "https://cms.example.test",
+				fetch: async () => Response.json({ totalDocs }),
+			});
+			await expect(client.countVersions("posts", "post_1")).rejects.toMatchObject({
+				code: "internal",
+				status: 500,
+			});
+			await expect(client.countGlobalVersions("site-settings")).rejects.toMatchObject({
+				code: "internal",
+				status: 500,
+			});
+		}
+	);
+
 	it("gets individual versions and manages scheduled publications", async () => {
 		const calls: Array<{ method: string; path: string; revision: string | null }> = [];
 		const scheduledActions: string[] = [];

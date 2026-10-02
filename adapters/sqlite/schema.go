@@ -180,7 +180,7 @@ func sqliteDocumentIndexes(manifest schema.Manifest) (map[string]string, error) 
 				return nil, fmt.Errorf("build SQLite index for %s.%s: %w", collection.ID, indexed.path, err)
 			}
 			for _, locales := range chains {
-				expression, _, _, supported := sqliteDocumentPathExpression(indexed.chain, locales)
+				expression, _, _, supported := sqliteDocumentPathExpression("values_json", indexed.chain, locales)
 				if !supported {
 					return nil, fmt.Errorf("build SQLite index for %s.%s: unsupported manifest index path", collection.ID, indexed.path)
 				}
@@ -209,7 +209,7 @@ func sqliteDocumentIndexes(manifest schema.Manifest) (map[string]string, error) 
 				expressions := make([]string, len(indexed))
 				parts := make([]string, len(indexed))
 				for fieldIndex, item := range indexed {
-					expression, _, _, supported := sqliteDocumentPathExpression(item.chain, locales)
+					expression, _, _, supported := sqliteDocumentPathExpression("values_json", item.chain, locales)
 					if !supported {
 						return nil, fmt.Errorf("build SQLite compound index %s[%d]: unsupported manifest path %q", collection.ID, index, item.path)
 					}
@@ -370,7 +370,8 @@ func sqliteFieldValueKind(field schema.Field) (sqliteDocumentValueKind, bool) {
 // the same locale projection rules as the operation engine. It returns a
 // scalar value expression and its underlying JSON type expression. Callers
 // must supply the effective request locale chain for localized paths.
-func sqliteDocumentPathExpression(chain []schema.Field, locales []schema.LocaleCode) (string, string, sqliteDocumentValueKind, bool) {
+// base is the authored value JSON source, independent of its containing row.
+func sqliteDocumentPathExpression(base string, chain []schema.Field, locales []schema.LocaleCode) (string, string, sqliteDocumentValueKind, bool) {
 	if len(chain) == 0 {
 		return "", "", 0, false
 	}
@@ -378,7 +379,6 @@ func sqliteDocumentPathExpression(chain []schema.Field, locales []schema.LocaleC
 	if !supported {
 		return "", "", 0, false
 	}
-	base := "values_json"
 	pending := make([]string, 0, len(chain))
 	for index, candidate := range chain {
 		pending = append(pending, candidate.Name)

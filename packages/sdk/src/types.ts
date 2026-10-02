@@ -1268,6 +1268,13 @@ export interface RiduClient<
 		Version<LocaleResult<OutputFor<Config, Slug>, AllLocalesOutputFor<Config, Slug>, Options>>[]
 	>;
 
+	/** Count retained versions visible for one collection document. */
+	countVersions<Slug extends VersionCollectionSlug<Config>>(
+		collection: Slug,
+		id: string,
+		options?: LocaleOptions<LocaleFor<Config>>
+	): Promise<CountEnvelope>;
+
 	/** Read one stored collection-document version by revision number. */
 	version<
 		Slug extends VersionCollectionSlug<Config>,
@@ -1383,6 +1390,12 @@ export interface RiduClient<
 			LocaleResult<GlobalOutputFor<Config, Slug>, GlobalAllLocalesOutputFor<Config, Slug>, Options>
 		>[]
 	>;
+
+	/** Count retained versions visible for one global. */
+	countGlobalVersions<Slug extends VersionGlobalSlug<Config>>(
+		slug: Slug,
+		options?: LocaleOptions<LocaleFor<Config>>
+	): Promise<CountEnvelope>;
 
 	/** Read one stored global version by revision number. */
 	globalVersion<

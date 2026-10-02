@@ -141,7 +141,7 @@ type Version struct {
 }
 
 // VersionRequest identifies an access-filtered history query. Adapters must
-// apply Access to each stored snapshot before returning it.
+// apply Access to each stored snapshot before returning or counting it.
 type VersionRequest struct {
 	Collection  schema.Collection
 	DocumentID  string
@@ -152,11 +152,15 @@ type VersionRequest struct {
 }
 
 // VersionTransaction is required for version-enabled collections. Snapshots
-// participate in the same transaction as their document mutation. ListVersions
-// must apply access to the stored snapshots before returning them.
+// participate in the same transaction as their document mutation. History reads
+// apply access to each stored snapshot. CountVersions counts retained, authorized
+// snapshots in the store without returning their documents.
 type VersionTransaction interface {
 	SaveVersion(context.Context, schema.Collection, Document, int) (Version, error)
 	ListVersions(context.Context, VersionRequest) ([]Version, error)
+	// CountVersions counts retained snapshots with the same access and locale
+	// predicates as ListVersions, without reading snapshot values into the result.
+	CountVersions(context.Context, VersionRequest) (int, error)
 	FindVersion(context.Context, schema.Collection, string, int) (Version, error)
 }
 

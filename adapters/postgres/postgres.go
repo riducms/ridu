@@ -1487,17 +1487,9 @@ func (transaction *documentTransaction) SaveVersion(ctx context.Context, collect
 }
 
 func (transaction *documentTransaction) ListVersions(ctx context.Context, request store.VersionRequest) ([]store.Version, error) {
-	collection, documentID, access := request.Collection, request.DocumentID, request.Access
-	arguments := []any{collection.ID, documentID}
-	predicate := quote("collection_id") + " = $1 AND " + quote("document_id") + " = $2"
-	if access != nil {
-		compiler := predicateCompiler{collection: collection, next: len(arguments), arguments: arguments, snapshot: true, localeChain: request.LocaleChain}
-		compiled, err := compileAccessPredicate(&compiler, *access, request.AllLocales, request.Locales)
-		if err != nil {
-			return nil, err
-		}
-		predicate += " AND (" + compiled + ")"
-		arguments = compiler.arguments
+	predicate, arguments, err := postgresVersionPredicate(request)
+	if err != nil {
+		return nil, err
 	}
 	statement := "SELECT " + quote("revision") + ", " + quote("status") + ", " + quote("snapshot") + ", " + quote("created_at") + " FROM " + quote("ridu_versions") + " WHERE " + predicate + " ORDER BY " + quote("revision") + " DESC"
 	rows, err := transaction.transaction.Query(ctx, statement, arguments...)
@@ -1509,17 +1501,44 @@ func (transaction *documentTransaction) ListVersions(ctx context.Context, reques
 	for rows.Next() {
 		var version store.Version
 		var encoded []byte
-		version.DocumentID = documentID
+		version.DocumentID = request.DocumentID
 		if err := rows.Scan(&version.Revision, &version.Status, &encoded, &version.CreatedAt); err != nil {
 			return nil, err
 		}
 		if err := json.Unmarshal(encoded, &version.Snapshot); err != nil {
 			return nil, fmt.Errorf("decode version snapshot: %w", err)
 		}
-		version.ID = documentID + ":" + fmt.Sprint(version.Revision)
+		version.ID = request.DocumentID + ":" + fmt.Sprint(version.Revision)
 		versions = append(versions, version)
 	}
 	return versions, rows.Err()
+}
+
+func (transaction *documentTransaction) CountVersions(ctx context.Context, request store.VersionRequest) (int, error) {
+	predicate, arguments, err := postgresVersionPredicate(request)
+	if err != nil {
+		return 0, err
+	}
+	statement := "SELECT count(*) FROM " + quote("ridu_versions") + " WHERE " + predicate
+	var count int
+	if err := transaction.transaction.QueryRow(ctx, statement, arguments...).Scan(&count); err != nil {
+		return 0, translateError(err)
+	}
+	return count, nil
+}
+
+func postgresVersionPredicate(request store.VersionRequest) (string, []any, error) {
+	arguments := []any{request.Collection.ID, request.DocumentID}
+	predicate := quote("collection_id") + " = $1 AND " + quote("document_id") + " = $2"
+	if request.Access == nil {
+		return predicate, arguments, nil
+	}
+	compiler := predicateCompiler{collection: request.Collection, next: len(arguments), arguments: arguments, snapshot: true, localeChain: request.LocaleChain}
+	compiled, err := compileAccessPredicate(&compiler, *request.Access, request.AllLocales, request.Locales)
+	if err != nil {
+		return "", nil, err
+	}
+	return predicate + " AND (" + compiled + ")", compiler.arguments, nil
 }
 
 func (transaction *documentTransaction) FindVersion(ctx context.Context, collection schema.Collection, documentID string, revision int) (store.Version, error) {

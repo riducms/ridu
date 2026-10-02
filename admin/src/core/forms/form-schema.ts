@@ -38,6 +38,7 @@ export function localizationSource(
 	sources: Readonly<Record<string, string>>,
 	fields: readonly SchemaField[] = []
 ) {
+	if (Object.keys(sources).length === 0) return undefined;
 	return sources[localizationProvenancePath(path, values, original, fields)];
 }
 

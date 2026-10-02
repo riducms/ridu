@@ -1573,6 +1573,17 @@
           "access"
         ]
       },
+      "CountEnvelope": {
+        "type": "object",
+        "properties": {
+          "totalDocs": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "totalDocs"
+        ]
+      },
       "Embedded_unified-articles-body_blocks_Input": {
         "type": "object",
         "allOf": [

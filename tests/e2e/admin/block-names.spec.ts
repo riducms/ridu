@@ -76,7 +76,7 @@ test("names stay separate from content through collapse, reorder, duplicate and 
 	expect(errors.consoleErrors).toEqual([]);
 });
 
-test("rich-text names retain focus and history and share drawer Apply/Cancel", async ({ page }) => {
+test("rich-text names retain focus and history beside inline block fields", async ({ page }) => {
 	await loginAsEditor(page);
 	const errors = observePageErrors(page);
 	const created = await page.request.post("/api/collections/block-names?draft=true", {
@@ -98,15 +98,17 @@ test("rich-text names retain focus and history and share drawer Apply/Cancel", a
 	const cards = bodyCards(page);
 	const name = cards.first().getByRole("textbox", { name: "Block name", exact: true });
 	await expect(name).toHaveAttribute("placeholder", "Content heading");
-	const headerGap = await cards.first().evaluate((card) => {
+	const headerAlignment = await cards.first().evaluate((card) => {
 		const input = card.querySelector("input");
 		const type = card.querySelector("[data-block-select] > span");
-		if (!(input instanceof HTMLInputElement) || !(type instanceof HTMLElement))
-			throw new Error("Expected the named card header and type label.");
-		return type.getBoundingClientRect().top - input.getBoundingClientRect().bottom;
+		if (!(input instanceof HTMLInputElement) || !(type instanceof HTMLElement)) {
+			throw new Error("Expected the inline block header and type label.");
+		}
+		const name = input.getBoundingClientRect();
+		const label = type.getBoundingClientRect();
+		return Math.abs(name.top + name.height / 2 - (label.top + label.height / 2));
 	});
-	expect(headerGap).toBeGreaterThanOrEqual(0);
-	expect(headerGap).toBeLessThan(24);
+	expect(headerAlignment).toBeLessThan(30);
 	await page.setViewportSize({ width: 390, height: 844 });
 	const narrowCard = await cards.first().evaluate((card) => {
 		const type = card.querySelector("[data-block-select] > span");
@@ -118,7 +120,7 @@ test("rich-text names retain focus and history and share drawer Apply/Cancel", a
 		};
 	});
 	expect(narrowCard.typeHeight).toBeLessThan(narrowCard.lineHeight * 1.5);
-	expect(narrowCard.cardHeight).toBeLessThan(180);
+	expect(narrowCard.cardHeight).toBeGreaterThan(narrowCard.typeHeight);
 	await page.setViewportSize({ width: 1280, height: 720 });
 	await name.pressSequentially("Hero promotion");
 	const composition = await name.evaluate((element) => {
@@ -165,18 +167,12 @@ test("rich-text names retain focus and history and share drawer Apply/Cancel", a
 		0
 	);
 	await expect(hiddenCard.getByPlaceholder("Secret rich-text editorial name")).toHaveCount(0);
-	await cards.first().getByRole("button", { name: "Edit", exact: true }).click();
-	const drawer = page.getByRole("dialog", { name: "Edit Callout", exact: true });
-	const draftName = drawer.getByRole("textbox", { name: "Block name", exact: true });
-	await expect(name).not.toBeEditable();
-	await expect(draftName).toHaveCount(1);
-	await draftName.fill("Cancelled name");
-	await drawer.getByRole("button", { name: "Cancel", exact: true }).click();
+	await cards.first().getByRole("button", { name: "Collapse Callout" }).click();
+	await expect(cards.first().getByRole("textbox", { name: "Heading", exact: true })).toHaveCount(0);
 	await expect(name).toHaveValue("Hero promotion 漢字");
-	await cards.first().getByRole("button", { name: "Edit", exact: true }).click();
-	await draftName.fill("Applied name");
-	await drawer.getByRole("button", { name: "Apply", exact: true }).click();
-	await expect(name).toHaveValue("Applied name");
+	await cards.first().getByRole("button", { name: "Expand Callout" }).click();
+	await cards.first().getByRole("textbox", { name: "Heading", exact: true }).fill("Edited heading");
+	await expect(name).toHaveValue("Hero promotion 漢字");
 	await name.fill("Saved immediately");
 	const saved = page.waitForResponse(
 		(response) =>
@@ -193,7 +189,7 @@ test("rich-text names retain focus and history and share drawer Apply/Cancel", a
 	).doc;
 	expect(stored.body.root.children[0].fields).toMatchObject({
 		_key: original.body.root.children[0].fields._key,
-		heading: "Content heading",
+		heading: "Edited heading",
 		blockName: "Saved immediately",
 	});
 	expect(stored.body.root.children[1].fields.blockName).toBe("Second name");

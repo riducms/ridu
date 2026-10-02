@@ -71,6 +71,7 @@ const access = {
 };
 
 const document = (id: string, title = id): AdminDocument => ({ id, title, _revision: 2 });
+const count = (totalDocs: number) => ({ totalDocs });
 
 async function editor(
 	overrides: Partial<AdminClient> = {},
@@ -85,7 +86,8 @@ async function editor(
 		global: vi.fn(async () => document("posts")),
 		globalAccess: vi.fn(async () => access),
 		collectionAccess: vi.fn(async () => access),
-		versions: vi.fn(async () => []),
+		countVersions: vi.fn(async () => count(0)),
+		countGlobalVersions: vi.fn(async () => count(0)),
 		update: vi.fn(async (_slug: string, id: string) => document(id, "Saved")),
 		...overrides,
 	} as unknown as AdminClient;
@@ -123,6 +125,218 @@ async function dispose(fixture: Awaited<ReturnType<typeof editor>>) {
 	fixture.runtime.dispose();
 	fixture.notifications.destroy();
 }
+
+it.each([false, true])(
+	"counts authorized retained versions without using the document revision (global=%s)",
+	async (global) => {
+		const id = global ? "posts" : "one";
+		const fixture = await editor(
+			{
+				countVersions: vi.fn(async () => count(2)),
+				countGlobalVersions: vi.fn(async () => count(2)),
+			} as never,
+			collection,
+			true,
+			{
+				id,
+				global,
+				prepared: {
+					document: { value: { ...document(id), _revision: 12 } },
+					access: { value: access },
+				},
+			}
+		);
+		try {
+			expect(fixture.controller.loading).toBe(false);
+			await expect.poll(() => fixture.controller.versionCount).toBe(2);
+			if (global) {
+				expect(fixture.client.countGlobalVersions).toHaveBeenCalledWith("posts", {
+					signal: expect.any(AbortSignal),
+					locale: "en",
+				});
+				expect(fixture.client.countVersions).not.toHaveBeenCalled();
+			} else {
+				expect(fixture.client.countVersions).toHaveBeenCalledWith("posts", "one", {
+					signal: expect.any(AbortSignal),
+					locale: "en",
+				});
+				expect(fixture.client.countGlobalVersions).not.toHaveBeenCalled();
+			}
+		} finally {
+			await dispose(fixture);
+		}
+	}
+);
+
+it("does not request history when ReadVersions is denied", async () => {
+	const denied = { ...access, operations: { ...access.operations, readVersions: false } };
+	const fixture = await editor({}, collection, true, {
+		id: "one",
+		prepared: { document: { value: document("one") }, access: { value: denied } },
+	});
+	try {
+		expect(fixture.controller.loading).toBe(false);
+		expect(fixture.controller.currentDocument?.id).toBe("one");
+		expect(fixture.controller.versionCount).toBeUndefined();
+		expect(fixture.client.countVersions).not.toHaveBeenCalled();
+	} finally {
+		await dispose(fixture);
+	}
+});
+
+it("keeps a readable document ready when the optional count request fails", async () => {
+	const pending = Promise.withResolvers<{ totalDocs: number }>();
+	const fixture = await editor(
+		{ countVersions: vi.fn(() => pending.promise) } as never,
+		collection,
+		true,
+		{
+			id: "one",
+			prepared: { document: { value: document("one") }, access: { value: access } },
+		}
+	);
+	try {
+		await expect.poll(() => vi.mocked(fixture.client.countVersions).mock.calls.length).toBe(1);
+		expect(fixture.controller.loading).toBe(false);
+		expect(fixture.controller.currentDocument?.id).toBe("one");
+		pending.reject(new Error("History unavailable"));
+		await expect.poll(() => fixture.controller.versionCount).toBeUndefined();
+		expect(fixture.controller.error).toBeUndefined();
+	} finally {
+		await dispose(fixture);
+	}
+});
+
+it("retains a pending count when a save fails before creating a revision", async () => {
+	const pending = Promise.withResolvers<{ totalDocs: number }>();
+	const fixture = await editor(
+		{
+			countVersions: vi.fn(() => pending.promise),
+			update: vi.fn(async () => {
+				throw new Error("Save failed");
+			}),
+		} as never,
+		collection,
+		true,
+		{ id: "one", prepared: { document: { value: document("one") }, access: { value: access } } }
+	);
+	try {
+		await expect.poll(() => vi.mocked(fixture.client.countVersions).mock.calls.length).toBe(1);
+		const signal = vi.mocked(fixture.client.countVersions).mock.calls[0]?.[2]?.signal;
+		fixture.controller.form.set("title", "Edited");
+		await expect(fixture.controller.save()).resolves.toBe(false);
+		expect(signal?.aborted).toBe(false);
+		pending.resolve(count(2));
+		await expect.poll(() => fixture.controller.versionCount).toBe(2);
+		expect(fixture.client.countVersions).toHaveBeenCalledOnce();
+	} finally {
+		await dispose(fixture);
+	}
+});
+
+it("ignores a count response from a superseded document visit", async () => {
+	const old = Promise.withResolvers<{ totalDocs: number }>();
+	const fixture = await editor(
+		{
+			countVersions: vi.fn(async (_slug, id) => (id === "one" ? old.promise : count(1))),
+		} as never,
+		collection,
+		true,
+		{ id: "one", prepared: { document: { value: document("one") }, access: { value: access } } }
+	);
+	try {
+		await expect.poll(() => vi.mocked(fixture.client.countVersions).mock.calls.length).toBe(1);
+		const signal = vi.mocked(fixture.client.countVersions).mock.calls[0]?.[2]?.signal;
+		await fixture.screen.rerender({
+			...fixture.props,
+			id: "two",
+			prepared: { document: { value: document("two") }, access: { value: access } },
+		});
+		await expect.poll(() => fixture.controller.versionCount).toBe(1);
+		expect(signal?.aborted).toBe(true);
+		old.resolve(count(3));
+		await new Promise((resolve) => window.setTimeout(resolve, 0));
+		expect(fixture.controller.versionCount).toBe(1);
+	} finally {
+		await dispose(fixture);
+	}
+});
+
+it("refreshes the retained count after a saved revision and an explicit refresh", async () => {
+	const list = vi
+		.fn()
+		.mockResolvedValueOnce(count(1))
+		.mockResolvedValueOnce(count(2))
+		.mockResolvedValue(count(3));
+	const fixture = await editor({ countVersions: list });
+	try {
+		await expect.poll(() => fixture.controller.versionCount).toBe(1);
+		fixture.controller.form.set("title", "Edited");
+		await expect(fixture.controller.save()).resolves.toBe(true);
+		await expect.poll(() => fixture.controller.versionCount).toBe(2);
+		await fixture.controller.refresh();
+		await expect.poll(() => fixture.controller.versionCount).toBe(3);
+		expect(list).toHaveBeenCalledTimes(3);
+	} finally {
+		await dispose(fixture);
+	}
+});
+
+it("keeps a known count while refreshing it and clears it if the new read fails", async () => {
+	const pending = Promise.withResolvers<{ totalDocs: number }>();
+	const list = vi
+		.fn()
+		.mockResolvedValueOnce(count(1))
+		.mockImplementationOnce(() => pending.promise);
+	const fixture = await editor({ countVersions: list });
+	try {
+		await expect.poll(() => fixture.controller.versionCount).toBe(1);
+		fixture.controller.form.set("title", "Edited");
+		await expect(fixture.controller.save()).resolves.toBe(true);
+		await expect.poll(() => list.mock.calls.length).toBe(2);
+		expect(fixture.controller.versionCount).toBe(1);
+		pending.reject(new Error("History unavailable"));
+		await expect.poll(() => fixture.controller.versionCount).toBeUndefined();
+		expect(fixture.controller.error).toBeUndefined();
+	} finally {
+		await dispose(fixture);
+	}
+});
+
+it("refreshes the count after a publication change", async () => {
+	const list = vi.fn().mockResolvedValueOnce(count(1)).mockResolvedValue(count(2));
+	const fixture = await editor({
+		countVersions: list,
+		unpublish: vi.fn(async () => ({ ...document("one"), _revision: 3, _status: "draft" })),
+	} as never);
+	try {
+		await expect.poll(() => fixture.controller.versionCount).toBe(1);
+		await fixture.controller.changePublication("draft");
+		await expect.poll(() => fixture.controller.versionCount).toBe(2);
+		expect(fixture.client.unpublish).toHaveBeenCalledOnce();
+	} finally {
+		await dispose(fixture);
+	}
+});
+
+it("clears the count when a saved document loses ReadVersions access", async () => {
+	const denied = { ...access, operations: { ...access.operations, readVersions: false } };
+	const list = vi.fn(async () => count(1));
+	const fixture = await editor({
+		countVersions: list,
+		collectionAccess: vi.fn().mockResolvedValueOnce(access).mockResolvedValue(denied),
+	} as never);
+	try {
+		await expect.poll(() => fixture.controller.versionCount).toBe(1);
+		fixture.controller.form.set("title", "Edited");
+		await expect(fixture.controller.save()).resolves.toBe(true);
+		expect(fixture.controller.currentDocument?.id).toBe("one");
+		expect(fixture.controller.versionCount).toBeUndefined();
+		expect(list).toHaveBeenCalledOnce();
+	} finally {
+		await dispose(fixture);
+	}
+});
 
 it.each([false, true])(
 	"starts a prepared document ready and refreshes through the ordinary client (global=%s)",
@@ -368,7 +582,11 @@ it("stops a superseded load before acquiring its document lock", async () => {
 			expect.anything(),
 			expect.anything()
 		);
-		expect(fixture.client.versions).not.toHaveBeenCalled();
+		expect(fixture.client.countVersions).not.toHaveBeenCalledWith(
+			"posts",
+			"one",
+			expect.anything()
+		);
 	} finally {
 		await dispose(fixture);
 	}

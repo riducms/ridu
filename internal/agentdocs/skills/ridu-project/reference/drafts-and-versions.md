@@ -191,7 +191,9 @@ history. It also means an ownership predicate can expose different revisions to 
 
 In the admin, open a saved document or global and choose **Versions** to browse its history. Select
 a revision to compare it with the previous revision, the latest published revision, or another
-revision from **More versions**. The comparison shows changed fields by default; you can show all
+revision from **More versions**. The editor's version badge reads an authorized count-only endpoint;
+opening history loads the retained snapshots.
+The comparison shows changed fields by default; you can show all
 fields and choose which content locales to compare. If a relationship target can no longer be read,
 its ID remains visible. The comparison follows the current read permissions described above.
 

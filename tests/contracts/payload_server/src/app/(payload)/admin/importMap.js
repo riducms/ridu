@@ -31,6 +31,7 @@ import { MetaTitleComponent as MetaTitleComponent_a8a977ebc872c5d5ea7ee689724c08
 import { MetaDescriptionComponent as MetaDescriptionComponent_a8a977ebc872c5d5ea7ee689724c0860 } from '@payloadcms/plugin-seo/client'
 import { MetaImageComponent as MetaImageComponent_a8a977ebc872c5d5ea7ee689724c0860 } from '@payloadcms/plugin-seo/client'
 import { PreviewComponent as PreviewComponent_a8a977ebc872c5d5ea7ee689724c0860 } from '@payloadcms/plugin-seo/client'
+import { BlocksFeatureClient as BlocksFeatureClient_e70f5e05f09f93e00b997edb1ef0c864 } from '@payloadcms/richtext-lexical/client'
 import { GlobalDocumentFrame as GlobalDocumentFrame_09be62dbcfe8180098c89aa3d86ee3f5 } from '../../../admin-components'
 import { AccountAvatar as AccountAvatar_09be62dbcfe8180098c89aa3d86ee3f5 } from '../../../admin-components'
 import { ShellHeader as ShellHeader_09be62dbcfe8180098c89aa3d86ee3f5 } from '../../../admin-components'
@@ -83,6 +84,7 @@ export const importMap = {
   "@payloadcms/plugin-seo/client#MetaDescriptionComponent": MetaDescriptionComponent_a8a977ebc872c5d5ea7ee689724c0860,
   "@payloadcms/plugin-seo/client#MetaImageComponent": MetaImageComponent_a8a977ebc872c5d5ea7ee689724c0860,
   "@payloadcms/plugin-seo/client#PreviewComponent": PreviewComponent_a8a977ebc872c5d5ea7ee689724c0860,
+  "@payloadcms/richtext-lexical/client#BlocksFeatureClient": BlocksFeatureClient_e70f5e05f09f93e00b997edb1ef0c864,
   "/admin-components#GlobalDocumentFrame": GlobalDocumentFrame_09be62dbcfe8180098c89aa3d86ee3f5,
   "/admin-components#AccountAvatar": AccountAvatar_09be62dbcfe8180098c89aa3d86ee3f5,
   "/admin-components#ShellHeader": ShellHeader_09be62dbcfe8180098c89aa3d86ee3f5,
