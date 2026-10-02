@@ -42,67 +42,72 @@ const Harness = svelte`
 	<FieldRenderer field={schema} {form} />
 `;
 
+function noteRows(kind: "plugin" | "local") {
+	bindings.length = 0;
+	const note: SchemaField = {
+		id: "note",
+		name: "note",
+		path: "rows.note",
+		type: "plugin",
+		category: "plugin",
+		required: false,
+		unique: false,
+		admin: { label: "Note" },
+		plugin: { key: "note", config: {} },
+	};
+	if (kind === "local") {
+		note.type = "text";
+		note.category = "scalar";
+		note.admin.editor = { reference: "app:note" };
+		delete note.plugin;
+	}
+	const schema: SchemaField = {
+		id: "rows",
+		name: "rows",
+		path: "rows",
+		type: "array",
+		category: "nested",
+		required: false,
+		unique: false,
+		admin: { label: "Rows" },
+		nested: { fields: [note] },
+	};
+	const plugin = defineAdminPlugin({
+		key: "notes",
+		pairingVersion: 1,
+		fields: {
+			note: definePluginField({
+				component: NoteEditor,
+				decodeValue(value: unknown) {
+					if (typeof value !== "string") throw new Error("Expected a note string");
+					return value;
+				},
+			}),
+		},
+	});
+	const runtime = new AdminRuntime(createAdminClient(), {
+		plugins: kind === "plugin" ? [plugin] : [],
+		fieldEditors:
+			kind === "local"
+				? { "app:note": defineFieldEditor({ type: "text", component: NoteEditor }) }
+				: {},
+	});
+	const form = new FormController();
+	form.reset(
+		{
+			rows: [
+				{ _key: "a", note: "First" },
+				{ _key: "b", note: "Second" },
+			],
+		},
+		[schema]
+	);
+	return { form, schema, runtime };
+}
+
 for (const kind of ["plugin", "local"] as const)
 	it(`the ${kind} field host preserves mounted bindings through reorder and revokes removed and unmounted editors`, async () => {
-		bindings.length = 0;
-		const note: SchemaField = {
-			id: "note",
-			name: "note",
-			path: "rows.note",
-			type: "plugin",
-			category: "plugin",
-			required: false,
-			unique: false,
-			admin: { label: "Note" },
-			plugin: { key: "note", config: {} },
-		};
-		if (kind === "local") {
-			note.type = "text";
-			note.category = "scalar";
-			note.admin.editor = { reference: "app:note" };
-			delete note.plugin;
-		}
-		const schema: SchemaField = {
-			id: "rows",
-			name: "rows",
-			path: "rows",
-			type: "array",
-			category: "nested",
-			required: false,
-			unique: false,
-			admin: { label: "Rows" },
-			nested: { fields: [note] },
-		};
-		const plugin = defineAdminPlugin({
-			key: "notes",
-			pairingVersion: 1,
-			fields: {
-				note: definePluginField({
-					component: NoteEditor,
-					decodeValue(value: unknown) {
-						if (typeof value !== "string") throw new Error("Expected a note string");
-						return value;
-					},
-				}),
-			},
-		});
-		const runtime = new AdminRuntime(createAdminClient(), {
-			plugins: kind === "plugin" ? [plugin] : [],
-			fieldEditors:
-				kind === "local"
-					? { "app:note": defineFieldEditor({ type: "text", component: NoteEditor }) }
-					: {},
-		});
-		const form = new FormController();
-		form.reset(
-			{
-				rows: [
-					{ _key: "a", note: "First" },
-					{ _key: "b", note: "Second" },
-				],
-			},
-			[schema]
-		);
+		const { form, schema, runtime } = noteRows(kind);
 		const screen = await render(Harness, { form, schema, runtime });
 		await expect.element(screen.getByRole("textbox", { name: "Note" }).nth(0)).toHaveValue("First");
 		expect(bindings).toHaveLength(2);
@@ -134,6 +139,26 @@ for (const kind of ["plugin", "local"] as const)
 		expect(() => current.set("After unmount")).toThrow("stale");
 		expect(form.isRegistered("rows.0.note")).toBe(false);
 	});
+
+it("a collapsed row keeps its pending plugin edit mounted through reorder", async () => {
+	const { form, schema, runtime } = noteRows("plugin");
+	const screen = await render(Harness, { form, schema, runtime });
+	await expect.element(screen.getByRole("textbox", { name: "Note" }).nth(0)).toHaveValue("First");
+	const first = bindings[0] as PluginFieldBinding<string>;
+	const unfinished = { code: "unfinished", message: "Finish the note" };
+	first.reportPendingEdit([{ ...unfinished, path: "rows.0.note" }]);
+	await screen.getByRole("button", { name: "Collapse", exact: true }).first().click();
+	await screen.getByRole("button", { name: "Reverse rows" }).click();
+	await expect
+		.poll(() => form.pendingEditIssues())
+		.toEqual([{ ...unfinished, path: "rows.1.note" }]);
+	expect(first.stale).toBe(false);
+	// Without pending input, the collapsed row releases its editor.
+	first.reportPendingEdit([]);
+	await expect.poll(() => first.stale).toBe(true);
+	expect(form.pendingEditIssues()).toEqual([]);
+	await screen.unmount();
+});
 
 const EmbeddedHarness = svelte`
 	<script>

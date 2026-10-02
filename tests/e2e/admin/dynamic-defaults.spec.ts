@@ -86,13 +86,11 @@ test("embedded rich-text insertion defers required dynamic defaults until the pa
 		.click();
 	const picker = page.getByRole("dialog", { name: "Insert block", exact: true });
 	await picker.getByRole("option", { name: "Card", exact: true }).click();
-	const drawer = page.getByRole("dialog", { name: "Insert Card", exact: true });
-	await expect(drawer.locator('input[name$=".title"]')).toHaveValue("");
-	await expect(drawer.locator('input[name$=".note"]')).toHaveValue("");
-	await drawer.locator('input[name$=".note"]').fill("Draft");
-	await drawer.locator('input[name$=".note"]').fill("");
-	await drawer.getByRole("button", { name: "Apply", exact: true }).click();
-	await expect(drawer).toBeHidden();
+	const card = body.locator('.ridu-richtext-embedded > article[data-block-type="card"]').first();
+	await expect(card.locator('input[name$=".title"]')).toHaveValue("");
+	await expect(card.locator('input[name$=".note"]')).toHaveValue("");
+	await card.locator('input[name$=".note"]').fill("Draft");
+	await card.locator('input[name$=".note"]').fill("");
 	const saved = await save(page, original.id);
 	expect(saved.ok(), await saved.text()).toBe(true);
 	const document = (await saved.json()).doc;
@@ -100,15 +98,8 @@ test("embedded rich-text insertion defers required dynamic defaults until the pa
 	expect(block.fields.title).toBe("Untitled");
 	expect(block.fields.note).toBe("");
 	await page.reload();
-	await body
-		.locator(".ridu-richtext-embedded-card")
-		.first()
-		.getByRole("button", { name: "Edit", exact: true })
-		.click();
-	const edit = page.getByRole("dialog", { name: "Edit Card", exact: true });
-	await expect(edit.locator('input[name$=".title"]')).toHaveValue("Untitled");
-	await expect(edit.locator('input[name$=".note"]')).toHaveValue("");
-	await edit.getByRole("button", { name: "Cancel", exact: true }).click();
+	await expect(card.locator('input[name$=".title"]')).toHaveValue("Untitled");
+	await expect(card.locator('input[name$=".note"]')).toHaveValue("");
 	expect(errors.pageErrors).toEqual([]);
 });
 

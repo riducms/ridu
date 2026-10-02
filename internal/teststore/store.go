@@ -1829,6 +1829,26 @@ func (transaction *transaction) ListVersions(ctx context.Context, request store.
 	return result, nil
 }
 
+func (transaction *transaction) CountVersions(ctx context.Context, request store.VersionRequest) (int, error) {
+	if err := primitivefield.ValidateNode(request.Collection.Fields, request.Access); err != nil {
+		return 0, err
+	}
+	if err := transaction.ready(ctx); err != nil {
+		return 0, err
+	}
+	storeRequest := store.Request{
+		Collection: request.Collection, Access: request.Access, Locales: request.Locales,
+		LocaleChain: request.LocaleChain, AllLocales: request.AllLocales,
+	}
+	total := 0
+	for _, version := range transaction.versions[string(request.Collection.ID)][request.DocumentID] {
+		if matchesRequest(version.Snapshot, storeRequest) {
+			total++
+		}
+	}
+	return total, nil
+}
+
 func (transaction *transaction) FindVersion(ctx context.Context, collection schema.Collection, documentID string, revision int) (store.Version, error) {
 	if err := transaction.ready(ctx); err != nil {
 		return store.Version{}, err

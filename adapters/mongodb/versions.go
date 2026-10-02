@@ -3,6 +3,7 @@ package mongodb
 import (
 	"context"
 	"fmt"
+	"math"
 
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
@@ -165,27 +166,13 @@ func (transaction *documentTransaction) ListVersions(ctx context.Context, reques
 	if err := transaction.store.requireVerifiedVersionIndexes(request.Collection); err != nil {
 		return nil, err
 	}
-	predicates := []bson.D{{{Key: mongoVersionOwnerPath, Value: request.DocumentID}}}
-	if request.Access != nil {
-		compiled, err := compileMongoAccessNode(
-			request.Collection,
-			*request.Access,
-			"version access",
-			mongoPredicateScope{
-				localeChain:   request.LocaleChain,
-				storagePrefix: mongoVersionSnapshotPath + ".",
-			},
-			request.AllLocales,
-			request.Locales,
-		)
-		if err != nil {
-			return nil, err
-		}
-		predicates = append(predicates, compiled)
+	predicate, err := mongoVersionPredicate(request)
+	if err != nil {
+		return nil, err
 	}
 	cursor, err := transaction.versionCollection(request.Collection).Find(
 		sessionContext,
-		mongoAnd(predicates),
+		predicate,
 		options.Find().SetSort(bson.D{{Key: mongoVersionRevisionPath, Value: -1}}),
 	)
 	if err != nil {
@@ -207,6 +194,57 @@ func (transaction *documentTransaction) ListVersions(ctx context.Context, reques
 		return nil, translateMongoError(ctx, err)
 	}
 	return versions, nil
+}
+
+func (transaction *documentTransaction) CountVersions(ctx context.Context, request store.VersionRequest) (int, error) {
+	sessionContext, leave, err := transaction.enter(ctx, false)
+	if err != nil {
+		return 0, err
+	}
+	defer leave()
+	if err := validateVersionRequest(request); err != nil {
+		return 0, err
+	}
+	if err := transaction.store.requireVerifiedIndexesForLocales(request.Collection, request.Locales); err != nil {
+		return 0, err
+	}
+	if err := transaction.store.requireVerifiedVersionIndexes(request.Collection); err != nil {
+		return 0, err
+	}
+	predicate, err := mongoVersionPredicate(request)
+	if err != nil {
+		return 0, err
+	}
+	count, err := transaction.versionCollection(request.Collection).CountDocuments(sessionContext, predicate)
+	if err != nil {
+		return 0, translateMongoError(ctx, err)
+	}
+	if count > int64(math.MaxInt) {
+		return 0, fmt.Errorf("MongoDB version count exceeds the platform integer range")
+	}
+	return int(count), nil
+}
+
+func mongoVersionPredicate(request store.VersionRequest) (bson.D, error) {
+	predicates := []bson.D{{{Key: mongoVersionOwnerPath, Value: request.DocumentID}}}
+	if request.Access != nil {
+		compiled, err := compileMongoAccessNode(
+			request.Collection,
+			*request.Access,
+			"version access",
+			mongoPredicateScope{
+				localeChain:   request.LocaleChain,
+				storagePrefix: mongoVersionSnapshotPath + ".",
+			},
+			request.AllLocales,
+			request.Locales,
+		)
+		if err != nil {
+			return nil, err
+		}
+		predicates = append(predicates, compiled)
+	}
+	return mongoAnd(predicates), nil
 }
 
 func validateVersionRequest(request store.VersionRequest) error {

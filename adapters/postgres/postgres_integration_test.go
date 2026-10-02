@@ -262,6 +262,18 @@ func TestPostgresGlobalFilteredAccessUsesRowsAndVersionSnapshots(t *testing.T) {
 	if len(versions) != 1 || versions[0].Revision != 1 || stringValue(versions[0].Snapshot.Values["siteName"]) != "Ridu" {
 		t.Fatalf("filtered PostgreSQL global versions = %#v", versions)
 	}
+	read, err := backend.BeginSnapshot(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	access := query.Equal(siteName, "Ridu").Node()
+	count, err := read.(store.VersionTransaction).CountVersions(ctx, store.VersionRequest{
+		Collection: manifest.Snapshot().Globals[0], DocumentID: "site-settings", Access: &access,
+	})
+	_ = read.Rollback(ctx)
+	if err != nil || count != 1 {
+		t.Fatalf("filtered PostgreSQL global version count = %d, %v, want 1", count, err)
+	}
 	if _, err := application.Local().GlobalVersion(ctx, "site-settings", 2, ridu.FindOptions{}); !hasOperationCode(err, "not_found") {
 		t.Fatalf("non-matching PostgreSQL global version error = %v", err)
 	}
@@ -1753,6 +1765,10 @@ func (transaction *mutationLockProbeTransaction) SaveVersion(ctx context.Context
 
 func (transaction *mutationLockProbeTransaction) ListVersions(ctx context.Context, request store.VersionRequest) ([]store.Version, error) {
 	return transaction.Transaction.(store.VersionTransaction).ListVersions(ctx, request)
+}
+
+func (transaction *mutationLockProbeTransaction) CountVersions(ctx context.Context, request store.VersionRequest) (int, error) {
+	return transaction.Transaction.(store.VersionTransaction).CountVersions(ctx, request)
 }
 
 func (transaction *mutationLockProbeTransaction) FindVersion(ctx context.Context, collection schema.Collection, documentID string, revision int) (store.Version, error) {

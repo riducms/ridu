@@ -26,8 +26,11 @@ existing-project setup, feature selection, uploads/relationships, portable value
 safe Go rendering, migrations, and verification.
 
 Configure block-level embeds with executable `richtext.Config.Blocks` definitions. The paired
-editor uses the resolved allowlist for slash/toolbar insertion and an atomic card with a scoped
-Apply/Cancel drawer. The parent form owns saving; Lexical owns selection and history.
+editor uses the resolved allowlist for immediate slash/toolbar insertion. Each block exposes its
+ordinary fields inside an expandable section in the editor. Changes participate in the parent
+document save and Lexical history; nested rich-text fields keep their own selection and history.
+Configured names appear in the header, and field errors expand the block before focusing its
+invalid child. Collapse retains mounted fields and unfinished input.
 
 Content consumers import portable document types and HTML rendering from `@riducms/sdk/richtext`;
 installing `@riducms/sdk` is sufficient and does not install Svelte or Lexical.

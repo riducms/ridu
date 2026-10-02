@@ -275,14 +275,21 @@ To edit an existing item's fields directly in the parent form, render:
 
 ```svelte
 {#if selectedIdentity !== undefined && authoring.schemaForm !== undefined}
-	{@render authoring.schemaForm({ treeKey: "widgets", identity: selectedIdentity })}
+	{@render authoring.schemaForm({
+		treeKey: "widgets",
+		identity: selectedIdentity,
+		onChange: (payload) => updateWidgetFieldsInEditor(selectedIdentity, payload),
+	})}
 {/if}
 ```
 
 The plugin provides `selectedIdentity` from its own selection UI. `treeKey` matches the Go-declared
 tree, and `identity` identifies the existing item. Ridu finds its current position and renders its
-ordinary fields. Edits immediately enter the parent form; this does not save the document.
-Removed/malformed items show recovery UI rather than another item's fields.
+ordinary body fields. Edits immediately enter the parent form; this does not save the document.
+The optional `onChange` receives detached current field data only after a field inside this item
+changes. Use it to update an external editor's history and serialization. It does not run on initial
+render, sibling changes, or whole-plugin writes. Removed/malformed items show recovery UI rather
+than another item's fields.
 
 For a Go-configured `BlockAdmin.NameField`, `schemaHeader` renders just the editorial
 name input and its feedback:
@@ -299,10 +306,15 @@ name input and its feedback:
 
 Here `updateWidgetField` belongs to your plugin: apply the permitted field change
 to the latest matching item through your editor's history, then serialize with
-`field.set`. The header does not directly change the parent form. Ridu resolves the
+`field.set`. The header does not directly change the parent form. Render it separately from
+`schemaForm`, which leaves the configured name field out of its body. Ridu resolves the
 configured child, checks its access and visibility, and disables the card header
-while a draft for that tree and identity is open. The ordinary content renderer
-omits the name field's body placement; draft drawers include it in their own header.
+while a draft for that tree and identity is open. Draft drawers include it in their own header.
+
+For inline insertion, `createSchemaPayload({ treeKey, caseTag, variantSlug })` returns a fresh
+identity and Go-declared field defaults. Insert the returned payload through your editor; the host
+does not change the form until your editor serializes the new plugin value. No Apply/Cancel draft is
+registered for this operation.
 
 For **Apply/Cancel**, use a temporary embedded draft:
 

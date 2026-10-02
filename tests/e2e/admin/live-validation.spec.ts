@@ -430,7 +430,7 @@ test("packaged generic embedded fields receive live feedback through the standar
 	await expect(second).not.toHaveAttribute("aria-invalid", "true");
 });
 
-test("global ordinary and detached fields use the global live-validation transport", async ({
+test("global ordinary and inline rich-text fields use the global live-validation transport", async ({
 	page,
 }) => {
 	await loginAsEditor(page);
@@ -473,17 +473,20 @@ test("global ordinary and detached fields use the global live-validation transpo
 		path: "sku",
 	});
 	await expect(page.locator('input[name="sku"]')).toHaveAttribute("aria-invalid", "true");
-	const card = page.locator('[data-field-path="body"] .ridu-richtext-embedded-card').first();
-	await card.getByRole("button", { name: "Edit", exact: true }).click();
-	const drawer = page.getByRole("dialog", { name: "Edit Card", exact: true });
 	check = nextGlobalCheck();
-	await drawer.locator('input[name$=".sku"]').fill("wrong");
+	await page.locator('input[name="sku"]').fill("A-global");
+	await check;
+	await expect(page.locator('input[name="sku"]')).not.toHaveAttribute("aria-invalid", "true");
+	const card = page.locator('[data-field-path="body"] article[data-block-type="card"]').first();
+	const cardSKU = card.locator('input[name$=".sku"]');
+	check = nextGlobalCheck();
+	await cardSKU.fill("wrong");
 	response = await check;
 	expect(response.ok(), await response.text()).toBe(true);
 	expect(response.request().postDataJSON().id).toBeUndefined();
-	expect(response.request().postDataJSON().embedded).toHaveLength(1);
-	await expect(drawer.locator('input[name$=".sku"]')).toHaveAttribute("aria-invalid", "true");
-	await drawer.getByRole("button", { name: "Cancel", exact: true }).click();
+	expect(response.request().postDataJSON().embedded).toBeUndefined();
+	expect(response.request().postDataJSON().data.body.root.children[0].fields.sku).toBe("wrong");
+	await expect(cardSKU).toHaveAttribute("aria-invalid", "true");
 	const write = page.waitForResponse(
 		(response) =>
 			response.request().method() === "PATCH" &&
@@ -494,7 +497,7 @@ test("global ordinary and detached fields use the global live-validation transpo
 });
 
 for (const field of ["body", "localizedBody"] as const)
-	test(`live ${field} embedded feedback precedes Apply, cancels cleanly and leaves parent Save authoritative`, async ({
+	test(`live ${field} inline feedback restores, then Save reveals a collapsed invalid child`, async ({
 		page,
 	}) => {
 		await loginAsEditor(page);
@@ -521,25 +524,33 @@ for (const field of ["body", "localizedBody"] as const)
 		});
 		await page.goto(`/admin/collections/live-validation/${product.id}`);
 		if (field === "localizedBody") await chooseContentLocale(page, "French", "fr");
-		const card = page.locator(`[data-field-path="${field}"] .ridu-richtext-embedded-card`).first();
-		await card.getByRole("button", { name: "Edit", exact: true }).click();
-		const drawer = page.getByRole("dialog", { name: "Edit Card", exact: true });
-		const url = drawer.locator('input[name$=".links.0.url"]');
+		const card = page
+			.locator(`[data-field-path="${field}"] article[data-block-type="card"]`)
+			.first();
+		const url = card.locator('input[name$=".links.0.url"]');
 		let check = nextCheck(page);
 		await url.fill("invalid");
-		expect((await check).ok()).toBe(true);
+		let response = await check;
+		expect(response.ok(), await response.text()).toBe(true);
+		expect(response.request().postDataJSON().embedded).toBeUndefined();
+		expect(response.request().postDataJSON().data[field].root.children[0].fields.links[0].url).toBe(
+			"invalid"
+		);
 		await expect(url).toHaveAttribute("aria-invalid", "true");
-		await drawer.getByRole("button", { name: "Cancel", exact: true }).click();
-		await expect(drawer).toHaveCount(0);
-		await card.getByRole("button", { name: "Edit", exact: true }).click();
+		check = nextCheck(page);
+		await url.fill("Original URL");
+		await check;
 		await expect(url).toHaveValue("Original URL");
 		await expect(url).not.toHaveAttribute("aria-invalid", "true");
 		check = nextCheck(page);
 		await url.fill("invalid");
 		await check;
 		await expect(url).toHaveAttribute("aria-invalid", "true");
-		await drawer.getByRole("button", { name: "Apply", exact: true }).click();
-		await expect(drawer).toHaveCount(0);
+		await card.getByRole("button", { name: "Collapse Card" }).click();
+		await expect(card.getByRole("button", { name: "Expand Card" })).toHaveAttribute(
+			"aria-expanded",
+			"false"
+		);
 		const save = page.waitForResponse(
 			(response) =>
 				response.request().method() === "PATCH" &&
@@ -547,7 +558,10 @@ for (const field of ["body", "localizedBody"] as const)
 		);
 		await documentSaveButton(page).click();
 		expect((await save).status()).toBe(422);
-		if (!(await drawer.isVisible()))
-			await card.getByRole("button", { name: "Edit", exact: true }).click();
+		await expect(card.getByRole("button", { name: "Collapse Card" })).toHaveAttribute(
+			"aria-expanded",
+			"true"
+		);
 		await expect(url).toHaveAttribute("aria-invalid", "true");
+		await expect(url).toBeFocused();
 	});

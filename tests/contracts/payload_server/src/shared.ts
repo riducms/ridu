@@ -68,6 +68,7 @@ export const staffManagedPublicRead = {
 };
 
 export const slugs = {
+	blockArticles: "block-articles",
 	categories: "categories",
 	editorialNotes: "editorial-notes",
 	events: "events",

@@ -106,7 +106,7 @@
 		background: transparent;
 		display: flex;
 		align-items: center;
-		gap: 5px;
+		gap: 4px;
 		height: 34px;
 		padding: 0 14px;
 		font: inherit;
@@ -121,6 +121,23 @@
 		}
 		&:hover {
 			background: var(--background-surface);
+			.ridu-document-tab__count {
+				background: var(--pill-surface);
+			}
+		}
+		&__count {
+			min-width: 16px;
+			padding: 2px 4px;
+			border-radius: 3px;
+			background: var(--background-layer);
+			font-size: 13px;
+			line-height: 16px;
+			font-weight: 400;
+			text-align: center;
+		}
+		&--active .ridu-document-tab__count,
+		&--active:hover .ridu-document-tab__count {
+			background: var(--pill-active-surface);
 		}
 	}
 	.ridu-document-bar {

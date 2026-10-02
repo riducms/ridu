@@ -137,7 +137,7 @@ test("localized aggregate issues identify the active translation and clear after
 });
 
 for (const field of ["body", "localizedBody"] as const)
-	test(`aggregate embedded ${field} issue reaches its detached child editor and follows nested reorder`, async ({
+	test(`aggregate embedded ${field} issue reaches its inline child and follows nested reorder`, async ({
 		page,
 	}) => {
 		await loginAsEditor(page);
@@ -169,11 +169,10 @@ for (const field of ["body", "localizedBody"] as const)
 		const original = (await created.json()).doc;
 		await page.goto(`/admin/collections/issue-targets/${original.id}`);
 		if (field === "localizedBody") await chooseContentLocale(page, "French", "fr");
-		const card = page.locator(`[data-field-path="${field}"] .ridu-richtext-embedded-card`).first();
-		await card.getByRole("button", { name: "Edit", exact: true }).click();
-		const drawer = page.getByRole("dialog", { name: "Edit Card", exact: true });
-		await drawer.locator('input[name$=".links.0.url"]').fill("invalid");
-		await drawer.getByRole("button", { name: "Apply", exact: true }).click();
+		const card = page
+			.locator(`[data-field-path="${field}"] article[data-block-type="card"]`)
+			.first();
+		await card.locator('input[name$=".links.0.url"]').fill("invalid");
 		const rejected = await save(page, original.id);
 		expect(rejected.status()).toBe(422);
 		const issues: ValidationIssue[] = (await rejected.json()).error.issues;
@@ -181,27 +180,23 @@ for (const field of ["body", "localizedBody"] as const)
 		expect(issue.path).toBe(`${field}.root.children.0.fields.links.0.url`);
 		expect(issue.target).toEqual(expect.any(String));
 		if (field === "localizedBody") expect(issue.locale).toBe("fr");
-		if (!(await drawer.isVisible()))
-			await card.getByRole("button", { name: "Edit", exact: true }).click();
-		await expect(drawer.locator('input[name$=".links.0.url"]')).toHaveAttribute(
+		await expect(card.locator('input[name$=".links.0.url"]')).toHaveAttribute(
 			"aria-invalid",
 			"true"
 		);
-		await drawer.getByRole("button", { name: "Open Row 01 actions", exact: true }).click();
+		await card.getByRole("button", { name: "Open Row 01 actions", exact: true }).click();
 		await page.getByRole("menuitem", { name: "Move down", exact: true }).click();
-		await expect(drawer.locator('input[name$=".links.1.url"]')).toHaveAttribute(
+		await expect(card.locator('input[name$=".links.1.url"]')).toHaveAttribute(
 			"aria-invalid",
 			"true"
 		);
-		await expect(drawer.locator('input[name$=".links.0.url"]')).not.toHaveAttribute(
+		await expect(card.locator('input[name$=".links.0.url"]')).not.toHaveAttribute(
 			"aria-invalid",
 			"true"
 		);
-		await drawer.locator('input[name$=".links.1.url"]').fill("Corrected URL");
-		await drawer.getByRole("button", { name: "Apply", exact: true }).click();
+		await card.locator('input[name$=".links.1.url"]').fill("Corrected URL");
 		expect((await save(page, original.id)).ok()).toBe(true);
 		await page.reload();
-		await card.getByRole("button", { name: "Edit", exact: true }).click();
-		await expect(drawer.locator('input[name$=".links.1.url"]')).toHaveValue("Corrected URL");
+		await expect(card.locator('input[name$=".links.1.url"]')).toHaveValue("Corrected URL");
 		expect(errors.pageErrors).toEqual([]);
 	});

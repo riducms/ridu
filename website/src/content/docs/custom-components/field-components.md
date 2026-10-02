@@ -204,8 +204,8 @@ the field your component edits.
 
 For a suggestion button that waits for an API response, keep the `field` object you started
 with and check `field.stale` before applying the result. It becomes stale if the user closes the
-editor, removes the row, changes document or locale, or saves or resets the form. Discard that
-result instead of writing it into the new form.
+editor, removes the row, pastes over its group, changes document or locale, or saves or resets the
+form. Discard that result instead of writing it into the new form.
 
 For reusable settings supplied from Go, see [field.Component](/reference/field/component/) and
 [defineFieldEditor](/reference/plugin/define-field-editor/). Settings are checked with a

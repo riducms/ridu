@@ -40,7 +40,16 @@
 	let announcement = $state("");
 	// Only DOM identity lives here. The form owns all values, including unfinished numeric input.
 	let keys = $state.raw<string[]>([]);
-	const itemKey = (index: number) => keys[index] ?? `initial-${index}`;
+	const usedKeys = $derived(new Set(keys));
+	function itemKey(index: number) {
+		const existing = keys[index];
+		if (existing !== undefined) return existing;
+		// An external owner can restore a removed item while its surviving key has
+		// moved to this index. Give the restored item a distinct render key.
+		let key = `initial-${index}`;
+		while (usedKeys.has(key)) key += "-restored";
+		return key;
+	}
 
 	async function focusItem(index: number) {
 		// Insertion/removal must render before moving focus to the surviving input or Add button.

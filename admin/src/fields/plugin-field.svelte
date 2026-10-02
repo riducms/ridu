@@ -4,7 +4,7 @@
 	import type {
 		EmbeddedSchemaDraft,
 		EmbeddedSchemaDraftEditorProps,
-		EmbeddedSchemaFormScope,
+		EmbeddedSchemaFormProps,
 		EmbeddedSchemaHeaderProps,
 		FieldAuthoringHost,
 		PluginFieldProps,
@@ -18,6 +18,7 @@
 	import { localizeSchemaCollection } from "@admin/core/i18n/localized-schema";
 	import {
 		createEmbeddedSchemaDraft,
+		createEmbeddedSchemaPayload,
 		copyEmbeddedSchemaPayload,
 		type HostedSchemaDraft,
 	} from "@admin/core/forms/embedded-schema-draft.svelte";
@@ -74,6 +75,10 @@
 			return occurrence === undefined ? [] : form.issuesFor(occurrence.path);
 		},
 		copySchemaPayload: (scope, payload) => copyEmbeddedSchemaPayload(field.schema, scope, payload),
+		createSchemaPayload: (scope) => {
+			field.assertEditable();
+			return createEmbeddedSchemaPayload(field.schema, scope);
+		},
 		get collections() {
 			return (
 				runtime.manifest?.collections.map((collection) =>
@@ -168,14 +173,26 @@
 	{/if}
 {/snippet}
 
-{#snippet schemaForm(scope: EmbeddedSchemaFormScope)}
-	<EmbeddedSchemaFields
-		field={field.schema}
-		{form}
-		{scope}
-		occurrence={embeddedIndex.get(JSON.stringify([scope.treeKey, scope.identity]))}
-		issues={embedded.issues}
-	/>
+{#snippet schemaForm(scope: EmbeddedSchemaFormProps)}
+	{const occurrence = $derived(embeddedIndex.get(JSON.stringify([scope.treeKey, scope.identity])))}
+	{#if !field.stale}
+		{#key occurrence === undefined ? "missing" : form.rowMountKey(occurrence.payload)}
+			<EmbeddedSchemaFields
+				field={field.schema}
+				{form}
+				{scope}
+				{occurrence}
+				issues={embedded.issues}
+				onChange={scope.onChange === undefined
+					? undefined
+					: (payload) => {
+							if (field.stale || field.readOnly) return;
+							field.assertEditable();
+							scope.onChange?.(payload);
+						}}
+			/>
+		{/key}
+	{/if}
 {/snippet}
 {#snippet schemaDraftEditor(options: EmbeddedSchemaDraftEditorProps)}
 	{const current = draftOptions(options)}

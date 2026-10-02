@@ -134,7 +134,7 @@ test("unified fields preserve generated editor settings, nested issue identities
 	expect(errors.pageErrors).toEqual([]);
 });
 
-test("unified rich-text fields host local editors and labels with authoritative save issues and Apply/Cancel", async ({
+test("unified rich-text fields host local editors and labels with inline undo and authoritative save issues", async ({
 	page,
 }) => {
 	test.setTimeout(60_000);
@@ -170,30 +170,27 @@ test("unified rich-text fields host local editors and labels with authoritative 
 	expect(response.ok(), await response.text()).toBe(true);
 	const original = (await response.json()).doc;
 	await page.goto(`/admin/collections/unified-articles/${original.id}`);
-	const card = page.locator('[data-field-path="body"] .ridu-richtext-embedded-card').first();
-	await card.getByRole("button", { name: "Edit", exact: true }).click();
-	let drawer = page.getByRole("dialog", { name: "Edit Card", exact: true });
-	const accent = drawer.locator('input[name$=".accent"]').first();
+	const card = page.locator('[data-field-path="body"] article[data-block-type="card"]').first();
+	const accent = card.locator('input[name$=".accent"]').first();
+	const label = card.locator('input[name$=".products.0.label"]');
+	const sku = card.locator('input[name$=".products.0.sku"]');
 	await expect(accent).toHaveAttribute("data-local-editor", "text");
-	await expect(drawer.locator('input[name$=".label"]').first()).toHaveAttribute(
+	await expect(card.locator('input[name$=".label"]').first()).toHaveAttribute(
 		"data-local-editor",
 		"text"
 	);
-	await expect(drawer.locator('input[name$=".products.0.label"]')).toHaveAttribute(
-		"data-local-editor",
-		"text"
-	);
-	await drawer.locator('input[name$=".products.0.label"]').fill("Discarded label");
+	await expect(label).toHaveAttribute("data-local-editor", "text");
+
+	await label.fill("Discarded label");
+	await label.press("ControlOrMeta+z");
+	await expect(label).toHaveValue("Nested product");
 	await accent.fill("Discarded");
-	await drawer.getByRole("button", { name: "Cancel", exact: true }).click();
-	await card.getByRole("button", { name: "Edit", exact: true }).click();
-	drawer = page.getByRole("dialog", { name: "Edit Card", exact: true });
-	await expect(drawer.locator('input[name$=".accent"]').first()).toHaveValue("Original");
-	await expect(drawer.locator('input[name$=".products.0.label"]')).toHaveValue("Nested product");
-	await drawer.locator('input[name$=".accent"]').first().fill("Applied");
-	await drawer.locator('input[name$=".products.0.sku"]').fill("invalid");
-	await expect(drawer.locator("[data-unified-row-key]")).toContainText("Nested product");
-	await drawer.getByRole("button", { name: "Apply", exact: true }).click();
+	await accent.press("ControlOrMeta+z");
+	await expect(accent).toHaveValue("Original");
+
+	await accent.fill("Applied");
+	await sku.fill("invalid");
+	await expect(card.locator("[data-unified-row-key]")).toContainText("Nested product");
 	const failed = await save(page, original.id);
 	expect(failed.status()).toBe(422);
 	const issues = (await failed.json()).error.issues;
@@ -206,24 +203,14 @@ test("unified rich-text fields host local editors and labels with authoritative 
 			}),
 		])
 	);
-	// Error focusing may open the containing drawer automatically.
-	if (!(await drawer.isVisible()))
-		await card.getByRole("button", { name: "Edit", exact: true }).click();
-	await expect(drawer.locator('input[name$=".products.0.sku"]')).toHaveAttribute(
-		"aria-invalid",
-		"true"
-	);
-	await expect(drawer.locator('input[name$=".accent"]').first()).toHaveValue("Applied");
-	await drawer.locator('input[name$=".products.0.label"]').fill("Applied label");
-	await drawer.locator('input[name$=".products.0.sku"]').fill(" sku-fixed ");
-	await drawer.getByRole("button", { name: "Apply", exact: true }).click();
+	await expect(sku).toHaveAttribute("aria-invalid", "true");
+	await expect(accent).toHaveValue("Applied");
+	await label.fill("Applied label");
+	await sku.fill(" sku-fixed ");
 	expect((await save(page, original.id)).ok()).toBe(true);
 	await page.reload();
-	await card.getByRole("button", { name: "Edit", exact: true }).click();
-	drawer = page.getByRole("dialog", { name: "Edit Card", exact: true });
-	await expect(drawer.locator('input[name$=".accent"]').first()).toHaveValue("Applied");
-	await expect(drawer.locator('input[name$=".products.0.sku"]')).toHaveValue("SKU-FIXED");
-	await expect(drawer.locator('input[name$=".products.0.label"]')).toHaveValue("Applied label");
-	await drawer.getByRole("button", { name: "Cancel", exact: true }).click();
+	await expect(accent).toHaveValue("Applied");
+	await expect(sku).toHaveValue("SKU-FIXED");
+	await expect(label).toHaveValue("Applied label");
 	expect(errors.pageErrors).toEqual([]);
 });

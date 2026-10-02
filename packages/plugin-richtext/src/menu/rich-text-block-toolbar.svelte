@@ -33,7 +33,7 @@
 	import { getRichTextField } from "@plugin-richtext/field/rich-text-context.svelte";
 	import { richTextBlockTypes } from "@plugin-richtext/field/rich-text-blocks";
 	import type { RichTextConfig } from "@plugin-richtext/field/rich-text-config";
-	import { OPEN_BLOCK_EDITOR_COMMAND } from "@plugin-richtext/menu/rich-text-commands";
+	import { INSERT_BLOCK_COMMAND } from "@plugin-richtext/menu/rich-text-commands";
 	import RichTextMenu from "@plugin-richtext/menu/rich-text-menu.svelte";
 	import {
 		buildRichTextOptions,
@@ -458,7 +458,7 @@
 		closePicker();
 		if (state === null) return;
 		if (option.blockType !== undefined) {
-			editor.dispatchCommand(OPEN_BLOCK_EDITOR_COMMAND, {
+			editor.dispatchCommand(INSERT_BLOCK_COMMAND, {
 				blockType: option.blockType,
 				position: state,
 			});

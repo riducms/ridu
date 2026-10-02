@@ -1954,17 +1954,24 @@ func removeDuplicateValues(fields []schema.Field, before, after store.Values, se
 }
 
 func (engine *Engine) Versions(ctx context.Context, collectionName, documentID string, actor *store.Document, localeOptions ...LocalizationOptions) (versions []store.Version, err error) {
-	return engine.readVersions(ctx, collectionName, documentID, 0, actor, localeOptions...)
+	versions, _, err = engine.readVersions(ctx, collectionName, documentID, 0, false, actor, localeOptions...)
+	return versions, err
 }
 
-// readVersions runs one ReadVersions lifecycle. When revision is positive it
+// CountVersions counts retained, authorized snapshots without resolving their output fields.
+func (engine *Engine) CountVersions(ctx context.Context, collectionName, documentID string, actor *store.Document, localeOptions ...LocalizationOptions) (int, error) {
+	_, total, err := engine.readVersions(ctx, collectionName, documentID, 0, true, actor, localeOptions...)
+	return total, err
+}
+
+// readVersions runs one ReadVersions lifecycle for a count or snapshot read. When revision is positive it
 // narrows the access-filtered result before resolving output fields and hooks,
 // so a single-version read cannot trigger side effects or failures from an
 // unrelated retained revision.
-func (engine *Engine) readVersions(ctx context.Context, collectionName, documentID string, revision int, actor *store.Document, localeOptions ...LocalizationOptions) (versions []store.Version, err error) {
+func (engine *Engine) readVersions(ctx context.Context, collectionName, documentID string, revision int, countOnly bool, actor *store.Document, localeOptions ...LocalizationOptions) (versions []store.Version, total int, err error) {
 	collection, exists := engine.collections[collectionName]
 	if !exists || collection.Schema.Versions == nil {
-		return nil, &Error{Code: "not_found", Status: 404, Message: "versioned collection was not found"}
+		return nil, 0, &Error{Code: "not_found", Status: 404, Message: "versioned collection was not found"}
 	}
 	var options LocalizationOptions
 	if len(localeOptions) != 0 {
@@ -1972,17 +1979,17 @@ func (engine *Engine) readVersions(ctx context.Context, collectionName, document
 	}
 	selection, localeError := localization.Resolve(engine.localization, options.Locale, options.FallbackLocales, options.DisableFallback, options.AllLocales)
 	if localeError != nil {
-		return nil, &Error{Code: "bad_locale", Status: 400, Message: localeError.Error(), Cause: localeError}
+		return nil, 0, &Error{Code: "bad_locale", Status: 400, Message: localeError.Error(), Cause: localeError}
 	}
 	stack, _ := ctx.Value(operationStackKey{}).([]operationFrame)
 	frame := operationFrame{kind: operation.ReadVersions, collection: collectionName, id: documentID}
 	if len(stack) >= engine.maxDepth || repeatedFrame(stack, frame) >= 4 {
-		return nil, &Error{Code: "operation_recursion", Status: 409, Message: "operation recursion limit exceeded"}
+		return nil, 0, &Error{Code: "operation_recursion", Status: 409, Message: "operation recursion limit exceeded"}
 	}
 	ctx = context.WithValue(ctx, operationStackKey{}, append(append([]operationFrame(nil), stack...), frame))
 	state, ownsTransaction, err := engine.transaction(ctx, transactionReadOnly)
 	if err != nil {
-		return nil, transactionAdmissionError("begin version read transaction", err)
+		return nil, 0, transactionAdmissionError("begin version read transaction", err)
 	}
 	transactionContext := context.WithValue(ctx, transactionKey{}, state)
 	if ownsTransaction {
@@ -2010,30 +2017,35 @@ func (engine *Engine) readVersions(ctx context.Context, collectionName, document
 	}()
 	decision, err := authorize(collection, operationContext)
 	if err != nil {
-		return nil, &Error{Code: "access_failed", Status: 500, Message: "access rule failed", Cause: err}
+		return nil, 0, &Error{Code: "access_failed", Status: 500, Message: "access rule failed", Cause: err}
 	}
 	if decision.Kind == Deny {
-		return nil, &Error{Code: "access_denied", Status: 403, Message: "operation is not permitted"}
+		return nil, 0, &Error{Code: "access_denied", Status: 403, Message: "operation is not permitted"}
 	}
 	if err := runHooks(collection.Hooks.BeforeRead, operationContext); err != nil {
-		return nil, hookError("before read", err)
+		return nil, 0, hookError("before read", err)
 	}
 	if err := runIdentityHooks(collection.Hooks.BeforeOperation, operationContext); err != nil {
-		return nil, hookError("before operation", err)
+		return nil, 0, hookError("before operation", err)
 	}
 	if err := runFieldHooks(collection, operationContext, func(hooks Hooks) []Hook { return hooks.BeforeOperation }, true, true); err != nil {
-		return nil, hookError("field before operation", err)
+		return nil, 0, hookError("field before operation", err)
 	}
 	versionTransaction, ok := state.transaction.(store.VersionTransaction)
 	if !ok {
-		return nil, &Error{Code: "store_failed", Status: 500, Message: "version-enabled collection requires store.VersionTransaction"}
+		return nil, 0, &Error{Code: "store_failed", Status: 500, Message: "version-enabled collection requires store.VersionTransaction"}
 	}
-	versions, err = versionTransaction.ListVersions(transactionContext, store.VersionRequest{
+	versionRequest := store.VersionRequest{
 		Collection: collection.Schema, DocumentID: documentID, Access: decision.Access,
 		Locales: selection.Configured, LocaleChain: selection.Chain, AllLocales: selection.All,
-	})
+	}
+	if countOnly {
+		total, err = versionTransaction.CountVersions(transactionContext, versionRequest)
+	} else {
+		versions, err = versionTransaction.ListVersions(transactionContext, versionRequest)
+	}
 	if err != nil {
-		return nil, translateStoreError(err)
+		return nil, 0, translateStoreError(err)
 	}
 	if revision > 0 {
 		found := -1
@@ -2044,19 +2056,19 @@ func (engine *Engine) readVersions(ctx context.Context, collectionName, document
 			}
 		}
 		if found < 0 {
-			return nil, &Error{Code: "not_found", Status: 404, Message: "version was not found"}
+			return nil, 0, &Error{Code: "not_found", Status: 404, Message: "version was not found"}
 		}
 		versions = []store.Version{versions[found]}
 	}
 	if err := runHooks(collection.Hooks.AfterOperation, operationContext); err != nil {
-		return nil, hookError("after operation", err)
+		return nil, 0, hookError("after operation", err)
 	}
 	if err := runFieldHooks(collection, operationContext, func(hooks Hooks) []Hook { return hooks.AfterOperation }); err != nil {
-		return nil, hookError("field after operation", err)
+		return nil, 0, hookError("field after operation", err)
 	}
 	for index := range versions {
 		if recoveryError := unknownBlockRecoveryError(collection.Schema.Fields, versions[index].Snapshot.Values, true); recoveryError != nil {
-			return nil, recoveryError
+			return nil, 0, recoveryError
 		}
 		versions[index].Snapshot = localization.ProjectDocument(versions[index].Snapshot, collection.Schema.Fields, selection)
 		versionContext := operationContext
@@ -2064,24 +2076,24 @@ func (engine *Engine) readVersions(ctx context.Context, collectionName, document
 		versionContext.Document = &versions[index].Snapshot
 		versionResult := Result{Document: &versions[index].Snapshot}
 		if err := engine.resolveOutputFields(state.transaction, collection, versionContext, selection, nil, &versionResult); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		if err := runReadHooks(collection, versionContext, &versionResult); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		if err := engine.redactResult(collection, versionContext, &versionResult); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 	}
 	if ownsTransaction {
 		if err := engine.commitTransaction(ctx, state); err != nil {
-			return nil, commitAttemptedError(err)
+			return nil, 0, commitAttemptedError(err)
 		}
 		if err := engine.dispatchDeferredHooks(ctx, state.afterCommit); err != nil {
-			return nil, committedHookError(err)
+			return nil, 0, committedHookError(err)
 		}
 	}
-	return versions, nil
+	return versions, total, nil
 }
 
 // Version returns one authorized snapshot revision.
@@ -2089,7 +2101,7 @@ func (engine *Engine) Version(ctx context.Context, collectionName, documentID st
 	if revision < 1 {
 		return store.Version{}, &Error{Code: "bad_request", Status: 400, Message: "version revision must be a positive integer"}
 	}
-	versions, err := engine.readVersions(ctx, collectionName, documentID, revision, actor, localeOptions...)
+	versions, _, err := engine.readVersions(ctx, collectionName, documentID, revision, false, actor, localeOptions...)
 	if err != nil {
 		return store.Version{}, err
 	}

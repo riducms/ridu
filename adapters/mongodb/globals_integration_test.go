@@ -117,6 +117,15 @@ func TestMongoDBGlobalUsesResourceStorePathAndSnapshotPredicates(t *testing.T) {
 	if versions[0].Revision != 1 || versionName != "Ridu" {
 		t.Fatalf("filtered MongoDB global versions = %#v", versions)
 	}
+	read := mongoBegin(t, backend, true)
+	access := query.Equal(siteName, "Ridu").Node()
+	count, err := read.(store.VersionTransaction).CountVersions(t.Context(), store.VersionRequest{
+		Collection: global, DocumentID: "site-settings", Access: &access,
+	})
+	mongoRollback(t, read)
+	if err != nil || count != 1 {
+		t.Fatalf("filtered MongoDB global version count = %d, %v, want 1", count, err)
+	}
 	if _, err := application.Local().GlobalVersion(t.Context(), "site-settings", 2, ridu.FindOptions{}); !mongoOperationCode(err, "not_found") {
 		t.Fatalf("non-matching MongoDB global version = %v, want not_found", err)
 	}

@@ -324,14 +324,14 @@ func (engine *Engine) operationCapabilities(transaction store.Transaction, colle
 			if !ok {
 				return false, &Error{Code: "store_failed", Status: 500, Message: "version-enabled collection requires store.VersionTransaction"}
 			}
-			versions, versionError := versionTransaction.ListVersions(base.Context, store.VersionRequest{
+			total, versionError := versionTransaction.CountVersions(base.Context, store.VersionRequest{
 				Collection: collection.Schema, DocumentID: base.ID, Access: decision.Access,
 				Locales: selection.Configured, LocaleChain: selection.Chain, AllLocales: selection.All,
 			})
 			if versionError != nil {
 				return false, translateStoreError(fmt.Errorf("evaluate filtered version capability: %w", versionError))
 			}
-			return len(versions) != 0, nil
+			return total != 0, nil
 		}
 		if decision.Kind == Allow {
 			if collection.Schema.Capabilities.Global && (kind == operation.Read || kind == operation.Update) {

@@ -1,5 +1,6 @@
 export type {
 	EmbeddedSchemaFormScope,
+	EmbeddedSchemaFormProps,
 	EmbeddedSchemaHeaderProps,
 	EmbeddedSchemaVariantScope,
 	EmbeddedSchemaDraft,

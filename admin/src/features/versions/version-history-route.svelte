@@ -156,10 +156,14 @@
 					to={historyPath}
 					class="ridu-document-tab ridu-document-tab--active"
 					aria-current="page"
+					aria-label={i18n.t("documents:versions")}
+					title={!controller.loading && !controller.error
+						? i18n.t("versions:total", { count: i18n.formatNumber(controller.versions.length) })
+						: undefined}
 				>
 					{i18n.t("documents:versions")}
-					{#if !controller.loading && !controller.error}
-						<span class="ridu-versions__count">
+					{#if !controller.loading && !controller.error && controller.versions.length > 0}
+						<span class="ridu-document-tab__count">
 							{i18n.formatNumber(controller.versions.length)}
 						</span>
 					{/if}

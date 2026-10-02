@@ -1,4 +1,5 @@
-import type { Access, CollectionConfig, Field, Where } from "payload";
+import { BlocksFeature, lexicalEditor } from "@payloadcms/richtext-lexical";
+import type { Access, Block, CollectionConfig, Field, Where } from "payload";
 
 import {
 	allowAuthenticated,
@@ -518,6 +519,63 @@ export const Pages: CollectionConfig = {
 	],
 };
 
+const richTextCallout: Block = {
+	slug: "callout",
+	fields: [
+		{ name: "title", type: "text", label: "Callout title", required: true },
+		{ name: "caption", type: "text", defaultValue: "Helpful context" },
+		{ name: "translation", type: "text", localized: true },
+		{
+			name: "appearance",
+			type: "group",
+			fields: [
+				{ name: "tone", type: "select", options: ["info", "warning"], defaultValue: "info" },
+			],
+		},
+		{
+			name: "links",
+			type: "array",
+			fields: [
+				{ name: "label", type: "text", required: true },
+				{ name: "href", type: "text" },
+			],
+		},
+		{ name: "detail", type: "richText", label: "Detail" },
+	],
+};
+
+const blockArticleBody = (name: string, localized = false): Field => ({
+	name,
+	type: "richText",
+	label: localized ? "Localized body" : "Body",
+	localized,
+	editor: lexicalEditor({
+		features: ({ defaultFeatures }) => [
+			...defaultFeatures,
+			BlocksFeature({ blocks: [richTextCallout] }),
+		],
+	}),
+});
+
+export const BlockArticles: CollectionConfig = {
+	slug: slugs.blockArticles,
+	labels: { singular: "Block article", plural: "Block articles" },
+	admin: { group: "Editorial", useAsTitle: "title" },
+	access: {
+		create: allowRoles(roles.administrator, roles.editor),
+		delete: allowRoles(roles.administrator),
+		read: allowEveryone,
+		update: allowRoles(roles.administrator, roles.editor),
+	},
+	versions: { drafts: true, maxPerDoc: 20 },
+	fields: [
+		{ name: "title", type: "text", required: true },
+		{ name: "caption", type: "text" },
+		blockArticleBody("body"),
+		blockArticleBody("localizedBody", true),
+	],
+};
+
 export const Events: CollectionConfig = {
 	slug: slugs.events,
 	labels: { plural: "Events", singular: "Event" },
@@ -704,6 +762,7 @@ export const collections: CollectionConfig[] = [
 	Categories,
 	Posts,
 	Pages,
+	BlockArticles,
 	Events,
 	EditorialNotes,
 	Redirects,

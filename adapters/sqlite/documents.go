@@ -388,7 +388,7 @@ func (transaction *documentTransaction) Distinct(ctx context.Context, request st
 	if err := store.ValidateDistinctRequest(request); err != nil {
 		return store.DistinctPage{}, err
 	}
-	value, supported := sqliteValueAtPathForLocales(request.Collection, request.Field, request.LocaleChain)
+	value, supported := sqliteValueAtPathForLocales(request.Collection, request.Field, request.LocaleChain, sqliteDocumentSource)
 	if !supported {
 		return store.DistinctPage{}, fmt.Errorf("SQLite distinct field %q is not supported", request.Field.String())
 	}
@@ -605,10 +605,52 @@ const (
 )
 
 type sqliteDocumentValue struct {
-	valueSQL      string
-	typeSQL       string
-	kind          sqliteDocumentValueKind
-	alwaysPresent bool
+	valueSQL        string
+	typeSQL         string
+	kind            sqliteDocumentValueKind
+	alwaysPresent   bool
+	historicalShape bool
+}
+
+// Predicate sources bind the same compiler to current documents or retained
+// snapshots. A missing metadata expression deliberately keeps that path on the
+// matcher; snapshot timestamps must retain RFC3339Nano instant comparison.
+type sqlitePredicateSource struct {
+	valuesJSON     string
+	snapshotValues bool
+	id             sqliteDocumentValue
+	createdAt      sqliteDocumentValue
+	updatedAt      sqliteDocumentValue
+	status         sqliteDocumentValue
+	revision       sqliteDocumentValue
+}
+
+var sqliteDocumentSource = sqlitePredicateSource{
+	valuesJSON: "values_json",
+	id:         sqliteDocumentValue{valueSQL: "id COLLATE BINARY", kind: sqliteStringValue, alwaysPresent: true},
+	createdAt:  sqliteDocumentValue{valueSQL: "created_at", kind: sqliteTimestampValue, alwaysPresent: true},
+	updatedAt:  sqliteDocumentValue{valueSQL: "updated_at", kind: sqliteTimestampValue, alwaysPresent: true},
+	status:     sqliteDocumentValue{valueSQL: "status COLLATE BINARY", kind: sqliteStringValue, alwaysPresent: true},
+	revision:   sqliteDocumentValue{valueSQL: "revision", kind: sqliteNumberValue, alwaysPresent: true},
+}
+
+func sqliteSnapshotSource() sqlitePredicateSource {
+	status := sqliteJSONExtractFrom("snapshot_json", "Status")
+	revision := sqliteJSONExtractFrom("snapshot_json", "Revision")
+	return sqlitePredicateSource{
+		valuesJSON: sqliteJSONExtractFrom("snapshot_json", "Values"), snapshotValues: true,
+		id: sqliteDocumentValue{
+			valueSQL: sqliteJSONExtractFrom("snapshot_json", "ID") + " COLLATE BINARY", kind: sqliteStringValue, alwaysPresent: true,
+		},
+		status: sqliteDocumentValue{
+			valueSQL: "NULLIF(" + status + ", '') COLLATE BINARY",
+			typeSQL:  "CASE WHEN " + status + " <> '' THEN 'text' END", kind: sqliteStringValue,
+		},
+		revision: sqliteDocumentValue{
+			valueSQL: "CASE WHEN " + revision + " > 0 THEN CAST(" + revision + " AS REAL) END",
+			typeSQL:  "CASE WHEN " + revision + " > 0 THEN 'real' END", kind: sqliteNumberValue,
+		},
+	}
 }
 
 func sqliteRequestPredicate(request store.Request) sqlitePredicate {
@@ -636,7 +678,7 @@ func sqliteRequestPredicate(request store.Request) sqlitePredicate {
 		if node == nil {
 			return
 		}
-		compiled, supported := compileSQLiteNodeForLocales(request.Collection, *node, locales)
+		compiled, supported := compileSQLiteNodeForLocales(request.Collection, *node, locales, sqliteDocumentSource)
 		if supported {
 			appendExact(compiled.clause, compiled.arguments...)
 		}
@@ -660,23 +702,23 @@ func sqliteRequestPredicate(request store.Request) sqlitePredicate {
 }
 
 func compileSQLiteNode(collection schema.Collection, node query.Node) (sqlitePredicate, bool) {
-	return compileSQLiteNodeForLocales(collection, node, nil)
+	return compileSQLiteNodeForLocales(collection, node, nil, sqliteDocumentSource)
 }
 
-func compileSQLiteNodeForLocales(collection schema.Collection, node query.Node, locales []schema.LocaleCode) (sqlitePredicate, bool) {
+func compileSQLiteNodeForLocales(collection schema.Collection, node query.Node, locales []schema.LocaleCode, source sqlitePredicateSource) (sqlitePredicate, bool) {
 	switch node.Kind {
 	case query.ExpressionComparison:
 		if node.Comparison == nil {
 			return sqlitePredicate{clause: "0", exact: true}, true
 		}
-		return compileSQLiteComparison(collection, *node.Comparison, locales)
+		return compileSQLiteComparison(collection, *node.Comparison, locales, source)
 	case query.ExpressionAnd:
 		if len(node.Children) < 2 {
 			return sqlitePredicate{clause: "0", exact: true}, true
 		}
 		result := sqlitePredicate{exact: true}
 		for _, child := range node.Children {
-			compiled, supported := compileSQLiteNodeForLocales(collection, child, locales)
+			compiled, supported := compileSQLiteNodeForLocales(collection, child, locales, source)
 			if !supported {
 				result.exact = false
 				continue
@@ -695,7 +737,7 @@ func compileSQLiteNodeForLocales(collection schema.Collection, node query.Node, 
 		}
 		result := sqlitePredicate{exact: true}
 		for _, child := range node.Children {
-			compiled, supported := compileSQLiteNodeForLocales(collection, child, locales)
+			compiled, supported := compileSQLiteNodeForLocales(collection, child, locales, source)
 			if !supported || !compiled.exact {
 				return sqlitePredicate{}, false
 			}
@@ -710,7 +752,7 @@ func compileSQLiteNodeForLocales(collection schema.Collection, node query.Node, 
 		if len(node.Children) != 1 {
 			return sqlitePredicate{clause: "0", exact: true}, true
 		}
-		compiled, supported := compileSQLiteNodeForLocales(collection, node.Children[0], locales)
+		compiled, supported := compileSQLiteNodeForLocales(collection, node.Children[0], locales, source)
 		if !supported || !compiled.exact {
 			return sqlitePredicate{}, false
 		}
@@ -724,8 +766,8 @@ func compileSQLiteNodeForLocales(collection schema.Collection, node query.Node, 
 	}
 }
 
-func compileSQLiteComparison(collection schema.Collection, comparison query.Comparison, locales []schema.LocaleCode) (sqlitePredicate, bool) {
-	value, supported := sqliteValueAtPathForLocales(collection, comparison.Path, locales)
+func compileSQLiteComparison(collection schema.Collection, comparison query.Comparison, locales []schema.LocaleCode, source sqlitePredicateSource) (sqlitePredicate, bool) {
+	value, supported := sqliteValueAtPathForLocales(collection, comparison.Path, locales, source)
 	if !supported {
 		return sqlitePredicate{}, false
 	}
@@ -734,6 +776,20 @@ func compileSQLiteComparison(collection schema.Collection, comparison query.Comp
 		// matcher uses Unicode case folding. Applying that SQL predicate could
 		// exclude a real match, so these operations remain an in-memory fallback.
 		return sqlitePredicate{}, false
+	}
+	if value.historicalShape && comparison.Operator != query.OperatorExists {
+		// The matcher compares retained scalar values by their stored type,
+		// which may predate the current manifest. A mismatched operand cannot
+		// safely become the compiler's usual constant-false predicate.
+		operands := []query.Value{comparison.Value}
+		if comparison.Operator == query.OperatorIn {
+			operands = comparison.Value.Values()
+		}
+		for _, operand := range operands {
+			if !sqliteOperandMatchesKind(operand, value.kind) {
+				return sqlitePredicate{}, false
+			}
+		}
 	}
 	if comparison.Operator == query.OperatorExists {
 		want, _ := comparison.Value.BooleanValue()
@@ -820,6 +876,21 @@ func compileSQLiteComparison(collection schema.Collection, comparison query.Comp
 	}
 }
 
+func sqliteOperandMatchesKind(operand query.Value, kind sqliteDocumentValueKind) bool {
+	switch operand.Kind() {
+	case query.ValueNull:
+		return true
+	case query.ValueString:
+		return kind == sqliteStringValue
+	case query.ValueNumber:
+		return kind == sqliteNumberValue
+	case query.ValueBoolean:
+		return kind == sqliteBooleanValue
+	default:
+		return false
+	}
+}
+
 func sqliteEquality(value sqliteDocumentValue, expected query.Value) sqlitePredicate {
 	switch expected.Kind() {
 	case query.ValueNull:
@@ -875,10 +946,10 @@ func sqliteEquality(value sqliteDocumentValue, expected query.Value) sqlitePredi
 }
 
 func sqliteValueAtPath(collection schema.Collection, path query.Path) (sqliteDocumentValue, bool) {
-	return sqliteValueAtPathForLocales(collection, path, nil)
+	return sqliteValueAtPathForLocales(collection, path, nil, sqliteDocumentSource)
 }
 
-func sqliteValueAtPathForLocales(collection schema.Collection, path query.Path, locales []schema.LocaleCode) (sqliteDocumentValue, bool) {
+func sqliteValueAtPathForLocales(collection schema.Collection, path query.Path, locales []schema.LocaleCode, source sqlitePredicateSource) (sqliteDocumentValue, bool) {
 	segments := path.Segments()
 	if len(segments) == 0 {
 		return sqliteDocumentValue{}, false
@@ -886,36 +957,55 @@ func sqliteValueAtPathForLocales(collection schema.Collection, path query.Path, 
 	if len(segments) == 1 {
 		switch segments[0] {
 		case "id":
-			return sqliteDocumentValue{valueSQL: "id COLLATE BINARY", kind: sqliteStringValue, alwaysPresent: true}, true
+			return source.id, source.id.valueSQL != ""
 		case "createdAt":
-			return sqliteDocumentValue{valueSQL: "created_at", kind: sqliteTimestampValue, alwaysPresent: true}, true
+			return source.createdAt, source.createdAt.valueSQL != ""
 		case "updatedAt":
-			return sqliteDocumentValue{valueSQL: "updated_at", kind: sqliteTimestampValue, alwaysPresent: true}, true
+			return source.updatedAt, source.updatedAt.valueSQL != ""
 		case "_status":
 			if collection.Versions == nil {
 				return sqliteDocumentValue{}, false
 			}
-			return sqliteDocumentValue{valueSQL: "status COLLATE BINARY", kind: sqliteStringValue, alwaysPresent: true}, true
+			return source.status, source.status.valueSQL != ""
 		case "_revision":
 			if collection.Versions == nil && collection.Upload == nil {
 				return sqliteDocumentValue{}, false
 			}
-			return sqliteDocumentValue{valueSQL: "revision", kind: sqliteNumberValue, alwaysPresent: true}, true
+			return source.revision, source.revision.valueSQL != ""
 		}
 	}
 	chain, supported := sqliteQueryableFieldChain(collection.Fields, segments)
 	if !supported {
 		return sqliteDocumentValue{}, false
 	}
-	valueSQL, typeSQL, kind, supported := sqliteDocumentPathExpression(chain, locales)
-	return sqliteDocumentValue{valueSQL: valueSQL, typeSQL: typeSQL, kind: kind}, supported
+	if source.snapshotValues {
+		for _, field := range chain {
+			// A snapshot can retain a scalar from an older field shape. The
+			// ordinary localized-group expression reparses selected SQL text as
+			// JSON, which could mistake that scalar for an authorized object.
+			if field.Localized && field.Type == schema.FieldTypeGroup {
+				return sqliteDocumentValue{}, false
+			}
+			if field.Localized && len(locales) > 1 {
+				// Historical empty strings fall through to the next locale even
+				// after this field becomes numeric or boolean. The ordinary SQL
+				// compiler only skips empty strings for string-typed leaves.
+				kind, _ := sqliteFieldValueKind(field)
+				if kind != sqliteStringValue {
+					return sqliteDocumentValue{}, false
+				}
+			}
+		}
+	}
+	valueSQL, typeSQL, kind, supported := sqliteDocumentPathExpression(source.valuesJSON, chain, locales)
+	return sqliteDocumentValue{valueSQL: valueSQL, typeSQL: typeSQL, kind: kind, historicalShape: source.snapshotValues}, supported
 }
 
 func sqliteSortClause(request store.Request) (string, bool) {
 	terms := stableSort(request.Sort)
 	parts := make([]string, len(terms))
 	for index, term := range terms {
-		value, supported := sqliteValueAtPathForLocales(request.Collection, term.Path, request.LocaleChain)
+		value, supported := sqliteValueAtPathForLocales(request.Collection, term.Path, request.LocaleChain, sqliteDocumentSource)
 		if !supported {
 			return "", false
 		}
@@ -988,7 +1078,7 @@ func listWindowQuery(request store.Request) (string, []any, error) {
 	if err := store.ValidateListWindowRequest(request); err != nil {
 		return "", nil, err
 	}
-	value, supported := sqliteValueAtPathForLocales(request.Collection, request.IndexWindow.Path, request.LocaleChain)
+	value, supported := sqliteValueAtPathForLocales(request.Collection, request.IndexWindow.Path, request.LocaleChain, sqliteDocumentSource)
 	if !supported || value.kind != sqliteStringValue {
 		return "", nil, fmt.Errorf("SQLite index window path %q is not a supported text index", request.IndexWindow.Path.String())
 	}
@@ -2197,26 +2287,12 @@ func (transaction *documentTransaction) ListVersions(ctx context.Context, reques
 		return nil, err
 	}
 	defer leave()
+	predicate := sqliteVersionPredicate(request)
+	defer predicate.close()
 	statement := `SELECT
   id, revision, status, snapshot_json, created_at
-FROM ridu_versions WHERE collection_id = ? AND document_id = ?
-`
-	arguments := []any{string(request.Collection.ID), request.DocumentID}
-	var release func()
-	if request.Access != nil {
-		token, matcherRelease := registerSQLiteMatcher(store.Request{
-			Collection: request.Collection, Access: request.Access,
-			Locales: request.Locales, LocaleChain: request.LocaleChain, AllLocales: request.AllLocales,
-		})
-		release = matcherRelease
-		statement += " AND " + sqliteDocumentMatcherFunction + `(json_extract(snapshot_json, '$.Values'), json_extract(snapshot_json, '$.ID'), json_extract(snapshot_json, '$.CreatedAt'), json_extract(snapshot_json, '$.UpdatedAt'), json_extract(snapshot_json, '$.Status'), json_extract(snapshot_json, '$.Revision'), ?) = 1`
-		arguments = append(arguments, token)
-	}
-	if release != nil {
-		defer release()
-	}
-	statement += " ORDER BY revision DESC"
-	rows, err := transaction.connection.QueryContext(ctx, statement, arguments...)
+FROM ridu_versions WHERE ` + predicate.clause + " ORDER BY revision DESC"
+	rows, err := transaction.connection.QueryContext(ctx, statement, predicate.arguments...)
 	if err != nil {
 		return nil, translateError(err)
 	}
@@ -2243,6 +2319,57 @@ FROM ridu_versions WHERE collection_id = ? AND document_id = ?
 		}
 	}
 	return versions, translateError(rows.Err())
+}
+
+func (transaction *documentTransaction) CountVersions(ctx context.Context, request store.VersionRequest) (int, error) {
+	if err := primitivefield.ValidateNode(request.Collection.Fields, request.Access); err != nil {
+		return 0, err
+	}
+	leave, err := transaction.enter(ctx, false)
+	if err != nil {
+		return 0, err
+	}
+	defer leave()
+	predicate := sqliteVersionPredicate(request)
+	defer predicate.close()
+	var count int
+	err = transaction.connection.QueryRowContext(ctx, "SELECT count(*) FROM ridu_versions WHERE "+predicate.clause, predicate.arguments...).Scan(&count)
+	return count, translateError(err)
+}
+
+func sqliteVersionPredicate(request store.VersionRequest) sqlitePredicate {
+	predicate := sqlitePredicate{
+		clause: "collection_id = ? AND document_id = ?", arguments: []any{string(request.Collection.ID), request.DocumentID}, exact: true,
+	}
+	if request.Access == nil {
+		return predicate
+	}
+	source := sqliteSnapshotSource()
+	appendNode := func(locales []schema.LocaleCode) {
+		compiled, supported := compileSQLiteNodeForLocales(request.Collection, *request.Access, locales, source)
+		if supported {
+			predicate.clause += " AND (" + compiled.clause + ")"
+			predicate.arguments = append(predicate.arguments, compiled.arguments...)
+		}
+		predicate.exact = predicate.exact && supported && compiled.exact
+	}
+	if request.AllLocales && len(request.Locales) != 0 {
+		for _, locale := range request.Locales {
+			appendNode([]schema.LocaleCode{locale})
+		}
+	} else {
+		appendNode(request.LocaleChain)
+	}
+	if !predicate.exact {
+		token, release := registerSQLiteMatcher(store.Request{
+			Collection: request.Collection, Access: request.Access,
+			Locales: request.Locales, LocaleChain: request.LocaleChain, AllLocales: request.AllLocales,
+		})
+		predicate.clause += " AND " + sqliteDocumentMatcherFunction + `(json_extract(snapshot_json, '$.Values'), json_extract(snapshot_json, '$.ID'), json_extract(snapshot_json, '$.CreatedAt'), json_extract(snapshot_json, '$.UpdatedAt'), json_extract(snapshot_json, '$.Status'), json_extract(snapshot_json, '$.Revision'), ?) = 1`
+		predicate.arguments = append(predicate.arguments, token)
+		predicate.release, predicate.exact = release, true
+	}
+	return predicate
 }
 
 func (transaction *documentTransaction) FindVersion(ctx context.Context, collection schema.Collection, documentID string, revision int) (store.Version, error) {

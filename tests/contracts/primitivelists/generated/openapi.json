@@ -1149,6 +1149,68 @@
         "summary": "List Primitive product versions"
       }
     },
+    "/api/collections/primitive-products/{id}/versions/count": {
+      "get": {
+        "operationId": "countVersionsprimitive-products",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Select one content locale, or all locales as locale-keyed values.",
+            "in": "query",
+            "name": "locale",
+            "required": false,
+            "schema": {
+              "default": "en",
+              "enum": [
+                "en",
+                "fr",
+                "all"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Override fallback with a locale or comma-separated chain; false disables fallback.",
+            "in": "query",
+            "name": "fallback-locale",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CountEnvelope"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Ridu error envelope"
+          }
+        },
+        "summary": "Count Primitive product versions"
+      }
+    },
     "/api/collections/primitive-products/{id}/versions/{revision}": {
       "get": {
         "operationId": "versionprimitive-products",
@@ -1377,6 +1439,17 @@
         "required": [
           "id",
           "access"
+        ]
+      },
+      "CountEnvelope": {
+        "type": "object",
+        "properties": {
+          "totalDocs": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "totalDocs"
         ]
       },
       "Embedded_primitive-products-body_blocks_Input": {

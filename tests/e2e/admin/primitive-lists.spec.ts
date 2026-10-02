@@ -138,7 +138,7 @@ test("nested, repeated and localized list edits preserve enclosing row identity 
 });
 
 for (const field of ["body", "localizedBody"] as const)
-	test(`${field} primitive list editors preserve Apply/Cancel and reject incomplete numeric input`, async ({
+	test(`${field} primitive lists edit inline, undo, and reject incomplete numeric input`, async ({
 		page,
 	}) => {
 		await loginAsEditor(page);
@@ -161,32 +161,39 @@ for (const field of ["body", "localizedBody"] as const)
 		});
 		await page.goto(`/admin/collections/${collection}/${original.id}`);
 		if (field === "localizedBody") await chooseContentLocale(page, "French", "fr");
-		const card = list(page, field).locator(".ridu-richtext-embedded-card").first();
-		await card.getByRole("button", { name: "Edit", exact: true }).click();
-		const drawer = page.getByRole("dialog", { name: "Edit Card", exact: true });
-		const points = drawer.locator('[data-field-path$=".points"]').first();
-		const sizes = drawer.locator('[data-field-path$=".sizes"]').first();
+		const card = list(page, field).locator('article[data-block-type="card"]').first();
+		const points = card.locator('[data-field-path$=".points"]').first();
+		const sizes = card.locator('[data-field-path$=".sizes"]').first();
+		await expect(card).toHaveAttribute("data-collapsed", "false");
 		await points.getByRole("button", { name: "Remove item 1", exact: true }).click();
-		await drawer.getByRole("button", { name: "Cancel", exact: true }).click();
-		await card.getByRole("button", { name: "Edit", exact: true }).click();
+		await expect(points.locator("[data-list-item]")).toHaveCount(1);
+		await points.locator("[data-list-item]").first().press("ControlOrMeta+z");
 		await expect(points.locator("[data-list-item]")).toHaveCount(2);
-		// The drawer schedules initial autofocus; let it finish before filling
-		// another input so it cannot redirect Playwright's keyboard insertion.
-		await expect(points.locator("[data-list-item]").first()).toBeFocused();
-		await sizes.locator("[data-list-item]").nth(1).fill("1e-");
-		await expect(sizes.locator("[data-list-item]").nth(1)).toHaveValue("1e-");
-		await drawer.getByRole("button", { name: "Apply", exact: true }).click();
-		await expect(drawer).toBeVisible();
-		await expect(sizes).toContainText("item 2: enter a finite number");
-		await sizes.locator("[data-list-item]").nth(1).fill("1e1");
 		await points.locator("[data-list-item]").nth(1).fill("Warranty");
 		await points.locator("[data-list-item]").nth(1).press("Alt+ArrowUp");
-		await drawer.getByRole("button", { name: "Apply", exact: true }).click();
+		await sizes.locator("[data-list-item]").nth(1).fill("1e-");
+		await expect(sizes.locator("[data-list-item]").nth(1)).toHaveValue("1e-");
+		await card.getByRole("button", { name: "Collapse Card" }).click();
+		await expect(card).toHaveAttribute("data-collapsed", "true");
+		await expect(sizes.locator("[data-list-item]").nth(1)).toHaveValue("1e-");
+		let writes = 0;
+		page.on("request", (request) => {
+			if (
+				request.method() === "PATCH" &&
+				new URL(request.url()).pathname === `/api/collections/${collection}/${original.id}`
+			)
+				writes++;
+		});
+		await submitDocumentForm(page);
+		await expect(card).toHaveAttribute("data-collapsed", "false");
+		await expect(sizes).toContainText(/item 2: enter a finite number/i);
+		expect(writes).toBe(0);
+		await sizes.locator("[data-list-item]").nth(1).fill("1e1");
 		const saved = await save(page, original.id);
 		expect(saved[field].root.children[0].fields.points).toEqual(["Warranty", "Oak"]);
 		expect(saved[field].root.children[0].fields.sizes).toEqual([0, 10]);
 		await page.reload();
-		await card.getByRole("button", { name: "Edit", exact: true }).click();
+		await expect(card).toHaveAttribute("data-collapsed", "false");
 		await expect(points.locator("[data-list-item]").nth(0)).toHaveValue("Warranty");
 		await expect(sizes.locator("[data-list-item]").nth(0)).toHaveValue("0");
 		expect(errors.pageErrors).toEqual([]);

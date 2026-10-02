@@ -1,0 +1,161 @@
+@use "@riducms/ui/styles.scss" as ui;
+
+@layer ridu.components {
+	.ridu-richtext-block {
+		position: relative;
+		z-index: 1;
+		overflow: hidden;
+		margin-block: 8px;
+		border: 1px solid var(--control-border);
+		border-radius: 4px;
+		background: var(--background);
+		color: var(--foreground);
+		font-family: var(--font-sans);
+		font-size: var(--font-size-body);
+		line-height: var(--line-height-body);
+		white-space: normal;
+
+		&:hover {
+			border-color: var(--control-border-hover);
+		}
+		&.is-selected {
+			border-color: var(--foreground-muted);
+			box-shadow: 0 0 0 1px var(--foreground-muted);
+		}
+		&.has-issues {
+			border-color: var(--control-invalid-border);
+			> .ridu-richtext-block__header {
+				background: var(--control-invalid-surface);
+			}
+		}
+	}
+
+	.ridu-richtext-block__header {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		min-width: 0;
+		min-height: 40px;
+		padding: 8px 12px;
+		background: var(--control-surface);
+	}
+
+	.ridu-richtext-block__select {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		min-width: 0;
+		flex: 1;
+		border: 0;
+		border-radius: var(--control-radius);
+		padding: 0;
+		background: transparent;
+		color: inherit;
+		font: inherit;
+		text-align: start;
+		cursor: pointer;
+		&:focus-visible {
+			@include ui.focus-outline;
+		}
+	}
+
+	.ridu-richtext-block.has-name-field .ridu-richtext-block__select {
+		flex: 0 0 auto;
+	}
+	.ridu-richtext-block__name {
+		min-width: 0;
+		flex: 1;
+	}
+	.ridu-richtext-block__label {
+		flex-shrink: 0;
+		border-radius: 2px;
+		padding: 2px 6px;
+		background: var(--background);
+		font-size: 11px;
+		line-height: 16px;
+	}
+	.ridu-richtext-block__summary {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.ridu-richtext-block__errors {
+		flex-shrink: 0;
+		border-radius: 10px;
+		padding: 0 5px;
+		background: var(--field-error-surface);
+		color: var(--field-error-foreground);
+		font-size: 12px;
+		line-height: 18px;
+	}
+
+	.ridu-richtext-block__actions {
+		display: flex;
+		align-items: center;
+		gap: 2px;
+	}
+	.ridu-richtext-block__action,
+	.ridu-richtext-block__toggle {
+		display: grid;
+		place-items: center;
+		flex-shrink: 0;
+		width: 24px;
+		height: 24px;
+		border: 0;
+		border-radius: var(--control-radius);
+		padding: 0;
+		background: transparent;
+		color: var(--foreground-muted);
+		cursor: pointer;
+		&:hover {
+			background: var(--background);
+			color: var(--foreground);
+		}
+		&:focus-visible {
+			@include ui.focus-outline;
+		}
+		svg {
+			width: 14px;
+			height: 14px;
+		}
+	}
+	.ridu-richtext-block__toggle {
+		svg {
+			transition: transform 200ms ease;
+		}
+		&[aria-expanded="true"] svg {
+			transform: rotate(180deg);
+		}
+	}
+
+	.ridu-richtext-block__fields {
+		min-width: 0;
+		padding: 20px;
+		&[hidden] {
+			display: none;
+		}
+	}
+	.ridu-richtext-block__recovery {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 12px;
+		padding: 20px;
+	}
+	.ridu-richtext-block__status,
+	.ridu-richtext-block-message {
+		margin: 0;
+		color: var(--destructive);
+		font-size: var(--font-size-body);
+		line-height: var(--line-height-body);
+	}
+	.ridu-richtext-block-message {
+		margin-block: 8px;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.ridu-richtext-block__toggle svg {
+			transition: none;
+		}
+	}
+}

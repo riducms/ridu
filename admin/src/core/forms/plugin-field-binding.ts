@@ -4,7 +4,7 @@ import type {
 	PluginForm,
 	RegisteredPluginField,
 } from "@riducms/plugin";
-import type { SchemaField } from "@riducms/protocol";
+import type { SchemaField, ValidationIssue } from "@riducms/protocol";
 import type { FormController } from "@admin/core/forms/form-controller.svelte";
 import { captureFieldOccurrence } from "@admin/core/forms/field-occurrence";
 import { writePluginField } from "@admin/core/forms/plugin-field-write";
@@ -13,6 +13,7 @@ import { cloneFormValue } from "@admin/core/forms/form-schema";
 /** The form owns values. This lease owns registration, occurrence tracking and child capabilities. */
 export class PluginFieldBinding implements Binding<unknown> {
 	#lifetime: FieldBindingLifetime;
+	#releasePendingEdit?: () => void;
 	readonly form: PluginForm;
 	constructor(
 		private controller: FormController,
@@ -120,6 +121,32 @@ export class PluginFieldBinding implements Binding<unknown> {
 		this.assertEditable();
 		const schema = this.#lifetime.schema;
 		writePluginField(this.controller, schema, detached);
+	};
+	reportPendingEdit = (issues: readonly ValidationIssue[]) => {
+		this.assertActive();
+		this.#releasePendingEdit?.();
+		this.#releasePendingEdit = undefined;
+		if (issues.length === 0) return;
+		const reported = this.#lifetime.path;
+		// Keep each path relative to the field so pending input follows its logical row.
+		const pending = issues.map((issue) => ({
+			issue: { ...issue },
+			suffix:
+				issue.path === reported || issue.path.startsWith(`${reported}.`)
+					? issue.path.slice(reported.length)
+					: "",
+		}));
+		const stop = this.controller.registerPendingEdit(() => {
+			if (this.#lifetime.stale) return [];
+			const path = this.#lifetime.path;
+			return pending.map(({ issue, suffix }) => ({ ...issue, path: path + suffix }));
+		});
+		// A derived read can discover revocation; the stale report is already empty.
+		const unsubscribe = this.#lifetime.onDestroy(() => queueMicrotask(stop));
+		this.#releasePendingEdit = () => {
+			unsubscribe();
+			stop();
+		};
 	};
 	assertActive = () => {
 		if (this.stale)

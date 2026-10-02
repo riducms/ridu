@@ -5,7 +5,7 @@ import { initialEditorState } from "../src/field/rich-text-document";
 import { decodeRichTextDocument } from "../src/field/rich-text-value";
 
 describe("rich-text document hydration", () => {
-	it("supplies Lexical element defaults without mutating stored documents", () => {
+	it("supplies Lexical defaults without mutating stored documents", () => {
 		const stored = {
 			version: 1,
 			root: {
@@ -25,7 +25,16 @@ describe("rich-text document hydration", () => {
 				children: [
 					{
 						type: "paragraph",
-						children: [{ type: "text", text: "Portable rich text" }],
+						children: [
+							{
+								type: "text",
+								text: "Portable rich text",
+								format: 0,
+								detail: 0,
+								mode: "normal",
+								style: "",
+							},
+						],
 						direction: null,
 						format: "",
 						indent: 0,

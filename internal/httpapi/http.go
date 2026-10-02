@@ -993,6 +993,15 @@ func (api *API) global(writer http.ResponseWriter, request *http.Request, reques
 			DisableFallback: localeOptions.disableFallback, AllLocales: localeOptions.allLocales, ActorCollection: actorCollection,
 		}
 		if len(segments) == 3 {
+			if segments[2] == "count" {
+				count, err := api.config.Engine.CountVersions(request.Context(), key, slug, actor, versionLocaleOptions)
+				if err != nil {
+					api.writeError(writer, requestID, err)
+					return
+				}
+				writeJSON(writer, http.StatusOK, protocol.CountEnvelope{TotalDocs: count})
+				return
+			}
 			revision, err := strconv.Atoi(segments[2])
 			if err != nil || revision < 1 {
 				api.writeError(writer, requestID, &operationengine.Error{Code: "bad_request", Status: 400, Message: "version revision must be a positive integer"})
@@ -1699,6 +1708,15 @@ func (api *API) documentAction(writer http.ResponseWriter, request *http.Request
 			DisableFallback: localeOptions.disableFallback, AllLocales: localeOptions.allLocales, ActorCollection: actorCollection,
 		}
 		if len(segments) == 4 {
+			if segments[3] == "count" {
+				count, err := api.config.Engine.CountVersions(request.Context(), collectionName, id, actor, versionLocaleOptions)
+				if err != nil {
+					api.writeError(writer, requestID, err)
+					return
+				}
+				writeJSON(writer, http.StatusOK, protocol.CountEnvelope{TotalDocs: count})
+				return
+			}
 			revision, err := strconv.Atoi(segments[3])
 			if err != nil || revision < 1 {
 				api.writeError(writer, requestID, &operationengine.Error{Code: "bad_request", Status: 400, Message: "version revision must be a positive integer"})

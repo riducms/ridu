@@ -10,8 +10,9 @@ The normal gates retain small exact-behavior tests and repeated-definition compi
 Large 100/1,000/5,000-node hook workloads and the 1/10/50 definition compile matrix are explicit here.
 Go benchmarks report time and allocations; they do not by themselves fail on a performance
 regression. Generated growth tests assert structural bounds and real consumer compilation. The
-browser performance case enforces its typing/insert/reorder thresholds with one worker; ordinary
-E2E continues to prove nested editors mount lazily and retain their values.
+browser performance case enforces its typing/insert/reorder thresholds with one worker and records
+the mounted inline editor count. It disables Playwright tracing so DOM snapshots do not distort
+interaction timings. Ordinary E2E covers nested editor values and collapse behavior.
 
 The rich-text block aggregate report is a separate diagnostic with no pass/fail threshold. It
 prints JSON for create, read, update and retained-version costs across the fixed block/byte matrix:
