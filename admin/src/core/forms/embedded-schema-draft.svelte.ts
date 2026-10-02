@@ -51,6 +51,15 @@ export function copyEmbeddedSchemaPayload(
 	return copy;
 }
 
+/** Create an inline item without opening or registering an Apply/Cancel draft. */
+export function createEmbeddedSchemaPayload(field: SchemaField, scope: EmbeddedSchemaVariantScope) {
+	const { branch, block } = embeddedVariant(field, scope);
+	return initialFormValues(block.fields, {
+		[branch.identity]: crypto.randomUUID(),
+		[branch.discriminator]: block.slug,
+	});
+}
+
 export function createEmbeddedSchemaDraft(
 	parent: FormController,
 	getField: () => SchemaField,

@@ -7,7 +7,8 @@ import (
 )
 
 // richTextEditorOptionsCollection exercises rich-text presentation settings: a
-// pinned toolbar without a gutter, and an editor without block handles.
+// pinned toolbar without a gutter, and an editor without block handles. Its group
+// lets Paste field replace a mounted editor's content.
 func richTextEditorOptionsCollection() ridu.Collection {
 	return ridu.Collection{
 		Slug:   "editor-options",
@@ -24,6 +25,9 @@ func richTextEditorOptionsCollection() ridu.Collection {
 				HideAddBlockButton:        true,
 				HideInsertParagraphAtEnd:  true,
 			}}).Label("Minimal"),
+			field.Group("excerpt", field.Fields{
+				richtext.Field("body").Label("Excerpt body"),
+			}),
 		},
 		Access: ridu.CollectionAccess{
 			Create: allowRoles(roleAdministrator, roleEditor),

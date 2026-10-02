@@ -32,8 +32,8 @@ async function saveCollection(page: Page, collection: string) {
 }
 const saveArticle = (page: Page) => saveCollection(page, "block-articles");
 
-test("embedded card drag stays in its editor and can be undone", async ({ page }) => {
-	await page.setViewportSize({ width: 1440, height: 1200 });
+test("expanded inline block drag stays in its editor and can be undone", async ({ page }) => {
+	await page.setViewportSize({ width: 1440, height: 2200 });
 	await loginAsEditor(page);
 	const paragraph = (text: string) => ({
 		type: "paragraph",
@@ -56,12 +56,14 @@ test("embedded card drag stays in its editor and can be undone", async ({ page }
 	await page.goto(`/admin/collections/block-articles/${article.id}`);
 
 	const editor = bodyEditor(page);
+	const canvas = editor.locator("..");
 	const card = bodyCards(page).first();
 	const blocks = editor.locator(":scope > :not([data-lexical-cursor])");
-	const grip = page.locator('[data-field-path="body"]').getByRole("button", {
+	const dropLine = canvas.locator(":scope > .ridu-richtext-drop-line");
+	const grip = canvas.locator(":scope > .ridu-richtext-block-toolbar").getByRole("button", {
 		name: "Drag to move block",
 	});
-	await card.hover();
+	await card.locator(".ridu-richtext-block__header").hover();
 	await grip.hover();
 	const start = await grip.boundingBox();
 	const last = await editor.getByText("After card").boundingBox();
@@ -75,17 +77,19 @@ test("embedded card drag stays in its editor and can be undone", async ({ page }
 	await page.mouse.move(last!.x + last!.width / 2, last!.y + last!.height * 0.8, {
 		steps: 16,
 	});
-	await expect(page.locator('[data-field-path="body"] .ridu-richtext-drop-line')).toHaveCSS(
-		"opacity",
-		"0.8"
-	);
+	await page.mouse.move(last!.x + last!.width / 2 + 2, last!.y + last!.height * 0.8, {
+		steps: 4,
+	});
+	await expect(dropLine).toHaveCSS("opacity", "0.8");
 	await page.mouse.up();
-	await expect(blocks.last()).toContainText("Movable callout");
+	await expect(blocks.last().getByRole("textbox", { name: "Callout title" })).toHaveValue(
+		"Movable callout"
+	);
 	await expect(editor).toBeFocused();
 
 	const otherEditor = page.locator('[data-field-path="localizedBody"] .ridu-richtext-content');
 	await expect(otherEditor).toContainText("Other editor");
-	await card.hover();
+	await card.locator(".ridu-richtext-block__header").hover();
 	await grip.hover();
 	const secondStart = await grip.boundingBox();
 	const other = await otherEditor.boundingBox();
@@ -106,22 +110,23 @@ test("embedded card drag stays in its editor and can be undone", async ({ page }
 	await page.mouse.move(other!.x + other!.width / 2, other!.y + other!.height / 2, {
 		steps: 16,
 	});
-	await expect(page.locator('[data-field-path="body"] .ridu-richtext-drop-line')).toHaveCSS(
-		"opacity",
-		"0"
-	);
+	await expect(dropLine).toHaveCSS("opacity", "0");
 	await page.mouse.up();
-	await expect(blocks.last()).toContainText("Movable callout");
+	await expect(blocks.last().getByRole("textbox", { name: "Callout title" })).toHaveValue(
+		"Movable callout"
+	);
 	await expect(otherEditor.locator(":scope > :not([data-lexical-cursor])")).toHaveCount(1);
 	await expect(otherEditor.locator(":scope > p")).toHaveText("Other editor");
 	await expect(otherEditor.locator(":scope > .ridu-richtext-embedded")).toHaveCount(0);
 
 	await editor.focus();
 	await editor.press("ControlOrMeta+z");
-	await expect(blocks.nth(1)).toContainText("Movable callout");
+	await expect(blocks.nth(1).getByRole("textbox", { name: "Callout title" })).toHaveValue(
+		"Movable callout"
+	);
 });
 
-test("schema blocks insert, validate, apply, cancel, duplicate, undo, remove, and reload", async ({
+test("schema blocks edit inline, validate, duplicate, undo, remove, and reload", async ({
 	page,
 }) => {
 	test.setTimeout(90_000);
@@ -131,47 +136,42 @@ test("schema blocks insert, validate, apply, cancel, duplicate, undo, remove, an
 	await page.goto("/admin/collections/block-articles/create");
 	await page.getByRole("textbox", { name: "Title", exact: true }).fill("Structured authoring");
 	const editor = bodyEditor(page);
-	let drawer = await insertBlock(page, editor, "Callout");
-	await drawer.getByRole("button", { name: "Cancel", exact: true }).click();
-	await expect(bodyCards(page)).toHaveCount(0);
-
-	drawer = await insertBlock(page, editor, "Callout");
-	await drawer.getByRole("button", { name: "Apply", exact: true }).click();
-	await expect(drawer).toBeVisible();
-	await expect(drawer.getByRole("textbox", { name: "Callout title", exact: true })).toBeFocused();
-	await drawer.getByRole("textbox", { name: "Callout title", exact: true }).fill("First callout");
-	await expect(drawer.getByRole("textbox", { name: "Caption", exact: true })).toHaveValue(
+	const callout = await insertBlock(page, editor, "Callout");
+	await expect(callout.getByRole("button", { name: "Collapse Callout" })).toHaveAttribute(
+		"aria-expanded",
+		"true"
+	);
+	await expect(callout.getByRole("textbox", { name: "Callout title", exact: true })).toBeVisible();
+	await expect(callout.getByRole("textbox", { name: "Caption", exact: true })).toHaveValue(
 		"Helpful context"
 	);
-	await drawer.getByRole("button", { name: "Apply", exact: true }).click();
+	await submitDocumentForm(page);
+	await expect(callout.getByRole("textbox", { name: "Callout title", exact: true })).toBeFocused();
+	await expect(callout).toHaveAttribute("data-invalid", "true");
+	await callout.getByRole("textbox", { name: "Callout title", exact: true }).fill("First callout");
 	await expect(bodyCards(page)).toHaveCount(1);
-	await expect(page.getByRole("textbox", { name: "Detail", exact: true })).toHaveCount(0);
 	const originalKey = await bodyCards(page).first().getAttribute("data-block-key");
 	expect(originalKey).toBeTruthy();
 
-	await bodyCards(page).first().getByRole("button", { name: "Edit", exact: true }).click();
-	drawer = page.getByRole("dialog", { name: "Edit Callout", exact: true });
-	await drawer
-		.getByRole("textbox", { name: "Callout title", exact: true })
-		.fill("Discard this edit");
-	await drawer.getByRole("button", { name: "Cancel", exact: true }).click();
-	await expect(bodyCards(page).first()).toContainText("First callout");
-	await bodyCards(page)
-		.first()
-		.getByRole("button", { name: "Select Callout block" })
-		.press("Enter");
-	drawer = page.getByRole("dialog", { name: "Edit Callout", exact: true });
-	await drawer.getByRole("textbox", { name: "Callout title", exact: true }).fill("Applied edit");
-	await drawer.getByRole("button", { name: "Apply", exact: true }).click();
-	await expect(bodyCards(page).first()).toContainText("Applied edit");
+	await callout.getByRole("textbox", { name: "Caption", exact: true }).focus();
+	await callout.getByRole("textbox", { name: "Callout title", exact: true }).fill("Edited inline");
+	await expect(callout.getByRole("textbox", { name: "Callout title", exact: true })).toHaveValue(
+		"Edited inline"
+	);
 	await editor.focus();
 	await page.keyboard.press("ControlOrMeta+z");
-	await expect(bodyCards(page).first()).toContainText("First callout");
+	await expect(callout.getByRole("textbox", { name: "Callout title", exact: true })).toHaveValue(
+		"First callout"
+	);
 	await expect(bodyCards(page).first()).toHaveAttribute("data-block-key", originalKey!);
 	await page.keyboard.press("ControlOrMeta+Shift+z");
-	await expect(bodyCards(page).first()).toContainText("Applied edit");
+	await expect(callout.getByRole("textbox", { name: "Callout title", exact: true })).toHaveValue(
+		"Edited inline"
+	);
 	await page.keyboard.press("ControlOrMeta+z");
-	await expect(bodyCards(page).first()).toContainText("First callout");
+	await expect(callout.getByRole("textbox", { name: "Callout title", exact: true })).toHaveValue(
+		"First callout"
+	);
 	await bodyCards(page).first().getByRole("button", { name: "Duplicate", exact: true }).click();
 	await expect(bodyCards(page)).toHaveCount(2);
 	expect(await bodyCards(page).last().getAttribute("data-block-key")).not.toBe(originalKey);
@@ -204,12 +204,91 @@ test("schema blocks insert, validate, apply, cancel, duplicate, undo, remove, an
 	await page.reload();
 	await expect(bodyCards(page)).toHaveCount(1);
 	await expect(bodyCards(page).first()).toHaveAttribute("data-block-key", originalKey!);
-	await expect(bodyCards(page).first()).toContainText("First callout");
+	await expect(bodyCards(page).first().getByRole("textbox", { name: "Callout title" })).toHaveValue(
+		"First callout"
+	);
 	expect(errors.pageErrors).toEqual([]);
 	expect(errors.consoleErrors).toEqual([]);
 });
 
-test("lazy nested editors keep independent histories and commit only with the outer block", async ({
+test("inline text fields and nested rich text retain focus through sequential typing", async ({
+	page,
+}) => {
+	await loginAsEditor(page);
+	await page.goto("/admin/collections/block-articles/create");
+	await page.getByRole("textbox", { name: "Title", exact: true }).fill("Sequential typing");
+	const callout = await insertBlock(page, bodyEditor(page), "Callout");
+	const title = callout.getByRole("textbox", { name: "Callout title", exact: true });
+	await title.pressSequentially("Typed callout", { delay: 10 });
+	await expect(title).toHaveValue("Typed callout");
+	await expect(title).toBeFocused();
+	const caption = callout.getByRole("textbox", { name: "Caption", exact: true });
+	await caption.fill("");
+	await caption.pressSequentially("Typed caption", { delay: 10 });
+	await expect(caption).toHaveValue("Typed caption");
+	await expect(caption).toBeFocused();
+	const addRow = callout.getByRole("button", { name: "Add row", exact: true });
+	await addRow.focus();
+	await addRow.press("ControlOrMeta+z");
+	await expect(caption).not.toHaveValue("Typed caption");
+	await addRow.press("ControlOrMeta+Shift+z");
+	await expect(caption).toHaveValue("Typed caption");
+	const detail = callout.getByRole("textbox", { name: "Detail", exact: true });
+	await detail.click();
+	await detail.pressSequentially("Nested body text", { delay: 10 });
+	await expect(detail).toContainText("Nested body text");
+	await expect(detail).toBeFocused();
+	const saved = await saveArticle(page);
+	const node = saved.body.root.children.find((entry: { type: string }) => entry.type === "block");
+	expect(node.fields).toMatchObject({
+		blockType: "callout",
+		title: "Typed callout",
+		caption: "Typed caption",
+	});
+	expect(node.fields.detail.root.children[0].children[0].text).toBe("Nested body text");
+});
+
+test("read-only users can inspect inline block fields without edit actions", async ({
+	browser,
+	page,
+}) => {
+	await loginAsEditor(page);
+	const created = await page.request.post("/api/collections/block-articles?draft=true", {
+		data: {
+			title: "Locked inline block",
+			body: richDocument([block("callout", { title: "Visible read-only value" })]),
+		},
+	});
+	expect(created.ok(), await created.text()).toBe(true);
+	const original = (await created.json()).doc;
+
+	const viewer = await browser.newContext();
+	try {
+		const view = await viewer.newPage();
+		const auth = await view.request.post("/api/auth/users/login", {
+			data: { email: "demo@riducms.local", password: "ridu-demo" },
+		});
+		expect(auth.ok(), await auth.text()).toBe(true);
+		await view.goto(`/admin/collections/block-articles/${original.id}`);
+		await expect(
+			view.getByRole("button", { name: "Open account menu for Demo Author" })
+		).toBeVisible();
+		await expect(bodyEditor(view)).toHaveAttribute("contenteditable", "false");
+		const callout = bodyCards(view).first();
+		await expect(callout.getByRole("textbox", { name: "Callout title" })).toHaveValue(
+			"Visible read-only value"
+		);
+		await expect(callout.getByRole("textbox", { name: "Callout title" })).not.toBeEditable();
+		await expect(callout.getByRole("button", { name: "Duplicate" })).toHaveCount(0);
+		await expect(callout.getByRole("button", { name: "Remove" })).toHaveCount(0);
+		await callout.getByRole("button", { name: "Collapse Callout" }).click();
+		await expect(callout.getByRole("button", { name: "Expand Callout" })).toBeVisible();
+	} finally {
+		await viewer.close();
+	}
+});
+
+test("nested inline editors keep independent histories and save with the outer block", async ({
 	page,
 }) => {
 	test.setTimeout(90_000);
@@ -228,23 +307,17 @@ test("lazy nested editors keep independent histories and commit only with the ou
 	await extra.fill("Extra text");
 	const inner = await insertBlock(page, detail, "CTA");
 	await inner.getByRole("textbox", { name: /^CTA label/ }).fill("Read more");
-	await inner.getByRole("button", { name: "Apply", exact: true }).click();
 	await expect(detail.locator('[data-block-type="cta"]')).toHaveCount(1);
 	await extra.focus();
 	await page.keyboard.press("ControlOrMeta+z");
 	await expect(detail.locator('[data-block-type="cta"]')).toHaveCount(1);
 	await extra.fill("Independent extra text");
-	await outer.getByRole("button", { name: "Apply", exact: true }).click();
-	await expect(page.getByRole("textbox", { name: "Detail", exact: true })).toHaveCount(0);
-	await bodyCards(page).first().getByRole("button", { name: "Edit", exact: true }).click();
-	const reopened = page.getByRole("dialog", { name: "Edit Callout", exact: true });
-	await expect(reopened.getByRole("textbox", { name: "Detail", exact: true })).toContainText(
+	await expect(outer.getByRole("textbox", { name: "Detail", exact: true })).toContainText(
 		"Read more"
 	);
-	await expect(reopened.getByRole("textbox", { name: "Extra detail", exact: true })).toContainText(
+	await expect(outer.getByRole("textbox", { name: "Extra detail", exact: true })).toContainText(
 		"Independent extra text"
 	);
-	await reopened.getByRole("button", { name: "Cancel", exact: true }).click();
 	const stored = await saveArticle(page);
 	const node = stored.body.root.children.find((node: { type: string }) => node.type === "block");
 	expect(
@@ -272,20 +345,18 @@ test("shared child localization and whole-document locales preserve block identi
 	expect(created.ok(), await created.text()).toBe(true);
 	const original = (await created.json()).doc;
 	await page.goto(`/admin/collections/block-articles/${original.id}?locale=fr`);
-	await bodyCards(page).first().getByRole("button", { name: "Edit", exact: true }).click();
-	let drawer = page.getByRole("dialog", { name: "Edit CTA", exact: true });
-	await expect(drawer.getByRole("textbox", { name: /^CTA label/ })).toHaveValue(
+	const shared = bodyCards(page).first();
+	await expect(shared.getByRole("textbox", { name: /^CTA label/ })).toHaveValue(
 		"English shared CTA"
 	);
-	await drawer.getByRole("textbox", { name: /^CTA label/ }).fill("CTA partagé français");
-	await drawer.getByRole("button", { name: "Apply", exact: true }).click();
+	await shared.getByRole("textbox", { name: /^CTA label/ }).fill("CTA partagé français");
 	const localizedCards = page.locator(
-		'[data-field-path="localizedBody"] .ridu-richtext-embedded-card'
+		'[data-field-path="localizedBody"] article.ridu-richtext-block'
 	);
-	await localizedCards.first().getByRole("button", { name: "Edit", exact: true }).click();
-	drawer = page.getByRole("dialog", { name: "Edit CTA", exact: true });
-	await drawer.getByRole("textbox", { name: /^CTA label/ }).fill("Document français");
-	await drawer.getByRole("button", { name: "Apply", exact: true }).click();
+	await localizedCards
+		.first()
+		.getByRole("textbox", { name: /^CTA label/ })
+		.fill("Document français");
 	await saveArticle(page);
 	const all = (
 		await (
@@ -303,8 +374,12 @@ test("shared child localization and whole-document locales preserve block identi
 	expect(all.localizedBody.en.root.children[0].fields.label).toBe("English document CTA");
 	expect(all.localizedBody.fr.root.children[0].fields.label).toBe("Document français");
 	await chooseContentLocale(page, "English", "en");
-	await expect(bodyCards(page).first()).toContainText("English shared CTA");
-	await expect(localizedCards.first()).toContainText("English document CTA");
+	await expect(shared.getByRole("textbox", { name: /^CTA label/ })).toHaveValue(
+		"English shared CTA"
+	);
+	await expect(localizedCards.first().getByRole("textbox", { name: /^CTA label/ })).toHaveValue(
+		"English document CTA"
+	);
 });
 
 test("pending validation blocks edits and received issues follow keyboard reorder", async ({
@@ -326,10 +401,9 @@ test("pending validation blocks edits and received issues follow keyboard reorde
 	await page.goto(`/admin/collections/block-articles/${original.id}`);
 	const key = original.body.root.children[0].fields._key;
 	const failing = page.locator(`[data-block-key="${key}"]`);
-	await failing.getByRole("button", { name: "Edit", exact: true }).click();
-	let drawer = page.getByRole("dialog", { name: "Edit Callout", exact: true });
-	await drawer.getByRole("textbox", { name: "Callout title", exact: true }).fill("invalid");
-	await drawer.getByRole("button", { name: "Apply", exact: true }).click();
+	await failing.getByRole("textbox", { name: "Callout title", exact: true }).fill("invalid");
+	await failing.getByRole("button", { name: "Collapse Callout" }).click();
+	await expect(failing.getByRole("textbox", { name: "Callout title", exact: true })).toHaveCount(0);
 	let release!: () => void;
 	let captured!: () => void;
 	const waiting = new Promise<void>((resolve) => {
@@ -350,22 +424,22 @@ test("pending validation blocks edits and received issues follow keyboard reorde
 	});
 	await submitDocumentForm(page);
 	await responseReady;
-	await expect(failing.getByRole("button", { name: "Select Callout block" })).toBeDisabled();
 	await expect(bodyEditor(page)).toHaveAttribute("contenteditable", "false");
 	release();
 	await expect(failing).toHaveAttribute("data-invalid", "true");
+	await expect(failing.getByRole("button", { name: "Collapse Callout" })).toHaveAttribute(
+		"aria-expanded",
+		"true"
+	);
+	await expect(failing.getByRole("textbox", { name: "Callout title", exact: true })).toBeFocused();
 	await failing.getByRole("button", { name: "Select Callout block" }).press("Alt+Shift+ArrowDown");
 	await expect(bodyCards(page).last()).toHaveAttribute("data-block-key", key);
 	await expect(failing).toHaveAttribute("data-invalid", "true");
 	await expect(bodyCards(page).first()).toHaveAttribute("data-invalid", "false");
-	await failing.getByRole("button", { name: "Edit", exact: true }).click();
-	drawer = page.getByRole("dialog", { name: "Edit Callout", exact: true });
-	await expect(
-		drawer.getByText("Use a descriptive callout title", { exact: true }).first()
-	).toBeVisible();
-	await expect(drawer.getByRole("textbox", { name: "Callout title", exact: true })).toBeFocused();
-	await drawer.getByRole("textbox", { name: "Callout title", exact: true }).fill("Corrected title");
-	await drawer.getByRole("button", { name: "Apply", exact: true }).click();
+	await expect(failing.getByText("Use a descriptive callout title", { exact: true })).toBeVisible();
+	await failing
+		.getByRole("textbox", { name: "Callout title", exact: true })
+		.fill("Corrected title");
 	await page.unroute(`**/api/collections/block-articles/${original.id}*`);
 	await saveArticle(page);
 });
@@ -483,7 +557,9 @@ test("schema removal and rename preserve stored content until explicit recovery"
 		const restored = await page.request.post("/__ridu-test/blocks-schema", { headers, data: {} });
 		expect(restored.ok(), await restored.text()).toBe(true);
 		await page.reload();
-		await expect(bodyCards(page).first()).toContainText("Retain this historical payload");
+		await expect(
+			bodyCards(page).first().getByRole("textbox", { name: "Callout title" })
+		).toHaveValue("Retain this historical payload");
 		await expect(bodyCards(page).first()).toHaveAttribute(
 			"data-block-key",
 			original.body.root.children[0].fields._key
@@ -491,7 +567,7 @@ test("schema removal and rename preserve stored content until explicit recovery"
 	}
 });
 
-test("100 mixed cards keep nested editors lazy across initial load and reload", async ({
+test("100 mixed inline blocks expose their fields and preserve collapsed editor state", async ({
 	page,
 }) => {
 	await loginAsEditor(page);
@@ -516,10 +592,20 @@ test("100 mixed cards keep nested editors lazy across initial load and reload", 
 	const document = (await created.json()).doc;
 	await page.goto(`/admin/collections/block-articles/${document.id}`);
 	await expect(bodyCards(page)).toHaveCount(100);
-	await expect(page.locator('.ridu-richtext-content[contenteditable="true"]')).toHaveCount(2);
+	const first = bodyCards(page).first();
+	await expect(first.getByRole("textbox", { name: "Detail", exact: true })).toBeVisible();
+	await expect(first.getByRole("textbox", { name: "Extra detail", exact: true })).toBeVisible();
+	await expect(first.locator('.ridu-richtext-content[contenteditable="true"]')).toHaveCount(2);
+	await first.getByRole("button", { name: "Collapse Callout" }).click();
+	await expect(first.getByRole("textbox", { name: "Detail", exact: true })).toHaveCount(0);
+	await expect(first.locator('.ridu-richtext-content[contenteditable="true"]')).toHaveCount(2);
+	await first.getByRole("button", { name: "Expand Callout" }).click();
+	await expect(first.getByRole("textbox", { name: "Detail", exact: true })).toBeVisible();
 	await page.reload();
 	await expect(bodyCards(page)).toHaveCount(100);
-	await expect(page.locator('.ridu-richtext-content[contenteditable="true"]')).toHaveCount(2);
+	await expect(
+		bodyCards(page).first().getByRole("textbox", { name: "Detail", exact: true })
+	).toBeVisible();
 });
 
 test("all block variants use ordinary references/uploads and survive publish and restore", async ({
@@ -529,23 +615,20 @@ test("all block variants use ordinary references/uploads and survive publish and
 	await loginAsEditor(page);
 	await page.goto("/admin/collections/block-articles/create");
 	await page.getByRole("textbox", { name: "Title", exact: true }).fill("Release article embeds");
-	let drawer = await insertBlock(page, bodyEditor(page), "CTA");
-	await drawer.getByRole("textbox", { name: /^CTA label/ }).fill("Explore Ridu");
-	await drawer.getByRole("combobox", { name: "Destination", exact: true }).click();
+	let embedded = await insertBlock(page, bodyEditor(page), "CTA");
+	await embedded.getByRole("textbox", { name: /^CTA label/ }).fill("Explore Ridu");
+	await embedded.getByRole("combobox", { name: "Destination", exact: true }).click();
 	await page.getByRole("option", { name: /About Ridu/ }).click();
-	await drawer.getByRole("button", { name: "Apply", exact: true }).click();
-	drawer = await insertBlock(page, bodyEditor(page), "Media");
-	await drawer.getByRole("button", { name: "Apply", exact: true }).click();
-	await expect(drawer.getByRole("button", { name: "Create New", exact: true })).toBeFocused();
-	await drawer.getByRole("button", { name: "Choose from existing", exact: true }).click();
+	embedded = await insertBlock(page, bodyEditor(page), "Media");
+	await embedded.getByRole("button", { name: "Choose from existing", exact: true }).click();
 	await page
 		.getByRole("dialog", { name: "Select block asset", exact: true })
 		.getByRole("button", { name: "ridu-cover.png", exact: true })
 		.click();
-	await drawer.getByRole("button", { name: "Apply", exact: true }).click();
-	drawer = await insertBlock(page, bodyEditor(page), "Callout");
-	await drawer.getByRole("textbox", { name: "Callout title", exact: true }).fill("Release callout");
-	await drawer.getByRole("button", { name: "Apply", exact: true }).click();
+	embedded = await insertBlock(page, bodyEditor(page), "Callout");
+	await embedded
+		.getByRole("textbox", { name: "Callout title", exact: true })
+		.fill("Release callout");
 	const saved = await saveArticle(page);
 	expect(saved._status).toBe("draft");
 	const savedBlocks = saved.body.root.children.filter(
@@ -564,10 +647,10 @@ test("all block variants use ordinary references/uploads and survive publish and
 	await page.getByRole("button", { name: "Publish changes", exact: true }).click();
 	expect((await publishResponse).ok()).toBe(true);
 	await expect(page.getByRole("button", { name: "Publish changes", exact: true })).toBeVisible();
-	await bodyCards(page).last().getByRole("button", { name: "Edit", exact: true }).click();
-	drawer = page.getByRole("dialog", { name: "Edit Callout", exact: true });
-	await drawer.getByRole("textbox", { name: "Callout title", exact: true }).fill("Later revision");
-	await drawer.getByRole("button", { name: "Apply", exact: true }).click();
+	await bodyCards(page)
+		.last()
+		.getByRole("textbox", { name: "Callout title", exact: true })
+		.fill("Later revision");
 	const publishedAgain = page.waitForResponse(
 		(response) =>
 			response.request().method() === "POST" &&
@@ -578,7 +661,9 @@ test("all block variants use ordinary references/uploads and survive publish and
 	await page.goto(`/admin/collections/block-articles/${saved.id}/versions/${saved._revision}`);
 	await page.getByRole("button", { name: "Restore this version", exact: true }).click();
 	await page.getByRole("button", { name: "Confirm", exact: true }).click();
-	await expect(bodyCards(page).last()).toContainText("Release callout");
+	await expect(bodyCards(page).last().getByRole("textbox", { name: "Callout title" })).toHaveValue(
+		"Release callout"
+	);
 	const restored = (
 		await (await page.request.get(`/api/collections/block-articles/${saved.id}`)).json()
 	).doc;
@@ -586,48 +671,41 @@ test("all block variants use ordinary references/uploads and survive publish and
 	expect(restored.body).toEqual(saved.body);
 });
 
-test("collapsed block fields mount inner editors only on demand and retain their draft", async ({
+test("nested disclosures in inline blocks mount editors on demand and retain their draft", async ({
 	page,
 }) => {
 	await loginAsEditor(page);
 	await page.goto("/admin/collections/block-articles/create");
 	await page.getByRole("textbox", { name: "Title", exact: true }).fill("Lazy advanced editor");
-	const drawer = await insertBlock(page, bodyEditor(page), "Callout");
-	await drawer
+	const callout = await insertBlock(page, bodyEditor(page), "Callout");
+	await callout
 		.getByRole("textbox", { name: "Callout title", exact: true })
 		.fill("Advanced callout");
-	await expect(drawer.getByRole("textbox", { name: "Advanced detail", exact: true })).toHaveCount(
+	await expect(callout.getByRole("textbox", { name: "Advanced detail", exact: true })).toHaveCount(
 		0
 	);
-	const section = drawer.locator("summary").filter({ hasText: /Advanced content/i });
+	const section = callout.locator("summary").filter({ hasText: /Advanced content/i });
 	await section.click();
-	const advanced = drawer.getByRole("textbox", { name: "Advanced detail", exact: true });
+	const advanced = callout.getByRole("textbox", { name: "Advanced detail", exact: true });
 	await expect(advanced).toBeVisible();
 	await advanced.fill("Only mounted when opened");
 	await section.click();
 	await expect(advanced).toHaveCount(0);
 	await section.click();
 	await expect(advanced).toContainText("Only mounted when opened");
-	await drawer.getByRole("button", { name: "Apply", exact: true }).click();
-	await bodyCards(page).first().getByRole("button", { name: "Edit", exact: true }).click();
-	const reopened = page.getByRole("dialog", { name: "Edit Callout", exact: true });
-	await expect(reopened.getByRole("textbox", { name: "Advanced detail", exact: true })).toHaveCount(
+	await callout.getByRole("button", { name: "Collapse Callout" }).click();
+	await expect(callout.getByRole("textbox", { name: "Advanced detail", exact: true })).toHaveCount(
 		0
 	);
-	await reopened
-		.locator("summary")
-		.filter({ hasText: /Advanced content/i })
-		.click();
+	await callout.getByRole("button", { name: "Expand Callout" }).click();
+	await expect(advanced).toBeVisible();
 	await expect(
-		reopened.getByRole("textbox", { name: "Advanced detail", exact: true })
+		callout.getByRole("textbox", { name: "Advanced detail", exact: true })
 	).toContainText("Only mounted when opened");
-	await reopened.getByRole("button", { name: "Cancel", exact: true }).click();
 	await saveArticle(page);
 });
 
-test("drawer drafts block outer submission, preview only applied edits, and preserve conflicts", async ({
-	page,
-}) => {
+test("inline block edits update preview before save and preserve conflicts", async ({ page }) => {
 	test.setTimeout(60_000);
 	await loginAsEditor(page);
 	const created = await page.request.post("/api/collections/block-articles?draft=true", {
@@ -642,11 +720,7 @@ test("drawer drafts block outer submission, preview only applied edits, and pres
 	await page.getByRole("button", { name: "Live preview", exact: true }).click();
 	const preview = page.frameLocator('iframe[title="Live preview"]');
 	await expect(preview.locator("[data-preview-blocks]")).toContainText("Saved callout");
-	await bodyCards(page).first().getByRole("button", { name: "Edit", exact: true }).click();
-	let drawer = page.getByRole("dialog", { name: "Edit Callout", exact: true });
-	await drawer
-		.getByRole("textbox", { name: "Callout title", exact: true })
-		.fill("Unapplied drawer title");
+	const callout = bodyCards(page).first();
 	let writes = 0;
 	page.on("request", (request) => {
 		if (
@@ -655,31 +729,15 @@ test("drawer drafts block outer submission, preview only applied edits, and pres
 		)
 			writes++;
 	});
-	await page
-		.locator("form")
-		.filter({ has: page.locator('input[name="title"]') })
-		.evaluate((form) => (form as HTMLFormElement).requestSubmit());
-	await expect(
-		page.getByText("Apply or cancel the open block editor before saving this document.").first()
-	).toBeAttached();
-	await expect(drawer).toBeVisible();
-	expect(writes).toBe(0);
-	await expect(preview.locator("[data-preview-blocks]")).toContainText("Saved callout");
-	await drawer
+	await callout
 		.getByRole("textbox", { name: "Callout title", exact: true })
-		.press("Alt+Shift+ArrowDown");
-	await expect(bodyCards(page).first()).toHaveAttribute(
+		.fill("Inline preview title");
+	await expect(preview.locator("[data-preview-blocks]")).toContainText("Inline preview title");
+	expect(writes).toBe(0);
+	await expect(callout).toHaveAttribute(
 		"data-block-key",
 		original.body.root.children[0].fields._key
 	);
-	await drawer.getByRole("button", { name: "Cancel", exact: true }).click();
-	await bodyCards(page).first().getByRole("button", { name: "Edit", exact: true }).click();
-	drawer = page.getByRole("dialog", { name: "Edit Callout", exact: true });
-	await drawer
-		.getByRole("textbox", { name: "Callout title", exact: true })
-		.fill("Applied preview title");
-	await drawer.getByRole("button", { name: "Apply", exact: true }).click();
-	await expect(preview.locator("[data-preview-blocks]")).toContainText("Applied preview title");
 	const remote = await page.request.patch(`/api/collections/block-articles/${original.id}`, {
 		headers: { "If-Match": `"${original._revision}"` },
 		data: { caption: "Remote sibling edit" },
@@ -692,7 +750,9 @@ test("drawer drafts block outer submission, preview only applied edits, and pres
 	);
 	await submitDocumentForm(page);
 	expect((await failedSave).status()).toBe(409);
-	await expect(bodyCards(page).first()).toContainText("Applied preview title");
+	await expect(callout.getByRole("textbox", { name: "Callout title", exact: true })).toHaveValue(
+		"Inline preview title"
+	);
 	const stored = (
 		await (await page.request.get(`/api/collections/block-articles/${original.id}`)).json()
 	).doc;
@@ -700,9 +760,7 @@ test("drawer drafts block outer submission, preview only applied edits, and pres
 	expect(stored.body.root.children[0].fields.title).toBe("Saved callout");
 });
 
-test("toolbar schema picker cancels without inserting a placeholder and inserts at its target", async ({
-	page,
-}) => {
+test("toolbar schema picker inserts inline at its target and removes cleanly", async ({ page }) => {
 	await loginAsEditor(page);
 	const errors = observePageErrors(page);
 	const created = await page.request.post("/api/collections/block-articles?draft=true", {
@@ -730,20 +788,20 @@ test("toolbar schema picker cancels without inserting a placeholder and inserts 
 	let picker = page.getByRole("dialog", { name: "Insert block", exact: true });
 	await picker.getByRole("combobox", { name: "Filter blocks" }).fill("Callout");
 	await picker.getByRole("option", { name: "Callout", exact: true }).click();
-	let drawer = page.getByRole("dialog", { name: "Insert Callout", exact: true });
-	await drawer.getByRole("button", { name: "Cancel", exact: true }).click();
-	await expect(editor.locator(":scope > *")).toHaveCount(1);
+	await expect(bodyCards(page)).toHaveCount(1);
+	await bodyCards(page).first().getByRole("button", { name: "Remove", exact: true }).click();
 	await expect(bodyCards(page)).toHaveCount(0);
+	await expect(editor.locator(":scope > p").first()).toHaveText("Insertion anchor");
 	await editor.locator("p").first().hover();
 	await toolbar.getByRole("button", { name: "Add block", exact: true }).click();
 	picker = page.getByRole("dialog", { name: "Insert block", exact: true });
 	await picker.getByRole("combobox", { name: "Filter blocks" }).fill("Callout");
 	await picker.getByRole("option", { name: "Callout", exact: true }).click();
-	drawer = page.getByRole("dialog", { name: "Insert Callout", exact: true });
-	await drawer
+	const callout = bodyCards(page).first();
+	await expect(callout).toBeVisible();
+	await callout
 		.getByRole("textbox", { name: "Callout title", exact: true })
 		.fill("Inserted after anchor");
-	await drawer.getByRole("button", { name: "Apply", exact: true }).click();
 	await expect(bodyCards(page)).toHaveCount(1);
 	const saved = await saveArticle(page);
 	expect(saved.body.root.children.map((node: { type: string }) => node.type)).toEqual([
@@ -785,7 +843,8 @@ test("a historical variant remains exportable when the loaded admin schema loses
 	});
 	await page.goto(`/admin/collections/block-articles/${original.id}`);
 	const card = bodyCards(page).first();
-	await expect(card.getByRole("button", { name: "Edit", exact: true })).toBeDisabled();
+	await expect(card.getByRole("textbox", { name: "Callout title", exact: true })).toHaveCount(0);
+	await expect(card.getByRole("alert")).toBeVisible();
 	const downloadEvent = page.waitForEvent("download");
 	await card.getByRole("button", { name: "Export block JSON", exact: true }).click();
 	const download = await downloadEvent;
@@ -843,24 +902,27 @@ test("draft validation reveals an invalid child through multiple lazy disclosure
 		await route.fulfill({ response, json: envelope });
 	});
 	await page.goto(`/admin/collections/block-articles/${original.id}`);
-	await bodyCards(page).first().getByRole("button", { name: "Edit", exact: true }).click();
-	const drawer = page.getByRole("dialog", { name: "Edit Callout", exact: true });
-	const outer = drawer.locator('[data-field-collapsible^="outer-links"]');
-	const inner = drawer.locator('[data-field-collapsible^="inner-label"]');
+	const callout = bodyCards(page).first();
+	const outer = callout.locator('[data-field-collapsible^="outer-links"]');
+	const inner = callout.locator('[data-field-collapsible^="inner-label"]');
 	await expect(outer).not.toHaveAttribute("open");
 	await outer.locator(":scope > summary").click();
 	await inner.locator(":scope > summary").click();
-	const label = drawer.getByRole("textbox", { name: "Label", exact: true });
+	const label = callout.getByRole("textbox", { name: "Label", exact: true });
 	await label.fill("");
 	await inner.locator(":scope > summary").click();
 	await outer.locator(":scope > summary").click();
 	await expect(label).toHaveCount(0);
-	await drawer.getByRole("button", { name: "Apply", exact: true }).click();
+	await callout.getByRole("button", { name: "Collapse Callout" }).click();
+	await submitDocumentForm(page);
+	await expect(callout.getByRole("button", { name: "Collapse Callout" })).toHaveAttribute(
+		"aria-expanded",
+		"true"
+	);
 	await expect(outer).toHaveAttribute("open");
 	await expect(inner).toHaveAttribute("open");
 	await expect(label).toBeFocused();
 	await label.fill("Corrected");
-	await drawer.getByRole("button", { name: "Apply", exact: true }).click();
 	const stored = await saveArticle(page);
 	expect(stored.body.root.children[0].fields.links[0].label).toBe("Corrected");
 });
@@ -944,12 +1006,12 @@ test("release page composes Hero Content Media and CTA with rich-text embeds and
 	await page.locator('input[name="layout.1.title"]').fill("Structured content");
 	const editor = page.getByRole("textbox", { name: "Body", exact: true });
 	await editor.fill("Portable page introduction");
-	let drawer = await insertBlock(page, editor, "Callout");
-	await drawer.getByRole("textbox", { name: "Callout title", exact: true }).fill("Layout callout");
-	await drawer.getByRole("button", { name: "Apply", exact: true }).click();
-	drawer = await insertBlock(page, editor, "CTA");
-	await drawer.getByRole("textbox", { name: /^CTA label/ }).fill("Embedded action");
-	await drawer.getByRole("button", { name: "Apply", exact: true }).click();
+	let inlineBlock = await insertBlock(page, editor, "Callout");
+	await inlineBlock
+		.getByRole("textbox", { name: "Callout title", exact: true })
+		.fill("Layout callout");
+	inlineBlock = await insertBlock(page, editor, "CTA");
+	await inlineBlock.getByRole("textbox", { name: /^CTA label/ }).fill("Embedded action");
 	await layout
 		.locator('[data-field-path="layout.2.asset"]')
 		.getByRole("button", { name: "Choose from existing", exact: true })
@@ -983,7 +1045,11 @@ test("release page composes Hero Content Media and CTA with rich-text embeds and
 		"cta",
 	]);
 	await page.reload();
-	await expect(editor).toContainText("Layout callout");
+	await expect(
+		editor.locator('article[data-block-type="callout"]').getByRole("textbox", {
+			name: "Callout title",
+		})
+	).toHaveValue("Layout callout");
 	await chooseContentLocale(page, "French", "fr");
 	await page.locator('input[name="layout.0.heading"]').fill("En-tête français");
 	await page.locator('input[name="layout.3.label"]').fill("Explorer la page");
@@ -1010,7 +1076,11 @@ test("release page composes Hero Content Media and CTA with rich-text embeds and
 	await page.goto(`/admin/collections/block-pages/${saved.id}/versions/${saved._revision}`);
 	await page.getByRole("button", { name: "Restore this version", exact: true }).click();
 	await page.getByRole("button", { name: "Confirm", exact: true }).click();
-	await expect(editor).toContainText("Layout callout");
+	await expect(
+		editor.locator('article[data-block-type="callout"]').getByRole("textbox", {
+			name: "Callout title",
+		})
+	).toHaveValue("Layout callout");
 	const restored = (
 		await (await page.request.get(`/api/collections/block-pages/${saved.id}?locale=en`)).json()
 	).doc;
@@ -1020,7 +1090,7 @@ test("release page composes Hero Content Media and CTA with rich-text embeds and
 	expect(errors.consoleErrors).toEqual([]);
 });
 
-test("server-normalized save replaces the mounted editor before subsequent edits", async ({
+test("server-normalized save stays clean on navigation and replaces the editor before later edits", async ({
 	page,
 }) => {
 	await loginAsEditor(page);
@@ -1054,9 +1124,21 @@ test("server-normalized save replaces the mounted editor before subsequent edits
 	});
 	await page.getByRole("textbox", { name: "Title", exact: true }).fill("Trigger normalization");
 	await saveArticle(page);
-	await expect(bodyCards(page).first()).toContainText("Server normalization");
+	await expect(bodyCards(page).first().getByRole("textbox", { name: "Callout title" })).toHaveValue(
+		"Server normalization"
+	);
 	await expect(bodyCards(page).first()).toHaveAttribute("data-block-key", key);
 	await expect(bodyEditor(page)).toHaveAttribute("contenteditable", "true");
+	await page
+		.getByRole("navigation", { name: "Breadcrumb" })
+		.getByRole("link", { name: "Block articles", exact: true })
+		.click();
+	await expect(page).toHaveURL((url) => url.pathname === "/admin/collections/block-articles");
+	await expect(page.getByRole("dialog", { name: "Leave without saving?" })).toHaveCount(0);
+	await page.goto(`/admin/collections/block-articles/${original.id}`);
+	await expect(bodyCards(page).first().getByRole("textbox", { name: "Callout title" })).toHaveValue(
+		"Server normalization"
+	);
 	await bodyEditor(page).locator("p").last().click();
 	await bodyEditor(page).press("ControlOrMeta+End");
 	await page.keyboard.type(" edited after save");
@@ -1066,7 +1148,9 @@ test("server-normalized save replaces the mounted editor before subsequent edits
 		saved.body.root.children.find((node: { type: string }) => node.type === "block").fields
 	).toMatchObject({ _key: key, title: "Server normalization" });
 	await page.reload();
-	await expect(bodyCards(page).first()).toContainText("Server normalization");
+	await expect(bodyCards(page).first().getByRole("textbox", { name: "Callout title" })).toHaveValue(
+		"Server normalization"
+	);
 	await expect(bodyEditor(page)).toContainText("edited after save");
 	expect(errors.pageErrors).toEqual([]);
 });

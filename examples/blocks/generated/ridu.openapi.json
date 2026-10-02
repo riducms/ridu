@@ -1364,6 +1364,68 @@
         "summary": "List Article versions"
       }
     },
+    "/api/collections/articles/{id}/versions/count": {
+      "get": {
+        "operationId": "countVersionsarticles",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Select one content locale, or all locales as locale-keyed values.",
+            "in": "query",
+            "name": "locale",
+            "required": false,
+            "schema": {
+              "default": "en",
+              "enum": [
+                "en",
+                "fr",
+                "all"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Override fallback with a locale or comma-separated chain; false disables fallback.",
+            "in": "query",
+            "name": "fallback-locale",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CountEnvelope"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Ridu error envelope"
+          }
+        },
+        "summary": "Count Article versions"
+      }
+    },
     "/api/collections/articles/{id}/versions/{revision}": {
       "get": {
         "operationId": "versionarticles",
@@ -3525,6 +3587,68 @@
           }
         },
         "summary": "List Page versions"
+      }
+    },
+    "/api/collections/pages/{id}/versions/count": {
+      "get": {
+        "operationId": "countVersionspages",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Select one content locale, or all locales as locale-keyed values.",
+            "in": "query",
+            "name": "locale",
+            "required": false,
+            "schema": {
+              "default": "en",
+              "enum": [
+                "en",
+                "fr",
+                "all"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Override fallback with a locale or comma-separated chain; false disables fallback.",
+            "in": "query",
+            "name": "fallback-locale",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CountEnvelope"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Ridu error envelope"
+          }
+        },
+        "summary": "Count Page versions"
       }
     },
     "/api/collections/pages/{id}/versions/{revision}": {
@@ -12580,6 +12704,17 @@
         ],
         "description": "Patch an existing row identified by _key. Omitted children are retained; a new key must satisfy the create contract at runtime.",
         "additionalProperties": false
+      },
+      "CountEnvelope": {
+        "type": "object",
+        "properties": {
+          "totalDocs": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "totalDocs"
+        ]
       },
       "Embedded_articles-body-blocks-block-callout-aside_blocks_Input": {
         "type": "object",

@@ -43,13 +43,14 @@ body := richtext.Field("body", richtext.Config{
 ```
 
 Add `body` to the collection's `Fields` list. With the development server running, open the editor
-and choose Callout from the insert menu. Fill in its fields, then choose Apply to insert it into
-the article or Cancel to discard it. You can edit, duplicate, move, or remove the card afterward,
-and undo or redo those changes.
+and choose Callout from the insert menu. The block appears immediately with its fields expanded
+inside the editor. Fill in those fields, then save the article. You can collapse, duplicate, move,
+or remove the block, and undo or redo those changes. Collapsing keeps its fields and unfinished
+input mounted. Rich-text fields inside a block keep their own selection and undo history.
 
-Finish or cancel changes in a block drawer before saving the article. Apply updates the editor;
-the article's Save button sends the complete document to Go, where validators and hooks run.
-Errors appear on the affected card and its fields.
+The article's Save button sends the complete document to Go, where validators and hooks run.
+Errors appear on the affected block and its fields; an invalid child expands the block before
+the admin focuses it.
 
 Adding `Blocks` enables the block tools alongside the defaults. If you also provide a `Features`
 list, include `richtext.FeatureBlocks`. Ridu only accepts block types listed in `Blocks`. To share

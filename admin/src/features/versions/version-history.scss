@@ -9,14 +9,6 @@
 		&__header {
 			border-bottom: 1px solid var(--control-border);
 		}
-		&__count {
-			margin-inline-start: 7px;
-			padding: 0 4px;
-			border-radius: 2px;
-			background: var(--pill-surface);
-			font-size: 12px;
-			font-weight: 400;
-		}
 		&__list {
 			padding: 15px var(--admin-gutter) 80px;
 		}

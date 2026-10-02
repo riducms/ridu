@@ -72,6 +72,7 @@ export interface Config {
 		categories: Category;
 		posts: Post;
 		pages: Page;
+		"block-articles": BlockArticle;
 		events: Event;
 		"editorial-notes": EditorialNote;
 		redirects: Redirect;
@@ -95,6 +96,7 @@ export interface Config {
 		categories: CategoriesSelect<false> | CategoriesSelect<true>;
 		posts: PostsSelect<false> | PostsSelect<true>;
 		pages: PagesSelect<false> | PagesSelect<true>;
+		"block-articles": BlockArticlesSelect<false> | BlockArticlesSelect<true>;
 		events: EventsSelect<false> | EventsSelect<true>;
 		"editorial-notes": EditorialNotesSelect<false> | EditorialNotesSelect<true>;
 		redirects: RedirectsSelect<false> | RedirectsSelect<true>;
@@ -427,6 +429,48 @@ export interface Page {
 		 */
 		image?: (number | null) | Media;
 	};
+	updatedAt: string;
+	createdAt: string;
+	_status?: ("draft" | "published") | null;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "block-articles".
+ */
+export interface BlockArticle {
+	id: number;
+	title: string;
+	caption?: string | null;
+	body?: {
+		root: {
+			type: string;
+			children: {
+				type: any;
+				version: number;
+				[k: string]: unknown;
+			}[];
+			direction: ("ltr" | "rtl") | null;
+			format: "left" | "start" | "center" | "right" | "end" | "justify" | "";
+			indent: number;
+			version: number;
+		};
+		[k: string]: unknown;
+	} | null;
+	localizedBody?: {
+		root: {
+			type: string;
+			children: {
+				type: any;
+				version: number;
+				[k: string]: unknown;
+			}[];
+			direction: ("ltr" | "rtl") | null;
+			format: "left" | "start" | "center" | "right" | "end" | "justify" | "";
+			indent: number;
+			version: number;
+		};
+		[k: string]: unknown;
+	} | null;
 	updatedAt: string;
 	createdAt: string;
 	_status?: ("draft" | "published") | null;
@@ -908,6 +952,10 @@ export interface PayloadLockedDocument {
 				value: number | Page;
 		  } | null)
 		| ({
+				relationTo: "block-articles";
+				value: number | BlockArticle;
+		  } | null)
+		| ({
 				relationTo: "events";
 				value: number | Event;
 		  } | null)
@@ -1197,6 +1245,19 @@ export interface PagesSelect<T extends boolean = true> {
 				description?: T;
 				image?: T;
 		  };
+	updatedAt?: T;
+	createdAt?: T;
+	_status?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "block-articles_select".
+ */
+export interface BlockArticlesSelect<T extends boolean = true> {
+	title?: T;
+	caption?: T;
+	body?: T;
+	localizedBody?: T;
 	updatedAt?: T;
 	createdAt?: T;
 	_status?: T;

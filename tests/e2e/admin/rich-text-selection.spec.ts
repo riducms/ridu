@@ -120,6 +120,7 @@ test("pointer selection stays intact across rich-text blocks in both directions"
 test("selection across a heading, paragraph and embedded block keeps content through format and undo", async ({
 	page,
 }) => {
+	await page.setViewportSize({ width: 1440, height: 2200 });
 	const { consoleErrors, pageErrors } = observePageErrors(page);
 	await loginAsEditor(page);
 	consoleErrors.length = 0;
@@ -149,7 +150,9 @@ test("selection across a heading, paragraph and embedded block keeps content thr
 	await page.goto(`/admin/collections/block-articles/${document.id}`);
 	const editor = bodyEditor(page);
 	const card = bodyCards(page).first();
-	await expect(card).toContainText("Embedded callout");
+	await expect(card.getByRole("textbox", { name: "Callout title", exact: true })).toHaveValue(
+		"Embedded callout"
+	);
 	const blockRoot = editor.locator(":scope > .ridu-richtext-embedded");
 	const order = () =>
 		editor.evaluate((element) =>
@@ -165,7 +168,9 @@ test("selection across a heading, paragraph and embedded block keeps content thr
 			"Paragraph before the block",
 			"Paragraph after the block",
 		]);
-		await expect(card.locator(".ridu-richtext-block-card__summary")).toHaveText("Embedded callout");
+		await expect(card.getByRole("textbox", { name: "Callout title", exact: true })).toHaveValue(
+			"Embedded callout"
+		);
 	};
 
 	await dragAcrossBlocks(page, editor.locator(":scope > p").last(), editor.locator(":scope > h2"), {

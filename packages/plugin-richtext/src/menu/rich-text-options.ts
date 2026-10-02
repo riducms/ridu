@@ -20,7 +20,7 @@ import {
 
 import {
 	OPEN_RELATIONSHIP_BROWSER_COMMAND,
-	OPEN_BLOCK_EDITOR_COMMAND,
+	INSERT_BLOCK_COMMAND,
 	OPEN_UPLOAD_BROWSER_COMMAND,
 } from "@plugin-richtext/menu/rich-text-commands";
 import { hasRichTextFeature, type RichTextConfig } from "@plugin-richtext/field/rich-text-config";
@@ -211,7 +211,7 @@ export function buildRichTextOptions(
 		);
 	}
 
-	if (hasRichTextFeature(config, "blocks") && authoring?.beginSchemaDraft !== undefined) {
+	if (hasRichTextFeature(config, "blocks") && authoring?.createSchemaPayload !== undefined) {
 		options.push(
 			...blockTypes.map(
 				(type) =>
@@ -223,9 +223,9 @@ export function buildRichTextOptions(
 						["block", type.slug, type.labels.singular],
 						() =>
 							queueMicrotask(() =>
-								editor.dispatchCommand(OPEN_BLOCK_EDITOR_COMMAND, { blockType: type.slug })
+								editor.dispatchCommand(INSERT_BLOCK_COMMAND, { blockType: type.slug })
 							),
-						{ restoreEditorFocus: false, blockType: type.slug, group: "blocks" }
+						{ blockType: type.slug, group: "blocks" }
 					)
 			)
 		);

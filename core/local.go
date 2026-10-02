@@ -536,6 +536,11 @@ func (local *LocalAPI) Versions(ctx context.Context, collection, id string, opti
 	return local.engine.Versions(ctx, collection, id, options.Actor, versionLocalizationOptions(options))
 }
 
+// CountVersions counts retained, authorized collection snapshots without reading their values.
+func (local *LocalAPI) CountVersions(ctx context.Context, collection, id string, options FindOptions) (int, error) {
+	return local.engine.CountVersions(ctx, collection, id, options.Actor, versionLocalizationOptions(options))
+}
+
 // Version preserves the exact authenticated collection identity
 // while reading one retained revision.
 func (local *LocalAPI) Version(ctx context.Context, collection, id string, revision int, options FindOptions) (store.Version, error) {
@@ -718,6 +723,11 @@ func (local *LocalAPI) CopyGlobalLocale(ctx context.Context, slug string, source
 
 func (local *LocalAPI) GlobalVersions(ctx context.Context, slug string, options FindOptions) ([]store.Version, error) {
 	return local.engine.Versions(ctx, "global:"+slug, slug, options.Actor, versionLocalizationOptions(options))
+}
+
+// CountGlobalVersions counts retained, authorized global snapshots without reading their values.
+func (local *LocalAPI) CountGlobalVersions(ctx context.Context, slug string, options FindOptions) (int, error) {
+	return local.engine.CountVersions(ctx, "global:"+slug, slug, options.Actor, versionLocalizationOptions(options))
 }
 
 func (local *LocalAPI) GlobalVersion(ctx context.Context, slug string, revision int, options FindOptions) (store.Version, error) {

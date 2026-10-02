@@ -1,7 +1,10 @@
 import { HISTORY_MERGE_TAG, HISTORY_PUSH_TAG } from "lexical";
 
-/** Groups one focused name-input session into one Lexical undo entry. */
-export class BlockNameHistorySession {
+/** Distinguish ordinary inline edits from Lexical's hydration and normalization merges. */
+export const BLOCK_FIELD_CHANGE_TAG = "ridu-block-field-change";
+
+/** Groups one focused embedded-field session into one Lexical undo entry. */
+export class BlockFieldHistorySession {
 	#merge = false;
 
 	reset() {

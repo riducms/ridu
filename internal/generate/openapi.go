@@ -254,6 +254,10 @@ func openAPI(manifest schema.Manifest) ([]byte, error) {
 			versionsSpec := operationSpec("List "+collection.Labels.Singular+" versions", "versions"+name, "200")
 			versionsSpec["parameters"] = localeParameters
 			document.Paths[versionBase+"/versions"] = map[string]any{"get": versionsSpec}
+			countSpec := operationSpec("Count "+collection.Labels.Singular+" versions", "countVersions"+name, "200")
+			countSpec["parameters"] = append([]map[string]any{{"name": "id", "in": "path", "required": true, "schema": map[string]string{"type": "string"}}}, localeParameters...)
+			addOpenAPIJSONResponse(countSpec, "200", map[string]any{"$ref": "#/components/schemas/CountEnvelope"})
+			document.Paths[versionBase+"/versions/count"] = map[string]any{"get": countSpec}
 			versionSpec := operationSpec("Read "+collection.Labels.Singular+" version", "version"+name, "200")
 			versionSpec["parameters"] = localeParameters
 			document.Paths[versionBase+"/versions/{revision}"] = map[string]any{
@@ -345,6 +349,10 @@ func openAPI(manifest schema.Manifest) ([]byte, error) {
 			versionsSpec := operationSpec("List "+global.Labels.Singular+" versions", "versions"+name, "200")
 			versionsSpec["parameters"] = localeParameters
 			document.Paths["/api/globals/"+slug+"/versions"] = map[string]any{"get": versionsSpec}
+			countSpec := operationSpec("Count "+global.Labels.Singular+" versions", "countVersions"+name, "200")
+			countSpec["parameters"] = localeParameters
+			addOpenAPIJSONResponse(countSpec, "200", map[string]any{"$ref": "#/components/schemas/CountEnvelope"})
+			document.Paths["/api/globals/"+slug+"/versions/count"] = map[string]any{"get": countSpec}
 			versionSpec := operationSpec("Read "+global.Labels.Singular+" version", "version"+name, "200")
 			versionSpec["parameters"] = localeParameters
 			document.Paths["/api/globals/"+slug+"/versions/{revision}"] = map[string]any{
@@ -1188,6 +1196,9 @@ func addOpenAPIJSONResponse(operation map[string]any, status string, response ma
 }
 
 func addTransportSchemas(schemas map[string]openAPISchema) {
+	schemas["CountEnvelope"] = openAPISchema{Type: "object", Properties: map[string]any{
+		"totalDocs": map[string]any{"type": "integer"},
+	}, Required: []string{"totalDocs"}}
 	schemas["Pagination"] = openAPISchema{Type: "object", Properties: map[string]any{
 		"page": map[string]any{"type": "integer"}, "limit": map[string]any{"type": "integer"},
 		"totalDocs": map[string]any{"type": "integer"}, "totalPages": map[string]any{"type": "integer"},

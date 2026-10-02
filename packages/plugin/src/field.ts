@@ -12,10 +12,12 @@ import { decodeComponentConfig } from "./component-config";
  * block, it follows that row's stable `_key` when the row moves. It does not switch
  * to whichever row later occupies the same numbered position.
  *
- * Ridu creates and cleans up bindings. Removing the field, unmounting its editor,
- * or replacing the document, locale, schema, or saved/reset form values makes a
- * binding stale. Reads and writes then throw; `stale` and `readOnly` remain safe
- * to check. Obtain a new binding from the newly mounted editor.
+ * Ridu creates and cleans up bindings. Removing the field, unmounting the editor
+ * that received or acquired the binding, or replacing the document, locale, schema,
+ * or saved/reset form values makes a binding stale. Reads and writes then throw;
+ * `stale` and `readOnly` remain safe to check. Obtain a new binding from the newly
+ * mounted editor. Pasting over a group remounts the editors inside it; bindings
+ * acquired by editors outside the group stay active, as they do for other edits.
  */
 export interface PluginFieldBinding<Value, Type extends FieldType = FieldType, Input = Value> {
 	/**
@@ -59,6 +61,17 @@ export interface PluginFieldBinding<Value, Type extends FieldType = FieldType, I
 	 * still runs when the document is saved.
 	 */
 	set: (value: Input | null) => void;
+	/**
+	 * Report input this editor shows but cannot store in the field yet, such as
+	 * unfinished text or an edit that fails its own value checks. While issues are
+	 * reported, the document counts as changed, saving fails with these issues, and
+	 * leaving the document asks for confirmation. Report an empty list once the input
+	 * can be stored again, normally just before calling `set`, or when the editor
+	 * discards it, such as when the stored value is replaced. Issues outside this
+	 * field are attached to it, issues follow the field when its row moves, and
+	 * reports end when the binding becomes stale.
+	 */
+	reportPendingEdit: (issues: readonly ValidationIssue[]) => void;
 }
 
 /** Read the containing document form, or connect to another field to update it. */

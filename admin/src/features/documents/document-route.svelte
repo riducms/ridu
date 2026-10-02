@@ -393,8 +393,22 @@
 						</button>
 					{/each}
 					{#if !controller.creating && controller.versionedCollection && controller.canReadVersions}
-						<Link class="ridu-document-tab" to={versionHistoryPath}>
+						<Link
+							class="ridu-document-tab"
+							to={versionHistoryPath}
+							aria-label={runtime.i18n.t("documents:versions")}
+							title={controller.versionCount === undefined
+								? undefined
+								: runtime.i18n.t("versions:total", {
+										count: runtime.i18n.formatNumber(controller.versionCount),
+									})}
+						>
 							{runtime.i18n.t("documents:versions")}
+							{#if controller.versionCount !== undefined && controller.versionCount > 0}
+								<span class="ridu-document-tab__count">
+									{runtime.i18n.formatNumber(controller.versionCount)}
+								</span>
+							{/if}
 						</Link>
 					{/if}
 					<Link

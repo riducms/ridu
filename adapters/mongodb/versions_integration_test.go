@@ -110,6 +110,10 @@ func TestMongoDBVersionTransactionRetentionAccessAndRollback(t *testing.T) {
 		mongoRollback(t, read)
 		t.Fatalf("retained versions = %#v", items)
 	}
+	if count, err := versionRead.CountVersions(t.Context(), store.VersionRequest{Collection: collection, DocumentID: document.ID}); err != nil || count != 2 {
+		mongoRollback(t, read)
+		t.Fatalf("retained version count = %d, %v, want 2", count, err)
+	}
 	ownerPath, _ := query.NewPath("owner")
 	ownerB := query.Equal(ownerPath, "owner-b").Node()
 	visible, err := versionRead.ListVersions(t.Context(), store.VersionRequest{
@@ -122,6 +126,10 @@ func TestMongoDBVersionTransactionRetentionAccessAndRollback(t *testing.T) {
 	if len(visible) != 1 || visible[0].Revision != 2 {
 		mongoRollback(t, read)
 		t.Fatalf("snapshot-filtered versions = %#v", visible)
+	}
+	if count, err := versionRead.CountVersions(t.Context(), store.VersionRequest{Collection: collection, DocumentID: document.ID, Access: &ownerB}); err != nil || count != 1 {
+		mongoRollback(t, read)
+		t.Fatalf("snapshot-filtered version count = %d, %v, want 1", count, err)
 	}
 	if _, err := versionRead.FindVersion(t.Context(), collection, document.ID, 1); !errors.Is(err, store.ErrNotFound) {
 		mongoRollback(t, read)
@@ -412,6 +420,14 @@ func TestMongoDBVersionRetentionRejectsCorruptHighRevisionBeforePruning(t *testi
 		{Key: mongoVersionSnapshotPath, Value: snapshot},
 	}); err != nil {
 		t.Fatal(err)
+	}
+	read := mongoBegin(t, backend, true)
+	count, err := read.(store.VersionTransaction).CountVersions(t.Context(), store.VersionRequest{
+		Collection: collection, DocumentID: document.ID,
+	})
+	mongoRollback(t, read)
+	if err != nil || count != 3 {
+		t.Fatalf("native count with malformed snapshot = %d, %v, want 3", count, err)
 	}
 
 	attempt := mongoBegin(t, backend, false)

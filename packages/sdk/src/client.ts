@@ -896,10 +896,7 @@ class FetchClient<
 			{ method: "GET" },
 			options
 		);
-		if (!isRecord(body) || typeof body.totalDocs !== "number") {
-			throw invalidSuccessEnvelope("count");
-		}
-		return { totalDocs: body.totalDocs };
+		return countFromEnvelope(body);
 	}
 
 	async find<
@@ -1143,6 +1140,22 @@ class FetchClient<
 		return body.versions as Version<
 			LocaleResult<OutputFor<Config, Slug>, AllLocalesOutputFor<Config, Slug>, Options>
 		>[];
+	}
+
+	async countVersions<Slug extends VersionCollectionSlug<Config>>(
+		collection: Slug,
+		id: string,
+		options?: LocaleOptions<LocaleFor<Config>>
+	): Promise<CountEnvelope> {
+		const query = new URLSearchParams();
+		appendLocaleQuery(query, options);
+		const suffix = query.size === 0 ? "" : `?${query}`;
+		const body = await this.#request(
+			`/api/collections/${encodeURIComponent(collection)}/${encodeDocumentID(id)}/versions/count${suffix}`,
+			{ method: "GET" },
+			options
+		);
+		return countFromEnvelope(body);
 	}
 
 	async version<
@@ -1587,6 +1600,21 @@ class FetchClient<
 		>[];
 	}
 
+	async countGlobalVersions<Slug extends VersionGlobalSlug<Config>>(
+		slug: Slug,
+		options?: LocaleOptions<LocaleFor<Config>>
+	): Promise<CountEnvelope> {
+		const query = new URLSearchParams();
+		appendLocaleQuery(query, options);
+		const suffix = query.size === 0 ? "" : `?${query}`;
+		const body = await this.#request(
+			`/api/globals/${encodeURIComponent(slug)}/versions/count${suffix}`,
+			{ method: "GET" },
+			options
+		);
+		return countFromEnvelope(body);
+	}
+
 	async globalVersion<
 		Slug extends VersionGlobalSlug<Config>,
 		const Options extends LocaleOptions<LocaleFor<Config>> | undefined = undefined,
@@ -1990,6 +2018,17 @@ function invalidSuccessEnvelope(kind: string) {
 		message: `Server returned an invalid ${kind} response envelope`,
 		issues: [],
 	});
+}
+
+function countFromEnvelope(body: unknown): CountEnvelope {
+	if (
+		!isRecord(body) ||
+		typeof body.totalDocs !== "number" ||
+		!Number.isSafeInteger(body.totalDocs) ||
+		body.totalDocs < 0
+	)
+		throw invalidSuccessEnvelope("count");
+	return { totalDocs: body.totalDocs };
 }
 
 function liveValidationFromEnvelope(value: unknown): LiveValidationEnvelope {

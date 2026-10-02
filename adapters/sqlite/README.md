@@ -24,3 +24,11 @@ verification, and known limits.
 
 The adapter supports local SQLite files and private `:memory:` databases. It does not provide
 Payload's remote libSQL transport or a Cloudflare D1 compatibility mode.
+
+Version lists and counts apply access predicates to the retained snapshot, within its collection
+and parent document. Supported scalar and nonlocalized group predicates use the ordinary document
+query compiler with snapshot sources, so counts do not deserialize snapshot values in Go. Repeated
+or plugin paths, localized group descent, numeric/boolean locale fallback, operands that disagree
+with the current scalar type, Unicode substring matching, and snapshot timestamp comparisons
+retain the existing matcher fallback. These preserve access to snapshots from older field shapes.
+Returned version lists still decode their authorized snapshots.

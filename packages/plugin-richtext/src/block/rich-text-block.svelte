@@ -4,7 +4,13 @@
 		useLexicalEditable,
 		useLexicalNodeSelection,
 	} from "@hvniel/lexical-svelte";
-	import { $getNodeByKey, REDO_COMMAND, UNDO_COMMAND, type NodeKey } from "lexical";
+	import {
+		$getNodeByKey,
+		REDO_COMMAND,
+		UNDO_COMMAND,
+		SKIP_DOM_SELECTION_TAG,
+		type NodeKey,
+	} from "lexical";
 	import { getAdminI18n } from "@riducms/plugin";
 	import { Button } from "@riducms/ui";
 	import {
@@ -12,15 +18,22 @@
 		getRichTextAuthoringHost,
 	} from "@plugin-richtext/field/rich-text-context.svelte";
 	import { blockSummary, richTextBlockTypes } from "@plugin-richtext/field/rich-text-blocks";
-	import { BlockNameHistorySession } from "@plugin-richtext/block/rich-text-block-name";
+	import { equalRichTextValues } from "@plugin-richtext/field/rich-text-value";
 	import {
-		OPEN_BLOCK_EDITOR_COMMAND,
+		BLOCK_FIELD_CHANGE_TAG,
+		BlockFieldHistorySession,
+	} from "@plugin-richtext/block/rich-text-block-history";
+	import { isBlockNode } from "@plugin-richtext/block/rich-text-block-node";
+	import ChevronDown from "~icons/lucide/chevron-down";
+	import Copy from "~icons/lucide/copy";
+	import X from "~icons/lucide/x";
+	import {
 		DUPLICATE_BLOCK_COMMAND,
 		REMOVE_BLOCK_COMMAND,
 		MOVE_BLOCK_COMMAND,
 		UPDATE_BLOCK_NAME_COMMAND,
 	} from "@plugin-richtext/menu/rich-text-commands";
-	import "@plugin-richtext/block/rich-text-block-card.scss";
+	import "@plugin-richtext/block/rich-text-block.scss";
 
 	let {
 		nodeKey,
@@ -32,7 +45,9 @@
 	const editable = useLexicalEditable();
 	const context = getRichTextField();
 	const authoring = getRichTextAuthoringHost();
-	const nameHistory = new BlockNameHistorySession();
+	const nameHistory = new BlockFieldHistorySession();
+	const fieldHistory = new BlockFieldHistorySession();
+	let collapsed = $state(false);
 	// The decorator instance owns this fixed Lexical node key.
 	// svelte-ignore state_referenced_locally
 	const [selected, setSelected, clearSelected] = useLexicalNodeSelection(nodeKey);
@@ -48,12 +63,21 @@
 	const nameField = $derived(type?.admin?.nameField);
 	const issues = $derived(authoring?.schemaIssues?.({ treeKey: "blocks", identity }) ?? []);
 	const recovery = $derived(type === undefined || !validEnvelope);
-	const summary = $derived(blockSummary(fields, type) || i18n.t("plugin.richtext:block.noSummary"));
+	const summary = $derived(blockSummary(fields, type) || i18n.t("plugin.richtext:block.untitled"));
+	const label = $derived(type?.labels.singular ?? blockType);
+	const errorCount = $derived(new Set(issues.map((issue) => issue.path)).size);
+
+	// Submission feedback opens the disclosure before the form focuses its invalid child.
+	$effect(() => {
+		if (issues.length > 0) collapsed = false;
+	});
+
 	function select(event: MouseEvent) {
 		event.stopPropagation();
-		if (!event.shiftKey) clearSelected();
+		if (!event.shiftKey && !event.metaKey && !event.ctrlKey) clearSelected();
 		setSelected(true);
 	}
+
 	function changeName(change: { field: string; value: string }) {
 		if (nameField === undefined || recovery || !editable()) return;
 		editor.dispatchCommand(UPDATE_BLOCK_NAME_COMMAND, {
@@ -64,6 +88,7 @@
 			historyTag: nameHistory.nextTag(),
 		});
 	}
+
 	function nameKeydown(event: KeyboardEvent) {
 		if (!(event.target instanceof HTMLInputElement)) return;
 		event.stopPropagation();
@@ -82,9 +107,57 @@
 		nameHistory.reset();
 		editor.dispatchCommand(undo ? UNDO_COMMAND : REDO_COMMAND, undefined);
 	}
-	function edit() {
-		editor.dispatchCommand(OPEN_BLOCK_EDITOR_COMMAND, { nodeKey });
+
+	function changeFields(payload: Record<string, unknown>) {
+		if (recovery || !editable()) return;
+		editor.update(
+			() => {
+				const node = $getNodeByKey(nodeKey);
+				if (!isBlockNode(node) || node.getFields()._key !== identity) return;
+				if (equalRichTextValues(node.getFields(), payload)) return;
+				context.acceptEmbeddedChange();
+				node.setFields(payload);
+			},
+			{
+				tag: [BLOCK_FIELD_CHANGE_TAG, fieldHistory.nextTag(), SKIP_DOM_SELECTION_TAG],
+				discrete: true,
+			}
+		);
 	}
+
+	function stopFieldEvent(event: Event) {
+		event.stopPropagation();
+	}
+
+	function fieldKeydown(event: KeyboardEvent) {
+		event.stopPropagation();
+		if (event.defaultPrevented) return;
+		const target = event.target;
+		if (!(target instanceof HTMLElement) || !editable()) return;
+		// Nested rich-text controls belong to their own editor, including its toolbar.
+		const fieldEditor = target.closest(".ridu-richtext-editor");
+		if (fieldEditor !== null && !fieldEditor.contains(editor.getRootElement())) return;
+		if (event.isComposing) return;
+		if (event.key === "Enter" && target instanceof HTMLInputElement) event.preventDefault();
+		if (
+			(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) &&
+			(target.readOnly || target.disabled)
+		)
+			return;
+		const key = event.key.toLowerCase();
+		const modifier = event.metaKey || event.ctrlKey;
+		const undo = modifier && key === "z" && !event.shiftKey;
+		const redo = modifier && ((key === "z" && event.shiftKey) || (key === "y" && !event.metaKey));
+		if (!undo && !redo) return;
+		event.preventDefault();
+		fieldHistory.reset();
+		editor.dispatchCommand(undo ? UNDO_COMMAND : REDO_COMMAND, undefined);
+	}
+
+	function toggle() {
+		collapsed = !collapsed;
+	}
+
 	function exportBlock() {
 		const serialized = editor.read(() => $getNodeByKey(nodeKey)?.exportJSON());
 		if (serialized === undefined) return;
@@ -97,12 +170,15 @@
 		link.click();
 		setTimeout(() => URL.revokeObjectURL(url), 0);
 	}
+
 	function duplicate() {
 		editor.dispatchCommand(DUPLICATE_BLOCK_COMMAND, nodeKey);
 	}
+
 	function remove() {
 		editor.dispatchCommand(REMOVE_BLOCK_COMMAND, nodeKey);
 	}
+
 	function keydown(event: KeyboardEvent) {
 		if (
 			(event.key === "Delete" || event.key === "Backspace") &&
@@ -127,14 +203,14 @@
 		} else if (event.key === "Enter" && event.target === event.currentTarget && editable()) {
 			event.preventDefault();
 			event.stopPropagation();
-			edit();
+			toggle();
 		}
 	}
 </script>
 
 <article
 	class={[
-		"ridu-richtext-embedded-card ridu-richtext-block-card",
+		"ridu-richtext-block",
 		nameField !== undefined && "has-name-field",
 		selected() && "is-selected",
 		issues.length > 0 && "has-issues",
@@ -143,28 +219,14 @@
 	data-block-type={blockType}
 	aria-label={i18n.t("plugin.richtext:block.label", { label: type?.labels.singular ?? blockType })}
 	data-invalid={issues.length > 0}
+	data-collapsed={collapsed}
 	role="group"
 >
-	{#if nameField !== undefined && authoring?.schemaHeader !== undefined}
-		<div
-			class="ridu-richtext-block-card__name"
-			onfocuscapture={nameHistory.reset.bind(nameHistory)}
-			onblurcapture={nameHistory.reset.bind(nameHistory)}
-			onkeydowncapture={nameKeydown}
-		>
-			{@render authoring.schemaHeader({
-				treeKey: "blocks",
-				identity,
-				readOnly: !editable() || recovery,
-				onChange: changeName,
-			})}
-		</div>
-	{/if}
-	<div class="ridu-richtext-block-card__header">
+	<div class="ridu-richtext-block__header">
 		<button
 			type="button"
 			data-block-select
-			class="ridu-richtext-block-card__select"
+			class="ridu-richtext-block__select"
 			aria-label={i18n.t("plugin.richtext:block.select", {
 				label: type?.labels.singular ?? blockType,
 			})}
@@ -172,57 +234,108 @@
 			onclickcapture={select}
 			onkeydowncapture={keydown}
 		>
-			<span class="ridu-richtext-block-card__label">
+			<span class="ridu-richtext-block__label">
 				{type?.labels.singular ?? blockType}
 			</span>
 			{#if nameField === undefined}
-				<span class="ridu-richtext-block-card__summary">
+				<span class="ridu-richtext-block__summary">
 					{summary}
 				</span>
 			{/if}
 		</button>
+		{#if nameField !== undefined && authoring?.schemaHeader !== undefined}
+			<div
+				class="ridu-richtext-block__name"
+				onfocuscapture={nameHistory.reset.bind(nameHistory)}
+				onblurcapture={nameHistory.reset.bind(nameHistory)}
+				onkeydowncapture={nameKeydown}
+			>
+				{@render authoring.schemaHeader({
+					treeKey: "blocks",
+					identity,
+					readOnly: !editable() || recovery,
+					onChange: changeName,
+				})}
+			</div>
+		{/if}
+		{#if errorCount > 0}
+			<span class="ridu-richtext-block__errors">
+				{i18n.t(errorCount === 1 ? "plugin.richtext:block.error" : "plugin.richtext:block.errors", {
+					count: errorCount,
+				})}
+			</span>
+		{/if}
 		{#if editable()}
 			<div
-				class="ridu-richtext-block-card__actions"
+				class="ridu-richtext-block__actions"
 				role="group"
 				aria-label={i18n.t("plugin.richtext:editor.blockActions")}
 			>
 				<Button
-					class="ridu-richtext-block-card__action"
-					size="sm"
-					variant="ghost"
-					onclick={edit}
-					disabled={recovery}
-				>
-					{i18n.t("plugin.richtext:block.edit")}
-				</Button>
-				<Button
-					class="ridu-richtext-block-card__action"
+					class="ridu-richtext-block__action"
 					size="sm"
 					variant="ghost"
 					onclick={duplicate}
 					disabled={recovery}
+					aria-label={i18n.t("plugin.richtext:block.duplicate")}
 				>
-					{i18n.t("plugin.richtext:block.duplicate")}
+					<Copy aria-hidden="true" />
 				</Button>
-				<Button class="ridu-richtext-block-card__action" size="sm" variant="ghost" onclick={remove}>
-					{i18n.t("plugin.richtext:block.remove")}
+				<Button
+					class="ridu-richtext-block__action"
+					size="sm"
+					variant="ghost"
+					onclick={remove}
+					aria-label={i18n.t("plugin.richtext:block.remove")}
+				>
+					<X aria-hidden="true" />
 				</Button>
 			</div>
 		{/if}
+		{#if !recovery}
+			<button
+				type="button"
+				class="ridu-richtext-block__toggle"
+				onclick={toggle}
+				aria-label={i18n.t(
+					collapsed ? "plugin.richtext:block.expand" : "plugin.richtext:block.collapse",
+					{ label }
+				)}
+				aria-expanded={!collapsed}
+			>
+				<ChevronDown aria-hidden="true" />
+			</button>
+		{/if}
 	</div>
 	{#if recovery}
-		<div class="ridu-richtext-block-card__recovery">
-			<p role="alert" class="ridu-richtext-block-card__status">
+		<div class="ridu-richtext-block__recovery">
+			<p role="alert" class="ridu-richtext-block__status">
 				{i18n.t("plugin.richtext:block.recovery")}
 			</p>
 			<Button size="sm" variant="outline" onclick={exportBlock}>
 				{i18n.t("plugin.richtext:block.export")}
 			</Button>
 		</div>
-	{:else if issues.length > 0}
-		<p class="ridu-richtext-block-card__status">
-			{i18n.t("plugin.richtext:block.issues", { count: issues.length })}
-		</p>
+	{:else if authoring?.schemaForm !== undefined}
+		<div
+			class="ridu-richtext-block__fields"
+			role="presentation"
+			hidden={collapsed}
+			onfocuscapture={fieldHistory.reset.bind(fieldHistory)}
+			onblurcapture={fieldHistory.reset.bind(fieldHistory)}
+			onkeydown={fieldKeydown}
+			onclick={stopFieldEvent}
+			onpointerdown={stopFieldEvent}
+			oncopy={stopFieldEvent}
+			oncut={stopFieldEvent}
+			onpaste={stopFieldEvent}
+		>
+			{@render authoring.schemaForm({
+				treeKey: "blocks",
+				identity,
+				readOnly: !editable(),
+				onChange: changeFields,
+			})}
+		</div>
 	{/if}
 </article>

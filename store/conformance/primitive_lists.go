@@ -146,6 +146,27 @@ func runPrimitiveLists(t *testing.T, factory Factory) {
 		t.Fatalf("history=%#v err=%v", history, err)
 	}
 	primitiveListValueEqual(t, history[0].Snapshot.Values["texts"], first["texts"])
+	localizedAccess := query.In(mustPath("localizedList"), "English").Node()
+	for _, test := range []struct {
+		name  string
+		chain []schema.LocaleCode
+		all   bool
+		want  int
+	}{
+		{name: "English", chain: []schema.LocaleCode{"en"}, want: 1},
+		{name: "French", chain: []schema.LocaleCode{"fr", "en"}, want: 0},
+		{name: "all locales", all: true, want: 0},
+	} {
+		read = begin(t, fixture.backend)
+		count, err := read.(store.VersionTransaction).CountVersions(t.Context(), fixture.versionRequest(store.VersionRequest{
+			Collection: fixture.records, DocumentID: id(1), Access: &localizedAccess,
+			LocaleChain: test.chain, AllLocales: test.all,
+		}))
+		rollback(t, read)
+		if err != nil || count != test.want {
+			t.Fatalf("%s localized version count = %d, %v, want %d", test.name, count, err, test.want)
+		}
+	}
 }
 
 func primitiveListValueEqual(t *testing.T, actual, want store.Value) {

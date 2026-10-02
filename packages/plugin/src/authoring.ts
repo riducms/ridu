@@ -101,6 +101,16 @@ export interface EmbeddedSchemaFormScope {
 	readOnly?: boolean;
 }
 
+/** Render one existing item's ordinary fields in the parent document form. */
+export interface EmbeddedSchemaFormProps extends EmbeddedSchemaFormScope {
+	/**
+	 * Called with detached current field data after an ordinary field inside this item changes.
+	 * Reflect it through your editor's history and serialization path. Initial rendering,
+	 * sibling changes, and writes of the whole plugin value do not call this callback.
+	 */
+	onChange?: (payload: Record<string, unknown>) => void;
+}
+
 /** A configured editorial-name control for one existing embedded item. */
 export interface EmbeddedSchemaHeaderProps extends EmbeddedSchemaFormScope {
 	/**
@@ -182,10 +192,11 @@ export interface FieldAuthoringHost {
 	/**
 	 * Render the ordinary fields of an existing embedded item using
 	 * `{@render authoring.schemaForm({ treeKey, identity })}`.
-	 * Edits update the parent document's unsaved form immediately. Use a draft below
-	 * if the user needs Apply/Cancel. Neither approach saves the document itself.
+	 * Edits update the parent document's unsaved form immediately. Pass `onChange`
+	 * when an external editor must also record those changes in its history and
+	 * serialization. Use a draft below if the user needs Apply/Cancel.
 	 */
-	schemaForm?: Snippet<[EmbeddedSchemaFormScope]>;
+	schemaForm?: Snippet<[EmbeddedSchemaFormProps]>;
 	/**
 	 * Render the configured name input and field feedback, without the card chrome.
 	 * Uses the item's schema, access, visibility and stable identity. An open draft
@@ -214,6 +225,11 @@ export interface FieldAuthoringHost {
 		scope: EmbeddedSchemaVariantScope,
 		payload: Readonly<Record<string, unknown>>
 	) => Record<string, unknown>;
+	/**
+	 * Create field data for a new item using Go-declared defaults and a fresh identity.
+	 * Insert the returned payload through your editor; this does not change the form.
+	 */
+	createSchemaPayload?: (scope: EmbeddedSchemaVariantScope) => Record<string, unknown>;
 	/** Collection definitions available in the current admin schema, not fetched documents. */
 	readonly collections: readonly SchemaCollection[];
 	/**

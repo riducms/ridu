@@ -179,7 +179,7 @@ export class FormController {
 			identities: Map<string, EmbeddedOccurrence | undefined>;
 		}
 	>();
-	#pathObservers = new Map<string, Set<(value: unknown) => void>>();
+	#pathObservers = new Map<string, Set<(value: unknown, changedPath: string) => void>>();
 	#derivedTextBindings = new Map<string, DerivedTextBindingState>();
 	#revision = 0;
 	// One edit marker per primitive list, never per item. Even equal duplicate reorders
@@ -258,8 +258,10 @@ export class FormController {
 		return this.#registered.has(path);
 	}
 
-	observe(path: string, observer: (value: unknown) => void) {
-		const observers = this.#pathObservers.get(path) ?? new Set<(value: unknown) => void>();
+	/** Notify synchronously for writes at, above, or below `path`; include the exact write path. */
+	observe(path: string, observer: (value: unknown, changedPath: string) => void) {
+		const observers =
+			this.#pathObservers.get(path) ?? new Set<(value: unknown, changedPath: string) => void>();
 		observers.add(observer);
 		this.#pathObservers.set(path, observers);
 		return () => {
@@ -448,7 +450,7 @@ export class FormController {
 				continue;
 			}
 			const observedValue = this.get(observedPath);
-			for (const observer of [...observers]) observer(observedValue);
+			for (const observer of [...observers]) observer(observedValue, path);
 		}
 		this.liveValidation.changed(path);
 		for (const observer of [...this.#changeObservers]) observer();

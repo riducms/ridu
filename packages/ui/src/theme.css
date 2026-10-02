@@ -46,6 +46,7 @@
 		--background-surface: #222;
 		--background-layer: #2f2f2f;
 		--pill-surface: #3c3c3c;
+		--pill-active-surface: #575757;
 		--pill-disabled-foreground: #b5b5b5;
 		--foreground: #fff;
 		--foreground-muted: #9a9a9a;
@@ -155,6 +156,7 @@
 		--background-surface: #f5f5f5;
 		--background-layer: #ebebeb;
 		--pill-surface: #ddd;
+		--pill-active-surface: #c3c3c3;
 		--pill-disabled-foreground: #656565;
 		--foreground: #2f2f2f;
 		--foreground-muted: #656565;

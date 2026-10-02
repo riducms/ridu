@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { createEmptyHistoryState, registerHistory } from "@lexical/history";
 import { $getRoot, REDO_COMMAND, UNDO_COMMAND, createEditor, type EditorState } from "lexical";
 import { BlockNode, createBlockNode, updateBlockName } from "../src/block/rich-text-block-node";
-import { BlockNameHistorySession } from "../src/block/rich-text-block-name";
+import { BlockFieldHistorySession } from "../src/block/rich-text-block-history";
 
 function fields(editorState: EditorState) {
 	return editorState.read(() =>
@@ -36,7 +36,7 @@ describe("rich-text block names", () => {
 			{ discrete: true }
 		);
 
-		const session = new BlockNameHistorySession();
+		const session = new BlockFieldHistorySession();
 		editor.update(
 			() => {
 				updateBlockName({
@@ -91,7 +91,7 @@ describe("rich-text block names", () => {
 			},
 			{ discrete: true }
 		);
-		const session = new BlockNameHistorySession();
+		const session = new BlockFieldHistorySession();
 		const update = (value: string) =>
 			editor.update(
 				() => {

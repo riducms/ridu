@@ -72,6 +72,7 @@ async function editor() {
 	const client = {
 		find: vi.fn(async (_slug: string, id: string) => ({ id, title: id, _revision: 2 })),
 		collectionAccess: vi.fn(async () => access),
+		countVersions: vi.fn(async () => ({ totalDocs: 0 })),
 		publish: vi.fn(() => mutation.promise),
 		duplicate: vi.fn(() => mutation.promise),
 		delete: vi.fn(() => mutation.promise),

@@ -709,6 +709,26 @@ func Run(t *testing.T, factory Factory) {
 			rollback(t, read)
 			t.Fatalf("versions = %#v, want newest revision then original", items)
 		}
+		firstAccess := query.Equal(mustPath("state"), "first").Node()
+		secondAccess := query.Equal(mustPath("state"), "second").Node()
+		hiddenAccess := query.Equal(mustPath("state"), "hidden").Node()
+		for _, test := range []struct {
+			name    string
+			request store.VersionRequest
+			want    int
+		}{
+			{name: "retained", request: store.VersionRequest{Collection: fixture.records, DocumentID: created.ID}, want: 2},
+			{name: "missing document", request: store.VersionRequest{Collection: fixture.records, DocumentID: id(2)}, want: 0},
+			{name: "original snapshot", request: store.VersionRequest{Collection: fixture.records, DocumentID: created.ID, Access: &firstAccess}, want: 1},
+			{name: "updated snapshot", request: store.VersionRequest{Collection: fixture.records, DocumentID: created.ID, Access: &secondAccess}, want: 1},
+			{name: "hidden snapshots", request: store.VersionRequest{Collection: fixture.records, DocumentID: created.ID, Access: &hiddenAccess}, want: 0},
+		} {
+			count, err := versionRead.CountVersions(t.Context(), fixture.versionRequest(test.request))
+			if err != nil || count != test.want {
+				rollback(t, read)
+				t.Fatalf("%s version count = %d, %v, want %d", test.name, count, err, test.want)
+			}
+		}
 		first, err := versionRead.FindVersion(t.Context(), fixture.records, created.ID, created.Revision)
 		state, valid := first.Snapshot.Values["state"].StringValue()
 		if err != nil || !valid || state != "first" {

@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { render } from "vitest-browser-svelte";
+import { svelte } from "@hvniel/vite-plugin-svelte-inline-component";
 import type { SchemaField } from "@riducms/protocol";
 import type { FieldAuthoringHost, FieldDocument } from "@riducms/plugin";
 import { PluginFieldBinding } from "@admin/core/forms/plugin-field-binding";
@@ -30,6 +32,21 @@ const rows: SchemaField = {
 	nested: { fields: [leaf] },
 };
 const decodeValue = (value: unknown) => value;
+const DerivedReader = svelte`
+	<script>
+		let { binding, read } = $props();
+		const status = $derived.by(() => {
+			read;
+			try {
+				binding.value;
+				return "Active";
+			} catch (error) {
+				return error.message;
+			}
+		});
+	</script>
+	<p role="status">{status}</p>
+`;
 function fixture() {
 	const form = new FormController();
 	form.reset(
@@ -69,6 +86,46 @@ describe("advanced plugin occurrence bindings", () => {
 		expect(binding.schema.admin.readOnly).not.toBe(true);
 		expect(() => binding.set({ items: [3] })).toThrow("read-only");
 		binding.destroy();
+	});
+
+	it("holds reported pending edits in the form until cleared or revoked", () => {
+		const { form, binding } = fixture();
+		const finish = { code: "unfinished", message: "Finish the value" };
+		binding.reportPendingEdit([{ ...finish, path: "title" }]);
+		// Pending input belongs to the reporting field; it keeps the document changed.
+		expect(form.pendingEditIssues()).toEqual([{ ...finish, path: "rows.0.value" }]);
+		expect(form.dirty).toBe(true);
+		binding.reportPendingEdit([]);
+		expect(form.pendingEditIssues()).toEqual([]);
+		expect(form.dirty).toBe(false);
+		binding.reportPendingEdit([{ ...finish, path: "rows.0.value.items" }]);
+		expect(form.pendingEditIssues()).toEqual([{ ...finish, path: "rows.0.value.items" }]);
+		// Pending input follows its logical row.
+		form.setRows("rows", (form.snapshot().rows as Record<string, unknown>[]).toReversed());
+		expect(form.pendingEditIssues()).toEqual([{ ...finish, path: "rows.1.value.items" }]);
+		binding.destroy();
+		expect(form.pendingEditIssues()).toEqual([]);
+		expect(() => binding.reportPendingEdit([])).toThrow("stale");
+	});
+
+	it("a derived read can revoke a binding that holds a pending edit", async () => {
+		const { form, binding, changeSchema } = fixture();
+		binding.reportPendingEdit([
+			{ code: "unfinished", path: "rows.0.value", message: "Finish the value" },
+		]);
+		const screen = await render(DerivedReader, { binding, read: 0 });
+		await expect.element(screen.getByRole("status")).toHaveTextContent("Active");
+		// Nothing notifies the binding of this change; the next derived read discovers it.
+		changeSchema();
+		await screen.rerender({ read: 1 });
+		await expect
+			.element(screen.getByRole("status"))
+			.toHaveTextContent(
+				"This plugin field binding is stale. Use the current mounted field occurrence."
+			);
+		expect(form.pendingEditIssues()).toEqual([]);
+		expect(form.dirty).toBe(false);
+		await screen.unmount();
 	});
 
 	it("retained writers and acquired sibling writers follow logical rows across reorder", () => {
@@ -415,6 +472,34 @@ it("browser capability forwarding preserves live Svelte prop getters", () => {
 	open = true;
 	expect(readOpen()).toBe(true);
 	binding.destroy();
+});
+it("guards inline embedded payload creation and detaches the returned value", () => {
+	const { binding, readonly } = fixture();
+	const payload = { uid: "one", settings: { caption: "Original" } };
+	let calls = 0;
+	const guarded = guardPluginAuthoring(
+		{
+			collections: [],
+			documentRevision: 0,
+			canCreateDocument: () => false,
+			findDocument: async () => ({ id: "one" }),
+			referenceBrowser: () => ({}),
+			createSchemaPayload: () => {
+				calls++;
+				return payload;
+			},
+		},
+		binding
+	);
+	const scope = { treeKey: "widgets", caseTag: "widget", variantSlug: "card" };
+	const created = guarded.createSchemaPayload!(scope);
+	(created.settings as { caption: string }).caption = "Changed";
+	expect(payload.settings.caption).toBe("Original");
+	readonly();
+	expect(() => guarded.createSchemaPayload!(scope)).toThrow("read-only");
+	expect(calls).toBe(1);
+	binding.destroy();
+	expect(() => guarded.createSchemaPayload!(scope)).toThrow("stale");
 });
 it("rejects non-JSON supplied values instead of leaking or changing their types", () => {
 	const { binding, form } = fixture();

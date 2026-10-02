@@ -50049,10 +50049,22 @@
 			"typeLinkIDs": {}
 		},
 		"ts:@riducms/plugin#FieldAuthoringHost": {
-			"summary": "Optional authoring services for relationship-like field components.",
+			"summary": "Optional services supplied to a plugin field for embedded forms, related documents, and plugin requests.",
 			"group": "Interfaces",
 			"parametersLabel": "",
 			"parameters": [
+				{
+					"name": "schemaForm",
+					"type": "Snippet<[EmbeddedSchemaFormProps]>",
+					"description": "Render an existing item's ordinary fields in the parent form. Pass onChange when your editor needs to record each child edit in its own history and serialization.",
+					"targetID": "ts:@riducms/plugin#FieldAuthoringHost.schemaForm"
+				},
+				{
+					"name": "createSchemaPayload",
+					"type": "(scope: EmbeddedSchemaVariantScope) => Record<string, unknown>",
+					"description": "Create Go-declared default fields and fresh identity for inline insertion; your editor inserts and serializes the result.",
+					"targetID": "ts:@riducms/plugin#FieldAuthoringHost.createSchemaPayload"
+				},
 				{
 					"name": "collections",
 					"type": "readonly SchemaCollection[]",
@@ -50085,12 +50097,58 @@
 				}
 			],
 			"details": [
+				"Check an optional method before using it. Embedded forms edit the unsaved parent document; your plugin editor owns insertion, history, and serialization of its outer value.",
 				"requestPlugin is owner-scoped by the framework to the component’s paired backend plugin and routes through the configured SDK transport."
 			],
 			"example": "",
 			"keywords": ["FieldAuthoringHost", "@riducms/plugin.FieldAuthoringHost"],
-			"relatedDocs": [],
-			"relatedSymbols": [],
+			"relatedDocs": ["/guides/custom-fields/"],
+			"relatedSymbols": [
+				"ts:@riducms/plugin#EmbeddedSchemaFormProps",
+				"ts:@riducms/plugin#EmbeddedSchemaVariantScope"
+			],
+			"typeLinkIDs": {
+				"EmbeddedSchemaFormProps": "ts:@riducms/plugin#EmbeddedSchemaFormProps",
+				"EmbeddedSchemaVariantScope": "ts:@riducms/plugin#EmbeddedSchemaVariantScope"
+			}
+		},
+		"ts:@riducms/plugin#EmbeddedSchemaFormProps": {
+			"summary": "Props for rendering the ordinary fields of an existing embedded item inside the parent document form.",
+			"group": "Interfaces",
+			"parametersLabel": "Props",
+			"parameters": [
+				{
+					"name": "treeKey",
+					"type": "string",
+					"description": "The embedded tree key declared by the Go plugin field."
+				},
+				{
+					"name": "identity",
+					"type": "string",
+					"description": "The existing item's stable identity; it stays the same when the item moves."
+				},
+				{
+					"name": "readOnly",
+					"type": "boolean",
+					"description": "Display the fields without allowing edits. Access rules can also make them read-only."
+				},
+				{
+					"name": "onChange",
+					"type": "(payload: Record<string, unknown>) => void",
+					"description": "Receive detached field data after a child edit so your editor can record that edit in its own history and serialized value.",
+					"targetID": "ts:@riducms/plugin#EmbeddedSchemaFormProps.onChange"
+				}
+			],
+			"details": [
+				"Pass these props to the authoring.schemaForm Svelte snippet. Ridu updates the unsaved parent form; onChange is optional for editors that also keep a separate history, such as rich text."
+			],
+			"example": "import type { EmbeddedSchemaFormProps } from '@riducms/plugin';\n\nfunction blockFormProps(\n  identity: string,\n  recordEdit: (fields: Record<string, unknown>) => void\n): EmbeddedSchemaFormProps {\n  return { treeKey: 'blocks', identity, onChange: recordEdit };\n}",
+			"keywords": ["EmbeddedSchemaFormProps", "@riducms/plugin.EmbeddedSchemaFormProps"],
+			"relatedDocs": ["/guides/custom-fields/"],
+			"relatedSymbols": [
+				"ts:@riducms/plugin#FieldAuthoringHost.schemaForm",
+				"ts:@riducms/plugin#EmbeddedSchemaFormProps.onChange"
+			],
 			"typeLinkIDs": {}
 		},
 		"ts:@riducms/plugin#FieldReferenceBrowserProps": {
@@ -53599,6 +53657,103 @@
 			"keywords": ["AdminShellSlot.component", "@riducms/plugin.AdminShellSlot.component"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
+			"typeLinkIDs": {}
+		},
+		"ts:@riducms/plugin#FieldAuthoringHost.createSchemaPayload": {
+			"summary": "Create a new embedded item's field payload with Go-declared defaults and a fresh identity.",
+			"group": "Methods",
+			"parametersLabel": "",
+			"parameters": [
+				{
+					"name": "scope",
+					"type": "EmbeddedSchemaVariantScope",
+					"description": "Select the declared tree, case tag, and variant to insert.",
+					"targetID": "ts:@riducms/plugin#EmbeddedSchemaVariantScope"
+				}
+			],
+			"returns": {
+				"type": "Record<string, unknown>",
+				"description": "New ordinary field data, including a fresh identity and configured defaults. Insert and serialize it through your plugin editor."
+			},
+			"details": [
+				"This method only creates data. It does not insert an outer plugin item, change the parent form, or open an Apply/Cancel draft. Check that the optional method exists before calling it."
+			],
+			"example": "import type { FieldAuthoringHost } from '@riducms/plugin';\n\nfunction insertCallout(\n  authoring: FieldAuthoringHost,\n  insert: (fields: Record<string, unknown>) => void\n) {\n  const fields = authoring.createSchemaPayload?.({\n    treeKey: 'blocks',\n    caseTag: 'block',\n    variantSlug: 'callout'\n  });\n  if (fields) insert(fields);\n}",
+			"keywords": [
+				"FieldAuthoringHost.createSchemaPayload",
+				"@riducms/plugin.FieldAuthoringHost.createSchemaPayload"
+			],
+			"relatedDocs": ["/guides/custom-fields/", "/docs/rich-text/blocks/"],
+			"relatedSymbols": [
+				"ts:@riducms/plugin#EmbeddedSchemaVariantScope",
+				"ts:@riducms/plugin#FieldAuthoringHost.schemaForm"
+			],
+			"typeLinkIDs": {
+				"EmbeddedSchemaVariantScope": "ts:@riducms/plugin#EmbeddedSchemaVariantScope"
+			}
+		},
+		"ts:@riducms/plugin#FieldAuthoringHost.schemaForm": {
+			"summary": "Render ordinary fields of an existing embedded item in the unsaved parent form.",
+			"group": "Methods",
+			"parametersLabel": "",
+			"parameters": [
+				{
+					"name": "args",
+					"type": "[EmbeddedSchemaFormProps]",
+					"description": "The embedded tree key and stable item identity, with optional read-only mode and onChange callback.",
+					"targetID": "ts:@riducms/plugin#EmbeddedSchemaFormProps"
+				}
+			],
+			"returns": {
+				"type": "SnippetReturn",
+				"description": "Rendered Svelte fields. Use this as a snippet in your component template."
+			},
+			"details": [
+				"Render with {@render authoring.schemaForm({ treeKey, identity, onChange })}. Child edits update the unsaved parent form. Pass onChange when your editor also needs to record them in its own history and serialized plugin value.",
+				"Use beginSchemaDraft and schemaDraftEditor when the item needs Apply/Cancel. The parent document is saved later through its ordinary Save action."
+			],
+			"example": "",
+			"keywords": [
+				"FieldAuthoringHost.schemaForm",
+				"@riducms/plugin.FieldAuthoringHost.schemaForm"
+			],
+			"relatedDocs": ["/guides/custom-fields/"],
+			"relatedSymbols": [
+				"ts:@riducms/plugin#EmbeddedSchemaFormProps",
+				"ts:@riducms/plugin#EmbeddedSchemaFormProps.onChange"
+			],
+			"typeLinkIDs": {
+				"EmbeddedSchemaFormProps": "ts:@riducms/plugin#EmbeddedSchemaFormProps"
+			}
+		},
+		"ts:@riducms/plugin#EmbeddedSchemaFormProps.onChange": {
+			"summary": "Record a child-field edit in the plugin editor's history and serialized value.",
+			"group": "Methods",
+			"parametersLabel": "",
+			"parameters": [
+				{
+					"name": "payload",
+					"type": "Record<string, unknown>",
+					"description": "Detached current ordinary field data for this embedded item after the edit."
+				}
+			],
+			"returns": {
+				"type": "void",
+				"description": "No return value. Update the latest matching item through your editor."
+			},
+			"details": [
+				"Ridu calls this callback only when an ordinary field inside the specified item changes. Initial rendering, sibling edits, and a write of the whole plugin value do not call it. Ridu updates the unsaved parent form; your editor must record its own history and serialize its value."
+			],
+			"example": "function recordEmbeddedEdit(\n  identity: string,\n  commit: (identity: string, payload: Record<string, unknown>) => void\n) {\n  return (payload: Record<string, unknown>) =>\n    commit(identity, payload);\n}",
+			"keywords": [
+				"EmbeddedSchemaFormProps.onChange",
+				"@riducms/plugin.EmbeddedSchemaFormProps.onChange"
+			],
+			"relatedDocs": ["/guides/custom-fields/"],
+			"relatedSymbols": [
+				"ts:@riducms/plugin#EmbeddedSchemaFormProps",
+				"ts:@riducms/plugin#FieldAuthoringHost.schemaForm"
+			],
 			"typeLinkIDs": {}
 		},
 		"ts:@riducms/plugin#FieldAuthoringHost.findDocument": {

@@ -68,6 +68,9 @@
 	let repeatedRoot: HTMLElement;
 	let collapsed = $state.raw(new Set<string>());
 	let clipboardMessage = $state("");
+	// Pasted rows get new keys and editors; a pasted group remounts its editors the same way,
+	// discarding unsaved editor input even when the pasted value equals the form value.
+	let groupPastes = $state(0);
 	let blockPickerOpen = $state(false);
 	let insertAfter = $state<string>();
 
@@ -195,7 +198,10 @@
 					)
 				: value;
 			if (Array.isArray(pasted)) owner.setRows(target.path, pasted as Record<string, unknown>[]);
-			else owner.set(target.path, pasted);
+			else {
+				owner.set(target.path, pasted);
+				groupPastes++;
+			}
 			clipboardMessage = runtime.i18n.t("fields:pasted", { label: target.admin.label });
 		} finally {
 			pendingPastes.delete(lifetime);
@@ -434,7 +440,9 @@
 				{@render fieldActions()}
 			</div>
 		</FieldMessages>
-		<FieldLayout fields={inheritedFields} {form} />
+		{#key groupPastes}
+			<FieldLayout fields={inheritedFields} {form} />
+		{/key}
 		{#if clipboardMessage !== ""}
 			<p class="ridu-nested-field__note" aria-live="polite">
 				{clipboardMessage}

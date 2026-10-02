@@ -34,7 +34,13 @@ test("dashboard cards and the plugin route use the configured application extens
 test("global authoring preserves published values and global-only actions", async ({ page }) => {
 	const errors = observePageErrors(page);
 	await loginAsEditor(page);
+	const history = await page.request.get("/api/globals/site-settings/versions?locale=en");
+	expect(history.ok(), await history.text()).toBe(true);
+	const initialCount = (await history.json()).versions.length;
 	await page.goto("/admin/globals/site-settings?locale=en");
+	const versionsTab = page.getByRole("link", { name: "Versions", exact: true });
+	const count = versionsTab.locator(".ridu-document-tab__count");
+	await expect(count).toHaveText(String(initialCount));
 	await expect(page).toHaveURL(/\/admin\/globals\/site-settings(?:\?locale=en)?$/);
 	await expect(page.getByRole("heading", { name: "Site settings", exact: true })).toBeVisible();
 	await expect(page.getByLabel("Site name", { exact: true })).toHaveValue(
@@ -54,10 +60,17 @@ test("global authoring preserves published values and global-only actions", asyn
 	await expect(
 		page.getByLabel("Notifications alt+T").getByText("Published", { exact: true })
 	).toBeVisible();
+	await expect(count).toHaveText(String(initialCount + 1));
 	await page.reload();
 	await expect(page.getByLabel("Announcement — English", { exact: true })).toHaveValue(
 		"Globals have drafts, hooks, access, versions, and generated types."
 	);
+	await expect(count).toHaveText(String(initialCount + 1));
+	await page.getByRole("link", { name: "API", exact: true }).click();
+	await expect(count).toHaveText(String(initialCount + 1));
+	await versionsTab.click();
+	await expect(page.getByRole("table", { name: "Version history" })).toBeVisible();
+	await expect(count).toHaveText(String(initialCount + 1));
 	expect(errors.consoleErrors).toEqual([]);
 	expect(errors.pageErrors).toEqual([]);
 });

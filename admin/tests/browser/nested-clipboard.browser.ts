@@ -206,6 +206,40 @@ for (const type of ["array", "group"] as const) {
 	}
 }
 
+it("pasting a group replaces its editors even when the pasted value is unchanged", async () => {
+	const field = schema("group");
+	field.nested!.fields = [
+		{
+			id: "data",
+			name: "data",
+			path: "items.data",
+			type: "json",
+			category: "scalar",
+			required: false,
+			unique: false,
+			admin: { label: "Data" },
+		},
+	];
+	const props = fixture(field);
+	props.form.reset({ items: { data: { kept: true } } }, props.fields);
+	const screen = await render(Harness, props);
+	const editor = screen.getByRole("textbox", { name: "Data", exact: true });
+	await editor.fill('{"broken":');
+	expect(props.form.pendingEditIssues()).toHaveLength(1);
+	// The copy matches the form value; only the editor's unfinished draft differs.
+	const copy = createFieldClipboardPayload(field, "field", props.form.get("items"));
+	vi.spyOn(navigator.clipboard, "readText").mockResolvedValue(
+		"ridu-field-clipboard:" + JSON.stringify(copy)
+	);
+	await screen.getByRole("button", { name: "Open Items actions", exact: true }).click();
+	await page.getByRole("menuitem", { name: "Paste field", exact: true }).click();
+	await expect.poll(() => editor.element().textContent).toContain('"kept": true');
+	expect(props.form.pendingEditIssues()).toEqual([]);
+	expect(props.form.dirty).toBe(false);
+	await screen.unmount();
+	props.runtime.dispose();
+});
+
 it("resolves a nested group field through its retained parent row after reordering", async () => {
 	const details = {
 		...schema("group"),

@@ -3,7 +3,7 @@ import { documentSaveButton, loginAsEditor, observePageErrors } from "./helpers"
 import { bodyCards, bodyEditor, insertBlock } from "./rich-text-block-fixture";
 
 for (const mode of ["inline", "reference"] as const) {
-	test(`${mode} blocks preserve document-dependent access, refresh, denied saves and embedded drafts`, async ({
+	test(`${mode} blocks preserve document-dependent access, refresh, denied saves and inline embeds`, async ({
 		page,
 	}) => {
 		test.setTimeout(90_000);
@@ -50,13 +50,12 @@ for (const mode of ["inline", "reference"] as const) {
 		expect((await saved).ok()).toBe(true);
 		await expect(page.locator('input[name="layout.1.controlled"]')).toBeEditable();
 		await expect(page.locator('input[name="layout.1.secret"]')).toHaveValue("Redacted");
-		const drawer = await insertBlock(page, bodyEditor(page), "Card");
-		await drawer.getByRole("textbox", { name: "Visibility", exact: true }).fill("visible");
-		await drawer.getByRole("button", { name: "Cancel", exact: true }).click();
+		const inserted = await insertBlock(page, bodyEditor(page), "Card");
+		await inserted.getByRole("textbox", { name: "Visibility", exact: true }).fill("visible");
+		await inserted.getByRole("button", { name: "Remove", exact: true }).click();
 		await expect(bodyCards(page)).toHaveCount(0);
-		const applied = await insertBlock(page, bodyEditor(page), "Card");
-		await applied.getByRole("textbox", { name: "Visibility", exact: true }).fill("visible");
-		await applied.getByRole("button", { name: "Apply", exact: true }).click();
+		const replacement = await insertBlock(page, bodyEditor(page), "Card");
+		await replacement.getByRole("textbox", { name: "Visibility", exact: true }).fill("visible");
 		await expect(bodyCards(page)).toHaveCount(1);
 		saved = page.waitForResponse(
 			(r) =>
@@ -145,8 +144,7 @@ for (const mode of ["inline", "reference"] as const) {
 		await picker.getByRole("button", { name: "Person", exact: true }).click();
 		await expect(layout.getByText("Untitled Person", { exact: true })).toBeVisible();
 		for (const label of ["Person", "CTA"]) {
-			const drawer = await insertBlock(page, bodyEditor(page), label);
-			await drawer.getByRole("button", { name: "Apply", exact: true }).click();
+			await insertBlock(page, bodyEditor(page), label);
 			await expect(bodyCards(page).filter({ hasText: label })).toBeVisible();
 		}
 		const saved = page.waitForResponse(
