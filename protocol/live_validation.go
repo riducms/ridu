@@ -7,7 +7,9 @@ import "github.com/riducms/ridu/store"
 // Field paths refer to the submitted snapshot and are validated by the server.
 type LiveValidationRequest struct {
 	// ID selects an existing collection document. Global requests must omit it.
-	ID       string                        `json:"id,omitempty"`
+	ID string `json:"id,omitempty"`
+	// Draft defers editorial completeness checks, never structural validation.
+	Draft    *bool                         `json:"draft,omitempty"`
 	Data     store.Values                  `json:"data"`
 	Fields   []string                      `json:"fields"`
 	Embedded []LiveValidationEmbeddedScope `json:"embedded,omitempty"`

@@ -173,6 +173,20 @@
                         }
                       ]
                     }
+                  },
+                  {
+                    "id": "pages-layout-hero-block-name",
+                    "name": "blockName",
+                    "path": "layout.hero.blockName",
+                    "type": "text",
+                    "category": "scalar",
+                    "required": false,
+                    "unique": false,
+                    "default": "",
+                    "admin": {
+                      "label": "Block name"
+                    },
+                    "text": {}
                   }
                 ]
               },
@@ -289,6 +303,20 @@
                         }
                       ]
                     }
+                  },
+                  {
+                    "id": "pages-layout-content-block-name",
+                    "name": "blockName",
+                    "path": "layout.content.blockName",
+                    "type": "text",
+                    "category": "scalar",
+                    "required": false,
+                    "unique": false,
+                    "default": "",
+                    "admin": {
+                      "label": "Block name"
+                    },
+                    "text": {}
                   }
                 ]
               },
@@ -333,13 +361,26 @@
                       "label": "Caption"
                     },
                     "text": {}
+                  },
+                  {
+                    "id": "pages-layout-media-block-name",
+                    "name": "blockName",
+                    "path": "layout.media.blockName",
+                    "type": "text",
+                    "category": "scalar",
+                    "required": false,
+                    "unique": false,
+                    "default": "",
+                    "admin": {
+                      "label": "Block name"
+                    },
+                    "text": {}
                   }
                 ]
               },
               {
                 "typeName": "CTA",
                 "admin": {
-                  "nameField": "blockName",
                   "rowLabel": "label"
                 },
                 "slug": "cta",
@@ -504,13 +545,26 @@
                         }
                       ]
                     }
+                  },
+                  {
+                    "id": "campaigns-layout-hero-block-name",
+                    "name": "blockName",
+                    "path": "layout.hero.blockName",
+                    "type": "text",
+                    "category": "scalar",
+                    "required": false,
+                    "unique": false,
+                    "default": "",
+                    "admin": {
+                      "label": "Block name"
+                    },
+                    "text": {}
                   }
                 ]
               },
               {
                 "typeName": "CTA",
                 "admin": {
-                  "nameField": "blockName",
                   "rowLabel": "label"
                 },
                 "slug": "cta",
@@ -634,7 +688,6 @@
                       {
                         "typeName": "Callout",
                         "admin": {
-                          "nameField": "blockName",
                           "rowLabel": "title"
                         },
                         "slug": "callout",
@@ -714,7 +767,6 @@
                                         {
                                           "typeName": "CTA",
                                           "admin": {
-                                            "nameField": "blockName",
                                             "rowLabel": "label"
                                           },
                                           "slug": "cta",
@@ -881,13 +933,26 @@
                               "label": "Caption"
                             },
                             "text": {}
+                          },
+                          {
+                            "id": "articles-body-blocks-block-media-block-name",
+                            "name": "blockName",
+                            "path": "body.blocks.block.media.blockName",
+                            "type": "text",
+                            "category": "scalar",
+                            "required": false,
+                            "unique": false,
+                            "default": "",
+                            "admin": {
+                              "label": "Block name"
+                            },
+                            "text": {}
                           }
                         ]
                       },
                       {
                         "typeName": "CTA",
                         "admin": {
-                          "nameField": "blockName",
                           "rowLabel": "label"
                         },
                         "slug": "cta",
@@ -996,7 +1061,6 @@
                       {
                         "typeName": "Callout",
                         "admin": {
-                          "nameField": "blockName",
                           "rowLabel": "title"
                         },
                         "slug": "callout",
@@ -1075,7 +1139,6 @@
                                         {
                                           "typeName": "CTA",
                                           "admin": {
-                                            "nameField": "blockName",
                                             "rowLabel": "label"
                                           },
                                           "slug": "cta",
@@ -1240,13 +1303,26 @@
                               "label": "Caption"
                             },
                             "text": {}
+                          },
+                          {
+                            "id": "articles-localized-body-blocks-block-media-block-name",
+                            "name": "blockName",
+                            "path": "localizedBody.blocks.block.media.blockName",
+                            "type": "text",
+                            "category": "scalar",
+                            "required": false,
+                            "unique": false,
+                            "default": "",
+                            "admin": {
+                              "label": "Block name"
+                            },
+                            "text": {}
                           }
                         ]
                       },
                       {
                         "typeName": "CTA",
                         "admin": {
-                          "nameField": "blockName",
                           "rowLabel": "label"
                         },
                         "slug": "cta",

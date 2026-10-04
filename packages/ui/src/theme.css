@@ -95,6 +95,8 @@
 		--control-border: #3c3c3c;
 		--control-border-hover: #575757;
 		--control-border-disabled: #3c3c3c;
+		--panel-border: #4a4a4a;
+		--panel-border-hover: #656565;
 		--stroke-soft: oklch(1 0 0 / 8%);
 		--brand-primary: oklch(0.922 0 0);
 		--brand-primary-foreground: oklch(0.205 0 0);
@@ -205,6 +207,8 @@
 		--control-border: #ddd;
 		--control-border-hover: #c3c3c3;
 		--control-border-disabled: #ddd;
+		--panel-border: #d0d0d0;
+		--panel-border-hover: #b5b5b5;
 		--stroke-soft: oklch(0.922 0 0);
 		--brand-primary: oklch(0.205 0 0);
 		--brand-primary-foreground: oklch(0.985 0 0);

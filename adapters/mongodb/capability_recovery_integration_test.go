@@ -49,7 +49,9 @@ func TestMongoCapabilityReadsPreserveSchemaRecovery(t *testing.T) {
 					empty = richtextblocks.Document()
 					code, path = "unknown_embedded_schema", "body.root.children.0.fields.blockType"
 				}
-				config.Collections = []ridu.Collection{{Slug: "pages", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true}, Fields: field.Fields{definition(known, retired)}}}
+				allow := func(ridu.AccessContext) (ridu.AccessDecision, error) { return ridu.Allow(), nil }
+				config.Collections = []ridu.Collection{{Slug: "pages", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true}, Fields: field.Fields{definition(known, retired)},
+					Access: ridu.CollectionAccess{ReadDrafts: allow, ReadVersions: allow}}}
 				backend := mongoIntegrationStore(t)
 				app, err := ridu.New(config, backend)
 				if err != nil {
@@ -74,6 +76,15 @@ func TestMongoCapabilityReadsPreserveSchemaRecovery(t *testing.T) {
 				}
 				caps, err := current.Local().Capabilities(t.Context(), "pages", created.ID, ridu.CapabilityOptions{})
 				var failure *ridu.OperationError
+				if historical {
+					if err != nil {
+						t.Fatalf("current working capabilities should not decode retained history: %v", err)
+					}
+					if _, err := current.Local().Versions(t.Context(), "pages", created.ID, ridu.FindOptions{}); !errors.As(err, &failure) || failure.Code != "block_recovery_required" {
+						t.Fatalf("explicit retained-history read did not report recovery: %#v, %v", failure, err)
+					}
+					return
+				}
 				if !errors.As(err, &failure) || failure.Code != "block_recovery_required" || failure.Status != 409 || len(failure.Issues) != 1 || failure.Issues[0].Code != code || failure.Issues[0].Path != path {
 					t.Fatalf("capability recovery: %#v, %v", failure, err)
 				}

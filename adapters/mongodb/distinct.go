@@ -51,7 +51,7 @@ func (transaction *documentTransaction) Distinct(ctx context.Context, request st
 		groupValue = mongoLocalizedValueExpression(resolved)
 	}
 	group := bson.D{{Key: "$group", Value: bson.D{{Key: "_id", Value: groupValue}}}}
-	collection := transaction.collection(request.Collection)
+	collection := transaction.readCollection(documentRequest)
 	basePipeline := mongo.Pipeline{
 		bson.D{{Key: "$match", Value: predicate}},
 		group,

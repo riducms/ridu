@@ -75,6 +75,10 @@ const StepMongoDBRenameResource StepKind = "mongodb_rename_resource"
 // shared state is removed by the preceding transactional retirement step.
 const StepMongoDBDropResources StepKind = "mongodb_drop_resources"
 
+// StepMongoDBRebuildHeadReservations recalculates active cross-head unique
+// reservations before newly declared unique indexes are built.
+const StepMongoDBRebuildHeadReservations StepKind = "mongodb_rebuild_head_reservations"
+
 // StepMongoDBAssertSchema verifies the complete planner-owned MongoDB catalog
 // outside a database transaction after every physical step has completed.
 const StepMongoDBAssertSchema StepKind = "mongodb_assert_schema"
@@ -155,6 +159,7 @@ type MongoDBCreateIndexPayload struct {
 type MongoDBDropIndexPayload struct {
 	CollectionID schema.StableID `json:"collectionId"`
 	Version      bool            `json:"version,omitempty"`
+	Published    bool            `json:"published,omitempty"`
 	Index        string          `json:"index"`
 }
 
@@ -307,6 +312,7 @@ func (artifact Artifact) validate() error {
 			}
 			if step.Kind == StepMongoDBCreateIndex || step.Kind == StepMongoDBDropIndex ||
 				step.Kind == StepMongoDBRenameResource || step.Kind == StepMongoDBDropResources ||
+				step.Kind == StepMongoDBRebuildHeadReservations ||
 				step.Kind == StepMongoDBAssertSchema {
 				mongoDBSteps++
 			}
@@ -615,6 +621,14 @@ func validateStepPayload(mode PhaseMode, step Step) error {
 		if err := decodeStrictJSON(step.Payload, &payload); err != nil || validateMongoDBDropResources(payload) != nil {
 			return fmt.Errorf("malformed MongoDB-resource-drop payload")
 		}
+	case StepMongoDBRebuildHeadReservations:
+		if mode != PhaseNoTransaction {
+			return fmt.Errorf("MongoDB head-reservation rebuild is allowed only in a no-transaction phase")
+		}
+		var payload AssertSchemaPayload
+		if err := decodeStrictJSON(step.Payload, &payload); err != nil || !bytes.Equal(step.Payload, []byte("{}")) {
+			return fmt.Errorf("malformed MongoDB-head-reservation-rebuild payload")
+		}
 	case StepMongoDBAssertSchema:
 		if mode != PhaseNoTransaction {
 			return fmt.Errorf("MongoDB schema assertion is allowed only in a no-transaction phase")
@@ -722,6 +736,9 @@ func validateMongoDBCreateIndex(payload MongoDBCreateIndexPayload) error {
 func validateMongoDBDropIndex(payload MongoDBDropIndexPayload) error {
 	if !schema.IsValidStableID(string(payload.CollectionID)) || !mongoDBPhysicalIdentifier(payload.Index) || payload.Index == "_id_" {
 		return fmt.Errorf("invalid MongoDB physical index identity")
+	}
+	if payload.Version && payload.Published {
+		return fmt.Errorf("MongoDB index removal cannot target both version and published state")
 	}
 	return nil
 }

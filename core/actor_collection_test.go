@@ -88,7 +88,7 @@ func TestMutationOptionsForwardIdentityRevisionAndBulkLocales(t *testing.T) {
 		Revision int    `json:"_revision"`
 	}
 	actor := &store.Document{ID: "shared-id"}
-	posts := ridu.NewTypedCollection[document, input, input]("posts").With(app.Local())
+	posts := ridu.NewTypedCollection[document, input, input, input]("posts").With(app.Local())
 	options := ridu.TypedMutationOptions{Actor: actor, ActorCollection: "staff", Locale: "en"}
 	created, err := posts.Create(t.Context(), input{"Hello"}, options)
 	if err != nil {

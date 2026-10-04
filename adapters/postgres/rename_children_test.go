@@ -112,19 +112,14 @@ func TestPostgresFieldRenameRefusesRenamedChildren(t *testing.T) {
 	}
 }
 
-// The rule applies when a migration is created. The planner that replays
-// committed history does not apply it, so a migration that was created and
-// applied before the rule existed still verifies against the planner.
-func TestPostgresFieldRenameRuleDoesNotInvalidateCommittedHistory(t *testing.T) {
+// Artifact creation and verification use the same rename-only contract.
+func TestPostgresFieldRenameRuleAppliesToTheSharedPlanner(t *testing.T) {
 	ctx := context.Background()
 	_, before := renameChildrenManifest(t, field.Group("meta", field.Fields{field.Text("slug"), field.Number("rank")}), field.Number("views"))
 	_, after := renameChildrenManifest(t, field.Group("info", field.Fields{field.Text("handle"), field.Number("order")}), field.Number("views"))
-	committed, err := planArtifact(ctx, "rename", &before, after, renameChildrenIntent(t, before, after), false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := validatePostgresPlannedSQL(ctx, committed); err != nil {
-		t.Fatalf("a committed rename with renamed children no longer verifies: %v", err)
+	_, err := planArtifact(ctx, "rename", &before, after, renameChildrenIntent(t, before, after), false)
+	if err == nil || !strings.Contains(err.Error(), "separate migration") {
+		t.Fatalf("planner accepted a rename with changed children: %v", err)
 	}
 }
 

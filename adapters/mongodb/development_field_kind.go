@@ -25,8 +25,8 @@ func (backend *Store) HasMigrationHistory(ctx context.Context) (bool, error) {
 	return false, nil
 }
 
-// ReviewDevelopmentFieldKinds reads every current document and snapshot under
-// one stable database snapshot, without projecting through the candidate schema.
+// ReviewDevelopmentFieldKinds reads both active heads and every snapshot under
+// one stable database snapshot, counting each logical document once.
 func (backend *Store) ReviewDevelopmentFieldKinds(ctx context.Context, before, after schema.Manifest) ([]fieldchange.Report, error) {
 	changes := fieldchange.Detect(before.Snapshot(), after.Snapshot())
 	reports := fieldchange.Reports(changes)
@@ -39,13 +39,13 @@ func (backend *Store) ReviewDevelopmentFieldKinds(ctx context.Context, before, a
 	if err != nil {
 		return nil, err
 	}
-	err = backend.scanMongoFieldKinds(sessionContext, transaction, changes, reports, false)
+	err = backend.scanMongoFieldKinds(sessionContext, transaction, changes, reports, false, mongoManifestLocales(before))
 	leave()
 	return reports, err
 }
 
-// ClearDevelopmentFieldKinds clears only the reviewed field values from live
-// documents and complete retained snapshots, with references in one transaction.
+// ClearDevelopmentFieldKinds clears only the reviewed field values from working
+// documents, published heads, and retained snapshots, with references in one transaction.
 // Immutable applied or incomplete migration history requires the reviewed runner.
 func (backend *Store) ClearDevelopmentFieldKinds(ctx context.Context, before, after schema.Manifest, expected []fieldchange.Report) error {
 	changes := fieldchange.Detect(before.Snapshot(), after.Snapshot())
@@ -69,14 +69,15 @@ func (backend *Store) ClearDevelopmentFieldKinds(ctx context.Context, before, af
 				return fmt.Errorf("this MongoDB database is managed by ridu migrate; field-kind recovery requires a reviewed migration")
 			}
 			reports := fieldchange.Reports(changes)
-			if err := backend.scanMongoFieldKinds(sessionContext, transaction, changes, reports, false); err != nil {
+			locales := mongoManifestLocales(before)
+			if err := backend.scanMongoFieldKinds(sessionContext, transaction, changes, reports, false, locales); err != nil {
 				return err
 			}
 			if err := fieldchange.ConfirmCounts(expected, reports); err != nil {
 				return err
 			}
 			reports = fieldchange.Reports(changes)
-			if err := backend.scanMongoFieldKinds(sessionContext, transaction, changes, reports, true); err != nil {
+			if err := backend.scanMongoFieldKinds(sessionContext, transaction, changes, reports, true, locales); err != nil {
 				return err
 			}
 			// lease.transaction pauses its heartbeat while holding the fence.
@@ -86,15 +87,26 @@ func (backend *Store) ClearDevelopmentFieldKinds(ctx context.Context, before, af
 	})
 }
 
-func (backend *Store) scanMongoFieldKinds(ctx context.Context, transaction *documentTransaction, changes []fieldchange.Change, reports []fieldchange.Report, clear bool) error {
+func (backend *Store) scanMongoFieldKinds(ctx context.Context, transaction *documentTransaction, changes []fieldchange.Change, reports []fieldchange.Report, clear bool, locales []schema.LocaleCode) error {
+	reported := make([]map[string]struct{}, len(reports))
+	for index := range reported {
+		reported[index] = make(map[string]struct{})
+	}
 	for _, resource := range fieldchange.AffectedResources(changes) {
-		for _, snapshot := range []bool{false, true} {
-			name := physicalCollectionName(resource.ID)
-			if snapshot {
-				name = physicalVersionCollectionName(resource.ID)
+		for _, head := range []struct {
+			name      string
+			snapshot  bool
+			published bool
+		}{
+			{name: physicalCollectionName(resource.ID)},
+			{name: physicalPublishedCollectionName(resource.ID), published: true},
+			{name: physicalVersionCollectionName(resource.ID), snapshot: true},
+		} {
+			if head.published && resource.Versions == nil {
+				continue
 			}
-			collection := backend.database.Collection(name)
-			if err := scanMongoFieldKindCollection(ctx, transaction, collection, resource, changes, reports, snapshot, clear); err != nil {
+			collection := backend.database.Collection(head.name)
+			if err := scanMongoFieldKindCollection(ctx, transaction, collection, resource, changes, reports, reported, head.snapshot, head.published, clear, locales); err != nil {
 				return err
 			}
 		}
@@ -102,7 +114,15 @@ func (backend *Store) scanMongoFieldKinds(ctx context.Context, transaction *docu
 	return nil
 }
 
-func scanMongoFieldKindCollection(ctx context.Context, transaction *documentTransaction, collection *mongo.Collection, resource schema.Collection, changes []fieldchange.Change, reports []fieldchange.Report, snapshot, clear bool) error {
+func mongoManifestLocales(manifest schema.Manifest) []schema.LocaleCode {
+	localization := manifest.Snapshot().Application.Localization
+	if localization == nil {
+		return nil
+	}
+	return localization.LocaleCodes()
+}
+
+func scanMongoFieldKindCollection(ctx context.Context, transaction *documentTransaction, collection *mongo.Collection, resource schema.Collection, changes []fieldchange.Change, reports []fieldchange.Report, reported []map[string]struct{}, snapshot, published, clear bool, locales []schema.LocaleCode) error {
 	cursor, err := collection.Find(ctx, bson.D{})
 	if err != nil {
 		return translateMongoError(ctx, err)
@@ -124,9 +144,27 @@ func scanMongoFieldKindCollection(ctx context.Context, transaction *documentTran
 		if err != nil {
 			return err
 		}
-		values, found, err := fieldchange.Process(changes, reports, resource.ID, document.Values, snapshot, clear)
+		localReports := append([]fieldchange.Report(nil), reports...)
+		for index := range localReports {
+			localReports[index].Documents, localReports[index].Snapshots = 0, 0
+		}
+		values, found, err := fieldchange.Process(changes, localReports, resource.ID, document.Values, snapshot, clear)
 		if err != nil {
 			return err
+		}
+		for index := range localReports {
+			if snapshot {
+				reports[index].Snapshots += localReports[index].Snapshots
+				continue
+			}
+			if localReports[index].Documents == 0 {
+				continue
+			}
+			identity := string(resource.ID) + "\x00" + document.ID
+			if _, exists := reported[index][identity]; !exists {
+				reported[index][identity] = struct{}{}
+				reports[index].Documents++
+			}
 		}
 		if !clear || !found {
 			continue
@@ -143,8 +181,23 @@ func scanMongoFieldKindCollection(ctx context.Context, transaction *documentTran
 			return translateMongoError(ctx, err)
 		}
 		if !snapshot {
-			document.Values = values
-			if err := transaction.replaceDocumentReferences(ctx, resource, document); err != nil {
+			working := document
+			if published {
+				rawWorking, err := transaction.collection(resource).FindOne(ctx, bson.D{{Key: "_id", Value: document.ID}}).Raw()
+				if err != nil {
+					return translateMongoError(ctx, err)
+				}
+				working, err = decodeCollectionDocument(rawWorking, resource)
+				if err != nil {
+					return err
+				}
+			} else {
+				working.Values = values
+			}
+			if err := transaction.replaceHeadReservationsForLocales(ctx, resource, working, locales); err != nil {
+				return err
+			}
+			if err := transaction.replaceDocumentReferences(ctx, resource, working); err != nil {
 				return err
 			}
 		}

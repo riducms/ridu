@@ -317,6 +317,18 @@ Creation is offline. The database-backed commands use their own bounded pools, T
 advisory-lock admission, and schema assertions. Read [Migrations](/docs/migrations/) for exact
 command semantics, destructive and maintenance admission, resumable phases, and recovery.
 
+PostgreSQL accepts only planner `atlas` `1.2.0` artifacts. Separate working and live content is
+part of this layout from its initial migration. Earlier framework layouts and planner histories
+are unsupported; recreate the database and migration history rather than rewriting old artifacts.
+Startup and readiness never convert an old layout.
+
+Authoring reads use the latest working revision for conflict checks, while
+public reads filter and sort against the independent published snapshot. Saving a newer draft does
+not change the public content or its revision/timestamp. Version-history retention may prune old
+snapshots without removing the active published head. Content rewrites and index rebuilds still
+need the migration maintenance admission and a verified backup, because both working and live
+heads must remain coherent.
+
 ## Test against PostgreSQL {#testing}
 
 Use a disposable PostgreSQL 17 database for application tests that cover access rules,

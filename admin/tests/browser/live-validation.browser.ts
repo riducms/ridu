@@ -658,6 +658,20 @@ it("global ordinary and detached requests omit document IDs at the SDK boundary"
 	check.mockRestore();
 });
 
+it("marks advisory validation as draft-mode for draft-capable editing", async () => {
+	const client = createAdminClient();
+	const check = vi.spyOn(client, "collectionLiveValidation").mockResolvedValue({ evaluations: [] });
+	const { form } = setup();
+	form.setResource({ collection: "posts", id: "post_1" });
+	connectDocumentLiveValidation(form, client, () => true);
+	form.set("sku", "draft value");
+	form.liveValidation.flush("sku");
+	await settle();
+	expect(check.mock.calls[0]![1]).toMatchObject({ id: "post_1", draft: true });
+	form.disposeBindings();
+	check.mockRestore();
+});
+
 it("skips an unavailable embedded structure without rejecting an unowned promise", () => {
 	const plugin: SchemaField = {
 		...sku,

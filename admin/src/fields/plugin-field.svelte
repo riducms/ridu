@@ -15,7 +15,6 @@
 	import { PluginFieldBinding } from "@admin/core/forms/plugin-field-binding";
 	import { guardPluginAuthoring } from "@admin/core/forms/plugin-field-authoring";
 	import { getAdminRuntime } from "@admin/core/runtime/admin-runtime.svelte";
-	import { localizeSchemaCollection } from "@admin/core/i18n/localized-schema";
 	import {
 		createEmbeddedSchemaDraft,
 		createEmbeddedSchemaPayload,
@@ -80,11 +79,7 @@
 			return createEmbeddedSchemaPayload(field.schema, scope);
 		},
 		get collections() {
-			return (
-				runtime.manifest?.collections.map((collection) =>
-					localizeSchemaCollection(collection, runtime.i18n)
-				) ?? []
-			);
+			return runtime.localizedCollections;
 		},
 		get documentRevision() {
 			return runtime.documentRevision;
@@ -163,10 +158,10 @@
 				{form}
 				readOnly={locked}
 				disabled={headerDraftOpen(options)}
-				onChange={(change) => {
+				onChange={(value) => {
 					field.assertEditable();
 					if (headerLocked(options)) throw new Error("This embedded header is read-only.");
-					options.onChange(change);
+					options.onChange(value);
 				}}
 			/>
 		{/key}

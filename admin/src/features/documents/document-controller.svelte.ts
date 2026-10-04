@@ -24,6 +24,7 @@ import {
 	submissionFormValues,
 } from "@admin/core/forms/form-schema";
 import { invalidFieldLabels } from "@admin/core/forms/form-validation";
+import { correlateFormIssues } from "@admin/core/forms/form-issue-correlation";
 import type { NotificationCenter } from "@admin/core/notifications/notification-center.svelte";
 import { samePreparedCreateValues } from "@admin/core/bootstrap/admin-bootstrap";
 import {
@@ -74,6 +75,7 @@ export class DocumentController {
 	readonly upload: UploadDraft;
 	publicationOperation = $state(false);
 	saveOutcomeUncertain = $state(false);
+	serverSaveConflict = $state(false);
 	duplicateOperation = $state(false);
 	deleteDialogOpen = $state(false);
 	currentDocument = $state.raw<AdminDocument>();
@@ -116,7 +118,7 @@ export class DocumentController {
 		this.#stopObservingFormChanges = this.form.observeChanges(() => {
 			this.#formChangeGeneration += 1;
 		});
-		connectDocumentLiveValidation(this.form, options.runtime.client);
+		connectDocumentLiveValidation(this.form, options.runtime.client, () => this.draftsCollection);
 		this.#scheduleRouteSync(this.#routeSnapshot());
 		$effect.pre(() => {
 			this.#scheduleRouteSync(this.#routeSnapshot());
@@ -149,15 +151,16 @@ export class DocumentController {
 
 		$effect(() => {
 			const interval = this.collection?.versionSettings?.autosaveIntervalSeconds ?? 0;
-			const documentID = this.documentID;
-			if (documentID === undefined || interval <= 0) return;
+			if (interval <= 0) return;
 
 			const timer = window.setInterval(async () => {
-				if (!this.canSave || this.publicationOperation) return;
-				// A background update to a published document would make its edits public.
-				// Keep a recoverable local checkpoint until the author explicitly chooses
-				// Publish changes; draft documents can use the ordinary server mutation.
-				if (this.currentStatus === "published") this.checkpointDraft();
+				if (!this.canSave || this.publicationOperation || this.serverSaveConflict) return;
+				// Account creation needs a password supplied by the explicit Save flow.
+				// Autosave must not create identities or treat missing credentials as an
+				// uncertain network mutation.
+				if (this.creatingAuthUser) return;
+				if (this.creating && !this.form.dirty && !this.upload.dirty) return;
+				if (this.currentStatus === "published" && !this.draftsCollection) this.checkpointDraft();
 				else await this.save({ silent: true });
 			}, interval * 1_000);
 			return () => window.clearInterval(timer);
@@ -240,12 +243,26 @@ export class DocumentController {
 		return this.currentDocument._status === "draft" ? "draft" : "published";
 	}
 
-	get selectedFile() {
-		return this.upload.file;
-	}
-
 	get hasUnsavedChanges() {
 		return this.form.dirty || this.upload.dirty || this.recoveryConflict !== undefined;
+	}
+
+	get hasSavedDraftChanges() {
+		return this.draftsCollection && this.currentDocument?._hasDraftChanges === true;
+	}
+
+	get canDiscardSavedDraft() {
+		return (
+			!this.creating &&
+			this.hasSavedDraftChanges &&
+			!this.hasUnsavedChanges &&
+			!this.serverSaveConflict &&
+			!this.saveOutcomeUncertain &&
+			!this.form.submitting &&
+			!this.publicationOperation &&
+			!this.lock.lockedByAnotherEditor &&
+			this.form.access?.operations.update === true
+		);
 	}
 
 	get creatingAuthUser() {
@@ -274,6 +291,7 @@ export class DocumentController {
 		return (
 			this.collectionAvailable &&
 			this.recoveryConflict === undefined &&
+			!this.serverSaveConflict &&
 			!this.saveOutcomeUncertain &&
 			!this.upload.busy &&
 			!this.upload.editingImage &&
@@ -385,16 +403,16 @@ export class DocumentController {
 		return this.#documentString("mimeType");
 	}
 
-	checkpointDraft = () => {
+	checkpointDraft = (): boolean => {
 		const collection = this.collection;
-		if (collection === undefined) return;
+		if (collection === undefined) return false;
 		// An unresolved checkpoint stays in storage even though the saved form is clean.
-		if (this.recoveryConflict !== undefined) return;
+		if (this.recoveryConflict !== undefined) return false;
 		if (this.form.dirty) {
 			// Edits survive a failed refresh or a pending access check; only a missing
 			// base document makes them unrecoverable.
-			if (!this.creating && this.currentDocument === undefined) return;
-			saveFormDraft(
+			if (!this.creating && this.currentDocument === undefined) return false;
+			return saveFormDraft(
 				collection,
 				this.documentID,
 				$state.snapshot(this.form.values),
@@ -403,18 +421,19 @@ export class DocumentController {
 				this.#draftLocale,
 				this.options.runtime.manifest?.blocks
 			);
-			return;
 		}
 		const access = this.form.access;
-		if (access === undefined || this.error !== undefined) return;
+		if (access === undefined || this.error !== undefined) return false;
 		if (this.creating ? access.operations.create === true : access.operations.update === true)
 			clearFormDraft(collection.id, this.documentID, this.#draftLocale);
+		return true;
 	};
 
 	discardChanges = () => {
 		const collection = this.collection;
 		if (collection !== undefined) clearFormDraft(collection.id, this.documentID, this.#draftLocale);
 		this.recoveryConflict = undefined;
+		this.serverSaveConflict = false;
 		this.#dismissRecoveryNotification();
 		this.form.discard();
 		this.form.setLocalization(this.contentLocale, this.currentDocument?._localization?.sources);
@@ -471,8 +490,24 @@ export class DocumentController {
 		const checkpoint = this.recoveryConflict;
 		if (checkpoint === undefined) return;
 		this.recoveryConflict = undefined;
+		this.serverSaveConflict = false;
 		clearFormDraft(checkpoint.collection.id, this.documentID, this.#draftLocale);
 		this.#applyDraft(checkpoint);
+	};
+
+	reviewServerConflict = async () => {
+		if (!this.serverSaveConflict || this.creating || this.currentDocument === undefined) return;
+		// The existing recovery checkpoint retains the submitted edits while the latest
+		// working document is loaded. The normal recovery comparison then fences the retry.
+		if (this.form.dirty && !this.checkpointDraft()) {
+			this.options.notifications.error({
+				title: this.options.runtime.i18n.t("documents:reviewLatestUnavailable"),
+			});
+			return;
+		}
+		await this.refresh();
+		if (this.error === undefined && this.recoveryConflict === undefined && !this.form.dirty)
+			this.serverSaveConflict = false;
 	};
 
 	forceUnlock = async () => {
@@ -580,6 +615,7 @@ export class DocumentController {
 	}: { silent?: boolean; password?: string; publish?: boolean } = {}) => {
 		if (!this.canSave) return false;
 		const publishingChanges = publish && !this.creating && this.versionedCollection;
+		const savingDraft = this.draftsCollection && !publish && !this.creatingAuthUser;
 		if (publishingChanges && !this.canPublish) return false;
 		this.#dismissRecoveryNotification();
 		const collectionSlug = this.collectionSlug;
@@ -589,92 +625,165 @@ export class DocumentController {
 		this.#saveRequest = request;
 		this.#cancelLoad();
 		const wasCreating = this.creating;
+		const submittedSnapshot = $state.snapshot(this.form.values);
+		const changeGeneration = this.#formChangeGeneration;
 		try {
-			const saved = await this.form.submit(this.validationFields, this.creating, async (values) => {
-				if (!wasCreating)
-					values = changedFormValues(this.validationFields, values, this.form.original, (path) =>
-						this.form.isInherited(path)
-					);
-				if (this.globalResource) {
-					if (publishingChanges) {
-						return this.options.runtime.client.publishGlobalChanges(collectionSlug, values, {
+			const saved = await this.form.submit(
+				this.validationFields,
+				this.creating,
+				async (values) => {
+					if (!wasCreating)
+						values = changedFormValues(this.validationFields, values, this.form.original, (path) =>
+							this.form.isInherited(path)
+						);
+					if (this.globalResource) {
+						if (publishingChanges) {
+							return this.options.runtime.client.publishGlobalChanges(collectionSlug, values, {
+								revision: this.currentRevision,
+								signal: request.signal,
+								locale: this.contentLocale,
+							});
+						}
+						return this.options.runtime.client.updateGlobal(collectionSlug, values, {
 							revision: this.currentRevision,
+							...(savingDraft ? { draft: true } : {}),
 							signal: request.signal,
 							locale: this.contentLocale,
 						});
 					}
-					return this.options.runtime.client.updateGlobal(collectionSlug, values, {
-						revision: this.currentRevision,
-						signal: request.signal,
-						locale: this.contentLocale,
-					});
-				}
-				if (documentID !== undefined) {
-					if (this.uploadCollection) {
-						return this.options.runtime.client.updateUpload(
-							collectionSlug,
-							documentID,
+					if (documentID !== undefined) {
+						if (this.uploadCollection) {
+							return this.options.runtime.client.updateUpload(
+								collectionSlug,
+								documentID,
+								{
+									data: values,
+									file: this.upload.file,
+									filename: this.upload.filename,
+									image: this.upload.image,
+									publish: publishingChanges,
+								},
+								{
+									revision: this.currentRevision,
+									signal: request.signal,
+									locale: this.contentLocale,
+									...(savingDraft ? { draft: true } : {}),
+								}
+							);
+						}
+						if (publishingChanges) {
+							return this.options.runtime.client.publishChanges(
+								collectionSlug,
+								documentID,
+								values,
+								{
+									revision: this.currentRevision,
+									signal: request.signal,
+									locale: this.contentLocale,
+								}
+							);
+						}
+						return this.options.runtime.client.update(collectionSlug, documentID, values, {
+							revision: this.currentRevision,
+							...(savingDraft ? { draft: true } : {}),
+							signal: request.signal,
+							locale: this.contentLocale,
+						});
+					}
+					if (this.collection?.capabilities.auth) {
+						if (password === undefined)
+							throw new Error(this.options.runtime.i18n.t("documents:enterNewAccountPassword"));
+						return this.options.runtime.client.auth.createUser(
+							{ collection: collectionSlug, data: values, password },
 							{
-								data: values,
-								file: this.upload.file,
-								filename: this.upload.filename,
-								image: this.upload.image,
-								publish: publishingChanges,
-							},
-							{ revision: this.currentRevision, signal: request.signal, locale: this.contentLocale }
+								signal: request.signal,
+								locale: this.contentLocale,
+								...(this.versionedCollection
+									? { draft: this.draftsCollection ? !publish : false }
+									: {}),
+							}
 						);
 					}
-					if (publishingChanges) {
-						return this.options.runtime.client.publishChanges(collectionSlug, documentID, values, {
-							revision: this.currentRevision,
+					if (!this.uploadCollection) {
+						return this.options.runtime.client.create(collectionSlug, values, {
 							signal: request.signal,
 							locale: this.contentLocale,
+							...(this.versionedCollection
+								? { draft: this.draftsCollection ? !publish : false }
+								: {}),
 						});
 					}
-					return this.options.runtime.client.update(collectionSlug, documentID, values, {
-						revision: this.currentRevision,
-						signal: request.signal,
-						locale: this.contentLocale,
-					});
-				}
-				if (this.collection?.capabilities.auth) {
-					if (password === undefined)
-						throw new Error(this.options.runtime.i18n.t("documents:enterNewAccountPassword"));
-					return this.options.runtime.client.auth.createUser(
-						{ collection: collectionSlug, data: values, password },
-						{ signal: request.signal, locale: this.contentLocale }
-					);
-				}
-				if (!this.uploadCollection) {
-					return this.options.runtime.client.create(collectionSlug, values, {
-						signal: request.signal,
-						locale: this.contentLocale,
+					if (this.upload.file === undefined)
+						throw new Error(this.options.runtime.i18n.t("uploads:chooseFileBeforeSaving"));
+					return this.options.runtime.client.upload(collectionSlug, this.upload.file, {
+						filename: this.upload.filename,
+						image: this.upload.image,
 						...(this.versionedCollection
 							? { draft: this.draftsCollection ? !publish : false }
 							: {}),
+						data: values,
+						signal: request.signal,
+						locale: this.contentLocale,
 					});
+				},
+				{
+					mode: savingDraft ? "draft" : "complete",
+					allowEditsDuringRequest: silent && !wasCreating && !this.uploadCollection,
+					// Apply the server baseline once, after checking this request's lifetime.
+					// Committing submitted values first remounts editors between two resets.
+					commitBaseline: false,
 				}
-				if (this.selectedFile === undefined)
-					throw new Error(this.options.runtime.i18n.t("uploads:chooseFileBeforeSaving"));
-				return this.options.runtime.client.upload(collectionSlug, this.selectedFile, {
-					filename: this.upload.filename,
-					image: this.upload.image,
-					publish,
-					data: values,
-					signal: request.signal,
-					locale: this.contentLocale,
-				});
-			});
+			);
 			if (request.signal.aborted) return false;
 			this.saveOutcomeUncertain = false;
-			this.#applyDocument(saved);
+			this.serverSaveConflict = false;
+			const editedDuringSave = this.#formChangeGeneration !== changeGeneration;
+			const preserveEditors = silent && !wasCreating && !this.uploadCollection;
+			let recoveryNeeded = false;
+			if (editedDuringSave || preserveEditors) {
+				const savedValues = documentFormValues(this.collection?.fields ?? [], saved);
+				if (this.form.acceptSavedBaseline(savedValues, submittedSnapshot)) {
+					this.currentDocument = saved;
+					this.form.setLocalization(this.contentLocale, saved._localization?.sources);
+					if (editedDuringSave) this.checkpointDraft();
+				} else {
+					const collection = this.collection;
+					const checkpointed =
+						collection !== undefined &&
+						saveFormDraft(
+							collection,
+							this.documentID,
+							$state.snapshot(this.form.values),
+							submittedSnapshot,
+							formDraftBase(this.currentDocument),
+							this.#draftLocale,
+							this.options.runtime.manifest?.blocks
+						);
+					const checkpoint = checkpointed
+						? peekFormDraft(collection.id, this.documentID, this.#draftLocale)
+						: undefined;
+					if (checkpoint === undefined) {
+						this.serverSaveConflict = true;
+						this.options.notifications.error({
+							title: this.options.runtime.i18n.t("documents:reviewLatestUnavailable"),
+						});
+						return false;
+					}
+					this.#applyDocument(saved);
+					this.recoveryConflict = checkpoint;
+					recoveryNeeded = true;
+				}
+			} else {
+				this.#applyDocument(saved);
+			}
 			this.lastSavedAt = Date.now();
 			this.options.runtime.documentsChanged();
-			clearFormDraft(
-				this.collection?.id ?? this.collectionSlug,
-				this.documentID,
-				this.#draftLocale
-			);
+			if (!editedDuringSave && !recoveryNeeded)
+				clearFormDraft(
+					this.collection?.id ?? this.collectionSlug,
+					this.documentID,
+					this.#draftLocale
+				);
 			if (!silent) {
 				this.options.notifications.success({
 					title: wasCreating
@@ -702,19 +811,23 @@ export class DocumentController {
 			return !request.signal.aborted;
 		} catch (cause) {
 			if (request.signal.aborted) return false;
+			if (!wasCreating && cause instanceof RiduError && cause.status === 409) {
+				this.serverSaveConflict = true;
+				this.checkpointDraft();
+			}
 			if (
-				this.uploadCollection &&
+				(this.uploadCollection || wasCreating) &&
 				!(cause instanceof FormValidationError) &&
 				(!(cause instanceof RiduError) || cause.status >= 500)
 			) {
 				this.saveOutcomeUncertain = true;
 				if (!silent) {
 					this.options.notifications.error({
-						title: this.options.runtime.i18n.t("uploads:outcomeUnknown"),
+						title: this.options.runtime.i18n.t("documents:saveOutcomeUnknown"),
 						message: this.options.runtime.i18n.t(
 							wasCreating
-								? "uploads:outcomeUnknownDescription"
-								: "uploads:saveOutcomeUnknownDescription"
+								? "documents:createOutcomeUnknownDescription"
+								: "documents:saveOutcomeUnknownDescription"
 						),
 					});
 				}
@@ -757,12 +870,15 @@ export class DocumentController {
 			this.form.submitting ||
 			this.publicationOperation ||
 			this.upload.busy ||
+			this.serverSaveConflict ||
 			this.saveOutcomeUncertain
 		)
 			return;
 		this.#cancelLoad();
 		this.publicationOperation = true;
+		const releaseEditing = this.form.beginManualSubmission();
 		const generation = this.#routeGeneration;
+		const submittedValues = $state.snapshot(this.form.values);
 		try {
 			const saved =
 				next === "published"
@@ -803,6 +919,20 @@ export class DocumentController {
 			});
 		} catch (cause) {
 			if (generation !== this.#routeGeneration) return;
+			if (cause instanceof RiduError) {
+				if (cause.status === 409) {
+					this.serverSaveConflict = true;
+					this.checkpointDraft();
+				}
+				if (cause.issues.length > 0) {
+					this.form.issues = correlateFormIssues(
+						this.validationFields,
+						submittedValues,
+						this.form.values,
+						cause.issues
+					);
+				}
+			}
 			this.options.notifications.error({
 				title: this.options.runtime.i18n.t("documents:statusNotChanged"),
 				message:
@@ -811,6 +941,45 @@ export class DocumentController {
 						: this.options.runtime.i18n.t("documents:statusChangeFailed"),
 			});
 		} finally {
+			releaseEditing();
+			if (generation === this.#routeGeneration) this.publicationOperation = false;
+		}
+	};
+
+	discardSavedDraft = async () => {
+		if (!this.canDiscardSavedDraft || this.documentID === undefined) return;
+		const generation = this.#routeGeneration;
+		this.publicationOperation = true;
+		const releaseEditing = this.form.beginManualSubmission();
+		this.#cancelLoad();
+		try {
+			const saved = this.globalResource
+				? await this.options.runtime.client.discardGlobalDraft(this.collectionSlug, {
+						revision: this.currentRevision,
+						locale: this.contentLocale,
+					})
+				: await this.options.runtime.client.discardDraft(this.collectionSlug, this.documentID, {
+						revision: this.currentRevision,
+						locale: this.contentLocale,
+					});
+			if (generation !== this.#routeGeneration) return;
+			this.#applyDocument(saved);
+			this.options.runtime.documentsChanged();
+			await this.#refreshAccess(this.documentID);
+			if (generation !== this.#routeGeneration) return;
+			this.#loadVersionCount();
+			this.options.notifications.success({
+				title: this.options.runtime.i18n.t("documents:savedDraftDiscarded"),
+			});
+		} catch (cause) {
+			if (generation !== this.#routeGeneration) return;
+			if (cause instanceof RiduError && cause.status === 409) this.serverSaveConflict = true;
+			this.options.notifications.error({
+				title: this.options.runtime.i18n.t("documents:discardSavedDraftFailed"),
+				message: cause instanceof Error ? cause.message : undefined,
+			});
+		} finally {
+			releaseEditing();
 			if (generation === this.#routeGeneration) this.publicationOperation = false;
 		}
 	};
@@ -938,6 +1107,7 @@ export class DocumentController {
 			this.#routeGeneration += 1;
 			this.#dismissRecoveryNotification();
 			this.recoveryConflict = undefined;
+			this.serverSaveConflict = false;
 			this.#cancelRouteRequests();
 			this.publicationOperation = false;
 			this.duplicateOperation = false;
@@ -1289,8 +1459,16 @@ export class DocumentController {
 				documentID === undefined || preserveDocument
 					? undefined
 					: global
-						? this.options.runtime.client.global(slug, { signal, locale })
-						: this.options.runtime.client.find(slug, documentID, { signal, locale }),
+						? this.options.runtime.client.global(slug, {
+								signal,
+								locale,
+								...(this.draftsCollection ? { draft: true } : {}),
+							})
+						: this.options.runtime.client.find(slug, documentID, {
+								signal,
+								locale,
+								...(this.draftsCollection ? { draft: true } : {}),
+							}),
 				global
 					? this.options.runtime.client.globalAccess(slug, { signal, locale })
 					: this.options.runtime.client.collectionAccess(slug, {

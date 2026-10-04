@@ -49,6 +49,8 @@ export interface CollectionContract {
 	allOutput?: unknown;
 	create: unknown;
 	update: unknown;
+	draftCreate?: unknown;
+	draftUpdate?: unknown;
 	where: unknown;
 	select: unknown;
 	populate: unknown;
@@ -69,6 +71,7 @@ export interface GlobalContract {
 	output: unknown;
 	allOutput?: unknown;
 	update: unknown;
+	draftUpdate?: unknown;
 	select: unknown;
 	populate: unknown;
 	populateOutput?: unknown;
@@ -121,6 +124,12 @@ export type GlobalUpdateFor<
 	Config extends RiduConfigShape,
 	Slug extends GlobalSlug<Config>,
 > = GlobalContractFor<Config, Slug>["update"];
+
+/** Generated input for staging an incomplete global working draft. */
+export type GlobalDraftUpdateFor<Config extends RiduConfigShape, Slug extends GlobalSlug<Config>> =
+	GlobalContractFor<Config, Slug> extends { draftUpdate: infer Input }
+		? Input
+		: GlobalUpdateFor<Config, Slug>;
 
 /** Top-level field selection accepted by one generated global. */
 export type GlobalSelectFor<
@@ -200,11 +209,19 @@ export type CreateFor<
 	Slug extends CollectionSlug<Config>,
 > = ContractFor<Config, Slug>["create"];
 
+/** Generated input for creating an incomplete draft-capable document. */
+export type DraftCreateFor<Config extends RiduConfigShape, Slug extends CollectionSlug<Config>> =
+	ContractFor<Config, Slug> extends { draftCreate: infer Input } ? Input : CreateFor<Config, Slug>;
+
 /** Update input accepted by one generated collection. */
 export type UpdateFor<
 	Config extends RiduConfigShape,
 	Slug extends CollectionSlug<Config>,
 > = ContractFor<Config, Slug>["update"];
+
+/** Generated input for staging an incomplete collection working draft. */
+export type DraftUpdateFor<Config extends RiduConfigShape, Slug extends CollectionSlug<Config>> =
+	ContractFor<Config, Slug> extends { draftUpdate: infer Input } ? Input : UpdateFor<Config, Slug>;
 
 /** Filter expression accepted by one generated collection. */
 export type WhereFor<
@@ -479,6 +496,12 @@ export type CreateOptions<
 	Drafts extends boolean = boolean,
 > = MutationLocaleOptions<Locale> & DraftCreateOption<Versions, Drafts>;
 
+/** Updating a draft-capable resource may explicitly stage a working draft. */
+export type UpdateOptions<
+	Locale extends string = string,
+	Drafts extends boolean = boolean,
+> = MutationOptions<Locale> & (Drafts extends true ? { draft?: true } : { draft?: never });
+
 /** Locale, revision, and resulting draft-state controls accepted when restoring a version. */
 export type RestoreOptions<
 	Locale extends string = string,
@@ -497,14 +520,26 @@ export interface CopyLocaleInput<Locale extends string = string> {
 export interface UploadOptions<
 	Data,
 	Locale extends string = string,
+	Drafts extends boolean = boolean,
 > extends MutationLocaleOptions<Locale> {
 	/** Generated document fields to save alongside the uploaded file. */
 	data?: Partial<Data>;
 	filename?: string;
 	image?: UploadImageEdit;
-	/** Publish a versioned asset on its first save. */
-	publish?: boolean;
+	/** Create a working draft when true, or publish on create when false. */
+	draft?: Drafts extends true ? boolean : never;
 }
+
+type CompleteUploadOptions<Data, Locale extends string, Drafts extends boolean> = UploadOptions<
+	Data,
+	Locale,
+	Drafts
+> &
+	({} extends Data ? { data?: Data } : { data: Data });
+
+type CompleteUploadArgs<Data, Locale extends string, Drafts extends boolean> = {} extends Data
+	? [options?: CompleteUploadOptions<Data, Locale, Drafts>]
+	: [options: CompleteUploadOptions<Data, Locale, Drafts>];
 
 /** One atomic update to an upload's metadata, file and image transformation. */
 export interface UpdateUploadInput<Data> {
@@ -574,7 +609,10 @@ export interface ListOptions<
 	Select,
 	Populate,
 	Locale extends string = string,
+	Drafts extends boolean = boolean,
 > extends LocaleOptions<Locale> {
+	/** Select the authorized working draft rather than the public published snapshot. */
+	draft?: Drafts extends true ? boolean : false;
 	/** One-based result page; defaults to the first page. */
 	page?: number;
 	/** Maximum documents returned in this page. */
@@ -600,7 +638,10 @@ export interface FindOptions<
 	Select,
 	Populate,
 	Locale extends string = string,
+	Drafts extends boolean = boolean,
 > extends LocaleOptions<Locale> {
+	/** Select the authorized working draft rather than the public published snapshot. */
+	draft?: Drafts extends true ? boolean : false;
 	/** Maximum relationship depth available to explicit population. */
 	depth?: number;
 	/** Top-level fields to return in addition to always-present metadata. */
@@ -1051,7 +1092,8 @@ export interface RiduClient<
 					WhereFor<Config, Slug>,
 					SelectFor<Config, Slug>,
 					PopulateFor<Config, Slug>,
-					LocaleFor<Config>
+					LocaleFor<Config>,
+					CollectionDraftsFor<Config, Slug>
 			  >
 			| undefined = undefined,
 	>(
@@ -1072,7 +1114,12 @@ export interface RiduClient<
 	find<
 		Slug extends CollectionSlug<Config>,
 		const Options extends
-			| FindOptions<SelectFor<Config, Slug>, PopulateFor<Config, Slug>, LocaleFor<Config>>
+			| FindOptions<
+					SelectFor<Config, Slug>,
+					PopulateFor<Config, Slug>,
+					LocaleFor<Config>,
+					CollectionDraftsFor<Config, Slug>
+			  >
 			| undefined = undefined,
 	>(
 		collection: Slug,
@@ -1080,7 +1127,14 @@ export interface RiduClient<
 		options?: Options
 	): Promise<CollectionQueryResult<Config, Slug, Options>>;
 
-	/** Create a collection document from its generated input contract. */
+	/** Draft-capable collections create an editable working draft unless `draft: false` is explicit. */
+	create<Slug extends DraftCollectionSlug<Config>>(
+		collection: Slug,
+		data: DraftCreateFor<Config, Slug>,
+		options?: CreateOptions<LocaleFor<Config>, true, true> & { draft?: true }
+	): Promise<OutputFor<Config, Slug>>;
+
+	/** Create a collection document from its complete generated input contract. */
 	create<Slug extends CollectionSlug<Config>>(
 		collection: Slug,
 		data: CreateFor<Config, Slug>,
@@ -1105,6 +1159,14 @@ export interface RiduClient<
 		id: string,
 		input: CopyLocaleInput<LocaleFor<Config>>,
 		options?: RevisionOptions
+	): Promise<OutputFor<Config, Slug>>;
+
+	/** Stage an incomplete working update without changing the published snapshot. */
+	update<Slug extends DraftCollectionSlug<Config>>(
+		collection: Slug,
+		id: string,
+		data: DraftUpdateFor<Config, Slug>,
+		options: UpdateOptions<LocaleFor<Config>, true> & { draft: true }
 	): Promise<OutputFor<Config, Slug>>;
 
 	/**
@@ -1138,7 +1200,7 @@ export interface RiduClient<
 		collection: Slug,
 		id: string,
 		data: UpdateFor<Config, Slug>,
-		options?: MutationOptions<LocaleFor<Config>>
+		options?: UpdateOptions<LocaleFor<Config>, CollectionDraftsFor<Config, Slug>>
 	): Promise<OutputFor<Config, Slug>>;
 
 	/** Add and remove target IDs through one writable inverse join field. */
@@ -1220,26 +1282,60 @@ export interface RiduClient<
 		options?: MutationLocaleOptions<LocaleFor<Config>>
 	): Promise<DeleteEnvelope>;
 
-	/** Upload a browser `Blob` and optional document metadata to an upload collection. */
+	/** Upload a browser `Blob` and generated document metadata to an upload collection. */
+	upload<Slug extends Extract<UploadCollectionSlug<Config>, DraftCollectionSlug<Config>>>(
+		collection: Slug,
+		file: Blob,
+		options?: UploadOptions<DraftCreateFor<Config, Slug>, LocaleFor<Config>, true> & {
+			draft?: true;
+		}
+	): Promise<OutputFor<Config, Slug>>;
+
+	/** Upload using the complete editorial input contract. */
 	upload<Slug extends UploadCollectionSlug<Config>>(
 		collection: Slug,
 		file: Blob,
-		options?: UploadOptions<CreateFor<Config, Slug>, LocaleFor<Config>>
+		...args: CompleteUploadArgs<
+			CreateFor<Config, Slug>,
+			LocaleFor<Config>,
+			CollectionDraftsFor<Config, Slug>
+		>
 	): Promise<OutputFor<Config, Slug>>;
 
 	/** Ask the Ridu server to fetch a remote file into an upload collection. */
+	uploadFromURL<Slug extends Extract<UploadCollectionSlug<Config>, DraftCollectionSlug<Config>>>(
+		collection: Slug,
+		url: string,
+		options?: UploadOptions<DraftCreateFor<Config, Slug>, LocaleFor<Config>, true> & {
+			draft?: true;
+		}
+	): Promise<OutputFor<Config, Slug>>;
+
+	/** Fetch using the complete editorial input contract. */
 	uploadFromURL<Slug extends UploadCollectionSlug<Config>>(
 		collection: Slug,
 		url: string,
-		options?: UploadOptions<CreateFor<Config, Slug>, LocaleFor<Config>>
+		...args: CompleteUploadArgs<
+			CreateFor<Config, Slug>,
+			LocaleFor<Config>,
+			CollectionDraftsFor<Config, Slug>
+		>
 	): Promise<OutputFor<Config, Slug>>;
 
 	/** Save file, image and document edits in one revision-checked mutation. */
+	updateUpload<Slug extends Extract<UploadCollectionSlug<Config>, DraftCollectionSlug<Config>>>(
+		collection: Slug,
+		id: string,
+		input: UpdateUploadInput<DraftUpdateFor<Config, Slug>> & { publish?: false },
+		options: UpdateOptions<LocaleFor<Config>, true> & { draft: true }
+	): Promise<OutputFor<Config, Slug>>;
+
+	/** Update an upload using its complete editorial input contract. */
 	updateUpload<Slug extends UploadCollectionSlug<Config>>(
 		collection: Slug,
 		id: string,
 		input: UpdateUploadInput<UpdateFor<Config, Slug>>,
-		options?: MutationOptions<LocaleFor<Config>>
+		options?: UpdateOptions<LocaleFor<Config>, CollectionDraftsFor<Config, Slug>>
 	): Promise<OutputFor<Config, Slug>>;
 
 	/** Read an immutable original through editor access. Never publicly cache it. */
@@ -1341,6 +1437,13 @@ export interface RiduClient<
 		options?: MutationOptions<LocaleFor<Config>>
 	): Promise<OutputFor<Config, Slug>>;
 
+	/** Discard staged working changes while retaining the published snapshot. */
+	discardDraft<Slug extends DraftCollectionSlug<Config>>(
+		collection: Slug,
+		id: string,
+		options: MutationOptions<LocaleFor<Config>> & { revision: number }
+	): Promise<OutputFor<Config, Slug>>;
+
 	/** Restore one stored collection-document revision, optionally as a draft. */
 	restore<Slug extends VersionCollectionSlug<Config>>(
 		collection: Slug,
@@ -1356,7 +1459,8 @@ export interface RiduClient<
 			| FindOptions<
 					GlobalSelectFor<Config, Slug>,
 					GlobalPopulateFor<Config, Slug>,
-					LocaleFor<Config>
+					LocaleFor<Config>,
+					GlobalDraftsFor<Config, Slug>
 			  >
 			| undefined = undefined,
 	>(
@@ -1365,10 +1469,17 @@ export interface RiduClient<
 	): Promise<GlobalQueryResult<Config, Slug, Options>>;
 
 	/** Update one global, optionally requiring its last observed revision. */
+	updateGlobal<Slug extends DraftGlobalSlug<Config>>(
+		slug: Slug,
+		data: GlobalDraftUpdateFor<Config, Slug>,
+		options: UpdateOptions<LocaleFor<Config>, true> & { draft: true }
+	): Promise<GlobalOutputFor<Config, Slug>>;
+
+	/** Update one global, optionally requiring its last observed revision. */
 	updateGlobal<Slug extends GlobalSlug<Config>>(
 		slug: Slug,
 		data: GlobalUpdateFor<Config, Slug>,
-		options?: MutationOptions<LocaleFor<Config>>
+		options?: UpdateOptions<LocaleFor<Config>, GlobalDraftsFor<Config, Slug>>
 	): Promise<GlobalOutputFor<Config, Slug>>;
 
 	/** Copy localized values between two locales of one global. */
@@ -1428,6 +1539,12 @@ export interface RiduClient<
 	unpublishGlobal<Slug extends DraftGlobalSlug<Config>>(
 		slug: Slug,
 		options?: MutationOptions<LocaleFor<Config>>
+	): Promise<GlobalOutputFor<Config, Slug>>;
+
+	/** Discard staged global changes while retaining the published snapshot. */
+	discardGlobalDraft<Slug extends DraftGlobalSlug<Config>>(
+		slug: Slug,
+		options: MutationOptions<LocaleFor<Config>> & { revision: number }
 	): Promise<GlobalOutputFor<Config, Slug>>;
 
 	/** Restore one stored global revision, optionally as a draft. */
@@ -1498,12 +1615,30 @@ export interface RiduAuth<
 	): Promise<AuthActionEnvelope>;
 
 	/** Create a user in an auth-enabled collection, including sign-up and managed-user flows. */
+	createUser<
+		Slug extends Extract<AuthCollectionSlug<Config>, DraftCollectionSlug<Config>> = Extract<
+			SessionCollection<Config, DefaultAuth>,
+			DraftCollectionSlug<Config>
+		>,
+	>(
+		input: { data: DraftCreateFor<Config, Slug>; password: string } & AuthCollectionInput<
+			DefaultAuth,
+			Slug
+		>,
+		options?: CreateOptions<LocaleFor<Config>, true, true> & { draft?: true }
+	): Promise<OutputFor<Config, Slug>>;
+
+	/** Explicit publication requires the complete generated user data contract. */
 	createUser<Slug extends AuthCollectionSlug<Config> = SessionCollection<Config, DefaultAuth>>(
 		input: { data: CreateFor<Config, Slug>; password: string } & AuthCollectionInput<
 			DefaultAuth,
 			Slug
 		>,
-		options?: MutationLocaleOptions<LocaleFor<Config>>
+		options?: CreateOptions<
+			LocaleFor<Config>,
+			CollectionVersionsFor<Config, Slug>,
+			CollectionDraftsFor<Config, Slug>
+		>
 	): Promise<OutputFor<Config, Slug>>;
 
 	/** Check whether an auth collection still permits its first bootstrap user. */

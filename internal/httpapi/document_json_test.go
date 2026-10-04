@@ -33,7 +33,9 @@ func TestDocumentJSONMatchesEncodingJSONOfTheDocumentMap(t *testing.T) {
 		Values:              store.Values{"name": store.String("Ada <admin> & co"), "bio": store.Null()},
 	}
 	documents := map[string]store.Document{
-		"metadata only": {ID: "empty", CreatedAt: created, UpdatedAt: created},
+		"metadata only":        {ID: "empty", CreatedAt: created, UpdatedAt: created},
+		"pending draft":        {ID: "pending", CreatedAt: created, UpdatedAt: created, Status: store.StatusPublished, Revision: 3, PublishedRevision: 2, HasDraftChanges: true},
+		"aligned working head": {ID: "aligned", CreatedAt: created, UpdatedAt: created, Status: store.StatusPublished, Revision: 2, PublishedRevision: 2},
 		"every value kind": {
 			ID: "post_1", CreatedAt: created, UpdatedAt: created.Add(time.Second), Status: store.StatusDraft, Revision: 7,
 			LocalizationSources: map[string]schema.LocaleCode{"title": "fr", "seo.title": "en"},
@@ -109,6 +111,10 @@ func documentMap(document store.Document) map[string]any {
 	}
 	if document.Revision > 0 {
 		result["_revision"] = document.Revision
+	}
+	if document.PublishedRevision > 0 {
+		result["_publishedRevision"] = document.PublishedRevision
+		result["_hasDraftChanges"] = document.HasDraftChanges
 	}
 	if len(document.LocalizationSources) > 0 {
 		sources := map[string]string{}

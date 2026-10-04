@@ -149,11 +149,14 @@ joins: nil resolves all, while a non-nil empty slice resolves none. `Populate` c
 shape only; it does not change what is validated or saved. `AllLocales` is read-only for ordinary
 create/update calls—write one locale at a time or use `CopyLocale`.
 
-`Draft` is a pointer so omitted, true, and false stay distinct. For reads, true includes drafts and
-false restricts results to published documents. For creates, true requests draft and false requests
-published status. Updates do not accept status intent: edit drafts with `Update`, and use
-`PublishChanges` or `Unpublish` for lifecycle transitions. The omitted defaults are covered in
-[Drafts and versions](/docs/drafts-and-versions/).
+`Draft` is a pointer so omitted, true, and false stay distinct. For reads, true selects working
+content and requires draft-read access; false selects the preserved published snapshot. For
+creates, true permits incomplete draft content and false validates and publishes atomically.
+Use `Draft: &draft` with `draft := true` when updating working content on an already-published
+document. This leaves the live snapshot unchanged. `PublishChanges` validates and publishes the
+complete candidate; `DiscardDraft` resets pending changes to the live snapshot. `Unpublish`
+removes the live snapshot without deleting the working content. The omitted defaults are covered
+in [Drafts and versions](/docs/drafts-and-versions/).
 
 ## Collection operation map {#collection-operations}
 

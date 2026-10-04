@@ -300,6 +300,176 @@ func TestSQLiteRollbackDoesNotResurrectAddedRelationshipValues(t *testing.T) {
 	}
 }
 
+func TestSQLiteRollbackScrubsPublishedFieldsBeforeReapply(t *testing.T) {
+	ctx := t.Context()
+	resolve := func(extra bool) schema.Manifest {
+		t.Helper()
+		fields := field.Fields{field.Text("title")}
+		if extra {
+			fields = append(fields, field.Text("later"))
+		}
+		manifest, err := ridu.Resolve(ridu.Config{Name: "SQLite published rollback", Collections: []ridu.Collection{{
+			Slug: "posts", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true}, Fields: fields,
+		}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return manifest
+	}
+	before, after := resolve(false), resolve(true)
+	directory := t.TempDir()
+	for index, candidate := range []struct {
+		name string
+		base *schema.Manifest
+		next schema.Manifest
+	}{{"initial", nil, before}, {"add-later", &before, after}} {
+		artifact, err := planArtifact(ctx, candidate.name, candidate.base, candidate.next, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := migrationartifact.Create(directory, candidate.name, artifact, time.Unix(int64(index+1), 0)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	backend := newSQLiteMigrationStore(t)
+	if err := backend.ApplyArtifacts(ctx, directory); err != nil {
+		t.Fatal(err)
+	}
+	collection := sqliteCollectionBySlug(t, after, "posts")
+	write, err := backend.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	created, err := write.Create(ctx, store.CreateRequest{Collection: collection, ID: "one", Status: store.StatusPublished,
+		Values: store.Values{"title": store.String("Live"), "later": store.String("must disappear")}})
+	if err == nil {
+		_, err = write.Update(ctx, store.UpdateRequest{Request: store.Request{Collection: collection, ID: created.ID, ExpectedRevision: created.Revision},
+			Intent: store.WriteIntentSaveDraft, Values: store.Values{"title": store.String("Pending")}})
+	}
+	if err != nil {
+		_ = write.Rollback(ctx)
+		t.Fatal(err)
+	}
+	if err := write.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := backend.DownArtifacts(ctx, directory); err != nil {
+		t.Fatal(err)
+	}
+	if err := backend.ApplyArtifacts(ctx, directory); err != nil {
+		t.Fatal(err)
+	}
+	read, err := backend.BeginSnapshot(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer read.Rollback(ctx)
+	for _, publishedOnly := range []bool{false, true} {
+		document, err := read.Find(ctx, store.Request{Collection: collection, ID: created.ID, PublishedOnly: publishedOnly})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, exists := document.Values["later"]; exists {
+			t.Fatalf("rolled-back field reappeared in publishedOnly=%t: %#v", publishedOnly, document.Values)
+		}
+		if document.Revision != map[bool]int{false: 2, true: 1}[publishedOnly] {
+			t.Fatalf("rollback changed head revision: %#v", document)
+		}
+	}
+}
+
+func TestSQLiteRetireRollbackResourcesScrubsPublishedOnlyReference(t *testing.T) {
+	ctx := t.Context()
+	after, err := ridu.Resolve(ridu.Config{Name: "SQLite live reference retirement", Collections: []ridu.Collection{
+		{Slug: "tags", Fields: field.Fields{field.Text("name")}},
+		{Slug: "teams", Fields: field.Fields{field.Text("name")}},
+		{Slug: "retired", Fields: field.Fields{field.Text("name")}},
+		{Slug: "keepers", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true},
+			Fields: field.Fields{field.Text("title"), field.PolymorphicRelationship("subject", "tags", "teams", "retired")}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Exercise the retirement step in isolation: its input is the former
+	// physical reference topology, before a complete rollback revalidates the
+	// target schema and rebuilds derived references.
+	targetSnapshot := after.Snapshot()
+	allCollections := targetSnapshot.Collections
+	targetSnapshot.Collections = nil
+	for _, resource := range allCollections {
+		if resource.Slug != "retired" {
+			targetSnapshot.Collections = append(targetSnapshot.Collections, resource)
+		}
+	}
+	target := schema.NewManifest(targetSnapshot)
+	backend := newSQLiteMigrationStore(t)
+	if err := backend.Migrate(ctx, after); err != nil {
+		t.Fatal(err)
+	}
+	keeper := sqliteCollectionBySlug(t, after, "keepers")
+	retired := sqliteCollectionBySlug(t, after, "retired")
+	tags := sqliteCollectionBySlug(t, after, "tags")
+	reference := func(slug string) store.Value {
+		return store.Object(store.Values{"relationTo": store.String(slug), "id": store.String(slug + "-1")})
+	}
+	write, err := backend.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, target := range []struct {
+		collection schema.Collection
+		id         string
+	}{{retired, "retired-1"}, {tags, "tags-1"}} {
+		if _, err := write.Create(ctx, store.CreateRequest{Collection: target.collection, ID: target.id, Values: store.Values{"name": store.String(target.id)}}); err != nil {
+			_ = write.Rollback(ctx)
+			t.Fatal(err)
+		}
+	}
+	created, err := write.Create(ctx, store.CreateRequest{Collection: keeper, ID: "keeper-1", Status: store.StatusPublished,
+		Values: store.Values{"title": store.String("Keeper"), "subject": reference("retired")}})
+	if err == nil {
+		_, err = write.Update(ctx, store.UpdateRequest{Request: store.Request{Collection: keeper, ID: created.ID, ExpectedRevision: created.Revision},
+			Intent: store.WriteIntentSaveDraft, Values: store.Values{"title": store.String("Pending"), "subject": reference("tags")}})
+	}
+	if err != nil {
+		_ = write.Rollback(ctx)
+		t.Fatal(err)
+	}
+	if err := write.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	connection, err := backend.db.Conn(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := backend.retireSQLiteRollbackResources(ctx, connection, after, target); err != nil {
+		_ = connection.Close()
+		t.Fatal(err)
+	}
+	_ = connection.Close()
+	read, err := backend.BeginSnapshot(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer read.Rollback(ctx)
+	live, err := read.Find(ctx, store.Request{Collection: keeper, ID: "keeper-1", PublishedOnly: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if subject, exists := live.Values["subject"]; exists && subject.Kind() != store.ValueNull {
+		t.Fatalf("retired live-only reference resurrected: %#v", live.Values)
+	}
+	working, err := read.Find(ctx, store.Request{Collection: keeper, ID: "keeper-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if subject, ok := working.Values["subject"].CopyObject(); !ok {
+		t.Fatalf("surviving working reference changed: %#v", working.Values)
+	} else if slug, _ := subject["relationTo"].StringValue(); slug != "tags" {
+		t.Fatalf("surviving working reference changed: %#v", working.Values)
+	}
+}
+
 func TestSQLiteMigrationDownRetiresAddedResourcesAndDormantReferences(t *testing.T) {
 	ctx := context.Background()
 	directory := t.TempDir()

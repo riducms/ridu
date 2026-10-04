@@ -15,7 +15,7 @@ import (
 )
 
 // ReferencedUploadObjects performs a bounded, access-independent lookup over
-// current/trash documents and every retained immutable version. It probes one
+// working/trash documents, active published heads, and every retained immutable version. It probes one
 // requested key at a time so both the reply and strict-decoding work remain
 // bounded even when one object is referenced by many documents.
 func (transaction *documentTransaction) ReferencedUploadObjects(ctx context.Context, request store.UploadReferenceRequest) ([]string, error) {
@@ -64,6 +64,27 @@ func (transaction *documentTransaction) ReferencedUploadObjects(ctx context.Cont
 					break
 				}
 				continue
+			}
+			publishedRaw, findErr := transaction.publishedCollection(collection).FindOne(
+				sessionContext,
+				mongoUploadReferenceFilter("$values", key),
+				options.FindOne().SetSort(bson.D{{Key: mongoIDPath, Value: int32(1)}}),
+			).Raw()
+			switch {
+			case findErr == nil:
+				live, decodeErr := decodeCollectionDocument(publishedRaw, collection)
+				if decodeErr != nil {
+					return nil, fmt.Errorf("decode matching MongoDB published upload: %w", decodeErr)
+				}
+				if !mongoUploadValuesReference(live.Values, key) {
+					return nil, fmt.Errorf("MongoDB published upload did not confirm its matched object reference")
+				}
+				found = true
+			case !errors.Is(findErr, mongo.ErrNoDocuments):
+				return nil, translateMongoError(ctx, findErr)
+			}
+			if found {
+				break
 			}
 
 			versionRaw, findErr := transaction.versionCollection(collection).FindOne(

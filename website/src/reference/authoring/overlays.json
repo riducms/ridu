@@ -3224,7 +3224,7 @@
 				{
 					"name": "Draft",
 					"type": "*bool",
-					"description": "Select draft or published status for versioned creates."
+					"description": "On draft-enabled creates, true saves an incomplete working draft and false validates and publishes immediately. On an existing published document, true stages working edits; ordinary updates cannot silently replace live content."
 				},
 				{
 					"name": "Locale",
@@ -3248,7 +3248,7 @@
 				}
 			],
 			"details": [
-				"The root package re-exports this type as ridu.MutationOptions. Updates preserve status so publish and unpublish hooks cannot be bypassed. Populate affects only the response, never validation or stored values."
+				"The root package re-exports this type as ridu.MutationOptions. Draft intent chooses working-save versus publication validation; it does not bypass publish or unpublish lifecycle operations. ExpectedRevision fences concurrent writes. Populate affects only the response, never validation or stored values."
 			],
 			"example": "",
 			"keywords": ["ridu.MutationOptions", "MutationOptions"],
@@ -9313,7 +9313,7 @@
 				}
 			],
 			"returns": {
-				"type": "TypedCollection[Document, Create, Update]",
+				"type": "TypedCollection[Document, Create, Update, Draft]",
 				"description": "The declared result."
 			},
 			"details": [
@@ -9337,7 +9337,7 @@
 				},
 				{
 					"name": "With(local)",
-					"type": "BoundTypedCollection[Document, Create, Update]",
+					"type": "BoundTypedCollection[Document, Create, Update, Draft]",
 					"description": "Bind the descriptor to one application LocalAPI."
 				}
 			],
@@ -9349,17 +9349,22 @@
 			"typeLinkIDs": {}
 		},
 		"go:github.com/riducms/ridu/core#BoundTypedCollection": {
-			"summary": "Typed Create, Import, Find, List, Update, and Delete methods.",
+			"summary": "Typed collection methods for strict writes, incomplete working drafts, reads, and deletion.",
 			"group": "Generated Go API",
 			"parametersLabel": "",
 			"parameters": [
 				{
-					"name": "Create(ctx, input, actor)",
+					"name": "Create(ctx, input, options)",
 					"type": "(Document, error)",
-					"description": "Validate and create a typed document."
+					"description": "Create from the strict Create model; draft-enabled resources default to draft unless options.Draft explicitly requests publication."
 				},
 				{
-					"name": "Import(ctx, input, options, actor)",
+					"name": "CreateDraft(ctx, input, options)",
+					"type": "(Document, error)",
+					"description": "Create an incomplete working draft from the generated Draft model; forces draft intent."
+				},
+				{
+					"name": "Import(ctx, input, options)",
 					"type": "(Document, error)",
 					"description": "Import a typed document while preserving migration metadata."
 				},
@@ -9374,24 +9379,113 @@
 					"description": "List and JSON-decode a typed page into generated models."
 				},
 				{
-					"name": "Update(ctx, id, input, actor)",
+					"name": "Update(ctx, id, input, options)",
 					"type": "(Document, error)",
-					"description": "Apply a typed partial update."
+					"description": "Apply a strict partial working update. Published documents require explicit draft intent; Publish is a separate operation."
 				},
 				{
-					"name": "Delete(ctx, id, actor)",
+					"name": "SaveDraft(ctx, id, input, options)",
+					"type": "(Document, error)",
+					"description": "Stage incomplete working values from the generated Draft model without changing the live snapshot."
+				},
+				{
+					"name": "DiscardDraft(ctx, id, options)",
+					"type": "(Document, error)",
+					"description": "Reset pending working values to the live snapshot, subject to expected revision and update access."
+				},
+				{
+					"name": "Delete(ctx, id, options)",
 					"type": "(Document, error)",
 					"description": "Delete through the ordinary access-controlled operation pipeline."
 				}
 			],
 			"details": [
-				"Inputs and outputs cross the same operation engine as untyped LocalAPI. JSON conversion reports incompatible field types; unknown stored fields are ignored and absent model fields keep their Go zero values. The wrapper does not create a second runtime."
+				"Inputs and outputs cross the same operation engine as untyped LocalAPI. Draft is a separate generated input model with optional editorial fields, not a relaxation of the strict Create or Update model. JSON conversion reports incompatible field types; unknown stored fields are ignored and absent model fields keep their Go zero values. The wrapper does not create a second runtime."
 			],
 			"example": "",
 			"keywords": ["core.BoundTypedCollection", "BoundTypedCollection"],
 			"relatedDocs": [],
 			"relatedSymbols": [],
 			"typeLinkIDs": {}
+		},
+		"go:github.com/riducms/ridu/core#BoundTypedCollection.CreateDraft": {
+			"summary": "Save an incomplete new document using its generated draft input model.",
+			"group": "Generated Go API",
+			"parametersLabel": "Arguments",
+			"parameters": [
+				{
+					"name": "ctx",
+					"type": "context.Context",
+					"description": "Cancellation context for the access-controlled create transaction."
+				},
+				{
+					"name": "input",
+					"type": "Draft",
+					"description": "The generated draft model. Nil fields are omitted; core.Null explicitly clears an editorial value. Supplied identities and field types remain validated."
+				},
+				{
+					"name": "options",
+					"type": "TypedMutationOptions",
+					"description": "Caller identity and content locale. Draft is forced to true; use Create with Draft set to false for a complete published create."
+				}
+			],
+			"returns": {
+				"type": "(Document, error)",
+				"description": "The saved working document, or the operation error. The create does not produce a live snapshot."
+			},
+			"details": [
+				"The generated handle uses the same Local API authorization, hooks and transaction as untyped creates. Editorial requiredness is deferred until publication, not field types, access, identities or structural validation."
+			],
+			"example": "pages := generated.PagesCollection.With(app.Local())\ndraft, err := pages.CreateDraft(\n\tctx,\n\tgenerated.PageDraft{Title: core.Set(\"Working title\")},\n\tcore.TypedMutationOptions{\n\t\tActor: &session.User,\n\t\tActorCollection: session.Collection,\n\t},\n)\nif err != nil {\n\treturn err\n}\n// The required layout can be completed before publishing.\n_ = draft.ID",
+			"keywords": ["draft", "incomplete", "CreateDraft"],
+			"relatedDocs": ["/docs/drafts-and-versions/", "/docs/local-api/"],
+			"relatedSymbols": [
+				"go:github.com/riducms/ridu/core#BoundTypedCollection.SaveDraft",
+				"go:github.com/riducms/ridu/core#TypedMutationOptions"
+			],
+			"typeLinkIDs": {
+				"TypedMutationOptions": "go:github.com/riducms/ridu/core#TypedMutationOptions"
+			}
+		},
+		"go:github.com/riducms/ridu/core#BoundTypedCollection.SaveDraft": {
+			"summary": "Stage incomplete edits without replacing a document's published snapshot.",
+			"group": "Generated Go API",
+			"parametersLabel": "Arguments",
+			"parameters": [
+				{
+					"name": "ctx",
+					"type": "context.Context",
+					"description": "Cancellation context for the access-controlled update transaction."
+				},
+				{ "name": "id", "type": "string", "description": "The document to update." },
+				{
+					"name": "input",
+					"type": "Draft",
+					"description": "The generated draft patch. Nil fields retain saved values; core.Null clears an editorial field. Keyed rows preserve their occurrence identities."
+				},
+				{
+					"name": "options",
+					"type": "TypedMutationOptions",
+					"description": "Caller identity, locale and ExpectedRevision from the last working read. Draft is forced to true."
+				}
+			],
+			"returns": {
+				"type": "(Document, error)",
+				"description": "The saved working document with a new revision, or an operation error such as conflict for a stale ExpectedRevision."
+			},
+			"details": [
+				"Saved pending values remain separate from live content. Publish validates the complete working candidate before replacing the live snapshot; DiscardDraft resets the working head to that live snapshot."
+			],
+			"example": "pages := generated.PagesCollection.With(app.Local())\nsaved, err := pages.SaveDraft(\n\tctx, draft.ID,\n\tgenerated.PageDraft{Title: core.Null[string]()},\n\tcore.TypedMutationOptions{\n\t\tActor: &session.User,\n\t\tActorCollection: session.Collection,\n\t\tExpectedRevision: draft.Revision,\n\t},\n)\nif err != nil {\n\treturn err\n}\n_ = saved.Revision",
+			"keywords": ["draft", "pending", "SaveDraft"],
+			"relatedDocs": ["/docs/drafts-and-versions/", "/docs/local-api/"],
+			"relatedSymbols": [
+				"go:github.com/riducms/ridu/core#BoundTypedCollection.CreateDraft",
+				"go:github.com/riducms/ridu/core#TypedMutationOptions"
+			],
+			"typeLinkIDs": {
+				"TypedMutationOptions": "go:github.com/riducms/ridu/core#TypedMutationOptions"
+			}
 		},
 		"go:github.com/riducms/ridu/core#TypedPage": {
 			"summary": "A typed list result with the ordinary page metadata.",
@@ -9471,7 +9565,7 @@
 				{
 					"name": "Draft",
 					"type": "*bool",
-					"description": "Optional publication-state filter."
+					"description": "Select the working head with true or the live head with false before filtering, sorting and pagination; nil uses the access-aware default."
 				},
 				{
 					"name": "Actor",
@@ -9513,6 +9607,41 @@
 			"relatedSymbols": [],
 			"typeLinkIDs": {}
 		},
+		"go:github.com/riducms/ridu/core#TypedMutationOptions": {
+			"summary": "Actor, draft intent, expected revision, locale, and response controls for a generated Go mutation.",
+			"group": "Generated Go API",
+			"parametersLabel": "Options",
+			"parameters": [
+				{
+					"name": "Draft",
+					"type": "*bool",
+					"description": "True stages working content; false requests a complete published create. SaveDraft and CreateDraft force true regardless of this option."
+				},
+				{
+					"name": "ExpectedRevision",
+					"type": "int",
+					"description": "Fence an existing working revision so a concurrent save or lifecycle operation returns a conflict instead of overwriting it."
+				},
+				{
+					"name": "Actor",
+					"type": "*store.Document",
+					"description": "Authenticated document used by access rules, paired with ActorCollection."
+				},
+				{
+					"name": "System",
+					"type": "bool",
+					"description": "Trusted server-side bypass of access rules; never infer this from an absent actor."
+				}
+			],
+			"details": [
+				"Other fields support caller-owned create IDs, returned population and output fields, and exact locale selection. The generated methods forward these options to the same LocalAPI operation engine. Draft writes defer editorial completeness only; supplied structure, access, references, and custom validators still run."
+			],
+			"example": "",
+			"keywords": ["core.TypedMutationOptions", "TypedMutationOptions", "draft", "revision"],
+			"relatedDocs": [],
+			"relatedSymbols": [],
+			"typeLinkIDs": {}
+		},
 		"go:github.com/riducms/ridu/core#NewTypedGlobal": {
 			"summary": "Create a generated-model handle for one global slug.",
 			"group": "Generated Go API",
@@ -9525,7 +9654,7 @@
 				}
 			],
 			"returns": {
-				"type": "TypedGlobal[Document, Update]",
+				"type": "TypedGlobal[Document, Update, Draft]",
 				"description": "The declared result."
 			},
 			"details": [],
@@ -9536,7 +9665,7 @@
 			"typeLinkIDs": {}
 		},
 		"go:github.com/riducms/ridu/core#BoundTypedGlobal": {
-			"summary": "Typed Find, Update, Publish, Unpublish, Restore, and RestoreAsDraft methods.",
+			"summary": "Typed singleton methods for reads, working drafts, publication, restoration, and discard.",
 			"group": "Generated Go API",
 			"parametersLabel": "",
 			"parameters": [
@@ -9546,33 +9675,43 @@
 					"description": "Read one locale with optional population, projection and exact actor identity."
 				},
 				{
-					"name": "Update(ctx, input, expectedRevision, actor)",
+					"name": "Update(ctx, input, options)",
 					"type": "(Document, error)",
-					"description": "Create or update the typed singleton."
+					"description": "Initialize or update working singleton values from the strict Update model. Published content requires explicit draft intent; Publish is a separate operation."
 				},
 				{
-					"name": "Publish(ctx, expectedRevision, actor)",
+					"name": "SaveDraft(ctx, input, options)",
 					"type": "(Document, error)",
-					"description": "Publish the current singleton revision."
+					"description": "Stage incomplete working values from the generated Draft model without changing live content."
 				},
 				{
-					"name": "Unpublish(ctx, expectedRevision, actor)",
+					"name": "DiscardDraft(ctx, options)",
 					"type": "(Document, error)",
-					"description": "Return the singleton to draft."
+					"description": "Reset pending working values to the live singleton under an expected-revision fence."
 				},
 				{
-					"name": "Restore(ctx, revision, expectedRevision, actor)",
+					"name": "Publish(ctx, options)",
 					"type": "(Document, error)",
-					"description": "Restore a retained revision as published content."
+					"description": "Validate the complete working singleton and promote it to live content."
 				},
 				{
-					"name": "RestoreAsDraft(ctx, revision, expectedRevision, actor)",
+					"name": "Unpublish(ctx, options)",
 					"type": "(Document, error)",
-					"description": "Restore a retained revision as a draft."
+					"description": "Remove the live snapshot while retaining working content as draft."
+				},
+				{
+					"name": "Restore(ctx, revision, options)",
+					"type": "(Document, error)",
+					"description": "Restore a retained snapshot with its historical publication state: published snapshots become live; draft snapshots remain unpublished."
+				},
+				{
+					"name": "RestoreAsDraft(ctx, revision, options)",
+					"type": "(Document, error)",
+					"description": "Stage a retained snapshot in working content without unpublishing the existing live snapshot."
 				}
 			],
 			"details": [
-				"Generated wrappers keep singleton methods discoverable without changing LocalAPI semantics or authorization."
+				"Generated wrappers keep singleton methods discoverable without changing LocalAPI semantics or authorization. TypedMutationOptions.ExpectedRevision fences concurrent writes; publication validates the full working candidate."
 			],
 			"example": "",
 			"keywords": ["core.BoundTypedGlobal", "BoundTypedGlobal"],
@@ -12796,7 +12935,7 @@
 				},
 				{
 					"name": "With",
-					"type": "func(*LocalAPI) BoundTypedGlobal[Document, Update]",
+					"type": "func(*LocalAPI) BoundTypedGlobal[Document, Update, Draft]",
 					"description": "Binds the definition to a running LocalAPI."
 				}
 			],
@@ -14217,7 +14356,7 @@
 				}
 			],
 			"returns": {
-				"type": "BoundTypedCollection[Document, Create, Update]",
+				"type": "BoundTypedCollection[Document, Create, Update, Draft]",
 				"description": "The declared result."
 			},
 			"details": [],
@@ -14255,7 +14394,7 @@
 				}
 			],
 			"returns": {
-				"type": "BoundTypedGlobal[Document, Update]",
+				"type": "BoundTypedGlobal[Document, Update, Draft]",
 				"description": "The declared result."
 			},
 			"details": [],
@@ -19480,7 +19619,7 @@
 			}
 		},
 		"go:github.com/riducms/ridu/store#UpdateRequest": {
-			"summary": "An authorized request plus values and an optional publish status.",
+			"summary": "An authorized update with values and one explicit publication-head intent.",
 			"group": "Types",
 			"parametersLabel": "",
 			"parameters": [
@@ -19495,9 +19634,9 @@
 					"description": "The Values value."
 				},
 				{
-					"name": "Status",
-					"type": "*Status",
-					"description": "The Status value."
+					"name": "Intent",
+					"type": "WriteIntent",
+					"description": "Draft-capable writes require SaveDraft, Publish, Unpublish, or DiscardDraft. An ordinary update cannot implicitly replace the live head."
 				},
 				{
 					"name": "ReplaceValues",
@@ -19513,7 +19652,7 @@
 			"typeLinkIDs": {
 				"Request": "go:github.com/riducms/ridu/store#Request",
 				"Values": "go:github.com/riducms/ridu/store#Values",
-				"Status": "go:github.com/riducms/ridu/store#Status"
+				"WriteIntent": "go:github.com/riducms/ridu/store#WriteIntent"
 			}
 		},
 		"go:github.com/riducms/ridu/store#Document": {
@@ -23377,6 +23516,11 @@
 					"name": "StepMongoDBDropResources",
 					"type": "\"mongodb_drop_resources\"",
 					"description": "Drop the exact MongoDB namespaces for reviewed retired stable identities."
+				},
+				{
+					"name": "StepMongoDBRebuildHeadReservations",
+					"type": "\"mongodb_rebuild_head_reservations\"",
+					"description": "Recalculate active cross-head unique reservations before creating new unique indexes."
 				},
 				{
 					"name": "StepMongoDBAssertSchema",
@@ -31667,7 +31811,7 @@
 			"typeLinkIDs": {}
 		},
 		"go:github.com/riducms/ridu/adapters/mongodb#Store.Ready": {
-			"summary": "Prove manifest-ledger and complete managed-index readiness for compatibility callers.",
+			"summary": "Prove manifest-ledger and complete managed-index readiness for development and diagnostics.",
 			"group": "Methods",
 			"parametersLabel": "",
 			"parameters": [
@@ -31687,7 +31831,7 @@
 				"description": "The declared result."
 			},
 			"details": [
-				"This is the legacy manifest-only contract. Production binaries built by ridu build use ReadyWithMigrationHistory."
+				"This checks the manifest and managed indexes. Production binaries built by ridu build additionally bind the exact migration history through ReadyWithMigrationHistory."
 			],
 			"example": "",
 			"keywords": ["mongodb.Store.Ready", "Store.Ready"],
@@ -32038,7 +32182,7 @@
 			}
 		},
 		"go:github.com/riducms/ridu/adapters/mongodb#ArtifactOptions": {
-			"summary": "Reviewed semantic intent frozen into a planner 2.0.0 artifact.",
+			"summary": "Reviewed semantic intent frozen into a planner 3.0.0 artifact.",
 			"group": "Migrations",
 			"parametersLabel": "Fields",
 			"parameters": [
@@ -65359,6 +65503,41 @@
 				"operation.Issue": "go:github.com/riducms/ridu/operation#Issue"
 			}
 		},
+		"go:github.com/riducms/ridu/operation#WritePhase": {
+			"summary": "The completeness policy for the current write candidate, independent of whether a public snapshot exists.",
+			"group": "Types",
+			"parametersLabel": "Values",
+			"parameters": [
+				{
+					"name": "WritePhaseNone",
+					"type": "\"\"",
+					"description": "A read or non-content operation."
+				},
+				{
+					"name": "WritePhaseDraft",
+					"type": "\"draft\"",
+					"description": "An editorial save may defer required fields and minimum text or row counts; other validators still run."
+				},
+				{
+					"name": "WritePhasePublished",
+					"type": "\"published\"",
+					"description": "A publication candidate must satisfy full completeness, including supplied exact translations."
+				}
+			],
+			"details": [
+				"Inspect operation.Context.WritePhase in a custom validator when a rule applies only at publication. A published document can have pending working changes, so its status alone does not identify the current validation phase."
+			],
+			"example": "",
+			"keywords": [
+				"operation.WritePhase",
+				"WritePhase",
+				"draft validation",
+				"publication validation"
+			],
+			"relatedDocs": [],
+			"relatedSymbols": [],
+			"typeLinkIDs": {}
+		},
 		"go:github.com/riducms/ridu/operation#LiveValidationContext": {
 			"summary": "The request and surrounding values available to a live server validation callback.",
 			"group": "Types",
@@ -68474,28 +68653,23 @@
 			}
 		},
 		"go:github.com/riducms/ridu/field#BlockAdmin": {
-			"summary": "Configure the header for ordinary Blocks and rich-text blocks.",
+			"summary": "Configure a block row label; every block also has an ordinary blockName Text field in its header.",
 			"group": "Types",
 			"parametersLabel": "Properties",
 			"parameters": [
 				{
-					"name": "NameField",
-					"type": "string",
-					"description": "Optional name of a direct stored Text child to edit in the block header. Slug fields, nested paths and custom field editors are rejected. Leave unset to keep the existing content summary."
-				},
-				{
 					"name": "RowLabelPath",
 					"type": "string",
-					"description": "Direct stored scalar child used as the content summary. With NameField configured, this becomes the empty name input’s placeholder; an unavailable summary falls back to the untitled block label."
+					"description": "Optional direct stored scalar child used as a row summary. This does not change the blockName header input or its Untitled placeholder."
 				}
 			],
 			"details": [
-				"Declare the name field explicitly in the block’s Fields. The header replaces its body placement while retaining ordinary validation, access, visibility, localization and hooks. The name stays separate from the published heading.",
-				"An empty name shows a placeholder without saving it. Names use ordinary child storage and API exposure, and have no automatic uniqueness, slug or URL-anchor behavior. The example uses an optional, nonlocalized name.",
+				"Every resolved block has a direct plain Text blockName child. Ridu adds it with an empty-string default when omitted from Fields. Declare field.Text(\"blockName\") to customize its default, validation, access, visibility or localization; slug and custom editors are not allowed.",
+				"The guarded header input uses Untitled as its empty placeholder and is omitted from the body. Names use ordinary child storage and API exposure, with no automatic uniqueness, slug or URL-anchor behavior.",
 				"Rich-text cards use the same header input, with undo/redo support. Editing drawers include the name in their detached draft: Apply commits it with the other fields and Cancel discards it."
 			],
-			"example": "cta := field.Block{\n\tSlug: \"cta\",\n\tAdmin: field.BlockAdmin{\n\t\tNameField:    \"blockName\",\n\t\tRowLabelPath: \"heading\",\n\t},\n\tFields: field.Fields{\n\t\tfield.Text(\"blockName\").Label(\"Block name\"),\n\t\tfield.Text(\"heading\").Required(),\n\t},\n}",
-			"keywords": ["field.BlockAdmin", "NameField", "RowLabelPath", "blockName", "editorial names"],
+			"example": "cta := field.Block{\n\tSlug: \"cta\",\n\tAdmin: field.BlockAdmin{RowLabelPath: \"heading\"},\n\tFields: field.Fields{\n\t\tfield.Text(\"blockName\").Label(\"Internal name\"),\n\t\tfield.Text(\"heading\").Required(),\n\t},\n}",
+			"keywords": ["field.BlockAdmin", "RowLabelPath", "blockName", "editorial names"],
 			"relatedDocs": ["/docs/fields/blocks/#give-each-block-an-editorial-name"],
 			"relatedSymbols": ["go:github.com/riducms/ridu/field#Block"],
 			"typeLinkIDs": {}

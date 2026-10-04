@@ -18,6 +18,12 @@ the immutable artifact API for a deployed database. Existing projects must updat
 server's adapter factory, and committed migrations together; deployed servers require an absolute
 `RIDU_SQLITE_PATH` on durable local storage.
 
+Draft-enabled versioned content keeps one working head and an independently selected live head;
+the live head is not a retained-history version and survives history pruning. New databases and
+immutable migrations use the current `1.2.0` planner and physical layout. Older planner histories
+and databases missing the live-head table are unsupported; readiness and development synchronization
+reject them instead of converting stored content.
+
 See the [SQLite guide](../../website/src/content/docs/sqlite.md) for new- and
 existing-project wiring, development sync, immutable migrations, backup/restore, startup
 verification, and known limits.

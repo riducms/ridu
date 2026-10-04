@@ -20,6 +20,7 @@ const (
 	goOutput goModelMode = iota
 	goCreate
 	goUpdate
+	goDraft
 	goAllLocales
 	goAllLocalesValue
 )
@@ -65,6 +66,11 @@ func goClient(manifest schema.Manifest) ([]byte, error) {
 		writeGoModel(&output, baseName, collection, goOutput, pluginTypes, fieldNames, blocks)
 		writeGoModel(&output, baseName+"Create", collection, goCreate, pluginTypes, fieldNames, blocks)
 		writeGoModel(&output, baseName+"Update", collection, goUpdate, pluginTypes, fieldNames, blocks)
+		draftName := baseName + "Update"
+		if collection.Versions != nil && collection.Versions.Drafts {
+			draftName = baseName + "Draft"
+			writeGoModel(&output, draftName, collection, goDraft, pluginTypes, fieldNames, blocks)
+		}
 		if blocks.localized {
 			writeGoModel(&output, baseName+"AllLocales", collection, goAllLocales, pluginTypes, fieldNames, blocks)
 		}
@@ -73,7 +79,7 @@ func goClient(manifest schema.Manifest) ([]byte, error) {
 			variable = exportedGoIdentifier(string(collection.Slug))
 		}
 		variable += "Collection"
-		fmt.Fprintf(&output, "var %s = core.NewTypedCollection[%s, %sCreate, %sUpdate](%q)\n\n", variable, baseName, baseName, baseName, collection.Slug)
+		fmt.Fprintf(&output, "var %s = core.NewTypedCollection[%s, %sCreate, %sUpdate, %s](%q)\n\n", variable, baseName, baseName, baseName, draftName, collection.Slug)
 		if blocks.localized {
 			fmt.Fprintf(&output, "// %sAllLocales reads all translations with optional population and projection.\nvar %sAllLocales = core.NewTypedAllLocalesCollection[%sAllLocales](%q)\n\n", variable, variable, baseName, collection.Slug)
 		}
@@ -90,6 +96,11 @@ func goClient(manifest schema.Manifest) ([]byte, error) {
 		fieldNames := goModelFieldNames(global, "UnmarshalJSON")
 		writeGoModel(&output, baseName, global, goOutput, pluginTypes, fieldNames, blocks)
 		writeGoModel(&output, baseName+"Update", global, goUpdate, pluginTypes, fieldNames, blocks)
+		draftName := baseName + "Update"
+		if global.Versions != nil && global.Versions.Drafts {
+			draftName = baseName + "Draft"
+			writeGoModel(&output, draftName, global, goDraft, pluginTypes, fieldNames, blocks)
+		}
 		if blocks.localized {
 			writeGoModel(&output, baseName+"AllLocales", global, goAllLocales, pluginTypes, fieldNames, blocks)
 		}
@@ -98,7 +109,7 @@ func goClient(manifest schema.Manifest) ([]byte, error) {
 			variable = exportedGoIdentifier(string(global.Slug))
 		}
 		variable += "Global"
-		fmt.Fprintf(&output, "var %s = core.NewTypedGlobal[%s, %sUpdate](%q)\n\n", variable, baseName, baseName, global.Slug)
+		fmt.Fprintf(&output, "var %s = core.NewTypedGlobal[%s, %sUpdate, %s](%q)\n\n", variable, baseName, baseName, draftName, global.Slug)
 		if blocks.localized {
 			fmt.Fprintf(&output, "// %sAllLocales reads all translations with optional population and projection.\nvar %sAllLocales = core.NewTypedAllLocalesGlobal[%sAllLocales](%q)\n\n", variable, variable, baseName, global.Slug)
 		}
@@ -121,6 +132,8 @@ func writeGoModel(output *strings.Builder, name string, collection schema.Collec
 		fmt.Fprintf(output, "// %s supplies a new document. Required values are concrete; defaulted values may be omitted, and nullable values use core.Set or core.Null.\n", name)
 	case goUpdate:
 		fmt.Fprintf(output, "// %s edits a document. Nil fields are unchanged; supplied block lists replace order and membership.\n", name)
+	case goDraft:
+		fmt.Fprintf(output, "// %s saves unfinished working content. Nil fields are omitted; core.Null clears editorial values. Publication validates completeness.\n", name)
 	case goAllLocales:
 		fmt.Fprintf(output, "// %s is an all-locales read: localized fields contain locale-code maps.\n", name)
 	default:
@@ -136,6 +149,9 @@ func writeGoModel(output *strings.Builder, name string, collection schema.Collec
 		}
 		if collection.Capabilities.Versions {
 			output.WriteString("\tStatus string `json:\"_status\"`\n")
+			if collection.Versions != nil && collection.Versions.Drafts {
+				output.WriteString("\tPublishedRevision int `json:\"_publishedRevision,omitempty\"`\n\tHasDraftChanges *bool `json:\"_hasDraftChanges,omitempty\"`\n")
+			}
 		}
 		if collection.Versions != nil || collection.Upload != nil {
 			output.WriteString("\tRevision int `json:\"_revision\"`\n")
@@ -156,7 +172,7 @@ func writeGoModel(output *strings.Builder, name string, collection schema.Collec
 		// Reads may omit every authored field through field-level access or an
 		// explicit projection. Output models therefore preserve field presence
 		// independently of authoring requiredness.
-		optional := goOutputMode(mode) || mode == goUpdate || !generatedInputRequired(field) || mode == goCreate && generatedFieldHasDefault(field)
+		optional := goOutputMode(mode) || mode == goUpdate || mode == goDraft || !generatedInputRequired(field) || mode == goCreate && generatedFieldHasDefault(field)
 		fieldType = blocks.presence(field, fieldType, mode, optional)
 		tag := field.Name
 		if optional || mode == goUpdate {
@@ -188,6 +204,10 @@ func goModelFieldNames(collection schema.Collection, reserved ...string) []strin
 		used["DeletedAt"] = true
 	}
 	if collection.Capabilities.Versions {
+		if collection.Versions != nil && collection.Versions.Drafts {
+			used["PublishedRevision"] = true
+			used["HasDraftChanges"] = true
+		}
 		used["Status"] = true
 	}
 	if collection.Versions != nil || collection.Upload != nil {
@@ -298,7 +318,7 @@ func goAnonymousStruct(fields []schema.Field, mode goModelMode, pluginTypes map[
 		}
 		fieldType := goFieldType(field, mode, pluginTypes)
 		// Nested output fields can be redacted or projected independently too.
-		optional := goOutputMode(mode) || mode == goUpdate || !generatedInputRequired(field) || mode == goCreate && generatedFieldHasDefault(field)
+		optional := goOutputMode(mode) || mode == goUpdate || mode == goDraft || !generatedInputRequired(field) || mode == goCreate && generatedFieldHasDefault(field)
 		fieldType = goPresenceType(field, fieldType, mode, optional)
 		tag := field.Name
 		if optional {
@@ -315,6 +335,9 @@ func goPresenceType(field schema.Field, fieldType string, mode goModelMode, opti
 	if !goOutputMode(mode) {
 		nullable = !generatedInputRequired(field)
 	}
+	if mode == goDraft {
+		nullable = true
+	}
 	// A plugin-owned named Go type can have a nil-able underlying type or a
 	// custom marshaler that emits null. The manifest intentionally does not
 	// expose executable type internals, so mutation generation must treat every
@@ -326,7 +349,7 @@ func goPresenceType(field schema.Field, fieldType string, mode goModelMode, opti
 		}
 		return fieldType
 	}
-	if mode == goCreate || mode == goUpdate {
+	if mode == goCreate || mode == goUpdate || mode == goDraft {
 		if nullable {
 			return "*core.Input[" + fieldType + "]"
 		}

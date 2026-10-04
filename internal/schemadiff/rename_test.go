@@ -31,7 +31,7 @@ func TestCollectionRenameCandidatePairsDerivedFieldIdentities(t *testing.T) {
 	}
 }
 
-func TestBlockNameFieldIsPresentationOnlyForRenameMatching(t *testing.T) {
+func TestBlockRowLabelIsPresentationOnlyForRenameMatching(t *testing.T) {
 	blockField := func(owner schema.StableID, admin *schema.BlockAdmin) schema.Field {
 		path, _ := query.NewPath("layout")
 		childPath, _ := query.NewPath("layout", "card", "title")
@@ -44,10 +44,10 @@ func TestBlockNameFieldIsPresentationOnlyForRenameMatching(t *testing.T) {
 		}
 	}
 	before := manifest(collection("posts", "posts", blockField("posts", nil)))
-	after := manifest(collection("articles", "articles", blockField("articles", &schema.BlockAdmin{NameField: "title"})))
+	after := manifest(collection("articles", "articles", blockField("articles", &schema.BlockAdmin{RowLabel: "title"})))
 	candidates := schemadiff.RenameCandidates(before, after)
 	if len(candidates) != 1 || candidates[0].Kind != schemadiff.RenameCollection {
-		t.Fatalf("presentation-only block name field changed migration matching: %#v", candidates)
+		t.Fatalf("presentation-only block row label changed migration matching: %#v", candidates)
 	}
 }
 

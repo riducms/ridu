@@ -349,5 +349,5 @@ func validatedManifest(snapshot schema.Snapshot) (schema.Manifest, error) {
 	if err != nil {
 		return schema.Manifest{}, err
 	}
-	return schema.Parse(encoded)
+	return schema.ParseHistorical(encoded)
 }

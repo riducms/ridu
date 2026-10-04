@@ -15,26 +15,28 @@ import (
 // TypedCollection is a generated collection definition that can be bound to
 // an application's LocalAPI. It adds compile-time application models without
 // creating a privileged data path.
-type TypedCollection[Document, Create, Update any] struct {
+type TypedCollection[Document, Create, Update, Draft any] struct {
 	slug string
 }
 
 // NewTypedCollection constructs a generated typed collection definition.
-func NewTypedCollection[Document, Create, Update any](slug string) TypedCollection[Document, Create, Update] {
-	return TypedCollection[Document, Create, Update]{slug: slug}
+func NewTypedCollection[Document, Create, Update, Draft any](slug string) TypedCollection[Document, Create, Update, Draft] {
+	return TypedCollection[Document, Create, Update, Draft]{slug: slug}
 }
 
 // Slug returns the collection's public API address.
-func (collection TypedCollection[Document, Create, Update]) Slug() string { return collection.slug }
+func (collection TypedCollection[Document, Create, Update, Draft]) Slug() string {
+	return collection.slug
+}
 
 // With binds a generated collection definition to a running application.
-func (collection TypedCollection[Document, Create, Update]) With(local *LocalAPI) BoundTypedCollection[Document, Create, Update] {
-	return BoundTypedCollection[Document, Create, Update]{definition: collection, local: local}
+func (collection TypedCollection[Document, Create, Update, Draft]) With(local *LocalAPI) BoundTypedCollection[Document, Create, Update, Draft] {
+	return BoundTypedCollection[Document, Create, Update, Draft]{definition: collection, local: local}
 }
 
 // BoundTypedCollection is a typed view of one collection on a LocalAPI.
-type BoundTypedCollection[Document, Create, Update any] struct {
-	definition TypedCollection[Document, Create, Update]
+type BoundTypedCollection[Document, Create, Update, Draft any] struct {
+	definition TypedCollection[Document, Create, Update, Draft]
 	local      *LocalAPI
 }
 
@@ -46,7 +48,7 @@ type TypedPage[Document any] struct {
 	Total     int
 }
 
-func (collection BoundTypedCollection[Document, Create, Update]) Create(ctx context.Context, input Create, options TypedMutationOptions) (Document, error) {
+func (collection BoundTypedCollection[Document, Create, Update, Draft]) Create(ctx context.Context, input Create, options TypedMutationOptions) (Document, error) {
 	values, err := typedInputValues(input)
 	if err != nil {
 		return *new(Document), err
@@ -55,7 +57,20 @@ func (collection BoundTypedCollection[Document, Create, Update]) Create(ctx cont
 	return decodeTypedDocument[Document](document, err)
 }
 
-func (collection BoundTypedCollection[Document, Create, Update]) Import(ctx context.Context, input Create, options ImportOptions) (Document, error) {
+// CreateDraft saves an editorially incomplete draft through the same engine as Create.
+func (collection BoundTypedCollection[Document, Create, Update, Draft]) CreateDraft(ctx context.Context, input Draft, options TypedMutationOptions) (Document, error) {
+	values, err := typedInputValues(input)
+	if err != nil {
+		return *new(Document), err
+	}
+	mutation := options.mutationOptions()
+	draft := true
+	mutation.Draft = &draft
+	document, err := collection.local.Create(ctx, collection.definition.slug, values, mutation)
+	return decodeTypedDocument[Document](document, err)
+}
+
+func (collection BoundTypedCollection[Document, Create, Update, Draft]) Import(ctx context.Context, input Create, options ImportOptions) (Document, error) {
 	values, err := typedInputValues(input)
 	if err != nil {
 		return *new(Document), err
@@ -65,18 +80,18 @@ func (collection BoundTypedCollection[Document, Create, Update]) Import(ctx cont
 }
 
 // Find reads one locale with optional population and projection.
-func (collection BoundTypedCollection[Document, Create, Update]) Find(ctx context.Context, id string, options TypedReadOptions) (Document, error) {
+func (collection BoundTypedCollection[Document, Create, Update, Draft]) Find(ctx context.Context, id string, options TypedReadOptions) (Document, error) {
 	document, err := collection.local.Find(ctx, collection.definition.slug, id, options.findOptions(false))
 	return decodeTypedDocument[Document](document, err)
 }
 
 // List filters, paginates and populates one locale through the operation engine.
 // A failed decode returns an error and no partial page.
-func (collection BoundTypedCollection[Document, Create, Update]) List(ctx context.Context, options TypedListOptions) (TypedPage[Document], error) {
+func (collection BoundTypedCollection[Document, Create, Update, Draft]) List(ctx context.Context, options TypedListOptions) (TypedPage[Document], error) {
 	return listTypedDocuments[Document](ctx, collection.local, collection.definition.slug, options, false)
 }
 
-func (collection BoundTypedCollection[Document, Create, Update]) Update(ctx context.Context, id string, input Update, options TypedMutationOptions) (Document, error) {
+func (collection BoundTypedCollection[Document, Create, Update, Draft]) Update(ctx context.Context, id string, input Update, options TypedMutationOptions) (Document, error) {
 	values, err := typedInputValues(input)
 	if err != nil {
 		return *new(Document), err
@@ -85,7 +100,26 @@ func (collection BoundTypedCollection[Document, Create, Update]) Update(ctx cont
 	return decodeTypedDocument[Document](document, err)
 }
 
-func (collection BoundTypedCollection[Document, Create, Update]) Delete(ctx context.Context, id string, options TypedMutationOptions) (Document, error) {
+// SaveDraft stages incomplete working values without modifying the live head.
+func (collection BoundTypedCollection[Document, Create, Update, Draft]) SaveDraft(ctx context.Context, id string, input Draft, options TypedMutationOptions) (Document, error) {
+	values, err := typedInputValues(input)
+	if err != nil {
+		return *new(Document), err
+	}
+	mutation := options.mutationOptions()
+	draft := true
+	mutation.Draft = &draft
+	document, err := collection.local.Update(ctx, collection.definition.slug, id, values, mutation)
+	return decodeTypedDocument[Document](document, err)
+}
+
+// DiscardDraft resets pending working values to the published document.
+func (collection BoundTypedCollection[Document, Create, Update, Draft]) DiscardDraft(ctx context.Context, id string, options TypedMutationOptions) (Document, error) {
+	document, err := collection.local.DiscardDraft(ctx, collection.definition.slug, id, options.mutationOptions())
+	return decodeTypedDocument[Document](document, err)
+}
+
+func (collection BoundTypedCollection[Document, Create, Update, Draft]) Delete(ctx context.Context, id string, options TypedMutationOptions) (Document, error) {
 	document, err := collection.local.Delete(ctx, collection.definition.slug, id, options.mutationOptions())
 	return decodeTypedDocument[Document](document, err)
 }
@@ -122,6 +156,10 @@ func decodeStoredDocument[Document any](stored store.Document) (Document, error)
 	}
 	if stored.Revision > 0 {
 		values["_revision"] = store.Number(float64(stored.Revision))
+	}
+	if stored.PublishedRevision > 0 {
+		values["_publishedRevision"] = store.Number(float64(stored.PublishedRevision))
+		values["_hasDraftChanges"] = store.Boolean(stored.HasDraftChanges)
 	}
 	encoded, err := values.MarshalJSON()
 	if err != nil {

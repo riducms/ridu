@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/riducms/ridu/internal/fieldchange"
+	"github.com/riducms/ridu/internal/schemadiff"
 	ridumigration "github.com/riducms/ridu/migration"
 	"github.com/riducms/ridu/schema"
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -94,7 +95,7 @@ func decodeMongoDevelopmentManifest(raw bson.Raw) (schema.Manifest, error) {
 	if !idOK || id != mongoDevelopmentSchemaID || !encodedOK || !digestOK {
 		return schema.Manifest{}, fmt.Errorf("stored MongoDB synchronized schema has invalid identity or field types")
 	}
-	manifest, err := schema.Parse([]byte(encoded))
+	manifest, err := schema.ParseHistorical([]byte(encoded))
 	if err != nil {
 		return schema.Manifest{}, err
 	}
@@ -152,6 +153,9 @@ func (backend *Store) SyncDevelopmentSchema(ctx context.Context, manifest schema
 		}
 		var changes []fieldchange.Change
 		if exists {
+			if err := schemadiff.RejectVersionsEnable(before.Snapshot(), manifest.Snapshot(), nil); err != nil {
+				return err
+			}
 			changes = fieldchange.Detect(before.Snapshot(), manifest.Snapshot())
 		}
 		requireEmpty := func(sessionContext context.Context) error {
@@ -159,7 +163,7 @@ func (backend *Store) SyncDevelopmentSchema(ctx context.Context, manifest schema
 				return nil
 			}
 			reports := fieldchange.Reports(changes)
-			if err := backend.scanMongoFieldKinds(sessionContext, &documentTransaction{store: backend}, changes, reports, false); err != nil {
+			if err := backend.scanMongoFieldKinds(sessionContext, &documentTransaction{store: backend}, changes, reports, false, mongoManifestLocales(before)); err != nil {
 				return err
 			}
 			return fieldchange.RequireEmpty(reports)
@@ -168,6 +172,24 @@ func (backend *Store) SyncDevelopmentSchema(ctx context.Context, manifest schema
 			if err := lease.transaction(runContext, requireEmpty); err != nil {
 				return err
 			}
+		}
+		if exists {
+			// The old manifest owns the active published-head layout. Check its
+			// coverage before rebuilding candidate reservations, so a missing
+			// live head cannot be silently treated as an unpublished document.
+			previous := before.Snapshot()
+			for _, collection := range append(previous.Collections, previous.Globals...) {
+				if collection.Versions != nil {
+					if err := backend.verifyMongoPublishedHeadCoverage(runContext, collection); err != nil {
+						return err
+					}
+				}
+			}
+		}
+		// Candidate unique declarations cover both working and published heads.
+		// Rebuild while the lease fences writers, before admitting new indexes.
+		if err := backend.rebuildMongoHeadReservations(runContext, manifest); err != nil {
+			return fmt.Errorf("rebuild MongoDB active unique-head reservations: %w", err)
 		}
 		if err := backend.syncMongoIndexes(runContext, manifest); err != nil {
 			return err

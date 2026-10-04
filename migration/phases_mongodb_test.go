@@ -63,6 +63,39 @@ func TestMongoDBCreateIndexPayloadIsClosedAndNoTransactionOnly(t *testing.T) {
 	}
 }
 
+func TestMongoDBDropIndexHasOnePhysicalHead(t *testing.T) {
+	valid := Step{Kind: StepMongoDBDropIndex, Payload: json.RawMessage(`{"collectionId":"collection-valid","published":true,"index":"z_i_0123456789abcdef"}`)}
+	if err := validateStepPayload(PhaseNoTransaction, valid); err != nil {
+		t.Fatalf("published index removal: %v", err)
+	}
+	invalid := Step{Kind: StepMongoDBDropIndex, Payload: json.RawMessage(`{"collectionId":"collection-valid","version":true,"published":true,"index":"z_i_0123456789abcdef"}`)}
+	if err := validateStepPayload(PhaseNoTransaction, invalid); err == nil {
+		t.Fatal("ambiguous published/version index removal was admitted")
+	}
+}
+
+func TestMongoDBHeadReservationRebuildIsCanonicalMaintenance(t *testing.T) {
+	valid := Step{Kind: StepMongoDBRebuildHeadReservations, Payload: json.RawMessage(`{}`)}
+	if err := validateStepPayload(PhaseNoTransaction, valid); err != nil {
+		t.Fatalf("canonical head-reservation rebuild: %v", err)
+	}
+	for _, candidate := range []struct {
+		mode    PhaseMode
+		payload string
+	}{{PhaseTransaction, `{}`}, {PhaseNoTransaction, `null`}, {PhaseNoTransaction, `{"collection":"arbitrary"}`}} {
+		if err := validateStepPayload(candidate.mode, Step{Kind: StepMongoDBRebuildHeadReservations, Payload: json.RawMessage(candidate.payload)}); err == nil {
+			t.Fatalf("invalid head-reservation rebuild admitted: %s %s", candidate.mode, candidate.payload)
+		}
+	}
+}
+
+func TestMongoDBRetiredHeadUpgradeStepIsRejected(t *testing.T) {
+	step := Step{Kind: StepKind("mongodb_upgrade_published_heads"), Payload: json.RawMessage(`{}`)}
+	if err := validateStepPayload(PhaseNoTransaction, step); err == nil {
+		t.Fatal("retired MongoDB head-upgrade step was admitted")
+	}
+}
+
 func TestMongoDBAssertSchemaIsCanonicalAndNoTransactionOnly(t *testing.T) {
 	if err := validateStepPayload(PhaseNoTransaction, Step{Kind: StepMongoDBAssertSchema, Payload: json.RawMessage(`{}`)}); err != nil {
 		t.Fatalf("canonical assertion payload: %v", err)

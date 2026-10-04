@@ -14,7 +14,7 @@ import (
 func phaseOneBlocks() schema.Field {
 	path, _ := query.ParsePath("layout")
 	return schema.Field{ID: "layout", Name: "layout", Path: path, Type: schema.FieldTypeBlocks, Category: schema.FieldCategoryNested,
-		Blocks: &schema.BlocksField{MinRows: 2, MaxRows: 3, Types: []schema.BlockType{{Slug: "hero", Labels: schema.BlockLabels{Singular: "Hero"}, Fields: []schema.Field{}}}}}
+		Blocks: &schema.BlocksField{MinRows: 2, MaxRows: 3, Types: []schema.BlockType{{Slug: "hero", Labels: schema.BlockLabels{Singular: "Hero"}, Fields: []schema.Field{atlasBlockNameField("layout-hero-block-name", "layout.hero.blockName")}}}}}
 }
 func phaseOneBlockRows(count int) store.Value {
 	rows := make([]store.Value, count)

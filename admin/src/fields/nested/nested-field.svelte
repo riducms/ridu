@@ -26,6 +26,7 @@
 	import { getAdminRuntime } from "@admin/core/runtime/admin-runtime.svelte";
 	import { focusFieldIssue, fieldIssueRevealEvent } from "@admin/core/forms/field-issue-focus";
 	import FieldLayout from "@admin/fields/field-layout.svelte";
+	import { getFieldLayoutPresentation } from "@admin/fields/field-layout-presentation";
 	import FieldMessages from "@admin/fields/field-messages.svelte";
 	import {
 		compatibleClipboardValue,
@@ -41,6 +42,7 @@
 	import { blockHeaderValue, visibleBlockChild } from "@admin/fields/nested/block-header";
 
 	let { field, form }: { field: SchemaField; form: FormController } = $props();
+	const layoutPresentation = getFieldLayoutPresentation();
 	const runtime = getAdminRuntime();
 	const customRowLabel = $derived(runtime.rowLabels.resolve(field));
 	const blocks = $derived(resolveBlockTypes(field.blocks));
@@ -285,11 +287,11 @@
 
 	function rowLabel(row: Record<string, unknown>, index: number) {
 		const block = blockTypes.get(String(row.blockType));
-		if (field.type === "blocks" && block?.admin?.nameField !== undefined) {
+		if (field.type === "blocks" && block !== undefined) {
 			const path = `${field.path}.${index}`;
 			return (
-				blockHeaderValue(form, block, path, block.admin.nameField) ||
-				blockHeaderValue(form, block, path, block.admin.rowLabel) ||
+				blockHeaderValue(form, block, path, "blockName") ||
+				blockHeaderValue(form, block, path, block.admin?.rowLabel) ||
 				runtime.i18n.t("fields:untitled", { label: block.labels.singular })
 			);
 		}
@@ -360,17 +362,16 @@
 
 	function fieldsForRow(row: Record<string, unknown>, index: number) {
 		const rowKey = String(row._key);
-		const nameField = blockTypes.get(String(row.blockType))?.admin?.nameField;
 		return fieldsFor(row)
-			.filter((child) => child.name !== nameField)
+			.filter((child) => field.type !== "blocks" || child.name !== "blockName")
 			.map((child) => rowField(child, index, rowKey));
 	}
 
 	function rowLabelSnapshot(row: Record<string, unknown>, index: number) {
 		const block = blockTypes.get(String(row.blockType));
-		if (block?.admin?.nameField === undefined) return immutableRowLabelSnapshot(row);
+		if (block === undefined) return immutableRowLabelSnapshot(row);
 		const visible = { ...row };
-		for (const name of [block.admin.nameField, block.admin.rowLabel]) {
+		for (const name of ["blockName", block.admin?.rowLabel]) {
 			const child = block.fields.find((field) => field.name === name);
 			if (child !== undefined && !visibleBlockChild(form, rowField(child, index, String(row._key))))
 				delete visible[child.name];
@@ -437,7 +438,9 @@
 						</span>
 					{/if}
 				</div>
-				{@render fieldActions()}
+				{#if layoutPresentation?.groupActions ?? true}
+					{@render fieldActions()}
+				{/if}
 			</div>
 		</FieldMessages>
 		{#key groupPastes}
@@ -549,7 +552,7 @@
 										</span>
 									{/if}
 									<div class="ridu-repeated-row__label">
-										{#if block?.admin?.nameField !== undefined}
+										{#if block !== undefined}
 											<BlockHeader
 												{block}
 												path={`${field.path}.${index}`}

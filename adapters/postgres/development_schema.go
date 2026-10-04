@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/riducms/ridu/internal/fieldchange"
 	"github.com/riducms/ridu/internal/primitivefield"
+	"github.com/riducms/ridu/internal/schemadiff"
 	ridumigration "github.com/riducms/ridu/migration"
 	"github.com/riducms/ridu/schema"
 )
@@ -101,7 +102,7 @@ func readPostgresDevelopmentManifest(ctx context.Context, transaction *sql.Tx) (
 	if err != nil {
 		return nil, err
 	}
-	manifest, err := schema.Parse([]byte(encoded))
+	manifest, err := schema.ParseHistorical([]byte(encoded))
 	if err != nil {
 		return nil, fmt.Errorf("RIDU_DEVELOPMENT_SCHEMA_UNKNOWN: invalid recorded PostgreSQL manifest: %w", err)
 	}
@@ -184,6 +185,9 @@ func (backend *Store) SyncDevelopmentSchema(ctx context.Context, manifest schema
 		return err
 	}
 	if exists {
+		if err := schemadiff.RejectVersionsEnable(before.Snapshot(), manifest.Snapshot(), nil); err != nil {
+			return err
+		}
 		changes := fieldchange.Detect(before.Snapshot(), manifest.Snapshot())
 		if len(changes) != 0 {
 			var stored []fieldchange.Change
@@ -252,6 +256,9 @@ func (backend *Store) SyncDevelopmentSchema(ctx context.Context, manifest schema
 	}
 	if err := assertPhysicalSchema(ctx, transaction, manifest); err != nil {
 		return fmt.Errorf("verify development schema: %w", err)
+	}
+	if err := checkMigrationPublishedUniqueUnion(ctx, transaction, manifest); err != nil {
+		return fmt.Errorf("verify development uniqueness: %w", err)
 	}
 	if err := writePostgresDevelopmentManifest(ctx, transaction, manifest); err != nil {
 		return err

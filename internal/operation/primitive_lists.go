@@ -42,16 +42,16 @@ func validatePrimitiveListReadOutput(field schema.Field, value store.Value, path
 
 // Primitive items have no stable public identity. Keep their issues attached to
 // the entire field, and identify the offending item in actionable message text.
-func validatePrimitiveList(field schema.Field, value store.Value, path string, issues *validationIssueCollector) {
+func validatePrimitiveList(field schema.Field, value store.Value, path string, deferCompleteness bool, issues *validationIssueCollector) {
 	if value.Kind() != store.ValueList {
 		issues.add(schema.Issue{Code: "invalid_type", Path: path, Message: fmt.Sprintf("%s must be an array", field.Admin.Label)})
 		return
 	}
-	if field.Required && value.Len() == 0 {
+	if field.Required && value.Len() == 0 && !deferCompleteness {
 		issues.add(requiredIssue(field, path))
 	}
 	if field.List != nil {
-		if value.Len() < field.List.MinRows {
+		if value.Len() < field.List.MinRows && !deferCompleteness {
 			issues.add(schema.Issue{Code: "min_rows", Path: path, Message: fmt.Sprintf("%s must contain at least %d items", field.Admin.Label, field.List.MinRows)})
 		}
 		if field.List.MaxRows > 0 && value.Len() > field.List.MaxRows {
@@ -76,7 +76,7 @@ func validatePrimitiveList(field schema.Field, value store.Value, path string, i
 			}
 			size := utf8.RuneCountInString(text)
 			if field.Text != nil {
-				if field.Text.MinLength != nil && size < *field.Text.MinLength {
+				if field.Text.MinLength != nil && size < *field.Text.MinLength && !deferCompleteness {
 					add("min_length", fmt.Sprintf("must contain at least %d characters", *field.Text.MinLength))
 				}
 				if field.Text.MaxLength != nil && size > *field.Text.MaxLength {

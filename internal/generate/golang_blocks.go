@@ -13,6 +13,8 @@ type goBlocks struct {
 	catalog          *blocktypes.Catalog
 	pluginParameters map[string][]string
 	localized        bool
+	hasDrafts        bool
+	draftReadFields  map[schema.StableID]bool
 	models           map[schema.StableID]string
 	nested           map[string]string
 	nestedNames      map[schema.StableID]string
@@ -30,6 +32,7 @@ type goBlocks struct {
 func newGoBlocks(c *blocktypes.Catalog, snapshot schema.Snapshot) (*goBlocks, error) {
 	g := &goBlocks{selectNames: map[schema.StableID]string{}, selects: map[schema.StableID]schema.Field{}, catalog: c, localized: snapshot.Application.Localization != nil, models: map[schema.StableID]string{}, nested: map[string]string{}, nestedNames: map[schema.StableID]string{}, nestedFields: map[string][]schema.Field{}, referenceNames: map[schema.StableID]string{}, references: map[string]goBlockReference{}, nestedModes: map[string]goModelMode{}, arrayUpdates: map[string]string{}, arrayReads: map[string]string{}, arrayRows: map[string]bool{}}
 	g.pluginParameters = map[string][]string{}
+	g.draftReadFields = c.DraftReadFields(snapshot)
 	for _, plugin := range snapshot.Plugins {
 		for _, mapping := range plugin.FieldTypes {
 			g.pluginParameters[mapping.Key] = mapping.EmbeddedTypes
@@ -37,6 +40,7 @@ func newGoBlocks(c *blocktypes.Catalog, snapshot schema.Snapshot) (*goBlocks, er
 	}
 	used := map[string]int{}
 	for _, collection := range append(snapshot.Collections, snapshot.Globals...) {
+		g.hasDrafts = g.hasDrafts || collection.Versions != nil && collection.Versions.Drafts
 		name := exportedGoIdentifier(collection.Labels.Singular)
 		if name == "" {
 			name = exportedGoIdentifier(string(collection.Slug))
@@ -107,6 +111,9 @@ func newGoBlocks(c *blocktypes.Catalog, snapshot schema.Snapshot) (*goBlocks, er
 }
 func (g *goBlocks) modes() []goModelMode {
 	modes := []goModelMode{goOutput, goCreate, goUpdate}
+	if g.hasDrafts {
+		modes = append(modes, goDraft)
+	}
 	if g.localized {
 		modes = append(modes, goAllLocales, goAllLocalesValue)
 	}
@@ -128,12 +135,20 @@ func goBlockSuffix(mode goModelMode) string {
 	if mode == goCreate {
 		return "Input"
 	}
+	if mode == goDraft {
+		return "Draft"
+	}
 	if mode == goAllLocales {
 		return "AllLocales"
 	}
 	return ""
 }
 func (g *goBlocks) presence(f schema.Field, typ string, mode goModelMode, optional bool, lossless ...bool) string {
+	// Authentication identity is not unfinished editorial content. It may be
+	// omitted by an update, but a supplied identity must retain its strict type.
+	if mode == goDraft && !g.draftReadFields[f.ID] {
+		return goPresenceType(f, typ, goUpdate, optional)
+	}
 	if goOutputMode(mode) && !f.Required && len(lossless) > 0 && lossless[0] {
 		return "*BlockOptional[" + typ + "]"
 	}
@@ -149,7 +164,7 @@ func (g *goBlocks) fieldType(f schema.Field, mode goModelMode, plugins map[strin
 	if mode == goAllLocales && f.Localized {
 		f.Localized = false
 		typ := g.fieldType(f, goAllLocalesValue, plugins, inBlock)
-		if !f.Required {
+		if !f.Required || g.draftReadFields[f.ID] {
 			typ = goPresenceType(f, typ, goOutput, true)
 		}
 		return "map[string]" + typ
@@ -190,7 +205,7 @@ func (g *goBlocks) fieldType(f schema.Field, mode goModelMode, plugins map[strin
 				continue
 			}
 			typ := g.fieldType(child, mode, plugins, inBlock)
-			optional := goOutputMode(mode) || mode == goUpdate || !generatedInputRequired(child) || generatedFieldHasDefault(child)
+			optional := goOutputMode(mode) || mode == goUpdate || mode == goDraft || !generatedInputRequired(child) || generatedFieldHasDefault(child)
 			typ = g.presence(child, typ, mode, optional, inBlock)
 			tag := child.Name
 			if optional {
@@ -326,13 +341,13 @@ func (g *goBlocks) write(out *strings.Builder, plugins map[string]string) {
 			name := variant.Name + goBlockSuffix(mode)
 			writeGoBlockVariantDoc(out, name, mode)
 			fmt.Fprintf(out, "type %s struct {\n", name)
-			if mode == goCreate {
+			if mode == goCreate || mode == goDraft {
 				out.WriteString("// Key identifies this occurrence; omit it for a new server-assigned identity.\n")
 			} else {
 				out.WriteString("// Key is the required identity of this existing occurrence.\n")
 			}
 			fmt.Fprintf(out, "Key string `json:\"%s", variant.Identity)
-			if mode == goCreate {
+			if mode == goCreate || mode == goDraft {
 				out.WriteString(",omitempty")
 			}
 			out.WriteString("\"`\n")
@@ -356,12 +371,11 @@ func (g *goBlocks) write(out *strings.Builder, plugins map[string]string) {
 			g.writeMarshalObject(out, name, variant.Block.ResolvedFields(), names, mode, plugins, variant.Block.Slug, true, variant.Discriminator, variant.Identity)
 			fmt.Fprintf(out, "// BlockKey returns the occurrence identity, or an empty string for a nil or new block.\nfunc (value *%s) BlockKey() string {if value==nil{return \"\"};return value.Key}\n", name)
 			fmt.Fprintf(out, "func(value *%s) UnmarshalJSON(data []byte) error {type payload %s;var decoded payload;var fields map[string]json.RawMessage;if err:=json.Unmarshal(data,&fields);err!=nil{return err};var discriminator string;if err:=json.Unmarshal(fields[%q],&discriminator);err!=nil{return blockFieldError(%q,\"invalid discriminator\",err)};if discriminator!=%q{return newContractError(ContractError{Container:%q,Discriminator:discriminator,Path:%q,Reason:\"incorrect discriminator\"})};", name, name, variant.Discriminator, variant.Discriminator, variant.Block.Slug, name, variant.Discriminator)
-			if mode != goCreate {
+			if mode != goCreate && mode != goDraft {
 				fmt.Fprintf(out, "var key string;if err:=json.Unmarshal(fields[%q],&key);err!=nil{return blockFieldError(%q,\"invalid identity\",err)};if strings.TrimSpace(key)==\"\"{return blockFieldError(%q,\"expected a nonempty block identity\",nil)};", variant.Identity, variant.Identity, variant.Identity)
 			}
 
 			if mode == goCreate {
-				fmt.Fprintf(out, "if raw,ok:=fields[%q];ok{var key string;if err:=json.Unmarshal(raw,&key);err!=nil{return blockFieldError(%q,\"invalid identity\",err)};if strings.TrimSpace(key)==\"\"{return blockFieldError(%q,\"expected a nonempty block identity\",nil)}};", variant.Identity, variant.Identity, variant.Identity)
 				for _, f := range variant.Block.ResolvedFields() {
 					if generatedInputRequired(f) && !generatedFieldHasDefault(f) && goFieldAppearsInModel(f) {
 						fmt.Fprintf(out, "if raw,ok:=fields[%q];!ok||bytes.Equal(bytes.TrimSpace(raw),[]byte(\"null\")){return blockFieldError(%q,\"required field is absent or null\",nil)};", f.Name, f.Name)
@@ -373,7 +387,7 @@ func (g *goBlocks) write(out *strings.Builder, plugins map[string]string) {
 				g.writeOutputNullChecks(out, variant.Block.ResolvedFields(), mode)
 				g.writeOutputNulls(out, variant.Block.ResolvedFields(), names, mode, plugins)
 			}
-			if mode == goCreate || mode == goUpdate {
+			if mode == goCreate || mode == goUpdate || mode == goDraft {
 				g.writeInputNulls(out, variant.Block.ResolvedFields(), names, plugins, mode)
 				g.writeInputUnknowns(out, variant.Block.ResolvedFields(), true, true, variant.Discriminator, variant.Identity)
 			}
@@ -398,7 +412,7 @@ func (g *goBlocks) write(out *strings.Builder, plugins map[string]string) {
 			}
 			names := goNestedFieldNames(fields, g.arrayRows[name])
 			g.writeDecodeFields(out, fields, names, g.nestedModes[name], plugins, g.arrayRows[name], true)
-			if mode := g.nestedModes[name]; mode == goCreate || mode == goUpdate {
+			if mode := g.nestedModes[name]; mode == goCreate || mode == goUpdate || mode == goDraft {
 				g.writeInputNulls(out, fields, names, plugins, mode)
 				g.writeInputUnknowns(out, fields, false, g.arrayRows[name])
 			} else {
@@ -447,6 +461,9 @@ func (g *goBlocks) writeInputUnknowns(out *strings.Builder, fields []schema.Fiel
 }
 
 func (g *goBlocks) writeInputNulls(out *strings.Builder, fields []schema.Field, names []string, plugins map[string]string, mode goModelMode) {
+	if mode == goDraft {
+		return
+	}
 	for i, f := range fields {
 		if !goFieldAppearsInMode(f, mode) {
 			continue
@@ -476,7 +493,7 @@ func (g *goBlocks) writeOutputNulls(out *strings.Builder, fields []schema.Field,
 
 func (g *goBlocks) writeOutputNullChecks(out *strings.Builder, fields []schema.Field, mode goModelMode) {
 	for _, f := range fields {
-		if !f.Required {
+		if !f.Required || g.draftReadFields[f.ID] {
 			continue
 		}
 		fmt.Fprintf(out, "if raw,ok:=fields[%q];ok{if bytes.Equal(bytes.TrimSpace(raw),[]byte(\"null\")){return blockFieldError(%q,\"null is not allowed\",nil)};", f.Name, f.Name)

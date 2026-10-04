@@ -260,10 +260,6 @@ export class ReferenceBrowserWorkflow {
 		return this.#lookup.error;
 	}
 
-	get selectedFile() {
-		return this.upload.file;
-	}
-
 	get creating() {
 		return this.screen === "document" && this.editorDocument === undefined;
 	}
@@ -336,7 +332,7 @@ export class ReferenceBrowserWorkflow {
 			? this.form.access?.operations.create === true
 			: this.form.access?.operations.update === true;
 		const inputReady = this.creating
-			? !this.collection.capabilities.upload || this.selectedFile !== undefined
+			? !this.collection.capabilities.upload || this.upload.file !== undefined
 			: this.editorDirty;
 		return (
 			!this.options.readOnly &&
@@ -503,10 +499,10 @@ export class ReferenceBrowserWorkflow {
 						locale: this.options.locale,
 					});
 				}
-				if (this.selectedFile === undefined) {
+				if (this.upload.file === undefined) {
 					throw new Error(this.options.runtime.i18n.t("uploads:chooseFileBeforeCreating"));
 				}
-				return this.options.runtime.client.upload(this.collection.slug, this.selectedFile, {
+				return this.options.runtime.client.upload(this.collection.slug, this.upload.file, {
 					filename: this.upload.filename,
 					image: this.upload.image,
 					data: values,

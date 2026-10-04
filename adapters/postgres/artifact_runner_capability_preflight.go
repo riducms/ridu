@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/riducms/ridu/internal/migrationartifact"
+	"github.com/riducms/ridu/internal/schemadiff"
 	ridumigration "github.com/riducms/ridu/migration"
 	"github.com/riducms/ridu/schema"
 )
@@ -34,6 +35,9 @@ func validatePostgresCapabilityDecreasePreflight(artifact ridumigration.Artifact
 	}
 
 	before, after := *artifact.Before, artifact.After
+	if err := schemadiff.RejectVersionsEnable(before, after, postgresCollectionRenameIDs(renames)); err != nil {
+		return err
+	}
 	risks := unsafeUploadCollectionRemovals(before, after, renames)
 	risks = append(risks, unsafeCapabilityDisables(before, after, renames)...)
 	if len(risks) == 0 {

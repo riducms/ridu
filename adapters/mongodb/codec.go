@@ -27,6 +27,11 @@ func physicalVersionCollectionName(id schema.StableID) string {
 	return "z_v_" + hex.EncodeToString(digest[:8])
 }
 
+func physicalPublishedCollectionName(id schema.StableID) string {
+	digest := sha256.Sum256([]byte(id))
+	return "z_p_" + hex.EncodeToString(digest[:8])
+}
+
 func newDocumentID(collectionID schema.StableID) (string, error) {
 	random := make([]byte, 12)
 	if _, err := rand.Read(random); err != nil {
@@ -93,6 +98,9 @@ func encodeDocument(document store.Document) (bson.D, error) {
 		{Key: "status", Value: string(document.Status)},
 		{Key: "revision", Value: int64(document.Revision)},
 		{Key: "fence", Value: int64(0)},
+	}
+	if document.HasDraftChanges {
+		metadata = append(metadata, bson.E{Key: "pending", Value: true})
 	}
 	if document.DeletedAt != nil {
 		deletedAt, err := encodeTime(*document.DeletedAt)
@@ -195,7 +203,30 @@ func stringsContainNUL(value string) bool {
 }
 
 func decodeDocument(raw bson.Raw) (store.Document, error) {
-	if err := requireExactKeys(raw, "MongoDB document", "_id", "meta", "values"); err != nil {
+	keys := []string{"_id", "meta", "values"}
+	if reservations := raw.Lookup("reservations"); reservations.Type != 0 {
+		array, ok := reservations.ArrayOK()
+		if !ok {
+			return store.Document{}, fmt.Errorf("stored MongoDB document has invalid unique-head reservations")
+		}
+		entries, err := array.Values()
+		if err != nil {
+			return store.Document{}, fmt.Errorf("stored MongoDB document has invalid unique-head reservations: %w", err)
+		}
+		previous := ""
+		for _, entry := range entries {
+			value, valid := entry.StringValueOK()
+			if !valid || len(value) != 66 || value[:2] != "u_" || (previous != "" && value <= previous) {
+				return store.Document{}, fmt.Errorf("stored MongoDB document has invalid unique-head reservation identity")
+			}
+			if _, err := hex.DecodeString(value[2:]); err != nil {
+				return store.Document{}, fmt.Errorf("stored MongoDB document has invalid unique-head reservation identity")
+			}
+			previous = value
+		}
+		keys = append(keys, "reservations")
+	}
+	if err := requireExactKeys(raw, "MongoDB document", keys...); err != nil {
 		return store.Document{}, err
 	}
 	id, ok := raw.Lookup("_id").StringValueOK()
@@ -209,7 +240,17 @@ func decodeDocument(raw bson.Raw) (store.Document, error) {
 	if !ok {
 		return store.Document{}, fmt.Errorf("stored MongoDB document has invalid metadata")
 	}
-	if err := requireExactKeys(metadata, "MongoDB document metadata", "codec", "incarnation", "createdAt", "updatedAt", "deletedAt", "status", "revision", "fence"); err != nil {
+	metadataKeys := []string{"codec", "incarnation", "createdAt", "updatedAt", "deletedAt", "status", "revision", "fence"}
+	pending := false
+	if value := metadata.Lookup("pending"); value.Type != 0 {
+		var ok bool
+		pending, ok = value.BooleanOK()
+		if !ok {
+			return store.Document{}, fmt.Errorf("stored MongoDB document has invalid pending metadata")
+		}
+		metadataKeys = append(metadataKeys, "pending")
+	}
+	if err := requireExactKeys(metadata, "MongoDB document metadata", metadataKeys...); err != nil {
 		return store.Document{}, err
 	}
 	codec, ok := metadata.Lookup("codec").Int32OK()
@@ -262,7 +303,7 @@ func decodeDocument(raw bson.Raw) (store.Document, error) {
 	}
 	return store.Document{
 		ID: id, CreatedAt: decodeTime(createdAtNanos), UpdatedAt: decodeTime(updatedAtNanos),
-		DeletedAt: deletedAt, Status: status, Revision: int(revision64), Values: values,
+		DeletedAt: deletedAt, Status: status, Revision: int(revision64), HasDraftChanges: pending, Values: values,
 	}, nil
 }
 

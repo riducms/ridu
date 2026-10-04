@@ -5,6 +5,8 @@ import { SvelteMap } from "svelte/reactivity";
 interface AdminScrollPage {
 	ready: () => boolean;
 	target?: () => HTMLElement | null;
+	/** A same-page editor replacement can temporarily shrink the primary viewport. */
+	contentRevision?: () => unknown;
 }
 
 const [getAdminScroll, setAdminScroll] = createContext<{
@@ -41,6 +43,53 @@ export function useAdminScrollRestoration(
 	const scroll = getAdminScroll();
 	const page = $derived(scroll.page);
 	let renderedLocation = $state.raw<ReturnType<typeof useLocation>["current"]>();
+	function primaryTarget() {
+		const shell = target();
+		return shell === window || page?.target === undefined ? shell : page.target();
+	}
+
+	let previousRender:
+		| {
+				page: AdminScrollPage | undefined;
+				location: typeof location.current;
+				revision: unknown;
+				target: Window | HTMLElement | null;
+		  }
+		| undefined;
+	$effect.pre(() => {
+		const current = {
+			page,
+			location: location.current,
+			revision: page?.contentRevision?.(),
+			target: primaryTarget(),
+		};
+		const retain =
+			previousRender?.page === current.page &&
+			previousRender?.location === current.location &&
+			previousRender?.target === current.target &&
+			previousRender?.revision !== current.revision &&
+			renderedLocation === current.location &&
+			current.page?.ready();
+		previousRender = current;
+		const viewport = current.target;
+		if (!retain || viewport === null) return;
+		const left = viewport instanceof HTMLElement ? viewport.scrollLeft : viewport.scrollX;
+		const top = viewport instanceof HTMLElement ? viewport.scrollTop : viewport.scrollY;
+		let active = true;
+		let frame: number | undefined;
+		// Capture before replacement DOM can clamp the scroll range. Flush the new
+		// editors, including external DOM initialization, before the next paint.
+		tick().then(() => {
+			if (!active) return;
+			frame = requestAnimationFrame(() => {
+				viewport.scrollTo({ left, top, behavior: "instant" });
+			});
+		});
+		return () => {
+			active = false;
+			if (frame !== undefined) cancelAnimationFrame(frame);
+		};
+	});
 
 	$effect(() => {
 		const current = location.current;
@@ -59,10 +108,7 @@ export function useAdminScrollRestoration(
 
 	useScrollRestoration({
 		storageKey: `ridu-admin-scroll:${root.current}`,
-		target: () => {
-			const shell = target();
-			return shell === window || page?.target === undefined ? shell : page.target();
-		},
+		target: primaryTarget,
 		ready: () => renderedLocation === location.current && (page?.ready() ?? !waitForPage()),
 	});
 }

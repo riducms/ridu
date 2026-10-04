@@ -18,6 +18,13 @@ Existing projects must update `ridu.toml`, the server's adapter factory, develop
 committed migration history together. Runtime credentials belong in `DATABASE_URL`; production
 connections must require verified TLS. Opening the adapter does not create or migrate tables.
 
+Only the current PostgreSQL planner and physical schema are supported. Histories and development
+databases from earlier draft layouts are rejected rather than converted. Create a fresh database
+and current migration history for those layouts. Ordinary authored schema migrations, data
+transforms, verification, and recovery remain available. Startup never alters the schema. A
+published head remains live while newer working drafts are saved and is retained independently of
+version-history pruning.
+
 Read the complete [PostgreSQL guide](../../website/src/content/docs/postgres.md) before changing an
 adapter or deploying a schema change. It includes generated-project wiring, existing services,
 `ridu migrate verify`, backup/cutover, pool bounds, and readiness checks.

@@ -60,7 +60,7 @@ func TestBlockRestorePreservesAbsentTranslations(t *testing.T) {
 			draft := true
 			readAll := func() store.Document {
 				t.Helper()
-				doc, err := app.Local().Find(ctx, "pages", created.ID, ridu.FindOptions{AllLocales: true, Draft: &draft})
+				doc, err := app.Local().Find(ctx, "pages", created.ID, ridu.FindOptions{AllLocales: true, Draft: &draft, System: true})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -95,7 +95,7 @@ func TestBlockRestorePreservesAbsentTranslations(t *testing.T) {
 			if _, err := app.Local().Update(ctx, "pages", created.ID, store.Values{"layout": store.List(store.Object(row))}, ridu.MutationOptions{}); err != nil {
 				t.Fatal(err)
 			}
-			french, err := app.Local().Find(ctx, "pages", created.ID, ridu.FindOptions{Locale: "fr", Draft: &draft})
+			french, err := app.Local().Find(ctx, "pages", created.ID, ridu.FindOptions{Locale: "fr", Draft: &draft, System: true})
 			if err != nil {
 				t.Fatal(err)
 			}

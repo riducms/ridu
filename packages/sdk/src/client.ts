@@ -41,6 +41,8 @@ import type {
 	AuthCollectionSlug,
 	CollectionSlug,
 	CreateFor,
+	DraftCreateFor,
+	DraftUpdateFor,
 	FindOptions,
 	ListOptions,
 	LocaleOptions,
@@ -54,6 +56,7 @@ import type {
 	RevisionOptions,
 	PublicationScheduleOptions,
 	MutationOptions,
+	UpdateOptions,
 	CreateOptions,
 	RestoreOptions,
 	SelectFor,
@@ -78,6 +81,7 @@ import type {
 	GlobalSlug,
 	GlobalOutputFor,
 	GlobalUpdateFor,
+	GlobalDraftUpdateFor,
 	GlobalSelectFor,
 	GlobalPopulateFor,
 	GlobalAccessOptions,
@@ -293,11 +297,12 @@ class FetchClient<
 			},
 			createUser: async (
 				input: { data: unknown; password: string } & CollectionChoice,
-				options?: MutationLocaleOptions
+				options?: CreateOptions
 			) => {
 				const collection = client.#collectionFor(input.collection, "createUser");
 				const query = new URLSearchParams();
 				appendLocaleQuery(query, options);
+				appendDraftQuery(query, options);
 				const suffix = query.size === 0 ? "" : `?${query}`;
 				const body = await client.#request(
 					`/api/auth/${encodeURIComponent(collection)}/create-user${suffix}`,
@@ -845,7 +850,8 @@ class FetchClient<
 					WhereFor<Config, Slug>,
 					SelectFor<Config, Slug>,
 					PopulateFor<Config, Slug>,
-					LocaleFor<Config>
+					LocaleFor<Config>,
+					CollectionDraftsFor<Config, Slug>
 			  >
 			| undefined = undefined,
 	>(
@@ -860,6 +866,7 @@ class FetchClient<
 		if (options?.select !== undefined) query.set("select", JSON.stringify(options.select));
 		if (options?.populate !== undefined) query.set("populate", JSON.stringify(options.populate));
 		if (options?.includeAccess === true) query.set("include-access", "true");
+		appendDraftQuery(query, options);
 		if (options?.trash === true) query.set("trash", "true");
 		appendLocaleQuery(query, options);
 		for (const sort of options?.sort ?? []) query.append("sort", sort);
@@ -902,7 +909,12 @@ class FetchClient<
 	async find<
 		Slug extends CollectionSlug<Config>,
 		const Options extends
-			| FindOptions<SelectFor<Config, Slug>, PopulateFor<Config, Slug>, LocaleFor<Config>>
+			| FindOptions<
+					SelectFor<Config, Slug>,
+					PopulateFor<Config, Slug>,
+					LocaleFor<Config>,
+					CollectionDraftsFor<Config, Slug>
+			  >
 			| undefined = undefined,
 	>(
 		collection: Slug,
@@ -913,6 +925,7 @@ class FetchClient<
 		if (options?.depth !== undefined) query.set("depth", String(options.depth));
 		if (options?.select !== undefined) query.set("select", JSON.stringify(options.select));
 		if (options?.populate !== undefined) query.set("populate", JSON.stringify(options.populate));
+		appendDraftQuery(query, options);
 		appendLocaleQuery(query, options);
 		const suffix = query.size === 0 ? "" : `?${query}`;
 		const body = await this.#request(
@@ -923,7 +936,12 @@ class FetchClient<
 		return documentFromEnvelope<CollectionQueryResult<Config, Slug, Options>>(body);
 	}
 
-	async create<Slug extends CollectionSlug<Config>>(
+	create<Slug extends DraftCollectionSlug<Config>>(
+		collection: Slug,
+		data: DraftCreateFor<Config, Slug>,
+		options?: CreateOptions<LocaleFor<Config>, true, true> & { draft?: true }
+	): Promise<OutputFor<Config, Slug>>;
+	create<Slug extends CollectionSlug<Config>>(
 		collection: Slug,
 		data: CreateFor<Config, Slug>,
 		options?: CreateOptions<
@@ -931,6 +949,11 @@ class FetchClient<
 			CollectionVersionsFor<Config, Slug>,
 			CollectionDraftsFor<Config, Slug>
 		>
+	): Promise<OutputFor<Config, Slug>>;
+	async create<Slug extends CollectionSlug<Config>>(
+		collection: Slug,
+		data: unknown,
+		options?: CreateOptions<LocaleFor<Config>, boolean, boolean>
 	): Promise<OutputFor<Config, Slug>> {
 		const query = new URLSearchParams();
 		appendLocaleQuery(query, options);
@@ -980,15 +1003,28 @@ class FetchClient<
 		return documentFromEnvelope<OutputFor<Config, Slug>>(body);
 	}
 
-	async update<Slug extends CollectionSlug<Config>>(
+	update<Slug extends DraftCollectionSlug<Config>>(
+		collection: Slug,
+		id: string,
+		data: DraftUpdateFor<Config, Slug>,
+		options: UpdateOptions<LocaleFor<Config>, true> & { draft: true }
+	): Promise<OutputFor<Config, Slug>>;
+	update<Slug extends CollectionSlug<Config>>(
 		collection: Slug,
 		id: string,
 		data: UpdateFor<Config, Slug>,
-		options?: MutationOptions
+		options?: UpdateOptions<LocaleFor<Config>, CollectionDraftsFor<Config, Slug>>
+	): Promise<OutputFor<Config, Slug>>;
+	async update<Slug extends CollectionSlug<Config>>(
+		collection: Slug,
+		id: string,
+		data: unknown,
+		options?: UpdateOptions<LocaleFor<Config>, true>
 	): Promise<OutputFor<Config, Slug>> {
 		const revision = revisionHeaders(options);
 		const query = new URLSearchParams();
 		appendLocaleQuery(query, options);
+		appendDraftQuery(query, options);
 		const suffix = query.size === 0 ? "" : `?${query}`;
 		const body = await this.#request(
 			`/api/collections/${encodeURIComponent(collection)}/${encodeDocumentID(id)}${suffix}`,
@@ -1011,10 +1047,10 @@ class FetchClient<
 		if (options?.filename) form.set("file", file, options.filename);
 		else form.set("file", file);
 		if (options?.image) form.set("image", JSON.stringify(options.image));
-		if (options?.publish) form.set("publish", "true");
 		if (options?.data !== undefined) form.set("data", JSON.stringify(options.data));
 		const query = new URLSearchParams();
 		appendLocaleQuery(query, options);
+		appendDraftQuery(query, options);
 		const suffix = query.size === 0 ? "" : `?${query}`;
 		const body = await this.#request(
 			"/api/collections/" + encodeURIComponent(collection) + suffix,
@@ -1031,6 +1067,7 @@ class FetchClient<
 	): Promise<OutputFor<Config, Slug>> {
 		const query = new URLSearchParams();
 		appendLocaleQuery(query, options);
+		appendDraftQuery(query, options);
 		const suffix = query.size === 0 ? "" : `?${query}`;
 		const body = await this.#request(
 			`/api/collections/${encodeURIComponent(collection)}/remote-upload${suffix}`,
@@ -1040,7 +1077,6 @@ class FetchClient<
 					url,
 					data: options?.data ?? {},
 					image: options?.image,
-					publish: options?.publish,
 					filename: options?.filename,
 				}),
 			},
@@ -1053,10 +1089,15 @@ class FetchClient<
 		collection: Slug,
 		id: string,
 		input: UpdateUploadInput<UpdateFor<Config, Slug>>,
-		options?: MutationOptions
+		options?: UpdateOptions
 	): Promise<OutputFor<Config, Slug>> {
+		assertUploadDraftOptions({
+			...options,
+			...(input.publish === undefined ? {} : { publish: input.publish }),
+		});
 		const query = new URLSearchParams();
 		appendLocaleQuery(query, options);
+		appendDraftQuery(query, options);
 		const suffix = query.size === 0 ? "" : `?${query}`;
 		let payload: FormData | string;
 		if (input.file) {
@@ -1292,6 +1333,14 @@ class FetchClient<
 		return this.#versionMutation(collection, id, "unpublish", options);
 	}
 
+	async discardDraft<Slug extends DraftCollectionSlug<Config>>(
+		collection: Slug,
+		id: string,
+		options: MutationOptions<LocaleFor<Config>> & { revision: number }
+	): Promise<OutputFor<Config, Slug>> {
+		return this.#versionMutation(collection, id, "discard-draft", options);
+	}
+
 	async restore<Slug extends VersionCollectionSlug<Config>>(
 		collection: Slug,
 		id: string,
@@ -1516,7 +1565,8 @@ class FetchClient<
 			| FindOptions<
 					GlobalSelectFor<Config, Slug>,
 					GlobalPopulateFor<Config, Slug>,
-					LocaleFor<Config>
+					LocaleFor<Config>,
+					GlobalDraftsFor<Config, Slug>
 			  >
 			| undefined = undefined,
 	>(slug: Slug, options?: Options): Promise<GlobalQueryResult<Config, Slug, Options>> {
@@ -1524,6 +1574,7 @@ class FetchClient<
 		if (options?.depth !== undefined) query.set("depth", String(options.depth));
 		if (options?.select !== undefined) query.set("select", JSON.stringify(options.select));
 		if (options?.populate !== undefined) query.set("populate", JSON.stringify(options.populate));
+		appendDraftQuery(query, options);
 		appendLocaleQuery(query, options);
 		const suffix = query.size === 0 ? "" : `?${query}`;
 		const body = await this.#request(
@@ -1534,14 +1585,25 @@ class FetchClient<
 		return documentFromEnvelope<GlobalQueryResult<Config, Slug, Options>>(body);
 	}
 
-	async updateGlobal<Slug extends GlobalSlug<Config>>(
+	updateGlobal<Slug extends DraftGlobalSlug<Config>>(
+		slug: Slug,
+		data: GlobalDraftUpdateFor<Config, Slug>,
+		options: UpdateOptions<LocaleFor<Config>, true> & { draft: true }
+	): Promise<GlobalOutputFor<Config, Slug>>;
+	updateGlobal<Slug extends GlobalSlug<Config>>(
 		slug: Slug,
 		data: GlobalUpdateFor<Config, Slug>,
-		options?: MutationOptions
+		options?: UpdateOptions<LocaleFor<Config>, GlobalDraftsFor<Config, Slug>>
+	): Promise<GlobalOutputFor<Config, Slug>>;
+	async updateGlobal<Slug extends GlobalSlug<Config>>(
+		slug: Slug,
+		data: unknown,
+		options?: UpdateOptions<LocaleFor<Config>, true>
 	): Promise<GlobalOutputFor<Config, Slug>> {
 		const revision = revisionHeaders(options);
 		const query = new URLSearchParams();
 		appendLocaleQuery(query, options);
+		appendDraftQuery(query, options);
 		const suffix = query.size === 0 ? "" : `?${query}`;
 		const body = await this.#request(
 			`/api/globals/${encodeURIComponent(slug)}${suffix}`,
@@ -1663,6 +1725,13 @@ class FetchClient<
 		options?: MutationOptions
 	): Promise<GlobalOutputFor<Config, Slug>> {
 		return this.#globalVersionMutation(slug, "unpublish", options);
+	}
+
+	async discardGlobalDraft<Slug extends DraftGlobalSlug<Config>>(
+		slug: Slug,
+		options: MutationOptions<LocaleFor<Config>> & { revision: number }
+	): Promise<GlobalOutputFor<Config, Slug>> {
+		return this.#globalVersionMutation(slug, "discard-draft", options);
 	}
 
 	async restoreGlobal<Slug extends VersionGlobalSlug<Config>>(
@@ -2007,8 +2076,13 @@ function appendLocaleQuery(query: URLSearchParams, options: LocaleOptions | unde
 	}
 }
 
-function appendDraftQuery(query: URLSearchParams, options: CreateOptions | undefined) {
+function appendDraftQuery(query: URLSearchParams, options: { draft?: boolean } | undefined) {
 	if (options?.draft !== undefined) query.set("draft", String(options.draft));
+}
+
+function assertUploadDraftOptions(options: { draft?: boolean; publish?: boolean } | undefined) {
+	if (options?.draft === true && options.publish === true)
+		throw new TypeError("An upload cannot be published and saved as a draft in one request.");
 }
 
 function invalidSuccessEnvelope(kind: string) {

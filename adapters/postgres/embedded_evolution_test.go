@@ -13,9 +13,11 @@ import (
 func postgresEmbeddedEvolutionFixture() schema.Manifest {
 	title := atlasTextField("title", "title")
 	title.Path, _ = query.ParsePath("body.widgets.widget.card.title")
+	cardName := atlasBlockNameField("card-block-name", "body.widgets.widget.card.blockName")
+	noteName := atlasBlockNameField("note-block-name", "body.widgets.widget.note.blockName")
 	body := schema.Field{ID: "body", Name: "body", Type: schema.FieldTypePlugin, Category: schema.FieldCategoryPlugin,
 		Plugin: &schema.PluginField{Key: "outline", EmbeddedTrees: []schema.EmbeddedTree{{Version: 1, Key: "widgets", Root: []string{"outline"}, Children: "items", Tag: "kind", Cases: []schema.EmbeddedTreeCase{{TagValue: "widget", Payload: "data", Identity: "uid", Discriminator: "schema", Types: []schema.BlockType{
-			{Slug: "card", Fields: []schema.Field{title}}, {Slug: "note"},
+			{Slug: "card", Fields: []schema.Field{title, cardName}}, {Slug: "note", Fields: []schema.Field{noteName}},
 		}}}}}}}
 	body.Path, _ = query.ParsePath("body")
 	manifest := atlasTestManifest(body)
@@ -34,7 +36,9 @@ func TestPostgresEmbeddedEvolutionRequiresTransform(t *testing.T) {
 		{"payload", func(tree *schema.EmbeddedTree) { tree.Cases[0].Payload = "payload" }},
 		{"identity", func(tree *schema.EmbeddedTree) { tree.Cases[0].Identity = "id" }},
 		{"remove-variant", func(tree *schema.EmbeddedTree) { tree.Cases[0].Types = tree.Cases[0].ResolvedTypes()[:1] }},
-		{"remove-child", func(tree *schema.EmbeddedTree) { tree.Cases[0].ResolvedTypes()[0].Fields = nil }},
+		{"remove-child", func(tree *schema.EmbeddedTree) {
+			tree.Cases[0].ResolvedTypes()[0].Fields = tree.Cases[0].ResolvedTypes()[0].ResolvedFields()[1:]
+		}},
 		{"require-child", func(tree *schema.EmbeddedTree) { tree.Cases[0].ResolvedTypes()[0].ResolvedFields()[0].Required = true }},
 		{"localize-child", func(tree *schema.EmbeddedTree) { tree.Cases[0].ResolvedTypes()[0].ResolvedFields()[0].Localized = true }},
 		{"add-min-array", func(tree *schema.EmbeddedTree) {
@@ -78,7 +82,7 @@ func TestPostgresEmbeddedEvolutionAllowsAdditionsAndPresentation(t *testing.T) {
 	before := postgresEmbeddedEvolutionFixture()
 	snapshot := before.Snapshot()
 	tree := &snapshot.Collections[0].Fields[0].Plugin.EmbeddedTrees[0]
-	tree.Cases[0].Types = append(tree.Cases[0].ResolvedTypes(), schema.BlockType{Slug: "new-card", Fields: []schema.Field{atlasTextField("new-title", "title")}})
+	tree.Cases[0].Types = append(tree.Cases[0].ResolvedTypes(), schema.BlockType{Slug: "new-card", Fields: []schema.Field{atlasTextField("new-title", "title"), atlasBlockNameField("new-card-block-name", "body.widgets.widget.new-card.blockName")}})
 	card := &tree.Cases[0].ResolvedTypes()[0]
 	card.Labels.Singular = "New label"
 	card.ResolvedFields()[0].Admin.Label = "New title label"
@@ -117,7 +121,7 @@ func TestPostgresEmbeddedEvolutionInspectsNestedChildren(t *testing.T) {
 	child := card.ResolvedFields()[0]
 	group := schema.Field{ID: "group", Name: "settings", Type: schema.FieldTypeGroup, Category: schema.FieldCategoryNested, Nested: &schema.NestedField{Fields: []schema.Field{child}}}
 	group.Path, _ = query.ParsePath("body.widgets.widget.card.settings")
-	card.Fields = []schema.Field{group}
+	card.Fields = []schema.Field{group, card.ResolvedFields()[1]}
 	before = schema.NewManifest(snapshot)
 	card.ResolvedFields()[0].Nested.ResolvedFields()[0].Required = true
 	if _, err := BuildArtifact(t.Context(), "require-nested", &before, schema.NewManifest(snapshot), nil, false); err == nil || !strings.Contains(err.Error(), "compiled data transform") {
@@ -162,12 +166,12 @@ func TestPostgresEmbeddedEvolutionRejectsInvalidGroupMaterialization(t *testing.
 				group.Nested.ResolvedFields()[0].Default = &value
 				card.Fields = append(card.ResolvedFields(), group)
 			} else {
-				card.ResolvedFields()[1].Nested.ResolvedFields()[0].Default = &value
+				card.ResolvedFields()[2].Nested.ResolvedFields()[0].Default = &value
 			}
 			if _, err := BuildArtifact(t.Context(), "materialize-group", &before, schema.NewManifest(snapshot), nil, false); err == nil || !strings.Contains(err.Error(), "compiled data transform") {
 				t.Fatalf("invalid materialization: %v", err)
 			}
-			card.ResolvedFields()[1].Nested.ResolvedFields()[1].Default = &value
+			card.ResolvedFields()[2].Nested.ResolvedFields()[1].Default = &value
 			if _, err := BuildArtifact(t.Context(), "valid-defaults", &before, schema.NewManifest(snapshot), nil, false); err != nil {
 				t.Fatalf("complete defaults must be allowed: %v", err)
 			}

@@ -21,6 +21,7 @@ type UploadInput struct {
 	Data             store.Values              `json:"data"`
 	Image            *protocol.UploadImageEdit `json:"image"`
 	Publish          bool                      `json:"publish"`
+	Draft            *bool                     `json:"-"`
 	Reader           io.Reader                 `json:"-"`
 	Locale           LocaleOptions             `json:"-"`
 	ExpectedRevision int                       `json:"-"`
@@ -39,7 +40,16 @@ func (api *API) saveUpload(writer http.ResponseWriter, request *http.Request, re
 		api.writeError(writer, requestID, &operationengine.Error{Code: "upload_unavailable", Status: 503, Message: "upload storage is unavailable"})
 		return
 	}
+	if id == "" && request.URL.Query().Has("publish") {
+		api.writeError(writer, requestID, &operationengine.Error{Code: "bad_request", Status: 400, Message: "publish is not a create-upload selector; use draft=false"})
+		return
+	}
 	locale, err := decodeLocaleQuery(request.URL.Query())
+	if err != nil {
+		api.writeError(writer, requestID, err)
+		return
+	}
+	draft, err := decodeDraftQuery(request)
 	if err != nil {
 		api.writeError(writer, requestID, err)
 		return
@@ -89,7 +99,16 @@ func (api *API) saveUpload(writer http.ResponseWriter, request *http.Request, re
 				return
 			}
 		}
-		input.Publish = request.FormValue("publish") == "true"
+		if id == "" {
+			_, value := request.MultipartForm.Value["publish"]
+			_, file := request.MultipartForm.File["publish"]
+			if value || file {
+				api.writeError(writer, requestID, &operationengine.Error{Code: "bad_request", Status: 400, Message: "publish is not a create-upload field; use draft=false"})
+				return
+			}
+		} else {
+			input.Publish = request.FormValue("publish") == "true"
+		}
 	} else if id != "" {
 		if err := api.decodeJSON(writer, request, &input); err != nil {
 			api.writeError(writer, requestID, err)
@@ -99,7 +118,11 @@ func (api *API) saveUpload(writer http.ResponseWriter, request *http.Request, re
 		api.writeError(writer, requestID, &operationengine.Error{Code: "validation", Status: 422, Message: "a file is required"})
 		return
 	}
-	input.Locale, input.ExpectedRevision = locale.public(), revisionHeader(request)
+	if id != "" && input.Publish && draft != nil && *draft {
+		api.writeError(writer, requestID, &operationengine.Error{Code: "bad_request", Status: 400, Message: "publish and draft=true cannot be combined"})
+		return
+	}
+	input.Locale, input.ExpectedRevision, input.Draft = locale.public(), revisionHeader(request), draft
 	var document store.Document
 	status := http.StatusOK
 	if id == "" {
@@ -125,9 +148,15 @@ func (api *API) createRemoteUpload(writer http.ResponseWriter, request *http.Req
 		api.authCollectionCreateError(writer, requestID, collection)
 		return
 	}
+	if request.URL.Query().Has("publish") {
+		api.writeError(writer, requestID, &operationengine.Error{Code: "bad_request", Status: 400, Message: "publish is not a create-upload selector; use draft=false"})
+		return
+	}
 	var input struct {
-		URL string `json:"url"`
-		UploadInput
+		URL      string                    `json:"url"`
+		Filename string                    `json:"filename"`
+		Data     store.Values              `json:"data"`
+		Image    *protocol.UploadImageEdit `json:"image"`
 	}
 	if err := api.decodeJSON(writer, request, &input); err != nil {
 		api.writeError(writer, requestID, err)
@@ -138,8 +167,12 @@ func (api *API) createRemoteUpload(writer http.ResponseWriter, request *http.Req
 		api.writeError(writer, requestID, err)
 		return
 	}
-	input.Locale = locale.public()
-	document, err := api.config.RemoteUpload(request.Context(), string(collection.Slug), input.URL, input.UploadInput, identity)
+	draft, err := decodeDraftQuery(request)
+	if err != nil {
+		api.writeError(writer, requestID, err)
+		return
+	}
+	document, err := api.config.RemoteUpload(request.Context(), string(collection.Slug), input.URL, UploadInput{Filename: input.Filename, Data: input.Data, Image: input.Image, Draft: draft, Locale: locale.public()}, identity)
 	if err != nil {
 		api.writeError(writer, requestID, err)
 		return

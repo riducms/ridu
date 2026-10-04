@@ -26,6 +26,7 @@ import {
 	localizationSource,
 	reconcileFormSchema,
 	recoverFormDraft,
+	rebaseSavedFormValues,
 	shouldSubmitLocalizedPath,
 	type DetachedDraftValue,
 	type FormSchemaReconciliation,
@@ -153,6 +154,8 @@ export class FormController {
 	issues = $state<ValidationIssue[]>([]);
 	#submittingIssues = $state.raw<readonly ValidationIssue[]>([]);
 	submitting = $state(false);
+	#allowEditsDuringSubmission = $state(false);
+	#submissionToken?: symbol;
 	revision = $state(0);
 	access = $state.raw<AccessCapabilitiesEnvelope>();
 	accessMode = $state<"create" | "update">("update");
@@ -224,7 +227,34 @@ export class FormController {
 
 	/** Transient host-owned editing lock; unlike schema read-only, this is not presentation metadata. */
 	get editingBlocked() {
-		return this.submitting;
+		return this.submitting && !this.#allowEditsDuringSubmission;
+	}
+
+	/** Lock field editors while a publication or discard request may replace the document. */
+	beginManualSubmission() {
+		return this.#beginSubmission(false).release;
+	}
+
+	#beginSubmission(allowEdits: boolean) {
+		const token = Symbol("form-submission");
+		this.#submissionToken = token;
+		this.submitting = true;
+		this.#allowEditsDuringSubmission = allowEdits;
+		return {
+			token,
+			release: () => {
+				if (this.#submissionToken !== token) return;
+				this.#submissionToken = undefined;
+				this.#allowEditsDuringSubmission = false;
+				this.submitting = false;
+			},
+		};
+	}
+
+	#cancelSubmission() {
+		this.#submissionToken = undefined;
+		this.#allowEditsDuringSubmission = false;
+		this.submitting = false;
 	}
 
 	/** Parent-owned detached edits participate in saving and navigation protection. */
@@ -382,6 +412,27 @@ export class FormController {
 		return key;
 	}
 
+	#captureRowMounts(fields: readonly SchemaField[]) {
+		const mounts = new Map<string, { row: Record<string, unknown>; key: symbol }>();
+		for (const { token, value } of indexFieldValues(fields, this.values)) {
+			if (!isRecord(value)) continue;
+			const key = this.#rowMountKeys.get(value);
+			if (key) mounts.set(token, { row: value, key });
+		}
+		return mounts;
+	}
+
+	#restoreRowMounts(
+		fields: readonly SchemaField[],
+		mounts: ReadonlyMap<string, { row: Record<string, unknown>; key: symbol }>
+	) {
+		for (const { row } of mounts.values()) this.#rowMountKeys.delete(row);
+		for (const { token, value } of indexFieldValues(fields, this.values)) {
+			const mount = mounts.get(token);
+			if (mount && isRecord(value)) this.#rowMountKeys.set(value, mount.key);
+		}
+	}
+
 	snapshot(): FormValues {
 		return { ...this.#readContext?.snapshot(), ...cloneFormValues(this.values) };
 	}
@@ -405,13 +456,7 @@ export class FormController {
 					: []
 			)
 		);
-		const mounts = new Map<string, { row: Record<string, unknown>; key: symbol }>();
-		if (root)
-			for (const { token, value: row } of indexFieldValues([root], this.values)) {
-				if (!isRecord(row)) continue;
-				const key = this.#rowMountKeys.get(row);
-				if (key) mounts.set(token, { row, key });
-			}
+		const mounts = root ? this.#captureRowMounts([root]) : undefined;
 		writePath(this.values, path, value);
 		this.#invalidateValueIndexes();
 		if (root) {
@@ -428,13 +473,7 @@ export class FormController {
 			for (const token of listValues.keys())
 				if (!retained.has(token)) this.#listEdits.delete(token);
 		}
-		if (root && mounts.size) {
-			for (const { row } of mounts.values()) this.#rowMountKeys.delete(row);
-			for (const { token, value: row } of indexFieldValues([root], this.values)) {
-				const mount = mounts.get(token);
-				if (mount && isRecord(row)) this.#rowMountKeys.set(row, mount.key);
-			}
-		}
+		if (root && mounts) this.#restoreRowMounts([root], mounts);
 		this.issues = this.issues.filter(
 			(issue) => issue.path !== path && !issue.path.startsWith(`${path}.`)
 		);
@@ -653,7 +692,7 @@ export class FormController {
 		this.localizationSources = {};
 		this.issues = [];
 		this.#submittingIssues = [];
-		this.submitting = false;
+		this.#cancelSubmission();
 		this.revision = ++this.#revision;
 	}
 
@@ -689,7 +728,7 @@ export class FormController {
 		this.original = result.original;
 		this.issues = [];
 		this.#submittingIssues = [];
-		this.submitting = false;
+		this.#cancelSubmission();
 		this.revision = ++this.#revision;
 		return { detached: result.detached, restoredFields: 0 };
 	}
@@ -720,7 +759,7 @@ export class FormController {
 		this.original = result.original;
 		this.issues = [];
 		this.#submittingIssues = [];
-		this.submitting = false;
+		this.#cancelSubmission();
 		this.revision = ++this.#revision;
 		return { detached: result.detached, restoredFields: result.restoredFields };
 	}
@@ -728,7 +767,13 @@ export class FormController {
 	async submit<T>(
 		fields: readonly SchemaField[],
 		requireMissing: boolean,
-		operation: (values: FormValues) => Promise<T>
+		operation: (values: FormValues) => Promise<T>,
+		options: {
+			mode?: "complete" | "draft";
+			allowEditsDuringRequest?: boolean;
+			/** Set false when the caller adopts the authoritative response instead of submitted values. */
+			commitBaseline?: boolean;
+		} = {}
 	) {
 		// Save owns the next validation result, but cancelling advisory work must not
 		// make its current feedback disappear while the request is in flight.
@@ -765,6 +810,7 @@ export class FormController {
 				? unknownIssues
 				: validateFormValues(fields, this.values, {
 						requireMissing,
+						mode: options.mode,
 						include,
 						i18n: this.#i18n,
 					});
@@ -772,24 +818,29 @@ export class FormController {
 			this.issues = clientIssues;
 			throw new FormValidationError(clientIssues, this.#i18n);
 		}
-		this.submitting = true;
+		const submission = this.#beginSubmission(options.allowEditsDuringRequest === true);
 		this.issues = [];
 		this.#submittingIssues = retainedIssues;
 		const submittedValues = cloneFormValues(this.values);
 		const retainIssueOccurrences = this.#captureIssueLifetime(fields);
 		try {
 			const result = await operation(submissionFormValues(fields, this.values, include));
-			if (this.#revision === controllerRevision) {
-				this.#invalidateEditors();
+			if (
+				options.commitBaseline !== false &&
+				this.#submissionToken === submission.token &&
+				this.#revision === controllerRevision &&
+				JSON.stringify(this.values) === JSON.stringify(submittedValues)
+			) {
+				if (options.allowEditsDuringRequest !== true) this.#invalidateEditors();
 				this.original = cloneFormValues(submittedValues);
 				this.issues = [];
 				this.#submittingIssues = [];
-				this.submitting = false;
 				this.revision = ++this.#revision;
 			}
+			if (this.#submissionToken === submission.token) this.#submittingIssues = [];
 			return result;
 		} catch (error) {
-			if (this.#revision === controllerRevision) {
+			if (this.#submissionToken === submission.token && this.#revision === controllerRevision) {
 				this.issues =
 					error instanceof RiduError && error.issues.length > 0
 						? correlateFormIssues(
@@ -803,8 +854,31 @@ export class FormController {
 			}
 			throw error;
 		} finally {
-			if (this.#revision === controllerRevision) this.submitting = false;
+			submission.release();
 		}
+	}
+
+	/** Adopt a confirmed server save while retaining edits made after its request snapshot. */
+	acceptSavedBaseline(saved: FormValues, submitted: FormValues) {
+		const rebased = rebaseSavedFormValues(
+			this.#fields,
+			saved,
+			submitted,
+			cloneFormValues(this.values)
+		);
+		if (rebased === undefined) return false;
+		if (JSON.stringify(rebased) !== JSON.stringify(this.values)) {
+			const mounts = this.#captureRowMounts(this.#fields);
+			this.values = rebased;
+			this.#restoreRowMounts(this.#fields, mounts);
+			this.#invalidateValueIndexes();
+		}
+		this.original = cloneFormValues(saved);
+		this.issues = [];
+		this.#submittingIssues = [];
+		this.revision = ++this.#revision;
+		this.refreshLiveValidation();
+		return true;
 	}
 
 	#captureIssueLifetime(fields: readonly SchemaField[]) {

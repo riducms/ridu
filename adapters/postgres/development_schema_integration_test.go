@@ -9,9 +9,153 @@ import (
 	"github.com/riducms/ridu/core"
 	"github.com/riducms/ridu/field"
 	"github.com/riducms/ridu/internal/migrationartifact"
+	ridumigration "github.com/riducms/ridu/migration"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
 )
+
+func TestPostgresDevelopmentSyncPreservesHistoricalBlocksAndStoredHeads(t *testing.T) {
+	ctx := t.Context()
+	backend := migrationArtifactTestBackend(t)
+	current, err := core.Resolve(core.Config{Name: "Historical blocks", Collections: []core.Collection{{
+		Slug: "posts", Versions: true, VersionConfig: core.VersionConfig{Drafts: true},
+		Fields: field.Fields{field.Blocks("layout", field.Block{
+			Slug: "card", Fields: field.Fields{field.Text("title")},
+		})},
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	prior := current.Snapshot()
+	block := &prior.Collections[0].Fields[0].Blocks.Types[0]
+	if len(block.Fields) != 2 || block.Fields[1].Name != "blockName" {
+		t.Fatalf("current block fields = %#v", block.Fields)
+	}
+	block.Fields = block.Fields[:1]
+	historical := schema.NewManifest(prior)
+	encoded, err := historical.Bytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := schema.Parse(encoded); err == nil || !strings.Contains(err.Error(), "blockName") {
+		t.Fatalf("historical fixture unexpectedly passes current validation: %v", err)
+	}
+	digest, err := ridumigration.DigestManifest(historical)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := backend.Plan(ctx, historical)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := backend.ApplyPlan(ctx, plan); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := backend.pool.Exec(ctx, `CREATE TABLE ridu_postgres_schema (
+singleton integer PRIMARY KEY CHECK (singleton = 1),
+manifest_json text NOT NULL,
+manifest_digest text NOT NULL
+)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := backend.pool.Exec(ctx, `INSERT INTO ridu_postgres_schema (singleton, manifest_json, manifest_digest) VALUES (1, $1, $2)`, string(encoded), digest); err != nil {
+		t.Fatal(err)
+	}
+	recorded, exists, err := backend.DevelopmentManifest(ctx)
+	if err != nil || !exists || !recorded.Equal(historical) {
+		t.Fatalf("historical record = exists:%t equal:%t error:%v", exists, recorded.Equal(historical), err)
+	}
+	children := recorded.Snapshot().Collections[0].Fields[0].Blocks.ResolvedTypes()[0].ResolvedFields()
+	if len(children) != 1 || children[0].Name != "title" {
+		t.Fatalf("historical block children were changed: %#v", children)
+	}
+	if _, err := backend.pool.Exec(ctx, `UPDATE ridu_postgres_schema SET manifest_digest = $1`, strings.Repeat("f", 64)); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := backend.DevelopmentManifest(ctx); err == nil || !strings.Contains(err.Error(), "digest") {
+		t.Fatalf("corrupt historical digest was accepted: %v", err)
+	}
+	if _, err := backend.pool.Exec(ctx, `UPDATE ridu_postgres_schema SET manifest_digest = $1`, digest); err != nil {
+		t.Fatal(err)
+	}
+	collection := historical.Snapshot().Collections[0]
+	row := func(title string) store.Value {
+		return store.List(store.Object(store.Values{
+			"_key": store.String("card-1"), "blockType": store.String("card"), "title": store.String(title),
+		}))
+	}
+	write, err := backend.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer write.Rollback(ctx)
+	published, err := write.Create(ctx, store.CreateRequest{
+		Collection: collection, ID: "historical-post", Status: store.StatusPublished,
+		Values: store.Values{"layout": row("Published card")},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := write.(store.VersionTransaction).SaveVersion(ctx, collection, published, 0); err != nil {
+		t.Fatal(err)
+	}
+	draft, err := write.Update(ctx, store.UpdateRequest{
+		Request: store.Request{Collection: collection, ID: published.ID, ExpectedRevision: published.Revision},
+		Intent:  store.WriteIntentSaveDraft, Values: store.Values{"layout": row("Draft card")},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := write.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := backend.SyncDevelopmentSchema(ctx, current); err != nil {
+		t.Fatalf("sync from historical block schema: %v", err)
+	}
+	recorded, exists, err = backend.DevelopmentManifest(ctx)
+	if err != nil || !exists || !recorded.Equal(current) {
+		t.Fatalf("synchronized record = exists:%t equal:%t error:%v", exists, recorded.Equal(current), err)
+	}
+	read, err := backend.BeginSnapshot(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer read.Rollback(ctx)
+	collection = current.Snapshot().Collections[0]
+	currentDocument, err := read.Find(ctx, store.Request{Collection: collection, ID: published.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	publishedDocument, err := read.Find(ctx, store.Request{Collection: collection, ID: published.ID, PublishedOnly: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	versions, err := read.(store.VersionTransaction).ListVersions(ctx, store.VersionRequest{Collection: collection, DocumentID: published.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	storedTitle := func(document store.Document) string {
+		t.Helper()
+		first, ok := document.Values["layout"].ListItem(0)
+		if !ok {
+			t.Fatalf("missing stored block row: %#v", document.Values)
+		}
+		title, ok := first.Get("title").StringValue()
+		if !ok {
+			t.Fatalf("missing stored block title: %#v", first)
+		}
+		return title
+	}
+	if storedTitle(currentDocument) != "Draft card" || currentDocument.Revision != draft.Revision || !currentDocument.HasDraftChanges {
+		t.Fatalf("current document after sync = %#v", currentDocument)
+	}
+	if storedTitle(publishedDocument) != "Published card" || publishedDocument.Revision != published.Revision {
+		t.Fatalf("published head after sync = %#v", publishedDocument)
+	}
+	if len(versions) != 1 || storedTitle(versions[0].Snapshot) != "Published card" || versions[0].Revision != published.Revision {
+		t.Fatalf("version history after sync = %#v", versions)
+	}
+}
 
 func TestPostgresDevelopmentSchemaRecordPublishesOnlySuccessfulSync(t *testing.T) {
 	ctx := t.Context()
@@ -70,6 +214,23 @@ func TestPostgresDevelopmentSchemaRecordPublishesOnlySuccessfulSync(t *testing.T
 	}
 	if _, _, err := backend.DevelopmentManifest(ctx); err == nil || !strings.Contains(err.Error(), "RIDU_DEVELOPMENT_SCHEMA_UNKNOWN") {
 		t.Fatalf("corrupt schema record was trusted: %v", err)
+	}
+}
+
+func TestPostgresDevelopmentPlanRejectsMissingPublishedHeadStorage(t *testing.T) {
+	ctx := t.Context()
+	backend := migrationArtifactTestBackend(t)
+	snapshot := atlasTestManifest(atlasTextField("posts-title", "title")).Snapshot()
+	snapshot.Collections[0].Versions = &schema.VersionSettings{Drafts: true}
+	manifest := schema.NewManifest(snapshot)
+	if err := backend.SyncDevelopmentSchema(ctx, manifest); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := backend.pool.Exec(ctx, `DROP TABLE ridu_published_documents`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := backend.Plan(ctx, manifest); err == nil || !strings.Contains(err.Error(), "unsupported PostgreSQL development schema layout") {
+		t.Fatalf("plan with missing published-head storage = %v", err)
 	}
 }
 

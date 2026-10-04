@@ -40,6 +40,7 @@ union PrimitiveProductContentBlock = PrimitiveProductContentBlockCard | Primitiv
 
 type PrimitiveProductContentBlockCard {
   _key: String!
+  blockName: String
   blockType: String!
   points: [String!]
   sizes: [Float!]
@@ -47,6 +48,7 @@ type PrimitiveProductContentBlockCard {
 
 type PrimitiveProductContentBlockNote {
   _key: String!
+  blockName: String
   blockType: String!
   points: [String!]
   sizes: [Float!]
@@ -249,8 +251,10 @@ input PrimitiveProductWhere {
   OR: [PrimitiveProductWhere!]
   and: [PrimitiveProductWhere!]
   availableSizes: RiduNumberListWhere
+  content__card__blockName: RiduStringWhere
   content__card__points: RiduStringListWhere
   content__card__sizes: RiduNumberListWhere
+  content__note__blockName: RiduStringWhere
   content__note__points: RiduStringListWhere
   content__note__sizes: RiduNumberListWhere
   details__points: RiduStringListWhere

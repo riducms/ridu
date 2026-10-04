@@ -150,7 +150,8 @@ type FindOptions struct {
 // ActorCollection and ExpectedRevision; their locales remain positional.
 // MutateJoin consumes only actor and locale controls. Restore consumes actor,
 // expected revision, population, output selection and locale controls.
-// ID and Draft are create-only controls; publication uses its named actions.
+// ID is create-only. Draft:true explicitly stages an editorial working update;
+// publication still uses its named action.
 type MutationOptions struct {
 	// ID supplies a caller-owned document ID for create operations when
 	// Config.AllowIDOnCreate is enabled. Other mutations ignore it.
@@ -168,7 +169,7 @@ type MutationOptions struct {
 	// document. Nil resolves all; a non-nil empty slice resolves none.
 	OutputFields []query.Path
 	// Draft selects draft (true) or published (false) status for versioned
-	// creates. Updates preserve status so publish and unpublish hooks cannot be bypassed.
+	// creates. Draft:true on Update stages working changes beside live content.
 	Draft           *bool
 	Locale          schema.LocaleCode
 	FallbackLocales []schema.LocaleCode
@@ -524,6 +525,15 @@ func (local *LocalAPI) Unpublish(ctx context.Context, collection, id string, opt
 	return requiredDocument(result, err)
 }
 
+// DiscardDraft atomically resets a pending working version to the live head.
+// It requires Update access and an expected working revision when provided.
+func (local *LocalAPI) DiscardDraft(ctx context.Context, collection, id string, options MutationOptions) (store.Document, error) {
+	request := operationengine.Request{Operation: operation.DiscardDraft, Collection: collection, ID: id}
+	applyMutationOptions(&request, options)
+	result, err := local.engine.Execute(ctx, request)
+	return requiredDocument(result, err)
+}
+
 // CopyLocale preserves the exact authenticated collection identity
 // for both the source read and destination mutation lifecycle.
 func (local *LocalAPI) CopyLocale(ctx context.Context, collection, id string, source, target schema.LocaleCode, options MutationOptions) (store.Document, error) {
@@ -712,6 +722,14 @@ func (local *LocalAPI) UnpublishGlobal(ctx context.Context, slug string, options
 	request := operationengine.Request{
 		Operation: operation.Unpublish, Collection: "global:" + slug, ID: slug,
 	}
+	applyMutationOptions(&request, options)
+	result, err := local.engine.Execute(ctx, request)
+	return requiredDocument(result, err)
+}
+
+// DiscardGlobalDraft resets a singleton's pending working version to its live head.
+func (local *LocalAPI) DiscardGlobalDraft(ctx context.Context, slug string, options MutationOptions) (store.Document, error) {
+	request := operationengine.Request{Operation: operation.DiscardDraft, Collection: "global:" + slug, ID: slug}
 	applyMutationOptions(&request, options)
 	result, err := local.engine.Execute(ctx, request)
 	return requiredDocument(result, err)

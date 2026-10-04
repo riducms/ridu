@@ -29,10 +29,7 @@ func blockNamesCollection() ridu.Collection {
 	cta := field.Block{
 		Slug:   "cta",
 		Labels: field.BlockLabels{Singular: "CTA"},
-		Admin: field.BlockAdmin{
-			NameField:    "blockName",
-			RowLabelPath: "heading",
-		},
+		Admin:  field.BlockAdmin{RowLabelPath: "heading"},
 		Fields: field.Fields{
 			name,
 			field.Text("heading").Required(),
@@ -41,11 +38,8 @@ func blockNamesCollection() ridu.Collection {
 	}
 
 	callout := field.Block{
-		Slug: "callout",
-		Admin: field.BlockAdmin{
-			NameField:    "blockName",
-			RowLabelPath: "heading",
-		},
+		Slug:  "callout",
+		Admin: field.BlockAdmin{RowLabelPath: "heading"},
 		Fields: field.Fields{
 			name,
 			field.Text("heading").Required(),
@@ -56,11 +50,8 @@ func blockNamesCollection() ridu.Collection {
 	}
 
 	hidden := field.Block{
-		Slug: "hidden-name",
-		Admin: field.BlockAdmin{
-			NameField:    "blockName",
-			RowLabelPath: "blockName",
-		},
+		Slug:  "hidden-name",
+		Admin: field.BlockAdmin{RowLabelPath: "blockName"},
 		Fields: field.Fields{
 			field.Text("blockName").Admin(field.Admin{Hidden: true}),
 			field.Text("heading"),

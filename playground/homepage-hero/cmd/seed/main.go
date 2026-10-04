@@ -20,27 +20,26 @@ import (
 	"github.com/riducms/ridu/store"
 )
 
-const title = "Ridu: A whole CMS in one Go binary"
+const title = "Ridu: notes on building a CMS in Go"
 
 // sections are the article body: each heading introduces one paragraph.
 var sections = []struct{ heading, body string }{
 	{
-		"Configuration you can review",
-		"Collections, fields, access rules, and hooks are ordinary Go. When a pull request adds a field, " +
-			"the same diff shows the schema change, the migration, and the regenerated TypeScript types, " +
-			"so reviewers see exactly what editors and API clients will get before anything ships.",
+		"Why define content in code",
+		"I wanted collections and fields to live in the repository, so changes show up in pull " +
+			"requests and the same setup can be reused between projects instead of being clicked " +
+			"together in an admin panel each time.",
 	},
 	{
-		"An admin that follows the model",
-		"Nobody built this editor by hand. Ridu reads the same configuration and renders the forms, " +
-			"lists, relationship pickers, uploads, and rich text you see here. Add a field in Go and it " +
-			"appears in the admin, the REST API, and the generated SDK together, with the same rules.",
+		"Where the admin comes from",
+		"The admin reads the same Go config to build its forms and lists. Adding a field in Go adds " +
+			"it to the admin, the REST API and the generated TypeScript types, and the same access " +
+			"rules and validation apply in each.",
 	},
 	{
-		"Nothing else to run",
-		"One build compiles the API, the admin, and background jobs into a single executable. Deploy " +
-			"it beside PostgreSQL, SQLite, or MongoDB: there is no Node process to keep alive and nothing " +
-			"to install on the host but the binary itself.",
+		"Deploying it",
+		"A build produces one executable with the API, the admin and background jobs in it. It runs " +
+			"next to PostgreSQL, SQLite or MongoDB, and there is no separate Node process to host.",
 	},
 }
 
@@ -91,7 +90,7 @@ func run(ctx context.Context) error {
 	}
 	actor := ridu.MutationOptions{Actor: &editor, ActorCollection: "users"}
 	post, err := application.Local().Import(ctx, "posts", store.Values{
-		"title":   store.String("Ridu: One binary"),
+		"title":   store.String("Ridu: notes"),
 		"banner":  store.String(banner.ID),
 		"content": article(sections[:1]),
 	}, ridu.ImportOptions{ID: "hero-post", Status: store.StatusPublished, Actor: &editor, ActorCollection: "users"})
@@ -100,9 +99,9 @@ func run(ctx context.Context) error {
 	}
 	// A few revisions give the document a real version history.
 	for _, revision := range []store.Values{
-		{"title": store.String("Ridu: A CMS in one binary"), "content": article(sections[:2])},
+		{"title": store.String("Ridu: notes on a Go CMS"), "content": article(sections[:2])},
 		{"content": article(sections)},
-		{"title": store.String(title), "metaTitle": store.String("A whole CMS in one Go binary")},
+		{"title": store.String(title), "metaTitle": store.String("Notes on building a CMS in Go")},
 	} {
 		if _, err := application.Local().PublishChanges(ctx, "posts", post.ID, revision, actor); err != nil {
 			return fmt.Errorf("revise post: %w", err)

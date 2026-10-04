@@ -39,6 +39,27 @@ func (transaction *documentTransaction) replaceDocumentReferences(ctx context.Co
 	if referenceErr != nil {
 		return referenceErr
 	}
+	if collection.Versions != nil {
+		live, hasLive, err := transaction.publishedHead(ctx, collection, document.ID, nil)
+		if err != nil {
+			return err
+		}
+		if hasLive {
+			liveEntries, err := referenceindex.Collect(collection, live)
+			if err != nil {
+				return err
+			}
+			seen := make(map[string]struct{}, len(entries)+len(liveEntries))
+			for _, entry := range entries {
+				seen[mongoReferenceIdentity(entry)] = struct{}{}
+			}
+			for _, entry := range liveEntries {
+				if _, exists := seen[mongoReferenceIdentity(entry)]; !exists {
+					entries = append(entries, entry)
+				}
+			}
+		}
+	}
 	if len(entries) == 0 {
 		return nil
 	}
@@ -374,9 +395,13 @@ func (transaction *documentTransaction) applyReferenceDelete(ctx context.Context
 	})
 
 	type ownerMutation struct {
-		owner      store.DocumentReference
-		collection schema.Collection
-		values     bson.D
+		owner          store.DocumentReference
+		collection     schema.Collection
+		document       store.Document
+		values         bson.D
+		workingChanged bool
+		liveValues     bson.D
+		liveChanged    bool
 	}
 	mutations := make([]ownerMutation, 0, len(orderedOwners))
 	staleOwners := make([]store.DocumentReference, 0)
@@ -398,17 +423,41 @@ func (transaction *documentTransaction) applyReferenceDelete(ctx context.Context
 		if referenceErr != nil {
 			return referenceErr
 		}
-		if !changed {
-			return fmt.Errorf("reference index for owner collection %q is inconsistent with current values", owner.CollectionID)
+		live, hasLive, err := transaction.publishedHead(ctx, collection, owner.DocumentID, nil)
+		if err != nil {
+			return err
 		}
-		if err := validateCompleteValues(collection, values); err != nil {
-			return fmt.Errorf("nullified MongoDB owner %q: %w", owner.CollectionID, err)
+		var liveValues bson.D
+		liveChanged := false
+		if hasLive {
+			var nullified store.Values
+			nullified, liveChanged, err = referenceindex.NullifyTarget(collection, live.Values, request.Target)
+			if err != nil {
+				return err
+			}
+			if liveChanged {
+				if err := validateCompleteValues(collection, nullified); err != nil {
+					return fmt.Errorf("nullified MongoDB published owner %q: %w", owner.CollectionID, err)
+				}
+				liveValues, err = encodeValues(nullified)
+				if err != nil {
+					return err
+				}
+			}
+		}
+		if !changed && !liveChanged {
+			return fmt.Errorf("reference index for owner collection %q is inconsistent with both active heads", owner.CollectionID)
+		}
+		if changed {
+			if err := validateCompleteValues(collection, values); err != nil {
+				return fmt.Errorf("nullified MongoDB owner %q: %w", owner.CollectionID, err)
+			}
 		}
 		encoded, err := encodeValues(values)
 		if err != nil {
 			return err
 		}
-		mutations = append(mutations, ownerMutation{owner: owner, collection: collection, values: encoded})
+		mutations = append(mutations, ownerMutation{owner: owner, collection: collection, document: document, values: encoded, workingChanged: changed, liveValues: liveValues, liveChanged: liveChanged})
 	}
 
 	// No current document changes until every restriction, derived-index row,
@@ -420,6 +469,26 @@ func (transaction *documentTransaction) applyReferenceDelete(ctx context.Context
 		}
 	}
 	for _, mutation := range mutations {
+		if mutation.liveChanged {
+			result, err := transaction.publishedCollection(mutation.collection).UpdateOne(ctx,
+				bson.D{{Key: mongoIDPath, Value: mutation.owner.DocumentID}},
+				bson.D{{Key: "$set", Value: bson.D{{Key: "values", Value: mutation.liveValues}}}})
+			if err != nil {
+				return translateMongoError(ctx, err)
+			}
+			if result.MatchedCount != 1 {
+				return fmt.Errorf("MongoDB published reference owner %q disappeared", mutation.owner.DocumentID)
+			}
+		}
+		if !mutation.workingChanged {
+			if err := transaction.replaceHeadReservations(ctx, mutation.collection, mutation.document, nil); err != nil {
+				return err
+			}
+			if err := transaction.replaceDocumentReferences(ctx, mutation.collection, mutation.document); err != nil {
+				return err
+			}
+			continue
+		}
 		updatedRaw, err := transaction.collection(mutation.collection).FindOneAndUpdate(
 			ctx,
 			mongoAnd([]bson.D{
@@ -435,6 +504,9 @@ func (transaction *documentTransaction) applyReferenceDelete(ctx context.Context
 		}
 		updated, err := decodeCollectionDocument(updatedRaw, mutation.collection)
 		if err != nil {
+			return err
+		}
+		if err := transaction.replaceHeadReservations(ctx, mutation.collection, updated, nil); err != nil {
 			return err
 		}
 		if err := transaction.replaceDocumentReferences(ctx, mutation.collection, updated); err != nil {

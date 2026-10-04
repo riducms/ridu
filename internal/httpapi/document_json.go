@@ -10,7 +10,7 @@ import (
 )
 
 // documentMetadataNames lists every metadata member a wire document can carry.
-var documentMetadataNames = [...]string{"id", "createdAt", "updatedAt", "deletedAt", "_status", "_revision", "_localization"}
+var documentMetadataNames = [...]string{"id", "createdAt", "updatedAt", "deletedAt", "_status", "_revision", "_publishedRevision", "_hasDraftChanges", "_localization"}
 
 // documentJSON encodes a document in its wire shape: metadata and fields share
 // one object with sorted names, a field replaces metadata of the same name, and
@@ -66,6 +66,8 @@ func hasDocumentMetadata(document store.Document, name string) bool {
 		return document.Status != ""
 	case "_revision":
 		return document.Revision > 0
+	case "_publishedRevision", "_hasDraftChanges":
+		return document.PublishedRevision > 0
 	case "_localization":
 		return len(document.LocalizationSources) > 0
 	default:
@@ -87,6 +89,10 @@ func appendDocumentMetadataJSON(dst []byte, document store.Document, name string
 		return appendStringJSON(dst, string(document.Status))
 	case "_revision":
 		return strconv.AppendInt(dst, int64(document.Revision), 10)
+	case "_publishedRevision":
+		return strconv.AppendInt(dst, int64(document.PublishedRevision), 10)
+	case "_hasDraftChanges":
+		return strconv.AppendBool(dst, document.HasDraftChanges)
 	default:
 		paths := make([]string, 0, len(document.LocalizationSources))
 		for path := range document.LocalizationSources {

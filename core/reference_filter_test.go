@@ -476,6 +476,8 @@ func TestReferenceOptionFiltersGuardDuplicateStatusVersionAndTrashRestore(t *tes
 			{Slug: "people", Fields: field.Fields{field.Text("category")}},
 			{
 				Slug: "entries", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true}, Trash: true,
+				// Duplicate deliberately validates the working document after source read authorization.
+				Access: ridu.CollectionAccess{ReadDrafts: func(ridu.AccessContext) (ridu.AccessDecision, error) { return ridu.Allow(), nil }},
 				Fields: field.Fields{field.Text("category"), field.Relationship("author", "people").FilterOptionRules(field.OptionFilter("category", field.FilterEquals, "category"))},
 			},
 		},

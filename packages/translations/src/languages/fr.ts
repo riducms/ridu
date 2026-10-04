@@ -551,6 +551,24 @@ export const frMessages = {
 	"documents:restore": "Restaurer",
 	"documents:save": "Enregistrer",
 	"documents:saveDraft": "Enregistrer le brouillon",
+	"documents:savedDraftChanges":
+		"Modifications du brouillon enregistrées, en attente de publication",
+	"documents:discardSavedDraft": "Abandonner le brouillon enregistré",
+	"documents:discardSavedDraftQuestion": "Abandonner le brouillon enregistré ?",
+	"documents:discardSavedDraftDescription":
+		"La version publiée restera en ligne. Les modifications enregistrées du brouillon seront perdues.",
+	"documents:savedDraftDiscarded": "Brouillon enregistré abandonné.",
+	"documents:discardSavedDraftFailed": "Impossible d’abandonner le brouillon enregistré.",
+	"documents:serverSaveConflict":
+		"Ce document a changé sur le serveur. L’enregistrement automatique est suspendu et vos modifications sont conservées.",
+	"documents:reviewLatest": "Examiner la dernière version",
+	"documents:reviewLatestUnavailable":
+		"Vos modifications n’ont pas pu être sauvegardées localement. Copiez-les avant de recharger la page.",
+	"documents:saveOutcomeUnknown": "Résultat de l’enregistrement inconnu",
+	"documents:createOutcomeUnknownDescription":
+		"Le serveur a peut-être créé ce document, mais la réponse a été perdue. Vérifiez la liste avant de créer une autre copie. Vos modifications sont toujours ici.",
+	"documents:saveOutcomeUnknownDescription":
+		"Le serveur a peut-être enregistré ces modifications. Rechargez la dernière version avant de réessayer ; vos modifications restent disponibles pour examen.",
 	"documents:publishing": "Publication…",
 	"documents:unsavedChanges": "Modifications non enregistrées",
 	"documents:leaveWithoutSavingQuestion": "Quitter sans enregistrer ?",

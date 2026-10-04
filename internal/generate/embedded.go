@@ -15,6 +15,9 @@ func (g openAPIBlockGenerator) embeddedName(f schema.Field, t schema.EmbeddedTre
 	if g.update {
 		mode = "Update"
 	}
+	if g.draft {
+		mode = "Draft" + mode
+	}
 	if all {
 		mode += "AllLocales"
 	}
@@ -38,10 +41,15 @@ func (g openAPIBlockGenerator) addEmbeddedSchemas(schemas map[string]openAPISche
 		for _, f := range fields {
 			if f.Plugin != nil {
 				for _, t := range f.Plugin.EmbeddedTrees {
-					for _, mode := range []string{"output", "input", "update", "all"} {
+					modes := []string{"output", "input", "update", "all"}
+					if g.draftReadFields[f.ID] {
+						modes = append(modes, "draft", "draftUpdate")
+					}
+					for _, mode := range modes {
 						gen := g
-						gen.input = mode == "input" || mode == "update"
-						gen.update = mode == "update"
+						gen.input = mode == "input" || mode == "update" || mode == "draft" || mode == "draftUpdate"
+						gen.update = mode == "update" || mode == "draftUpdate"
+						gen.draft = mode == "draft" || mode == "draftUpdate"
 						all := mode == "all"
 						name := gen.embeddedName(f, t, all)
 						branches := []any{}

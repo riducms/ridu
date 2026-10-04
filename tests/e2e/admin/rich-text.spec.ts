@@ -1,13 +1,7 @@
 import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "./fixture";
 
-import {
-	documentSaveButton,
-	loginAsEditor,
-	observePageErrors,
-	selectRichText,
-	submitDocumentForm,
-} from "./helpers";
+import { loginAsEditor, observePageErrors, selectRichText, submitDocumentForm } from "./helpers";
 
 async function expectBlockActionsAligned(toolbar: Locator, block: Locator) {
 	await expect
@@ -545,7 +539,10 @@ test("rich-text formatting, block insertion, embeds, movement, and persistence",
 		.poll(() => richText.evaluate((element) => element.firstElementChild?.tagName))
 		.toBe("H2");
 
-	await documentSaveButton(page).click();
+	const publish = page
+		.locator(".ridu-document-actions")
+		.getByRole("button", { name: /^Publish( changes)?$/ });
+	await publish.click();
 	await expect(
 		page
 			.locator("[data-sonner-toast][data-front='true']")
@@ -565,17 +562,20 @@ test("rich-text formatting, block insertion, embeds, movement, and persistence",
 	await page.locator('input[name="title"]').fill("Browser-created post");
 	await page.getByRole("combobox", { name: "Status", exact: true }).click();
 	await page.getByRole("option", { name: "Published" }).click();
-	await documentSaveButton(page).click();
+	await publish.click();
 	await expect(page).not.toHaveURL(/\/create$/);
 	await expect(page.locator('input[name="title"]')).toHaveValue("Browser-created post");
-	await expect(
-		page
-			.locator("[data-sonner-toast][data-front='true']")
-			.filter({ hasText: "Post successfully created." })
-	).toBeVisible();
+	const publishedID = new URL(page.url()).pathname.split("/").at(-1);
+	expect(publishedID).toBeTruthy();
+	await expect
+		.poll(async () => {
+			const response = await page.request.get(`/api/collections/posts/${publishedID}?draft=false`);
+			return response.ok() ? (await response.json()).doc : undefined;
+		})
+		.toMatchObject({ title: "Browser-created post", _status: "published" });
 
 	await page.getByLabel("Summary").fill("");
-	await submitDocumentForm(page);
+	await publish.click();
 	await expect(page.getByText("Summary is required")).toBeVisible();
 	await expect(page.getByLabel("Summary")).toBeFocused();
 	await expect(

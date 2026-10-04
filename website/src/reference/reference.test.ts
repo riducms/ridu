@@ -182,19 +182,13 @@ const goPackageDirectories: Readonly<Record<string, string>> = {
 };
 
 describe('reference data', () => {
-	test('documents editorial block naming in config, wire metadata and the plugin host', () => {
+	test('documents default block naming and the plugin host', () => {
 		const admin = findReferenceSymbol('field', 'block-admin');
-		expect(admin?.parameters.map((parameter) => parameter.name)).toEqual([
-			'NameField',
-			'RowLabelPath'
-		]);
-		expect(admin?.signature).toContain('NameField string');
-		expect(admin?.example).toContain('NameField:    "blockName"');
+		expect(admin?.parameters.map((parameter) => parameter.name)).toEqual(['RowLabelPath']);
+		expect(admin?.signature).not.toContain('NameField');
 		expect(admin?.example).toContain('field.Text("blockName")');
 		expect(admin?.relatedDocs).toContain('/docs/fields/blocks/#give-each-block-an-editorial-name');
-		expect(findReferenceSymbol('schema', 'block-admin')?.signature).toContain(
-			'json:"nameField,omitempty"'
-		);
+		expect(findReferenceSymbol('schema', 'block-admin')?.signature).not.toContain('nameField');
 		expect(findReferenceSymbol('plugin', 'embedded-schema-header-props')).toBeDefined();
 		expect(
 			findReferenceSymbol('plugin', 'field-authoring-host-schema-header-method')

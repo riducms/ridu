@@ -37,6 +37,59 @@
 		color: var(--destructive);
 	}
 
+	.ridu-field-grid--inset .ridu-group-field {
+		gap: 10px;
+
+		> .ridu-field-feedback > .ridu-field-control > .ridu-group-field__header {
+			border-bottom: 0;
+			padding-bottom: 0;
+
+			.ridu-group-field__title {
+				font-size: 20px;
+				line-height: 24px;
+			}
+		}
+	}
+	.ridu-field-grid--inset > .ridu-field-layout-item > .ridu-group-field {
+		margin: 20px -20px;
+		border-block: 1px solid var(--background-layer);
+		padding: 20px;
+	}
+	.ridu-field-grid--inset .ridu-repeated-field {
+		gap: 10px;
+		.ridu-repeated-field__heading {
+			font-size: 20px;
+			line-height: 24px;
+		}
+		.ridu-repeated-field__rows:empty {
+			display: none;
+		}
+		.ridu-repeated-field__add {
+			min-height: 28px;
+			height: 28px;
+		}
+	}
+
+	.ridu-field-grid--inset > .ridu-field-layout-item:first-child > .ridu-group-field {
+		margin-block-start: 0;
+		border-block-start: 0;
+		padding-block-start: 0;
+	}
+
+	.ridu-field-grid--inset > .ridu-field-layout-item:last-child > .ridu-group-field {
+		margin-block-end: 0;
+		border-block-end: 0;
+		padding-block-end: 0;
+	}
+
+	.ridu-field-grid--inset
+		> .ridu-field-layout-item:has(> .ridu-group-field)
+		+ .ridu-field-layout-item
+		> .ridu-group-field {
+		border-block-start: 0;
+		padding-block-start: 0;
+	}
+
 	.ridu-group-field__status,
 	.ridu-repeated-field__status {
 		display: inline-block;
@@ -307,9 +360,53 @@
 		flex: 1;
 	}
 
-	.ridu-block-name__input {
+	.ridu-block-name__control {
+		position: relative;
+		display: flex;
+		width: fit-content;
+		min-width: 80px;
+		max-width: 100%;
+		height: 24px;
+
+		&::after {
+			content: attr(data-value) " ";
+			visibility: hidden;
+			overflow: hidden;
+			font-family: var(--font-sans);
+			font-size: 12.5px;
+			font-weight: 600;
+			line-height: 24px;
+			white-space: nowrap;
+		}
+	}
+
+	.ridu-block-name__input.ridu-input {
+		position: absolute;
+		inset: 0;
 		min-width: 0;
-		height: 32px;
+		height: 24px;
+		border: 0;
+		border-radius: 0;
+		padding: 0;
+		background: transparent;
+		box-shadow: none;
+		font-size: 12.5px;
+		font-weight: 600;
+		text-overflow: ellipsis;
+
+		&:hover:not(:focus):not([readonly]):not(:disabled):not([aria-invalid="true"]) {
+			box-shadow: inset 0 -1px 0 var(--control-border);
+		}
+		&:focus {
+			outline: 0;
+			box-shadow: none;
+		}
+		&:focus-visible {
+			box-shadow: inset 0 -1px 0 var(--ink-strong);
+		}
+		&[aria-invalid="true"] {
+			box-shadow: inset 0 -1px 0 var(--control-invalid-border);
+		}
 	}
 	.ridu-block-name__label {
 		@include ui.visually-hidden;

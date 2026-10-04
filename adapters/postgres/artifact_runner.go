@@ -960,7 +960,7 @@ func applyContentRename(ctx context.Context, transaction *sql.Tx, artifact ridum
 		}
 	}
 	if collectionIdentityRename && beforeCollection.ID != afterCollection.ID {
-		for _, table := range []string{"ridu_auth_credentials", "ridu_auth_sessions", "ridu_auth_tokens", "ridu_auth_api_keys", "ridu_preferences", "ridu_versions", "ridu_document_locks"} {
+		for _, table := range []string{"ridu_auth_credentials", "ridu_auth_sessions", "ridu_auth_tokens", "ridu_auth_api_keys", "ridu_preferences", "ridu_versions", "ridu_published_documents", "ridu_document_locks"} {
 			exists, err := transactionTableExists(ctx, transaction, table)
 			if err != nil {
 				return err
@@ -1127,33 +1127,41 @@ func optionalJSONString(input map[string]json.RawMessage, key string) (string, b
 }
 
 func rewriteVersionSnapshots(ctx context.Context, transaction *sql.Tx, collectionID schema.StableID, renames []ridumigration.FieldRename) error {
-	exists, err := transactionTableExists(ctx, transaction, "ridu_versions")
-	if err != nil || !exists {
-		return err
-	}
-	return rewriteJSONRows(ctx, transaction,
-		`SELECT document_id, revision, snapshot FROM ridu_versions WHERE collection_id = $1 FOR UPDATE`, []any{collectionID},
-		func(key1 string, key2 int, encoded []byte) (bool, []byte, error) {
-			var document map[string]any
-			if err := json.Unmarshal(encoded, &document); err != nil {
-				return false, nil, err
-			}
-			values, _ := document["Values"].(map[string]any)
-			changed := false
-			for _, rename := range renames {
-				if jsonRenameCollision(values, strings.Split(rename.Before, "."), lastPathSegment(rename.After)) {
-					return false, nil, fmt.Errorf("version snapshot field rename %s to %s would overwrite existing content", rename.Before, rename.After)
+	for _, table := range []string{"ridu_versions", "ridu_published_documents"} {
+		exists, err := transactionTableExists(ctx, transaction, table)
+		if err != nil {
+			return err
+		}
+		if !exists {
+			continue
+		}
+		if err := rewriteJSONRows(ctx, transaction,
+			fmt.Sprintf(`SELECT document_id, revision, snapshot FROM %s WHERE collection_id = $1 FOR UPDATE`, quote(table)), []any{collectionID},
+			func(key1 string, key2 int, encoded []byte) (bool, []byte, error) {
+				var document map[string]any
+				if err := json.Unmarshal(encoded, &document); err != nil {
+					return false, nil, err
 				}
-				changed = renameJSONKey(values, strings.Split(rename.Before, "."), lastPathSegment(rename.After)) || changed
-			}
-			if !changed {
-				return false, nil, nil
-			}
-			updated, err := json.Marshal(document)
-			return true, updated, err
-		},
-		`UPDATE ridu_versions SET snapshot = $1 WHERE collection_id = $2 AND document_id = $3 AND revision = $4`, collectionID,
-	)
+				values, _ := document["Values"].(map[string]any)
+				changed := false
+				for _, rename := range renames {
+					if jsonRenameCollision(values, strings.Split(rename.Before, "."), lastPathSegment(rename.After)) {
+						return false, nil, fmt.Errorf("version snapshot field rename %s to %s would overwrite existing content", rename.Before, rename.After)
+					}
+					changed = renameJSONKey(values, strings.Split(rename.Before, "."), lastPathSegment(rename.After)) || changed
+				}
+				if !changed {
+					return false, nil, nil
+				}
+				updated, err := json.Marshal(document)
+				return true, updated, err
+			},
+			fmt.Sprintf(`UPDATE %s SET snapshot = $1 WHERE collection_id = $2 AND document_id = $3 AND revision = $4`, quote(table)), collectionID,
+		); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func rewriteCollectionReferences(ctx context.Context, transaction *sql.Tx, artifact ridumigration.Artifact, before, after schema.CollectionSlug) error {
@@ -1252,10 +1260,6 @@ func rewriteAllVersionReferences(
 	beforeOwnerID, afterOwnerID schema.StableID,
 	before, after string,
 ) error {
-	exists, err := transactionTableExists(ctx, transaction, "ridu_versions")
-	if err != nil || !exists {
-		return err
-	}
 	ownerSchemas := make(map[schema.StableID][][]schema.Field)
 	for snapshotIndex, snapshot := range []schema.Snapshot{beforeSnapshot, afterSnapshot} {
 		for _, owner := range snapshotReferenceOwners(snapshot) {
@@ -1271,7 +1275,20 @@ func rewriteAllVersionReferences(
 			}
 		}
 	}
-	rows, err := transaction.QueryContext(ctx, `SELECT collection_id, document_id, revision, snapshot FROM ridu_versions FOR UPDATE`)
+	for _, table := range []string{"ridu_versions", "ridu_published_documents"} {
+		if err := rewriteSnapshotReferencesInTable(ctx, transaction, table, ownerSchemas, before, after); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func rewriteSnapshotReferencesInTable(ctx context.Context, transaction *sql.Tx, table string, ownerSchemas map[schema.StableID][][]schema.Field, before, after string) error {
+	exists, err := transactionTableExists(ctx, transaction, table)
+	if err != nil || !exists {
+		return err
+	}
+	rows, err := transaction.QueryContext(ctx, fmt.Sprintf(`SELECT collection_id, document_id, revision, snapshot FROM %s FOR UPDATE`, quote(table)))
 	if err != nil {
 		return err
 	}
@@ -1326,7 +1343,7 @@ func rewriteAllVersionReferences(
 		return err
 	}
 	for _, item := range updates {
-		if _, err := transaction.ExecContext(ctx, `UPDATE ridu_versions SET snapshot = $1 WHERE collection_id = $2 AND document_id = $3 AND revision = $4`, item.value, item.collection, item.document, item.revision); err != nil {
+		if _, err := transaction.ExecContext(ctx, fmt.Sprintf(`UPDATE %s SET snapshot = $1 WHERE collection_id = $2 AND document_id = $3 AND revision = $4`, quote(table)), item.value, item.collection, item.document, item.revision); err != nil {
 			return err
 		}
 	}

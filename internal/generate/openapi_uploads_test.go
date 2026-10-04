@@ -33,10 +33,19 @@ func TestOpenAPIUploadRoutesDescribeCurrentRequests(t *testing.T) {
 	}
 	createSchema := requiredOpenAPIMap(t, requiredOpenAPIMap(t, createContent, "multipart/form-data"), "schema")
 	createProperties := requiredOpenAPIMap(t, createSchema, "properties")
-	for _, field := range []string{"file", "data", "image", "publish"} {
+	for _, field := range []string{"file", "data", "image"} {
 		if _, present := createProperties[field]; !present {
 			t.Errorf("upload creation is missing multipart %q", field)
 		}
+	}
+	if _, present := createProperties["publish"]; present {
+		t.Fatal("upload creation advertises a second publication selector")
+	}
+	remote := requiredOpenAPIMap(t, requiredOpenAPIMap(t, paths, "/api/collections/media/remote-upload"), "post")
+	remoteContent := requiredOpenAPIMap(t, requiredOpenAPIMap(t, remote, "requestBody"), "content")
+	remoteSchema := requiredOpenAPIMap(t, requiredOpenAPIMap(t, remoteContent, "application/json"), "schema")
+	if _, present := requiredOpenAPIMap(t, remoteSchema, "properties")["publish"]; present || remoteSchema["additionalProperties"] != false {
+		t.Fatal("remote upload creation permits an obsolete publication selector")
 	}
 	if required, _ := json.Marshal(createSchema["required"]); string(required) != `["file"]` {
 		t.Errorf("upload creation required fields = %s", required)

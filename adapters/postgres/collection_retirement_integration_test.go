@@ -222,7 +222,7 @@ func TestPostgresRemovedResourceStateCannotReattachAfterStableIDAndDocumentIDReu
 	if err := backend.pool.QueryRow(ctx, `SELECT count(*) FROM ridu_document_references
 WHERE (owner_collection_id = $1 AND owner_document_id = $2 AND target_collection_id = $3)
    OR (owner_collection_id = $3 AND owner_document_id = $4 AND target_collection_id = $5)`,
-		string(ids["entries"]), entry.ID, string(ids["retired-users"]), retiredUser.ID, string(ids["media"])).Scan(&seededReferences); err != nil || seededReferences != 2 {
+		string(ids["entries"]), entry.ID, string(ids["retired-users"]), retiredUser.ID, string(ids["media"])).Scan(&seededReferences); err != nil || seededReferences != 4 {
 		t.Fatalf("seeded relationship/upload references = %d, %v", seededReferences, err)
 	}
 

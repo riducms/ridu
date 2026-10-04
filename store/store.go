@@ -38,7 +38,15 @@ type Document struct {
 	DeletedAt *time.Time
 	Status    Status
 	Revision  int
-	Values    Values
+	// PublishedRevision is the revision of the currently visible published
+	// head, or zero when the document has never been published or was
+	// unpublished. It is not the optimistic-concurrency revision for working
+	// content; Revision remains that token on ordinary authoring reads.
+	PublishedRevision int
+	// HasDraftChanges is true only on authoring reads when working content has
+	// changed since the published head. Published-only reads never disclose it.
+	HasDraftChanges bool
+	Values          Values
 	// LocalizationSources records the locale that supplied each projected
 	// localized field path. It is response metadata and is never persisted.
 	LocalizationSources map[string]schema.LocaleCode
@@ -67,12 +75,16 @@ type Request struct {
 	Select           []query.Path
 	Populate         []query.Population
 	PopulationAccess map[schema.StableID]*query.Node
+	// PopulationPublishedOnly selects each target's head independently. An entry
+	// overrides PublishedOnly for that target; omitted entries inherit it.
+	PopulationPublishedOnly map[schema.StableID]bool
 	// PopulationBudget is shared by every recursive population read that
 	// contributes to one response. Official adapters initialize a default when
 	// callers omit it so direct store use cannot bypass the materialization cap.
 	PopulationBudget *PopulationBudget
-	// PublishedOnly restricts every versioned collection read participating in
-	// this request, including populated targets. Unversioned collections ignore it.
+	// PublishedOnly selects the live snapshot for this collection. Populated
+	// targets inherit it unless PopulationPublishedOnly supplies their selection.
+	// Unversioned collections ignore it.
 	PublishedOnly    bool
 	Deletion         DeletionMode
 	ExpectedRevision int
@@ -122,7 +134,11 @@ type CreateRequest struct {
 type UpdateRequest struct {
 	Request
 	Values Values
-	Status *Status
+	// Intent makes publication-head transitions explicit. Draft-enabled
+	// collections require SaveDraft, Publish, Unpublish, or DiscardDraft.
+	// Default updates on versions-only collections keep the live head current.
+	// SaveDraft and DiscardDraft require draft-enabled collections.
+	Intent WriteIntent
 	// ReplaceValues treats Values as the complete canonical authored document
 	// state, including locale maps. Omitted fields and locales are removed. The
 	// default remains a patch so ordinary updates preserve omitted values.
@@ -130,6 +146,18 @@ type UpdateRequest struct {
 	// and reference checks have produced the canonical snapshot candidate.
 	ReplaceValues bool
 }
+
+// WriteIntent selects the atomic relationship between a versioned document's
+// mutable working content and its at-most-one published head.
+type WriteIntent string
+
+const (
+	WriteIntentDefault      WriteIntent = ""
+	WriteIntentSaveDraft    WriteIntent = "save-draft"
+	WriteIntentPublish      WriteIntent = "publish"
+	WriteIntentUnpublish    WriteIntent = "unpublish"
+	WriteIntentDiscardDraft WriteIntent = "discard-draft"
+)
 
 type Version struct {
 	ID         string

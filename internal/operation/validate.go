@@ -13,6 +13,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/riducms/ridu/internal/embedded"
+	"github.com/riducms/ridu/internal/localization"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
 )
@@ -28,6 +29,37 @@ func validateWithOptions(fields []schema.Field, values store.Values, options val
 	}
 	validated := validateFields(fields, values, options, pluginValidators, issues)
 	return validated, issues.values
+}
+
+// validatePublicationCandidate checks the canonical document rather than only
+// the selected-locale patch. The selected translation must be complete. Other
+// translations remain optional, but every supplied translation must be valid;
+// fallback content is never treated as a persisted translation.
+func validatePublicationCandidate(fields []schema.Field, canonical store.Values, selected schema.LocaleCode, configured []schema.LocaleCode, projections *localization.Projector, pluginValidators map[string]PluginValidator) []schema.Issue {
+	locales := configured
+	if len(locales) == 0 {
+		locales = []schema.LocaleCode{""}
+	}
+	var issues []schema.Issue
+	for _, locale := range locales {
+		selection := localization.Selection{Locale: locale, Chain: []schema.LocaleCode{locale}, Configured: configured, PreserveNull: true}
+		values := projections.Values(canonical, selection)
+		options := validationOptions{requireMissing: true}
+		if locale != selected {
+			// A locale omitted from a retained document is optional at every
+			// localized nesting depth. Nonlocalized children remain required.
+			options.previousScope = true
+		}
+		_, found := validateWithOptions(fields, values, options, pluginValidators)
+		for _, issue := range found {
+			issue.Locale = locale
+			issues = append(issues, issue)
+			if len(issues) >= MaxValidationIssues {
+				return issues
+			}
+		}
+	}
+	return issues
 }
 
 // MaxValidationIssues bounds error-envelope construction for malformed nested
@@ -57,6 +89,10 @@ func (collector *validationIssueCollector) full() bool {
 type validationOptions struct {
 	prefix         string
 	requireMissing bool
+	// deferCompleteness applies only to a draft write. It defers editorial
+	// presence and lower-bound checks, never codecs, shape, upper bounds, or
+	// reference integrity.
+	deferCompleteness bool
 	// previous is the stored occurrence projected to the exact write locale.
 	// A nil map means a new occurrence, whose missing children need validation.
 	previous store.Values
@@ -196,21 +232,21 @@ func validateMembers(fields []schema.Field, object *validationObject, options va
 			}
 		}
 		if !exists {
-			if options.requireMissing && field.Required {
+			if options.requireMissing && !options.deferCompleteness && field.Required {
 				issues.add(requiredIssue(field, path))
-			} else if options.requireMissing && field.List != nil && field.List.MinRows > 0 {
+			} else if options.requireMissing && !options.deferCompleteness && field.List != nil && field.List.MinRows > 0 {
 				issues.add(schema.Issue{Code: "min_rows", Path: path, Message: fmt.Sprintf("%s must contain at least %d items", field.Admin.Label, field.List.MinRows)})
-			} else if options.requireMissing && field.Type == schema.FieldTypeArray && field.Nested != nil && field.Nested.MinRows > 0 {
+			} else if options.requireMissing && !options.deferCompleteness && field.Type == schema.FieldTypeArray && field.Nested != nil && field.Nested.MinRows > 0 {
 				issues.add(schema.Issue{Code: "min_rows", Path: path, Message: fmt.Sprintf("%s must contain at least %d rows", field.Admin.Label, field.Nested.MinRows)})
 			}
 			continue
 		}
 		if value.Kind() == store.ValueNull {
-			if field.Required {
+			if field.Required && !options.deferCompleteness {
 				issues.add(requiredIssue(field, path))
-			} else if field.List != nil && field.List.MinRows > 0 {
+			} else if !options.deferCompleteness && field.List != nil && field.List.MinRows > 0 {
 				issues.add(schema.Issue{Code: "min_rows", Path: path, Message: fmt.Sprintf("%s must contain at least %d items", field.Admin.Label, field.List.MinRows)})
-			} else if field.Type == schema.FieldTypeArray && field.Nested != nil && field.Nested.MinRows > 0 {
+			} else if !options.deferCompleteness && field.Type == schema.FieldTypeArray && field.Nested != nil && field.Nested.MinRows > 0 {
 				issues.add(schema.Issue{Code: "min_rows", Path: path, Message: fmt.Sprintf("%s must contain at least %d rows", field.Admin.Label, field.Nested.MinRows)})
 			}
 			continue
@@ -220,12 +256,12 @@ func validateMembers(fields []schema.Field, object *validationObject, options va
 			text, valid := value.StringValue()
 			if !valid {
 				issues.add(schema.Issue{Code: "invalid_type", Path: path, Message: fmt.Sprintf("%s must be a string", field.Admin.Label)})
-			} else if field.Required && text == "" {
+			} else if field.Required && text == "" && !options.deferCompleteness {
 				issues.add(requiredIssue(field, path))
 			} else {
 				minLength, maxLength := stringLengthConstraints(field)
 				length := utf8.RuneCountInString(text)
-				if minLength != nil && length < *minLength {
+				if minLength != nil && length < *minLength && !options.deferCompleteness {
 					issues.add(schema.Issue{Code: "min_length", Path: path, Message: fmt.Sprintf("%s must contain at least %d characters", field.Admin.Label, *minLength)})
 				}
 				if maxLength != nil && length > *maxLength {
@@ -233,17 +269,17 @@ func validateMembers(fields []schema.Field, object *validationObject, options va
 				}
 			}
 		case schema.FieldTypeTextList, schema.FieldTypeNumberList:
-			validatePrimitiveList(field, value, path, issues)
+			validatePrimitiveList(field, value, path, options.deferCompleteness, issues)
 		case schema.FieldTypeRelationship:
-			issues.add(validateRelationship(field, value, path)...)
+			issues.add(validateRelationship(field, value, path, options.deferCompleteness)...)
 		case schema.FieldTypeUpload:
-			issues.add(validateUpload(field, value, path)...)
+			issues.add(validateUpload(field, value, path, options.deferCompleteness)...)
 		case schema.FieldTypeEmail:
 			text, valid := value.StringValue()
 			if !valid {
 				issues.add(schema.Issue{Code: "invalid_type", Path: path, Message: fmt.Sprintf("%s must be a string", field.Admin.Label)})
 			} else if text == "" {
-				if field.Required {
+				if field.Required && !options.deferCompleteness {
 					issues.add(requiredIssue(field, path))
 				}
 			} else if address, err := mail.ParseAddress(text); err != nil || address.Address != text {
@@ -254,7 +290,7 @@ func validateMembers(fields []schema.Field, object *validationObject, options va
 			if !valid {
 				issues.add(schema.Issue{Code: "invalid_type", Path: path, Message: fmt.Sprintf("%s must be a string", field.Admin.Label)})
 			} else if text == "" {
-				if field.Required {
+				if field.Required && !options.deferCompleteness {
 					issues.add(requiredIssue(field, path))
 				}
 			} else if !validDateValue(field, text) {
@@ -286,7 +322,7 @@ func validateMembers(fields []schema.Field, object *validationObject, options va
 					issues.add(schema.Issue{Code: "invalid_type", Path: path, Message: fmt.Sprintf("%s must be an array", field.Admin.Label)})
 					continue
 				}
-				if field.Required && value.Len() == 0 {
+				if field.Required && value.Len() == 0 && !options.deferCompleteness {
 					issues.add(requiredIssue(field, path))
 				}
 				seen := make(map[string]bool, value.Len())
@@ -320,7 +356,7 @@ func validateMembers(fields []schema.Field, object *validationObject, options va
 				continue
 			}
 			if text == "" {
-				if field.Required {
+				if field.Required && !options.deferCompleteness {
 					issues.add(requiredIssue(field, path))
 				}
 				continue
@@ -349,7 +385,7 @@ func validateMembers(fields []schema.Field, object *validationObject, options va
 				issues.add(schema.Issue{Code: "invalid_type", Path: path, Message: fmt.Sprintf("%s must be an object", field.Admin.Label)})
 				continue
 			}
-			child, changed := validateObject(field.Nested.ResolvedFields(), value, validationOptions{prefix: path, requireMissing: true, previousValue: options.prior(field.Name), budget: options.budget}, pluginValidators, issues)
+			child, changed := validateObject(field.Nested.ResolvedFields(), value, validationOptions{prefix: path, requireMissing: true, deferCompleteness: options.deferCompleteness, previousScope: options.previousScope, previousValue: options.prior(field.Name), budget: options.budget}, pluginValidators, issues)
 			if changed {
 				object.set(field.Name, child)
 			}
@@ -358,10 +394,10 @@ func validateMembers(fields []schema.Field, object *validationObject, options va
 				issues.add(schema.Issue{Code: "invalid_type", Path: path, Message: fmt.Sprintf("%s must be an array", field.Admin.Label)})
 				continue
 			}
-			if field.Required && value.Len() == 0 {
+			if field.Required && value.Len() == 0 && !options.deferCompleteness {
 				issues.add(schema.Issue{Code: "required", Path: path, Message: fmt.Sprintf("%s must contain at least one row", field.Admin.Label)})
 			}
-			if value.Len() < field.Nested.MinRows && !(field.Required && value.Len() == 0) {
+			if value.Len() < field.Nested.MinRows && !options.deferCompleteness && !(field.Required && value.Len() == 0) {
 				issues.add(schema.Issue{Code: "min_rows", Path: path, Message: fmt.Sprintf("%s must contain at least %d rows", field.Admin.Label, field.Nested.MinRows)})
 			}
 			if field.Nested.MaxRows > 0 && value.Len() > field.Nested.MaxRows {
@@ -383,7 +419,7 @@ func validateMembers(fields []schema.Field, object *validationObject, options va
 					continue
 				}
 				key, _ := item.Get("_key").StringValue()
-				child, changed := validateObject(field.Nested.ResolvedFields(), item, validationOptions{prefix: itemPath, requireMissing: true, previousValue: previousRows[key], budget: options.budget, rowMetadata: schema.FieldTypeArray}, pluginValidators, issues)
+				child, changed := validateObject(field.Nested.ResolvedFields(), item, validationOptions{prefix: itemPath, requireMissing: true, deferCompleteness: options.deferCompleteness, previousScope: options.previousScope, previousValue: previousRows[key], budget: options.budget, rowMetadata: schema.FieldTypeArray}, pluginValidators, issues)
 				keyValue, exists := item.Lookup("_key")
 				issues.add(validateRowKeyValue(keyValue, exists, rowKeys, itemPath, index)...)
 				if changed {
@@ -398,10 +434,10 @@ func validateMembers(fields []schema.Field, object *validationObject, options va
 				issues.add(schema.Issue{Code: "invalid_type", Path: path, Message: fmt.Sprintf("%s must be an array", field.Admin.Label)})
 				continue
 			}
-			if field.Required && value.Len() == 0 {
+			if field.Required && value.Len() == 0 && !options.deferCompleteness {
 				issues.add(schema.Issue{Code: "required", Path: path, Message: fmt.Sprintf("%s must contain at least one block", field.Admin.Label)})
 			}
-			if value.Len() < field.Blocks.MinRows && !(field.Required && value.Len() == 0) {
+			if value.Len() < field.Blocks.MinRows && !options.deferCompleteness && !(field.Required && value.Len() == 0) {
 				issues.add(schema.Issue{Code: "min_rows", Path: path, Message: fmt.Sprintf("%s must contain at least %d blocks", field.Admin.Label, field.Blocks.MinRows)})
 			}
 			if field.Blocks.MaxRows > 0 && value.Len() > field.Blocks.MaxRows {
@@ -435,7 +471,7 @@ func validateMembers(fields []schema.Field, object *validationObject, options va
 				if previousType, _ := previous.Get("blockType").StringValue(); previousType != blockKey {
 					previous = store.Value{}
 				}
-				child, changed := validateObject(block.ResolvedFields(), item, validationOptions{prefix: itemPath, requireMissing: true, previousValue: previous, budget: options.budget, rowMetadata: schema.FieldTypeBlocks}, pluginValidators, issues)
+				child, changed := validateObject(block.ResolvedFields(), item, validationOptions{prefix: itemPath, requireMissing: true, deferCompleteness: options.deferCompleteness, previousScope: options.previousScope, previousValue: previous, budget: options.budget, rowMetadata: schema.FieldTypeBlocks}, pluginValidators, issues)
 				keyValue, exists := item.Lookup("_key")
 				issues.add(validateRowKeyValue(keyValue, exists, rowKeys, itemPath, index)...)
 				if changed {
@@ -462,7 +498,7 @@ func validateMembers(fields []schema.Field, object *validationObject, options va
 				updated, err := embedded.TransformValue(field, value, path, options.budget, func(occurrence embedded.ReadOccurrence) (store.Value, bool, error) {
 					// Envelope identity/discriminator are metadata, not authored children.
 					metadata := [2]string{occurrence.Case.Identity, occurrence.Case.Discriminator}
-					child, childChanged := validateObject(occurrence.Fields, occurrence.Payload, validationOptions{prefix: occurrence.RuntimePath, requireMissing: true, previousValue: previous[occurrence.Identity], budget: options.budget, embeddedMetadata: metadata}, pluginValidators, issues)
+					child, childChanged := validateObject(occurrence.Fields, occurrence.Payload, validationOptions{prefix: occurrence.RuntimePath, requireMissing: true, deferCompleteness: options.deferCompleteness, previousScope: options.previousScope, previousValue: previous[occurrence.Identity], budget: options.budget, embeddedMetadata: metadata}, pluginValidators, issues)
 					changed = changed || childChanged
 					return child, childChanged, nil
 				})
@@ -586,7 +622,7 @@ func requiredIssue(field schema.Field, path string) schema.Issue {
 	return schema.Issue{Code: "required", Path: path, Message: fmt.Sprintf("%s is required", field.Admin.Label)}
 }
 
-func validateUpload(field schema.Field, value store.Value, path string) []schema.Issue {
+func validateUpload(field schema.Field, value store.Value, path string, deferCompleteness bool) []schema.Issue {
 	if field.Upload == nil {
 		return []schema.Issue{{Code: "invalid_upload", Path: path, Message: "upload contract is missing"}}
 	}
@@ -594,7 +630,7 @@ func validateUpload(field schema.Field, value store.Value, path string) []schema
 		if value.Kind() != store.ValueList {
 			return []schema.Issue{{Code: "invalid_type", Path: path, Message: fmt.Sprintf("%s must be an array", field.Admin.Label)}}
 		}
-		if field.Required && value.Len() == 0 {
+		if field.Required && value.Len() == 0 && !deferCompleteness {
 			return []schema.Issue{{Code: "required", Path: path, Message: fmt.Sprintf("%s must contain at least one upload", field.Admin.Label)}}
 		}
 		if value.Len() > MaxDocumentReferences {
@@ -610,7 +646,7 @@ func validateUpload(field schema.Field, value store.Value, path string) []schema
 		}
 		id, valid := item.StringValue()
 		if valid && id == "" && !field.Upload.HasMany {
-			if field.Required {
+			if field.Required && !deferCompleteness {
 				issues = append(issues, requiredIssue(field, path))
 			}
 			continue
@@ -626,7 +662,7 @@ func validateUpload(field schema.Field, value store.Value, path string) []schema
 	return issues
 }
 
-func validateRelationship(field schema.Field, value store.Value, path string) []schema.Issue {
+func validateRelationship(field schema.Field, value store.Value, path string, deferCompleteness bool) []schema.Issue {
 	if field.Relationship == nil {
 		return []schema.Issue{{Code: "invalid_relationship", Path: path, Message: "relationship contract is missing"}}
 	}
@@ -634,7 +670,7 @@ func validateRelationship(field schema.Field, value store.Value, path string) []
 		if value.Kind() != store.ValueList {
 			return []schema.Issue{{Code: "invalid_type", Path: path, Message: fmt.Sprintf("%s must be an array", field.Admin.Label)}}
 		}
-		if field.Required && value.Len() == 0 {
+		if field.Required && value.Len() == 0 && !deferCompleteness {
 			return []schema.Issue{{Code: "required", Path: path, Message: fmt.Sprintf("%s must contain at least one relationship", field.Admin.Label)}}
 		}
 		if value.Len() > MaxDocumentReferences {
@@ -655,7 +691,7 @@ func validateRelationship(field schema.Field, value store.Value, path string) []
 		if !field.Relationship.Polymorphic {
 			id, valid := item.StringValue()
 			if valid && id == "" && !field.Relationship.HasMany {
-				if field.Required {
+				if field.Required && !deferCompleteness {
 					issues = append(issues, requiredIssue(field, path))
 				}
 				continue

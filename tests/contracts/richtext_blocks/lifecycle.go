@@ -67,7 +67,7 @@ func parentLifecycle(t *testing.T, factory Factory) {
 	}
 	published, err := app.Local().Publish(ctx, "articles", created.ID, ridu.MutationOptions{Actor: &user, ActorCollection: "users", ExpectedRevision: created.Revision})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("publish release article: %#v", err)
 	}
 	if published.Status != store.StatusPublished {
 		t.Fatal("publish lost status")
@@ -80,8 +80,12 @@ func parentLifecycle(t *testing.T, factory Factory) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if restored.Status != store.StatusDraft || stringValue(payload(t, restored.Values["body"], 1)["title"]) != "First title" || stringValue(payload(t, restored.Values["body"], 1)["_key"]) != "callout" {
+	if restored.Status != store.StatusPublished || !restored.HasDraftChanges || stringValue(payload(t, restored.Values["body"], 1)["title"]) != "First title" || stringValue(payload(t, restored.Values["body"], 1)["_key"]) != "callout" {
 		t.Fatal("restore lost payload, identity or status")
+	}
+	liveAfterRestore, err := app.Local().Find(ctx, "articles", created.ID, ridu.FindOptions{})
+	if err != nil || stringValue(payload(t, liveAfterRestore.Values["body"], 0)["title"]) != "Changed title" {
+		t.Fatalf("restore-as-draft changed live content: %#v, %v", liveAfterRestore, err)
 	}
 	duplicate, err := app.Local().Duplicate(ctx, "articles", created.ID, store.Values{"title": store.String("Copy")}, ridu.MutationOptions{Actor: &user, ActorCollection: "users"})
 	if err != nil {

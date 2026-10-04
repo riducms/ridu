@@ -126,9 +126,7 @@ test("expanded inline block drag stays in its editor and can be undone", async (
 	);
 });
 
-test("schema blocks edit inline, validate, duplicate, undo, remove, and reload", async ({
-	page,
-}) => {
+test("schema blocks edit inline, validate, undo, remove, and reload", async ({ page }) => {
 	test.setTimeout(90_000);
 	const errors = observePageErrors(page);
 	await loginAsEditor(page);
@@ -145,7 +143,7 @@ test("schema blocks edit inline, validate, duplicate, undo, remove, and reload",
 	await expect(callout.getByRole("textbox", { name: "Caption", exact: true })).toHaveValue(
 		"Helpful context"
 	);
-	await submitDocumentForm(page);
+	await page.getByRole("button", { name: "Publish", exact: true }).click();
 	await expect(callout.getByRole("textbox", { name: "Callout title", exact: true })).toBeFocused();
 	await expect(callout).toHaveAttribute("data-invalid", "true");
 	await callout.getByRole("textbox", { name: "Callout title", exact: true }).fill("First callout");
@@ -172,25 +170,19 @@ test("schema blocks edit inline, validate, duplicate, undo, remove, and reload",
 	await expect(callout.getByRole("textbox", { name: "Callout title", exact: true })).toHaveValue(
 		"First callout"
 	);
-	await bodyCards(page).first().getByRole("button", { name: "Duplicate", exact: true }).click();
-	await expect(bodyCards(page)).toHaveCount(2);
-	expect(await bodyCards(page).last().getAttribute("data-block-key")).not.toBe(originalKey);
-	await editor.focus();
-	await page.keyboard.press("ControlOrMeta+z");
-	await expect(bodyCards(page)).toHaveCount(1);
-	await page.keyboard.press("ControlOrMeta+Shift+z");
-	await expect(bodyCards(page)).toHaveCount(2);
-	const duplicateKey = await bodyCards(page).last().getAttribute("data-block-key");
 	await bodyCards(page)
-		.last()
+		.first()
 		.getByRole("button", { name: "Select Callout block" })
 		.press("Delete");
-	await expect(bodyCards(page)).toHaveCount(1);
+	await expect(bodyCards(page)).toHaveCount(0);
 	await editor.focus();
 	await page.keyboard.press("ControlOrMeta+z");
-	await expect(bodyCards(page)).toHaveCount(2);
-	await expect(bodyCards(page).last()).toHaveAttribute("data-block-key", duplicateKey!);
-	await bodyCards(page).last().getByRole("button", { name: "Remove", exact: true }).click();
+	await expect(bodyCards(page)).toHaveCount(1);
+	await expect(bodyCards(page).first()).toHaveAttribute("data-block-key", originalKey!);
+	await bodyCards(page).first().getByRole("button", { name: "Remove", exact: true }).click();
+	await expect(bodyCards(page)).toHaveCount(0);
+	await editor.focus();
+	await page.keyboard.press("ControlOrMeta+z");
 	await expect(bodyCards(page)).toHaveCount(1);
 	const stored = await saveArticle(page);
 	const node = stored.body.root.children.find((node: { type: string }) => node.type === "block");
@@ -312,9 +304,7 @@ test("nested inline editors keep independent histories and save with the outer b
 	await page.keyboard.press("ControlOrMeta+z");
 	await expect(detail.locator('[data-block-type="cta"]')).toHaveCount(1);
 	await extra.fill("Independent extra text");
-	await expect(outer.getByRole("textbox", { name: "Detail", exact: true })).toContainText(
-		"Read more"
-	);
+	await expect(inner.getByRole("textbox", { name: /^CTA label/ })).toHaveValue("Read more");
 	await expect(outer.getByRole("textbox", { name: "Extra detail", exact: true })).toContainText(
 		"Independent extra text"
 	);
@@ -412,8 +402,8 @@ test("pending validation blocks edits and received issues follow keyboard reorde
 	const responseReady = new Promise<void>((resolve) => {
 		captured = resolve;
 	});
-	await page.route(`**/api/collections/block-articles/${original.id}*`, async (route) => {
-		if (route.request().method() !== "PATCH") {
+	await page.route(`**/api/collections/block-articles/${original.id}/publish*`, async (route) => {
+		if (route.request().method() !== "POST") {
 			await route.continue();
 			return;
 		}
@@ -422,7 +412,7 @@ test("pending validation blocks edits and received issues follow keyboard reorde
 		await waiting;
 		await route.fulfill({ response });
 	});
-	await submitDocumentForm(page);
+	await page.getByRole("button", { name: "Publish changes", exact: true }).click();
 	await responseReady;
 	await expect(bodyEditor(page)).toHaveAttribute("contenteditable", "false");
 	release();
@@ -440,7 +430,7 @@ test("pending validation blocks edits and received issues follow keyboard reorde
 	await failing
 		.getByRole("textbox", { name: "Callout title", exact: true })
 		.fill("Corrected title");
-	await page.unroute(`**/api/collections/block-articles/${original.id}*`);
+	await page.unroute(`**/api/collections/block-articles/${original.id}/publish*`);
 	await saveArticle(page);
 });
 
@@ -914,7 +904,7 @@ test("draft validation reveals an invalid child through multiple lazy disclosure
 	await outer.locator(":scope > summary").click();
 	await expect(label).toHaveCount(0);
 	await callout.getByRole("button", { name: "Collapse Callout" }).click();
-	await submitDocumentForm(page);
+	await page.getByRole("button", { name: "Publish changes", exact: true }).click();
 	await expect(callout.getByRole("button", { name: "Collapse Callout" })).toHaveAttribute(
 		"aria-expanded",
 		"true"

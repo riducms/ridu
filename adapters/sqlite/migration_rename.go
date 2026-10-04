@@ -269,6 +269,9 @@ func renameSQLiteCollectionContent(ctx context.Context, connection *sql.Conn, so
 			return translateError(err)
 		}
 	}
+	if err := renameSQLitePublishedValues(ctx, connection, source, target, renamed); err != nil {
+		return err
+	}
 
 	rows, err = connection.QueryContext(ctx, `SELECT document_id, revision, snapshot_json
 FROM ridu_versions WHERE collection_id = ? ORDER BY document_id, revision`, string(source.ID))
@@ -320,6 +323,51 @@ FROM ridu_versions WHERE collection_id = ? ORDER BY document_id, revision`, stri
 	for _, version := range versions {
 		if _, err := connection.ExecContext(ctx, `UPDATE ridu_versions SET snapshot_json = ?
 WHERE collection_id = ? AND document_id = ? AND revision = ?`, version.snapshot, string(source.ID), version.documentID, version.revision); err != nil {
+			return translateError(err)
+		}
+	}
+	return nil
+}
+
+func renameSQLitePublishedValues(ctx context.Context, connection *sql.Conn, source, target schema.Collection, renamed map[schema.StableID]schema.Field) error {
+	rows, err := connection.QueryContext(ctx, `SELECT id, values_json FROM ridu_published_documents WHERE collection_id = ? ORDER BY id`, string(source.ID))
+	if err != nil {
+		return translateError(err)
+	}
+	type update struct{ id, values string }
+	var updates []update
+	for rows.Next() {
+		var id, encoded string
+		if err := rows.Scan(&id, &encoded); err != nil {
+			rows.Close()
+			return translateError(err)
+		}
+		var values store.Values
+		if err := values.UnmarshalJSON([]byte(encoded)); err != nil {
+			rows.Close()
+			return fmt.Errorf("decode published document %s: %w", id, err)
+		}
+		rewritten, changed, err := renameSQLiteValues(source.Fields, target.Fields, renamed, values)
+		if err != nil {
+			rows.Close()
+			return fmt.Errorf("published document %s: %w", id, err)
+		}
+		if changed {
+			encoded, err := rewritten.MarshalJSON()
+			if err != nil {
+				rows.Close()
+				return err
+			}
+			updates = append(updates, update{id: id, values: string(encoded)})
+		}
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return translateError(err)
+	}
+	rows.Close()
+	for _, item := range updates {
+		if _, err := connection.ExecContext(ctx, `UPDATE ridu_published_documents SET values_json = ? WHERE collection_id = ? AND id = ?`, item.values, string(source.ID), item.id); err != nil {
 			return translateError(err)
 		}
 	}

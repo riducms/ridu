@@ -18,13 +18,13 @@ import HomeCommand from '@/components/home/home-command.astro';
 	<h1
 		class="mx-auto mt-7 mb-0 max-w-1040px text-[clamp(42px,6.2vw,80px)] leading-[1] tracking-[-0.01em]"
 	>
-		Your content model in Go.
-		<span class="block text-ink-soft">Your CMS in one binary.</span>
+		Headless CMS and app framework for Go
 	</h1>
 
 	<p class="mx-auto mt-7 mb-0 max-w-640px text-16px leading-[1.65] text-ink-soft sm:text-18px">
-		Collections, access rules, hooks, and a polished admin, defined in Go config you can review and
-		test. Ship the API, admin, and jobs as a single binary, with no Node in production.
+		Define collections, fields, access rules and hooks in Go. Ridu generates an admin, a REST API,
+		database migrations and TypeScript types from that config, and builds the whole thing into one
+		binary.
 	</p>
 
 	<div class="mt-9 flex flex-wrap items-center justify-center gap-4">
@@ -62,7 +62,8 @@ import HomeCommand from '@/components/home/home-command.astro';
 		</div>
 
 		<figcaption class="mt-5 text-13px text-ink-faint">
-			Edit on the left, see your site update on the right. The admin comes from your Go config.
+			The edit form is generated from the collection's Go config. The page on the right is a
+			separate frontend, updating through live preview as you type.
 		</figcaption>
 	</figure>
 </section>

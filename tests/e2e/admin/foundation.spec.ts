@@ -56,7 +56,7 @@ test("global authoring preserves published values and global-only actions", asyn
 	await page
 		.getByLabel("Announcement — English", { exact: true })
 		.fill("Globals have drafts, hooks, access, versions, and generated types.");
-	await documentSaveButton(page).click();
+	await page.getByRole("button", { name: "Publish changes", exact: true }).click();
 	await expect(
 		page.getByLabel("Notifications alt+T").getByText("Published", { exact: true })
 	).toBeVisible();

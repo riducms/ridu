@@ -260,6 +260,10 @@ func (backend *Store) applyMongoMigrationReplay(
 					if err := backend.dropMongoMigrationResources(ctx, plan, step.resourceIDs); err != nil {
 						return fmt.Errorf("apply MongoDB migration %s step %s/%s: %w", file.Name, step.phaseID, step.stepID, err)
 					}
+				case ridumigration.StepMongoDBRebuildHeadReservations:
+					if err := backend.rebuildMongoHeadReservations(ctx, plan.after); err != nil {
+						return fmt.Errorf("apply MongoDB migration %s step %s/%s: %w", file.Name, step.phaseID, step.stepID, err)
+					}
 				case ridumigration.StepMongoDBAssertSchema:
 					backend.clearVerifiedIndexes()
 					if err := backend.verifyIndexPlansWithoutAuthorization(ctx, plan.physical.collections, plan.physical.system); err != nil {
@@ -626,8 +630,8 @@ func verifyPreparedMongoDBArtifactReplay(
 	})
 }
 
-// Ready preserves manifest-only readiness compatibility for callers that do
-// not yet provide an executable migration-history digest.
+// Ready checks the manifest and physical schema for development and adapter
+// diagnostics when no executable migration history digest is available.
 func (backend *Store) Ready(ctx context.Context, manifest schema.Manifest) error {
 	return backend.ready(ctx, manifest, "")
 }

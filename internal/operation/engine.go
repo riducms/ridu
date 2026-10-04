@@ -55,6 +55,7 @@ type Decision struct {
 type Context struct {
 	Context         context.Context
 	Operation       operation.Kind
+	WritePhase      operation.WritePhase
 	Collection      schema.Collection
 	ID              string
 	Actor           *store.Document
@@ -186,10 +187,6 @@ type Request struct {
 	// replaceValues is reserved for restoring one canonical version snapshot.
 	// Ordinary updates and publication transitions remain patches.
 	replaceValues bool
-	// allowDraftUnpublish lets version restoration write an explicitly draft
-	// snapshot when the current document is already a draft. Ordinary unpublish
-	// calls still require a published source document.
-	allowDraftUnpublish bool
 	// copyLocaleSource preserves source occurrence identities for an explicit
 	// locale copy. Independent whole-field translations may reuse the same key
 	// for different variants; that is not an in-place schema change.
@@ -263,9 +260,6 @@ type Error struct {
 func (operationError *Error) Error() string { return operationError.Message }
 func (operationError *Error) Unwrap() error { return operationError.Cause }
 
-// trustedDraftRead reports an explicit draft read without an actor: server
-// code such as a job or a renderer that chose to include drafts. Read access
-// still applies; the actor-facing ReadDrafts rule does not.
 // publishRequired names the operation a caller needs instead of an ordinary
 // update, which never silently changes live content or status.
 func publishRequired(collection schema.Collection, statusChange bool) *Error {
@@ -278,13 +272,52 @@ func publishRequired(collection schema.Collection, statusChange bool) *Error {
 	}
 	message := "a published " + string(collection.Slug) + " document changes only through the publish lifecycle; apply these edits live with PublishChanges (REST POST " + route + "/publish with the changed fields, SDK publishChanges)"
 	if collection.Versions.Drafts {
-		message += ", or Unpublish it first to edit a draft"
+		message += ", or explicitly save a working draft with Draft:true"
 	}
 	return &Error{Code: "publish_required", Status: 409, Message: message}
 }
 
+// trustedDraftRead carries an explicitly trusted draft read into populated targets.
 func trustedDraftRead(request Request) bool {
-	return request.Draft != nil && *request.Draft && request.Actor == nil
+	return request.Draft != nil && *request.Draft && request.System
+}
+
+func creationStatus(collection schema.Collection, request Request) store.Status {
+	if collection.Versions == nil {
+		return ""
+	}
+	if request.Draft != nil {
+		if *request.Draft {
+			return store.StatusDraft
+		}
+		return store.StatusPublished
+	}
+	if request.Status != nil && *request.Status != "" {
+		return *request.Status
+	}
+	if collection.Versions.Drafts {
+		return store.StatusDraft
+	}
+	return store.StatusPublished
+}
+
+func writePhaseForRequest(collection schema.Collection, request Request) operation.WritePhase {
+	switch request.Operation {
+	case operation.Create, operation.Duplicate:
+		if creationStatus(collection, request) == store.StatusDraft {
+			return operation.WritePhaseDraft
+		}
+		return operation.WritePhasePublished
+	case operation.Update, operation.Unpublish:
+		if collection.Versions != nil && collection.Versions.Drafts {
+			return operation.WritePhaseDraft
+		}
+		return operation.WritePhasePublished
+	case operation.Publish, operation.DiscardDraft:
+		return operation.WritePhasePublished
+	default:
+		return operation.WritePhaseNone
+	}
 }
 
 // publishedOnly decides whether a read of collection excludes drafts. A read
@@ -296,11 +329,6 @@ func (engine *Engine) publishedOnly(request Request, collection Collection, ctx 
 	}
 	if request.Draft != nil && !*request.Draft {
 		return true, nil
-	}
-	// Judge trust from ctx, which always carries the caller: a request built
-	// only to carry Draft must not pass for anonymous server code.
-	if request.Draft != nil && *request.Draft && ctx.Actor == nil {
-		return false, nil
 	}
 	reads, err := engine.readsDrafts(collection, ctx)
 	if err != nil {
@@ -352,19 +380,12 @@ func (engine *Engine) readsDrafts(collection Collection, ctx Context) (bool, err
 	return decision.Kind == Allow, nil
 }
 
-// publishedTargetAccess narrows a populated or referenced versioned target to
-// published documents when the actor may not read its drafts.
-func (engine *Engine) publishedTargetAccess(target Collection, ctx Context, access *query.Node) (*query.Node, error) {
+// publishedTargetOnly selects the live head when the actor may not read a
+// target's working content. A status predicate cannot make that selection:
+// published documents can have pending working edits.
+func (engine *Engine) publishedTargetOnly(target Collection, ctx Context) (bool, error) {
 	reads, err := engine.readsDrafts(target, ctx)
-	if err != nil || reads {
-		return access, err
-	}
-	published := query.Equal("_status", "published").Node()
-	if access == nil {
-		return &published, nil
-	}
-	combined := query.Node{Kind: query.ExpressionAnd, Children: []query.Node{*access, published}}
-	return &combined, nil
+	return !reads, err
 }
 
 type Engine struct {
@@ -566,6 +587,7 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 	if !exists {
 		return Result{}, &Error{Code: "unknown_collection", Status: 404, Message: fmt.Sprintf("collection %q was not found", request.Collection)}
 	}
+	failureContext.WritePhase = writePhaseForRequest(collection.Schema, request)
 	if createIDError := engine.prepareCreateID(&request); createIDError != nil {
 		return Result{}, createIDError
 	}
@@ -618,11 +640,23 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 	failureContext.Locale, failureContext.AllLocales = hookSelection.Locale, hookSelection.All
 	failureContext.Collection = collection.Schema
 	resourceAfterError = collection.Hooks.AfterError
-	if request.Operation != operation.Create && request.Operation != operation.Duplicate && request.Operation != operation.Read && request.Operation != operation.Update && request.Operation != operation.Delete && request.Operation != operation.RestoreDeleted && request.Operation != operation.DeletePermanent && request.Operation != operation.Publish && request.Operation != operation.Unpublish {
+	if request.Operation != operation.Create && request.Operation != operation.Duplicate && request.Operation != operation.Read && request.Operation != operation.Update && request.Operation != operation.Delete && request.Operation != operation.RestoreDeleted && request.Operation != operation.DeletePermanent && request.Operation != operation.Publish && request.Operation != operation.Unpublish && request.Operation != operation.DiscardDraft {
 		return Result{}, &Error{Code: "bad_operation", Status: 400, Message: fmt.Sprintf("operation %q is not supported", request.Operation)}
+	}
+	if request.Status != nil && (*request.Status != "" && *request.Status != store.StatusPublished && *request.Status != store.StatusDraft ||
+		*request.Status == store.StatusDraft && (collection.Schema.Versions == nil || !collection.Schema.Versions.Drafts)) {
+		return Result{}, &Error{Code: "validation", Status: 422, Message: "document validation failed", Issues: []schema.Issue{{Code: "invalid_status", Path: "_status", Message: "document status is not valid for this collection"}}}
 	}
 	if collection.Schema.Capabilities.Global && (request.Operation == operation.Create || request.Operation == operation.Duplicate || request.Operation == operation.Delete || request.Operation == operation.RestoreDeleted || request.Operation == operation.DeletePermanent || request.Operation == operation.Read && request.ID == "") {
 		return Result{}, &Error{Code: "bad_operation", Status: 400, Message: "global singletons support read, update, publish, and unpublish operations"}
+	}
+	if request.Operation == operation.DiscardDraft {
+		if collection.Schema.Versions == nil || !collection.Schema.Versions.Drafts {
+			return Result{}, &Error{Code: "bad_operation", Status: 400, Message: "discard requires a draft-enabled resource"}
+		}
+		if len(request.Data) != 0 || request.Draft != nil {
+			return Result{}, &Error{Code: "bad_operation", Status: 400, Message: "discard does not accept document data or a draft selector"}
+		}
 	}
 	if request.TrashOnly && (request.Operation != operation.Read || !collection.Schema.Capabilities.Trash) {
 		return Result{}, &Error{Code: "bad_operation", Status: 400, Message: "trash queries require a trash-enabled collection read"}
@@ -633,8 +667,8 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 	if request.Operation == operation.Unpublish && collection.Schema.Versions != nil && !collection.Schema.Versions.Drafts {
 		return Result{}, &Error{Code: "bad_operation", Status: 400, Message: "collection does not support drafts"}
 	}
-	if request.Draft != nil && request.Operation != operation.Read && request.Operation != operation.Create {
-		return Result{}, &Error{Code: "bad_operation", Status: 400, Message: "draft mode supports only reads and creates; use publish or unpublish to change status"}
+	if request.Draft != nil && request.Operation != operation.Read && request.Operation != operation.Create && !(request.Operation == operation.Update && *request.Draft) {
+		return Result{}, &Error{Code: "bad_operation", Status: 400, Message: "draft mode supports reads, creates, and explicit draft updates; use publish or unpublish to change public status"}
 	}
 	if request.Draft != nil && collection.Schema.Versions == nil && request.Operation != operation.Read {
 		return Result{}, &Error{Code: "bad_operation", Status: 400, Message: "draft mode requires a version-enabled collection"}
@@ -643,11 +677,6 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 		if *request.Draft && !collection.Schema.Versions.Drafts {
 			return Result{}, &Error{Code: "bad_operation", Status: 400, Message: "collection does not support drafts"}
 		}
-		status := store.StatusPublished
-		if *request.Draft {
-			status = store.StatusDraft
-		}
-		request.Status = &status
 	}
 	if collection.Schema.Capabilities.Upload && !request.StoragePrepared {
 		if request.Operation == operation.Create && request.ImportID == "" || request.Operation == operation.Duplicate {
@@ -693,6 +722,7 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 		projections:     projections,
 		Context:         transactionContext,
 		Operation:       request.Operation,
+		WritePhase:      writePhaseForRequest(collection.Schema, request),
 		Collection:      collection.Schema,
 		ID:              request.ID,
 		Actor:           cloneDocumentPointer(request.Actor),
@@ -708,11 +738,15 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 	decision := Decision{Kind: Allow}
 	var submittedUpdateDecision *Decision
 	if request.Operation != operation.Duplicate {
+		authorizationContext := operationContext
+		if request.Operation == operation.DiscardDraft {
+			authorizationContext.Operation = operation.Update
+		}
 		if request.LocalizationPrepared {
-			decision, err = authorizePreparedLocalization(collection, operationContext, localizationPreparedData, selection.Configured)
+			decision, err = authorizePreparedLocalization(collection, authorizationContext, localizationPreparedData, selection.Configured)
 			accessAllLocales = len(selection.Configured) != 0
 		} else {
-			decision, err = authorize(collection, operationContext)
+			decision, err = authorize(collection, authorizationContext)
 		}
 		if err != nil {
 			return Result{}, &Error{Code: "access_failed", Status: 500, Message: "access rule failed", Cause: err}
@@ -737,7 +771,8 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 			}
 			submittedUpdateDecision = &updateDecision
 		}
-		if request.Operation == operation.Create && request.Draft != nil && !*request.Draft {
+		if request.Operation == operation.Create && collection.Schema.Versions != nil &&
+			(request.Draft != nil || request.Status != nil) && creationStatus(collection.Schema, request) == store.StatusPublished {
 			publishContext := operationContext
 			publishContext.Operation = operation.Publish
 			publishDecision, publishError := authorize(collection, publishContext)
@@ -765,7 +800,9 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 	var duplicateCanonical store.Values
 	var duplicateVisible store.Values
 	var duplicateReadContext Context
-	if request.Operation == operation.Duplicate || request.Operation == operation.Update || request.Operation == operation.Delete || request.Operation == operation.RestoreDeleted || request.Operation == operation.DeletePermanent || request.Operation == operation.Publish || request.Operation == operation.Unpublish {
+	var duplicatePublishedOnly bool
+	var discardLiveCanonical store.Values
+	if request.Operation == operation.Duplicate || request.Operation == operation.Update || request.Operation == operation.Delete || request.Operation == operation.RestoreDeleted || request.Operation == operation.DeletePermanent || request.Operation == operation.Publish || request.Operation == operation.Unpublish || request.Operation == operation.DiscardDraft {
 		deletion := store.DeletionActive
 		if request.Operation == operation.RestoreDeleted || request.Operation == operation.DeletePermanent {
 			deletion = store.DeletionTrash
@@ -786,10 +823,16 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 			}
 			findAccess = readDecision.Access
 			duplicateReadContext = readContext
+			var draftError error
+			duplicatePublishedOnly, draftError = engine.duplicateSourcePublishedOnly(collection, readContext, selection.Configured)
+			if draftError != nil {
+				return Result{}, draftError
+			}
 		}
 		original, findError := state.transaction.Find(transactionContext, store.Request{
 			Collection: collection.Schema, Collections: engine.schemas, ID: request.ID, Access: findAccess, Deletion: deletion,
 			Locales: selection.Configured, LocaleChain: selection.Chain, AllLocales: accessAllLocales, Lock: store.LockMutation,
+			PublishedOnly: duplicatePublishedOnly,
 		})
 		if findError != nil {
 			if collection.Schema.Capabilities.Global && request.Operation == operation.Update && decision.Kind == Allow && errors.Is(findError, store.ErrNotFound) {
@@ -798,10 +841,24 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 				return Result{}, translateStoreError(findError)
 			}
 		} else {
+			if request.Operation == operation.DiscardDraft {
+				if original.PublishedRevision == 0 || !original.HasDraftChanges {
+					return Result{}, &Error{Code: "conflict", Status: 409, Message: "document has no working draft to discard"}
+				}
+				live, liveError := state.transaction.Find(transactionContext, store.Request{
+					Collection: collection.Schema, Collections: engine.schemas, ID: request.ID, Access: decision.Access,
+					Deletion: deletion, PublishedOnly: true, Locales: selection.Configured,
+					LocaleChain: selection.Chain, AllLocales: accessAllLocales, Lock: store.LockMutation,
+				})
+				if liveError != nil {
+					return Result{}, translateStoreError(liveError)
+				}
+				discardLiveCanonical = store.CloneValues(live.Values)
+			}
 			if request.Operation == operation.Duplicate && request.ExpectedRevision != 0 && original.Revision != request.ExpectedRevision {
 				return Result{}, translateStoreError(store.ErrConflict)
 			}
-			if request.Operation == operation.Unpublish && original.Status != store.StatusPublished && !request.allowDraftUnpublish {
+			if request.Operation == operation.Unpublish && original.Status != store.StatusPublished {
 				return Result{}, &Error{Code: "validation", Status: 422, Message: "only a published document can be unpublished"}
 			}
 			canonicalDocument := store.CloneDocument(original)
@@ -809,7 +866,7 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 				return Result{}, recoveryError
 			}
 			if request.Operation == operation.Update && collection.Schema.Versions != nil &&
-				(original.Status == store.StatusPublished || request.Status != nil) {
+				(original.Status == store.StatusPublished && (request.Draft == nil || !*request.Draft) || request.Status != nil) {
 				return Result{}, publishRequired(collection.Schema, request.Status != nil)
 			}
 			if submittedUpdateDecision != nil {
@@ -841,6 +898,7 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 					if _, accessError := state.transaction.Find(transactionContext, store.Request{
 						Collection: collection.Schema, Collections: engine.schemas, ID: request.ID, Access: localeDecision.Access,
 						Deletion: deletion, Locales: selection.Configured, LocaleChain: []schema.LocaleCode{locale}, Lock: store.LockMutation,
+						PublishedOnly: duplicatePublishedOnly,
 					}); accessError != nil {
 						if errors.Is(accessError, store.ErrNotFound) {
 							return Result{}, &Error{Code: "access_denied", Status: 403, Message: "every retained source locale must be readable"}
@@ -871,6 +929,13 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 			visibleOriginal := projections.Document(canonicalDocument, visibleSelection)
 			originalVisible = store.CloneValues(visibleOriginal.Values)
 			operationContext.Original = cloneDocumentPointer(&visibleOriginal)
+			if request.Operation == operation.DiscardDraft {
+				request.LocalizationPrepared = true
+				preparedValidationSelection = exactUpdateSelection(selection)
+				localizationPreparedData = store.CloneValues(discardLiveCanonical)
+				request.Data = projections.Values(discardLiveCanonical, preparedValidationSelection)
+				operationContext.Data = store.CloneValues(request.Data)
+			}
 			if request.Operation == operation.Delete || request.Operation == operation.DeletePermanent || request.Operation == operation.RestoreDeleted {
 				request.Data, operationContext.Data = store.CloneValues(visibleOriginal.Values), store.CloneValues(visibleOriginal.Values)
 			} else if request.Operation == operation.Publish || request.Operation == operation.Unpublish {
@@ -986,7 +1051,7 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 
 	// BeforeValidate prepares input, so it runs only for operations that save
 	// submitted or copied values, never for reads, deletes, or restores.
-	if changesDocument(request.Operation) {
+	if changesDocument(request.Operation) && request.Operation != operation.DiscardDraft {
 		if err := runIdentityHooks(collection.Hooks.BeforeValidate, operationContext); err != nil {
 			return Result{}, hookError("before validation", err)
 		}
@@ -996,7 +1061,7 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 			return Result{}, identityError
 		}
 	}
-	if changesDocument(request.Operation) {
+	if changesDocument(request.Operation) && request.Operation != operation.DiscardDraft {
 		if err := runFieldHooks(collection, operationContext, func(hooks Hooks) []Hook { return hooks.BeforeValidate }, true); err != nil {
 			return Result{}, hookError("field before validation", err)
 		}
@@ -1013,7 +1078,14 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 			return Result{}, identityError
 		}
 	}
-	mutationValidation := validationOptions{requireMissing: request.Operation == operation.Create || request.Operation == operation.Duplicate || originalMissing}
+	mutationValidation := validationOptions{
+		requireMissing:    request.Operation == operation.Create || request.Operation == operation.Duplicate || request.Operation == operation.Publish || originalMissing,
+		deferCompleteness: operationContext.WritePhase == operation.WritePhaseDraft,
+	}
+	var retainedIdentity store.Values
+	if request.Operation == operation.Update || request.Operation == operation.Publish || request.Operation == operation.Unpublish {
+		retainedIdentity = originalCanonical
+	}
 	defaults := defaultResults{}
 	if request.LocalizationPrepared {
 		// Retained snapshot occurrences may intentionally lack this translation.
@@ -1037,7 +1109,7 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 		}
 		request.Data = initialized
 		validated, validationIssues := validateWithOptions(collection.Schema.Fields, request.Data, mutationValidation, engine.pluginValidators)
-		validationIssues = append(validationIssues, validateAuthIdentity(collection.Schema, validated)...)
+		validationIssues = append(validationIssues, validateAuthIdentity(collection.Schema, validated, retainedIdentity, mutationValidation.deferCompleteness)...)
 		correlatePrimitiveListIssues(collection.Schema, request.Data, operationContext, validationIssues)
 		if len(validationIssues) != 0 {
 			return Result{}, &Error{Code: "validation", Status: 422, Message: "document validation failed", Issues: validationIssues}
@@ -1088,11 +1160,17 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 		}
 	}
 	fieldAuthorizationOperation := request.Operation
-	if fieldAuthorizationOperation == operation.Publish || fieldAuthorizationOperation == operation.Unpublish {
+	if fieldAuthorizationOperation == operation.Publish || fieldAuthorizationOperation == operation.Unpublish || fieldAuthorizationOperation == operation.DiscardDraft {
 		fieldAuthorizationOperation = operation.Update
 	}
 	if !request.SkipFieldAccess {
-		if err := authorizeBoundFields(collection, fieldAuthorizationContext, fieldAuthorizationOperation, fieldAuthorizationBefore, fieldAuthorizationAfter, request.LocalizationPrepared); err != nil {
+		var err error
+		if request.Operation == operation.DiscardDraft {
+			err = authorizeDiscardFields(collection, fieldAuthorizationContext, originalCanonical, discardLiveCanonical)
+		} else {
+			err = authorizeBoundFields(collection, fieldAuthorizationContext, fieldAuthorizationOperation, fieldAuthorizationBefore, fieldAuthorizationAfter, request.LocalizationPrepared)
+		}
+		if err != nil {
 			return Result{}, err
 		}
 	}
@@ -1109,22 +1187,23 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 		return Result{}, draftError
 	}
 	storeRequest := store.Request{
-		Collection:       collection.Schema,
-		Collections:      engine.schemas,
-		ID:               request.ID,
-		Access:           decision.Access,
-		Page:             request.Page,
-		Limit:            request.Limit,
-		Sort:             append([]query.Sort(nil), request.Sort...),
-		IndexWindow:      cloneIndexWindow(request.IndexWindow),
-		Select:           storeSelection,
-		Populate:         append([]query.Population(nil), request.Populate...),
-		PopulationAccess: make(map[schema.StableID]*query.Node),
-		PublishedOnly:    readPublishedOnly,
-		ExpectedRevision: request.ExpectedRevision,
-		Locales:          append([]schema.LocaleCode(nil), selection.Configured...),
-		LocaleChain:      append([]schema.LocaleCode(nil), selection.Chain...),
-		AllLocales:       accessAllLocales,
+		Collection:              collection.Schema,
+		Collections:             engine.schemas,
+		ID:                      request.ID,
+		Access:                  decision.Access,
+		Page:                    request.Page,
+		Limit:                   request.Limit,
+		Sort:                    append([]query.Sort(nil), request.Sort...),
+		IndexWindow:             cloneIndexWindow(request.IndexWindow),
+		Select:                  storeSelection,
+		Populate:                append([]query.Population(nil), request.Populate...),
+		PopulationAccess:        make(map[schema.StableID]*query.Node),
+		PopulationPublishedOnly: make(map[schema.StableID]bool),
+		PublishedOnly:           readPublishedOnly,
+		ExpectedRevision:        request.ExpectedRevision,
+		Locales:                 append([]schema.LocaleCode(nil), selection.Configured...),
+		LocaleChain:             append([]schema.LocaleCode(nil), selection.Chain...),
+		AllLocales:              accessAllLocales,
 	}
 	if request.TrashOnly {
 		storeRequest.Deletion = store.DeletionTrash
@@ -1150,7 +1229,7 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 			storeRequest.Filter = &node
 		}
 	}
-	if changesDocument(request.Operation) {
+	if changesDocument(request.Operation) && request.Operation != operation.DiscardDraft {
 		if err := runIdentityHooks(collection.Hooks.BeforeChange, operationContext); err != nil {
 			return Result{}, hookError("before change", err)
 		}
@@ -1163,6 +1242,11 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 	}
 	if err := runFieldHooks(collection, operationContext, func(hooks Hooks) []Hook { return hooks.BeforeOperation }, true, true); err != nil {
 		return Result{}, hookError("field before operation", err)
+	}
+	if request.Operation == operation.DiscardDraft {
+		// Discard is a reset to the immutable live head. BeforeOperation observers
+		// may inspect the candidate, but cannot transform what the store restores.
+		operationContext.Data = projections.Values(discardLiveCanonical, preparedValidationSelection)
 	}
 	if request.Operation != operation.Read {
 		if identityError := prepareRowIdentities(collection.Schema.Fields, operationContext.Data, false, false); identityError != nil {
@@ -1196,7 +1280,7 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 		}
 		request.Data = initialized
 		validated, validationIssues := validateWithOptions(collection.Schema.Fields, request.Data, mutationValidation, engine.pluginValidators)
-		validationIssues = append(validationIssues, validateAuthIdentity(collection.Schema, validated)...)
+		validationIssues = append(validationIssues, validateAuthIdentity(collection.Schema, validated, retainedIdentity, mutationValidation.deferCompleteness)...)
 		correlatePrimitiveListIssues(collection.Schema, request.Data, operationContext, validationIssues)
 		if len(validationIssues) != 0 {
 			return Result{}, &Error{Code: "validation", Status: 422, Message: "document validation failed after before-operation hooks", Issues: validationIssues}
@@ -1246,6 +1330,13 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 		// the locale projected into hooks. Validate the final hook-mutated locale
 		// together with every untouched persisted locale before changing status.
 		statusChanges := changedValues(originalVisible, request.Data)
+		if !request.LocalizationPrepared {
+			// Explicitly submitted values may equal a fallback-projected value
+			// while still establishing a missing exact translation.
+			for name := range submittedData {
+				statusChanges[name] = request.Data[name]
+			}
+		}
 		statusPatch, storageError := localization.StoragePatch(collection.Schema.Fields, statusChanges, hookSelection)
 		if storageError != nil {
 			return Result{}, &Error{Code: "validation", Status: 422, Message: "localized document validation failed", Cause: storageError}
@@ -1282,13 +1373,18 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 			}
 		}
 	}
+	if request.Operation == operation.Publish {
+		if issues := validatePublicationCandidate(collection.Schema.Fields, referenceData, hookSelection.Locale, selection.Configured, projections, engine.pluginValidators); len(issues) != 0 {
+			return Result{}, &Error{Code: "validation", Status: 422, Message: "published document is incomplete", Issues: issues}
+		}
+	}
 	if changesDocument(request.Operation) {
 		// Final candidate admission and additive rules follow the existing second
-		// codec checkpoint. Ordinary writes inspect only the exact write locale;
-		// canonical copy/restore operations inspect each persisted occurrence.
+		// codec checkpoint. Ordinary edits inspect only the exact write locale;
+		// publication and canonical copy/restore inspect each persisted occurrence.
 		finalContext := operationContext
 		finalSelection := exactUpdateSelection(hookSelection)
-		if request.Operation == operation.Duplicate || request.LocalizationPrepared {
+		if request.Operation == operation.Duplicate || request.Operation == operation.Publish || request.LocalizationPrepared {
 			finalSelection = referenceSelection
 		}
 		finalContext.Data = projections.Values(referenceData, finalSelection)
@@ -1298,7 +1394,13 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 			admissionContext := operationContext
 			admissionContext.Data, admissionContext.Document = referenceData, nil
 			admissionContext.AllLocales = referenceSelection.All
-			if err := authorizeBoundFields(collection, admissionContext, fieldAuthorizationOperation, originalCanonical, referenceData, request.LocalizationPrepared); err != nil {
+			var err error
+			if request.Operation == operation.DiscardDraft {
+				err = authorizeDiscardFields(collection, admissionContext, originalCanonical, discardLiveCanonical)
+			} else {
+				err = authorizeBoundFields(collection, admissionContext, fieldAuthorizationOperation, originalCanonical, referenceData, request.LocalizationPrepared)
+			}
+			if err != nil {
 				return Result{}, err
 			}
 		}
@@ -1330,7 +1432,7 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 			return Result{}, &Error{Code: "validation", Status: 422, Message: "adopted upload objects are invalid", Cause: validationError}
 		}
 	}
-	if request.Operation == operation.Create || request.Operation == operation.Duplicate || request.Operation == operation.Update || request.Operation == operation.RestoreDeleted || request.Operation == operation.Publish || request.Operation == operation.Unpublish {
+	if request.Operation == operation.Create || request.Operation == operation.Duplicate || request.Operation == operation.Update || request.Operation == operation.RestoreDeleted || request.Operation == operation.Publish || request.Operation == operation.Unpublish || request.Operation == operation.DiscardDraft {
 		referenceIssues, referenceError := engine.validateDocumentReferences(operationContext, state.transaction, referenceData, referenceSelection)
 		if referenceError != nil {
 			return Result{}, referenceError
@@ -1377,10 +1479,6 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 	}
 	switch request.Operation {
 	case operation.Create:
-		status := store.Status("")
-		if request.Status != nil {
-			status = *request.Status
-		}
 		storageValues, storageError := localization.StoragePatch(collection.Schema.Fields, request.Data, selection)
 		if storageError != nil {
 			return Result{}, &Error{Code: "validation", Status: 422, Message: "localized document validation failed", Cause: storageError}
@@ -1389,14 +1487,14 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 		if createID == "" {
 			createID = request.ID
 		}
-		document, storeError := state.transaction.Create(transactionContext, store.CreateRequest{Collection: collection.Schema, ID: createID, Values: storageValues, Status: status, CreatedAt: request.ImportCreatedAt, UpdatedAt: request.ImportUpdatedAt, Locales: selection.Configured})
+		document, storeError := state.transaction.Create(transactionContext, store.CreateRequest{Collection: collection.Schema, ID: createID, Values: storageValues, Status: creationStatus(collection.Schema, request), CreatedAt: request.ImportCreatedAt, UpdatedAt: request.ImportUpdatedAt, Locales: selection.Configured})
 		result.Document, err = documentResult(document, storeError)
 	case operation.Duplicate:
 		storageValues, storageError := duplicateCanonicalValues(collection.Schema.Fields, duplicateCanonical, duplicateVisible, request.Data, selection)
 		if storageError != nil {
 			return Result{}, &Error{Code: "validation", Status: 422, Message: "localized document validation failed", Cause: storageError}
 		}
-		document, storeError := state.transaction.Create(transactionContext, store.CreateRequest{Collection: collection.Schema, Values: storageValues, Locales: selection.Configured})
+		document, storeError := state.transaction.Create(transactionContext, store.CreateRequest{Collection: collection.Schema, Values: storageValues, Status: creationStatus(collection.Schema, request), Locales: selection.Configured})
 		result.Document, err = documentResult(document, storeError)
 	case operation.Read:
 		if request.ID == "" {
@@ -1420,7 +1518,10 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 			}
 		} else {
 			document, storeError := state.transaction.Find(transactionContext, storeRequest)
-			if collection.Schema.Capabilities.Global && decision.Kind == Allow && errors.Is(storeError, store.ErrNotFound) {
+			// Globals without an editorial draft workflow retain implicit virtual
+			// defaults. An explicit live selector still requires a saved live head.
+			implicitDefaults := request.Draft == nil && collection.Schema.Versions != nil && !collection.Schema.Versions.Drafts
+			if collection.Schema.Capabilities.Global && (!storeRequest.PublishedOnly || implicitDefaults) && decision.Kind == Allow && errors.Is(storeError, store.ErrNotFound) {
 				values, _ := validate(collection.Schema.Fields, store.Values{}, true, engine.pluginValidators)
 				status := store.StatusPublished
 				if collection.Schema.Versions != nil && collection.Schema.Versions.Drafts {
@@ -1437,17 +1538,11 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 		var document store.Document
 		var storeError error
 		if originalMissing {
-			status := store.StatusPublished
-			if request.Status != nil {
-				status = *request.Status
-			} else if collection.Schema.Versions != nil && collection.Schema.Versions.Drafts {
-				status = store.StatusDraft
-			}
 			storageValues, storageError := localization.StoragePatch(collection.Schema.Fields, request.Data, selection)
 			if storageError != nil {
 				return Result{}, &Error{Code: "validation", Status: 422, Message: "localized document validation failed", Cause: storageError}
 			}
-			document, storeError = state.transaction.Create(transactionContext, store.CreateRequest{Collection: collection.Schema, ID: request.ID, Values: storageValues, Status: status, Locales: selection.Configured})
+			document, storeError = state.transaction.Create(transactionContext, store.CreateRequest{Collection: collection.Schema, ID: request.ID, Values: storageValues, Status: creationStatus(collection.Schema, request), Locales: selection.Configured})
 		} else {
 			storageValues := localizationPreparedData
 			if !request.LocalizationPrepared {
@@ -1458,16 +1553,16 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 				}
 				storageValues = localization.MergeStorageUpdate(collection.Schema.Fields, originalCanonical, storageValues)
 			}
-			document, storeError = state.transaction.Update(transactionContext, store.UpdateRequest{Request: storeRequest, Values: storageValues, Status: request.Status, ReplaceValues: request.replaceValues})
+			intent := store.WriteIntentDefault
+			if collection.Schema.Versions != nil && collection.Schema.Versions.Drafts {
+				intent = store.WriteIntentSaveDraft
+			}
+			document, storeError = state.transaction.Update(transactionContext, store.UpdateRequest{Request: storeRequest, Values: storageValues, Intent: intent, ReplaceValues: request.replaceValues})
 		}
 		result.Document, err = documentResult(document, storeError)
 	case operation.Publish, operation.Unpublish:
 		if collection.Schema.Versions == nil {
 			return Result{}, &Error{Code: "bad_operation", Status: 400, Message: "collection does not support versions"}
-		}
-		status := store.StatusPublished
-		if request.Operation == operation.Unpublish {
-			status = store.StatusDraft
 		}
 		statusChanges := changedValues(originalVisible, request.Data)
 		if !request.LocalizationPrepared {
@@ -1484,7 +1579,14 @@ func (engine *Engine) Execute(ctx context.Context, request Request) (result Resu
 		} else {
 			storageValues = localization.MergeStorageUpdate(collection.Schema.Fields, originalCanonical, storageValues)
 		}
-		document, storeError := state.transaction.Update(transactionContext, store.UpdateRequest{Request: storeRequest, Values: storageValues, Status: &status, ReplaceValues: request.replaceValues})
+		intent := store.WriteIntentPublish
+		if request.Operation == operation.Unpublish {
+			intent = store.WriteIntentUnpublish
+		}
+		document, storeError := state.transaction.Update(transactionContext, store.UpdateRequest{Request: storeRequest, Values: storageValues, Intent: intent, ReplaceValues: request.replaceValues})
+		result.Document, err = documentResult(document, storeError)
+	case operation.DiscardDraft:
+		document, storeError := state.transaction.Update(transactionContext, store.UpdateRequest{Request: storeRequest, Intent: store.WriteIntentDiscardDraft})
 		result.Document, err = documentResult(document, storeError)
 	case operation.Delete:
 		var document store.Document
@@ -1865,16 +1967,27 @@ func importedUploadObjectKeys(values store.Values) ([]string, error) {
 	return keys, nil
 }
 
-func validateAuthIdentity(collection schema.Collection, values store.Values) []schema.Issue {
+func validateAuthIdentity(collection schema.Collection, values, previous store.Values, draftCompletenessDeferred bool) []schema.Issue {
 	if collection.Auth == nil {
 		return nil
 	}
 	value, exists := values[collection.Auth.IdentityField]
 	if !exists {
+		// Partial updates may omit the identity. Validate the retained value,
+		// while an explicit null still fails without falling back to storage.
+		value, exists = previous[collection.Auth.IdentityField]
+	}
+	if !exists || value.Kind() == store.ValueNull {
+		if draftCompletenessDeferred {
+			return []schema.Issue{{Code: "required", Path: collection.Auth.IdentityField, Message: "authentication identity is required"}}
+		}
 		return nil
 	}
 	identity, valid := value.StringValue()
 	if !valid || identity == "" {
+		if draftCompletenessDeferred {
+			return []schema.Issue{{Code: "required", Path: collection.Auth.IdentityField, Message: "authentication identity is required"}}
+		}
 		return nil
 	}
 	address, err := mail.ParseAddress(identity)
@@ -1896,7 +2009,7 @@ func authIdentityChanges(collection schema.Collection, original, incoming store.
 
 func recordsVersion(operationKind operation.Kind) bool {
 	switch operationKind {
-	case operation.Create, operation.Duplicate, operation.Update, operation.Publish, operation.Unpublish:
+	case operation.Create, operation.Duplicate, operation.Update, operation.Publish, operation.Unpublish, operation.DiscardDraft:
 		return true
 	default:
 		return false
@@ -2201,23 +2314,47 @@ func (engine *Engine) RestorePopulated(ctx context.Context, collectionName, docu
 	}
 
 	status := version.Status
-	if draft {
-		status = store.StatusDraft
-	}
 	operationKind := operation.Publish
-	if status == store.StatusDraft {
-		operationKind = operation.Unpublish
+	saveDraft := draft
+	if draft {
+		operationKind = operation.Update
+		status = store.StatusDraft
+	} else if status == store.StatusDraft {
+		// A historical draft describes the desired final publication state.
+		// Unpublish is valid only while a live head exists; restoring into an
+		// already-unpublished document is a draft edit instead. Inspect that
+		// state under the same transaction lock used by the eventual mutation.
+		current, findError := state.transaction.Find(transactionContext, store.Request{
+			Collection: collection.Schema, Collections: engine.schemas, ID: documentID,
+			Locales: versionSelection.Configured, LocaleChain: versionSelection.Chain,
+			AllLocales: versionSelection.All, Lock: store.LockMutation,
+		})
+		if findError != nil {
+			return Result{}, translateStoreError(findError)
+		}
+		if current.Status == store.StatusDraft {
+			operationKind = operation.Update
+			saveDraft = true
+		} else {
+			operationKind = operation.Unpublish
+		}
 	}
-	result, err = engine.Execute(transactionContext, Request{
+	restoreRequest := Request{
 		Operation: operationKind, Collection: collectionName, ID: documentID, Data: version.Snapshot.Values,
-		Actor: actor, ActorCollection: options.ActorCollection, System: options.System, ExpectedRevision: expectedRevision, Status: &status,
+		Actor: actor, ActorCollection: options.ActorCollection, System: options.System, ExpectedRevision: expectedRevision,
 		Populate:        append([]query.Population(nil), populations...),
 		OutputFields:    appendOptionalPaths(outputFields),
 		StoragePrepared: collection.Schema.Capabilities.Upload, ValidateUploadObjects: collection.Schema.Capabilities.Upload, LocalizationPrepared: true,
-		replaceValues: true, allowDraftUnpublish: operationKind == operation.Unpublish,
-		Locale: options.Locale, FallbackLocales: options.FallbackLocales,
+		replaceValues: true,
+		Locale:        options.Locale, FallbackLocales: options.FallbackLocales,
 		DisableFallback: options.DisableFallback, AllLocales: options.AllLocales,
-	})
+	}
+	if saveDraft {
+		restoreRequest.Draft = &saveDraft
+	} else {
+		restoreRequest.Status = &status
+	}
+	result, err = engine.Execute(transactionContext, restoreRequest)
 	if err != nil {
 		return Result{}, err
 	}
@@ -2686,7 +2823,12 @@ func runReadHooks(collection Collection, operationContext Context, result *Resul
 				return &Error{Code: "invalid_computed_value", Status: 500, Message: fmt.Sprintf("virtual field %q has invalid %q output after read hooks; expected %q", field.Path.String(), value.Kind(), field.Virtual.ValueType)}
 			}
 		}
-		return validateReadOutput(collection.Schema.Fields, collection.Schema.Fields, document.Values, readContext.AllLocales)
+		allowIncomplete := document.Status == store.StatusDraft || document.HasDraftChanges
+		identityField := ""
+		if collection.Schema.Auth != nil {
+			identityField = collection.Schema.Auth.IdentityField
+		}
+		return validateReadOutput(collection.Schema.Fields, collection.Schema.Fields, document.Values, readContext.AllLocales, allowIncomplete, identityField)
 	}
 	if result.Document != nil {
 		return run(result.Document)
@@ -2701,15 +2843,17 @@ func runReadHooks(collection Collection, operationContext Context, result *Resul
 	return nil
 }
 
-// Selection/redaction may omit a property, but a read transform cannot return
-// explicit null for a field whose generated output contract is nonnullable.
+// Selection/redaction may omit a property, but a published read transform
+// cannot return explicit null for a required output field. Working drafts may
+// carry incomplete editorial values; an auth identity remains non-nullable.
 // Primitive lists also retain their declared element type and finite numbers.
 // Authoring length/range rules remain write validation, not output formatting rules.
-func validateReadOutput(fields, root []schema.Field, values store.Values, allLocales bool) error {
+func validateReadOutput(fields, root []schema.Field, values store.Values, allLocales, allowIncomplete bool, identityField string) error {
 	for _, field := range fields {
-		if field.Required || primitivefield.IsList(field) {
+		identity := identityField != "" && field.Path.String() == identityField
+		if field.Required || identity || primitivefield.IsList(field) {
 			for _, location := range fieldLocationsAtPath(root, values, field.Path.String(), allLocales) {
-				if field.Required && location.value.Kind() == store.ValueNull {
+				if (identity || field.Required && !allowIncomplete) && location.value.Kind() == store.ValueNull {
 					return &Error{Code: "invalid_field_output", Status: 500, Message: fmt.Sprintf("required field %q returned null after read hooks", location.runtimePath)}
 				}
 				if primitivefield.IsList(field) {
@@ -2719,7 +2863,7 @@ func validateReadOutput(fields, root []schema.Field, values store.Values, allLoc
 				}
 			}
 		}
-		if err := validateReadOutput(schema.ChildFields(field), root, values, allLocales); err != nil {
+		if err := validateReadOutput(schema.ChildFields(field), root, values, allLocales, allowIncomplete, identityField); err != nil {
 			return err
 		}
 	}
@@ -2727,7 +2871,7 @@ func validateReadOutput(fields, root []schema.Field, values store.Values, allLoc
 }
 
 func changesDocument(kind operation.Kind) bool {
-	return kind == operation.Create || kind == operation.Duplicate || kind == operation.Update || kind == operation.Publish || kind == operation.Unpublish
+	return kind == operation.Create || kind == operation.Duplicate || kind == operation.Update || kind == operation.Publish || kind == operation.Unpublish || kind == operation.DiscardDraft
 }
 
 func valueAtPath(fields []schema.Field, values store.Values, path string, allLocales bool) (store.Value, bool) {

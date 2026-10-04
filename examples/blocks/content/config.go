@@ -41,7 +41,7 @@ var Media = field.Block{
 
 var CTA = field.Block{
 	Slug: "cta", Labels: field.BlockLabels{Singular: "CTA"}, TypeName: "CTA",
-	Admin: field.BlockAdmin{NameField: "blockName", RowLabelPath: "label"},
+	Admin: field.BlockAdmin{RowLabelPath: "label"},
 	Fields: field.Fields{
 		field.Text("blockName").Label("Block name"),
 		field.Text("label").Required().Localized(),
@@ -53,7 +53,7 @@ var CTA = field.Block{
 // whose fields do not refer back to Callout, so the schema has no recursion.
 var Callout = field.Block{
 	Slug: "callout", TypeName: "Callout",
-	Admin: field.BlockAdmin{NameField: "blockName", RowLabelPath: "title"},
+	Admin: field.BlockAdmin{RowLabelPath: "title"},
 	Fields: field.Fields{
 		field.Text("blockName").Label("Block name"),
 		field.Text("title").Required(),

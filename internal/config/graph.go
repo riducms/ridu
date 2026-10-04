@@ -305,6 +305,11 @@ func (b *graphBuilder) blocks(blocks []field.Block, registered bool, authored st
 			q.repeated[len(q.repeated)-1].Case = block.Slug
 		}
 		b.fields(block.Fields, blockPath+".fields", q)
+		// Manifest lowering adds this direct child when it was not authored.
+		// Bind sibling conditions against the same scope before lowering runs.
+		if b.scopes[q.scope]["blockName"] == "" {
+			b.node(defaultBlockNameField(), fmt.Sprintf("%s.fields[%d]", blockPath, len(block.Fields)), q)
+		}
 	}
 }
 

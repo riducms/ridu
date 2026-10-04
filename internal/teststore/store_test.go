@@ -26,6 +26,131 @@ func TestProjectionDistinguishesOmittedAndMetadataOnlySelections(t *testing.T) {
 	}
 }
 
+func TestPublishedHeadIsSelectedBeforeFilteringAndSurvivesDraftAndDiscard(t *testing.T) {
+	ctx := context.Background()
+	backend := New()
+	collection := schema.Collection{ID: "posts", Versions: &schema.VersionSettings{Drafts: true, MaxPerDocument: 1}, Fields: []schema.Field{{ID: "title", Name: "title", Type: schema.FieldTypeText, Category: schema.FieldCategoryScalar}}}
+	write, err := backend.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	created, err := write.Create(ctx, store.CreateRequest{Collection: collection, ID: "post-1", Status: store.StatusPublished, Values: store.Values{"title": store.String("live")}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.Revision != 1 || created.PublishedRevision != 1 || created.HasDraftChanges {
+		t.Fatalf("published create metadata = %#v", created)
+	}
+	if _, err := write.Update(ctx, store.UpdateRequest{Request: store.Request{Collection: collection, ID: created.ID, ExpectedRevision: 1}, Values: store.Values{"title": store.String("implicit publish")}}); err == nil {
+		t.Fatal("draft-capable default update accepted an implicit publication")
+	}
+	staged, err := write.Update(ctx, store.UpdateRequest{Request: store.Request{Collection: collection, ID: created.ID, ExpectedRevision: 1}, Intent: store.WriteIntentSaveDraft, Values: store.Values{"title": store.String("pending")}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if staged.Status != store.StatusPublished || staged.Revision != 2 || staged.PublishedRevision != 1 || !staged.HasDraftChanges {
+		t.Fatalf("staged metadata = %#v", staged)
+	}
+	live, err := write.Find(ctx, store.Request{Collection: collection, ID: created.ID, PublishedOnly: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if title, _ := live.Values["title"].StringValue(); title != "live" || live.Revision != 1 || live.HasDraftChanges {
+		t.Fatalf("published projection = %#v", live)
+	}
+	filter := query.Equal("title", "pending").Node()
+	publicPage, err := write.List(ctx, store.Request{Collection: collection, PublishedOnly: true, Filter: &filter})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if publicPage.Total != 0 {
+		t.Fatalf("public pending-title count = %d, want 0", publicPage.Total)
+	}
+	discarded, err := write.Update(ctx, store.UpdateRequest{Request: store.Request{Collection: collection, ID: created.ID, ExpectedRevision: 2}, Intent: store.WriteIntentDiscardDraft})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if title, _ := discarded.Values["title"].StringValue(); title != "live" || discarded.Revision != 3 || discarded.PublishedRevision != 1 || discarded.HasDraftChanges {
+		t.Fatalf("discarded = %#v", discarded)
+	}
+	if err := write.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestPopulationSelectsTargetLiveHeadIndependentlyOfWorkingRoot(t *testing.T) {
+	ctx := context.Background()
+	backend := New()
+	target := schema.Collection{ID: "targets", Slug: "targets", Versions: &schema.VersionSettings{Drafts: true, MaxPerDocument: 1}, Fields: []schema.Field{{ID: "targets-title", Name: "title", Type: schema.FieldTypeText, Category: schema.FieldCategoryScalar}}}
+	path, err := query.NewPath("target")
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner := schema.Collection{ID: "owners", Slug: "owners", Versions: &schema.VersionSettings{Drafts: true, MaxPerDocument: 1}, Fields: []schema.Field{{ID: "owners-target", Name: "target", Path: path, Type: schema.FieldTypeRelationship, Category: schema.FieldCategoryRelationship, Relationship: &schema.RelationshipField{CollectionID: target.ID, CollectionSlug: target.Slug}}}}
+	transaction, err := backend.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer transaction.Rollback(ctx)
+	live, err := transaction.Create(ctx, store.CreateRequest{Collection: target, ID: "target-1", Status: store.StatusPublished, Values: store.Values{"title": store.String("live")}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := transaction.Update(ctx, store.UpdateRequest{Request: store.Request{Collection: target, ID: live.ID, ExpectedRevision: live.Revision}, Intent: store.WriteIntentSaveDraft, Values: store.Values{"title": store.String("private pending")}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := transaction.Create(ctx, store.CreateRequest{Collection: owner, ID: "owner-1", Status: store.StatusDraft, Values: store.Values{"target": store.String(live.ID)}}); err != nil {
+		t.Fatal(err)
+	}
+	populated, err := transaction.Find(ctx, store.Request{
+		Collection: owner, ID: "owner-1", Collections: map[schema.StableID]schema.Collection{owner.ID: owner, target.ID: target},
+		Populate:                []query.Population{{Path: path, Depth: 1}},
+		PopulationPublishedOnly: map[schema.StableID]bool{target.ID: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	actual, ok := populated.Values["target"].CopyDocument()
+	if !ok {
+		t.Fatalf("target was not populated: %#v", populated.Values["target"])
+	}
+	if title, _ := actual.Values["title"].StringValue(); title != "live" || actual.Revision != 1 {
+		t.Fatalf("populated target = %#v, want live head", actual)
+	}
+}
+
+func TestNonDraftVersionsDoNotExposeDraftMetadata(t *testing.T) {
+	ctx := context.Background()
+	backend := New()
+	collection := schema.Collection{ID: "posts", Versions: &schema.VersionSettings{Drafts: false, MaxPerDocument: 1}}
+	transaction, err := backend.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer transaction.Rollback(ctx)
+	created, err := transaction.Create(ctx, store.CreateRequest{Collection: collection, ID: "post-1", Status: store.StatusPublished})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.PublishedRevision != 0 || created.HasDraftChanges {
+		t.Fatalf("non-draft create metadata = %#v", created)
+	}
+	working, err := transaction.Find(ctx, store.Request{Collection: collection, ID: created.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if working.PublishedRevision != 0 || working.HasDraftChanges {
+		t.Fatalf("non-draft working read metadata = %#v", working)
+	}
+	updated, err := transaction.Update(ctx, store.UpdateRequest{Request: store.Request{Collection: collection, ID: created.ID, ExpectedRevision: 1}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.PublishedRevision != 0 || updated.HasDraftChanges {
+		t.Fatalf("non-draft update metadata = %#v", updated)
+	}
+}
+
 func TestSnapshotCommitDoesNotReplaceConcurrentWrite(t *testing.T) {
 	ctx := context.Background()
 	backend := New()

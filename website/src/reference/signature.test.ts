@@ -157,19 +157,19 @@ describe('formatReferenceSignature', () => {
 describe('tokenizeReferenceSignature', () => {
 	test('preserves comments without highlighting or linking their words as code', () => {
 		const signature =
-			'type BlockAdmin struct {\n\t// NameField names a Text child; type labels are not code.\n\tNameField string\n\t/* BlockAdmin and NameField\n\t   are prose here. */\n}';
+			'type BlockAdmin struct {\n\t// RowLabelPath names a Text child; type labels are not code.\n\tRowLabelPath string\n\t/* BlockAdmin and RowLabelPath\n\t   are prose here. */\n}';
 		const tokens = tokenizeReferenceSignature(signature, {
 			name: 'BlockAdmin',
-			parameters: [{ name: 'NameField' }],
+			parameters: [{ name: 'RowLabelPath' }],
 			typeLinks: { Text: '/reference/field/text/' }
 		});
 		expect(tokens.filter((token) => token.kind === 'comment')).toEqual([
-			{ text: '// NameField names a Text child; type labels are not code.', kind: 'comment' },
-			{ text: '/* BlockAdmin and NameField\n\t   are prose here. */', kind: 'comment' }
+			{ text: '// RowLabelPath names a Text child; type labels are not code.', kind: 'comment' },
+			{ text: '/* BlockAdmin and RowLabelPath\n\t   are prose here. */', kind: 'comment' }
 		]);
 		expect(tokens.filter((token) => token.href !== undefined)).toEqual([]);
 		expect(tokens.filter((token) => token.kind === 'parameter')).toEqual([
-			{ text: 'NameField', kind: 'parameter' }
+			{ text: 'RowLabelPath', kind: 'parameter' }
 		]);
 		expect(tokens.map((token) => token.text).join('')).toBe(signature);
 	});

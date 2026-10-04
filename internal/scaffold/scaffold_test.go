@@ -668,7 +668,7 @@ func TestCreateMongoDBRendersQualifiedReplicaSetGuidanceForStarterAndBlank(t *te
 					"Local ARM runs are preflight only",
 					"qualification run before publication",
 					"GitHub workflow publishes the qualified release",
-					"planner `2.0.0`",
+					"planner `3.0.0`",
 					"do not inspect",
 				} {
 					if !strings.Contains(rendered.text, required) {
@@ -740,14 +740,14 @@ func TestCreateMongoDBRendersQualifiedReplicaSetGuidanceForStarterAndBlank(t *te
 				"Atlas",
 				"DocumentDB",
 				"Cosmos DB",
-				"planner contract `2.0.0`",
+				"planner contract `3.0.0`",
 				"`ridu check` and `ridu build` remain offline",
 			} {
 				if !strings.Contains(referenceDocumentation.String(), required) {
 					t.Errorf("MongoDB generated agent references are missing bounded production guidance %q", required)
 				}
 			}
-			for _, required := range []string{"MongoDB planner contract `2.0.0`", "--allow-destructive", "--allow-maintenance"} {
+			for _, required := range []string{"MongoDB planner contract `3.0.0`", "--allow-destructive", "--allow-maintenance"} {
 				if !strings.Contains(referenceTexts["migrations.md"], required) {
 					t.Errorf("generated migration reference is missing MongoDB lifecycle guidance %q", required)
 				}

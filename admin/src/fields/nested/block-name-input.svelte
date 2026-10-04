@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { SchemaBlockType, SchemaField } from "@riducms/protocol";
+	import type { SchemaField } from "@riducms/protocol";
 	import { Input } from "@riducms/ui";
 	import FieldMessages from "@admin/fields/field-messages.svelte";
 	import LiveValidationFeedback from "@admin/fields/live-validation-feedback.svelte";
@@ -7,7 +7,6 @@
 	import { FieldEditorBinding } from "@admin/core/forms/field-editor-binding";
 	import { getAdminRuntime } from "@admin/core/runtime/admin-runtime.svelte";
 	import { localizeSchemaField } from "@admin/core/i18n/localized-schema";
-	import { blockHeaderValue } from "@admin/fields/nested/block-header";
 	import {
 		contentLocaleLabel,
 		withContentLocaleLabel,
@@ -16,18 +15,16 @@
 
 	let {
 		schema,
-		block,
 		form,
 		readOnly = false,
 		disabled = false,
 		onChange,
 	}: {
 		schema: SchemaField;
-		block: SchemaBlockType;
 		form: FormController;
 		readOnly?: boolean;
 		disabled?: boolean;
-		onChange?: (change: { field: string; value: string }) => void;
+		onChange?: (value: string) => void;
 	} = $props();
 	const runtime = getAdminRuntime();
 	const presented = $derived(
@@ -50,24 +47,13 @@
 		"text",
 		() => runtime.manifestRevision,
 		(value) => {
-			const name = binding.schema.name;
-			if (onChange !== undefined) onChange({ field: name, value: value ?? "" });
+			if (onChange !== undefined) onChange(value ?? "");
 			else form.set(binding.schema.path, value);
 		}
 	);
 	$effect(() => binding.destroy);
 	const current = $derived(binding.schema);
-	const placeholder = $derived(
-		blockHeaderValue(
-			form,
-			block,
-			current.path.slice(0, current.path.lastIndexOf(".")),
-			block.admin?.rowLabel
-		) ||
-			runtime.i18n.t("fields:untitled", {
-				label: runtime.i18n.text(block.labels.singular, block.labels.singularTranslations),
-			})
-	);
+	const placeholder = $derived(runtime.i18n.t("documents:untitled"));
 	const inherited = $derived(
 		form.isInherited(current.path) ? form.localizationSource(current.path) : undefined
 	);
@@ -89,18 +75,20 @@
 			issues={binding.issues}
 		>
 			<label class="ridu-block-name__label" for={current.id}>{current.admin.label}</label>
-			<Input
-				{...binding.inputProps}
-				value={binding.value ?? ""}
-				{placeholder}
-				readonly={binding.readOnly}
-				{disabled}
-				minlength={current.text?.minLength}
-				maxlength={current.text?.maxLength}
-				class="ridu-block-name__input"
-				oninput={(event) => binding.set(event.currentTarget.value)}
-				onkeydown={keydown}
-			/>
+			<div class="ridu-block-name__control" data-value={binding.value ?? ""}>
+				<Input
+					{...binding.inputProps}
+					value={binding.value ?? ""}
+					{placeholder}
+					readonly={binding.readOnly}
+					{disabled}
+					minlength={current.text?.minLength}
+					maxlength={current.text?.maxLength}
+					class="ridu-block-name__input"
+					oninput={(event) => binding.set(event.currentTarget.value)}
+					onkeydown={keydown}
+				/>
+			</div>
 		</FieldMessages>
 		<LiveValidationFeedback
 			feedback={binding.liveValidation}

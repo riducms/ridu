@@ -16,7 +16,7 @@ import (
 	"github.com/riducms/ridu/store"
 )
 
-// RunNames proves that a configured block name remains an ordinary optional
+// RunNames proves that an authored block name remains an ordinary optional
 // text child in both Blocks and schema-backed rich text. The same contract runs
 // against every official adapter so no adapter-specific storage or backfill is
 // needed for the presentation metadata.
@@ -34,16 +34,16 @@ func RunNames(t *testing.T, factory Factory) {
 		{
 			name: "ordinary validation",
 			values: store.Values{"layout": store.List(store.Object(store.Values{
-				"blockType": store.String("named"), "name": store.String("invalid"),
+				"blockType": store.String("named"), "blockName": store.String("invalid"),
 			}))},
-			path: "layout.0.name",
+			path: "layout.0.blockName",
 		},
 		{
 			name: "rich text validation",
 			values: store.Values{"body": Document(Block("named", "", store.Values{
-				"name": store.String("invalid"),
+				"blockName": store.String("invalid"),
 			}))},
-			path: "body.root.children.0.fields.name",
+			path: "body.root.children.0.fields.blockName",
 			rest: true,
 		},
 	} {
@@ -125,7 +125,7 @@ func RunNames(t *testing.T, factory Factory) {
 }
 
 func nameConfiguration() ridu.Config {
-	name := field.Text("name").Localized().
+	name := field.Text("blockName").Localized().
 		Validate(func(_ operation.Context, value operation.Value[string]) ([]operation.Issue, error) {
 			text, present := value.Get()
 			if present && strings.EqualFold(strings.TrimSpace(text), "invalid") {
@@ -143,7 +143,6 @@ func nameConfiguration() ridu.Config {
 	protected := field.Text("protected").Access(field.Access{Update: func(operation.Context) (bool, error) { return false, nil }})
 	named := field.Block{
 		Slug:   "named",
-		Admin:  field.BlockAdmin{NameField: "name"},
 		Fields: field.Fields{name, protected},
 	}
 	return ridu.Config{
@@ -192,7 +191,7 @@ func namedPatch(ordinary, embedded string) store.Values {
 func nameRow(key, name, protected string) store.Value {
 	values := store.Values{"_key": store.String(key), "blockType": store.String("named")}
 	if name != "" {
-		values["name"] = store.String(name)
+		values["blockName"] = store.String(name)
 	}
 	if protected != "" {
 		values["protected"] = store.String(protected)
@@ -203,7 +202,7 @@ func nameRow(key, name, protected string) store.Value {
 func nameChildren(name, protected string) store.Values {
 	values := store.Values{}
 	if name != "" {
-		values["name"] = store.String(name)
+		values["blockName"] = store.String(name)
 	}
 	if protected != "" {
 		values["protected"] = store.String(protected)
@@ -261,17 +260,17 @@ func assertNames(t *testing.T, values store.Values, ordinary, embedded string, l
 	t.Helper()
 	rows, _ := values["layout"].CopyList()
 	first, _ := rows[0].CopyObject()
-	if got := stringValue(first["name"]); !localized && got != ordinary {
+	if got := stringValue(first["blockName"]); !localized && got != ordinary {
 		t.Fatalf("ordinary name = %q, want %q", got, ordinary)
 	}
 	second, _ := rows[1].CopyObject()
-	if _, present := second["name"]; present {
+	if _, present := second["blockName"]; present {
 		t.Fatal("optional ordinary name was materialized")
 	}
-	if got := stringValue(payload(t, values["body"], 0)["name"]); !localized && got != embedded {
+	if got := stringValue(payload(t, values["body"], 0)["blockName"]); !localized && got != embedded {
 		t.Fatalf("rich-text name = %q, want %q", got, embedded)
 	}
-	if _, present := payload(t, values["body"], 1)["name"]; present {
+	if _, present := payload(t, values["body"], 1)["blockName"]; present {
 		t.Fatal("optional rich-text name was materialized")
 	}
 }
@@ -280,13 +279,13 @@ func assertLocalizedNames(t *testing.T, values store.Values) {
 	t.Helper()
 	rows, _ := values["layout"].CopyList()
 	ordinary, _ := rows[0].CopyObject()
-	ordinaryNames, ok := ordinary["name"].CopyObject()
+	ordinaryNames, ok := ordinary["blockName"].CopyObject()
 	if !ok || stringValue(ordinaryNames["en"]) != "ORDINARY" || stringValue(ordinaryNames["fr"]) != "ORDINAIRE" {
-		t.Fatalf("ordinary localized names = %#v", ordinary["name"])
+		t.Fatalf("ordinary localized names = %#v", ordinary["blockName"])
 	}
-	richNames, ok := payload(t, values["body"], 0)["name"].CopyObject()
+	richNames, ok := payload(t, values["body"], 0)["blockName"].CopyObject()
 	if !ok || stringValue(richNames["en"]) != "RICH" || stringValue(richNames["fr"]) != "RICHE" {
-		t.Fatalf("rich-text localized names = %#v", payload(t, values["body"], 0)["name"])
+		t.Fatalf("rich-text localized names = %#v", payload(t, values["body"], 0)["blockName"])
 	}
 	assertNames(t, values, "", "", true)
 }

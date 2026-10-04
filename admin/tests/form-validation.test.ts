@@ -65,6 +65,45 @@ describe("manifest-derived form validation", () => {
 		]);
 	});
 
+	it("allows incomplete draft content without accepting malformed supplied values", () => {
+		const title = field("title", "text", true);
+		const rows = field("rows", "array", true);
+		rows.nested = {
+			fields: [field("name", "text", true, "rows.name")],
+			minRows: 2,
+			maxRows: 3,
+		};
+		const status = selectField("status", true);
+		const fields = [title, rows, status];
+		const options = { requireMissing: true, mode: "draft" as const };
+
+		expect(validateFormValues(fields, {}, options)).toEqual([]);
+		expect(
+			validateFormValues(
+				fields,
+				{ title: "", rows: [{ _key: "row-1", name: "" }], status: "" },
+				options
+			)
+		).toEqual([]);
+		expect(
+			validateFormValues(
+				fields,
+				{ title: 42, rows: [{ _key: "row-1", name: false }], status: "unknown" },
+				options
+			).map(({ code, path }) => ({ code, path }))
+		).toEqual([
+			{ code: "invalid_type", path: "title" },
+			{ code: "invalid_type", path: "rows.0.name" },
+			{ code: "invalid_option", path: "status" },
+		]);
+		expect(
+			validateFormValues(fields, { rows: [{}, {}, {}, {}] }, options).map(({ code, path }) => ({
+				code,
+				path,
+			}))
+		).toEqual([{ code: "max_rows", path: "rows" }]);
+	});
+
 	it("does not validate fields omitted by access capabilities", () => {
 		expect(
 			validateFormValues(

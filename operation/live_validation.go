@@ -16,6 +16,9 @@ type LiveValidationContext struct {
 	// Operation is Create for a new collection document, or Update for document
 	// edits and globals (including a global's first save).
 	Operation Kind
+	// WritePhase tells callbacks whether the snapshot targets an editorial draft
+	// save or a complete published write; live checks remain advisory in either case.
+	WritePhase WritePhase
 	// CollectionID or GlobalID identifies the owning resource, not its document.
 	CollectionID schema.StableID
 	GlobalID     schema.StableID

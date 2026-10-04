@@ -243,7 +243,7 @@ func TestMongoDBArtifactExactReplanRejectsSelfConsistentTampering(t *testing.T) 
 		t.Fatalf("wrong planner error = %v", err)
 	}
 	unsupported := mongoDBMigrationCloneArtifact(t, artifact)
-	unsupported.Planner.Version = "9.0.0"
+	unsupported.Planner.Version = "2.0.0"
 	if err := validateMongoDBArtifactPlan(context.Background(), unsupported, "unsupported"); err == nil || !strings.Contains(err.Error(), "unsupported planner version") {
 		t.Fatalf("unsupported planner error = %v", err)
 	}

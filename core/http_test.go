@@ -779,7 +779,7 @@ func TestRESTVersionDetailAndScheduledPublicationing(t *testing.T) {
 	}
 	var restored protocol.DocumentEnvelope[map[string]any]
 	decodeResponse(t, restoreResponse, &restored)
-	if restored.Doc["_status"] != "draft" || restored.Doc["title"] != "Queued" {
+	if restored.Doc["_status"] != "published" || restored.Doc["_hasDraftChanges"] != true || restored.Doc["title"] != "Queued" {
 		t.Fatalf("restored as draft = %#v", restored.Doc)
 	}
 	invalidDraft := requestJSON(t, client, http.MethodPost, base+"/restore/2?draft=perhaps", nil, "")

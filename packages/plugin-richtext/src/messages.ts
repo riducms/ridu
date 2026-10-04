@@ -25,10 +25,8 @@ export const richTextMessages = defineAdminMessages({
 
 		"block.label": "{label} block",
 		"block.select": "Select {label} block",
-		"block.duplicate": "Duplicate",
 		"block.remove": "Remove",
 		"block.description": "Structured block · {key}",
-		"block.untitled": "[Untitled]",
 		"block.expand": "Expand {label}",
 		"block.collapse": "Collapse {label}",
 		"block.error": "{count} Error",
@@ -139,10 +137,8 @@ export const richTextMessages = defineAdminMessages({
 
 			"block.label": "Bloc {label}",
 			"block.select": "Sélectionner le bloc {label}",
-			"block.duplicate": "Dupliquer",
 			"block.remove": "Supprimer",
 			"block.description": "Bloc structuré · {key}",
-			"block.untitled": "[Sans titre]",
 			"block.expand": "Développer {label}",
 			"block.collapse": "Réduire {label}",
 			"block.error": "{count} erreur",
@@ -253,10 +249,8 @@ export const richTextMessages = defineAdminMessages({
 
 			"block.label": "كتلة {label}",
 			"block.select": "تحديد كتلة {label}",
-			"block.duplicate": "تكرار",
 			"block.remove": "إزالة",
 			"block.description": "كتلة منظمة · {key}",
-			"block.untitled": "[بلا عنوان]",
 			"block.expand": "توسيع {label}",
 			"block.collapse": "طي {label}",
 			"block.error": "{count} خطأ",

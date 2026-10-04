@@ -18,6 +18,9 @@ type HookContext struct {
 	// Operation names the document operation, such as Create, Update, or Read,
 	// not the hook phase. Shared hooks should check it before running write-only work.
 	Operation operation.Kind
+	// WritePhase identifies draft saves versus publication writes independently
+	// of the row's current public status.
+	WritePhase operation.WritePhase
 	// CollectionID is the collection's stable resource ID, not its slug.
 	// It is empty for a global operation.
 	CollectionID schema.StableID

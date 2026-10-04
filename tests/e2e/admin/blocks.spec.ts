@@ -36,7 +36,12 @@ test("API keyless blocks survive admin editing, reorder, nested duplication and 
 	expect(originalLinks[0]._key).not.toBe(originalLinks[1]._key);
 	await page.goto(`/admin/collections/pages/${original.id}`);
 	const layout = page.locator('[data-field-path="layout"]').first();
-	await expect(layout.getByText("First hero", { exact: true })).toBeVisible();
+	await expect(page.locator('input[name="layout.0.heading"]')).toHaveValue("First hero");
+	await expect(page.locator('input[name="layout.0.blockName"]')).toHaveValue("");
+	await expect(page.locator('input[name="layout.0.blockName"]')).toHaveAttribute(
+		"placeholder",
+		"Untitled"
+	);
 	await page.locator('input[name="layout.0.heading"]').fill("First hero edited");
 	await page.locator('input[name="layout.0.links.0.label"]').fill("First link edited");
 	const links = page.locator('[data-field-path="layout.0.links"]').first();
@@ -236,7 +241,8 @@ test("block insertion chooses a variant at the intended position and reveals col
 		.click();
 	await page.getByRole("dialog").getByRole("button", { name: "Hero", exact: true }).click();
 	await layout.getByRole("button", { name: "Collapse all", exact: true }).click();
-	await submitDocumentForm(page);
+	// Missing editorial fields are legal in a saved draft, but publication must reveal them.
+	await page.getByRole("button", { name: "Publish changes", exact: true }).click();
 	const summary = layout.getByRole("button", { name: /1 Error:.*Heading/i });
 	await expect(summary).toBeVisible();
 	await summary.click();
@@ -289,15 +295,17 @@ test("block errors reveal invalid fields inside collapsed sections", async ({ pa
 	await heading.fill("");
 	await section.locator("summary").click();
 	await layout.getByRole("button", { name: "Collapse all", exact: true }).click();
-	await submitDocumentForm(page);
+	await page.getByRole("button", { name: "Publish changes", exact: true }).click();
 	await layout.getByRole("button", { name: /1 Error:.*Heading/i }).click();
 	await expect(section).toHaveAttribute("open");
 	await expect(heading).toBeFocused();
 	await heading.fill("Corrected heading");
 	const saved = page.waitForResponse(
-		(response) => response.request().method() === "PATCH" && response.url().includes(original.id)
+		(response) =>
+			response.request().method() === "POST" &&
+			new URL(response.url()).pathname === `/api/collections/pages/${original.id}/publish`
 	);
-	await submitDocumentForm(page);
+	await page.getByRole("button", { name: "Publish changes", exact: true }).click();
 	expect((await saved).ok()).toBe(true);
 	await page.reload();
 	await section.locator("summary").click();

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import type { SchemaBlockType, SchemaField } from "@riducms/protocol";
 import { copyBlockClipboardNodes } from "../src/block/rich-text-block-clipboard";
-import { blockSummary, richTextBlockTypes } from "../src/field/rich-text-blocks";
+import { richTextBlockTypes } from "../src/field/rich-text-blocks";
 
 const callout: SchemaBlockType = {
 	slug: "callout",
@@ -43,19 +43,8 @@ const field: SchemaField = {
 };
 
 describe("rich-text schema block authoring", () => {
-	it("uses resolved definitions, not arbitrary plugin settings, and names a useful nested summary", () => {
+	it("uses resolved definitions, not arbitrary plugin settings, for the allowed block types", () => {
 		expect(richTextBlockTypes(field)).toEqual([callout]);
-		expect(blockSummary({ appearance: { caption: "A useful summary" } }, callout)).toBe(
-			"A useful summary"
-		);
-		expect(blockSummary({}, callout)).toBe("");
-	});
-	it("never mirrors configured editorial names into plugin-owned card text", () => {
-		const hiddenName: SchemaBlockType = {
-			...callout,
-			admin: { nameField: "privateName", rowLabel: "privateName" },
-		};
-		expect(blockSummary({ privateName: "Secret editorial name" }, hiddenName)).toBe("");
 	});
 	it("clones declared clipboard payloads through the host without interpreting arbitrary nested JSON", () => {
 		const nodes = [

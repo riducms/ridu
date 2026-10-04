@@ -752,8 +752,8 @@ func TestMongoSystemIndexPlansCoverReferenceAndVersionQueries(t *testing.T) {
 	plans := mongoSystemIndexPlans([]mongoCollectionIndexPlan{
 		{collection: target}, {collection: owner}, {collection: versioned},
 	})
-	if len(plans) != 13 {
-		t.Fatalf("MongoDB system index plans = %#v, want reference, version, preference, document-lock, upload-lock, two task, and six auth plans", plans)
+	if len(plans) != 14 {
+		t.Fatalf("MongoDB system index plans = %#v, want reference, version, published, preference, document-lock, upload-lock, two task, and six auth plans", plans)
 	}
 	var referencePlan, versionPlan, preferencePlan, documentLockPlan, uploadLockPlan, taskPlan, taskConcurrencyPlan *mongoSystemIndexPlan
 	authPlans := 0

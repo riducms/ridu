@@ -4,7 +4,7 @@
 
 	import type { FormController } from "@admin/core/forms/form-controller.svelte";
 	import { evaluateFieldCondition } from "@admin/core/forms/field-condition";
-	import { localizeSchemaCollection, localizeSchemaField } from "@admin/core/i18n/localized-schema";
+	import { localizeSchemaField } from "@admin/core/i18n/localized-schema";
 	import { getAdminRuntime } from "@admin/core/runtime/admin-runtime.svelte";
 	import { fieldAccessPath } from "@admin/fields/nested/scoped-field";
 	import ReferenceBrowser from "@admin/features/reference-browser/reference-browser-loader.svelte";
@@ -38,11 +38,7 @@
 	const runtime = getAdminRuntime();
 	const authoring: FieldAuthoringHost = {
 		get collections() {
-			return (
-				runtime.manifest?.collections.map((collection) =>
-					localizeSchemaCollection(collection, runtime.i18n)
-				) ?? []
-			);
+			return runtime.localizedCollections;
 		},
 		get documentRevision() {
 			return runtime.documentRevision;

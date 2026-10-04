@@ -434,7 +434,11 @@ const sqliteUploadReferenceQuery = `WITH candidate_keys(object_key) AS (
   FROM candidate_keys AS candidate
   WHERE EXISTS (
     SELECT 1
-    FROM ridu_documents AS document
+    FROM (
+      SELECT collection_id, values_json FROM ridu_documents
+      UNION ALL
+      SELECT collection_id, values_json FROM ridu_published_documents
+    ) AS document
     WHERE document.collection_id IN (SELECT value FROM json_each(?))
       AND (
         json_extract(document.values_json, '$.objectKey') = candidate.object_key

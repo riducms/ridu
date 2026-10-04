@@ -22,18 +22,19 @@ import (
 const mongoDBShadowDatabasePrefix = "ridu_shadow_"
 
 type mongoDBArtifactReplayStep struct {
-	phaseID                       string
-	stepID                        string
-	mode                          ridumigration.PhaseMode
-	kind                          ridumigration.StepKind
-	index                         mongoDBPlannedIndex
-	dropIndex                     mongoDBPlannedIndex
-	resourceRename                ridumigration.MongoDBRenameResourcePayload
-	resourceRenameContentRequired bool
-	resourceRenameVersionRequired bool
-	rename                        ridumigration.Rename
-	transform                     ridumigration.DataTransformDescriptor
-	resourceIDs                   []schema.StableID
+	phaseID                         string
+	stepID                          string
+	mode                            ridumigration.PhaseMode
+	kind                            ridumigration.StepKind
+	index                           mongoDBPlannedIndex
+	dropIndex                       mongoDBPlannedIndex
+	resourceRename                  ridumigration.MongoDBRenameResourcePayload
+	resourceRenameContentRequired   bool
+	resourceRenameVersionRequired   bool
+	resourceRenamePublishedRequired bool
+	rename                          ridumigration.Rename
+	transform                       ridumigration.DataTransformDescriptor
+	resourceIDs                     []schema.StableID
 }
 
 type mongoDBArtifactReplayPhase struct {
@@ -103,7 +104,7 @@ func prepareMongoDBArtifactReplay(ctx context.Context, files []migrationartifact
 			if err != nil {
 				return nil, err
 			}
-			_, retired, err = normalizeMongoDBSemanticBefore(before.Snapshot(), after.Snapshot(), renamePlan, false)
+			_, retired, err = normalizeMongoDBSemanticBefore(before.Snapshot(), after.Snapshot(), renamePlan)
 			if err != nil {
 				return nil, err
 			}
@@ -124,7 +125,7 @@ func prepareMongoDBArtifactReplay(ctx context.Context, files []migrationartifact
 
 		remainingDrops := make(map[string]mongoDBPlannedIndex, len(drops))
 		for _, drop := range drops {
-			key := mongoDBReplayDropIndexKey(drop.resourceID, drop.version, drop.name)
+			key := mongoDBReplayDropIndexKey(drop.resourceID, drop.version, drop.published, drop.name)
 			if _, duplicate := remainingDrops[key]; duplicate {
 				return nil, fmt.Errorf("MongoDB migration %s reconstructs duplicate dropped index identity", file.Name)
 			}
@@ -157,7 +158,7 @@ func prepareMongoDBArtifactReplay(ctx context.Context, files []migrationartifact
 					if err := json.Unmarshal(step.Payload, &payload); err != nil {
 						return nil, fmt.Errorf("decode MongoDB migration index drop %s/%s in %s: %w", phase.ID, step.ID, file.Name, err)
 					}
-					key := mongoDBReplayDropIndexKey(payload.CollectionID, payload.Version, payload.Index)
+					key := mongoDBReplayDropIndexKey(payload.CollectionID, payload.Version, payload.Published, payload.Index)
 					drop, exists := remainingDrops[key]
 					if !exists {
 						return nil, fmt.Errorf("MongoDB migration step %s/%s in %s does not resolve to one planned index drop", phase.ID, step.ID, file.Name)
@@ -172,6 +173,11 @@ func prepareMongoDBArtifactReplay(ctx context.Context, files []migrationartifact
 						return nil, fmt.Errorf("MongoDB migration step %s/%s in %s does not resolve to one planned resource rename", phase.ID, step.ID, file.Name)
 					}
 					compiled.resourceRenameContentRequired, compiled.resourceRenameVersionRequired = mongoDBRenameSourceRequirements(beforePlans, compiled.resourceRename.BeforeID)
+					for _, physical := range beforePlans.system {
+						if physical.kind == mongoSystemPublishedIndexes && physical.collectionID == compiled.resourceRename.BeforeID {
+							compiled.resourceRenamePublishedRequired = true
+						}
+					}
 				case ridumigration.StepRenameContent:
 					var payload ridumigration.RenamePayload
 					if err := json.Unmarshal(step.Payload, &payload); err != nil {
@@ -196,6 +202,7 @@ func prepareMongoDBArtifactReplay(ctx context.Context, files []migrationartifact
 						return nil, fmt.Errorf("decode MongoDB migration resource drop %s/%s in %s: %w", phase.ID, step.ID, file.Name, err)
 					}
 					compiled.resourceIDs = append([]schema.StableID(nil), payload.ResourceIDs...)
+				case ridumigration.StepMongoDBRebuildHeadReservations:
 				case ridumigration.StepMongoDBAssertSchema:
 				default:
 					return nil, fmt.Errorf("MongoDB migration step %s/%s in %s has unsupported kind %q", phase.ID, step.ID, file.Name, step.Kind)
@@ -227,8 +234,8 @@ func mongoDBRenameSourceRequirements(plans mongoPhysicalIndexPlanSet, resourceID
 	return content, versions
 }
 
-func mongoDBReplayDropIndexKey(resourceID schema.StableID, version bool, index string) string {
-	return fmt.Sprintf("%s\x00%t\x00%s", resourceID, version, index)
+func mongoDBReplayDropIndexKey(resourceID schema.StableID, version, published bool, index string) string {
+	return fmt.Sprintf("%s\x00%t\x00%t\x00%s", resourceID, version, published, index)
 }
 
 func replayMongoDBArtifacts(ctx context.Context, shadow *Store, artifacts []mongoDBArtifactReplayPlan) error {
@@ -243,6 +250,10 @@ func replayMongoDBArtifacts(ctx context.Context, shadow *Store, artifacts []mong
 			switch step.kind {
 			case ridumigration.StepMongoDBCreateIndex:
 				if err := shadow.createMongoIndex(ctx, step.index.collection, step.index.description, step.index.definition); err != nil {
+					return fmt.Errorf("replay MongoDB migration %s step %s/%s: %w", artifact.fileName, step.phaseID, step.stepID, err)
+				}
+			case ridumigration.StepMongoDBRebuildHeadReservations:
+				if err := shadow.rebuildMongoHeadReservations(ctx, artifact.after); err != nil {
 					return fmt.Errorf("replay MongoDB migration %s step %s/%s: %w", artifact.fileName, step.phaseID, step.stepID, err)
 				}
 			case ridumigration.StepMongoDBAssertSchema:

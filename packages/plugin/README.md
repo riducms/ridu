@@ -291,24 +291,24 @@ changes. Use it to update an external editor's history and serialization. It doe
 render, sibling changes, or whole-plugin writes. Removed/malformed items show recovery UI rather
 than another item's fields.
 
-For a Go-configured `BlockAdmin.NameField`, `schemaHeader` renders just the editorial
-name input and its feedback:
+`schemaHeader` renders the resolved `blockName` input and its feedback for every
+block schema:
 
 ```svelte
 {#if authoring.schemaHeader !== undefined}
 	{@render authoring.schemaHeader({
 		treeKey: "widgets",
 		identity: selectedIdentity,
-		onChange: ({ field, value }) => updateWidgetField(selectedIdentity, field, value),
+		onChange: (value) => updateWidgetBlockName(selectedIdentity, value),
 	})}
 {/if}
 ```
 
-Here `updateWidgetField` belongs to your plugin: apply the permitted field change
+Here `updateWidgetBlockName` belongs to your plugin: apply the permitted name change
 to the latest matching item through your editor's history, then serialize with
 `field.set`. The header does not directly change the parent form. Render it separately from
-`schemaForm`, which leaves the configured name field out of its body. Ridu resolves the
-configured child, checks its access and visibility, and disables the card header
+`schemaForm`, which leaves `blockName` out of its body. Ridu resolves the
+ordinary Text child, checks its access and visibility, and disables the card header
 while a draft for that tree and identity is open. Draft drawers include it in their own header.
 
 For inline insertion, `createSchemaPayload({ treeKey, caseTag, variantSlug })` returns a fresh
