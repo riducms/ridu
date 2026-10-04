@@ -12,6 +12,7 @@ func addLiveValidationSchemas(schemas map[string]openAPISchema) {
 		Type: "object", AdditionalProperties: &closed,
 		Description: "Advisory unsaved input. Only explicitly opted-in fields run; this never replaces save validation. Maximum request body: 1 MiB.",
 		Properties: map[string]any{
+			"draft":    map[string]any{"type": "boolean", "description": "Defer required fields and editorial minima for a draft; all other validation remains active."},
 			"id":       map[string]any{"type": "string", "maxLength": 512},
 			"data":     map[string]any{"type": "object", "description": "Raw partial document values; omitted update values are retained from exact-locale storage. Malformed typed values are skipped."},
 			"fields":   map[string]any{"type": "array", "minItems": 1, "maxItems": 64, "uniqueItems": true, "items": map[string]any{"type": "string"}, "description": "Current snapshot field paths, relative to the innermost embedded payload when supplied."},

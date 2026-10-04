@@ -15,6 +15,11 @@ export async function insertBlock(page: Page, editor: Locator, type: string) {
 		await editor.press("ControlOrMeta+End");
 		await editor.press("Enter");
 	}
+	// Place the caret in the committed empty paragraph before opening the menu.
+	// Typing during Enter's native caret scroll can dismiss the upstream typeahead anchor.
+	const insertionParagraph = editor.locator(":scope > p").last();
+	await expect(insertionParagraph).toHaveText("");
+	await insertionParagraph.click();
 	await page.keyboard.type(`/${type}`);
 	const option = page.getByRole("option", { name: type, exact: true });
 	await expect(option).toBeVisible();

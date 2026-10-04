@@ -145,12 +145,16 @@ func (transaction *documentTransaction) populatePlan(
 				populationwalk.LocaleSelection{All: request.AllLocales, Chain: request.LocaleChain},
 			)
 			byID := make(map[string]store.Document, len(ids))
+			publishedOnly := request.PublishedOnly
+			if selected, exists := request.PopulationPublishedOnly[target.ID]; exists {
+				publishedOnly = selected
+			}
 			for start := 0; start < len(ids); start += maxMongoPopulationLookupIDs {
 				end := min(start+maxMongoPopulationLookupIDs, len(ids))
 				batch := ids[start:end]
 				targetRequest := store.Request{
 					Collection: target, Collections: request.Collections,
-					Access: request.PopulationAccess[target.ID], PublishedOnly: request.PublishedOnly,
+					Access: request.PopulationAccess[target.ID], PublishedOnly: publishedOnly,
 					Deletion: store.DeletionActive, Locales: request.Locales,
 					LocaleChain: request.LocaleChain, AllLocales: request.AllLocales,
 				}
@@ -163,7 +167,7 @@ func (transaction *documentTransaction) populatePlan(
 					mongoTypeGuard(mongoIDPath, "string"),
 					{{Key: mongoIDPath, Value: bson.D{{Key: "$in", Value: batch}}}},
 				})
-				cursor, err := transaction.collection(target).Find(ctx, predicate, options.Find().SetSort(bson.D{{Key: mongoIDPath, Value: int32(1)}}))
+				cursor, err := transaction.readCollection(targetRequest).Find(ctx, predicate, options.Find().SetSort(bson.D{{Key: mongoIDPath, Value: int32(1)}}))
 				if err != nil {
 					return nil, translateMongoError(ctx, err)
 				}
@@ -183,12 +187,17 @@ func (transaction *documentTransaction) populatePlan(
 				if err := cursor.Close(ctx); err != nil {
 					return nil, translateMongoError(ctx, err)
 				}
+				for index := range targetDocuments {
+					if err := transaction.attachPublishedMetadata(ctx, targetRequest, &targetDocuments[index]); err != nil {
+						return nil, err
+					}
+				}
 				if population.Depth > 1 {
 					targetDocuments, err = transaction.populatePlan(ctx, targetDocuments, store.Request{
 						Collection: target, Collections: request.Collections,
 						Populate:         populationwalk.DepthPopulations(target, population.Depth-1),
-						PopulationAccess: request.PopulationAccess, PopulationBudget: populationBudget,
-						PublishedOnly: request.PublishedOnly, Locales: request.Locales,
+						PopulationAccess: request.PopulationAccess, PopulationPublishedOnly: request.PopulationPublishedOnly, PopulationBudget: populationBudget,
+						PublishedOnly: publishedOnly, Locales: request.Locales,
 						LocaleChain: request.LocaleChain, AllLocales: request.AllLocales,
 					}, false, false)
 					if err != nil {

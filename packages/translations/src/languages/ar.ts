@@ -577,6 +577,23 @@ export const arMessages = {
 	"documents:restore": "استعادة",
 	"documents:save": "حفظ",
 	"documents:saveDraft": "حفظ المسودة",
+	"documents:savedDraftChanges": "تغييرات المسودة محفوظة وتنتظر النشر",
+	"documents:discardSavedDraft": "تجاهل المسودة المحفوظة",
+	"documents:discardSavedDraftQuestion": "هل تريد تجاهل المسودة المحفوظة؟",
+	"documents:discardSavedDraftDescription":
+		"ستبقى النسخة المنشورة متاحة. ستُفقد تغييرات المسودة المحفوظة.",
+	"documents:savedDraftDiscarded": "تم تجاهل المسودة المحفوظة.",
+	"documents:discardSavedDraftFailed": "تعذر تجاهل المسودة المحفوظة.",
+	"documents:serverSaveConflict":
+		"تغيّر هذا المستند على الخادم. توقّف الحفظ التلقائي مؤقتًا مع الاحتفاظ بتغييراتك.",
+	"documents:reviewLatest": "مراجعة أحدث نسخة",
+	"documents:reviewLatestUnavailable":
+		"تعذر حفظ تغييراتك محليًا بأمان. انسخها قبل إعادة تحميل الصفحة.",
+	"documents:saveOutcomeUnknown": "نتيجة الحفظ غير معروفة",
+	"documents:createOutcomeUnknownDescription":
+		"ربما أنشأ الخادم هذا المستند لكن الاستجابة فُقدت. تحقّق من القائمة قبل إنشاء نسخة أخرى. تغييراتك ما زالت هنا.",
+	"documents:saveOutcomeUnknownDescription":
+		"ربما حفظ الخادم هذه التغييرات. أعد تحميل أحدث نسخة قبل المحاولة مرة أخرى؛ تغييراتك متاحة للمراجعة.",
 	"documents:publishing": "جارٍ النشر…",
 	"documents:unsavedChanges": "تغييرات غير محفوظة",
 	"documents:leaveWithoutSavingQuestion": "هل تريد المغادرة دون حفظ؟",

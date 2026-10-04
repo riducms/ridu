@@ -1,6 +1,4 @@
 import { expect, test } from "./fixture";
-import type { AdminPreparedRouteStateV1 } from "@riducms/protocol";
-
 import {
 	documentSaveButton,
 	loginAsEditor,
@@ -255,40 +253,66 @@ test("no-draft collection creation requires publish capability", async ({ page }
 	expect(createRequests).toBe(0);
 });
 
-test("published edits checkpoint locally without being background-published", async ({ page }) => {
+test("published edits autosave a durable working revision without being background-published", async ({
+	page,
+	request,
+}) => {
 	await page.clock.install();
 	await loginAsEditor(page);
 	await page.goto("/admin/collections/posts");
 	await page.getByRole("link", { name: "Welcome to Ridu", exact: true }).click();
 	await expect(page).toHaveURL(/\/admin\/collections\/posts\/[^/?]+\?locale=en$/);
 	const documentID = new URL(page.url()).pathname.split("/").at(-1);
+	expect(documentID).toBeTruthy();
+	const workingEndpoint = `/api/collections/posts/${documentID}?locale=en&draft=true`;
+	const publicEndpoint = `/api/collections/posts/${documentID}?locale=en&draft=false`;
+	const initialWorkingResponse = await page.request.get(workingEndpoint);
+	expect(initialWorkingResponse.ok(), await initialWorkingResponse.text()).toBe(true);
+	const initialWorking = (await initialWorkingResponse.json()).doc;
+	const initialPublicResponse = await request.get(publicEndpoint);
+	expect(initialPublicResponse.ok(), await initialPublicResponse.text()).toBe(true);
+	const initialPublic = (await initialPublicResponse.json()).doc;
+	let publishRequests = 0;
+	page.on("request", (sent) => {
+		if (
+			sent.method() === "POST" &&
+			new URL(sent.url()).pathname === `/api/collections/posts/${documentID}/publish`
+		) {
+			publishRequests += 1;
+		}
+	});
 	await page.locator('input[name="title"]').fill("Must remain an explicit publish");
 	await page.clock.fastForward(15_000);
 
 	await expect
 		.poll(
-			() =>
-				page.evaluate(() => {
-					const key = Object.keys(sessionStorage).find((candidate) =>
-						candidate.startsWith("ridu:form-recovery:")
-					);
-					if (key === undefined) return undefined;
-					const checkpoint = JSON.parse(sessionStorage.getItem(key) ?? "null") as {
-						values?: { title?: string };
-					} | null;
-					return checkpoint?.values?.title;
-				}),
+			async () => {
+				const response = await page.request.get(workingEndpoint);
+				return response.ok() ? (await response.json()).doc : undefined;
+			},
 			{ timeout: 5_000 }
 		)
-		.toBe("Must remain an explicit publish");
-	const response = await page.request.get(`/api/collections/posts/${documentID}`);
-	expect(response.ok()).toBe(true);
-	const stored = (await response.json()).doc;
-	expect(stored.title).toBe("Welcome to Ridu");
-	expect(stored._status).toBe("published");
+		.toMatchObject({
+			title: "Must remain an explicit publish",
+			_status: "published",
+			_revision: initialWorking._revision + 1,
+			_publishedRevision: initialPublic._revision,
+			_hasDraftChanges: true,
+		});
+	const publicResponse = await request.get(publicEndpoint);
+	expect(publicResponse.ok(), await publicResponse.text()).toBe(true);
+	expect((await publicResponse.json()).doc).toMatchObject({
+		title: initialPublic.title,
+		_status: "published",
+		_revision: initialPublic._revision,
+	});
+	expect(publishRequests).toBe(0);
 
 	await page.reload();
 	await expect(page.locator('input[name="title"]')).toHaveValue("Must remain an explicit publish");
+	await expect(
+		page.getByText("Saved draft changes pending publication", { exact: true })
+	).toBeVisible();
 });
 
 test("published edits use the publish endpoint and remain published", async ({ page }) => {
@@ -324,20 +348,16 @@ test("published edits use the publish endpoint and remain published", async ({ p
 	});
 });
 
-test("published edits require publish capability", async ({ page }) => {
-	await page.route(/\/admin\/collections\/posts\/[^/?]+(?:\?|$)/, async (route) => {
+test("published edits can save drafts without publish capability", async ({ page, request }) => {
+	await useAdminRuntimeFallback(page);
+	await page.route(/\/api\/access\/collections\/posts(?:\?|$)/, async (route) => {
 		const response = await route.fetch();
-		const state = (await response.json()) as Extract<
-			AdminPreparedRouteStateV1,
-			{ outcome: "prepared" }
-		>;
-		expect(state.outcome).toBe("prepared");
-		if (state.route.kind !== "collection-document") throw new Error("Expected document state");
-		const access = state.route.document.access.value;
-		if (access === undefined) throw new Error("Expected document access");
+		const access = (await response.json()) as {
+			operations: { update: boolean; publish: boolean };
+		};
 		access.operations.update = true;
 		access.operations.publish = false;
-		await route.fulfill({ response, json: state });
+		await route.fulfill({ response, json: access });
 	});
 	let publishRequests = 0;
 	page.on("request", (request) => {
@@ -347,14 +367,59 @@ test("published edits require publish capability", async ({ page }) => {
 	});
 	await loginAsEditor(page);
 	await page.goto("/admin/collections/posts");
-	await page.getByRole("link", { name: "Welcome to Ridu", exact: true }).click();
+	const documentURL = await page
+		.getByRole("link", { name: "Welcome to Ridu", exact: true })
+		.getAttribute("href");
+	if (documentURL === null) throw new Error("Expected document URL");
+	await page.goto(documentURL);
+	await expect(page.getByRole("heading", { name: "Welcome to Ridu", exact: true })).toBeVisible();
+	const documentID = new URL(page.url()).pathname.split("/").at(-1);
+	expect(documentID).toBeTruthy();
+	const workingEndpoint = `/api/collections/posts/${documentID}?locale=en&draft=true`;
+	const publicEndpoint = `/api/collections/posts/${documentID}?locale=en&draft=false`;
+	const initialWorkingResponse = await page.request.get(workingEndpoint);
+	expect(initialWorkingResponse.ok(), await initialWorkingResponse.text()).toBe(true);
+	const initialWorking = (await initialWorkingResponse.json()).doc;
+	const initialPublicResponse = await request.get(publicEndpoint);
+	expect(initialPublicResponse.ok(), await initialPublicResponse.text()).toBe(true);
+	const initialPublic = (await initialPublicResponse.json()).doc;
 	await page.locator('input[name="title"]').fill("Cannot bypass publish access");
 	const publish = page.getByRole("button", { name: "Publish changes", exact: true });
-	await expect(publish).toBeDisabled();
+	const saveDraft = page.getByRole("button", { name: "Save draft", exact: true });
+	await expect(publish).toHaveCount(0);
+	await expect(saveDraft).toBeEnabled();
+	const savedDraftResponse = page.waitForResponse(
+		(response) =>
+			response.request().method() === "PATCH" &&
+			new URL(response.url()).pathname === `/api/collections/posts/${documentID}` &&
+			new URL(response.url()).searchParams.get("draft") === "true"
+	);
+	await saveDraft.click();
+	expect((await savedDraftResponse).ok()).toBe(true);
+	const workingResponse = await page.request.get(workingEndpoint);
+	expect(workingResponse.ok(), await workingResponse.text()).toBe(true);
+	expect((await workingResponse.json()).doc).toMatchObject({
+		title: "Cannot bypass publish access",
+		_status: "published",
+		_revision: initialWorking._revision + 1,
+		_publishedRevision: initialPublic._revision,
+		_hasDraftChanges: true,
+	});
+	const publicResponse = await request.get(publicEndpoint);
+	expect(publicResponse.ok(), await publicResponse.text()).toBe(true);
+	expect((await publicResponse.json()).doc).toMatchObject({
+		title: initialPublic.title,
+		_revision: initialPublic._revision,
+		_status: "published",
+	});
+	await page.reload();
+	await expect(page.locator('input[name="title"]')).toHaveValue("Cannot bypass publish access");
+	await expect(publish).toHaveCount(0);
+	await page.locator('input[name="title"]').fill("Still cannot bypass publish access");
 	await page.locator('input[name="title"]').press("Enter");
 	// Keep the request observer active beyond the completed keyboard event.
 	await page.waitForTimeout(250);
-	await expect(publish).toBeDisabled();
+	await expect(publish).toHaveCount(0);
 	expect(publishRequests).toBe(0);
 });
 

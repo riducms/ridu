@@ -304,14 +304,19 @@ function serializableInput(value: unknown, seen = new Set<object>(), depth = 0):
 }
 
 /** Connect a document form to the same authenticated SDK used for its writes. */
-export function connectDocumentLiveValidation(form: FormController, client: AdminClient) {
+export function connectDocumentLiveValidation(
+	form: FormController,
+	client: AdminClient,
+	editingDraft: () => boolean = () => false
+) {
 	form.configureLiveValidation((input, signal) => {
 		const resource = form.resource;
 		if (!resource) throw new Error("No document is open for live validation.");
 		const options = { signal, locale: form.contentLocale };
-		const { id: _id, ...globalInput } = input;
+		const request = { ...input, ...(editingDraft() ? { draft: true } : {}) };
+		const { id: _id, ...globalInput } = request;
 		return resource.global
 			? client.globalLiveValidation(resource.collection, globalInput, options)
-			: client.collectionLiveValidation(resource.collection, input, options);
+			: client.collectionLiveValidation(resource.collection, request, options);
 	});
 }

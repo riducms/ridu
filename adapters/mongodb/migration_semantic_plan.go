@@ -100,21 +100,15 @@ func buildMongoDBArtifact(
 		if err != nil {
 			return ridumigration.Artifact{}, err
 		}
-		// A renamed group, array or blocks field carries its children with it,
-		// so their identities follow the new name and an unchanged child is not
-		// a removal. An artifact that binds a data transform keeps the earlier
-		// reading, in which those children look removed and the transform
-		// answers for them: committed history replays against this planner and
-		// must keep producing the same risks.
-		carryChildren := len(options.DataTransforms) == 0
-		if carryChildren {
-			for _, pair := range renamePlan.fieldRenames {
-				if err := schemadiff.ValidateFieldRenameOnly(pair.Before, pair.After); err != nil {
-					return ridumigration.Artifact{}, err
-				}
+		if err := schemadiff.RejectVersionsEnable(before.Snapshot(), after.Snapshot(), renamePlan.collectionMapping); err != nil {
+			return ridumigration.Artifact{}, err
+		}
+		for _, pair := range renamePlan.fieldRenames {
+			if err := schemadiff.ValidateFieldRenameOnly(pair.Before, pair.After); err != nil {
+				return ridumigration.Artifact{}, err
 			}
 		}
-		normalizedBefore, retired, err = normalizeMongoDBSemanticBefore(before.Snapshot(), after.Snapshot(), renamePlan, carryChildren)
+		normalizedBefore, retired, err = normalizeMongoDBSemanticBefore(before.Snapshot(), after.Snapshot(), renamePlan)
 		if err != nil {
 			return ridumigration.Artifact{}, err
 		}
@@ -427,9 +421,8 @@ func mongoRenameIntentKey(intent ridumigration.Rename) string {
 
 // normalizeMongoDBSemanticBefore gives the before-schema the identities its
 // resources and fields have after the confirmed renames, so the transition can
-// be validated as additive. carryChildren also moves the descendants of a
-// renamed field under its new identity.
-func normalizeMongoDBSemanticBefore(before, after schema.Snapshot, plan mongoDBSemanticRenamePlan, carryChildren bool) (schema.Snapshot, []schema.StableID, error) {
+// be validated as additive. Descendants of a renamed field follow its new identity.
+func normalizeMongoDBSemanticBefore(before, after schema.Snapshot, plan mongoDBSemanticRenamePlan) (schema.Snapshot, []schema.StableID, error) {
 	normalized := schema.NewManifest(before).Snapshot()
 	afterCollections := make(map[schema.StableID]schema.Collection, len(after.Collections))
 	for _, collection := range after.Collections {
@@ -456,7 +449,7 @@ func normalizeMongoDBSemanticBefore(before, after schema.Snapshot, plan mongoDBS
 		if mappedID != "" {
 			collection.ID, collection.Slug = target.ID, target.Slug
 		}
-		if err := normalizeMongoDBResourceFields(&collection, beforeID, target, plan, carryChildren); err != nil {
+		if err := normalizeMongoDBResourceFields(&collection, beforeID, target, plan); err != nil {
 			return schema.Snapshot{}, nil, err
 		}
 		collections = append(collections, collection)
@@ -495,7 +488,7 @@ func (ancestor *mongoDBRenamedAncestor) carry(field *schema.Field) {
 	}
 }
 
-func normalizeMongoDBResourceFields(resource *schema.Collection, beforeID schema.StableID, target schema.Collection, plan mongoDBSemanticRenamePlan, carryChildren bool) error {
+func normalizeMongoDBResourceFields(resource *schema.Collection, beforeID schema.StableID, target schema.Collection, plan mongoDBSemanticRenamePlan) error {
 	var rewrite func([]schema.Field, *mongoDBRenamedAncestor) ([]schema.Field, error)
 	rewrite = func(fields []schema.Field, ancestor *mongoDBRenamedAncestor) ([]schema.Field, error) {
 		result := append([]schema.Field(nil), fields...)
@@ -510,7 +503,7 @@ func normalizeMongoDBResourceFields(resource *schema.Collection, beforeID schema
 			// Descendants are looked up by their original paths above; one with
 			// no mapping of its own follows this field.
 			below := ancestor
-			if carryChildren && result[index].ID != original.ID {
+			if result[index].ID != original.ID {
 				below = &mongoDBRenamedAncestor{
 					beforeID: string(original.ID), afterID: string(result[index].ID),
 					beforeDepth: len(original.Path.Segments()), afterPath: result[index].Path.Segments(),
@@ -575,7 +568,7 @@ func normalizeMongoDBResourceFields(resource *schema.Collection, beforeID schema
 		paths := append([]query.Path(nil), resource.Indexes[index].Fields...)
 		for pathIndex, path := range paths {
 			mapped := pathMapping[path.String()]
-			if mapped == "" && carryChildren {
+			if mapped == "" {
 				// An index on a child of a renamed field follows it.
 				for before, after := range pathMapping {
 					if rest, beneath := strings.CutPrefix(path.String(), before+"."); beneath {
@@ -785,6 +778,8 @@ func mongoDBSemanticIndexDelta(before, after mongoPhysicalIndexPlanSet, mapping 
 			planned.resourceID = mapped
 			if planned.version {
 				planned.collection = physicalVersionCollectionName(mapped)
+			} else if planned.published {
+				planned.collection = physicalPublishedCollectionName(mapped)
 			} else {
 				planned.collection = physicalCollectionName(mapped)
 			}
@@ -876,7 +871,7 @@ func mongoDBArtifactPhases(fromDigest string, before *schema.Manifest, after sch
 		if err := appendPhase(ridumigration.PhaseNoTransaction, []phaseValue{{
 			kind: ridumigration.StepMongoDBDropIndex,
 			name: fmt.Sprintf("drop superseded MongoDB index %s for %s", drop.name, drop.description),
-			data: ridumigration.MongoDBDropIndexPayload{CollectionID: drop.resourceID, Version: drop.version, Index: drop.name},
+			data: ridumigration.MongoDBDropIndexPayload{CollectionID: drop.resourceID, Version: drop.version, Published: drop.published, Index: drop.name},
 		}}); err != nil {
 			return nil, err
 		}
@@ -903,6 +898,25 @@ func mongoDBArtifactPhases(fromDigest string, before *schema.Manifest, after sch
 			data: ridumigration.MongoDBDropResourcesPayload{ResourceIDs: append([]schema.StableID(nil), retired...)},
 		}}); err != nil {
 			return nil, err
+		}
+	}
+	if before != nil {
+		versioned := make(map[schema.StableID]bool)
+		for _, resource := range append(append([]schema.Collection(nil), after.Snapshot().Collections...), after.Snapshot().Globals...) {
+			versioned[resource.ID] = resource.Versions != nil
+		}
+		for _, create := range delta.creates {
+			if !create.definition.unique || !versioned[create.resourceID] {
+				continue
+			}
+			if err := appendPhase(ridumigration.PhaseNoTransaction, []phaseValue{{
+				kind: ridumigration.StepMongoDBRebuildHeadReservations,
+				name: "rebuild MongoDB active unique-head reservations",
+				data: ridumigration.AssertSchemaPayload{},
+			}}); err != nil {
+				return nil, err
+			}
+			break
 		}
 	}
 	for _, create := range delta.creates {

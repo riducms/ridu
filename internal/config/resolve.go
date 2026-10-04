@@ -134,6 +134,12 @@ func (resolver *resolver) resolve() (schema.Manifest, schema.Snapshot, error) {
 		Globals:     globals,
 		Plugins:     plugins,
 	}
+	// Lowering adds framework-owned children such as blockName. Recheck the
+	// resolved graph with the same budget and lazy binding used by schema.Parse.
+	if err := schema.BindBlockReferences(&snapshot); err != nil {
+		resolver.issue("invalid_block_graph", "fields", err.Error())
+		return schema.Manifest{}, schema.Snapshot{}, schema.NewValidationError(resolver.issues)
+	}
 	return schema.NewManifest(snapshot), snapshot, nil
 }
 
@@ -1621,10 +1627,10 @@ func (fieldResolver *fieldResolver) resolveFieldWithNestedConfig(definition fiel
 
 	if definition.Name() == "" {
 		fieldResolver.resolver.issue("missing_field_name", configPath+".name", "field name must not be empty")
-	} else if !schema.IsValidFieldName(definition.Name()) {
-		fieldResolver.resolver.issue("invalid_field_name", configPath+".name", "field name must start with a lowercase letter and contain only letters, numbers, or underscores")
 	} else if isReservedFieldName(definition.Name()) || len(parentPath) == 0 && isReservedWhereFieldName(definition.Name()) {
 		fieldResolver.resolver.issue("reserved_field_name", configPath+".name", fmt.Sprintf("field name %q is reserved for framework document or query metadata", definition.Name()))
+	} else if !schema.IsValidFieldName(definition.Name()) {
+		fieldResolver.resolver.issue("invalid_field_name", configPath+".name", "field name must start with a lowercase letter and contain only letters, numbers, or underscores")
 	}
 
 	pathString := strings.Join(pathSegments, ".")
@@ -2472,7 +2478,7 @@ func humanize(value string) string {
 
 func isReservedFieldName(name string) bool {
 	switch name {
-	case "id", "createdAt", "updatedAt", "deletedAt":
+	case "id", "createdAt", "updatedAt", "deletedAt", "_status", "_revision", "_publishedRevision", "_hasDraftChanges":
 		return true
 	default:
 		return false
@@ -2486,6 +2492,10 @@ func isReservedWhereFieldName(name string) bool {
 	default:
 		return false
 	}
+}
+
+func defaultBlockNameField() field.View {
+	return field.Snapshot(field.Text("blockName").Label("Block name").Default(""))
 }
 
 func (fieldResolver *fieldResolver) resolveBlockTypes(blocks []field.Block, configPath string, pathSegments []string) []schema.BlockType {
@@ -2502,6 +2512,13 @@ func (fieldResolver *fieldResolver) resolveBlockTypes(blocks []field.Block, conf
 		seen[block.Slug] = true
 		labels := fieldResolver.resolver.resolveBlockLabels(block.Slug, block.Labels, blockPath+".labels")
 		blockFields := fieldResolver.resolveFields(block.Fields, blockPath+".fields", append(pathSegments, block.Slug))
+		if name, found := resolvedDirectField(blockFields, "blockName"); found {
+			if reason := invalidBlockNameFieldReason(name); reason != "" {
+				fieldResolver.resolver.issue("invalid_block_name_field", blockPath+".fields.blockName", reason)
+			}
+		} else {
+			blockFields = append(blockFields, fieldResolver.resolveField(defaultBlockNameField(), fmt.Sprintf("%s.fields[%d]", blockPath, len(block.Fields)), append(pathSegments, block.Slug)))
+		}
 		for _, blockField := range blockFields {
 			if blockField.Name == "blockType" {
 				fieldResolver.resolver.issue("reserved_field_name", blockPath+".fields", "direct block field name \"blockType\" is reserved for the framework block discriminator")
@@ -2509,15 +2526,6 @@ func (fieldResolver *fieldResolver) resolveBlockTypes(blocks []field.Block, conf
 			}
 		}
 		var admin *schema.BlockAdmin
-		if nameField := strings.TrimSpace(block.Admin.NameField); nameField != "" {
-			child, found := resolvedDirectField(blockFields, nameField)
-			if !found {
-				fieldResolver.resolver.issue("invalid_block_name_field", blockPath+".admin.nameField", "block name field must name an existing direct stored text child")
-			} else if reason := invalidBlockNameFieldReason(child); reason != "" {
-				fieldResolver.resolver.issue("invalid_block_name_field", blockPath+".admin.nameField", reason)
-			}
-			admin = &schema.BlockAdmin{NameField: nameField}
-		}
 		if rowLabel := strings.TrimSpace(block.Admin.RowLabelPath); rowLabel != "" {
 			found := false
 			for _, child := range blockFields {

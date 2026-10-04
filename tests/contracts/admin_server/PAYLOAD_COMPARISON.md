@@ -49,23 +49,23 @@ generated `payload-types.ts` is committed so schema changes can be checked for d
 
 ## What is genuinely comparable now
 
-| Surface             | Payload reference                                               | Ridu today                                                                                                                                                                                                 | Status                                                                           |
-| ------------------- | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| Executable schema   | TypeScript config                                               | Go config and deterministic manifest                                                                                                                                                                       | Equivalent promise                                                               |
-| Collection CRUD     | Local API, REST, GraphQL, admin                                 | Local API, REST, SDK, admin, plus an optional experimental GraphQL plugin                                                                                                                                  | Core equivalent; wider GraphQL conformance remains experimental                  |
-| Collection access   | Boolean or filtered predicates, distinct admin/version rules    | `Allow`, `Deny`, or store-enforced `Where`, with distinct `Admin` and `ReadVersions` rules                                                                                                                 | Broadly equivalent across the current collection/global surfaces                 |
-| Field access        | Create/read/update and response redaction                       | Create/read/update and response redaction                                                                                                                                                                  | Equivalent for current paths                                                     |
-| Admin capabilities  | Permission-aware navigation, fields, and actions                | Per-request safe operation and field booleans                                                                                                                                                              | Equivalent across primary collection/global surfaces                             |
-| Auth collections    | Users, cookie/JWT sessions, roles                               | Users, cookie sessions, recovery, verification, API keys, roles, force unlock                                                                                                                              | Broadly equivalent for the admin and cookie-session surface                      |
-| Relationships       | Singular, many, polymorphic, joins                              | Singular, many, polymorphic, access-aware joins with configurable tables and atomic target mutations                                                                                                       | Broadly equivalent                                                               |
-| Nested data         | Groups, arrays, blocks, named and unnamed tabs                  | Groups, arrays, blocks, plus named data-bearing and unnamed presentation-only tabs at root or nested layouts; separately authored tab groups keep independent selection state                              | Broadly equivalent                                                               |
-| Drafts and versions | Autosave, publish, compare, restore, restore as draft, schedule | Dedicated history/detail/diff, ordinary/draft restore, autosave, publish, localized snapshots, and durable scheduling                                                                                      | Broadly equivalent; create-route autosave and scheduled unpublish differ         |
-| Uploads             | Metadata, variants, bulk intake, preview, focal/crop controls   | Metadata, variants, retryable bulk intake, SSRF-safe Paste URL, named-size preview, focal/crop regeneration, and storage-safe duplication                                                                  | Broadly comparable outside excluded localization operations                      |
-| Hooks               | Broad collection/field/auth/global lifecycle                    | Collection, field, auth, global, operation, error, and commit phases                                                                                                                                       | Broad lifecycle parity                                                           |
-| Rich text           | Mature Lexical default feature surface                          | Lexical Svelte with matching default relationships, uploads, check/lists, links, code, rules, alignment, indentation, and inline formats                                                                   | Broadly comparable; Payload's optional extension ecosystem is deeper             |
-| Form Builder        | Official reusable forms/submissions plugin                      | Paired Go/TypeScript plugin with native block authoring, dynamic server validation, confirmations, protected email templates, uploads, payments, generated contracts, and application-owned render helpers | Broad workflow parity; spam controls remain explicit application work            |
-| Generated contracts | Payload TypeScript types and their SDK default                  | Manifest, exact output/create/update/query contracts, OpenAPI, and an automatically configured Fetch SDK                                                                                                   | Equivalent automatic SDK ergonomics; Ridu keeps stronger input/output separation |
-| Production runtime  | Next.js/Node plus adapter                                       | One embedded Go binary                                                                                                                                                                                     | Intentionally different; Ridu advantage                                          |
+| Surface             | Payload reference                                               | Ridu today                                                                                                                                                                                                 | Status                                                                                                                                   |
+| ------------------- | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Executable schema   | TypeScript config                                               | Go config and deterministic manifest                                                                                                                                                                       | Equivalent promise                                                                                                                       |
+| Collection CRUD     | Local API, REST, GraphQL, admin                                 | Local API, REST, SDK, admin, plus an optional experimental GraphQL plugin                                                                                                                                  | Core equivalent; wider GraphQL conformance remains experimental                                                                          |
+| Collection access   | Boolean or filtered predicates, distinct admin/version rules    | `Allow`, `Deny`, or store-enforced `Where`, with distinct `Admin` and `ReadVersions` rules                                                                                                                 | Broadly equivalent across the current collection/global surfaces                                                                         |
+| Field access        | Create/read/update and response redaction                       | Create/read/update and response redaction                                                                                                                                                                  | Equivalent for current paths                                                                                                             |
+| Admin capabilities  | Permission-aware navigation, fields, and actions                | Per-request safe operation and field booleans                                                                                                                                                              | Equivalent across primary collection/global surfaces                                                                                     |
+| Auth collections    | Users, cookie/JWT sessions, roles                               | Users, cookie sessions, recovery, verification, API keys, roles, force unlock                                                                                                                              | Broadly equivalent for the admin and cookie-session surface                                                                              |
+| Relationships       | Singular, many, polymorphic, joins                              | Singular, many, polymorphic, access-aware joins with configurable tables and atomic target mutations                                                                                                       | Broadly equivalent                                                                                                                       |
+| Nested data         | Groups, arrays, blocks, named and unnamed tabs                  | Groups, arrays, blocks, plus named data-bearing and unnamed presentation-only tabs at root or nested layouts; separately authored tab groups keep independent selection state                              | Broadly equivalent                                                                                                                       |
+| Drafts and versions | Autosave, publish, compare, restore, restore as draft, schedule | Incomplete editorial drafts, durable working/live heads, new-document autosave, publish/discard, history/detail/diff, ordinary/draft restore, localized snapshots, and durable scheduling                  | Broad whole-document workflow parity; untouched create forms do not create records and locale-specific publication remains outside scope |
+| Uploads             | Metadata, variants, bulk intake, preview, focal/crop controls   | Metadata, variants, retryable bulk intake, SSRF-safe Paste URL, named-size preview, focal/crop regeneration, and storage-safe duplication                                                                  | Broadly comparable outside excluded localization operations                                                                              |
+| Hooks               | Broad collection/field/auth/global lifecycle                    | Collection, field, auth, global, operation, error, and commit phases                                                                                                                                       | Broad lifecycle parity                                                                                                                   |
+| Rich text           | Mature Lexical default feature surface                          | Lexical Svelte with matching default relationships, uploads, check/lists, links, code, rules, alignment, indentation, and inline formats                                                                   | Broadly comparable; Payload's optional extension ecosystem is deeper                                                                     |
+| Form Builder        | Official reusable forms/submissions plugin                      | Paired Go/TypeScript plugin with native block authoring, dynamic server validation, confirmations, protected email templates, uploads, payments, generated contracts, and application-owned render helpers | Broad workflow parity; spam controls remain explicit application work                                                                    |
+| Generated contracts | Payload TypeScript types and their SDK default                  | Manifest, exact output/create/update/query contracts, OpenAPI, and an automatically configured Fetch SDK                                                                                                   | Equivalent automatic SDK ergonomics; Ridu keeps stronger input/output separation                                                         |
+| Production runtime  | Next.js/Node plus adapter                                       | One embedded Go binary                                                                                                                                                                                     | Intentionally different; Ridu advantage                                                                                                  |
 
 ## Reference surfaces exposed directly in the Payload admin
 
@@ -99,6 +99,45 @@ Payload's React/Next.js component model, exact REST response shapes, GraphQL as 
 transport, and database layout are implementation choices rather than parity requirements. Ridu
 should copy the useful authoring and extension promises while preserving its Go source of truth,
 store-enforced authorization, generated Fetch SDK, static Svelte admin, and single-binary runtime.
+
+The current draft workflow is covered by
+[`working-drafts.spec.ts`](../../e2e/admin/working-drafts.spec.ts): a meaningfully edited incomplete
+new document autosaves, survives reload, reports missing required fields on publication, publishes
+once complete, and keeps live content unchanged while later draft edits autosave. Discard restores
+the live value without changing its published revision. Untouched forms do not create records;
+new auth accounts require an explicit credential-backed save. Publication remains whole-document,
+not independently controlled per locale. See the
+[drafts guide](../../../website/src/content/docs/drafts-and-versions.md) for validation, access, and migration
+contracts.
+
+### Browser comparison: 3 October 2026
+
+The pinned Payload fixture at `127.0.0.1:18095` and the rebuilt Ridu fixture using an isolated
+SQLite database at `127.0.0.1:18096` were exercised side by side in the in-app browser:
+
+- A title-only post autosaved and survived reload in each admin. Publishing rejected its missing
+  required Summary; completing Summary allowed publication.
+- After publication, changing the title autosaved a working edit that survived reload. Payload's
+  API view with Draft unchecked and Ridu's API view with Authenticated unchecked still returned
+  the original published title. Their draft/editor views returned the new title.
+- Payload displayed **Changed** with **Revert to published**. Ridu displayed **Saved draft changes
+  pending publication** with **Discard saved draft**. Both confirmed actions restored the published
+  fields and returned to a clean published state without requiring a second publication.
+- Both comparison tabs reported no console warnings or errors during the workflow.
+
+Observable differences remain deliberate: Payload creates an empty draft when its create form is
+opened; Ridu waits for an edit. Payload's pending draft reports `_status: "draft"`; Ridu keeps
+`_status: "published"` while a live head exists and exposes `_hasDraftChanges` to authorized working
+readers. This comparison establishes the whole-document authoring workflow, not locale-specific
+publication or identical transport shapes.
+
+The implementation also received four independent GPT-6.1 Sol xhigh adversarial review passes,
+covering the operation engine, database adapters, public/generated contracts, and admin state.
+Accepted findings gained focused regressions for atomic head selection and uniqueness, exact-locale
+publication, GraphQL null/default handling, auth credential inputs, autosave acknowledgement rebasing,
+recovery checkpoints, and editor focus/undo continuity. Follow-up reviews closed those findings and
+found no remaining substantive correctness or unjustified-complexity issues in their bounded scopes.
+PostgreSQL and MongoDB adapter fixes were additionally exercised against disposable live fixtures.
 
 The comparison fixture should evolve by adding a behavior to Payload first, then either expressing
 the same behavior in Ridu or leaving it visibly unmatched. Do not weaken the Payload config to make
@@ -246,3 +285,19 @@ contain application-owned plugins. Rebuilding and serving the contract entry thr
 titles, nested rich text, blocks, relationships, uploads, and revision history. The new
 `bun run dev:admin-fixture` script makes the correct launch mode the obvious default for future
 side-by-side audits.
+
+### Block header naming
+
+Payload's Block article at `/admin/collections/block-articles/1` renders a separate
+`blockName` input beside the type badge, including on newly inserted Callouts whose
+caption defaults to “Helpful context”. It has an empty value and an “Untitled” placeholder;
+it does not use title or caption as the editable name. The local source baseline is
+`fea6f8a47a50ff1330d8a5071b43e7dcffb97b22`, rich-text `BlockCollapsible` and `SectionTitle`.
+
+Ridu now supplies an ordinary `blockName` Text child for every block schema and uses
+one guarded header control for ordinary rows, rich-text cards and detached drafts.
+Rich-text header summary fallbacks and the opt-in `NameField` selector are removed.
+The naming browser tests cover default insertion without application naming config,
+independent content/name edits, focus, history, IME, collapse, reorder, duplicate,
+save/reload, hidden/read-only children and server validation. Configured row summaries
+remain available for action/drag labels; they do not replace the name placeholder.

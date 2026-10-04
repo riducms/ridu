@@ -41,7 +41,6 @@
 	import { BLOCK_FIELD_CHANGE_TAG } from "@plugin-richtext/block/rich-text-block-history";
 	import {
 		INSERT_BLOCK_COMMAND,
-		DUPLICATE_BLOCK_COMMAND,
 		REMOVE_BLOCK_COMMAND,
 		MOVE_BLOCK_COMMAND,
 		UPDATE_BLOCK_NAME_COMMAND,
@@ -177,31 +176,6 @@
 						paragraph.select();
 					}
 					message = "";
-					return true;
-				},
-				COMMAND_PRIORITY_EDITOR
-			),
-			editor.registerCommand(
-				DUPLICATE_BLOCK_COMMAND,
-				(nodeKey) => {
-					if (authoring?.copySchemaPayload === undefined || !editor.isEditable()) return false;
-					const node = $getNodeByKey(nodeKey);
-					if (!isBlockNode(node)) return false;
-					const fields = node.getFields();
-					if (typeof fields.blockType !== "string") return false;
-					const payload = authoring.copySchemaPayload(
-						{ treeKey: "blocks", caseTag: "block", variantSlug: fields.blockType },
-						fields
-					);
-					$addUpdateTag(HISTORY_PUSH_TAG);
-					const duplicate = createBlockNode(payload);
-					node.insertAfter(duplicate);
-					queueMicrotask(() =>
-						editor
-							.getElementByKey(duplicate.getKey())
-							?.querySelector<HTMLElement>("[data-block-select]")
-							?.focus()
-					);
 					return true;
 				},
 				COMMAND_PRIORITY_EDITOR

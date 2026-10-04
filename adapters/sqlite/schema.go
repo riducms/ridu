@@ -14,6 +14,7 @@ import (
 	"github.com/riducms/ridu/internal/fieldchange"
 	"github.com/riducms/ridu/internal/primitivefield"
 	"github.com/riducms/ridu/internal/referenceindex"
+	"github.com/riducms/ridu/internal/schemadiff"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
 )
@@ -32,11 +33,24 @@ func (backend *Store) Migrate(ctx context.Context, manifest schema.Manifest) err
 // to manifest inside the caller's write transaction and records it as the
 // manifest the database has.
 func (backend *Store) migrateDevelopmentSchema(ctx context.Context, connection *sql.Conn, manifest schema.Manifest) error {
+	immutable, err := sqliteArtifactLedgerExists(ctx, connection)
+	if err != nil {
+		return err
+	}
+	if immutable {
+		return fmt.Errorf("SQLite development migration cannot modify a database with immutable migration history")
+	}
 	previous, recorded, err := sqliteDevelopmentManifest(ctx, connection)
 	if err != nil {
 		return err
 	}
 	if recorded {
+		if err := schemadiff.RejectVersionsEnable(previous.Snapshot(), manifest.Snapshot(), nil); err != nil {
+			return err
+		}
+		if err := assertSQLitePhysicalSchema(ctx, connection, previous, false); err != nil {
+			return fmt.Errorf("current SQLite development schema: %w", err)
+		}
 		changes := fieldchange.Detect(previous.Snapshot(), manifest.Snapshot())
 		reports := fieldchange.Reports(changes)
 		if err := scanSQLiteFieldKinds(ctx, connection, changes, reports, false); err != nil {
@@ -54,12 +68,10 @@ func (backend *Store) migrateDevelopmentSchema(ctx context.Context, connection *
 	if err != nil {
 		return fmt.Errorf("encode SQLite manifest: %w", err)
 	}
-	immutable, err := sqliteArtifactLedgerExists(ctx, connection)
-	if err != nil {
-		return err
-	}
-	if immutable {
-		return fmt.Errorf("SQLite development migration cannot modify a database with immutable migration history")
+	if !recorded {
+		if err := assertNoSQLiteManagedSchema(ctx, connection); err != nil {
+			return err
+		}
 	}
 	if err := installSchema(ctx, connection); err != nil {
 		return err
@@ -129,12 +141,13 @@ WHERE type = 'index' AND name LIKE ? ORDER BY name`, documentIndexPrefix+"%")
 	}
 
 	for _, index := range existing {
-		if _, wanted := desired[index.name]; wanted && index.table != "ridu_documents" {
+		statement, wanted := desired[index.name]
+		if wanted && index.table != sqliteIndexTable(statement) {
 			return fmt.Errorf("create SQLite document index %q: name is already used by table %q", index.name, index.table)
 		}
 	}
 	for _, index := range existing {
-		if index.table != "ridu_documents" {
+		if index.table != "ridu_documents" && index.table != "ridu_published_documents" {
 			continue
 		}
 		if statement, keep := desired[index.name]; keep {
@@ -160,6 +173,13 @@ WHERE type = 'index' AND name LIKE ? ORDER BY name`, documentIndexPrefix+"%")
 	return nil
 }
 
+func sqliteIndexTable(statement string) string {
+	if strings.Contains(statement, " ON ridu_published_documents ") {
+		return "ridu_published_documents"
+	}
+	return "ridu_documents"
+}
+
 type sqliteIndexPath struct {
 	path  string
 	chain []schema.Field
@@ -173,6 +193,13 @@ func sqliteDocumentIndexes(manifest schema.Manifest) (map[string]string, error) 
 	desired := make(map[string]string)
 	resources := append(append([]schema.Collection(nil), snapshot.Collections...), snapshot.Globals...)
 	for _, collection := range resources {
+		add := func(name, statement string) {
+			desired[name] = statement
+			if collection.Versions != nil {
+				publishedName := strings.Replace(name, documentIndexPrefix, documentIndexPrefix+"pub_", 1)
+				desired[publishedName] = strings.Replace(strings.Replace(statement, quoteSQLiteIdentifier(name), quoteSQLiteIdentifier(publishedName), 1), " ON ridu_documents ", " ON ridu_published_documents ", 1)
+			}
+		}
 		paths := sqliteDeclaredIndexPaths(collection.Fields)
 		for _, indexed := range paths {
 			chains, err := sqliteIndexLocaleChains(snapshot.Application.Localization, indexed.chain)
@@ -186,7 +213,7 @@ func sqliteDocumentIndexes(manifest schema.Manifest) (map[string]string, error) 
 				}
 				key := "field:" + indexed.path + ":" + sqliteLocaleChainKey(locales)
 				name := documentIndexName(collection.ID, key)
-				desired[name] = sqliteCreateDocumentIndex(name, []string{expression})
+				add(name, sqliteCreateDocumentIndex(name, []string{expression}))
 			}
 		}
 
@@ -218,7 +245,7 @@ func sqliteDocumentIndexes(manifest schema.Manifest) (map[string]string, error) 
 				}
 				key := "compound:" + strings.Join(parts, "\x00") + ":" + sqliteLocaleChainKey(locales)
 				name := documentIndexName(collection.ID, key)
-				desired[name] = sqliteCreateDocumentIndex(name, expressions)
+				add(name, sqliteCreateDocumentIndex(name, expressions))
 			}
 		}
 	}
@@ -504,7 +531,7 @@ func readSQLiteDevelopmentManifest(ctx context.Context, runner sqlRunner) (*sche
 	if err != nil {
 		return nil, translateError(err)
 	}
-	manifest, err := schema.Parse([]byte(encoded))
+	manifest, err := schema.ParseHistorical([]byte(encoded))
 	if err != nil {
 		return nil, fmt.Errorf("decode previous SQLite development manifest: %w", err)
 	}
@@ -550,6 +577,22 @@ var sqliteSchemaStatements = []string{
   ON ridu_documents (collection_id, deleted_at, id)`,
 	`CREATE INDEX IF NOT EXISTS ridu_documents_status
   ON ridu_documents (collection_id, status, deleted_at, id)`,
+	`CREATE TABLE IF NOT EXISTS ridu_published_documents (
+  collection_id TEXT NOT NULL,
+  id TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  deleted_at INTEGER,
+  status TEXT NOT NULL CHECK (status = 'published'),
+  revision INTEGER NOT NULL,
+  values_json TEXT NOT NULL CHECK (json_valid(values_json)),
+  has_draft_changes INTEGER NOT NULL DEFAULT 0 CHECK (has_draft_changes IN (0, 1)),
+  PRIMARY KEY (collection_id, id),
+  FOREIGN KEY (collection_id, id)
+    REFERENCES ridu_documents (collection_id, id) ON DELETE CASCADE
+) STRICT`,
+	`CREATE INDEX IF NOT EXISTS ridu_published_documents_active
+  ON ridu_published_documents (collection_id, deleted_at, id)`,
 	`CREATE TABLE IF NOT EXISTS ridu_unique_values (
   collection_id TEXT NOT NULL,
   index_key TEXT NOT NULL,
@@ -755,8 +798,8 @@ func rebuildUniqueValues(ctx context.Context, runner sqlRunner, manifest schema.
 	}
 	resources := append(append([]schema.Collection(nil), manifest.Snapshot().Collections...), manifest.Snapshot().Globals...)
 	for _, collection := range resources {
-		rows, err := runner.QueryContext(ctx, `SELECT id, values_json FROM ridu_documents
-WHERE collection_id = ? AND deleted_at IS NULL`, string(collection.ID))
+		rows, err := runner.QueryContext(ctx, `SELECT id, values_json FROM ridu_documents WHERE collection_id = ? AND deleted_at IS NULL
+UNION ALL SELECT id, values_json FROM ridu_published_documents WHERE collection_id = ? AND deleted_at IS NULL`, string(collection.ID), string(collection.ID))
 		if err != nil {
 			return translateError(err)
 		}
@@ -791,7 +834,8 @@ func rebuildDocumentReferences(ctx context.Context, runner sqlRunner, manifest s
 	}
 	resources := append(append([]schema.Collection(nil), manifest.Snapshot().Collections...), manifest.Snapshot().Globals...)
 	for _, collection := range resources {
-		rows, err := runner.QueryContext(ctx, `SELECT id, values_json FROM ridu_documents WHERE collection_id = ?`, string(collection.ID))
+		rows, err := runner.QueryContext(ctx, `SELECT id, values_json FROM ridu_documents WHERE collection_id = ?
+UNION ALL SELECT id, values_json FROM ridu_published_documents WHERE collection_id = ?`, string(collection.ID), string(collection.ID))
 		if err != nil {
 			return translateError(err)
 		}
@@ -823,7 +867,8 @@ func rebuildDocumentReferences(ctx context.Context, runner sqlRunner, manifest s
 				_, err := runner.ExecContext(ctx, `INSERT INTO ridu_document_references (
   owner_collection_id, owner_document_id, field_id,
   target_collection_id, target_document_id, locale, occurrence
-) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+) VALUES (?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT DO NOTHING`,
 					string(entry.Owner.CollectionID), entry.Owner.DocumentID, string(entry.FieldID),
 					string(entry.Target.CollectionID), entry.Target.DocumentID, string(entry.Locale), entry.Occurrence,
 				)
@@ -1030,8 +1075,21 @@ func sqliteIndexedValue(values store.Values, chain []schema.Field, locale string
 
 func insertUniqueValue(ctx context.Context, runner sqlRunner, collectionID schema.StableID, indexKey, valueKey, documentID string) error {
 	_, err := runner.ExecContext(ctx, `INSERT INTO ridu_unique_values
-  (collection_id, index_key, value_key, document_id) VALUES (?, ?, ?, ?)`, string(collectionID), indexKey, valueKey, documentID)
-	return translateError(err)
+  (collection_id, index_key, value_key, document_id) VALUES (?, ?, ?, ?)
+ON CONFLICT(collection_id, index_key, value_key) DO UPDATE SET document_id = excluded.document_id
+WHERE ridu_unique_values.document_id = excluded.document_id`, string(collectionID), indexKey, valueKey, documentID)
+	if err != nil {
+		return translateError(err)
+	}
+	var owner string
+	if err := runner.QueryRowContext(ctx, `SELECT document_id FROM ridu_unique_values
+WHERE collection_id = ? AND index_key = ? AND value_key = ?`, string(collectionID), indexKey, valueKey).Scan(&owner); err != nil {
+		return translateError(err)
+	}
+	if owner != documentID {
+		return store.ErrConflict
+	}
+	return nil
 }
 
 func canonicalJSON(raw []byte) string {

@@ -17,18 +17,14 @@
 		getRichTextField,
 		getRichTextAuthoringHost,
 	} from "@plugin-richtext/field/rich-text-context.svelte";
-	import { blockSummary, richTextBlockTypes } from "@plugin-richtext/field/rich-text-blocks";
+	import { richTextBlockTypes } from "@plugin-richtext/field/rich-text-blocks";
 	import { equalRichTextValues } from "@plugin-richtext/field/rich-text-value";
 	import {
 		BLOCK_FIELD_CHANGE_TAG,
 		BlockFieldHistorySession,
 	} from "@plugin-richtext/block/rich-text-block-history";
 	import { isBlockNode } from "@plugin-richtext/block/rich-text-block-node";
-	import ChevronDown from "~icons/lucide/chevron-down";
-	import Copy from "~icons/lucide/copy";
-	import X from "~icons/lucide/x";
 	import {
-		DUPLICATE_BLOCK_COMMAND,
 		REMOVE_BLOCK_COMMAND,
 		MOVE_BLOCK_COMMAND,
 		UPDATE_BLOCK_NAME_COMMAND,
@@ -44,6 +40,7 @@
 	const i18n = getAdminI18n();
 	const editable = useLexicalEditable();
 	const context = getRichTextField();
+	const schemaReadOnly = $derived(context.field.admin.readOnly === true);
 	const authoring = getRichTextAuthoringHost();
 	const nameHistory = new BlockFieldHistorySession();
 	const fieldHistory = new BlockFieldHistorySession();
@@ -60,10 +57,8 @@
 	const type = $derived(
 		richTextBlockTypes(context.field).find((candidate) => candidate.slug === blockType)
 	);
-	const nameField = $derived(type?.admin?.nameField);
 	const issues = $derived(authoring?.schemaIssues?.({ treeKey: "blocks", identity }) ?? []);
 	const recovery = $derived(type === undefined || !validEnvelope);
-	const summary = $derived(blockSummary(fields, type) || i18n.t("plugin.richtext:block.untitled"));
 	const label = $derived(type?.labels.singular ?? blockType);
 	const errorCount = $derived(new Set(issues.map((issue) => issue.path)).size);
 
@@ -78,19 +73,18 @@
 		setSelected(true);
 	}
 
-	function changeName(change: { field: string; value: string }) {
-		if (nameField === undefined || recovery || !editable()) return;
+	function changeName(value: string) {
+		if (recovery || !editable()) return;
 		editor.dispatchCommand(UPDATE_BLOCK_NAME_COMMAND, {
 			nodeKey,
 			identity,
-			nameField,
-			change,
+			value,
 			historyTag: nameHistory.nextTag(),
 		});
 	}
 
 	function nameKeydown(event: KeyboardEvent) {
-		if (!(event.target instanceof HTMLInputElement)) return;
+		if (event.defaultPrevented || !(event.target instanceof HTMLInputElement)) return;
 		event.stopPropagation();
 		if (event.isComposing) return;
 		if (event.key === "Enter") {
@@ -171,11 +165,8 @@
 		setTimeout(() => URL.revokeObjectURL(url), 0);
 	}
 
-	function duplicate() {
-		editor.dispatchCommand(DUPLICATE_BLOCK_COMMAND, nodeKey);
-	}
-
 	function remove() {
+		if (!editable()) return;
 		editor.dispatchCommand(REMOVE_BLOCK_COMMAND, nodeKey);
 	}
 
@@ -209,12 +200,7 @@
 </script>
 
 <article
-	class={[
-		"ridu-richtext-block",
-		nameField !== undefined && "has-name-field",
-		selected() && "is-selected",
-		issues.length > 0 && "has-issues",
-	]}
+	class={["ridu-richtext-block", selected() && "is-selected", issues.length > 0 && "has-issues"]}
 	data-block-key={identity}
 	data-block-type={blockType}
 	aria-label={i18n.t("plugin.richtext:block.label", { label: type?.labels.singular ?? blockType })}
@@ -237,13 +223,8 @@
 			<span class="ridu-richtext-block__label">
 				{type?.labels.singular ?? blockType}
 			</span>
-			{#if nameField === undefined}
-				<span class="ridu-richtext-block__summary">
-					{summary}
-				</span>
-			{/if}
 		</button>
-		{#if nameField !== undefined && authoring?.schemaHeader !== undefined}
+		{#if !recovery && authoring?.schemaHeader !== undefined}
 			<div
 				class="ridu-richtext-block__name"
 				onfocuscapture={nameHistory.reset.bind(nameHistory)}
@@ -265,7 +246,7 @@
 				})}
 			</span>
 		{/if}
-		{#if editable()}
+		{#if !schemaReadOnly}
 			<div
 				class="ridu-richtext-block__actions"
 				role="group"
@@ -275,20 +256,14 @@
 					class="ridu-richtext-block__action"
 					size="sm"
 					variant="ghost"
-					onclick={duplicate}
-					disabled={recovery}
-					aria-label={i18n.t("plugin.richtext:block.duplicate")}
-				>
-					<Copy aria-hidden="true" />
-				</Button>
-				<Button
-					class="ridu-richtext-block__action"
-					size="sm"
-					variant="ghost"
 					onclick={remove}
+					disabled={!editable() || recovery}
 					aria-label={i18n.t("plugin.richtext:block.remove")}
 				>
-					<X aria-hidden="true" />
+					<!-- Icon geometry from Payload; see ../toolbar/PAYLOAD-LICENSE.md. -->
+					<svg aria-hidden="true" width="20" height="20" viewBox="0 0 20 20">
+						<path d="M14 6L6 14M6 6L14 14" />
+					</svg>
 				</Button>
 			</div>
 		{/if}
@@ -302,8 +277,11 @@
 					{ label }
 				)}
 				aria-expanded={!collapsed}
+				aria-controls={`${context.field.id}-block-${nodeKey}-content`}
 			>
-				<ChevronDown aria-hidden="true" />
+				<svg aria-hidden="true" width="20" height="20" viewBox="0 0 20 20">
+					<path d="M14 8L10 12L6 8" />
+				</svg>
 			</button>
 		{/if}
 	</div>
@@ -318,24 +296,32 @@
 		</div>
 	{:else if authoring?.schemaForm !== undefined}
 		<div
-			class="ridu-richtext-block__fields"
-			role="presentation"
-			hidden={collapsed}
-			onfocuscapture={fieldHistory.reset.bind(fieldHistory)}
-			onblurcapture={fieldHistory.reset.bind(fieldHistory)}
-			onkeydown={fieldKeydown}
-			onclick={stopFieldEvent}
-			onpointerdown={stopFieldEvent}
-			oncopy={stopFieldEvent}
-			oncut={stopFieldEvent}
-			onpaste={stopFieldEvent}
+			class="ridu-richtext-block__content"
+			id={`${context.field.id}-block-${nodeKey}-content`}
+			inert={collapsed}
+			aria-hidden={collapsed}
 		>
-			{@render authoring.schemaForm({
-				treeKey: "blocks",
-				identity,
-				readOnly: !editable(),
-				onChange: changeFields,
-			})}
+			<div class="ridu-richtext-block__content-inner">
+				<div
+					class="ridu-richtext-block__fields"
+					role="presentation"
+					onfocuscapture={fieldHistory.reset.bind(fieldHistory)}
+					onblurcapture={fieldHistory.reset.bind(fieldHistory)}
+					onkeydown={fieldKeydown}
+					onclick={stopFieldEvent}
+					onpointerdown={stopFieldEvent}
+					oncopy={stopFieldEvent}
+					oncut={stopFieldEvent}
+					onpaste={stopFieldEvent}
+				>
+					{@render authoring.schemaForm({
+						treeKey: "blocks",
+						identity,
+						readOnly: schemaReadOnly,
+						onChange: changeFields,
+					})}
+				</div>
+			</div>
 		</div>
 	{/if}
 </article>

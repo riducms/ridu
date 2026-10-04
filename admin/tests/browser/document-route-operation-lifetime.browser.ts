@@ -2,12 +2,14 @@ import { createMemoryRouter } from "@hvniel/svelte-router";
 import { svelte } from "@hvniel/vite-plugin-svelte-inline-component";
 import { SCHEMA_MANIFEST_VERSION, type SchemaCollection } from "@riducms/protocol";
 import { expect, it, vi } from "vitest";
+import { userEvent } from "vitest/browser";
 import { render } from "vitest-browser-svelte";
 
 import type { AdminClient, AdminDocument } from "@admin/core/api/admin-client";
 import { NotificationCenter } from "@admin/core/notifications/notification-center.svelte";
 import { AdminRuntime } from "@admin/core/runtime/admin-runtime.svelte";
 import DocumentRoute from "@admin/features/documents/document-route.svelte";
+import { RiduError } from "@riducms/sdk";
 
 const Provider = svelte`
 	<script>
@@ -144,6 +146,193 @@ it("keeps an account unlock active when only the document view changes", async (
 	}
 });
 
+it("saves a published document as a pending draft and explicitly discards it", async () => {
+	const collection: SchemaCollection = {
+		...usersCollection,
+		capabilities: { ...usersCollection.capabilities, versions: true },
+		versionSettings: { drafts: true, maxPerDocument: 10, autosaveIntervalSeconds: 0 },
+	};
+	const update = vi.fn(async () => ({
+		...document("one"),
+		email: "working@example.test",
+		_status: "published" as const,
+		_revision: 3,
+		_publishedRevision: 2,
+		_hasDraftChanges: true,
+	}));
+	const discardDraft = vi.fn(async () => ({
+		...document("one", "one"),
+		_status: "published" as const,
+		_revision: 4,
+		_publishedRevision: 2,
+		_hasDraftChanges: false,
+	}));
+	const fixture = await documentRouteFixture(
+		{
+			find: vi.fn(async () => ({
+				...document("one"),
+				_status: "published" as const,
+			})) as unknown as AdminClient["find"],
+			collectionAccess: vi.fn(async () => ({
+				...access,
+				operations: { ...access.operations, publish: true },
+			})),
+			update,
+			discardDraft,
+			versions: vi.fn(async () => []),
+			countVersions: vi.fn(async () => ({ totalDocs: 1 })),
+		},
+		collection
+	);
+	try {
+		await fixture.screen.getByRole("textbox", { name: "Email" }).fill("working@example.test");
+		await fixture.screen.getByRole("button", { name: "Save draft", exact: true }).click();
+		await expect
+			.poll(() => update)
+			.toHaveBeenCalledWith(
+				"users",
+				"one",
+				{ email: "working@example.test" },
+				expect.objectContaining({ draft: true, revision: 2 })
+			);
+		await expect
+			.element(fixture.screen.getByText("Saved draft changes pending publication"))
+			.toBeVisible();
+		await fixture.openAction("Discard saved draft");
+		await fixture.screen
+			.getByRole("dialog", { name: "Discard the saved draft?" })
+			.getByRole("button", { name: "Discard saved draft" })
+			.click();
+		await expect
+			.poll(() => discardDraft)
+			.toHaveBeenCalledWith("users", "one", expect.objectContaining({ revision: 3 }));
+		await expect
+			.element(fixture.screen.getByText("Saved draft changes pending publication"))
+			.not.toBeInTheDocument();
+	} finally {
+		await fixture.destroy();
+	}
+});
+
+for (const operation of ["publish", "discard"] as const) {
+	it(`locks document editors during a clean ${operation} request`, async () => {
+		const collection: SchemaCollection = {
+			...usersCollection,
+			capabilities: { ...usersCollection.capabilities, versions: true },
+			versionSettings: { drafts: true, maxPerDocument: 10, autosaveIntervalSeconds: 0 },
+		};
+		const pending = Promise.withResolvers<AdminDocument>();
+		const starting = {
+			...document("one"),
+			_status: operation === "publish" ? ("draft" as const) : ("published" as const),
+			_hasDraftChanges: operation === "discard",
+		};
+		const publish = vi.fn(() => pending.promise);
+		const discardDraft = vi.fn(() => pending.promise);
+		const fixture = await documentRouteFixture(
+			{
+				find: vi.fn(async () => starting) as unknown as AdminClient["find"],
+				collectionAccess: vi.fn(async () => ({
+					...access,
+					operations: { ...access.operations, publish: true },
+				})),
+				publish,
+				discardDraft,
+				countVersions: vi.fn(async () => ({ totalDocs: 1 })),
+			},
+			collection
+		);
+		try {
+			const email = fixture.screen.getByRole("textbox", { name: "Email" });
+			if (operation === "publish")
+				await fixture.screen.getByRole("button", { name: "Publish changes" }).click();
+			else {
+				await fixture.openAction("Discard saved draft");
+				await fixture.screen
+					.getByRole("dialog", { name: "Discard the saved draft?" })
+					.getByRole("button", { name: "Discard saved draft" })
+					.click();
+			}
+			await expect
+				.poll(() => (operation === "publish" ? publish : discardDraft))
+				.toHaveBeenCalledOnce();
+			await expect.element(email).toHaveAttribute("readonly");
+			pending.resolve({
+				...starting,
+				_status: "published",
+				_hasDraftChanges: false,
+				_revision: 3,
+			});
+			await expect.element(email).not.toHaveAttribute("readonly");
+		} finally {
+			await fixture.destroy();
+		}
+	});
+}
+
+it("does not complete a discarded draft on a later route after access refresh", async () => {
+	const collection: SchemaCollection = {
+		...usersCollection,
+		capabilities: { ...usersCollection.capabilities, versions: true },
+		versionSettings: { drafts: true, maxPerDocument: 10, autosaveIntervalSeconds: 0 },
+	};
+	const versionAccess = {
+		...access,
+		operations: { ...access.operations, readVersions: true },
+	};
+	const accessAfterDiscard = Promise.withResolvers<typeof versionAccess>();
+	let holdAccess = false;
+	const collectionAccess = vi.fn(async () => {
+		if (holdAccess) return accessAfterDiscard.promise;
+		return versionAccess;
+	});
+	const discardDraft = vi.fn(async () => ({
+		...document("one"),
+		_status: "published" as const,
+		_hasDraftChanges: false,
+		_revision: 3,
+	}));
+	const countVersions = vi.fn(async () => ({ totalDocs: 1 }));
+	const fixture = await documentRouteFixture(
+		{
+			find: vi.fn(async (_slug: string, id: string) => ({
+				...document(id),
+				_status: "published" as const,
+				_hasDraftChanges: id === "one",
+			})) as unknown as AdminClient["find"],
+			collectionAccess,
+			discardDraft,
+			countVersions,
+		},
+		collection
+	);
+	try {
+		const accessCalls = collectionAccess.mock.calls.length;
+		holdAccess = true;
+		await fixture.openAction("Discard saved draft");
+		await fixture.screen
+			.getByRole("dialog", { name: "Discard the saved draft?" })
+			.getByRole("button", { name: "Discard saved draft" })
+			.click();
+		await expect.poll(() => collectionAccess.mock.calls.length).toBeGreaterThan(accessCalls);
+		holdAccess = false;
+		await fixture.router.navigate("/collections/users/two?locale=en");
+		await expect
+			.poll(() => fixture.client.find)
+			.toHaveBeenCalledWith("users", "two", expect.anything());
+		await expect.poll(() => countVersions).toHaveBeenCalledWith("users", "two", expect.anything());
+		const countCalls = countVersions.mock.calls.length;
+		accessAfterDiscard.resolve(versionAccess);
+		await accessAfterDiscard.promise;
+		// Let the access refresh and then the waiting discard operation both resume.
+		await Promise.resolve();
+		expect(countVersions).toHaveBeenCalledTimes(countCalls);
+		expect(fixture.success).not.toHaveBeenCalled();
+	} finally {
+		await fixture.destroy();
+	}
+});
+
 it("keeps locale-copy choices live across repeated locale navigation", async () => {
 	const copyLocale = vi.fn(async () => document("one", "Copied"));
 	const fixture = await documentRouteFixture({ copyLocale });
@@ -243,13 +432,15 @@ async function documentRouteFixture(
 		{ initialEntries: [initialEntry] }
 	);
 	const screen = await render(Provider, { router, runtime, notifications });
-	await expect
-		.poll(() => client.find)
-		.toHaveBeenCalledWith(
-			"users",
-			"one",
-			expect.objectContaining({ signal: expect.any(AbortSignal) })
-		);
+	if (!initialEntry.startsWith("/collections/users/create")) {
+		await expect
+			.poll(() => client.find)
+			.toHaveBeenCalledWith(
+				"users",
+				"one",
+				expect.objectContaining({ signal: expect.any(AbortSignal) })
+			);
+	}
 
 	return {
 		screen,
@@ -369,6 +560,147 @@ it("keeps an Edit link on create/API and does not show an empty More menu on cre
 		await fixture.destroy();
 	}
 });
+
+it.each([false, true])(
+	"forwards new auth publication intent without autosaving credentials (publish=%s)",
+	async (publish) => {
+		const intervals = vi.spyOn(window, "setInterval");
+		const createUser = vi.fn(
+			async (
+				_input: { collection: string; data: Record<string, unknown>; password: string },
+				_options?: { draft?: boolean }
+			) => document("new")
+		);
+		const fixture = await documentRouteFixture(
+			{
+				auth: { createUser },
+				collectionAccess: vi.fn(async () => ({
+					...access,
+					operations: { ...access.operations, publish },
+				})),
+			} as unknown as Partial<AdminClient>,
+			{
+				...usersCollection,
+				capabilities: { ...usersCollection.capabilities, versions: true },
+				versionSettings: { drafts: true, maxPerDocument: 10, autosaveIntervalSeconds: 1 },
+			},
+			"/collections/users/create?locale=en"
+		);
+		try {
+			await fixture.screen.getByRole("textbox", { name: "Email" }).fill("new@example.test");
+			const autosave = intervals.mock.calls.find(([, delay]) => delay === 1_000)?.[0];
+			expect(typeof autosave).toBe("function");
+			if (typeof autosave !== "function") throw new Error("autosave interval was not installed");
+			await autosave();
+			expect(createUser).not.toHaveBeenCalled();
+			const save = fixture.screen.getByRole("button", {
+				name: publish ? "Publish" : "Save draft",
+				exact: true,
+			});
+			await expect.element(save).toBeEnabled();
+			await fixture.screen.getByLabelText(/^Password/).fill("new-user-password");
+			await fixture.screen.getByLabelText(/^Confirm password/).fill("new-user-password");
+			await save.click();
+			await expect.poll(() => createUser).toHaveBeenCalledOnce();
+			expect(createUser.mock.calls[0]?.[0]).toEqual({
+				collection: "users",
+				data: expect.objectContaining({ email: "new@example.test" }),
+				password: "new-user-password",
+			});
+			expect(createUser.mock.calls[0]?.[1]).toEqual(expect.objectContaining({ draft: !publish }));
+		} finally {
+			await fixture.destroy();
+			intervals.mockRestore();
+		}
+	},
+	30_000
+);
+
+it.each(["draft", "published"] as const)(
+	"disables publication after a stale revision conflict (status=%s)",
+	async (status) => {
+		const publish = vi.fn(async () => {
+			throw new RiduError({ code: "conflict", status: 409, message: "Stale revision", issues: [] });
+		});
+		const fixture = await documentRouteFixture(
+			{
+				find: vi.fn(async () => ({
+					...document("one"),
+					_status: status,
+					_hasDraftChanges: status === "published",
+					_publishedRevision: status === "published" ? 1 : undefined,
+				})) as unknown as AdminClient["find"],
+				collectionAccess: vi.fn(async () => ({
+					...access,
+					operations: { ...access.operations, publish: true, unpublish: true },
+				})),
+				publish,
+				versions: vi.fn(async () => []),
+			},
+			{
+				...usersCollection,
+				capabilities: { ...usersCollection.capabilities, versions: true },
+				versionSettings: { drafts: true, maxPerDocument: 10, autosaveIntervalSeconds: 0 },
+			}
+		);
+		try {
+			const button = fixture.screen.getByRole("button", { name: "Publish changes", exact: true });
+			await expect.element(button).toBeEnabled();
+			await button.click();
+			await expect.poll(() => publish).toHaveBeenCalledOnce();
+			await expect.element(button).toBeDisabled();
+			if (status === "published") {
+				await fixture.openMoreActions();
+				await expect
+					.element(fixture.screen.getByRole("button", { name: "Unpublish", exact: true }))
+					.toBeDisabled();
+			}
+		} finally {
+			await fixture.destroy();
+		}
+	}
+);
+
+it("keeps the focused editor DOM, caret and undo history through an unchanged silent save", async () => {
+	const intervals = vi.spyOn(window, "setInterval");
+	const response = Promise.withResolvers<AdminDocument>();
+	const update = vi.fn(() => response.promise);
+	const fixture = await documentRouteFixture(
+		{ update },
+		{
+			...usersCollection,
+			capabilities: { ...usersCollection.capabilities, versions: true },
+			versionSettings: { drafts: true, maxPerDocument: 10, autosaveIntervalSeconds: 1 },
+		}
+	);
+	try {
+		const email = fixture.screen.getByRole("textbox", { name: "Email" });
+		const editor = email.element() as HTMLInputElement;
+		await email.click();
+		await userEvent.keyboard("{End}x");
+		await expect.element(email).toHaveValue("one@example.testx");
+		expect(window.document.activeElement).toBe(editor);
+		const autosave = intervals.mock.calls.find(([, delay]) => delay === 1_000)?.[0];
+		if (typeof autosave !== "function") throw new Error("autosave interval was not installed");
+		const saving = autosave();
+		expect(window.document.activeElement).toBe(editor);
+		await expect.poll(() => update).toHaveBeenCalledOnce();
+		expect(email.element()).toBe(editor);
+		expect(window.document.activeElement).toBe(editor);
+		editor.setSelectionRange(3, 3);
+		response.resolve({ ...document("one"), email: "one@example.testx", _revision: 3 });
+		await saving;
+		expect(email.element()).toBe(editor);
+		expect(window.document.activeElement).toBe(editor);
+		expect(editor.selectionStart).toBe(3);
+		expect(editor.selectionEnd).toBe(3);
+		await userEvent.keyboard("{ControlOrMeta>}z{/ControlOrMeta}");
+		await expect.element(email).toHaveValue("one@example.test");
+	} finally {
+		await fixture.destroy();
+		intervals.mockRestore();
+	}
+}, 30_000);
 
 it("keeps Save draft available to an update-only author", async () => {
 	const collection: SchemaCollection = {

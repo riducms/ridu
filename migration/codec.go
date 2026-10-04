@@ -188,13 +188,13 @@ func (artifact Artifact) BeforeManifest() (schema.Manifest, error) {
 
 // decodeManifests validates the embedded manifests of a decoded artifact.
 func (artifact *Artifact) decodeManifests(before, after json.RawMessage) error {
-	afterManifest, err := schema.Parse(after)
+	afterManifest, err := schema.ParseHistorical(after)
 	if err != nil {
 		return fmt.Errorf("migration %s after manifest: %w", artifact.Name, err)
 	}
 	artifact.After = afterManifest.Snapshot()
 	if len(before) != 0 {
-		beforeManifest, err := schema.Parse(before)
+		beforeManifest, err := schema.ParseHistorical(before)
 		if err != nil {
 			return fmt.Errorf("migration %s before manifest: %w", artifact.Name, err)
 		}

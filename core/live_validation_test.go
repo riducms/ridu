@@ -375,7 +375,7 @@ func TestLiveValidationDetachedContextUsesParentRootAndPersistedPrior(t *testing
 				if pending, _ := seen.Siblings.String("sku"); pending != "G-pending" {
 					t.Fatalf("detached Siblings sku=%q", pending)
 				}
-				if !reflect.DeepEqual(seen.Root.Get("body"), original) {
+				if !reflect.DeepEqual(seen.Root.Get("body"), document.Values["body"]) {
 					t.Fatal("detached advisory edit replaced the parent Root before Apply")
 				}
 			}
@@ -572,6 +572,30 @@ func TestLiveValidationCannotReadDraftsHiddenFromAnonymousReaders(t *testing.T) 
 	app.Handler(core.HandlerOptions{}).ServeHTTP(response, request)
 	if response.Code != http.StatusNotFound || calls != 0 {
 		t.Fatalf("advisory exposed unreadable draft: %d %s callbacks=%d", response.Code, response.Body.String(), calls)
+	}
+}
+
+func TestLiveValidationCarriesExplicitDraftWritePhase(t *testing.T) {
+	var phases []operation.WritePhase
+	app, _ := newLiveApp(t, core.Config{Name: "Live draft phase", Collections: []core.Collection{{
+		Slug: "products", Versions: true, VersionConfig: core.VersionConfig{Drafts: true},
+		Fields: field.Fields{field.Text("title").Required().LiveValidate(func(ctx operation.LiveValidationContext, _ operation.Value[string]) ([]operation.Issue, error) {
+			phases = append(phases, ctx.WritePhase)
+			return nil, nil
+		})},
+	}}})
+	published := false
+	product, err := app.Local().Create(t.Context(), "products", store.Values{"title": store.String("Published")}, core.MutationOptions{Draft: &published})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, draft := range []bool{true, false} {
+		liveChecked(t, liveRequest(t, app, "collections/products/validate", map[string]any{
+			"id": product.ID, "draft": draft, "data": map[string]any{"title": "Candidate"}, "fields": []string{"title"},
+		}))
+	}
+	if !reflect.DeepEqual(phases, []operation.WritePhase{operation.WritePhaseDraft, operation.WritePhasePublished}) {
+		t.Fatalf("live validation phases = %v", phases)
 	}
 }
 

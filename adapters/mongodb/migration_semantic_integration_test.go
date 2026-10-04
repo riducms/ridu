@@ -20,10 +20,10 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
-// TestMongoDBV2SemanticMigrationLifecycleOnAuthenticatedReplicaSet is one
+// TestMongoDBSemanticMigrationLifecycleOnAuthenticatedReplicaSet is one
 // opt-in production-shaped semantic proof. It intentionally shares the
 // authenticated TLS replica-set fixture instead of growing another service.
-func TestMongoDBV2SemanticMigrationLifecycleOnAuthenticatedReplicaSet(t *testing.T) {
+func TestMongoDBSemanticMigrationLifecycleOnAuthenticatedReplicaSet(t *testing.T) {
 	if os.Getenv(mongoDBProductionFixtureEnvironment) != "true" {
 		t.Skip("set RIDU_MONGODB_PRODUCTION_FIXTURE_TEST=true to run the authenticated MongoDB semantic migration proof")
 	}

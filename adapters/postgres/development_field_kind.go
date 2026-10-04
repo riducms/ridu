@@ -289,14 +289,23 @@ func scanPostgresFieldKinds(ctx context.Context, transaction pgx.Tx, before sche
 }
 
 func scanPostgresFieldKindSnapshots(ctx context.Context, transaction pgx.Tx, resource schema.Collection, changes []fieldchange.Change, reports []fieldchange.Report, clear bool) error {
+	for _, table := range []string{"ridu_versions", "ridu_published_documents"} {
+		if err := scanPostgresFieldKindSnapshotTable(ctx, transaction, table, resource, changes, reports, clear); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func scanPostgresFieldKindSnapshotTable(ctx context.Context, transaction pgx.Tx, table string, resource schema.Collection, changes []fieldchange.Change, reports []fieldchange.Report, clear bool) error {
 	var exists bool
-	if err := transaction.QueryRow(ctx, `SELECT to_regclass(current_schema() || '.ridu_versions') IS NOT NULL`).Scan(&exists); err != nil {
+	if err := transaction.QueryRow(ctx, `SELECT to_regclass(current_schema() || '.' || $1) IS NOT NULL`, table).Scan(&exists); err != nil {
 		return err
 	}
 	if !exists {
 		return nil
 	}
-	rows, err := transaction.Query(ctx, `SELECT document_id, revision, snapshot FROM ridu_versions WHERE collection_id = $1 ORDER BY document_id, revision`, string(resource.ID))
+	rows, err := transaction.Query(ctx, `SELECT document_id, revision, snapshot FROM `+quote(table)+` WHERE collection_id = $1 ORDER BY document_id, revision`, string(resource.ID))
 	if err != nil {
 		return err
 	}
@@ -339,7 +348,7 @@ func scanPostgresFieldKindSnapshots(ctx context.Context, transaction pgx.Tx, res
 	}
 	rows.Close()
 	for _, update := range rewrites {
-		if _, err := transaction.Exec(ctx, `UPDATE ridu_versions SET snapshot = $1 WHERE collection_id = $2 AND document_id = $3 AND revision = $4`, update.value, string(resource.ID), update.id, update.revision); err != nil {
+		if _, err := transaction.Exec(ctx, `UPDATE `+quote(table)+` SET snapshot = $1 WHERE collection_id = $2 AND document_id = $3 AND revision = $4`, update.value, string(resource.ID), update.id, update.revision); err != nil {
 			return err
 		}
 	}

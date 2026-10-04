@@ -53,6 +53,8 @@ type Article struct {
 	UpdatedAt string §json:"updatedAt"§
 	DeletedAt *string §json:"deletedAt,omitempty"§
 	Status string §json:"_status"§
+	PublishedRevision int §json:"_publishedRevision,omitempty"§
+	HasDraftChanges *bool §json:"_hasDraftChanges,omitempty"§
 	Revision int §json:"_revision"§
 	IDField *string §json:"iD,omitempty"§
 	CreatedAtField *string §json:"created_at,omitempty"§
@@ -86,7 +88,7 @@ type ArticleUpdate struct {
 	Title *core.Input[string] §json:"title,omitempty"§
 }
 
-var ArticlesCollection = core.NewTypedCollection[Article, ArticleCreate, ArticleUpdate]("articles")
+var ArticlesCollection = core.NewTypedCollection[Article, ArticleCreate, ArticleUpdate, ArticleDraft]("articles")
 `, "§", "`")
 	expected, err := format.Source([]byte(expectedSource))
 	if err != nil {

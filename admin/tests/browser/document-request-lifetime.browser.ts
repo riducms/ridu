@@ -12,6 +12,7 @@ import type { AdminClient, AdminDocument } from "@admin/core/api/admin-client";
 import { NotificationCenter } from "@admin/core/notifications/notification-center.svelte";
 import { AdminRuntime } from "@admin/core/runtime/admin-runtime.svelte";
 import { DocumentController } from "@admin/features/documents/document-controller.svelte";
+import { FieldEditorBinding } from "@admin/core/forms/field-editor-binding";
 
 const Editor = svelte`
 	<script>
@@ -125,6 +126,46 @@ async function dispose(fixture: Awaited<ReturnType<typeof editor>>) {
 	fixture.runtime.dispose();
 	fixture.notifications.destroy();
 }
+
+it.each([false, true])(
+	"settles an explicit document save against the server baseline once (publish=%s)",
+	async (publish) => {
+		const response = Promise.withResolvers<AdminDocument>();
+		const fixture = await editor({
+			update: vi.fn(() => response.promise),
+			publishChanges: vi.fn(() => response.promise),
+		});
+		try {
+			await expect.poll(() => fixture.controller.loading).toBe(false);
+			const form = fixture.controller.form;
+			form.set("title", "Submitted");
+			const epoch = form.editorEpoch;
+			const invalidate = vi.fn();
+			const release = form.registerEditorLifetime(invalidate);
+			const binding = new FieldEditorBinding(form, () => collection.fields[0]!, "text");
+			const delayedWrite = binding.set;
+
+			const saving = fixture.controller.save({ publish });
+			expect(form.editingBlocked).toBe(true);
+			response.resolve(document("one", "Normalized by the server"));
+			expect(await saving).toBe(true);
+
+			// A submitted-value reset followed by the authoritative reset remounts
+			// rich-text editors twice and can collapse a scrolled document between them.
+			expect(invalidate).toHaveBeenCalledOnce();
+			expect(form.editorEpoch).toBe(epoch + 1);
+			expect(() => delayedWrite("Obsolete editor")).toThrow("stale");
+			expect(form.get("title")).toBe("Normalized by the server");
+			expect(form.original.title).toBe("Normalized by the server");
+			expect(form.dirty).toBe(false);
+			expect(form.editingBlocked).toBe(false);
+			binding.destroy();
+			release();
+		} finally {
+			await dispose(fixture);
+		}
+	}
+);
 
 it.each([false, true])(
 	"counts authorized retained versions without using the document revision (global=%s)",

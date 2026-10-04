@@ -22,6 +22,7 @@ const LiveValidationTimeout = 5 * time.Second
 type LiveValidationRequest struct {
 	Collection      string
 	ID              string
+	Draft           *bool
 	Data            store.Values
 	Fields          []string
 	Embedded        []LiveValidationEmbeddedScope
@@ -67,6 +68,9 @@ func (engine *Engine) LiveValidate(ctx context.Context, request LiveValidationRe
 	if !exists {
 		return result, &Error{Code: "unknown_collection", Status: 404, Message: "resource was not found"}
 	}
+	if request.Draft != nil && (collection.Schema.Versions == nil || *request.Draft && !collection.Schema.Versions.Drafts) {
+		return result, liveBadRequest("draft mode requires an editorial draft-enabled resource")
+	}
 	selection, localeError := localization.Resolve(engine.localization, request.Locale, nil, engine.localization != nil, false)
 	if localeError != nil {
 		return result, &Error{Code: "bad_locale", Status: 400, Message: localeError.Error(), Cause: localeError}
@@ -92,7 +96,11 @@ func (engine *Engine) LiveValidate(ctx context.Context, request LiveValidationRe
 	if request.ID != "" || collection.Schema.Capabilities.Global {
 		kind = operation.Update
 	}
-	base := Context{LiveValidation: true, Context: ctx, Operation: kind, Collection: collection.Schema, ID: request.ID, Actor: cloneDocumentPointer(request.Actor), ActorCollection: request.ActorCollection, Data: store.CloneValues(request.Data), Locale: selection.Locale, Locales: selection.Configured}
+	phase := writePhaseForRequest(collection.Schema, Request{Operation: kind, Draft: request.Draft})
+	if request.Draft != nil && !*request.Draft {
+		phase = operation.WritePhasePublished
+	}
+	base := Context{LiveValidation: true, Context: ctx, Operation: kind, WritePhase: phase, Collection: collection.Schema, ID: request.ID, Actor: cloneDocumentPointer(request.Actor), ActorCollection: request.ActorCollection, Data: store.CloneValues(request.Data), Locale: selection.Locale, Locales: selection.Configured}
 	if err := liveAuthorizeResource(collection, base, operation.Admin); err != nil {
 		return result, err
 	}
@@ -108,7 +116,11 @@ func (engine *Engine) LiveValidate(ctx context.Context, request LiveValidationRe
 		return result, liveDenied()
 	}
 	if request.ID != "" {
-		document, findError := state.transaction.Find(ctx, store.Request{Collection: collection.Schema, Collections: engine.schemas, ID: request.ID, Access: decision.Access, Deletion: store.DeletionActive, PublishedOnly: request.Actor == nil, Locales: selection.Configured, LocaleChain: selection.Chain})
+		publishedOnly, draftError := engine.publishedOnly(Request{Operation: operation.Read, Draft: request.Draft, Actor: request.Actor, ActorCollection: request.ActorCollection}, collection, base)
+		if draftError != nil {
+			return result, draftError
+		}
+		document, findError := state.transaction.Find(ctx, store.Request{Collection: collection.Schema, Collections: engine.schemas, ID: request.ID, Access: decision.Access, Deletion: store.DeletionActive, PublishedOnly: publishedOnly, Locales: selection.Configured, LocaleChain: selection.Chain})
 		if findError != nil {
 			if !(collection.Schema.Capabilities.Global && decision.Kind == Allow && errors.Is(findError, store.ErrNotFound)) {
 				return result, translateStoreError(findError)
@@ -154,7 +166,11 @@ func (engine *Engine) LiveValidate(ctx context.Context, request LiveValidationRe
 		if request.ID == "" {
 			return result, liveDenied()
 		}
-		if _, findError := state.transaction.Find(ctx, store.Request{Collection: collection.Schema, Collections: engine.schemas, ID: request.ID, Access: decision.Access, Deletion: store.DeletionActive, PublishedOnly: request.Actor == nil, Locales: selection.Configured, LocaleChain: selection.Chain}); findError != nil {
+		publishedOnly, draftError := engine.publishedOnly(Request{Operation: operation.Read, Draft: request.Draft, Actor: request.Actor, ActorCollection: request.ActorCollection}, collection, base)
+		if draftError != nil {
+			return result, draftError
+		}
+		if _, findError := state.transaction.Find(ctx, store.Request{Collection: collection.Schema, Collections: engine.schemas, ID: request.ID, Access: decision.Access, Deletion: store.DeletionActive, PublishedOnly: publishedOnly, Locales: selection.Configured, LocaleChain: selection.Chain}); findError != nil {
 			return result, translateStoreError(findError)
 		}
 	}

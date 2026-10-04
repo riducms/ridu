@@ -225,11 +225,16 @@ func TestOpenAPIUnifiedBlockInputsPreserveManagedAndOpaqueValues(t *testing.T) {
 	if err := json.Unmarshal(encoded, &document); err != nil {
 		t.Fatal(err)
 	}
-	if err := resolvedResourceSchema(t, document, "usersCreate").Validate(map[string]any{"id": "person", "email": "person@example.com", "password": "correct horse battery staple", "name": "Person"}); err != nil {
+	if err := resolvedResourceSchema(t, document, "usersCreate").Validate(map[string]any{"id": "person", "email": "person@example.com", "name": "Person"}); err != nil {
 		t.Fatalf("managed auth inputs rejected: %v", err)
 	}
-	if err := resolvedResourceSchema(t, document, "usersUpdate").Validate(map[string]any{"email": "new@example.com", "password": "another correct horse battery staple"}); err != nil {
+	if err := resolvedResourceSchema(t, document, "usersUpdate").Validate(map[string]any{"email": "new@example.com"}); err != nil {
 		t.Fatalf("managed auth update rejected: %v", err)
+	}
+	for _, name := range []string{"usersCreate", "usersUpdate"} {
+		if err := resolvedResourceSchema(t, document, name).Validate(map[string]any{"email": "person@example.com", "password": "credential-not-content"}); err == nil {
+			t.Fatalf("%s admits a credential as document data", name)
+		}
 	}
 }
 

@@ -142,7 +142,12 @@ for (const mode of ["inline", "reference"] as const) {
 		const picker = page.getByRole("dialog");
 		await expect(picker.getByRole("button", { name: "CTA", exact: true })).toBeVisible();
 		await picker.getByRole("button", { name: "Person", exact: true }).click();
-		await expect(layout.getByText("Untitled Person", { exact: true })).toBeVisible();
+		await expect(layout.locator(".ridu-repeated-row__type").first()).toHaveText("Person");
+		await expect(layout.locator('input[name="layout.0.blockName"]')).toHaveValue("");
+		await expect(layout.locator('input[name="layout.0.blockName"]')).toHaveAttribute(
+			"placeholder",
+			"Untitled"
+		);
 		for (const label of ["Person", "CTA"]) {
 			await insertBlock(page, bodyEditor(page), label);
 			await expect(bodyCards(page).filter({ hasText: label })).toBeVisible();

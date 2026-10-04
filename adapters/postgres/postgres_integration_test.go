@@ -928,7 +928,13 @@ func TestPostgresLocalizedScalarStorageQueryAndFallback(t *testing.T) {
 	if err != nil || stringValue(arabic.Values["title"]) != "Hello" {
 		t.Fatalf("Arabic fallback document = %#v, %v", arabic, err)
 	}
-	if _, err := application.Local().PublishChanges(ctx, "posts", document.ID, store.Values{"summary": store.String("")}, ridu.MutationOptions{Locale: "ar"}); err != nil {
+	if _, err := application.Local().PublishChanges(ctx, "posts", document.ID, store.Values{
+		"summary": store.String(""), "title": store.String("Arabic title"),
+		"seo":     store.Object(store.Values{"description": store.String("Arabic description")}),
+		"details": store.Object(store.Values{"name": store.String("Arabic details")}),
+		"links":   store.List(store.Object(store.Values{"_key": store.String("link-1"), "label": store.String("Arabic link"), "href": store.String("/about")})),
+		"layout":  store.List(store.Object(store.Values{"_key": store.String("block-1"), "blockType": store.String("hero"), "heading": store.String("Arabic heading")})),
+	}, ridu.MutationOptions{Locale: "ar"}); err != nil {
 		t.Fatal(err)
 	}
 	arabic, err = application.Local().Find(ctx, "posts", document.ID, ridu.FindOptions{Locale: "ar"})

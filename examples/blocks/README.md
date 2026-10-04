@@ -12,10 +12,10 @@ relationships to asset records. Assets here are metadata records with URLs; file
 upload setup is outside this example. Rich text remains the existing versioned
 plugin document with configured schema-backed block payloads in articles.
 
-CTA and Callout also configure `BlockAdmin.NameField: "blockName"`. This optional,
-ordinary text field is edited in the block header; it is separate from the public
-CTA label or Callout title. A blank name shows the content summary as a placeholder
-without storing it. The same control appears on rich-text cards and in their
+Every block gets an ordinary `blockName` Text field edited in its header. CTA and
+Callout declare the field explicitly to customize it; the name is separate from
+the public CTA label or Callout title. A blank name shows “Untitled” as a placeholder
+without storing that placeholder. The same control appears on rich-text cards and in their
 Apply/Cancel drawers. Names are returned by the API, but these frontend renderers
 render the content fields and never turn an editorial name into an anchor.
 

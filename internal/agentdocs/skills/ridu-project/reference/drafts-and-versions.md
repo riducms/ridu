@@ -3,10 +3,14 @@
 # Drafts and versions
 
 Versions and drafts are related but separate. `Versions: true` records immutable snapshots and
-adds optimistic revisions. `VersionConfig.Drafts: true` makes unpublished status part of the
-ordinary authoring workflow. You can keep history without enabling draft creation.
+adds optimistic revisions. `VersionConfig.Drafts: true` adds incomplete working content alongside
+a separate published snapshot. You can keep history without enabling draft creation.
 
 ## Enable revision history {#enable-versions}
+
+Choose versioning when creating a collection or global. Enabling it later on an existing
+unversioned resource is unsupported: the existing documents have no publication state or live
+heads. Ridu rejects that schema transition rather than hiding those documents from public reads.
 
 ```go title="content/posts.go"
 package content
@@ -34,24 +38,35 @@ var Posts = ridu.Collection{
 ```
 
 Versioned output includes `_revision` and `_status` (`draft` or `published`). The Go store model
-exposes the same values as `Document.Revision` and `Document.Status`.
+exposes the same values as `Document.Revision` and `Document.Status`. Working reads also expose
+`_publishedRevision` and `_hasDraftChanges` when live content exists. `_status: 'published'` means
+there is a live snapshot; pending working edits are not automatically public. Public reads omit
+the draft metadata and return the live snapshot's own revision and timestamp.
 
-| Setting            | Current behaviour                                                                                                                                         |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Drafts`           | Defaults false. When true, ordinary creates default to draft and draft-specific create/update/restore behaviour is enabled.                               |
-| `MaxPerDocument`   | Defaults to 100. Every mutation prunes the oldest snapshots beyond this positive per-document limit.                                                      |
-| `AutosaveInterval` | Defaults to 30 seconds when zero; a configured value must be at least one second. It controls the admin's draft-save and published-edit checkpoint timer. |
+| Setting            | Current behaviour                                                                                                                   |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `Drafts`           | Defaults false. When true, ordinary creates default to draft and draft-specific create/update/restore behaviour is enabled.         |
+| `MaxPerDocument`   | Defaults to 100. Every mutation prunes the oldest snapshots beyond this positive per-document limit.                                |
+| `AutosaveInterval` | Defaults to 30 seconds when zero; a configured value must be at least one second. It controls the admin's working-draft save timer. |
 
-The server does not mutate documents on a timer. For a dirty draft, autosave is the admin calling
-the same update endpoint, so access, validation, hooks, revisions, and conflicts still apply. A
-dirty published document is checkpointed in browser storage instead: a background update would
-make those edits public. Reload restores that checkpoint until the author chooses
-**Publish changes**. Zero currently selects the 30-second default rather than disabling this timer.
+The server does not mutate documents on a timer. Autosave is the admin calling the normal draft
+write endpoint, so access, validation, hooks, revisions and conflicts still apply. It saves working
+content for unpublished and published documents, and creates a new draft after meaningful edits
+without requiring a manual first save. Untouched new forms do not create documents. New auth
+identities require an explicit credential-bearing save; autosave never creates accounts.
 
-Every accepted create, duplicate, update, publish, unpublish, and restore saves the canonical
+A saved pending draft survives reload and opening the document on another device. The admin
+distinguishes saved pending changes from unsaved typing, allows publishing a clean saved draft and
+offers **Discard draft changes**. Stale saves pause for review. An uncertain first-create outcome
+is not automatically retried, because doing so could create a duplicate. Browser checkpoints remain
+failure-recovery protection rather than the primary draft store. Zero currently selects the
+30-second default rather than disabling the timer.
+
+Every accepted create, duplicate, update, publish, unpublish, discard, and restore saves the canonical
 stored document in the same transaction. Reads and delete/trash operations do not create
 versions. Relationship population, computed output, and field redaction are response shapes and
-are not copied into the stored snapshot.
+are not copied into the stored snapshot. The current working and published heads are independent of
+history retention: pruning versions cannot remove the live content or the media it references.
 
 ## Draft write semantics {#draft-writes}
 
@@ -62,8 +77,14 @@ are not copied into the stored snapshot.
 | Versions disabled                               | Ordinary unversioned document            | Ordinary unversioned update                              |
 | Versions enabled, drafts disabled, `Draft: nil` | Published                                | Rejected for the published row; use `PublishChanges`     |
 | Drafts enabled, `Draft: nil`                    | Draft                                    | Updates a draft; published rows require `PublishChanges` |
-| `Draft: &true`                                  | Draft; rejected when drafts are disabled | Rejected; use the unpublish lifecycle                    |
+| `Draft: &true`                                  | Draft; rejected when drafts are disabled | Save working content without changing the live snapshot  |
 | `Draft: &false`                                 | Published                                | Rejected; use the publish lifecycle                      |
+
+Draft saves defer required fields, minimum text length and minimum row counts recursively. Types,
+enum values, upper bounds, structural row identity, valid references, access and plugin codecs still
+apply. Authentication identity and upload-file requirements are not editorial completeness rules.
+Custom validators still run; publication-only rules can inspect
+`operation.Context.WritePhase == operation.WritePhasePublished`.
 
 In REST/SDK calls, the equivalent write option is `draft: true` or `draft: false`. Publishing and
 unpublishing are clearer lifecycle operations than changing status as part of an unrelated update,
@@ -72,7 +93,11 @@ because they run the publish/unpublish hook operation and are easier to audit.
 The low-level Go and REST version surface is present on any versioned resource. Treat
 publish/unpublish as a draft workflow and configure `Drafts: true`; restore-as-draft rejects a
 versioned resource whose draft support is disabled, and the admin/GraphQL draft actions
-are driven by that setting.
+are driven by that setting. Generated TypeScript `DraftCreate`/`DraftUpdate` models and Go `Draft`
+models describe incomplete authored values without weakening block discriminators, reference IDs
+or plugin structure. Go typed handles expose
+[`CreateDraft`](https://riducms.com/reference/core/bound-typed-collection-create-draft-method/) and
+[`SaveDraft`](https://riducms.com/reference/core/bound-typed-collection-save-draft-method/).
 
 ## Draft read semantics {#draft-reads}
 
@@ -82,16 +107,20 @@ collections read published content, even when the collection's `Read` rule allow
 
 The Local Go API's `FindOptions.Draft` and `ListOptions.Draft` are three-state:
 
-| Read option                   | Result set                                                                                            |
-| ----------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `Draft: nil`                  | Published and draft documents for actors that may read drafts; published only for everyone else       |
-| `Draft: &false`               | Published documents only                                                                              |
-| `Draft: &true`, with an actor | Published and draft documents; fails with `access_denied` when the actor may not read drafts          |
-| `Draft: &true`, no actor      | Published and draft documents, for server code such as a job or renderer; `Read` access still applies |
+| Read option     | Result set                                                                                         |
+| --------------- | -------------------------------------------------------------------------------------------------- |
+| `Draft: nil`    | Working documents for actors allowed by `ReadDrafts`; live snapshots otherwise.                    |
+| `Draft: &false` | Live snapshots only, including for editors; never-published documents are absent.                  |
+| `Draft: &true`  | Working documents, including unpublished ones; requires `ReadDrafts`, also for anonymous requests. |
 
-`Draft: &true` means include drafts, not drafts only. REST and SDK reads do not accept a `draft`
-option; REST rejects `?draft=true`, so they always use the actor's default. The GraphQL plugin lets
-signed-in clients request drafts and refuses an anonymous `draft: true`.
+`Draft: &true` means read working content, not draft-only status. REST uses `?draft=true` or
+`?draft=false`; the SDK and GraphQL use `draft: true` or `draft: false`. Each enters the same draft
+access rule. An anonymous Go call is not implicitly trusted; deliberately privileged server work
+must choose `System` rather than obtaining permission by setting a draft selector.
+
+Head selection precedes access predicates, caller filters, sorting, pagination, counts and
+population in the store query. Public queries cannot match a pending title and then return the old
+published title. Draft-aware population still checks each target's normal access rules.
 
 To choose who reads drafts yourself, set `ReadDrafts` on the collection or global. It returns
 `Allow` or `Deny` and replaces the editor default:
@@ -122,7 +151,8 @@ read path for a configured live preview; they do not weaken normal collection ro
 
 ## Publish and unpublish {#publish-unpublish}
 
-Publish changes status to `published`; unpublish changes it to `draft`. Both are mutations: they
+Publish atomically replaces the live snapshot from the final working candidate; unpublish removes
+live content while retaining working values. Both are mutations: they
 run their dedicated collection access rule (falling back to `Update` only when omitted), update
 field access, validation, field and collection change/operation hooks, optimistic revision checks,
 snapshotting, and after-commit work. `PublishChanges` and the SDK's `publishChanges` atomically
@@ -130,10 +160,16 @@ apply edited values through that same publish lifecycle instead of performing an
 Body-bearing publish and unpublish operations require both `Update` and their dedicated lifecycle
 permission. Status-only transitions require only the dedicated permission. An ordinary update of a
 published versioned row, or one that sets its status, returns `publish_required` (409); Ridu never
-silently turns a generic update into a live publication. Edit a published row with `PublishChanges`
-(REST `POST /api/collections/{collection}/{id}/publish` with the changed fields), or unpublish it and
-update the draft. A collection with versions but no drafts publishes every row, so it is edited
+silently turns a generic update into a live publication. Save a published row's working content
+with `draft: true`, then publish it. Alternatively use `PublishChanges`
+(REST `POST /api/collections/{collection}/{id}/publish` with the changed fields) to edit and publish
+atomically. A collection with versions but no drafts publishes every row, so it is edited
 only through `PublishChanges`.
+
+Publication validates the whole merged document, not just its changed fields. Supplied exact
+translations must be complete and valid; entirely absent translations follow the existing optional
+translation policy. Fallback content is never saved as a translation. Failed publication leaves
+the saved working content and previous live snapshot unchanged.
 
 ```go
 published, err := app.Local().Publish(ctx, "posts", post.ID, ridu.MutationOptions{ExpectedRevision: post.Revision, Actor: actor})
@@ -201,8 +237,9 @@ its ID remains visible. The comparison follows the current read permissions desc
 
 A restore does not move a pointer backward or delete later revisions. Ridu loads the authorized
 snapshot, then runs its values through the publish lifecycle when the selected snapshot is
-published, or the unpublish lifecycle when it is draft. Because the transition carries values, it
-requires Update plus the matching lifecycle permission and runs current validation, relationship
+published, or removes live content when the selected snapshot is draft. Restoring a draft into an
+already-unpublished document is an ordinary draft update. The transition requires Update plus any
+matching Publish or Unpublish permission and runs current validation, relationship
 checks, hooks, localization, and optimistic concurrency. The restored document receives the next
 revision and the restore itself becomes a new snapshot.
 
@@ -215,11 +252,23 @@ if err != nil {
 restored, err := app.Local().Restore(ctx, "posts", post.ID, versions[len(versions)-1].Revision, ridu.MutationOptions{ExpectedRevision: post.Revision, Actor: actor})
 ```
 
-`Restore` preserves the selected snapshot's status. `RestoreAsDraft` copies its values but forces
-draft status and therefore requires drafts to be enabled. Both actions take mutation options for
+`Restore` uses the selected snapshot's publication lifecycle. Restoring a published snapshot
+deliberately replaces live and working content together. `RestoreAsDraft` copies its values into
+working content without unpublishing the existing live snapshot and requires drafts to be enabled.
+Both actions take mutation options for
 exact actor identity, returned population/output selection, revision fence, and
-locale controls. Restore first requires version-read permission, then Update plus Publish or
-Unpublish according to the resulting status.
+locale controls. Restore first requires version-read permission. Restoring as draft, or restoring
+a draft when nothing is live, requires Update rather than Unpublish.
+
+To reset a pending draft to the live snapshot, call `LocalAPI.DiscardDraft` or SDK `discardDraft`
+with its working revision. This increments the working revision, clears pending changes and leaves
+the public revision and timestamp intact. It requires Update and field update access, not Publish
+or Unpublish. It runs operation observers and post-change hooks, but skips candidate-mutating
+before-validate/before-change hooks so the reset remains exact. There must be a live snapshot and
+pending changes; delete a never-published draft instead.
+
+REST uses `POST /api/collections/:slug/:id/discard-draft`; globals use
+`POST /api/globals/:slug/discard-draft` and SDK `discardGlobalDraft`.
 
 For localized resources, the snapshot is restored as a canonical all-locale value set so one
 locale cannot accidentally splice old data over another. The response can still be projected to
@@ -280,13 +329,15 @@ publish/unpublish and version restore, but not scheduled global publishing.
 
 ## Versioned globals {#globals}
 
-Globals accept the same `Versions` and `VersionConfig` fields. A missing draft-enabled global reads
-as a schema-shaped draft with defaults; its first `UpdateGlobal` persists revision 1. Use:
+Globals accept the same `Versions` and `VersionConfig` fields. An authorized working read of a missing
+draft-enabled global returns a schema-shaped draft with defaults; a live read returns `not_found`
+until publication. Its first `UpdateGlobal` persists revision 1. Use:
 
 - `Global` and `UpdateGlobal`;
 - `PublishGlobal` and `UnpublishGlobal`;
 - `GlobalVersions` and `GlobalVersion`;
 - `RestoreGlobal` and `RestoreGlobalAsDraft`.
+- `DiscardGlobalDraft`.
 
 `GlobalAccess.ReadVersions` falls back to `Read`; `GlobalAccess.Publish` and `Unpublish` each fall
 back to `Update` when omitted. A filtered update cannot initialize a missing singleton because
@@ -296,16 +347,16 @@ behaviour.
 
 ## Common surprises {#failures}
 
-| Symptom                                           | Explanation                                                                                                            |
-| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| A signed-in user cannot see a new document        | Draft-enabled creates default to draft, and only editors read drafts; publish it or allow the user with `ReadDrafts`.  |
-| `Draft: &true` returns published documents too    | True means include drafts, not draft-only. Add an authored status field if the product needs another workflow filter.  |
-| Old snapshot has a redacted/missing field         | Current field access and after-read lifecycle apply to history reads.                                                  |
-| Restore returns `access_denied`                   | Restore needs both access to that snapshot and update access to the current document.                                  |
-| Restore/publish/update returns `conflict`         | The expected revision is stale; reload instead of silently retrying with zero.                                         |
-| Only 100 snapshots remain                         | Zero `MaxPerDocument` resolves to the 100-version default; raise it if storage policy allows.                          |
-| Setting autosave to zero does not stop it         | Zero resolves to the current 30-second default; the admin server-saves drafts and locally checkpoints published edits. |
-| Scheduled job failed after an editor role changed | Execution rehydrates and reauthorizes the original exact identity by design.                                           |
+| Symptom                                           | Explanation                                                                                                               |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| A signed-in user cannot see a new document        | Draft-enabled creates default to draft, and only editors read drafts; publish it or allow the user with `ReadDrafts`.     |
+| `Draft: &true` returns published documents too    | True selects working content, including documents that already have a live snapshot.                                      |
+| Old snapshot has a redacted/missing field         | Current field access and after-read lifecycle apply to history reads.                                                     |
+| Restore returns `access_denied`                   | Restore needs both access to that snapshot and update access to the current document.                                     |
+| Restore/publish/update returns `conflict`         | The expected revision is stale; reload instead of silently retrying with zero.                                            |
+| Only 100 snapshots remain                         | Zero `MaxPerDocument` resolves to the 100-version default; raise it if storage policy allows.                             |
+| Setting autosave to zero does not stop it         | Zero resolves to the current 30-second default; the admin server-saves working drafts, including pending published edits. |
+| Scheduled job failed after an editor role changed | Execution rehydrates and reauthorizes the original exact identity by design.                                              |
 
 Version and publishing methods are listed in the [Local Go API](./local-api.md) and exact Go
 signatures are in the [Go API reference](https://riducms.com/reference/ridu/). For browser and wire forms, see the

@@ -36,6 +36,17 @@ func mongoPhysicalIndexPlans(manifest schema.Manifest) (mongoPhysicalIndexPlanSe
 	if err != nil {
 		return mongoPhysicalIndexPlanSet{}, err
 	}
+	for index := range collections {
+		reservation, exists := mongoHeadReservationIndexDefinition(collections[index].collection, collections[index].definitions)
+		if !exists {
+			continue
+		}
+		collections[index].definitions = append(collections[index].definitions, reservation)
+		collections[index].fingerprint, err = mongoIndexFingerprint(collections[index].definitions)
+		if err != nil {
+			return mongoPhysicalIndexPlanSet{}, err
+		}
+	}
 	system := mongoSystemIndexPlans(collections)
 	if err := validateMongoPhysicalIndexPlans(collections, system); err != nil {
 		return mongoPhysicalIndexPlanSet{}, err
@@ -65,7 +76,7 @@ func validateMongoPhysicalIndexPlans(collections []mongoCollectionIndexPlan, sys
 	for _, plan := range system {
 		identity := fmt.Sprintf("system:%d", plan.kind)
 		description := plan.description
-		if plan.kind == mongoSystemVersionIndexes {
+		if plan.kind == mongoSystemVersionIndexes || plan.kind == mongoSystemPublishedIndexes {
 			identity = "versions:" + string(plan.collectionID)
 		}
 		claims = append(claims, mongoPhysicalCollectionClaim{

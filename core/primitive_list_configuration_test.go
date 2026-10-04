@@ -54,8 +54,12 @@ func TestPrimitiveListConfigurationUsesOneDeterministicValueField(t *testing.T) 
 	if actual, _ := manifest.Bytes(); !bytes.Equal(encoded, actual) {
 		t.Fatal("list manifest retained mutable metadata aliases")
 	}
-	for _, nested := range [][]schema.Field{fields[5].Nested.ResolvedFields(), fields[6].Nested.ResolvedFields(), fields[7].Blocks.ResolvedTypes()[0].ResolvedFields(), schema.EmbeddedBlocks(fields[8])[0].Blocks.ResolvedTypes()[0].ResolvedFields()} {
-		if len(nested) != 2 || nested[0].Type != schema.FieldTypeTextList || nested[1].Type != schema.FieldTypeNumberList {
+	for index, nested := range [][]schema.Field{fields[5].Nested.ResolvedFields(), fields[6].Nested.ResolvedFields(), fields[7].Blocks.ResolvedTypes()[0].ResolvedFields(), schema.EmbeddedBlocks(fields[8])[0].Blocks.ResolvedTypes()[0].ResolvedFields()} {
+		wantCount := 2
+		if index >= 2 {
+			wantCount = 3
+		}
+		if len(nested) != wantCount || nested[0].Type != schema.FieldTypeTextList || nested[1].Type != schema.FieldTypeNumberList || index >= 2 && nested[2].Name != "blockName" {
 			t.Fatalf("nested list contracts: %#v", nested)
 		}
 	}

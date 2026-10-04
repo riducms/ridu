@@ -50,15 +50,12 @@ export const INSERT_BLOCK_COMMAND: LexicalCommand<{
 	blockType: string;
 	position?: { targetNodeKey: NodeKey; insertBefore: boolean };
 }> = createCommand("INSERT_BLOCK_COMMAND");
-export const DUPLICATE_BLOCK_COMMAND: LexicalCommand<NodeKey> =
-	createCommand("DUPLICATE_BLOCK_COMMAND");
 export const REMOVE_BLOCK_COMMAND: LexicalCommand<NodeKey> = createCommand("REMOVE_BLOCK_COMMAND");
 export const MOVE_BLOCK_COMMAND: LexicalCommand<{ nodeKey: NodeKey; direction: -1 | 1 }> =
 	createCommand("MOVE_BLOCK_COMMAND");
 export const UPDATE_BLOCK_NAME_COMMAND: LexicalCommand<{
 	nodeKey: NodeKey;
 	identity: string;
-	nameField: string;
-	change: { field: string; value: string };
+	value: string;
 	historyTag: typeof HISTORY_PUSH_TAG | typeof HISTORY_MERGE_TAG;
 }> = createCommand("UPDATE_BLOCK_NAME_COMMAND");

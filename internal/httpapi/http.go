@@ -130,8 +130,7 @@ type Config struct {
 	VerifyEmail                  func(context.Context, string, string) error
 	ChangePassword               func(context.Context, string, string, string) error
 	AuthBootstrapAvailable       func(context.Context, string) (bool, error)
-	CreateAuthUser               func(context.Context, string, store.Values, string, *AuthIdentity) (store.Document, error)
-	CreateAuthUserLocalized      func(context.Context, string, store.Values, string, *AuthIdentity, LocaleOptions) (store.Document, error)
+	CreateAuthUser               func(context.Context, string, store.Values, string, *AuthIdentity, LocaleOptions, *bool) (store.Document, error)
 	CreateAPIKey                 func(context.Context, string, string, time.Time) (APIKey, error)
 	APIKeys                      func(context.Context, string) ([]APIKeyInfo, error)
 	RevokeAPIKey                 func(context.Context, string, string) error
@@ -954,7 +953,12 @@ func (api *API) global(writer http.ResponseWriter, request *http.Request, reques
 				api.writeError(writer, requestID, err)
 				return
 			}
-			operationRequest := operationengine.Request{Operation: operation.Update, Collection: key, ID: slug, Data: values, Actor: actor, ActorCollection: actorCollection, ExpectedRevision: revisionHeader(request)}
+			draft, err := decodeDraftQuery(request)
+			if err != nil {
+				api.writeError(writer, requestID, err)
+				return
+			}
+			operationRequest := operationengine.Request{Operation: operation.Update, Collection: key, ID: slug, Data: values, Actor: actor, ActorCollection: actorCollection, ExpectedRevision: revisionHeader(request), Draft: draft}
 			localeOptions.apply(&operationRequest)
 			result, err := api.config.Engine.Execute(request.Context(), operationRequest)
 			if err != nil {
@@ -1021,7 +1025,7 @@ func (api *API) global(writer http.ResponseWriter, request *http.Request, reques
 			return
 		}
 		writeJSON(writer, http.StatusOK, map[string]any{"versions": versionsJSON(versions)})
-	case "publish", "unpublish":
+	case "publish", "unpublish", "discard-draft":
 		if request.Method != http.MethodPost || len(segments) != 2 {
 			api.methodNotAllowed(writer, requestID, http.MethodPost)
 			return
@@ -1029,6 +1033,8 @@ func (api *API) global(writer http.ResponseWriter, request *http.Request, reques
 		kind := operation.Publish
 		if action == "unpublish" {
 			kind = operation.Unpublish
+		} else if action == "discard-draft" {
+			kind = operation.DiscardDraft
 		}
 		values, err := api.decodeOptionalValues(writer, request)
 		if err != nil {
@@ -1491,7 +1497,12 @@ func (api *API) collection(writer http.ResponseWriter, request *http.Request, re
 			api.writeError(writer, requestID, err)
 			return
 		}
-		operationRequest := operationengine.Request{Operation: operation.Update, Collection: segments[0], ID: id, Data: values, Actor: actor, ActorCollection: actorCollection, ExpectedRevision: revisionHeader(request)}
+		draft, err := decodeDraftQuery(request)
+		if err != nil {
+			api.writeError(writer, requestID, err)
+			return
+		}
+		operationRequest := operationengine.Request{Operation: operation.Update, Collection: segments[0], ID: id, Data: values, Actor: actor, ActorCollection: actorCollection, ExpectedRevision: revisionHeader(request), Draft: draft}
 		localeOptions.apply(&operationRequest)
 		result, err := api.config.Engine.Execute(request.Context(), operationRequest)
 		if err != nil {
@@ -1738,14 +1749,16 @@ func (api *API) documentAction(writer http.ResponseWriter, request *http.Request
 		writeJSON(writer, http.StatusOK, map[string]any{"versions": versionsJSON(versions)})
 	case "schedule":
 		api.scheduledPublication(writer, request, requestID, collectionName, id, segments, actor, identity)
-	case "publish", "unpublish":
-		if request.Method != http.MethodPost {
+	case "publish", "unpublish", "discard-draft":
+		if request.Method != http.MethodPost || len(segments) != 3 {
 			api.methodNotAllowed(writer, requestID, http.MethodPost)
 			return
 		}
 		kind := operation.Publish
 		if action == "unpublish" {
 			kind = operation.Unpublish
+		} else if action == "discard-draft" {
+			kind = operation.DiscardDraft
 		}
 		values, err := api.decodeOptionalValues(writer, request)
 		if err != nil {
@@ -2425,7 +2438,7 @@ func (api *API) createAuthUser(writer http.ResponseWriter, request *http.Request
 		api.methodNotAllowed(writer, requestID, http.MethodPost)
 		return
 	}
-	if api.config.CreateAuthUser == nil && api.config.CreateAuthUserLocalized == nil {
+	if api.config.CreateAuthUser == nil {
 		api.writeError(writer, requestID, &operationengine.Error{Code: "unknown_auth_collection", Status: 404, Message: "auth collection was not found"})
 		return
 	}
@@ -2444,12 +2457,12 @@ func (api *API) createAuthUser(writer http.ResponseWriter, request *http.Request
 		api.writeError(writer, requestID, err)
 		return
 	}
-	var document store.Document
-	if api.config.CreateAuthUserLocalized != nil {
-		document, err = api.config.CreateAuthUserLocalized(request.Context(), collection, input.Data, input.Password, identity, localeOptions.public())
-	} else {
-		document, err = api.config.CreateAuthUser(request.Context(), collection, input.Data, input.Password, identity)
+	draft, err := decodeDraftQuery(request)
+	if err != nil {
+		api.writeError(writer, requestID, err)
+		return
 	}
+	document, err := api.config.CreateAuthUser(request.Context(), collection, input.Data, input.Password, identity, localeOptions.public(), draft)
 	if err != nil {
 		api.writeError(writer, requestID, err)
 		return
@@ -3214,6 +3227,7 @@ func decodeDynamicValues(encoded []byte, target *store.Values) error {
 }
 
 type listQuery struct {
+	draft           *bool
 	page, limit     int
 	filter          query.Expression
 	sort            []query.Sort
@@ -3233,9 +3247,13 @@ func decodeListQuery(values url.Values, collection schema.Collection, allowAcces
 		if strings.HasPrefix(key, "where[") {
 			return listQuery{}, &operationengine.Error{Code: "bad_query", Status: 400, Message: "bracket-style where[...] parameters are not supported; send the filter as one URL-encoded JSON where parameter, for example where=" + bracketWhereExample(values)}
 		}
-		if key != "page" && key != "limit" && key != "depth" && key != "where" && key != "select" && key != "populate" && key != "sort" && key != "trash" && key != "locale" && key != "fallback-locale" && key != "fallbackLocale" && (key != "include-access" || !allowAccess) {
+		if key != "page" && key != "limit" && key != "depth" && key != "where" && key != "select" && key != "populate" && key != "sort" && key != "trash" && key != "locale" && key != "fallback-locale" && key != "fallbackLocale" && key != "draft" && (key != "include-access" || !allowAccess) {
 			return listQuery{}, &operationengine.Error{Code: "bad_query", Status: 400, Message: fmt.Sprintf("unknown query parameter %q", key)}
 		}
+	}
+	draft, err := decodeDraftValues(values)
+	if err != nil {
+		return listQuery{}, err
 	}
 	includeAccessValues := values["include-access"]
 	if len(includeAccessValues) > 1 {
@@ -3293,7 +3311,7 @@ func decodeListQuery(values url.Values, collection schema.Collection, allowAcces
 	if err != nil {
 		return listQuery{}, err
 	}
-	return listQuery{page: page, limit: limit, filter: filter, sort: sorts, selectFields: selection.stored, outputFields: selection.output, populate: population, trashOnly: trashOnly, includeAccess: includeAccess,
+	return listQuery{draft: draft, page: page, limit: limit, filter: filter, sort: sorts, selectFields: selection.stored, outputFields: selection.output, populate: population, trashOnly: trashOnly, includeAccess: includeAccess,
 		locale: localeOptions.locale, fallbackLocales: localeOptions.fallbackLocales, disableFallback: localeOptions.disableFallback, allLocales: localeOptions.allLocales}, nil
 }
 
@@ -3336,17 +3354,21 @@ func decodeLocaleQuery(values url.Values) (localeQuery, error) {
 }
 
 func decodeDraftQuery(request *http.Request) (*bool, error) {
-	values, present := request.URL.Query()["draft"]
+	return decodeDraftValues(request.URL.Query())
+}
+
+func decodeDraftValues(queryValues url.Values) (*bool, error) {
+	values, present := queryValues["draft"]
 	if !present {
 		return nil, nil
 	}
 	if len(values) != 1 {
 		return nil, &operationengine.Error{Code: "bad_query", Status: 400, Message: "draft query must be specified once"}
 	}
-	draft, err := strconv.ParseBool(values[0])
-	if err != nil {
-		return nil, &operationengine.Error{Code: "bad_query", Status: 400, Message: "invalid draft query", Cause: err}
+	if values[0] != "true" && values[0] != "false" {
+		return nil, &operationengine.Error{Code: "bad_query", Status: 400, Message: "draft query must be true or false"}
 	}
+	draft := values[0] == "true"
 	return &draft, nil
 }
 

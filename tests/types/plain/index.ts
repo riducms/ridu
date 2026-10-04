@@ -347,8 +347,19 @@ void adminClient;
 // @ts-expect-error generated clients reject collection slugs outside the generated manifest.
 void automaticClient.list("comments");
 
-// @ts-expect-error generated clients preserve generated create inputs.
 void automaticClient.create("posts", { status: "draft" });
+void automaticClient.create("posts", { title: null }, { draft: true });
+void automaticClient.update("posts", post.id, { title: null }, { draft: true, revision: 1 });
+void automaticClient.discardDraft("posts", post.id, { revision: 2 });
+void automaticClient.find("posts", post.id, { draft: false });
+// @ts-expect-error a published create still requires its complete input.
+void automaticClient.create("posts", { status: "draft" }, { draft: false });
+// @ts-expect-error ordinary updates cannot clear required fields.
+void automaticClient.update("posts", post.id, { title: null });
+// @ts-expect-error draft inputs still reject undeclared fields.
+void automaticClient.create("posts", { unknown: true }, { draft: true });
+// @ts-expect-error draft inputs still enforce block discriminators.
+void automaticClient.create("posts", { layout: [{ blockType: "unknown" }] }, { draft: true });
 
 // @ts-expect-error the generated fixture has no upload-enabled collection.
 void automaticClient.upload("posts", new Blob());

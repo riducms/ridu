@@ -35,7 +35,7 @@ func TestReferenceWorkflow(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer backend.Close()
-	config := content.Config()
+	config := referenceWorkflowConfig()
 	if !migrated {
 		manifest, err := ridu.Resolve(config)
 		if err != nil {
@@ -182,7 +182,11 @@ func TestReferenceWorkflow(t *testing.T) {
 	}
 	for _, value := range *all.Layout {
 		if hero, ok := value.(*generated.HeroAllLocales); ok {
-			if hero.Heading == nil || ((*hero.Heading)["en"] != "Hello <reader>" || (*hero.Heading)["fr"] != "Bonjour") {
+			if hero.Heading == nil {
+				t.Fatal("locale output omitted heading")
+			}
+			english, french := (*hero.Heading)["en"], (*hero.Heading)["fr"]
+			if english == nil || *english != "Hello <reader>" || french == nil || *french != "Bonjour" {
 				t.Fatalf("locale output = %#v", hero.Heading)
 			}
 		}
@@ -200,7 +204,11 @@ func TestReferenceWorkflow(t *testing.T) {
 		for _, value := range *document.Layout {
 			switch block := value.(type) {
 			case *generated.HeroAllLocales:
-				if block.Heading == nil || (*block.Heading)["en"] != "Hello <reader>" || (*block.Heading)["fr"] != "Bonjour" {
+				if block.Heading == nil {
+					t.Fatal("all-locales list omitted heading")
+				}
+				english, french := (*block.Heading)["en"], (*block.Heading)["fr"]
+				if english == nil || *english != "Hello <reader>" || french == nil || *french != "Bonjour" {
 					t.Fatal("all-locales list lost translations")
 				}
 			case *generated.MediaAllLocales:
@@ -248,7 +256,7 @@ func TestReferenceWorkflow(t *testing.T) {
 
 	// Edit a nested link through a read which redacts required labels. Retention
 	// must preserve both rows, every omitted label, and unrelated block content.
-	restrictedConfig := content.Config()
+	restrictedConfig := referenceWorkflowConfig()
 	restrictedConfig.Collections[1].Fields, err = restrictedConfig.Collections[1].Fields.Edit(func(root *field.ChildrenDraft) error {
 		return root.EditBlock("layout", "content", func(block *field.ChildrenDraft) error {
 			return block.EditChildren("links", func(links *field.ChildrenDraft) error {
@@ -341,4 +349,18 @@ func TestReferenceWorkflow(t *testing.T) {
 	if err := json.Unmarshal([]byte(`[{"blockType":"retired","_key":"old"}]`), &unknown); err == nil {
 		t.Fatal("unknown discriminator accepted")
 	}
+}
+
+func referenceWorkflowConfig() ridu.Config {
+	config := content.Config()
+	// These tests exercise anonymous field redaction, not the editor-default policy.
+	// Grant draft visibility explicitly without bypassing collection or field access.
+	for index := range config.Collections {
+		if config.Collections[index].VersionConfig.Drafts {
+			config.Collections[index].Access.ReadDrafts = func(ridu.AccessContext) (ridu.AccessDecision, error) {
+				return ridu.Allow(), nil
+			}
+		}
+	}
+	return config
 }

@@ -77,6 +77,169 @@ export function changedFormValues(
 	return submissionRecord(fields, input, "", () => true, original, isInherited);
 }
 
+/** Apply late edits to a confirmed save, or require recovery for incompatible structure. */
+export function rebaseSavedFormValues(
+	fields: readonly SchemaField[],
+	saved: FormValues,
+	submitted: FormValues,
+	current: FormValues
+): FormValues | undefined {
+	return rebaseRecord(fields, saved, submitted, current);
+}
+
+function rebaseRecord(
+	fields: readonly SchemaField[],
+	saved: unknown,
+	submitted: unknown,
+	current: unknown
+): FormValues | undefined {
+	if (!isRecord(current) || !isRecord(submitted)) return;
+	const merged = isRecord(saved) ? cloneFormValues(saved) : {};
+	for (const field of fields) {
+		const now = current[field.name];
+		const before = submitted[field.name];
+		if (deepEqual(now, before)) continue;
+		if (!Object.hasOwn(current, field.name)) {
+			delete merged[field.name];
+			continue;
+		}
+		if (now === undefined) {
+			merged[field.name] = undefined;
+			continue;
+		}
+		const savedValue = merged[field.name];
+		let rebased: unknown;
+		if (field.type === "group" && isRecord(now) && isRecord(before)) {
+			if (!isRecord(savedValue)) return;
+			rebased = rebaseRecord(field.nested?.fields ?? [], savedValue, before, now);
+		} else if ((field.type === "array" || field.type === "blocks") && Array.isArray(now))
+			rebased = rebaseRows(field, savedValue, before, now);
+		else if (field.type === "plugin" && field.plugin?.embeddedTrees !== undefined)
+			rebased = rebaseEmbedded(field, savedValue, before, now);
+		else rebased = cloneFormValue(now);
+		if (rebased === undefined) return;
+		merged[field.name] = rebased;
+	}
+	copyReservedValue(current, merged, "_key");
+	copyReservedValue(current, merged, "blockType");
+	return merged;
+}
+
+function rebaseRows(field: SchemaField, saved: unknown, submitted: unknown, current: unknown[]) {
+	if (!Array.isArray(saved) || !Array.isArray(submitted)) return;
+	const identity = (row: unknown) =>
+		isRecord(row) && typeof row._key === "string"
+			? JSON.stringify([row._key, field.type === "blocks" ? row.blockType : null])
+			: undefined;
+	const identities = (rows: unknown[]) => {
+		const keys = rows.map(identity);
+		return keys.some((key) => key === undefined) || new Set(keys).size !== keys.length
+			? undefined
+			: (keys as string[]);
+	};
+	const savedKeys = identities(saved);
+	const submittedKeys = identities(submitted);
+	const currentKeys = identities(current);
+	if (!savedKeys || !submittedKeys || !currentKeys) return;
+	const localStructureChanged = !deepEqual(currentKeys, submittedKeys);
+	const serverStructureChanged = !deepEqual(savedKeys, submittedKeys);
+	if (localStructureChanged && serverStructureChanged && !deepEqual(currentKeys, savedKeys)) return;
+	const byKey = (rows: unknown[], keys: string[]) => new Map(keys.map((key, i) => [key, rows[i]]));
+	const savedByKey = byKey(saved, savedKeys);
+	const submittedByKey = byKey(submitted, submittedKeys);
+	const currentByKey = byKey(current, currentKeys);
+	for (const [key, before] of submittedByKey) {
+		const now = currentByKey.get(key);
+		if (now !== undefined && !deepEqual(now, before) && !savedByKey.has(key)) return;
+	}
+	const useCurrent = localStructureChanged && !serverStructureChanged;
+	const source = useCurrent ? current : saved;
+	const sourceKeys = useCurrent ? currentKeys : savedKeys;
+	const blocks = resolveBlockTypes(field.blocks);
+	const result: unknown[] = [];
+	for (const [index, row] of source.entries()) {
+		const key = sourceKeys[index]!;
+		const before = submittedByKey.get(key);
+		const now = currentByKey.get(key);
+		const server = savedByKey.get(key);
+		if (before === undefined || now === undefined || server === undefined) {
+			result.push(cloneFormValue(row));
+			continue;
+		}
+		const children =
+			field.type === "array"
+				? (field.nested?.fields ?? [])
+				: blocks.find((block) => block.slug === (row as FormValues).blockType)?.fields;
+		if (children === undefined) return;
+		const rebased = rebaseRecord(children, server, before, now);
+		if (rebased === undefined) return;
+		result.push(rebased);
+	}
+	return result;
+}
+
+function rebaseEmbedded(field: SchemaField, saved: unknown, submitted: unknown, current: unknown) {
+	const inspect = (value: unknown) => embeddedOccurrences(field, value, field.path);
+	const server = inspect(saved);
+	const before = inspect(submitted);
+	const now = inspect(current);
+	if (
+		[server, before, now].some(
+			(result) => result.issues.length > 0 || result.occurrences.some((item) => !item.identity)
+		)
+	)
+		return;
+	const key = (item: (typeof now.occurrences)[number]) =>
+		JSON.stringify([item.tree.key, item.case.tagValue, item.block.slug, item.identity]);
+	const byKey = (items: typeof now.occurrences) => new Map(items.map((item) => [key(item), item]));
+	const savedByKey = byKey(server.occurrences);
+	const submittedByKey = byKey(before.occurrences);
+	const currentByKey = byKey(now.occurrences);
+	const shape = (value: unknown) =>
+		transformEmbeddedPayloads(field, cloneFormValue(value), field.path, (item) => ({
+			[item.case.discriminator]: item.block.slug,
+			[item.case.identity]: item.identity,
+		}));
+	const localStructureChanged = !deepEqual(shape(current), shape(submitted));
+	const serverStructureChanged = !deepEqual(shape(saved), shape(submitted));
+	if (localStructureChanged && serverStructureChanged && !deepEqual(shape(current), shape(saved)))
+		return;
+	for (const [identity, item] of currentByKey) {
+		const prior = submittedByKey.get(identity);
+		if (prior && !deepEqual(item.payload, prior.payload) && !savedByKey.has(identity)) return;
+	}
+	const useCurrent = localStructureChanged && !serverStructureChanged;
+	let conflict = false;
+	const merged = transformEmbeddedPayloads(
+		field,
+		cloneFormValue(useCurrent ? current : saved),
+		field.path,
+		(item) => {
+			const identity = key(item);
+			const prior = submittedByKey.get(identity);
+			const local = currentByKey.get(identity);
+			const confirmed = savedByKey.get(identity);
+			if (!prior || !local || !confirmed) return item.payload;
+			const rebased = rebaseRecord(
+				item.block.fields,
+				confirmed.payload,
+				prior.payload,
+				local.payload
+			);
+			if (!rebased) {
+				conflict = true;
+				return item.payload;
+			}
+			return {
+				...rebased,
+				[item.case.discriminator]: item.block.slug,
+				[item.case.identity]: item.identity,
+			};
+		}
+	);
+	return conflict ? undefined : merged;
+}
+
 /** Initialize a new record, retaining supplied values and container metadata. */
 export function initialFormValues(
 	fields: readonly SchemaField[],

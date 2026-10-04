@@ -31,10 +31,13 @@ func TestPostgresUploadReferenceStatementCoalescesCollectionsAndVersions(t *test
 	if got := strings.Count(statement, "ridu_versions"); got != 3 {
 		t.Fatalf("version branches = %d in %s", got, statement)
 	}
-	if got := strings.Count(statement, " = ANY($1::text[])"); got != 4 {
+	if got := strings.Count(statement, "ridu_published_documents"); got != 3 {
+		t.Fatalf("published-head branches = %d in %s", got, statement)
+	}
+	if got := strings.Count(statement, " = ANY($1::text[])"); got != 6 {
 		t.Fatalf("candidate predicates = %d in %s", got, statement)
 	}
-	if got := strings.Count(statement, "jsonb_path_query_array("); got != 3 || strings.Contains(statement, "jsonb_each") {
+	if got := strings.Count(statement, "jsonb_path_query_array("); got != 4 || strings.Contains(statement, "jsonb_each") {
 		t.Fatalf("indexed variant predicates = %d in %s", got, statement)
 	}
 	mediaATable := quote(collectionTable("media-a"))

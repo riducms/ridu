@@ -37,23 +37,38 @@ export interface ExistsWhere {
 
 export type PostsLayoutQuoteInput = {
 	"source"?: ID | null;
+	"blockName"?: string | null;
 } & { blockType: "quote"; _key?: string };
 
 /** Patch a retained row by _key. New identities must satisfy the input contract at runtime. */
 export type PostsLayoutQuoteUpdate = {
 	"source"?: ID | null;
+	"blockName"?: string | null;
 } & { blockType: "quote"; _key: string };
 
 export type PostsLayoutQuote = {
 	"source"?: ID | Authors | null;
+	"blockName"?: string | null;
+} & { blockType: "quote"; _key: string };
+
+export type PostsLayoutQuoteDraftInput = {
+	"source"?: ID | null;
+	"blockName"?: string | null;
+} & { blockType: "quote"; _key?: string };
+
+export type PostsLayoutQuoteDraftUpdate = {
+	"source"?: ID | null;
+	"blockName"?: string | null;
 } & { blockType: "quote"; _key: string };
 
 export type PostsLayoutQuoteAllLocales = {
 	"source"?: ID | AuthorsAllLocales | null;
+	"blockName"?: string | null;
 } & { blockType: "quote"; _key: string };
 
 export type PostsLayoutQuoteAllLocalesValue = {
 	"source"?: ID | AuthorsAllLocales | null;
+	"blockName"?: string | null;
 } & { blockType: "quote"; _key: string };
 
 export type PostsLayoutBlockInput = PostsLayoutQuoteInput;
@@ -64,6 +79,12 @@ export type PostsLayoutUpdate = Array<PostsLayoutBlockUpdate>;
 
 export type PostsLayoutBlock = PostsLayoutQuote;
 export type PostsLayout = Array<PostsLayoutBlock>;
+
+export type PostsLayoutBlockDraftInput = PostsLayoutQuoteDraftInput;
+export type PostsLayoutDraftInput = Array<PostsLayoutBlockDraftInput>;
+
+export type PostsLayoutBlockDraftUpdate = PostsLayoutQuoteDraftUpdate | PostsLayoutQuoteDraftInput;
+export type PostsLayoutDraftUpdate = Array<PostsLayoutBlockDraftUpdate>;
 
 export type PostsLayoutBlockAllLocales = PostsLayoutQuoteAllLocales;
 export type PostsLayoutAllLocales = Array<PostsLayoutBlockAllLocales>;
@@ -221,9 +242,11 @@ export interface Posts {
 	createdAt: string;
 	updatedAt: string;
 	_status: "draft" | "published";
+	_publishedRevision?: number;
+	_hasDraftChanges?: boolean;
 	_revision: number;
 	_localization?: { sources: Partial<Record<string, Locale>> };
-	"title"?: string;
+	"title"?: string | null;
 	"status"?: "draft" | "published" | null;
 	"author"?: ID | Authors | null;
 	"seo"?: {
@@ -246,8 +269,10 @@ export interface PostsAllLocales {
 	createdAt: string;
 	updatedAt: string;
 	_status: "draft" | "published";
+	_publishedRevision?: number;
+	_hasDraftChanges?: boolean;
 	_revision: number;
-	"title"?: RiduLocalizedValues<string>;
+	"title"?: RiduLocalizedValues<string | null>;
 	"status"?: "draft" | "published" | null;
 	"author"?: RiduLocalizedValues<ID | AuthorsAllLocales | null>;
 	"seo"?: {
@@ -306,6 +331,47 @@ export interface PostsUpdate {
 	"subject"?: { relationTo: "authors"; id: ID } | { relationTo: "posts"; id: ID } | null;
 }
 
+export interface PostsDraftCreate {
+	"title"?: string | null;
+	"status"?: "draft" | "published" | null;
+	"author"?: ID | null;
+	"seo"?: {
+		"description"?: string | null;
+		"reviewer"?: ID | null;
+	} | null;
+	"sections"?: Array<{
+		_key?: string;
+		"reviewer"?: ID | null;
+	}> | null;
+	"layout"?: PostsLayoutDraftInput | null;
+	"localeNamed"?: {
+		"en"?: ID | null;
+	} | null;
+	"subject"?: { relationTo: "authors"; id: ID } | { relationTo: "posts"; id: ID } | null;
+}
+
+export interface PostsDraftUpdate {
+	"title"?: string | null;
+	"status"?: "draft" | "published" | null;
+	"author"?: ID | null;
+	"seo"?: {
+		"description"?: string | null;
+		"reviewer"?: ID | null;
+	} | null;
+	"sections"?: Array<{
+		_key?: string;
+		"reviewer"?: ID | null;
+	} | {
+		_key: string;
+		"reviewer"?: ID | null;
+	}> | null;
+	"layout"?: PostsLayoutDraftUpdate | null;
+	"localeNamed"?: {
+		"en"?: ID | null;
+	} | null;
+	"subject"?: { relationTo: "authors"; id: ID } | { relationTo: "posts"; id: ID } | null;
+}
+
 export interface PostsWhere {
 	and?: readonly PostsWhere[];
 	or?: readonly PostsWhere[];
@@ -324,6 +390,7 @@ export interface PostsWhere {
 	"sections.reviewer"?: ScalarWhere<ID>;
 	"layout"?: ExistsWhere;
 	"layout.quote.source"?: ScalarWhere<ID>;
+	"layout.quote.blockName"?: ScalarWhere<string>;
 	"localeNamed"?: ExistsWhere;
 	"localeNamed.en"?: ScalarWhere<ID>;
 	"subject"?: ScalarWhere<ID>;
@@ -388,7 +455,7 @@ export interface PostsAllLocalesPopulateOutput {
 	"subject": { relationTo: "authors"; id: ID | AuthorsAllLocales } | { relationTo: "posts"; id: ID | PostsAllLocales } | null;
 }
 
-export type PostsValidationPath = "title" | `title.${Locale}` | "status" | "author" | `author.${Locale}` | "seo" | "seo.description" | "seo.reviewer" | "sections" | `sections.${number}` | `sections.${number}._key` | `sections.${number}.reviewer` | "layout" | `layout.${number}` | `layout.${number}._key` | `layout.${number}.blockType` | `layout.${number}.source` | "localeNamed" | "localeNamed.en" | "subject";
+export type PostsValidationPath = "title" | `title.${Locale}` | "status" | "author" | `author.${Locale}` | "seo" | "seo.description" | "seo.reviewer" | "sections" | `sections.${number}` | `sections.${number}._key` | `sections.${number}.reviewer` | "layout" | `layout.${number}` | `layout.${number}._key` | `layout.${number}.blockType` | `layout.${number}.source` | `layout.${number}.blockName` | "localeNamed" | "localeNamed.en" | "subject";
 
 export interface RiduConfig {
 	locale: Locale;
@@ -440,6 +507,8 @@ export interface RiduConfig {
 			allOutput: PostsAllLocales;
 			create: PostsCreate;
 			update: PostsUpdate;
+			draftCreate: PostsDraftCreate;
+			draftUpdate: PostsDraftUpdate;
 			where: PostsWhere;
 			select: PostsSelect;
 			populate: PostsPopulate;

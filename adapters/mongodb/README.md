@@ -3,6 +3,14 @@
 `github.com/riducms/ridu/adapters/mongodb` requires a writable replica-set primary with logical
 sessions and transactions. Opening it does not create collections, indexes, or migration state.
 
+Draft-enabled versioned content keeps a working document and a separate live-head document;
+the live head is independent of retained version history. MongoDB migration history uses the
+current planner `3.0.0`; older planner artifacts and physical layouts are unsupported and must
+be handled outside Ridu before startup. Readiness rejects incomplete live-head coverage.
+Unique-index additions to versioned content use a maintenance-admitted,
+resumable reservation rebuild before the new indexes are built; typed field renames
+rebuild those reservations in their semantic transaction.
+
 New projects can select it during scaffolding:
 
 ```sh

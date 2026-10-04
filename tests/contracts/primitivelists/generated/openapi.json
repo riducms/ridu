@@ -411,15 +411,6 @@
         "operationId": "createprimitive-products",
         "parameters": [
           {
-            "description": "Create the document as a draft when true or publish it atomically when false.",
-            "in": "query",
-            "name": "draft",
-            "required": false,
-            "schema": {
-              "type": "boolean"
-            }
-          },
-          {
             "description": "Select one content locale, or all locales as locale-keyed values.",
             "in": "query",
             "name": "locale",
@@ -894,6 +885,16 @@
         "operationId": "publishprimitive-products",
         "parameters": [
           {
+            "description": "Require the last observed working _revision; stale mutations return conflict without changing either head.",
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "pattern": "^\"?[1-9][0-9]*\"?$",
+              "type": "string"
+            }
+          },
+          {
             "description": "Select one content locale, or all locales as locale-keyed values.",
             "in": "query",
             "name": "locale",
@@ -918,8 +919,34 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/primitive-productsUpdate"
+              }
+            }
+          },
+          "description": "Optional changes to apply before validating and publishing the complete working candidate, including every supplied exact translation.",
+          "required": false
+        },
         "responses": {
           "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "doc": {
+                      "$ref": "#/components/schemas/primitive-products"
+                    }
+                  },
+                  "required": [
+                    "doc"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
             "description": "Successful response"
           },
           "default": {
@@ -1481,6 +1508,16 @@
                           "pattern": "\\S",
                           "type": "string"
                         },
+                        "blockName": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
                         "blockType": {
                           "const": "card",
                           "type": "string"
@@ -1573,6 +1610,16 @@
                           "pattern": "\\S",
                           "type": "string"
                         },
+                        "blockName": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
                         "blockType": {
                           "const": "card",
                           "type": "string"
@@ -1663,6 +1710,16 @@
                           "minLength": 1,
                           "pattern": "\\S",
                           "type": "string"
+                        },
+                        "blockName": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
                         },
                         "blockType": {
                           "const": "card",
@@ -1759,6 +1816,16 @@
                               "pattern": "\\S",
                               "type": "string"
                             },
+                            "blockName": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
                             "blockType": {
                               "const": "card",
                               "type": "string"
@@ -1804,6 +1871,16 @@
                               "minLength": 1,
                               "pattern": "\\S",
                               "type": "string"
+                            },
+                            "blockName": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
                             },
                             "blockType": {
                               "const": "card",
@@ -1901,6 +1978,16 @@
                           "pattern": "\\S",
                           "type": "string"
                         },
+                        "blockName": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
                         "blockType": {
                           "const": "card",
                           "type": "string"
@@ -1993,6 +2080,16 @@
                           "pattern": "\\S",
                           "type": "string"
                         },
+                        "blockName": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
                         "blockType": {
                           "const": "card",
                           "type": "string"
@@ -2083,6 +2180,16 @@
                           "minLength": 1,
                           "pattern": "\\S",
                           "type": "string"
+                        },
+                        "blockName": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
                         },
                         "blockType": {
                           "const": "card",
@@ -2179,6 +2286,16 @@
                               "pattern": "\\S",
                               "type": "string"
                             },
+                            "blockName": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
                             "blockType": {
                               "const": "card",
                               "type": "string"
@@ -2224,6 +2341,16 @@
                               "minLength": 1,
                               "pattern": "\\S",
                               "type": "string"
+                            },
+                            "blockName": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
                             },
                             "blockType": {
                               "const": "card",
@@ -2359,6 +2486,10 @@
             "description": "Raw partial document values; omitted update values are retained from exact-locale storage. Malformed typed values are skipped.",
             "type": "object"
           },
+          "draft": {
+            "description": "Defer required fields and editorial minima for a draft; all other validation remains active.",
+            "type": "boolean"
+          },
           "embedded": {
             "items": {
               "$ref": "#/components/schemas/LiveValidationEmbeddedScope"
@@ -2467,6 +2598,10 @@
           "data": {
             "description": "Raw partial document values; omitted update values are retained from exact-locale storage. Malformed typed values are skipped.",
             "type": "object"
+          },
+          "draft": {
+            "description": "Defer required fields and editorial minima for a draft; all other validation remains active.",
+            "type": "boolean"
           },
           "embedded": {
             "items": {
@@ -2591,6 +2726,16 @@
             "pattern": "\\S",
             "type": "string"
           },
+          "blockName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "blockType": {
             "const": "card",
             "type": "string"
@@ -2635,6 +2780,16 @@
             "pattern": "\\S",
             "type": "string"
           },
+          "blockName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "blockType": {
             "const": "card",
             "type": "string"
@@ -2678,6 +2833,16 @@
             "minLength": 1,
             "pattern": "\\S",
             "type": "string"
+          },
+          "blockName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "blockType": {
             "const": "card",
@@ -2724,6 +2889,16 @@
             "minLength": 1,
             "pattern": "\\S",
             "type": "string"
+          },
+          "blockName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "blockType": {
             "const": "card",
@@ -2773,6 +2948,16 @@
             "pattern": "\\S",
             "type": "string"
           },
+          "blockName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "blockType": {
             "const": "card",
             "type": "string"
@@ -2817,6 +3002,16 @@
             "pattern": "\\S",
             "type": "string"
           },
+          "blockName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "blockType": {
             "const": "card",
             "type": "string"
@@ -2860,6 +3055,16 @@
             "minLength": 1,
             "pattern": "\\S",
             "type": "string"
+          },
+          "blockName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "blockType": {
             "const": "card",
@@ -2906,6 +3111,16 @@
             "minLength": 1,
             "pattern": "\\S",
             "type": "string"
+          },
+          "blockName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "blockType": {
             "const": "card",
@@ -2955,6 +3170,16 @@
             "pattern": "\\S",
             "type": "string"
           },
+          "blockName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "blockType": {
             "const": "note",
             "type": "string"
@@ -2999,6 +3224,16 @@
             "pattern": "\\S",
             "type": "string"
           },
+          "blockName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "blockType": {
             "const": "note",
             "type": "string"
@@ -3042,6 +3277,16 @@
             "minLength": 1,
             "pattern": "\\S",
             "type": "string"
+          },
+          "blockName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "blockType": {
             "const": "note",
@@ -3088,6 +3333,16 @@
             "minLength": 1,
             "pattern": "\\S",
             "type": "string"
+          },
+          "blockName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "blockType": {
             "const": "note",
@@ -3137,6 +3392,16 @@
             "pattern": "\\S",
             "type": "string"
           },
+          "blockName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "blockType": {
             "const": "card",
             "type": "string"
@@ -3181,6 +3446,16 @@
             "pattern": "\\S",
             "type": "string"
           },
+          "blockName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "blockType": {
             "const": "card",
             "type": "string"
@@ -3224,6 +3499,16 @@
             "minLength": 1,
             "pattern": "\\S",
             "type": "string"
+          },
+          "blockName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "blockType": {
             "const": "card",
@@ -3270,6 +3555,16 @@
             "minLength": 1,
             "pattern": "\\S",
             "type": "string"
+          },
+          "blockName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "blockType": {
             "const": "card",
@@ -3350,6 +3645,17 @@
       "primitive-products": {
         "type": "object",
         "properties": {
+          "_revision": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "_status": {
+            "enum": [
+              "draft",
+              "published"
+            ],
+            "type": "string"
+          },
           "availableSizes": {
             "anyOf": [
               {
@@ -4055,6 +4361,20 @@
                                   "min": 0
                                 },
                                 "list": {}
+                              },
+                              {
+                                "id": "primitive-products-body-blocks-block-card-block-name",
+                                "name": "blockName",
+                                "path": "body.blocks.block.card.blockName",
+                                "type": "text",
+                                "category": "scalar",
+                                "required": false,
+                                "unique": false,
+                                "default": "",
+                                "admin": {
+                                  "label": "Block name"
+                                },
+                                "text": {}
                               }
                             ]
                           }
@@ -4835,6 +5155,20 @@
                                       "min": 0
                                     },
                                     "list": {}
+                                  },
+                                  {
+                                    "id": "primitive-products-localized-body-blocks-block-card-block-name",
+                                    "name": "blockName",
+                                    "path": "localizedBody.blocks.block.card.blockName",
+                                    "type": "text",
+                                    "category": "scalar",
+                                    "required": false,
+                                    "unique": false,
+                                    "default": "",
+                                    "admin": {
+                                      "label": "Block name"
+                                    },
+                                    "text": {}
                                   }
                                 ]
                               }
@@ -5542,6 +5876,20 @@
                                         "min": 0
                                       },
                                       "list": {}
+                                    },
+                                    {
+                                      "id": "primitive-products-localized-body-blocks-block-card-block-name",
+                                      "name": "blockName",
+                                      "path": "localizedBody.blocks.block.card.blockName",
+                                      "type": "text",
+                                      "category": "scalar",
+                                      "required": false,
+                                      "unique": false,
+                                      "default": "",
+                                      "admin": {
+                                        "label": "Block name"
+                                      },
+                                      "text": {}
                                     }
                                   ]
                                 }
@@ -6415,6 +6763,20 @@
                                   "min": 0
                                 },
                                 "list": {}
+                              },
+                              {
+                                "id": "primitive-products-body-blocks-block-card-block-name",
+                                "name": "blockName",
+                                "path": "body.blocks.block.card.blockName",
+                                "type": "text",
+                                "category": "scalar",
+                                "required": false,
+                                "unique": false,
+                                "default": "",
+                                "admin": {
+                                  "label": "Block name"
+                                },
+                                "text": {}
                               }
                             ]
                           }
@@ -7189,6 +7551,20 @@
                                   "min": 0
                                 },
                                 "list": {}
+                              },
+                              {
+                                "id": "primitive-products-localized-body-blocks-block-card-block-name",
+                                "name": "blockName",
+                                "path": "localizedBody.blocks.block.card.blockName",
+                                "type": "text",
+                                "category": "scalar",
+                                "required": false,
+                                "unique": false,
+                                "default": "",
+                                "admin": {
+                                  "label": "Block name"
+                                },
+                                "text": {}
                               }
                             ]
                           }
@@ -8008,6 +8384,20 @@
                                   "min": 0
                                 },
                                 "list": {}
+                              },
+                              {
+                                "id": "primitive-products-body-blocks-block-card-block-name",
+                                "name": "blockName",
+                                "path": "body.blocks.block.card.blockName",
+                                "type": "text",
+                                "category": "scalar",
+                                "required": false,
+                                "unique": false,
+                                "default": "",
+                                "admin": {
+                                  "label": "Block name"
+                                },
+                                "text": {}
                               }
                             ]
                           }
@@ -8789,6 +9179,20 @@
                                   "min": 0
                                 },
                                 "list": {}
+                              },
+                              {
+                                "id": "primitive-products-localized-body-blocks-block-card-block-name",
+                                "name": "blockName",
+                                "path": "localizedBody.blocks.block.card.blockName",
+                                "type": "text",
+                                "category": "scalar",
+                                "required": false,
+                                "unique": false,
+                                "default": "",
+                                "admin": {
+                                  "label": "Block name"
+                                },
+                                "text": {}
                               }
                             ]
                           }

@@ -67,8 +67,5 @@
 		The embedded field occurrence is no longer available. Close this editor and reopen it.
 	</p>
 {:else}
-	<FieldLayout
-		fields={children.filter((child) => child.name !== occurrence.block.admin?.nameField)}
-		{form}
-	/>
+	<FieldLayout fields={children.filter((child) => child.name !== "blockName")} {form} inset />
 {/if}

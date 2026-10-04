@@ -11,7 +11,6 @@ import (
 
 	"github.com/riducms/ridu/internal/embedded"
 	"github.com/riducms/ridu/internal/migrationartifact"
-	"github.com/riducms/ridu/internal/referenceindex"
 	ridumigration "github.com/riducms/ridu/migration"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
@@ -84,6 +83,15 @@ func (backend *Store) applyMongoMigrationTransactionPhase(
 	if rebuildReferences {
 		if err := backend.rebuildMongoMigrationReferences(ctx, transaction, plan.after); err != nil {
 			return fmt.Errorf("apply MongoDB migration %s phase %s reference rebuild: %w", file.Name, phase.id, err)
+		}
+		sessionContext, leave, err := transaction.enter(ctx, true)
+		if err != nil {
+			return err
+		}
+		err = backend.rebuildMongoHeadReservations(sessionContext, plan.after)
+		leave()
+		if err != nil {
+			return fmt.Errorf("apply MongoDB migration %s phase %s unique-head reservation rebuild: %w", file.Name, phase.id, err)
 		}
 	}
 	if err := backend.completeMongoMigrationTransactionPhase(ctx, transaction, lease, file, phase); err != nil {
@@ -228,6 +236,11 @@ func (backend *Store) renameMongoMigrationResource(ctx context.Context, plan mon
 			return err
 		}
 	}
+	if step.resourceRenamePublishedRequired {
+		if err := backend.renameMongoMigrationNamespace(ctx, physicalPublishedCollectionName(payload.BeforeID), physicalPublishedCollectionName(payload.AfterID), true); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -292,7 +305,7 @@ func (backend *Store) dropMongoMigrationResources(ctx context.Context, plan mong
 		if _, exists := mongoManifestResourceByID(plan.before.Snapshot(), id); !exists {
 			return fmt.Errorf("MongoDB retired resource is outside the immutable before manifest")
 		}
-		for _, name := range []string{physicalCollectionName(id), physicalVersionCollectionName(id)} {
+		for _, name := range []string{physicalCollectionName(id), physicalVersionCollectionName(id), physicalPublishedCollectionName(id)} {
 			names, err := backend.database.ListCollectionNames(ctx, bson.D{{Key: "name", Value: name}})
 			if err != nil {
 				return translateMongoError(ctx, err)
@@ -371,6 +384,11 @@ func (backend *Store) rewriteMongoMigrationDocuments(ctx context.Context, transa
 	}
 	if err := rewriteMongoDocumentCollection(sessionContext, backend.database.Collection(physicalCollectionName(resource.ID)), fieldSchemas, pairs, beforeSlug, afterSlug, false); err != nil {
 		return err
+	}
+	if resource.Versions != nil {
+		if err := rewriteMongoDocumentCollection(sessionContext, backend.database.Collection(physicalPublishedCollectionName(resource.ID)), fieldSchemas, pairs, beforeSlug, afterSlug, false); err != nil {
+			return err
+		}
 	}
 	if resource.Versions != nil || resource.Capabilities.Versions {
 		return rewriteMongoDocumentCollection(sessionContext, backend.database.Collection(physicalVersionCollectionName(resource.ID)), fieldSchemas, pairs, beforeSlug, afterSlug, true)
@@ -1363,20 +1381,9 @@ func (backend *Store) rebuildMongoMigrationReferences(ctx context.Context, trans
 				_ = cursor.Close(sessionContext)
 				return decodeErr
 			}
-			entries, referenceErr := referenceindex.Collect(resource, document)
-			if referenceErr != nil {
-				return referenceErr
-			}
-			for _, entry := range entries {
-				encoded, encodeErr := encodeMongoReferenceEntry(entry)
-				if encodeErr != nil {
-					_ = cursor.Close(sessionContext)
-					return encodeErr
-				}
-				if _, insertErr := backend.database.Collection(mongoReferenceCollectionName).InsertOne(sessionContext, encoded); insertErr != nil {
-					_ = cursor.Close(sessionContext)
-					return translateMongoError(sessionContext, insertErr)
-				}
+			if err := transaction.replaceDocumentReferences(sessionContext, resource, document); err != nil {
+				_ = cursor.Close(sessionContext)
+				return err
 			}
 		}
 		if err := cursor.Err(); err != nil {

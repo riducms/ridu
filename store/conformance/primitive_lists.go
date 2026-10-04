@@ -131,7 +131,7 @@ func runPrimitiveLists(t *testing.T, factory Factory) {
 		t.Fatal("list sort accepted")
 	}
 	transaction = begin(t, fixture.backend)
-	updated, err := transaction.Update(t.Context(), fixture.updateRequest(store.UpdateRequest{Request: store.Request{Collection: fixture.records, ID: id(1)}, Values: store.Values{"texts": store.List(store.String("replacement")), "numbers": store.List()}}))
+	updated, err := transaction.Update(t.Context(), fixture.updateRequest(store.UpdateRequest{Request: store.Request{Collection: fixture.records, ID: id(1)}, Values: store.Values{"texts": store.List(store.String("replacement")), "numbers": store.List()}, Intent: store.WriteIntentPublish}))
 	if err != nil {
 		rollback(t, transaction)
 		t.Fatal(err)

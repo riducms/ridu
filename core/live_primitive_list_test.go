@@ -306,7 +306,7 @@ func TestLivePrimitiveListEmbeddedContextAndReader(t *testing.T) {
 			if title, _ := seen.Root.String("title"); title != "unsaved" {
 				t.Fatalf("Root=%q", title)
 			}
-			if !reflect.DeepEqual(seen.Root.Get(owner), body) {
+			if !reflect.DeepEqual(seen.Root.Get(owner), document.Values[owner]) {
 				t.Fatal("detached draft changed parent Root")
 			}
 			if _, ok := seen.Input.Lookup("sizes"); !ok {

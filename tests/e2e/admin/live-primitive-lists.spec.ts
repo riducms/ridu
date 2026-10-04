@@ -34,7 +34,10 @@ async function create(page: Page, data: Record<string, unknown>) {
 async function rowAction(page: Page, path: string, row: number, action: string) {
 	await list(page, path)
 		.getByRole("button", {
-			name: `Open Row ${String(row + 1).padStart(2, "0")} actions`,
+			name:
+				path === "content"
+					? "Open Untitled Card actions"
+					: `Open Row ${String(row + 1).padStart(2, "0")} actions`,
 			exact: true,
 		})
 		.first()

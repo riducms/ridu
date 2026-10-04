@@ -821,7 +821,7 @@ printf '%s' "$RIDU_FAKE_PROJECT_RESPONSE"
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(files) != 1 || files[0].Artifact.Planner.Name != "mongodb" || files[0].Artifact.Planner.Version != "2.0.0" {
+	if len(files) != 1 || files[0].Artifact.Planner.Name != "mongodb" || files[0].Artifact.Planner.Version != "3.0.0" {
 		t.Fatalf("MongoDB CLI artifacts = %#v", files)
 	}
 	artifact, err := os.ReadFile(files[0].Path)

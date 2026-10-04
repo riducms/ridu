@@ -15,7 +15,11 @@ func (g *goBlocks) writeDecodeFields(out *strings.Builder, fields []schema.Field
 		key = wire[0]
 	}
 	if hasKey {
-		fmt.Fprintf(out, `if raw,ok:=fields[%q];ok{if err:=json.Unmarshal(raw,&decoded.Key);err!=nil{return blockFieldError(%q,"invalid identity",err)}};`, key, key)
+		fmt.Fprintf(out, `if raw,ok:=fields[%q];ok{if err:=json.Unmarshal(raw,&decoded.Key);err!=nil{return blockFieldError(%q,"invalid identity",err)};`, key, key)
+		if mode == goCreate || mode == goDraft {
+			fmt.Fprintf(out, `if strings.TrimSpace(decoded.Key)==""{return blockFieldError(%q,"expected a nonempty occurrence identity",nil)};`, key)
+		}
+		out.WriteString("};")
 	}
 	for i, field := range fields {
 		if !goFieldAppearsInMode(field, mode) {
@@ -116,6 +120,9 @@ func (g *goBlocks) writeModelDecoder(out *strings.Builder, name string, collecti
 		}
 		if collection.Capabilities.Versions {
 			metadata = append(metadata, struct{ name, wire string }{"Status", "_status"})
+			if collection.Versions != nil && collection.Versions.Drafts {
+				metadata = append(metadata, struct{ name, wire string }{"PublishedRevision", "_publishedRevision"}, struct{ name, wire string }{"HasDraftChanges", "_hasDraftChanges"})
+			}
 		}
 		if collection.Versions != nil || collection.Upload != nil {
 			metadata = append(metadata, struct{ name, wire string }{"Revision", "_revision"})
@@ -157,7 +164,7 @@ func (g *goBlocks) writeMarshalObject(out *strings.Builder, name string, fields 
 	}
 	if hasKey {
 		tag := key
-		if discriminator == "" || mode == goCreate {
+		if discriminator == "" || mode == goCreate || mode == goDraft {
 			tag += ",omitempty"
 		}
 		fmt.Fprintf(out, "Key string `json:%q`;", tag)

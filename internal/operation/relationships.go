@@ -106,13 +106,13 @@ func (engine *Engine) validateDocumentReferences(ctx Context, transaction store.
 			access = denyAllAccessPredicate()
 		}
 		// A reference can only point at a draft the actor may read.
-		access, err = engine.publishedTargetAccess(target, targetContext, access)
+		publishedOnly, err := engine.publishedTargetOnly(target, targetContext)
 		if err != nil {
 			return nil, err
 		}
 		_, err = transaction.Find(ctx.Context, store.Request{
 			Collection: target.Schema, Collections: engine.schemas, ID: reference.id,
-			Filter: check.filter, Access: access,
+			Filter: check.filter, Access: access, PublishedOnly: publishedOnly,
 			Lock: store.LockReference, Locales: referenceSelection.Configured,
 			LocaleChain: referenceSelection.Chain, AllLocales: referenceSelection.All,
 		})

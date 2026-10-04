@@ -84,6 +84,32 @@ func TestPostgresPluginReferenceRetirementPreventsCurrentAndVersionResurrectionA
 		!pluginReferenceVersionsContain(versions, "legacy-plugin-reference") {
 		t.Fatalf("seeded global plugin versions = %#v, %v", versions, err)
 	}
+	ownerHeads := []struct {
+		resource schema.StableID
+		id       string
+	}{
+		{pluginReferenceResourceID(before.Snapshot(), "entries"), entry.ID},
+		{pluginReferenceGlobalID(before.Snapshot(), "site"), global.ID},
+	}
+	type retainedHead struct {
+		snapshot string
+		revision int
+		pending  bool
+	}
+	readRetainedHead := func(resource schema.StableID, id string) retainedHead {
+		t.Helper()
+		var head retainedHead
+		if err := backend.pool.QueryRow(ctx, `SELECT (snapshot #- ARRAY['Values', 'content']::text[])::text,
+revision, has_draft_changes FROM ridu_published_documents WHERE collection_id = $1 AND document_id = $2`,
+			string(resource), id).Scan(&head.snapshot, &head.revision, &head.pending); err != nil {
+			t.Fatal(err)
+		}
+		return head
+	}
+	retainedBefore := make(map[schema.StableID]retainedHead, len(ownerHeads))
+	for _, owner := range ownerHeads {
+		retainedBefore[owner.resource] = readRetainedHead(owner.resource, owner.id)
+	}
 
 	afterConfig := pluginReferenceLiveConfig(false, false)
 	after, err := ridu.Resolve(afterConfig)
@@ -102,6 +128,11 @@ func TestPostgresPluginReferenceRetirementPreventsCurrentAndVersionResurrectionA
 	}
 	if err := backend.ApplyArtifactsWithOptions(ctx, directory, RunnerOptions{AllowMaintenance: true}); err != nil {
 		t.Fatal(err)
+	}
+	for _, owner := range ownerHeads {
+		if current := readRetainedHead(owner.resource, owner.id); current != retainedBefore[owner.resource] {
+			t.Fatalf("retirement changed unrelated live fields or head metadata for %s: before=%#v after=%#v", owner.resource, retainedBefore[owner.resource], current)
+		}
 	}
 
 	readdedConfig := pluginReferenceLiveConfig(true, true)
@@ -128,15 +159,47 @@ func TestPostgresPluginReferenceRetirementPreventsCurrentAndVersionResurrectionA
 	if err != nil {
 		t.Fatal(err)
 	}
-	if value, exists := currentEntry.Values["content"]; exists && value.Kind() != store.ValueNull {
-		t.Fatalf("retired current collection plugin value reattached: %#v", value)
-	}
 	currentGlobal, err := readdedApp.Local().Global(ctx, "site", ridu.FindOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if value, exists := currentGlobal.Values["content"]; exists && value.Kind() != store.ValueNull {
-		t.Fatalf("retired current global plugin value reattached: %#v", value)
+	// Check for the old marker if a response value exists, then check canonical
+	// absence in both stored heads.
+	for _, document := range []store.Document{currentEntry, currentGlobal} {
+		value, exists := document.Values["content"]
+		if !exists {
+			continue
+		}
+		encoded, err := json.Marshal(value)
+		if err != nil || strings.Contains(string(encoded), targetID) || strings.Contains(string(encoded), "legacy-plugin-reference") {
+			t.Fatalf("retired plugin reference reattached in response: %s, %v", encoded, err)
+		}
+	}
+	read, err := backend.BeginSnapshot(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer read.Rollback(ctx)
+	resources := append(readded.Snapshot().Collections, readded.Snapshot().Globals...)
+	for _, resource := range resources {
+		id := currentEntry.ID
+		if resource.Slug == "site" {
+			id = currentGlobal.ID
+		} else if resource.Slug != "entries" {
+			continue
+		}
+		for _, publishedOnly := range []bool{false, true} {
+			document, err := read.Find(ctx, store.Request{Collection: resource, ID: id, PublishedOnly: publishedOnly})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if value, exists := document.Values["content"]; exists && value.Kind() != store.ValueNull {
+				t.Fatalf("retired plugin content survived in %s head publishedOnly=%t: %#v", resource.Slug, publishedOnly, value)
+			}
+		}
+	}
+	if err := read.Rollback(ctx); err != nil {
+		t.Fatal(err)
 	}
 	if versions, err := readdedApp.Local().Versions(ctx, "entries", ownerID, ridu.FindOptions{}); err != nil || len(versions) != 0 {
 		t.Fatalf("retired collection plugin versions reattached = %#v, %v", versions, err)

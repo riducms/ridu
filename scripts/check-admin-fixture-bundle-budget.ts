@@ -177,7 +177,10 @@ const measurements = {
 // The fixed rich-text toolbar, its shared selection state and the editor layout options add
 // 832 gzip bytes to the lazy editor (133,284 total). Allow 1 KiB async JS; the entry and CSS
 // caps remain unchanged.
-const budgets = { entryJS: 215 * 1024, largestAsyncJS: 131 * 1024, totalCSS: 54 * 1024 };
+// Payload block headers, retained disclosure animation and inset group styling measure
+// 55,663 CSS bytes, 367 bytes above the previous cap. Allow a bounded 512-byte CSS slice;
+// preserve both JavaScript caps and the initial-route closure checks above.
+const budgets = { entryJS: 215 * 1024, largestAsyncJS: 131 * 1024, totalCSS: 54.5 * 1024 };
 
 for (const [name, size] of Object.entries(measurements)) {
 	console.log(

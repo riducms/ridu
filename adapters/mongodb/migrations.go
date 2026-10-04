@@ -20,7 +20,7 @@ const (
 	// mongoDBPlannerVersion is recorded in every artifact. Validation replans
 	// each committed artifact with this planner, so its emitted artifacts and
 	// digests must remain byte-for-byte reproducible.
-	mongoDBPlannerVersion = "2.0.0"
+	mongoDBPlannerVersion = "3.0.0"
 )
 
 // CreatedArtifact is the stable filesystem identity of one newly published
@@ -167,7 +167,7 @@ func validateMongoDBArtifactPlan(ctx context.Context, artifact ridumigration.Art
 		return err
 	}
 	if expectedDigest != artifactDigest {
-		return fmt.Errorf("MongoDB migration %s does not match planner %s %s", label, mongoDBPlannerName, mongoDBPlannerVersion)
+		return fmt.Errorf("MongoDB migration %s does not match planner %s %s", label, mongoDBPlannerName, artifact.Planner.Version)
 	}
 	return nil
 }
@@ -188,6 +188,7 @@ type mongoDBPlannedIndex struct {
 	definition  mongoIndexDefinition
 	resourceID  schema.StableID
 	version     bool
+	published   bool
 }
 
 func mongoDBFlattenedIndexPlans(plans mongoPhysicalIndexPlanSet) []mongoDBPlannedIndex {
@@ -206,8 +207,10 @@ func mongoDBFlattenedIndexPlans(plans mongoPhysicalIndexPlanSet) []mongoDBPlanne
 			planned := mongoDBPlannedIndex{
 				collection: plan.physicalName, name: definition.name, description: plan.description, definition: definition,
 			}
-			if plan.kind == mongoSystemVersionIndexes {
-				planned.resourceID, planned.version = plan.collectionID, true
+			if plan.kind == mongoSystemVersionIndexes || plan.kind == mongoSystemPublishedIndexes {
+				planned.resourceID = plan.collectionID
+				planned.version = plan.kind == mongoSystemVersionIndexes
+				planned.published = plan.kind == mongoSystemPublishedIndexes
 			}
 			flattened = append(flattened, planned)
 		}

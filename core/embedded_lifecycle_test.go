@@ -181,7 +181,7 @@ func TestEmbeddedLocalizationReferencesPopulationAndDelete(t *testing.T) {
 		t.Fatal(err)
 	}
 	draft := true
-	all, err := app.Local().Find(t.Context(), "pages", created.ID, ridu.FindOptions{AllLocales: true, Draft: &draft})
+	all, err := app.Local().Find(t.Context(), "pages", created.ID, ridu.FindOptions{AllLocales: true, Draft: &draft, System: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -191,7 +191,7 @@ func TestEmbeddedLocalizationReferencesPopulationAndDelete(t *testing.T) {
 		t.Fatalf("identity locale merge: %#v", translations)
 	}
 	path, _ := query.NewPath("body", "widgets", "widget", "card", "target")
-	populated, err := app.Local().Find(t.Context(), "pages", created.ID, ridu.FindOptions{Populate: []query.Population{{Path: path}}, Draft: &draft})
+	populated, err := app.Local().Find(t.Context(), "pages", created.ID, ridu.FindOptions{Populate: []query.Population{{Path: path}}, Draft: &draft, System: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -202,7 +202,7 @@ func TestEmbeddedLocalizationReferencesPopulationAndDelete(t *testing.T) {
 	if _, err := app.Local().Delete(t.Context(), "targets", target.ID, ridu.MutationOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	after, err := app.Local().Find(t.Context(), "pages", created.ID, ridu.FindOptions{Draft: &draft})
+	after, err := app.Local().Find(t.Context(), "pages", created.ID, ridu.FindOptions{Draft: &draft, System: true})
 	if err != nil {
 		t.Fatal(err)
 	}

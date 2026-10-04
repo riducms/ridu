@@ -20,7 +20,16 @@ func TestRemovedBlockSchemaRequiresRecoveryAtOperationBoundary(t *testing.T) {
 	ctx := context.Background()
 	draft := true
 	backend := teststore.New()
-	config := ridu.Config{Name: "Retired blocks", Localization: ridu.LocalizationConfig{DefaultLocale: "en", Locales: []ridu.Locale{{Code: "en", Label: "English"}, {Code: "fr", Label: "French"}}}, Collections: []ridu.Collection{{Slug: "pages", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true}, Fields: field.Fields{field.Text("title").Localized(), field.Blocks("layout", field.Block{Slug: "hero", Fields: field.Fields{field.Text("heading")}}, field.Block{Slug: "retired", Fields: field.Fields{field.Text("private")}})}}}}
+	config := ridu.Config{
+		Name:         "Retired blocks",
+		Localization: ridu.LocalizationConfig{DefaultLocale: "en", Locales: []ridu.Locale{{Code: "en", Label: "English"}, {Code: "fr", Label: "French"}}},
+		Collections: []ridu.Collection{{
+			Slug: "pages", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true},
+			// The duplicate case deliberately validates the working document after source read authorization.
+			Access: ridu.CollectionAccess{ReadDrafts: func(ridu.AccessContext) (ridu.AccessDecision, error) { return ridu.Allow(), nil }},
+			Fields: field.Fields{field.Text("title").Localized(), field.Blocks("layout", field.Block{Slug: "hero", Fields: field.Fields{field.Text("heading")}}, field.Block{Slug: "retired", Fields: field.Fields{field.Text("private")}})},
+		}},
+	}
 	original, err := ridu.New(config, backend)
 	if err != nil {
 		t.Fatal(err)
@@ -49,14 +58,14 @@ func TestRemovedBlockSchemaRequiresRecoveryAtOperationBoundary(t *testing.T) {
 		run  func() error
 	}{
 		{"read", func() error {
-			doc, err := current.Local().Find(ctx, "pages", created.ID, ridu.FindOptions{Draft: &draft})
+			doc, err := current.Local().Find(ctx, "pages", created.ID, ridu.FindOptions{Draft: &draft, System: true})
 			if len(doc.Values) > 0 {
 				t.Fatal("failed read returned payload")
 			}
 			return err
 		}},
 		{"list", func() error {
-			page, err := current.Local().List(ctx, "pages", ridu.ListOptions{Draft: &draft})
+			page, err := current.Local().List(ctx, "pages", ridu.ListOptions{Draft: &draft, System: true})
 			if len(page.Documents) > 0 {
 				t.Fatal("failed list returned payload")
 			}
@@ -97,13 +106,13 @@ func TestRemovedBlockSchemaRequiresRecoveryAtOperationBoundary(t *testing.T) {
 	for _, check := range checks {
 		t.Run(check.name, func(t *testing.T) { assertRecovery(t, check.run()) })
 	}
-	metadata, err := current.Local().Find(ctx, "pages", created.ID, ridu.FindOptions{Draft: &draft, Select: []query.Path{}})
+	metadata, err := current.Local().Find(ctx, "pages", created.ID, ridu.FindOptions{Draft: &draft, System: true, Select: []query.Path{}})
 	if err != nil || metadata.ID != created.ID || len(metadata.Values) != 0 {
 		t.Fatalf("metadata-only projection must not require payload recovery: %#v %v", metadata, err)
 	}
 	// Restoring the schema must reveal exactly the original persisted values and
 	// revision: denied mutations may not change content or create revisions.
-	restored, err := original.Local().Find(ctx, "pages", created.ID, ridu.FindOptions{Draft: &draft})
+	restored, err := original.Local().Find(ctx, "pages", created.ID, ridu.FindOptions{Draft: &draft, System: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +143,7 @@ func TestRemovedBlockSchemaHistoricalSnapshotRequiresRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = current.Local().Find(ctx, "pages", healthy.ID, ridu.FindOptions{Draft: &draft}); err != nil {
+	if _, err = current.Local().Find(ctx, "pages", healthy.ID, ridu.FindOptions{Draft: &draft, System: true}); err != nil {
 		t.Fatalf("healthy current document must remain usable: %v", err)
 	}
 	for _, test := range []struct {
@@ -161,7 +170,7 @@ func TestRemovedBlockSchemaHistoricalSnapshotRequiresRecovery(t *testing.T) {
 			}
 		})
 	}
-	stored, err := current.Local().Find(ctx, "pages", healthy.ID, ridu.FindOptions{Draft: &draft})
+	stored, err := current.Local().Find(ctx, "pages", healthy.ID, ridu.FindOptions{Draft: &draft, System: true})
 	if err != nil {
 		t.Fatal(err)
 	}

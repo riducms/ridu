@@ -49,7 +49,7 @@ func TestLocalRowLabelsUnifiedEmbeddedOccurrencesResolve(t *testing.T) {
 		t.Fatal(err)
 	}
 	embedded := schema.EmbeddedBlocks(manifest.Snapshot().Collections[0].Fields[0])[0].Blocks.ResolvedTypes()[0].ResolvedFields()
-	if len(embedded) != 1 || embedded[0].Nested.RowLabelComponent.Reference != "app:summary" || string(embedded[0].Nested.RowLabelComponent.Config) != `{"prefix":"Row"}` {
+	if len(embedded) != 2 || embedded[0].Nested.RowLabelComponent.Reference != "app:summary" || string(embedded[0].Nested.RowLabelComponent.Config) != `{"prefix":"Row"}` || embedded[1].Name != "blockName" {
 		t.Fatalf("embedded row label projection: %#v", embedded)
 	}
 }

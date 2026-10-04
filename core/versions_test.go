@@ -69,15 +69,19 @@ func TestDraftPublishingConflictsAndRestore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if restoredDraft.Status != store.StatusDraft || restoredDraft.Revision != 5 {
+	if restoredDraft.Status != store.StatusPublished || !restoredDraft.HasDraftChanges || restoredDraft.Revision != 5 {
 		t.Fatalf("restored as draft = %#v", restoredDraft)
 	}
 	restoredHistoricalDraft, err := application.Local().Restore(ctx, "posts", draft.ID, 1, ridu.MutationOptions{Actor: actor, ExpectedRevision: restoredDraft.Revision})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if title, _ := restoredHistoricalDraft.Values["title"].StringValue(); title != "First" || restoredHistoricalDraft.Status != store.StatusDraft || restoredHistoricalDraft.Revision != 6 {
+	if title, _ := restoredHistoricalDraft.Values["title"].StringValue(); title != "First" || restoredHistoricalDraft.Status != store.StatusDraft || restoredHistoricalDraft.PublishedRevision != 0 || restoredHistoricalDraft.Revision != 6 {
 		t.Fatalf("restored historical draft = %#v", restoredHistoricalDraft)
+	}
+	live := false
+	if _, err := application.Local().Find(ctx, "posts", draft.ID, ridu.FindOptions{Draft: &live}); !operationCode(err, "not_found") {
+		t.Fatalf("restoring a historical draft left public content: %v", err)
 	}
 	versions, err := application.Local().Versions(ctx, "posts", draft.ID, ridu.FindOptions{Actor: actor})
 	if err != nil {
@@ -85,6 +89,148 @@ func TestDraftPublishingConflictsAndRestore(t *testing.T) {
 	}
 	if len(versions) != 6 {
 		t.Fatalf("versions = %d", len(versions))
+	}
+}
+
+func TestRestoreIncompleteHistoricalDraftRespectsPublicationIntent(t *testing.T) {
+	actor := &store.Document{ID: "editor"}
+	application, err := ridu.New(ridu.Config{Name: "incomplete historical restore", Collections: []ridu.Collection{{
+		Slug: "posts", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true},
+		Fields: field.Fields{field.Text("title").Required()},
+		Access: ridu.CollectionAccess{ReadDrafts: func(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
+			if ctx.Actor != nil && ctx.Actor.ID == actor.ID {
+				return ridu.Allow(), nil
+			}
+			return ridu.Deny(), nil
+		}},
+	}}}, teststore.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := t.Context()
+	local := application.Local()
+	incomplete, err := local.Create(ctx, "posts", store.Values{}, ridu.MutationOptions{Actor: actor})
+	if err != nil || incomplete.Status != store.StatusDraft {
+		t.Fatalf("incomplete historical draft = %#v, %v", incomplete, err)
+	}
+	complete, err := local.Update(ctx, "posts", incomplete.ID, store.Values{"title": store.String("Public title")}, ridu.MutationOptions{Actor: actor, ExpectedRevision: incomplete.Revision})
+	if err != nil {
+		t.Fatal(err)
+	}
+	published, err := local.Publish(ctx, "posts", incomplete.ID, ridu.MutationOptions{Actor: actor, ExpectedRevision: complete.Revision})
+	if err != nil {
+		t.Fatal(err)
+	}
+	draft, live := true, false
+	staged, err := local.RestoreAsDraft(ctx, "posts", incomplete.ID, incomplete.Revision, ridu.MutationOptions{Actor: actor, ExpectedRevision: published.Revision})
+	if err != nil || staged.Status != store.StatusPublished || !staged.HasDraftChanges || staged.PublishedRevision != published.Revision {
+		t.Fatalf("incomplete snapshot was not staged beside live: %#v, %v", staged, err)
+	}
+	working, err := local.Find(ctx, "posts", incomplete.ID, ridu.FindOptions{Actor: actor, Draft: &draft})
+	if err != nil || working.Revision != staged.Revision {
+		t.Fatalf("authorized working read = %#v, %v", working, err)
+	}
+	if _, exists := working.Values["title"]; exists {
+		t.Fatalf("working snapshot unexpectedly acquired a title: %#v", working.Values)
+	}
+	if _, err := local.Find(ctx, "posts", incomplete.ID, ridu.FindOptions{Draft: &draft}); !operationCode(err, "access_denied") {
+		t.Fatalf("anonymous explicit draft read = %v, want access_denied", err)
+	}
+	public, err := local.Find(ctx, "posts", incomplete.ID, ridu.FindOptions{Draft: &live})
+	if err != nil || stringValue(public.Values["title"]) != "Public title" || public.Revision != published.Revision {
+		t.Fatalf("restore-as-draft changed live snapshot: %#v, %v", public, err)
+	}
+	if _, err := local.Restore(ctx, "posts", incomplete.ID, incomplete.Revision, ridu.MutationOptions{Actor: actor, ExpectedRevision: published.Revision}); !operationCode(err, "conflict") {
+		t.Fatalf("stale restore = %v, want conflict", err)
+	}
+	restored, err := local.Restore(ctx, "posts", incomplete.ID, incomplete.Revision, ridu.MutationOptions{Actor: actor, ExpectedRevision: staged.Revision})
+	if err != nil || restored.Status != store.StatusDraft || restored.PublishedRevision != 0 || restored.Revision <= staged.Revision {
+		t.Fatalf("normal restore of incomplete draft = %#v, %v", restored, err)
+	}
+	if _, err := local.Find(ctx, "posts", incomplete.ID, ridu.FindOptions{Draft: &live}); !operationCode(err, "not_found") {
+		t.Fatalf("historical draft restore retained public snapshot: %v", err)
+	}
+	working, err = local.Find(ctx, "posts", incomplete.ID, ridu.FindOptions{Actor: actor, Draft: &draft})
+	if err != nil || working.Revision != restored.Revision || working.Status != store.StatusDraft {
+		t.Fatalf("working draft after unpublishing restore = %#v, %v", working, err)
+	}
+}
+
+func TestRestoreHistoricalDraftIntoAlreadyUnpublishedDocument(t *testing.T) {
+	allowUpdate, allowUnpublish := true, false
+	application, err := ridu.New(ridu.Config{Name: "restore unpublished working draft", Collections: []ridu.Collection{{
+		Slug: "posts", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true},
+		Fields: field.Fields{field.Text("title").Required()},
+		Access: ridu.CollectionAccess{
+			ReadDrafts: func(ridu.AccessContext) (ridu.AccessDecision, error) { return ridu.Allow(), nil },
+			Update: func(ridu.AccessContext) (ridu.AccessDecision, error) {
+				if allowUpdate {
+					return ridu.Allow(), nil
+				}
+				return ridu.Deny(), nil
+			},
+			Unpublish: func(ridu.AccessContext) (ridu.AccessDecision, error) {
+				if allowUnpublish {
+					return ridu.Allow(), nil
+				}
+				return ridu.Deny(), nil
+			},
+		},
+	}}}, teststore.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	local, ctx := application.Local(), t.Context()
+	draft, err := local.Create(ctx, "posts", store.Values{"title": store.String("First draft")}, ridu.MutationOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated, err := local.Update(ctx, "posts", draft.ID, store.Values{"title": store.String("Second draft")}, ridu.MutationOptions{ExpectedRevision: draft.Revision})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := local.Restore(ctx, "posts", draft.ID, draft.Revision, ridu.MutationOptions{ExpectedRevision: draft.Revision}); !operationCode(err, "conflict") {
+		t.Fatalf("stale never-published restore = %v, want conflict", err)
+	}
+	restored, err := local.Restore(ctx, "posts", draft.ID, draft.Revision, ridu.MutationOptions{ExpectedRevision: updated.Revision})
+	if err != nil || restored.Status != store.StatusDraft || restored.PublishedRevision != 0 || restored.Revision != updated.Revision+1 || stringValue(restored.Values["title"]) != "First draft" {
+		t.Fatalf("never-published draft-to-draft restore = %#v, %v", restored, err)
+	}
+	live := false
+	if _, err := local.Find(ctx, "posts", draft.ID, ridu.FindOptions{Draft: &live}); !operationCode(err, "not_found") {
+		t.Fatalf("never-published restore created a live head: %v", err)
+	}
+	allowUpdate = false
+	if _, err := local.Restore(ctx, "posts", draft.ID, updated.Revision, ridu.MutationOptions{ExpectedRevision: restored.Revision}); !operationCode(err, "access_denied") {
+		t.Fatalf("draft-to-draft restore without Update access = %v, want access_denied", err)
+	}
+	allowUpdate = true
+	published, err := local.Publish(ctx, "posts", draft.ID, ridu.MutationOptions{ExpectedRevision: restored.Revision})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := local.Restore(ctx, "posts", draft.ID, updated.Revision, ridu.MutationOptions{ExpectedRevision: published.Revision}); !operationCode(err, "access_denied") {
+		t.Fatalf("live historical-draft restore bypassed Unpublish access: %v", err)
+	}
+	allowUnpublish = true
+	unpublished, err := local.Unpublish(ctx, "posts", draft.ID, ridu.MutationOptions{ExpectedRevision: published.Revision})
+	if err != nil {
+		t.Fatal(err)
+	}
+	allowUnpublish = false
+	if _, err := local.Restore(ctx, "posts", draft.ID, updated.Revision, ridu.MutationOptions{ExpectedRevision: published.Revision}); !operationCode(err, "conflict") {
+		t.Fatalf("stale post-unpublish restore = %v, want conflict", err)
+	}
+	restored, err = local.Restore(ctx, "posts", draft.ID, updated.Revision, ridu.MutationOptions{ExpectedRevision: unpublished.Revision})
+	if err != nil || restored.Status != store.StatusDraft || restored.PublishedRevision != 0 || restored.Revision != unpublished.Revision+1 || stringValue(restored.Values["title"]) != "Second draft" {
+		t.Fatalf("post-unpublish draft-to-draft restore = %#v, %v", restored, err)
+	}
+	if _, err := local.Find(ctx, "posts", draft.ID, ridu.FindOptions{Draft: &live}); !operationCode(err, "not_found") {
+		t.Fatalf("post-unpublish restore recreated a live head: %v", err)
+	}
+	versions, err := local.Versions(ctx, "posts", draft.ID, ridu.FindOptions{})
+	if err != nil || len(versions) != 6 || versions[len(versions)-1].Status != store.StatusDraft {
+		t.Fatalf("failed restores wrote versions or final draft was not retained: %#v, %v", versions, err)
 	}
 }
 

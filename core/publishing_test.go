@@ -202,7 +202,7 @@ func TestUnpublishRequiresPublishedDocument(t *testing.T) {
 		t.Fatalf("unpublish draft error = %v, want published-document validation", err)
 	}
 	draftMode := true
-	unchanged, err := application.Local().Find(t.Context(), "posts", draft.ID, FindOptions{Draft: &draftMode})
+	unchanged, err := application.Local().Find(t.Context(), "posts", draft.ID, FindOptions{Draft: &draftMode, System: true})
 	if err != nil {
 		t.Fatal(err)
 	}

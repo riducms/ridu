@@ -30,9 +30,8 @@ function blocks(childType: SchemaField["type"] = "text"): SchemaField {
 				{
 					slug: "hero",
 					labels: { singular: "Hero", plural: "Heroes" },
-					admin: { nameField: "name" },
 					fields: [
-						scalar("name"),
+						scalar("blockName"),
 						scalar("heading", childType),
 						{ ...scalar("links", "array"), nested: { fields: [scalar("label")] } },
 						scalar("metadata", "json"),
@@ -79,7 +78,7 @@ describe("field clipboard", () => {
 		const payload = createFieldClipboardPayload(field, "row", {
 			_key: "old-row",
 			blockType: "hero",
-			name: "Homepage hero",
+			blockName: "Homepage hero",
 			heading: "Copied hero",
 			links: [{ _key: "old-link", label: "Read more" }, { label: "Keyless" }],
 			metadata: { _key: "business-key", inner: [{ _key: "external" }] },
@@ -87,7 +86,7 @@ describe("field clipboard", () => {
 		const pasted = compatibleClipboardValue(payload, field, "row") as Record<string, unknown>;
 		expect(pasted.metadata).toEqual({ _key: "business-key", inner: [{ _key: "external" }] });
 		expect((pasted.links as Record<string, unknown>[])[1]?._key).toBeString();
-		expect(pasted.name).toBe("Homepage hero");
+		expect(pasted.blockName).toBe("Homepage hero");
 		expect(pasted.heading).toBe("Copied hero");
 		expect(pasted._key).not.toBe("old-row");
 		expect((pasted.links as Record<string, unknown>[])[0]?._key).not.toBe("old-link");
@@ -107,7 +106,7 @@ describe("field clipboard", () => {
 						fields: {
 							blockType: "hero",
 							_key: "old-rich-block",
-							name: "Release callout",
+							blockName: "Release callout",
 							heading: "Copied rich block",
 							links: [{ _key: "old-rich-link", label: "Read release" }],
 						},
@@ -119,7 +118,7 @@ describe("field clipboard", () => {
 		const pasted = compatibleClipboardValue(payload, field, "field") as typeof source;
 		const copiedFields = pasted.root.children[0]!.fields;
 
-		expect(copiedFields.name).toBe("Release callout");
+		expect(copiedFields.blockName).toBe("Release callout");
 		expect(copiedFields.heading).toBe("Copied rich block");
 		expect(copiedFields._key).not.toBe("old-rich-block");
 		expect(copiedFields.links[0]!._key).not.toBe("old-rich-link");
@@ -131,7 +130,7 @@ describe("field clipboard", () => {
 		const first = {
 			...scalar("team", "array"),
 			category: "nested" as const,
-			nested: { fields: [scalar("name")], minRows: 1, maxRows: 3 },
+			nested: { fields: [scalar("blockName")], minRows: 1, maxRows: 3 },
 		};
 		const second = { ...first, nested: { ...first.nested, maxRows: 4 } };
 		expect(fieldClipboardSignature(first)).not.toBe(fieldClipboardSignature(second));

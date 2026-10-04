@@ -21,7 +21,7 @@ func ReadManifest(path string) (schema.Manifest, bool, error) {
 	if err != nil {
 		return schema.Manifest{}, false, err
 	}
-	manifest, err := schema.Parse(encoded)
+	manifest, err := schema.ParseHistorical(encoded)
 	if err == nil {
 		manifest, err = CompactManifest(manifest)
 	}
@@ -38,5 +38,5 @@ func CompactManifest(manifest schema.Manifest) (schema.Manifest, error) {
 	if err != nil {
 		return schema.Manifest{}, err
 	}
-	return schema.Parse(compact)
+	return schema.ParseHistorical(compact)
 }

@@ -129,6 +129,7 @@ func TestMongoDBUploadReferenceDeletePlansNullifiesVersionsAndRecreation(t *test
 	removeRestriction := mongoBegin(t, backend, false)
 	if _, err := removeRestriction.Update(t.Context(), store.UpdateRequest{
 		Request: store.Request{Collection: owners, ID: active.ID}, Values: store.Values{"guard": store.Null()},
+		Intent: store.WriteIntentPublish,
 	}); err != nil {
 		mongoRollback(t, removeRestriction)
 		t.Fatal(err)

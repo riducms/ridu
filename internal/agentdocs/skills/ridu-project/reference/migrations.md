@@ -147,7 +147,7 @@ An artifact records the information needed to identify and re-run the transition
 - machine-readable safety findings with notice, warning, or destructive severity.
 
 PostgreSQL artifacts can use atomic transaction phases, checkpointed batch phases, and narrowly
-typed non-transactional concurrent-index phases. MongoDB planner contract `2.0.0` artifacts emit
+typed non-transactional concurrent-index phases. MongoDB planner contract `3.0.0` artifacts emit
 only typed physical index, confirmed rename, compiled-transform, retirement, and assertion steps;
 they do not embed arbitrary driver commands. Arbitrary non-transactional SQL is not admitted.
 Formatting-only JSON changes do not alter the canonical artifact digest, but renaming, reordering,
@@ -418,7 +418,7 @@ and step progress separately: an interrupted transaction leaves neither its data
 batch resumes after its last committed keyset checkpoint, and a concurrent index resumes from
 catalog state or removes an invalid interrupted build before retrying the reviewed definition.
 
-MongoDB planner contract `2.0.0` artifacts use that same immutable format-`1` envelope. The
+MongoDB planner contract `3.0.0` artifacts use that same immutable format-`1` envelope. The
 runner authenticates every committed artifact against the planner, takes a fenced, expiring lease,
 records completed steps durably, recognizes already-completed physical work, and resumes the same
 artifact after an interrupted process. It never treats process exit or

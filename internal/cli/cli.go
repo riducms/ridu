@@ -970,19 +970,11 @@ func runMigrate(ctx context.Context, args []string, stdout, stderr io.Writer, op
 			output.Error("confirm schema renames", err)
 			return 1
 		}
-		var previousPointer *schema.Manifest
-		if previousExists {
-			previousPointer = &previous
-		}
-		artifact, err := postgres.BuildArtifact(ctx, *name, previousPointer, manifest, postgresRenames(accepted), *allowDestructive, transforms...)
-		if err != nil {
-			return reportMigrateCreateError(stdout, output, "plan migration", err)
-		}
-		created, err := migrationartifact.Create(directory, *name, artifact, time.Now())
+		created, err := postgres.CreateArtifact(ctx, directory, *name, manifest, time.Now(), postgresRenames(accepted), *allowDestructive, transforms...)
 		if err != nil {
 			return reportMigrateCreateError(stdout, output, "create migration", err)
 		}
-		for _, risk := range artifact.Risks {
+		for _, risk := range created.Artifact.Risks {
 			fmt.Fprintf(stdout, "%s\t%s\t%s\n", risk.Level, risk.Code, risk.Message)
 		}
 		relative, _ := filepath.Rel(definition.Root, created.Path)

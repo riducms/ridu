@@ -15,25 +15,25 @@ const databases = [
 		id: 'sqlite',
 		label: 'SQLite',
 		env: 'ENV RIDU_SQLITE_PATH=/data/app.sqlite',
-		note: 'One file on a mounted volume'
+		note: 'A database file on a mounted volume'
 	},
 	{
 		id: 'mongodb',
 		label: 'MongoDB',
 		env: 'ENV DATABASE_URL=mongodb+srv://…',
-		note: 'A replica set over verified TLS'
+		note: 'Needs a replica set and TLS'
 	}
 ] as const;
 
 const lines = [
 	{
 		code: 'FROM gcr.io/distroless/static-debian12',
-		note: 'No Node, no npm, not even a shell'
+		note: 'A static base image with no shell'
 	},
-	{ code: 'COPY dist/my-app /app', note: 'The API, admin, and background jobs' },
+	{ code: 'COPY dist/my-app /app', note: 'Your app, with the admin built in' },
 	{ database: true },
-	{ code: 'EXPOSE 8080', note: 'Health checks answer at /readyz' },
-	{ code: 'ENTRYPOINT ["/app"]', note: 'Refuses to start on an unmigrated database' }
+	{ code: 'EXPOSE 8080', note: 'Health checks use /readyz' },
+	{ code: 'ENTRYPOINT ["/app"]', note: 'Checks migrations are applied first' }
 ] as const;
 
 const dockerfile = (env: string) =>
@@ -48,11 +48,17 @@ const dockerfile = (env: string) =>
 	<div>
 		<p class="eyebrow">Deploy</p>
 		<h2 id="home-deploy-title" class="mt-4 mb-0 text-38px leading-[1.05] sm:text-48px">
-			Production is one file.
+			Deploy with a five-line Dockerfile
 		</h2>
 		<p class="mt-4 mb-0 max-w-460px text-16px leading-[1.65] text-ink-soft sm:text-17px">
-			<code class="font-mono text-[0.9em] text-ink">ridu build</code> compiles the API, the admin, background
-			jobs, and migration checks into a single executable. The image around it needs nothing else.
+			<code class="font-mono text-[0.9em] text-ink">ridu build</code> produces one executable with the
+			API, the admin and background jobs in it. Nothing else runs in production, so the image only needs
+			that file. Migrations are generated from your config, and the binary checks they have been applied
+			before it starts. There's also a
+			<a
+				class="text-ink underline decoration-line-strong underline-offset-3 hover:decoration-ink"
+				href="/docs/production/railway/">Railway guide</a
+			>.
 		</p>
 
 		<div class="mt-8">

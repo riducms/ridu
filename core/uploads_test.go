@@ -27,6 +27,7 @@ import (
 	"github.com/riducms/ridu/operation"
 	"github.com/riducms/ridu/protocol"
 	"github.com/riducms/ridu/query"
+	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/storage"
 	"github.com/riducms/ridu/store"
 )
@@ -1930,6 +1931,123 @@ func TestRESTRemoteUploadRejectsPrivateNetworkTargets(t *testing.T) {
 	}
 }
 
+func TestUploadCreateRejectsObsoletePublishSelectors(t *testing.T) {
+	backend, err := localstorage.New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	application, err := ridu.New(ridu.Config{Name: "upload create selectors", Storage: backend, StorageNamespace: "upload-create-selectors", Collections: []ridu.Collection{{
+		Slug: "media", Upload: true, Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true},
+		UploadConfig: ridu.UploadConfig{MaxFileSize: 1024, MimeTypes: []string{"text/plain"}},
+	}}}, teststore.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := handlerClient(application.Handler(ridu.HandlerOptions{}))
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	file, err := writer.CreateFormFile("file", "old.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := io.WriteString(file, "old"); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.WriteField("publish", "false"); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	request, err := http.NewRequest(http.MethodPost, "http://ridu.test/api/collections/media", &body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Content-Type", writer.FormDataContentType())
+	response, err := client.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusBadRequest {
+		t.Fatalf("obsolete multipart publish = %d: %s", response.StatusCode, readBody(t, response))
+	}
+	response.Body.Close()
+	response = requestJSON(t, client, http.MethodPost, "http://ridu.test/api/collections/media/remote-upload", strings.NewReader(`{"url":"https://example.test/file.txt","publish":false}`), "")
+	if response.StatusCode != http.StatusBadRequest {
+		t.Fatalf("obsolete remote publish = %d: %s", response.StatusCode, readBody(t, response))
+	}
+	response.Body.Close()
+}
+
+func TestDuplicateUploadCopiesVisibleHeadAndFencesItsRevision(t *testing.T) {
+	for _, deniedLocale := range []schema.LocaleCode{"", "en", "fr"} {
+		name := string(deniedLocale)
+		if name == "" {
+			name = "drafts-readable"
+		}
+		t.Run(name, func(t *testing.T) {
+			backend, err := localstorage.New(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			application, err := ridu.New(ridu.Config{
+				Name: "duplicate upload heads", Storage: backend, StorageNamespace: "duplicate-upload-heads",
+				Localization: ridu.LocalizationConfig{DefaultLocale: "en", Locales: []ridu.Locale{{Code: "en", Label: "English"}, {Code: "fr", Label: "French"}}},
+				Collections: []ridu.Collection{{
+					Slug: "media", Upload: true, Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true},
+					UploadConfig: ridu.UploadConfig{MaxFileSize: 1024, MimeTypes: []string{"text/plain"}},
+					Fields:       field.Fields{field.Text("alt").Localized()},
+					Access: ridu.CollectionAccess{ReadDrafts: func(ctx ridu.AccessContext) (ridu.AccessDecision, error) {
+						if deniedLocale != "" && ctx.Locale == deniedLocale {
+							return ridu.Deny(), nil
+						}
+						return ridu.Allow(), nil
+					}},
+				}},
+			}, teststore.New())
+			if err != nil {
+				t.Fatal(err)
+			}
+			live := false
+			source, err := application.Upload(t.Context(), "media", ridu.UploadInput{Filename: "live.txt", Reader: strings.NewReader("live bytes"), Draft: &live, Data: store.Values{"alt": store.String("English")}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			draft := true
+			working, err := application.UpdateUpload(t.Context(), "media", source.ID, ridu.UpdateUploadInput{Filename: "working.txt", Reader: strings.NewReader("working bytes"), Draft: &draft, ExpectedRevision: source.Revision})
+			if err != nil {
+				t.Fatal(err)
+			}
+			selectedRevision, otherRevision := working.Revision, source.Revision
+			wantBytes := "working bytes"
+			if deniedLocale != "" {
+				selectedRevision, otherRevision = source.Revision, working.Revision
+				wantBytes = "live bytes"
+			}
+			if _, err := application.Duplicate(t.Context(), "media", source.ID, nil, ridu.MutationOptions{ExpectedRevision: otherRevision}); !operationCode(err, "conflict") {
+				t.Fatalf("other head revision = %v, want conflict", err)
+			}
+			duplicate, err := application.Duplicate(t.Context(), "media", source.ID, nil, ridu.MutationOptions{ExpectedRevision: selectedRevision})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if duplicate.Status != store.StatusDraft {
+				t.Fatalf("duplicate status = %s, want draft", duplicate.Status)
+			}
+			key, _ := duplicate.Values["objectKey"].StringValue()
+			reader, _, err := backend.Open(t.Context(), key)
+			if err != nil {
+				t.Fatal(err)
+			}
+			copied, readError := io.ReadAll(reader)
+			reader.Close()
+			if readError != nil || string(copied) != wantBytes {
+				t.Fatalf("duplicate bytes = %q, %v; want %q", copied, readError, wantBytes)
+			}
+		})
+	}
+}
+
 func TestUploadReconciliationReportsBeforeExplicitCleanup(t *testing.T) {
 	root := t.TempDir()
 	backend, err := localstorage.New(root)
@@ -2855,7 +2973,8 @@ func TestUploadCreateCanPublishAndReeditRedactedSource(t *testing.T) {
 	if err := png.Encode(&encoded, image.NewRGBA(image.Rect(0, 0, 10, 8))); err != nil {
 		t.Fatal(err)
 	}
-	created, err := application.Upload(t.Context(), "media", ridu.UploadInput{Filename: "published.png", Reader: bytes.NewReader(encoded.Bytes()), Publish: true})
+	live := false
+	created, err := application.Upload(t.Context(), "media", ridu.UploadInput{Filename: "published.png", Reader: bytes.NewReader(encoded.Bytes()), Draft: &live})
 	if err != nil {
 		t.Fatal(err)
 	}

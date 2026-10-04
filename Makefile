@@ -172,7 +172,7 @@ mongodb-generated-project-test:
 	RIDU_MONGODB_GENERATED_PROJECT_TEST=true go test -count=1 -timeout=15m ./internal/cli -run '^TestGeneratedMongoDBDevelopmentProject$$'
 
 mongodb-production-test:
-	RIDU_MONGODB_PRODUCTION_FIXTURE_TEST=true go test -race -count=1 -timeout=20m ./adapters/mongodb -run '^(TestMongoDBProductionReplicaSetTLSAuthenticationAndElection|TestMongoDBV2SemanticMigrationLifecycleOnAuthenticatedReplicaSet)$$'
+	RIDU_MONGODB_PRODUCTION_FIXTURE_TEST=true go test -race -count=1 -timeout=20m ./adapters/mongodb -run '^(TestMongoDBProductionReplicaSetTLSAuthenticationAndElection|TestMongoDBSemanticMigrationLifecycleOnAuthenticatedReplicaSet)$$'
 	RIDU_MONGODB_PRODUCTION_DEPLOYMENT_TEST=true go test -race -count=1 -timeout=60m ./adapters/mongodb -run '^TestGeneratedMongoDBProductionDeployment$$'
 
 mongodb-fixture-test:

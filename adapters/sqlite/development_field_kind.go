@@ -36,8 +36,9 @@ func sqliteDevelopmentManifest(ctx context.Context, runner sqlRunner) (schema.Ma
 	return *manifest, true, nil
 }
 
-// ReviewDevelopmentFieldKinds counts live (including trashed) documents and
-// every retained snapshot under their previous schema, without changing data.
+// ReviewDevelopmentFieldKinds counts logical documents (including trash)
+// across both active heads and every retained snapshot under their previous
+// schema, without changing data.
 func (backend *Store) ReviewDevelopmentFieldKinds(ctx context.Context, before, after schema.Manifest) ([]fieldchange.Report, error) {
 	changes := fieldchange.Detect(before.Snapshot(), after.Snapshot())
 	reports := fieldchange.Reports(changes)
@@ -48,8 +49,9 @@ func (backend *Store) ReviewDevelopmentFieldKinds(ctx context.Context, before, a
 }
 
 // ClearDevelopmentFieldKinds clears only the confirmed changed fields, in
-// current values and snapshots, and adopts the resulting development schema in
-// one transaction. Immutable migration history is never bypassed.
+// working values, published heads, and snapshots, and adopts the resulting
+// development schema in one transaction. Immutable migration history is never
+// bypassed.
 func (backend *Store) ClearDevelopmentFieldKinds(ctx context.Context, before, after schema.Manifest, expected []fieldchange.Report) error {
 	changes := fieldchange.Detect(before.Snapshot(), after.Snapshot())
 	if err := fieldchange.ValidateClear(changes); err != nil {
@@ -86,13 +88,26 @@ func scanSQLiteFieldKinds(ctx context.Context, connection *sql.Conn, changes []f
 	if installed == 0 {
 		return nil
 	}
+	// A published document is one logical document even when both active heads
+	// contain the affected field. A live-only value still counts and clears.
+	reported := make([]map[string]struct{}, len(reports))
+	for index := range reported {
+		reported[index] = make(map[string]struct{})
+	}
 	for _, resource := range fieldchange.AffectedResources(changes) {
-		for _, snapshot := range []bool{false, true} {
-			query := `SELECT id, 0, values_json FROM ridu_documents WHERE collection_id = ? ORDER BY id`
-			if snapshot {
-				query = `SELECT document_id, revision, snapshot_json FROM ridu_versions WHERE collection_id = ? ORDER BY document_id, revision`
+		for _, head := range []struct {
+			query     string
+			snapshot  bool
+			published bool
+		}{
+			{query: `SELECT id, 0, values_json FROM ridu_documents WHERE collection_id = ? ORDER BY id`},
+			{query: `SELECT id, 0, values_json FROM ridu_published_documents WHERE collection_id = ? ORDER BY id`, published: true},
+			{query: `SELECT document_id, revision, snapshot_json FROM ridu_versions WHERE collection_id = ? ORDER BY document_id, revision`, snapshot: true},
+		} {
+			if head.published && resource.Versions == nil {
+				continue
 			}
-			rows, err := connection.QueryContext(ctx, query, string(resource.ID))
+			rows, err := connection.QueryContext(ctx, head.query, string(resource.ID))
 			if err != nil {
 				return translateError(err)
 			}
@@ -109,7 +124,7 @@ func scanSQLiteFieldKinds(ctx context.Context, connection *sql.Conn, changes []f
 					return translateError(err)
 				}
 				var document store.Document
-				if snapshot {
+				if head.snapshot {
 					err = json.Unmarshal([]byte(update.encoded), &document)
 				} else {
 					err = document.Values.UnmarshalJSON([]byte(update.encoded))
@@ -118,17 +133,35 @@ func scanSQLiteFieldKinds(ctx context.Context, connection *sql.Conn, changes []f
 					rows.Close()
 					return fmt.Errorf("decode stored field-kind recovery document %s: %w", update.id, err)
 				}
-				values, found, err := fieldchange.Process(changes, reports, resource.ID, document.Values, snapshot, clear)
+				localReports := append([]fieldchange.Report(nil), reports...)
+				for index := range localReports {
+					localReports[index].Documents, localReports[index].Snapshots = 0, 0
+				}
+				values, found, err := fieldchange.Process(changes, localReports, resource.ID, document.Values, head.snapshot, clear)
 				if err != nil {
 					rows.Close()
 					return err
+				}
+				for index := range localReports {
+					if head.snapshot {
+						reports[index].Snapshots += localReports[index].Snapshots
+						continue
+					}
+					if localReports[index].Documents == 0 {
+						continue
+					}
+					identity := string(resource.ID) + "\x00" + update.id
+					if _, exists := reported[index][identity]; !exists {
+						reported[index][identity] = struct{}{}
+						reports[index].Documents++
+					}
 				}
 				if !clear || !found {
 					continue
 				}
 				document.Values = values
 				var encoded []byte
-				if snapshot {
+				if head.snapshot {
 					encoded, err = json.Marshal(document)
 				} else {
 					encoded, err = values.MarshalJSON()
@@ -148,8 +181,10 @@ func scanSQLiteFieldKinds(ctx context.Context, connection *sql.Conn, changes []f
 				return translateError(err)
 			}
 			for _, update := range rewrites {
-				if snapshot {
+				if head.snapshot {
 					_, err = connection.ExecContext(ctx, `UPDATE ridu_versions SET snapshot_json = ? WHERE collection_id = ? AND document_id = ? AND revision = ?`, update.encoded, string(resource.ID), update.id, update.revision)
+				} else if head.published {
+					_, err = connection.ExecContext(ctx, `UPDATE ridu_published_documents SET values_json = ? WHERE collection_id = ? AND id = ?`, update.encoded, string(resource.ID), update.id)
 				} else {
 					_, err = connection.ExecContext(ctx, `UPDATE ridu_documents SET values_json = ? WHERE collection_id = ? AND id = ?`, update.encoded, string(resource.ID), update.id)
 				}

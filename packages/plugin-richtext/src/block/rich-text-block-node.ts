@@ -88,19 +88,13 @@ export function isBlockNode(node: LexicalNode | null | undefined): node is Block
 export interface BlockNameUpdate {
 	nodeKey: NodeKey;
 	identity: string;
-	nameField: string;
-	change: { field: string; value: string };
+	value: string;
 }
 
 // @lexical-scope
 export function updateBlockName(update: BlockNameUpdate): boolean {
 	const node = $getNodeByKey(update.nodeKey);
-	if (
-		!isBlockNode(node) ||
-		node.getFields()._key !== update.identity ||
-		update.change.field !== update.nameField
-	)
-		return false;
-	node.setFields({ ...node.getFields(), [update.nameField]: update.change.value });
+	if (!isBlockNode(node) || node.getFields()._key !== update.identity) return false;
+	node.setFields({ ...node.getFields(), blockName: update.value });
 	return true;
 }

@@ -88,6 +88,17 @@ func (transaction *documentTransaction) Create(ctx context.Context, request stor
 	if _, err := transaction.collection(request.Collection).InsertOne(sessionContext, encoded); err != nil {
 		return store.Document{}, translateMongoError(ctx, err)
 	}
+	if request.Collection.Versions != nil && status == store.StatusPublished {
+		if _, err := transaction.publishedCollection(request.Collection).InsertOne(sessionContext, encoded); err != nil {
+			return store.Document{}, translateMongoError(ctx, err)
+		}
+		if request.Collection.Versions.Drafts {
+			document.PublishedRevision = document.Revision
+		}
+	}
+	if err := transaction.replaceHeadReservations(sessionContext, request.Collection, document, request.Locales); err != nil {
+		return store.Document{}, err
+	}
 	if err := transaction.replaceDocumentReferences(sessionContext, request.Collection, document); err != nil {
 		return store.Document{}, err
 	}
@@ -130,7 +141,7 @@ func (transaction *documentTransaction) Find(ctx context.Context, request store.
 	if request.Lock == store.LockMutation || request.Lock == store.LockReference {
 		basePredicate := predicate
 		predicate = mongoAnd([]bson.D{basePredicate, mongoTypeGuard(mongoFencePath, "long")})
-		raw, err = transaction.collection(request.Collection).FindOneAndUpdate(
+		raw, err = transaction.readCollection(request).FindOneAndUpdate(
 			sessionContext,
 			predicate,
 			bson.D{{Key: "$inc", Value: bson.D{{Key: mongoFencePath, Value: int64(1)}}}},
@@ -140,7 +151,7 @@ func (transaction *documentTransaction) Find(ctx context.Context, request store.
 			// A corrupt fence must not masquerade as an absent document. Probe
 			// with the same ID, filter, access, and deletion predicate so an
 			// unauthorized or otherwise non-matching document remains hidden.
-			candidate, probeErr := transaction.collection(request.Collection).FindOne(sessionContext, basePredicate).Raw()
+			candidate, probeErr := transaction.readCollection(request).FindOne(sessionContext, basePredicate).Raw()
 			switch {
 			case probeErr == nil:
 				if _, decodeErr := decodeCollectionDocumentForLocales(candidate, request.Collection, request.Locales); decodeErr != nil {
@@ -151,13 +162,16 @@ func (transaction *documentTransaction) Find(ctx context.Context, request store.
 			}
 		}
 	} else {
-		raw, err = transaction.collection(request.Collection).FindOne(sessionContext, predicate).Raw()
+		raw, err = transaction.readCollection(request).FindOne(sessionContext, predicate).Raw()
 	}
 	if err != nil {
 		return store.Document{}, translateMongoError(ctx, err)
 	}
 	document, err := decodeCollectionDocumentForLocales(raw, request.Collection, request.Locales)
 	if err != nil {
+		return store.Document{}, err
+	}
+	if err := transaction.attachPublishedMetadata(sessionContext, request, &document); err != nil {
 		return store.Document{}, err
 	}
 	documents, err := transaction.populate(sessionContext, []store.Document{document}, request)
@@ -190,7 +204,8 @@ func (transaction *documentTransaction) List(ctx context.Context, request store.
 	if err != nil {
 		return store.Page{}, err
 	}
-	total64, err := transaction.collection(request.Collection).CountDocuments(sessionContext, predicate)
+	collection := transaction.readCollection(request)
+	total64, err := collection.CountDocuments(sessionContext, predicate)
 	if err != nil {
 		return store.Page{}, translateMongoError(ctx, err)
 	}
@@ -207,7 +222,7 @@ func (transaction *documentTransaction) List(ctx context.Context, request store.
 	var cursor *mongo.Cursor
 	if len(order.computed) == 0 {
 		findOptions := options.Find().SetSort(order.order).SetSkip(int64(start)).SetLimit(int64(end - start))
-		cursor, err = transaction.collection(request.Collection).Find(sessionContext, predicate, findOptions)
+		cursor, err = collection.Find(sessionContext, predicate, findOptions)
 	} else {
 		pipeline := mongo.Pipeline{
 			bson.D{{Key: "$match", Value: predicate}},
@@ -217,7 +232,7 @@ func (transaction *documentTransaction) List(ctx context.Context, request store.
 			bson.D{{Key: "$limit", Value: int64(end - start)}},
 			bson.D{{Key: "$unset", Value: order.temporary}},
 		}
-		cursor, err = transaction.collection(request.Collection).Aggregate(sessionContext, pipeline)
+		cursor, err = collection.Aggregate(sessionContext, pipeline)
 	}
 	if err != nil {
 		return store.Page{}, translateMongoError(ctx, err)
@@ -227,6 +242,9 @@ func (transaction *documentTransaction) List(ctx context.Context, request store.
 	for cursor.Next(sessionContext) {
 		document, err := decodeCollectionDocumentForLocales(cursor.Current, request.Collection, request.Locales)
 		if err != nil {
+			return store.Page{}, err
+		}
+		if err := transaction.attachPublishedMetadata(sessionContext, request, &document); err != nil {
 			return store.Page{}, err
 		}
 		result.Documents = append(result.Documents, document)
@@ -322,13 +340,19 @@ func (transaction *documentTransaction) Update(ctx context.Context, request stor
 		return store.Document{}, err
 	}
 	if request.Collection.Versions == nil {
-		if request.Status != nil {
-			return store.Document{}, fmt.Errorf("MongoDB document status requires a versioned collection")
+		if request.Intent != store.WriteIntentDefault {
+			return store.Document{}, fmt.Errorf("write intent requires a versioned collection")
 		}
-	} else if request.Status != nil {
-		if err := validateMongoVersionMetadata(request.Collection, *request.Status, 1); err != nil {
-			return store.Document{}, err
-		}
+	} else if !request.Collection.Versions.Drafts &&
+		(request.Intent == store.WriteIntentSaveDraft || request.Intent == store.WriteIntentDiscardDraft) {
+		return store.Document{}, fmt.Errorf("draft write intent requires a draft-enabled collection")
+	} else if request.Collection.Versions.Drafts && request.Intent == store.WriteIntentDefault {
+		return store.Document{}, fmt.Errorf("write intent is required for a draft-enabled collection")
+	}
+	switch request.Intent {
+	case store.WriteIntentDefault, store.WriteIntentSaveDraft, store.WriteIntentPublish, store.WriteIntentUnpublish, store.WriteIntentDiscardDraft:
+	default:
+		return store.Document{}, fmt.Errorf("unsupported write intent %q", request.Intent)
 	}
 	values := store.CloneValues(request.Values)
 	canonicalizeMongoAuthIdentity(request.Collection, values)
@@ -339,15 +363,51 @@ func (transaction *documentTransaction) Update(ctx context.Context, request stor
 	if err != nil {
 		return store.Document{}, err
 	}
+	currentRaw, currentError := transaction.collection(request.Collection).FindOne(sessionContext, predicate).Raw()
+	if err := transaction.mutationResultError(ctx, sessionContext, request.Request, currentError); err != nil {
+		return store.Document{}, err
+	}
+	current, err := decodeCollectionDocumentForLocales(currentRaw, request.Collection, request.Locales)
+	if err != nil {
+		return store.Document{}, err
+	}
+	live, hasLive, err := transaction.publishedHead(sessionContext, request.Collection, request.ID, request.Locales)
+	if err != nil {
+		return store.Document{}, err
+	}
+	if (request.Intent == store.WriteIntentUnpublish && !hasLive) || (request.Intent == store.WriteIntentDiscardDraft && (!hasLive || !current.HasDraftChanges)) {
+		return store.Document{}, store.ErrConflict
+	}
 	updatedAt, err := encodeTime(transaction.store.now().UTC())
 	if err != nil {
 		return store.Document{}, err
 	}
 	assignments := bson.D{{Key: "meta.updatedAt", Value: mongoLiteral(updatedAt)}}
-	if request.Status != nil {
-		assignments = append(assignments, bson.E{Key: mongoStatusPath, Value: mongoLiteral(string(*request.Status))})
+	if request.Collection.Versions != nil {
+		switch request.Intent {
+		case store.WriteIntentSaveDraft:
+			status := store.StatusDraft
+			if hasLive {
+				status = store.StatusPublished
+			}
+			assignments = append(assignments, bson.E{Key: mongoStatusPath, Value: mongoLiteral(string(status))}, bson.E{Key: "meta.pending", Value: mongoLiteral(hasLive)})
+		case store.WriteIntentPublish:
+			assignments = append(assignments, bson.E{Key: mongoStatusPath, Value: mongoLiteral(string(store.StatusPublished))}, bson.E{Key: "meta.pending", Value: mongoLiteral(false)})
+		case store.WriteIntentUnpublish:
+			assignments = append(assignments, bson.E{Key: mongoStatusPath, Value: mongoLiteral(string(store.StatusDraft))}, bson.E{Key: "meta.pending", Value: mongoLiteral(false)})
+		case store.WriteIntentDiscardDraft:
+			assignments = append(assignments, bson.E{Key: mongoStatusPath, Value: mongoLiteral(string(store.StatusPublished))}, bson.E{Key: "meta.pending", Value: mongoLiteral(false)})
+		case store.WriteIntentDefault:
+			assignments = append(assignments, bson.E{Key: "meta.pending", Value: mongoLiteral(false)})
+		}
 	}
-	if request.ReplaceValues {
+	if request.Intent == store.WriteIntentDiscardDraft {
+		encodedValues, encodeErr := encodeValues(live.Values)
+		if encodeErr != nil {
+			return store.Document{}, encodeErr
+		}
+		assignments = append(assignments, bson.E{Key: "values", Value: mongoLiteral(encodedValues)})
+	} else if request.ReplaceValues {
 		encodedValues, encodeErr := encodeValues(values)
 		if encodeErr != nil {
 			return store.Document{}, encodeErr
@@ -373,6 +433,36 @@ func (transaction *documentTransaction) Update(ctx context.Context, request stor
 	}
 	document, err := decodeCollectionDocumentForLocales(raw, request.Collection, request.Locales)
 	if err != nil {
+		return store.Document{}, err
+	}
+	if request.Collection.Versions != nil {
+		switch request.Intent {
+		case store.WriteIntentSaveDraft, store.WriteIntentDiscardDraft:
+			// The published snapshot remains unchanged.
+		case store.WriteIntentUnpublish:
+			if _, err := transaction.publishedCollection(request.Collection).DeleteOne(sessionContext, bson.D{{Key: "_id", Value: document.ID}}); err != nil {
+				return store.Document{}, translateMongoError(ctx, err)
+			}
+		case store.WriteIntentDefault, store.WriteIntentPublish:
+			if document.Status == store.StatusPublished {
+				published := store.CloneDocument(document)
+				published.HasDraftChanges = false
+				encoded, encodeErr := encodeDocument(published)
+				if encodeErr != nil {
+					return store.Document{}, encodeErr
+				}
+				if _, err := transaction.publishedCollection(request.Collection).ReplaceOne(sessionContext, bson.D{{Key: "_id", Value: document.ID}}, encoded, options.Replace().SetUpsert(true)); err != nil {
+					return store.Document{}, translateMongoError(ctx, err)
+				}
+			} else if _, err := transaction.publishedCollection(request.Collection).DeleteOne(sessionContext, bson.D{{Key: "_id", Value: document.ID}}); err != nil {
+				return store.Document{}, translateMongoError(ctx, err)
+			}
+		}
+		if err := transaction.attachPublishedMetadata(sessionContext, request.Request, &document); err != nil {
+			return store.Document{}, err
+		}
+	}
+	if err := transaction.replaceHeadReservations(sessionContext, request.Collection, document, request.Locales); err != nil {
 		return store.Document{}, err
 	}
 	if err := transaction.replaceDocumentReferences(sessionContext, request.Collection, document); err != nil {
@@ -450,6 +540,19 @@ func (transaction *documentTransaction) setTrashed(ctx context.Context, request 
 	if err != nil {
 		return store.Document{}, err
 	}
+	if request.Collection.Versions != nil {
+		if _, err := transaction.publishedCollection(request.Collection).UpdateOne(sessionContext,
+			bson.D{{Key: "_id", Value: document.ID}},
+			bson.D{{Key: "$set", Value: bson.D{{Key: "meta.updatedAt", Value: now}, {Key: "meta.deletedAt", Value: deletedAt}}}}); err != nil {
+			return store.Document{}, translateMongoError(ctx, err)
+		}
+		if err := transaction.attachPublishedMetadata(sessionContext, request, &document); err != nil {
+			return store.Document{}, err
+		}
+	}
+	if err := transaction.replaceHeadReservations(sessionContext, request.Collection, document, request.Locales); err != nil {
+		return store.Document{}, err
+	}
 	return projectDocument(document, request.Select), nil
 }
 
@@ -488,6 +591,11 @@ func (transaction *documentTransaction) Delete(ctx context.Context, request stor
 	document, err := decodeCollectionDocumentForLocales(raw, request.Collection, request.Locales)
 	if err != nil {
 		return store.Document{}, err
+	}
+	if request.Collection.Versions != nil {
+		if _, err := transaction.publishedCollection(request.Collection).DeleteOne(sessionContext, bson.D{{Key: "_id", Value: document.ID}}); err != nil {
+			return store.Document{}, translateMongoError(ctx, err)
+		}
 	}
 	if mongoCollectionHasRelationships(request.Collection) {
 		if err := transaction.deleteDocumentReferences(sessionContext, store.DocumentReference{CollectionID: request.Collection.ID, DocumentID: document.ID}); err != nil {
@@ -618,6 +726,62 @@ func canonicalizeMongoAuthIdentity(collection schema.Collection, values store.Va
 
 func (transaction *documentTransaction) collection(collection schema.Collection) *mongo.Collection {
 	return transaction.store.database.Collection(physicalCollectionName(collection.ID))
+}
+
+func (transaction *documentTransaction) publishedCollection(collection schema.Collection) *mongo.Collection {
+	return transaction.store.database.Collection(physicalPublishedCollectionName(collection.ID))
+}
+
+func (transaction *documentTransaction) publishedHead(ctx context.Context, collection schema.Collection, id string, locales []schema.LocaleCode) (store.Document, bool, error) {
+	if collection.Versions == nil {
+		return store.Document{}, false, nil
+	}
+	raw, err := transaction.publishedCollection(collection).FindOne(ctx, bson.D{{Key: "_id", Value: id}}).Raw()
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return store.Document{}, false, nil
+	}
+	if err != nil {
+		return store.Document{}, false, translateMongoError(ctx, err)
+	}
+	document, err := decodeCollectionDocumentForLocales(raw, collection, locales)
+	if err != nil {
+		return store.Document{}, false, err
+	}
+	return document, true, nil
+}
+
+func (transaction *documentTransaction) readCollection(request store.Request) *mongo.Collection {
+	if request.PublishedOnly && request.Collection.Versions != nil {
+		return transaction.publishedCollection(request.Collection)
+	}
+	return transaction.collection(request.Collection)
+}
+
+func (transaction *documentTransaction) attachPublishedMetadata(ctx context.Context, request store.Request, document *store.Document) error {
+	if request.PublishedOnly || request.Collection.Versions == nil || !request.Collection.Versions.Drafts {
+		document.PublishedRevision = 0
+		document.HasDraftChanges = false
+		return nil
+	}
+	raw, err := transaction.publishedCollection(request.Collection).FindOne(ctx, bson.D{{Key: "_id", Value: document.ID}}).Raw()
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		if document.Status == store.StatusPublished {
+			return fmt.Errorf("stored MongoDB document %q has published status without a published head", document.ID)
+		}
+		return nil
+	}
+	if err != nil {
+		return translateMongoError(ctx, err)
+	}
+	live, err := decodeCollectionDocumentForLocales(raw, request.Collection, request.Locales)
+	if err != nil {
+		return err
+	}
+	if document.Status != store.StatusPublished || live.Status != store.StatusPublished {
+		return fmt.Errorf("stored MongoDB document %q has inconsistent publication metadata", document.ID)
+	}
+	document.PublishedRevision = live.Revision
+	return nil
 }
 
 func (transaction *documentTransaction) closeCursor(cursor *mongo.Cursor) {

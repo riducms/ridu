@@ -182,7 +182,8 @@ func (api *API) adminReadError(request *http.Request, err error) *protocol.Error
 func (api *API) readCollectionPage(ctx context.Context, slug string, identity *AuthIdentity, options listQuery) (protocol.CollectionPageEnvelope[json.RawMessage], error) {
 	result, err := api.config.Engine.Execute(ctx, operationengine.Request{
 		Operation: operation.Read, Collection: slug, Filter: options.filter,
-		Page: options.page, Limit: options.limit, Actor: identityActor(identity), ActorCollection: identityCollection(identity), Sort: options.sort,
+		Draft: options.draft,
+		Page:  options.page, Limit: options.limit, Actor: identityActor(identity), ActorCollection: identityCollection(identity), Sort: options.sort,
 		Select: options.selectFields, OutputFields: options.outputFields, Populate: options.populate, TrashOnly: options.trashOnly,
 		IncludeAccess: options.includeAccess, Locale: options.locale, FallbackLocales: options.fallbackLocales,
 		DisableFallback: options.disableFallback, AllLocales: options.allLocales,
@@ -214,6 +215,7 @@ func (api *API) readCollectionPage(ctx context.Context, slug string, identity *A
 func (api *API) readCollectionCount(ctx context.Context, slug string, identity *AuthIdentity, options listQuery) (int, error) {
 	result, err := api.config.Engine.Execute(ctx, operationengine.Request{
 		Operation: operation.Read, Collection: slug, Filter: options.filter, Page: 1, Limit: 1,
+		Draft: options.draft,
 		Actor: identityActor(identity), ActorCollection: identityCollection(identity), TrashOnly: options.trashOnly,
 		Locale: options.locale, FallbackLocales: options.fallbackLocales, DisableFallback: options.disableFallback, AllLocales: options.allLocales,
 	})

@@ -141,7 +141,7 @@ data-only transform leaves the manifest unchanged. If planning reports a transfo
 retirement as destructive, inspect the affected data and rerun the reviewed
 create command with `--allow-destructive`, preserving its transform and rename inputs. The flag
 completes artifact creation without connecting to the database. Commit the resulting artifact.
-Committed artifacts are immutable MongoDB planner `2.0.0` plans; never rewrite one during an
+Committed artifacts are immutable MongoDB planner `3.0.0` plans; never rewrite one during an
 upgrade. `ridu check` and `ridu build` remain offline: they compare committed history with
 executable config but do not inspect the applied ledger or indexes. Live `status` and
 startup/readiness own those checks.

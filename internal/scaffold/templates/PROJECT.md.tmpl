@@ -278,7 +278,7 @@ including any destructive/resource-retirement risk, before continuing. When plan
 transform or resource retirement as destructive, inspect the exact affected data and then rerun the
 reviewed create command with `--allow-destructive`, preserving its `--transform` and accepted rename
 inputs. This completes artifact creation only; it does not connect to or mutate MongoDB.
-Committed artifacts are immutable MongoDB planner `2.0.0` plans; never rewrite one during an
+Committed artifacts are immutable MongoDB planner `3.0.0` plans; never rewrite one during an
 upgrade.
 
 `{{.RiduCommand}} check` and `{{.RiduCommand}} build` are offline gates. They require committed history to end at executable

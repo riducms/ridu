@@ -44,7 +44,7 @@ const HeaderConsumer = svelte`
 			drafts.push(authoring.beginSchemaDraft(scope));
 		}
 		function changed(scope, change) {
-			changes.push({ treeKey: scope.treeKey, ...change });
+			changes.push({ treeKey: scope.treeKey, value: change });
 		}
 	</script>
 	{#each scopes as scope (scope.treeKey)}
@@ -59,7 +59,7 @@ const HeaderConsumer = svelte`
 `;
 const { drafts: headerDrafts, changes: headerChanges } = HeaderConsumer as unknown as {
 	drafts: EmbeddedSchemaDraft[];
-	changes: { treeKey: string; field: string; value: string }[];
+	changes: { treeKey: string; value: string }[];
 };
 
 function text(name: string, options: Partial<SchemaField> = {}): SchemaField {
@@ -71,7 +71,9 @@ function text(name: string, options: Partial<SchemaField> = {}): SchemaField {
 		category: "scalar",
 		required: false,
 		unique: false,
-		admin: { label: name === "name" ? "Block name" : name === "summary" ? "Summary" : "Enabled" },
+		admin: {
+			label: name === "blockName" ? "Block name" : name === "summary" ? "Summary" : "Enabled",
+		},
 		text: {},
 		...options,
 	};
@@ -100,8 +102,12 @@ function block(
 	return {
 		slug: options.slug ?? "card",
 		labels: { singular: "Card", plural: "Cards" },
-		admin: { nameField: "name", rowLabel: "summary" },
-		fields: [text("name", options.name), text("summary", options.summary), checkbox("enabled")],
+		admin: { rowLabel: "summary" },
+		fields: [
+			text("blockName", options.name),
+			text("summary", options.summary),
+			checkbox("enabled"),
+		],
 	};
 }
 
@@ -124,12 +130,11 @@ function embeddedNameBlock(treeKey: string): SchemaBlockType {
 	return {
 		slug: "card",
 		labels: { singular: "Card", plural: "Cards" },
-		admin: { nameField: "name" },
 		fields: [
 			{
-				...text("name"),
+				...text("blockName"),
 				id: `${treeKey}-name`,
-				path: `body.${treeKey}.widget.card.name`,
+				path: `body.${treeKey}.widget.card.blockName`,
 			},
 		],
 	};
@@ -225,31 +230,34 @@ function access(fields: Record<string, FieldCapabilities>): AccessCapabilitiesEn
 }
 
 function nameInputs() {
-	return [...document.querySelectorAll<HTMLInputElement>('input[name$=".name"]')];
+	return [...document.querySelectorAll<HTMLInputElement>('input[name$=".blockName"]')];
 }
 
 function inputValues() {
 	return [...document.querySelectorAll<HTMLInputElement>("input")].map((input) => input.value);
 }
 
-it("renders the configured name once in the header and never stores its placeholder", async () => {
+it("renders the block name once in the header and never stores its placeholder", async () => {
 	const props = fixture([row("one", { summary: "Summary fallback" })]);
 	const screen = await render(Harness, props);
 	const input = screen.getByRole("textbox", { name: "Block name", exact: true });
-	await expect.element(input).toHaveAttribute("placeholder", "Summary fallback");
+	await expect.element(input).toHaveAttribute("placeholder", "Untitled");
+	await expect
+		.element(screen.getByRole("button", { name: "Drag Summary fallback", exact: true }))
+		.toBeInTheDocument();
 	expect(nameInputs()).toHaveLength(1);
-	expect(props.form.get("layout.0.name")).toBeUndefined();
+	expect(props.form.get("layout.0.blockName")).toBeUndefined();
 	expect(props.form.snapshot()).toEqual({
 		layout: [row("one", { summary: "Summary fallback" })],
 	});
 	await input.fill("Homepage hero");
-	expect(props.form.get("layout.0.name")).toBe("Homepage hero");
+	expect(props.form.get("layout.0.blockName")).toBe("Homepage hero");
 	expect(nameInputs()).toHaveLength(1);
 	await screen.unmount();
 });
 
 it("refreshes keyed name bindings without reading destroyed schema derivations", async () => {
-	const props = fixture([row("one", { name: "Saved name" })]);
+	const props = fixture([row("one", { blockName: "Saved name" })]);
 	const lifecycleWarnings: string[] = [];
 	const warnings = vi.spyOn(console, "warn").mockImplementation((...parts) => {
 		if (parts.some((part) => String(part).includes("derived_inert")))
@@ -284,17 +292,17 @@ it("keeps hidden and denied names and summaries out of shared block occurrences"
 	const field = blocks([block(), hidden]);
 	const props = fixture(
 		[
-			row("visible", { name: "Visible name", summary: "Visible summary" }),
-			row("denied", { name: "Denied name", summary: "Denied summary" }),
-			{ _key: "hidden", blockType: "hidden", name: "Hidden name", summary: "Hidden summary" },
+			row("visible", { blockName: "Visible name", summary: "Visible summary" }),
+			row("denied", { blockName: "Denied name", summary: "Denied summary" }),
+			{ _key: "hidden", blockType: "hidden", blockName: "Hidden name", summary: "Hidden summary" },
 		],
 		field
 	);
 	props.form.setAccess(
 		access({
-			"layout.0.name": fieldCapability(true),
+			"layout.0.blockName": fieldCapability(true),
 			"layout.0.summary": fieldCapability(true),
-			"layout.1.name": fieldCapability(false),
+			"layout.1.blockName": fieldCapability(false),
 			"layout.1.summary": fieldCapability(false),
 		}),
 		"update"
@@ -313,9 +321,9 @@ it("keeps hidden and denied names and summaries out of shared block occurrences"
 
 	props.form.setAccess(
 		access({
-			"layout.0.name": fieldCapability(false),
+			"layout.0.blockName": fieldCapability(false),
 			"layout.0.summary": fieldCapability(false),
-			"layout.1.name": fieldCapability(true),
+			"layout.1.blockName": fieldCapability(true),
 			"layout.1.summary": fieldCapability(true),
 		}),
 		"update"
@@ -335,7 +343,7 @@ it("keeps hidden and denied names and summaries out of shared block occurrences"
 });
 
 it("applies name conditions and current child and ancestor write guards", async () => {
-	const conditionalName = text("name", {
+	const conditionalName = text("blockName", {
 		admin: {
 			label: "Block name",
 			condition: {
@@ -353,7 +361,10 @@ it("applies name conditions and current child and ancestor write guards", async 
 		...block(),
 		fields: [conditionalName, text("summary"), checkbox("enabled")],
 	};
-	const props = fixture([row("one", { name: "Conditional", enabled: false })], blocks([named]));
+	const props = fixture(
+		[row("one", { blockName: "Conditional", enabled: false })],
+		blocks([named])
+	);
 	const screen = await render(Harness, props);
 	const input = screen.getByRole("textbox", { name: "Block name", exact: true });
 	await expect.element(input).not.toBeInTheDocument();
@@ -363,7 +374,7 @@ it("applies name conditions and current child and ancestor write guards", async 
 	props.form.setAccess(
 		access({
 			layout: fieldCapability(true, false),
-			"layout.0.name": fieldCapability(true),
+			"layout.0.blockName": fieldCapability(true),
 		}),
 		"update"
 	);
@@ -371,7 +382,7 @@ it("applies name conditions and current child and ancestor write guards", async 
 	props.form.setAccess(
 		access({
 			layout: fieldCapability(true),
-			"layout.0.name": fieldCapability(true, false),
+			"layout.0.blockName": fieldCapability(true, false),
 		}),
 		"update"
 	);
@@ -392,9 +403,11 @@ it("applies name conditions and current child and ancestor write guards", async 
 });
 
 it("focuses an inline name issue while its block body remains collapsed", async () => {
-	const props = fixture([row("one", { name: "Invalid", summary: "Details" })]);
+	const props = fixture([row("one", { blockName: "Invalid", summary: "Details" })]);
 	const screen = await render(Harness, props);
-	props.form.issues = [{ path: "layout.0.name", code: "name", message: "Name is required" }];
+	props.form.issues = [
+		{ path: "layout.0.blockName", code: "blockName", message: "Name is required" },
+	];
 	const collapse = screen.getByRole("button", { name: "Collapse", exact: true });
 	await collapse.click();
 	const expand = screen.getByRole("button", { name: "Expand", exact: true });
@@ -408,7 +421,10 @@ it("focuses an inline name issue while its block body remains collapsed", async 
 });
 
 it("keeps a header occurrence stable through reorder and replaces it after removal or locale reset", async () => {
-	const props = fixture([row("first", { name: "First" }), row("second", { name: "Second" })]);
+	const props = fixture([
+		row("first", { blockName: "First" }),
+		row("second", { blockName: "Second" }),
+	]);
 	const screen = await render(Harness, props);
 	await expect
 		.element(screen.getByRole("textbox", { name: "Block name", exact: true }).nth(0))
@@ -420,15 +436,15 @@ it("keeps a header occurrence stable through reorder and replaces it after remov
 	);
 	first.value = "Delayed first";
 	first.dispatchEvent(new Event("input", { bubbles: true }));
-	expect(props.form.get("layout.1.name")).toBe("Delayed first");
-	expect(props.form.get("layout.0.name")).toBe("Second");
+	expect(props.form.get("layout.1.blockName")).toBe("Delayed first");
+	expect(props.form.get("layout.0.blockName")).toBe("Second");
 	await tick();
 	expect(nameInputs()[1]).toBe(first);
 
-	props.form.setRows("layout", [row("second", { name: "Second" })]);
+	props.form.setRows("layout", [row("second", { blockName: "Second" })]);
 	props.form.setRows("layout", [
-		row("second", { name: "Second" }),
-		row("first", { name: "Replacement" }),
+		row("second", { blockName: "Second" }),
+		row("first", { blockName: "Replacement" }),
 	]);
 	await tick();
 	const replacement = nameInputs()[1]!;
@@ -449,8 +465,8 @@ it("locks only the matching public schema header and releases callbacks with its
 	const schema = embeddedNameSchema();
 	const original = {
 		body: {
-			alpha: [{ kind: "widget", content: { schema: "card", uid: "same", name: "Alpha" } }],
-			beta: [{ kind: "widget", content: { schema: "card", uid: "same", name: "Beta" } }],
+			alpha: [{ kind: "widget", content: { schema: "card", uid: "same", blockName: "Alpha" } }],
+			beta: [{ kind: "widget", content: { schema: "card", uid: "same", blockName: "Beta" } }],
 		},
 	};
 	const form = new FormController();
@@ -463,7 +479,7 @@ it("locks only the matching public schema header and releases callbacks with its
 	await expect.element(beta).toHaveValue("Beta");
 
 	await alpha.fill("Callback only");
-	expect(headerChanges).toEqual([{ treeKey: "alpha", field: "name", value: "Callback only" }]);
+	expect(headerChanges).toEqual([{ treeKey: "alpha", value: "Callback only" }]);
 	expect(form.snapshot()).toEqual(original);
 
 	await screen.getByRole("button", { name: "Open Alpha draft", exact: true }).click();
@@ -473,7 +489,6 @@ it("locks only the matching public schema header and releases callbacks with its
 	await beta.fill("Independent beta");
 	expect(headerChanges.at(-1)).toEqual({
 		treeKey: "beta",
-		field: "name",
 		value: "Independent beta",
 	});
 	expect(form.snapshot()).toEqual(original);
@@ -494,9 +509,10 @@ it("locks only the matching public schema header and releases callbacks with its
 it("checks occurrence lifetime and access before invoking a header apply callback", () => {
 	const field = blocks();
 	const form = new FormController();
-	form.reset({ layout: [row("first", { name: "First" }), row("second", { name: "Second" })] }, [
-		field,
-	]);
+	form.reset(
+		{ layout: [row("first", { blockName: "First" }), row("second", { blockName: "Second" })] },
+		[field]
+	);
 	const schema = scopeRepeatedRowField(block().fields[0]!, "layout.0", "first");
 	const apply = vi.fn();
 	const binding = new FieldEditorBinding(
@@ -510,10 +526,10 @@ it("checks occurrence lifetime and access before invoking a header apply callbac
 	form.setRows("layout", (form.snapshot().layout as Record<string, unknown>[]).toReversed());
 	delayed("Moved first");
 	expect(apply).toHaveBeenLastCalledWith("Moved first");
-	form.setAccess(access({ "layout.1.name": fieldCapability(true, false) }), "update");
+	form.setAccess(access({ "layout.1.blockName": fieldCapability(true, false) }), "update");
 	expect(() => delayed("Denied")).toThrow("read-only");
 	expect(apply).toHaveBeenCalledTimes(1);
-	form.setRows("layout", [row("second", { name: "Second" })]);
+	form.setRows("layout", [row("second", { blockName: "Second" })]);
 	expect(() => delayed("Removed")).toThrow("stale");
 	expect(apply).toHaveBeenCalledTimes(1);
 	binding.destroy();

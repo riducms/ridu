@@ -257,18 +257,20 @@ func (value *AssetAllLocales) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-var AssetsCollection = core.NewTypedCollection[Asset, AssetCreate, AssetUpdate]("assets")
+var AssetsCollection = core.NewTypedCollection[Asset, AssetCreate, AssetUpdate, AssetUpdate]("assets")
 
 // AssetsCollectionAllLocales reads all translations with optional population and projection.
 var AssetsCollectionAllLocales = core.NewTypedAllLocalesCollection[AssetAllLocales]("assets")
 
 // Page is a single-locale read. Authored fields can be omitted by access rules or projection.
 type Page struct {
-	ID        string `json:"id"`
-	CreatedAt string `json:"createdAt"`
-	UpdatedAt string `json:"updatedAt"`
-	Status    string `json:"_status"`
-	Revision  int    `json:"_revision"`
+	ID                string `json:"id"`
+	CreatedAt         string `json:"createdAt"`
+	UpdatedAt         string `json:"updatedAt"`
+	Status            string `json:"_status"`
+	PublishedRevision int    `json:"_publishedRevision,omitempty"`
+	HasDraftChanges   *bool  `json:"_hasDraftChanges,omitempty"`
+	Revision          int    `json:"_revision"`
 	// Title may be omitted by access rules or projection.
 	Title *string `json:"title,omitempty"`
 	// Layout may be omitted by access rules or projection.
@@ -304,6 +306,16 @@ func (value *Page) UnmarshalJSON(data []byte) error {
 		if raw, ok := fields["_status"]; ok {
 			if err := json.Unmarshal(raw, &decoded.Status); err != nil {
 				return blockFieldError("_status", "invalid metadata", err)
+			}
+		}
+		if raw, ok := fields["_publishedRevision"]; ok {
+			if err := json.Unmarshal(raw, &decoded.PublishedRevision); err != nil {
+				return blockFieldError("_publishedRevision", "invalid metadata", err)
+			}
+		}
+		if raw, ok := fields["_hasDraftChanges"]; ok {
+			if err := json.Unmarshal(raw, &decoded.HasDraftChanges); err != nil {
+				return blockFieldError("_hasDraftChanges", "invalid metadata", err)
 			}
 		}
 		if raw, ok := fields["_revision"]; ok {
@@ -447,13 +459,65 @@ func (value *PageUpdate) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// PageDraft saves unfinished working content. Nil fields are omitted; core.Null clears editorial values. Publication validates completeness.
+type PageDraft struct {
+	// Title: nil omits the field; core.Set sends a value; core.Null sends explicit null.
+	Title *core.Input[string] `json:"title,omitempty"`
+	// Layout: nil omits the field; core.Set sends a value; core.Null sends explicit null.
+	Layout *core.Input[PagesLayoutDraft] `json:"layout,omitempty"`
+}
+
+func (value *PageDraft) UnmarshalJSON(data []byte) error {
+	type payload PageDraft
+	var decoded payload
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+	if fields == nil {
+		return nil
+	}
+	err := func() error {
+		if raw, ok := fields["title"]; ok {
+			if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+				decoded.Title = core.Null[string]()
+			} else {
+				child, err := decodeBlockValue[string](raw)
+				if err != nil {
+					return blockFieldError("title", "invalid value", err)
+				}
+				decoded.Title = core.Set(child)
+			}
+		}
+		if raw, ok := fields["layout"]; ok {
+			if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+				decoded.Layout = core.Null[PagesLayoutDraft]()
+			} else {
+				child, err := decodeBlockValue[PagesLayoutDraft](raw)
+				if err != nil {
+					return blockFieldError("layout", "invalid value", err)
+				}
+				decoded.Layout = core.Set(child)
+			}
+		}
+		return nil
+	}()
+	if err != nil {
+		return newContractError(ContractError{Container: "PageDraft", Reason: "invalid document", Err: err})
+	}
+	*value = PageDraft(decoded)
+	return nil
+}
+
 // PageAllLocales is an all-locales read: localized fields contain locale-code maps.
 type PageAllLocales struct {
-	ID        string `json:"id"`
-	CreatedAt string `json:"createdAt"`
-	UpdatedAt string `json:"updatedAt"`
-	Status    string `json:"_status"`
-	Revision  int    `json:"_revision"`
+	ID                string `json:"id"`
+	CreatedAt         string `json:"createdAt"`
+	UpdatedAt         string `json:"updatedAt"`
+	Status            string `json:"_status"`
+	PublishedRevision int    `json:"_publishedRevision,omitempty"`
+	HasDraftChanges   *bool  `json:"_hasDraftChanges,omitempty"`
+	Revision          int    `json:"_revision"`
 	// Title may be omitted by access rules or projection.
 	Title *string `json:"title,omitempty"`
 	// Layout may be omitted by access rules or projection.
@@ -489,6 +553,16 @@ func (value *PageAllLocales) UnmarshalJSON(data []byte) error {
 		if raw, ok := fields["_status"]; ok {
 			if err := json.Unmarshal(raw, &decoded.Status); err != nil {
 				return blockFieldError("_status", "invalid metadata", err)
+			}
+		}
+		if raw, ok := fields["_publishedRevision"]; ok {
+			if err := json.Unmarshal(raw, &decoded.PublishedRevision); err != nil {
+				return blockFieldError("_publishedRevision", "invalid metadata", err)
+			}
+		}
+		if raw, ok := fields["_hasDraftChanges"]; ok {
+			if err := json.Unmarshal(raw, &decoded.HasDraftChanges); err != nil {
+				return blockFieldError("_hasDraftChanges", "invalid metadata", err)
 			}
 		}
 		if raw, ok := fields["_revision"]; ok {
@@ -531,7 +605,7 @@ func (value *PageAllLocales) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-var PagesCollection = core.NewTypedCollection[Page, PageCreate, PageUpdate]("pages")
+var PagesCollection = core.NewTypedCollection[Page, PageCreate, PageUpdate, PageDraft]("pages")
 
 // PagesCollectionAllLocales reads all translations with optional population and projection.
 var PagesCollectionAllLocales = core.NewTypedAllLocalesCollection[PageAllLocales]("pages")
@@ -781,18 +855,20 @@ func (value *CampaignAllLocales) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-var CampaignsCollection = core.NewTypedCollection[Campaign, CampaignCreate, CampaignUpdate]("campaigns")
+var CampaignsCollection = core.NewTypedCollection[Campaign, CampaignCreate, CampaignUpdate, CampaignUpdate]("campaigns")
 
 // CampaignsCollectionAllLocales reads all translations with optional population and projection.
 var CampaignsCollectionAllLocales = core.NewTypedAllLocalesCollection[CampaignAllLocales]("campaigns")
 
 // Article is a single-locale read. Authored fields can be omitted by access rules or projection.
 type Article struct {
-	ID        string `json:"id"`
-	CreatedAt string `json:"createdAt"`
-	UpdatedAt string `json:"updatedAt"`
-	Status    string `json:"_status"`
-	Revision  int    `json:"_revision"`
+	ID                string `json:"id"`
+	CreatedAt         string `json:"createdAt"`
+	UpdatedAt         string `json:"updatedAt"`
+	Status            string `json:"_status"`
+	PublishedRevision int    `json:"_publishedRevision,omitempty"`
+	HasDraftChanges   *bool  `json:"_hasDraftChanges,omitempty"`
+	Revision          int    `json:"_revision"`
 	// Title may be omitted by access rules or projection.
 	Title *string `json:"title,omitempty"`
 	// Body may be omitted by access rules or projection.
@@ -830,6 +906,16 @@ func (value *Article) UnmarshalJSON(data []byte) error {
 		if raw, ok := fields["_status"]; ok {
 			if err := json.Unmarshal(raw, &decoded.Status); err != nil {
 				return blockFieldError("_status", "invalid metadata", err)
+			}
+		}
+		if raw, ok := fields["_publishedRevision"]; ok {
+			if err := json.Unmarshal(raw, &decoded.PublishedRevision); err != nil {
+				return blockFieldError("_publishedRevision", "invalid metadata", err)
+			}
+		}
+		if raw, ok := fields["_hasDraftChanges"]; ok {
+			if err := json.Unmarshal(raw, &decoded.HasDraftChanges); err != nil {
+				return blockFieldError("_hasDraftChanges", "invalid metadata", err)
 			}
 		}
 		if raw, ok := fields["_revision"]; ok {
@@ -1011,13 +1097,78 @@ func (value *ArticleUpdate) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// ArticleDraft saves unfinished working content. Nil fields are omitted; core.Null clears editorial values. Publication validates completeness.
+type ArticleDraft struct {
+	// Title: nil omits the field; core.Set sends a value; core.Null sends explicit null.
+	Title *core.Input[string] `json:"title,omitempty"`
+	// Body: nil omits the field; core.Set sends a value; core.Null sends explicit null.
+	Body *core.Input[richtext.Document[ArticlesBodyBlocksBlockDraftPayload]] `json:"body,omitempty"`
+	// LocalizedBody: nil omits the field; core.Set sends a value; core.Null sends explicit null.
+	LocalizedBody *core.Input[richtext.Document[ArticlesLocalizedBodyBlocksBlockDraftPayload]] `json:"localizedBody,omitempty"`
+}
+
+func (value *ArticleDraft) UnmarshalJSON(data []byte) error {
+	type payload ArticleDraft
+	var decoded payload
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+	if fields == nil {
+		return nil
+	}
+	err := func() error {
+		if raw, ok := fields["title"]; ok {
+			if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+				decoded.Title = core.Null[string]()
+			} else {
+				child, err := decodeBlockValue[string](raw)
+				if err != nil {
+					return blockFieldError("title", "invalid value", err)
+				}
+				decoded.Title = core.Set(child)
+			}
+		}
+		if raw, ok := fields["body"]; ok {
+			if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+				decoded.Body = core.Null[richtext.Document[ArticlesBodyBlocksBlockDraftPayload]]()
+			} else {
+				child, err := decodeBlockValue[richtext.Document[ArticlesBodyBlocksBlockDraftPayload]](raw)
+				if err != nil {
+					return blockFieldError("body", "invalid value", err)
+				}
+				decoded.Body = core.Set(child)
+			}
+		}
+		if raw, ok := fields["localizedBody"]; ok {
+			if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+				decoded.LocalizedBody = core.Null[richtext.Document[ArticlesLocalizedBodyBlocksBlockDraftPayload]]()
+			} else {
+				child, err := decodeBlockValue[richtext.Document[ArticlesLocalizedBodyBlocksBlockDraftPayload]](raw)
+				if err != nil {
+					return blockFieldError("localizedBody", "invalid value", err)
+				}
+				decoded.LocalizedBody = core.Set(child)
+			}
+		}
+		return nil
+	}()
+	if err != nil {
+		return newContractError(ContractError{Container: "ArticleDraft", Reason: "invalid document", Err: err})
+	}
+	*value = ArticleDraft(decoded)
+	return nil
+}
+
 // ArticleAllLocales is an all-locales read: localized fields contain locale-code maps.
 type ArticleAllLocales struct {
-	ID        string `json:"id"`
-	CreatedAt string `json:"createdAt"`
-	UpdatedAt string `json:"updatedAt"`
-	Status    string `json:"_status"`
-	Revision  int    `json:"_revision"`
+	ID                string `json:"id"`
+	CreatedAt         string `json:"createdAt"`
+	UpdatedAt         string `json:"updatedAt"`
+	Status            string `json:"_status"`
+	PublishedRevision int    `json:"_publishedRevision,omitempty"`
+	HasDraftChanges   *bool  `json:"_hasDraftChanges,omitempty"`
+	Revision          int    `json:"_revision"`
 	// Title may be omitted by access rules or projection.
 	Title *string `json:"title,omitempty"`
 	// Body may be omitted by access rules or projection.
@@ -1056,6 +1207,16 @@ func (value *ArticleAllLocales) UnmarshalJSON(data []byte) error {
 		if raw, ok := fields["_status"]; ok {
 			if err := json.Unmarshal(raw, &decoded.Status); err != nil {
 				return blockFieldError("_status", "invalid metadata", err)
+			}
+		}
+		if raw, ok := fields["_publishedRevision"]; ok {
+			if err := json.Unmarshal(raw, &decoded.PublishedRevision); err != nil {
+				return blockFieldError("_publishedRevision", "invalid metadata", err)
+			}
+		}
+		if raw, ok := fields["_hasDraftChanges"]; ok {
+			if err := json.Unmarshal(raw, &decoded.HasDraftChanges); err != nil {
+				return blockFieldError("_hasDraftChanges", "invalid metadata", err)
 			}
 		}
 		if raw, ok := fields["_revision"]; ok {
@@ -1115,7 +1276,7 @@ func (value *ArticleAllLocales) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-var ArticlesCollection = core.NewTypedCollection[Article, ArticleCreate, ArticleUpdate]("articles")
+var ArticlesCollection = core.NewTypedCollection[Article, ArticleCreate, ArticleUpdate, ArticleDraft]("articles")
 
 // ArticlesCollectionAllLocales reads all translations with optional population and projection.
 var ArticlesCollectionAllLocales = core.NewTypedAllLocalesCollection[ArticleAllLocales]("articles")
@@ -1670,6 +1831,91 @@ func (rows *CalloutAsideBlocksBlockUpdate) UnmarshalJSON(data []byte) error {
 				reason = "missing discriminator"
 			}
 			return blockRowError(ContractError{Container: "CalloutAsideBlocksBlockUpdate", Discriminator: header.Type, Path: "blockType", Reason: reason}, index)
+		}
+	}
+	*rows = decoded
+	return nil
+}
+
+// CalloutAsideBlocksBlockDraftBlock admits only generated block pointers; decoding returns those same pointer types.
+type CalloutAsideBlocksBlockDraftBlock interface {
+	isCalloutAsideBlocksBlockDraftBlock()
+	BlockType() string
+	BlockKey() string
+}
+
+// CalloutAsideBlocksBlockDraftPayload is one typed detached payload, with scalar JSON encoding.
+type CalloutAsideBlocksBlockDraftPayload struct {
+	Value CalloutAsideBlocksBlockDraftBlock
+}
+
+func (p CalloutAsideBlocksBlockDraftPayload) MarshalJSON() ([]byte, error) {
+	if p.Value == nil {
+		return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutAsideBlocksBlockDraftPayload", Reason: "nil embedded payload is not allowed"})
+	}
+	data, err := json.Marshal(p.Value)
+	if err != nil {
+		return nil, err
+	}
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutAsideBlocksBlockDraftPayload", Reason: "nil embedded payload is not allowed"})
+	}
+	return data, nil
+}
+func (p *CalloutAsideBlocksBlockDraftPayload) UnmarshalJSON(data []byte) error {
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		return newContractError(ContractError{Container: "CalloutAsideBlocksBlockDraftPayload", Reason: "embedded payload must be an object"})
+	}
+	var rows CalloutAsideBlocksBlockDraft
+	if err := json.Unmarshal(append(append([]byte{'['}, data...), ']'), &rows); err != nil {
+		return err
+	}
+	p.Value = rows[0]
+	return nil
+}
+
+// CalloutAsideBlocksBlockDraft is an ordered list of block pointers. Nil rows are invalid.
+type CalloutAsideBlocksBlockDraft []CalloutAsideBlocksBlockDraftBlock
+
+func (rows CalloutAsideBlocksBlockDraft) MarshalJSON() ([]byte, error) {
+	if rows == nil {
+		return []byte("null"), nil
+	}
+	encoded := make([]json.RawMessage, len(rows))
+	for index, row := range rows {
+		data, err := json.Marshal(row)
+		if err != nil {
+			return nil, blockRowError(ContractError{Operation: "encode", Container: "CalloutAsideBlocksBlockDraft", Reason: "cannot encode variant", Err: err}, index)
+		}
+		if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+			return nil, blockRowError(ContractError{Operation: "encode", Container: "CalloutAsideBlocksBlockDraft", Reason: "nil block row is not allowed"}, index)
+		}
+		encoded[index] = data
+	}
+	return json.Marshal(encoded)
+}
+func (rows *CalloutAsideBlocksBlockDraft) UnmarshalJSON(data []byte) error {
+	var raw []json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return newContractError(ContractError{Container: "CalloutAsideBlocksBlockDraft", Reason: "malformed block list", Err: err})
+	}
+	if raw == nil {
+		*rows = nil
+		return nil
+	}
+	decoded := make(CalloutAsideBlocksBlockDraft, len(raw))
+	for index, data := range raw {
+		header, err := decodeBlockHeaderFields(data, "blockType", "_key")
+		if err != nil {
+			return blockRowError(ContractError{Container: "CalloutAsideBlocksBlockDraft", Reason: "malformed discriminator", Err: err}, index)
+		}
+		switch header.Type {
+		default:
+			reason := "unknown discriminator"
+			if header.Type == "" {
+				reason = "missing discriminator"
+			}
+			return blockRowError(ContractError{Container: "CalloutAsideBlocksBlockDraft", Discriminator: header.Type, Path: "blockType", Reason: reason}, index)
 		}
 	}
 	*rows = decoded
@@ -2253,6 +2499,98 @@ func (rows *CalloutDetailBlocksBlockUpdate) UnmarshalJSON(data []byte) error {
 }
 func (*CTAUpdate) isCalloutDetailBlocksBlockUpdateBlock() {}
 func (*CTAInput) isCalloutDetailBlocksBlockUpdateBlock()  {}
+
+// CalloutDetailBlocksBlockDraftBlock admits only generated block pointers; decoding returns those same pointer types.
+type CalloutDetailBlocksBlockDraftBlock interface {
+	isCalloutDetailBlocksBlockDraftBlock()
+	BlockType() string
+	BlockKey() string
+}
+
+// CalloutDetailBlocksBlockDraftPayload is one typed detached payload, with scalar JSON encoding.
+type CalloutDetailBlocksBlockDraftPayload struct {
+	Value CalloutDetailBlocksBlockDraftBlock
+}
+
+func (p CalloutDetailBlocksBlockDraftPayload) MarshalJSON() ([]byte, error) {
+	if p.Value == nil {
+		return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutDetailBlocksBlockDraftPayload", Reason: "nil embedded payload is not allowed"})
+	}
+	data, err := json.Marshal(p.Value)
+	if err != nil {
+		return nil, err
+	}
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutDetailBlocksBlockDraftPayload", Reason: "nil embedded payload is not allowed"})
+	}
+	return data, nil
+}
+func (p *CalloutDetailBlocksBlockDraftPayload) UnmarshalJSON(data []byte) error {
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		return newContractError(ContractError{Container: "CalloutDetailBlocksBlockDraftPayload", Reason: "embedded payload must be an object"})
+	}
+	var rows CalloutDetailBlocksBlockDraft
+	if err := json.Unmarshal(append(append([]byte{'['}, data...), ']'), &rows); err != nil {
+		return err
+	}
+	p.Value = rows[0]
+	return nil
+}
+
+// CalloutDetailBlocksBlockDraft is an ordered list of block pointers. Nil rows are invalid.
+type CalloutDetailBlocksBlockDraft []CalloutDetailBlocksBlockDraftBlock
+
+func (rows CalloutDetailBlocksBlockDraft) MarshalJSON() ([]byte, error) {
+	if rows == nil {
+		return []byte("null"), nil
+	}
+	encoded := make([]json.RawMessage, len(rows))
+	for index, row := range rows {
+		data, err := json.Marshal(row)
+		if err != nil {
+			return nil, blockRowError(ContractError{Operation: "encode", Container: "CalloutDetailBlocksBlockDraft", Reason: "cannot encode variant", Err: err}, index)
+		}
+		if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+			return nil, blockRowError(ContractError{Operation: "encode", Container: "CalloutDetailBlocksBlockDraft", Reason: "nil block row is not allowed"}, index)
+		}
+		encoded[index] = data
+	}
+	return json.Marshal(encoded)
+}
+func (rows *CalloutDetailBlocksBlockDraft) UnmarshalJSON(data []byte) error {
+	var raw []json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return newContractError(ContractError{Container: "CalloutDetailBlocksBlockDraft", Reason: "malformed block list", Err: err})
+	}
+	if raw == nil {
+		*rows = nil
+		return nil
+	}
+	decoded := make(CalloutDetailBlocksBlockDraft, len(raw))
+	for index, data := range raw {
+		header, err := decodeBlockHeaderFields(data, "blockType", "_key")
+		if err != nil {
+			return blockRowError(ContractError{Container: "CalloutDetailBlocksBlockDraft", Reason: "malformed discriminator", Err: err}, index)
+		}
+		switch header.Type {
+		case "cta":
+			var value CTADraft
+			if err := json.Unmarshal(data, &value); err != nil {
+				return blockRowError(ContractError{Container: "CalloutDetailBlocksBlockDraft", Discriminator: header.Type, Reason: "malformed variant", Err: err}, index)
+			}
+			decoded[index] = &value
+		default:
+			reason := "unknown discriminator"
+			if header.Type == "" {
+				reason = "missing discriminator"
+			}
+			return blockRowError(ContractError{Container: "CalloutDetailBlocksBlockDraft", Discriminator: header.Type, Path: "blockType", Reason: reason}, index)
+		}
+	}
+	*rows = decoded
+	return nil
+}
+func (*CTADraft) isCalloutDetailBlocksBlockDraftBlock() {}
 
 // CalloutDetailBlocksBlockAllLocalesBlock admits only generated block pointers; decoding returns those same pointer types.
 type CalloutDetailBlocksBlockAllLocalesBlock interface {
@@ -2913,6 +3251,112 @@ func (*MediaUpdate) isArticlesBodyBlocksBlockUpdateBlock()   {}
 func (*MediaInput) isArticlesBodyBlocksBlockUpdateBlock()    {}
 func (*CTAUpdate) isArticlesBodyBlocksBlockUpdateBlock()     {}
 func (*CTAInput) isArticlesBodyBlocksBlockUpdateBlock()      {}
+
+// ArticlesBodyBlocksBlockDraftBlock admits only generated block pointers; decoding returns those same pointer types.
+type ArticlesBodyBlocksBlockDraftBlock interface {
+	isArticlesBodyBlocksBlockDraftBlock()
+	BlockType() string
+	BlockKey() string
+}
+
+// ArticlesBodyBlocksBlockDraftPayload is one typed detached payload, with scalar JSON encoding.
+type ArticlesBodyBlocksBlockDraftPayload struct {
+	Value ArticlesBodyBlocksBlockDraftBlock
+}
+
+func (p ArticlesBodyBlocksBlockDraftPayload) MarshalJSON() ([]byte, error) {
+	if p.Value == nil {
+		return nil, newContractError(ContractError{Operation: "encode", Container: "ArticlesBodyBlocksBlockDraftPayload", Reason: "nil embedded payload is not allowed"})
+	}
+	data, err := json.Marshal(p.Value)
+	if err != nil {
+		return nil, err
+	}
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		return nil, newContractError(ContractError{Operation: "encode", Container: "ArticlesBodyBlocksBlockDraftPayload", Reason: "nil embedded payload is not allowed"})
+	}
+	return data, nil
+}
+func (p *ArticlesBodyBlocksBlockDraftPayload) UnmarshalJSON(data []byte) error {
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		return newContractError(ContractError{Container: "ArticlesBodyBlocksBlockDraftPayload", Reason: "embedded payload must be an object"})
+	}
+	var rows ArticlesBodyBlocksBlockDraft
+	if err := json.Unmarshal(append(append([]byte{'['}, data...), ']'), &rows); err != nil {
+		return err
+	}
+	p.Value = rows[0]
+	return nil
+}
+
+// ArticlesBodyBlocksBlockDraft is an ordered list of block pointers. Nil rows are invalid.
+type ArticlesBodyBlocksBlockDraft []ArticlesBodyBlocksBlockDraftBlock
+
+func (rows ArticlesBodyBlocksBlockDraft) MarshalJSON() ([]byte, error) {
+	if rows == nil {
+		return []byte("null"), nil
+	}
+	encoded := make([]json.RawMessage, len(rows))
+	for index, row := range rows {
+		data, err := json.Marshal(row)
+		if err != nil {
+			return nil, blockRowError(ContractError{Operation: "encode", Container: "ArticlesBodyBlocksBlockDraft", Reason: "cannot encode variant", Err: err}, index)
+		}
+		if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+			return nil, blockRowError(ContractError{Operation: "encode", Container: "ArticlesBodyBlocksBlockDraft", Reason: "nil block row is not allowed"}, index)
+		}
+		encoded[index] = data
+	}
+	return json.Marshal(encoded)
+}
+func (rows *ArticlesBodyBlocksBlockDraft) UnmarshalJSON(data []byte) error {
+	var raw []json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return newContractError(ContractError{Container: "ArticlesBodyBlocksBlockDraft", Reason: "malformed block list", Err: err})
+	}
+	if raw == nil {
+		*rows = nil
+		return nil
+	}
+	decoded := make(ArticlesBodyBlocksBlockDraft, len(raw))
+	for index, data := range raw {
+		header, err := decodeBlockHeaderFields(data, "blockType", "_key")
+		if err != nil {
+			return blockRowError(ContractError{Container: "ArticlesBodyBlocksBlockDraft", Reason: "malformed discriminator", Err: err}, index)
+		}
+		switch header.Type {
+		case "callout":
+			var value CalloutDraft
+			if err := json.Unmarshal(data, &value); err != nil {
+				return blockRowError(ContractError{Container: "ArticlesBodyBlocksBlockDraft", Discriminator: header.Type, Reason: "malformed variant", Err: err}, index)
+			}
+			decoded[index] = &value
+		case "media":
+			var value MediaDraft
+			if err := json.Unmarshal(data, &value); err != nil {
+				return blockRowError(ContractError{Container: "ArticlesBodyBlocksBlockDraft", Discriminator: header.Type, Reason: "malformed variant", Err: err}, index)
+			}
+			decoded[index] = &value
+		case "cta":
+			var value CTADraft
+			if err := json.Unmarshal(data, &value); err != nil {
+				return blockRowError(ContractError{Container: "ArticlesBodyBlocksBlockDraft", Discriminator: header.Type, Reason: "malformed variant", Err: err}, index)
+			}
+			decoded[index] = &value
+		default:
+			reason := "unknown discriminator"
+			if header.Type == "" {
+				reason = "missing discriminator"
+			}
+			return blockRowError(ContractError{Container: "ArticlesBodyBlocksBlockDraft", Discriminator: header.Type, Path: "blockType", Reason: reason}, index)
+		}
+	}
+	*rows = decoded
+	return nil
+}
+func (*CalloutDraft) isArticlesBodyBlocksBlockDraftBlock() {}
+func (*MediaDraft) isArticlesBodyBlocksBlockDraftBlock()   {}
+func (*CTADraft) isArticlesBodyBlocksBlockDraftBlock()     {}
 
 // ArticlesBodyBlocksBlockAllLocalesBlock admits only generated block pointers; decoding returns those same pointer types.
 type ArticlesBodyBlocksBlockAllLocalesBlock interface {
@@ -3612,6 +4056,112 @@ func (*MediaInput) isArticlesLocalizedBodyBlocksBlockUpdateBlock()    {}
 func (*CTAUpdate) isArticlesLocalizedBodyBlocksBlockUpdateBlock()     {}
 func (*CTAInput) isArticlesLocalizedBodyBlocksBlockUpdateBlock()      {}
 
+// ArticlesLocalizedBodyBlocksBlockDraftBlock admits only generated block pointers; decoding returns those same pointer types.
+type ArticlesLocalizedBodyBlocksBlockDraftBlock interface {
+	isArticlesLocalizedBodyBlocksBlockDraftBlock()
+	BlockType() string
+	BlockKey() string
+}
+
+// ArticlesLocalizedBodyBlocksBlockDraftPayload is one typed detached payload, with scalar JSON encoding.
+type ArticlesLocalizedBodyBlocksBlockDraftPayload struct {
+	Value ArticlesLocalizedBodyBlocksBlockDraftBlock
+}
+
+func (p ArticlesLocalizedBodyBlocksBlockDraftPayload) MarshalJSON() ([]byte, error) {
+	if p.Value == nil {
+		return nil, newContractError(ContractError{Operation: "encode", Container: "ArticlesLocalizedBodyBlocksBlockDraftPayload", Reason: "nil embedded payload is not allowed"})
+	}
+	data, err := json.Marshal(p.Value)
+	if err != nil {
+		return nil, err
+	}
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		return nil, newContractError(ContractError{Operation: "encode", Container: "ArticlesLocalizedBodyBlocksBlockDraftPayload", Reason: "nil embedded payload is not allowed"})
+	}
+	return data, nil
+}
+func (p *ArticlesLocalizedBodyBlocksBlockDraftPayload) UnmarshalJSON(data []byte) error {
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		return newContractError(ContractError{Container: "ArticlesLocalizedBodyBlocksBlockDraftPayload", Reason: "embedded payload must be an object"})
+	}
+	var rows ArticlesLocalizedBodyBlocksBlockDraft
+	if err := json.Unmarshal(append(append([]byte{'['}, data...), ']'), &rows); err != nil {
+		return err
+	}
+	p.Value = rows[0]
+	return nil
+}
+
+// ArticlesLocalizedBodyBlocksBlockDraft is an ordered list of block pointers. Nil rows are invalid.
+type ArticlesLocalizedBodyBlocksBlockDraft []ArticlesLocalizedBodyBlocksBlockDraftBlock
+
+func (rows ArticlesLocalizedBodyBlocksBlockDraft) MarshalJSON() ([]byte, error) {
+	if rows == nil {
+		return []byte("null"), nil
+	}
+	encoded := make([]json.RawMessage, len(rows))
+	for index, row := range rows {
+		data, err := json.Marshal(row)
+		if err != nil {
+			return nil, blockRowError(ContractError{Operation: "encode", Container: "ArticlesLocalizedBodyBlocksBlockDraft", Reason: "cannot encode variant", Err: err}, index)
+		}
+		if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+			return nil, blockRowError(ContractError{Operation: "encode", Container: "ArticlesLocalizedBodyBlocksBlockDraft", Reason: "nil block row is not allowed"}, index)
+		}
+		encoded[index] = data
+	}
+	return json.Marshal(encoded)
+}
+func (rows *ArticlesLocalizedBodyBlocksBlockDraft) UnmarshalJSON(data []byte) error {
+	var raw []json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return newContractError(ContractError{Container: "ArticlesLocalizedBodyBlocksBlockDraft", Reason: "malformed block list", Err: err})
+	}
+	if raw == nil {
+		*rows = nil
+		return nil
+	}
+	decoded := make(ArticlesLocalizedBodyBlocksBlockDraft, len(raw))
+	for index, data := range raw {
+		header, err := decodeBlockHeaderFields(data, "blockType", "_key")
+		if err != nil {
+			return blockRowError(ContractError{Container: "ArticlesLocalizedBodyBlocksBlockDraft", Reason: "malformed discriminator", Err: err}, index)
+		}
+		switch header.Type {
+		case "callout":
+			var value CalloutDraft
+			if err := json.Unmarshal(data, &value); err != nil {
+				return blockRowError(ContractError{Container: "ArticlesLocalizedBodyBlocksBlockDraft", Discriminator: header.Type, Reason: "malformed variant", Err: err}, index)
+			}
+			decoded[index] = &value
+		case "media":
+			var value MediaDraft
+			if err := json.Unmarshal(data, &value); err != nil {
+				return blockRowError(ContractError{Container: "ArticlesLocalizedBodyBlocksBlockDraft", Discriminator: header.Type, Reason: "malformed variant", Err: err}, index)
+			}
+			decoded[index] = &value
+		case "cta":
+			var value CTADraft
+			if err := json.Unmarshal(data, &value); err != nil {
+				return blockRowError(ContractError{Container: "ArticlesLocalizedBodyBlocksBlockDraft", Discriminator: header.Type, Reason: "malformed variant", Err: err}, index)
+			}
+			decoded[index] = &value
+		default:
+			reason := "unknown discriminator"
+			if header.Type == "" {
+				reason = "missing discriminator"
+			}
+			return blockRowError(ContractError{Container: "ArticlesLocalizedBodyBlocksBlockDraft", Discriminator: header.Type, Path: "blockType", Reason: reason}, index)
+		}
+	}
+	*rows = decoded
+	return nil
+}
+func (*CalloutDraft) isArticlesLocalizedBodyBlocksBlockDraftBlock() {}
+func (*MediaDraft) isArticlesLocalizedBodyBlocksBlockDraftBlock()   {}
+func (*CTADraft) isArticlesLocalizedBodyBlocksBlockDraftBlock()     {}
+
 // ArticlesLocalizedBodyBlocksBlockAllLocalesBlock admits only generated block pointers; decoding returns those same pointer types.
 type ArticlesLocalizedBodyBlocksBlockAllLocalesBlock interface {
 	isArticlesLocalizedBodyBlocksBlockAllLocalesBlock()
@@ -4177,6 +4727,75 @@ func (*HeroInput) isCampaignsLayoutUpdateBlock()  {}
 func (*CTAUpdate) isCampaignsLayoutUpdateBlock()  {}
 func (*CTAInput) isCampaignsLayoutUpdateBlock()   {}
 
+// CampaignsLayoutDraftBlock admits only generated block pointers; decoding returns those same pointer types.
+type CampaignsLayoutDraftBlock interface {
+	isCampaignsLayoutDraftBlock()
+	BlockType() string
+	BlockKey() string
+}
+
+// CampaignsLayoutDraft is an ordered list of block pointers. Nil rows are invalid.
+type CampaignsLayoutDraft []CampaignsLayoutDraftBlock
+
+func (rows CampaignsLayoutDraft) MarshalJSON() ([]byte, error) {
+	if rows == nil {
+		return []byte("null"), nil
+	}
+	encoded := make([]json.RawMessage, len(rows))
+	for index, row := range rows {
+		data, err := json.Marshal(row)
+		if err != nil {
+			return nil, blockRowError(ContractError{Operation: "encode", Container: "CampaignsLayoutDraft", Reason: "cannot encode variant", Err: err}, index)
+		}
+		if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+			return nil, blockRowError(ContractError{Operation: "encode", Container: "CampaignsLayoutDraft", Reason: "nil block row is not allowed"}, index)
+		}
+		encoded[index] = data
+	}
+	return json.Marshal(encoded)
+}
+func (rows *CampaignsLayoutDraft) UnmarshalJSON(data []byte) error {
+	var raw []json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return newContractError(ContractError{Container: "CampaignsLayoutDraft", Reason: "malformed block list", Err: err})
+	}
+	if raw == nil {
+		*rows = nil
+		return nil
+	}
+	decoded := make(CampaignsLayoutDraft, len(raw))
+	for index, data := range raw {
+		header, err := decodeBlockHeaderFields(data, "blockType", "_key")
+		if err != nil {
+			return blockRowError(ContractError{Container: "CampaignsLayoutDraft", Reason: "malformed discriminator", Err: err}, index)
+		}
+		switch header.Type {
+		case "hero":
+			var value HeroDraft
+			if err := json.Unmarshal(data, &value); err != nil {
+				return blockRowError(ContractError{Container: "CampaignsLayoutDraft", Discriminator: header.Type, Reason: "malformed variant", Err: err}, index)
+			}
+			decoded[index] = &value
+		case "cta":
+			var value CTADraft
+			if err := json.Unmarshal(data, &value); err != nil {
+				return blockRowError(ContractError{Container: "CampaignsLayoutDraft", Discriminator: header.Type, Reason: "malformed variant", Err: err}, index)
+			}
+			decoded[index] = &value
+		default:
+			reason := "unknown discriminator"
+			if header.Type == "" {
+				reason = "missing discriminator"
+			}
+			return blockRowError(ContractError{Container: "CampaignsLayoutDraft", Discriminator: header.Type, Path: "blockType", Reason: reason}, index)
+		}
+	}
+	*rows = decoded
+	return nil
+}
+func (*HeroDraft) isCampaignsLayoutDraftBlock() {}
+func (*CTADraft) isCampaignsLayoutDraftBlock()  {}
+
 // CampaignsLayoutAllLocalesBlock admits only generated block pointers; decoding returns those same pointer types.
 type CampaignsLayoutAllLocalesBlock interface {
 	isCampaignsLayoutAllLocalesBlock()
@@ -4705,6 +5324,89 @@ func (*MediaUpdate) isPagesLayoutUpdateBlock()   {}
 func (*MediaInput) isPagesLayoutUpdateBlock()    {}
 func (*CTAUpdate) isPagesLayoutUpdateBlock()     {}
 func (*CTAInput) isPagesLayoutUpdateBlock()      {}
+
+// PagesLayoutDraftBlock admits only generated block pointers; decoding returns those same pointer types.
+type PagesLayoutDraftBlock interface {
+	isPagesLayoutDraftBlock()
+	BlockType() string
+	BlockKey() string
+}
+
+// PagesLayoutDraft is an ordered list of block pointers. Nil rows are invalid.
+type PagesLayoutDraft []PagesLayoutDraftBlock
+
+func (rows PagesLayoutDraft) MarshalJSON() ([]byte, error) {
+	if rows == nil {
+		return []byte("null"), nil
+	}
+	encoded := make([]json.RawMessage, len(rows))
+	for index, row := range rows {
+		data, err := json.Marshal(row)
+		if err != nil {
+			return nil, blockRowError(ContractError{Operation: "encode", Container: "PagesLayoutDraft", Reason: "cannot encode variant", Err: err}, index)
+		}
+		if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+			return nil, blockRowError(ContractError{Operation: "encode", Container: "PagesLayoutDraft", Reason: "nil block row is not allowed"}, index)
+		}
+		encoded[index] = data
+	}
+	return json.Marshal(encoded)
+}
+func (rows *PagesLayoutDraft) UnmarshalJSON(data []byte) error {
+	var raw []json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return newContractError(ContractError{Container: "PagesLayoutDraft", Reason: "malformed block list", Err: err})
+	}
+	if raw == nil {
+		*rows = nil
+		return nil
+	}
+	decoded := make(PagesLayoutDraft, len(raw))
+	for index, data := range raw {
+		header, err := decodeBlockHeaderFields(data, "blockType", "_key")
+		if err != nil {
+			return blockRowError(ContractError{Container: "PagesLayoutDraft", Reason: "malformed discriminator", Err: err}, index)
+		}
+		switch header.Type {
+		case "hero":
+			var value HeroDraft
+			if err := json.Unmarshal(data, &value); err != nil {
+				return blockRowError(ContractError{Container: "PagesLayoutDraft", Discriminator: header.Type, Reason: "malformed variant", Err: err}, index)
+			}
+			decoded[index] = &value
+		case "content":
+			var value ContentDraft
+			if err := json.Unmarshal(data, &value); err != nil {
+				return blockRowError(ContractError{Container: "PagesLayoutDraft", Discriminator: header.Type, Reason: "malformed variant", Err: err}, index)
+			}
+			decoded[index] = &value
+		case "media":
+			var value MediaDraft
+			if err := json.Unmarshal(data, &value); err != nil {
+				return blockRowError(ContractError{Container: "PagesLayoutDraft", Discriminator: header.Type, Reason: "malformed variant", Err: err}, index)
+			}
+			decoded[index] = &value
+		case "cta":
+			var value CTADraft
+			if err := json.Unmarshal(data, &value); err != nil {
+				return blockRowError(ContractError{Container: "PagesLayoutDraft", Discriminator: header.Type, Reason: "malformed variant", Err: err}, index)
+			}
+			decoded[index] = &value
+		default:
+			reason := "unknown discriminator"
+			if header.Type == "" {
+				reason = "missing discriminator"
+			}
+			return blockRowError(ContractError{Container: "PagesLayoutDraft", Discriminator: header.Type, Path: "blockType", Reason: reason}, index)
+		}
+	}
+	*rows = decoded
+	return nil
+}
+func (*HeroDraft) isPagesLayoutDraftBlock()    {}
+func (*ContentDraft) isPagesLayoutDraftBlock() {}
+func (*MediaDraft) isPagesLayoutDraftBlock()   {}
+func (*CTADraft) isPagesLayoutDraftBlock()     {}
 
 // PagesLayoutAllLocalesBlock admits only generated block pointers; decoding returns those same pointer types.
 type PagesLayoutAllLocalesBlock interface {
@@ -5242,6 +5944,91 @@ func (rows *ContentBodyBlocksBlockUpdate) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// ContentBodyBlocksBlockDraftBlock admits only generated block pointers; decoding returns those same pointer types.
+type ContentBodyBlocksBlockDraftBlock interface {
+	isContentBodyBlocksBlockDraftBlock()
+	BlockType() string
+	BlockKey() string
+}
+
+// ContentBodyBlocksBlockDraftPayload is one typed detached payload, with scalar JSON encoding.
+type ContentBodyBlocksBlockDraftPayload struct {
+	Value ContentBodyBlocksBlockDraftBlock
+}
+
+func (p ContentBodyBlocksBlockDraftPayload) MarshalJSON() ([]byte, error) {
+	if p.Value == nil {
+		return nil, newContractError(ContractError{Operation: "encode", Container: "ContentBodyBlocksBlockDraftPayload", Reason: "nil embedded payload is not allowed"})
+	}
+	data, err := json.Marshal(p.Value)
+	if err != nil {
+		return nil, err
+	}
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		return nil, newContractError(ContractError{Operation: "encode", Container: "ContentBodyBlocksBlockDraftPayload", Reason: "nil embedded payload is not allowed"})
+	}
+	return data, nil
+}
+func (p *ContentBodyBlocksBlockDraftPayload) UnmarshalJSON(data []byte) error {
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		return newContractError(ContractError{Container: "ContentBodyBlocksBlockDraftPayload", Reason: "embedded payload must be an object"})
+	}
+	var rows ContentBodyBlocksBlockDraft
+	if err := json.Unmarshal(append(append([]byte{'['}, data...), ']'), &rows); err != nil {
+		return err
+	}
+	p.Value = rows[0]
+	return nil
+}
+
+// ContentBodyBlocksBlockDraft is an ordered list of block pointers. Nil rows are invalid.
+type ContentBodyBlocksBlockDraft []ContentBodyBlocksBlockDraftBlock
+
+func (rows ContentBodyBlocksBlockDraft) MarshalJSON() ([]byte, error) {
+	if rows == nil {
+		return []byte("null"), nil
+	}
+	encoded := make([]json.RawMessage, len(rows))
+	for index, row := range rows {
+		data, err := json.Marshal(row)
+		if err != nil {
+			return nil, blockRowError(ContractError{Operation: "encode", Container: "ContentBodyBlocksBlockDraft", Reason: "cannot encode variant", Err: err}, index)
+		}
+		if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+			return nil, blockRowError(ContractError{Operation: "encode", Container: "ContentBodyBlocksBlockDraft", Reason: "nil block row is not allowed"}, index)
+		}
+		encoded[index] = data
+	}
+	return json.Marshal(encoded)
+}
+func (rows *ContentBodyBlocksBlockDraft) UnmarshalJSON(data []byte) error {
+	var raw []json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return newContractError(ContractError{Container: "ContentBodyBlocksBlockDraft", Reason: "malformed block list", Err: err})
+	}
+	if raw == nil {
+		*rows = nil
+		return nil
+	}
+	decoded := make(ContentBodyBlocksBlockDraft, len(raw))
+	for index, data := range raw {
+		header, err := decodeBlockHeaderFields(data, "blockType", "_key")
+		if err != nil {
+			return blockRowError(ContractError{Container: "ContentBodyBlocksBlockDraft", Reason: "malformed discriminator", Err: err}, index)
+		}
+		switch header.Type {
+		default:
+			reason := "unknown discriminator"
+			if header.Type == "" {
+				reason = "missing discriminator"
+			}
+			return blockRowError(ContractError{Container: "ContentBodyBlocksBlockDraft", Discriminator: header.Type, Path: "blockType", Reason: reason}, index)
+		}
+	}
+	*rows = decoded
+	return nil
+}
+
 // ContentBodyBlocksBlockAllLocalesBlock admits only generated block pointers; decoding returns those same pointer types.
 type ContentBodyBlocksBlockAllLocalesBlock interface {
 	isContentBodyBlocksBlockAllLocalesBlock()
@@ -5620,11 +6407,6 @@ func (value *CTA) UnmarshalJSON(data []byte) error {
 			decoded.Destination = &BlockOptional[Reference[Page]]{Value: &child}
 		}
 	}
-	if raw, ok := fields["label"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			return blockFieldError("label", "null is not allowed", nil)
-		}
-	}
 	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		decoded.BlockName = &BlockOptional[string]{}
 	}
@@ -5716,21 +6498,15 @@ func (value *CTAInput) UnmarshalJSON(data []byte) error {
 	if discriminator != "cta" {
 		return newContractError(ContractError{Container: "CTAInput", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
 	}
-	if raw, ok := fields["_key"]; ok {
-		var key string
-		if err := json.Unmarshal(raw, &key); err != nil {
-			return blockFieldError("_key", "invalid identity", err)
-		}
-		if strings.TrimSpace(key) == "" {
-			return blockFieldError("_key", "expected a nonempty block identity", nil)
-		}
-	}
 	if raw, ok := fields["label"]; !ok || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		return blockFieldError("label", "required field is absent or null", nil)
 	}
 	if raw, ok := fields["_key"]; ok {
 		if err := json.Unmarshal(raw, &decoded.Key); err != nil {
 			return blockFieldError("_key", "invalid identity", err)
+		}
+		if strings.TrimSpace(decoded.Key) == "" {
+			return blockFieldError("_key", "expected a nonempty occurrence identity", nil)
 		}
 	}
 	if raw, ok := fields["blockName"]; ok {
@@ -5936,6 +6712,143 @@ func (value *CTAUpdate) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// CTADraft is a generated block. Use *CTADraft in block lists and type switches.
+// Draft permits incomplete authored children, while retaining the block discriminator and supplied identity. An omitted Key adds a new occurrence.
+type CTADraft struct {
+	// Key identifies this occurrence; omit it for a new server-assigned identity.
+	Key string `json:"_key,omitempty"`
+	// BlockName: nil omits the field; core.Set sends a value; core.Null sends explicit null.
+	BlockName *core.Input[string] `json:"blockName,omitempty"`
+	// Label: nil omits the field; core.Set sends a value; core.Null sends explicit null.
+	Label *core.Input[string] `json:"label,omitempty"`
+	// Destination: nil omits the field; core.Set sends a value; core.Null sends explicit null.
+	Destination *core.Input[string] `json:"destination,omitempty"`
+}
+
+// BlockType returns the immutable stored discriminator.
+func (*CTADraft) BlockType() string { return "cta" }
+func (value CTADraft) MarshalJSON() ([]byte, error) {
+	var encoded struct {
+		BlockType   string          `json:"blockType"`
+		Key         string          `json:"_key,omitempty"`
+		BlockName   json.RawMessage `json:"blockName,omitempty"`
+		Label       json.RawMessage `json:"label,omitempty"`
+		Destination json.RawMessage `json:"destination,omitempty"`
+	}
+	encoded.BlockType = "cta"
+	encoded.Key = value.Key
+	if value.BlockName != nil {
+		child, present := value.BlockName.Get()
+		data := []byte("null")
+		var err error
+		if present {
+			data, err = encodeBlockValue[string](child)
+		}
+		if err != nil {
+			return nil, newContractError(ContractError{Operation: "encode", Container: "CTADraft", Path: "blockName", Reason: "invalid value", Err: err})
+		}
+		encoded.BlockName = data
+	}
+	if value.Label != nil {
+		child, present := value.Label.Get()
+		data := []byte("null")
+		var err error
+		if present {
+			data, err = encodeBlockValue[string](child)
+		}
+		if err != nil {
+			return nil, newContractError(ContractError{Operation: "encode", Container: "CTADraft", Path: "label", Reason: "invalid value", Err: err})
+		}
+		encoded.Label = data
+	}
+	if value.Destination != nil {
+		child, present := value.Destination.Get()
+		data := []byte("null")
+		var err error
+		if present {
+			data, err = encodeBlockValue[string](child)
+		}
+		if err != nil {
+			return nil, newContractError(ContractError{Operation: "encode", Container: "CTADraft", Path: "destination", Reason: "invalid value", Err: err})
+		}
+		encoded.Destination = data
+	}
+	return json.Marshal(encoded)
+}
+
+// BlockKey returns the occurrence identity, or an empty string for a nil or new block.
+func (value *CTADraft) BlockKey() string {
+	if value == nil {
+		return ""
+	}
+	return value.Key
+}
+func (value *CTADraft) UnmarshalJSON(data []byte) error {
+	type payload CTADraft
+	var decoded payload
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+	var discriminator string
+	if err := json.Unmarshal(fields["blockType"], &discriminator); err != nil {
+		return blockFieldError("blockType", "invalid discriminator", err)
+	}
+	if discriminator != "cta" {
+		return newContractError(ContractError{Container: "CTADraft", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
+	}
+	if raw, ok := fields["_key"]; ok {
+		if err := json.Unmarshal(raw, &decoded.Key); err != nil {
+			return blockFieldError("_key", "invalid identity", err)
+		}
+		if strings.TrimSpace(decoded.Key) == "" {
+			return blockFieldError("_key", "expected a nonempty occurrence identity", nil)
+		}
+	}
+	if raw, ok := fields["blockName"]; ok {
+		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+			decoded.BlockName = core.Null[string]()
+		} else {
+			child, err := decodeBlockValue[string](raw)
+			if err != nil {
+				return blockFieldError("blockName", "invalid value", err)
+			}
+			decoded.BlockName = core.Set(child)
+		}
+	}
+	if raw, ok := fields["label"]; ok {
+		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+			decoded.Label = core.Null[string]()
+		} else {
+			child, err := decodeBlockValue[string](raw)
+			if err != nil {
+				return blockFieldError("label", "invalid value", err)
+			}
+			decoded.Label = core.Set(child)
+		}
+	}
+	if raw, ok := fields["destination"]; ok {
+		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+			decoded.Destination = core.Null[string]()
+		} else {
+			child, err := decodeBlockValue[string](raw)
+			if err != nil {
+				return blockFieldError("destination", "invalid value", err)
+			}
+			decoded.Destination = core.Set(child)
+		}
+	}
+	for name := range fields {
+		switch name {
+		case "_key", "blockType", "blockName", "label", "destination":
+		default:
+			return blockFieldError(name, "unknown input field", nil)
+		}
+	}
+	*value = CTADraft(decoded)
+	return nil
+}
+
 // CTAAllLocales is a generated block. Use *CTAAllLocales in block lists and type switches.
 // Authored children may be omitted by access rules or projection, even when required on create.
 type CTAAllLocales struct {
@@ -5945,7 +6858,7 @@ type CTAAllLocales struct {
 	BlockName *BlockOptional[string] `json:"blockName,omitempty"`
 	// Label may be omitted by access rules or projection.
 	// Locale-code map; missing locales are absent translations.
-	Label *map[string]string `json:"label,omitempty"`
+	Label *map[string]*string `json:"label,omitempty"`
 	// Destination: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
 	Destination *BlockOptional[Reference[PageAllLocales]] `json:"destination,omitempty"`
 }
@@ -5970,9 +6883,9 @@ func (value CTAAllLocales) MarshalJSON() ([]byte, error) {
 		encoded.BlockName = data
 	}
 	if value.Label != nil {
-		data, err := (func(value *map[string]string) ([]byte, error) {
-			return encodeBlockPointer(value, (func(value map[string]string) ([]byte, error) {
-				return encodeBlockLocales(value, encodeBlockValue[string])
+		data, err := (func(value *map[string]*string) ([]byte, error) {
+			return encodeBlockPointer(value, (func(value map[string]*string) ([]byte, error) {
+				return encodeBlockLocales(value, (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) }))
 			}))
 		})(value.Label)
 		if err != nil {
@@ -6044,8 +6957,8 @@ func (value *CTAAllLocales) UnmarshalJSON(data []byte) error {
 				return blockFieldError("label", "invalid value", err)
 			}
 		} else {
-			child, err := (func(data []byte) (map[string]string, error) {
-				return decodeBlockLocales(data, decodeBlockValue[string])
+			child, err := (func(data []byte) (map[string]*string, error) {
+				return decodeBlockLocales(data, (func(data []byte) (*string, error) { return decodeBlockPointer(data, decodeBlockValue[string]) }))
 			})(raw)
 			if err != nil {
 				return blockFieldError("label", "invalid value", err)
@@ -6064,20 +6977,6 @@ func (value *CTAAllLocales) UnmarshalJSON(data []byte) error {
 				return blockFieldError("destination", "invalid value", err)
 			}
 			decoded.Destination = &BlockOptional[Reference[PageAllLocales]]{Value: &child}
-		}
-	}
-	if raw, ok := fields["label"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			return blockFieldError("label", "null is not allowed", nil)
-		}
-		var locales map[string]json.RawMessage
-		if err := json.Unmarshal(raw, &locales); err != nil {
-			return err
-		}
-		for locale, value := range locales {
-			if bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
-				return blockFieldError(joinBlockPath("label", locale), "null is not allowed", nil)
-			}
 		}
 	}
 	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
@@ -6211,11 +7110,6 @@ func (value *CTAAllLocalesValue) UnmarshalJSON(data []byte) error {
 				return blockFieldError("destination", "invalid value", err)
 			}
 			decoded.Destination = &BlockOptional[Reference[PageAllLocales]]{Value: &child}
-		}
-	}
-	if raw, ok := fields["label"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			return blockFieldError("label", "null is not allowed", nil)
 		}
 	}
 	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
@@ -6403,11 +7297,6 @@ func (value *Callout) UnmarshalJSON(data []byte) error {
 			decoded.Aside = &BlockOptional[richtext.Document[CalloutAsideBlocksBlockPayload]]{Value: &child}
 		}
 	}
-	if raw, ok := fields["title"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			return blockFieldError("title", "null is not allowed", nil)
-		}
-	}
 	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		decoded.BlockName = &BlockOptional[string]{}
 	}
@@ -6535,21 +7424,15 @@ func (value *CalloutInput) UnmarshalJSON(data []byte) error {
 	if discriminator != "callout" {
 		return newContractError(ContractError{Container: "CalloutInput", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
 	}
-	if raw, ok := fields["_key"]; ok {
-		var key string
-		if err := json.Unmarshal(raw, &key); err != nil {
-			return blockFieldError("_key", "invalid identity", err)
-		}
-		if strings.TrimSpace(key) == "" {
-			return blockFieldError("_key", "expected a nonempty block identity", nil)
-		}
-	}
 	if raw, ok := fields["title"]; !ok || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		return blockFieldError("title", "required field is absent or null", nil)
 	}
 	if raw, ok := fields["_key"]; ok {
 		if err := json.Unmarshal(raw, &decoded.Key); err != nil {
 			return blockFieldError("_key", "invalid identity", err)
+		}
+		if strings.TrimSpace(decoded.Key) == "" {
+			return blockFieldError("_key", "expected a nonempty occurrence identity", nil)
 		}
 	}
 	if raw, ok := fields["blockName"]; ok {
@@ -6841,6 +7724,195 @@ func (value *CalloutUpdate) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// CalloutDraft is a generated block. Use *CalloutDraft in block lists and type switches.
+// Draft permits incomplete authored children, while retaining the block discriminator and supplied identity. An omitted Key adds a new occurrence.
+type CalloutDraft struct {
+	// Key identifies this occurrence; omit it for a new server-assigned identity.
+	Key string `json:"_key,omitempty"`
+	// BlockName: nil omits the field; core.Set sends a value; core.Null sends explicit null.
+	BlockName *core.Input[string] `json:"blockName,omitempty"`
+	// Title: nil omits the field; core.Set sends a value; core.Null sends explicit null.
+	Title *core.Input[string] `json:"title,omitempty"`
+	// Message: nil omits the field; core.Set sends a value; core.Null sends explicit null.
+	Message *core.Input[string] `json:"message,omitempty"`
+	// Detail: nil omits the field; core.Set sends a value; core.Null sends explicit null.
+	Detail *core.Input[richtext.Document[CalloutDetailBlocksBlockDraftPayload]] `json:"detail,omitempty"`
+	// Aside: nil omits the field; core.Set sends a value; core.Null sends explicit null.
+	Aside *core.Input[richtext.Document[CalloutAsideBlocksBlockDraftPayload]] `json:"aside,omitempty"`
+}
+
+// BlockType returns the immutable stored discriminator.
+func (*CalloutDraft) BlockType() string { return "callout" }
+func (value CalloutDraft) MarshalJSON() ([]byte, error) {
+	var encoded struct {
+		BlockType string          `json:"blockType"`
+		Key       string          `json:"_key,omitempty"`
+		BlockName json.RawMessage `json:"blockName,omitempty"`
+		Title     json.RawMessage `json:"title,omitempty"`
+		Message   json.RawMessage `json:"message,omitempty"`
+		Detail    json.RawMessage `json:"detail,omitempty"`
+		Aside     json.RawMessage `json:"aside,omitempty"`
+	}
+	encoded.BlockType = "callout"
+	encoded.Key = value.Key
+	if value.BlockName != nil {
+		child, present := value.BlockName.Get()
+		data := []byte("null")
+		var err error
+		if present {
+			data, err = encodeBlockValue[string](child)
+		}
+		if err != nil {
+			return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutDraft", Path: "blockName", Reason: "invalid value", Err: err})
+		}
+		encoded.BlockName = data
+	}
+	if value.Title != nil {
+		child, present := value.Title.Get()
+		data := []byte("null")
+		var err error
+		if present {
+			data, err = encodeBlockValue[string](child)
+		}
+		if err != nil {
+			return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutDraft", Path: "title", Reason: "invalid value", Err: err})
+		}
+		encoded.Title = data
+	}
+	if value.Message != nil {
+		child, present := value.Message.Get()
+		data := []byte("null")
+		var err error
+		if present {
+			data, err = encodeBlockValue[string](child)
+		}
+		if err != nil {
+			return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutDraft", Path: "message", Reason: "invalid value", Err: err})
+		}
+		encoded.Message = data
+	}
+	if value.Detail != nil {
+		child, present := value.Detail.Get()
+		data := []byte("null")
+		var err error
+		if present {
+			data, err = encodeBlockValue[richtext.Document[CalloutDetailBlocksBlockDraftPayload]](child)
+		}
+		if err != nil {
+			return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutDraft", Path: "detail", Reason: "invalid value", Err: err})
+		}
+		encoded.Detail = data
+	}
+	if value.Aside != nil {
+		child, present := value.Aside.Get()
+		data := []byte("null")
+		var err error
+		if present {
+			data, err = encodeBlockValue[richtext.Document[CalloutAsideBlocksBlockDraftPayload]](child)
+		}
+		if err != nil {
+			return nil, newContractError(ContractError{Operation: "encode", Container: "CalloutDraft", Path: "aside", Reason: "invalid value", Err: err})
+		}
+		encoded.Aside = data
+	}
+	return json.Marshal(encoded)
+}
+
+// BlockKey returns the occurrence identity, or an empty string for a nil or new block.
+func (value *CalloutDraft) BlockKey() string {
+	if value == nil {
+		return ""
+	}
+	return value.Key
+}
+func (value *CalloutDraft) UnmarshalJSON(data []byte) error {
+	type payload CalloutDraft
+	var decoded payload
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+	var discriminator string
+	if err := json.Unmarshal(fields["blockType"], &discriminator); err != nil {
+		return blockFieldError("blockType", "invalid discriminator", err)
+	}
+	if discriminator != "callout" {
+		return newContractError(ContractError{Container: "CalloutDraft", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
+	}
+	if raw, ok := fields["_key"]; ok {
+		if err := json.Unmarshal(raw, &decoded.Key); err != nil {
+			return blockFieldError("_key", "invalid identity", err)
+		}
+		if strings.TrimSpace(decoded.Key) == "" {
+			return blockFieldError("_key", "expected a nonempty occurrence identity", nil)
+		}
+	}
+	if raw, ok := fields["blockName"]; ok {
+		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+			decoded.BlockName = core.Null[string]()
+		} else {
+			child, err := decodeBlockValue[string](raw)
+			if err != nil {
+				return blockFieldError("blockName", "invalid value", err)
+			}
+			decoded.BlockName = core.Set(child)
+		}
+	}
+	if raw, ok := fields["title"]; ok {
+		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+			decoded.Title = core.Null[string]()
+		} else {
+			child, err := decodeBlockValue[string](raw)
+			if err != nil {
+				return blockFieldError("title", "invalid value", err)
+			}
+			decoded.Title = core.Set(child)
+		}
+	}
+	if raw, ok := fields["message"]; ok {
+		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+			decoded.Message = core.Null[string]()
+		} else {
+			child, err := decodeBlockValue[string](raw)
+			if err != nil {
+				return blockFieldError("message", "invalid value", err)
+			}
+			decoded.Message = core.Set(child)
+		}
+	}
+	if raw, ok := fields["detail"]; ok {
+		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+			decoded.Detail = core.Null[richtext.Document[CalloutDetailBlocksBlockDraftPayload]]()
+		} else {
+			child, err := decodeBlockValue[richtext.Document[CalloutDetailBlocksBlockDraftPayload]](raw)
+			if err != nil {
+				return blockFieldError("detail", "invalid value", err)
+			}
+			decoded.Detail = core.Set(child)
+		}
+	}
+	if raw, ok := fields["aside"]; ok {
+		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+			decoded.Aside = core.Null[richtext.Document[CalloutAsideBlocksBlockDraftPayload]]()
+		} else {
+			child, err := decodeBlockValue[richtext.Document[CalloutAsideBlocksBlockDraftPayload]](raw)
+			if err != nil {
+				return blockFieldError("aside", "invalid value", err)
+			}
+			decoded.Aside = core.Set(child)
+		}
+	}
+	for name := range fields {
+		switch name {
+		case "_key", "blockType", "blockName", "title", "message", "detail", "aside":
+		default:
+			return blockFieldError(name, "unknown input field", nil)
+		}
+	}
+	*value = CalloutDraft(decoded)
+	return nil
+}
+
 // CalloutAllLocales is a generated block. Use *CalloutAllLocales in block lists and type switches.
 // Authored children may be omitted by access rules or projection, even when required on create.
 type CalloutAllLocales struct {
@@ -7017,11 +8089,6 @@ func (value *CalloutAllLocales) UnmarshalJSON(data []byte) error {
 				return blockFieldError("aside", "invalid value", err)
 			}
 			decoded.Aside = &BlockOptional[richtext.Document[CalloutAsideBlocksBlockAllLocalesPayload]]{Value: &child}
-		}
-	}
-	if raw, ok := fields["title"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			return blockFieldError("title", "null is not allowed", nil)
 		}
 	}
 	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
@@ -7211,11 +8278,6 @@ func (value *CalloutAllLocalesValue) UnmarshalJSON(data []byte) error {
 			decoded.Aside = &BlockOptional[richtext.Document[CalloutAsideBlocksBlockAllLocalesValuePayload]]{Value: &child}
 		}
 	}
-	if raw, ok := fields["title"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			return blockFieldError("title", "null is not allowed", nil)
-		}
-	}
 	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		decoded.BlockName = &BlockOptional[string]{}
 	}
@@ -7247,6 +8309,8 @@ type Content struct {
 	Body *BlockOptional[richtext.Document[ContentBodyBlocksBlockPayload]] `json:"body,omitempty"`
 	// Links: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
 	Links *BlockOptional[ContentLinks] `json:"links,omitempty"`
+	// BlockName: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
+	BlockName *BlockOptional[string] `json:"blockName,omitempty"`
 }
 
 // BlockType returns the immutable stored discriminator.
@@ -7258,6 +8322,7 @@ func (value Content) MarshalJSON() ([]byte, error) {
 		Title     json.RawMessage `json:"title,omitempty"`
 		Body      json.RawMessage `json:"body,omitempty"`
 		Links     json.RawMessage `json:"links,omitempty"`
+		BlockName json.RawMessage `json:"blockName,omitempty"`
 	}
 	encoded.BlockType = "content"
 	encoded.Key = value.Key
@@ -7285,6 +8350,13 @@ func (value Content) MarshalJSON() ([]byte, error) {
 			return nil, newContractError(ContractError{Operation: "encode", Container: "Content", Path: "links", Reason: "invalid value", Err: err})
 		}
 		encoded.Links = data
+	}
+	if value.BlockName != nil {
+		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.BlockName.Value)
+		if err != nil {
+			return nil, newContractError(ContractError{Operation: "encode", Container: "Content", Path: "blockName", Reason: "invalid value", Err: err})
+		}
+		encoded.BlockName = data
 	}
 	return json.Marshal(encoded)
 }
@@ -7361,6 +8433,19 @@ func (value *Content) UnmarshalJSON(data []byte) error {
 			decoded.Links = &BlockOptional[ContentLinks]{Value: &child}
 		}
 	}
+	if raw, ok := fields["blockName"]; ok {
+		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+			if err := json.Unmarshal(raw, &decoded.BlockName); err != nil {
+				return blockFieldError("blockName", "invalid value", err)
+			}
+		} else {
+			child, err := decodeBlockValue[string](raw)
+			if err != nil {
+				return blockFieldError("blockName", "invalid value", err)
+			}
+			decoded.BlockName = &BlockOptional[string]{Value: &child}
+		}
+	}
 	if raw, ok := fields["title"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		decoded.Title = &BlockOptional[string]{}
 	}
@@ -7369,6 +8454,9 @@ func (value *Content) UnmarshalJSON(data []byte) error {
 	}
 	if raw, ok := fields["links"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		decoded.Links = &BlockOptional[ContentLinks]{}
+	}
+	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		decoded.BlockName = &BlockOptional[string]{}
 	}
 	*value = Content(decoded)
 	return nil
@@ -7386,6 +8474,8 @@ type ContentInput struct {
 	Body *core.Input[richtext.Document[ContentBodyBlocksBlockInputPayload]] `json:"body,omitempty"`
 	// Links: nil omits the field; core.Set sends a value; core.Null sends explicit null.
 	Links *core.Input[[]ContentLinksRowInput] `json:"links,omitempty"`
+	// BlockName: nil omits the field; core.Set sends a value; core.Null sends explicit null.
+	BlockName *core.Input[string] `json:"blockName,omitempty"`
 }
 
 // BlockType returns the immutable stored discriminator.
@@ -7397,6 +8487,7 @@ func (value ContentInput) MarshalJSON() ([]byte, error) {
 		Title     json.RawMessage `json:"title,omitempty"`
 		Body      json.RawMessage `json:"body,omitempty"`
 		Links     json.RawMessage `json:"links,omitempty"`
+		BlockName json.RawMessage `json:"blockName,omitempty"`
 	}
 	encoded.BlockType = "content"
 	encoded.Key = value.Key
@@ -7438,6 +8529,18 @@ func (value ContentInput) MarshalJSON() ([]byte, error) {
 		}
 		encoded.Links = data
 	}
+	if value.BlockName != nil {
+		child, present := value.BlockName.Get()
+		data := []byte("null")
+		var err error
+		if present {
+			data, err = encodeBlockValue[string](child)
+		}
+		if err != nil {
+			return nil, newContractError(ContractError{Operation: "encode", Container: "ContentInput", Path: "blockName", Reason: "invalid value", Err: err})
+		}
+		encoded.BlockName = data
+	}
 	return json.Marshal(encoded)
 }
 
@@ -7463,17 +8566,11 @@ func (value *ContentInput) UnmarshalJSON(data []byte) error {
 		return newContractError(ContractError{Container: "ContentInput", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
 	}
 	if raw, ok := fields["_key"]; ok {
-		var key string
-		if err := json.Unmarshal(raw, &key); err != nil {
-			return blockFieldError("_key", "invalid identity", err)
-		}
-		if strings.TrimSpace(key) == "" {
-			return blockFieldError("_key", "expected a nonempty block identity", nil)
-		}
-	}
-	if raw, ok := fields["_key"]; ok {
 		if err := json.Unmarshal(raw, &decoded.Key); err != nil {
 			return blockFieldError("_key", "invalid identity", err)
+		}
+		if strings.TrimSpace(decoded.Key) == "" {
+			return blockFieldError("_key", "expected a nonempty occurrence identity", nil)
 		}
 	}
 	if raw, ok := fields["title"]; ok {
@@ -7511,6 +8608,17 @@ func (value *ContentInput) UnmarshalJSON(data []byte) error {
 			decoded.Links = core.Set(child)
 		}
 	}
+	if raw, ok := fields["blockName"]; ok {
+		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+			decoded.BlockName = core.Null[string]()
+		} else {
+			child, err := decodeBlockValue[string](raw)
+			if err != nil {
+				return blockFieldError("blockName", "invalid value", err)
+			}
+			decoded.BlockName = core.Set(child)
+		}
+	}
 	if raw, ok := fields["title"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		decoded.Title = core.Null[string]()
 	}
@@ -7520,9 +8628,12 @@ func (value *ContentInput) UnmarshalJSON(data []byte) error {
 	if raw, ok := fields["links"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		decoded.Links = core.Null[[]ContentLinksRowInput]()
 	}
+	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		decoded.BlockName = core.Null[string]()
+	}
 	for name := range fields {
 		switch name {
-		case "_key", "blockType", "title", "body", "links":
+		case "_key", "blockType", "title", "body", "links", "blockName":
 		default:
 			return blockFieldError(name, "unknown input field", nil)
 		}
@@ -7544,6 +8655,8 @@ type ContentUpdate struct {
 	Body *core.Input[richtext.Document[ContentBodyBlocksBlockUpdatePayload]] `json:"body,omitempty"`
 	// Links: nil omits the field; core.Set sends a value; core.Null sends explicit null.
 	Links *core.Input[ContentLinksUpdate] `json:"links,omitempty"`
+	// BlockName: nil omits the field; core.Set sends a value; core.Null sends explicit null.
+	BlockName *core.Input[string] `json:"blockName,omitempty"`
 }
 
 // BlockType returns the immutable stored discriminator.
@@ -7558,6 +8671,7 @@ func (value ContentUpdate) MarshalJSON() ([]byte, error) {
 		Title     json.RawMessage `json:"title,omitempty"`
 		Body      json.RawMessage `json:"body,omitempty"`
 		Links     json.RawMessage `json:"links,omitempty"`
+		BlockName json.RawMessage `json:"blockName,omitempty"`
 	}
 	encoded.BlockType = "content"
 	encoded.Key = value.Key
@@ -7596,6 +8710,18 @@ func (value ContentUpdate) MarshalJSON() ([]byte, error) {
 			return nil, newContractError(ContractError{Operation: "encode", Container: "ContentUpdate", Path: "links", Reason: "invalid value", Err: err})
 		}
 		encoded.Links = data
+	}
+	if value.BlockName != nil {
+		child, present := value.BlockName.Get()
+		data := []byte("null")
+		var err error
+		if present {
+			data, err = encodeBlockValue[string](child)
+		}
+		if err != nil {
+			return nil, newContractError(ContractError{Operation: "encode", Container: "ContentUpdate", Path: "blockName", Reason: "invalid value", Err: err})
+		}
+		encoded.BlockName = data
 	}
 	return json.Marshal(encoded)
 }
@@ -7666,6 +8792,17 @@ func (value *ContentUpdate) UnmarshalJSON(data []byte) error {
 			decoded.Links = core.Set(child)
 		}
 	}
+	if raw, ok := fields["blockName"]; ok {
+		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+			decoded.BlockName = core.Null[string]()
+		} else {
+			child, err := decodeBlockValue[string](raw)
+			if err != nil {
+				return blockFieldError("blockName", "invalid value", err)
+			}
+			decoded.BlockName = core.Set(child)
+		}
+	}
 	if raw, ok := fields["title"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		decoded.Title = core.Null[string]()
 	}
@@ -7675,14 +8812,184 @@ func (value *ContentUpdate) UnmarshalJSON(data []byte) error {
 	if raw, ok := fields["links"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		decoded.Links = core.Null[ContentLinksUpdate]()
 	}
+	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		decoded.BlockName = core.Null[string]()
+	}
 	for name := range fields {
 		switch name {
-		case "_key", "blockType", "title", "body", "links":
+		case "_key", "blockType", "title", "body", "links", "blockName":
 		default:
 			return blockFieldError(name, "unknown input field", nil)
 		}
 	}
 	*value = ContentUpdate(decoded)
+	return nil
+}
+
+// ContentDraft is a generated block. Use *ContentDraft in block lists and type switches.
+// Draft permits incomplete authored children, while retaining the block discriminator and supplied identity. An omitted Key adds a new occurrence.
+type ContentDraft struct {
+	// Key identifies this occurrence; omit it for a new server-assigned identity.
+	Key string `json:"_key,omitempty"`
+	// Title: nil omits the field; core.Set sends a value; core.Null sends explicit null.
+	Title *core.Input[string] `json:"title,omitempty"`
+	// Body: nil omits the field; core.Set sends a value; core.Null sends explicit null.
+	Body *core.Input[richtext.Document[ContentBodyBlocksBlockDraftPayload]] `json:"body,omitempty"`
+	// Links: nil omits the field; core.Set sends a value; core.Null sends explicit null.
+	Links *core.Input[[]ContentLinksRowDraft] `json:"links,omitempty"`
+	// BlockName: nil omits the field; core.Set sends a value; core.Null sends explicit null.
+	BlockName *core.Input[string] `json:"blockName,omitempty"`
+}
+
+// BlockType returns the immutable stored discriminator.
+func (*ContentDraft) BlockType() string { return "content" }
+func (value ContentDraft) MarshalJSON() ([]byte, error) {
+	var encoded struct {
+		BlockType string          `json:"blockType"`
+		Key       string          `json:"_key,omitempty"`
+		Title     json.RawMessage `json:"title,omitempty"`
+		Body      json.RawMessage `json:"body,omitempty"`
+		Links     json.RawMessage `json:"links,omitempty"`
+		BlockName json.RawMessage `json:"blockName,omitempty"`
+	}
+	encoded.BlockType = "content"
+	encoded.Key = value.Key
+	if value.Title != nil {
+		child, present := value.Title.Get()
+		data := []byte("null")
+		var err error
+		if present {
+			data, err = encodeBlockValue[string](child)
+		}
+		if err != nil {
+			return nil, newContractError(ContractError{Operation: "encode", Container: "ContentDraft", Path: "title", Reason: "invalid value", Err: err})
+		}
+		encoded.Title = data
+	}
+	if value.Body != nil {
+		child, present := value.Body.Get()
+		data := []byte("null")
+		var err error
+		if present {
+			data, err = encodeBlockValue[richtext.Document[ContentBodyBlocksBlockDraftPayload]](child)
+		}
+		if err != nil {
+			return nil, newContractError(ContractError{Operation: "encode", Container: "ContentDraft", Path: "body", Reason: "invalid value", Err: err})
+		}
+		encoded.Body = data
+	}
+	if value.Links != nil {
+		child, present := value.Links.Get()
+		data := []byte("null")
+		var err error
+		if present {
+			data, err = (func(value []ContentLinksRowDraft) ([]byte, error) {
+				return encodeBlockSlice(value, encodeBlockValue[ContentLinksRowDraft])
+			})(child)
+		}
+		if err != nil {
+			return nil, newContractError(ContractError{Operation: "encode", Container: "ContentDraft", Path: "links", Reason: "invalid value", Err: err})
+		}
+		encoded.Links = data
+	}
+	if value.BlockName != nil {
+		child, present := value.BlockName.Get()
+		data := []byte("null")
+		var err error
+		if present {
+			data, err = encodeBlockValue[string](child)
+		}
+		if err != nil {
+			return nil, newContractError(ContractError{Operation: "encode", Container: "ContentDraft", Path: "blockName", Reason: "invalid value", Err: err})
+		}
+		encoded.BlockName = data
+	}
+	return json.Marshal(encoded)
+}
+
+// BlockKey returns the occurrence identity, or an empty string for a nil or new block.
+func (value *ContentDraft) BlockKey() string {
+	if value == nil {
+		return ""
+	}
+	return value.Key
+}
+func (value *ContentDraft) UnmarshalJSON(data []byte) error {
+	type payload ContentDraft
+	var decoded payload
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+	var discriminator string
+	if err := json.Unmarshal(fields["blockType"], &discriminator); err != nil {
+		return blockFieldError("blockType", "invalid discriminator", err)
+	}
+	if discriminator != "content" {
+		return newContractError(ContractError{Container: "ContentDraft", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
+	}
+	if raw, ok := fields["_key"]; ok {
+		if err := json.Unmarshal(raw, &decoded.Key); err != nil {
+			return blockFieldError("_key", "invalid identity", err)
+		}
+		if strings.TrimSpace(decoded.Key) == "" {
+			return blockFieldError("_key", "expected a nonempty occurrence identity", nil)
+		}
+	}
+	if raw, ok := fields["title"]; ok {
+		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+			decoded.Title = core.Null[string]()
+		} else {
+			child, err := decodeBlockValue[string](raw)
+			if err != nil {
+				return blockFieldError("title", "invalid value", err)
+			}
+			decoded.Title = core.Set(child)
+		}
+	}
+	if raw, ok := fields["body"]; ok {
+		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+			decoded.Body = core.Null[richtext.Document[ContentBodyBlocksBlockDraftPayload]]()
+		} else {
+			child, err := decodeBlockValue[richtext.Document[ContentBodyBlocksBlockDraftPayload]](raw)
+			if err != nil {
+				return blockFieldError("body", "invalid value", err)
+			}
+			decoded.Body = core.Set(child)
+		}
+	}
+	if raw, ok := fields["links"]; ok {
+		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+			decoded.Links = core.Null[[]ContentLinksRowDraft]()
+		} else {
+			child, err := (func(data []byte) ([]ContentLinksRowDraft, error) {
+				return decodeBlockSlice(data, decodeBlockValue[ContentLinksRowDraft])
+			})(raw)
+			if err != nil {
+				return blockFieldError("links", "invalid value", err)
+			}
+			decoded.Links = core.Set(child)
+		}
+	}
+	if raw, ok := fields["blockName"]; ok {
+		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+			decoded.BlockName = core.Null[string]()
+		} else {
+			child, err := decodeBlockValue[string](raw)
+			if err != nil {
+				return blockFieldError("blockName", "invalid value", err)
+			}
+			decoded.BlockName = core.Set(child)
+		}
+	}
+	for name := range fields {
+		switch name {
+		case "_key", "blockType", "title", "body", "links", "blockName":
+		default:
+			return blockFieldError(name, "unknown input field", nil)
+		}
+	}
+	*value = ContentDraft(decoded)
 	return nil
 }
 
@@ -7698,6 +9005,8 @@ type ContentAllLocales struct {
 	Body *BlockOptional[richtext.Document[ContentBodyBlocksBlockAllLocalesPayload]] `json:"body,omitempty"`
 	// Links: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
 	Links *BlockOptional[ContentLinksAllLocales] `json:"links,omitempty"`
+	// BlockName: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
+	BlockName *BlockOptional[string] `json:"blockName,omitempty"`
 }
 
 // BlockType returns the immutable stored discriminator.
@@ -7709,6 +9018,7 @@ func (value ContentAllLocales) MarshalJSON() ([]byte, error) {
 		Title     json.RawMessage `json:"title,omitempty"`
 		Body      json.RawMessage `json:"body,omitempty"`
 		Links     json.RawMessage `json:"links,omitempty"`
+		BlockName json.RawMessage `json:"blockName,omitempty"`
 	}
 	encoded.BlockType = "content"
 	encoded.Key = value.Key
@@ -7740,6 +9050,13 @@ func (value ContentAllLocales) MarshalJSON() ([]byte, error) {
 			return nil, newContractError(ContractError{Operation: "encode", Container: "ContentAllLocales", Path: "links", Reason: "invalid value", Err: err})
 		}
 		encoded.Links = data
+	}
+	if value.BlockName != nil {
+		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.BlockName.Value)
+		if err != nil {
+			return nil, newContractError(ContractError{Operation: "encode", Container: "ContentAllLocales", Path: "blockName", Reason: "invalid value", Err: err})
+		}
+		encoded.BlockName = data
 	}
 	return json.Marshal(encoded)
 }
@@ -7818,6 +9135,19 @@ func (value *ContentAllLocales) UnmarshalJSON(data []byte) error {
 			decoded.Links = &BlockOptional[ContentLinksAllLocales]{Value: &child}
 		}
 	}
+	if raw, ok := fields["blockName"]; ok {
+		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+			if err := json.Unmarshal(raw, &decoded.BlockName); err != nil {
+				return blockFieldError("blockName", "invalid value", err)
+			}
+		} else {
+			child, err := decodeBlockValue[string](raw)
+			if err != nil {
+				return blockFieldError("blockName", "invalid value", err)
+			}
+			decoded.BlockName = &BlockOptional[string]{Value: &child}
+		}
+	}
 	if raw, ok := fields["title"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		decoded.Title = &BlockOptional[map[string]*string]{}
 	}
@@ -7826,6 +9156,9 @@ func (value *ContentAllLocales) UnmarshalJSON(data []byte) error {
 	}
 	if raw, ok := fields["links"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		decoded.Links = &BlockOptional[ContentLinksAllLocales]{}
+	}
+	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		decoded.BlockName = &BlockOptional[string]{}
 	}
 	*value = ContentAllLocales(decoded)
 	return nil
@@ -7842,6 +9175,8 @@ type ContentAllLocalesValue struct {
 	Body *BlockOptional[richtext.Document[ContentBodyBlocksBlockAllLocalesValuePayload]] `json:"body,omitempty"`
 	// Links: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
 	Links *BlockOptional[ContentLinksAllLocalesValue] `json:"links,omitempty"`
+	// BlockName: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
+	BlockName *BlockOptional[string] `json:"blockName,omitempty"`
 }
 
 // BlockType returns the immutable stored discriminator.
@@ -7853,6 +9188,7 @@ func (value ContentAllLocalesValue) MarshalJSON() ([]byte, error) {
 		Title     json.RawMessage `json:"title,omitempty"`
 		Body      json.RawMessage `json:"body,omitempty"`
 		Links     json.RawMessage `json:"links,omitempty"`
+		BlockName json.RawMessage `json:"blockName,omitempty"`
 	}
 	encoded.BlockType = "content"
 	encoded.Key = value.Key
@@ -7880,6 +9216,13 @@ func (value ContentAllLocalesValue) MarshalJSON() ([]byte, error) {
 			return nil, newContractError(ContractError{Operation: "encode", Container: "ContentAllLocalesValue", Path: "links", Reason: "invalid value", Err: err})
 		}
 		encoded.Links = data
+	}
+	if value.BlockName != nil {
+		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.BlockName.Value)
+		if err != nil {
+			return nil, newContractError(ContractError{Operation: "encode", Container: "ContentAllLocalesValue", Path: "blockName", Reason: "invalid value", Err: err})
+		}
+		encoded.BlockName = data
 	}
 	return json.Marshal(encoded)
 }
@@ -7956,6 +9299,19 @@ func (value *ContentAllLocalesValue) UnmarshalJSON(data []byte) error {
 			decoded.Links = &BlockOptional[ContentLinksAllLocalesValue]{Value: &child}
 		}
 	}
+	if raw, ok := fields["blockName"]; ok {
+		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+			if err := json.Unmarshal(raw, &decoded.BlockName); err != nil {
+				return blockFieldError("blockName", "invalid value", err)
+			}
+		} else {
+			child, err := decodeBlockValue[string](raw)
+			if err != nil {
+				return blockFieldError("blockName", "invalid value", err)
+			}
+			decoded.BlockName = &BlockOptional[string]{Value: &child}
+		}
+	}
 	if raw, ok := fields["title"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		decoded.Title = &BlockOptional[string]{}
 	}
@@ -7964,6 +9320,9 @@ func (value *ContentAllLocalesValue) UnmarshalJSON(data []byte) error {
 	}
 	if raw, ok := fields["links"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		decoded.Links = &BlockOptional[ContentLinksAllLocalesValue]{}
+	}
+	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		decoded.BlockName = &BlockOptional[string]{}
 	}
 	*value = ContentAllLocalesValue(decoded)
 	return nil
@@ -7982,6 +9341,8 @@ type Hero struct {
 	Heading *string `json:"heading,omitempty"`
 	// Appearance: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
 	Appearance *BlockOptional[HeroAppearance] `json:"appearance,omitempty"`
+	// BlockName: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
+	BlockName *BlockOptional[string] `json:"blockName,omitempty"`
 }
 
 // BlockType returns the immutable stored discriminator.
@@ -7992,6 +9353,7 @@ func (value Hero) MarshalJSON() ([]byte, error) {
 		Key        string          `json:"_key"`
 		Heading    json.RawMessage `json:"heading,omitempty"`
 		Appearance json.RawMessage `json:"appearance,omitempty"`
+		BlockName  json.RawMessage `json:"blockName,omitempty"`
 	}
 	encoded.BlockType = "hero"
 	encoded.Key = value.Key
@@ -8010,6 +9372,13 @@ func (value Hero) MarshalJSON() ([]byte, error) {
 			return nil, newContractError(ContractError{Operation: "encode", Container: "Hero", Path: "appearance", Reason: "invalid value", Err: err})
 		}
 		encoded.Appearance = data
+	}
+	if value.BlockName != nil {
+		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.BlockName.Value)
+		if err != nil {
+			return nil, newContractError(ContractError{Operation: "encode", Container: "Hero", Path: "blockName", Reason: "invalid value", Err: err})
+		}
+		encoded.BlockName = data
 	}
 	return json.Marshal(encoded)
 }
@@ -8073,13 +9442,24 @@ func (value *Hero) UnmarshalJSON(data []byte) error {
 			decoded.Appearance = &BlockOptional[HeroAppearance]{Value: &child}
 		}
 	}
-	if raw, ok := fields["heading"]; ok {
+	if raw, ok := fields["blockName"]; ok {
 		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			return blockFieldError("heading", "null is not allowed", nil)
+			if err := json.Unmarshal(raw, &decoded.BlockName); err != nil {
+				return blockFieldError("blockName", "invalid value", err)
+			}
+		} else {
+			child, err := decodeBlockValue[string](raw)
+			if err != nil {
+				return blockFieldError("blockName", "invalid value", err)
+			}
+			decoded.BlockName = &BlockOptional[string]{Value: &child}
 		}
 	}
 	if raw, ok := fields["appearance"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		decoded.Appearance = &BlockOptional[HeroAppearance]{}
+	}
+	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		decoded.BlockName = &BlockOptional[string]{}
 	}
 	*value = Hero(decoded)
 	return nil
@@ -8095,6 +9475,8 @@ type HeroInput struct {
 	Heading string `json:"heading"`
 	// Appearance: nil omits the field; core.Set sends a value; core.Null sends explicit null.
 	Appearance *core.Input[HeroAppearanceInput] `json:"appearance,omitempty"`
+	// BlockName: nil omits the field; core.Set sends a value; core.Null sends explicit null.
+	BlockName *core.Input[string] `json:"blockName,omitempty"`
 }
 
 // BlockType returns the immutable stored discriminator.
@@ -8105,6 +9487,7 @@ func (value HeroInput) MarshalJSON() ([]byte, error) {
 		Key        string          `json:"_key,omitempty"`
 		Heading    json.RawMessage `json:"heading"`
 		Appearance json.RawMessage `json:"appearance,omitempty"`
+		BlockName  json.RawMessage `json:"blockName,omitempty"`
 	}
 	encoded.BlockType = "hero"
 	encoded.Key = value.Key
@@ -8126,6 +9509,18 @@ func (value HeroInput) MarshalJSON() ([]byte, error) {
 			return nil, newContractError(ContractError{Operation: "encode", Container: "HeroInput", Path: "appearance", Reason: "invalid value", Err: err})
 		}
 		encoded.Appearance = data
+	}
+	if value.BlockName != nil {
+		child, present := value.BlockName.Get()
+		data := []byte("null")
+		var err error
+		if present {
+			data, err = encodeBlockValue[string](child)
+		}
+		if err != nil {
+			return nil, newContractError(ContractError{Operation: "encode", Container: "HeroInput", Path: "blockName", Reason: "invalid value", Err: err})
+		}
+		encoded.BlockName = data
 	}
 	return json.Marshal(encoded)
 }
@@ -8151,21 +9546,15 @@ func (value *HeroInput) UnmarshalJSON(data []byte) error {
 	if discriminator != "hero" {
 		return newContractError(ContractError{Container: "HeroInput", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
 	}
-	if raw, ok := fields["_key"]; ok {
-		var key string
-		if err := json.Unmarshal(raw, &key); err != nil {
-			return blockFieldError("_key", "invalid identity", err)
-		}
-		if strings.TrimSpace(key) == "" {
-			return blockFieldError("_key", "expected a nonempty block identity", nil)
-		}
-	}
 	if raw, ok := fields["heading"]; !ok || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		return blockFieldError("heading", "required field is absent or null", nil)
 	}
 	if raw, ok := fields["_key"]; ok {
 		if err := json.Unmarshal(raw, &decoded.Key); err != nil {
 			return blockFieldError("_key", "invalid identity", err)
+		}
+		if strings.TrimSpace(decoded.Key) == "" {
+			return blockFieldError("_key", "expected a nonempty occurrence identity", nil)
 		}
 	}
 	if raw, ok := fields["heading"]; ok {
@@ -8190,15 +9579,29 @@ func (value *HeroInput) UnmarshalJSON(data []byte) error {
 			decoded.Appearance = core.Set(child)
 		}
 	}
+	if raw, ok := fields["blockName"]; ok {
+		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+			decoded.BlockName = core.Null[string]()
+		} else {
+			child, err := decodeBlockValue[string](raw)
+			if err != nil {
+				return blockFieldError("blockName", "invalid value", err)
+			}
+			decoded.BlockName = core.Set(child)
+		}
+	}
 	if raw, ok := fields["heading"]; !ok || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		return blockFieldError("heading", "required field is absent or null", nil)
 	}
 	if raw, ok := fields["appearance"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		decoded.Appearance = core.Null[HeroAppearanceInput]()
 	}
+	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		decoded.BlockName = core.Null[string]()
+	}
 	for name := range fields {
 		switch name {
-		case "_key", "blockType", "heading", "appearance":
+		case "_key", "blockType", "heading", "appearance", "blockName":
 		default:
 			return blockFieldError(name, "unknown input field", nil)
 		}
@@ -8218,6 +9621,8 @@ type HeroUpdate struct {
 	Heading *string `json:"heading,omitempty"`
 	// Appearance: nil omits the field; core.Set sends a value; core.Null sends explicit null.
 	Appearance *core.Input[HeroAppearanceUpdate] `json:"appearance,omitempty"`
+	// BlockName: nil omits the field; core.Set sends a value; core.Null sends explicit null.
+	BlockName *core.Input[string] `json:"blockName,omitempty"`
 }
 
 // BlockType returns the immutable stored discriminator.
@@ -8231,6 +9636,7 @@ func (value HeroUpdate) MarshalJSON() ([]byte, error) {
 		Key        string          `json:"_key"`
 		Heading    json.RawMessage `json:"heading,omitempty"`
 		Appearance json.RawMessage `json:"appearance,omitempty"`
+		BlockName  json.RawMessage `json:"blockName,omitempty"`
 	}
 	encoded.BlockType = "hero"
 	encoded.Key = value.Key
@@ -8252,6 +9658,18 @@ func (value HeroUpdate) MarshalJSON() ([]byte, error) {
 			return nil, newContractError(ContractError{Operation: "encode", Container: "HeroUpdate", Path: "appearance", Reason: "invalid value", Err: err})
 		}
 		encoded.Appearance = data
+	}
+	if value.BlockName != nil {
+		child, present := value.BlockName.Get()
+		data := []byte("null")
+		var err error
+		if present {
+			data, err = encodeBlockValue[string](child)
+		}
+		if err != nil {
+			return nil, newContractError(ContractError{Operation: "encode", Container: "HeroUpdate", Path: "blockName", Reason: "invalid value", Err: err})
+		}
+		encoded.BlockName = data
 	}
 	return json.Marshal(encoded)
 }
@@ -8311,20 +9729,171 @@ func (value *HeroUpdate) UnmarshalJSON(data []byte) error {
 			decoded.Appearance = core.Set(child)
 		}
 	}
+	if raw, ok := fields["blockName"]; ok {
+		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+			decoded.BlockName = core.Null[string]()
+		} else {
+			child, err := decodeBlockValue[string](raw)
+			if err != nil {
+				return blockFieldError("blockName", "invalid value", err)
+			}
+			decoded.BlockName = core.Set(child)
+		}
+	}
 	if raw, ok := fields["heading"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		return blockFieldError("heading", "required field is absent or null", nil)
 	}
 	if raw, ok := fields["appearance"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		decoded.Appearance = core.Null[HeroAppearanceUpdate]()
 	}
+	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		decoded.BlockName = core.Null[string]()
+	}
 	for name := range fields {
 		switch name {
-		case "_key", "blockType", "heading", "appearance":
+		case "_key", "blockType", "heading", "appearance", "blockName":
 		default:
 			return blockFieldError(name, "unknown input field", nil)
 		}
 	}
 	*value = HeroUpdate(decoded)
+	return nil
+}
+
+// HeroDraft is a generated block. Use *HeroDraft in block lists and type switches.
+// Draft permits incomplete authored children, while retaining the block discriminator and supplied identity. An omitted Key adds a new occurrence.
+type HeroDraft struct {
+	// Key identifies this occurrence; omit it for a new server-assigned identity.
+	Key string `json:"_key,omitempty"`
+	// Heading: nil omits the field; core.Set sends a value; core.Null sends explicit null.
+	Heading *core.Input[string] `json:"heading,omitempty"`
+	// Appearance: nil omits the field; core.Set sends a value; core.Null sends explicit null.
+	Appearance *core.Input[HeroAppearanceDraft] `json:"appearance,omitempty"`
+	// BlockName: nil omits the field; core.Set sends a value; core.Null sends explicit null.
+	BlockName *core.Input[string] `json:"blockName,omitempty"`
+}
+
+// BlockType returns the immutable stored discriminator.
+func (*HeroDraft) BlockType() string { return "hero" }
+func (value HeroDraft) MarshalJSON() ([]byte, error) {
+	var encoded struct {
+		BlockType  string          `json:"blockType"`
+		Key        string          `json:"_key,omitempty"`
+		Heading    json.RawMessage `json:"heading,omitempty"`
+		Appearance json.RawMessage `json:"appearance,omitempty"`
+		BlockName  json.RawMessage `json:"blockName,omitempty"`
+	}
+	encoded.BlockType = "hero"
+	encoded.Key = value.Key
+	if value.Heading != nil {
+		child, present := value.Heading.Get()
+		data := []byte("null")
+		var err error
+		if present {
+			data, err = encodeBlockValue[string](child)
+		}
+		if err != nil {
+			return nil, newContractError(ContractError{Operation: "encode", Container: "HeroDraft", Path: "heading", Reason: "invalid value", Err: err})
+		}
+		encoded.Heading = data
+	}
+	if value.Appearance != nil {
+		child, present := value.Appearance.Get()
+		data := []byte("null")
+		var err error
+		if present {
+			data, err = encodeBlockValue[HeroAppearanceDraft](child)
+		}
+		if err != nil {
+			return nil, newContractError(ContractError{Operation: "encode", Container: "HeroDraft", Path: "appearance", Reason: "invalid value", Err: err})
+		}
+		encoded.Appearance = data
+	}
+	if value.BlockName != nil {
+		child, present := value.BlockName.Get()
+		data := []byte("null")
+		var err error
+		if present {
+			data, err = encodeBlockValue[string](child)
+		}
+		if err != nil {
+			return nil, newContractError(ContractError{Operation: "encode", Container: "HeroDraft", Path: "blockName", Reason: "invalid value", Err: err})
+		}
+		encoded.BlockName = data
+	}
+	return json.Marshal(encoded)
+}
+
+// BlockKey returns the occurrence identity, or an empty string for a nil or new block.
+func (value *HeroDraft) BlockKey() string {
+	if value == nil {
+		return ""
+	}
+	return value.Key
+}
+func (value *HeroDraft) UnmarshalJSON(data []byte) error {
+	type payload HeroDraft
+	var decoded payload
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+	var discriminator string
+	if err := json.Unmarshal(fields["blockType"], &discriminator); err != nil {
+		return blockFieldError("blockType", "invalid discriminator", err)
+	}
+	if discriminator != "hero" {
+		return newContractError(ContractError{Container: "HeroDraft", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
+	}
+	if raw, ok := fields["_key"]; ok {
+		if err := json.Unmarshal(raw, &decoded.Key); err != nil {
+			return blockFieldError("_key", "invalid identity", err)
+		}
+		if strings.TrimSpace(decoded.Key) == "" {
+			return blockFieldError("_key", "expected a nonempty occurrence identity", nil)
+		}
+	}
+	if raw, ok := fields["heading"]; ok {
+		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+			decoded.Heading = core.Null[string]()
+		} else {
+			child, err := decodeBlockValue[string](raw)
+			if err != nil {
+				return blockFieldError("heading", "invalid value", err)
+			}
+			decoded.Heading = core.Set(child)
+		}
+	}
+	if raw, ok := fields["appearance"]; ok {
+		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+			decoded.Appearance = core.Null[HeroAppearanceDraft]()
+		} else {
+			child, err := decodeBlockValue[HeroAppearanceDraft](raw)
+			if err != nil {
+				return blockFieldError("appearance", "invalid value", err)
+			}
+			decoded.Appearance = core.Set(child)
+		}
+	}
+	if raw, ok := fields["blockName"]; ok {
+		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+			decoded.BlockName = core.Null[string]()
+		} else {
+			child, err := decodeBlockValue[string](raw)
+			if err != nil {
+				return blockFieldError("blockName", "invalid value", err)
+			}
+			decoded.BlockName = core.Set(child)
+		}
+	}
+	for name := range fields {
+		switch name {
+		case "_key", "blockType", "heading", "appearance", "blockName":
+		default:
+			return blockFieldError(name, "unknown input field", nil)
+		}
+	}
+	*value = HeroDraft(decoded)
 	return nil
 }
 
@@ -8335,9 +9904,11 @@ type HeroAllLocales struct {
 	Key string `json:"_key"`
 	// Heading may be omitted by access rules or projection.
 	// Locale-code map; missing locales are absent translations.
-	Heading *map[string]string `json:"heading,omitempty"`
+	Heading *map[string]*string `json:"heading,omitempty"`
 	// Appearance: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
 	Appearance *BlockOptional[HeroAppearanceAllLocales] `json:"appearance,omitempty"`
+	// BlockName: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
+	BlockName *BlockOptional[string] `json:"blockName,omitempty"`
 }
 
 // BlockType returns the immutable stored discriminator.
@@ -8348,13 +9919,14 @@ func (value HeroAllLocales) MarshalJSON() ([]byte, error) {
 		Key        string          `json:"_key"`
 		Heading    json.RawMessage `json:"heading,omitempty"`
 		Appearance json.RawMessage `json:"appearance,omitempty"`
+		BlockName  json.RawMessage `json:"blockName,omitempty"`
 	}
 	encoded.BlockType = "hero"
 	encoded.Key = value.Key
 	if value.Heading != nil {
-		data, err := (func(value *map[string]string) ([]byte, error) {
-			return encodeBlockPointer(value, (func(value map[string]string) ([]byte, error) {
-				return encodeBlockLocales(value, encodeBlockValue[string])
+		data, err := (func(value *map[string]*string) ([]byte, error) {
+			return encodeBlockPointer(value, (func(value map[string]*string) ([]byte, error) {
+				return encodeBlockLocales(value, (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) }))
 			}))
 		})(value.Heading)
 		if err != nil {
@@ -8370,6 +9942,13 @@ func (value HeroAllLocales) MarshalJSON() ([]byte, error) {
 			return nil, newContractError(ContractError{Operation: "encode", Container: "HeroAllLocales", Path: "appearance", Reason: "invalid value", Err: err})
 		}
 		encoded.Appearance = data
+	}
+	if value.BlockName != nil {
+		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.BlockName.Value)
+		if err != nil {
+			return nil, newContractError(ContractError{Operation: "encode", Container: "HeroAllLocales", Path: "blockName", Reason: "invalid value", Err: err})
+		}
+		encoded.BlockName = data
 	}
 	return json.Marshal(encoded)
 }
@@ -8413,8 +9992,8 @@ func (value *HeroAllLocales) UnmarshalJSON(data []byte) error {
 				return blockFieldError("heading", "invalid value", err)
 			}
 		} else {
-			child, err := (func(data []byte) (map[string]string, error) {
-				return decodeBlockLocales(data, decodeBlockValue[string])
+			child, err := (func(data []byte) (map[string]*string, error) {
+				return decodeBlockLocales(data, (func(data []byte) (*string, error) { return decodeBlockPointer(data, decodeBlockValue[string]) }))
 			})(raw)
 			if err != nil {
 				return blockFieldError("heading", "invalid value", err)
@@ -8435,22 +10014,24 @@ func (value *HeroAllLocales) UnmarshalJSON(data []byte) error {
 			decoded.Appearance = &BlockOptional[HeroAppearanceAllLocales]{Value: &child}
 		}
 	}
-	if raw, ok := fields["heading"]; ok {
+	if raw, ok := fields["blockName"]; ok {
 		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			return blockFieldError("heading", "null is not allowed", nil)
-		}
-		var locales map[string]json.RawMessage
-		if err := json.Unmarshal(raw, &locales); err != nil {
-			return err
-		}
-		for locale, value := range locales {
-			if bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
-				return blockFieldError(joinBlockPath("heading", locale), "null is not allowed", nil)
+			if err := json.Unmarshal(raw, &decoded.BlockName); err != nil {
+				return blockFieldError("blockName", "invalid value", err)
 			}
+		} else {
+			child, err := decodeBlockValue[string](raw)
+			if err != nil {
+				return blockFieldError("blockName", "invalid value", err)
+			}
+			decoded.BlockName = &BlockOptional[string]{Value: &child}
 		}
 	}
 	if raw, ok := fields["appearance"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		decoded.Appearance = &BlockOptional[HeroAppearanceAllLocales]{}
+	}
+	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		decoded.BlockName = &BlockOptional[string]{}
 	}
 	*value = HeroAllLocales(decoded)
 	return nil
@@ -8465,6 +10046,8 @@ type HeroAllLocalesValue struct {
 	Heading *string `json:"heading,omitempty"`
 	// Appearance: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
 	Appearance *BlockOptional[HeroAppearanceAllLocalesValue] `json:"appearance,omitempty"`
+	// BlockName: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
+	BlockName *BlockOptional[string] `json:"blockName,omitempty"`
 }
 
 // BlockType returns the immutable stored discriminator.
@@ -8475,6 +10058,7 @@ func (value HeroAllLocalesValue) MarshalJSON() ([]byte, error) {
 		Key        string          `json:"_key"`
 		Heading    json.RawMessage `json:"heading,omitempty"`
 		Appearance json.RawMessage `json:"appearance,omitempty"`
+		BlockName  json.RawMessage `json:"blockName,omitempty"`
 	}
 	encoded.BlockType = "hero"
 	encoded.Key = value.Key
@@ -8493,6 +10077,13 @@ func (value HeroAllLocalesValue) MarshalJSON() ([]byte, error) {
 			return nil, newContractError(ContractError{Operation: "encode", Container: "HeroAllLocalesValue", Path: "appearance", Reason: "invalid value", Err: err})
 		}
 		encoded.Appearance = data
+	}
+	if value.BlockName != nil {
+		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.BlockName.Value)
+		if err != nil {
+			return nil, newContractError(ContractError{Operation: "encode", Container: "HeroAllLocalesValue", Path: "blockName", Reason: "invalid value", Err: err})
+		}
+		encoded.BlockName = data
 	}
 	return json.Marshal(encoded)
 }
@@ -8556,13 +10147,24 @@ func (value *HeroAllLocalesValue) UnmarshalJSON(data []byte) error {
 			decoded.Appearance = &BlockOptional[HeroAppearanceAllLocalesValue]{Value: &child}
 		}
 	}
-	if raw, ok := fields["heading"]; ok {
+	if raw, ok := fields["blockName"]; ok {
 		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			return blockFieldError("heading", "null is not allowed", nil)
+			if err := json.Unmarshal(raw, &decoded.BlockName); err != nil {
+				return blockFieldError("blockName", "invalid value", err)
+			}
+		} else {
+			child, err := decodeBlockValue[string](raw)
+			if err != nil {
+				return blockFieldError("blockName", "invalid value", err)
+			}
+			decoded.BlockName = &BlockOptional[string]{Value: &child}
 		}
 	}
 	if raw, ok := fields["appearance"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		decoded.Appearance = &BlockOptional[HeroAppearanceAllLocalesValue]{}
+	}
+	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		decoded.BlockName = &BlockOptional[string]{}
 	}
 	*value = HeroAllLocalesValue(decoded)
 	return nil
@@ -8581,6 +10183,8 @@ type Media struct {
 	Asset *Reference[Asset] `json:"asset,omitempty"`
 	// Caption: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
 	Caption *BlockOptional[string] `json:"caption,omitempty"`
+	// BlockName: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
+	BlockName *BlockOptional[string] `json:"blockName,omitempty"`
 }
 
 // BlockType returns the immutable stored discriminator.
@@ -8591,6 +10195,7 @@ func (value Media) MarshalJSON() ([]byte, error) {
 		Key       string          `json:"_key"`
 		Asset     json.RawMessage `json:"asset,omitempty"`
 		Caption   json.RawMessage `json:"caption,omitempty"`
+		BlockName json.RawMessage `json:"blockName,omitempty"`
 	}
 	encoded.BlockType = "media"
 	encoded.Key = value.Key
@@ -8609,6 +10214,13 @@ func (value Media) MarshalJSON() ([]byte, error) {
 			return nil, newContractError(ContractError{Operation: "encode", Container: "Media", Path: "caption", Reason: "invalid value", Err: err})
 		}
 		encoded.Caption = data
+	}
+	if value.BlockName != nil {
+		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.BlockName.Value)
+		if err != nil {
+			return nil, newContractError(ContractError{Operation: "encode", Container: "Media", Path: "blockName", Reason: "invalid value", Err: err})
+		}
+		encoded.BlockName = data
 	}
 	return json.Marshal(encoded)
 }
@@ -8672,13 +10284,24 @@ func (value *Media) UnmarshalJSON(data []byte) error {
 			decoded.Caption = &BlockOptional[string]{Value: &child}
 		}
 	}
-	if raw, ok := fields["asset"]; ok {
+	if raw, ok := fields["blockName"]; ok {
 		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			return blockFieldError("asset", "null is not allowed", nil)
+			if err := json.Unmarshal(raw, &decoded.BlockName); err != nil {
+				return blockFieldError("blockName", "invalid value", err)
+			}
+		} else {
+			child, err := decodeBlockValue[string](raw)
+			if err != nil {
+				return blockFieldError("blockName", "invalid value", err)
+			}
+			decoded.BlockName = &BlockOptional[string]{Value: &child}
 		}
 	}
 	if raw, ok := fields["caption"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		decoded.Caption = &BlockOptional[string]{}
+	}
+	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		decoded.BlockName = &BlockOptional[string]{}
 	}
 	*value = Media(decoded)
 	return nil
@@ -8694,6 +10317,8 @@ type MediaInput struct {
 	Asset string `json:"asset"`
 	// Caption: nil omits the field; core.Set sends a value; core.Null sends explicit null.
 	Caption *core.Input[string] `json:"caption,omitempty"`
+	// BlockName: nil omits the field; core.Set sends a value; core.Null sends explicit null.
+	BlockName *core.Input[string] `json:"blockName,omitempty"`
 }
 
 // BlockType returns the immutable stored discriminator.
@@ -8704,6 +10329,7 @@ func (value MediaInput) MarshalJSON() ([]byte, error) {
 		Key       string          `json:"_key,omitempty"`
 		Asset     json.RawMessage `json:"asset"`
 		Caption   json.RawMessage `json:"caption,omitempty"`
+		BlockName json.RawMessage `json:"blockName,omitempty"`
 	}
 	encoded.BlockType = "media"
 	encoded.Key = value.Key
@@ -8725,6 +10351,18 @@ func (value MediaInput) MarshalJSON() ([]byte, error) {
 			return nil, newContractError(ContractError{Operation: "encode", Container: "MediaInput", Path: "caption", Reason: "invalid value", Err: err})
 		}
 		encoded.Caption = data
+	}
+	if value.BlockName != nil {
+		child, present := value.BlockName.Get()
+		data := []byte("null")
+		var err error
+		if present {
+			data, err = encodeBlockValue[string](child)
+		}
+		if err != nil {
+			return nil, newContractError(ContractError{Operation: "encode", Container: "MediaInput", Path: "blockName", Reason: "invalid value", Err: err})
+		}
+		encoded.BlockName = data
 	}
 	return json.Marshal(encoded)
 }
@@ -8750,21 +10388,15 @@ func (value *MediaInput) UnmarshalJSON(data []byte) error {
 	if discriminator != "media" {
 		return newContractError(ContractError{Container: "MediaInput", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
 	}
-	if raw, ok := fields["_key"]; ok {
-		var key string
-		if err := json.Unmarshal(raw, &key); err != nil {
-			return blockFieldError("_key", "invalid identity", err)
-		}
-		if strings.TrimSpace(key) == "" {
-			return blockFieldError("_key", "expected a nonempty block identity", nil)
-		}
-	}
 	if raw, ok := fields["asset"]; !ok || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		return blockFieldError("asset", "required field is absent or null", nil)
 	}
 	if raw, ok := fields["_key"]; ok {
 		if err := json.Unmarshal(raw, &decoded.Key); err != nil {
 			return blockFieldError("_key", "invalid identity", err)
+		}
+		if strings.TrimSpace(decoded.Key) == "" {
+			return blockFieldError("_key", "expected a nonempty occurrence identity", nil)
 		}
 	}
 	if raw, ok := fields["asset"]; ok {
@@ -8789,15 +10421,29 @@ func (value *MediaInput) UnmarshalJSON(data []byte) error {
 			decoded.Caption = core.Set(child)
 		}
 	}
+	if raw, ok := fields["blockName"]; ok {
+		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+			decoded.BlockName = core.Null[string]()
+		} else {
+			child, err := decodeBlockValue[string](raw)
+			if err != nil {
+				return blockFieldError("blockName", "invalid value", err)
+			}
+			decoded.BlockName = core.Set(child)
+		}
+	}
 	if raw, ok := fields["asset"]; !ok || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		return blockFieldError("asset", "required field is absent or null", nil)
 	}
 	if raw, ok := fields["caption"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		decoded.Caption = core.Null[string]()
 	}
+	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		decoded.BlockName = core.Null[string]()
+	}
 	for name := range fields {
 		switch name {
-		case "_key", "blockType", "asset", "caption":
+		case "_key", "blockType", "asset", "caption", "blockName":
 		default:
 			return blockFieldError(name, "unknown input field", nil)
 		}
@@ -8817,6 +10463,8 @@ type MediaUpdate struct {
 	Asset *string `json:"asset,omitempty"`
 	// Caption: nil omits the field; core.Set sends a value; core.Null sends explicit null.
 	Caption *core.Input[string] `json:"caption,omitempty"`
+	// BlockName: nil omits the field; core.Set sends a value; core.Null sends explicit null.
+	BlockName *core.Input[string] `json:"blockName,omitempty"`
 }
 
 // BlockType returns the immutable stored discriminator.
@@ -8830,6 +10478,7 @@ func (value MediaUpdate) MarshalJSON() ([]byte, error) {
 		Key       string          `json:"_key"`
 		Asset     json.RawMessage `json:"asset,omitempty"`
 		Caption   json.RawMessage `json:"caption,omitempty"`
+		BlockName json.RawMessage `json:"blockName,omitempty"`
 	}
 	encoded.BlockType = "media"
 	encoded.Key = value.Key
@@ -8851,6 +10500,18 @@ func (value MediaUpdate) MarshalJSON() ([]byte, error) {
 			return nil, newContractError(ContractError{Operation: "encode", Container: "MediaUpdate", Path: "caption", Reason: "invalid value", Err: err})
 		}
 		encoded.Caption = data
+	}
+	if value.BlockName != nil {
+		child, present := value.BlockName.Get()
+		data := []byte("null")
+		var err error
+		if present {
+			data, err = encodeBlockValue[string](child)
+		}
+		if err != nil {
+			return nil, newContractError(ContractError{Operation: "encode", Container: "MediaUpdate", Path: "blockName", Reason: "invalid value", Err: err})
+		}
+		encoded.BlockName = data
 	}
 	return json.Marshal(encoded)
 }
@@ -8910,20 +10571,171 @@ func (value *MediaUpdate) UnmarshalJSON(data []byte) error {
 			decoded.Caption = core.Set(child)
 		}
 	}
+	if raw, ok := fields["blockName"]; ok {
+		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+			decoded.BlockName = core.Null[string]()
+		} else {
+			child, err := decodeBlockValue[string](raw)
+			if err != nil {
+				return blockFieldError("blockName", "invalid value", err)
+			}
+			decoded.BlockName = core.Set(child)
+		}
+	}
 	if raw, ok := fields["asset"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		return blockFieldError("asset", "required field is absent or null", nil)
 	}
 	if raw, ok := fields["caption"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		decoded.Caption = core.Null[string]()
 	}
+	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		decoded.BlockName = core.Null[string]()
+	}
 	for name := range fields {
 		switch name {
-		case "_key", "blockType", "asset", "caption":
+		case "_key", "blockType", "asset", "caption", "blockName":
 		default:
 			return blockFieldError(name, "unknown input field", nil)
 		}
 	}
 	*value = MediaUpdate(decoded)
+	return nil
+}
+
+// MediaDraft is a generated block. Use *MediaDraft in block lists and type switches.
+// Draft permits incomplete authored children, while retaining the block discriminator and supplied identity. An omitted Key adds a new occurrence.
+type MediaDraft struct {
+	// Key identifies this occurrence; omit it for a new server-assigned identity.
+	Key string `json:"_key,omitempty"`
+	// Asset: nil omits the field; core.Set sends a value; core.Null sends explicit null.
+	Asset *core.Input[string] `json:"asset,omitempty"`
+	// Caption: nil omits the field; core.Set sends a value; core.Null sends explicit null.
+	Caption *core.Input[string] `json:"caption,omitempty"`
+	// BlockName: nil omits the field; core.Set sends a value; core.Null sends explicit null.
+	BlockName *core.Input[string] `json:"blockName,omitempty"`
+}
+
+// BlockType returns the immutable stored discriminator.
+func (*MediaDraft) BlockType() string { return "media" }
+func (value MediaDraft) MarshalJSON() ([]byte, error) {
+	var encoded struct {
+		BlockType string          `json:"blockType"`
+		Key       string          `json:"_key,omitempty"`
+		Asset     json.RawMessage `json:"asset,omitempty"`
+		Caption   json.RawMessage `json:"caption,omitempty"`
+		BlockName json.RawMessage `json:"blockName,omitempty"`
+	}
+	encoded.BlockType = "media"
+	encoded.Key = value.Key
+	if value.Asset != nil {
+		child, present := value.Asset.Get()
+		data := []byte("null")
+		var err error
+		if present {
+			data, err = encodeBlockValue[string](child)
+		}
+		if err != nil {
+			return nil, newContractError(ContractError{Operation: "encode", Container: "MediaDraft", Path: "asset", Reason: "invalid value", Err: err})
+		}
+		encoded.Asset = data
+	}
+	if value.Caption != nil {
+		child, present := value.Caption.Get()
+		data := []byte("null")
+		var err error
+		if present {
+			data, err = encodeBlockValue[string](child)
+		}
+		if err != nil {
+			return nil, newContractError(ContractError{Operation: "encode", Container: "MediaDraft", Path: "caption", Reason: "invalid value", Err: err})
+		}
+		encoded.Caption = data
+	}
+	if value.BlockName != nil {
+		child, present := value.BlockName.Get()
+		data := []byte("null")
+		var err error
+		if present {
+			data, err = encodeBlockValue[string](child)
+		}
+		if err != nil {
+			return nil, newContractError(ContractError{Operation: "encode", Container: "MediaDraft", Path: "blockName", Reason: "invalid value", Err: err})
+		}
+		encoded.BlockName = data
+	}
+	return json.Marshal(encoded)
+}
+
+// BlockKey returns the occurrence identity, or an empty string for a nil or new block.
+func (value *MediaDraft) BlockKey() string {
+	if value == nil {
+		return ""
+	}
+	return value.Key
+}
+func (value *MediaDraft) UnmarshalJSON(data []byte) error {
+	type payload MediaDraft
+	var decoded payload
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+	var discriminator string
+	if err := json.Unmarshal(fields["blockType"], &discriminator); err != nil {
+		return blockFieldError("blockType", "invalid discriminator", err)
+	}
+	if discriminator != "media" {
+		return newContractError(ContractError{Container: "MediaDraft", Discriminator: discriminator, Path: "blockType", Reason: "incorrect discriminator"})
+	}
+	if raw, ok := fields["_key"]; ok {
+		if err := json.Unmarshal(raw, &decoded.Key); err != nil {
+			return blockFieldError("_key", "invalid identity", err)
+		}
+		if strings.TrimSpace(decoded.Key) == "" {
+			return blockFieldError("_key", "expected a nonempty occurrence identity", nil)
+		}
+	}
+	if raw, ok := fields["asset"]; ok {
+		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+			decoded.Asset = core.Null[string]()
+		} else {
+			child, err := decodeBlockValue[string](raw)
+			if err != nil {
+				return blockFieldError("asset", "invalid value", err)
+			}
+			decoded.Asset = core.Set(child)
+		}
+	}
+	if raw, ok := fields["caption"]; ok {
+		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+			decoded.Caption = core.Null[string]()
+		} else {
+			child, err := decodeBlockValue[string](raw)
+			if err != nil {
+				return blockFieldError("caption", "invalid value", err)
+			}
+			decoded.Caption = core.Set(child)
+		}
+	}
+	if raw, ok := fields["blockName"]; ok {
+		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+			decoded.BlockName = core.Null[string]()
+		} else {
+			child, err := decodeBlockValue[string](raw)
+			if err != nil {
+				return blockFieldError("blockName", "invalid value", err)
+			}
+			decoded.BlockName = core.Set(child)
+		}
+	}
+	for name := range fields {
+		switch name {
+		case "_key", "blockType", "asset", "caption", "blockName":
+		default:
+			return blockFieldError(name, "unknown input field", nil)
+		}
+	}
+	*value = MediaDraft(decoded)
 	return nil
 }
 
@@ -8937,6 +10749,8 @@ type MediaAllLocales struct {
 	// Caption: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
 	// Locale-code map; missing locales are absent translations.
 	Caption *BlockOptional[map[string]*string] `json:"caption,omitempty"`
+	// BlockName: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
+	BlockName *BlockOptional[string] `json:"blockName,omitempty"`
 }
 
 // BlockType returns the immutable stored discriminator.
@@ -8947,6 +10761,7 @@ func (value MediaAllLocales) MarshalJSON() ([]byte, error) {
 		Key       string          `json:"_key"`
 		Asset     json.RawMessage `json:"asset,omitempty"`
 		Caption   json.RawMessage `json:"caption,omitempty"`
+		BlockName json.RawMessage `json:"blockName,omitempty"`
 	}
 	encoded.BlockType = "media"
 	encoded.Key = value.Key
@@ -8969,6 +10784,13 @@ func (value MediaAllLocales) MarshalJSON() ([]byte, error) {
 			return nil, newContractError(ContractError{Operation: "encode", Container: "MediaAllLocales", Path: "caption", Reason: "invalid value", Err: err})
 		}
 		encoded.Caption = data
+	}
+	if value.BlockName != nil {
+		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.BlockName.Value)
+		if err != nil {
+			return nil, newContractError(ContractError{Operation: "encode", Container: "MediaAllLocales", Path: "blockName", Reason: "invalid value", Err: err})
+		}
+		encoded.BlockName = data
 	}
 	return json.Marshal(encoded)
 }
@@ -9034,13 +10856,24 @@ func (value *MediaAllLocales) UnmarshalJSON(data []byte) error {
 			decoded.Caption = &BlockOptional[map[string]*string]{Value: &child}
 		}
 	}
-	if raw, ok := fields["asset"]; ok {
+	if raw, ok := fields["blockName"]; ok {
 		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			return blockFieldError("asset", "null is not allowed", nil)
+			if err := json.Unmarshal(raw, &decoded.BlockName); err != nil {
+				return blockFieldError("blockName", "invalid value", err)
+			}
+		} else {
+			child, err := decodeBlockValue[string](raw)
+			if err != nil {
+				return blockFieldError("blockName", "invalid value", err)
+			}
+			decoded.BlockName = &BlockOptional[string]{Value: &child}
 		}
 	}
 	if raw, ok := fields["caption"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		decoded.Caption = &BlockOptional[map[string]*string]{}
+	}
+	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		decoded.BlockName = &BlockOptional[string]{}
 	}
 	*value = MediaAllLocales(decoded)
 	return nil
@@ -9055,6 +10888,8 @@ type MediaAllLocalesValue struct {
 	Asset *Reference[AssetAllLocales] `json:"asset,omitempty"`
 	// Caption: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
 	Caption *BlockOptional[string] `json:"caption,omitempty"`
+	// BlockName: nil means omitted; a wrapper with nil Value means null. Get returns a concrete value when present.
+	BlockName *BlockOptional[string] `json:"blockName,omitempty"`
 }
 
 // BlockType returns the immutable stored discriminator.
@@ -9065,6 +10900,7 @@ func (value MediaAllLocalesValue) MarshalJSON() ([]byte, error) {
 		Key       string          `json:"_key"`
 		Asset     json.RawMessage `json:"asset,omitempty"`
 		Caption   json.RawMessage `json:"caption,omitempty"`
+		BlockName json.RawMessage `json:"blockName,omitempty"`
 	}
 	encoded.BlockType = "media"
 	encoded.Key = value.Key
@@ -9083,6 +10919,13 @@ func (value MediaAllLocalesValue) MarshalJSON() ([]byte, error) {
 			return nil, newContractError(ContractError{Operation: "encode", Container: "MediaAllLocalesValue", Path: "caption", Reason: "invalid value", Err: err})
 		}
 		encoded.Caption = data
+	}
+	if value.BlockName != nil {
+		data, err := (func(value *string) ([]byte, error) { return encodeBlockPointer(value, encodeBlockValue[string]) })(value.BlockName.Value)
+		if err != nil {
+			return nil, newContractError(ContractError{Operation: "encode", Container: "MediaAllLocalesValue", Path: "blockName", Reason: "invalid value", Err: err})
+		}
+		encoded.BlockName = data
 	}
 	return json.Marshal(encoded)
 }
@@ -9146,13 +10989,24 @@ func (value *MediaAllLocalesValue) UnmarshalJSON(data []byte) error {
 			decoded.Caption = &BlockOptional[string]{Value: &child}
 		}
 	}
-	if raw, ok := fields["asset"]; ok {
+	if raw, ok := fields["blockName"]; ok {
 		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			return blockFieldError("asset", "null is not allowed", nil)
+			if err := json.Unmarshal(raw, &decoded.BlockName); err != nil {
+				return blockFieldError("blockName", "invalid value", err)
+			}
+		} else {
+			child, err := decodeBlockValue[string](raw)
+			if err != nil {
+				return blockFieldError("blockName", "invalid value", err)
+			}
+			decoded.BlockName = &BlockOptional[string]{Value: &child}
 		}
 	}
 	if raw, ok := fields["caption"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		decoded.Caption = &BlockOptional[string]{}
+	}
+	if raw, ok := fields["blockName"]; ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		decoded.BlockName = &BlockOptional[string]{}
 	}
 	*value = MediaAllLocalesValue(decoded)
 	return nil
@@ -9235,16 +11089,6 @@ func (value *ContentLinksRow) UnmarshalJSON(data []byte) error {
 				return blockFieldError("href", "invalid value", err)
 			}
 			decoded.Href = &child
-		}
-	}
-	if raw, ok := fields["label"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			return blockFieldError("label", "null is not allowed", nil)
-		}
-	}
-	if raw, ok := fields["href"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			return blockFieldError("href", "null is not allowed", nil)
 		}
 	}
 	*value = ContentLinksRow(decoded)
@@ -9330,16 +11174,6 @@ func (value *ContentLinksRowAllLocales) UnmarshalJSON(data []byte) error {
 			decoded.Href = &child
 		}
 	}
-	if raw, ok := fields["label"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			return blockFieldError("label", "null is not allowed", nil)
-		}
-	}
-	if raw, ok := fields["href"]; ok {
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			return blockFieldError("href", "null is not allowed", nil)
-		}
-	}
 	*value = ContentLinksRowAllLocales(decoded)
 	return nil
 }
@@ -9423,17 +11257,106 @@ func (value *ContentLinksRowAllLocalesValue) UnmarshalJSON(data []byte) error {
 			decoded.Href = &child
 		}
 	}
+	*value = ContentLinksRowAllLocalesValue(decoded)
+	return nil
+}
+
+type ContentLinksRowDraft struct {
+	Key string `json:"_key,omitempty"`
+	// Label: nil omits the field; core.Set sends a value; core.Null sends explicit null.
+	Label *core.Input[string] `json:"label,omitempty"`
+	// Href: nil omits the field; core.Set sends a value; core.Null sends explicit null.
+	Href *core.Input[string] `json:"href,omitempty"`
+}
+
+// RowKey returns the occurrence identity, or an empty string for a nil or unkeyed row.
+func (value *ContentLinksRowDraft) RowKey() string {
+	if value == nil {
+		return ""
+	}
+	return value.Key
+}
+func (value ContentLinksRowDraft) MarshalJSON() ([]byte, error) {
+	var encoded struct {
+		Key   string          `json:"_key,omitempty"`
+		Label json.RawMessage `json:"label,omitempty"`
+		Href  json.RawMessage `json:"href,omitempty"`
+	}
+	encoded.Key = value.Key
+	if value.Label != nil {
+		child, present := value.Label.Get()
+		data := []byte("null")
+		var err error
+		if present {
+			data, err = encodeBlockValue[string](child)
+		}
+		if err != nil {
+			return nil, newContractError(ContractError{Operation: "encode", Container: "ContentLinksRowDraft", Path: "label", Reason: "invalid value", Err: err})
+		}
+		encoded.Label = data
+	}
+	if value.Href != nil {
+		child, present := value.Href.Get()
+		data := []byte("null")
+		var err error
+		if present {
+			data, err = encodeBlockValue[string](child)
+		}
+		if err != nil {
+			return nil, newContractError(ContractError{Operation: "encode", Container: "ContentLinksRowDraft", Path: "href", Reason: "invalid value", Err: err})
+		}
+		encoded.Href = data
+	}
+	return json.Marshal(encoded)
+}
+func (value *ContentLinksRowDraft) UnmarshalJSON(data []byte) error {
+	type payload ContentLinksRowDraft
+	var decoded payload
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+	if fields == nil {
+		return fmt.Errorf("expected an object")
+	}
+	if raw, ok := fields["_key"]; ok {
+		if err := json.Unmarshal(raw, &decoded.Key); err != nil {
+			return blockFieldError("_key", "invalid identity", err)
+		}
+		if strings.TrimSpace(decoded.Key) == "" {
+			return blockFieldError("_key", "expected a nonempty occurrence identity", nil)
+		}
+	}
 	if raw, ok := fields["label"]; ok {
 		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			return blockFieldError("label", "null is not allowed", nil)
+			decoded.Label = core.Null[string]()
+		} else {
+			child, err := decodeBlockValue[string](raw)
+			if err != nil {
+				return blockFieldError("label", "invalid value", err)
+			}
+			decoded.Label = core.Set(child)
 		}
 	}
 	if raw, ok := fields["href"]; ok {
 		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			return blockFieldError("href", "null is not allowed", nil)
+			decoded.Href = core.Null[string]()
+		} else {
+			child, err := decodeBlockValue[string](raw)
+			if err != nil {
+				return blockFieldError("href", "invalid value", err)
+			}
+			decoded.Href = core.Set(child)
 		}
 	}
-	*value = ContentLinksRowAllLocalesValue(decoded)
+	for name := range fields {
+		switch name {
+		case "_key", "label", "href":
+		default:
+			return blockFieldError(name, "unknown input field", nil)
+		}
+	}
+	*value = ContentLinksRowDraft(decoded)
 	return nil
 }
 
@@ -9488,6 +11411,9 @@ func (value *ContentLinksRowInput) UnmarshalJSON(data []byte) error {
 	if raw, ok := fields["_key"]; ok {
 		if err := json.Unmarshal(raw, &decoded.Key); err != nil {
 			return blockFieldError("_key", "invalid identity", err)
+		}
+		if strings.TrimSpace(decoded.Key) == "" {
+			return blockFieldError("_key", "expected a nonempty occurrence identity", nil)
 		}
 	}
 	if raw, ok := fields["label"]; ok {
@@ -9778,6 +11704,61 @@ func (value *HeroAppearanceAllLocalesValue) UnmarshalJSON(data []byte) error {
 		decoded.Tone = &BlockOptional[HeroAppearanceTone]{}
 	}
 	*value = HeroAppearanceAllLocalesValue(decoded)
+	return nil
+}
+
+type HeroAppearanceDraft struct {
+	// Tone: nil omits the field; core.Set sends a value; core.Null sends explicit null.
+	Tone *core.Input[HeroAppearanceTone] `json:"tone,omitempty"`
+}
+
+func (value HeroAppearanceDraft) MarshalJSON() ([]byte, error) {
+	var encoded struct {
+		Tone json.RawMessage `json:"tone,omitempty"`
+	}
+	if value.Tone != nil {
+		child, present := value.Tone.Get()
+		data := []byte("null")
+		var err error
+		if present {
+			data, err = encodeBlockValue[HeroAppearanceTone](child)
+		}
+		if err != nil {
+			return nil, newContractError(ContractError{Operation: "encode", Container: "HeroAppearanceDraft", Path: "tone", Reason: "invalid value", Err: err})
+		}
+		encoded.Tone = data
+	}
+	return json.Marshal(encoded)
+}
+func (value *HeroAppearanceDraft) UnmarshalJSON(data []byte) error {
+	type payload HeroAppearanceDraft
+	var decoded payload
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+	if fields == nil {
+		return fmt.Errorf("expected an object")
+	}
+	if raw, ok := fields["tone"]; ok {
+		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+			decoded.Tone = core.Null[HeroAppearanceTone]()
+		} else {
+			child, err := decodeBlockValue[HeroAppearanceTone](raw)
+			if err != nil {
+				return blockFieldError("tone", "invalid value", err)
+			}
+			decoded.Tone = core.Set(child)
+		}
+	}
+	for name := range fields {
+		switch name {
+		case "tone":
+		default:
+			return blockFieldError(name, "unknown input field", nil)
+		}
+	}
+	*value = HeroAppearanceDraft(decoded)
 	return nil
 }
 

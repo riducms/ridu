@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"ariga.io/atlas/sql/migrate"
 	atlaspostgres "ariga.io/atlas/sql/postgres"
@@ -41,18 +42,10 @@ func (err *SafetyError) Error() string {
 // ordered Ridu semantic steps for explicitly confirmed rename intent. It binds
 // compiled data transforms exactly as the runner regenerates them.
 func BuildArtifact(ctx context.Context, name string, before *schema.Manifest, after schema.Manifest, renames []Rename, allowDestructive bool, transforms ...ridumigration.DataTransformDescriptor) (ridumigration.Artifact, error) {
-	if err := validateFieldRenamesOnlyRename(renames); err != nil {
-		return ridumigration.Artifact{}, err
-	}
-	if before != nil && len(transforms) != 0 {
-		if err := validateTransformColumnCasts(before.Snapshot(), after.Snapshot()); err != nil {
-			return ridumigration.Artifact{}, err
-		}
-	}
 	return planArtifact(ctx, name, before, after, renames, allowDestructive, transforms...)
 }
 
-// validateTransformColumnCasts refuses, at creation, a transform-backed
+// validateTransformColumnCasts refuses a transform-backed
 // change of a column to a type PostgreSQL cannot cast to automatically. The
 // physical change runs before the transform, so such an artifact could never
 // apply. Every column type casts to text.
@@ -92,10 +85,6 @@ func validateTransformColumnCasts(before, after schema.Snapshot) error {
 // more than the field's name; see schemadiff.ValidateFieldRenameOnly. A
 // change of the field's own localization would replace its columns and drop
 // the values the rename was confirmed to keep.
-//
-// The rule is applied when a migration is created and not in the planner that
-// replays committed history, so an artifact applied before it existed still
-// verifies.
 func validateFieldRenamesOnlyRename(renames []Rename) error {
 	for _, rename := range renames {
 		if rename.Kind != RenameField || rename.BeforeField == nil || rename.AfterField == nil {
@@ -108,9 +97,55 @@ func validateFieldRenamesOnlyRename(renames []Rename) error {
 	return nil
 }
 
+// CreatedArtifact is the immutable file and plan produced by CreateArtifact.
+type CreatedArtifact struct {
+	Path     string
+	Name     string
+	Checksum string
+	Artifact ridumigration.Artifact
+}
+
+// CreateArtifact derives the predecessor from committed history and writes a
+// deterministic artifact for the current PostgreSQL planner.
+func CreateArtifact(ctx context.Context, directory, name string, after schema.Manifest, now time.Time, renames []Rename, allowDestructive bool, transforms ...ridumigration.DataTransformDescriptor) (CreatedArtifact, error) {
+	files, err := migrationartifact.ReadAll(directory)
+	if err != nil {
+		return CreatedArtifact{}, err
+	}
+	if err := validatePostgresSemanticHistory(files); err != nil {
+		return CreatedArtifact{}, err
+	}
+	if err := validatePendingArtifactInspection(ctx, files); err != nil {
+		return CreatedArtifact{}, err
+	}
+	if err := validatePostgresDataTransformIdentities(files, transforms); err != nil {
+		return CreatedArtifact{}, err
+	}
+	var before *schema.Manifest
+	if len(files) != 0 {
+		latest, err := files[len(files)-1].Artifact.AfterManifest()
+		if err != nil {
+			return CreatedArtifact{}, err
+		}
+		before = &latest
+	}
+	artifact, err := BuildArtifact(ctx, name, before, after, renames, allowDestructive, transforms...)
+	if err != nil {
+		return CreatedArtifact{}, err
+	}
+	file, err := migrationartifact.Create(directory, name, artifact, now)
+	if err != nil {
+		return CreatedArtifact{}, err
+	}
+	return CreatedArtifact{Path: file.Path, Name: file.Name, Checksum: file.Digest, Artifact: file.Artifact}, nil
+}
+
 // planArtifact is the deterministic planner shared by artifact creation and
 // the runner's exact regeneration of committed artifacts.
 func planArtifact(ctx context.Context, name string, before *schema.Manifest, after schema.Manifest, renames []Rename, allowDestructive bool, transforms ...ridumigration.DataTransformDescriptor) (ridumigration.Artifact, error) {
+	if err := validateFieldRenamesOnlyRename(renames); err != nil {
+		return ridumigration.Artifact{}, err
+	}
 	if err := primitivefield.ValidateManifestIndexes(after); err != nil {
 		return ridumigration.Artifact{}, err
 	}
@@ -118,6 +153,19 @@ func planArtifact(ctx context.Context, name string, before *schema.Manifest, aft
 		return ridumigration.Artifact{}, err
 	}
 	if before != nil {
+		if len(transforms) != 0 {
+			if err := validateTransformColumnCasts(before.Snapshot(), after.Snapshot()); err != nil {
+				return ridumigration.Artifact{}, err
+			}
+		}
+		var err error
+		renames, err = withStableCollectionSlugRenames(before.Snapshot(), after.Snapshot(), renames)
+		if err != nil {
+			return ridumigration.Artifact{}, err
+		}
+		if err := schemadiff.RejectVersionsEnable(before.Snapshot(), after.Snapshot(), postgresCollectionRenameIDs(renames)); err != nil {
+			return ridumigration.Artifact{}, err
+		}
 		if len(transforms) == 0 {
 			if err := primitivefield.ValidateEvolution(before.Snapshot(), after.Snapshot()); err != nil {
 				return ridumigration.Artifact{}, err
@@ -133,10 +181,6 @@ func planArtifact(ctx context.Context, name string, before *schema.Manifest, aft
 	}
 	var operations []ridumigration.Operation
 	if before != nil {
-		renames, err = withStableCollectionSlugRenames(before.Snapshot(), after.Snapshot(), renames)
-		if err != nil {
-			return ridumigration.Artifact{}, err
-		}
 		if err := validatePlannedCollectionSlugRewriteNonOverlap(renames); err != nil {
 			return ridumigration.Artifact{}, err
 		}
@@ -377,12 +421,7 @@ func unsafeCapabilityDisables(before, after schema.Snapshot, renames []Rename) [
 	for _, collection := range after.Collections {
 		afterCollections[collection.ID] = collection
 	}
-	renameTargets := make(map[schema.StableID]schema.StableID)
-	for _, rename := range renames {
-		if rename.Kind == RenameCollection {
-			renameTargets[rename.BeforeCollection.ID] = rename.AfterCollection.ID
-		}
-	}
+	renameTargets := postgresCollectionRenameIDs(renames)
 	afterGlobals := make(map[schema.StableID]schema.Global, len(after.Globals))
 	for _, global := range after.Globals {
 		afterGlobals[global.ID] = global
@@ -435,6 +474,16 @@ func unsafeCapabilityDisables(before, after schema.Snapshot, renames []Rename) [
 		}
 	}
 	return risks
+}
+
+func postgresCollectionRenameIDs(renames []Rename) map[schema.StableID]schema.StableID {
+	result := make(map[schema.StableID]schema.StableID)
+	for _, rename := range renames {
+		if rename.Kind == RenameCollection {
+			result[rename.BeforeCollection.ID] = rename.AfterCollection.ID
+		}
+	}
+	return result
 }
 
 func phasesFromOperations(fromDigest string, steps []ridumigration.Operation) ([]ridumigration.Phase, error) {

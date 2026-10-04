@@ -379,6 +379,9 @@ func (transaction *documentTransaction) CreateAuthCredential(ctx context.Context
 }
 
 func (transaction *documentTransaction) Create(ctx context.Context, request store.CreateRequest) (store.Document, error) {
+	if err := transaction.lockUniqueUnion(ctx, request.Collection); err != nil {
+		return store.Document{}, err
+	}
 	id := request.ID
 	if id == "" {
 		var err error
@@ -465,6 +468,17 @@ func (transaction *documentTransaction) Create(ctx context.Context, request stor
 	if err := transaction.replaceDocumentReferences(ctx, request.Collection, document); err != nil {
 		return store.Document{}, err
 	}
+	if request.Collection.Versions != nil && document.Status == store.StatusPublished {
+		if err := transaction.putPublishedHead(ctx, request.Collection, document); err != nil {
+			return store.Document{}, err
+		}
+		if request.Collection.Versions.Drafts {
+			document.PublishedRevision = document.Revision
+		}
+	}
+	if err := transaction.checkUniqueUnion(ctx, request.Collection, request.Locales); err != nil {
+		return store.Document{}, err
+	}
 	return document, nil
 }
 
@@ -474,7 +488,7 @@ func (transaction *documentTransaction) Find(ctx context.Context, request store.
 		return store.Document{}, err
 	}
 	fields := fieldsForRead(request)
-	statement := fmt.Sprintf("SELECT %s FROM %s WHERE %s", selectColumns(request.Collection, fields, request.Locales), quote(collectionTable(request.Collection.ID)), predicate)
+	statement := fmt.Sprintf("SELECT %s FROM %s WHERE %s", readColumns(request, fields), readSource(request), predicate)
 	switch request.Lock {
 	case store.LockNone:
 	case store.LockReference:
@@ -484,9 +498,16 @@ func (transaction *documentTransaction) Find(ctx context.Context, request store.
 	default:
 		return store.Document{}, fmt.Errorf("unsupported document lock mode %q", request.Lock)
 	}
-	document, err := scanDocument(transaction.transaction.QueryRow(ctx, statement, arguments...), request.Collection, fields)
+	document, err := scanRequestedDocument(transaction.transaction.QueryRow(ctx, statement, arguments...), request, fields)
 	if err != nil {
 		return store.Document{}, translateError(err)
+	}
+	if !request.PublishedOnly {
+		loaded := []store.Document{document}
+		if err := transaction.attachPublishedMetadata(ctx, request.Collection, loaded); err != nil {
+			return store.Document{}, err
+		}
+		document = loaded[0]
 	}
 	documents, err := transaction.populate(ctx, []store.Document{document}, request)
 	if err != nil {
@@ -501,7 +522,7 @@ func (transaction *documentTransaction) List(ctx context.Context, request store.
 		return store.Page{}, err
 	}
 	var total int
-	countStatement := fmt.Sprintf("SELECT count(*) FROM %s WHERE %s", quote(collectionTable(request.Collection.ID)), predicate)
+	countStatement := fmt.Sprintf("SELECT count(*) FROM %s WHERE %s", readSource(request), predicate)
 	if err := transaction.transaction.QueryRow(ctx, countStatement, arguments...).Scan(&total); err != nil {
 		return store.Page{}, translateError(err)
 	}
@@ -513,7 +534,7 @@ func (transaction *documentTransaction) List(ctx context.Context, request store.
 	}
 	arguments = append(arguments, limit, offset)
 	statement := fmt.Sprintf("SELECT %s FROM %s WHERE %s ORDER BY %s LIMIT $%d OFFSET $%d",
-		selectColumns(request.Collection, fields, request.Locales), quote(collectionTable(request.Collection.ID)), predicate, order, len(arguments)-1, len(arguments))
+		readColumns(request, fields), readSource(request), predicate, order, len(arguments)-1, len(arguments))
 	rows, err := transaction.transaction.Query(ctx, statement, arguments...)
 	if err != nil {
 		return store.Page{}, translateError(err)
@@ -521,7 +542,7 @@ func (transaction *documentTransaction) List(ctx context.Context, request store.
 	defer rows.Close()
 	var documents []store.Document
 	for rows.Next() {
-		document, err := scanDocument(rows, request.Collection, fields)
+		document, err := scanRequestedDocument(rows, request, fields)
 		if err != nil {
 			return store.Page{}, err
 		}
@@ -529,6 +550,12 @@ func (transaction *documentTransaction) List(ctx context.Context, request store.
 	}
 	if err := rows.Err(); err != nil {
 		return store.Page{}, err
+	}
+	rows.Close()
+	if !request.PublishedOnly {
+		if err := transaction.attachPublishedMetadata(ctx, request.Collection, documents); err != nil {
+			return store.Page{}, err
+		}
 	}
 	documents, err = transaction.populate(ctx, documents, request)
 	if err != nil {
@@ -553,7 +580,7 @@ func (transaction *documentTransaction) Distinct(ctx context.Context, request st
 	if err != nil {
 		return store.DistinctPage{}, err
 	}
-	compiler := predicateCompiler{collection: request.Collection, localeChain: request.LocaleChain}
+	compiler := predicateCompiler{collection: request.Collection, localeChain: request.LocaleChain, snapshot: request.PublishedOnly && request.Collection.Versions != nil}
 	column, err := compiler.column(request.Field)
 	if err != nil {
 		return store.DistinctPage{}, err
@@ -565,7 +592,7 @@ func (transaction *documentTransaction) Distinct(ctx context.Context, request st
 	if scalarFieldValueKind(resolved.leaf) == query.ValueString {
 		column = "(" + column + ` COLLATE "C")`
 	}
-	distinctQuery := fmt.Sprintf("SELECT DISTINCT %s AS distinct_value FROM %s WHERE %s", column, quote(collectionTable(request.Collection.ID)), predicate)
+	distinctQuery := fmt.Sprintf("SELECT DISTINCT %s AS distinct_value FROM %s WHERE %s", column, readSource(documentRequest), predicate)
 	var total int
 	if err := transaction.transaction.QueryRow(ctx, "SELECT count(*) FROM ("+distinctQuery+") AS distinct_values", arguments...).Scan(&total); err != nil {
 		return store.DistinctPage{}, translateError(err)
@@ -631,7 +658,7 @@ func (transaction *documentTransaction) ListWindow(ctx context.Context, request 
 	defer rows.Close()
 	documents := make([]store.Document, 0, request.Limit+1)
 	for rows.Next() {
-		document, scanError := scanDocument(rows, request.Collection, fields)
+		document, scanError := scanRequestedDocument(rows, request, fields)
 		if scanError != nil {
 			return store.Window{}, scanError
 		}
@@ -639,6 +666,12 @@ func (transaction *documentTransaction) ListWindow(ctx context.Context, request 
 	}
 	if err := rows.Err(); err != nil {
 		return store.Window{}, err
+	}
+	rows.Close()
+	if !request.PublishedOnly {
+		if err := transaction.attachPublishedMetadata(ctx, request.Collection, documents); err != nil {
+			return store.Window{}, err
+		}
 	}
 	hasMore := len(documents) > request.Limit
 	if hasMore {
@@ -662,7 +695,7 @@ func listWindowQuery(request store.Request) (string, []any, []schema.Field, erro
 	if err != nil {
 		return "", nil, nil, err
 	}
-	compiler := predicateCompiler{collection: request.Collection, localeChain: request.LocaleChain}
+	compiler := predicateCompiler{collection: request.Collection, localeChain: request.LocaleChain, snapshot: request.PublishedOnly && request.Collection.Versions != nil}
 	column, err := compiler.column(request.IndexWindow.Path)
 	if err != nil {
 		return "", nil, nil, err
@@ -674,7 +707,7 @@ func listWindowQuery(request store.Request) (string, []any, []schema.Field, erro
 	arguments = append(arguments, request.IndexWindow.LowerBound, request.IndexWindow.UpperBound, request.Limit+1)
 	fields := fieldsForRead(request)
 	statement := fmt.Sprintf("SELECT %s FROM %s WHERE %s ORDER BY %s ASC LIMIT $%d",
-		selectColumns(request.Collection, fields, request.Locales), quote(collectionTable(request.Collection.ID)), predicate, column, limitParameter)
+		readColumns(request, fields), readSource(request), predicate, column, limitParameter)
 	return statement, arguments, fields, nil
 }
 
@@ -756,7 +789,7 @@ func sortClause(request store.Request) (string, error) {
 	if !hasID {
 		terms = append(terms, query.Asc("id"))
 	}
-	compiler := predicateCompiler{collection: request.Collection, localeChain: request.LocaleChain}
+	compiler := predicateCompiler{collection: request.Collection, localeChain: request.LocaleChain, snapshot: request.PublishedOnly && request.Collection.Versions != nil}
 	parts := make([]string, len(terms))
 	for index, term := range terms {
 		column, err := compiler.column(term.Path)
@@ -798,16 +831,18 @@ func (transaction *documentTransaction) populate(ctx context.Context, documents 
 				continue
 			}
 			targetFields := storedSchemaFields(target.Fields)
+			publishedOnly := request.PublishedOnly
+			if selected, exists := request.PopulationPublishedOnly[target.ID]; exists {
+				publishedOnly = selected
+			}
+			targetRequest := store.Request{Collection: target, PublishedOnly: publishedOnly, Locales: request.Locales}
 			if population.Select != nil && population.Depth <= 1 {
 				targetFields = fieldsForRead(store.Request{Collection: target, Select: population.Select})
 			}
 			predicate := fmt.Sprintf("%s = ANY($1) AND %s IS NULL", quote("id"), quote("deleted_at"))
 			arguments := []any{ids}
-			if request.PublishedOnly && target.Versions != nil {
-				predicate += " AND " + quote("_status") + " = 'published'"
-			}
 			if access := request.PopulationAccess[target.ID]; access != nil {
-				compiler := predicateCompiler{collection: target, next: 1, arguments: arguments, localeChain: request.LocaleChain}
+				compiler := predicateCompiler{collection: target, next: 1, arguments: arguments, localeChain: request.LocaleChain, snapshot: publishedOnly && target.Versions != nil}
 				compiled, compileError := compileAccessPredicate(&compiler, *access, request.AllLocales, request.Locales)
 				if compileError != nil {
 					return nil, compileError
@@ -815,7 +850,7 @@ func (transaction *documentTransaction) populate(ctx context.Context, documents 
 				predicate += " AND (" + compiled + ")"
 				arguments = compiler.arguments
 			}
-			statement := fmt.Sprintf("SELECT %s FROM %s WHERE %s", selectColumns(target, targetFields, request.Locales), quote(collectionTable(target.ID)), predicate)
+			statement := fmt.Sprintf("SELECT %s FROM %s WHERE %s", readColumns(targetRequest, targetFields), readSource(targetRequest), predicate)
 			rows, err := transaction.transaction.Query(ctx, statement, arguments...)
 			if err != nil {
 				return nil, translateError(err)
@@ -823,7 +858,7 @@ func (transaction *documentTransaction) populate(ctx context.Context, documents 
 			byID := make(map[string]store.Document, len(ids))
 			var targetDocuments []store.Document
 			for rows.Next() {
-				document, err := scanDocument(rows, target, targetFields)
+				document, err := scanRequestedDocument(rows, targetRequest, targetFields)
 				if err != nil {
 					rows.Close()
 					return nil, err
@@ -835,10 +870,16 @@ func (transaction *documentTransaction) populate(ctx context.Context, documents 
 				return nil, err
 			}
 			rows.Close()
+			if !publishedOnly {
+				if err := transaction.attachPublishedMetadata(ctx, target, targetDocuments); err != nil {
+					return nil, err
+				}
+			}
 			if population.Depth > 1 {
 				targetDocuments, err = transaction.populate(ctx, targetDocuments, store.Request{
 					Collection: target, Collections: request.Collections, Populate: populationwalk.DepthPopulations(target, population.Depth-1), PopulationAccess: request.PopulationAccess,
-					PopulationBudget: populationBudget, PublishedOnly: request.PublishedOnly, Locales: request.Locales, LocaleChain: request.LocaleChain, AllLocales: request.AllLocales,
+					PopulationBudget: populationBudget, PublishedOnly: publishedOnly, PopulationPublishedOnly: request.PopulationPublishedOnly,
+					Locales: request.Locales, LocaleChain: request.LocaleChain, AllLocales: request.AllLocales,
 				})
 				if err != nil {
 					return nil, err
@@ -978,6 +1019,43 @@ func projectDocument(document store.Document, selection []query.Path) store.Docu
 }
 
 func (transaction *documentTransaction) Update(ctx context.Context, request store.UpdateRequest) (store.Document, error) {
+	if request.Collection.Versions != nil && !request.Collection.Versions.Drafts &&
+		(request.Intent == store.WriteIntentSaveDraft || request.Intent == store.WriteIntentDiscardDraft) {
+		return store.Document{}, fmt.Errorf("draft write intent requires a draft-enabled collection")
+	}
+	if request.Collection.Versions != nil && request.Collection.Versions.Drafts && request.Intent == store.WriteIntentDefault {
+		return store.Document{}, fmt.Errorf("write intent is required for a draft-enabled collection")
+	}
+	if err := transaction.lockUniqueUnion(ctx, request.Collection); err != nil {
+		return store.Document{}, err
+	}
+	var live store.Document
+	var hasLive bool
+	if request.Collection.Versions != nil {
+		probe := request.Request
+		probe.ExpectedRevision = 0
+		probe.Lock = store.LockMutation
+		probe.Select = nil
+		probe.Populate = nil
+		current, err := transaction.Find(ctx, probe)
+		if err != nil {
+			return store.Document{}, err
+		}
+		if request.ExpectedRevision > 0 && current.Revision != request.ExpectedRevision {
+			return store.Document{}, store.ErrConflict
+		}
+		live, hasLive, err = transaction.publishedHead(ctx, request.Collection, current.ID)
+		if err != nil {
+			return store.Document{}, err
+		}
+		if request.Intent == store.WriteIntentDiscardDraft {
+			if !hasLive || !live.HasDraftChanges {
+				return store.Document{}, store.ErrConflict
+			}
+			request.Values = store.CloneValues(live.Values)
+			request.ReplaceValues = true
+		}
+	}
 	assignments := []string{fmt.Sprintf("%s = now()", quote("updated_at"))}
 	values := store.CloneValues(request.Values)
 	canonicalizePostgresAuthIdentity(request.Collection, values)
@@ -1027,10 +1105,36 @@ func (transaction *documentTransaction) Update(ctx context.Context, request stor
 		assignments = append(assignments, quote("_revision")+" = "+quote("_revision")+" + 1")
 	}
 	if request.Collection.Versions != nil {
-		if request.Status != nil {
-			arguments = append(arguments, *request.Status)
+		var status *store.Status
+		switch request.Intent {
+		case store.WriteIntentDefault:
+		case store.WriteIntentSaveDraft:
+			next := store.StatusDraft
+			if hasLive {
+				next = store.StatusPublished
+			}
+			status = &next
+		case store.WriteIntentPublish:
+			next := store.StatusPublished
+			status = &next
+		case store.WriteIntentUnpublish:
+			if !hasLive {
+				return store.Document{}, store.ErrConflict
+			}
+			next := store.StatusDraft
+			status = &next
+		case store.WriteIntentDiscardDraft:
+			next := store.StatusPublished
+			status = &next
+		default:
+			return store.Document{}, fmt.Errorf("unsupported write intent %q", request.Intent)
+		}
+		if status != nil {
+			arguments = append(arguments, *status)
 			assignments = append(assignments, fmt.Sprintf("%s = $%d", quote("_status"), len(arguments)))
 		}
+	} else if request.Intent != store.WriteIntentDefault {
+		return store.Document{}, fmt.Errorf("write intent requires a versioned collection")
 	}
 	predicate, predicateArguments, err := requestPredicateFrom(request.Request, true, len(arguments))
 	if err != nil {
@@ -1060,6 +1164,44 @@ func (transaction *documentTransaction) Update(ctx context.Context, request stor
 		return store.Document{}, translateError(err)
 	}
 	if err := transaction.replaceDocumentReferences(ctx, request.Collection, document); err != nil {
+		return store.Document{}, err
+	}
+	if request.Collection.Versions != nil {
+		switch request.Intent {
+		case store.WriteIntentDefault:
+			if document.Status == store.StatusPublished {
+				if err := transaction.putPublishedHead(ctx, request.Collection, document); err != nil {
+					return store.Document{}, err
+				}
+			} else if err := transaction.deletePublishedHead(ctx, request.Collection, document.ID); err != nil {
+				return store.Document{}, err
+			}
+		case store.WriteIntentSaveDraft:
+			if hasLive {
+				if err := transaction.setPublishedPending(ctx, request.Collection, document.ID, true); err != nil {
+					return store.Document{}, err
+				}
+			}
+		case store.WriteIntentPublish:
+			if err := transaction.putPublishedHead(ctx, request.Collection, document); err != nil {
+				return store.Document{}, err
+			}
+		case store.WriteIntentUnpublish:
+			if err := transaction.deletePublishedHead(ctx, request.Collection, document.ID); err != nil {
+				return store.Document{}, err
+			}
+		case store.WriteIntentDiscardDraft:
+			if err := transaction.setPublishedPending(ctx, request.Collection, document.ID, false); err != nil {
+				return store.Document{}, err
+			}
+		}
+		loaded := []store.Document{document}
+		if err := transaction.attachPublishedMetadata(ctx, request.Collection, loaded); err != nil {
+			return store.Document{}, err
+		}
+		document = loaded[0]
+	}
+	if err := transaction.checkUniqueUnion(ctx, request.Collection, request.Locales); err != nil {
 		return store.Document{}, err
 	}
 	return document, nil
@@ -1093,11 +1235,15 @@ func (transaction *documentTransaction) Delete(ctx context.Context, request stor
 	if err := transaction.deleteDocumentReferences(ctx, store.DocumentReference{CollectionID: request.Collection.ID, DocumentID: request.ID}); err != nil {
 		return store.Document{}, err
 	}
+	if err := transaction.deletePublishedHead(ctx, request.Collection, request.ID); err != nil {
+		return store.Document{}, err
+	}
 	return document, nil
 }
 
 type referenceDeleteMatch struct {
 	entry      referenceindex.Entry
+	published  bool
 	field      schema.Field
 	root       schema.Field
 	collection schema.Collection
@@ -1126,7 +1272,7 @@ func (transaction *documentTransaction) ApplyReferenceDelete(ctx context.Context
 		}
 	}
 	rows, err := transaction.transaction.Query(ctx, `SELECT
-  owner_collection_id, owner_document_id, field_id, locale, occurrence
+  owner_collection_id, owner_document_id, field_id, locale, occurrence, published_head
 FROM ridu_document_references
 WHERE target_collection_id = $1 AND target_document_id = $2
 ORDER BY owner_collection_id, owner_document_id, field_id, locale, occurrence
@@ -1137,7 +1283,8 @@ FOR UPDATE`, string(request.Target.CollectionID), request.Target.DocumentID)
 	var matches []referenceDeleteMatch
 	for rows.Next() {
 		entry := referenceindex.Entry{Target: request.Target}
-		if err := rows.Scan(&entry.Owner.CollectionID, &entry.Owner.DocumentID, &entry.FieldID, &entry.Locale, &entry.Occurrence); err != nil {
+		var published bool
+		if err := rows.Scan(&entry.Owner.CollectionID, &entry.Owner.DocumentID, &entry.FieldID, &entry.Locale, &entry.Occurrence, &published); err != nil {
 			rows.Close()
 			return translateError(err)
 		}
@@ -1154,7 +1301,7 @@ FOR UPDATE`, string(request.Target.CollectionID), request.Target.DocumentID)
 			rows.Close()
 			return fmt.Errorf("reference owner field %q is unavailable", entry.FieldID)
 		}
-		matches = append(matches, referenceDeleteMatch{entry: entry, field: field, root: root, collection: collection})
+		matches = append(matches, referenceDeleteMatch{entry: entry, published: published, field: field, root: root, collection: collection})
 	}
 	if err := rows.Err(); err != nil {
 		rows.Close()
@@ -1194,7 +1341,12 @@ FOR UPDATE`, string(request.Target.CollectionID), request.Target.DocumentID)
 		locale     schema.LocaleCode
 	}
 	mutations := make(map[string]rootMutation)
+	publishedOwners := make(map[store.DocumentReference]schema.Collection)
 	for _, match := range matches {
+		if match.published {
+			publishedOwners[match.entry.Owner] = match.collection
+			continue
+		}
 		locale := schema.LocaleCode("")
 		if match.root.Localized {
 			locale = match.entry.Locale
@@ -1223,7 +1375,7 @@ FOR UPDATE`, string(request.Target.CollectionID), request.Target.DocumentID)
 		}
 		if !found {
 			// Remove stale rows only after every restrict decision was planned.
-			if err := transaction.deleteDocumentReferences(ctx, mutation.owner); err != nil {
+			if err := transaction.deleteWorkingDocumentReferences(ctx, mutation.owner); err != nil {
 				return err
 			}
 			continue
@@ -1244,6 +1396,56 @@ FOR UPDATE`, string(request.Target.CollectionID), request.Target.DocumentID)
 			return translateError(err)
 		}
 		if err := transaction.replaceReferenceRootEntries(ctx, mutation.owner, mutation.root, updated, mutation.locale); err != nil {
+			return err
+		}
+	}
+	owners := make([]store.DocumentReference, 0, len(publishedOwners))
+	for owner := range publishedOwners {
+		owners = append(owners, owner)
+	}
+	sort.Slice(owners, func(left, right int) bool {
+		if owners[left].CollectionID != owners[right].CollectionID {
+			return owners[left].CollectionID < owners[right].CollectionID
+		}
+		return owners[left].DocumentID < owners[right].DocumentID
+	})
+	for _, owner := range owners {
+		collection := publishedOwners[owner]
+		live, found, err := transaction.publishedHead(ctx, collection, owner.DocumentID)
+		if err != nil {
+			return err
+		}
+		if !found {
+			if _, err := transaction.transaction.Exec(ctx, `DELETE FROM ridu_document_references
+WHERE owner_collection_id = $1 AND owner_document_id = $2 AND published_head = true`, string(owner.CollectionID), owner.DocumentID); err != nil {
+				return translateError(err)
+			}
+			continue
+		}
+		values, changed, err := referenceindex.NullifyTarget(collection, live.Values, request.Target)
+		if err != nil {
+			return err
+		}
+		if !changed {
+			return fmt.Errorf("published reference index for owner collection %q is inconsistent with current values", owner.CollectionID)
+		}
+		live.Values = values
+		live.PublishedRevision = 0
+		live.HasDraftChanges = false
+		live.LocalizationSources = nil
+		encoded, err := json.Marshal(live)
+		if err != nil {
+			return fmt.Errorf("encode PostgreSQL published head: %w", err)
+		}
+		command, err := transaction.transaction.Exec(ctx, `UPDATE ridu_published_documents SET snapshot = $3
+WHERE collection_id = $1 AND document_id = $2`, string(collection.ID), owner.DocumentID, encoded)
+		if err != nil {
+			return translateError(err)
+		}
+		if command.RowsAffected() != 1 {
+			return store.ErrConflict
+		}
+		if err := transaction.replacePublishedReferences(ctx, collection, live); err != nil {
 			return err
 		}
 	}
@@ -1345,7 +1547,7 @@ func (transaction *documentTransaction) replaceReferenceRootEntries(ctx context.
 		ids[index] = string(id)
 	}
 	statement := `DELETE FROM ridu_document_references
-WHERE owner_collection_id = $1 AND owner_document_id = $2 AND field_id = ANY($3)`
+WHERE owner_collection_id = $1 AND owner_document_id = $2 AND field_id = ANY($3) AND published_head = false`
 	arguments := []any{string(owner.CollectionID), owner.DocumentID, ids}
 	if root.Localized {
 		statement += " AND locale = $4"
@@ -1382,6 +1584,7 @@ func (transaction *documentTransaction) DeleteDocumentState(ctx context.Context,
 		query string
 	}{
 		{"ridu_versions", `DELETE FROM ridu_versions WHERE collection_id = $1 AND document_id = $2`},
+		{"ridu_published_documents", `DELETE FROM ridu_published_documents WHERE collection_id = $1 AND document_id = $2`},
 		{"ridu_tasks", `DELETE FROM ridu_tasks WHERE (target_collection_id = $1 AND target_document_id = $2) OR (requested_by_collection_id = $1 AND requested_by_document_id = $2)`},
 		{"ridu_document_locks", `DELETE FROM ridu_document_locks WHERE (collection_id = $1 AND document_id = $2) OR (owner_collection_id = $1 AND owner_id = $2)`},
 		{"ridu_auth_tokens", `DELETE FROM ridu_auth_tokens WHERE collection_id = $1 AND user_id = $2`},
@@ -1410,7 +1613,7 @@ func (transaction *documentTransaction) DeleteDocumentState(ctx context.Context,
 
 func (transaction *documentTransaction) replaceDocumentReferences(ctx context.Context, collection schema.Collection, document store.Document) error {
 	owner := store.DocumentReference{CollectionID: collection.ID, DocumentID: document.ID}
-	if err := transaction.deleteDocumentReferences(ctx, owner); err != nil {
+	if err := transaction.deleteWorkingDocumentReferences(ctx, owner); err != nil {
 		return err
 	}
 	statement := `INSERT INTO ridu_document_references (
@@ -1432,6 +1635,11 @@ func (transaction *documentTransaction) replaceDocumentReferences(ctx context.Co
 	return nil
 }
 
+func (transaction *documentTransaction) deleteWorkingDocumentReferences(ctx context.Context, owner store.DocumentReference) error {
+	_, err := transaction.transaction.Exec(ctx, `DELETE FROM ridu_document_references WHERE owner_collection_id = $1 AND owner_document_id = $2 AND published_head = false`, string(owner.CollectionID), owner.DocumentID)
+	return translateError(err)
+}
+
 func (transaction *documentTransaction) deleteDocumentReferences(ctx context.Context, owner store.DocumentReference) error {
 	_, err := transaction.transaction.Exec(ctx, `DELETE FROM ridu_document_references WHERE owner_collection_id = $1 AND owner_document_id = $2`, string(owner.CollectionID), owner.DocumentID)
 	return translateError(err)
@@ -1449,10 +1657,21 @@ func (transaction *documentTransaction) Trash(ctx context.Context, request store
 	if err != nil {
 		return store.Document{}, translateError(err)
 	}
+	if err := transaction.setPublishedDeletion(ctx, request.Collection, document); err != nil {
+		return store.Document{}, err
+	}
+	loaded := []store.Document{document}
+	if err := transaction.attachPublishedMetadata(ctx, request.Collection, loaded); err != nil {
+		return store.Document{}, err
+	}
+	document = loaded[0]
 	return document, nil
 }
 
 func (transaction *documentTransaction) Restore(ctx context.Context, request store.Request) (store.Document, error) {
+	if err := transaction.lockUniqueUnion(ctx, request.Collection); err != nil {
+		return store.Document{}, err
+	}
 	request.Deletion = store.DeletionTrash
 	predicate, arguments, err := requestPredicate(request, true)
 	if err != nil {
@@ -1463,6 +1682,17 @@ func (transaction *documentTransaction) Restore(ctx context.Context, request sto
 	document, err := scanDocument(transaction.transaction.QueryRow(ctx, statement, arguments...), request.Collection, fields)
 	if err != nil {
 		return store.Document{}, translateError(err)
+	}
+	if err := transaction.setPublishedDeletion(ctx, request.Collection, document); err != nil {
+		return store.Document{}, err
+	}
+	loaded := []store.Document{document}
+	if err := transaction.attachPublishedMetadata(ctx, request.Collection, loaded); err != nil {
+		return store.Document{}, err
+	}
+	document = loaded[0]
+	if err := transaction.checkUniqueUnion(ctx, request.Collection, request.Locales); err != nil {
+		return store.Document{}, err
 	}
 	return document, nil
 }
@@ -1666,7 +1896,7 @@ func requestPredicateFrom(request store.Request, requireID bool, offset int) (st
 	if err := primitivefield.ValidateRequest(request); err != nil {
 		return "", nil, err
 	}
-	compiler := predicateCompiler{collection: request.Collection, next: offset, localeChain: request.LocaleChain}
+	compiler := predicateCompiler{collection: request.Collection, next: offset, localeChain: request.LocaleChain, snapshot: request.PublishedOnly && request.Collection.Versions != nil}
 	var predicates []string
 	if requireID {
 		if request.ID == "" {
@@ -1675,9 +1905,6 @@ func requestPredicateFrom(request store.Request, requireID bool, offset int) (st
 		compiler.arguments = append(compiler.arguments, request.ID)
 		compiler.next++
 		predicates = append(predicates, fmt.Sprintf("%s = $%d", quote("id"), compiler.next))
-	}
-	if request.PublishedOnly && request.Collection.Versions != nil {
-		predicates = append(predicates, quote("_status")+" = 'published'")
 	}
 	switch request.Deletion {
 	case store.DeletionAll:
@@ -1803,6 +2030,7 @@ func (compiler *predicateCompiler) column(path query.Path) (string, error) {
 	if resolved.many {
 		return "", fmt.Errorf("sort field %q traverses a repeated field", path.String())
 	}
+	resolved.snapshot = compiler.snapshot
 	resolved.localeChain = compiler.localeChain
 	return resolved.scalarColumn(), nil
 }

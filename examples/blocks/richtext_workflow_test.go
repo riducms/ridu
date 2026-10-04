@@ -9,7 +9,6 @@ import (
 	"github.com/riducms/ridu"
 	"github.com/riducms/ridu/adapters/sqlite"
 	"github.com/riducms/ridu/core"
-	"github.com/riducms/ridu/examples/blocks/content"
 	"github.com/riducms/ridu/examples/blocks/generated"
 	"github.com/riducms/ridu/field"
 	"github.com/riducms/ridu/operation"
@@ -25,7 +24,7 @@ func TestTypedArticleRoundTripPreservesRedactionLocalizationAndPopulation(t *tes
 		t.Fatal(err)
 	}
 	defer backend.Close()
-	config := content.Config()
+	config := referenceWorkflowConfig()
 	manifest, err := ridu.Resolve(config)
 	if err != nil {
 		t.Fatal(err)
@@ -82,7 +81,7 @@ func TestTypedArticleRoundTripPreservesRedactionLocalizationAndPopulation(t *tes
 		t.Fatal(err)
 	}
 	// This reader cannot see Message, while Media.Asset is a populated document.
-	restricted := content.Config()
+	restricted := referenceWorkflowConfig()
 	for _, host := range []string{"body", "localizedBody"} {
 		restricted.Collections[3].Fields, err = restricted.Collections[3].Fields.Edit(func(root *field.ChildrenDraft) error {
 			return root.EditBranch(host, field.BranchSelector{Boundary: field.EmbeddedCase, Tree: "blocks", Case: "block", Slug: "callout"}, func(block *field.ChildrenDraft) error {

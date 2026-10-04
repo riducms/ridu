@@ -6,6 +6,7 @@ import type { AdminClient, AdminDocument } from "@admin/core/api/admin-client";
 import { AdminRuntime } from "@admin/core/runtime/admin-runtime.svelte";
 import { NotificationCenter } from "@admin/core/notifications/notification-center.svelte";
 import { DocumentController } from "@admin/features/documents/document-controller.svelte";
+import { RiduError } from "@riducms/sdk";
 
 const Editor = svelte`
 	<script>
@@ -172,6 +173,22 @@ it("does not publish while document writes are blocked", async () => {
 		await fixture.controller.changePublication("published");
 		expect(fixture.client.publish).not.toHaveBeenCalled();
 		expect(fixture.controller.publicationOperation).toBe(false);
+	} finally {
+		await fixture.screen.unmount();
+	}
+});
+
+it("does not retry publication after a stale revision conflict", async () => {
+	const fixture = await editor();
+	try {
+		const pending = fixture.controller.changePublication("published");
+		fixture.mutation.reject(
+			new RiduError({ code: "conflict", status: 409, message: "Stale revision", issues: [] })
+		);
+		await pending;
+		expect(fixture.controller.serverSaveConflict).toBe(true);
+		await fixture.controller.changePublication("published");
+		expect(fixture.client.publish).toHaveBeenCalledOnce();
 	} finally {
 		await fixture.screen.unmount();
 	}

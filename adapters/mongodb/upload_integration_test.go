@@ -43,6 +43,7 @@ func TestMongoDBUploadDocumentsReferencesPopulationVersionsAndTargetedLookup(t *
 	}
 	current, err := seed.Update(t.Context(), store.UpdateRequest{
 		Request: store.Request{Collection: media, ID: original.ID},
+		Intent:  store.WriteIntentPublish,
 		Values: store.Values{
 			"objectKey": store.String("current-original"),
 			"sizes": store.Object(store.Values{"$current": store.Object(store.Values{
@@ -131,6 +132,7 @@ func TestMongoDBUploadDocumentsReferencesPopulationVersionsAndTargetedLookup(t *
 	if _, err := peerMutation.Update(t.Context(), store.UpdateRequest{
 		Request: store.Request{Collection: media, ID: target.ID},
 		Values:  store.Values{"objectKey": store.String("peer-new-object")},
+		Intent:  store.WriteIntentPublish,
 	}); err != nil {
 		mongoRollback(t, peerMutation)
 		mongoRollback(t, stable)

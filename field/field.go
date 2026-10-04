@@ -60,9 +60,6 @@ type Option struct {
 
 // BlockAdmin configures ordinary and embedded block headers.
 type BlockAdmin struct {
-	// NameField names a direct stored Text child edited from the block header.
-	// Slug fields and fields with custom editors are not eligible.
-	NameField string
 	// RowLabelPath names a direct stored scalar child; empty values use the block type label.
 	RowLabelPath string
 }
