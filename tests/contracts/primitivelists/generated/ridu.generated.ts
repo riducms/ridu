@@ -45,105 +45,125 @@ export interface ExistsWhere {
 export type PrimitiveProductsBodyBlocksBlockCardInput = {
 	"points"?: string[] | null;
 	"sizes"?: number[] | null;
+	"blockName"?: string | null;
 } & { blockType: "card"; _key?: string };
 
 /** Patch a retained row by _key. New identities must satisfy the input contract at runtime. */
 export type PrimitiveProductsBodyBlocksBlockCardUpdate = {
 	"points"?: string[] | null;
 	"sizes"?: number[] | null;
+	"blockName"?: string | null;
 } & { blockType: "card"; _key: string };
 
 export type PrimitiveProductsBodyBlocksBlockCard = {
 	"points"?: string[] | null;
 	"sizes"?: number[] | null;
+	"blockName"?: string | null;
 } & { blockType: "card"; _key: string };
 
 export type PrimitiveProductsBodyBlocksBlockCardAllLocales = {
 	"points"?: string[] | null;
 	"sizes"?: number[] | null;
+	"blockName"?: string | null;
 } & { blockType: "card"; _key: string };
 
 export type PrimitiveProductsBodyBlocksBlockCardAllLocalesValue = {
 	"points"?: string[] | null;
 	"sizes"?: number[] | null;
+	"blockName"?: string | null;
 } & { blockType: "card"; _key: string };
 
 export type PrimitiveProductsContentCardInput = {
 	"points"?: string[] | null;
 	"sizes"?: number[] | null;
+	"blockName"?: string | null;
 } & { blockType: "card"; _key?: string };
 
 /** Patch a retained row by _key. New identities must satisfy the input contract at runtime. */
 export type PrimitiveProductsContentCardUpdate = {
 	"points"?: string[] | null;
 	"sizes"?: number[] | null;
+	"blockName"?: string | null;
 } & { blockType: "card"; _key: string };
 
 export type PrimitiveProductsContentCard = {
 	"points"?: string[] | null;
 	"sizes"?: number[] | null;
+	"blockName"?: string | null;
 } & { blockType: "card"; _key: string };
 
 export type PrimitiveProductsContentCardAllLocales = {
 	"points"?: string[] | null;
 	"sizes"?: number[] | null;
+	"blockName"?: string | null;
 } & { blockType: "card"; _key: string };
 
 export type PrimitiveProductsContentCardAllLocalesValue = {
 	"points"?: string[] | null;
 	"sizes"?: number[] | null;
+	"blockName"?: string | null;
 } & { blockType: "card"; _key: string };
 
 export type PrimitiveProductsContentNoteInput = {
 	"points"?: string[] | null;
 	"sizes"?: number[] | null;
+	"blockName"?: string | null;
 } & { blockType: "note"; _key?: string };
 
 /** Patch a retained row by _key. New identities must satisfy the input contract at runtime. */
 export type PrimitiveProductsContentNoteUpdate = {
 	"points"?: string[] | null;
 	"sizes"?: number[] | null;
+	"blockName"?: string | null;
 } & { blockType: "note"; _key: string };
 
 export type PrimitiveProductsContentNote = {
 	"points"?: string[] | null;
 	"sizes"?: number[] | null;
+	"blockName"?: string | null;
 } & { blockType: "note"; _key: string };
 
 export type PrimitiveProductsContentNoteAllLocales = {
 	"points"?: string[] | null;
 	"sizes"?: number[] | null;
+	"blockName"?: string | null;
 } & { blockType: "note"; _key: string };
 
 export type PrimitiveProductsContentNoteAllLocalesValue = {
 	"points"?: string[] | null;
 	"sizes"?: number[] | null;
+	"blockName"?: string | null;
 } & { blockType: "note"; _key: string };
 
 export type PrimitiveProductsLocalizedBodyBlocksBlockCardInput = {
 	"points"?: string[] | null;
 	"sizes"?: number[] | null;
+	"blockName"?: string | null;
 } & { blockType: "card"; _key?: string };
 
 /** Patch a retained row by _key. New identities must satisfy the input contract at runtime. */
 export type PrimitiveProductsLocalizedBodyBlocksBlockCardUpdate = {
 	"points"?: string[] | null;
 	"sizes"?: number[] | null;
+	"blockName"?: string | null;
 } & { blockType: "card"; _key: string };
 
 export type PrimitiveProductsLocalizedBodyBlocksBlockCard = {
 	"points"?: string[] | null;
 	"sizes"?: number[] | null;
+	"blockName"?: string | null;
 } & { blockType: "card"; _key: string };
 
 export type PrimitiveProductsLocalizedBodyBlocksBlockCardAllLocales = {
 	"points"?: string[] | null;
 	"sizes"?: number[] | null;
+	"blockName"?: string | null;
 } & { blockType: "card"; _key: string };
 
 export type PrimitiveProductsLocalizedBodyBlocksBlockCardAllLocalesValue = {
 	"points"?: string[] | null;
 	"sizes"?: number[] | null;
+	"blockName"?: string | null;
 } & { blockType: "card"; _key: string };
 
 export type PrimitiveProductsBodyBlocksBlockBlockInput = PrimitiveProductsBodyBlocksBlockCardInput;
@@ -308,8 +328,10 @@ export interface PrimitiveProductsWhere {
 	"content"?: ExistsWhere;
 	"content.card.points"?: PrimitiveListWhere<string>;
 	"content.card.sizes"?: PrimitiveListWhere<number>;
+	"content.card.blockName"?: ScalarWhere<string>;
 	"content.note.points"?: PrimitiveListWhere<string>;
 	"content.note.sizes"?: PrimitiveListWhere<number>;
+	"content.note.blockName"?: ScalarWhere<string>;
 	"body"?: ScalarWhere<import("@riducms/sdk/richtext").RichTextDocument<PrimitiveProductsBodyBlocksBlock[number]>>;
 	"localizedBody"?: ScalarWhere<import("@riducms/sdk/richtext").RichTextDocument<PrimitiveProductsLocalizedBodyBlocksBlock[number]>>;
 }
@@ -356,7 +378,7 @@ export type PrimitiveProductsPopulateOutput = Record<string, never>;
 
 export type PrimitiveProductsAllLocalesPopulateOutput = Record<string, never>;
 
-export type PrimitiveProductsValidationPath = "title" | "sellingPoints" | "availableSizes" | "localizedPoints" | `localizedPoints.${Locale}` | "localizedSizes" | `localizedSizes.${Locale}` | "details" | "details.points" | "details.sizes" | "variants" | `variants.${number}` | `variants.${number}._key` | `variants.${number}.points` | `variants.${number}.sizes` | "content" | `content.${number}` | `content.${number}._key` | `content.${number}.blockType` | `content.${number}.points` | `content.${number}.sizes` | "body" | `body.${string}` | "localizedBody" | `localizedBody.${Locale}` | `localizedBody.${string}` | `localizedBody.${Locale}.${string}`;
+export type PrimitiveProductsValidationPath = "title" | "sellingPoints" | "availableSizes" | "localizedPoints" | `localizedPoints.${Locale}` | "localizedSizes" | `localizedSizes.${Locale}` | "details" | "details.points" | "details.sizes" | "variants" | `variants.${number}` | `variants.${number}._key` | `variants.${number}.points` | `variants.${number}.sizes` | "content" | `content.${number}` | `content.${number}._key` | `content.${number}.blockType` | `content.${number}.points` | `content.${number}.sizes` | `content.${number}.blockName` | "body" | `body.${string}` | "localizedBody" | `localizedBody.${Locale}` | `localizedBody.${string}` | `localizedBody.${Locale}.${string}`;
 
 export interface RiduConfig {
 	locale: Locale;

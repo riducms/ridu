@@ -389,7 +389,7 @@ func lowerTypedPolicies[W, R any](binding *operationengine.FieldBinding, hooks f
 				root = operation.Snapshot(ctx.RootData)
 			}
 			live := operation.LiveValidationContext{
-				Context: base.Context, Operation: base.Operation, CollectionID: base.CollectionID, GlobalID: base.GlobalID,
+				Context: base.Context, Operation: base.Operation, WritePhase: base.WritePhase, CollectionID: base.CollectionID, GlobalID: base.GlobalID,
 				ID: base.ID, Actor: base.Actor, Locale: base.Locale, Root: root, Siblings: base.Siblings, Prior: base.Prior,
 				Input: operation.Snapshot(ctx.InputSiblingData),
 				Local: graphReader{local: local, context: ctx.Context, actor: cloneDocument(ctx.Actor), actorCollection: ctx.ActorCollection, locale: ctx.Locale, live: true},
@@ -476,7 +476,7 @@ func graphCallbackContext(ctx operationengine.Context, id string, local **LocalA
 		actor.Data = operation.Snapshot(ctx.Actor.Values)
 	}
 	return operation.Context{
-		Context: ctx.Context, Operation: ctx.Operation, CollectionID: collectionID, GlobalID: globalID,
+		Context: ctx.Context, Operation: ctx.Operation, WritePhase: ctx.WritePhase, CollectionID: collectionID, GlobalID: globalID,
 		OccurrenceID: operation.OccurrenceID(ctx.OccurrenceID), SchemaOccurrenceID: operation.OccurrenceID(id), ID: operation.ID(ctx.ID),
 		Actor: actor, System: ctx.System, Locale: ctx.Locale, AllLocales: ctx.AllLocales, Root: operation.Snapshot(root), Siblings: operation.Snapshot(ctx.SiblingData), Prior: operation.Snapshot(ctx.OriginalSiblingData),
 		Local: graphReader{live: ctx.LiveValidation, local: local, context: ctx.Context, actor: cloneDocument(ctx.Actor), actorCollection: ctx.ActorCollection, system: ctx.System, locale: ctx.Locale},

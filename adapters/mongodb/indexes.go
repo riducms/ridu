@@ -22,6 +22,7 @@ const mongoIndexNameHashBytes = 8
 const (
 	mongoContentLifecycleIndexName         = "z_content_lifecycle"
 	mongoContentPublicationIndexName       = "z_content_publication"
+	mongoHeadUniqueReservationIndexName    = "z_unique_heads"
 	mongoReferenceOwnerIndexName           = "z_reference_owner"
 	mongoReferenceTargetIndexName          = "z_reference_target"
 	mongoVersionOwnerIndexName             = "z_version_owner_revision"
@@ -78,6 +79,7 @@ type mongoSystemIndexKind uint8
 const (
 	mongoSystemReferenceIndexes mongoSystemIndexKind = iota + 1
 	mongoSystemVersionIndexes
+	mongoSystemPublishedIndexes
 	mongoSystemPreferenceIndexes
 	mongoSystemDocumentLockIndexes
 	mongoSystemTaskIndexes
@@ -177,7 +179,6 @@ func (backend *Store) syncMongoIndexes(ctx context.Context, manifest schema.Mani
 			}
 		}
 	}
-
 	return backend.verifyIndexPlans(ctx, plans, systemPlans)
 }
 
@@ -227,6 +228,7 @@ func (backend *Store) verifyIndexPlansWithoutAuthorization(ctx context.Context, 
 func (backend *Store) verifyIndexPlansWithAuthorization(ctx context.Context, plans []mongoCollectionIndexPlan, systemPlans []mongoSystemIndexPlan, authorize bool) error {
 	verified := make(map[schema.StableID]mongoVerifiedIndexPlan, len(plans))
 	verifiedVersions := make(map[schema.StableID]bool)
+	verifiedPublished := make(map[schema.StableID]bool)
 	verifiedReferences := false
 	verifiedPreferences := false
 	verifiedDocumentLocks := false
@@ -265,6 +267,8 @@ func (backend *Store) verifyIndexPlansWithAuthorization(ctx context.Context, pla
 			verifiedReferences = true
 		case mongoSystemVersionIndexes:
 			verifiedVersions[plan.collectionID] = true
+		case mongoSystemPublishedIndexes:
+			verifiedPublished[plan.collectionID] = true
 		case mongoSystemPreferenceIndexes:
 			verifiedPreferences = true
 		case mongoSystemDocumentLockIndexes:
@@ -291,6 +295,13 @@ func (backend *Store) verifyIndexPlansWithAuthorization(ctx context.Context, pla
 			return fmt.Errorf("unknown MongoDB system index plan")
 		}
 	}
+	for _, plan := range plans {
+		if plan.collection.Versions != nil && verifiedPublished[plan.collection.ID] {
+			if err := backend.verifyMongoPublishedHeadCoverage(ctx, plan.collection); err != nil {
+				return err
+			}
+		}
+	}
 	if !authorize {
 		// Retired derived namespaces are useful migration/status diagnostics, but
 		// they do not make current application traffic unsafe. Ordinary serving
@@ -302,6 +313,11 @@ func (backend *Store) verifyIndexPlansWithAuthorization(ctx context.Context, pla
 			return err
 		}
 		return nil
+	}
+	for _, plan := range plans {
+		if plan.collection.Versions != nil && verifiedVersions[plan.collection.ID] && !verifiedPublished[plan.collection.ID] {
+			return fmt.Errorf("MongoDB published-head indexes for collection %q are not verified", plan.collection.ID)
+		}
 	}
 	backend.indexesMu.Lock()
 	backend.verifiedIndexes = verified
@@ -451,6 +467,9 @@ func (backend *Store) verifiedIndexPlan(collection schema.Collection) (mongoVeri
 	definitions, err := mongoContentIndexesForLocales(collection, verified.locales)
 	if err != nil {
 		return mongoVerifiedIndexPlan{}, err
+	}
+	if reservation, exists := mongoHeadReservationIndexDefinition(collection, definitions); exists {
+		definitions = append(definitions, reservation)
 	}
 	fingerprint, err := mongoIndexFingerprint(definitions)
 	if err != nil {
@@ -639,6 +658,23 @@ func mongoIndexPlans(manifest schema.Manifest) ([]mongoCollectionIndexPlan, erro
 	return plans, nil
 }
 
+func mongoHeadReservationIndexDefinition(collection schema.Collection, definitions []mongoIndexDefinition) (mongoIndexDefinition, bool) {
+	if collection.Versions == nil {
+		return mongoIndexDefinition{}, false
+	}
+	for _, definition := range definitions {
+		if definition.unique {
+			return mongoIndexDefinition{
+				name:     mongoHeadUniqueReservationIndexName,
+				identity: "head-reservations:" + string(collection.ID),
+				keys:     bson.D{{Key: "reservations", Value: int32(1)}}, unique: true,
+				partialFilter: bson.D{{Key: "reservations", Value: bson.D{{Key: "$exists", Value: true}}}},
+			}, true
+		}
+	}
+	return mongoIndexDefinition{}, false
+}
+
 func mongoSystemIndexPlans(collectionPlans []mongoCollectionIndexPlan) []mongoSystemIndexPlan {
 	plans := []mongoSystemIndexPlan{
 		{
@@ -824,6 +860,14 @@ func mongoSystemIndexPlans(collectionPlans []mongoCollectionIndexPlan) []mongoSy
 			referencesRequired = true
 		}
 		if collection.Versions != nil {
+			publishedDefinitions := make([]mongoIndexDefinition, 0, len(collectionPlan.definitions))
+			for _, definition := range collectionPlan.definitions {
+				// Reservations belong to the working document, which owns both
+				// active heads. The published projection has no reservation set.
+				if definition.name != mongoHeadUniqueReservationIndexName {
+					publishedDefinitions = append(publishedDefinitions, definition)
+				}
+			}
 			plans = append(plans, mongoSystemIndexPlan{
 				kind:         mongoSystemVersionIndexes,
 				collectionID: collection.ID,
@@ -837,6 +881,12 @@ func mongoSystemIndexPlans(collectionPlans []mongoCollectionIndexPlan) []mongoSy
 					},
 					unique: true,
 				}},
+			})
+			plans = append(plans, mongoSystemIndexPlan{
+				kind: mongoSystemPublishedIndexes, collectionID: collection.ID,
+				description:  fmt.Sprintf("published content for collection %q", collection.ID),
+				physicalName: physicalPublishedCollectionName(collection.ID),
+				definitions:  publishedDefinitions,
 			})
 		}
 	}

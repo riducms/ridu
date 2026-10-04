@@ -189,6 +189,7 @@
 	const splitPreview = new MediaQuery("(min-width: 1240px)");
 	registerAdminScrollPage({
 		ready: () => !controller.loading,
+		contentRevision: () => form.editorEpoch,
 		target: () =>
 			documentView !== "api" && livePreviewOpen && splitPreview.current ? fieldsViewport : viewport,
 	});
@@ -297,6 +298,10 @@
 			resetNewUserCredentials();
 			return;
 		}
+		await focusFirstIssue();
+	}
+
+	async function focusFirstIssue() {
 		const issuePath = form.issues[0]?.path;
 		if (issuePath === undefined) return;
 		documentView = "edit";
@@ -305,18 +310,19 @@
 	}
 
 	function handleSave(event: Event) {
-		return submitDocument(
-			event,
-			!controller.creating &&
-				controller.versionedCollection &&
-				controller.currentStatus === "published"
-		);
+		return submitDocument(event, false);
 	}
 
-	function handlePublish(event: Event) {
-		if (!controller.creating && controller.currentStatus === "draft" && !dirty) {
+	async function handlePublish(event: Event) {
+		if (
+			!controller.creating &&
+			!dirty &&
+			(controller.currentStatus === "draft" || controller.hasSavedDraftChanges)
+		) {
 			event.preventDefault();
-			return controller.changePublication("published");
+			await controller.changePublication("published");
+			await focusFirstIssue();
+			return;
 		}
 		return submitDocument(event, true);
 	}
@@ -497,8 +503,8 @@
 					<Banner class="ridu-document-notice" tone="warning">
 						{runtime.i18n.t(
 							controller.creating
-								? "uploads:outcomeUnknownDescription"
-								: "uploads:saveOutcomeUnknownDescription"
+								? "documents:createOutcomeUnknownDescription"
+								: "documents:saveOutcomeUnknownDescription"
 						)}
 						{#if !controller.creating}
 							<Button
@@ -510,6 +516,21 @@
 								{runtime.i18n.t("uploads:reloadSaved")}
 							</Button>
 						{/if}
+					</Banner>
+				{/if}
+				{#if controller.serverSaveConflict && controller.recoveryConflict === undefined}
+					<Banner class="ridu-document-notice" tone="warning">
+						<span class="ridu-document-notice__message">
+							{runtime.i18n.t("documents:serverSaveConflict")}
+						</span>
+						<Button
+							variant="outline"
+							size="sm"
+							disabled={controller.loading}
+							onclick={controller.reviewServerConflict}
+						>
+							{runtime.i18n.t("documents:reviewLatest")}
+						</Button>
 					</Banner>
 				{/if}
 
@@ -553,7 +574,7 @@
 					>
 						<fieldset
 							class="ridu-document-form__fieldset"
-							disabled={form.submitting || controller.recoveryConflict !== undefined}
+							disabled={form.editingBlocked || controller.recoveryConflict !== undefined}
 						>
 							{#if controller.uploadCollection && controller.collection?.uploadSettings}
 								{#key JSON.stringify([globalResource, slug, routeDocumentID, activeLocale])}

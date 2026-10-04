@@ -68,7 +68,7 @@ func TestLocalEditorUnifiedEmbeddedOccurrencesResolve(t *testing.T) {
 		t.Fatal(err)
 	}
 	embedded := schema.EmbeddedBlocks(manifest.Snapshot().Collections[0].Fields[0])[0].Blocks.ResolvedTypes()[0].ResolvedFields()
-	if len(embedded) != 1 || embedded[0].Admin.Editor == nil || embedded[0].Admin.Editor.Reference != "app:text" || string(embedded[0].Admin.Editor.Config) != `{"capture":true}` {
+	if len(embedded) != 2 || embedded[0].Admin.Editor == nil || embedded[0].Admin.Editor.Reference != "app:text" || string(embedded[0].Admin.Editor.Config) != `{"capture":true}` || embedded[1].Name != "blockName" {
 		t.Fatalf("embedded editor projection: %#v", embedded)
 	}
 }

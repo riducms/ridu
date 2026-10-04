@@ -18,6 +18,7 @@ import {
 import { NotificationCenter } from "@admin/core/notifications/notification-center.svelte";
 import { AdminRuntime } from "@admin/core/runtime/admin-runtime.svelte";
 import { DocumentController } from "@admin/features/documents/document-controller.svelte";
+import { RiduError } from "@riducms/sdk";
 
 const Editor = svelte`
 	<script>
@@ -106,6 +107,7 @@ async function editor(
 		access?: AccessCapabilitiesEnvelope;
 		schema?: SchemaCollection;
 		find?: AdminClient["find"];
+		update?: AdminClient["update"];
 		create?: boolean;
 		locale?: string;
 		preparedValues?: Record<string, unknown>;
@@ -114,6 +116,7 @@ async function editor(
 	const resolvedAccess = options.access ?? access;
 	const client = {
 		find: options.find ?? vi.fn(async (_slug: string, id: string) => ({ ...document, id })),
+		update: options.update,
 		collectionAccess: vi.fn(async () => resolvedAccess),
 		countVersions: vi.fn(async () => ({ totalDocs: 0 })),
 		unpublish: vi.fn(async () => ({ ...document, _status: "draft", _revision: 4 })),
@@ -143,6 +146,7 @@ async function editor(
 	runtime.manifestRevision = 1;
 	const notifications = new NotificationCenter();
 	const success = vi.spyOn(notifications, "success");
+	const error = vi.spyOn(notifications, "error");
 	const warning = vi.spyOn(notifications, "warning");
 	const dismiss = vi.spyOn(notifications, "dismiss");
 	let controller!: DocumentController;
@@ -169,8 +173,102 @@ async function editor(
 		notifications.destroy();
 		clearFormDraft(collection.id, props.id, options.locale);
 	};
-	return { screen, controller, runtime, props, success, warning, dismiss, client, dispose };
+	return { screen, controller, runtime, props, success, error, warning, dismiss, client, dispose };
 }
+
+const rowCollection: SchemaCollection = {
+	...collection,
+	versionSettings: { drafts: true, maxPerDocument: 10, autosaveIntervalSeconds: 0 },
+	fields: [
+		...collection.fields,
+		{
+			id: "rows",
+			name: "rows",
+			path: "rows",
+			type: "array",
+			category: "nested",
+			required: false,
+			unique: false,
+			admin: { label: "Rows" },
+			nested: { fields: [textField("text")] },
+		},
+	],
+};
+
+it("keeps a confirmed creation conflict retryable after correcting input", async () => {
+	const fixture = await editor(base, { create: true, prepared: true });
+	const create = vi
+		.fn()
+		.mockRejectedValueOnce(
+			new RiduError({
+				code: "conflict",
+				status: 409,
+				message: "Unique value already exists",
+				issues: [],
+			})
+		)
+		.mockResolvedValueOnce({ ...base, title: "Available title" });
+	fixture.client.create = create;
+	try {
+		fixture.controller.form.set("title", "Taken title");
+		expect(await fixture.controller.save()).toBe(false);
+		expect(fixture.controller.serverSaveConflict).toBe(false);
+		expect(fixture.controller.saveOutcomeUncertain).toBe(false);
+		fixture.controller.form.set("title", "Available title");
+		expect(fixture.controller.canSave).toBe(true);
+		expect(await fixture.controller.save()).toBe(true);
+		expect(create).toHaveBeenCalledTimes(2);
+	} finally {
+		await fixture.dispose();
+	}
+});
+
+it.each([false, true])(
+	"preserves a late-edited server-removed row for recovery (storage fails=%s)",
+	async (storageFails) => {
+		const original = { ...base, rows: [{ _key: "row", text: "Original" }] };
+		const saved = { ...original, rows: [], _revision: 3 };
+		const response = Promise.withResolvers<AdminDocument>();
+		const update = vi.fn(() => response.promise);
+		const fixture = await editor(original, { schema: rowCollection, update });
+		const blockedStorage = storageFails
+			? vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+					throw new Error("Storage unavailable");
+				})
+			: undefined;
+		try {
+			fixture.controller.form.set("rows.0.text", "Submitted");
+			const saving = fixture.controller.save({ silent: true });
+			await expect.poll(() => update).toHaveBeenCalledOnce();
+			fixture.controller.form.set("rows.0.text", "Typed later");
+			response.resolve(saved);
+			await saving;
+			if (storageFails) {
+				expect(fixture.controller.form.get("rows")).toEqual([{ _key: "row", text: "Typed later" }]);
+				expect(fixture.controller.serverSaveConflict).toBe(true);
+				expect(fixture.controller.recoveryConflict).toBeUndefined();
+				expect(fixture.error).toHaveBeenCalledWith(
+					expect.objectContaining({ title: expect.stringContaining("checkpointed") })
+				);
+			} else {
+				const checkpoint = peekFormDraft(rowCollection.id, "one");
+				expect(checkpoint?.values.rows).toEqual([{ _key: "row", text: "Typed later" }]);
+				expect(checkpoint?.original.rows).toEqual([{ _key: "row", text: "Submitted" }]);
+				expect(fixture.controller.recoveryConflict).toEqual(checkpoint);
+				expect(fixture.controller.form.get("rows")).toEqual([]);
+				expect(fixture.controller.canSave).toBe(false);
+				await expect
+					.element(fixture.screen.getByRole("dialog", { name: "Review unsaved changes" }))
+					.toBeVisible();
+				await fixture.screen.getByRole("button", { name: "Keep yours", exact: true }).click();
+				expect(fixture.controller.form.get("rows")).toEqual([{ _key: "row", text: "Typed later" }]);
+			}
+		} finally {
+			blockedStorage?.mockRestore();
+			await fixture.dispose();
+		}
+	}
+);
 
 it.each([false, true])(
 	"restores a matching base and its notification discards saved recovery (prepared=%s)",
@@ -427,6 +525,38 @@ it("storage denial does not break checkpointing, reads or discard", async () => 
 		set.mockRestore();
 		get.mockRestore();
 		remove.mockRestore();
+		await fixture.dispose();
+	}
+});
+
+it("does not refresh a save conflict from an older checkpoint when current edits cannot be stored", async () => {
+	const fixture = await editor();
+	try {
+		expect(
+			saveFormDraft(
+				collection,
+				"one",
+				{ title: "Older edit", note: "Saved note" },
+				{ title: "Saved title", note: "Saved note" },
+				formDraftBase(base)
+			)
+		).toBe(true);
+		fixture.controller.form.set("title", "Current unsaved edit");
+		fixture.controller.serverSaveConflict = true;
+		const reads = vi.mocked(fixture.client.find).mock.calls.length;
+		const denied = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+			throw new DOMException("Denied", "SecurityError");
+		});
+		try {
+			await fixture.controller.reviewServerConflict();
+		} finally {
+			denied.mockRestore();
+		}
+		expect(vi.mocked(fixture.client.find).mock.calls.length).toBe(reads);
+		expect(fixture.controller.form.get("title")).toBe("Current unsaved edit");
+		expect(peekFormDraft(collection.id, "one")?.values.title).toBe("Older edit");
+		expect(fixture.controller.serverSaveConflict).toBe(true);
+	} finally {
 		await fixture.dispose();
 	}
 });

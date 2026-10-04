@@ -1,20 +1,17 @@
 ---
-title: 'Blocks field'
-description: 'Build pages from different content sections, such as heroes, quotes, and image galleries.'
+title: "Blocks field"
+description: "Build pages from different content sections, such as heroes, quotes, and image galleries."
 product: core
-eyebrow: 'Structured fields'
+eyebrow: "Structured fields"
 order: 75
-aliases: ['field.Blocks', 'page builder', 'BlockType', 'BlockTypes']
+aliases: ["field.Blocks", "page builder", "BlockType", "BlockTypes"]
 relatedSymbolIds:
-  [
-    'go:github.com/riducms/ridu/field#Blocks',
-    'go:github.com/riducms/ridu/field#Block'
-  ]
+  ["go:github.com/riducms/ridu/field#Blocks", "go:github.com/riducms/ridu/field#Block"]
 navigation:
-  section: 'Model content'
+  section: "Model content"
   parent: fields
   order: 150
-  title: 'Blocks'
+  title: "Blocks"
 ---
 
 Use `field.Blocks` when authors need to combine different kinds of content in one list. A page
@@ -102,48 +99,50 @@ definitions are shared by every reference. Block-type labels are separate from l
 labels and from a row heading derived from its values.
 
 Authors can add any configured block type, edit its fields, and reorder the list. Set
-`BlockAdmin.RowLabelPath` to a direct child field to use its value as the block’s heading. In the
-example, a Hero block displays its `heading` value, or “Hero” when that value is blank. JSON,
-Point, and MultiSelect fields cannot supply this label.
+`BlockAdmin.RowLabelPath` to a direct scalar child to provide a content summary for
+row actions and drag labels when the editorial name is empty. For example, a Hero
+block can use its `heading` value in these labels. This does not replace the header
+name input or its “Untitled” placeholder. JSON, Point, and MultiSelect fields
+cannot serve as row labels.
 
 Set `Admin.RowLabel` to a [custom row label component](/docs/custom-components/row-labels/) when
-you need a richer heading.
+you need richer supplementary header content.
 
 ### Give each block an editorial name
 
-Use `NameField` when an editor needs to distinguish repeated blocks independently
-of their published heading:
+Every block has an editable name in its header, including rich-text cards and
+their editing drawers. Ridu adds an optional plain `field.Text("blockName")` with
+an empty-string default when you omit it from `Fields`. Declare it yourself to
+customize the ordinary Text field:
 
 ```go
 field.Block{
 	Slug: "cta",
-	Admin: field.BlockAdmin{
-		NameField: "blockName",
-		RowLabelPath: "heading",
-	},
+	Admin: field.BlockAdmin{RowLabelPath: "heading"},
 	Fields: field.Fields{
-		field.Text("blockName").Label("Block name"),
+		field.Text("blockName").Label("Internal name"),
 		field.Text("heading").Required(),
 	},
 }
 ```
 
-The name is an always-visible input in the block header, including rich-text cards
-and their editing drawers. It does not appear again in the content form. When empty,
-the input shows the permitted `RowLabelPath` value, then “Untitled CTA” if no summary
-is available. The placeholder is never saved. Custom row-label components remain
-supplementary header content when a name is configured.
+The header uses the same field access and visibility guards as the content form;
+it does not repeat `blockName` in the body. When empty, the input shows “Untitled”
+as a placeholder. It does not use a content summary as the placeholder, and the
+placeholder is never saved. Custom row-label components remain supplementary
+header content.
 
-`NameField` must select a direct stored Text field with its standard editor, not a
-slug field, nested path or custom editor. The field keeps ordinary validation,
-hooks, access, visibility and localization. Names are optional and nonlocalized
-in this example; add `.Required()` or `.Localized()` only when the application needs it.
+An explicit `blockName` must be a direct plain Text field with its standard editor,
+not a slug or custom editor. You can customize its default, validation, access,
+visibility and localization through the normal field configuration. The name is
+optional and nonlocalized in this example; add `.Required()` or `.Localized()`
+only when the application needs it.
 
-`blockName` is an example field name, not reserved metadata. The API and generated
-types include it like any configured child: directly on ordinary blocks and inside
-`fields` on rich-text blocks. Renaming does not change `_key`, `blockType`, public
-headings or URL anchors. Duplication retains the name and creates fresh keys.
-Without `NameField`, blocks keep their content-derived summaries.
+The API and generated types include `blockName` like any other child: directly on
+ordinary blocks and inside `fields` on rich-text blocks. Names persist through
+ordinary saves, revisions and localization. Renaming does not change `_key`,
+`blockType`, public headings or URL anchors. Duplication retains the name and
+creates fresh keys.
 
 `MinRows` and `MaxRows` constrain a supplied list. An optional field may remain absent or `null`,
 but a supplied empty list must satisfy `MinRows`. `Required` additionally requires a nonempty

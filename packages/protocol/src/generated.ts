@@ -147,6 +147,8 @@ export type AdminDocumentV1 = Record<string, unknown> & {
 	deletedAt?: string;
 	_status?: "draft" | "published";
 	_revision?: number;
+	_publishedRevision?: number;
+	_hasDraftChanges?: boolean;
 	_localization?: { sources: Record<string, string> };
 };
 
@@ -285,6 +287,7 @@ export interface ValidationIssue {
 /** Explicit advisory evaluation of an unsaved snapshot; never a write. */
 export interface LiveValidationRequest {
 	id?: string;
+	draft?: boolean;
 	data: Record<string, unknown>;
 	fields: string[];
 	embedded?: LiveValidationEmbeddedScope[];
@@ -992,7 +995,7 @@ export interface SchemaBlockLabels {
 
 export interface SchemaBlockType {
 	typeName?: string;
-	admin?: { nameField?: string; rowLabel?: string };
+	admin?: { rowLabel?: string };
 	slug: string;
 	labels: SchemaBlockLabels;
 	fields: SchemaField[];

@@ -54,7 +54,7 @@ func TestPostgresDevelopmentFieldClearPreservesReplacementRequiredness(t *testin
 				t.Fatal(err)
 			}
 			reports, err := backend.ReviewDevelopmentFieldKinds(ctx, before, after)
-			if err != nil || reports[0].Documents != 1 || reports[0].Snapshots != 1 {
+			if err != nil || reports[0].Documents != 1 || reports[0].Snapshots != 2 {
 				t.Fatalf("stored recovery counts: %#v, %v", reports, err)
 			}
 			err = backend.ClearDevelopmentFieldKinds(ctx, before, after, reports)

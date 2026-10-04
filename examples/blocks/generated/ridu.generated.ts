@@ -50,19 +50,31 @@ export type CTAUpdate = {
 
 export type CTA = {
 	"blockName"?: string | null;
-	"label"?: string;
+	"label"?: string | null;
 	"destination"?: ID | Pages | null;
+} & { blockType: "cta"; _key: string };
+
+export type CTADraftInput = {
+	"blockName"?: string | null;
+	"label"?: string | null;
+	"destination"?: ID | null;
+} & { blockType: "cta"; _key?: string };
+
+export type CTADraftUpdate = {
+	"blockName"?: string | null;
+	"label"?: string | null;
+	"destination"?: ID | null;
 } & { blockType: "cta"; _key: string };
 
 export type CTAAllLocales = {
 	"blockName"?: string | null;
-	"label"?: RiduLocalizedValues<string>;
+	"label"?: RiduLocalizedValues<string | null>;
 	"destination"?: ID | PagesAllLocales | null;
 } & { blockType: "cta"; _key: string };
 
 export type CTAAllLocalesValue = {
 	"blockName"?: string | null;
-	"label"?: string;
+	"label"?: string | null;
 	"destination"?: ID | PagesAllLocales | null;
 } & { blockType: "cta"; _key: string };
 
@@ -85,15 +97,31 @@ export type CalloutUpdate = {
 
 export type Callout = {
 	"blockName"?: string | null;
-	"title"?: string;
+	"title"?: string | null;
 	"message"?: string | null;
 	"detail"?: import("@riducms/sdk/richtext").RichTextDocument<CalloutDetailBlocksBlock[number]> | null;
 	"aside"?: import("@riducms/sdk/richtext").RichTextDocument<never[][number]> | null;
 } & { blockType: "callout"; _key: string };
 
+export type CalloutDraftInput = {
+	"blockName"?: string | null;
+	"title"?: string | null;
+	"message"?: string | null;
+	"detail"?: import("@riducms/sdk/richtext").RichTextDocumentInput<CalloutDetailBlocksBlockDraftInput[number]> | null;
+	"aside"?: import("@riducms/sdk/richtext").RichTextDocumentInput<never[][number]> | null;
+} & { blockType: "callout"; _key?: string };
+
+export type CalloutDraftUpdate = {
+	"blockName"?: string | null;
+	"title"?: string | null;
+	"message"?: string | null;
+	"detail"?: import("@riducms/sdk/richtext").RichTextDocumentInput<CalloutDetailBlocksBlockDraftUpdate[number]> | null;
+	"aside"?: import("@riducms/sdk/richtext").RichTextDocumentInput<never[][number]> | null;
+} & { blockType: "callout"; _key: string };
+
 export type CalloutAllLocales = {
 	"blockName"?: string | null;
-	"title"?: string;
+	"title"?: string | null;
 	"message"?: RiduLocalizedValues<string | null>;
 	"detail"?: import("@riducms/sdk/richtext").RichTextDocument<CalloutDetailBlocksBlockAllLocales[number]> | null;
 	"aside"?: import("@riducms/sdk/richtext").RichTextDocument<never[][number]> | null;
@@ -101,7 +129,7 @@ export type CalloutAllLocales = {
 
 export type CalloutAllLocalesValue = {
 	"blockName"?: string | null;
-	"title"?: string;
+	"title"?: string | null;
 	"message"?: string | null;
 	"detail"?: import("@riducms/sdk/richtext").RichTextDocument<CalloutDetailBlocksBlockAllLocalesValue[number]> | null;
 	"aside"?: import("@riducms/sdk/richtext").RichTextDocument<never[][number]> | null;
@@ -115,6 +143,7 @@ export type ContentInput = {
 		"label": string;
 		"href": string;
 	}> | null;
+	"blockName"?: string | null;
 } & { blockType: "content"; _key?: string };
 
 /** Patch a retained row by _key. New identities must satisfy the input contract at runtime. */
@@ -130,6 +159,7 @@ export type ContentUpdate = {
 		"label"?: string;
 		"href"?: string;
 	}> | null;
+	"blockName"?: string | null;
 } & { blockType: "content"; _key: string };
 
 export type Content = {
@@ -137,9 +167,36 @@ export type Content = {
 	"body"?: import("@riducms/sdk/richtext").RichTextDocument<never[][number]> | null;
 	"links"?: Array<{
 		_key: string;
-		"label"?: string;
-		"href"?: string;
+		"label"?: string | null;
+		"href"?: string | null;
 	}> | null;
+	"blockName"?: string | null;
+} & { blockType: "content"; _key: string };
+
+export type ContentDraftInput = {
+	"title"?: string | null;
+	"body"?: import("@riducms/sdk/richtext").RichTextDocumentInput<never[][number]> | null;
+	"links"?: Array<{
+		_key?: string;
+		"label"?: string | null;
+		"href"?: string | null;
+	}> | null;
+	"blockName"?: string | null;
+} & { blockType: "content"; _key?: string };
+
+export type ContentDraftUpdate = {
+	"title"?: string | null;
+	"body"?: import("@riducms/sdk/richtext").RichTextDocumentInput<never[][number]> | null;
+	"links"?: Array<{
+		_key?: string;
+		"label"?: string | null;
+		"href"?: string | null;
+	} | {
+		_key: string;
+		"label"?: string | null;
+		"href"?: string | null;
+	}> | null;
+	"blockName"?: string | null;
 } & { blockType: "content"; _key: string };
 
 export type ContentAllLocales = {
@@ -147,9 +204,10 @@ export type ContentAllLocales = {
 	"body"?: import("@riducms/sdk/richtext").RichTextDocument<never[][number]> | null;
 	"links"?: Array<{
 		_key: string;
-		"label"?: string;
-		"href"?: string;
+		"label"?: string | null;
+		"href"?: string | null;
 	}> | null;
+	"blockName"?: string | null;
 } & { blockType: "content"; _key: string };
 
 export type ContentAllLocalesValue = {
@@ -157,9 +215,10 @@ export type ContentAllLocalesValue = {
 	"body"?: import("@riducms/sdk/richtext").RichTextDocument<never[][number]> | null;
 	"links"?: Array<{
 		_key: string;
-		"label"?: string;
-		"href"?: string;
+		"label"?: string | null;
+		"href"?: string | null;
 	}> | null;
+	"blockName"?: string | null;
 } & { blockType: "content"; _key: string };
 
 export type HeroInput = {
@@ -167,6 +226,7 @@ export type HeroInput = {
 	"appearance"?: {
 		"tone"?: "light" | "dark" | null;
 	} | null;
+	"blockName"?: string | null;
 } & { blockType: "hero"; _key?: string };
 
 /** Patch a retained row by _key. New identities must satisfy the input contract at runtime. */
@@ -175,53 +235,90 @@ export type HeroUpdate = {
 	"appearance"?: {
 		"tone"?: "light" | "dark" | null;
 	} | null;
+	"blockName"?: string | null;
 } & { blockType: "hero"; _key: string };
 
 export type Hero = {
-	"heading"?: string;
+	"heading"?: string | null;
 	"appearance"?: {
 		"tone"?: "light" | "dark" | null;
 	} | null;
+	"blockName"?: string | null;
+} & { blockType: "hero"; _key: string };
+
+export type HeroDraftInput = {
+	"heading"?: string | null;
+	"appearance"?: {
+		"tone"?: "light" | "dark" | null;
+	} | null;
+	"blockName"?: string | null;
+} & { blockType: "hero"; _key?: string };
+
+export type HeroDraftUpdate = {
+	"heading"?: string | null;
+	"appearance"?: {
+		"tone"?: "light" | "dark" | null;
+	} | null;
+	"blockName"?: string | null;
 } & { blockType: "hero"; _key: string };
 
 export type HeroAllLocales = {
-	"heading"?: RiduLocalizedValues<string>;
+	"heading"?: RiduLocalizedValues<string | null>;
 	"appearance"?: {
 		"tone"?: "light" | "dark" | null;
 	} | null;
+	"blockName"?: string | null;
 } & { blockType: "hero"; _key: string };
 
 export type HeroAllLocalesValue = {
-	"heading"?: string;
+	"heading"?: string | null;
 	"appearance"?: {
 		"tone"?: "light" | "dark" | null;
 	} | null;
+	"blockName"?: string | null;
 } & { blockType: "hero"; _key: string };
 
 export type MediaInput = {
 	"asset": ID;
 	"caption"?: string | null;
+	"blockName"?: string | null;
 } & { blockType: "media"; _key?: string };
 
 /** Patch a retained row by _key. New identities must satisfy the input contract at runtime. */
 export type MediaUpdate = {
 	"asset"?: ID;
 	"caption"?: string | null;
+	"blockName"?: string | null;
 } & { blockType: "media"; _key: string };
 
 export type Media = {
-	"asset"?: ID | Assets;
+	"asset"?: ID | Assets | null;
 	"caption"?: string | null;
+	"blockName"?: string | null;
+} & { blockType: "media"; _key: string };
+
+export type MediaDraftInput = {
+	"asset"?: ID | null;
+	"caption"?: string | null;
+	"blockName"?: string | null;
+} & { blockType: "media"; _key?: string };
+
+export type MediaDraftUpdate = {
+	"asset"?: ID | null;
+	"caption"?: string | null;
+	"blockName"?: string | null;
 } & { blockType: "media"; _key: string };
 
 export type MediaAllLocales = {
-	"asset"?: ID | AssetsAllLocales;
+	"asset"?: ID | AssetsAllLocales | null;
 	"caption"?: RiduLocalizedValues<string | null>;
+	"blockName"?: string | null;
 } & { blockType: "media"; _key: string };
 
 export type MediaAllLocalesValue = {
-	"asset"?: ID | AssetsAllLocales;
+	"asset"?: ID | AssetsAllLocales | null;
 	"caption"?: string | null;
+	"blockName"?: string | null;
 } & { blockType: "media"; _key: string };
 
 export type ArticlesBodyBlocksBlockBlockInput = CalloutInput | MediaInput | CTAInput;
@@ -232,6 +329,12 @@ export type ArticlesBodyBlocksBlockUpdate = Array<ArticlesBodyBlocksBlockBlockUp
 
 export type ArticlesBodyBlocksBlockBlock = Callout | Media | CTA;
 export type ArticlesBodyBlocksBlock = Array<ArticlesBodyBlocksBlockBlock>;
+
+export type ArticlesBodyBlocksBlockBlockDraftInput = CalloutDraftInput | MediaDraftInput | CTADraftInput;
+export type ArticlesBodyBlocksBlockDraftInput = Array<ArticlesBodyBlocksBlockBlockDraftInput>;
+
+export type ArticlesBodyBlocksBlockBlockDraftUpdate = CalloutDraftUpdate | CalloutDraftInput | MediaDraftUpdate | MediaDraftInput | CTADraftUpdate | CTADraftInput;
+export type ArticlesBodyBlocksBlockDraftUpdate = Array<ArticlesBodyBlocksBlockBlockDraftUpdate>;
 
 export type ArticlesBodyBlocksBlockBlockAllLocales = CalloutAllLocales | MediaAllLocales | CTAAllLocales;
 export type ArticlesBodyBlocksBlockAllLocales = Array<ArticlesBodyBlocksBlockBlockAllLocales>;
@@ -248,6 +351,12 @@ export type ArticlesLocalizedBodyBlocksBlockUpdate = Array<ArticlesLocalizedBody
 export type ArticlesLocalizedBodyBlocksBlockBlock = Callout | Media | CTA;
 export type ArticlesLocalizedBodyBlocksBlock = Array<ArticlesLocalizedBodyBlocksBlockBlock>;
 
+export type ArticlesLocalizedBodyBlocksBlockBlockDraftInput = CalloutDraftInput | MediaDraftInput | CTADraftInput;
+export type ArticlesLocalizedBodyBlocksBlockDraftInput = Array<ArticlesLocalizedBodyBlocksBlockBlockDraftInput>;
+
+export type ArticlesLocalizedBodyBlocksBlockBlockDraftUpdate = CalloutDraftUpdate | CalloutDraftInput | MediaDraftUpdate | MediaDraftInput | CTADraftUpdate | CTADraftInput;
+export type ArticlesLocalizedBodyBlocksBlockDraftUpdate = Array<ArticlesLocalizedBodyBlocksBlockBlockDraftUpdate>;
+
 export type ArticlesLocalizedBodyBlocksBlockBlockAllLocales = CalloutAllLocales | MediaAllLocales | CTAAllLocales;
 export type ArticlesLocalizedBodyBlocksBlockAllLocales = Array<ArticlesLocalizedBodyBlocksBlockBlockAllLocales>;
 
@@ -262,6 +371,12 @@ export type CalloutAsideBlocksBlockUpdate = Array<CalloutAsideBlocksBlockBlockUp
 
 export type CalloutAsideBlocksBlockBlock = never;
 export type CalloutAsideBlocksBlock = Array<CalloutAsideBlocksBlockBlock>;
+
+export type CalloutAsideBlocksBlockBlockDraftInput = never;
+export type CalloutAsideBlocksBlockDraftInput = Array<CalloutAsideBlocksBlockBlockDraftInput>;
+
+export type CalloutAsideBlocksBlockBlockDraftUpdate = never;
+export type CalloutAsideBlocksBlockDraftUpdate = Array<CalloutAsideBlocksBlockBlockDraftUpdate>;
 
 export type CalloutAsideBlocksBlockBlockAllLocales = never;
 export type CalloutAsideBlocksBlockAllLocales = Array<CalloutAsideBlocksBlockBlockAllLocales>;
@@ -278,6 +393,12 @@ export type CalloutDetailBlocksBlockUpdate = Array<CalloutDetailBlocksBlockBlock
 export type CalloutDetailBlocksBlockBlock = CTA;
 export type CalloutDetailBlocksBlock = Array<CalloutDetailBlocksBlockBlock>;
 
+export type CalloutDetailBlocksBlockBlockDraftInput = CTADraftInput;
+export type CalloutDetailBlocksBlockDraftInput = Array<CalloutDetailBlocksBlockBlockDraftInput>;
+
+export type CalloutDetailBlocksBlockBlockDraftUpdate = CTADraftUpdate | CTADraftInput;
+export type CalloutDetailBlocksBlockDraftUpdate = Array<CalloutDetailBlocksBlockBlockDraftUpdate>;
+
 export type CalloutDetailBlocksBlockBlockAllLocales = CTAAllLocales;
 export type CalloutDetailBlocksBlockAllLocales = Array<CalloutDetailBlocksBlockBlockAllLocales>;
 
@@ -292,6 +413,12 @@ export type CampaignsLayoutUpdate = Array<CampaignsLayoutBlockUpdate>;
 
 export type CampaignsLayoutBlock = Hero | CTA;
 export type CampaignsLayout = Array<CampaignsLayoutBlock>;
+
+export type CampaignsLayoutBlockDraftInput = HeroDraftInput | CTADraftInput;
+export type CampaignsLayoutDraftInput = Array<CampaignsLayoutBlockDraftInput>;
+
+export type CampaignsLayoutBlockDraftUpdate = HeroDraftUpdate | HeroDraftInput | CTADraftUpdate | CTADraftInput;
+export type CampaignsLayoutDraftUpdate = Array<CampaignsLayoutBlockDraftUpdate>;
 
 export type CampaignsLayoutBlockAllLocales = HeroAllLocales | CTAAllLocales;
 export type CampaignsLayoutAllLocales = Array<CampaignsLayoutBlockAllLocales>;
@@ -308,6 +435,12 @@ export type ContentBodyBlocksBlockUpdate = Array<ContentBodyBlocksBlockBlockUpda
 export type ContentBodyBlocksBlockBlock = never;
 export type ContentBodyBlocksBlock = Array<ContentBodyBlocksBlockBlock>;
 
+export type ContentBodyBlocksBlockBlockDraftInput = never;
+export type ContentBodyBlocksBlockDraftInput = Array<ContentBodyBlocksBlockBlockDraftInput>;
+
+export type ContentBodyBlocksBlockBlockDraftUpdate = never;
+export type ContentBodyBlocksBlockDraftUpdate = Array<ContentBodyBlocksBlockBlockDraftUpdate>;
+
 export type ContentBodyBlocksBlockBlockAllLocales = never;
 export type ContentBodyBlocksBlockAllLocales = Array<ContentBodyBlocksBlockBlockAllLocales>;
 
@@ -322,6 +455,12 @@ export type PagesLayoutUpdate = Array<PagesLayoutBlockUpdate>;
 
 export type PagesLayoutBlock = Hero | Content | Media | CTA;
 export type PagesLayout = Array<PagesLayoutBlock>;
+
+export type PagesLayoutBlockDraftInput = HeroDraftInput | ContentDraftInput | MediaDraftInput | CTADraftInput;
+export type PagesLayoutDraftInput = Array<PagesLayoutBlockDraftInput>;
+
+export type PagesLayoutBlockDraftUpdate = HeroDraftUpdate | HeroDraftInput | ContentDraftUpdate | ContentDraftInput | MediaDraftUpdate | MediaDraftInput | CTADraftUpdate | CTADraftInput;
+export type PagesLayoutDraftUpdate = Array<PagesLayoutBlockDraftUpdate>;
 
 export type PagesLayoutBlockAllLocales = HeroAllLocales | ContentAllLocales | MediaAllLocales | CTAAllLocales;
 export type PagesLayoutAllLocales = Array<PagesLayoutBlockAllLocales>;
@@ -396,10 +535,12 @@ export interface Pages {
 	createdAt: string;
 	updatedAt: string;
 	_status: "draft" | "published";
+	_publishedRevision?: number;
+	_hasDraftChanges?: boolean;
 	_revision: number;
 	_localization?: { sources: Partial<Record<string, Locale>> };
-	"title"?: string;
-	"layout"?: PagesLayout;
+	"title"?: string | null;
+	"layout"?: PagesLayout | null;
 }
 
 export interface PagesAllLocales {
@@ -407,9 +548,11 @@ export interface PagesAllLocales {
 	createdAt: string;
 	updatedAt: string;
 	_status: "draft" | "published";
+	_publishedRevision?: number;
+	_hasDraftChanges?: boolean;
 	_revision: number;
-	"title"?: string;
-	"layout"?: PagesLayoutAllLocales;
+	"title"?: string | null;
+	"layout"?: PagesLayoutAllLocales | null;
 }
 
 export interface PagesCreate {
@@ -420,6 +563,16 @@ export interface PagesCreate {
 export interface PagesUpdate {
 	"title"?: string;
 	"layout"?: PagesLayoutUpdate;
+}
+
+export interface PagesDraftCreate {
+	"title"?: string | null;
+	"layout"?: PagesLayoutDraftInput | null;
+}
+
+export interface PagesDraftUpdate {
+	"title"?: string | null;
+	"layout"?: PagesLayoutDraftUpdate | null;
 }
 
 export interface PagesWhere {
@@ -435,13 +588,16 @@ export interface PagesWhere {
 	"layout.hero.heading"?: ScalarWhere<string>;
 	"layout.hero.appearance"?: ExistsWhere;
 	"layout.hero.appearance.tone"?: ScalarWhere<"light" | "dark">;
+	"layout.hero.blockName"?: ScalarWhere<string>;
 	"layout.content.title"?: ScalarWhere<string>;
 	"layout.content.body"?: ScalarWhere<import("@riducms/sdk/richtext").RichTextDocument<never[][number]>>;
 	"layout.content.links"?: ExistsWhere;
 	"layout.content.links.label"?: ScalarWhere<string>;
 	"layout.content.links.href"?: ScalarWhere<string>;
+	"layout.content.blockName"?: ScalarWhere<string>;
 	"layout.media.asset"?: ScalarWhere<ID>;
 	"layout.media.caption"?: ScalarWhere<string>;
+	"layout.media.blockName"?: ScalarWhere<string>;
 	"layout.cta.blockName"?: ScalarWhere<string>;
 	"layout.cta.label"?: ScalarWhere<string>;
 	"layout.cta.destination"?: ScalarWhere<ID>;
@@ -473,16 +629,16 @@ export interface PagesPopulate {
 }
 
 export interface PagesPopulateOutput {
-	"layout.media.asset": ID | Assets;
+	"layout.media.asset": ID | Assets | null;
 	"layout.cta.destination": ID | Pages | null;
 }
 
 export interface PagesAllLocalesPopulateOutput {
-	"layout.media.asset": ID | AssetsAllLocales;
+	"layout.media.asset": ID | AssetsAllLocales | null;
 	"layout.cta.destination": ID | PagesAllLocales | null;
 }
 
-export type PagesValidationPath = "title" | "layout" | `layout.${number}` | `layout.${number}._key` | `layout.${number}.blockType` | `layout.${number}.heading` | `layout.${number}.heading.${Locale}` | `layout.${number}.appearance` | `layout.${number}.appearance.tone` | `layout.${number}.title` | `layout.${number}.title.${Locale}` | `layout.${number}.body` | `layout.${number}.body.${string}` | `layout.${number}.links` | `layout.${number}.links.${number}` | `layout.${number}.links.${number}._key` | `layout.${number}.links.${number}.label` | `layout.${number}.links.${number}.href` | `layout.${number}.asset` | `layout.${number}.caption` | `layout.${number}.caption.${Locale}` | `layout.${number}.blockName` | `layout.${number}.label` | `layout.${number}.label.${Locale}` | `layout.${number}.destination`;
+export type PagesValidationPath = "title" | "layout" | `layout.${number}` | `layout.${number}._key` | `layout.${number}.blockType` | `layout.${number}.heading` | `layout.${number}.heading.${Locale}` | `layout.${number}.appearance` | `layout.${number}.appearance.tone` | `layout.${number}.blockName` | `layout.${number}.title` | `layout.${number}.title.${Locale}` | `layout.${number}.body` | `layout.${number}.body.${string}` | `layout.${number}.links` | `layout.${number}.links.${number}` | `layout.${number}.links.${number}._key` | `layout.${number}.links.${number}.label` | `layout.${number}.links.${number}.href` | `layout.${number}.asset` | `layout.${number}.caption` | `layout.${number}.caption.${Locale}` | `layout.${number}.label` | `layout.${number}.label.${Locale}` | `layout.${number}.destination`;
 
 export interface Campaigns {
 	id: ID;
@@ -523,6 +679,7 @@ export interface CampaignsWhere {
 	"layout.hero.heading"?: ScalarWhere<string>;
 	"layout.hero.appearance"?: ExistsWhere;
 	"layout.hero.appearance.tone"?: ScalarWhere<"light" | "dark">;
+	"layout.hero.blockName"?: ScalarWhere<string>;
 	"layout.cta.blockName"?: ScalarWhere<string>;
 	"layout.cta.label"?: ScalarWhere<string>;
 	"layout.cta.destination"?: ScalarWhere<ID>;
@@ -563,9 +720,11 @@ export interface Articles {
 	createdAt: string;
 	updatedAt: string;
 	_status: "draft" | "published";
+	_publishedRevision?: number;
+	_hasDraftChanges?: boolean;
 	_revision: number;
 	_localization?: { sources: Partial<Record<string, Locale>> };
-	"title"?: string;
+	"title"?: string | null;
 	"body"?: import("@riducms/sdk/richtext").RichTextDocument<ArticlesBodyBlocksBlock[number]> | null;
 	"localizedBody"?: import("@riducms/sdk/richtext").RichTextDocument<ArticlesLocalizedBodyBlocksBlock[number]> | null;
 }
@@ -575,8 +734,10 @@ export interface ArticlesAllLocales {
 	createdAt: string;
 	updatedAt: string;
 	_status: "draft" | "published";
+	_publishedRevision?: number;
+	_hasDraftChanges?: boolean;
 	_revision: number;
-	"title"?: string;
+	"title"?: string | null;
 	"body"?: import("@riducms/sdk/richtext").RichTextDocument<ArticlesBodyBlocksBlockAllLocales[number]> | null;
 	"localizedBody"?: RiduLocalizedValues<import("@riducms/sdk/richtext").RichTextDocument<ArticlesLocalizedBodyBlocksBlockAllLocalesValue[number]> | null>;
 }
@@ -591,6 +752,18 @@ export interface ArticlesUpdate {
 	"title"?: string;
 	"body"?: import("@riducms/sdk/richtext").RichTextDocumentInput<ArticlesBodyBlocksBlockUpdate[number]> | null;
 	"localizedBody"?: import("@riducms/sdk/richtext").RichTextDocumentInput<ArticlesLocalizedBodyBlocksBlockUpdate[number]> | null;
+}
+
+export interface ArticlesDraftCreate {
+	"title"?: string | null;
+	"body"?: import("@riducms/sdk/richtext").RichTextDocumentInput<ArticlesBodyBlocksBlockDraftInput[number]> | null;
+	"localizedBody"?: import("@riducms/sdk/richtext").RichTextDocumentInput<ArticlesLocalizedBodyBlocksBlockDraftInput[number]> | null;
+}
+
+export interface ArticlesDraftUpdate {
+	"title"?: string | null;
+	"body"?: import("@riducms/sdk/richtext").RichTextDocumentInput<ArticlesBodyBlocksBlockDraftUpdate[number]> | null;
+	"localizedBody"?: import("@riducms/sdk/richtext").RichTextDocumentInput<ArticlesLocalizedBodyBlocksBlockDraftUpdate[number]> | null;
 }
 
 export interface ArticlesWhere {
@@ -639,19 +812,19 @@ export interface ArticlesPopulate {
 
 export interface ArticlesPopulateOutput {
 	"body.blocks.block.callout.detail.blocks.block.cta.destination": ID | Pages | null;
-	"body.blocks.block.media.asset": ID | Assets;
+	"body.blocks.block.media.asset": ID | Assets | null;
 	"body.blocks.block.cta.destination": ID | Pages | null;
 	"localizedBody.blocks.block.callout.detail.blocks.block.cta.destination": ID | Pages | null;
-	"localizedBody.blocks.block.media.asset": ID | Assets;
+	"localizedBody.blocks.block.media.asset": ID | Assets | null;
 	"localizedBody.blocks.block.cta.destination": ID | Pages | null;
 }
 
 export interface ArticlesAllLocalesPopulateOutput {
 	"body.blocks.block.callout.detail.blocks.block.cta.destination": ID | PagesAllLocales | null;
-	"body.blocks.block.media.asset": ID | AssetsAllLocales;
+	"body.blocks.block.media.asset": ID | AssetsAllLocales | null;
 	"body.blocks.block.cta.destination": ID | PagesAllLocales | null;
 	"localizedBody.blocks.block.callout.detail.blocks.block.cta.destination": ID | PagesAllLocales | null;
-	"localizedBody.blocks.block.media.asset": ID | AssetsAllLocales;
+	"localizedBody.blocks.block.media.asset": ID | AssetsAllLocales | null;
 	"localizedBody.blocks.block.cta.destination": ID | PagesAllLocales | null;
 }
 
@@ -689,6 +862,8 @@ export interface RiduConfig {
 			allOutput: PagesAllLocales;
 			create: PagesCreate;
 			update: PagesUpdate;
+			draftCreate: PagesDraftCreate;
+			draftUpdate: PagesDraftUpdate;
 			where: PagesWhere;
 			select: PagesSelect;
 			populate: PagesPopulate;
@@ -725,6 +900,8 @@ export interface RiduConfig {
 			allOutput: ArticlesAllLocales;
 			create: ArticlesCreate;
 			update: ArticlesUpdate;
+			draftCreate: ArticlesDraftCreate;
+			draftUpdate: ArticlesDraftUpdate;
 			where: ArticlesWhere;
 			select: ArticlesSelect;
 			populate: ArticlesPopulate;

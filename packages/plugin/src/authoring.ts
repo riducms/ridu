@@ -9,6 +9,10 @@ export type FieldDocument = Record<string, unknown> & {
 	deletedAt?: string;
 	_status?: "draft" | "published";
 	_revision?: number;
+	/** Revision of the live snapshot when this is an authorized working-draft read. */
+	_publishedRevision?: number;
+	/** Whether the working snapshot differs from that live snapshot. */
+	_hasDraftChanges?: boolean;
 	_localization?: {
 		sources: Record<string, string>;
 	};
@@ -111,14 +115,14 @@ export interface EmbeddedSchemaFormProps extends EmbeddedSchemaFormScope {
 	onChange?: (payload: Record<string, unknown>) => void;
 }
 
-/** A configured editorial-name control for one existing embedded item. */
+/** The editorial block-name control for one existing embedded item. */
 export interface EmbeddedSchemaHeaderProps extends EmbeddedSchemaFormScope {
 	/**
-	 * Receives a permitted change to the Go-configured name field. Apply it to the
+	 * Receives a permitted block-name value. Apply it to `blockName` on the
 	 * latest matching item through your editor's own history/serialization path.
 	 * The host does not write the parent form or save the document itself.
 	 */
-	onChange: (change: { field: string; value: string }) => void;
+	onChange: (value: string) => void;
 }
 
 /** Select a Go-declared embedded variant when creating or copying an item's field data. */
@@ -198,9 +202,9 @@ export interface FieldAuthoringHost {
 	 */
 	schemaForm?: Snippet<[EmbeddedSchemaFormProps]>;
 	/**
-	 * Render the configured name input and field feedback, without the card chrome.
+	 * Render the block-name input and field feedback, without the card chrome.
 	 * Uses the item's schema, access, visibility and stable identity. An open draft
-	 * locks the card input; an item without a name field renders no control.
+	 * locks the card input. Hidden or unreadable names render no control.
 	 */
 	schemaHeader?: Snippet<[EmbeddedSchemaHeaderProps]>;
 	/**

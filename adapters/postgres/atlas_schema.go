@@ -18,7 +18,7 @@ const atlasPlannerName = "atlas"
 // AtlasVersion is Ridu's embedded PostgreSQL planning contract version. It is
 // persisted in every migration artifact; the runner accepts only artifacts
 // planned by this exact version.
-const AtlasVersion = "1.1.0"
+const AtlasVersion = "1.2.0"
 
 func atlasPlanner() ridumigration.Planner {
 	return ridumigration.Planner{Name: atlasPlannerName, Version: AtlasVersion}
@@ -103,6 +103,7 @@ func atlasSchema(manifest schema.Manifest, mapping atlasIdentityMap) *atlasschem
 	}
 	if hasVersionCollections(resources) {
 		physical.AddTables(versionsAtlasTable())
+		physical.AddTables(publishedDocumentsAtlasTable())
 	}
 	if hasDocumentLockCollections(snapshot.Collections) {
 		physical.AddTables(documentLocksAtlasTable())
@@ -121,12 +122,27 @@ func documentReferencesAtlasTable() *atlasschema.Table {
 	locale := atlasschema.NewStringColumn("locale", atlaspostgres.TypeText).SetDefault(&atlasschema.Literal{V: ""})
 	occurrence := atlasschema.NewIntColumn("occurrence", atlaspostgres.TypeInteger)
 	table.AddColumns(ownerCollection, ownerDocument, field, targetCollection, targetDocument, locale, occurrence)
-	table.SetPrimaryKey(atlasschema.NewPrimaryKey(ownerCollection, ownerDocument, field, targetCollection, targetDocument, locale, occurrence))
+	head := atlasschema.NewBoolColumn("published_head", atlaspostgres.TypeBoolean).SetDefault(&atlasschema.Literal{V: "false"})
+	table.AddColumns(head)
+	table.SetPrimaryKey(atlasschema.NewPrimaryKey(ownerCollection, ownerDocument, field, targetCollection, targetDocument, locale, occurrence, head))
 	table.AddIndexes(
 		atlasschema.NewIndex("ridu_document_references_target_idx").AddColumns(targetCollection, targetDocument),
 		atlasschema.NewIndex("ridu_document_references_owner_idx").AddColumns(ownerCollection, ownerDocument),
 	)
 	return table
+}
+
+func publishedDocumentsAtlasTable() *atlasschema.Table {
+	table := atlasschema.NewTable("ridu_published_documents")
+	collection := atlasschema.NewStringColumn("collection_id", atlaspostgres.TypeText)
+	document := atlasschema.NewStringColumn("document_id", atlaspostgres.TypeText)
+	table.AddColumns(
+		collection, document,
+		atlasschema.NewIntColumn("revision", atlaspostgres.TypeInteger),
+		atlasschema.NewJSONColumn("snapshot", atlaspostgres.TypeJSONB),
+		atlasschema.NewBoolColumn("has_draft_changes", atlaspostgres.TypeBoolean).SetDefault(&atlasschema.Literal{V: "false"}),
+	)
+	return table.SetPrimaryKey(atlasschema.NewPrimaryKey(collection, document))
 }
 
 func preferencesAtlasTable() *atlasschema.Table {
@@ -171,11 +187,11 @@ func collectionAtlasTable(collection schema.Collection, id schema.StableID, mapp
 			continue
 		}
 		fieldID := mapping.field(collection.ID, field.ID)
-		columns := []*atlasschema.Column{atlasFieldColumn(field, fieldID, "")}
+		columns := []*atlasschema.Column{atlasFieldColumn(field, fieldID, "", collection.Versions != nil && collection.Versions.Drafts)}
 		if field.Localized {
 			columns = columns[:0]
 			for _, locale := range locales {
-				columns = append(columns, atlasFieldColumn(field, fieldID, locale))
+				columns = append(columns, atlasFieldColumn(field, fieldID, locale, collection.Versions != nil && collection.Versions.Drafts))
 			}
 		}
 		for index, column := range columns {
@@ -346,7 +362,7 @@ func atlasNestedIndexExpression(collectionID schema.StableID, chain []schema.Fie
 	}
 }
 
-func atlasFieldColumn(field schema.Field, id schema.StableID, locale schema.LocaleCode) *atlasschema.Column {
+func atlasFieldColumn(field schema.Field, id schema.StableID, locale schema.LocaleCode, incompleteDrafts bool) *atlasschema.Column {
 	name := fieldColumn(id)
 	if locale != "" {
 		name = localizedFieldColumn(id, locale)
@@ -362,7 +378,7 @@ func atlasFieldColumn(field schema.Field, id schema.StableID, locale schema.Loca
 	default:
 		column = atlasschema.NewStringColumn(name, atlaspostgres.TypeText)
 	}
-	column.SetNull(!field.Required || locale != "")
+	column.SetNull(incompleteDrafts || !field.Required || locale != "")
 	if field.Default != nil && locale == "" {
 		value := *field.Default
 		if field.Type == schema.FieldTypeNumber {

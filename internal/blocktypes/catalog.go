@@ -83,7 +83,7 @@ func Build(snapshot schema.Snapshot) (*Catalog, error) {
 			if base == "" {
 				continue
 			}
-			for _, suffix := range []string{"", "Create", "Update", "AllLocales", "Where", "Select", "Populate", "PopulateOutput", "AllLocalesPopulateOutput", "PopulationSelect", "ValidationPath"} {
+			for _, suffix := range []string{"", "Create", "Update", "Draft", "DraftCreate", "DraftUpdate", "AllLocales", "Where", "Select", "Populate", "PopulateOutput", "AllLocalesPopulateOutput", "PopulationSelect", "ValidationPath"} {
 				if _, exists := symbols[base+suffix]; !exists {
 					symbols[base+suffix] = claim{owner: "resource " + string(resource.ID), path: string(resource.Slug)}
 				}
@@ -157,7 +157,7 @@ func Build(snapshot schema.Snapshot) (*Catalog, error) {
 						result.Variants = append(result.Variants, Variant{Name: variantName, Block: block, Discriminator: keys[0], Identity: keys[1]})
 					}
 					reserve(variantName+"BlockType", "block "+variantName, blockPath)
-					for _, suffix := range []string{"", "Input", "Update", "AllLocales", "AllLocalesValue"} {
+					for _, suffix := range []string{"", "Input", "Update", "Draft", "DraftInput", "DraftUpdate", "AllLocales", "AllLocalesValue"} {
 						reserve(variantName+suffix, "block "+variantName, blockPath)
 					}
 					container.Variants = append(container.Variants, variantName)
@@ -165,11 +165,11 @@ func Build(snapshot schema.Snapshot) (*Catalog, error) {
 					// while retaining each occurrence's stable field identity in Fields.
 					walk(block.ResolvedFields(), variantName, fieldPath+".blocks."+block.Slug, true, suppressed)
 				}
-				for _, suffix := range []string{"", "Input", "AllLocales", "Block", "BlockInput", "BlockAllLocales", "InputBlock", "AllLocalesBlock", "AllLocalesValue", "BlockAllLocalesValue", "AllLocalesValueBlock", "Update", "BlockUpdate", "UpdateBlock"} {
+				for _, suffix := range []string{"", "Input", "AllLocales", "Block", "BlockInput", "BlockAllLocales", "InputBlock", "AllLocalesBlock", "AllLocalesValue", "BlockAllLocalesValue", "AllLocalesValueBlock", "Update", "BlockUpdate", "UpdateBlock", "Draft", "DraftInput", "DraftUpdate", "BlockDraftInput", "BlockDraftUpdate"} {
 					reserve(name+suffix, "container "+name+" ("+field.Name+")", fieldPath)
 				}
 				if embedded {
-					for _, suffix := range []string{"Payload", "InputPayload", "UpdatePayload", "AllLocalesPayload", "AllLocalesValuePayload"} {
+					for _, suffix := range []string{"Payload", "InputPayload", "UpdatePayload", "DraftPayload", "DraftInputPayload", "DraftUpdatePayload", "AllLocalesPayload", "AllLocalesValuePayload"} {
 						reserve(name+suffix, "embedded payload "+name, fieldPath)
 					}
 				}
@@ -180,7 +180,7 @@ func Build(snapshot schema.Snapshot) (*Catalog, error) {
 					if field.Type == schema.FieldTypeArray {
 						nestedName += "Row"
 					}
-					for _, suffix := range []string{"", "Input", "Update", "AllLocales", "AllLocalesValue"} {
+					for _, suffix := range []string{"", "Input", "Update", "Draft", "DraftInput", "DraftUpdate", "AllLocales", "AllLocalesValue"} {
 						reserve(nestedName+suffix, "nested "+name+" ("+field.Name+")", fieldPath)
 					}
 				}

@@ -371,11 +371,11 @@ type ImageSize struct {
 
 // VersionConfig controls revision and draft behavior for a versioned collection.
 type VersionConfig struct {
-	// Drafts allows unpublished document states.
+	// Drafts keeps incomplete working content separate from the published snapshot.
 	Drafts bool
 	// MaxPerDocument limits retained revisions per document. Zero uses the framework default.
 	MaxPerDocument int
-	// AutosaveInterval controls draft autosave frequency. Zero disables autosave.
+	// AutosaveInterval controls admin draft autosave frequency. Zero uses 30 seconds.
 	AutosaveInterval time.Duration
 }
 

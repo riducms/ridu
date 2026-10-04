@@ -65,7 +65,7 @@ func benchPageApp(b *testing.B) (*core.App, benchPageInput) {
 
 func BenchmarkTypedHandleOverhead(b *testing.B) {
 	app, input := benchPageApp(b)
-	typed := core.NewTypedCollection[benchPage, benchPageInput, benchPageInput]("pages").With(app.Local())
+	typed := core.NewTypedCollection[benchPage, benchPageInput, benchPageInput, benchPageInput]("pages").With(app.Local())
 	var created benchPage
 	for range 20 {
 		page, err := typed.Create(b.Context(), input, core.TypedMutationOptions{})
@@ -120,7 +120,7 @@ func BenchmarkTypedHandleOverhead(b *testing.B) {
 	})
 	b.Run("typed create", func(b *testing.B) {
 		app, _ := benchPageApp(b)
-		typed := core.NewTypedCollection[benchPage, benchPageInput, benchPageInput]("pages").With(app.Local())
+		typed := core.NewTypedCollection[benchPage, benchPageInput, benchPageInput, benchPageInput]("pages").With(app.Local())
 		b.ReportAllocs()
 		for b.Loop() {
 			if _, err := typed.Create(b.Context(), input, core.TypedMutationOptions{}); err != nil {

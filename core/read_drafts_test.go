@@ -65,7 +65,7 @@ func TestOnlyEditorsReadDraftsUnlessReadDraftsSaysOtherwise(t *testing.T) {
 	if _, err := local.Find(ctx, "articles", draft.ID, explicit); !operationCode(err, "access_denied") {
 		t.Fatalf("a learner's explicit draft read = %v, want access_denied", err)
 	}
-	if _, err := local.Find(ctx, "articles", draft.ID, ridu.FindOptions{Draft: &include}); err != nil {
+	if _, err := local.Find(ctx, "articles", draft.ID, ridu.FindOptions{Draft: &include, System: true}); err != nil {
 		t.Fatalf("trusted server code lost its explicit draft read: %v", err)
 	}
 	// Distinct judges the explicit draft read by its caller too.

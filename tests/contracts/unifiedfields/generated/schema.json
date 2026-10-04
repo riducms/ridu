@@ -442,6 +442,20 @@
                         }
                       }
                     }
+                  },
+                  {
+                    "id": "unified-articles-content-card-block-name",
+                    "name": "blockName",
+                    "path": "content.card.blockName",
+                    "type": "text",
+                    "category": "scalar",
+                    "required": false,
+                    "unique": false,
+                    "default": "",
+                    "admin": {
+                      "label": "Block name"
+                    },
+                    "text": {}
                   }
                 ]
               },
@@ -484,6 +498,20 @@
                         }
                       },
                       "label": "Accent"
+                    },
+                    "text": {}
+                  },
+                  {
+                    "id": "unified-articles-content-note-block-name",
+                    "name": "blockName",
+                    "path": "content.note.blockName",
+                    "type": "text",
+                    "category": "scalar",
+                    "required": false,
+                    "unique": false,
+                    "default": "",
+                    "admin": {
+                      "label": "Block name"
                     },
                     "text": {}
                   }
@@ -772,6 +800,20 @@
                                 }
                               }
                             }
+                          },
+                          {
+                            "id": "unified-articles-body-blocks-block-card-block-name",
+                            "name": "blockName",
+                            "path": "body.blocks.block.card.blockName",
+                            "type": "text",
+                            "category": "scalar",
+                            "required": false,
+                            "unique": false,
+                            "default": "",
+                            "admin": {
+                              "label": "Block name"
+                            },
+                            "text": {}
                           }
                         ]
                       }

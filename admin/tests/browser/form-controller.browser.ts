@@ -2,9 +2,331 @@ import { describe, expect, it } from "vitest";
 import type { AccessCapabilitiesEnvelope, SchemaField } from "@riducms/protocol";
 
 import { normalizeSlug, slugFollowsSource } from "@admin/fields/text/slug";
-import { reconcileFormSchema } from "@admin/core/forms/form-schema";
+import { changedFormValues, reconcileFormSchema } from "@admin/core/forms/form-schema";
+import { tree } from "./draft-fixture";
 
 const { FormController } = await import("@admin/core/forms/form-controller.svelte");
+
+it("retains edits typed while a draft autosave is in flight", async () => {
+	const field: SchemaField = {
+		id: "title",
+		name: "title",
+		path: "title",
+		type: "text",
+		category: "scalar",
+		required: true,
+		unique: false,
+		admin: { label: "Title" },
+		text: {},
+	};
+	const form = new FormController({ title: "Original" });
+	form.reset({ title: "Original" }, [field]);
+	form.set("title", "Submitted");
+	const result = Promise.withResolvers<{ title: string }>();
+	const saving = form.submit([field], false, async () => result.promise, {
+		mode: "draft",
+		allowEditsDuringRequest: true,
+	});
+	expect(form.editingBlocked).toBe(false);
+	form.set("title", "Typed later");
+	result.resolve({ title: "Submitted" });
+	await saving;
+	form.acceptSavedBaseline({ title: "Submitted" }, { title: "Submitted" });
+	expect(form.get("title")).toBe("Typed later");
+	expect(form.original.title).toBe("Submitted");
+	expect(form.dirty).toBe(true);
+	expect(form.submitting).toBe(false);
+});
+
+it("keeps plugin editor lifetimes when a silent save settles without later typing", async () => {
+	const field: SchemaField = {
+		id: "title",
+		name: "title",
+		path: "title",
+		type: "text",
+		category: "scalar",
+		required: false,
+		unique: false,
+		admin: { label: "Title" },
+		text: {},
+	};
+	const form = new FormController();
+	form.reset({ title: "Original" }, [field]);
+	form.set("title", "Edited");
+	const epoch = form.editorEpoch;
+	let invalidations = 0;
+	form.registerEditorLifetime(() => invalidations++);
+	const response = Promise.withResolvers<void>();
+	const saving = form.submit([field], false, async () => response.promise, {
+		mode: "draft",
+		allowEditsDuringRequest: true,
+	});
+	response.resolve();
+	await saving;
+	expect(form.acceptSavedBaseline({ title: "Edited" }, { title: "Edited" })).toBe(true);
+	expect(form.editorEpoch).toBe(epoch);
+	expect(invalidations).toBe(0);
+});
+
+it("rebases late group and keyed-row edits over server normalization without remounting rows", async () => {
+	const text = (name: string): SchemaField => ({
+		id: name,
+		name,
+		path: name,
+		type: "text",
+		category: "scalar",
+		required: false,
+		unique: false,
+		admin: { label: name },
+		text: {},
+	});
+	const fields: SchemaField[] = [
+		{
+			id: "group",
+			name: "group",
+			path: "group",
+			type: "group",
+			category: "nested",
+			required: false,
+			unique: false,
+			admin: { label: "Group" },
+			nested: { fields: [text("a"), text("b")] },
+		},
+		{
+			id: "rows",
+			name: "rows",
+			path: "rows",
+			type: "array",
+			category: "nested",
+			required: false,
+			unique: false,
+			admin: { label: "Rows" },
+			nested: { fields: [text("a"), text("b")] },
+		},
+	];
+	const form = new FormController();
+	form.reset(
+		{
+			group: { a: "original", b: "old" },
+			rows: [
+				{ _key: "first", a: "original", b: "old" },
+				{ _key: "second", a: "second", b: "old" },
+			],
+		},
+		fields
+	);
+	const firstMount = form.rowMountKey((form.get("rows") as Record<string, unknown>[])[0]!);
+	form.set("group.a", "submitted");
+	form.set("rows.0.a", "submitted");
+	const submitted = form.snapshot();
+	const result = Promise.withResolvers<void>();
+	const saving = form.submit(fields, false, async () => result.promise, {
+		mode: "draft",
+		allowEditsDuringRequest: true,
+	});
+	form.set("group.b", "typed later");
+	form.set("rows.0.b", "typed later");
+	form.setRows("rows", [...(form.snapshot().rows as Record<string, unknown>[])].reverse());
+	result.resolve();
+	await saving;
+	form.acceptSavedBaseline(
+		{
+			group: { a: "normalized", b: "old" },
+			rows: [
+				{ _key: "first", a: "normalized", b: "old" },
+				{ _key: "second", a: "second", b: "old" },
+			],
+		},
+		submitted
+	);
+	const rows = form.get("rows") as Record<string, unknown>[];
+	expect(form.get("group")).toEqual({ a: "normalized", b: "typed later" });
+	expect(rows).toEqual([
+		{ _key: "second", a: "second", b: "old" },
+		{ _key: "first", a: "normalized", b: "typed later" },
+	]);
+	expect(form.rowMountKey(rows[1]!)).toBe(firstMount);
+	expect(changedFormValues(fields, form.snapshot(), form.original)).toEqual({
+		group: { b: "typed later" },
+		rows: [{ _key: "second" }, { _key: "first", b: "typed later" }],
+	});
+});
+
+const rebaseRowsField: SchemaField = {
+	id: "rows",
+	name: "rows",
+	path: "rows",
+	type: "array",
+	category: "nested",
+	required: false,
+	unique: false,
+	admin: { label: "Rows" },
+	nested: {
+		fields: [
+			{
+				id: "rows-text",
+				name: "text",
+				path: "rows.text",
+				type: "text",
+				category: "scalar",
+				required: false,
+				unique: false,
+				admin: { label: "Text" },
+				text: {},
+			},
+		],
+	},
+};
+
+it.each(["insert", "reorder"] as const)(
+	"accepts a saved server %s around a later row-field edit",
+	(serverChange) => {
+		const submitted = {
+			rows: [
+				{ _key: "a", text: "A" },
+				{ _key: "b", text: "B" },
+			],
+		};
+		const form = new FormController();
+		form.reset(submitted, [rebaseRowsField]);
+		const mount = form.rowMountKey((form.get("rows") as Record<string, unknown>[])[1]!);
+		form.set("rows.1.text", "Typed after submit");
+		const saved = {
+			rows:
+				serverChange === "insert"
+					? [
+							{ _key: "a", text: "Normalized A" },
+							{ _key: "new", text: "Hook row" },
+							{ _key: "b", text: "B" },
+						]
+					: [
+							{ _key: "b", text: "B" },
+							{ _key: "a", text: "Normalized A" },
+						],
+		};
+		expect(form.acceptSavedBaseline(saved, submitted)).toBe(true);
+		expect(form.get("rows")).toEqual(
+			saved.rows.map((row) => (row._key === "b" ? { ...row, text: "Typed after submit" } : row))
+		);
+		const rows = form.get("rows") as Record<string, unknown>[];
+		expect(form.rowMountKey(rows.find((row) => row._key === "b")!)).toBe(mount);
+		expect(form.original).toEqual(saved);
+	}
+);
+
+it.each(["remove", "replace", "concurrent structure"] as const)(
+	"keeps all local values when a saved %s cannot safely rebase",
+	(serverChange) => {
+		const submitted = {
+			rows: [
+				{ _key: "a", text: "A" },
+				{ _key: "b", text: "B" },
+			],
+		};
+		const form = new FormController();
+		form.reset(submitted, [rebaseRowsField]);
+		form.set("rows.1.text", "My late edit");
+		if (serverChange === "concurrent structure")
+			form.setRows("rows", [...(form.get("rows") as Record<string, unknown>[])].reverse());
+		const local = form.snapshot();
+		const saved = {
+			rows:
+				serverChange === "remove"
+					? [{ _key: "a", text: "A" }]
+					: serverChange === "replace"
+						? [
+								{ _key: "a", text: "A" },
+								{ _key: "replacement", text: "New" },
+							]
+						: [
+								{ _key: "a", text: "A" },
+								{ _key: "new", text: "Hook row" },
+								{ _key: "b", text: "B" },
+							],
+		};
+		expect(form.acceptSavedBaseline(saved, submitted)).toBe(false);
+		expect(form.snapshot()).toEqual(local);
+	}
+);
+
+it("rebases an embedded plugin leaf onto server-inserted and reordered occurrences", () => {
+	const title: SchemaField = {
+		id: "title",
+		name: "title",
+		path: "body.title",
+		type: "text",
+		category: "scalar",
+		required: false,
+		unique: false,
+		admin: { label: "Title" },
+		text: {},
+	};
+	const body: SchemaField = {
+		id: "body",
+		name: "body",
+		path: "body",
+		type: "plugin",
+		category: "plugin",
+		required: false,
+		unique: false,
+		admin: { label: "Body" },
+		plugin: { key: "outline", config: {}, embeddedTrees: [tree([title])] },
+	};
+	const row = (uid: string, value: string) => ({
+		kind: "widget",
+		content: { schema: "card", uid, title: value },
+	});
+	const submitted = { body: { outline: [row("a", "A"), row("b", "B")] } };
+	const form = new FormController();
+	form.reset(submitted, [body]);
+	form.set("body.outline.1.content.title", "Typed later");
+	const saved = { body: { outline: [row("new", "Hook"), row("b", "B"), row("a", "A")] } };
+	expect(form.acceptSavedBaseline(saved, submitted)).toBe(true);
+	expect(form.get("body")).toEqual({
+		outline: [row("new", "Hook"), row("b", "Typed later"), row("a", "A")],
+	});
+	expect(form.original).toEqual(saved);
+	const removed = new FormController();
+	removed.reset(submitted, [body]);
+	removed.set("body.outline.1.content.title", "Typed later");
+	expect(removed.acceptSavedBaseline({ body: { outline: [row("a", "A")] } }, submitted)).toBe(
+		false
+	);
+	expect(removed.get("body")).toEqual({ outline: [row("a", "A"), row("b", "Typed later")] });
+});
+
+it.each(["reset", "reconcile"] as const)(
+	"a stale submission cannot unlock a newer submission after %s",
+	async (boundary) => {
+		const field: SchemaField = {
+			id: "title",
+			name: "title",
+			path: "title",
+			type: "text",
+			category: "scalar",
+			required: false,
+			unique: false,
+			admin: { label: "Title" },
+			text: {},
+		};
+		const form = new FormController();
+		form.reset({ title: "First" }, [field]);
+		const first = Promise.withResolvers<void>();
+		const firstSave = form.submit([field], false, async () => first.promise);
+		if (boundary === "reset") form.reset({ title: "Second" }, [field]);
+		else form.reconcile([field], [field]);
+		form.set("title", "Second edit");
+		const second = Promise.withResolvers<void>();
+		const secondSave = form.submit([field], false, async () => second.promise);
+		first.resolve();
+		await firstSave;
+		expect(form.submitting).toBe(true);
+		expect(form.editingBlocked).toBe(true);
+		second.resolve();
+		await secondSave;
+		expect(form.submitting).toBe(false);
+	}
+);
 
 describe("form controller field access", () => {
 	it("preserves mixed occurrence permissions and unsaved edits through reorder", async () => {

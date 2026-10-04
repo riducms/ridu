@@ -16,6 +16,7 @@ func (api *API) readDocument(ctx context.Context, collection, id string, identit
 	result, err := api.config.Engine.Execute(ctx, operationengine.Request{
 		Operation: operation.Read, Collection: collection, ID: id,
 		Actor: identityActor(identity), ActorCollection: identityCollection(identity),
+		Draft:  options.draft,
 		Select: options.selectFields, OutputFields: options.outputFields, Populate: options.populate,
 		Locale: options.locale, FallbackLocales: options.fallbackLocales,
 		DisableFallback: options.disableFallback, AllLocales: options.allLocales,

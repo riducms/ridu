@@ -381,6 +381,61 @@ func TestMongoDBRecursivePopulationChargesEachOutputNodeOnce(t *testing.T) {
 	mongoRollback(t, overflow)
 }
 
+func TestMongoDBPopulatedWorkingHeadsIncludePublicationMetadata(t *testing.T) {
+	backend := mongoIntegrationStore(t)
+	ctx := t.Context()
+	application, err := ridu.New(ridu.Config{Name: "MongoDB populated draft metadata", Collections: []ridu.Collection{{
+		Slug: "nodes", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true},
+		Fields: field.Fields{field.Text("title"), field.Relationship("next", "nodes")},
+	}}}, backend)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := backend.SyncIndexes(ctx, application.Manifest()); err != nil {
+		t.Fatal(err)
+	}
+	collection := application.Manifest().Snapshot().Collections[0]
+	write := mongoBegin(t, backend, false)
+	for _, candidate := range []struct{ id, next string }{{"leaf", ""}, {"middle", "leaf"}, {"root", "middle"}} {
+		values := store.Values{"title": store.String(candidate.id)}
+		if candidate.next != "" {
+			values["next"] = store.String(candidate.next)
+		}
+		created, err := write.Create(ctx, store.CreateRequest{Collection: collection, ID: candidate.id, Status: store.StatusPublished, Values: values})
+		if err != nil {
+			mongoRollback(t, write)
+			t.Fatal(err)
+		}
+		if candidate.id != "root" {
+			values["title"] = store.String("pending-" + candidate.id)
+			if _, err := write.Update(ctx, store.UpdateRequest{Request: store.Request{Collection: collection, ID: candidate.id, ExpectedRevision: created.Revision}, Intent: store.WriteIntentSaveDraft, Values: values}); err != nil {
+				mongoRollback(t, write)
+				t.Fatal(err)
+			}
+		}
+	}
+	mongoCommit(t, write)
+	for _, depth := range []int{1, 2} {
+		read := mongoBegin(t, backend, true)
+		root, err := read.Find(ctx, store.Request{Collection: collection, Collections: map[schema.StableID]schema.Collection{collection.ID: collection}, ID: "root",
+			Populate: []query.Population{{Path: mongoMustPath(t, "next"), Depth: depth}}})
+		mongoRollback(t, read)
+		if err != nil {
+			t.Fatal(err)
+		}
+		middle, ok := root.Values["next"].CopyDocument()
+		if !ok || middle.PublishedRevision != 1 || !middle.HasDraftChanges || middle.Revision != 2 {
+			t.Fatalf("depth %d middle metadata = %#v", depth, middle)
+		}
+		if depth == 2 {
+			leaf, ok := middle.Values["next"].CopyDocument()
+			if !ok || leaf.PublishedRevision != 1 || !leaf.HasDraftChanges || leaf.Revision != 2 {
+				t.Fatalf("nested leaf metadata = %#v", leaf)
+			}
+		}
+	}
+}
+
 func TestMongoDBRecursivePopulationAllowsWideGeneratedPlans(t *testing.T) {
 	backend := mongoIntegrationStore(t)
 	hubFields := field.Fields{field.Text("name")}

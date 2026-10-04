@@ -309,6 +309,23 @@ func (backend *Store) scrubSQLiteRollbackFields(ctx context.Context, connection 
 				return fmt.Errorf("scrub resource %s document %s: %w", currentResource.ID, document.ID, err)
 			}
 		}
+		if currentResource.Versions != nil {
+			live, err := loadDocumentRecordsWhere(ctx, connection, readResource, "ridu_published_documents", "collection_id = ?", string(currentResource.ID))
+			if err != nil {
+				return fmt.Errorf("load published resource %s: %w", currentResource.ID, err)
+			}
+			for _, document := range live {
+				if err := embedded.ValidateValues(targetResource.Fields, document.Values, "", true, nil); err != nil {
+					return fmt.Errorf("rollback requires an explicit data migration for embedded published payloads: %w", err)
+				}
+				values, changed := scrubSQLiteRollbackValues(currentResource.Fields, targetResource.Fields, document.Values)
+				if changed {
+					if err := updateSQLitePublishedValues(ctx, connection, currentResource.ID, document.ID, values); err != nil {
+						return fmt.Errorf("scrub published resource %s document %s: %w", currentResource.ID, document.ID, err)
+					}
+				}
+			}
+		}
 		if targetResource.Versions == nil {
 			continue
 		}
@@ -576,6 +593,23 @@ func (backend *Store) retireSQLiteRollbackResources(ctx context.Context, connect
 				return fmt.Errorf("scrub retired resource references from %s/%s: %w", resource.ID, document.ID, err)
 			}
 		}
+		if resource.Versions != nil {
+			live, err := loadDocumentRecordsWhere(ctx, connection, resource, "ridu_published_documents", "collection_id = ?", string(resource.ID))
+			if err != nil {
+				return fmt.Errorf("load published reference-bearing resource %s: %w", resource.ID, err)
+			}
+			for _, document := range live {
+				values, changed, referenceErr := referenceindex.RemoveResourceTargets(resource, document.Values, retired)
+				if referenceErr != nil {
+					return referenceErr
+				}
+				if changed {
+					if err := updateSQLitePublishedValues(ctx, connection, resource.ID, document.ID, values); err != nil {
+						return fmt.Errorf("scrub retired resource references from published %s/%s: %w", resource.ID, document.ID, err)
+					}
+				}
+			}
+		}
 	}
 
 	statements := []struct {
@@ -608,6 +642,15 @@ func (backend *Store) retireSQLiteRollbackResources(ctx context.Context, connect
 	// short-lived irreversible hashes. Clearing it globally would weaken
 	// throttling for unrelated auth collections.
 	return nil
+}
+
+func updateSQLitePublishedValues(ctx context.Context, connection *sql.Conn, collectionID schema.StableID, documentID string, values store.Values) error {
+	encoded, err := values.MarshalJSON()
+	if err != nil {
+		return err
+	}
+	_, err = connection.ExecContext(ctx, `UPDATE ridu_published_documents SET values_json = ? WHERE collection_id = ? AND id = ?`, string(encoded), string(collectionID), documentID)
+	return translateError(err)
 }
 
 func sqliteManifestResources(manifest schema.Manifest) []schema.Collection {

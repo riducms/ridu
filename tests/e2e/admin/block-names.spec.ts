@@ -1,6 +1,6 @@
 import { expect, test } from "./fixture";
 import { submitDocumentForm, loginAsEditor, observePageErrors } from "./helpers";
-import { block, richDocument, bodyCards } from "./rich-text-block-fixture";
+import { block, richDocument, bodyCards, bodyEditor, insertBlock } from "./rich-text-block-fixture";
 
 test("names stay separate from content through collapse, reorder, duplicate and save", async ({
 	page,
@@ -32,7 +32,7 @@ test("names stay separate from content through collapse, reorder, duplicate and 
 	const layout = page.locator('[data-field-path="layout"]').first();
 	const input = page.locator('input[name="layout.0.blockName"]');
 	await expect(input).toHaveValue("");
-	await expect(input).toHaveAttribute("placeholder", "Published heading");
+	await expect(input).toHaveAttribute("placeholder", "Untitled");
 	await expect(layout.getByRole("textbox", { name: "Block name", exact: true })).toHaveCount(2);
 	await expect(page.locator('input[name="layout.1.blockName"]')).not.toBeEditable();
 	await expect(layout).not.toContainText("Secret editorial name");
@@ -97,7 +97,7 @@ test("rich-text names retain focus and history beside inline block fields", asyn
 	await page.goto(`/admin/collections/block-names/${original.id}`);
 	const cards = bodyCards(page);
 	const name = cards.first().getByRole("textbox", { name: "Block name", exact: true });
-	await expect(name).toHaveAttribute("placeholder", "Content heading");
+	await expect(name).toHaveAttribute("placeholder", "Untitled");
 	const headerAlignment = await cards.first().evaluate((card) => {
 		const input = card.querySelector("input");
 		const type = card.querySelector("[data-block-select] > span");
@@ -219,5 +219,59 @@ test("server name validation focuses the header without mounting collapsed conte
 	await submitDocumentForm(page);
 	await page.reload();
 	await expect(name).toHaveValue("");
-	await expect(name).toHaveAttribute("placeholder", "Heading");
+	await expect(name).toHaveAttribute("placeholder", "Untitled");
+	expect((await name.boundingBox())?.width).toBeLessThan(100);
+});
+
+test("new blocks have independent header names without application naming configuration", async ({
+	page,
+}) => {
+	await loginAsEditor(page);
+	const errors = observePageErrors(page);
+	await page.goto("/admin/collections/block-articles/create?locale=en");
+	await page.getByRole("textbox", { name: "Title", exact: true }).fill("Default block names");
+	const card = await insertBlock(page, bodyEditor(page), "Callout");
+	const name = card.getByRole("textbox", { name: "Block name", exact: true });
+	const title = card.getByRole("textbox", { name: "Callout title", exact: true });
+	const caption = card.getByRole("textbox", { name: "Caption", exact: true });
+	await expect(name).toHaveValue("");
+	await expect(name).toHaveAttribute("placeholder", "Untitled");
+	await expect(caption).toHaveValue("Helpful context");
+	await expect(card.locator(".ridu-richtext-block__header")).not.toContainText("Helpful context");
+	await expect(card.getByRole("textbox", { name: "Block name", exact: true })).toHaveCount(1);
+	await title.fill("Article heading");
+	await name.pressSequentially("Editor note");
+	await expect(name).toBeFocused();
+	await name.hover();
+	await expect(name).not.toHaveCSS("box-shadow", "none");
+	await name.press("ControlOrMeta+z");
+	await expect(name).toHaveValue("");
+	await expect(title).toHaveValue("Article heading");
+	await name.press("ControlOrMeta+Shift+z");
+	await expect(name).toHaveValue("Editor note");
+	await card.getByRole("button", { name: "Collapse Callout" }).click();
+	await expect(name).toHaveValue("Editor note");
+	const response = page.waitForResponse(
+		(response) =>
+			response.request().method() === "POST" &&
+			new URL(response.url()).pathname === "/api/collections/block-articles"
+	);
+	await submitDocumentForm(page);
+	const saved = await response;
+	expect(saved.ok(), await saved.text()).toBe(true);
+	const stored = (await saved.json()).doc;
+	expect(
+		stored.body.root.children.find((node: { type: string }) => node.type === "block").fields
+	).toMatchObject({
+		blockName: "Editor note",
+		title: "Article heading",
+		caption: "Helpful context",
+	});
+	await page.waitForURL((url) => url.pathname === `/admin/collections/block-articles/${stored.id}`);
+	await page.reload();
+	await expect(
+		bodyCards(page).first().getByRole("textbox", { name: "Block name", exact: true })
+	).toHaveValue("Editor note");
+	expect(errors.pageErrors).toEqual([]);
+	expect(errors.consoleErrors).toEqual([]);
 });

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Portal, useLexicalComposerContext } from "@hvniel/lexical-svelte";
+	import { Portal, useLexicalComposerContext, useLexicalEditable } from "@hvniel/lexical-svelte";
 
 	import type { RichTextConfig } from "@plugin-richtext/field/rich-text-config";
 	import RichTextFixedToolbar from "@plugin-richtext/toolbar/rich-text-fixed-toolbar.svelte";
@@ -17,6 +17,7 @@
 
 	// One selection subscription serves both toolbars for this editor.
 	const toolbar = new RichTextToolbarState(useLexicalComposerContext()[0]);
+	const editable = useLexicalEditable();
 
 	// Synchronizes the toolbar state with the editor while mounted; cleanup removes the listener.
 	$effect(toolbar.connect);
@@ -27,4 +28,6 @@
 		<RichTextFixedToolbar {toolbar} {config} />
 	</Portal>
 {/if}
-<RichTextFloatingToolbar {toolbar} {config} />
+{#if editable()}
+	<RichTextFloatingToolbar {toolbar} {config} />
+{/if}

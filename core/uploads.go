@@ -33,8 +33,8 @@ type UploadInput struct {
 	Reader io.Reader
 	// Image stages a crop and focal point with the document mutation.
 	Image *UploadImageEdit
-	// Publish creates a published version when versioning is enabled.
-	Publish bool
+	// Draft selects working (true) or published (false) content on creation.
+	Draft *bool
 	// Data contains application-owned upload document fields.
 	Data store.Values
 	// Actor is the authenticated document used by access rules.
@@ -47,7 +47,8 @@ type UploadInput struct {
 
 // RemoteUploadInput identifies an HTTP(S) asset and its document metadata.
 type RemoteUploadInput struct {
-	Publish         bool
+	// Draft selects working (true) or published (false) content on creation.
+	Draft           *bool
 	Image           *UploadImageEdit
 	Filename        string
 	URL             string
@@ -67,9 +68,12 @@ type UpdateUploadInput struct {
 	Data             store.Values
 	ExpectedRevision int
 	Publish          bool
-	Actor            *store.Document
-	ActorCollection  schema.CollectionSlug
-	Locale           LocaleOptions
+	// Draft:true saves working changes without replacing live content.
+	// Use Publish for publication; Draft:true cannot be combined with it.
+	Draft           *bool
+	Actor           *store.Document
+	ActorCollection schema.CollectionSlug
+	Locale          LocaleOptions
 }
 
 // ReconcileResult summarizes an upload-storage reconciliation pass.
@@ -112,8 +116,8 @@ func (application *App) Duplicate(ctx context.Context, collection, id string, ov
 		return application.local.Duplicate(ctx, collection, id, overrides, options)
 	}
 	overrides = uploads.ApplicationValues(overrides)
-	source, err := application.local.engine.ReadUploadMetadata(ctx, operationengine.Request{Collection: collection, ID: id,
-		Actor: options.Actor, ActorCollection: options.ActorCollection,
+	source, err := application.local.engine.ReadUploadMetadata(ctx, operationengine.Request{Operation: operation.Duplicate, Collection: collection, ID: id,
+		Actor: options.Actor, ActorCollection: options.ActorCollection, System: options.System,
 		Locale: string(options.Locale), FallbackLocales: append([]schema.LocaleCode(nil), options.FallbackLocales...),
 		DisableFallback: options.DisableFallback, AllLocales: options.AllLocales,
 	})
@@ -198,13 +202,8 @@ func (application *App) upload(ctx context.Context, collection string, input Upl
 		return store.Document{}, uploadPreparationError(err, "upload could not be stored")
 	}
 	resource := application.uploadTransactionResource(prepared)
-	var draft *bool
-	if input.Publish {
-		published := false
-		draft = &published
-	}
 	document, err := application.local.createStoragePrepared(ctx, collection, prepared.Values, MutationOptions{
-		Actor: input.Actor, ActorCollection: input.ActorCollection, Draft: draft,
+		Actor: input.Actor, ActorCollection: input.ActorCollection, Draft: input.Draft,
 		Locale: input.Locale.Locale, FallbackLocales: append([]schema.LocaleCode(nil), input.Locale.FallbackLocales...),
 		DisableFallback: input.Locale.DisableFallback, AllLocales: input.Locale.AllLocales,
 	}, resource)
@@ -253,7 +252,7 @@ func (application *App) UploadFromURL(ctx context.Context, collection string, in
 	if input.Filename != "" {
 		filename = input.Filename
 	}
-	return application.upload(ctx, collection, UploadInput{Filename: filename, Reader: bytes.NewReader(remote.Bytes), Data: input.Data, Image: input.Image, Publish: input.Publish, Actor: input.Actor, ActorCollection: input.ActorCollection, Locale: input.Locale}, true)
+	return application.upload(ctx, collection, UploadInput{Filename: filename, Reader: bytes.NewReader(remote.Bytes), Data: input.Data, Image: input.Image, Draft: input.Draft, Actor: input.Actor, ActorCollection: input.ActorCollection, Locale: input.Locale}, true)
 }
 
 // UploadFromURLForIdentity fetches and stores a remote file for one exact
@@ -275,6 +274,9 @@ func (application *App) UpdateUpload(ctx context.Context, collection, id string,
 }
 
 func (application *App) updateUpload(ctx context.Context, collection, id string, input UpdateUploadInput, admissionHeld bool) (store.Document, error) {
+	if input.Publish && input.Draft != nil && *input.Draft {
+		return store.Document{}, &operationengine.Error{Code: "bad_operation", Status: 400, Message: "publish and draft cannot both be requested"}
+	}
 	resolved, exists := application.bySlug[collection]
 	if !exists || resolved.Upload == nil {
 		return store.Document{}, &operationengine.Error{Code: "unknown_upload_collection", Status: 404, Message: "upload collection was not found"}
@@ -293,7 +295,7 @@ func (application *App) updateUpload(ctx context.Context, collection, id string,
 	if input.ExpectedRevision != 0 && input.ExpectedRevision != current.Revision {
 		return store.Document{}, &operationengine.Error{Code: "conflict", Status: 409, Message: "document revision is stale", Cause: store.ErrConflict}
 	}
-	options := MutationOptions{Actor: input.Actor, ActorCollection: input.ActorCollection, ExpectedRevision: current.Revision, Locale: input.Locale.Locale, FallbackLocales: input.Locale.FallbackLocales, DisableFallback: input.Locale.DisableFallback, AllLocales: input.Locale.AllLocales}
+	options := MutationOptions{Actor: input.Actor, ActorCollection: input.ActorCollection, ExpectedRevision: current.Revision, Draft: input.Draft, Locale: input.Locale.Locale, FallbackLocales: input.Locale.FallbackLocales, DisableFallback: input.Locale.DisableFallback, AllLocales: input.Locale.AllLocales}
 	values := uploads.ApplicationValues(input.Data)
 	var prepared uploads.Prepared
 	switch {

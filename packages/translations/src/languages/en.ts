@@ -528,6 +528,23 @@ export const enMessages = {
 	"documents:restore": "Restore",
 	"documents:save": "Save",
 	"documents:saveDraft": "Save draft",
+	"documents:savedDraftChanges": "Saved draft changes pending publication",
+	"documents:discardSavedDraft": "Discard saved draft",
+	"documents:discardSavedDraftQuestion": "Discard the saved draft?",
+	"documents:discardSavedDraftDescription":
+		"The published version will stay live. Saved draft changes will be lost.",
+	"documents:savedDraftDiscarded": "Saved draft discarded.",
+	"documents:discardSavedDraftFailed": "The saved draft could not be discarded.",
+	"documents:serverSaveConflict":
+		"This document changed on the server. Autosave is paused and your edits are preserved.",
+	"documents:reviewLatest": "Review latest",
+	"documents:reviewLatestUnavailable":
+		"Your edits could not be safely checkpointed. Copy them before reloading.",
+	"documents:saveOutcomeUnknown": "Save outcome unknown",
+	"documents:createOutcomeUnknownDescription":
+		"The server may have created this document, but the response was lost. Check the collection list before creating another copy. Your edits are still here.",
+	"documents:saveOutcomeUnknownDescription":
+		"The server may have saved these changes. Reload the latest document before trying again; your edits remain available for review.",
 	"documents:publishing": "Publishing…",
 	"documents:unsavedChanges": "Unsaved changes",
 	"documents:leaveWithoutSavingQuestion": "Leave without saving?",

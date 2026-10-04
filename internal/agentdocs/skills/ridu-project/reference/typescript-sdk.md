@@ -297,14 +297,27 @@ save the form and handle their validation errors separately.
 For versioned collections, use `versions` and `version` to inspect snapshots. Use `countVersions`
 when a badge needs only the authorized retained count; it returns `{ totalDocs }` without loading
 snapshots. Then use `publish`,
-`publishChanges`, `unpublish`, or `restore`. `publishChanges` submits edited values and the status
+`publishChanges`, `unpublish`, `discardDraft`, or `restore`. `publishChanges` submits edited values and the status
 transition as one publish operation, so publish access and hooks cannot be bypassed by an ordinary
 update. `schedulePublish`, `scheduleUnpublish`, `scheduledPublications`, and
 `cancelScheduledPublication` manage durable collection publication jobs. Scheduled unpublish is
 limited to draft-capable collections. Versioned globals use `globalVersions`, `globalVersion`,
 and `countGlobalVersions` for the corresponding history reads and count,
-`publishGlobal`, `publishGlobalChanges`, `unpublishGlobal`, and `restoreGlobal`; scheduled
+`publishGlobal`, `publishGlobalChanges`, `unpublishGlobal`, `discardGlobalDraft`, and `restoreGlobal`; scheduled
 publication changes are collection-only today.
+
+Draft-enabled creates default to incomplete working drafts. Explicit `{ draft: false }` uses the
+complete create contract and publishes atomically. To stage edits to published content, pass
+`{ draft: true, revision: post._revision }` to `update`, `updateGlobal`, or `updateUpload`. Required
+editorial fields can be missing or null in these generated draft inputs; structural validation,
+access rules, and limits still apply. Publication validates the complete saved candidate, not just
+the submitted patch.
+
+Reads accept `draft: true` for authorized working content and `draft: false` for live snapshots.
+Omitting the option follows draft-read access. This selection happens before filters, counts,
+sorting, and pagination. Working responses expose `_publishedRevision` and `_hasDraftChanges`
+when a live head exists; live responses omit both. `discardDraft` resets saved pending changes
+without unpublishing. Restoring with `draft: true` also leaves the live snapshot unchanged.
 
 ```ts title="publishing.ts"
 const history = await ridu.versions('posts', post.id);
@@ -379,7 +392,8 @@ const edited = await ridu.updateUpload(
 ```
 
 For a replacement file, add `file` (and optionally `filename`) to the `updateUpload` input. Set
-`publish: true` on an upload or update when the asset should publish in that operation.
+`draft: false` when creating a complete published upload. An existing upload update uses
+`publish: true` to commit its file/metadata edits and publication in one operation.
 `previewUploadFromURL` returns a `blob` and `filename` for inspection without saving a document;
 `readUploadSource` returns the immutable original file through editor access. Stored object
 delivery remains an access-checked REST `GET`. File-size, MIME, image, remote-host, and storage
@@ -426,6 +440,11 @@ reporting a logout. `auth.rotate()` replaces the token without extending the ses
 Configured recovery, verification, API-key, and lock features add `requestPasswordReset`,
 `resetPassword`, `requestVerification`, `verifyEmail`, `createAPIKey`, `apiKeys`, `revokeAPIKey`,
 and `forceUnlock`.
+
+For a draft-enabled auth collection, `auth.createUser` accepts incomplete editorial data while
+still requiring the identity field and password. Omitted `draft` creates a working draft; pass
+`{ draft: false }` as its second argument to publish complete user data atomically. Credentials
+stay outside `data`.
 
 By default the client uses Ridu's HttpOnly `ridu_session` cookie and sends `credentials:
 "include"`. A client on another origin, a server renderer, or a script uses the token transport:

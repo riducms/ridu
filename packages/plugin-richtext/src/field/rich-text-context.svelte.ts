@@ -7,12 +7,10 @@ const [getRichTextAuthoringHost, setRichTextAuthoringHost] = createContext<
 
 export { getRichTextAuthoringHost, setRichTextAuthoringHost };
 
-import type { FieldDocumentForm } from "@riducms/plugin";
 import type { SchemaField } from "@riducms/protocol";
 
 const [getRichTextField, setRichTextField] = createContext<{
 	readonly field: SchemaField;
-	readonly form: FieldDocumentForm;
 	/** Acknowledge an ordinary inline field write before Lexical reconciles its decorators. */
 	acceptEmbeddedChange(): void;
 }>();

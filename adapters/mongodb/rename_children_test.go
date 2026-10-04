@@ -148,12 +148,9 @@ func TestMongoDBFieldRenameCarriesUnchangedChildrenAndRefusesChangedOnes(t *test
 	}
 }
 
-// Committed history replays against this planner and must keep producing the
-// same artifact. Before the children followed a renamed field, the only way
-// to rename a container was to bind a data transform, which made its children
-// read as a schema change the transform answers for. That reading, and the
-// risk it records, stays for any migration that binds a transform.
-func TestMongoDBContainerRenameWithATransformKeepsItsRecordedRisk(t *testing.T) {
+// A bound transform does not change the canonical identity of descendants
+// under a confirmed container rename or invent a transformed-schema risk.
+func TestMongoDBContainerRenameWithATransformCarriesChildren(t *testing.T) {
 	ctx := context.Background()
 	fields := func(group string) ridu.Config {
 		return ridu.Config{Name: "Rename children", Collections: []ridu.Collection{{Slug: "posts", Fields: field.Fields{
@@ -171,10 +168,6 @@ func TestMongoDBContainerRenameWithATransformKeepsItsRecordedRisk(t *testing.T) 
 	directory := renameChildrenHistory(t, before)
 	transform := ridumigration.DataTransformDescriptor{Name: "move-meta", Checksum: ridumigration.DataTransformChecksum([]byte("move-meta-v1"))}
 	options := ArtifactOptions{Renames: renameChildrenIntent(t, before, after), DataTransforms: []ridumigration.DataTransformDescriptor{transform}}
-	if _, err := CreateArtifact(ctx, directory, "rename", after, time.Unix(2, 0), options); err == nil || !strings.Contains(err.Error(), "safety resolution") {
-		t.Fatalf("a container rename with a transform, without destructive approval = %v", err)
-	}
-	options.AllowDestructive = true
 	if _, err := CreateArtifact(ctx, directory, "rename", after, time.Unix(2, 0), options); err != nil {
 		t.Fatal(err)
 	}
@@ -182,12 +175,10 @@ func TestMongoDBContainerRenameWithATransformKeepsItsRecordedRisk(t *testing.T) 
 	if err != nil || len(files) != 2 {
 		t.Fatalf("history = %d files, %v", len(files), err)
 	}
-	recorded := false
 	for _, risk := range files[1].Artifact.Risks {
-		recorded = recorded || risk.Code == mongoRiskTransformedSchema
-	}
-	if !recorded {
-		t.Fatalf("risks = %#v", files[1].Artifact.Risks)
+		if risk.Code == mongoRiskTransformedSchema {
+			t.Fatalf("unchanged descendants were treated as transformed schema: %#v", files[1].Artifact.Risks)
+		}
 	}
 	if err := validateMongoDBArtifactHistory(ctx, files); err != nil {
 		t.Fatalf("history does not replay: %v", err)

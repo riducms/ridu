@@ -145,6 +145,8 @@ func writeGoBlockVariantDoc(out *strings.Builder, name string, mode goModelMode)
 	case goUpdate:
 		out.WriteString("// Update retains an existing occurrence by Key. Omitted children remain unchanged.\n// The engine verifies that the key belongs to an existing occurrence of this variant.\n")
 		fmt.Fprintf(out, "// Start with the read list's Retain method; use %sInput for additions.\n", strings.TrimSuffix(name, "Update"))
+	case goDraft:
+		out.WriteString("// Draft permits incomplete authored children, while retaining the block discriminator and supplied identity. An omitted Key adds a new occurrence.\n")
 	default:
 		out.WriteString("// Authored children may be omitted by access rules or projection, even when required on create.\n")
 		if mode == goOutput {

@@ -137,6 +137,9 @@ function isAdminDocument(value: unknown) {
 		isRecord(value) &&
 		typeof value.id === "string" &&
 		(value._revision === undefined || isInteger(value._revision)) &&
+		(value._publishedRevision === undefined ||
+			(isInteger(value._publishedRevision) && value._publishedRevision > 0)) &&
+		(value._hasDraftChanges === undefined || typeof value._hasDraftChanges === "boolean") &&
 		(value._status === undefined || value._status === "draft" || value._status === "published") &&
 		(value._localization === undefined ||
 			(isRecord(value._localization) &&

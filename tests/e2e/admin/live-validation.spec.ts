@@ -147,7 +147,10 @@ async function rowAction(page: Page, field: string, row: number, action: string)
 		.locator(`[data-field-path="${field}"]`)
 		.first()
 		.getByRole("button", {
-			name: `Open Row ${String(row + 1).padStart(2, "0")} actions`,
+			name:
+				field === "content"
+					? "Open Untitled Card actions"
+					: `Open Row ${String(row + 1).padStart(2, "0")} actions`,
 			exact: true,
 		})
 		.first()
@@ -240,9 +243,9 @@ test("supplier-dependent live feedback reaches ordinary and configured editors w
 		await expectInvalidMessages(page, custom, customMessages);
 		await expectInvalidBorder(custom);
 		await expect(bodyEditor).toHaveAttribute("contenteditable", "false");
-		await expect(bodyFooter).toHaveCount(0);
-		await expect(body.getByText(richTextPrompt, { exact: true })).toHaveCount(0);
-		await expect(body.getByText("No content", { exact: true })).toBeVisible();
+		await expect(bodyFooter).toBeDisabled();
+		await expect(body.getByText(richTextPrompt, { exact: true })).toBeVisible();
+		await expect(body.getByText("No content", { exact: true })).toHaveCount(0);
 	} finally {
 		releaseSave();
 	}

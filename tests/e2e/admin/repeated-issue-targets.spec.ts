@@ -22,7 +22,10 @@ async function rowAction(page: Page, path: string, index: number, action: string
 		.locator(`[data-field-path="${path}"]`)
 		.first()
 		.getByRole("button", {
-			name: `Open Row ${String(index + 1).padStart(2, "0")} actions`,
+			name:
+				path === "content"
+					? "Open Untitled Card actions"
+					: `Open Row ${String(index + 1).padStart(2, "0")} actions`,
 			exact: true,
 		})
 		.first()

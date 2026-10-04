@@ -20,10 +20,10 @@
 		form: FormController;
 		readOnly?: boolean;
 		disabled?: boolean;
-		onChange?: (change: { field: string; value: string }) => void;
+		onChange?: (value: string) => void;
 	} = $props();
 	const runtime = getAdminRuntime();
-	const child = $derived(block.fields.find((field) => field.name === block.admin?.nameField));
+	const child = $derived(block.fields.find((field) => field.name === "blockName"));
 	const schema = $derived(
 		child === undefined ? undefined : scopeRepeatedRowField(child, path, instance)
 	);
@@ -32,7 +32,7 @@
 {#if schema !== undefined}
 	{#key form}
 		{#key `${form.editorEpoch}:${runtime.manifestRevision}:${schema.id}`}
-			<BlockNameInput {schema} {block} {form} {readOnly} {disabled} {onChange} />
+			<BlockNameInput {schema} {form} {readOnly} {disabled} {onChange} />
 		{/key}
 	{/key}
 {/if}

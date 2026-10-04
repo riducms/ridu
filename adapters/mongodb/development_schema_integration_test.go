@@ -9,6 +9,7 @@ import (
 
 	"github.com/riducms/ridu/core"
 	"github.com/riducms/ridu/field"
+	ridumigration "github.com/riducms/ridu/migration"
 	"github.com/riducms/ridu/schema"
 	"github.com/riducms/ridu/store"
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -21,6 +22,53 @@ func mongoDevelopmentSchemaTestManifest(t *testing.T, nodes ...field.Node) schem
 		t.Fatal(err)
 	}
 	return manifest
+}
+
+func TestDecodeMongoDevelopmentManifestPreservesHistoricalBlockNameAbsence(t *testing.T) {
+	current := mongoDevelopmentSchemaTestManifest(t, field.Blocks("layout", field.Block{
+		Slug: "card", Fields: field.Fields{field.Text("title")},
+	}))
+	snapshot := current.Snapshot()
+	block := &snapshot.Collections[0].Fields[0].Blocks.Types[0]
+	if len(block.Fields) != 2 || block.Fields[1].Name != "blockName" {
+		t.Fatalf("current block fields = %#v", block.Fields)
+	}
+	block.Fields = block.Fields[:1]
+	historical := schema.NewManifest(snapshot)
+	encoded, err := historical.Bytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := schema.Parse(encoded); err == nil || !strings.Contains(err.Error(), "blockName") {
+		t.Fatalf("historical fixture unexpectedly passes current validation: %v", err)
+	}
+	digest, err := ridumigration.DigestManifest(historical)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stored := func(recordedDigest string) bson.Raw {
+		t.Helper()
+		raw, err := bson.Marshal(bson.D{
+			{Key: "_id", Value: mongoDevelopmentSchemaID},
+			{Key: "manifestJSON", Value: string(encoded)},
+			{Key: "manifestDigest", Value: recordedDigest},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return raw
+	}
+	decoded, err := decodeMongoDevelopmentManifest(stored(digest))
+	if err != nil || !decoded.Equal(historical) {
+		t.Fatalf("decode historical canonical manifest: %v, equal=%t", err, decoded.Equal(historical))
+	}
+	fields := decoded.Snapshot().Collections[0].Fields[0].Blocks.ResolvedTypes()[0].ResolvedFields()
+	if len(fields) != 1 || fields[0].Name != "title" {
+		t.Fatalf("historical block children were changed: %#v", fields)
+	}
+	if _, err := decodeMongoDevelopmentManifest(stored(strings.Repeat("f", 64))); err == nil || !strings.Contains(err.Error(), "digest") {
+		t.Fatalf("corrupt historical digest was accepted: %v", err)
+	}
 }
 
 func TestMongoDBDevelopmentSchemaRecordPublishesOnlySuccessfulSync(t *testing.T) {
@@ -74,6 +122,56 @@ func TestMongoDBDevelopmentSchemaRecordPublishesOnlySuccessfulSync(t *testing.T)
 	}
 	if _, _, err := backend.DevelopmentManifest(ctx); err == nil || !strings.Contains(err.Error(), "RIDU_DEVELOPMENT_SCHEMA_UNKNOWN") {
 		t.Fatalf("corrupt schema record was trusted: %v", err)
+	}
+}
+
+func TestMongoDBDevelopmentUniqueAdmissionChecksPublishedOnlyDuplicates(t *testing.T) {
+	ctx := t.Context()
+	backend := mongoIntegrationStore(t)
+	resolve := func(unique bool) schema.Manifest {
+		t.Helper()
+		slug := field.Text("slug")
+		if unique {
+			slug = slug.Unique()
+		}
+		manifest, err := core.Resolve(core.Config{Name: "Unique active heads", Collections: []core.Collection{{
+			Slug: "posts", Versions: true, VersionConfig: core.VersionConfig{Drafts: true}, Fields: field.Fields{slug},
+		}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return manifest
+	}
+	before, candidate := resolve(false), resolve(true)
+	if err := backend.SyncDevelopmentSchema(ctx, before); err != nil {
+		t.Fatal(err)
+	}
+	collection := before.Snapshot().Collections[0]
+	write := mongoBegin(t, backend, false)
+	for _, id := range []string{"one", "two"} {
+		created, err := write.Create(ctx, store.CreateRequest{
+			Collection: collection, ID: id, Status: store.StatusPublished,
+			Values: store.Values{"slug": store.String("shared-live")},
+		})
+		if err != nil {
+			mongoRollback(t, write)
+			t.Fatal(err)
+		}
+		if _, err := write.Update(ctx, store.UpdateRequest{
+			Request: store.Request{Collection: collection, ID: id, ExpectedRevision: created.Revision},
+			Intent:  store.WriteIntentSaveDraft, Values: store.Values{"slug": store.String("draft-" + id)},
+		}); err != nil {
+			mongoRollback(t, write)
+			t.Fatal(err)
+		}
+	}
+	mongoCommit(t, write)
+	if err := backend.SyncDevelopmentSchema(ctx, candidate); err == nil {
+		t.Fatal("unique declaration was admitted despite duplicate published-only values")
+	}
+	recorded, exists, err := backend.DevelopmentManifest(ctx)
+	if err != nil || !exists || !recorded.Equal(before) {
+		t.Fatalf("failed admission certified candidate: exists=%t, error=%v", exists, err)
 	}
 }
 

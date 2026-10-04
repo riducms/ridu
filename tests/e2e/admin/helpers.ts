@@ -23,9 +23,9 @@ export async function chooseContentLocale(page: Page, locale: string, code: stri
 	await expect(trigger).toBeEnabled();
 }
 
-// Schema-mismatch recovery belongs to the documented runtime-only fallback: a prepared route and
-// its server reads always share one authoritative manifest. Force that fallback in the few tests
-// that deliberately rewrite the browser's /api/schema response.
+// Prepared routes and their server reads share authoritative schema and access results. Force the
+// documented runtime-only fallback when a test deliberately overrides browser schema or access
+// responses, so the editor actually consumes the contract under test.
 export async function useAdminRuntimeFallback(page: Page) {
 	await page.route("**/admin/**", async (route) => {
 		if (route.request().resourceType() !== "document") {

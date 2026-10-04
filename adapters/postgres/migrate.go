@@ -10,6 +10,7 @@ import (
 	atlasschema "ariga.io/atlas/sql/schema"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/riducms/ridu/internal/primitivefield"
+	"github.com/riducms/ridu/internal/schemadiff"
 	ridumigration "github.com/riducms/ridu/migration"
 	"github.com/riducms/ridu/schema"
 )
@@ -106,6 +107,31 @@ func (backend *Store) Plan(ctx context.Context, manifest schema.Manifest) ([]Sta
 }
 
 func planPostgresDevelopmentSchema(ctx context.Context, transaction *sql.Tx, manifest schema.Manifest) ([]Statement, error) {
+	previous, err := readPostgresDevelopmentManifest(ctx, transaction)
+	if err != nil {
+		return nil, err
+	}
+	if previous != nil {
+		if err := schemadiff.RejectVersionsEnable(previous.Snapshot(), manifest.Snapshot(), nil); err != nil {
+			return nil, err
+		}
+		referencesCurrent, err := transactionColumnExists(ctx, transaction, "ridu_document_references", "published_head")
+		if err != nil {
+			return nil, err
+		}
+		previousSnapshot := previous.Snapshot()
+		previousResources := append(append([]schema.Collection(nil), previousSnapshot.Collections...), previousSnapshot.Globals...)
+		publishedTableExists := true
+		if hasVersionCollections(previousResources) {
+			publishedTableExists, err = transactionTableExists(ctx, transaction, "ridu_published_documents")
+			if err != nil {
+				return nil, err
+			}
+		}
+		if !referencesCurrent || !publishedTableExists {
+			return nil, fmt.Errorf("unsupported PostgreSQL development schema layout; recreate this development database with the current schema")
+		}
+	}
 	driver, err := atlaspostgres.Open(transaction)
 	if err != nil {
 		return nil, fmt.Errorf("open Atlas development inspector: %w", err)

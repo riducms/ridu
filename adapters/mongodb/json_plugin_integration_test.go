@@ -180,6 +180,7 @@ func mongoJSONPluginConfig() ridu.Config {
 			{
 				Slug: "pages", Versions: true,
 				VersionConfig: ridu.VersionConfig{Drafts: true, MaxPerDocument: 5},
+				Access:        ridu.CollectionAccess{ReadDrafts: func(ridu.AccessContext) (ridu.AccessDecision, error) { return ridu.Allow(), nil }},
 				Fields: field.Fields{field.JSON("metadata").Required(), richtext.Field("content", richtext.Config{
 					Features:                []richtext.Feature{richtext.FeatureRelationships, richtext.FeatureUploads},
 					RelationshipCollections: []string{"posts"},

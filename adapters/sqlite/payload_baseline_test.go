@@ -23,6 +23,7 @@ func TestSQLitePayloadBaselineWorkflow(t *testing.T) {
 			{
 				Slug: "posts", Versions: true, VersionConfig: ridu.VersionConfig{Drafts: true},
 				Fields: field.Fields{field.Text("title").Required(), field.Textarea("summary"), field.Relationship("author", "authors").Required(), field.Relationship("category", "categories").Required()},
+				Access: ridu.CollectionAccess{ReadDrafts: func(ridu.AccessContext) (ridu.AccessDecision, error) { return ridu.Allow(), nil }},
 			},
 		},
 	}

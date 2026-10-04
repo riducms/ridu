@@ -30,6 +30,14 @@ func TestPrimitiveListsLocalRESTNestedAndLocalized(t *testing.T) {
 	block["_key"] = store.String("block-A")
 	block["blockType"] = store.String("card")
 	values := store.Values{"title": store.String("Product"), "sellingPoints": points, "availableSizes": sizes, "details": store.Object(children), "variants": store.List(store.Object(row)), "content": store.List(store.Object(block)), "body": richtextblocks.Document(richtextblocks.Block("card", "embed-A", children)), "localizedPoints": points, "localizedSizes": sizes, "localizedBody": richtextblocks.Document(richtextblocks.Block("card", "embed-fr", children))}
+	namedBlock := store.CloneValues(block)
+	namedBlock["blockName"] = store.String("")
+	namedChildren := store.CloneValues(children)
+	namedChildren["blockName"] = store.String("")
+	expected := store.CloneValues(values)
+	expected["content"] = store.List(store.Object(namedBlock))
+	expected["body"] = richtextblocks.Document(richtextblocks.Block("card", "embed-A", namedChildren))
+	expected["localizedBody"] = richtextblocks.Document(richtextblocks.Block("card", "embed-fr", namedChildren))
 	config := primitivelists.Config()
 	config.Collections[0].Access.Publish = config.Collections[0].Access.Update
 	app, err := core.New(config, teststore.New())
@@ -40,8 +48,8 @@ func TestPrimitiveListsLocalRESTNestedAndLocalized(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for key, value := range values {
-		primitiveRuntimeEqual(t, created.Values[key], value)
+	for key := range values {
+		primitiveRuntimeEqual(t, created.Values[key], expected[key])
 	}
 	encoded, _ := json.Marshal(values)
 	response := requestJSON(t, handlerClient(app.Handler(core.HandlerOptions{})), http.MethodPost, "http://ridu.test/api/collections/primitive-products?locale=fr", strings.NewReader(string(encoded)), "")
@@ -52,12 +60,12 @@ func TestPrimitiveListsLocalRESTNestedAndLocalized(t *testing.T) {
 		Doc map[string]json.RawMessage `json:"doc"`
 	}
 	decodeResponse(t, response, &wire)
-	for key, value := range values {
+	for key := range values {
 		var actual store.Value
 		if err := json.Unmarshal(wire.Doc[key], &actual); err != nil {
 			t.Fatalf("REST %s: %v", key, err)
 		}
-		primitiveRuntimeEqual(t, actual, value)
+		primitiveRuntimeEqual(t, actual, expected[key])
 	}
 	updated, err := app.Local().PublishChanges(t.Context(), "primitive-products", created.ID, store.Values{"sellingPoints": store.List(store.String("Replacement")), "availableSizes": store.List(), "localizedPoints": store.List()}, core.MutationOptions{Locale: "fr", ExpectedRevision: created.Revision})
 	if err != nil {

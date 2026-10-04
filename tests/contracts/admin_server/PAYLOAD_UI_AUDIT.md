@@ -107,7 +107,13 @@ surfaces plus the configured Folders collection.
 
 The following routes were opened for both the create and seeded-edit state of every comparable
 collection. Payload's draft-enabled create routes immediately autosaved blank draft records during
-the audit; Ridu's create routes remained local until Save.
+the original audit; Ridu's create routes then remained local until Save. The 3 October follow-up
+adds durable autosave after meaningful edits on new draft-enabled documents, incomplete editorial
+drafts, separate working/live heads, and publish/discard controls. Untouched forms still do not
+create records, and new auth accounts still require an explicit credential-backed save. The
+[working-drafts browser contract](../../e2e/admin/working-drafts.spec.ts) covers reload, publication
+validation, pending edits without live-content changes, and discard. Locale-specific publication
+remains outside this bounded workflow.
 
 | Collection          | Payload 3 observed                                                                                                                   | Ridu observed                                                                                                                                                                                                                                                                       | Main Ridu shortfall                               |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |

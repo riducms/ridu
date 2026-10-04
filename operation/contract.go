@@ -27,7 +27,19 @@ const (
 	DeletePermanent Kind = "delete-permanent"
 	Publish         Kind = "publish"
 	Unpublish       Kind = "unpublish"
+	DiscardDraft    Kind = "discard-draft"
 	Unlock          Kind = "unlock"
+)
+
+// WritePhase identifies the completeness policy for a document candidate.
+// It is independent of the row's public status: a published document may have
+// unpublished working changes. Reads and non-content operations use None.
+type WritePhase string
+
+const (
+	WritePhaseNone      WritePhase = ""
+	WritePhaseDraft     WritePhase = "draft"
+	WritePhasePublished WritePhase = "published"
 )
 
 // ID is the logical write value of a singular relationship. It is distinct
@@ -59,6 +71,10 @@ type Context struct {
 	// Operation is the enclosing document operation, such as Create or Update,
 	// rather than the hook phase currently running.
 	Operation Kind
+	// WritePhase is Draft for an editorial save and Published for a write that
+	// creates or changes public content. Validators run in both phases; authors
+	// may defer only their own completion rules while a draft is saved.
+	WritePhase WritePhase
 	// CollectionID identifies the collection; it is empty for a global.
 	// This is a framework resource identifier, not its authored slug.
 	CollectionID schema.StableID

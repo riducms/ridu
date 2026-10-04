@@ -54,7 +54,6 @@ func TestMongoDBVersionTransactionRetentionAccessAndRollback(t *testing.T) {
 		mongoRollback(t, write)
 		t.Fatalf("re-saved revision timestamp = %v, want preserved %v", resaved.CreatedAt, firstVersion.CreatedAt)
 	}
-	published := store.StatusPublished
 	titlePath, _ := query.NewPath("title")
 	document, err = write.Update(t.Context(), store.UpdateRequest{
 		Request: store.Request{
@@ -62,7 +61,7 @@ func TestMongoDBVersionTransactionRetentionAccessAndRollback(t *testing.T) {
 			Select: []query.Path{titlePath},
 		},
 		Values: store.Values{"title": store.String("second"), "owner": store.String("owner-b")},
-		Status: &published,
+		Intent: store.WriteIntentPublish,
 	})
 	if err != nil {
 		mongoRollback(t, write)
@@ -76,11 +75,10 @@ func TestMongoDBVersionTransactionRetentionAccessAndRollback(t *testing.T) {
 		mongoRollback(t, write)
 		t.Fatal(err)
 	}
-	draft := store.StatusDraft
 	document, err = write.Update(t.Context(), store.UpdateRequest{
 		Request: store.Request{Collection: collection, ID: document.ID, ExpectedRevision: document.Revision},
 		Values:  store.Values{"title": store.String("third"), "owner": store.String("owner-c")},
-		Status:  &draft,
+		Intent:  store.WriteIntentUnpublish,
 	})
 	if err != nil {
 		mongoRollback(t, write)
@@ -93,6 +91,7 @@ func TestMongoDBVersionTransactionRetentionAccessAndRollback(t *testing.T) {
 	if _, err := write.Update(t.Context(), store.UpdateRequest{
 		Request: store.Request{Collection: collection, ID: document.ID, ExpectedRevision: 1},
 		Values:  store.Values{"title": store.String("stale")},
+		Intent:  store.WriteIntentSaveDraft,
 	}); !errors.Is(err, store.ErrConflict) {
 		mongoRollback(t, write)
 		t.Fatalf("stale revision update = %v, want ErrConflict", err)
@@ -156,7 +155,7 @@ func TestMongoDBVersionTransactionRetentionAccessAndRollback(t *testing.T) {
 	rolledDocument, err := rolledBack.Update(t.Context(), store.UpdateRequest{
 		Request: store.Request{Collection: collection, ID: document.ID, ExpectedRevision: document.Revision},
 		Values:  store.Values{"title": store.String("rolled back")},
-		Status:  &published,
+		Intent:  store.WriteIntentPublish,
 	})
 	if err != nil {
 		mongoRollback(t, rolledBack)
@@ -236,6 +235,7 @@ func TestMongoDBVersionAccessUsesRepeatedSnapshotPredicates(t *testing.T) {
 	}
 	document, err = write.Update(t.Context(), store.UpdateRequest{
 		Request: store.Request{Collection: collection, ID: document.ID, ExpectedRevision: document.Revision},
+		Intent:  store.WriteIntentSaveDraft,
 		Values: store.Values{"rows": store.List(store.Object(store.Values{
 			"_key": store.String("revision-two"), "kind": store.String("revision-two"), "label": store.String("Second revision"),
 		}))},

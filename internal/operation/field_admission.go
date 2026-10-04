@@ -90,6 +90,37 @@ func authorizeBoundFields(collection Collection, ctx Context, kind operation.Kin
 	return nil
 }
 
+// authorizeDiscardFields checks only values that a reset would actually
+// change. A saved live head may contain protected fields; their unchanged
+// presence must not prevent discarding unrelated working edits.
+func authorizeDiscardFields(collection Collection, ctx Context, before, after store.Values) error {
+	if ctx.System {
+		return nil
+	}
+	ctx.Operation, ctx.Data, ctx.Document, ctx.AllLocales = operation.Update, store.CloneValues(after), nil, true
+	for _, binding := range collection.Bindings {
+		rule := binding.Access.Update
+		if rule == nil {
+			continue
+		}
+		path := binding.Field.Path.String()
+		previous := fieldLocationsAtPath(collection.Schema.Fields, before, path, true)
+		current := fieldLocationsAtPath(collection.Schema.Fields, after, path, true)
+		priorByIdentity := indexFieldHookLocations(previous)
+		for _, location := range changedFieldLocations(previous, current) {
+			fieldContext := scopedBindingContext(ctx, binding, location, priorByIdentity)
+			allowed, err := rule(fieldContext)
+			if err != nil {
+				return &Error{Code: "access_failed", Status: 500, Message: "field update access rule failed", Cause: err}
+			}
+			if !allowed {
+				return &Error{Code: "field_access_denied", Status: 403, Message: "discard would change a protected field", Issues: []schema.Issue{{Code: "access_denied", Path: location.runtimePath, Message: "field may not be changed"}}}
+			}
+		}
+	}
+	return nil
+}
+
 // fieldSubmissionValues projects the original submission and its hypothetical
 // patch result into the admission checkpoint's exact locale shape. The canonical
 // merge preserves omitted children and matches repeated membership by stable key.

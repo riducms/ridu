@@ -41,7 +41,7 @@ func (api *API) liveValidation(writer http.ResponseWriter, request *http.Request
 	for i, scope := range input.Embedded {
 		embedded[i] = operationengine.LiveValidationEmbeddedScope{Field: scope.Field, TreeKey: scope.TreeKey, CaseTag: scope.CaseTag, VariantSlug: scope.VariantSlug, Identity: scope.Identity, Data: scope.Data}
 	}
-	result, err := api.config.Engine.LiveValidate(request.Context(), operationengine.LiveValidationRequest{Collection: collection, ID: input.ID, Data: input.Data, Fields: input.Fields, Embedded: embedded, Actor: identityActor(identity), ActorCollection: identityCollection(identity), Locale: locale.locale})
+	result, err := api.config.Engine.LiveValidate(request.Context(), operationengine.LiveValidationRequest{Collection: collection, ID: input.ID, Draft: input.Draft, Data: input.Data, Fields: input.Fields, Embedded: embedded, Actor: identityActor(identity), ActorCollection: identityCollection(identity), Locale: locale.locale})
 	if err != nil {
 		api.writeError(writer, requestID, err)
 		return

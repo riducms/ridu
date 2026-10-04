@@ -74,6 +74,7 @@ func TestApplyReferenceDeletePlansRestrictBeforeReconcilingCurrentTrashValues(t 
 	owner, err = transaction.Update(ctx, store.UpdateRequest{
 		Request: store.Request{Collection: posts, ID: owner.ID},
 		Values:  store.Values{"guard": store.String("user-2")},
+		Intent:  store.WriteIntentSaveDraft,
 	})
 	if err != nil {
 		t.Fatal(err)

@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/riducms/ridu/internal/blocktypes"
@@ -50,7 +51,7 @@ func openAPI(manifest schema.Manifest) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	generator := openAPIBlockGenerator{blocks: catalog}
+	generator := openAPIBlockGenerator{blocks: catalog, draftReadFields: catalog.DraftReadFields(snapshot)}
 	document := openAPIDocument{
 		BlockRegistry: snapshot.Blocks,
 		OpenAPI:       "3.1.0",
@@ -94,9 +95,9 @@ func openAPI(manifest schema.Manifest) ([]byte, error) {
 			"get": listSpec, "post": createSpec,
 		}
 		findSpec := operationSpec("Find "+collection.Labels.Singular, "find"+name, "200")
-		findSpec["parameters"] = append(resourceReadParameters(), localeParameters...)
+		findSpec["parameters"] = append(append(resourceReadParameters(), readDraftParameters(collection)...), localeParameters...)
 		updateSpec := operationSpec("Update "+collection.Labels.Singular, "update"+name, "200")
-		updateSpec["parameters"] = localeParameters
+		updateSpec["parameters"] = append(updateDraftParameters(collection), localeParameters...)
 		deleteSpec := operationSpec("Delete "+collection.Labels.Singular, "delete"+name, "200")
 		deleteSpec["parameters"] = localeParameters
 		document.Paths["/api/collections/"+slug+"/{id}"] = map[string]any{
@@ -170,7 +171,26 @@ func openAPI(manifest schema.Manifest) ([]byte, error) {
 				"get": bootstrapSpec,
 			}
 			createAuthSpec := operationSpec("Create "+collection.Labels.Singular+" with credentials", "createAuth"+name, "201")
-			createAuthSpec["parameters"] = localeParameters
+			createAuthSpec["parameters"] = append(createDraftParameters(collection), localeParameters...)
+			dataSchema := map[string]any{"$ref": "#/components/schemas/" + name + "Create"}
+			if collection.Versions != nil && collection.Versions.Drafts {
+				dataSchema = map[string]any{"anyOf": []any{
+					map[string]any{"$ref": "#/components/schemas/" + name + "Create"},
+					map[string]any{"$ref": "#/components/schemas/" + name + "DraftCreate"},
+				}}
+			}
+			closed := false
+			requestName := name + "AuthCreateUserRequest"
+			document.Components.Schemas[requestName] = openAPISchema{
+				Type: "object", Required: []string{"data", "password"}, AdditionalProperties: &closed,
+				Properties: map[string]any{
+					"data": dataSchema, "password": map[string]any{"type": "string"},
+				},
+			}
+			createAuthSpec["requestBody"] = openAPIJSONRequest(requestName)
+			if collection.Versions != nil && collection.Versions.Drafts {
+				createAuthSpec["requestBody"].(map[string]any)["description"] = "Creates a working draft by default or with draft=true; draft=false requires complete published data. Password is a credential in this envelope, not a document field."
+			}
 			document.Paths["/api/auth/"+slug+"/create-user"] = map[string]any{
 				"post": createAuthSpec,
 			}
@@ -216,16 +236,16 @@ func openAPI(manifest schema.Manifest) ([]byte, error) {
 		}
 		if collection.Upload != nil {
 			remoteUploadSpec := operationSpec("Create "+collection.Labels.Singular+" from a public URL", "remoteUpload"+name, "201")
-			remoteUploadSpec["parameters"] = localeParameters
+			remoteUploadSpec["parameters"] = append(createDraftParameters(collection), localeParameters...)
 			remoteUploadSpec["requestBody"] = map[string]any{"required": true, "content": map[string]any{"application/json": map[string]any{"schema": map[string]any{
-				"type": "object", "required": []string{"url"}, "properties": map[string]any{
+				"type": "object", "required": []string{"url"}, "additionalProperties": false, "properties": map[string]any{
 					"url": map[string]any{"type": "string", "format": "uri"}, "data": map[string]any{"type": "object"},
-					"image": uploadImageSchema(), "filename": map[string]any{"type": "string"}, "publish": map[string]any{"type": "boolean"},
+					"image": uploadImageSchema(), "filename": map[string]any{"type": "string"},
 				},
 			}}}}
 			document.Paths["/api/collections/"+slug+"/remote-upload"] = map[string]any{"post": remoteUploadSpec}
 			uploadSpec := operationSpec("Save "+collection.Labels.Singular+" file, image and document edits", "updateUpload"+name, "200")
-			uploadSpec["parameters"] = uploadDocumentParameters(localeParameters, true)
+			uploadSpec["parameters"] = append(uploadDocumentParameters(localeParameters, true), updateDraftParameters(collection)...)
 			uploadSpec["requestBody"] = uploadRequestBody(true)
 			document.Paths["/api/collections/"+slug+"/{id}/upload"] = map[string]any{"patch": uploadSpec}
 			sourceSpec := operationSpec("Read editor-only image source", "readUploadSource"+name, "200")
@@ -265,11 +285,14 @@ func openAPI(manifest schema.Manifest) ([]byte, error) {
 				"get":        versionSpec,
 			}
 			publishSpec := operationSpec("Publish "+collection.Labels.Singular, "publish"+name, "200")
-			publishSpec["parameters"] = localeParameters
+			publishSpec["parameters"] = append(revisionParameters(), localeParameters...)
+			publishSpec["requestBody"] = optionalPublishRequest(name)
+			addOpenAPIJSONResponse(publishSpec, "200", openAPIDocumentEnvelope(name))
 			document.Paths[versionBase+"/publish"] = map[string]any{"post": publishSpec}
 			if collection.Versions.Drafts {
 				unpublishSpec := operationSpec("Unpublish "+collection.Labels.Singular, "unpublish"+name, "200")
-				unpublishSpec["parameters"] = localeParameters
+				unpublishSpec["parameters"] = append(revisionParameters(), localeParameters...)
+				addOpenAPIJSONResponse(unpublishSpec, "200", openAPIDocumentEnvelope(name))
 				document.Paths[versionBase+"/unpublish"] = map[string]any{"post": unpublishSpec}
 			}
 			restoreSpec := operationSpec("Restore "+collection.Labels.Singular, "restore"+name, "200")
@@ -321,6 +344,9 @@ func openAPI(manifest schema.Manifest) ([]byte, error) {
 		}
 		if collection.Upload == nil {
 			createSpec["requestBody"] = openAPIJSONRequest(name + "Create")
+			if collection.Versions != nil && collection.Versions.Drafts {
+				createSpec["requestBody"] = openAPIDraftRequest(name+"Create", name+"DraftCreate", "Draft-enabled creates default to draft. draft=false requires the complete Create schema.")
+			}
 		} else {
 			requestBody := uploadRequestBody(false)
 			content := requestBody["content"].(map[string]any)
@@ -328,18 +354,34 @@ func openAPI(manifest schema.Manifest) ([]byte, error) {
 			data := multipart["properties"].(map[string]any)["data"].(map[string]any)
 			data["contentMediaType"] = "application/json"
 			data["contentSchema"] = map[string]any{"$ref": "#/components/schemas/" + name + "Create"}
+			if collection.Versions != nil && collection.Versions.Drafts {
+				data["contentSchema"] = map[string]any{"anyOf": []any{
+					map[string]any{"$ref": "#/components/schemas/" + name + "Create"},
+					map[string]any{"$ref": "#/components/schemas/" + name + "DraftCreate"},
+				}}
+			}
 			createSpec["requestBody"] = requestBody
 		}
 		updateSpec["requestBody"] = openAPIJSONRequest(name + "Update")
+		if collection.Versions != nil && collection.Versions.Drafts {
+			updateSpec["requestBody"] = openAPIDraftRequest(name+"Update", name+"DraftUpdate", "draft=true saves working content without changing the published snapshot.")
+			discard := operationSpec("Discard pending draft changes", "discardDraft"+name, "200")
+			discard["parameters"] = append(revisionParameters(), localeParameters...)
+			addOpenAPIJSONResponse(discard, "200", openAPIDocumentEnvelope(name))
+			document.Paths["/api/collections/"+slug+"/{id}/discard-draft"] = map[string]any{
+				"parameters": []map[string]any{{"name": "id", "in": "path", "required": true, "schema": map[string]string{"type": "string"}}},
+				"post":       discard,
+			}
+		}
 	}
 	for _, global := range snapshot.Globals {
 		slug, name := string(global.Slug), string(global.ID)
 		localeParameters := localizationParameters(snapshot.Application.Localization, global.Fields)
 		document.Paths["/api/globals/"+slug+"/validate"] = map[string]any{"post": liveValidationOperation(name, snapshot.Application.Localization, true)}
 		readSpec := operationSpec("Read "+global.Labels.Singular, "read"+name, "200")
-		readSpec["parameters"] = append(resourceReadParameters(), localeParameters...)
+		readSpec["parameters"] = append(append(resourceReadParameters(), readDraftParameters(global)...), localeParameters...)
 		updateSpec := operationSpec("Update "+global.Labels.Singular, "update"+name, "200")
-		updateSpec["parameters"] = localeParameters
+		updateSpec["parameters"] = append(updateDraftParameters(global), localeParameters...)
 		document.Paths["/api/globals/"+slug] = map[string]any{
 			"get":   readSpec,
 			"patch": updateSpec,
@@ -360,9 +402,12 @@ func openAPI(manifest schema.Manifest) ([]byte, error) {
 				"get":        versionSpec,
 			}
 			publishSpec := operationSpec("Publish "+global.Labels.Singular, "publish"+name, "200")
-			publishSpec["parameters"] = localeParameters
+			publishSpec["parameters"] = append(revisionParameters(), localeParameters...)
+			publishSpec["requestBody"] = optionalPublishRequest(name)
+			addOpenAPIJSONResponse(publishSpec, "200", openAPIDocumentEnvelope(name))
 			unpublishSpec := operationSpec("Unpublish "+global.Labels.Singular, "unpublish"+name, "200")
-			unpublishSpec["parameters"] = localeParameters
+			unpublishSpec["parameters"] = append(revisionParameters(), localeParameters...)
+			addOpenAPIJSONResponse(unpublishSpec, "200", openAPIDocumentEnvelope(name))
 			document.Paths["/api/globals/"+slug+"/publish"] = map[string]any{"post": publishSpec}
 			document.Paths["/api/globals/"+slug+"/unpublish"] = map[string]any{"post": unpublishSpec}
 			restoreSpec := operationSpec("Restore "+global.Labels.Singular, "restore"+name, "200")
@@ -380,6 +425,13 @@ func openAPI(manifest schema.Manifest) ([]byte, error) {
 			return nil, err
 		}
 		updateSpec["requestBody"] = openAPIJSONRequest(name + "Update")
+		if global.Versions != nil && global.Versions.Drafts {
+			updateSpec["requestBody"] = openAPIDraftRequest(name+"Update", name+"DraftUpdate", "draft=true saves working content without changing the published snapshot.")
+			discard := operationSpec("Discard pending global draft changes", "discardDraft"+name, "200")
+			discard["parameters"] = append(revisionParameters(), localeParameters...)
+			addOpenAPIJSONResponse(discard, "200", openAPIDocumentEnvelope(name))
+			document.Paths["/api/globals/"+slug+"/discard-draft"] = map[string]any{"post": discard}
+		}
 	}
 	document.Paths["/api/auth/me"] = map[string]any{"get": operationSpec("Current session", "currentSession", "200")}
 	document.Paths["/api/auth/rotate"] = map[string]any{"post": operationSpec("Rotate the current session token", "rotateSession", "200")}
@@ -542,6 +594,21 @@ func customEndpointOperationSpec(summary, operationID string) map[string]any {
 	}
 }
 
+func revisionParameters() []map[string]any {
+	return []map[string]any{{
+		"name": "If-Match", "in": "header", "required": false,
+		"description": "Require the last observed working _revision; stale mutations return conflict without changing either head.",
+		"schema":      map[string]any{"type": "string", "pattern": `^"?[1-9][0-9]*"?$`},
+	}}
+}
+
+func optionalPublishRequest(name string) map[string]any {
+	body := openAPIJSONRequest(name + "Update")
+	body["required"] = false
+	body["description"] = "Optional changes to apply before validating and publishing the complete working candidate, including every supplied exact translation."
+	return body
+}
+
 func depthParameters() []map[string]any {
 	return []map[string]any{{
 		"name": "depth", "in": "query", "required": false,
@@ -584,6 +651,7 @@ func collectionListParameters(collection schema.Collection) []map[string]any {
 	}
 	parameters = append(parameters, collectionListAccessParameters()...)
 	parameters = append(parameters, resourceReadParameters()...)
+	parameters = append(parameters, readDraftParameters(collection)...)
 	if collection.Capabilities.Trash {
 		parameters = append(parameters, map[string]any{
 			"name": "trash", "in": "query", "required": false,
@@ -652,7 +720,7 @@ func restoreVersionParameters() []map[string]any {
 }
 
 func createDraftParameters(collection schema.Collection) []map[string]any {
-	if collection.Versions == nil || collection.Upload != nil {
+	if collection.Versions == nil || !collection.Versions.Drafts {
 		return nil
 	}
 	return []map[string]any{{
@@ -660,6 +728,24 @@ func createDraftParameters(collection schema.Collection) []map[string]any {
 		"description": "Create the document as a draft when true or publish it atomically when false.",
 		"schema":      map[string]any{"type": "boolean"},
 	}}
+}
+
+func readDraftParameters(collection schema.Collection) []map[string]any {
+	if collection.Versions == nil || !collection.Versions.Drafts {
+		return nil
+	}
+	return []map[string]any{{"name": "draft", "in": "query", "required": false,
+		"description": "Select saved working content when true (requires draft read access), or the published snapshot when false. Omission follows draft read access.",
+		"schema":      map[string]any{"type": "boolean"}}}
+}
+
+func updateDraftParameters(collection schema.Collection) []map[string]any {
+	parameters := readDraftParameters(collection)
+	if len(parameters) > 0 {
+		parameters[0]["description"] = "Save incomplete working content when true, leaving published content unchanged. Ordinary updates never change published content."
+		parameters[0]["schema"] = map[string]any{"type": "boolean", "enum": []bool{true}}
+	}
+	return parameters
 }
 
 func (generator openAPIBlockGenerator) addOpenAPIResourceSchema(schemas map[string]openAPISchema, name string, collection schema.Collection, pluginTypes map[string]json.RawMessage) error {
@@ -670,6 +756,14 @@ func (generator openAPIBlockGenerator) addOpenAPIResourceSchema(schemas map[stri
 		"updatedAt": openAPIProperty{Type: "string", Format: "date-time"},
 	}
 	required := []string{"id", "createdAt", "updatedAt"}
+	if collection.Versions != nil {
+		properties["_revision"] = map[string]any{"type": "integer", "minimum": 1}
+		properties["_status"] = map[string]any{"type": "string", "enum": []string{"draft", "published"}}
+		if collection.Versions.Drafts {
+			properties["_publishedRevision"] = map[string]any{"type": "integer", "minimum": 1}
+			properties["_hasDraftChanges"] = map[string]any{"type": "boolean"}
+		}
+	}
 	if collection.Capabilities.Trash {
 		properties["deletedAt"] = map[string]any{"type": []string{"string", "null"}, "format": "date-time"}
 	}
@@ -694,9 +788,11 @@ func (generator openAPIBlockGenerator) addOpenAPIResourceSchema(schemas map[stri
 // access or selection. Input mode reuses the tree with authoring requiredness,
 // canonical references and per-locale values.
 type openAPIBlockGenerator struct {
-	blocks *blocktypes.Catalog
-	input  bool
-	update bool
+	blocks          *blocktypes.Catalog
+	input           bool
+	update          bool
+	draft           bool
+	draftReadFields map[schema.StableID]bool
 }
 
 func openAPIFieldSchema(field schema.Field, pluginTypes map[string]json.RawMessage) (map[string]any, error) {
@@ -734,10 +830,10 @@ func (generator openAPIBlockGenerator) fieldSchemaForLocaleMode(field schema.Fie
 		// Read transforms preserve the logical type but do not rerun write
 		// admission. Length constraints describe submitted values only.
 		if generator.input {
-			if minimum != nil {
+			if minimum != nil && !generator.draft {
 				property["minLength"] = *minimum
 			}
-			if field.Required && (minimum == nil || *minimum < 1) {
+			if field.Required && !generator.draft && (minimum == nil || *minimum < 1) {
 				property["minLength"] = 1
 			}
 			if maximum != nil {
@@ -780,6 +876,12 @@ func (generator openAPIBlockGenerator) fieldSchemaForLocaleMode(field schema.Fie
 		property = map[string]any{"type": "array", "items": item}
 		if generator.input && field.List != nil {
 			openAPIRowBounds(property, field.Required, field.List.MinRows, field.List.MaxRows)
+			if generator.draft {
+				delete(property, "minItems")
+				if field.Type == schema.FieldTypeTextList {
+					delete(property["items"].(map[string]any), "minLength")
+				}
+			}
 		}
 	case schema.FieldTypeCheckbox:
 		property["type"] = "boolean"
@@ -848,6 +950,9 @@ func (generator openAPIBlockGenerator) fieldSchemaForLocaleMode(field schema.Fie
 			property = map[string]any{"type": "array", "items": items}
 			if generator.input {
 				openAPIRowBounds(property, field.Required, field.Nested.MinRows, field.Nested.MaxRows)
+				if generator.draft {
+					delete(property, "minItems")
+				}
 			}
 		}
 	case schema.FieldTypeBlocks:
@@ -861,12 +966,19 @@ func (generator openAPIBlockGenerator) fieldSchemaForLocaleMode(field schema.Fie
 				name := generator.blocks.Fields[field.ID].Variants[index]
 				if generator.input {
 					name += "Input"
+					if generator.draft {
+						name = generator.blocks.Fields[field.ID].Variants[index] + "DraftInput"
+					}
 				} else if childAllLocales {
 					name += "AllLocales"
 				}
 				if generator.update {
 					base := generator.blocks.Fields[field.ID].Variants[index]
-					variants = append(variants, map[string]any{"anyOf": []any{map[string]any{"$ref": "#/components/schemas/" + base + "Input"}, map[string]any{"$ref": "#/components/schemas/" + base + "Update"}}})
+					prefix := base
+					if generator.draft {
+						prefix += "Draft"
+					}
+					variants = append(variants, map[string]any{"anyOf": []any{map[string]any{"$ref": "#/components/schemas/" + prefix + "Input"}, map[string]any{"$ref": "#/components/schemas/" + prefix + "Update"}}})
 				} else {
 					mapping[block.Slug] = "#/components/schemas/" + name
 					variants = append(variants, map[string]any{"$ref": mapping[block.Slug]})
@@ -902,6 +1014,9 @@ func (generator openAPIBlockGenerator) fieldSchemaForLocaleMode(field schema.Fie
 		property = map[string]any{"type": "array", "items": items}
 		if generator.input {
 			openAPIRowBounds(property, field.Required, field.Blocks.MinRows, field.Blocks.MaxRows)
+			if generator.draft {
+				delete(property, "minItems")
+			}
 		}
 	case schema.FieldTypeRelationship, schema.FieldTypeUpload:
 		// Reads may populate references; writes use their string IDs.
@@ -942,11 +1057,12 @@ func (generator openAPIBlockGenerator) fieldSchemaForLocaleMode(field schema.Fie
 			property = generator.embeddedFieldSchema(field, property, allLocales)
 		}
 	}
-	if (field.Type == schema.FieldTypeDate || field.Type == schema.FieldTypeEmail) && !field.Required {
+	incompleteRead := !generator.input && generator.draftReadFields[field.ID]
+	if (field.Type == schema.FieldTypeDate || field.Type == schema.FieldTypeEmail) && (!field.Required || generator.draft || incompleteRead) {
 		// Optional date and email controls preserve explicitly empty wire values.
 		property = map[string]any{"anyOf": []any{property, map[string]any{"const": ""}}}
 	}
-	if !field.Required && (!generator.input || !generatedInputRequired(field)) && len(property) > 0 {
+	if (generator.draft || incompleteRead || !field.Required && (!generator.input || !generatedInputRequired(field))) && len(property) > 0 {
 		property = map[string]any{"anyOf": []any{property, map[string]any{"type": "null"}}}
 	}
 	if allLocales && field.Localized {
@@ -970,7 +1086,7 @@ func (generator openAPIBlockGenerator) fieldsObject(fields []schema.Field, plugi
 			return nil, err
 		}
 		properties[field.Name] = property
-		if generator.input && !generator.update && generatedInputRequired(field) && !generatedFieldHasDefault(field) {
+		if generator.input && !generator.update && !generator.draft && generatedInputRequired(field) && !generatedFieldHasDefault(field) {
 			required = append(required, field.Name)
 		}
 	}
@@ -1126,6 +1242,28 @@ func (generator openAPIBlockGenerator) addBlockSchemas(schemas map[string]openAP
 		updateProperties[variant.Discriminator] = properties[variant.Discriminator]
 		updateProperties[variant.Identity] = properties[variant.Identity]
 		schemas[variant.Name+"Update"] = openAPISchema{Type: "object", Properties: updateProperties, Required: []string{variant.Discriminator, variant.Identity}, AdditionalProperties: &closed, Description: "Patch an existing row identified by _key. Omitted children are retained; a new key must satisfy the create contract at runtime."}
+		inputGenerator.draft = true
+		draftModes := []bool{}
+		if len(generator.draftReadFields) > 0 {
+			draftModes = []bool{false, true}
+		}
+		for _, update := range draftModes {
+			inputGenerator.update = update
+			object, err := inputGenerator.fieldsObject(variant.Block.ResolvedFields(), pluginTypes, false)
+			if err != nil {
+				return err
+			}
+			properties := object["properties"].(map[string]any)
+			properties[variant.Discriminator] = map[string]any{"type": "string", "const": variant.Block.Slug}
+			properties[variant.Identity] = map[string]any{"type": "string", "minLength": 1, "pattern": `\S`}
+			required := []string{variant.Discriminator}
+			suffix := "DraftInput"
+			if update {
+				suffix = "DraftUpdate"
+				required = append(required, variant.Identity)
+			}
+			schemas[variant.Name+suffix] = openAPISchema{Type: "object", Properties: properties, Required: required, AdditionalProperties: &closed}
+		}
 		modes := []bool{false}
 		if localized {
 			modes = append(modes, true)
@@ -1187,6 +1325,12 @@ func openAPIJSONRequest(name string) map[string]any {
 	return map[string]any{"required": true, "content": map[string]any{"application/json": map[string]any{"schema": map[string]any{"$ref": "#/components/schemas/" + name}}}}
 }
 
+func openAPIDraftRequest(strict, draft, description string) map[string]any {
+	return map[string]any{"required": true, "description": description, "content": map[string]any{"application/json": map[string]any{"schema": map[string]any{
+		"anyOf": []any{map[string]any{"$ref": "#/components/schemas/" + strict}, map[string]any{"$ref": "#/components/schemas/" + draft}},
+	}}}}
+}
+
 func openAPIDocumentEnvelope(name string) map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{"doc": map[string]any{"$ref": "#/components/schemas/" + name}}, "required": []string{"doc"}}
 }
@@ -1239,10 +1383,12 @@ func (generator openAPIBlockGenerator) addInputResourceSchemas(schemas map[strin
 	}
 	properties := object["properties"].(map[string]any)
 	required, _ := object["required"].([]string)
-	if collection.Capabilities.Auth {
-		properties["email"] = map[string]any{"type": "string", "format": "email"}
-		properties["password"] = map[string]any{"type": "string"}
-		required = append(required, "email", "password")
+	if collection.Auth != nil {
+		identity := collection.Auth.IdentityField
+		properties[identity] = map[string]any{"type": "string", "format": "email"}
+		if !slices.Contains(required, identity) {
+			required = append(required, identity)
+		}
 	}
 	generator.update = true
 	updateObject, err := generator.fieldsObject(collection.Fields, pluginTypes, false)
@@ -1250,9 +1396,8 @@ func (generator openAPIBlockGenerator) addInputResourceSchemas(schemas map[strin
 		return err
 	}
 	update := updateObject["properties"].(map[string]any)
-	if collection.Capabilities.Auth {
-		update["email"] = properties["email"]
-		update["password"] = properties["password"]
+	if collection.Auth != nil {
+		update[collection.Auth.IdentityField] = properties[collection.Auth.IdentityField]
 	}
 	if allowID {
 		properties["id"] = map[string]any{"type": "string"}
@@ -1260,5 +1405,30 @@ func (generator openAPIBlockGenerator) addInputResourceSchemas(schemas map[strin
 	closed := false
 	schemas[name+"Create"] = openAPISchema{Type: "object", Properties: properties, Required: required, AdditionalProperties: &closed}
 	schemas[name+"Update"] = openAPISchema{Type: "object", Properties: update, AdditionalProperties: &closed}
+	if collection.Versions != nil && collection.Versions.Drafts {
+		generator.draft = true
+		for _, update := range []bool{false, true} {
+			generator.update = update
+			object, err := generator.fieldsObject(collection.Fields, pluginTypes, false)
+			if err != nil {
+				return err
+			}
+			properties := object["properties"].(map[string]any)
+			suffix := "DraftCreate"
+			var required []string
+			if collection.Auth != nil {
+				properties[collection.Auth.IdentityField] = updateObject["properties"].(map[string]any)[collection.Auth.IdentityField]
+				if !update {
+					required = []string{collection.Auth.IdentityField}
+				}
+			}
+			if update {
+				suffix = "DraftUpdate"
+			} else if allowID {
+				properties["id"] = map[string]any{"type": "string"}
+			}
+			schemas[name+suffix] = openAPISchema{Type: "object", Properties: properties, Required: required, AdditionalProperties: &closed}
+		}
+	}
 	return nil
 }

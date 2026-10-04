@@ -45,6 +45,7 @@ export type UnifiedArticlesBodyBlocksBlockCardInput = {
 		"sku"?: string | null;
 		"accent"?: string | null;
 	}> | null;
+	"blockName"?: string | null;
 } & { blockType: "card"; _key?: string };
 
 /** Patch a retained row by _key. New identities must satisfy the input contract at runtime. */
@@ -63,6 +64,7 @@ export type UnifiedArticlesBodyBlocksBlockCardUpdate = {
 		"sku"?: string | null;
 		"accent"?: string | null;
 	}> | null;
+	"blockName"?: string | null;
 } & { blockType: "card"; _key: string };
 
 export type UnifiedArticlesBodyBlocksBlockCard = {
@@ -75,6 +77,7 @@ export type UnifiedArticlesBodyBlocksBlockCard = {
 		"sku"?: string | null;
 		"accent"?: string | null;
 	}> | null;
+	"blockName"?: string | null;
 } & { blockType: "card"; _key: string };
 
 export type UnifiedArticlesBodyBlocksBlockCardAllLocales = {
@@ -87,6 +90,7 @@ export type UnifiedArticlesBodyBlocksBlockCardAllLocales = {
 		"sku"?: string | null;
 		"accent"?: string | null;
 	}> | null;
+	"blockName"?: string | null;
 } & { blockType: "card"; _key: string };
 
 export type UnifiedArticlesBodyBlocksBlockCardAllLocalesValue = {
@@ -99,6 +103,7 @@ export type UnifiedArticlesBodyBlocksBlockCardAllLocalesValue = {
 		"sku"?: string | null;
 		"accent"?: string | null;
 	}> | null;
+	"blockName"?: string | null;
 } & { blockType: "card"; _key: string };
 
 export type UnifiedArticlesContentCardInput = {
@@ -111,6 +116,7 @@ export type UnifiedArticlesContentCardInput = {
 		"sku"?: string | null;
 		"accent"?: string | null;
 	}> | null;
+	"blockName"?: string | null;
 } & { blockType: "card"; _key?: string };
 
 /** Patch a retained row by _key. New identities must satisfy the input contract at runtime. */
@@ -129,6 +135,7 @@ export type UnifiedArticlesContentCardUpdate = {
 		"sku"?: string | null;
 		"accent"?: string | null;
 	}> | null;
+	"blockName"?: string | null;
 } & { blockType: "card"; _key: string };
 
 export type UnifiedArticlesContentCard = {
@@ -141,6 +148,7 @@ export type UnifiedArticlesContentCard = {
 		"sku"?: string | null;
 		"accent"?: string | null;
 	}> | null;
+	"blockName"?: string | null;
 } & { blockType: "card"; _key: string };
 
 export type UnifiedArticlesContentCardAllLocales = {
@@ -153,6 +161,7 @@ export type UnifiedArticlesContentCardAllLocales = {
 		"sku"?: string | null;
 		"accent"?: string | null;
 	}> | null;
+	"blockName"?: string | null;
 } & { blockType: "card"; _key: string };
 
 export type UnifiedArticlesContentCardAllLocalesValue = {
@@ -165,32 +174,38 @@ export type UnifiedArticlesContentCardAllLocalesValue = {
 		"sku"?: string | null;
 		"accent"?: string | null;
 	}> | null;
+	"blockName"?: string | null;
 } & { blockType: "card"; _key: string };
 
 export type UnifiedArticlesContentNoteInput = {
 	"label"?: string | null;
 	"accent"?: string | null;
+	"blockName"?: string | null;
 } & { blockType: "note"; _key?: string };
 
 /** Patch a retained row by _key. New identities must satisfy the input contract at runtime. */
 export type UnifiedArticlesContentNoteUpdate = {
 	"label"?: string | null;
 	"accent"?: string | null;
+	"blockName"?: string | null;
 } & { blockType: "note"; _key: string };
 
 export type UnifiedArticlesContentNote = {
 	"label"?: string | null;
 	"accent"?: string | null;
+	"blockName"?: string | null;
 } & { blockType: "note"; _key: string };
 
 export type UnifiedArticlesContentNoteAllLocales = {
 	"label"?: string | null;
 	"accent"?: string | null;
+	"blockName"?: string | null;
 } & { blockType: "note"; _key: string };
 
 export type UnifiedArticlesContentNoteAllLocalesValue = {
 	"label"?: string | null;
 	"accent"?: string | null;
+	"blockName"?: string | null;
 } & { blockType: "note"; _key: string };
 
 export type UnifiedArticlesBodyBlocksBlockBlockInput = UnifiedArticlesBodyBlocksBlockCardInput;
@@ -464,8 +479,10 @@ export interface UnifiedArticlesWhere {
 	"content.card.products.label"?: ScalarWhere<string>;
 	"content.card.products.sku"?: ScalarWhere<string>;
 	"content.card.products.accent"?: ScalarWhere<string>;
+	"content.card.blockName"?: ScalarWhere<string>;
 	"content.note.label"?: ScalarWhere<string>;
 	"content.note.accent"?: ScalarWhere<string>;
+	"content.note.blockName"?: ScalarWhere<string>;
 	"author"?: ScalarWhere<ID>;
 	"accent"?: ScalarWhere<string>;
 	"localizedAccent"?: ScalarWhere<string>;
@@ -529,7 +546,7 @@ export interface UnifiedArticlesAllLocalesPopulateOutput {
 	"author": ID | UsersAllLocales | null;
 }
 
-export type UnifiedArticlesValidationPath = "title" | "sku" | "defaulted" | "meta" | "meta.description" | "meta.accent" | "sections" | `sections.${number}` | `sections.${number}._key` | `sections.${number}.label` | `sections.${number}.sku` | `sections.${number}.accent` | `sections.${number}.products` | `sections.${number}.products.${number}` | `sections.${number}.products.${number}._key` | `sections.${number}.products.${number}.label` | `sections.${number}.products.${number}.sku` | `sections.${number}.products.${number}.accent` | "content" | `content.${number}` | `content.${number}._key` | `content.${number}.blockType` | `content.${number}.label` | `content.${number}.sku` | `content.${number}.accent` | `content.${number}.products` | `content.${number}.products.${number}` | `content.${number}.products.${number}._key` | `content.${number}.products.${number}.label` | `content.${number}.products.${number}.sku` | `content.${number}.products.${number}.accent` | "author" | "accent" | "localizedAccent" | `localizedAccent.${Locale}` | "localizedTitle" | `localizedTitle.${Locale}` | "localizedMeta" | "localizedMeta.description" | `localizedMeta.description.${Locale}` | "privateNote" | "presentationHidden" | "body" | `body.${string}`;
+export type UnifiedArticlesValidationPath = "title" | "sku" | "defaulted" | "meta" | "meta.description" | "meta.accent" | "sections" | `sections.${number}` | `sections.${number}._key` | `sections.${number}.label` | `sections.${number}.sku` | `sections.${number}.accent` | `sections.${number}.products` | `sections.${number}.products.${number}` | `sections.${number}.products.${number}._key` | `sections.${number}.products.${number}.label` | `sections.${number}.products.${number}.sku` | `sections.${number}.products.${number}.accent` | "content" | `content.${number}` | `content.${number}._key` | `content.${number}.blockType` | `content.${number}.label` | `content.${number}.sku` | `content.${number}.accent` | `content.${number}.products` | `content.${number}.products.${number}` | `content.${number}.products.${number}._key` | `content.${number}.products.${number}.label` | `content.${number}.products.${number}.sku` | `content.${number}.products.${number}.accent` | `content.${number}.blockName` | "author" | "accent" | "localizedAccent" | `localizedAccent.${Locale}` | "localizedTitle" | `localizedTitle.${Locale}` | "localizedMeta" | "localizedMeta.description" | `localizedMeta.description.${Locale}` | "privateNote" | "presentationHidden" | "body" | `body.${string}`;
 
 export interface RiduConfig {
 	locale: Locale;

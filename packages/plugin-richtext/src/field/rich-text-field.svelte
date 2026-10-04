@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { untrack } from "svelte";
-	import type { PluginFieldProps, PluginFieldBinding } from "@riducms/plugin";
+	import type { PluginFieldProps } from "@riducms/plugin";
 	import type { RichTextDocument } from "@riducms/sdk/richtext";
 	import type { RichTextConfig } from "@plugin-richtext/field/rich-text-config";
 	import RichTextEditor from "@plugin-richtext/field/rich-text-editor.svelte";
@@ -28,40 +28,17 @@
 			replacement++;
 		}
 	});
-	const editorField: PluginFieldBinding<RichTextDocument<unknown>, "plugin"> = {
-		get schema() {
-			return field.schema;
-		},
-		get value() {
-			return field.value;
-		},
-		get rawValue() {
-			return field.rawValue;
-		},
-		get issues() {
-			return field.issues;
-		},
-		get liveValidation() {
-			return field.liveValidation;
-		},
-		get readOnly() {
-			return field.readOnly;
-		},
-		get stale() {
-			return field.stale;
-		},
-		set: (value) => {
-			// A parent editor can flush decorators inside this write's callback. Mark
-			// our own serialization before that happens so nested editors stay mounted.
-			accepted = fingerprint(value);
-			try {
-				field.set(value);
-			} finally {
-				accepted = fingerprint();
-			}
-		},
-		reportPendingEdit: (issues) => field.reportPendingEdit(issues),
-	};
+
+	function commitEditorValue(value: RichTextDocument<unknown>) {
+		// A parent editor can flush decorators inside this write's callback. Mark
+		// our own serialization before that happens so nested editors stay mounted.
+		accepted = fingerprint(value);
+		try {
+			field.set(value);
+		} finally {
+			accepted = fingerprint();
+		}
+	}
 
 	function acceptEmbeddedChange() {
 		// Inline ordinary fields already wrote to the parent form. Decorator reconciliation
@@ -71,5 +48,5 @@
 </script>
 
 {#key replacement}
-	<RichTextEditor field={editorField} {form} {config} {authoring} {i18n} {acceptEmbeddedChange} />
+	<RichTextEditor {field} {config} {authoring} {i18n} {commitEditorValue} {acceptEmbeddedChange} />
 {/key}

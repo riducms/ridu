@@ -2,7 +2,16 @@
 	import type { AdminDocumentExtensionHost } from "@riducms/plugin";
 	import type { DocumentController } from "@admin/features/documents/document-controller.svelte";
 	import { getAdminRuntime } from "@admin/core/runtime/admin-runtime.svelte";
-	import { Button, buttonVariants } from "@riducms/ui";
+	import {
+		Button,
+		Dialog,
+		DialogContent,
+		DialogDescription,
+		DialogFooter,
+		DialogHeader,
+		DialogTitle,
+		buttonVariants,
+	} from "@riducms/ui";
 	import { Popover, PopoverContent, PopoverTrigger } from "@admin/components/ui/popover";
 	import { Select, SelectContent, SelectItem, SelectTrigger } from "@admin/components/ui/select";
 	import { Link } from "@hvniel/svelte-router";
@@ -46,6 +55,7 @@
 	let moreActionsOpen = $state(false);
 	let publishMenuOpen = $state(false);
 	let scheduleOpen = $state(false);
+	let discardDraftOpen = $state(false);
 	let now = $state.raw(Date.now());
 	$effect(() => {
 		if (
@@ -114,6 +124,7 @@
 	const showDelete = $derived(
 		!controller.globalResource && !controller.creating && controller.canDelete
 	);
+	const showDiscardDraft = $derived(controller.canDiscardSavedDraft);
 
 	const primarySave = $derived.by(() => {
 		const publishesOnCreate =
@@ -126,21 +137,19 @@
 				disabled: !controller.canSave || !controller.canPublish,
 				onclick: onPublish,
 			};
-		if (
-			!controller.creating &&
-			controller.versionedCollection &&
-			(controller.currentStatus === "published" || controller.canPublish)
-		) {
-			const publishingUnchangedDraft =
-				controller.currentStatus === "draft" && !controller.hasUnsavedChanges;
-			const publishBlocked = publishingUnchangedDraft
+		if (!controller.creating && controller.versionedCollection && controller.canPublish) {
+			const publishingSavedDraft =
+				!controller.hasUnsavedChanges &&
+				(controller.currentStatus === "draft" || controller.hasSavedDraftChanges);
+			const publishBlocked = publishingSavedDraft
 				? controller.currentDocument === undefined ||
 					controller.publicationOperation ||
+					controller.serverSaveConflict ||
 					controller.saveOutcomeUncertain ||
 					controller.upload.busy ||
 					form.submitting ||
 					controller.loading
-				: !controller.canSave;
+				: !controller.canSave || !controller.hasUnsavedChanges;
 			return {
 				label: runtime.i18n.t("documents:publishChanges"),
 				disabled: !controller.canPublish || publishBlocked,
@@ -153,11 +162,7 @@
 					? "documents:saveDraft"
 					: "documents:save"
 			),
-			disabled:
-				!controller.canSave ||
-				(controller.versionedCollection &&
-					controller.currentStatus === "published" &&
-					!controller.canPublish),
+			disabled: !controller.canSave,
 			onclick: onSave,
 		};
 	});
@@ -177,6 +182,11 @@
 						controller.currentStatus === "draft" ? "documents:draft" : "documents:published"
 					)}
 				</strong>
+				{#if controller.currentStatus === "published" && controller.hasSavedDraftChanges}
+					<span class="ridu-document-metadata__saved-draft">
+						{runtime.i18n.t("documents:savedDraftChanges")}
+					</span>
+				{/if}
 			</span>
 		{/if}
 		{#if controller.lastSavedAt !== undefined && lastSavedDistance !== undefined && controller.collection?.versionSettings?.autosaveIntervalSeconds}
@@ -240,9 +250,7 @@
 			controller.draftsCollection &&
 				controller.canPublish &&
 				!controller.creatingAuthUser &&
-				(controller.creating ||
-					((controller.collection?.versionSettings?.autosaveIntervalSeconds ?? 0) === 0 &&
-						controller.currentStatus === "draft"))
+				(controller.creating || controller.hasUnsavedChanges)
 		)}
 		{#if offersDraftChoice}
 			<Button
@@ -292,7 +300,7 @@
 		</div>
 
 		<div class="ridu-document-actions__menu">
-			{#if showDuplicate || showDownload || showUnpublish || showDelete || controller.canForceUnlock || showCopyLocale || showCreate}
+			{#if showDuplicate || showDownload || showUnpublish || showDiscardDraft || showDelete || controller.canForceUnlock || showCopyLocale || showCreate}
 				<Popover bind:open={moreActionsOpen}>
 					<PopoverTrigger
 						class={buttonVariants({
@@ -377,6 +385,8 @@
 								variant="ghost"
 								class="ridu-document-menu__item"
 								disabled={controller.publicationOperation ||
+									controller.serverSaveConflict ||
+									controller.saveOutcomeUncertain ||
 									controller.hasUnsavedChanges ||
 									form.submitting}
 								onclick={() => {
@@ -385,6 +395,18 @@
 								}}
 							>
 								{runtime.i18n.t("documents:unpublish")}
+							</Button>
+						{/if}
+						{#if showDiscardDraft}
+							<Button
+								variant="ghost"
+								class="ridu-document-menu__item"
+								onclick={() => {
+									moreActionsOpen = false;
+									discardDraftOpen = true;
+								}}
+							>
+								{runtime.i18n.t("documents:discardSavedDraft")}
 							</Button>
 						{/if}
 						{#if showDelete}
@@ -422,6 +444,31 @@
 		</div>
 	</div>
 </div>
+
+<Dialog bind:open={discardDraftOpen}>
+	<DialogContent variant="confirmation">
+		<DialogHeader>
+			<DialogTitle>{runtime.i18n.t("documents:discardSavedDraftQuestion")}</DialogTitle>
+			<DialogDescription>
+				{runtime.i18n.t("documents:discardSavedDraftDescription")}
+			</DialogDescription>
+		</DialogHeader>
+		<DialogFooter>
+			<Button variant="outline" onclick={() => (discardDraftOpen = false)}>
+				{runtime.i18n.t("documents:cancel")}
+			</Button>
+			<Button
+				disabled={!showDiscardDraft}
+				onclick={async () => {
+					discardDraftOpen = false;
+					await controller.discardSavedDraft();
+				}}
+			>
+				{runtime.i18n.t("documents:discardSavedDraft")}
+			</Button>
+		</DialogFooter>
+	</DialogContent>
+</Dialog>
 
 {#if scheduleOpen && showSchedule && controller.documentID}
 	{#key `${controller.collectionSlug}:${controller.documentID}:${activeLocale}`}

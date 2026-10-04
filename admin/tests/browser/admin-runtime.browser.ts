@@ -1,4 +1,7 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
+import { render } from "vitest-browser-svelte";
+import { svelte } from "@hvniel/vite-plugin-svelte-inline-component";
+import { en, fr } from "@riducms/translations";
 import {
 	SCHEMA_MANIFEST_VERSION,
 	type AccessCapabilitiesEnvelope,
@@ -11,6 +14,83 @@ import {
 import type { AdminClient, AdminDocument } from "@admin/core/api/admin-client";
 
 const { AdminRuntime } = await import("@admin/core/runtime/admin-runtime.svelte");
+
+const LocalizedCollections = svelte`
+	<script>
+		let { runtime } = $props();
+	</script>
+	<p role="status">{runtime.localizedCollections.map(collection =>
+		[collection.labels.plural, collection.fields[0]?.admin.label].join(": ")
+	).join(", ")}</p>
+`;
+
+test("shares collection localization and refreshes readers after manifest and translator changes", async () => {
+	const preferenceKey = "ridu:admin-language";
+	const storedLanguage = localStorage.getItem(preferenceKey);
+	const runtime = new AdminRuntime(
+		{
+			...fixtureClient(),
+			setPreference: async <Value>(_key: string, value: Value) => value,
+		},
+		{ languages: [en, fr] }
+	);
+	const posts: SchemaCollection = {
+		...collection("posts", false),
+		labels: { singular: "Post", plural: "Posts", pluralTranslations: { fr: "Articles" } },
+		fields: [
+			{
+				id: "status",
+				name: "status",
+				path: "status",
+				type: "text",
+				category: "scalar",
+				required: false,
+				unique: false,
+				admin: { label: "Status", labelTranslations: { fr: "Statut" } },
+			},
+		],
+	};
+	runtime.manifest = { ...manifest, collections: [posts] };
+	const localize = vi.spyOn(runtime.i18n, "text");
+	try {
+		await runtime.i18n.setLanguage("en");
+		const screen = await render(LocalizedCollections, { runtime });
+		await expect.element(screen.getByRole("status")).toHaveTextContent("Posts: Status");
+		const calls = localize.mock.calls.length;
+		expect(calls).toBeGreaterThan(0);
+		expect(runtime.localizedCollections[0]?.labels.plural).toBe("Posts");
+		expect(runtime.localizedCollections[0]?.fields[0]?.admin.label).toBe("Status");
+		expect(localize.mock.calls).toHaveLength(calls);
+
+		await runtime.i18n.setLanguage("fr");
+		await expect.element(screen.getByRole("status")).toHaveTextContent("Articles: Statut");
+		runtime.manifest = {
+			...manifest,
+			collections: [
+				{ ...posts, labels: { ...posts.labels, pluralTranslations: { fr: "Publications" } } },
+			],
+		};
+		await expect.element(screen.getByRole("status")).toHaveTextContent("Publications: Statut");
+		await runtime.i18n.setLanguage("en");
+		await expect.element(screen.getByRole("status")).toHaveTextContent("Posts: Status");
+
+		// The translator can change its fallback without changing the active interface language.
+		runtime.i18n.configure({
+			languages: [en, fr].map(({ code, label }) => ({ code, label })),
+			defaultLanguage: "fr",
+		});
+		expect(runtime.i18n.language).toBe("en");
+		await expect.element(screen.getByRole("status")).toHaveTextContent("Publications: Statut");
+		expect(posts.labels.plural).toBe("Posts");
+		expect(posts.fields[0]?.admin.label).toBe("Status");
+		await screen.unmount();
+	} finally {
+		localize.mockRestore();
+		runtime.dispose();
+		if (storedLanguage === null) localStorage.removeItem(preferenceKey);
+		else localStorage.setItem(preferenceKey, storedLanguage);
+	}
+});
 
 describe("route content locale", () => {
 	test("prefers a supported URL locale, then the active locale, then the default", () => {

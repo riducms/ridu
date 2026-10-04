@@ -52,9 +52,13 @@ export class RichTextToolbarState {
 
 	outdent = () => this.#withSelection(() => changeIndent(this.#editor, "outdent"));
 
-	toggleLink = () => toggleLink(this.#editor, this.#current.link);
+	toggleLink = () => {
+		if (this.#editor.isEditable()) toggleLink(this.#editor, this.#current.link);
+	};
 
-	focusEditor = () => this.#editor.focus();
+	focusEditor = () => {
+		if (this.#editor.isEditable()) this.#editor.focus();
+	};
 
 	#refresh(next: RichTextToolbarSelection) {
 		if (sameToolbarSelection(this.#current, next)) return;
@@ -64,7 +68,14 @@ export class RichTextToolbarState {
 
 	// A fixed toolbar can be used before the editor has a selection; place the caret at the end.
 	#withSelection(command: () => void) {
+		if (!this.#editor.isEditable()) return;
 		if (this.#current.kind !== "none") command();
-		else this.#editor.focus(command, { defaultSelection: "rootEnd" });
+		else
+			this.#editor.focus(
+				() => {
+					if (this.#editor.isEditable()) command();
+				},
+				{ defaultSelection: "rootEnd" }
+			);
 	}
 }

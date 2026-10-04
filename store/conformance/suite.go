@@ -32,6 +32,43 @@ func Run(t *testing.T, factory Factory) {
 	runTest := func(name string, test func(*testing.T)) {
 		t.Run(name, test)
 	}
+	runTest("versions-only-rejects-draft-write-intents", func(t *testing.T) {
+		snapshot := manifest.Snapshot()
+		for index := range snapshot.Collections {
+			if snapshot.Collections[index].Versions != nil {
+				snapshot.Collections[index].Versions.Drafts = false
+			}
+		}
+		fixture := openFixture(t, factory, schema.NewManifest(snapshot))
+		transaction := begin(t, fixture.backend)
+		defer rollback(t, transaction)
+		created, err := transaction.Create(t.Context(), fixture.createRequest(store.CreateRequest{
+			Collection: fixture.records, ID: id(1), Values: recordValues("live", 1), Status: store.StatusPublished,
+		}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, intent := range []store.WriteIntent{store.WriteIntentSaveDraft, store.WriteIntentDiscardDraft} {
+			if _, err := transaction.Update(t.Context(), fixture.updateRequest(store.UpdateRequest{
+				Request: store.Request{Collection: fixture.records, ID: created.ID, ExpectedRevision: created.Revision},
+				Intent:  intent, Values: store.Values{"state": store.String("private")},
+			})); err == nil {
+				t.Fatalf("versions-only collection accepted %s", intent)
+			}
+		}
+		for _, publishedOnly := range []bool{false, true} {
+			current, err := transaction.Find(t.Context(), fixture.request(store.Request{
+				Collection: fixture.records, ID: created.ID, PublishedOnly: publishedOnly,
+			}))
+			if err != nil || current.Revision != created.Revision {
+				t.Fatalf("rejected draft write changed head publishedOnly=%t: %#v, %v", publishedOnly, current, err)
+			}
+			state, _ := current.Values["state"].StringValue()
+			if state != "live" {
+				t.Fatalf("rejected draft write changed head publishedOnly=%t: %q", publishedOnly, state)
+			}
+		}
+	})
 
 	runTest("filter-and-access-compose", func(t *testing.T) {
 		fixture := openFixture(t, factory, manifest)
@@ -475,6 +512,7 @@ func Run(t *testing.T, factory Factory) {
 		patched, err := transaction.Update(t.Context(), fixture.updateRequest(store.UpdateRequest{
 			Request: store.Request{Collection: fixture.records, ID: created.ID, ExpectedRevision: created.Revision},
 			Values:  store.Values{"state": store.String("patched")},
+			Intent:  store.WriteIntentPublish,
 		}))
 		if err != nil {
 			rollback(t, transaction)
@@ -493,6 +531,7 @@ func Run(t *testing.T, factory Factory) {
 		replaced, err := transaction.Update(t.Context(), fixture.updateRequest(store.UpdateRequest{
 			Request:       store.Request{Collection: fixture.records, ID: created.ID, ExpectedRevision: patched.Revision},
 			Values:        snapshot,
+			Intent:        store.WriteIntentPublish,
 			ReplaceValues: true,
 		}))
 		if err != nil {
@@ -687,6 +726,7 @@ func Run(t *testing.T, factory Factory) {
 		updated, err := transaction.Update(t.Context(), fixture.updateRequest(store.UpdateRequest{
 			Request: store.Request{Collection: fixture.records, ID: created.ID, ExpectedRevision: created.Revision},
 			Values:  store.Values{"state": store.String("second")},
+			Intent:  store.WriteIntentPublish,
 		}))
 		if err != nil {
 			rollback(t, transaction)

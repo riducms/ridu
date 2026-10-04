@@ -61,15 +61,17 @@
 
 	let {
 		field: binding,
-		form,
 		config,
 		authoring,
 		i18n,
+		commitEditorValue,
 		acceptEmbeddedChange,
-	}: PluginFieldProps<RichTextDocument<unknown>, RichTextConfig> & {
+	}: Omit<PluginFieldProps<RichTextDocument<unknown>, RichTextConfig>, "form"> & {
+		commitEditorValue: (value: RichTextDocument<unknown>) => void;
 		acceptEmbeddedChange: () => void;
 	} = $props();
 	const { schema: field, readOnly: editingBlocked, issues } = $derived(binding);
+	const schemaReadOnly = $derived(field.admin.readOnly === true);
 	// An edit whose export the server would reject stays in the editor and is held by the
 	// form as a pending edit, so it can neither be saved nor left without a warning.
 	let rejectedChange = $state<string>();
@@ -83,7 +85,7 @@
 		fieldControlARIA(field.id, field.admin.description !== undefined, errors.length > 0)
 	);
 	const visiblePlaceholder = $derived(
-		editingBlocked
+		schemaReadOnly
 			? i18n.t("plugin.richtext:editor.empty")
 			: i18n.t("plugin.richtext:editor.placeholder")
 	);
@@ -102,9 +104,6 @@
 		acceptEmbeddedChange: () => acceptEmbeddedChange(),
 		get field() {
 			return field;
-		},
-		get form() {
-			return form;
 		},
 	});
 
@@ -230,7 +229,7 @@
 			binding.reportPendingEdit([]);
 			// Reconciliation and history updates can dirty nodes without changing the document.
 			if (equalRichTextValues(value, binding.rawValue)) return;
-			binding.set(value as RichTextDocument<unknown>);
+			commitEditorValue(value as RichTextDocument<unknown>);
 			return;
 		}
 		rejectedChange = i18n.t("plugin.richtext:editor.rejectedChange", {
@@ -267,7 +266,7 @@
 			class={[
 				"ridu-richtext-editor",
 				errors.length > 0 && "has-error",
-				editingBlocked && "is-read-only",
+				schemaReadOnly && "is-read-only",
 				config.admin.hideGutter && "is-gutterless",
 			]}
 			aria-invalid={inputARIA["aria-invalid"]}
@@ -281,8 +280,12 @@
 				</Button>
 			{:else}
 				<LexicalExtensionComposer {extension} contentEditable={null}>
-					{#if config.admin.fixedToolbar && !editingBlocked}
-						<div class="ridu-richtext-fixed-toolbar-slot" bind:this={fixedToolbarSlot}></div>
+					{#if config.admin.fixedToolbar && !schemaReadOnly}
+						<div
+							class="ridu-richtext-fixed-toolbar-slot"
+							bind:this={fixedToolbarSlot}
+							inert={editingBlocked}
+						></div>
 					{/if}
 					<div class="ridu-richtext-canvas" bind:this={canvasElement}>
 						<ContentEditable
@@ -312,9 +315,6 @@
 					{/if}
 					{#if !editingBlocked}
 						<RichTextSlashMenu {authoring} {config} />
-						<!-- Mounted after the canvas, where editor listeners have always run; the fixed
-						     toolbar portals into its slot above the text. -->
-						<RichTextToolbars {config} {fixedToolbarSlot} />
 						{#if hasRichTextFeature(config, "links")}
 							<RichTextLinkPlugin />
 						{/if}
@@ -328,6 +328,10 @@
 							<RichTextRelationshipPlugin {authoring} {config} {field} />
 						{/if}
 					{/if}
+					<!-- Keep the fixed toolbar's height while a save temporarily locks the editor. -->
+					{#if !schemaReadOnly}
+						<RichTextToolbars {config} {fixedToolbarSlot} />
+					{/if}
 					<RichTextEditabilityPlugin readOnly={editingBlocked} />
 					<RichTextBlocksPlugin {authoring} {field} />
 					<OnChangePlugin
@@ -336,7 +340,7 @@
 						ignoreHistoryMergeTagChange={false}
 					/>
 					{#if !config.admin.hideInsertParagraphAtEnd}
-						<RichTextFooter readOnly={editingBlocked} />
+						<RichTextFooter readOnly={schemaReadOnly} />
 					{/if}
 				</LexicalExtensionComposer>
 			{/if}

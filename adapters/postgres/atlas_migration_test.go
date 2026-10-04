@@ -992,7 +992,13 @@ func referenceRootWithoutChildren(root schema.Field) schema.Field {
 	if root.Blocks != nil {
 		blocks := append([]schema.BlockType(nil), root.Blocks.ResolvedTypes()...)
 		for index := range blocks {
+			fields := blocks[index].ResolvedFields()
 			blocks[index].Fields = nil
+			for _, child := range fields {
+				if child.Name == "blockName" {
+					blocks[index].Fields = append(blocks[index].Fields, child)
+				}
+			}
 		}
 		root.Blocks = &schema.BlocksField{Types: blocks}
 	}
@@ -1034,7 +1040,7 @@ func retirementReferenceRoot(t *testing.T, shape string, includeRetired bool) sc
 		root.Nested = &schema.NestedField{Fields: []schema.Field{reference}}
 	case "blocks":
 		root.Type = schema.FieldTypeBlocks
-		root.Blocks = &schema.BlocksField{Types: []schema.BlockType{{Slug: "reference", Labels: schema.BlockLabels{Singular: "Reference"}, Fields: []schema.Field{reference}}}}
+		root.Blocks = &schema.BlocksField{Types: []schema.BlockType{{Slug: "reference", Labels: schema.BlockLabels{Singular: "Reference"}, Fields: []schema.Field{reference, atlasBlockNameField("entries-content-reference-block-name", "content.reference.blockName")}}}}
 	default:
 		t.Fatalf("unknown retirement reference shape %q", shape)
 	}
@@ -1566,6 +1572,14 @@ func atlasUploadReferenceManifest() schema.Manifest {
 func atlasTextField(id schema.StableID, name string) schema.Field {
 	path, _ := query.NewPath(name)
 	return schema.Field{ID: id, Name: name, Path: path, Type: schema.FieldTypeText, Category: schema.FieldCategoryScalar, Admin: schema.FieldAdmin{Label: name}, Text: &schema.TextField{}}
+}
+
+func atlasBlockNameField(id schema.StableID, path string) schema.Field {
+	name := atlasTextField(id, "blockName")
+	name.Path, _ = query.ParsePath(path)
+	empty := ""
+	name.Default = &empty
+	return name
 }
 
 func artifactSQL(t *testing.T, artifact ridumigration.Artifact) string {

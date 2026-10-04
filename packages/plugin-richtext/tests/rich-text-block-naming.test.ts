@@ -24,13 +24,13 @@ describe("rich-text block names", () => {
 				const first = createBlockNode({
 					_key: "first",
 					blockType: "callout",
-					name: "Before",
+					blockName: "Before",
 					nested: { retained: true },
 				});
 				firstKey = first.getKey();
 				$getRoot().append(
 					first,
-					createBlockNode({ _key: "second", blockType: "callout", name: "Sibling" })
+					createBlockNode({ _key: "second", blockType: "callout", blockName: "Sibling" })
 				);
 			},
 			{ discrete: true }
@@ -42,8 +42,7 @@ describe("rich-text block names", () => {
 				updateBlockName({
 					nodeKey: firstKey,
 					identity: "first",
-					nameField: "name",
-					change: { field: "name", value: "After" },
+					value: "After",
 				});
 			},
 			{ tag: session.nextTag(), discrete: true }
@@ -52,10 +51,10 @@ describe("rich-text block names", () => {
 			{
 				_key: "first",
 				blockType: "callout",
-				name: "After",
+				blockName: "After",
 				nested: { retained: true },
 			},
-			{ _key: "second", blockType: "callout", name: "Sibling" },
+			{ _key: "second", blockType: "callout", blockName: "Sibling" },
 		]);
 
 		editor.update(
@@ -63,19 +62,12 @@ describe("rich-text block names", () => {
 				updateBlockName({
 					nodeKey: firstKey,
 					identity: "stale",
-					nameField: "name",
-					change: { field: "name", value: "Wrong identity" },
-				});
-				updateBlockName({
-					nodeKey: firstKey,
-					identity: "first",
-					nameField: "name",
-					change: { field: "other", value: "Wrong field" },
+					value: "Wrong identity",
 				});
 			},
 			{ discrete: true }
 		);
-		expect(fields(editor.getEditorState())[0]?.name).toBe("After");
+		expect(fields(editor.getEditorState())[0]?.blockName).toBe("After");
 	});
 
 	it("groups each simulated focus session into one undo entry and supports redo", async () => {
@@ -85,7 +77,7 @@ describe("rich-text block names", () => {
 		let nodeKey = "";
 		editor.update(
 			() => {
-				const node = createBlockNode({ _key: "one", blockType: "callout", name: "Before" });
+				const node = createBlockNode({ _key: "one", blockType: "callout", blockName: "Before" });
 				nodeKey = node.getKey();
 				$getRoot().append(node);
 			},
@@ -98,8 +90,7 @@ describe("rich-text block names", () => {
 					updateBlockName({
 						nodeKey,
 						identity: "one",
-						nameField: "name",
-						change: { field: "name", value },
+						value,
 					});
 				},
 				{ tag: session.nextTag(), discrete: true }
@@ -109,21 +100,21 @@ describe("rich-text block names", () => {
 		update("F");
 		update("Fi");
 		update("First focus");
-		expect(fields(editor.getEditorState())[0]?.name).toBe("First focus");
+		expect(fields(editor.getEditorState())[0]?.blockName).toBe("First focus");
 		expect(history.undoStack.length).toBe(1);
 		editor.dispatchCommand(UNDO_COMMAND, undefined);
 		await Promise.resolve();
-		expect(fields(editor.getEditorState())[0]?.name).toBe("Before");
+		expect(fields(editor.getEditorState())[0]?.blockName).toBe("Before");
 		session.reset();
 		editor.dispatchCommand(REDO_COMMAND, undefined);
 		await Promise.resolve();
-		expect(fields(editor.getEditorState())[0]?.name).toBe("First focus");
+		expect(fields(editor.getEditorState())[0]?.blockName).toBe("First focus");
 
 		session.reset();
 		update("Second focus");
 		editor.dispatchCommand(UNDO_COMMAND, undefined);
 		await Promise.resolve();
-		expect(fields(editor.getEditorState())[0]?.name).toBe("First focus");
+		expect(fields(editor.getEditorState())[0]?.blockName).toBe("First focus");
 		unregister();
 	});
 });

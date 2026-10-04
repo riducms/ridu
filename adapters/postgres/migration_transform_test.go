@@ -166,7 +166,7 @@ func buildPostgresTransformTestArtifact(ctx context.Context, name string, before
 
 // Creation binds a registered transform through the same planner the runner
 // regenerates, so a JSON-backed kind change and a data-only artifact both
-// verify. A cast PostgreSQL cannot apply in place is refused at creation.
+// verify. A cast PostgreSQL cannot apply in place is refused by either path.
 func TestPostgresTransformCreationMatchesRunnerRegeneration(t *testing.T) {
 	ctx := t.Context()
 	descriptor := ridumigration.DataTransformDescriptor{Name: "convert-body", Checksum: ridumigration.DataTransformChecksum([]byte("convert-body-v1"))}
@@ -198,5 +198,8 @@ func TestPostgresTransformCreationMatchesRunnerRegeneration(t *testing.T) {
 	before, after := resolve(field.Text("body")), resolve(field.Number("body"))
 	if _, err := BuildArtifact(ctx, "convert", &before, after, nil, true, descriptor); err == nil || !strings.Contains(err.Error(), "cannot convert posts.body from text to double precision in place") {
 		t.Fatalf("uncastable column change with a transform = %v", err)
+	}
+	if _, err := planArtifact(ctx, "convert", &before, after, nil, true, descriptor); err == nil || !strings.Contains(err.Error(), "cannot convert posts.body from text to double precision in place") {
+		t.Fatalf("uncastable column change during replay = %v", err)
 	}
 }

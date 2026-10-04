@@ -74,6 +74,7 @@ func (engine *Engine) preparePopulations(collection Collection, operationContext
 			continue
 		}
 		if includeDrafts {
+			request.PopulationPublishedOnly[targetID] = false
 			if decision.Kind == Where {
 				request.PopulationAccess[targetID] = decision.Access
 			}
@@ -81,7 +82,7 @@ func (engine *Engine) preparePopulations(collection Collection, operationContext
 		}
 		// Each target shows drafts only to actors that may read its drafts,
 		// whatever the root collection allows.
-		access, draftError := engine.publishedTargetAccess(targetCollection, populationContext, decision.Access)
+		publishedOnly, draftError := engine.publishedTargetOnly(targetCollection, populationContext)
 		if draftError != nil {
 			var operationError *Error
 			if errors.As(draftError, &operationError) {
@@ -89,8 +90,9 @@ func (engine *Engine) preparePopulations(collection Collection, operationContext
 			}
 			return &Error{Code: "access_failed", Status: 500, Message: "population draft access failed", Cause: draftError}
 		}
-		if access != nil {
-			request.PopulationAccess[targetID] = access
+		request.PopulationPublishedOnly[targetID] = request.PublishedOnly || publishedOnly
+		if decision.Kind == Where {
+			request.PopulationAccess[targetID] = decision.Access
 		}
 	}
 	return nil

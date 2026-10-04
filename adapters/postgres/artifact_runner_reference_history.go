@@ -26,14 +26,12 @@ func validatePostgresSemanticHistory(files []migrationartifact.File) error {
 	return validatePostgresReferenceSafetyHistory(files)
 }
 
-// validatePostgresPlannerHistory admits only artifacts planned by this
-// release's planner. Every committed artifact, applied or pending, is
-// regenerated against that single contract.
+// Only the current planner has a replayable physical schema contract.
 func validatePostgresPlannerHistory(files []migrationartifact.File) error {
 	for _, file := range files {
 		planner := file.Artifact.Planner
-		if planner.Name != atlasPlannerName || planner.Version != AtlasVersion {
-			return fmt.Errorf("PostgreSQL migration %s uses unsupported planner %s %q; this Ridu release plans and applies only %s %q artifacts, so create a new migration history with ridu migrate create and apply it to a new database", file.Name, planner.Name, planner.Version, atlasPlannerName, AtlasVersion)
+		if planner != atlasPlanner() {
+			return fmt.Errorf("PostgreSQL migration %s uses unsupported planner %s %q; this release supports only %s %q, so create a new migration history on a fresh database", file.Name, planner.Name, planner.Version, atlasPlannerName, AtlasVersion)
 		}
 	}
 	return nil

@@ -646,8 +646,46 @@ type BlocksField struct {
 
 // BlockAdmin contains presentation metadata derived from direct block children.
 type BlockAdmin struct {
-	NameField string `json:"nameField,omitempty"`
-	RowLabel  string `json:"rowLabel,omitempty"`
+	RowLabel string `json:"rowLabel,omitempty"`
+
+	// Retained only to verify and re-encode immutable snapshots. Application
+	// configuration cannot author the retired naming property.
+	recordedNameField    string
+	hasRecordedNameField bool
+}
+
+// MarshalJSON encodes block presentation metadata, retaining recorded history.
+func (admin BlockAdmin) MarshalJSON() ([]byte, error) {
+	// Preserve the original property order used by canonical historical digests.
+	return json.Marshal(struct {
+		NameField string `json:"nameField,omitempty"`
+		RowLabel  string `json:"rowLabel,omitempty"`
+	}{NameField: admin.recordedNameField, RowLabel: admin.RowLabel})
+}
+
+// UnmarshalJSON decodes block presentation metadata. Parse applies the current
+// authoring rules; ParseHistorical validates recorded naming metadata instead.
+func (admin *BlockAdmin) UnmarshalJSON(encoded []byte) error {
+	var wire struct {
+		NameField json.RawMessage `json:"nameField,omitempty"`
+		RowLabel  string          `json:"rowLabel,omitempty"`
+	}
+	decoder := json.NewDecoder(bytes.NewReader(encoded))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&wire); err != nil {
+		return err
+	}
+	if err := ensureJSONEnd(decoder); err != nil {
+		return err
+	}
+	decoded := BlockAdmin{RowLabel: wire.RowLabel, hasRecordedNameField: len(wire.NameField) != 0}
+	if decoded.hasRecordedNameField {
+		if err := json.Unmarshal(wire.NameField, &decoded.recordedNameField); err != nil {
+			return err
+		}
+	}
+	*admin = decoded
+	return nil
 }
 
 // BlockLabels contains resolved author-facing names and admin language overrides.
@@ -686,8 +724,24 @@ func NewManifest(snapshot Snapshot) Manifest {
 }
 
 // Parse decodes a manifest, rejects unknown properties, and verifies that its
-// format version is supported by this schema package.
+// format version and authoring metadata are supported by this schema package.
 func Parse(encoded []byte) (Manifest, error) {
+	return parse(encoded, true)
+}
+
+// ParseHistorical decodes a recorded manifest without imposing the automatic
+// blockName child introduced after earlier version-1 snapshots were stored.
+// It retains those schemas exactly, including an authored blockName of another
+// kind, so digest verification and schema-change admission use the actual prior
+// state. All other format and metadata checks are the same as Parse.
+// Retired admin.nameField metadata is retained privately for historical identity,
+// not exposed as an authoring API or interpreted by the current admin.
+// Use Parse for current generated contracts and executable configuration.
+func ParseHistorical(encoded []byte) (Manifest, error) {
+	return parse(encoded, false)
+}
+
+func parse(encoded []byte, requireBlockNames bool) (Manifest, error) {
 	decoder := json.NewDecoder(bytes.NewReader(encoded))
 	decoder.DisallowUnknownFields()
 
@@ -704,7 +758,7 @@ func Parse(encoded []byte) (Manifest, error) {
 	if err := BindBlockReferences(&snapshot); err != nil {
 		return Manifest{}, err
 	}
-	if err := validateBlockNameMetadata(snapshot); err != nil {
+	if err := validateBlockNameMetadata(snapshot, requireBlockNames); err != nil {
 		return Manifest{}, err
 	}
 	if err := ValidateEmbeddedMetadata(snapshot); err != nil {
@@ -1099,17 +1153,31 @@ func validateConstraintAndIndexMetadata(snapshot Snapshot) error {
 	return nil
 }
 
-func validateBlockNameMetadata(snapshot Snapshot) error {
+func validateBlockNameMetadata(snapshot Snapshot, requireBlockNames bool) error {
 	var inspectFields func([]Field, string) error
 	var inspectBlock func(BlockType, string) error
 	inspectBlock = func(block BlockType, path string) error {
-		if block.Admin != nil && block.Admin.NameField != "" {
-			child, found := directField(block.Fields, block.Admin.NameField)
+		if requireBlockNames {
+			if block.Admin != nil && block.Admin.hasRecordedNameField {
+				return fmt.Errorf("invalid block metadata at %s.admin.nameField: retired naming metadata is only valid in recorded historical schemas", path)
+			}
+			child, found := directField(block.Fields, "blockName")
 			if !found {
-				return fmt.Errorf("invalid block name field at %s.admin.nameField: must name an existing direct stored text child", path)
+				return fmt.Errorf("invalid block name at %s.fields.blockName: every block type requires a direct stored text child", path)
 			}
 			if reason := invalidBlockNameFieldReason(child); reason != "" {
-				return fmt.Errorf("invalid block name field at %s.admin.nameField: %s", path, reason)
+				return fmt.Errorf("invalid block name at %s.fields.blockName: %s", path, reason)
+			}
+		} else if block.Admin != nil && block.Admin.hasRecordedNameField {
+			if block.Admin.recordedNameField == "" {
+				return fmt.Errorf("invalid historical block name at %s.admin.nameField: recorded naming metadata requires a non-empty text child name", path)
+			}
+			child, found := directField(block.Fields, block.Admin.recordedNameField)
+			if !found {
+				return fmt.Errorf("invalid historical block name at %s.admin.nameField: must name an existing direct stored text child", path)
+			}
+			if reason := invalidBlockNameFieldReason(child); reason != "" {
+				return fmt.Errorf("invalid historical block name at %s.admin.nameField: %s", path, reason)
 			}
 		}
 		return inspectFields(block.Fields, path+".fields")

@@ -26,6 +26,7 @@ import {
 	preferenceOwnerID,
 } from "@admin/core/preferences/preference-write-queue";
 import { AdminI18nController } from "@admin/core/i18n/admin-i18n.svelte";
+import { localizeSchemaCollection } from "@admin/core/i18n/localized-schema";
 import { isHiddenAdminResource } from "@admin/core/schema/hidden-resource";
 
 export type ThemePreference = "system" | "light" | "dark";
@@ -79,6 +80,12 @@ export class AdminRuntime {
 		ownerID: string;
 		promise: Promise<void>;
 	};
+	// Field hosts share localization work; public authoring guards still detach their reads.
+	#localizedCollections = $derived(
+		this.manifest?.collections.map((collection) =>
+			localizeSchemaCollection(collection, this.i18n)
+		) ?? []
+	);
 
 	get authCollection() {
 		const admin = this.manifest?.application.admin;
@@ -134,6 +141,10 @@ export class AdminRuntime {
 
 	get contentLocales() {
 		return this.manifest?.application.localization?.locales ?? [];
+	}
+
+	get localizedCollections() {
+		return this.#localizedCollections;
 	}
 
 	get contentLocaleSwitchBlocked() {

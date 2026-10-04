@@ -19,8 +19,11 @@ func Values() store.Values {
 	block := store.CloneValues(children)
 	block["_key"] = store.String("block-A")
 	block["blockType"] = store.String("card")
+	block["blockName"] = store.String("")
 	document := func(key string) store.Value {
-		value, _ := richtextblocks.Document(richtextblocks.Block("card", key, children)).CopyObject()
+		payload := store.CloneValues(children)
+		payload["blockName"] = store.String("")
+		value, _ := richtextblocks.Document(richtextblocks.Block("card", key, payload)).CopyObject()
 		root, _ := value["root"].CopyObject()
 		// Omit unrelated optional-null editor metadata: PostgreSQL's existing
 		// localized projection removes null object properties. Lists still

@@ -42,28 +42,29 @@ const steps = [
 		id: 'model',
 		title: 'Define the model',
 		note: 'content/posts.go',
-		description: 'Fields, access rules, and hooks in Go.',
+		description: 'Collections, fields, access rules and hooks, written in Go.',
 		duration: 6500
 	},
 	{
 		id: 'edit',
 		title: 'Edit in the admin',
 		note: 'npm run dev',
-		description: 'The admin form comes from the model. No UI code.',
+		description:
+			'The admin builds its forms from your collections, so there is no UI code to write.',
 		duration: 5500
 	},
 	{
 		id: 'read',
-		title: 'Read it anywhere',
+		title: 'Read it from your app',
 		note: 'generated SDK',
-		description: 'Typed queries from your app, with the same access rules.',
+		description: 'Query it with the generated TypeScript SDK. The same access rules apply.',
 		duration: 6500
 	},
 	{
 		id: 'ship',
-		title: 'Ship one binary',
+		title: 'Build one binary',
 		note: 'npm run build',
-		description: 'Admin, API, and jobs in a single executable.',
+		description: 'The admin, API and background jobs compile into one executable.',
 		duration: 7500
 	}
 ] as const;
@@ -79,10 +80,10 @@ const steps = [
 	<div class="mx-auto max-w-860px text-center">
 		<p class="eyebrow">How it works</p>
 		<h2 id="home-workflow-title" class="mt-4 mb-0 text-38px leading-[1.05] sm:text-48px">
-			From a Go struct to a running CMS.
+			How a Ridu project fits together
 		</h2>
 		<div class="mt-5 flex items-center justify-center gap-3 text-13px text-ink-faint">
-			<span>Pick a step, or let it play.</span>
+			<span>The steps cycle on their own. Select one to stay on it.</span>
 			<button
 				type="button"
 				class="toggle inline-flex h-7 items-center gap-1.5 rounded-full border border-line bg-transparent px-2.5 text-12px text-ink-soft hover:(border-line-strong text-ink)"
@@ -105,15 +106,16 @@ const steps = [
 	</div>
 
 	<div
-		class="mt-10 grid gap-2 sm:grid-cols-2 lg:grid-cols-4"
+		class="steps mt-10 -mx-4 flex snap-x snap-mandatory gap-2 overflow-x-auto px-4 scroll-px-4 sm:(mx-0 grid grid-cols-2 overflow-visible px-0) lg:grid-cols-4"
 		role="tablist"
+		data-home-steps
 		aria-label="Ridu workflow"
 	>
 		{
 			steps.map((step, index) => (
 				<button
 					id={`home-tab-${step.id}`}
-					class="step group relative flex cursor-pointer flex-col items-start justify-start overflow-hidden rounded-6px border border-line bg-transparent px-4 pt-6 pb-4 text-left text-ink-soft transition-[background-color,border-color,color,transform] duration-200 hover:(border-line-strong bg-surface text-ink) aria-[selected=true]:(border-line-strong bg-surface-raised text-ink)"
+					class="step group relative flex w-[80%] shrink-0 snap-start cursor-pointer sm:w-auto flex-col items-start justify-start overflow-hidden rounded-6px border border-line bg-transparent px-4 pt-6 pb-4 text-left text-ink-soft transition-[background-color,border-color,color,transform] duration-200 hover:(border-line-strong bg-surface text-ink) aria-[selected=true]:(border-line-strong bg-surface-raised text-ink)"
 					type="button"
 					role="tab"
 					aria-selected={index === 0 ? 'true' : 'false'}
@@ -153,12 +155,13 @@ const steps = [
 				<div
 					class="flex flex-col justify-center gap-3 rounded-6px border border-line bg-surface px-7 py-8"
 				>
-					<p class="eyebrow">You get</p>
+					<p class="eyebrow">Generated from this file</p>
 					<ul class="reveal-list m-0 grid list-none gap-2.5 p-0 text-15px text-ink-soft">
-						<li><span class="mr-2 text-accent">→</span>An admin list and edit form</li>
+						<li><span class="mr-2 text-accent">→</span>An admin list view and edit form</li>
 						<li><span class="mr-2 text-accent">→</span>REST endpoints and an OpenAPI spec</li>
-						<li><span class="mr-2 text-accent">→</span>A typed TypeScript SDK</li>
-						<li><span class="mr-2 text-accent">→</span>A reviewed database migration</li>
+						<li><span class="mr-2 text-accent">→</span>TypeScript types and a typed SDK</li>
+						<li><span class="mr-2 text-accent">→</span>A database migration for you to review</li>
+						<li><span class="mr-2 text-accent">→</span>A GraphQL API, if you add the plugin</li>
 					</ul>
 				</div>
 			</div>
@@ -236,6 +239,14 @@ const steps = [
 		display: inline;
 	}
 
+	/* On phones the steps scroll sideways; the strip hides its scrollbar. */
+	.steps {
+		scrollbar-width: none;
+	}
+	.steps::-webkit-scrollbar {
+		display: none;
+	}
+
 	/* Panels share one grid cell, so switching never changes the section's height. */
 	.panels {
 		display: grid;
@@ -273,6 +284,9 @@ const steps = [
 	}
 	[data-active] .reveal-list > li:nth-child(4) {
 		animation-delay: 0.95s;
+	}
+	[data-active] .reveal-list > li:nth-child(5) {
+		animation-delay: 1.15s;
 	}
 	[data-active] .screenshot :global(img) {
 		animation: home-settle 1.4s cubic-bezier(0.2, 0.7, 0.2, 1) both;
@@ -341,6 +355,7 @@ const steps = [
 			const tabs = [...workflow.querySelectorAll<HTMLButtonElement>('[data-home-tab]')];
 			const panels = [...workflow.querySelectorAll<HTMLElement>('[data-home-panel]')];
 			const toggle = workflow.querySelector<HTMLButtonElement>('[data-home-toggle]');
+			const strip = workflow.querySelector<HTMLElement>('[data-home-steps]');
 			const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 			let autoplay = !reducedMotion.matches;
 			let hovered = false;
@@ -357,7 +372,17 @@ const steps = [
 				);
 			};
 
+			// Keep the active step visible in the phone strip without scrolling the page.
+			const reveal = (tab: HTMLButtonElement) => {
+				if (strip === null || strip.scrollWidth <= strip.clientWidth) return;
+				strip.scrollTo({
+					left: tab.offsetLeft - strip.offsetLeft - 16,
+					behavior: reducedMotion.matches ? 'auto' : 'smooth'
+				});
+			};
+
 			const select = (tab: HTMLButtonElement) => {
+				reveal(tab);
 				for (const candidate of tabs) {
 					const selected = candidate === tab;
 					candidate.setAttribute('aria-selected', String(selected));

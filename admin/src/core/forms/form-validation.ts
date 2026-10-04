@@ -9,6 +9,7 @@ import { joinFormPath } from "@admin/core/forms/form-path";
 
 export interface FormValidationOptions {
 	requireMissing: boolean;
+	mode?: "complete" | "draft";
 	include?: (path: string, canonicalPath: string) => boolean;
 	i18n?: AdminI18n;
 }
@@ -24,6 +25,7 @@ export function validateFormValues(
 		values,
 		"",
 		options.requireMissing,
+		options.mode === "draft",
 		issues,
 		options.include ?? (() => true),
 		options.i18n
@@ -111,6 +113,7 @@ function validateFields(
 	values: FormValues,
 	prefix: string,
 	requireMissing: boolean,
+	allowIncomplete: boolean,
 	issues: ValidationIssue[],
 	include: (path: string, canonicalPath: string) => boolean,
 	i18n?: AdminI18n
@@ -124,16 +127,22 @@ function validateFields(
 		if (!exists) {
 			const defaults = requireMissing ? initialFormValues([field]) : {};
 			if (Object.hasOwn(defaults, field.name)) {
-				validateFields([field], defaults, prefix, true, issues, include, i18n);
-			} else if (requireMissing && field.required && !field.dynamicDefault) {
+				validateFields([field], defaults, prefix, true, allowIncomplete, issues, include, i18n);
+			} else if (requireMissing && !allowIncomplete && field.required && !field.dynamicDefault) {
 				issues.push(requiredIssue(field, path, i18n));
 			} else if (
 				requireMissing &&
+				!allowIncomplete &&
 				!field.dynamicDefault &&
 				(field.type === "text-list" || field.type === "number-list")
 			) {
-				validatePrimitiveList(field, [], path, issues, i18n);
-			} else if (requireMissing && field.type === "array" && (field.nested?.minRows ?? 0) > 0) {
+				validatePrimitiveList(field, [], path, allowIncomplete, issues, i18n);
+			} else if (
+				requireMissing &&
+				!allowIncomplete &&
+				field.type === "array" &&
+				(field.nested?.minRows ?? 0) > 0
+			) {
 				issues.push(
 					issue(
 						"min_rows",
@@ -150,10 +159,10 @@ function validateFields(
 			continue;
 		}
 		if (value === null || value === undefined) {
-			if (field.required) issues.push(requiredIssue(field, path, i18n));
+			if (field.required && !allowIncomplete) issues.push(requiredIssue(field, path, i18n));
 			else if (field.type === "text-list" || field.type === "number-list")
-				validatePrimitiveList(field, [], path, issues, i18n);
-			else if (field.type === "array" && (field.nested?.minRows ?? 0) > 0) {
+				validatePrimitiveList(field, [], path, allowIncomplete, issues, i18n);
+			else if (!allowIncomplete && field.type === "array" && (field.nested?.minRows ?? 0) > 0) {
 				issues.push(
 					issue(
 						"min_rows",
@@ -173,14 +182,14 @@ function validateFields(
 		switch (field.type) {
 			case "text-list":
 			case "number-list":
-				validatePrimitiveList(field, value, path, issues, i18n);
+				validatePrimitiveList(field, value, path, allowIncomplete, issues, i18n);
 				break;
 			case "text":
 			case "code":
 			case "textarea":
 			case "email":
 			case "date":
-				validateString(field, value, path, issues, i18n);
+				validateString(field, value, path, allowIncomplete, issues, i18n);
 				break;
 			case "number":
 				if (typeof value !== "number" || !Number.isFinite(value)) {
@@ -216,16 +225,16 @@ function validateFields(
 				break;
 			case "select":
 			case "radio":
-				validateSelect(field, value, path, issues, i18n);
+				validateSelect(field, value, path, allowIncomplete, issues, i18n);
 				break;
 			case "point":
 				validatePoint(field, value, path, issues, i18n);
 				break;
 			case "relationship":
-				validateReference(field, value, path, false, issues, i18n);
+				validateReference(field, value, path, false, allowIncomplete, issues, i18n);
 				break;
 			case "upload":
-				validateReference(field, value, path, true, issues, i18n);
+				validateReference(field, value, path, true, allowIncomplete, issues, i18n);
 				break;
 			case "group":
 				if (!isRecord(value) || field.nested === undefined) {
@@ -242,14 +251,23 @@ function validateFields(
 						)
 					);
 				} else {
-					validateFields(field.nested.fields, value, path, true, issues, include, i18n);
+					validateFields(
+						field.nested.fields,
+						value,
+						path,
+						true,
+						allowIncomplete,
+						issues,
+						include,
+						i18n
+					);
 				}
 				break;
 			case "array":
-				validateRows(field, value, path, issues, include, i18n);
+				validateRows(field, value, path, allowIncomplete, issues, include, i18n);
 				break;
 			case "blocks":
-				validateBlocks(field, value, path, issues, include, i18n);
+				validateBlocks(field, value, path, allowIncomplete, issues, include, i18n);
 				break;
 			case "plugin": {
 				const embedded = embeddedOccurrences(field, value, path);
@@ -260,6 +278,7 @@ function validateFields(
 						occurrence.payload,
 						occurrence.path,
 						true,
+						allowIncomplete,
 						issues,
 						include,
 						i18n
@@ -277,6 +296,7 @@ function validatePrimitiveList(
 	field: SchemaField,
 	value: unknown,
 	path: string,
+	allowIncomplete: boolean,
 	issues: ValidationIssue[],
 	i18n: AdminI18n = createAdminI18n()
 ) {
@@ -290,7 +310,7 @@ function validatePrimitiveList(
 		report("invalid_type", "errors:array");
 		return;
 	}
-	const minimum = Math.max(field.required ? 1 : 0, field.list?.minRows ?? 0);
+	const minimum = allowIncomplete ? 0 : Math.max(field.required ? 1 : 0, field.list?.minRows ?? 0);
 	if (value.length < minimum)
 		report(field.required && value.length === 0 ? "required" : "min_rows", "errors:listMinItems", {
 			count: minimum,
@@ -305,7 +325,7 @@ function validatePrimitiveList(
 				continue;
 			}
 			const length = Array.from(item).length;
-			if (length < (field.text?.minLength ?? 0))
+			if (!allowIncomplete && length < (field.text?.minLength ?? 0))
 				report("min_length", "errors:listItemMinLength", { number, count: field.text!.minLength! });
 			if (field.text?.maxLength !== undefined && length > field.text.maxLength)
 				report("max_length", "errors:listItemMaxLength", { number, count: field.text.maxLength });
@@ -324,6 +344,7 @@ function validateString(
 	field: SchemaField,
 	value: unknown,
 	path: string,
+	allowIncomplete: boolean,
 	issues: ValidationIssue[],
 	i18n?: AdminI18n
 ) {
@@ -340,7 +361,7 @@ function validateString(
 				)
 			)
 		);
-	} else if (field.required && value.length === 0) {
+	} else if (!allowIncomplete && field.required && value.length === 0) {
 		issues.push(requiredIssue(field, path, i18n));
 	}
 }
@@ -349,11 +370,12 @@ function validateSelect(
 	field: SchemaField,
 	value: unknown,
 	path: string,
+	allowIncomplete: boolean,
 	issues: ValidationIssue[],
 	i18n?: AdminI18n
 ) {
 	if (field.type === "select" && field.select?.hasMany === true) {
-		validateSelectMany(field, value, path, issues, i18n);
+		validateSelectMany(field, value, path, allowIncomplete, issues, i18n);
 		return;
 	}
 	if (typeof value !== "string") {
@@ -372,7 +394,7 @@ function validateSelect(
 		return;
 	}
 	if (value === "") {
-		if (field.required) issues.push(requiredIssue(field, path, i18n));
+		if (field.required && !allowIncomplete) issues.push(requiredIssue(field, path, i18n));
 		return;
 	}
 	if (!field.select?.options.some((option) => option.value === value)) {
@@ -395,6 +417,7 @@ function validateSelectMany(
 	field: SchemaField,
 	value: unknown,
 	path: string,
+	allowIncomplete: boolean,
 	issues: ValidationIssue[],
 	i18n?: AdminI18n
 ) {
@@ -414,7 +437,7 @@ function validateSelectMany(
 		return;
 	}
 	if (value.length === 0) {
-		if (field.required) issues.push(requiredIssue(field, path, i18n));
+		if (field.required && !allowIncomplete) issues.push(requiredIssue(field, path, i18n));
 		return;
 	}
 
@@ -506,6 +529,7 @@ function validateReference(
 	value: unknown,
 	path: string,
 	upload: boolean,
+	allowIncomplete: boolean,
 	issues: ValidationIssue[],
 	i18n?: AdminI18n
 ) {
@@ -528,7 +552,7 @@ function validateReference(
 			);
 			return;
 		}
-		if (field.required && value.length === 0) {
+		if (field.required && !allowIncomplete && value.length === 0) {
 			issues.push(
 				issue(
 					"required",
@@ -551,7 +575,7 @@ function validateReference(
 		return;
 	}
 	if (value === "") {
-		if (field.required) issues.push(requiredIssue(field, path, i18n));
+		if (field.required && !allowIncomplete) issues.push(requiredIssue(field, path, i18n));
 		return;
 	}
 	validateReferenceValue(field, value, path, upload, issues, i18n);
@@ -615,6 +639,7 @@ function validateRows(
 	field: SchemaField,
 	value: unknown,
 	path: string,
+	allowIncomplete: boolean,
 	issues: ValidationIssue[],
 	include: (path: string, canonicalPath: string) => boolean,
 	i18n?: AdminI18n
@@ -634,7 +659,7 @@ function validateRows(
 		);
 		return;
 	}
-	if (field.required && value.length === 0) {
+	if (field.required && !allowIncomplete && value.length === 0) {
 		issues.push(
 			issue(
 				"required",
@@ -648,7 +673,11 @@ function validateRows(
 			)
 		);
 	}
-	if (value.length < (field.nested.minRows ?? 0) && !(field.required && value.length === 0)) {
+	if (
+		!allowIncomplete &&
+		value.length < (field.nested.minRows ?? 0) &&
+		!(field.required && value.length === 0)
+	) {
 		issues.push(
 			issue(
 				"min_rows",
@@ -688,7 +717,7 @@ function validateRows(
 			);
 			continue;
 		}
-		validateFields(field.nested.fields, row, rowPath, true, issues, include, i18n);
+		validateFields(field.nested.fields, row, rowPath, true, allowIncomplete, issues, include, i18n);
 	}
 }
 
@@ -696,6 +725,7 @@ function validateBlocks(
 	field: SchemaField,
 	value: unknown,
 	path: string,
+	allowIncomplete: boolean,
 	issues: ValidationIssue[],
 	include: (path: string, canonicalPath: string) => boolean,
 	i18n?: AdminI18n
@@ -715,7 +745,7 @@ function validateBlocks(
 		);
 		return;
 	}
-	if (field.required && value.length === 0) {
+	if (field.required && !allowIncomplete && value.length === 0) {
 		issues.push(
 			issue(
 				"required",
@@ -731,7 +761,7 @@ function validateBlocks(
 	}
 	const minRows = field.blocks.minRows ?? 0;
 	const maxRows = field.blocks.maxRows ?? 0;
-	if (value.length < minRows && !(field.required && value.length === 0)) {
+	if (!allowIncomplete && value.length < minRows && !(field.required && value.length === 0)) {
 		issues.push(
 			issue(
 				"min_rows",
@@ -785,7 +815,7 @@ function validateBlocks(
 			);
 			continue;
 		}
-		validateFields(block.fields, row, rowPath, true, issues, include, i18n);
+		validateFields(block.fields, row, rowPath, true, allowIncomplete, issues, include, i18n);
 	}
 }
 

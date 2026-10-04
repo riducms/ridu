@@ -57,7 +57,7 @@
 		<div class="ridu-embedded-draft__header">
 			<SheetTitle>{options.title ?? i18n.t("fields:embeddedEditTitle")}</SheetTitle>
 			<SheetDescription>{i18n.t("fields:embeddedEditDescription")}</SheetDescription>
-			{#if !draft.stale && session.block.admin?.nameField !== undefined}
+			{#if !draft.stale}
 				<div class="ridu-embedded-draft__name">
 					<BlockHeader
 						block={session.block}
@@ -83,7 +83,7 @@
 			{/if}
 			{#if !draft.stale}
 				<FieldLayout
-					fields={session.fields.filter((field) => field.name !== session.block.admin?.nameField)}
+					fields={session.fields.filter((field) => field.name !== "blockName")}
 					form={session.form}
 				/>
 			{/if}

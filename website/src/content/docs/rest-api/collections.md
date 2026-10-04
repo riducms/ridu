@@ -127,6 +127,12 @@ These routes exist only when collection versions are enabled. Unpublish, includi
 unpublish action, additionally requires draft support. Publish, unpublish, restore, and schedule
 operations accept `If-Match`.
 
+For draft-enabled resources, `?draft=true` selects authorized working content on reads and saves
+pending content on create/update. `?draft=false` selects the preserved live snapshot on reads;
+on create it validates and publishes atomically. To publish an existing working draft, use the
+publish route. Draft writes defer editorial completeness, not structural validation or access.
+Live filters, counts, sorting, and pagination use the live snapshot's values.
+
 <dl class="doc-option-list">
   <div>
     <dt><code>GET /api/collections/{collection}/{id}/versions</code></dt>
@@ -142,11 +148,15 @@ operations accept `If-Match`.
   </div>
   <div>
     <dt><code>POST /api/collections/{collection}/{id}/unpublish</code></dt>
-    <dd>Return the current document to draft.</dd>
+    <dd>Remove the live snapshot while retaining working content.</dd>
+  </div>
+  <div>
+    <dt><code>POST /api/collections/{collection}/{id}/discard-draft</code></dt>
+    <dd>Reset saved pending changes to the live snapshot without unpublishing. Requires draft support and update access.</dd>
   </div>
   <div>
     <dt><code>POST /api/collections/{collection}/{id}/restore/{revision}</code></dt>
-    <dd>Restore a snapshot; add <code>?draft=true</code> to restore it as a draft.</dd>
+    <dd>Restore a snapshot and its publication state; add <code>?draft=true</code> to restore working content without changing the live snapshot.</dd>
   </div>
   <div>
     <dt><code>GET /api/collections/{collection}/{id}/schedule</code></dt>
@@ -188,11 +198,11 @@ An upload-enabled collection adds these routes:
 <dl class="doc-option-list">
   <div>
     <dt><code>POST /api/collections/{collection}</code></dt>
-    <dd>Multipart <code>file</code>, with optional JSON <code>data</code> and <code>image</code> fields and a <code>publish</code> flag.</dd>
+    <dd>Multipart <code>file</code>, with optional JSON <code>data</code> and <code>image</code> fields. For a draft-enabled collection, <code>?draft=false</code> validates and publishes on creation.</dd>
   </div>
   <div>
     <dt><code>POST /api/collections/{collection}/remote-upload</code></dt>
-    <dd>JSON <code>url</code>, optional <code>data</code>, <code>image</code>, <code>filename</code>, and <code>publish</code>. Creates a document.</dd>
+    <dd>JSON <code>url</code>, optional <code>data</code>, <code>image</code>, and <code>filename</code>. Creates a document; <code>?draft=false</code> validates and publishes on creation.</dd>
   </div>
   <div>
     <dt><code>POST /api/collections/{collection}/upload-preview</code></dt>
@@ -221,7 +231,8 @@ An upload-enabled collection adds these routes:
 </dl>
 
 Multipart upload and file replacement require `file`. The optional `data` and `image` multipart
-fields contain JSON objects; send `publish=true` to publish a versioned asset in the same operation.
+fields contain JSON objects. Creation uses `?draft=false` to validate and publish; an existing
+asset update uses `publish=true` to commit file/metadata changes and publication in one operation.
 JSON updates can change `data` or `image` without replacing the file. Multipart requests are limited
 to the collection’s maximum file size plus framing allowance. Remote-host, redirect, MIME,
 image-dimension, spool, and storage rules come from the upload configuration. Object responses are

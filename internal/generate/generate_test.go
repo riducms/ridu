@@ -1066,10 +1066,10 @@ func TestOpenAPIIsDeterministicAndContainsCRUDPaths(t *testing.T) {
 		}
 	}
 	assertOpenAPIIntegerParameter(t, requiredOpenAPIMap(t, requiredOpenAPIMap(t, paths, "/api/collections/posts"), "get"), "depth", 0, 5)
-	assertOpenAPIParameterNames(t, requiredOpenAPIMap(t, requiredOpenAPIMap(t, paths, "/api/collections/posts"), "get"), []string{"page", "limit", "where", "sort", "include-access", "depth", "select", "populate", "locale", "fallback-locale"})
-	assertOpenAPIParameterNames(t, requiredOpenAPIMap(t, requiredOpenAPIMap(t, paths, "/api/collections/articles/{id}"), "get"), []string{"depth", "select", "populate"})
-	assertOpenAPIParameterNames(t, requiredOpenAPIMap(t, requiredOpenAPIMap(t, paths, "/api/globals/site-settings"), "get"), []string{"depth", "select", "populate", "locale", "fallback-locale"})
-	assertOpenAPINoParameter(t, requiredOpenAPIMap(t, requiredOpenAPIMap(t, paths, "/api/collections/posts"), "post"), "draft")
+	assertOpenAPIParameterNames(t, requiredOpenAPIMap(t, requiredOpenAPIMap(t, paths, "/api/collections/posts"), "get"), []string{"page", "limit", "where", "sort", "include-access", "depth", "select", "populate", "draft", "locale", "fallback-locale"})
+	assertOpenAPIParameterNames(t, requiredOpenAPIMap(t, requiredOpenAPIMap(t, paths, "/api/collections/articles/{id}"), "get"), []string{"depth", "select", "populate", "draft"})
+	assertOpenAPIParameterNames(t, requiredOpenAPIMap(t, requiredOpenAPIMap(t, paths, "/api/globals/site-settings"), "get"), []string{"depth", "select", "populate", "draft", "locale", "fallback-locale"})
+	assertOpenAPIBooleanParameter(t, requiredOpenAPIMap(t, requiredOpenAPIMap(t, paths, "/api/collections/posts"), "post"), "draft")
 	assertOpenAPIBooleanParameter(t, requiredOpenAPIMap(t, requiredOpenAPIMap(t, paths, "/api/collections/articles"), "post"), "draft")
 	assertOpenAPIIntegerParameter(t, requiredOpenAPIMap(t, requiredOpenAPIMap(t, paths, "/api/globals/site-settings"), "get"), "depth", 0, 5)
 	assertOpenAPIStringEnumParameter(t, requiredOpenAPIMap(t, requiredOpenAPIMap(t, paths, "/api/collections/posts"), "get"), "locale", []string{"en", "fr", "all"})
@@ -1197,7 +1197,7 @@ func TestGeneratedGoModelsIncludeTypedGlobals(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, expected := range []string{"type SiteSettings struct", "type SiteSettingsUpdate struct", `var SiteSettingsGlobal = core.NewTypedGlobal[SiteSettings, SiteSettingsUpdate]("site-settings")`} {
+	for _, expected := range []string{"type SiteSettings struct", "type SiteSettingsUpdate struct", `var SiteSettingsGlobal = core.NewTypedGlobal[SiteSettings, SiteSettingsUpdate, SiteSettingsUpdate]("site-settings")`} {
 		if !strings.Contains(string(generated), expected) {
 			t.Fatalf("generated Go global missing %q:\n%s", expected, generated)
 		}

@@ -16,14 +16,14 @@ func uploadRequestBody(replacement bool) map[string]any {
 	multipart := map[string]any{
 		"type": "object", "required": []string{"file"},
 		"properties": map[string]any{
-			"file":    map[string]any{"type": "string", "format": "binary"},
-			"data":    map[string]any{"type": "string", "description": "JSON-encoded document fields."},
-			"image":   map[string]any{"type": "string", "description": "JSON-encoded image edit, using percentages of the oriented source."},
-			"publish": map[string]any{"type": "boolean"},
+			"file":  map[string]any{"type": "string", "format": "binary"},
+			"data":  map[string]any{"type": "string", "description": "JSON-encoded document fields."},
+			"image": map[string]any{"type": "string", "description": "JSON-encoded image edit, using percentages of the oriented source."},
 		},
 	}
 	content := map[string]any{"multipart/form-data": map[string]any{"schema": multipart}}
 	if replacement {
+		multipart["properties"].(map[string]any)["publish"] = map[string]any{"type": "boolean"}
 		content["application/json"] = map[string]any{"schema": map[string]any{
 			"type": "object", "properties": map[string]any{
 				"data": map[string]any{"type": "object"}, "image": uploadImageSchema(),

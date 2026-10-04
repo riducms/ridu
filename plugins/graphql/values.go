@@ -81,6 +81,10 @@ func documentMap(document store.Document) map[string]interface{} {
 		result["_status"] = string(document.Status)
 		result["_revision"] = document.Revision
 	}
+	if document.PublishedRevision > 0 {
+		result["_publishedRevision"] = document.PublishedRevision
+		result["_hasDraftChanges"] = document.HasDraftChanges
+	}
 	for name, value := range document.Values {
 		result[fieldName(name)] = valueInterface(value)
 	}
@@ -172,10 +176,17 @@ func valuesMap(values store.Values) map[string]interface{} {
 	return result
 }
 
-func valuesArg(args map[string]interface{}, name string, fields []schema.Field) store.Values {
-	raw, _ := args[name].(map[string]interface{})
+func valuesArg(params enginegraphql.ResolveParams, name string, fields []schema.Field) store.Values {
+	submitted, present := submittedInputArgument(params, name)
+	if present && submitted == nil {
+		return store.Values{}
+	}
+	raw, _ := params.Args[name].(map[string]interface{})
 	if raw == nil {
 		return store.Values{}
+	}
+	if present {
+		raw = preserveInputNulls(raw, submitted, fields, false)
 	}
 	normalized := normalizeInputObject(raw, fields)
 	encoded, err := json.Marshal(normalized)
@@ -187,6 +198,99 @@ func valuesArg(args map[string]interface{}, name string, fields []schema.Field) 
 		return store.Values{}
 	}
 	return result
+}
+
+// graphql-go omits nullable input-object fields whose variable value is null.
+// Preserve those authored clears without replacing its other validated/coerced
+// values or admitting unrecognized fields.
+func preserveInputNulls(coerced map[string]interface{}, submitted interface{}, fields []schema.Field, arrayRow bool) map[string]interface{} {
+	input, _ := submitted.(map[string]interface{})
+	result := make(map[string]interface{}, len(coerced))
+	for name, value := range coerced {
+		result[name] = value
+	}
+	if arrayRow {
+		if key, present := input["_key"]; present && key == nil {
+			result["_key"] = nil
+		}
+	}
+	for _, field := range fields {
+		name := fieldName(field.Name)
+		value, present := input[name]
+		if !present {
+			continue
+		}
+		if value == nil {
+			result[name] = nil
+			continue
+		}
+		if field.Nested == nil {
+			continue
+		}
+		if child, ok := result[name].(map[string]interface{}); ok {
+			result[name] = preserveInputNulls(child, value, field.Nested.ResolvedFields(), field.Type == schema.FieldTypeArray)
+		} else if rows, ok := result[name].([]interface{}); ok {
+			inputRows, isList := value.([]interface{})
+			if !isList {
+				inputRows = []interface{}{value}
+			}
+			for index, row := range rows {
+				if child, ok := row.(map[string]interface{}); ok && index < len(inputRows) {
+					rows[index] = preserveInputNulls(child, inputRows[index], field.Nested.ResolvedFields(), field.Type == schema.FieldTypeArray)
+				}
+			}
+		}
+	}
+	return result
+}
+
+func submittedInputArgument(params enginegraphql.ResolveParams, name string) (interface{}, bool) {
+	variables := requestFromContext(params).rawVariables
+	if variables == nil {
+		variables = params.Info.VariableValues
+	}
+	defaults := map[string]ast.Value{}
+	if operation, ok := params.Info.Operation.(*ast.OperationDefinition); ok {
+		for _, definition := range operation.VariableDefinitions {
+			defaults[definition.Variable.Name.Value] = definition.DefaultValue
+		}
+	}
+	var submitted func(ast.Value) (interface{}, bool)
+	submitted = func(value ast.Value) (interface{}, bool) {
+		switch value := value.(type) {
+		case nil:
+			return nil, false
+		case *ast.Variable:
+			if result, exists := variables[value.Name.Value]; exists {
+				return result, true
+			}
+			return submitted(defaults[value.Name.Value])
+		case *ast.ListValue:
+			result := make([]interface{}, len(value.Values))
+			for index, child := range value.Values {
+				result[index], _ = submitted(child)
+			}
+			return result, true
+		case *ast.ObjectValue:
+			result := make(map[string]interface{}, len(value.Fields))
+			for _, child := range value.Fields {
+				if item, present := submitted(child.Value); present {
+					result[child.Name.Value] = item
+				}
+			}
+			return result, true
+		default:
+			return parseJSONLiteral(value), true
+		}
+	}
+	for _, node := range params.Info.FieldASTs {
+		for _, argument := range node.Arguments {
+			if argument.Name.Value == name {
+				return submitted(argument.Value)
+			}
+		}
+	}
+	return nil, false
 }
 
 func normalizeInputObject(raw map[string]interface{}, fields []schema.Field) map[string]interface{} {
@@ -212,6 +316,18 @@ func normalizeInputObject(raw map[string]interface{}, fields []schema.Field) map
 func dataStringArg(args map[string]interface{}, objectName, name string) string {
 	object, _ := args[objectName].(map[string]interface{})
 	return fmt.Sprint(object[name])
+}
+
+func submittedAuthPasswordError(params enginegraphql.ResolveParams) error {
+	submitted, present := submittedInputArgument(params, "data")
+	if !present {
+		return nil
+	}
+	input, _ := submitted.(map[string]interface{})
+	if password, present := input["password"]; present && password == nil {
+		return fmt.Errorf("data.password must be a non-null string")
+	}
+	return nil
 }
 
 func stringArg(args map[string]interface{}, name, fallback string) string {
@@ -327,15 +443,21 @@ func boolPointerArg(args map[string]interface{}, name string) *bool {
 	return &result
 }
 
-// readDraftArg returns a read's draft selection. Without an actor Ridu treats
-// an explicit draft read as trusted server code, so an anonymous GraphQL client
-// may not choose one; signed-in clients are checked by the ReadDrafts rule.
-func readDraftArg(args map[string]interface{}, request requestState) (*bool, error) {
-	draft := boolPointerArg(args, "draft")
-	if draft != nil && *draft && request.actor == nil {
-		return nil, extendedError{message: "sign in to read drafts", extensions: map[string]interface{}{"code": "access_denied", "status": 403}}
+func draftPointerArg(params enginegraphql.ResolveParams) *bool {
+	if submitted, present := submittedInputArgument(params, "draft"); present {
+		value, valid := submitted.(bool)
+		if !valid {
+			return nil
+		}
+		return &value
 	}
-	return draft, nil
+	return boolPointerArg(params.Args, "draft")
+}
+
+// Draft selection is authorized by the operation engine, including anonymous
+// requests. This transport never promotes an anonymous request to system access.
+func readDraftArg(params enginegraphql.ResolveParams) (*bool, error) {
+	return draftPointerArg(params), nil
 }
 
 func intArg(args map[string]interface{}, name string, fallback int) int {

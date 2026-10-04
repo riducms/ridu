@@ -16,6 +16,7 @@ import (
 	"github.com/riducms/ridu/internal/embedded"
 	"github.com/riducms/ridu/internal/migrationartifact"
 	"github.com/riducms/ridu/internal/primitivefield"
+	"github.com/riducms/ridu/internal/schemadiff"
 	ridumigration "github.com/riducms/ridu/migration"
 	"github.com/riducms/ridu/query"
 	"github.com/riducms/ridu/schema"
@@ -24,7 +25,7 @@ import (
 // The SQLite planner accepts only artifacts recorded by this exact planner.
 const (
 	sqlitePlannerName    = "ridu-sqlite"
-	sqlitePlannerVersion = "1.1.0"
+	sqlitePlannerVersion = "1.2.0"
 )
 
 // MigrationStatus describes one immutable SQLite artifact relative to the
@@ -156,6 +157,9 @@ func buildSQLiteArtifactWithValidation(ctx context.Context, name string, before 
 		return ridumigration.Artifact{}, err
 	}
 	if before != nil {
+		if err := schemadiff.RejectVersionsEnable(before.Snapshot(), after.Snapshot(), nil); err != nil {
+			return ridumigration.Artifact{}, err
+		}
 		fromDigest, err := ridumigration.DigestManifest(*before)
 		if err != nil {
 			return ridumigration.Artifact{}, err
@@ -1242,8 +1246,10 @@ func expectedSQLiteObjects(ctx context.Context, manifest *schema.Manifest, inclu
 				return err
 			}
 		}
-		if err := installSchema(ctx, database); err != nil {
-			return err
+		for _, statement := range sqliteSchemaStatements {
+			if _, err := database.ExecContext(ctx, statement); err != nil {
+				return fmt.Errorf("install SQLite expected schema: %w", translateError(err))
+			}
 		}
 		if manifest != nil {
 			if err := reconcileDocumentIndexes(ctx, database, *manifest); err != nil {

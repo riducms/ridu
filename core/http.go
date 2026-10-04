@@ -268,12 +268,9 @@ func (application *App) Handler(options HandlerOptions) http.Handler {
 		VerifyEmail:            application.VerifyEmail,
 		ChangePassword:         application.ChangePassword,
 		AuthBootstrapAvailable: application.AuthBootstrapAvailable,
-		CreateAuthUser: func(ctx context.Context, collection string, values store.Values, password string, identity *httpapi.AuthIdentity) (store.Document, error) {
-			return application.CreateAuthUserForTransport(ctx, collection, values, password, MutationOptions{Actor: httpIdentityActor(identity), ActorCollection: httpIdentityCollection(identity)})
-		},
-		CreateAuthUserLocalized: func(ctx context.Context, collection string, values store.Values, password string, identity *httpapi.AuthIdentity, options httpapi.LocaleOptions) (store.Document, error) {
+		CreateAuthUser: func(ctx context.Context, collection string, values store.Values, password string, identity *httpapi.AuthIdentity, options httpapi.LocaleOptions, draft *bool) (store.Document, error) {
 			return application.CreateAuthUserForTransport(ctx, collection, values, password, MutationOptions{
-				Actor: httpIdentityActor(identity), ActorCollection: httpIdentityCollection(identity),
+				Actor: httpIdentityActor(identity), ActorCollection: httpIdentityCollection(identity), Draft: draft,
 				Locale: schema.LocaleCode(options.Locale), FallbackLocales: options.FallbackLocales,
 				DisableFallback: options.DisableFallback, AllLocales: options.AllLocales,
 			})
@@ -371,13 +368,13 @@ func (application *App) Handler(options HandlerOptions) http.Handler {
 			return release, nil
 		},
 		Upload: func(ctx context.Context, collection string, input httpapi.UploadInput, identity *httpapi.AuthIdentity, admissionHeld bool) (store.Document, error) {
-			return application.uploadForIdentity(ctx, collection, UploadInput{Filename: input.Filename, Reader: input.Reader, Data: input.Data, Image: input.Image, Publish: input.Publish, Locale: uploadLocale(input.Locale)}, authIdentity(identity), admissionHeld)
+			return application.uploadForIdentity(ctx, collection, UploadInput{Filename: input.Filename, Reader: input.Reader, Data: input.Data, Image: input.Image, Draft: input.Draft, Locale: uploadLocale(input.Locale)}, authIdentity(identity), admissionHeld)
 		},
 		UpdateUpload: func(ctx context.Context, collection, id string, input httpapi.UploadInput, identity *httpapi.AuthIdentity, admissionHeld bool) (store.Document, error) {
-			return application.updateUploadForIdentity(ctx, collection, id, UpdateUploadInput{Filename: input.Filename, Reader: input.Reader, Data: input.Data, Image: input.Image, Publish: input.Publish, ExpectedRevision: input.ExpectedRevision, Locale: uploadLocale(input.Locale)}, authIdentity(identity), admissionHeld)
+			return application.updateUploadForIdentity(ctx, collection, id, UpdateUploadInput{Filename: input.Filename, Reader: input.Reader, Data: input.Data, Image: input.Image, Publish: input.Publish, Draft: input.Draft, ExpectedRevision: input.ExpectedRevision, Locale: uploadLocale(input.Locale)}, authIdentity(identity), admissionHeld)
 		},
 		RemoteUpload: func(ctx context.Context, collection, remoteURL string, input httpapi.UploadInput, identity *httpapi.AuthIdentity) (store.Document, error) {
-			return application.UploadFromURLForIdentity(ctx, collection, RemoteUploadInput{URL: remoteURL, Filename: input.Filename, Data: input.Data, Image: input.Image, Publish: input.Publish, Locale: uploadLocale(input.Locale)}, authIdentity(identity))
+			return application.UploadFromURLForIdentity(ctx, collection, RemoteUploadInput{URL: remoteURL, Filename: input.Filename, Data: input.Data, Image: input.Image, Draft: input.Draft, Locale: uploadLocale(input.Locale)}, authIdentity(identity))
 		},
 		PreviewUpload: func(ctx context.Context, collection, id, remoteURL string, identity *httpapi.AuthIdentity) (io.ReadCloser, storage.Object, string, error) {
 			return application.PreviewUploadForIdentity(ctx, collection, id, remoteURL, authIdentity(identity))

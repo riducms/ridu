@@ -27,6 +27,7 @@ type Store struct {
 	mu              sync.Mutex
 	authBootstrapMu sync.Mutex
 	documents       map[string]map[string]store.Document
+	published       map[string]map[string]store.Document
 	nextID          int
 	events          []string
 	now             func() time.Time
@@ -57,6 +58,7 @@ type rateLimit struct {
 func New() *Store {
 	return &Store{
 		documents: make(map[string]map[string]store.Document), now: time.Now,
+		published: make(map[string]map[string]store.Document),
 		passwords: make(map[string][]byte), credentials: make(map[string]store.AuthCredential), sessions: make(map[string]session), authTokens: make(map[string]store.AuthToken), apiKeys: make(map[string]store.AuthAPIKey), rateLimits: make(map[string]rateLimit),
 		versions:      make(map[string]map[string][]store.Version),
 		tasks:         make(map[string]store.Task),
@@ -614,7 +616,7 @@ func (backend *Store) Begin(ctx context.Context) (store.Transaction, error) {
 	defer backend.mu.Unlock()
 	backend.events = append(backend.events, "begin")
 	return &transaction{
-		store: backend, documents: cloneCollections(backend.documents), versions: cloneVersions(backend.versions),
+		store: backend, documents: cloneCollections(backend.documents), published: cloneCollections(backend.published), versions: cloneVersions(backend.versions),
 		references: cloneReferenceEntries(backend.references),
 		passwords:  make(map[string][]byte), credentials: make(map[string]store.AuthCredential),
 		credentialUpdates: make(map[string]store.AuthCredential),
@@ -1080,6 +1082,7 @@ func (backend *Store) AllowAuthAttempt(_ context.Context, keyHash string, now ti
 type transaction struct {
 	store               *Store
 	documents           map[string]map[string]store.Document
+	published           map[string]map[string]store.Document
 	done                bool
 	readOnly            bool
 	versions            map[string]map[string][]store.Version
@@ -1230,18 +1233,24 @@ func (transaction *transaction) Create(ctx context.Context, request store.Create
 	values := store.CloneValues(request.Values)
 	canonicalizeTestAuthIdentity(request.Collection, values)
 	document := store.Document{ID: id, CreatedAt: createdAt, UpdatedAt: updatedAt, Status: status, Revision: revision, Values: values}
+	if request.Collection.Versions != nil && status == store.StatusPublished {
+		document.PublishedRevision = revision
+	}
 	collection := transaction.collection(string(request.Collection.ID))
 	if _, exists := collection[id]; exists {
 		return store.Document{}, store.ErrConflict
 	}
-	if uniqueConflict(collection, request.Collection, document, "") {
+	if transaction.uniqueHeadConflict(request.Collection, document, nil) {
 		return store.Document{}, store.ErrConflict
 	}
 	collection[id] = document
+	if document.PublishedRevision > 0 {
+		transaction.publishedCollection(string(request.Collection.ID))[id] = publishedProjection(document)
+	}
 	if err := transaction.replaceReferenceEntries(request.Collection, document); err != nil {
 		return store.Document{}, err
 	}
-	return store.CloneDocument(document), nil
+	return testAuthoringProjection(document, request.Collection), nil
 }
 
 func (transaction *transaction) Find(ctx context.Context, request store.Request) (store.Document, error) {
@@ -1255,8 +1264,8 @@ func (transaction *transaction) Find(ctx context.Context, request store.Request)
 		return store.Document{}, fmt.Errorf("unsupported document lock mode %q", request.Lock)
 	}
 	transaction.event("find")
-	document, exists := transaction.collection(string(request.Collection.ID))[request.ID]
-	if !exists || !matchesDeletion(document, request.Deletion) || request.PublishedOnly && request.Collection.Versions != nil && document.Status != store.StatusPublished || !matchesRequest(document, request) {
+	document, exists := transaction.selectedCollection(request.Collection, request.PublishedOnly)[request.ID]
+	if !exists || !matchesDeletion(document, request.Deletion) || !matchesRequest(document, request) {
 		return store.Document{}, store.ErrNotFound
 	}
 	return transaction.prepare(document, request)
@@ -1271,8 +1280,8 @@ func (transaction *transaction) List(ctx context.Context, request store.Request)
 	}
 	transaction.event("list")
 	var documents []store.Document
-	for _, document := range transaction.collection(string(request.Collection.ID)) {
-		if matchesDeletion(document, request.Deletion) && (!request.PublishedOnly || request.Collection.Versions == nil || document.Status == store.StatusPublished) && matchesRequest(document, request) {
+	for _, document := range transaction.selectedCollection(request.Collection, request.PublishedOnly) {
+		if matchesDeletion(document, request.Deletion) && matchesRequest(document, request) {
 			documents = append(documents, store.CloneDocument(document))
 		}
 	}
@@ -1316,11 +1325,11 @@ func (transaction *transaction) Distinct(ctx context.Context, request store.Dist
 		Locales: request.Locales, LocaleChain: request.LocaleChain,
 	}
 	unique := make(map[string]store.Value)
-	for _, document := range transaction.collection(string(request.Collection.ID)) {
+	for _, document := range transaction.selectedCollection(request.Collection, request.PublishedOnly) {
 		if err := ctx.Err(); err != nil {
 			return store.DistinctPage{}, err
 		}
-		if !matchesDeletion(document, request.Deletion) || request.PublishedOnly && request.Collection.Versions != nil && document.Status != store.StatusPublished || !matchesRequest(document, documentRequest) {
+		if !matchesDeletion(document, request.Deletion) || !matchesRequest(document, documentRequest) {
 			continue
 		}
 		document = localizedForRequest(document, documentRequest)
@@ -1487,6 +1496,9 @@ func (transaction *transaction) ReferencedUploadObjects(ctx context.Context, req
 		for _, document := range transaction.collection(string(collection.ID)) {
 			collectUploadObjectReferences(document.Values, candidates, referenced)
 		}
+		for _, document := range transaction.publishedCollection(string(collection.ID)) {
+			collectUploadObjectReferences(document.Values, candidates, referenced)
+		}
 		for _, versions := range transaction.versions[string(collection.ID)] {
 			for _, version := range versions {
 				collectUploadObjectReferences(version.Snapshot.Values, candidates, referenced)
@@ -1643,9 +1655,13 @@ func (transaction *transaction) prepare(document store.Document, request store.R
 				return value
 			}
 			return populateValue(value, relationship, func(collectionID schema.StableID, id string) (store.Document, bool) {
-				target, found := transaction.collection(string(collectionID))[id]
 				targetSchema := request.Collections[collectionID]
-				found = found && target.DeletedAt == nil && (!request.PublishedOnly || targetSchema.Versions == nil || target.Status == store.StatusPublished)
+				publishedOnly := request.PublishedOnly
+				if selected, exists := request.PopulationPublishedOnly[collectionID]; exists {
+					publishedOnly = selected
+				}
+				target, found := transaction.selectedCollection(targetSchema, publishedOnly)[id]
+				found = found && target.DeletedAt == nil
 				if access := request.PopulationAccess[collectionID]; found && access != nil {
 					found = matchesRequest(target, store.Request{
 						Collection: targetSchema, Access: access, Locales: request.Locales,
@@ -1655,7 +1671,7 @@ func (transaction *transaction) prepare(document store.Document, request store.R
 				if found {
 					if population.Depth > 1 {
 						var err error
-						target, err = transaction.prepare(target, store.Request{Collection: targetSchema, Collections: request.Collections, Populate: populationwalk.DepthPopulations(targetSchema, population.Depth-1), PopulationAccess: request.PopulationAccess, PopulationBudget: populationBudget, PublishedOnly: request.PublishedOnly, Locales: request.Locales, LocaleChain: request.LocaleChain, AllLocales: request.AllLocales})
+						target, err = transaction.prepare(target, store.Request{Collection: targetSchema, Collections: request.Collections, Populate: populationwalk.DepthPopulations(targetSchema, population.Depth-1), PopulationAccess: request.PopulationAccess, PopulationPublishedOnly: request.PopulationPublishedOnly, PopulationBudget: populationBudget, PublishedOnly: publishedOnly, Locales: request.Locales, LocaleChain: request.LocaleChain, AllLocales: request.AllLocales})
 						if err != nil {
 							populationError = err
 							return store.Document{}, false
@@ -1676,7 +1692,7 @@ func (transaction *transaction) prepare(document store.Document, request store.R
 		}
 		document.Values = mapped
 	}
-	return project(document, request.Select), nil
+	return project(testAuthoringProjection(document, request.Collection), request.Select), nil
 }
 
 func populateValue(value store.Value, relationship *schema.RelationshipField, lookup func(schema.StableID, string) (store.Document, bool)) store.Value {
@@ -1739,8 +1755,15 @@ func project(document store.Document, selection []query.Path) store.Document {
 }
 
 func (transaction *transaction) Update(ctx context.Context, request store.UpdateRequest) (store.Document, error) {
+	if request.Collection.Versions != nil && !request.Collection.Versions.Drafts &&
+		(request.Intent == store.WriteIntentSaveDraft || request.Intent == store.WriteIntentDiscardDraft) {
+		return store.Document{}, fmt.Errorf("draft write intent requires a draft-enabled collection")
+	}
 	if err := primitivefield.ValidateRequest(request.Request); err != nil {
 		return store.Document{}, err
+	}
+	if request.Collection.Versions != nil && request.Collection.Versions.Drafts && request.Intent == store.WriteIntentDefault {
+		return store.Document{}, fmt.Errorf("write intent is required for a draft-enabled collection")
 	}
 	if err := transaction.writable(ctx); err != nil {
 		return store.Document{}, err
@@ -1754,27 +1777,98 @@ func (transaction *transaction) Update(ctx context.Context, request store.Update
 	if request.ExpectedRevision > 0 && document.Revision != request.ExpectedRevision {
 		return store.Document{}, store.ErrConflict
 	}
-	if request.ReplaceValues {
+	live, hasLive := transaction.publishedCollection(string(request.Collection.ID))[request.ID]
+	if request.Intent == store.WriteIntentDiscardDraft && (!hasLive || !document.HasDraftChanges) {
+		return store.Document{}, store.ErrConflict
+	}
+	if request.Intent == store.WriteIntentDiscardDraft {
+		document.Values = store.CloneValues(live.Values)
+	} else if request.ReplaceValues {
 		document.Values = store.CloneValues(request.Values)
 	} else {
 		document.Values = localization.MergeStoragePatch(request.Collection.Fields, document.Values, request.Values)
 	}
 	canonicalizeTestAuthIdentity(request.Collection, document.Values)
 	document.UpdatedAt = transaction.store.now().UTC()
-	if request.Status != nil {
-		document.Status = *request.Status
-	}
 	if request.Collection.Versions != nil || request.Collection.Upload != nil {
 		document.Revision++
 	}
-	if uniqueConflict(collection, request.Collection, document, document.ID) {
+	if request.Collection.Versions != nil {
+		switch request.Intent {
+		case store.WriteIntentDefault:
+			if document.Status == store.StatusPublished {
+				document.PublishedRevision = document.Revision
+				document.HasDraftChanges = false
+			}
+		case store.WriteIntentSaveDraft:
+			if hasLive {
+				document.Status = store.StatusPublished
+				document.PublishedRevision = live.Revision
+				document.HasDraftChanges = true
+			} else {
+				document.Status = store.StatusDraft
+				document.PublishedRevision = 0
+				document.HasDraftChanges = false
+			}
+		case store.WriteIntentPublish:
+			document.Status = store.StatusPublished
+			document.PublishedRevision = document.Revision
+			document.HasDraftChanges = false
+		case store.WriteIntentUnpublish:
+			if !hasLive {
+				return store.Document{}, store.ErrConflict
+			}
+			document.Status = store.StatusDraft
+			document.PublishedRevision = 0
+			document.HasDraftChanges = false
+		case store.WriteIntentDiscardDraft:
+			document.Status = store.StatusPublished
+			document.PublishedRevision = live.Revision
+			document.HasDraftChanges = false
+		default:
+			return store.Document{}, fmt.Errorf("unsupported write intent %q", request.Intent)
+		}
+	} else if request.Intent != store.WriteIntentDefault {
+		return store.Document{}, fmt.Errorf("write intent requires a versioned collection")
+	}
+	var nextLive *store.Document
+	if request.Collection.Versions != nil {
+		switch request.Intent {
+		case store.WriteIntentSaveDraft, store.WriteIntentDiscardDraft:
+			if hasLive {
+				copy := live
+				nextLive = &copy
+			}
+		case store.WriteIntentPublish:
+			copy := publishedProjection(document)
+			nextLive = &copy
+		case store.WriteIntentDefault:
+			if document.Status == store.StatusPublished {
+				copy := publishedProjection(document)
+				nextLive = &copy
+			}
+		}
+	}
+	if transaction.uniqueHeadConflict(request.Collection, document, nextLive) {
 		return store.Document{}, store.ErrConflict
 	}
 	collection[document.ID] = document
+	if request.Collection.Versions != nil {
+		switch request.Intent {
+		case store.WriteIntentPublish, store.WriteIntentDefault:
+			if document.Status == store.StatusPublished {
+				transaction.publishedCollection(string(request.Collection.ID))[document.ID] = publishedProjection(document)
+			} else {
+				delete(transaction.publishedCollection(string(request.Collection.ID)), document.ID)
+			}
+		case store.WriteIntentUnpublish:
+			delete(transaction.publishedCollection(string(request.Collection.ID)), document.ID)
+		}
+	}
 	if err := transaction.replaceReferenceEntries(request.Collection, document); err != nil {
 		return store.Document{}, err
 	}
-	return store.CloneDocument(document), nil
+	return testAuthoringProjection(document, request.Collection), nil
 }
 
 func (transaction *transaction) SaveVersion(ctx context.Context, collection schema.Collection, document store.Document, maximum int) (store.Version, error) {
@@ -1875,8 +1969,9 @@ func (transaction *transaction) Delete(ctx context.Context, request store.Reques
 		return store.Document{}, store.ErrNotFound
 	}
 	delete(collection, request.ID)
+	delete(transaction.publishedCollection(string(request.Collection.ID)), request.ID)
 	transaction.deleteReferenceEntries(store.DocumentReference{CollectionID: request.Collection.ID, DocumentID: request.ID})
-	return store.CloneDocument(document), nil
+	return testAuthoringProjection(document, request.Collection), nil
 }
 
 func (transaction *transaction) ApplyReferenceDelete(ctx context.Context, request store.ReferenceDeleteRequest) error {
@@ -1973,11 +2068,26 @@ func (transaction *transaction) ApplyReferenceDelete(ctx context.Context, reques
 		if referenceErr != nil {
 			return referenceErr
 		}
-		if !changed {
+		live, hasLive := transaction.publishedCollection(string(owner.CollectionID))[owner.DocumentID]
+		liveValues := live.Values
+		liveChanged := false
+		if hasLive {
+			liveValues, liveChanged, referenceErr = referenceindex.NullifyTarget(collection, live.Values, request.Target)
+			if referenceErr != nil {
+				return referenceErr
+			}
+		}
+		if !changed && !liveChanged {
 			return fmt.Errorf("reference index for owner collection %q is inconsistent with current values", owner.CollectionID)
 		}
-		document.Values = values
-		transaction.collection(string(owner.CollectionID))[owner.DocumentID] = document
+		if changed {
+			document.Values = values
+			transaction.collection(string(owner.CollectionID))[owner.DocumentID] = document
+		}
+		if liveChanged {
+			live.Values = liveValues
+			transaction.publishedCollection(string(owner.CollectionID))[owner.DocumentID] = live
+		}
 		if err := transaction.replaceReferenceEntries(collection, document); err != nil {
 			return err
 		}
@@ -2007,12 +2117,18 @@ func (transaction *transaction) CascadeOwners(ctx context.Context, request store
 func (transaction *transaction) replaceReferenceEntries(collection schema.Collection, document store.Document) error {
 	owner := store.DocumentReference{CollectionID: collection.ID, DocumentID: document.ID}
 	transaction.deleteReferenceEntries(owner)
-	entries, referenceErr := referenceindex.Collect(collection, document)
-	if referenceErr != nil {
-		return referenceErr
+	heads := []store.Document{document}
+	if live, exists := transaction.publishedCollection(string(collection.ID))[document.ID]; exists {
+		heads = append(heads, live)
 	}
-	for _, entry := range entries {
-		transaction.references[referenceEntryKey(entry)] = entry
+	for _, head := range heads {
+		entries, referenceErr := referenceindex.Collect(collection, head)
+		if referenceErr != nil {
+			return referenceErr
+		}
+		for _, entry := range entries {
+			transaction.references[referenceEntryKey(entry)] = entry
+		}
 	}
 	return nil
 }
@@ -2076,7 +2192,12 @@ func (transaction *transaction) Trash(ctx context.Context, request store.Request
 	document.DeletedAt = &now
 	document.UpdatedAt = now
 	collection[request.ID] = document
-	return store.CloneDocument(document), nil
+	if live, exists := transaction.publishedCollection(string(request.Collection.ID))[request.ID]; exists {
+		live.DeletedAt = &now
+		live.UpdatedAt = now
+		transaction.publishedCollection(string(request.Collection.ID))[request.ID] = live
+	}
+	return testAuthoringProjection(document, request.Collection), nil
 }
 
 func (transaction *transaction) Restore(ctx context.Context, request store.Request) (store.Document, error) {
@@ -2094,11 +2215,20 @@ func (transaction *transaction) Restore(ctx context.Context, request store.Reque
 	}
 	document.DeletedAt = nil
 	document.UpdatedAt = transaction.store.now().UTC()
-	if uniqueConflict(collection, request.Collection, document, document.ID) {
+	var restoredLive *store.Document
+	if live, exists := transaction.publishedCollection(string(request.Collection.ID))[request.ID]; exists {
+		live.DeletedAt = nil
+		live.UpdatedAt = document.UpdatedAt
+		restoredLive = &live
+	}
+	if transaction.uniqueHeadConflict(request.Collection, document, restoredLive) {
 		return store.Document{}, store.ErrConflict
 	}
 	collection[request.ID] = document
-	return store.CloneDocument(document), nil
+	if restoredLive != nil {
+		transaction.publishedCollection(string(request.Collection.ID))[request.ID] = *restoredLive
+	}
+	return testAuthoringProjection(document, request.Collection), nil
 }
 
 func (transaction *transaction) Commit(ctx context.Context) error {
@@ -2132,6 +2262,7 @@ func (transaction *transaction) Commit(ctx context.Context) error {
 		}
 	}
 	transaction.store.documents = cloneCollections(transaction.documents)
+	transaction.store.published = cloneCollections(transaction.published)
 	transaction.store.versions = cloneVersions(transaction.versions)
 	transaction.store.references = cloneReferenceEntries(transaction.references)
 	for reference := range transaction.deletedState {
@@ -2279,6 +2410,48 @@ func (transaction *transaction) collection(id string) map[string]store.Document 
 		transaction.documents[id] = collection
 	}
 	return collection
+}
+
+func (transaction *transaction) publishedCollection(id string) map[string]store.Document {
+	collection := transaction.published[id]
+	if collection == nil {
+		collection = make(map[string]store.Document)
+		transaction.published[id] = collection
+	}
+	return collection
+}
+
+func (transaction *transaction) uniqueHeadConflict(collection schema.Collection, working store.Document, published *store.Document) bool {
+	current := transaction.collection(string(collection.ID))
+	live := transaction.publishedCollection(string(collection.ID))
+	if uniqueConflict(current, collection, working, working.ID) || uniqueConflict(live, collection, working, working.ID) {
+		return true
+	}
+	return published != nil && (uniqueConflict(current, collection, *published, working.ID) || uniqueConflict(live, collection, *published, working.ID))
+}
+
+func (transaction *transaction) selectedCollection(collection schema.Collection, publishedOnly bool) map[string]store.Document {
+	if publishedOnly && collection.Versions != nil {
+		return transaction.publishedCollection(string(collection.ID))
+	}
+	return transaction.collection(string(collection.ID))
+}
+
+func publishedProjection(document store.Document) store.Document {
+	published := store.CloneDocument(document)
+	published.Status = store.StatusPublished
+	published.PublishedRevision = 0
+	published.HasDraftChanges = false
+	return published
+}
+
+func testAuthoringProjection(document store.Document, collection schema.Collection) store.Document {
+	projected := store.CloneDocument(document)
+	if collection.Versions != nil && !collection.Versions.Drafts {
+		projected.PublishedRevision = 0
+		projected.HasDraftChanges = false
+	}
+	return projected
 }
 
 func cloneCollections(source map[string]map[string]store.Document) map[string]map[string]store.Document {

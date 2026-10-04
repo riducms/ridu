@@ -92,6 +92,9 @@ func postgresUploadReferenceStatement(request store.UploadReferenceRequest) (str
 			"SELECT snapshot #>> '{Values,source,objectKey}'::text[] AS object_key FROM ridu_versions WHERE collection_id = ANY($2::text[]) AND snapshot #>> '{Values,source,objectKey}'::text[] = ANY($1::text[])",
 			"SELECT snapshot #>> '{Values,objectKey}'::text[] AS object_key FROM ridu_versions WHERE collection_id = ANY($2::text[]) AND snapshot #>> '{Values,objectKey}'::text[] = ANY($1::text[])",
 			"SELECT candidate.object_key FROM unnest($1::text[]) AS candidate(object_key) WHERE EXISTS (SELECT 1 FROM ridu_versions WHERE collection_id = ANY($2::text[]) AND jsonb_path_query_array(snapshot #> '{Values,sizes}'::text[], '$.*.\"objectKey\"'::jsonpath) ? candidate.object_key)",
+			"SELECT snapshot #>> '{Values,source,objectKey}'::text[] AS object_key FROM ridu_published_documents WHERE collection_id = ANY($2::text[]) AND snapshot #>> '{Values,source,objectKey}'::text[] = ANY($1::text[])",
+			"SELECT snapshot #>> '{Values,objectKey}'::text[] AS object_key FROM ridu_published_documents WHERE collection_id = ANY($2::text[]) AND snapshot #>> '{Values,objectKey}'::text[] = ANY($1::text[])",
+			"SELECT candidate.object_key FROM unnest($1::text[]) AS candidate(object_key) WHERE EXISTS (SELECT 1 FROM ridu_published_documents WHERE collection_id = ANY($2::text[]) AND jsonb_path_query_array(snapshot #> '{Values,sizes}'::text[], '$.*.\"objectKey\"'::jsonpath) ? candidate.object_key)",
 		)
 	}
 	if len(parts) == 0 {

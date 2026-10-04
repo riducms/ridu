@@ -371,7 +371,7 @@ plaintext to another development host only. They do not expand the production su
 
 ## Immutable migration lifecycle {#migrations}
 
-Artifacts created by `ridu migrate create` use MongoDB planner contract `2.0.0` inside shared
+New artifacts created by `ridu migrate create` use MongoDB planner contract `3.0.0` inside shared
 artifact-envelope format `1`. Create and inspect the plan before the cutover:
 
 ```bash title="terminal"
@@ -379,11 +379,21 @@ ridu migrate create --name add-post-summary
 ridu migrate plan --json
 ```
 
-Ridu binds each artifact to its manifest history and rejects altered or reordered migration files.
+Ridu accepts only planner `3.0.0` artifacts, binds them to their manifest history, and rejects
+altered or reordered migration files. Its initial layout includes independent live heads and
+cross-head unique reservations. Earlier framework layouts and planner histories are unsupported;
+recreate the database and migration history rather than rewriting old artifacts. Startup and
+readiness never convert an old layout. The active live head does not depend on retained versions.
+
+Migrations that add or change a unique index on versioned content require
+maintenance admission: an explicit resumable step recalculates reservations across working
+and published heads before the new index is built. Typed field renames recalculate those
+reservations inside the semantic transaction.
+
 `up` takes a fenced lease with a bounded wait, records durable
 step progress, and resumes the same immutable history after an interruption. It requires explicit
 maintenance admission only when the pending or incomplete history suffix contains a rename,
-transform, reference-index rebuild, or resource retirement. Run that work only after every old
+transform, unique-reservation rebuild, reference-index rebuild, or resource retirement. Run that work only after every old
 application process and worker is drained.
 
 `verify` creates a random isolated database, replays the complete history with the adapter's

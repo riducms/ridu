@@ -20,8 +20,8 @@ interface TestConfig extends RiduConfigShape {
 		media: {
 			auth: false;
 			upload: true;
-			versions: false;
-			drafts: false;
+			versions: true;
+			drafts: true;
 			trash: false;
 			output: { id: string; alt: string; filename: string; focalX?: number; focalY?: number };
 			create: { alt: string };
@@ -232,6 +232,60 @@ describe("Fetch client", () => {
 		expect(captured?.url).toBe("https://cms.example.test/api/collections/posts");
 	});
 
+	it("selects working drafts and stages updates through explicit draft query flags", async () => {
+		const requests: Request[] = [];
+		const client = createClient<TestConfig>({
+			baseURL: "https://cms.example.test",
+			fetch: async (request) => {
+				requests.push(request as Request);
+				const path = new URL((request as Request).url).pathname;
+				if (path === "/api/collections/posts" && (request as Request).method === "GET")
+					return Response.json({
+						docs: [],
+						pagination: {
+							page: 1,
+							limit: 10,
+							totalDocs: 0,
+							totalPages: 0,
+							hasNextPage: false,
+							hasPrevPage: false,
+						},
+					});
+				return Response.json({ doc: { id: "post_1", title: "Working", _revision: 4 } });
+			},
+		});
+
+		await client.list("posts", { draft: true });
+		await client.find("posts", "post_1", { draft: true });
+		await client.update("posts", "post_1", { title: "Working" }, { draft: true, revision: 3 });
+		await client.global("site-settings", { draft: true });
+		await client.updateGlobal(
+			"site-settings",
+			{ siteName: "Working" },
+			{ draft: true, revision: 3 }
+		);
+		await client.discardDraft("posts", "post_1", { revision: 4 });
+		await client.discardGlobalDraft("site-settings", { revision: 4 });
+		expect(
+			requests.map((request) => {
+				const url = new URL(request.url);
+				return `${request.method} ${url.pathname}${url.search}`;
+			})
+		).toEqual([
+			"GET /api/collections/posts?draft=true",
+			"GET /api/collections/posts/post_1?draft=true",
+			"PATCH /api/collections/posts/post_1?draft=true",
+			"GET /api/globals/site-settings?draft=true",
+			"PATCH /api/globals/site-settings?draft=true",
+			"POST /api/collections/posts/post_1/discard-draft",
+			"POST /api/globals/site-settings/discard-draft",
+		]);
+		expect(requests[2]?.headers.get("if-match")).toBe('"3"');
+		expect(requests[4]?.headers.get("if-match")).toBe('"3"');
+		expect(requests[5]?.headers.get("if-match")).toBe('"4"');
+		expect(requests[6]?.headers.get("if-match")).toBe('"4"');
+	});
+
 	it("mints and consumes document-scoped preview capabilities", async () => {
 		const requests: Request[] = [];
 		const client = createClient<TestConfig>({
@@ -363,6 +417,53 @@ describe("Fetch client", () => {
 				cropHeight: 60,
 			},
 		});
+	});
+
+	it("stages upload creates and metadata edits without publishing live bytes", async () => {
+		const requests: Request[] = [];
+		const client = createClient<TestConfig>({
+			baseURL: "https://cms.example.test",
+			fetch: async (request) => {
+				requests.push(request as Request);
+				return Response.json({ doc: { id: "media_1", alt: "Draft", filename: "draft.png" } });
+			},
+		});
+		await client.upload("media", new Blob(["draft"], { type: "image/png" }), {
+			data: { alt: "" },
+			draft: true,
+		});
+		await client.uploadFromURL("media", "https://cdn.example.test/draft.png", { draft: true });
+		await client.upload("media", new Blob(["live"], { type: "image/png" }), {
+			data: { alt: "Live" },
+			draft: false,
+		});
+		await client.uploadFromURL("media", "https://cdn.example.test/live.png", {
+			data: { alt: "Live" },
+			draft: false,
+		});
+		await client.updateUpload(
+			"media",
+			"media_1",
+			{ data: { alt: "Draft" } },
+			{
+				draft: true,
+				revision: 2,
+			}
+		);
+		expect(requests.map((request) => new URL(request.url).searchParams.get("draft"))).toEqual([
+			"true",
+			"true",
+			"false",
+			"false",
+			"true",
+		]);
+		expect(requests[4]?.headers.get("if-match")).toBe('"2"');
+		expect((await requests[2]?.formData())?.has("publish")).toBe(false);
+		expect(await requests[3]?.json()).not.toHaveProperty("publish");
+		await expect(
+			client.updateUpload("media", "media_1", { publish: true }, { draft: true })
+		).rejects.toThrow("cannot be published");
+		expect(requests).toHaveLength(5);
 	});
 
 	it("forwards abort signals", async () => {
@@ -996,32 +1097,36 @@ describe("Fetch client", () => {
 		]);
 	});
 
-	it("creates auth users without mixing credentials into document data", async () => {
-		let captured: Request | undefined;
-		const client = createClient<TestConfig>({
-			baseURL: "https://cms.example.test",
-			fetch: async (request) => {
-				captured = request as Request;
-				return Response.json({ doc: { id: "post_auth", title: "New account" } });
-			},
-		});
+	it.each([undefined, true, false] as const)(
+		"creates auth users with draft=%s and separate credentials",
+		async (draft) => {
+			let captured: Request | undefined;
+			const client = createClient<TestConfig>({
+				baseURL: "https://cms.example.test",
+				fetch: async (request) => {
+					captured = request as Request;
+					return Response.json({ doc: { id: "post_auth", title: "New account" } });
+				},
+			});
 
-		const created = await client.auth.createUser(
-			{ collection: "posts", data: { title: "New account" }, password: "correct-horse" },
-			{
-				locale: "fr",
-				fallbackLocale: false,
-			}
-		);
-		expect(created.id).toBe("post_auth");
-		expect(captured?.url).toBe(
-			"https://cms.example.test/api/auth/posts/create-user?locale=fr&fallback-locale=false"
-		);
-		expect(await captured?.json()).toEqual({
-			data: { title: "New account" },
-			password: "correct-horse",
-		});
-	});
+			const created = await client.auth.createUser(
+				{ collection: "posts", data: { title: "New account" }, password: "correct-horse" },
+				{
+					locale: "fr",
+					fallbackLocale: false,
+					...(draft === undefined ? {} : { draft }),
+				}
+			);
+			expect(created.id).toBe("post_auth");
+			expect(captured?.url).toBe(
+				`https://cms.example.test/api/auth/posts/create-user?locale=fr&fallback-locale=false${draft === undefined ? "" : `&draft=${draft}`}`
+			);
+			expect(await captured?.json()).toEqual({
+				data: { title: "New account" },
+				password: "correct-horse",
+			});
+		}
+	);
 
 	it("exposes recovery, verification, and API key endpoints", async () => {
 		const paths: string[] = [];

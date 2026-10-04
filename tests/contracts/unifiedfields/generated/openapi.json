@@ -1623,6 +1623,16 @@
                             }
                           ]
                         },
+                        "blockName": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
                         "blockType": {
                           "const": "card",
                           "type": "string"
@@ -1759,6 +1769,16 @@
                           "type": "string"
                         },
                         "accent": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "blockName": {
                           "anyOf": [
                             {
                               "type": "string"
@@ -1907,6 +1927,16 @@
                           "type": "string"
                         },
                         "accent": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "blockName": {
                           "anyOf": [
                             {
                               "type": "string"
@@ -2068,6 +2098,16 @@
                                 }
                               ]
                             },
+                            "blockName": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
                             "blockType": {
                               "const": "card",
                               "type": "string"
@@ -2158,6 +2198,16 @@
                               "type": "string"
                             },
                             "accent": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "blockName": {
                               "anyOf": [
                                 {
                                   "type": "string"
@@ -2392,6 +2442,10 @@
             "description": "Raw partial document values; omitted update values are retained from exact-locale storage. Malformed typed values are skipped.",
             "type": "object"
           },
+          "draft": {
+            "description": "Defer required fields and editorial minima for a draft; all other validation remains active.",
+            "type": "boolean"
+          },
           "embedded": {
             "items": {
               "$ref": "#/components/schemas/LiveValidationEmbeddedScope"
@@ -2500,6 +2554,10 @@
           "data": {
             "description": "Raw partial document values; omitted update values are retained from exact-locale storage. Malformed typed values are skipped.",
             "type": "object"
+          },
+          "draft": {
+            "description": "Defer required fields and editorial minima for a draft; all other validation remains active.",
+            "type": "boolean"
           },
           "embedded": {
             "items": {
@@ -2634,6 +2692,16 @@
               }
             ]
           },
+          "blockName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "blockType": {
             "const": "card",
             "type": "string"
@@ -2726,6 +2794,16 @@
             "type": "string"
           },
           "accent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "blockName": {
             "anyOf": [
               {
                 "type": "string"
@@ -2836,6 +2914,16 @@
               }
             ]
           },
+          "blockName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "blockType": {
             "const": "card",
             "type": "string"
@@ -2926,6 +3014,16 @@
             "type": "string"
           },
           "accent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "blockName": {
             "anyOf": [
               {
                 "type": "string"
@@ -3084,6 +3182,16 @@
               }
             ]
           },
+          "blockName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "blockType": {
             "const": "card",
             "type": "string"
@@ -3176,6 +3284,16 @@
             "type": "string"
           },
           "accent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "blockName": {
             "anyOf": [
               {
                 "type": "string"
@@ -3286,6 +3404,16 @@
               }
             ]
           },
+          "blockName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "blockType": {
             "const": "card",
             "type": "string"
@@ -3376,6 +3504,16 @@
             "type": "string"
           },
           "accent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "blockName": {
             "anyOf": [
               {
                 "type": "string"
@@ -3534,6 +3672,16 @@
               }
             ]
           },
+          "blockName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "blockType": {
             "const": "note",
             "type": "string"
@@ -3563,6 +3711,16 @@
             "type": "string"
           },
           "accent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "blockName": {
             "anyOf": [
               {
                 "type": "string"
@@ -3610,6 +3768,16 @@
               }
             ]
           },
+          "blockName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "blockType": {
             "const": "note",
             "type": "string"
@@ -3639,6 +3807,16 @@
             "type": "string"
           },
           "accent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "blockName": {
             "anyOf": [
               {
                 "type": "string"
@@ -4514,6 +4692,20 @@
                                     }
                                   }
                                 }
+                              },
+                              {
+                                "id": "unified-articles-body-blocks-block-card-block-name",
+                                "name": "blockName",
+                                "path": "body.blocks.block.card.blockName",
+                                "type": "text",
+                                "category": "scalar",
+                                "required": false,
+                                "unique": false,
+                                "default": "",
+                                "admin": {
+                                  "label": "Block name"
+                                },
+                                "text": {}
                               }
                             ]
                           }
@@ -5666,6 +5858,20 @@
                                     }
                                   }
                                 }
+                              },
+                              {
+                                "id": "unified-articles-body-blocks-block-card-block-name",
+                                "name": "blockName",
+                                "path": "body.blocks.block.card.blockName",
+                                "type": "text",
+                                "category": "scalar",
+                                "required": false,
+                                "unique": false,
+                                "default": "",
+                                "admin": {
+                                  "label": "Block name"
+                                },
+                                "text": {}
                               }
                             ]
                           }
@@ -6730,6 +6936,20 @@
                                     }
                                   }
                                 }
+                              },
+                              {
+                                "id": "unified-articles-body-blocks-block-card-block-name",
+                                "name": "blockName",
+                                "path": "body.blocks.block.card.blockName",
+                                "type": "text",
+                                "category": "scalar",
+                                "required": false,
+                                "unique": false,
+                                "default": "",
+                                "admin": {
+                                  "label": "Block name"
+                                },
+                                "text": {}
                               }
                             ]
                           }
